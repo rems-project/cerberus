@@ -1,0 +1,150 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives AilSyntax AilTypesAux AilWf Utils ErrorMonad Ctype TypingError
+import IntegerImpl
+
+(* following the table from (§6.4.4.1#5) *)
+val type_of_constant: Loc.t -> IntegerImpl.implementation -> integerConstant -> errorM integerType
+let type_of_constant loc impl = function
+  | IConstant n Decimal Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+    (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just U) ->
+      if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  | IConstant n Decimal (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just UL) ->
+      if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  | IConstant n Decimal (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just ULL) ->
+      if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        misc loc (UntypableIntegerConstant n)
+  | IConstantMax ity ->
+      return ity
+  | IConstantMin ity ->
+      return ity
+end
+
+val disjoint_bindings: bindings -> bool
+let rec disjoint_bindings bs =
+  match bs with
+    | [] -> true
+    | (a, _) :: xs ->
+      List.all (fun (b, _) -> a <> b) xs && disjoint_bindings xs
+  end
+
+val well_formed_bindings: forall 'a. Loc.t -> sigma 'a -> bindings -> errorM unit
+let well_formed_bindings loc sigm bindings =
+  mapM_ (fun (_, (_, qs, ty)) -> wf_lvalue sigm qs ty) bindings >>
+  if not (disjoint_bindings bindings) then
+    error "AilTyping.well_formed_bindings: found non disjoint bindings"
+  else
+    return ()
+

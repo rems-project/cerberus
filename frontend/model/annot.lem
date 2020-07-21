@@ -1,0 +1,121 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Maybe
+open import Pervasives
+import Loc
+import Symbol
+
+type bmc_annot =
+  | Abmc_id of nat (* NOTE: basically same as uid *)
+
+type attribute = <|
+  attr_ns: maybe Symbol.identifier;
+  attr_id: Symbol.identifier;
+  attr_args: list (Loc.t * string);
+|>
+
+type attributes =
+  | Attrs of list attribute
+
+instance (Show attributes)
+  let show attrs = "ATTRS"
+end
+
+val no_attributes: attributes
+let no_attributes =
+  Attrs []
+
+val combine_attributes: attributes -> attributes -> attributes
+let combine_attributes (Attrs xs1) (Attrs xs2) =
+  Attrs (xs1 ++ xs2)
+
+type annot =
+  | Astd of string (* ISO C11 Standard Annotation *)
+  | Aloc of Loc.t (* C source location *)
+  | Auid of string (* Unique ID *)
+  | Abmc of bmc_annot
+  | Aattrs of attributes (* C2X attributes *)
+  | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
+                              must only be used on a ctype to indicate it is a unfolding of a typedef *)
+
+
+val     get_loc: list annot -> maybe Loc.t
+let rec get_loc annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (Aloc loc :: _) ->
+        Just loc
+    | (Astd _ :: annots') ->
+        get_loc annots'
+    | (Auid _ :: annots') ->
+        get_loc annots'
+    | (Abmc _ :: annots') ->
+        get_loc annots'
+    | (Aattrs _ :: annots') ->
+        get_loc annots'
+  end
+
+val get_loc_: list annot -> Loc.t
+let get_loc_ annots =
+  match get_loc annots with
+    | Just loc -> loc
+    | Nothing -> Loc.unknown
+  end
+
+val     get_uid: list annot -> maybe string
+let rec get_uid annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (Aloc _ :: annots') ->
+        get_uid annots'
+    | (Astd _ :: annots') ->
+        get_uid annots'
+    | (Auid uid :: _) ->
+        Just uid
+    | (Abmc _ :: annots') ->
+        get_uid annots'
+    | (Aattrs _ :: annots') ->
+        get_uid annots'
+  end
+

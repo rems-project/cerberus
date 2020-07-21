@@ -1,0 +1,141 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+(* Symbols table with stacked scopes *)
+open import Pervasives Utils Symbol
+import Set_extra
+
+type t 'a_scope 'b_ident 'c_a = list ('a_scope * map 'b_ident 'c_a)
+
+
+val empty: forall 'scope 'ident 'a. t 'scope 'ident 'a
+let inline empty = []
+
+
+val register: forall 'scope 'ident 'a. MapKeyType 'ident => 'ident -> 'a -> t 'scope 'ident 'a -> t 'scope 'ident 'a
+let register ident a = function
+  | (scope, m) :: ms ->
+      (scope, Map.insert ident a m) :: ms
+  | _ ->
+      error "Scope_table.register' called on a table without any opened scope"
+end
+
+
+val     resolve: forall 'scope 'ident 'a. MapKeyType 'ident => 'ident -> t 'scope 'ident 'a -> maybe ('scope * 'a)
+let rec resolve ident t =
+  match t with
+    | (scope, m) :: ms ->
+        maybe (resolve ident ms) (fun a -> Just (scope, a)) (Map.lookup ident m)
+    | [] ->
+        Nothing
+  end
+
+
+val is_in_scope: forall 'scope 'ident 'a. MapKeyType 'ident => 'ident -> t 'scope 'ident 'a -> bool
+let is_in_scope ident t =
+  Maybe.isJust (resolve ident t)
+
+
+val is_in_current_scope: forall 'scope 'ident 'a. MapKeyType 'ident => 'ident -> t 'scope 'ident 'a -> bool
+let is_in_current_scope ident t =
+  match t with
+    | (_, m) :: ms ->
+        Maybe.isJust (Map.lookup ident m)
+    | [] ->
+        false
+  end
+
+(*
+val symbols: forall 'scope 'ident 'a. MapKeyType 'ident, SetType 'ident, SetType 'a => t 'scope 'ident 'a -> list 'a
+let symbols = function
+  | m::_ -> map snd $ Set_extra.toList (Map.toSet m)
+  | _ -> error "[Scope_table.symbols] the table is empty."
+end
+*)
+
+
+val create_scope: forall 'scope 'ident 'a. MapKeyType 'ident => 'scope -> t 'scope 'ident 'a -> t 'scope 'ident 'a
+let create_scope scope t =
+  (scope, Map.empty) :: t
+
+
+val destroy_scope: forall 'scope 'ident 'a. t 'scope 'ident 'a -> map 'ident 'a * t 'scope 'ident 'a
+let destroy_scope = function
+  | (_ ,m) :: ms ->
+      (m, ms)
+  | _ ->
+      error "[Scope_table.destroy_scope] the table is empty."
+end
+
+
+val return_scope: forall 'scope 'ident 'a. MapKeyType 'ident => t 'scope 'ident 'a -> t 'scope 'ident 'a
+let return_scope = function
+  | m :: _ ->
+      [m]
+  | _ ->
+      error "[Scope_table.return_scope] the table is empty."
+end
+
+
+val push_table: forall 'scope 'ident 'a. t 'scope 'ident 'a -> t 'scope 'ident 'a -> t 'scope 'ident 'a
+let push_table t1 t2 =
+  t1 ++ t2
+
+
+val current_scope_is: forall 'scope 'ident 'a. t 'scope 'ident 'a -> 'scope
+let current_scope_is = function
+  | (scope, _) :: _ ->
+      scope
+  | _ ->
+      error "[Scope_table.current_scope_is] the table is empty."
+end
+
+
+val     scope_is_visible: forall 'scope 'ident 'a. Eq 'scope => 'scope -> t 'scope 'ident 'a -> bool
+let rec scope_is_visible sc = function
+  | [] ->
+      false
+  | (sc', _) :: tbl' ->
+      if sc = sc' then
+        true
+      else
+        scope_is_visible sc tbl'
+end

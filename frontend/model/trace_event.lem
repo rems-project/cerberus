@@ -1,0 +1,111 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives Mem
+import Ctype
+
+type thread_id = nat
+
+type trace_event =
+  | ME_function_call of
+      Symbol.sym * list mem_value
+
+  | ME_function_return of
+      Symbol.sym * maybe mem_value
+
+  | ME_allocate_object of
+         thread_id      (* the allocating thread *)
+       * Symbol.prefix  (* symbols coming from the Core/C program,
+                           for debugging purpose *)
+       * integer_value  (* alignment constraint *)
+       * Ctype.ctype    (* type of the allocation *)
+       * maybe mem_value(* optional initialisation value
+                         * if provided the allocation is made read-only *)
+       * pointer_value
+
+  | ME_allocate_region of
+        thread_id       (* the allocating thread *)
+       * Symbol.prefix  (* symbols coming from the Core/C program,
+                           for debugging purpose *)
+       * integer_value  (* alignment constraint *)
+       * integer_value  (* size *)
+       * pointer_value
+
+  | ME_kill of
+      Loc.t
+       * bool
+       * pointer_value
+
+  | ME_load of
+      Loc.t
+       * maybe string (* prefix *)
+       * Ctype.ctype
+       * pointer_value
+       * mem_value
+
+  | ME_store of
+      Loc.t
+       * maybe string (* prefix *)
+       * Ctype.ctype
+       * (*is_locking *) bool
+       * pointer_value
+       * mem_value
+
+  | ME_eff_array_shift_ptrval of
+      pointer_value
+       * Ctype.ctype
+       * integer_value
+       * pointer_value
+
+  | ME_member_shift of
+      pointer_value
+       * string
+       * pointer_value
+
+(*
+  | ME_realloc of
+      Ctype.thread_id
+       * integer_value
+       * pointer_value
+       * integer_value
+       * pointer_value
+*)
+

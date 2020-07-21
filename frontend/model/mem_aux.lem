@@ -1,0 +1,135 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives Utils Mem
+import Ctype
+
+
+val integerFromIntegerValue: integer_value -> maybe integer
+let integerFromIntegerValue ival =
+  eval_integer_value ival
+
+(*
+val symbolicFromIntegerValue: integer_value -> maybe Symbolic.symbolic
+let symbolicFromIntegerValue ival =
+  case_integer_value ival
+    (fun _ -> Nothing)
+    (fun symb -> Just symb)
+    (fun () -> Nothing)
+*)
+
+val integerValueFromMemValue: mem_value -> maybe (Ctype.integerType * integer_value)
+let integerValueFromMemValue mval =
+  let () = Debug.print_debug 1 [] (fun () ->
+    "integerValueFromMemValue ==> " ^ Mem.stringFromMem_value mval
+  ) in
+  case_mem_value mval
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun ity ival -> Just (ity, ival))
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+
+val unspecifiedFromMemValue: mem_value -> maybe Ctype.ctype
+let unspecifiedFromMemValue mval =
+  case_mem_value mval
+    (fun ty -> Just ty)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+
+val isUnspecifiedMemValue: mem_value -> bool
+let isUnspecifiedMemValue mval =
+  match unspecifiedFromMemValue mval with
+    | Just _ -> true
+    | Nothing -> false
+  end
+
+(*
+val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
+let symbolicFromMemValue mval =
+  error "symbolicFromMemValue"
+*)
+(*
+let symbolicFromMemValue mval =
+(*
+  maybe Nothing (symbolicFromIntegerValue -| snd) (integerValueFromMemValue mval)
+*)
+  case_mem_value mval
+    (fun _ -> Nothing)
+    (fun symb -> Just symb)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+*)
+
+
+
+val pointerValueFromMemValue: mem_value -> maybe (Ctype.ctype * pointer_value)
+let pointerValueFromMemValue mem_val =
+  let () = Debug.print_debug 1 [] (fun () ->
+    "pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
+  ) in
+  case_mem_value mem_val
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun ref_ty ptr_val -> Just (ref_ty, ptr_val))
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+
+
+
+val integer_mval: Ctype.integerType -> integer -> mem_value
+let integer_mval ity n =
+  integer_value_mval ity (integer_ival n)

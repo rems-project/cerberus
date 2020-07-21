@@ -1,0 +1,298 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Christopher Pulte                                                             *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+
+open import Ctype Annot Loc
+import Symbol Implementation Undefined Cmm_csem
+open import Mem Mem_common
+(* import Linux *)
+
+import Core
+open import Core_aux
+
+open import Assert_extra
+
+
+val better_error_messages : forall 'a. string -> 'a -> 'a
+declare ocaml target_rep function better_error_messages message a = 
+  `try` a `with | Failure error -> failwith (` message ` ^ error) `
+
+
+
+
+
+type symbol = Symbol.sym
+type mu_object_type = Core.core_object_type
+type mu_base_type = Core.core_base_type
+(* type bty = mu_base_type *)
+type mu_name = Core.generic_name symbol
+
+type annotated 'a 'bty = Annotated of list Annot.annot * 'bty * 'a
+let a_unpack (Annotated _ _ a) = a
+
+type asym 'bty = annotated Symbol.sym 'bty
+type actype 'bty = annotated ctype 'bty
+
+(* type mv_tsymbol = tsymbol       (\* Mem.mem_value *\) *)
+type ov_asym 'bty = asym 'bty       (* object_value *)
+type lv_asym 'bty = asym 'bty       (* loaded_value *)
+type va_asym 'bty = asym 'bty       (* value *)
+
+
+
+
+type mu_object_value 'bty =  (* C object values *)
+ | M_OVinteger of Mem.integer_value (* integer value *)
+ | M_OVfloating of Mem.floating_value (* floating-point value *)
+ | M_OVpointer of Mem.pointer_value (* pointer value *)
+ | M_OVarray of list (lv_asym 'bty) (* C array value *)
+ | M_OVstruct of symbol * list (Symbol.identifier * ctype * Mem.mem_value) (* C struct value *)
+ | M_OVunion of symbol * Symbol.identifier * Mem.mem_value (* C union value *)
+
+type mu_loaded_value 'bty =  (* potentially unspecified C object values *)
+ | M_LVspecified of mu_object_value 'bty (* non-unspecified loaded value *)
+ (* | M_LVunspecified of ctype (\* unspecified loaded value *\) *)
+
+
+(* again, we might remove something from the definition here,
+   e.g. Vctype *)
+type mu_value 'bty =  (* Core values *)
+ | M_Vobject of mu_object_value 'bty (* C object value *)
+ | M_Vloaded of mu_loaded_value 'bty (* loaded C object value *)
+ | M_Vunit
+ | M_Vtrue
+ | M_Vfalse
+ (* | M_Vctype of ctype (\* C type as value *\) *)
+ | M_Vlist of Core.core_base_type * list (asym 'bty)
+ | M_Vtuple of list (asym 'bty) (* tuple *)
+
+
+
+type mu_ctor =  (* data constructors *)
+ | M_Cnil of mu_base_type (* empty list *) 
+ (* annotated with the type of the list items *)
+ | M_Ccons (* list cons *)
+ | M_Ctuple (* tuple *)
+ | M_Carray (* C array *)
+ | M_CivCOMPL (* bitwise complement *)
+ | M_CivAND (* bitwise AND *)
+ | M_CivOR (* bitwise OR *)
+ | M_CivXOR (* bitwise XOR *)
+ | M_Cspecified (* non-unspecified loaded value *)
+ | M_Cfvfromint (* cast integer to floating value *)
+ | M_Civfromfloat (* cast floating to integer value *)
+ (* | M_Cunspecified (\* unspecified loaded value *\) *)
+ (* | M_Civmax (\* max integer value *\)
+  * | M_Civmin (\* min integer value *\)
+  * | M_Civsizeof (\* sizeof value *\)
+  * | M_Civalignof (\* alignof value *\) *)
+
+type mu_pattern_ = 
+ | M_CaseBase of (maybe Symbol.sym * mu_base_type)
+ | M_CaseCtor of mu_ctor * list mu_pattern
+
+and mu_pattern = 
+ | M_Pattern of list annot * mu_pattern_
+
+type mu_sym_or_pattern 'bty = 
+  | M_Symbol of annotated symbol 'bty
+  | M_Pat of mu_pattern
+
+
+type mu_pexpr_ 'bty =  (* Core pure expressions *)
+ | M_PEsym of symbol
+ | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
+ | M_PEval of mu_value 'bty
+ | M_PEconstrained of list (Mem.mem_iv_constraint * asym 'bty) (* constrained value *)
+ | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
+ | M_PEerror of string * asym 'bty (* impl-defined static error *)
+ | M_PEctor of mu_ctor * list (asym 'bty) (* data constructor application *)
+ | M_PEcase of (asym 'bty) * list (mu_pattern * mu_pexpr 'bty) (* pattern matching *)
+ | M_PEarray_shift of (asym 'bty) * ctype * (asym 'bty) (* pointer array shift *)
+ | M_PEmember_shift of (asym 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
+ | M_PEnot of asym 'bty (* boolean not *)
+ | M_PEop of Core.binop * (asym 'bty) * (asym 'bty)
+ | M_PEstruct of symbol * list (Symbol.identifier * asym 'bty) (* C struct expression *)
+ | M_PEunion of symbol * Symbol.identifier * asym 'bty (* C union expression *)
+ (* | M_PEcfunction of asym 'bty (\* C function pointer expression *\) *)
+ | M_PEmemberof of symbol * Symbol.identifier * asym 'bty (* C struct/union member access *)
+ | M_PEcall of mu_name * list (asym 'bty) (* pure function call *)
+ | M_PElet of (mu_sym_or_pattern 'bty) * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure let *)
+ | M_PEif of asym 'bty * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure if *)
+ (* | M_PEis_scalar of asym 'bty
+  * | M_PEis_integer of asym 'bty
+  * | M_PEis_signed of asym 'bty
+  * | M_PEbmc_assume of asym 'bty
+  * | M_PEis_unsigned of asym 'bty
+  * | M_PEare_compatible of asym 'bty * asym 'bty *)
+
+and mu_pexpr 'bty = 
+ | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'bty)
+
+
+
+type mu_action_ 'bty =  (* memory actions *)
+ | M_Create of asym 'bty * actype 'bty * Symbol.prefix
+ | M_CreateReadOnly of asym 'bty * actype 'bty * asym 'bty * Symbol.prefix
+ | M_Alloc of actype 'bty * asym 'bty * Symbol.prefix
+ | M_Kill of bool * asym 'bty (* the boolean indicates whether the action is dynamic (i.e. free()) *)
+ | M_Store of bool * actype 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+ | M_Load of actype 'bty * asym 'bty * Cmm_csem.memory_order
+ | M_RMW of actype 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Fence of Cmm_csem.memory_order
+ | M_CompareExchangeStrong of actype 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of actype 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_LinuxFence of Linux.linux_memory_order
+ | M_LinuxLoad of actype 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxStore of actype 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxRMW of actype 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
+
+
+type mu_action 'a 'bty = 
+ | M_Action of Loc.t * 'a * (mu_action_ 'bty)
+
+
+type mu_paction 'a 'bty =  (* memory actions with Core.polarity *)
+ | M_Paction of Core.polarity * (mu_action 'a 'bty)
+
+type mu_memop 'bty =
+  | M_PtrEq of (asym 'bty * asym 'bty)
+  | M_PtrNe of (asym 'bty * asym 'bty)
+  | M_PtrLt of (asym 'bty * asym 'bty)
+  | M_PtrGt of (asym 'bty * asym 'bty)
+  | M_PtrLe of (asym 'bty * asym 'bty)
+  | M_PtrGe of (asym 'bty * asym 'bty)
+  | M_Ptrdiff of (actype 'bty * asym 'bty * asym 'bty)
+  | M_IntFromPtr of (actype 'bty * asym 'bty)
+  | M_PtrFromInt of (actype 'bty * asym 'bty)
+  | M_PtrValidForDeref of (actype 'bty * asym 'bty  )
+  | M_PtrWellAligned of (actype 'bty * asym 'bty  )
+  | M_PtrArrayShift of (asym 'bty * actype 'bty * asym 'bty  )
+  | M_Memcpy of (asym 'bty * asym 'bty * asym 'bty)
+  | M_Memcmp of (asym 'bty * asym 'bty * asym 'bty)
+  | M_Realloc of (asym 'bty * asym 'bty * asym 'bty)
+  | M_Va_start  of (asym 'bty * asym 'bty)
+  | M_Va_copy of (asym 'bty)
+  | M_Va_arg of (asym 'bty * actype 'bty)
+  | M_Va_end of (asym 'bty)
+
+type mu_expr_ 'a 'bty =  (* (effectful) expression *)
+ | M_Epure of (mu_pexpr 'bty)
+ | M_Ememop of mu_memop 'bty
+ | M_Eaction of (mu_paction 'a 'bty) (* memory action *)
+ | M_Ecase of asym 'bty * list (mu_pattern * (mu_expr 'a 'bty)) (* pattern matching *)
+ | M_Elet of (mu_sym_or_pattern 'bty) * (mu_pexpr 'bty) * (mu_expr 'a 'bty)
+ | M_Eif of asym 'bty * (mu_expr 'a 'bty) * (mu_expr 'a 'bty)
+ | M_Eskip
+ | M_Eccall of 'a * (actype 'bty) * asym 'bty * list (asym 'bty) (* C function call *)
+ | M_Eproc of 'a * mu_name * list (asym 'bty) (* Core procedure call *)
+ (* | M_Eunseq of list (mu_expr 'a 'bty) (\* unsequenced expressions *\) *)
+ | M_Ewseq of mu_pattern * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* weak sequencing *)
+ | M_Esseq of mu_pattern * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* strong sequencing *)
+ (* | M_Easeq of (symbol * mu_base_type) * (mu_action 'a 'bty) * (mu_paction 'a 'bty) (\* atomic sequencing *\) *)
+ (* | M_Eindet of nat * (mu_expr 'a 'bty) (\* indeterminately sequenced expr *)
+ | M_Ebound of nat * (mu_expr 'a 'bty) (* $\ldots$and boundary *)
+ | M_End of list (mu_expr 'a 'bty) (* nondeterministic choice *)
+ | M_Esave of (symbol * mu_base_type) * list (symbol * (mu_base_type * asym 'bty)) * (mu_expr 'a 'bty) (* save label *)
+ | M_Erun of 'a * symbol * list (asym 'bty) (* run from label *)
+ (* | M_Epar of list (mu_expr 'a 'bty) (\* cppmem-like thread creation *\) *)
+ (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
+
+and mu_expr 'a 'bty = 
+ | M_Expr of list annot * (mu_expr_ 'a 'bty)
+
+
+
+
+let embed_pexpr_expr pe = 
+  let (M_Pexpr annots _bty _) = pe in
+  M_Expr annots (M_Epure pe)
+
+
+type mu_impl_decl 'bty =
+  | M_Def of mu_base_type * mu_pexpr 'bty
+  | M_IFun of mu_base_type * list (symbol * mu_base_type) * mu_pexpr 'bty
+
+type mu_impl 'bty = map Implementation.implementation_constant (mu_impl_decl 'bty)
+
+type mu_fun_map_decl 'bty 'a =
+  | M_Fun of mu_base_type * list (symbol * mu_base_type) * mu_pexpr 'bty
+  | M_Proc of Loc.t * mu_base_type * list (symbol * mu_base_type) * mu_expr 'a 'bty
+  | M_ProcDecl of Loc.t * mu_base_type * list mu_base_type
+  | M_BuiltinDecl of Loc.t * mu_base_type * list mu_base_type
+
+type mu_fun_map 'bty 'a = map symbol (mu_fun_map_decl 'bty 'a)
+
+instance forall 'bty. (Located (mu_pexpr 'bty))
+  let locOf pe =
+    let (M_Pexpr annots _ _) = pe in
+    get_loc_ annots
+end
+
+instance forall 'a 'bty. (Located (mu_expr 'a 'bty))
+  let locOf e =
+    let (M_Expr annots _) = e in
+    get_loc_ annots
+end
+
+
+type mu_linking_kind = Core.linking_kind
+
+type mu_extern_map = Core.extern_map
+
+type mu_globs 'a 'bty=
+  | M_GlobalDef of mu_base_type * mu_expr 'a 'bty
+  | M_GlobalDecl of mu_base_type
+
+type mu_globs_map 'a 'bty =
+  map symbol (mu_globs 'a 'bty)
+
+type mu_tag_definitions = Core.core_tag_definitions
+
+type mu_funinfo = Loc.t * Annot.attributes * ctype * list (maybe symbol * ctype) * bool * bool
+
+(* a Core file is just a set of named functions *)
+type mu_file 'bty 'a = <|
+  mu_main    : maybe symbol;
+  mu_tagDefs : mu_tag_definitions;
+  mu_stdlib  : mu_fun_map 'bty 'a;
+  mu_impl    : mu_impl 'bty;
+  mu_globs   : list (symbol * mu_globs 'a 'bty);
+  mu_funs    : mu_fun_map 'bty 'a;
+  mu_extern  : mu_extern_map;
+  mu_funinfo : map symbol mu_funinfo;
+|>
+
+
+
+

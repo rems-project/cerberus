@@ -1,0 +1,559 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Justus Matthiesen                                                             *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives Loc Show Symbol
+import Annot
+
+type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
+ | Ichar
+ | Short
+ | Int_
+ | Long
+ | LongLong
+   (* Things defined in the standard libraries *)
+ | IntN_t of nat
+ | Int_leastN_t of nat
+ | Int_fastN_t of nat
+ | Intmax_t
+ | Intptr_t
+
+(* STD §6.2.5#17, sentence 1 *)
+type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
+ | Char
+ | Bool
+ | Signed of integerBaseType
+ | Unsigned of integerBaseType
+ | Enum of Symbol.sym
+   (* Things defined in the standard libraries *)
+ | Wchar_t
+ | Wint_t
+ | Size_t
+ | Ptrdiff_t
+
+(* STD §6.2.5#10, sentence 1 *)
+type realFloatingType =
+  | Float
+  | Double
+  | LongDouble
+
+(* STD §6.2.5#11, sentence 2 *)
+type floatingType =
+  | RealFloating of realFloatingType
+(*  | Complex of floatingType (* STD §6.2.5#11, sentence 1 *) *)
+
+(* STD §6.2.5#14, sentence 1 *)
+type basicType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)bty[0-9]*'?$"] =
+ | Integer of integerType
+ | Floating of floatingType
+
+(* STD §6.2.5#26, sentence 1-2 *)
+type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
+  const    : bool;
+  restrict : bool;
+  volatile : bool;
+  (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
+|>
+
+type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
+ | Void
+ | Basic of basicType
+   (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
+   (* the qualifiers are that of the element type (§6.7.3#9) *)
+   (* STD §6.2.5#20, bullet 1 *)
+ | Array of ctype * (maybe integer)
+   (* NOTE: the qualifiers associated to a ctype in the
+            list of parameters is that of the parameter lvalue. For example if
+            we have a parameter with type "restrict pointer to a const char",
+            the qualifiers in the tuple will be:
+              {no_qualifiers with restrict=true} *)
+   (* STD §6.2.5#20, bullet 4 *)
+ | Function of (* has_proto *)bool * (qualifiers * ctype)
+             * list (qualifiers * ctype * (* is_register *)bool)
+             * (* is_variadic *)bool
+   (* STD §6.2.5#20, bullet 5 *)
+   (* NOTE: the qualifiers are that of the referenced type *)
+ | Pointer of qualifiers * ctype
+   (* STD §6.2.5#20, bullet 6 *)
+ | Atomic of ctype
+ | Struct of Symbol.sym
+ | Union of Symbol.sym
+and ctype =
+  Ctype of list Annot.annot * ctype_
+
+type struct_tag = Symbol.sym
+type union_tag  = Symbol.sym
+type member_id  = Symbol.sym
+
+instance (Located ctype)
+  let locOf cty =
+    let (Ctype annots _) = cty in
+    Annot.get_loc_ annots
+end
+
+type flexible_array_member =
+    (* NOTE: the last parameter is the element type of the array *)
+  | FlexibleArrayMember of Annot.attributes * Symbol.identifier * qualifiers * ctype
+
+type tag_definition =
+  | StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * maybe flexible_array_member
+  | UnionDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+
+(** Type class instances *)
+
+let integerBaseTypeEqual ibty1 ibty2 =
+  let ord = function
+    | Ichar ->
+        (0 : nat)
+    | Short ->
+        1
+    | Int_ ->
+        2
+    | Long ->
+        3
+    | LongLong ->
+        4
+    | IntN_t _ ->
+        5
+    | Int_leastN_t  _ ->
+        6
+    | Int_fastN_t  _ ->
+        7
+    | Intmax_t ->
+        8
+    | Intptr_t ->
+        9
+  end in
+  match (ibty1, ibty2) with
+    | (IntN_t n1, IntN_t n2) ->
+        n1 = n2
+    | (Int_leastN_t n1, Int_leastN_t n2) ->
+        n1 = n2
+    | (Int_fastN_t n1, Int_fastN_t n2) ->
+        n1 = n2
+    | _ ->
+        ord ibty1 = ord ibty2
+  end
+
+instance (Eq integerBaseType)
+  let (=)  = integerBaseTypeEqual
+  let (<>) = fun ibty1 ibty2 -> not (integerBaseTypeEqual ibty1 ibty2)
+end
+
+let integerTypeEqual ity1 ity2 =
+  let ord = function
+    | Char ->
+        (0 : nat)
+    | Bool ->
+        1
+    | Signed _ ->
+        2
+    | Unsigned _ ->
+        3
+    | Enum _ ->
+        4
+    | Size_t ->
+        5
+    | Wchar_t ->
+        6
+    | Wint_t ->
+        7
+    | Ptrdiff_t ->
+        8
+  end in
+  match (ity1, ity2) with
+    | (Signed ibty1, Signed ibty2) ->
+        ibty1 = ibty2
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        ibty1 = ibty2
+    | (Enum sym1, Enum sym2) ->
+        sym1 = sym2
+    | _ ->
+        ord ity1 = ord ity2
+  end
+
+instance (Eq integerType)
+  let (=)  = integerTypeEqual
+  let (<>) = fun ity1 ity2 -> not (integerTypeEqual ity1 ity2)
+end
+
+instance (Eq realFloatingType)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Eq floatingType)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+(* STD §6.2.5#14, sentence 3 *)
+let basicTypeEqual bty1 bty2 =
+  let ord = function
+    | Integer _ ->
+        (0 : nat)
+    | Floating _ ->
+        1
+  end in
+  match (bty1, bty2) with
+    | (Integer ity1, Integer ity2) ->
+        ity1 = ity2
+    | (Floating fty1, Floating fty2) ->
+        fty1 = fty2
+    | _ ->
+        ord bty1 = ord bty2
+  end
+
+instance (Eq basicType)
+  let (=)  = basicTypeEqual
+  let (<>) = fun bty1 bty2 -> not (basicTypeEqual bty1 bty2)
+end
+
+
+let qualifiersEqual qs1 qs2 = 
+     qs1.const    = qs2.const
+  && qs1.restrict = qs2.restrict
+  && qs1.volatile = qs2.volatile
+
+instance (Eq qualifiers)
+  let (=)  = qualifiersEqual
+  let (<>) = fun qs1 qs2 -> not (qualifiersEqual qs1 qs2)
+end
+
+
+let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
+  let ord = function
+    | Void ->
+        (0 : nat)
+    | Basic _ ->
+        1
+    | Array _ _ ->
+        2
+    | Function _ _ _ _ ->
+        3
+    | Pointer _ _ ->
+        4
+    | Atomic _ ->
+        5
+    | Struct _ ->
+        6
+    | Union _ ->
+        7
+  end in
+  let paramsEqual (qs1, ty1, b1) (qs2, ty2, b2) =
+    qs1 = qs2 && ctypeEqual ty1 ty2 && b1 = b2 in
+  match (ty1, ty2) with
+    | (Basic bty1, Basic bty2) ->
+        bty1 = bty2
+    | (Array ty1 n1_opt, Array ty2 n2_opt) ->
+        ctypeEqual ty1 ty2 && n1_opt = n2_opt
+    | (Function has_proto1 (qs1, ty1) params1 b1,
+       Function has_proto2 (qs2, ty2) params2 b2) ->
+        has_proto1 = has_proto2 &&
+        qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2 &&
+        List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2
+    | (Atomic ty1, Atomic ty2) ->
+        ctypeEqual ty1 ty2
+    | (Struct id1, Struct id2) ->
+        id1 = id2
+    | (Union id1, Union id2) ->
+        id1 = id2
+    | _ ->
+        ord ty1 = ord ty2
+  end
+
+instance (Eq ctype)
+  let (=)  = ctypeEqual
+  let (<>) = fun ty1 ty2 -> not (ctypeEqual ty1 ty2)
+end
+
+let setElemCompare_integerBaseType ibty1 ibty2 =
+  let ord = function
+    | Ichar ->
+        (0 : nat)
+    | Short ->
+        1
+    | Int_ ->
+        2
+    | Long ->
+        3
+    | LongLong ->
+        4
+    | IntN_t _ ->
+        5
+    | Int_leastN_t _ ->
+        6
+    | Int_fastN_t _ ->
+        7
+    | Intmax_t ->
+        8
+    | Intptr_t ->
+        9
+  end in
+  match (ibty1, ibty2) with
+    | (IntN_t n1, IntN_t n2) ->
+        setElemCompare n1 n2
+    | (Int_leastN_t n1, Int_leastN_t n2) ->
+        setElemCompare n1 n2
+    | (Int_fastN_t n1, Int_fastN_t n2) ->
+        setElemCompare n1 n2
+    | _ ->
+        setElemCompare (ord ibty1) (ord ibty2)
+  end
+
+instance (SetType integerBaseType)
+  let setElemCompare = setElemCompare_integerBaseType
+end
+
+let setElemCompare_integerType ity1 ity2 =
+  let ord = function
+    | Char ->
+        (0 : nat)
+    | Bool ->
+        1
+    | Signed _ ->
+        2
+    | Unsigned _ ->
+        3
+    | Enum _ ->
+        4
+    | Size_t ->
+        5
+    | Wchar_t ->
+        6
+    | Wint_t ->
+        7
+    | Ptrdiff_t ->
+        8
+  end in
+  match (ity1, ity2) with
+    | (Signed ibty1, Signed ibty2) ->
+        setElemCompare ibty1 ibty2
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        setElemCompare ibty1 ibty2
+    | (Enum sym1, Enum sym2) ->
+        setElemCompare sym1 sym2
+    | _ ->
+        setElemCompare (ord ity1) (ord ity2)
+  end
+
+instance (SetType integerType)
+  let setElemCompare = setElemCompare_integerType
+end
+
+
+let setElemCompare_basicType bty1 bty2 =
+  let ord = function
+    | Integer _ ->
+        (0 : nat)
+    | Floating _ ->
+        1
+  end in
+  match (bty1, bty2) with
+    | (Integer ity1, Integer ity2) ->
+        setElemCompare ity1 ity2
+    | (Floating str1, Floating str2) ->
+        setElemCompare str1 str2
+    | _ ->
+        setElemCompare (ord bty1) (ord bty2)
+  end
+
+instance (SetType basicType)
+  let setElemCompare = setElemCompare_basicType
+end
+
+
+instance (SetType qualifiers)
+  let setElemCompare qs1 qs2 =
+    setElemCompare (qs1.const, qs1.restrict, qs1.volatile)
+                   (qs2.const, qs2.restrict, qs2.volatile)
+end
+
+
+instance (Show tag_definition)
+  let show def =
+    let string_of_identifiers tag_defs =
+      List.foldl (fun acc (ident, _) ->
+        acc ^ (show ident) ^ "; "
+      ) "[" tag_defs ^ "]"
+    in
+    match def with
+      | StructDef tag_defs Nothing ->
+          string_of_identifiers tag_defs
+      | StructDef tag_defs (Just (FlexibleArrayMember attrs ident qs elem_ty)) ->
+          let ty = Ctype [] (Array elem_ty Nothing) in
+          string_of_identifiers (tag_defs ++ [(ident, (attrs, qs, ty))])
+      | UnionDef tag_defs ->
+          string_of_identifiers tag_defs
+    end
+end
+
+(** Some useful functions *)
+
+val proj_ctype_: ctype -> ctype_
+let proj_ctype_ (Ctype _ ty_) = ty_
+
+(* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
+let unatomic (Ctype annots ty_ as ty) =
+match ty_ with
+  | Atomic ty ->
+      ty
+  | _ ->
+      ty
+end
+
+let unatomic_ ty =
+  proj_ctype_ (unatomic ty)
+
+val make_qualifiers: bool -> bool -> bool -> qualifiers
+let make_qualifiers c r v = <|
+  const    = c;
+  restrict = r;
+  volatile = v;
+|>
+
+val no_qualifiers: qualifiers
+let no_qualifiers = <|
+  const    = false;
+  restrict = false;
+  volatile = false;
+|>
+
+val combine_qualifiers: qualifiers -> qualifiers -> qualifiers
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile;
+|>
+
+
+(* Some constructors *)
+
+let mk_ctype_pointer qs ty =
+  Ctype [] (Pointer qs ty)
+
+let mk_ctype_integer ity =
+  Ctype [] (Basic (Integer ity))
+
+let mk_ctype_atomic cty =
+  Ctype [] (Atomic cty)
+
+(** Some standard types *)
+
+val void: ctype
+let void =
+  Ctype [] Void
+
+val char: ctype
+let char =
+  Ctype [] (Basic (Integer Char))
+
+val signed_char: ctype
+let signed_char =
+  Ctype [] (Basic (Integer (Signed Ichar)))
+
+val signed_short: ctype
+let signed_short =
+  Ctype [] (Basic (Integer (Signed Short)))
+
+val signed_int: ctype
+let signed_int =
+  Ctype [] (Basic (Integer (Signed Int_)))
+
+val signed_long: ctype
+let signed_long =
+  Ctype [] (Basic (Integer (Signed Long)))
+
+val signed_long_long: ctype
+let signed_long_long =
+  Ctype [] (Basic (Integer (Signed LongLong)))
+
+val intptr_t: ctype
+let intptr_t =
+  Ctype [] (Basic (Integer (Signed Intptr_t)))
+
+val intmax_t: ctype
+let intmax_t =
+  Ctype [] (Basic (Integer (Signed Intmax_t)))
+
+val unsigned_char: ctype
+let unsigned_char =
+  Ctype [] (Basic (Integer (Unsigned (Ichar))))
+
+val unsigned_short: ctype
+let unsigned_short =
+  Ctype [] (Basic (Integer (Unsigned Short)))
+
+val unsigned_int: ctype
+let unsigned_int =
+  Ctype [] (Basic (Integer (Unsigned Int_)))
+
+val unsigned_long: ctype
+let unsigned_long =
+  Ctype [] (Basic (Integer (Unsigned Long)))
+
+val unsigned_long_long: ctype
+let unsigned_long_long =
+  Ctype [] (Basic (Integer (Unsigned LongLong)))
+
+val uintptr_t: ctype
+let uintptr_t =
+  Ctype [] (Basic (Integer (Unsigned Intptr_t)))
+
+val uintmax_t: ctype
+let uintmax_t =
+  Ctype [] (Basic (Integer (Unsigned Intmax_t)))
+
+val char16_t: ctype
+let char16_t =
+  (* STD §7.28#2 *)
+  Ctype [] (Basic (Integer (Unsigned (Int_leastN_t 16))))
+
+val char32_t: ctype
+let char32_t =
+  (* STD §7.28#2 *)
+  Ctype [] (Basic (Integer (Unsigned (Int_leastN_t 32))))
+
+val wchar_t: ctype
+let wchar_t =
+  Ctype [] (Basic (Integer Wchar_t))
+
+val size_t: ctype
+let size_t =
+  Ctype [] (Basic (Integer Size_t))
+
+val ptrdiff_t: ctype
+let ptrdiff_t =
+  Ctype [] (Basic (Integer Ptrdiff_t))
+

@@ -1,0 +1,391 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+(* Concrete types and functions common to all memory layout models *)
+open import Pervasives
+import Loc
+import Undefined
+
+open import Nondeterminism
+
+type thread_id = nat
+
+type access_kind =
+  | LoadAccess
+  | StoreAccess
+
+type access_error =
+  | NullPtr
+  | FunctionPtr
+  | DeadPtr
+  | OutOfBoundPtr
+  | NoProvPtr
+  | AtomicMemberof
+
+
+let stringFromAccess_error = function
+  | NullPtr ->
+      "NullPtr"
+  | FunctionPtr ->
+      "FunctionPtr"
+  | DeadPtr ->
+      "DeadPtr"
+  | OutOfBoundPtr ->
+      "OutOfBoundPtr"
+  | NoProvPtr ->
+      "NoProvPtr"
+  | AtomicMemberof ->
+      "AtomicMemberof"
+end
+
+type free_error =
+  | Free_static_allocation
+  | Free_dead_allocation
+  | Free_out_of_bound
+
+let stringFromFree_error = function
+  | Free_static_allocation ->
+      "Free_static_allocation"
+  | Free_dead_allocation ->
+      "Free_dead_allocation"
+  | Free_out_of_bound ->
+      "Free_out_of_bound"
+end
+
+type mem_error =
+  | MerrOutsideLifetime of string (* mem_read_request *)
+  | MerrInternal of string
+  | MerrOther of string
+  
+  | MerrPtrdiff
+  | MerrAccess of Loc.t * access_kind * access_error
+  | MerrWriteOnReadOnly of Loc.t
+  
+  | MerrUndefinedFree of Loc.t * free_error
+  | MerrUndefinedRealloc
+  
+  | MerrIntFromPtr
+  | MerrPtrFromInt
+  
+  | MerrPtrComparison
+  
+  | MerrArrayShift
+  
+  | MerrWIP of string
+
+instance (Show mem_error)
+  let show = function
+    | MerrOutsideLifetime str ->
+        "MerrOutsideLifetime \"" ^  str ^ "\""
+    | MerrInternal str ->
+        "MerrInternal \"" ^  str ^ "\""
+    | MerrOther str ->
+        "MerrOther \"" ^  str ^ "\""
+    | MerrWIP str ->
+        "Memory WIP: " ^ str
+    | MerrPtrdiff ->
+        "MerrPtrdiff"
+    | MerrAccess loc LoadAccess err ->
+        "MerrAccess Load [" ^ Loc.stringFromLocation loc ^ "] " ^
+        stringFromAccess_error err
+    | MerrWriteOnReadOnly loc ->
+        "MerrWriteOnReadOnly [" ^ Loc.stringFromLocation loc ^ "]"
+    | MerrAccess loc StoreAccess err ->
+        "MerrAccess Store [" ^ Loc.stringFromLocation loc ^ "] " ^
+        stringFromAccess_error err
+    
+    | MerrUndefinedFree loc err ->
+        "MerrUndefinedFree [" ^ Loc.stringFromLocation loc ^ "] " ^ stringFromFree_error err
+    | MerrUndefinedRealloc ->
+        "MerrUndefinedRealloc"
+    | MerrIntFromPtr ->
+        "MerrIntFromPtr"
+    | MerrPtrFromInt ->
+        "MerrPtrFromInt"
+    | MerrPtrComparison ->
+        "MerrPtrComparison"
+    | MerrArrayShift ->
+        "MerrArrayShift"
+  end
+end
+
+
+let undefinedFromMem_error = function
+  | MerrOutsideLifetime _ ->
+      Just [Undefined.UB009_outside_lifetime]
+  | MerrPtrdiff ->
+      Just [Undefined.UB048_disjoint_array_pointers_subtraction]
+  | MerrAccess _ _ NullPtr ->
+      Just [Undefined.UB019_lvalue_not_an_object]
+  | MerrAccess _ _ DeadPtr ->
+      Just [Undefined.UB010_pointer_to_dead_object]
+  | MerrIntFromPtr ->
+      Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
+  | MerrPtrFromInt ->
+      Just [Undefined.UB_CERB001_integer_to_dead_pointer]
+  
+  | MerrPtrComparison ->
+      Just [Undefined.UB053_distinct_aggregate_union_pointer_comparison]
+  | MerrArrayShift ->
+      Just [Undefined.UB046_array_pointer_outside]
+
+  
+  (* TODO do better *)
+  | MerrAccess _ LoadAccess OutOfBoundPtr ->
+      Just [Undefined.UB_CERB002a_out_of_bound_load]
+  | MerrAccess _ StoreAccess OutOfBoundPtr ->
+      Just [Undefined.UB_CERB002b_out_of_bound_store]
+  
+  | MerrAccess _ _ AtomicMemberof ->
+      Just [Undefined.UB042_access_atomic_structUnion_member]
+  
+  | MerrUndefinedFree loc Free_static_allocation ->
+      Just [Undefined.UB179a_static_allocation]
+  | MerrUndefinedFree loc Free_dead_allocation ->
+      Just [Undefined.UB179b_dead_allocation]
+  | MerrUndefinedFree loc Free_out_of_bound ->
+      Nothing (* TODO *)
+  | MerrUndefinedRealloc ->
+      (* TODO *)
+      Just [Undefined.UB179a_static_allocation]
+  | MerrWriteOnReadOnly _ ->
+      (* TODO *)
+      Nothing
+  | _ ->
+      Nothing
+end
+
+
+
+
+
+
+
+type integer_operator =
+  | IntAdd
+  | IntSub
+  | IntMul
+  | IntDiv
+  | IntRem_t (* truncating remainder (this is % of C) *)
+  | IntRem_f (* flooring remainder *)
+  | IntExp
+
+type floating_operator =
+  | FloatAdd
+  | FloatSub
+  | FloatMul
+  | FloatDiv
+
+
+type pure_memop =
+  | PURE_MEMOP_TODO
+
+type memop =
+  | PtrEq
+  | PtrNe
+  | PtrLt
+  | PtrGt
+  | PtrLe
+  | PtrGe
+(*  | PtrIsNull *)
+  
+  | Ptrdiff     (* (address, address) -> eff integer *)
+  | IntFromPtr  (* (ctype, ctype, address) -> eff integer *) (* first type is that of the referenced type, second on is type of integer *)
+  | PtrFromInt  (* (ctype, ctype, integer) -> eff address *) (* first type is that of integer, second on is type of reference *)
+  | PtrValidForDeref (* (ctype, address) -> eff boolean *)
+  
+  | PtrWellAligned (* (ctype, address) -> eff boolean *)
+  
+  | PtrArrayShift (* address -> ctype -> integer -> eff address *)
+  
+  | Memcpy
+  | Memcmp
+  | Realloc (* TODO: not sure about this *)
+  | Va_start
+  | Va_copy
+  | Va_arg
+  | Va_end
+
+
+instance (Show memop)
+  let show = function
+    | PtrEq ->
+        "ptreq"
+    | PtrNe ->
+        "ptrne"
+    | PtrLt ->
+        "ptrlt"
+    | PtrGt ->
+        "ptrgt"
+    | PtrLe ->
+        "ptrle"
+    | PtrGe ->
+        "ptrge"
+    | Ptrdiff ->
+        "ptrdiff"
+    | IntFromPtr ->
+        "intfromptr"
+    | PtrFromInt ->
+        "ptrfromint"
+    | PtrValidForDeref ->
+        "ptrvalidforderef"
+    | PtrWellAligned ->
+        "ptrwellaligned"
+    | Memcpy ->
+        "memcpy"
+    | Memcmp ->
+        "memcmp"
+    | Realloc ->
+        "realloc"
+    | PtrArrayShift ->
+        "ptrarrayshift"
+    | Va_start ->
+        "va_start"
+    | Va_copy ->
+        "va_copy"
+    | Va_arg ->
+        "va_arg"
+    | Va_end ->
+        "va_end"
+  end
+end
+
+
+
+let stringFromInteger_operator = function
+  | IntAdd ->
+      "IntAdd"
+  | IntSub ->
+      "IntSub"
+  | IntMul ->
+      "IntMul"
+  | IntDiv ->
+      "IntDiv"
+  | IntRem_t ->
+      "IntRem_t"
+  | IntRem_f ->
+      "IntRem_f"
+  | IntExp ->
+      "IntExp"
+end
+
+
+let stringFromFloating_operator = function
+  | FloatAdd -> "FloatAdd"
+  | FloatSub -> "FloatSub"
+  | FloatMul -> "FloatMul"
+  | FloatDiv -> "FloatDiv"
+end
+
+
+type mem_constraint 'a =
+  | MC_empty
+  | MC_eq of 'a * 'a
+  | MC_le of 'a * 'a
+  | MC_lt of 'a * 'a
+  
+  | MC_in_device of 'a
+  
+  | MC_or of mem_constraint 'a * mem_constraint 'a
+  | MC_conj of list (mem_constraint 'a)
+  | MC_not of mem_constraint 'a
+
+instance forall 'a. (Constraints mem_constraint 'a)
+  let empty = MC_empty
+  let negate cs = MC_not cs
+  let concat cs1 cs2 = MC_conj [cs1; cs2]
+end
+
+
+
+
+(*
+
+
+type pointer_shift =
+(* TODO: bring back symbols *)
+(*  list (Core_ctype.ctype * Symbolic.symbolic) *)
+  list (Core_ctype.ctype * integer)
+
+
+type pointer_value =
+  | PVnull of Core_ctype.ctype
+  | PVobject of object_id * pointer_shift
+  | PVfunction of Symbol.t
+
+
+type integer_value_operator =
+  | IntAdd
+  | IntSub
+  | IntMul
+  | IntDiv
+  | IntMod
+  | IntExp
+
+type integer_value =
+  | IVinteger of integer
+  | IVsymbolic of Symbolic.symbolic (* possibly-symbolic integer value *)
+  | IVptrdiff of pointer_value * pointer_value
+  | IVintptr of pointer_value
+  | IVop of integer_value_operator * integer_value * integer_value
+
+
+type mem_value =
+  | MVunspecified of Core_ctype.ctype (* this should only be used for base and union types *)
+  | MVinteger of integer_value
+  | MVfloating of string
+  | MVpointer of pointer_value
+  | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
+  | MVstruct of Symbol.t * list (Cabs.identifier * mem_value)
+  | MVunion of Symbol.t * Cabs.identifier * mem_value (* the symbols are respectively the tag and the member *)
+
+
+*)
+
+
+type memory_flags = <|
+  allow_multi_provenance: bool; (* allow Prov_some aids, where aids is not a singleton *)
+  
+|>
+
+
+type memory_flag =
+  | Allow_disjoint_alloc_tests (* allow (for example) pointer equality between different objects *)

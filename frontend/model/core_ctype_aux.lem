@@ -1,0 +1,216 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+
+import Symbol AilTypesAux
+open import Utils Ctype
+
+(* SEE src/tags.mli for the documentation *)
+val tagDefs: unit -> map Symbol.sym tag_definition
+val set_tagDefs: map Symbol.sym tag_definition -> unit
+
+declare ocaml target_rep function tagDefs = `Tags.tagDefs`
+declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
+
+declare hol target_rep function tagDefs = `tagDefs`
+declare hol target_rep function set_tagDefs = `set_tagDefs`
+
+val get_membersDefs: Symbol.sym -> tag_definition
+let get_membersDefs tag_sym =
+  fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())
+
+val get_structDef: Symbol.sym -> list (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * maybe Ctype.flexible_array_member
+let get_structDef tag_sym =
+  match Map.lookup tag_sym (tagDefs ()) with
+    | Just (StructDef xs flexible_opt) ->
+        (xs, flexible_opt)
+    | Just _ ->
+        error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
+               "): found a union definition instead of a struct")
+    | Nothing ->
+        error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
+               "): couldn't find a struct/union definition")
+  end
+
+val get_unionDef: Symbol.sym -> (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+let get_unionDef tag_sym =
+  match Map.lookup tag_sym (tagDefs ()) with
+    | Just (UnionDef []) ->
+        error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
+               "): found an empty union definition")
+    | Just (UnionDef (x::xs)) ->
+        (x, xs)
+    | Just _ ->
+        error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
+               "): found a struct definition instead of a union")
+    | Nothing ->
+        error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
+               "): couldn't find a struct/union definition")
+  end
+
+val reset_tagDefs: unit -> unit
+declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`
+
+
+
+
+val     are_compatible: (qualifiers * ctype) -> (qualifiers * ctype) -> bool
+let rec are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
+  (* qualifiers need to be equal (see §6.7.3#10) *)
+  qs1 = qs2 && match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        AilTypesAux.are_compatible (qs1, Ctype [] (Basic bty1)) (qs2, Ctype [] (Basic bty2))
+    | (Array elem_ty1 n1_opt, Array elem_ty2 n2_opt) ->
+        (* STD §6.7.6.2#6 *)
+           are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2)
+        && match (n1_opt, n1_opt) with
+             | (Just n1, Just n2) -> n1 = n2
+             | (Just _ , Nothing) -> true
+             | (Nothing, Just _ ) -> true
+             | (Nothing, Nothing) -> true
+           end
+    | (Function _ (ret_qs1, ret_ty1) params1 isVariadic1, Function _ (ret_qs2, ret_ty2) params2 isVariadic2) ->
+        (* STD §6.7.6.3#15 *)
+        (* TODO: when the two types do not both have a param list *)
+           are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)
+        && are_compatible_params params1 params2
+        && isVariadic1 = isVariadic2
+    | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
+        (* STD §6.7.6.1#2 *)
+        are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
+    | (Struct tag1, Struct tag2) ->
+        (* STD §6.2.7#1 *)
+        (* TODO: being conservative here (aka STD compliant) *)
+        if Symbol.from_same_translation_unit tag1 tag2 then
+          tag1 = tag2
+        else
+          (* TODO: temporary hack *)
+          let Symbol.Symbol _ _ str_opt1 = tag1 in
+          let Symbol.Symbol _ _ str_opt2 = tag2 in
+          if str_opt1 = str_opt2 then
+            match (get_membersDefs tag1, get_membersDefs tag2) with
+              | (StructDef xs1 flexible_opt1, StructDef xs2 flexible_opt2) ->
+                  if List.length xs1 <> List.length xs2 then
+                    false
+                  else
+                    List.all (fun ((ident1, (_, qs1, ty1)), (ident2, (_, qs2, ty2))) ->
+                      ident1 = ident2 && are_compatible (qs1, ty1) (qs2, ty2)
+                    ) (List.zip xs1 xs2) &&
+                    match (flexible_opt1, flexible_opt2) with
+                      | (Nothing, Nothing) ->
+                          true
+                      | (Just (FlexibleArrayMember _ ident1 qs1 ty1), Just (FlexibleArrayMember _ ident2 qs2 ty2)) ->
+                          ident1 = ident2 && are_compatible (qs1, ty1) (qs2, ty2)
+                      | _ ->
+                          false
+                    end
+
+              | _ ->
+                  error "TODO(msg): impossible"
+            end
+          else
+            false
+    | (Union tag1, Union tag2) ->
+        (* STD §6.2.7#1 *)
+        (* TODO: being conservative here (aka STD compliant) *)
+        tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
+    | (Atomic atom_ty1, Atomic atom_ty2) ->
+        are_compatible (no_qualifiers, atom_ty1) (no_qualifiers, atom_ty2)
+    | _ ->
+        (* TODO: we can't see Enum types here and there is some impl-def stuff *)
+        false
+  end
+
+and are_compatible_params_aux acc = function
+  | ([], []) ->
+      acc
+  | (((qs1, ty1, _) :: params1), ((qs2, ty2, _) :: params2)) ->
+      are_compatible_params_aux (
+        (* NOTE(unsure): but as far as I can tell the twos parameters can differ
+           on whether they have the register storage-class *)
+        acc && are_compatible (qs1, ty1) (qs2, ty2)
+      ) (params1, params2)
+  | _ ->
+      (* the list of params must have the same length to be compatible *)
+      false
+end
+
+and are_compatible_params params1 params2 =
+  are_compatible_params_aux true (params1, params2)
+
+
+(*
+val tags_are_compatible: Symbol.sym -> Symbol.sym -> bool
+let tags_are_compatible tag_sym1 tag_sym2 =
+  let members_are_compatibles xs1 xs2 =
+    if List.length xs1 <> List.length xs2 then
+      false
+    else
+      List.all (fun ((ident1, ty1), (ident2, ty2)) ->
+        ident1 = ident2 && 
+      ) (List.combine xs1)
+  
+  if from_same_translation_unit tag_sym1 tag_sym2 then
+    tag_sym1 = tag_sym2
+  else
+    (* TODO: temporary hack *)
+    let Symbol.Symbol _ _ str_opt1 = tag_sym1 in
+    let Symbol.Symbol _ _ str_opt2 = tag_sym2 in
+    if str_opt1 = str_opt2 then
+      match (get_membersDefs tag_sym1, get_membersDefs tag_sym2) with
+        | (StructDef xs1, StructDef xs2) ->
+            members_are_compatibles xs1 x2
+        | (UnionDef xs1, UnionDef xs2) ->
+            members_are_compatibles xs1 xs2
+        | _ ->
+            false
+      end
+    else
+      false
+*)
+
+(*
+  | StructDef of list (Symbol.identifier * ctype)
+  | UnionDef of list (Symbol.identifier * ctype)
+*)

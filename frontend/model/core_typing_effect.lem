@@ -1,0 +1,98 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+import Map_extra
+
+open import Utils Exception Core Errors
+
+type eff 'a = Exception.exceptM 'a Errors.error
+include Exception
+
+val mapMapM: forall 'k 'a 'b. MapKeyType 'k, SetType 'k, SetType 'a =>
+             ('k -> 'a -> eff 'b) -> map 'k 'a -> eff (map 'k 'b)
+let mapMapM f xs =
+  Map_extra.fold (fun k a acc ->
+    bind (f k a) (fun b ->
+      bind acc (fun bs ->
+        return (Map.insert k b bs)
+      )
+    )
+  ) xs (return Map.empty)
+
+val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.error
+let runM m = m
+
+val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
+let core_typing_effect_fail loc cause =
+  Exception (loc, Errors.CORE_TYPING cause)
+let inline fail = core_typing_effect_fail
+
+(* NOTE: this is different than trysM, since it checks all the cases *)
+val     trysM_: forall 'a 'b. Loc.t -> Errors.core_typing_cause -> ('a -> eff 'b) -> list 'a -> eff 'b
+let rec trysM_ loc err f = function
+  | [] -> fail loc err
+  | x::xs ->
+    match f x with
+    | Result b -> Result b
+    | Exception _ -> trysM_ loc err f xs
+    end
+  end
+
+val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
+let core_typing_effect_guard pred loc cause =
+  if pred then
+    return ()
+  else
+    Exception (loc, Errors.CORE_TYPING cause)
+let inline guard = core_typing_effect_guard
+(* BUG in Lem (see issue #197)
+      fail loc cause
+ *)
+
+val foldlM: forall 'a 'b. ('a -> 'b -> eff 'a) -> 'a -> list 'b -> eff 'a
+let rec core_typing_effect_foldlM f b = function
+  | [] ->
+      return b
+  | x :: xs ->
+      bind (f b x) (fun z -> core_typing_effect_foldlM f z xs)
+end
+let inline foldlM = core_typing_effect_foldlM

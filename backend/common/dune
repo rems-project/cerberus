@@ -1,0 +1,7 @@
+(library
+ (name cerb_backend)
+ (public_name cerberus.backend_common)
+ (synopsis "Cerberus backend utilities")
+ (flags (:standard -w -27))
+ (foreign_stubs (language c) (names cerberus_cstubs))
+ (libraries cerb_frontend core_parser c_parser pprint util z3))

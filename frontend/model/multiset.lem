@@ -1,0 +1,77 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+import Map
+
+type t 'k =
+  Multiset of Map.map 'k nat
+
+val emp: forall 'k. MapKeyType 'k => t 'k
+let emp = Multiset $ Map.empty
+
+val count: forall 'k. MapKeyType 'k => 'k -> t 'k -> nat
+let count e (Multiset m) =
+  Map.findWithDefault e 0 m
+
+val mem: forall 'k. MapKeyType 'k => 'k -> t 'k -> bool
+let multiset_mem e m = (count e m > 0)
+let inline mem = multiset_mem
+
+val add: forall 'k. MapKeyType 'k => 'k -> t 'k -> t 'k
+let multiset_add e (Multiset m) = Multiset $ Map.insert e (1 + count e (Multiset m)) m
+let inline add = multiset_add
+
+val from_list: forall 'k. MapKeyType 'k => list 'k -> t 'k
+let from_list ls = foldl (fun m e -> add e m) emp ls
+
+
+val equal_multiset: forall 'a. SetType 'a, MapKeyType 'a => t 'a -> t 'a -> bool
+let equal_multiset ms1 ms2 =
+  let Multiset ms1' = ms1 in
+  let Multiset ms2' = ms2 in
+  Set.all (fun z -> count z ms1 = count z ms2) $ (domain ms1') union (domain ms2')
+
+
+instance forall 'a. SetType 'a, MapKeyType 'a => (Eq (t 'a))
+  let (=)  ms1 ms2 = equal_multiset ms1 ms2
+  let (<>) ms1 ms2 = not (equal_multiset ms1 ms2)
+end

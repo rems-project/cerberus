@@ -1,0 +1,897 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Christopher Pulte                                                             *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+open import Assert_extra
+
+import Symbol
+
+open import Core
+open import Mucore
+     import Core_typing Core_typing_aux
+
+(* The a-normalisation should happen after some partial evaluation and
+   rewrites that remove expressions passing ctypes and function
+   pointers as values. The embedding into mucore then is partial in
+   those places. *)
+
+
+
+(* type bty = core_base_type *)
+type value = generic_value Symbol.sym
+type values = list value
+type pexpr 'bty = generic_pexpr 'bty Symbol.sym
+type pexprs 'bty = list (pexpr 'bty)
+type expr 'a 'bty = generic_expr 'a 'bty Symbol.sym
+type pattern = mu_pattern
+type annot = Annot.annot
+type annots = list annot
+type outer_annots = annots
+type action 'a 'bty = generic_action 'a 'bty Symbol.sym
+type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
+
+type mu_value = Mucore.mu_value unit
+type mu_values = list mu_value
+type mu_pexpr = Mucore.mu_pexpr unit
+type mu_pexprs = list mu_pexpr
+type mu_expr 'a = Mucore.mu_expr 'a unit
+type mu_pattern = Mucore.mu_pattern
+type mu_action 'a = Mucore.mu_action 'a unit
+type mu_paction 'a = Mucore.mu_paction 'a unit
+type mu_sym_or_pattern = Mucore.mu_sym_or_pattern unit
+
+type asym = Mucore.asym unit
+type asyms = list asym
+
+
+(* ... adapting the algorithm from
+   http://matt.might.net/articles/a-normalization/ for core *)
+
+
+let annots_of_pexpr (Pexpr annots _ _) = annots
+let annots_of_mu_pexpr (M_Pexpr annots _ _) = annots
+let bty_of_pexpr (Pexpr _ bty _) = bty
+let bty_of_mu_pexpr (M_Pexpr _ bty _) = bty
+
+let is_symbol (M_Pexpr annots bty e) = 
+  match e with
+  | M_PEsym sym -> Just (Annotated annots bty sym)
+  | _ -> Nothing
+  end
+
+(* Here we depend on bty being of type core_base_type *)
+let var_pexpr sym annots bty = 
+  M_Pexpr annots bty (M_PEsym sym) 
+
+
+
+
+
+let ensure_ctype__pexpr = function
+  | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
+     Just (Annotated annots bty ct)
+  | _ -> Nothing
+end
+
+let fensure_ctype__pexpr err pe = 
+  match ensure_ctype__pexpr pe with
+  | Just ctype -> ctype
+  | Nothing -> failwith err
+end
+
+
+
+
+
+let core_to_mu__ctor loc ctor = 
+  let loc = Loc.stringFromLocation loc in
+  match ctor with 
+  | Core.Cnil bt -> M_Cnil bt
+  | Core.Ccons -> M_Ccons
+  | Core.Ctuple -> M_Ctuple
+  | Core.Carray -> M_Carray
+  | Core.CivCOMPL -> M_CivCOMPL
+  | Core.CivAND-> M_CivAND
+  | Core.CivOR -> M_CivOR
+  | Core.CivXOR -> M_CivXOR
+  | Core.Cspecified -> M_Cspecified
+  | Core.Cfvfromint-> M_Cfvfromint
+  | Core.Civfromfloat -> M_Civfromfloat
+  | Core.Civmax -> failwith (loc ^ ". core_anormalisation: Civmax")
+  | Core.Civmin -> failwith (loc ^ ". core_anormalisation: Civmin")
+  | Core.Civsizeof -> failwith (loc ^ ". core_anormalisation: Civsizeof")
+  | Core.Civalignof -> failwith (loc ^ ". core_anormalisation: Civalignof")
+  | Core.Cunspecified -> failwith (loc ^ ". core_anormalisation: Cunspecified")
+ end
+
+
+let rec core_to_mu__pattern (Core.Pattern annots pat_) = 
+  let wrap pat_ = M_Pattern annots pat_ in
+  let loc = Annot.get_loc_ annots in
+  match pat_ with
+  | Core.CaseBase (msym, bt) -> 
+     wrap (M_CaseBase (msym, bt))
+  | Core.CaseCtor ctor pats -> 
+     wrap (M_CaseCtor 
+             (core_to_mu__ctor loc ctor)
+             (map core_to_mu__pattern pats))
+  end
+
+
+
+
+
+
+
+type letbinder 'bound 'body = 
+  annots -> mu_sym_or_pattern -> 'bound -> 'body -> 'body
+
+val letbinder_pexpr_in_pexpr : letbinder mu_pexpr mu_pexpr
+let letbinder_pexpr_in_pexpr annots pat pexpr body : mu_pexpr = 
+  M_Pexpr annots (bty_of_mu_pexpr body) (M_PElet pat pexpr body)
+
+val letbinder_pexpr_in_expr : forall 'a. letbinder mu_pexpr (mu_expr 'a)
+let letbinder_pexpr_in_expr annots pat pexpr body : mu_expr 'a = 
+  M_Expr annots (M_Elet pat pexpr body)
+
+
+
+val letbind_pexpr :
+  forall 'a.
+  outer_annots ->
+  letbinder mu_pexpr 'a -> 
+  mu_pexpr -> 
+  (asym -> 'a) -> 
+  'a
+
+let letbind_pexpr outer_annots letbinder pexpr ctxt  = 
+  let (M_Pexpr annots bty _) = pexpr in
+  let sym = Symbol.fresh () in
+  let asym = Annotated annots bty sym in
+  let pat = M_Symbol asym in
+  let body = ctxt asym in
+  letbinder outer_annots pat pexpr body
+
+val n_val : 
+  forall 'a.
+  letbinder mu_pexpr 'a ->
+  annots -> 
+  value -> 
+  (mu_value -> 'a) -> 
+  'a
+
+val n_val_name :
+  forall 'a.
+  letbinder mu_pexpr 'a -> 
+  annots -> 
+  value -> 
+  (asym -> 'a) -> 
+  'a
+
+val n_val_names :     
+  forall 'a.
+  letbinder mu_pexpr 'a -> 
+  annots -> 
+  values -> 
+  (asyms -> 'a) -> 
+  'a
+
+
+
+
+
+val n_pexpr : Loc.t -> pexpr unit -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
+val n_pexpr_name : Loc.t -> outer_annots -> pexpr unit -> (asym -> mu_pexpr) -> mu_pexpr
+val n_pexpr_names : Loc.t -> outer_annots -> pexprs unit -> (asyms -> mu_pexpr) -> mu_pexpr
+val normalise_pexpr : forall 'bty. pexpr unit -> mu_pexpr
+
+val n_pexpr_in_expr : forall 'a. Loc.t -> pexpr unit -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_name_in_expr : forall 'a. Loc.t -> outer_annots -> pexpr unit -> (asym -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_names_in_expr : forall 'a. Loc.t -> outer_annots -> pexprs unit -> (asyms -> mu_expr 'a) -> mu_expr 'a
+
+
+(* let typeof_value v = 
+ *   match Core_typing.typeof_value Loc.unknown Core_typing_aux.empty_env v with
+ *   | Exception.Result bty -> bty
+ *   | Exception.Exception msg -> failwith "msg"
+ *   end *)
+
+
+let rec n_ov lb annots v k = 
+  match v with
+  | Core.OVinteger iv -> k (M_OVinteger iv)
+  | Core.OVfloating fv -> k (M_OVfloating fv)
+  | Core.OVpointer pv -> k (M_OVpointer pv)
+  | Core.OVarray is -> 
+     let vs = map Vloaded is in
+     n_val_names lb annots vs (fun syms ->
+     k (M_OVarray syms))
+  | Core.OVstruct sym is ->
+     k (M_OVstruct sym is)
+  | Core.OVunion sym id mv ->
+     k (M_OVunion sym id mv)
+  end
+
+and n_lv lb annots v k = 
+  match v with
+  | LVspecified ov ->
+     n_ov lb annots ov (fun ov ->
+     k (M_LVspecified ov))
+  | LVunspecified ct ->
+     failwith "core_anormalisation: LVunspeified"
+  end
+
+and n_val lb annots v k = 
+  match v with
+  | Vobject ov -> n_ov lb annots ov (fun ov -> k (M_Vobject ov))
+  | Vloaded lv -> n_lv lb annots lv (fun lv -> k (M_Vloaded lv))
+  | Vunit -> k M_Vunit
+  | Vtrue -> k M_Vtrue
+  | Vfalse -> k M_Vfalse
+  | Vctype ct -> failwith "core_anormalisation: Vctype"
+  (* | Vctype ct -> k (M_Vctype ct) *)
+  | Vlist cbt vs -> n_val_names lb annots vs (fun vs -> k (M_Vlist cbt vs))
+  | Vtuple vs -> n_val_names lb annots vs (fun vs -> k (M_Vtuple vs))
+  end
+
+ (* here we make explicit unit btys *)
+and n_val_name lb annots v k = 
+  let bty = () in (* typeof_value v in *)
+  n_val lb annots v (fun v -> 
+  let pe = M_Pexpr annots bty (M_PEval v) in
+  letbind_pexpr annots lb pe (fun sym -> 
+  k sym))
+
+and n_val_names lb annots vs k = 
+  match vs with
+  | [] -> k []
+  | v :: vs ->
+     n_val_name lb annots v (fun sym ->
+     n_val_names lb annots vs (fun syms ->
+     k (sym :: syms)))
+  end
+
+
+
+
+
+
+(* This code now twice, once for m_pexpr, once for embedding into
+   expr. This could be done parameterically with letbinder as before,
+   but that probably needs polymorphic recursion that Lem doesn't seem
+   to have. *)
+
+
+(* 1 begin *)
+
+let rec n_pexpr_name loc outer_annots e k : mu_pexpr = 
+  n_pexpr loc e (fun e -> 
+  match is_symbol e with
+  | Just sym -> k sym
+  | Nothing -> letbind_pexpr outer_annots letbinder_pexpr_in_pexpr e k
+  end)
+
+and n_pexpr_name_2 loc outer_annots (e,e') k = 
+  n_pexpr_name loc outer_annots e (fun e -> 
+  n_pexpr_name loc outer_annots e' (fun e' ->
+  k (e,e')))
+
+and n_pexpr_name_3 loc outer_annots (e,e',e'') k = 
+  n_pexpr_name loc outer_annots e (fun e -> 
+  n_pexpr_name loc outer_annots e' (fun e' ->
+  n_pexpr_name loc outer_annots e'' (fun e'' ->
+  k (e,e',e''))))
+
+and n_pexpr_names loc outer_annots (es : list (pexpr unit)) k =
+  match es with 
+  | [] -> k []
+  | e :: es -> 
+     n_pexpr_name loc outer_annots e (fun e -> 
+     n_pexpr_names loc outer_annots es (fun es ->
+     k (e :: es)))
+  end
+
+and n_pexpr loc (e : pexpr unit) k = 
+
+  let (Pexpr annots bty pe) = e in
+  let annotate pe = M_Pexpr annots bty pe in
+  let loc = match Annot.get_loc annots with
+    | Nothing -> loc
+    | Just loc -> loc
+  end in
+
+  let n_pexpr = n_pexpr loc in
+  let n_pexpr_names = n_pexpr_names loc annots in
+  let n_pexpr_name = n_pexpr_name loc annots in
+  let n_pexpr_name_2 = n_pexpr_name_2 loc annots in
+
+  match pe with
+  | PEsym sym -> 
+     k (annotate (M_PEsym sym))
+  | PEimpl i -> 
+     k (annotate (M_PEimpl i))
+  | PEval v -> 
+     n_val letbinder_pexpr_in_pexpr annots v (fun v ->
+     k (annotate (M_PEval v)))
+  | PEconstrained l -> 
+     let (constraints,exprs) = unzip l in
+     n_pexpr_names exprs (fun exprs ->
+     let l = zip constraints exprs in
+     k (annotate (M_PEconstrained l)))
+  | PEundef l u -> 
+     k (annotate (M_PEundef l u))
+  | PEerror err e' ->
+     n_pexpr_name e' (fun e' -> 
+     k (annotate (M_PEerror err e')))
+  | PEctor ctor args ->
+     n_pexpr_names args (fun args -> 
+     k (annotate (M_PEctor (core_to_mu__ctor loc ctor) args)))
+  | PEcase e' pats_pes ->
+     n_pexpr_name e' (fun e' -> 
+        let pats_pes = 
+          map (fun (pat,pe) -> 
+              let pat = core_to_mu__pattern pat in
+              let pe = n_pexpr pe k in
+              (pat, pe)) pats_pes 
+        in
+        annotate (M_PEcase e' pats_pes)
+     )
+  | PEarray_shift e' ctype e'' ->
+     n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (M_PEarray_shift e' ctype e'')))
+  | PEmember_shift e' sym id ->
+     n_pexpr_name e' (fun e' -> 
+     k (annotate (M_PEmember_shift e' sym id)))
+  | PEnot e' -> 
+     n_pexpr_name e' (fun e' -> 
+     k (annotate (M_PEnot e')))
+  | PEop binop e' e'' ->
+     n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (M_PEop binop e' e'')))
+  | PEstruct sym fields ->
+     let (fnames, pes) = unzip fields in
+     n_pexpr_names pes (fun pes ->
+     let fields = zip fnames pes in
+     k (annotate (M_PEstruct sym fields)))
+  | PEunion sym id e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (M_PEunion sym id e')))
+  | PEcfunction e' ->
+     failwith "core_anormalisation: PEcfunction"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEcfunction e'))) *)
+  | PEmemberof sym id e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (M_PEmemberof sym id e')))
+  | PEcall sym args ->
+     n_pexpr_names args (fun args ->
+     k (annotate (M_PEcall sym args)))
+  | PElet pat e' e'' ->
+     n_pexpr e' (fun e' ->
+     letbinder_pexpr_in_pexpr annots 
+       (M_Pat (core_to_mu__pattern pat))
+       e' (n_pexpr e'' k))
+  | PEif e' e'' e''' ->
+     (* this changes the type of the PEif expression *)
+     n_pexpr_name e' (fun e' ->
+     let e'' = n_pexpr e'' k in
+     let e''' = n_pexpr e''' k in
+     annotate (M_PEif e' e'' e'''))
+  | PEis_scalar e' ->
+     failwith "core_anormalisation: PEis_scalar"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_scalar e'))) *)
+  | PEis_integer e' ->
+     failwith "core_anormalisation: PEis_integer"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_integer e'))) *)
+  | PEis_signed e' ->
+     failwith "core_anormalisation: PEis_signed"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_signed e'))) *)
+  | PEis_unsigned e' ->
+     failwith "core_anormalisation: PEis_unsigned"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_unsigned e'))) *)
+  | PEbmc_assume e' ->
+     failwith "core_anormalisation: PEbmc_assume"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEbmc_assume e'))) *)
+  | PEare_compatible e' e'' ->
+     failwith "core_anormalisation: PEare_compatible"
+     (* n_pexpr_name_2 (e',e'') (fun (e',e'') ->
+      * k (annotate (M_PEare_compatible e' e''))) *)
+  end
+
+(* 1 end *)
+
+
+(* 2 begin *)
+
+let rec n_pexpr_in_expr_name loc outer_annots e k : mu_expr 'a = 
+  n_pexpr_in_expr loc e (fun e -> 
+  match is_symbol e with
+  | Just sym -> k sym
+  | Nothing -> letbind_pexpr outer_annots letbinder_pexpr_in_expr e k
+  end)
+
+and n_pexpr_in_expr_name_2 loc outer_annots (e,e') k : mu_expr 'a = 
+  n_pexpr_in_expr_name loc outer_annots e (fun e -> 
+  n_pexpr_in_expr_name loc outer_annots e' (fun e' ->
+  k (e,e')))
+
+and n_pexpr_in_expr_name_3 loc outer_annots (e,e',e'') k = 
+  n_pexpr_in_expr_name loc outer_annots e  (fun e -> 
+  n_pexpr_in_expr_name loc outer_annots e' (fun e' ->
+  n_pexpr_in_expr_name loc outer_annots e'' (fun e'' ->
+  k (e,e',e''))))
+
+and n_pexpr_in_expr_names loc outer_annots (es : list (pexpr unit)) k : mu_expr 'a =
+  match es with
+  | [] -> k []
+  | e :: es -> 
+     n_pexpr_in_expr_name loc outer_annots e (fun e -> 
+     n_pexpr_in_expr_names loc outer_annots es (fun es ->
+     k (e :: es)))
+  end
+
+and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
+
+  let (Pexpr annots bty pe) = e in
+  let annotate pe = M_Pexpr annots bty pe in
+  let loc = match Annot.get_loc annots with
+    | Nothing -> loc
+    | Just loc -> loc
+  end in
+
+  let n_pexpr_in_expr = n_pexpr_in_expr loc in
+  let n_pexpr_in_expr_names = n_pexpr_in_expr_names loc annots in
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 loc annots in
+
+  match pe with
+  | PEsym sym -> 
+     k (annotate (M_PEsym sym))
+  | PEimpl i -> 
+     k (annotate (M_PEimpl i))
+  | PEval v -> 
+     n_val letbinder_pexpr_in_expr annots v (fun v ->
+     k (annotate (M_PEval v)))
+  | PEconstrained l -> 
+     let (constraints,exprs) = unzip l in
+     n_pexpr_in_expr_names exprs (fun exprs ->
+     let l = zip constraints exprs in
+     k (annotate (M_PEconstrained l)))
+  | PEundef l u -> 
+     k (annotate (M_PEundef l u))
+  | PEerror err e' ->
+     n_pexpr_in_expr_name e' (fun e' -> 
+     k (annotate (M_PEerror err e')))
+  | PEctor ctor args ->
+     n_pexpr_in_expr_names args (fun args -> 
+     k (annotate (M_PEctor (core_to_mu__ctor loc ctor) args)))
+  | PEcase e' pats_pes ->
+     n_pexpr_in_expr_name e' (fun e' -> 
+        let pats_pes = 
+          map (fun (pat,pe) -> 
+              let pat = core_to_mu__pattern pat in
+              let pe = n_pexpr_in_expr pe k in
+              (pat, pe)) pats_pes 
+        in
+        M_Expr annots (M_Ecase e' pats_pes)
+     )
+  | PEarray_shift e' ctype e'' ->
+     n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (M_PEarray_shift e' ctype e'')))
+  | PEmember_shift e' sym id ->
+     n_pexpr_in_expr_name e' (fun e' -> 
+     k (annotate (M_PEmember_shift e' sym id)))
+  | PEnot e' -> 
+     n_pexpr_in_expr_name e' (fun e' -> 
+     k (annotate (M_PEnot e')))
+  | PEop binop e' e'' ->
+     n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (M_PEop binop e' e'')))
+  | PEstruct sym fields ->
+     let (fnames, pes) = unzip fields in
+     n_pexpr_in_expr_names pes (fun pes ->
+     let fields = zip fnames pes in
+     k (annotate (M_PEstruct sym fields)))
+  | PEunion sym id e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEunion sym id e')))
+  | PEcfunction e' ->
+     failwith "core_anormalisation: PEcfunction"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEcfunction e'))) *)
+  | PEmemberof sym id e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEmemberof sym id e')))
+  | PEcall sym args ->
+     n_pexpr_in_expr_names args (fun args ->
+     k (annotate (M_PEcall sym args)))
+  | PElet pat e' e'' ->
+     n_pexpr_in_expr e' (fun e' ->
+     letbinder_pexpr_in_expr annots 
+       (M_Pat (core_to_mu__pattern pat))
+       e' (n_pexpr_in_expr e'' k))
+  | PEif e' e'' e''' ->
+     (* this changes the type of the PEif expression *)
+     n_pexpr_in_expr_name e' (fun e' ->
+     let e'' = n_pexpr_in_expr e'' k in
+     let e''' = n_pexpr_in_expr e''' k in
+     M_Expr annots (M_Eif e' e'' e'''))
+  | PEis_scalar e' ->
+     failwith "core_anormalisation: PEis_scalar"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_scalar e'))) *)
+  | PEis_integer e' ->
+     failwith "core_anormalisation: PEis_integer"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_integer e'))) *)
+  | PEis_signed e' ->
+     failwith "core_anormalisation: PEis_signed"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_signed e'))) *)
+  | PEis_unsigned e' ->
+     failwith "core_anormalisation: PEis_unsigned"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_unsigned e'))) *)
+  | PEbmc_assume e' ->
+     failwith "core_anormalisation: PEbmc_assume"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEbmc_assume e'))) *)
+  | PEare_compatible e' e'' ->
+     failwith "core_anormalisation: PEare_compatible"
+     (* n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') ->
+      * k (annotate (M_PEare_compatible e' e''))) *)
+  end
+
+
+
+
+(* 2 end *)
+
+
+let normalise_pexpr (e : pexpr unit) = 
+  n_pexpr (Loc.locOf e) e (fun e -> e)
+
+
+(* val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
+ * let n_pexpr_in_expr p k = n_pexpr letbinder_pexpr_in_expr p k
+ * 
+ * val n_pexpr_name_in_expr : forall 'a. pexpr -> (asym -> mu_expr 'a) -> mu_expr 'a
+ * let n_pexpr_name_in_expr p k = n_pexpr_name letbinder_pexpr_in_expr p k
+ * 
+ * val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
+ * let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k *)
+
+let n_action loc annots (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
+  let (Action t an a) = action in
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let wrap a = M_Action t an a in
+  match a with
+  | Create e1 e2 sym ->
+     let ctype = fensure_ctype__pexpr "Create: not a ctype" e2 in
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     k (wrap (M_Create e1 ctype sym)))
+  | CreateReadOnly e1 e2 e3 sym ->
+     let ctype = fensure_ctype__pexpr "CreateReadOnly: not a ctype" e1 in
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     k (wrap (M_CreateReadOnly e1 ctype e3 sym))))
+  | Alloc e1 e2 sym ->
+     let ctype = fensure_ctype__pexpr "Alloc: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     k (wrap (M_Alloc ctype e2 sym)))
+  | Kill b e1 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     k (wrap (M_Kill b e1)))
+  | Store b e1 e2 e3 mo ->
+     let ctype = fensure_ctype__pexpr "Store: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     k (wrap (M_Store b ctype e2 e3 mo))))
+  | Load e1 e2 mo ->
+     let ctype = fensure_ctype__pexpr "Load: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     k (wrap (M_Load ctype e2 mo)))
+  | RMW e1 e2 e3 e4 mo1 mo2 ->
+     let ctype = fensure_ctype__pexpr "RMW: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     n_pexpr_in_expr_name e4 (fun e4 ->
+     k (wrap (M_RMW ctype e2 e3 e4 mo1 mo2)))))
+  | Fence mo -> 
+     k (wrap (M_Fence mo))
+  | CompareExchangeStrong e1 e2 e3 e4 mo1 mo2 ->
+     let ctype = fensure_ctype__pexpr "CompareExchangeStrong: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     n_pexpr_in_expr_name e4 (fun e4 ->
+     k (wrap (M_CompareExchangeStrong ctype e2 e3 e4 mo1 mo2)))))
+  | CompareExchangeWeak e1 e2 e3 e4 mo1 mo2 ->
+     let ctype = fensure_ctype__pexpr "CompareExchangeWeak: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     n_pexpr_in_expr_name e4 (fun e4 ->
+     k (wrap (M_CompareExchangeWeak ctype e2 e3 e4 mo1 mo2)))))
+  | LinuxFence lmo ->
+     k (wrap (M_LinuxFence lmo))
+  | LinuxLoad e1 e2 lmo ->
+     let ctype = fensure_ctype__pexpr "LinuxLoad: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     k (wrap (M_LinuxLoad ctype e2 lmo)))
+  | LinuxStore e1 e2 e3 lmo ->
+     let ctype = fensure_ctype__pexpr "LinuxStore: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     k (wrap (M_LinuxStore ctype e2 e3 lmo))))
+  | LinuxRMW e1 e2 e3 lmo ->
+     let ctype = fensure_ctype__pexpr "LinuxRMW: not a ctype" e1 in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     k (wrap (M_LinuxRMW ctype e2 e3 lmo))))
+  end
+     
+
+let n_paction loc annots pa (k : mu_paction 'a -> mu_expr 'a) = 
+  let (Paction pol a) = pa in
+  let wrap a = M_Paction pol a in
+  n_action loc annots a (fun a -> 
+  k (wrap a))
+
+
+let rec normalise_expr e =
+  n_expr (Loc.locOf e) e (fun e -> e)
+
+
+and n_memop loc annots memop pexprs k = 
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 loc annots in
+  let n_pexpr_in_expr_name_3 = n_pexpr_in_expr_name_3 loc annots in
+
+  match (memop, pexprs) with
+  | (Mem_common.PtrEq, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrEq (sym1, sym2)))
+  | (Mem_common.PtrNe, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrNe (sym1, sym2)))
+  | (Mem_common.PtrLt, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrLt (sym1, sym2)))
+  | (Mem_common.PtrGt, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrGt (sym1, sym2)))
+  | (Mem_common.PtrLe, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrLe (sym1, sym2)))
+  | (Mem_common.PtrGe, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrGe (sym1, sym2)))
+  | (Mem_common.Ptrdiff, [ct;pe1;pe2]) ->
+     let ct = fensure_ctype__pexpr "Ptrdiff: not a ctype" ct in
+     n_pexpr_in_expr_name_2 (pe1, pe2) (fun (sym1,sym2) ->
+     k (M_Ptrdiff (ct, sym1, sym2)))
+  | (Mem_common.IntFromPtr, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "IntFromPtr: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_IntFromPtr (ct, sym)))
+  | (Mem_common.PtrFromInt, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "PtrFromInt: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrFromInt (ct, sym)))
+  | (Mem_common.PtrValidForDeref, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "PtrValidForDeref: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrValidForDeref (ct, sym)))
+  | (Mem_common.PtrWellAligned, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "PtrWellAligned: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrWellAligned (ct, sym)))
+  | (Mem_common.PtrArrayShift, [pe1;ct;pe2]) ->
+     let ct = fensure_ctype__pexpr "PtrArrayShift: not a ctype" ct in
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrArrayShift (sym1 ,ct, sym2)))
+  | (Mem_common.Memcpy, [pe1;pe2;pe3]) ->
+     n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
+     k (M_Memcpy (sym1 ,sym2, sym3)))
+  | (Mem_common.Memcmp, [pe1;pe2;pe3]) ->
+     n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
+     k (M_Memcmp (sym1 ,sym2, sym3)))
+  | (Mem_common.Realloc, [pe1;pe2;pe3]) ->
+     n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
+     k (M_Realloc (sym1 ,sym2, sym3)))
+  | (Mem_common.Va_start, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_Va_start (sym1 ,sym2)))
+  | (Mem_common.Va_copy, [pe]) ->
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_Va_copy sym))
+  | (Mem_common.Va_arg, [pe;ct]) ->
+     let ct = fensure_ctype__pexpr "Va_arg: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_Va_arg (sym ,ct)))
+  | (Mem_common.Va_end, [pe]) ->
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_Va_end sym))
+  | (memop, pexprs) ->
+     failwith (show memop ^ " applied to " ^ 
+                 show (List.length pexprs) ^ " arguments")
+  end
+
+and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a) 
+        : mu_expr 'a = 
+  let (Expr annots pe) = e in
+  let wrap pe : mu_expr 'a = M_Expr annots pe in
+
+  let loc = match Annot.get_loc annots with
+    | Just loc -> loc
+    | Nothing -> loc
+  end in
+
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let n_pexpr_in_expr_names = n_pexpr_in_expr_names loc annots in
+  let n_pexpr_in_expr = n_pexpr_in_expr loc in
+  let n_paction = n_paction loc in
+  let n_expr = n_expr loc in
+  let n_memop = n_memop loc in
+
+  match pe with
+  | Epure pexpr -> 
+     n_pexpr_in_expr pexpr (fun e -> 
+     k (wrap (M_Epure e)))
+  | Ememop memop pexprs -> 
+     n_memop annots memop pexprs (fun memop ->
+     k (wrap (M_Ememop memop)))
+  | Eaction paction ->
+     n_paction annots paction (fun paction ->
+     k (wrap (M_Eaction paction)))
+  | Ecase pexpr pats_es ->
+     n_pexpr_in_expr_name pexpr (fun pexpr ->
+         let pats_es = 
+           map (fun (pat,e) -> 
+               let pat = core_to_mu__pattern pat in
+               let pe = n_expr e k in
+               (pat, pe)
+             ) 
+             pats_es 
+         in
+         wrap (M_Ecase pexpr pats_es)
+     )
+  | Elet pat e1 e2 ->
+     n_pexpr_in_expr e1 (fun e1 ->
+     wrap (M_Elet (M_Pat (core_to_mu__pattern pat) )
+             e1 (n_expr e2 k)))
+  | Eif e1 e2 e3 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     let e2 = n_expr e2 k in
+     let e3 = n_expr e3 k in
+     wrap (M_Eif e1 e2 e3))
+  | Eskip ->
+     k (wrap (M_Eskip))
+  | Eccall a ct e2 es ->
+     let ct = match ct with
+       | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
+          (Annotated annots bty ct)
+       | _ -> failwith "core_anormalisation: Eccall with non-ctype first argument"
+     end in
+     (* n_pexpr_in_expr_name e1 (fun e1 -> *)
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_names es (fun es ->
+     k (wrap (M_Eccall a ct e2 es))))
+  | Eproc a name es ->
+     n_pexpr_in_expr_names es (fun es ->
+     k (wrap (M_Eproc a name es)))
+  | Eunseq es ->
+     failwith "todo Eunseq"
+  | Ewseq pat e1 e2 ->
+     n_expr e1 (fun e1 ->
+     wrap (M_Ewseq (core_to_mu__pattern pat) e1 (n_expr e2 k)))
+  | Esseq pat e1 e2 ->
+     n_expr e1 (fun e1 ->
+     wrap (M_Esseq (core_to_mu__pattern pat) e1 (n_expr e2 k)))
+  | Easeq b action paction ->
+     failwith "todo Easeq"
+  | Eindet n e ->
+     failwith "todo Eindet"
+  | Ebound n e ->
+     wrap (M_Ebound n (n_expr e k))
+  | End es ->
+     let es = map normalise_expr es in
+     k (wrap (M_End es))
+  | Esave b syms_typs_pes e ->  (* have to check *)
+     let (syms,typs_pes) = unzip syms_typs_pes in
+     let (typs,pes) = unzip typs_pes in
+     n_pexpr_in_expr_names pes (fun pes ->
+     let typs_pes = zip typs pes in
+     let syms_typs_pes = zip syms typs_pes in
+     let e = normalise_expr e in
+     k (wrap (M_Esave b syms_typs_pes e)))
+  | Erun a sym pes ->
+     n_pexpr_in_expr_names pes (fun pes ->
+     k (wrap (M_Erun a sym pes)))
+  | Epar es -> 
+     failwith "todo Epar"
+  | Ewait tid ->
+     failwith "todo Ewait"
+  end
+
+
+
+
+let normalise_impl_decl (i : generic_impl_decl unit) : mu_impl_decl unit =
+  match i with
+  | Def bt p -> M_Def bt (normalise_pexpr p)
+  | IFun bt args body -> M_IFun bt args (normalise_pexpr body)
+  end
+
+let normalise_impl (i : generic_impl unit) : mu_impl unit =
+  Map.map normalise_impl_decl i
+
+let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a) 
+    : mu_fun_map_decl unit 'a =
+  better_error_messages (show name)
+    (match d with
+     | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
+     | Proc loc bt args e -> M_Proc loc bt args (normalise_expr e)
+     | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
+     | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
+     end)
+
+let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map unit 'a = 
+  Map.mapi normalise_fun_map_decl fmap
+  
+
+let normalise_globs (g : generic_globs 'a unit) : mu_globs 'a unit = 
+  match g with
+  | GlobalDef bt e -> M_GlobalDef bt (normalise_expr e)
+  | GlobalDecl bt -> M_GlobalDecl bt 
+  end
+
+let normalise_globs_list (gs : list (Symbol.sym * generic_globs 'a unit) )
+    : list (Symbol.sym * mu_globs 'a unit) = 
+  map (fun (sym,g) -> (sym, normalise_globs g)) gs
+
+
+let normalise_file file = 
+  <| mu_main = file.main
+   ; mu_tagDefs = file.tagDefs
+   ; mu_stdlib = normalise_fun_map file.stdlib
+   ; mu_impl = normalise_impl file.impl
+   ; mu_globs = normalise_globs_list file.globs
+   ; mu_funs = normalise_fun_map file.funs
+   ; mu_extern = file.extern
+   ; mu_funinfo = file.funinfo
+  |>
+

@@ -1,0 +1,520 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives Utils AilSyntax AilTypesAux Ctype
+import Cmm_csem
+
+(* Things needed to model in a implementation independent way,
+   types and constant the std library defines. *)
+
+val translate_builtin_typenames: string -> maybe ctype
+let translate_builtin_typenames = function
+  (* stdint.h *)
+  | "__cerbty_int8_t" ->
+      Just (mk_ctype_integer (Signed (IntN_t 8)))
+  | "__cerbty_int16_t" ->
+      Just (mk_ctype_integer (Signed (IntN_t 16)))
+  | "__cerbty_int32_t" ->
+      Just (mk_ctype_integer (Signed (IntN_t 32)))
+  | "__cerbty_int64_t" ->
+      Just (mk_ctype_integer (Signed (IntN_t 64)))
+  | "__cerbty_int128_t" ->
+      Just (mk_ctype_integer (Signed (IntN_t 128)))
+  | "__cerbty_int_fast8_t" ->
+      Just (mk_ctype_integer (Signed (Int_fastN_t 8)))
+  | "__cerbty_int_fast16_t" ->
+      Just (mk_ctype_integer (Signed (Int_fastN_t 16)))
+  | "__cerbty_int_fast32_t" ->
+      Just (mk_ctype_integer (Signed (Int_fastN_t 32)))
+  | "__cerbty_int_fast64_t" ->
+      Just (mk_ctype_integer (Signed (Int_fastN_t 64)))
+  | "__cerbty_int_least8_t" ->
+      Just (mk_ctype_integer (Signed (Int_leastN_t 8)))
+  | "__cerbty_int_least16_t" ->
+      Just (mk_ctype_integer (Signed (Int_leastN_t 16)))
+  | "__cerbty_int_least32_t" ->
+      Just (mk_ctype_integer (Signed (Int_leastN_t 32)))
+  | "__cerbty_int_least64_t" ->
+      Just (mk_ctype_integer (Signed (Int_leastN_t 64)))
+  | "__cerbty_intmax_t" ->
+      Just intmax_t
+  | "__cerbty_intptr_t" ->
+      Just intptr_t
+  | "__cerbty_ptrdiff_t" ->
+      Just ptrdiff_t
+  | "__cerbty_uint8_t" ->
+      Just (mk_ctype_integer (Unsigned (IntN_t 8)))
+  | "__cerbty_uint16_t" ->
+      Just (mk_ctype_integer (Unsigned (IntN_t 16)))
+  | "__cerbty_uint32_t" ->
+      Just (mk_ctype_integer (Unsigned (IntN_t 32)))
+  | "__cerbty_uint64_t" ->
+      Just (mk_ctype_integer (Unsigned (IntN_t 64)))
+  | "__cerbty_uint128_t" ->
+      Just (mk_ctype_integer (Unsigned (IntN_t 128)))
+  | "__cerbty_uint_fast8_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_fastN_t 8)))
+  | "__cerbty_uint_fast16_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_fastN_t 16)))
+  | "__cerbty_uint_fast32_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_fastN_t 32)))
+  | "__cerbty_uint_fast64_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_fastN_t 64)))
+  | "__cerbty_uint_least8_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_leastN_t 8)))
+  | "__cerbty_uint_least16_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_leastN_t 16)))
+  | "__cerbty_uint_least32_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_leastN_t 32)))
+  | "__cerbty_uint_least64_t" ->
+      Just (mk_ctype_integer (Unsigned (Int_leastN_t 64)))
+  | "__cerbty_uintmax_t" ->
+      Just uintmax_t
+  | "__cerbty_uintptr_t" ->
+      Just uintptr_t
+  (* setjmp.h *)
+  | "__cerbty_jmp_buf" ->
+      Nothing
+  (* stddef.h *)
+  | "__cerbty_max_align_t" ->
+      Nothing
+  | "__cerbty_size_t" ->
+      Just size_t
+  | "__cerbty_wchar_t" ->
+      Just wchar_t
+  | _ ->
+    Nothing
+end
+
+(* errno.h, the values are chosen arbitrarily *)
+(* NOTE: this is used by the driver *)
+val translate_errno: string -> integer
+let translate_errno = function
+  | "__cerbvar_EDOM"            -> 1
+  | "__cerbvar_EILSEQ"          -> 2
+  | "__cerbvar_ERANGE"          -> 3
+  | "__cerbvar_E2BIG"           -> 4
+  | "__cerbvar_EACCES"          -> 5
+  | "__cerbvar_EADDRINUSE"      -> 6
+  | "__cerbvar_EADDRNOTAVAIL"   -> 7
+  | "__cerbvar_EAFNOSUPPORT"    -> 8
+  | "__cerbvar_EAGAIN"          -> 9
+  | "__cerbvar_EALREADY"        -> 10
+  | "__cerbvar_EBADF"           -> 11
+  | "__cerbvar_EBADMSG"         -> 12
+  | "__cerbvar_EBUSY"           -> 13
+  | "__cerbvar_ECANCELED"       -> 14
+  | "__cerbvar_ECHILD"          -> 15
+  | "__cerbvar_ECONNABORTED"    -> 16
+  | "__cerbvar_ECONNREFUSED"    -> 17
+  | "__cerbvar_ECONNRESET"      -> 18
+  | "__cerbvar_EDEADLK"         -> 19
+  | "__cerbvar_EDESTADDRREQ"    -> 20
+  | "__cerbvar_EDQUOT"          -> 21
+  | "__cerbvar_EEXIST"          -> 22
+  | "__cerbvar_EFAULT"          -> 23
+  | "__cerbvar_EFBIG"           -> 24
+  | "__cerbvar_EHOSTUNREACH"    -> 25
+  | "__cerbvar_EIDRM"           -> 26
+  | "__cerbvar_EINPROGRESS"     -> 27
+  | "__cerbvar_EINTR"           -> 28
+  | "__cerbvar_EINVAL"          -> 29
+  | "__cerbvar_EIO"             -> 30
+  | "__cerbvar_EISCONN"         -> 31
+  | "__cerbvar_EISDIR"          -> 32
+  | "__cerbvar_ELOOP"           -> 33
+  | "__cerbvar_EMFILE"          -> 34
+  | "__cerbvar_EMLINK"          -> 35
+  | "__cerbvar_EMSGSIZE"        -> 36
+  | "__cerbvar_EMULTIHOP"       -> 37
+  | "__cerbvar_ENAMETOOLONG"    -> 38
+  | "__cerbvar_ENETDOWN"        -> 39
+  | "__cerbvar_ENETRESET"       -> 40
+  | "__cerbvar_ENETUNREACH"     -> 41
+  | "__cerbvar_ENFILE"          -> 42
+  | "__cerbvar_ENOBUFS"         -> 43
+  | "__cerbvar_ENODATA"         -> 44
+  | "__cerbvar_ENODEV"          -> 45
+  | "__cerbvar_ENOENT"          -> 46
+  | "__cerbvar_ENOEXEC"         -> 47
+  | "__cerbvar_ENOLCK"          -> 48
+  | "__cerbvar_ENOLINK"         -> 49
+  | "__cerbvar_ENOMEM"          -> 50
+  | "__cerbvar_ENOMSG"          -> 51
+  | "__cerbvar_ENOPROTOOPT"     -> 52
+  | "__cerbvar_ENOSPC"          -> 53
+  | "__cerbvar_ENOSR"           -> 54
+  | "__cerbvar_ENOSTR"          -> 55
+  | "__cerbvar_ENOSYS"          -> 56
+  | "__cerbvar_ENOTCONN"        -> 57
+  | "__cerbvar_ENOTDIR"         -> 58
+  | "__cerbvar_ENOTEMPTY"       -> 59
+  | "__cerbvar_ENOTRECOVERABLE" -> 60
+  | "__cerbvar_ENOTSOCK"        -> 61
+  | "__cerbvar_ENOTSUP"         -> 62
+  | "__cerbvar_ENOTTY"          -> 63
+  | "__cerbvar_ENXIO"           -> 64
+  | "__cerbvar_EOPNOTSUPP"      -> 65
+  | "__cerbvar_EOVERFLOW"       -> 66
+  | "__cerbvar_EOWNERDEAD"      -> 67
+  | "__cerbvar_EPERM"           -> 68
+  | "__cerbvar_EPIPE"           -> 69
+  | "__cerbvar_EPROTO"          -> 70
+  | "__cerbvar_EPROTONOSUPPORT" -> 71
+  | "__cerbvar_EPROTOTYPE"      -> 72
+  | "__cerbvar_EROFS"           -> 73
+  | "__cerbvar_ESPIPE"          -> 74
+  | "__cerbvar_ESRCH"           -> 75
+  | "__cerbvar_ESTALE"          -> 76
+  | "__cerbvar_ETIME"           -> 77
+  | "__cerbvar_ETIMEDOUT"       -> 78
+  | "__cerbvar_ETXTBSY"         -> 79
+  | "__cerbvar_EWOULDBLOCK"     -> 80
+  | "__cerbvar_EXDEV"           -> 81
+  | str -> error $ "Unknown errno code: " ^ str
+end
+
+val encode_memory_order: Cmm_csem.memory_order -> integer
+let encode_memory_order  = function
+  | Cmm_csem.Relaxed -> 0
+  | Cmm_csem.Consume -> 1
+  | Cmm_csem.Acquire -> 2
+  | Cmm_csem.Release -> 3
+  | Cmm_csem.Acq_rel -> 4
+  | Cmm_csem.Seq_cst -> 5
+  | Cmm_csem.NA -> error $ "encode_memory_order NA"
+end
+
+val decode_memory_order: nat -> maybe Cmm_csem.memory_order
+let decode_memory_order  = function
+  | 0 -> Just $ Cmm_csem.Relaxed
+  | 1 -> Just $ Cmm_csem.Consume
+  | 2 -> Just $ Cmm_csem.Acquire
+  | 3 -> Just $ Cmm_csem.Release
+  | 4 -> Just $ Cmm_csem.Acq_rel
+  | 5 -> Just $ Cmm_csem.Seq_cst
+  | _ -> Nothing
+end
+
+val translate_builtin_varnames: Symbol.identifier -> maybe (expression_ unit)
+let translate_builtin_varnames (Symbol.Identifier _ str) =
+  let const_int ic: maybe(expression_ unit) =
+    Just (AilEconst (ConstantInteger ic))
+  in
+  let const_ic n = const_int $ IConstant n Decimal Nothing in
+  match str with
+    (* stddef.h *)
+    | "__cerbvar_NULL" -> Just (AilEconst ConstantNull)
+    
+    (* errno.h *)
+    | "__cerbvar_EDOM" -> const_ic $ translate_errno str
+    | "__cerbvar_EILSEQ" -> const_ic $ translate_errno str
+    | "__cerbvar_ERANGE" -> const_ic $ translate_errno str
+    | "__cerbvar_E2BIG" -> const_ic $ translate_errno str
+    | "__cerbvar_EACCES" -> const_ic $ translate_errno str
+    | "__cerbvar_EADDRINUSE" -> const_ic $ translate_errno str
+    | "__cerbvar_EADDRNOTAVAIL" -> const_ic $ translate_errno str
+    | "__cerbvar_EAFNOSUPPORT" -> const_ic $ translate_errno str
+    | "__cerbvar_EAGAIN" -> const_ic $ translate_errno str
+    | "__cerbvar_EALREADY" -> const_ic $ translate_errno str
+    | "__cerbvar_EBADF" -> const_ic $ translate_errno str
+    | "__cerbvar_EBADMSG" -> const_ic $ translate_errno str
+    | "__cerbvar_EBUSY" -> const_ic $ translate_errno str
+    | "__cerbvar_ECANCELED" -> const_ic $ translate_errno str
+    | "__cerbvar_ECHILD" -> const_ic $ translate_errno str
+    | "__cerbvar_ECONNABORTED" -> const_ic $ translate_errno str
+    | "__cerbvar_ECONNREFUSED" -> const_ic $ translate_errno str
+    | "__cerbvar_ECONNRESET" -> const_ic $ translate_errno str
+    | "__cerbvar_EDEADLK" -> const_ic $ translate_errno str
+    | "__cerbvar_EDESTADDRREQ" -> const_ic $ translate_errno str
+    | "__cerbvar_EDQUOT" -> const_ic $ translate_errno str
+    | "__cerbvar_EEXIST" -> const_ic $ translate_errno str
+    | "__cerbvar_EFAULT" -> const_ic $ translate_errno str
+    | "__cerbvar_EFBIG" -> const_ic $ translate_errno str
+    | "__cerbvar_EHOSTUNREACH" -> const_ic $ translate_errno str
+    | "__cerbvar_EIDRM" -> const_ic $ translate_errno str
+    | "__cerbvar_EINPROGRESS" -> const_ic $ translate_errno str
+    | "__cerbvar_EINTR" -> const_ic $ translate_errno str
+    | "__cerbvar_EINVAL" -> const_ic $ translate_errno str
+    | "__cerbvar_EIO" -> const_ic $ translate_errno str
+    | "__cerbvar_EISCONN" -> const_ic $ translate_errno str
+    | "__cerbvar_EISDIR" -> const_ic $ translate_errno str
+    | "__cerbvar_ELOOP" -> const_ic $ translate_errno str
+    | "__cerbvar_EMFILE" -> const_ic $ translate_errno str
+    | "__cerbvar_EMLINK" -> const_ic $ translate_errno str
+    | "__cerbvar_EMSGSIZE" -> const_ic $ translate_errno str
+    | "__cerbvar_EMULTIHOP" -> const_ic $ translate_errno str
+    | "__cerbvar_ENAMETOOLONG" -> const_ic $ translate_errno str
+    | "__cerbvar_ENETDOWN" -> const_ic $ translate_errno str
+    | "__cerbvar_ENETRESET" -> const_ic $ translate_errno str
+    | "__cerbvar_ENETUNREACH" -> const_ic $ translate_errno str
+    | "__cerbvar_ENFILE" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOBUFS" -> const_ic $ translate_errno str
+    | "__cerbvar_ENODATA" -> const_ic $ translate_errno str
+    | "__cerbvar_ENODEV" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOENT" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOEXEC" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOLCK" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOLINK" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOMEM" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOMSG" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOPROTOOPT" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOSPC" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOSR" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOSTR" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOSYS" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTCONN" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTDIR" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTEMPTY" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTRECOVERABLE" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTSOCK" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTSUP" -> const_ic $ translate_errno str
+    | "__cerbvar_ENOTTY" -> const_ic $ translate_errno str
+    | "__cerbvar_ENXIO" -> const_ic $ translate_errno str
+    | "__cerbvar_EOPNOTSUPP" -> const_ic $ translate_errno str
+    | "__cerbvar_EOVERFLOW" -> const_ic $ translate_errno str
+    | "__cerbvar_EOWNERDEAD" -> const_ic $ translate_errno str
+    | "__cerbvar_EPERM" -> const_ic $ translate_errno str
+    | "__cerbvar_EPIPE" -> const_ic $ translate_errno str
+    | "__cerbvar_EPROTO" -> const_ic $ translate_errno str
+    | "__cerbvar_EPROTONOSUPPORT" -> const_ic $ translate_errno str
+    | "__cerbvar_EPROTOTYPE" -> const_ic $ translate_errno str
+    | "__cerbvar_EROFS" -> const_ic $ translate_errno str
+    | "__cerbvar_ESPIPE" -> const_ic $ translate_errno str
+    | "__cerbvar_ESRCH" -> const_ic $ translate_errno str
+    | "__cerbvar_ESTALE" -> const_ic $ translate_errno str
+    | "__cerbvar_ETIME" -> const_ic $ translate_errno str
+    | "__cerbvar_ETIMEDOUT" -> const_ic $ translate_errno str
+    | "__cerbvar_ETXTBSY" -> const_ic $ translate_errno str
+    | "__cerbvar_EWOULDBLOCK" -> const_ic $ translate_errno str
+    | "__cerbvar_EXDEV" -> const_ic $ translate_errno str
+    
+    (* stdatomic.h *)
+    | "__cerbvar_memory_order_relaxed" ->
+        const_ic $ encode_memory_order Cmm_csem.Relaxed
+    | "__cerbvar_memory_order_consume" ->
+        const_ic $ encode_memory_order Cmm_csem.Consume
+    | "__cerbvar_memory_order_acquire" ->
+        const_ic $ encode_memory_order Cmm_csem.Acquire
+    | "__cerbvar_memory_order_release" ->
+        const_ic $ encode_memory_order Cmm_csem.Release
+    | "__cerbvar_memory_order_acq_rel" ->
+        const_ic $ encode_memory_order Cmm_csem.Acq_rel
+    | "__cerbvar_memory_order_seq_cst" ->
+        const_ic $ encode_memory_order Cmm_csem.Seq_cst
+    | "__cerbvar_atomic_thread_fence" ->
+        Just (AilEbuiltin (AilBatomic AilBAthread_fence))
+    | "__cerbvar_atomic_store_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAstore))
+    | "__cerbvar_atomic_load_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAload))
+    | "__cerbvar_atomic_exchange_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAexchange))
+    | "__cerbvar_atomic_compare_exchange_strong_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAcompare_exchange_strong))
+    | "__cerbvar_atomic_compare_exchange_weak_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAcompare_exchange_weak))
+    | "__cerbvar_atomic_fetch_key_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAfetch_key))
+    
+    (* linux.h *)
+    | "__cerbvar_linux_fence" ->
+        Just (AilEbuiltin (AilBlinux AilBLfence))
+    | "__cerbvar_linux_read" ->
+        Just (AilEbuiltin (AilBlinux AilBLread))
+    | "__cerbvar_linux_write" ->
+        Just (AilEbuiltin (AilBlinux AilBLwrite))
+    | "__cerbvar_linux_rmw" ->
+        Just (AilEbuiltin (AilBlinux AilBLrmw))
+    
+    (* stdint.h *)
+    | "__cerbvar_CHAR_BIT" ->
+        (* TODO/FIXME: this depends on the implementation *)
+        const_ic 8
+    | "__cerbvar_SCHAR_MIN" ->
+        const_int $ IConstantMin (Signed Ichar)
+    | "__cerbvar_SCHAR_MAX" ->
+        const_int $ IConstantMax (Signed Ichar)
+    | "__cerbvar_UCHAR_MAX" ->
+        const_int $ IConstantMax (Unsigned Ichar)
+    | "__cerbvar_CHAR_MIN" ->
+        const_int $ IConstantMin Char
+    | "__cerbvar_CHAR_MAX" ->
+        const_int $ IConstantMax Char
+    | "__cerbvar_SHRT_MIN" ->
+        const_int $ IConstantMin (Signed Short)
+    | "__cerbvar_SHRT_MAX" ->
+        const_int $ IConstantMax (Signed Short)
+    | "__cerbvar_USHRT_MAX" ->
+        const_int $ IConstantMax (Unsigned Short)
+    | "__cerbvar_INT_MIN" ->
+        const_int $ IConstantMin (Signed Int_)
+    | "__cerbvar_INT_MAX" ->
+        const_int $ IConstantMax (Signed Int_)
+    | "__cerbvar_UINT_MAX" ->
+        const_int $ IConstantMax (Unsigned Int_)
+    | "__cerbvar_LONG_MIN" ->
+        const_int $ IConstantMin (Signed Long)
+    | "__cerbvar_LONG_MAX" ->
+        const_int $ IConstantMax (Signed Long)
+    | "__cerbvar_ULONG_MAX" ->
+        const_int $ IConstantMax (Unsigned Long)
+    | "__cerbvar_LLONG_MIN" ->
+        const_int $ IConstantMin (Signed LongLong)
+    | "__cerbvar_LLONG_MAX" ->
+        const_int $ IConstantMax (Signed LongLong)
+    | "__cerbvar_ULLONG_MAX" ->
+        const_int $ IConstantMax (Unsigned LongLong)
+    | "__cerbvar_INT8_MIN" ->
+        const_int $ IConstantMin (Signed (IntN_t 8))
+    | "__cerbvar_INT16_MIN" ->
+        const_int $ IConstantMin (Signed (IntN_t 16))
+    | "__cerbvar_INT32_MIN" ->
+        const_int $ IConstantMin (Signed (IntN_t 32))
+    | "__cerbvar_INT64_MIN" ->
+        const_int $ IConstantMin (Signed (IntN_t 64))
+    | "__cerbvar_INT8_MAX" ->
+        const_int $ IConstantMax (Signed (IntN_t 8))
+    | "__cerbvar_INT16_MAX" ->
+        const_int $ IConstantMax (Signed (IntN_t 16))
+    | "__cerbvar_INT32_MAX" ->
+        const_int $ IConstantMax (Signed (IntN_t 32))
+    | "__cerbvar_INT64_MAX" ->
+        const_int $ IConstantMax (Signed (IntN_t 64))
+    | "__cerbvar_UINT8_MAX" ->
+        const_int $ IConstantMax (Unsigned (IntN_t 8))
+    | "__cerbvar_UINT16_MAX" ->
+        const_int $ IConstantMax (Unsigned (IntN_t 16))
+    | "__cerbvar_UINT32_MAX" ->
+        const_int $ IConstantMax (Unsigned (IntN_t 32))
+    | "__cerbvar_UINT64_MAX" ->
+        const_int $ IConstantMax (Unsigned (IntN_t 64))
+    | "__cerbvar_INTPTR_MIN" ->
+        const_int $ IConstantMin (Signed Intptr_t)
+    | "__cerbvar_INTPTR_MAX" ->
+        const_int $ IConstantMax (Signed Intptr_t)
+    | "__cerbvar_UINTPTR_MAX" ->
+        const_int $ IConstantMax (Unsigned Intptr_t)
+    | "__cerbvar_INTMAX_MIN" ->
+        const_int $ IConstantMin (Signed Intmax_t)
+    | "__cerbvar_INTMAX_MAX" ->
+        const_int $ IConstantMax (Signed Intmax_t)
+    | "__cerbvar_UINTMAX_MAX" ->
+        const_int $ IConstantMax (Unsigned Intmax_t)
+    | "__cerbvar_PTRDIFF_MIN" ->
+        const_int $ IConstantMin Ptrdiff_t
+    | "__cerbvar_PTRDIFF_MAX" ->
+        const_int $ IConstantMax Ptrdiff_t
+    | "__cerbvar_INT_LEAST8_MIN" ->
+        const_int $ IConstantMin (Signed (Int_leastN_t 8))
+    | "__cerbvar_INT_LEAST16_MIN" ->
+        const_int $ IConstantMin (Signed (Int_leastN_t 16))
+    | "__cerbvar_INT_LEAST32_MIN" ->
+        const_int $ IConstantMin (Signed (Int_leastN_t 32))
+    | "__cerbvar_INT_LEAST64_MIN" ->
+        const_int $ IConstantMin (Signed (Int_leastN_t 64))
+    | "__cerbvar_INT_LEAST8_MAX" ->
+        const_int $ IConstantMax (Signed (Int_leastN_t 8))
+    | "__cerbvar_INT_LEAST16_MAX" ->
+        const_int $ IConstantMax (Signed (Int_leastN_t 16))
+    | "__cerbvar_INT_LEAST32_MAX" ->
+        const_int $ IConstantMax (Signed (Int_leastN_t 32))
+    | "__cerbvar_INT_LEAST64_MAX" ->
+        const_int $ IConstantMax (Signed (Int_leastN_t 64))
+    | "__cerbvar_UINT_LEAST8_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_leastN_t 8))
+    | "__cerbvar_UINT_LEAST16_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_leastN_t 16))
+    | "__cerbvar_UINT_LEAST32_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_leastN_t 32))
+    | "__cerbvar_UINT_LEAST64_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_leastN_t 64))
+    | "__cerbvar_INT_FAST8_MIN" ->
+        const_int $ IConstantMin (Signed (Int_fastN_t 8))
+    | "__cerbvar_INT_FAST16_MIN" ->
+        const_int $ IConstantMin (Signed (Int_fastN_t 16))
+    | "__cerbvar_INT_FAST32_MIN" ->
+        const_int $ IConstantMin (Signed (Int_fastN_t 32))
+    | "__cerbvar_INT_FAST64_MIN" ->
+        const_int $ IConstantMin (Signed (Int_fastN_t 64))
+    | "__cerbvar_INT_FAST8_MAX" ->
+        const_int $ IConstantMax (Signed (Int_fastN_t 8))
+    | "__cerbvar_INT_FAST16_MAX" ->
+        const_int $ IConstantMax (Signed (Int_fastN_t 16))
+    | "__cerbvar_INT_FAST32_MAX" ->
+        const_int $ IConstantMax (Signed (Int_fastN_t 32))
+    | "__cerbvar_INT_FAST64_MAX" ->
+        const_int $ IConstantMax (Signed (Int_fastN_t 64))
+    | "__cerbvar_UINT_FAST8_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_fastN_t 8))
+    | "__cerbvar_UINT_FAST16_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_fastN_t 16))
+    | "__cerbvar_UINT_FAST32_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_fastN_t 32))
+    | "__cerbvar_UINT_FAST64_MAX" ->
+        const_int $ IConstantMax (Unsigned (Int_fastN_t 64))
+    | "__cerbvar_SIZE_MAX" ->
+        const_int $ IConstantMax Size_t
+    | "__cerbvar_WCHAR_MIN" ->
+        const_int $ IConstantMin Wchar_t
+    | "__cerbvar_WCHAR_MAX" ->
+        const_int $ IConstantMax Wchar_t
+    | "__cerbvar_WINT_MIN" ->
+        const_int $ IConstantMin Wint_t
+    | "__cerbvar_WINT_MAX" ->
+        const_int $ IConstantMax Wint_t
+    
+    | _ ->
+      Nothing
+end
+
+
+(* Some GCC builtins *)
+val gcc_builtin_ctz: integer -> integer
+declare ocaml target_rep function gcc_builtin_ctz = `Ocaml_gcc_builtins.ctz`
+
+val gcc_builtin_bswap16: integer -> integer
+val gcc_builtin_bswap32: integer -> integer
+val gcc_builtin_bswap64: integer -> integer
+
+declare ocaml target_rep function gcc_builtin_bswap16 = `Ocaml_gcc_builtins.bswap16`
+declare ocaml target_rep function gcc_builtin_bswap32 = `Ocaml_gcc_builtins.bswap32`
+declare ocaml target_rep function gcc_builtin_bswap64 = `Ocaml_gcc_builtins.bswap64`

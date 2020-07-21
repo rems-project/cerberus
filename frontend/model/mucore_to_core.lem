@@ -1,0 +1,622 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Christopher Pulte                                                             *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+
+open import Ctype Annot Loc
+import Symbol Implementation Undefined Cmm_csem
+open import Mem Mem_common
+(* import Linux *)
+
+import Core
+open import Core_aux
+
+open import Assert_extra
+
+open import Mucore
+
+
+
+let mapsnd (f : 'b -> 'c) (l : list ('a * 'b)) : list ('a * 'c) = 
+  map (fun (a,b) -> (a, f b)) l
+
+
+type env 'bty = map symbol (Core.generic_pexpr 'bty symbol)
+
+let insert_symbol sym v env =
+  Map.insert sym v env
+
+let get_pexpr _where env asym = 
+  let (Annotated annots bty sym) = asym in
+  match Map.lookup sym env with
+  | Just pexpr -> pexpr
+  (* Maybe there was already a symbol before a-normalisation. Then the
+     a-normalisation would not have added a new let-expression. So
+     when reverting, we have to turn those symbols into PEsym
+     expressions. *)
+  | Nothing -> Core.Pexpr annots bty (Core.PEsym sym)
+  end
+
+let get_loaded_value env asym = 
+  let sym = a_unpack asym in
+  match Map.lookup sym env with
+  | Just (Core.Pexpr _ _ (Core.PEval (Core.Vloaded lv))) -> lv
+  | Just _ -> failwith "not a loaded value"
+  | Nothing -> failwith ("get_loaded_value: " ^ show sym ^ " not found")
+  end
+
+let get_object_value env asym = 
+  let sym = a_unpack asym in
+  match lookup sym env with
+  | Just (Core.Pexpr _ _ (Core.PEval (Core.Vobject ov))) -> ov
+  | Just _ -> failwith "not an object value"
+  | Nothing -> failwith ("get_object_value: " ^ show sym ^ " not found")
+  end
+
+let get_value env asym = 
+  let sym = a_unpack asym in
+  match Map.lookup sym env with
+  | Just (Core.Pexpr _ _ (Core.PEval v)) -> v
+  | Just _ -> failwith "not an object value"
+  | Nothing -> failwith ("get_value: " ^ show sym ^ " not found")
+  end
+
+
+let make_symbol_pexpr (Annotated annots bty sym) : Core.generic_pexpr 'bty symbol =
+  Core.Pexpr annots bty (Core.PEsym sym)
+
+let make_ctype_pexpr (Annotated annots bty ctype) : Core.generic_pexpr 'bty symbol =
+  Core.Pexpr annots bty (Core.PEval (Core.Vctype ctype))
+
+
+let rec mu_to_core__object_value (env : env 'bty) ov = 
+  match ov with
+  | M_OVinteger iv -> Core.OVinteger iv
+  | M_OVfloating fv -> Core.OVfloating fv
+  | M_OVpointer ov -> Core.OVpointer ov
+  | M_OVstruct s is -> Core.OVstruct s is
+  | M_OVunion s i mv -> Core.OVunion s i mv
+  | M_OVarray is ->
+     let is = map (get_loaded_value env) is in
+     Core.OVarray is
+  end
+
+and mu_to_core__loaded_value (env : env 'bty) lv = 
+  match lv with
+  | M_LVspecified ov ->
+     Core.LVspecified (mu_to_core__object_value env ov)
+  (* | M_LVunspecified ct -> Core.LVunspecified ct *)
+  end
+
+
+let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
+        : Core.generic_value symbol =
+  match v with
+  | M_Vobject ov -> Core.Vobject (mu_to_core__object_value env ov)
+  | M_Vloaded lv -> Core.Vloaded (mu_to_core__loaded_value env lv)
+  | M_Vunit -> Core.Vunit
+  | M_Vtrue -> Core.Vtrue
+  | M_Vfalse -> Core.Vfalse
+  (* | M_Vctype ct -> Core.Vctype ct *)
+  | M_Vlist cbt is -> 
+     let is = map (get_value env) is in
+     Core.Vlist cbt is
+  | M_Vtuple is ->
+     let is = map (get_value env) is in
+     Core.Vtuple is
+  end
+  
+let mu_to_core__ctor = function
+ | M_Cnil bt -> Core.Cnil bt
+ | M_Ccons -> Core.Ccons
+ | M_Ctuple -> Core.Ctuple
+ | M_Carray -> Core.Carray
+ | M_CivCOMPL -> Core.CivCOMPL
+ | M_CivAND-> Core.CivAND
+ | M_CivOR -> Core.CivOR
+ | M_CivXOR -> Core.CivXOR
+ | M_Cspecified -> Core.Cspecified
+ | M_Cfvfromint-> Core.Cfvfromint
+ | M_Civfromfloat -> Core.Civfromfloat
+end
+
+
+let rec mu_to_core__pattern (M_Pattern annots pat_) = 
+  let wrap pat_ = Core.Pattern annots pat_ in
+  match pat_ with
+  | M_CaseBase (msym, bt) -> 
+     wrap (Core.CaseBase (msym, bt))
+  | M_CaseCtor ctor pats -> 
+     wrap (Core.CaseCtor 
+             (mu_to_core__ctor ctor)
+             (map mu_to_core__pattern pats))
+  end
+
+let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
+        : Core.generic_pexpr 'bty symbol =
+  let (M_Pexpr annots bty pexpr_) = pexpr in
+  let wrap pexpr_ = Core.Pexpr annots bty pexpr_ in
+  match pexpr_ with
+  | M_PEsym s ->
+     wrap (Core.PEsym s)
+  | M_PEimpl ic -> 
+     wrap (Core.PEimpl ic)
+  | M_PEval v -> 
+     wrap (Core.PEval (mu_to_core__value env v))
+  | M_PEconstrained l -> 
+     let l = mapsnd (get_pexpr "PEconstrained" env) l in
+     wrap (Core.PEconstrained l)
+  | M_PEundef loc undef ->
+     wrap (Core.PEundef loc undef)
+  | M_PEerror err p -> 
+     wrap (Core.PEerror err (get_pexpr "PEerror" env p))
+  | M_PEctor ctor pes -> 
+     wrap (Core.PEctor 
+             (mu_to_core__ctor ctor)
+             (map (get_pexpr "PEctor" env) pes))
+  | M_PEcase p pats_pes ->
+     let pats_pes = 
+       map (fun (pat,e) -> 
+           (mu_to_core__pattern pat, 
+            mu_to_core__pexpr env e)) 
+         pats_pes in
+     wrap (Core.PEcase (get_pexpr "PEcase" env p) pats_pes)
+  | M_PEarray_shift pe1 ctype pe2 ->
+     wrap (Core.PEarray_shift 
+             (get_pexpr "PEarray_shift" env pe1) 
+             ctype 
+             (get_pexpr "PEarray_shift" env pe2))
+  | M_PEmember_shift p s id  ->
+     wrap (Core.PEmember_shift (get_pexpr "PEmember_shift" env p) s id)
+  | M_PEnot p ->
+     wrap (Core.PEnot (get_pexpr "PEnot" env p))
+  | M_PEop binop p1 p2 ->
+     wrap (Core.PEop binop 
+             (get_pexpr "PEop" env p1) 
+             (get_pexpr "PEop" env p2))
+  | M_PEstruct sym fields ->
+     let fields = mapsnd (get_pexpr "PEstruct" env) fields in
+     wrap (Core.PEstruct sym fields)
+  | M_PEunion sym id p ->
+     wrap (Core.PEunion sym id (get_pexpr "PEunion" env p))
+  (* | M_PEcfunction f ->
+   *    Core.PEcfunction (get_pexpr f) *)
+  | M_PEmemberof sym id p ->
+     wrap (Core.PEmemberof sym id (get_pexpr "PEmemberof" env p))
+  | M_PEcall name args ->
+     wrap (Core.PEcall name (map (get_pexpr "PEcall" env) args))
+  | M_PElet pat p1 p2 ->
+     match pat with
+     | M_Symbol (Annotated _ _ sym) ->
+        let p1 = mu_to_core__pexpr env p1 in
+        let env' = insert_symbol sym p1 env in
+        mu_to_core__pexpr env' p2
+     | M_Pat pat ->
+        wrap (Core.PElet 
+                (mu_to_core__pattern pat)
+                (mu_to_core__pexpr env p1) 
+                (mu_to_core__pexpr env p2))
+     end
+  | M_PEif p0 p1 p2 ->
+     wrap (Core.PEif 
+             (get_pexpr "PEif" env p0)
+                (mu_to_core__pexpr env p1) 
+                (mu_to_core__pexpr env p2))
+  (* | M_PEis_scalar p ->
+   *    Core.PEis_scalar (get_pexpr p)
+   * | M_PEis_integer p ->
+   *    Core.PEis_integer (get_pexpr p)
+   * | M_PEis_signed p ->
+   *    Core.PEis_signed (get_pexpr p)
+   * | M_PEis_unsigned p ->
+   *    Core.PEis_unsigned (get_pexpr p)
+   * | M_PEbmc_assume e ->
+   *    Core.PEbmc_assume (get_pexpr e)
+   * | M_PEare_compatible p1 p2 ->
+   *    Core.PEare_compatible (get_pexpr p1) (get_pexpr p2) *)
+
+
+  end
+
+let mu_to_core__action_ env (action_ : mu_action_ 'bty)
+        : Core.generic_action_ 'bty symbol =
+  match action_ with
+  | M_Create p1 p2 prefix ->
+     Core.Create 
+       (get_pexpr "Create" env p1)
+       (make_ctype_pexpr p2)
+       prefix
+  | M_CreateReadOnly p1 p2 p3 prefix ->
+     Core.CreateReadOnly 
+       (get_pexpr "CreateReadOnly" env p1)
+       (make_ctype_pexpr p2)
+       (get_pexpr "CreateReadOnly" env p3)
+       prefix
+  | M_Alloc p1 p2 prefix ->
+     Core.Alloc 
+       (make_ctype_pexpr p1)
+       (get_pexpr "Alloc" env p2)
+       prefix
+  | M_Kill b p ->
+     Core.Kill 
+       b
+       (get_pexpr "Kill" env p)
+  | M_Store b p1 p2 p3 mo ->
+     Core.Store 
+       b
+       (make_ctype_pexpr p1)
+       (get_pexpr "Store" env p2) 
+       (get_pexpr "Store" env p3)
+       mo
+  | M_Load p1 p2 mo ->
+     Core.Load 
+       (make_ctype_pexpr p1)
+       (get_pexpr "Load" env p2)
+       mo
+  | M_RMW p1 p2 p3 p4 mo1 mo2 ->
+     Core.RMW 
+       (make_ctype_pexpr p1)
+       (get_pexpr "RMW" env p2) 
+       (get_pexpr "RMW" env p3)
+       (get_pexpr "RMW" env p4)
+       mo1
+       mo2
+  | M_Fence mo ->
+     Core.Fence 
+       mo
+  | M_CompareExchangeStrong p1 p2 p3 p4 mo1 mo2 ->
+     Core.CompareExchangeStrong 
+       (make_ctype_pexpr p1)
+       (get_pexpr "CompareExchangeStrong" env p2) 
+       (get_pexpr "CompareExchangeStrong" env p3)
+       (get_pexpr "CompareExchangeStrong" env p4)
+       mo1
+       mo2
+  | M_CompareExchangeWeak p1 p2 p3 p4 mo1 mo2 ->
+     Core.CompareExchangeWeak
+       (make_ctype_pexpr p1)
+       (get_pexpr "CompareExchangeWeak" env p2) 
+       (get_pexpr "CompareExchangeWeak" env p3)
+       (get_pexpr "CompareExchangeWeak" env p4)
+       mo1
+       mo2
+  | M_LinuxFence mo ->
+     Core.LinuxFence 
+       mo
+  | M_LinuxLoad p1 p2 mo ->
+     Core.LinuxLoad 
+       (make_ctype_pexpr p1)
+       (get_pexpr "LinuxLoad" env p2)
+       mo
+  | M_LinuxStore p1 p2 p3 mo ->
+     Core.LinuxStore
+       (make_ctype_pexpr p1)
+       (get_pexpr "LinuxStore" env p2) 
+       (get_pexpr "LinuxStore" env p3)
+       mo
+  | M_LinuxRMW p1 p2 p3 mo ->
+     Core.LinuxRMW
+       (make_ctype_pexpr p1)
+       (get_pexpr "LinuxRMW" env p2) 
+       (get_pexpr "LinuxRMW" env p3)
+       mo
+  end
+
+let mu_to_core__action env (M_Action t a action_) = 
+  Core.Action t a (mu_to_core__action_ env action_)
+
+let mu_to_core__paction env (M_Paction p action) = 
+  Core.Paction p (mu_to_core__action env action)
+
+let mu_to_core__memop__ memop = 
+  let mctype ct = Left ct in
+  let msym sym = Right sym in
+  match memop with
+  | M_PtrEq (sym1,sym2) ->
+     (PtrEq, 
+      [msym sym1; msym sym2])
+  | M_PtrNe (sym1,sym2) ->
+     (PtrNe, 
+      [msym sym1; msym sym2])
+  | M_PtrLt (sym1,sym2) ->
+     (PtrLt, 
+      [msym sym1; msym sym2])
+  | M_PtrGt (sym1,sym2) ->
+     (PtrGt, 
+      [msym sym1; msym sym2])
+  | M_PtrLe (sym1,sym2) ->
+     (PtrLe, 
+      [msym sym1; msym sym2])
+  | M_PtrGe (sym1,sym2) ->
+     (PtrGe, 
+      [msym sym1; msym sym2])
+  | M_Ptrdiff (ct,sym1,sym2) ->
+     (Ptrdiff, 
+      [mctype ct; msym sym1; msym sym2])
+  | M_IntFromPtr (ct,sym) ->
+     (IntFromPtr, 
+      [mctype ct; msym sym])
+  | M_PtrFromInt (ct,sym) ->
+     (PtrFromInt, 
+      [mctype ct; msym sym])
+  | M_PtrValidForDeref (ct,sym) ->
+     (PtrValidForDeref, 
+      [mctype ct; msym sym])
+  | M_PtrWellAligned (ct,sym) ->
+     (PtrWellAligned, 
+      [mctype ct; msym sym])
+  | M_PtrArrayShift (sym1,ct,sym2) ->
+     (PtrArrayShift, 
+      [msym sym1; mctype ct; msym sym2])
+  | M_Memcpy (sym1,sym2,sym3) ->
+     (Memcpy, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Memcmp (sym1,sym2,sym3) ->
+     (Memcmp, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Realloc (sym1,sym2,sym3) ->
+     (Realloc, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Va_start (sym1,sym2) ->
+     (Va_start, 
+      [msym sym1; msym sym2])
+  | M_Va_copy sym ->
+     (Va_copy, 
+      [msym sym])
+  | M_Va_arg (sym,ct) ->
+     (Va_arg, 
+      [msym sym; mctype ct])
+  | M_Va_end sym ->
+     (Va_end, 
+      [msym sym])
+  end
+
+
+let mu_to_core__memop env memop = 
+  let mctype = make_ctype_pexpr in
+  let msym where asym = get_pexpr where env asym in
+  match memop with
+  | M_PtrEq (sym1,sym2) ->
+     (PtrEq, 
+      [msym "PtrEq" sym1; 
+       msym "PtrEq" sym2])
+  | M_PtrNe (sym1,sym2) ->
+     (PtrNe, 
+      [msym "PtrNe" sym1; 
+       msym "PtrNe" sym2])
+  | M_PtrLt (sym1,sym2) ->
+     (PtrLt, 
+      [msym "PtrLt" sym1; 
+       msym "PtrLt" sym2])
+  | M_PtrGt (sym1,sym2) ->
+     (PtrGt, 
+      [msym "PtrGt" sym1; 
+       msym "PtrGt" sym2])
+  | M_PtrLe (sym1,sym2) ->
+     (PtrLe, 
+      [msym "PtrLe" sym1; 
+       msym "PtrLe" sym2])
+  | M_PtrGe (sym1,sym2) ->
+     (PtrGe, 
+      [msym "PtrGe" sym1; 
+       msym "PtrGe" sym2])
+  | M_Ptrdiff (ct,sym1,sym2) ->
+     (Ptrdiff, 
+      [mctype ct; 
+       msym "Ptrdiff" sym1; 
+       msym "Ptrdiff" sym2])
+  | M_IntFromPtr (ct,sym) ->
+     (IntFromPtr, 
+      [mctype ct; 
+       msym "IntFromPtr" sym])
+  | M_PtrFromInt (ct,sym) ->
+     (PtrFromInt, 
+      [mctype ct; 
+       msym "PtrFromInt" sym])
+  | M_PtrValidForDeref (ct,sym) ->
+     (PtrValidForDeref, 
+      [mctype ct; 
+       msym "PtrValidForDeref" sym])
+  | M_PtrWellAligned (ct,sym) ->
+     (PtrWellAligned, 
+      [mctype ct; 
+       msym "PtrWellAligned" sym])
+  | M_PtrArrayShift (sym1,ct,sym2) ->
+     (PtrArrayShift, 
+      [msym "PtrArrayShift" sym1; 
+       mctype ct; 
+       msym "PtrArrayShift" sym2])
+  | M_Memcpy (sym1,sym2,sym3) ->
+     (Memcpy, 
+      [msym "Memcpy" sym1; 
+       msym "Memcpy" sym2; 
+       msym "Memcpy" sym3])
+  | M_Memcmp (sym1,sym2,sym3) ->
+     (Memcmp, 
+      [msym "Memcmp" sym1; 
+       msym "Memcmp" sym2; 
+       msym "Memcmp" sym3])
+  | M_Realloc (sym1,sym2,sym3) ->
+     (Realloc, 
+      [msym "Realloc" sym1; 
+       msym "Realloc" sym2; 
+       msym "Realloc" sym3])
+  | M_Va_start (sym1,sym2) ->
+     (Va_start, 
+      [msym "Va_start" sym1; 
+       msym "Va_start" sym2])
+  | M_Va_copy sym ->
+     (Va_copy, 
+      [msym "Va_copy" sym])
+  | M_Va_arg (sym,ct) ->
+     (Va_arg, 
+      [msym "Va_arg" sym; 
+       mctype ct])
+  | M_Va_end sym ->
+     (Va_end, 
+      [msym "Va_end" sym])
+  end
+
+let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
+        : Core.generic_expr 'a 'bty symbol =
+  let (M_Expr annots expr_) = expr in
+  let wrap expr_ = Core.Expr annots expr_ in
+  match expr_ with
+    | M_Epure p -> 
+       wrap (Core.Epure (mu_to_core__pexpr env p))
+    | M_Ememop memop ->
+       let (memop,args) = mu_to_core__memop env memop in
+       wrap (Core.Ememop memop args)
+    | M_Eaction pa ->
+       wrap (Core.Eaction (mu_to_core__paction env pa))
+    | M_Ecase pe es ->
+       wrap (Core.Ecase (get_pexpr "Ecase" env pe) 
+               (map (fun (pat,e) -> 
+                    (mu_to_core__pattern pat, 
+                     mu_to_core__expr env e)) es))
+    | M_Elet pat pe e ->
+       match pat with
+       | M_Symbol (Annotated _ _ sym) ->
+          let pe = mu_to_core__pexpr env pe in
+          let env' = insert_symbol sym pe env in
+          mu_to_core__expr env' e
+       | M_Pat pat ->
+          wrap (Core.Elet 
+                  (mu_to_core__pattern pat)
+                  (mu_to_core__pexpr env pe) 
+                  (mu_to_core__expr env e))
+       end
+    | M_Eif pe e1 e2 ->
+       wrap (Core.Eif (get_pexpr "Eif" env pe)
+               (mu_to_core__expr env e1)
+               (mu_to_core__expr env e2))
+    | M_Eskip ->
+       wrap Core.Eskip
+    | M_Eccall a (Annotated annots bty ct) pe2 pes ->
+       wrap (Core.Eccall a 
+               (Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)))
+               (get_pexpr "Eccall" env pe2) 
+               (map (get_pexpr "Eccall" env) pes))
+    | M_Eproc a name pes ->
+       wrap (Core.Eproc a name (map (get_pexpr "Eproc" env) pes))
+    (* | M_Eunseq es ->
+     *    Core.Eunseq (map (mu_to_core__expr env) es) *)
+    | M_Ewseq pat e1 e2 ->
+       wrap (Core.Ewseq 
+               (mu_to_core__pattern pat)
+               (mu_to_core__expr env e1)
+               (mu_to_core__expr env e2))
+    | M_Esseq pat e1 e2 ->
+       wrap (Core.Esseq 
+               (mu_to_core__pattern pat)
+               (mu_to_core__expr env e1)
+               (mu_to_core__expr env e2))
+    (* | M_Easeq (s,bt) a pa ->
+     *    Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa) *)
+    (* | M_Eindet n e ->
+     *    Core.Eindet n (mu_to_core__expr env e) *)
+    | M_Ebound n e ->
+       wrap (Core.Ebound n (mu_to_core__expr env e))
+    | M_End es ->
+       wrap (Core.End (map (mu_to_core__expr env) es))
+    | M_Esave (sym,bt) sbp e ->
+       let sbp = 
+         map (fun (sym,(bt,pe)) -> (sym,(bt,get_pexpr "Esave" env pe))) sbp in
+       wrap (Core.Esave (sym,bt) sbp (mu_to_core__expr env e))
+    | M_Erun a sym pes ->
+       wrap (Core.Erun a sym (map (get_pexpr "Erun" env) pes))
+    (* | M_Epar es ->
+     *    Core.Epar (map (mu_to_core__expr env) es) *)
+    (* | M_Ewait tid -> 
+     *    Core.Ewait tid *)
+  end
+
+
+let mu_to_core__impl_decl (i : mu_impl_decl 'bty) 
+    : Core.generic_impl_decl 'bty =
+  match i with
+  | M_Def bt p -> 
+     Core.Def bt (mu_to_core__pexpr Map.empty p)
+  | M_IFun bt args body -> 
+     Core.IFun bt args (mu_to_core__pexpr Map.empty body)
+  end
+
+let mu_to_core__impl (i : mu_impl 'bty) 
+    : Core.generic_impl 'bty =
+  Map.map mu_to_core__impl_decl i
+
+
+let mu_to_core__fun_map_decl (d : mu_fun_map_decl 'bty 'a) 
+    : Core.generic_fun_map_decl 'bty 'a =
+  match d with
+  | M_Fun bt args pe ->
+     Core.Fun bt args (mu_to_core__pexpr Map.empty pe)
+  | M_Proc loc bt args e ->
+     Core.Proc loc bt args (mu_to_core__expr Map.empty e)
+  | M_ProcDecl loc bt bts ->
+     Core.ProcDecl loc bt bts
+  | M_BuiltinDecl loc bt bts ->
+     Core.BuiltinDecl loc bt bts
+  end
+
+let mu_to_core__fun_map (fmap : mu_fun_map 'bty 'a) 
+    : Core.generic_fun_map 'bty 'a = 
+  Map.map mu_to_core__fun_map_decl fmap
+  
+
+let mu_to_core__globs (g : mu_globs 'a 'bty) 
+    : Core.generic_globs 'a 'bty = 
+  match g with
+  | M_GlobalDef bt e -> Core.GlobalDef bt (mu_to_core__expr Map.empty e)
+  | M_GlobalDecl bt -> Core.GlobalDecl bt 
+  end
+
+(* let mu_to_core__globs_map (g : Core.generic_globs_map 'a bty) 
+ *     : mu_globs_map 'a bty = 
+ *   Map.map mu_to_core__globs g *)
+  
+let mu_to_core__globs_list (gs : list (symbol * mu_globs 'a 'bty) )
+    : list (symbol * Core.generic_globs 'a 'bty) = 
+  map (fun (sym,g) -> (sym, mu_to_core__globs g)) gs
+
+
+let mu_to_core__file file = 
+  <| Core.main = file.mu_main
+   ; Core.tagDefs = file.mu_tagDefs
+   ; Core.stdlib = mu_to_core__fun_map file.mu_stdlib
+   ; Core.impl = mu_to_core__impl file.mu_impl
+   ; Core.globs = mu_to_core__globs_list file.mu_globs
+   ; Core.funs = mu_to_core__fun_map file.mu_funs
+   ; Core.extern = file.mu_extern
+   ; Core.funinfo = file.mu_funinfo
+  |>
+

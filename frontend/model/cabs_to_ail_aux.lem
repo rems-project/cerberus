@@ -1,0 +1,185 @@
+(*==================================================================================*)
+(*  BSD 2-Clause License                                                            *)
+(*                                                                                  *)
+(*  Cerberus                                                                        *)
+(*                                                                                  *)
+(*  Copyright (c) 2011-2020                                                         *)
+(*    Kayvan Memarian                                                               *)
+(*    Victor Gomes                                                                  *)
+(*    Justus Matthiesen                                                             *)
+(*    Peter Sewell                                                                  *)
+(*    Kyndylan Nienhuis                                                             *)
+(*    Stella Lau                                                                    *)
+(*    Jean Pichon-Pharabod                                                          *)
+(*    Christopher Pulte                                                             *)
+(*    Rodolphe Lepigre                                                              *)
+(*    James Lingard                                                                 *)
+(*                                                                                  *)
+(*  All rights reserved.                                                            *)
+(*                                                                                  *)
+(*  Redistribution and use in source and binary forms, with or without              *)
+(*  modification, are permitted provided that the following conditions are met:     *)
+(*                                                                                  *)
+(*  1. Redistributions of source code must retain the above copyright notice, this  *)
+(*     list of conditions and the following disclaimer.                             *)
+(*                                                                                  *)
+(*  2. Redistributions in binary form must reproduce the above copyright notice,    *)
+(*     this list of conditions and the following disclaimer in the documentation    *)
+(*     and/or other materials provided with the distribution.                       *)
+(*                                                                                  *)
+(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"     *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE       *)
+(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE  *)
+(*  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE    *)
+(*  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL      *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR      *)
+(*  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *)
+(*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,   *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE   *)
+(*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            *)
+(*==================================================================================*)
+
+open import Pervasives
+open import Utils Cabs
+
+import AilSyntax Ctype Annot
+
+module A = AilSyntax
+
+
+type tag_definition =
+  | Struct_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
+  | Union_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype))
+  | Enum_definition of list integer
+
+
+(* STD §6.2.2#1 *)
+type linkage =
+  | Linkage_external
+  | Linkage_internal
+  | Linkage_none
+
+instance (Eq linkage)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show linkage)
+  let show = function
+    | Linkage_external ->
+        "external"
+    | Linkage_internal ->
+        "internal"
+    | Linkage_none ->
+        "none"
+  end
+end
+
+instance (SetType linkage)
+  let setElemCompare = defaultCompare
+end
+
+val specifiers_of_external_declaration: external_declaration -> maybe specifiers
+let specifiers_of_external_declaration = function
+  | EDecl_func (FunDef _ _ specifs _ _) ->
+      Just specifs
+  | EDecl_decl (Declaration_base _ specifs _) ->
+      Just specifs
+  | EDecl_decl (Declaration_static_assert _) ->
+      Nothing
+end
+
+
+val determinate_storage_duration: linkage -> list storage_class_specifier -> A.storageDuration
+let determinate_storage_duration link scs =
+  if not (List.elem SC_Thread_local scs) &&
+     (link = Linkage_external || link = Linkage_internal ||
+      List.elem SC_static scs) then
+(* STD §6.2.4#3, sentence 1 *)
+    A.Static
+  
+  else if List.elem SC_Thread_local scs then
+(* STD §6.2.4#4, sentence 1 *)
+    A.Thread
+  
+  else if link = Linkage_none && not (List.elem SC_static scs) then
+(* STD §6.2.4#5, sentence 1 *)
+    A.Automatic
+  
+  else
+    error "determinate_storage_duration"
+
+
+let string_of_storageDuration = function
+  | A.Static ->
+      "static"
+  | A.Thread ->
+      "thread"
+  | A.Automatic ->
+      "automatic"
+  | A.Allocated ->
+      "allocated"
+end
+
+
+val mk_zeroInit: map A.ail_identifier tag_definition -> Ctype.ctype -> A.expression unit
+let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
+  match ty with
+    | Ctype.Void ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Void"
+    | Ctype.Basic (Ctype.Integer _) ->
+        A.ConstantInteger (A.IConstant 0 A.Octal Nothing)
+    | Ctype.Basic (Ctype.Floating _) ->
+        A.ConstantFloating ("0.0", Nothing)
+    | Ctype.Array elem_ty Nothing ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Array Nothing"
+    | Ctype.Array elem_ty (Just n) ->
+        A.ConstantArray elem_ty begin
+          List.replicate (natFromInteger n) (mk_zeroInit_aux tagDefs elem_ty)
+        end
+    | Ctype.Function _ _ _ _ ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Function"
+    | Ctype.Pointer _ _ ->
+        A.ConstantNull
+    | Ctype.Atomic atom_ty ->
+        (* TODO: check *)
+        mk_zeroInit_aux tagDefs atom_ty
+    | Ctype.Struct tag_sym ->
+        A.ConstantStruct tag_sym
+          match Map.lookup tag_sym tagDefs with
+            | Just (Struct_definition _ _ xs Nothing) ->
+                List.map (fun (memb_ident, (_, _, memb_ty)) ->
+                  (memb_ident, mk_zeroInit_aux tagDefs memb_ty)
+                ) xs
+            | Just (Struct_definition _ _ xs (Just _)) ->
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "TODO: check zeroInit for flexible array member"
+                ) in
+                List.map (fun (memb_ident, (_, _, memb_ty)) ->
+                  (memb_ident, mk_zeroInit_aux tagDefs memb_ty)
+                ) xs
+            | _ ->
+                error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Struct"
+          end
+    | Ctype.Union tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Union_definition _ _ ((memb_ident, (_, _, memb_ty)) :: _)) ->
+              A.ConstantUnion tag_sym memb_ident (mk_zeroInit_aux tagDefs memb_ty)
+          | _ ->
+              error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Union"
+        end
+  end
+let mk_zeroInit tagDefs ty =
+  A.AnnotatedExpression () [] Loc.unknown
+    (A.AilEconst (mk_zeroInit_aux tagDefs ty))
+
+open AilSyntax
+val zeroAil: expression unit
+let zeroAil =
+  AnnotatedExpression () [] Loc.unknown
+    (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
+
+val oneAil: expression unit
+let oneAil =
+  AnnotatedExpression () [] Loc.unknown
+    (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))

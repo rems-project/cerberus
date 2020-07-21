@@ -1,0 +1,13 @@
+(library
+ (name core_parser)
+ (public_name cerberus.core_parser)
+ (synopsis "Core parser")
+ (flags (:standard -w -27-32))
+ (modules :standard)
+ (wrapped false)
+ (libraries cerb_frontend))
+
+(ocamllex core_lexer)
+(menhir
+ (flags (--external-tokens Core_parser_util))
+ (modules core_parser))

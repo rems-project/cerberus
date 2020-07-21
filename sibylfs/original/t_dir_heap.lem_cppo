@@ -1,0 +1,802 @@
+open import Bool Maybe Basic_classes Either Tuple Num List List_extra Maybe_extra Function_extra Set Assert_extra
+import Sorting
+
+open import {ocaml} `Lem_support`
+open import {ocaml} `Sexplib.Std`
+open import {ocaml} `Sexplib.Conv`
+open import {hol} `lem_supportTheory`
+
+open import T_fs_prelude T_fs_spec 
+
+
+(******************************************************************************)
+(* Dir_heap_types                                                             *)
+(*                                                                            *)
+(* The types used by Dir_heap                                                 *)
+(******************************************************************************)
+
+module Dir_heap_types = struct
+
+  open Fs_types
+
+  (*-------------------------------*)
+  (* Directory references          *)
+  (*-------------------------------*)
+
+  type dh_dir_ref = Dir_ref of inode  (*o with sexp_of o*) (* coverage:sexp*)
+
+  instance (Eq dh_dir_ref)
+    let (=) = unsafe_structural_equality
+    let (<>) = unsafe_structural_inequality
+  end
+
+  let dh_dir_ref_compare (Dir_ref d0) (Dir_ref d1) = inode_compare d0 d1
+
+  instance ( SetType dh_dir_ref ) 
+    let setElemCompare = dh_dir_ref_compare
+  end
+
+  val dest_Dir_ref : forall 'impl. 'impl -> dh_dir_ref -> inode
+  let dest_Dir_ref s0 (Dir_ref i) = i
+
+
+  (*-------------------------------*)
+  (* File references               *)
+  (*-------------------------------*)
+
+  type dh_file_ref = File_ref of inode  (*o with sexp_of o*) (* coverage:sexp*)
+
+  instance (Eq dh_file_ref)
+    let (=) = unsafe_structural_equality
+    let (<>) = unsafe_structural_inequality
+  end
+
+  let dh_file_ref_compare (File_ref f0) (File_ref f1) = inode_compare f0 f1
+  instance ( SetType dh_file_ref ) 
+    let setElemCompare = dh_file_ref_compare
+  end
+
+  val dest_File_ref : forall 'impl. 'impl -> dh_file_ref -> inode
+  let dest_File_ref s0 (File_ref i) = i
+
+
+  (*-------------------------------*)
+  (* Directories                   *)
+  (*-------------------------------*)
+
+  type dh_entry = entry dh_dir_ref dh_file_ref  (*o with sexp_of o*) (* coverage:sexp*)
+
+(*o
+  let sexp_of_fmap = Fs_spec.Fs_types.sexp_of_fmap
+o*)
+
+  type dh_dir = <|                                                       (* coverage:sexp *)
+    dhd_entries: fmap name dh_entry; (* the content of the directory *)  (* coverage:sexp *)
+    dhd_parent : maybe (dh_dir_ref * name);                              (* coverage:sexp *)
+                                                                         (* coverage:sexp *)
+    dhd_observers : fmap nat (list ty_od_entry);                         (* coverage:sexp *)
+                                                                         (* coverage:sexp *)
+    (* fields like in ty_stats, but omitting                             (* coverage:sexp *)
+       st_dev, st_ino, st_kind, st_rvded *)                              (* coverage:sexp *)
+    dhd_perm  : file_perm;  (** Access rights *)                         (* coverage:sexp *)
+    dhd_nlink  : int;        (** Number of links *)                      (* coverage:sexp *)
+    dhd_uid   : uid;        (** User id of the owner *)                  (* coverage:sexp *)
+    dhd_gid   : gid;        (** Group ID of the dh_file's group *)       (* coverage:sexp *)
+    dhd_size  : int64;      (** Size in bytes *)                         (* coverage:sexp *)
+    dhd_atime : float_t;      (** Last access time *)                    (* coverage:sexp *)
+    dhd_mtime : float_t;      (** Last modification time *)              (* coverage:sexp *)
+    dhd_ctime : float_t;      (** Last status change time *)             (* coverage:sexp *)
+  |> (*o with sexp_of o*)                                                (* coverage:sexp *)
+
+  (* for impl marshalling, we need to avoid using fmaps *)
+  type dh_mdir = <|                                                      (* coverage:sexp *)
+    dhmd_entries: list (name*dh_entry);                                  (* coverage:sexp *)
+    dhmd_parent : maybe (dh_dir_ref * name);                             (* coverage:sexp *)
+                                                                         (* coverage:sexp *)
+    dhmd_observers : unit; (* we don't need this in the impl *)          (* coverage:sexp *)
+                                                                         (* coverage:sexp *)
+    (* fields like in ty_stats, but omitting                             (* coverage:sexp *)
+       st_dev, st_ino, st_kind, st_nlink, st_rvded *)                    (* coverage:sexp *)
+    dhmd_perm  : file_perm;  (** Access rights *)                        (* coverage:sexp *)
+    dhmd_nlink : int;        (** Number of links *)                      (* coverage:sexp *)
+    dhmd_uid   : uid;        (** User id of the owner *)                 (* coverage:sexp *)
+    dhmd_gid   : gid;        (** Group ID of the dh_file's group *)      (* coverage:sexp *)
+    dhmd_size  : int64;      (** Size in bytes *)                        (* coverage:sexp *)
+    dhmd_atime : float_t;      (** Last access time *)                   (* coverage:sexp *)
+    dhmd_mtime : float_t;      (** Last modification time *)             (* coverage:sexp *)
+    dhmd_ctime : float_t;      (** Last status change time *)            (* coverage:sexp *)
+  |>  (*o with sexp_of o*)                                               (* coverage:sexp *)
+
+  let dh_mdir_of_dir d = <| (* coverage:unused *)
+    dhmd_entries=(fmap_bindings d.dhd_entries);
+    dhmd_parent=d.dhd_parent;
+    dhmd_observers=();
+    dhmd_perm=d.dhd_perm;
+    dhmd_nlink=d.dhd_nlink;
+    dhmd_uid=d.dhd_uid;
+    dhmd_gid=d.dhd_gid;
+    dhmd_size=d.dhd_size;
+    dhmd_atime=d.dhd_atime;
+    dhmd_mtime=d.dhd_mtime;
+    dhmd_ctime=d.dhd_ctime
+  |>
+
+  let dh_dir_of_mdir md = <| (* coverage:unused *)
+    dhd_entries=(fmap_from_list md.dhmd_entries);
+    dhd_parent=md.dhmd_parent;
+    dhd_observers=(fmap_empty ());
+    dhd_perm=md.dhmd_perm;
+    dhd_nlink=md.dhmd_nlink;
+    dhd_uid=md.dhmd_uid;
+    dhd_gid=md.dhmd_gid;
+    dhd_size=md.dhmd_size;
+    dhd_atime=md.dhmd_atime;
+    dhd_mtime=md.dhmd_mtime;
+    dhd_ctime=md.dhmd_ctime  
+  |>
+
+
+
+  (* default values when constructing a new stats record *)
+  let default_st_dev = (2049 : int) (* device number FIXME 0? *)
+  let default_st_rdev = (0 : int) (* device minor number *)
+  let default_st_perm = File_perm 0O777 (* ugo+rwx *)
+  let default_st_nlink = (1:int)
+  let default_st_uid = root_uid
+  let default_st_gid = root_gid
+  let default_st_atime = (Float 0)
+  let default_st_mtime = (Float 0)
+  let default_st_ctime = (Float 0)
+
+  (* an empty directory with default settings *)
+  val dh_default_dir : dh_dir
+  let dh_default_dir = 
+    <| dhd_entries   = fmap_empty (); 
+       dhd_parent    = Nothing; 
+       dhd_observers = fmap_empty ();
+       dhd_perm      = default_st_perm;
+       dhd_nlink      = default_st_nlink;
+       dhd_uid       = default_st_uid;
+       dhd_gid       = default_st_gid;
+       dhd_size      = (9999); (* size for directories is unused *)
+       dhd_atime     = default_st_atime;
+       dhd_mtime     = default_st_mtime;
+       dhd_ctime     = default_st_ctime; |> 
+
+  (*-------------------------------*)
+  (* Files                         *)
+  (*-------------------------------*)
+
+  type dh_file = <|                                                 (* coverage:sexp *)
+    dhf_contents : file_contents;                                   (* coverage:sexp *)
+                                                                    (* coverage:sexp *)
+    (* fields like in ty_stats, but omitting                        (* coverage:sexp *)
+       st_dev, st_ino, st_size, st_rvded *)                         (* coverage:sexp *)
+    dhf_kind  : file_kind;  (** Kind of the dh_file *)              (* coverage:sexp *)
+    dhf_perm  : file_perm;  (** Access rights *)                    (* coverage:sexp *)
+    dhf_nlink : int;        (** Number of links *)                  (* coverage:sexp *)
+    dhf_uid   : uid;        (** User id of the owner *)             (* coverage:sexp *)
+    dhf_gid   : gid;        (** Group ID of the dh_file's group *)  (* coverage:sexp *)
+    dhf_atime : float_t;      (** Last access time *)               (* coverage:sexp *)
+    dhf_mtime : float_t;      (** Last modification time *)         (* coverage:sexp *)
+    dhf_ctime : float_t;      (** Last status change time *)        (* coverage:sexp *)
+  |>  (*o with sexp_of o*)                                          (* coverage:sexp *)
+
+  (* an empty file with default settings *)
+  val dh_default_file : dh_file
+  let dh_default_file = <| 
+    dhf_contents = (T_list_array.of_string "");
+    dhf_kind     = S_IFREG;
+    dhf_perm     = default_st_perm;
+    dhf_nlink    = default_st_nlink;
+    dhf_uid      = default_st_uid;
+    dhf_gid      = default_st_gid;
+    dhf_atime    = default_st_atime;
+    dhf_mtime    = default_st_mtime;
+    dhf_ctime    = default_st_ctime; 
+  |> 
+
+
+  (*-------------------------------*)
+  (* States                        *)
+  (*-------------------------------*)
+
+  (* File-system state *)
+  type dir_heap_state_fs = <|                           (* coverage:sexp *)
+    dhs_dirs  : fmap dh_dir_ref dh_dir;                 (* coverage:sexp *)
+    dhs_files : fmap dh_file_ref dh_file;               (* coverage:sexp *)
+
+    (* the list of free inodes, it is a pair 
+       [(free_list, last_used)]. free_list contains explicitly free ones, 
+       and last_used is the smallest used one, so all bigger ones are free *)
+    dhs_free_inodes : list inode * inode                (* coverage:sexp *)
+  |> (*o with sexp_of o*)                               (* coverage:sexp*)
+
+  (* an initial fs-state containing just the root directory *)
+  val dh_initial_state_fs : dir_heap_state_fs
+  let dh_initial_state_fs = <|
+    dhs_dirs=fmap_update (fmap_empty ()) (Dir_ref (Inode 0), dh_default_dir);
+    dhs_files=fmap_empty ();
+    dhs_free_inodes=([], Inode 0);
+  |>
+
+  (* the following defns only used by marshalling code in the impl; NB dhs_free_inodes is dropped *)
+  let marshal_value_of_dhs dhs = (* coverage:unused *)
+    let (ds,fs,zs) = (fmap_bindings dhs.dhs_dirs, fmap_bindings dhs.dhs_files,dhs.dhs_free_inodes) in (* coverage:unused *)
+    let ds = List.map (fun (x,y) -> (x,dh_mdir_of_dir y)) ds in (* coverage:unused *)
+    (ds,fs,zs) (* coverage:unused *)
+  let dhs_of_marshal_value (ds,fs,zs) = ( (* coverage:unused *)
+    let ds = List.map (fun (x,y) -> (x,dh_dir_of_mdir y)) ds in (* coverage:unused *)
+    let (ds,fs,zs) = ((* coverage:unused *)
+      fmap_from_list ds, fmap_from_list fs,zs ) in
+    <| dhs_dirs=ds; dhs_files=fs; dhs_free_inodes=zs |>) (* coverage:unused *)
+
+
+
+  (* Configuration state *)
+  type dir_heap_state_config = <|             (* coverage:sexp *)
+    dhs_sysconfig : fmap sysconf_value nat    (* coverage:sexp *)
+  |>  (*o with sexp_of o*)                    (* coverage:sexp *)
+
+  val dh_initial_state_config : dir_heap_state_config
+  let dh_initial_state_config = <|
+    dhs_sysconfig = fmap_empty ()
+  |>
+
+
+  (* Combined state *)
+  type dir_heap_state = <|                    (* coverage:sexp *)
+    dhs_state_fs     : dir_heap_state_fs;     (* coverage:sexp *)
+    dhs_state_config : dir_heap_state_config; (* coverage:sexp *)
+  |> (*o with sexp_of o*)                     (* coverage:sexp *)
+
+  val dh_initial_state : dir_heap_state
+  let dh_initial_state = <|
+    dhs_state_fs=dh_initial_state_fs;
+    dhs_state_config=dh_initial_state_config;
+  |>
+
+  (* instantiations of types that are exposed in the interface used by fs_test *)
+  type dh_environment = environment dh_dir_ref dh_file_ref dir_heap_state
+
+  type dh_os_state = ty_os_state dh_dir_ref dh_file_ref dir_heap_state (*o with sexp_of o*) (* coverage:sexp*)
+
+  type dh_os_state_or_special = os_state_or_special dh_dir_ref dh_file_ref dir_heap_state (*o with sexp_of o*) (* coverage:sexp*)
+
+
+end 
+
+
+(******************************************************************************)
+(* Dir_heap_basic_ops                                                         *)
+(*                                                                            *)
+(* Some basic operations that are later used                                  *)
+(*                                                                            *)
+(* These operations do not affect nlink link counts                           *)
+(******************************************************************************)
+
+module Dir_heap_basic_ops = struct
+
+  open Fs_types
+  open Dir_heap_types
+ 
+
+  (*--------------------------------------*)
+  (* Access maps of directories and files *) 
+  (*--------------------------------------*)
+
+  (* get the root directory (hard coded to Inode 0) *)
+  val dh_get_root : forall 'impl. 'impl -> dh_dir_ref
+  let dh_get_root s0 = (Dir_ref (Inode 0))
+  
+  (* lookup a directory ref to get the dir datastructure *)
+  val dh_lookup_dir : dir_heap_state -> dh_dir_ref -> maybe dh_dir
+  let dh_lookup_dir s k = fmap_lookup s.dhs_state_fs.dhs_dirs k
+
+  (* lookup a file ref to get the file datastructure *)
+  val dh_lookup_file : dir_heap_state -> dh_file_ref -> maybe dh_file
+  let dh_lookup_file s k = fmap_lookup s.dhs_state_fs.dhs_files k
+
+  (* resolve a name in a given directory to get the entry *)
+  val dh_resolve : dir_heap_state -> dh_dir_ref -> name -> maybe dh_entry
+  let dh_resolve s0 d0_ref name = (
+    let dopt = dh_lookup_dir s0 d0_ref in 
+    (match dopt with
+    | Nothing -> Nothing (* coverage:impossible -fsop_rename uses path resolution to get the references passed to this function, alt_rr gets so_fat ref from process_path: or it is the root ref or the dir ref (cwd) where the process is operating from *)
+    | Just(d0) -> (fmap_lookup d0.dhd_entries name) end))
+
+
+  (*--------------------------------------*)
+  (* Update maps of directories and files *) 
+  (*--------------------------------------*)
+
+  val dh_update_dirs : dir_heap_state -> dh_dir_ref -> maybe dh_dir -> dir_heap_state
+  let dh_update_dirs s k v = (
+    let fs_st = s.dhs_state_fs in
+    let fs_st' = <| fs_st with dhs_dirs=(fmap_update_option fs_st.dhs_dirs (k,v)) |> in
+    <| s with dhs_state_fs = fs_st' |>
+  )
+
+  val dh_update_files : dir_heap_state -> dh_file_ref -> maybe dh_file -> dir_heap_state
+  let dh_update_files s k v = (
+    let fs_st = s.dhs_state_fs in
+    let fs_st' = <| fs_st with dhs_files=(fmap_update_option fs_st.dhs_files (k,v)) |> in
+    <| s with dhs_state_fs = fs_st' |>
+  )
+
+  (* [dh_update_dir_entries s d0_ref name new_entry_opt] updates the entry [name] of dir [d0_ref] in
+     state [s] to point to [new_entry_opt]. *)
+  val dh_update_dir_entries : dir_heap_state -> dh_dir_ref -> name -> maybe dh_entry -> dir_heap_state
+  let dh_update_dir_entries s d0_ref name new_entry = (
+    let d0 = fromJust (dh_lookup_dir s d0_ref) in
+
+    let new_observ = match (fmap_in_dom name d0.dhd_entries, new_entry) with
+      | (true, Nothing) -> 
+           (* entry was there and is going to be deleted *)
+           fmap_map (fun el -> (OD_removed name) :: el) d0.dhd_observers 
+      | (false, Just _) -> 
+           (* entry was not there and is going to be added *)
+           fmap_map (fun el -> (OD_added name) :: el) d0.dhd_observers 
+      | _ -> 
+           (* nothing changes, only the details for the entry are updated *)
+           (* d0.dhd_observers *)
+           failwith "t_dir_heap: impossible; either we delete an existing entry or we add a new entry" (* coverage:impossible *)
+    end in
+
+    let m' = fmap_update_option d0.dhd_entries (name,new_entry) in
+    let s' = dh_update_dirs s d0_ref (Just (<|d0 with dhd_entries=m'; dhd_observers=new_observ|>)) in
+    s')
+
+
+  (*--------------------------------------*)
+  (* Creating new directores and files    *) 
+  (*--------------------------------------*)
+
+  (* [dh_get_free_inode s] gets a free inode in state [s].
+     The state contains an explicit list of free inodes. This
+     operation also removes the returned inode from this list
+     and therefore returns a modified state. *)
+  val dh_get_free_inode : dir_heap_state -> (dir_heap_state * inode)
+  let dh_get_free_inode s0 = (
+    let fs_st = s0.dhs_state_fs in
+    let (fis, i) = (match fs_st.dhs_free_inodes with
+      | ([], Inode lu) -> (([], Inode (lu+1)), Inode (lu+1))
+      | (i::is, lu) -> ((is, lu), i) (* coverage:impossible -the previous case is always entered first and does not allow this one to run *)
+    end) in
+    let fs_st' = <| fs_st with dhs_free_inodes = fis |> in
+    (<| s0 with dhs_state_fs = fs_st' |> , i)
+  )
+    
+  (* [dh_create_new_dir s] creates a new directory in state [s] and
+     returns the modified state, the reference of the new directory
+     and the new directory itself. Notice that the new directory is
+     not linked in any parent directory, it is disconnected. *)
+  val dh_create_new_dir : dir_heap_state -> (dir_heap_state * (dh_dir_ref * dh_dir))
+  let dh_create_new_dir s0 = (
+    let (s1, inode) = dh_get_free_inode s0 in
+    let d0_ref = Dir_ref inode in
+    let d0 = dh_default_dir in
+    let s2 = dh_update_dirs s1 d0_ref (Just d0) in
+    (s2, (d0_ref, d0))
+  )
+
+  (* [dh_create_new_files s] creates a new file in state [s] and
+     returns the modified state, the reference of the
+     new file and the new file itself. *)
+  val dh_create_new_file : dir_heap_state -> (dir_heap_state * (dh_file_ref * dh_file))
+  let dh_create_new_file s0 = (
+    let (s0, inode) = dh_get_free_inode s0 in
+    let i0_ref = File_ref inode in
+    let i0 = dh_default_file in
+    let s0 = dh_update_files s0 i0_ref (Just i0) in
+    (s0,(i0_ref,i0)))
+
+end
+
+
+(******************************************************************************)
+(* Dir_heap_ops                                                               *)
+(*                                                                            *)
+(* This module used the basic operations to implement the interface           *)
+(* given by records of type fs_ops.                                           *)
+(* These operations do affect nlink link counts.                              *)
+(******************************************************************************)
+
+(* FIXME the correctness of the nlink link count updates depend on
+invariants that should be stated, preferably as run-time assertion
+checks *)
+
+
+module Dir_heap_ops = struct
+
+  open Fs_types
+  open Fs_arch
+  open Dir_heap_types
+  open Dir_heap_basic_ops
+#ifdef aspect_perms
+  open Fs_permissions
+#endif
+
+
+  (*-------------------------------*)
+  (* dhops_get_init_state          *)
+  (*-------------------------------*)
+
+  val dhops_get_parent : dir_heap_state -> dh_dir_ref -> (maybe (dh_dir_ref * name))
+  let dhops_get_parent s0 d0_ref = (
+    match dh_lookup_dir s0 d0_ref with
+     | Nothing -> Nothing (* coverage:impossible - the functions real_path_dir_ref and rr_dot_dot obtain so_far from process_path (ref corresponding to root or process working directory cwd -see a coverage comment before-), and all the other functions calling dhops_get_parent perform path resolution before *)
+     | Just d0 -> d0.dhd_parent
+    end
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_link                    *)
+  (*-------------------------------*)
+
+  val dhops_link : dir_heap_state -> dh_entry -> dh_dir_ref -> string -> dir_heap_state
+  let dhops_link s0 ent d0_ref name = (
+    let s1 = dh_update_dir_entries s0 d0_ref name (Just ent) in
+    (* increase st_nlink for the fs object *)
+    match ent with
+    | File_ref_entry(f_ref) ->
+       let file = fromJust(dh_lookup_file s1 f_ref) in
+       dh_update_files s1 f_ref (Just(<|file with dhf_nlink=(file.dhf_nlink+1)|>))           
+    | Dir_ref_entry(d_ref) ->
+       let dir = fromJust(dh_lookup_dir s1 d_ref) in
+       (* increase the link count of the parent *)
+       let parent = fromJust (dh_lookup_dir s1 d0_ref) in
+       let s1 = dh_update_dirs s0 d0_ref (Just(<|parent with dhd_nlink=(parent.dhd_nlink+1)|>)) in
+       (* increase the link count of the dir *)
+       dh_update_dirs s1 d_ref (Just(<|dir with dhd_nlink=(dir.dhd_nlink+1)|>)) end
+  )
+
+  val dhops_link_file : dir_heap_state -> dh_file_ref -> dh_dir_ref -> string -> dir_heap_state
+  let dhops_link_file s0 i1_ref d0_ref name = dhops_link s0 (File_ref_entry i1_ref) d0_ref name
+
+
+  (*-------------------------------*)
+  (* dhops_unlink                  *)
+  (*-------------------------------*)
+
+  val dhops_unlink : dir_heap_state -> dh_dir_ref -> string -> dir_heap_state
+  let dhops_unlink s0 d0_ref name = (
+    let parent = fromJust (dh_lookup_dir s0 d0_ref) in
+    let ent = fromJust(fmap_lookup parent.dhd_entries name) in
+    (* decrease st_nlink for the fs object *)
+    let s1 =
+      (match ent with
+      | File_ref_entry(f_ref) ->
+         let file = fromJust(dh_lookup_file s0 f_ref) in
+         dh_update_files s0 f_ref (Just(<|file with dhf_nlink=(file.dhf_nlink-1)|>))           
+      | Dir_ref_entry(d_ref) ->
+         (* decrease link count of the dir to unlink *)
+         let dir = fromJust (dh_lookup_dir s0 d_ref) in
+         let s0 = dh_update_dirs s0 d_ref (Just(<|dir with dhd_nlink=(dir.dhd_nlink-1)|>))
+         in
+         (* decrease link count of the parent dir as well -because wehave removed the implicit link from the dir to the parent*)
+         dh_update_dirs s0 d0_ref (Just(<|parent with dhd_nlink=(parent.dhd_nlink-1)|>)) end)
+    in
+    (* unlink *)
+    dh_update_dir_entries s1 d0_ref name Nothing
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_mkdir                   *)
+  (*-------------------------------*)
+  val dhops_mkdir : dir_heap_state -> dh_dir_ref -> string -> (dir_heap_state * dh_dir_ref)
+  let dhops_mkdir s0 d0_ref name = (
+    let (s1,((d1_ref:dh_dir_ref),d1)) = dh_create_new_dir s0 in
+
+    (* set parent of d1 to d0 *)
+    let d1' = <| d1 with dhd_parent = Just (d0_ref, name); dhd_nlink = d1.dhd_nlink+1 |> in
+    let s2 = dh_update_dirs s1 d1_ref (Just d1') in
+
+    (* add d1 to entries of d0 *)
+    let s3 = dh_update_dir_entries s2 d0_ref name (Just (Dir_ref_entry d1_ref)) in
+
+    (* increase st_nlink of d0 since it has a new subdirectory link *)
+    let s4 =
+      let parent = fromJust(dh_lookup_dir s3 d0_ref) in
+      dh_update_dirs s3 d0_ref (Just (<|parent with dhd_nlink=(parent.dhd_nlink+1)|>))
+    in
+
+    (s4, d1_ref)
+  )
+
+  (*-------------------------------*)
+  (* dhops_mkfile                  *)
+  (*-------------------------------*)
+  val dhops_mkfile : dir_heap_state -> dh_dir_ref -> string -> dir_heap_state * dh_file_ref
+  let dhops_mkfile s0 d0_ref name = (
+    let (s1,(i0_ref,i0)) = dh_create_new_file s0 in 
+    let s2 = dh_update_dir_entries s1 d0_ref name (Just (File_ref_entry i0_ref)) in
+    (* set nlink to 1 after the creation of the file *)
+    let s3 =
+      let file = fromJust(dh_lookup_file s2 i0_ref) in
+      dh_update_files s2 i0_ref (Just (<|file with dhf_nlink=(file.dhf_nlink)|>))
+    in
+    (s3, i0_ref)
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_mv                      *)
+  (*-------------------------------*)
+
+  val dhops_mv : dir_heap_state -> dh_dir_ref -> string -> dh_dir_ref -> string -> dir_heap_state 
+  let dhops_mv s0 d0_ref name0 d1_ref name1 = (
+    let entry = fromJust (dh_resolve s0 d0_ref name0) in
+    let s0 =
+      if (dh_resolve s0 d1_ref name1) = Nothing
+      then s0
+      else dhops_unlink s0 d1_ref name1
+    in
+    let s0 = dhops_link s0 entry d1_ref name1 in
+    let s0 = dhops_unlink s0 d0_ref name0 in 
+    s0)
+
+
+  (*-------------------------------*)
+  (* dhops_read                    *)
+  (*-------------------------------*)
+
+  val dhops_read : dir_heap_state -> dh_file_ref -> (dir_heap_state * ret_value)
+  let dhops_read s0 i0_ref = (
+    let i0 = fromJust (dh_lookup_file s0 i0_ref) in
+    let bytes = i0.dhf_contents in
+    (s0, RV_bytes bytes)
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_readdir                 *)
+  (*-------------------------------*)
+
+  val dhops_readdir : dir_heap_state -> dh_dir_ref -> (dir_heap_state * list name)
+  let dhops_readdir s0 d0_ref = (
+    let d0 = fromJust (dh_lookup_dir s0 d0_ref) in
+    let name_fset = fmap_dom d0.dhd_entries in
+    let names = Sorting.sort (list_from_finset name_fset) in
+    (s0, names)
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_sysconf                 *)
+  (*-------------------------------*)
+
+  val dhops_sysconf : dir_heap_state -> sysconf_value -> nat
+  let dhops_sysconf s0 sc = match fmap_lookup s0.dhs_state_config.dhs_sysconfig sc with
+    | Just v -> v (* coverage:impossible -dhs_sysconfig is an always empty map *)
+    | Nothing -> sysconf_default sc
+  end
+
+
+  (*-------------------------------*)
+  (* dhops_write                   *)
+  (*-------------------------------*)
+  val dhops_write : dir_heap_state -> dh_file_ref -> ty_bytes -> dir_heap_state
+  let dhops_write s0 i0_ref c = (
+    let i0 = fromJust (dh_lookup_file s0 i0_ref) in
+    let i0 = <| i0 with dhf_contents = c |> in
+    let s1 = dh_update_files s0 i0_ref (Just i0) in
+    s1
+  )
+
+
+
+  (*-------------------------------*)
+  (* dhops_readlink                *)
+  (*-------------------------------*)
+  val dhops_readlink : dir_heap_state -> dh_file_ref -> ty_bytes
+  let dhops_readlink s0 i0_ref = (
+    let i0 = fromJust (dh_lookup_file s0 i0_ref) in
+    let bytes = i0.dhf_contents in
+    bytes
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_symlink                 *)
+  (*-------------------------------*)
+  val dhops_symlink : dir_heap_state -> dh_dir_ref -> string -> ty_bytes -> file_perm -> dir_heap_state
+  let dhops_symlink s0 d0_ref name bs perm = (
+    let (s1,(i0_ref,i0)) = dh_create_new_file s0 in 
+    let i0' = <| i0 with dhf_kind = S_IFLNK; dhf_perm = perm; dhf_contents = bs |> in
+    let s2 = dh_update_files s1 i0_ref (Just i0') in
+    let s3 = dh_update_dir_entries s2 d0_ref name (Just (File_ref_entry i0_ref)) in
+    s3
+  )
+
+
+  (*-------------------------------*)
+  (* dhops_stat                    *)
+  (*-------------------------------*)
+  val dhops_stat_file : dir_heap_state -> dh_file_ref -> ty_stats
+  let dhops_stat_file s0 i0_ref = (
+    let i0 = fromJust (dh_lookup_file s0 i0_ref) in
+    <| st_dev = default_st_dev;  (* not implemented yet, use default *)
+       st_ino = dest_File_ref s0 i0_ref; 
+       st_kind = i0.dhf_kind;
+       st_perm = i0.dhf_perm;
+       st_nlink = i0.dhf_nlink;
+       st_uid = i0.dhf_uid;
+       st_gid = i0.dhf_gid; 
+       st_rdev = default_st_rdev;  (* not implemented yet, use default *)
+       st_size =  int64FromNat (T_list_array.dim i0.dhf_contents);
+       st_atime = i0.dhf_atime; 
+       st_mtime = i0.dhf_mtime; 
+       st_ctime = i0.dhf_ctime; 
+    |>
+  )
+
+  val dhops_stat_dir : dir_heap_state -> dh_dir_ref -> ty_stats
+  let dhops_stat_dir s0 d0_ref = (
+    let d0 = fromJust (dh_lookup_dir s0 d0_ref) in
+    <| st_dev = default_st_dev;  (* not implemented yet, use default *)
+       st_ino = dest_Dir_ref s0 d0_ref; 
+       st_kind = S_IFDIR;
+       st_perm = d0.dhd_perm;
+       st_nlink = d0.dhd_nlink;
+       st_uid = d0.dhd_uid;
+       st_gid = d0.dhd_gid; 
+       st_rdev = default_st_rdev;  (* not implemented yet, use default *)
+       st_size =  d0.dhd_size;
+       st_atime = d0.dhd_atime; 
+       st_mtime = d0.dhd_mtime; 
+       st_ctime = d0.dhd_ctime; 
+    |>
+  )
+
+  (*-------------------------------*)
+  (* Observer management           *)
+  (*-------------------------------*)
+
+  val dhops_observe_dir_register : dir_heap_state -> dh_dir_ref -> (dir_heap_state * ty_od_handle dh_dir_ref)
+  let dhops_observe_dir_register s d0_ref = (
+    let d0 = fromJust (dh_lookup_dir s d0_ref) in
+
+    let dh =
+      fmap_fold (fun k _ m ->
+                 if k >= m
+                 then succ k
+                 else m (* coverage:impossible -we are looking for the maximum, the else would mean taking a minimum *))
+                d0.dhd_observers 0
+    in
+    let d1 = <| d0 with dhd_observers = fmap_update d0.dhd_observers (dh,[]) |> in
+
+    let s' = dh_update_dirs s d0_ref (Just d1) in
+    (s', OD_handle (dh, d0_ref))
+  )
+
+  val dhops_observe_dir : dir_heap_state -> (ty_od_handle dh_dir_ref) -> (dir_heap_state * list ty_od_entry)
+  let dhops_observe_dir s (OD_handle (dh, d0_ref)) = (
+    let d0 = fromJust (dh_lookup_dir s d0_ref) in
+
+    let entries = List.reverse (fromJust (fmap_lookup d0.dhd_observers dh)) in
+    let d1 = <| d0 with dhd_observers = fmap_update d0.dhd_observers (dh,[]) |> in
+
+    let s' = dh_update_dirs s d0_ref (Just d1) in
+    (s', entries))
+
+  val dhops_observe_dir_unregister : dir_heap_state -> (ty_od_handle dh_dir_ref) -> dir_heap_state
+  let dhops_observe_dir_unregister s (OD_handle (dh, d0_ref)) = (
+    let d0 = fromJust (dh_lookup_dir s d0_ref) in
+    let d1 = <| d0 with dhd_observers = fmap_remove d0.dhd_observers dh |> in
+    let s' = dh_update_dirs s d0_ref (Just d1) in
+    s'
+  )
+
+#ifdef aspect_perms
+  (*-------------------------------*)
+  (* permission management         *)
+  (*-------------------------------*)
+
+  val dhops_set_perm_file : dir_heap_state -> file_perm -> dh_file_ref -> dir_heap_state
+  let dhops_set_perm_file s0 perms i0_ref =
+    match dh_lookup_file s0 i0_ref with
+      | Nothing -> s0 (* do nothing if the ref is not valid *) (* coverage:impossible -all the calling functions perform path resolution to get the ref *)
+      | Just dh_file' -> dh_update_files s0 i0_ref (Just (<| dh_file' with dhf_perm = perms |>))
+    end
+
+  val dhops_set_perm_dir : dir_heap_state -> file_perm -> dh_dir_ref -> dir_heap_state
+  let dhops_set_perm_dir s0 perms d0_ref =
+    match dh_lookup_dir s0 d0_ref with
+      | Nothing -> s0 (* do nothing if the ref is not valid *) (* coverage:impossible -all the calling functions perform path resolution to get the ref *)
+      | Just dh_dir' -> dh_update_dirs s0 d0_ref (Just (<| dh_dir' with dhd_perm = perms |>))
+    end
+
+  val dhops_chown_file : dir_heap_state -> (uid * gid) -> dh_file_ref -> dir_heap_state
+  let dhops_chown_file s0 ugid i0_ref =
+    match dh_lookup_file s0 i0_ref with
+      | Nothing -> s0 (* do nothing if the ref is not valid *) (* coverage:impossible -all the calling functions perform path resolution to get the ref *)
+      | Just dh_file' -> dh_update_files s0 i0_ref
+           (Just (<| dh_file' with dhf_uid = fst ugid; dhf_gid = snd ugid |>))
+    end
+
+  val dhops_chown_dir : dir_heap_state -> (uid * gid) -> dh_dir_ref -> dir_heap_state
+  let dhops_chown_dir s0 ugid d0_ref =
+    match dh_lookup_dir s0 d0_ref with
+      | Nothing -> s0 (* do nothing if the ref is not valid *) (* coverage:impossible -all the calling functions perform path resolution to get the ref *)
+      | Just dh_dir' -> dh_update_dirs s0 d0_ref
+           (Just (<| dh_dir' with dhd_uid = fst ugid; dhd_gid = snd ugid |>))
+    end
+
+  val dir_heap_perm_ops : perm_ops dh_dir_ref dh_file_ref dir_heap_state
+  let dir_heap_perm_ops = <|
+    pops_set_perm_file = dhops_set_perm_file;
+    pops_set_perm_dir = dhops_set_perm_dir;
+
+    pops_chown_file = dhops_chown_file;
+    pops_chown_dir = dhops_chown_dir;
+
+    pops_uid_is_superuser = (fun _ uid -> uid = root_uid)
+  |>
+#endif
+
+
+  (*-------------------------------*)
+  (* Putting everything together   *)
+  (*-------------------------------*)
+
+  val dir_heap_ops : fs_ops dh_dir_ref dh_file_ref dir_heap_state
+  let dir_heap_ops = <|
+    fops_get_init_state=(fun () -> (dh_initial_state : dir_heap_state));
+    fops_get_parent=dhops_get_parent;
+    fops_get_root=(fun (s0 : dir_heap_state) -> Just(dh_get_root s0.dhs_state_fs));
+    fops_dest_dir_ref=dest_Dir_ref;
+    fops_dest_file_ref=dest_File_ref;
+    fops_file_ref_eq=(fun _ f0_ref f1_ref -> (f0_ref = f1_ref));
+    fops_dir_ref_eq=(fun _ d0_ref d1_ref -> (d0_ref = d1_ref));
+    fops_link_file=dhops_link_file;
+    fops_unlink=dhops_unlink;
+    fops_mkdir=dhops_mkdir;
+    fops_mvfile=dhops_mv;
+    fops_mvdir=dhops_mv;
+    fops_read=dhops_read;
+    fops_readdir=dhops_readdir;
+    fops_resolve=dh_resolve;
+    fops_lookup_sysconf=dhops_sysconf;
+    fops_write=dhops_write;
+    fops_mkfile=dhops_mkfile;
+    fops_readlink=dhops_readlink;
+    fops_symlink=dhops_symlink;
+    fops_stat_file=dhops_stat_file;
+    fops_stat_dir=dhops_stat_dir;
+    fops_lstat = dhops_stat_file; (* lstat behaves like stat apart from not resolving symlink *)
+
+    fops_observe_dir_register=dhops_observe_dir_register;
+    fops_observe_dir=dhops_observe_dir;
+    fops_observe_dir_unregister=dhops_observe_dir_unregister
+  |>
+
+
+  val dir_heap_env : environment dh_dir_ref dh_file_ref dir_heap_state
+  let dir_heap_env = <|
+    env_ops = dir_heap_ops;
+    env_arch = default_arch;
+#ifdef aspect_perms
+    env_prms = full_permissions;
+    env_perm_ops = dir_heap_perm_ops;
+#endif
+  |>
+
+  val dh_trans : dh_os_state -> os_label -> finset dh_os_state_or_special
+  let dh_trans = T_fs_spec.Os_transition_system.os_trans
+
+  val dh_init_state: ty_arch -> bool -> dh_os_state
+  let dh_init_state arch no_root = 
+    let env = <| dir_heap_env with env_arch = arch |> in
+    T_fs_spec.Os_transition_system.os_init_state no_root env
+
+  val dh_allowed_results_for_pid : 
+    ty_pid -> dh_os_state 
+    -> finset (Fs_types.error_or_value Fs_types.ret_value)
+  let dh_allowed_results_for_pid pid s0 = T_fs_spec.Os_transition_system.allowed_results_for_pid pid s0
+
+
+end
+
