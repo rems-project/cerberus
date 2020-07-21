@@ -1,6 +1,0 @@
-embed {{ coq Require Export MapsExt AilTypes.}}
-
-metavar identifier, id ::=
-% INC? {{ coq nat }}
-  {{ lex alphanum }}
-  {{ coq-equality }}

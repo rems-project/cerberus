@@ -21,7 +21,7 @@ Q = @
 normal: cerberus
 
 .PHONY: all
-all: cerberus cerberus-bmc cerberus-web csrt rustic
+all: cerberus
 
 .PHONY: full-build
 full-build: prelude-src
@@ -43,41 +43,6 @@ cerberus: prelude-src
 	@echo "[DUNE] cerberus"
 	$(Q)dune build cerberus.install
 
-.PHONY: cerberus-bmc bmc
-bmc: cerberus-bmc
-cerberus-bmc: prelude-src
-	@echo "[DUNE] cerberus-bmc"
-	$(Q)dune build cerberus.install cerberus-bmc.install
-
-.PHONY: rustic
-rustic: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install rustic.install
-
-.PHONY: csrt
-csrt: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install csrt.install
-
-
-# .PHONY: cerberus-ocaml ocaml
-# ocaml: cerberus-ocaml
-# cerberus-ocaml: prelude-src
-# 	@echo "[DUNE] $@"
-# 	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
-# 	FIXME does not compile
-# 	FIXME should generate rt-ocaml as a library
-# 	@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
-# 	@mkdir -p _lib/rt-ocaml
-# 	@cp backend/ocaml/runtime/META _lib/rt-ocaml
-# 	@cp backend/ocaml/runtime/_build/rt_ocaml.a \
-# 		   backend/ocaml/runtime/_build/rt_ocaml.cma \
-# 			 backend/ocaml/runtime/_build/rt_ocaml.cmxa _lib/rt-ocaml
-# 	@cp backend/ocaml/runtime/_build/*.cmi _lib/rt-ocaml
-# 	@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
-# 	@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
-# 	@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
-
 tmp/:
 	@echo "[MKDIR] tmp"
 	$(Q)mkdir -p tmp
@@ -86,18 +51,6 @@ config.json: tools/config.json
 	@echo "[CP] $< → $@"
 	@cp $< $@
 
-.PHONY: cerberus-web web
-web: cerberus-web
-cerberus-web: prelude-src config.json tmp/
-	@echo "[DUNE] web"
-	$(Q)dune build cerberus.install cerberus-web.install
-	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
-	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
-	@cp -L _build/default/backend/web/web.exe cerberus-webserver
-
-.PHONY: ui
-ui:
-	make -C public
 
 #### LEM sources for the frontend
 LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \

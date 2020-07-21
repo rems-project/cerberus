@@ -1,3 +1,0 @@
-expected:
-  - { value: "Unspecified(\"signed int\")", stdout: "" }
-

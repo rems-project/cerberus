@@ -1,7 +1,0 @@
-  {{ phantom }}
-  {{ coq nat }}
-  | ( nat ) :: S :: Parens
-      {{ icho [[nat]] }}
-  | N n :: S :: Nat
-      {{ icho [[n]] }}
-      {{ tex [[n]] }}

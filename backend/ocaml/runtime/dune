@@ -1,7 +1,0 @@
-;(library
-; (name rt_ocaml)
-; (public_name cerberus-ocaml.runtime)
-; (synopsis "Cerberus OCaml runtime")
-; (flags (:standard -w -27))
-; (modules :standard)
-; (libraries lem util cerb_frontend mem_concrete))

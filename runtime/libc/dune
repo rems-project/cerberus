@@ -70,9 +70,7 @@
        include/posix/math.h
        include/posix/dirent.h
        include/posix/sys/ipc.h
-       include/posix/sys/ioctl.h
        include/posix/sys/socket.h
-       include/posix/sys/cdefs.h
        include/posix/sys/uio.h
        include/posix/sys/un.h
        include/posix/sys/times.h

@@ -1,4 +1,0 @@
-  | ( range ) :: S :: Parens
-      {{ icho [[range]] }}
-  | [ w1 , w2 ] :: M :: Construct
-      {{ coq makeRange [[w1]] [[w2]] }}

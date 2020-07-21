@@ -1,2 +1,0 @@
-  | n in range :: M :: natMem
-      {{ coq memNat [[n]] [[range]] }}

@@ -1,4 +1,0 @@
-  | max range :: M :: RangeMax
-      {{ coq max [[range]] }}
-  | min range :: M :: RangeMin
-      {{ coq min [[range]] }}

@@ -1,4 +1,0 @@
-embed {{ coq
-Definition sub {A} (l1 l2 : list A) :=
-  List.Forall (fun x => List.In x l1) l2.
-}}

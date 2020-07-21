@@ -1,3 +1,0 @@
-expected:
-  - !Defined { value: "Specified(10)", stdout: "" }
-  - !Defined { value: "Specified(20)", stdout: "" }

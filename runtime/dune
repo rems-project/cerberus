@@ -2,12 +2,6 @@
 ; [find * -type f -exec echo "  ({} as runtime/{})" \; >> dune]
 (install
  (files
-  (bmc/rc11.cat as runtime/bmc/rc11.cat)
-  (bmc/linux.cat as runtime/bmc/linux.cat)
-  (bmc/linux_without_rcu.cat as runtime/bmc/linux_without_rcu.cat)
-  (bmc/luc.2015.cat as runtime/bmc/luc.2015.cat)
-  (bmc/c11.cat as runtime/bmc/c11.cat)
-  (bmc/linux.h as runtime/bmc/linux.h)
   (libc/include/builtins.h as runtime/libc/include/builtins.h)
   (libc/include/stdlib.h as runtime/libc/include/stdlib.h)
   (libc/include/float.h as runtime/libc/include/float.h)
@@ -62,9 +56,7 @@
   (libc/include/posix/math.h as runtime/libc/include/posix/math.h)
   (libc/include/posix/dirent.h as runtime/libc/include/posix/dirent.h)
   (libc/include/posix/sys/ipc.h as runtime/libc/include/posix/sys/ipc.h)
-  (libc/include/posix/sys/ioctl.h as runtime/libc/include/posix/sys/ioctl.h)
   (libc/include/posix/sys/socket.h as runtime/libc/include/posix/sys/socket.h)
-  (libc/include/posix/sys/cdefs.h as runtime/libc/include/posix/sys/cdefs.h)
   (libc/include/posix/sys/uio.h as runtime/libc/include/posix/sys/uio.h)
   (libc/include/posix/sys/un.h as runtime/libc/include/posix/sys/un.h)
   (libc/include/posix/sys/times.h as runtime/libc/include/posix/sys/times.h)
@@ -138,7 +130,6 @@
   (libc/src/unistd.c as runtime/libc/src/unistd.c)
   (libc/src/internal.h as runtime/libc/src/internal.h)
   (libc/src/time.c as runtime/libc/src/time.c)
-  (libc/generators/gen_inttypes.c as runtime/libc/generators/gen_inttypes.c)
   (libcore/std.core as runtime/libcore/std.core)
   (libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl as
    runtime/libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl)

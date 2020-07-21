@@ -1,9 +1,0 @@
-  | <=range :: :: LeTypeRange
-      {{ tex \leqslant_{range} }}
-  | =rank :: :: EqRank
-      {{ tex =_{rank} }}
-  | <rank :: :: LtRank
-      {{ tex <_{rank} }}
-  | <=rank :: :: LeRank
-      {{ tex \leqslant_{rank} }}
-  | typeRange :: :: TypeRange

@@ -1,5 +1,0 @@
-  | |e- :: :: ETurnstile
-      {{ tex \vdash_e }}
-  | |l- :: :: LTurnstile
-      {{ tex \vdash_l }}
-  | empty :: :: Empty

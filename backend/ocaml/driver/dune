@@ -1,7 +1,0 @@
-;(executable
-; (name main)
-; (public_name cerberus-ocaml)
-; (package cerberus-ocaml)
-; (flags (:standard -w -8-27)) ; FIXME
-; (libraries cmdliner str unix
-;  cerb_frontend cerb_backend mem_concrete util rt_ocaml))
