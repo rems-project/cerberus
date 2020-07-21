@@ -11,8 +11,8 @@ authors: [
   "Stella Lau"
   "Jean Pichon-Pharabod"
   "Christopher Pulte"
-  "James Lingard"
   "Rodolphe Lepigre"
+  "James Lingard"
 ]
 license: "BSD2"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
@@ -29,6 +29,7 @@ depends: [
   "apron" {>= "v0.9.12"}
   "menhir" {= "20190924"}
   "lem" {= "2020-06-03"}
+  "menhir" {>= "20190924"}
 ]
 build: [
   ["dune" "subst"] {pinned}
