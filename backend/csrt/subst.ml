@@ -1,8 +1,4 @@
-type ('a,'b) t = { substitute: 'a; swith: 'b }
-
-
-
-
+type ('a,'b) t = { s: 'a; swith: 'b }
 
 
 let make_substs

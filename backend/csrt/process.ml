@@ -86,12 +86,12 @@ let struct_decl loc tag fields genv =
     | Struct tag2 -> 
        let* decl = Global.get_struct_decl loc genv (Tag tag2) in
        let sopen = 
-         let subst = {substitute=decl.open_type.sbinder; 
+         let subst = {s=decl.open_type.sbinder; 
                       swith=IT.Member (tag, S thisstruct, member)} in
          RT.subst_var_l subst decl.open_type.souter
        in
        let sclosed = 
-         let subst = {substitute=decl.closed_type.sbinder; 
+         let subst = {s=decl.closed_type.sbinder; 
                       swith=IT.Member (tag, S thisstruct, member)} in
          RT.subst_var_l subst decl.closed_type.souter
        in

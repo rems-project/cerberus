@@ -38,7 +38,7 @@ let trees_of_map loc global equality
   let find_struct_child tag (member,cpointer) = 
     let* decl = Environment.Global.get_struct_decl loc global tag in
     let* bt = assoc_err loc member decl.raw
-                        "remove_owned_subtree" in
+                        (TypeErrors.Unreachable !^"remove_owned_subtree") in
     let* found = 
       symmap_foldM (fun sym' resource' found ->
           match bt, resource' with

@@ -1,23 +1,12 @@
 open Pp
 module Loc=Locations
 module BT=BaseTypes
+module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
 
-type call_return_switch_error = 
-  | Surplus_A of Sym.t * BaseTypes.t
-  | Missing_A of Sym.t * BaseTypes.t
-  | Missing_R of Resources.t
-  | Mismatch of { mname: Sym.t option; has: LS.t; expected: LS.t; }
-  | Unsat_constraint of LogicalConstraints.t
-  | Unconstrained_l of Sym.t
-
 type type_error = 
   | Name_bound_twice of Sym.t
-  | Pattern_type_mismatch of {
-      has: BT.t;
-      expected: BT.t
-    }
   | Constructor_wrong_argument_number of {
       constructor: CF.Mucore.mu_ctor;
       expected: int;
@@ -35,8 +24,12 @@ type type_error =
     }
   | Illtyped_it of IndexTerms.t
   | Variadic_function of Sym.t
-  | Return_error of call_return_switch_error
-  | Call_error of call_return_switch_error
+  | Surplus_A of Sym.t * BaseTypes.t
+  | Missing_A of Sym.t * BaseTypes.t
+  | Missing_R of Resources.t
+  | Mismatch of { has: LS.t; expected: LS.t; }
+  | Unsat_constraint of LogicalConstraints.t
+  | Unconstrained_l of Sym.t
   | Integer_value_error
   | Generic_error of PPrint.document
   | Undefined of CF.Undefined.undefined_behaviour
@@ -47,39 +40,6 @@ type type_error =
   | Z3_IT_not_implemented_yet of IndexTerms.t
 
 type t = type_error
-
-let pp_return_error = function
-  | Surplus_A (_name,t) ->
-     !^"Returning unexpected value of type" ^^^ BaseTypes.pp false t
-  | Missing_A (_name,t) ->
-     !^"Missing return value of type" ^^^ BaseTypes.pp false t
-  | Missing_R t ->
-     !^"Missing return resource of type" ^^^ Resources.pp false t
-  | Mismatch {mname; has; expected} ->
-    !^"Expected return value of type" ^^^ LS.pp false expected ^^^
-      !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
-  | Unsat_constraint c ->
-     !^"Unsatisfied return constraint" ^^^
-       LogicalConstraints.pp false c
-  | Unconstrained_l name ->
-     !^"Unconstrained logical variable" ^^^ Sym.pp name
-
-let pp_call_error = function
-  | Surplus_A (_name,t) ->
-     !^"Supplying unexpected argument of type" ^^^ BaseTypes.pp false t
-  | Missing_A (_name,t) ->
-     !^"Missing argument of type" ^^^ BaseTypes.pp false t
-  | Missing_R t ->
-     !^"Missing resource argument of type" ^^^ Resources.pp false t
-  | Mismatch {mname; has; expected} ->
-    !^"Expected argument of type" ^^^ LS.pp false expected ^^^
-      !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
-  | Unsat_constraint c ->
-     !^"Unsatisfied argument constraint" ^^^
-       LogicalConstraints.pp false c
-  | Unconstrained_l name ->
-     !^"Unconstrained logical variable" ^^^ Sym.pp name
-
 
 let pp (loc : Loc.t) (err : t) = 
   Loc.withloc loc
@@ -92,9 +52,6 @@ let pp (loc : Loc.t) (err : t) =
              (words "but found kind"); [VarTypes.pp_kind err.has]])
     | Name_bound_twice name ->
        !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
-    | Pattern_type_mismatch m ->
-       !^"Pattern type mismatch: expected" ^^^ BT.pp false m.expected ^^^ 
-         !^", has" ^^^ BT.pp false m.has
     | Constructor_wrong_argument_number {constructor;expected;has} ->
        let ctor_pp = 
          let open CF.Mucore in
@@ -134,10 +91,20 @@ let pp (loc : Loc.t) (err : t) =
            CF.Implementation.string_of_implementation_constant i)
     | Variadic_function fn ->
        !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
-    | Return_error err -> 
-       pp_return_error err
-    | Call_error err -> 
-       pp_call_error err
+    | Surplus_A (_name,t) ->
+       !^"Unexpected value of type" ^^^ BaseTypes.pp false t
+    | Missing_A (_name,t) ->
+       !^"Missing value of type" ^^^ BaseTypes.pp false t
+    | Missing_R t ->
+       !^"Missing resource of type" ^^^ Resources.pp false t
+    | Mismatch {has; expected} ->
+       !^"Expected value of type" ^^^ LS.pp false expected ^^^
+         !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
+    | Unsat_constraint c ->
+       !^"Unsatisfied constraint" ^^^
+         LogicalConstraints.pp false c
+    | Unconstrained_l name ->
+       !^"Unconstrained logical variable" ^^^ Sym.pp name
     | Integer_value_error ->
        !^"integer_value_to_num returned None"
     | Undefined undef ->

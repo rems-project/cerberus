@@ -129,7 +129,7 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
                       Constraint (pointer_constraint, lbindings2@@lbindings)),
                     Resource (StoredStruct stored_struct, rbindings2@@rbindings))
          | _ -> 
-            let* ct = assoc_err loc member decl.ctypes "make_stored_struct" in
+            let* ct = assoc_err loc member decl.ctypes (Unreachable !^"make_stored_struct") in
             let* size = Memory.size_of_ctype loc ct in
             let points = {pointer = S pointer; pointee = this; typ = ct ; size} in
             return (Logical (pointer, Base Loc,
@@ -167,7 +167,7 @@ let explode_struct_in_binding loc genv (Tag tag) logical_struct binding =
   let binding' = 
     fold_right (fun (name,bt,it) binding -> 
         Logical (name,Base bt, 
-                 instantiate_struct_member_l {substitute=it;swith=S name} binding)
+                 instantiate_struct_member_l {s=it;swith=S name} binding)
       ) substs binding
   in
   return binding'
@@ -230,7 +230,7 @@ let make_fun_arg_type genv asym loc ct =
             return (Loc, abindings)
           in
           let* ret = 
-            let r_rbindings = RT.subst_var_l {substitute=aname2;swith=S rname2} a_rbindings in
+            let r_rbindings = RT.subst_var_l {s=aname2;swith=S rname2} a_rbindings in
             let rpoints = StoredStruct stored in
             let* rbindings = 
               explode_struct_in_binding loc genv (Tag s) (S rname2)
@@ -257,9 +257,9 @@ let make_fun_arg_type genv asym loc ct =
        aux pointed (aname,rname) ct
     | Struct tag -> 
        let* decl = Environment.Global.get_struct_decl loc genv (Tag tag) in
-       let ftt = RT.subst_var_l {substitute=decl.closed_type.sbinder; swith=S aname }
+       let ftt = RT.subst_var_l {s=decl.closed_type.sbinder; swith=S aname }
                    decl.closed_type.souter in
-       let rtt = RT.subst_var_l {substitute=decl.closed_type.sbinder; swith=S rname }
+       let rtt = RT.subst_var_l {s=decl.closed_type.sbinder; swith=S rname }
                    decl.closed_type.souter in
        let arg = (Struct (Tag tag), ftt) in
        let ret = (Struct (Tag tag), rtt) in

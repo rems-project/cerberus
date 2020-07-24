@@ -33,8 +33,6 @@ module SymSet = Set.Make(Sym)
 
 let pp_budget = Some 7
 
-
-
 let error pp =
   CB.Pipeline.run_pp None 
     (hardline ^^
@@ -44,86 +42,59 @@ let error pp =
     );
   exit 1
 
+type 'a m = ('a, Loc.t * TypeErrors.t) Except.t
 
 
 
 
-
-let at_most_one loc err_str = function
-  | [] -> return None
-  | [x] -> return (Some x)
-  | _ -> fail loc (Generic_error err_str)
+let check_base_type loc has expected =
+  if BT.equal has expected then return () else 
+    fail loc (Mismatch {has = (Base has); expected = Base expected})
 
 
-let check_base_type loc mname has expected =
-  if BT.equal has expected 
-  then return ()
-  else 
-    let msm = (Mismatch {mname; has = (Base has); expected = Base expected}) in
-    fail loc (Call_error msm)
-
-
-let bind_l loc rt = 
-  let rec aux local' = function
-    | Logical (lname,bound,rt) ->
-       let new_lname = fresh () in
-       let local' = add_l local' (new_lname,bound) in
-       let rt = subst_var_l {substitute=lname; swith=S new_lname} rt in
-       aux local' rt
-    | Resource (bound,rt) ->
-       let local' = add_ur local' bound in
-       aux local' rt
-    | Constraint (bound,rt) ->
-       let local' = add_uc local' bound in
-       aux local' rt
-    | I -> local'
+let bind_l rt =
+  let rec aux rt delta = 
+    match rt with
+    | Logical (s,ls,rt) ->
+       let s' = fresh () in
+       aux (subst_var_l {s; swith=S s'} rt) (add (mL s' ls) delta)
+    | Resource (re,rt) -> aux rt (add (mUR re) delta)
+    | Constraint (lc,rt) -> aux rt (add (mUC lc) delta)
+    | I -> delta
   in
-  aux Local.empty rt
+  aux rt Local.empty
 
 
-let bind loc aname = function
-  | Computational (lname,bound,rt) ->
-     let new_lname = fresh () in
-     let local' = add_l Local.empty (new_lname,Base bound) in
-     let local' = add_a local' (aname,(bound,new_lname)) in
-     let rt = subst_var_l {substitute=lname;swith=S new_lname} rt in
-     let local'' = bind_l loc rt in
-     (local'' ++ local')
-
-
-let bind_to_name loc aname rt =
-  let local' = bind loc aname rt in
-  let* new_a = Local.filter_a (fun s _ _ -> return (Some s)) local' in
-  let* new_r = Local.filter_r (fun s _ -> return (Some s)) local' in
-  return (local',new_a,new_r)
-
-let bind_other loc = function
-  | Computational (lname,bound,rt) ->
-     let new_lname = fresh () in
-     let local' = add_l Local.empty (new_lname,Base bound) in
-     let rt = subst_var_l {substitute=lname;swith=S new_lname} rt in
-     let local'' = bind_l loc rt in
-     let* new_r = Local.filter_r (fun s _ -> return (Some s)) local'' in
-     return (local'' ++ local', (bound,new_lname),new_r)
+let bind name (Computational (s,bt,rt)) =
+  let s' = fresh () in
+  let local' = add (mA name (bt,s'))
+               (add (mL s' (Base bt)) Local.empty) in
+  let local'' = bind_l (subst_var_l {s;swith=S s'} rt) in
+  local'' ++ local'
+  
+let bind_other loc (Computational (s,bt,rt)) =
+  let s' = fresh () in
+  let local' = add (mL s' (Base bt)) Local.empty in
+  let local'' = bind_l (subst_var_l {s;swith=S s'} rt) in
+  return (local'' ++ local', (bt,s'))
 
 
 let pattern_match loc this pat expected_bt =
   let rec aux local' this pat expected_bt = 
     match pat with
-    | M_Pattern (annots, M_CaseBase (o_aname, mbt)) ->
+    | M_Pattern (annots, M_CaseBase (o_s, mbt)) ->
        let* has_bt = Conversions.bt_of_core_base_type loc mbt in
-       let* () = check_base_type loc None has_bt expected_bt in
-       let* aname = match o_aname with
-         | Some aname -> 
-            if is_bound aname local'
-            then fail loc (Name_bound_twice aname)
-            else return aname
-         | None -> return (fresh ())
+       let* () = check_base_type loc has_bt expected_bt in
+       let s' = fresh () in 
+       let local' = add (mL s' (Base has_bt)) local' in
+       let* local' = match o_s with
+         | Some s -> 
+            if is_bound s local' 
+            then fail loc (Name_bound_twice s)
+            else return (add (mA s (has_bt,s')) local')
+         | None -> return local'
        in
-       let new_lname = fresh () in 
-       let local' = add_l local' (new_lname,Base has_bt) in
-       let local' = add_a local' (aname,(has_bt,new_lname)) in
-       let local' = add_uc local' (LC (this %= S new_lname)) in
+       let local' = add (mUC (LC (this %= S s'))) local' in
        return local'
     | M_Pattern (annots, M_CaseCtor (constructor, pats)) ->
        match constructor with
@@ -133,7 +104,8 @@ let pattern_match loc this pat expected_bt =
           | [] ->
              if BT.equal (List item_bt) expected_bt 
              then return local'
-             else fail loc (Pattern_type_mismatch {has=List item_bt;expected=expected_bt})
+             else fail loc (Mismatch {has=Base (List item_bt);
+                                      expected=Base expected_bt})
           | _ -> 
              fail loc (Constructor_wrong_argument_number 
                          {constructor;expected=0;has=List.length pats})
@@ -162,7 +134,9 @@ let pattern_match loc this pat expected_bt =
                   components local' (i+1) pats bts
                | _, _ ->
                   fail loc (Constructor_wrong_argument_number 
-                              {constructor;expected=i+List.length pats;has=i+List.length pats})
+                              {constructor;
+                               expected=i+List.length pats;
+                               has=i+List.length pats})
              in
              let* local' = components local' 0 pats bts in
              return local'
@@ -188,50 +162,37 @@ let pattern_match loc this pat expected_bt =
           fail loc (Unsupported !^"todo: Civ..")
   in
   let* local' = aux Local.empty this pat expected_bt in
-  let* new_a = Local.filter_a (fun s _ _ -> return (Some s)) local' in
+  let new_a = Local.filter_a (fun s _ _ -> Some s) local' in
   return (local',new_a)
 
   
 
 
-let pattern_match_rt (loc : Loc.t) pat rt = 
-  let* local' = 
-    let (Computational (lname,bound,rt')) = rt in
-    (* The pattern-matching might de-struct 'bound'. For easily making
-       constraints carry over to those values, record (lname,bound) as
-       a logical variable and record constraints about how the
-       variables introduced in the pattern-matching relate to
-       (name,bound). *)
-    let new_lname = fresh () in
-    let rt' = subst_var_l {substitute=lname; swith=S new_lname} rt' in
-    let local' = add_l Local.empty (new_lname,Base bound) in
-    let* (local'',_) = pattern_match loc (S new_lname) pat bound in
-    let local''' = bind_l loc rt' in
-    return (local''' ++ local'' ++ local')
-  in
-  let* new_a = Local.filter_a (fun s _ _ -> return (Some s)) local' in
-  let* new_r = Local.filter_r (fun s _ -> return (Some s)) local' in
-  return (local',new_a,new_r)
+let pattern_match_rt (loc : Loc.t) pat (Computational (s,bt,rt)) =
+  (* The pattern-matching might de-struct 'bt'. For easily making
+     constraints carry over to those values, record (lname,bound) as a
+     logical variable and record constraints about how the variables
+     introduced in the pattern-matching relate to (name,bound). *)
+  let s' = fresh () in
+  let local' = add (mL s' (Base bt)) Local.empty in
+  let local'' = bind_l (subst_var_l {s; swith=S s'} rt) in
+  let* (local''',_) = pattern_match loc (S s') pat bt in
+  return (local''' ++ local'' ++ local')
 
 
 
-let abstract_concrete_resource = function
-  | Points p -> `Points p.pointer
-  | StoredStruct s -> `StoredStruct (s.pointer,s.tag)
 
 
 let match_resource loc {local;global} shape = 
   let* found = 
-    filter_r (fun name t ->
+    filter_rM (fun name t ->
         match shape, t  with
         | `Points pointer, RE.Points p' ->
            let* holds = Solver.equal loc {local;global} pointer p'.pointer in
            return (if holds then Some (Points p',name) else None)
-           (* return (if holds then Some (Points {p' with pointer},name) else None) *)
         | `StoredStruct (pointer,tag), RE.StoredStruct s' when tag = s'.tag ->
            let* holds = Solver.equal loc {local;global} pointer s'.pointer in
            return (if holds then Some (StoredStruct s',name) else None)
-           (* return (if holds then Some (StoredStruct {s' with pointer},name) else None) *)
         | _ -> 
            return None
       ) local
@@ -241,7 +202,7 @@ let match_resource loc {local;global} shape =
 
 let points_to loc {local;global} loc_it = 
   let* points = 
-    filter_r (fun name t ->
+    filter_rM (fun name t ->
         match t with
         | RE.Points p ->
            let* holds = Solver.equal loc {local;global} loc_it p.pointer in
@@ -255,7 +216,7 @@ let points_to loc {local;global} loc_it =
 
 let stored_struct_to_of_tag loc {local;global} loc_it tag = 
   let* stored = 
-    filter_r (fun name t ->
+    filter_rM (fun name t ->
         match t with
         | RE.StoredStruct s when s.tag = tag ->
            let* holds = Solver.equal loc {local;global} loc_it s.pointer in
@@ -267,15 +228,19 @@ let stored_struct_to_of_tag loc {local;global} loc_it tag =
   at_most_one loc !^"multiple points-to for same pointer" stored
 
 
+let abstract_concrete_resource = function
+  | Points p -> `Points p.pointer
+  | StoredStruct s -> `StoredStruct (s.pointer,s.tag)
+
 let match_concrete_resource loc {local;global} resource = 
   match_resource loc {local;global} (abstract_concrete_resource resource)
 
 
 
 
-let loc_type loc {local;global} pointer = 
+let guess_loc_type loc {local;global} pointer = 
   let* resources = 
-    filter_r (fun name t ->
+    filter_rM (fun name t ->
         match t with
         | RE.Points p' ->
            let* holds = Solver.equal loc {local;global} pointer p'.pointer in
@@ -287,12 +252,6 @@ let loc_type loc {local;global} pointer =
       ) local
   in
   at_most_one loc !^"multiple resources for same pointer" resources
-
-
-
-
-
-
 
 
 
@@ -317,7 +276,7 @@ let rec remove_owned_subtree loc {local;global} is_field pointer ct =
      | Some (r,stored) -> 
         fold_leftM (fun local (member,member_pointer) ->
             let* ct = Tools.assoc_err loc member decl.ctypes 
-                        "remove_owned_subtree" in
+                                      (Unreachable !^"remove_owned_subtree") in
             let* local = use_resource loc local r [loc] in
             remove_owned_subtree loc {local;global} true member_pointer ct
           ) local stored.members
@@ -341,34 +300,20 @@ let rec infer_index_term (loc : Loc.t) (env: Environment.t) (it : IT.t) =
   match it with
   | Num _ -> return (Base Int)
   | Bool _ -> return (Base Bool)
-  | Add (t,t')
-  | Sub (t,t')
-  | Mul (t,t')
-  | Div (t,t')
-  | Exp (t,t')
-  | Rem_t (t,t')
-  | Rem_f (t,t') 
-    ->
+  | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
+  | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t')  ->
      let* () = check_index_term loc env (Base Int) t in
      let* () = check_index_term loc env (Base Int) t' in
      return (Base Int)
-  | EQ (t,t')
-  | NE (t,t')
-  | LT (t,t')
-  | GT (t,t')
-  | LE (t,t')
-  | GE (t,t')
-    ->
+  | EQ (t,t') | NE (t,t') | LT (t,t')
+  | GT (t,t') | LE (t,t') | GE (t,t') ->
      let* () = check_index_term loc env (Base Int) t in
      let* () = check_index_term loc env (Base Int) t' in
      return (Base Bool)
   | Null t ->
      let* () = check_index_term loc env (Base Loc) t in
      return (Base Bool)
-  | And (t,t')
-  | Or (t,t')
-  | Impl (t,t')
-    ->
+  | And (t,t') | Or (t,t') | Impl (t,t') ->
      let* () = check_index_term loc env (Base Bool) t in
      let* () = check_index_term loc env (Base Bool) t' in
      return (Base Bool)
@@ -382,30 +327,25 @@ let rec infer_index_term (loc : Loc.t) (env: Environment.t) (it : IT.t) =
            return bt
          ) its in
      return (Base (BT.Tuple ts))
-  | Nth (n,it) ->
-     let* t = infer_index_term loc env it in
+  | Nth (n,it') ->
+     let* t = infer_index_term loc env it' in
      begin match t with
      | Base (Tuple ts) ->
         begin match List.nth_opt ts n with
         | Some t -> return (Base t)
-        | None -> fail loc (Unreachable !^"inconsistently typed index term")
+        | None -> fail loc (Illtyped_it it)
         end
-     | _ -> fail loc (Unreachable !^"inconsistently typed index term")
+     | _ -> fail loc (Illtyped_it it)
      end
-  (* | Struct (tag, members)->
-   *    let* decl = Global.get_struct_decl loc glocal tag in
-   *    aux members decl *)
-  | Member (tag, it,member) ->
-     let* () = check_index_term loc env (Base (Struct tag)) it in
+  | Member (tag, it', member) ->
+     let* () = check_index_term loc env (Base (Struct tag)) it' in
      let* decl = Global.get_struct_decl loc env.global tag in
-     let* bt = Tools.assoc_err loc member decl.raw 
-                 "inconsistently typed index term" in
+     let* bt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
      return (Base bt)
-  | MemberOffset (tag, it,member) ->
-     let* () = check_index_term loc env (Base (Struct tag)) it in
+  | MemberOffset (tag, it', member) ->
+     let* () = check_index_term loc env (Base (Struct tag)) it' in
      let* decl = Global.get_struct_decl loc env.global tag in
-     let* _ = Tools.assoc_err loc member decl.raw 
-                 "inconsistently typed index term" in
+     let* _ = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
      return (Base Loc)
   | Nil bt -> 
      return (Base bt)
@@ -416,17 +356,17 @@ let rec infer_index_term (loc : Loc.t) (env: Environment.t) (it : IT.t) =
   | List (its,bt) ->
      let* _ = mapM (check_index_term loc env (Base bt)) its in
      return (Base bt)
-  | Head it ->
-     let* ls = infer_index_term loc env it in
+  | Head it' ->
+     let* ls = infer_index_term loc env it' in
      begin match ls with
      | Base (List bt) -> return (Base bt)
-     | _ -> fail loc (Unreachable !^"inconsistently typed index term")
+     | _ -> fail loc (Illtyped_it it)
      end
-  | Tail it ->
+  | Tail it' ->
      let* ls = infer_index_term loc env it in
      begin match ls with
      | Base (List bt) -> return (Base (List bt))
-     | _ -> fail loc (Unreachable !^"inconsistently typed index term")
+     | _ -> fail loc (Illtyped_it it)
      end
   | S s ->
      get_l loc env.local s
@@ -434,8 +374,7 @@ let rec infer_index_term (loc : Loc.t) (env: Environment.t) (it : IT.t) =
 and check_index_term loc env (ls : LS.t) (it : IT.t) = 
   let* ls' = infer_index_term loc env it in
   if LS.equal ls ls' then return ()
-  else fail loc (Unreachable !^"inconsistently typed index term")
-
+  else fail loc (Illtyped_it it)
 
 
 
@@ -470,14 +409,12 @@ let subtype loc_ret {local;global} arg (rtyp : RT.t) ppdescr =
 
   let* () = 
     if BT.equal abt sbt then return ()
-    else
-      let msm = Mismatch {mname = Some aname; has = Base abt; expected = Base sbt} in
-      fail loc_ret (Return_error msm)
+    else fail loc_ret (Mismatch {has = Base abt; expected = Base sbt})
   in
 
   let spec = STS.{ typ = rtyp ; lvars = []; constraints = []} in
-  let spec = STS.subst_var {substitute=sname;swith=S lname} spec in
-  let local = add_l local (lname,Base abt) in
+  let spec = STS.subst_var {s=sname;swith=S lname} spec in
+  let local = add (mL lname (Base abt)) local in
 
   let* () = debug_print 1 (action ppdescr) in
   let* () = debug_print 2 PPrint.empty in
@@ -495,16 +432,15 @@ let subtype loc_ret {local;global} arg (rtyp : RT.t) ppdescr =
        | (sname,sls) :: lvars, _ ->
           begin match SymMap.find_opt sname unis with
           | Some Uni.{resolved = None} -> 
-             fail loc_ret (Call_error (Unconstrained_l sname))
+             fail loc_ret (Unconstrained_l sname)
           | Some Uni.{resolved = Some it} ->
              let* als = infer_index_term loc_ret {local;global} it in
              if LS.equal als sls then
                let spec = STS.{ spec with lvars } in
-               let spec = STS.subst_var {substitute=sname;swith=it} spec in
+               let spec = STS.subst_var {s=sname;swith=it} spec in
                aux local unis spec
              else
-               let msm = Mismatch {mname = None; has = als; expected = sls} in
-               fail loc_ret (Return_error msm)
+               fail loc_ret (Mismatch {has = als; expected = sls})
           | None ->
              fail loc_ret (Unreachable !^"did not find unification variable")
           end
@@ -512,7 +448,7 @@ let subtype loc_ret {local;global} arg (rtyp : RT.t) ppdescr =
           let spec = STS.{ spec with constraints } in
           let* (holds,_,_) = Solver.constraint_holds loc_ret {local;global} c in
           if holds then aux local unis spec
-          else fail loc_ret (Return_error (Unsat_constraint c))
+          else fail loc_ret (Unsat_constraint c)
        | [], [] ->
           return local
        end
@@ -521,17 +457,17 @@ let subtype loc_ret {local;global} arg (rtyp : RT.t) ppdescr =
        let uni = Uni.{ resolved = None } in
        let unis = SymMap.add sym uni unis in
        let spec = STS.{ spec with lvars = spec.lvars @ [(sym,sls)]; typ = rtyp } in
-       let spec = STS.subst_var {substitute=sname;swith=S sym} spec in
+       let spec = STS.subst_var {s=sname;swith=S sym} spec in
        aux local unis spec
     | Resource (re,rtyp) -> 
        let* matched = match_concrete_resource loc_ret {local;global} re in
        begin match matched with
        | None -> 
-          fail loc_ret (Return_error (Missing_R re))
+          fail loc_ret (Missing_R re)
        | Some (resource',r) ->
           let* () = debug_print 3 (blank 3 ^^ item "unis" (pp_unis unis)) in
           match RE.unify_non_pointer re resource' unis with
-          | None -> fail loc_ret (Return_error (Missing_R re))
+          | None -> fail loc_ret (Missing_R re)
           | Some unis ->
              let* local = use_resource loc_ret local r [loc_ret] in
              let (_,new_substs) = Uni.find_resolved local unis in
@@ -582,16 +518,15 @@ let calltyp loc_call {local;global} args (rtyp : FT.t) =
        | (sname,sls) :: lvars, _ ->
           begin match SymMap.find_opt sname unis with
           | Some Uni.{resolved = None} -> 
-             fail loc_call (Call_error (Unconstrained_l sname))
+             fail loc_call (Unconstrained_l sname)
           | Some Uni.{resolved = Some it} ->
              let* als = infer_index_term loc_call {local;global} it in
              if LS.equal als sls then
                let spec = CTS.{ spec with lvars } in
-               let spec = CTS.subst_var {substitute=sname;swith=it} spec in
+               let spec = CTS.subst_var {s=sname;swith=it} spec in
                aux local args unis spec
              else
-               let msm = Mismatch {mname = None; has = als; expected = sls} in
-               fail loc_call (Call_error msm)
+               fail loc_call (Mismatch {has = als; expected = sls})
           | None ->
              fail loc_call (Unreachable !^"did not find unification variable")
           end
@@ -599,40 +534,39 @@ let calltyp loc_call {local;global} args (rtyp : FT.t) =
           let spec = CTS.{ spec with constraints } in
           let* (holds,_,_) = Solver.constraint_holds loc_call {local;global} c in
           if holds then aux local args unis spec
-          else fail loc_call (Return_error (Unsat_constraint c))
+          else fail loc_call (Unsat_constraint c)
        | [], [] ->
           return (rt,local)
        end
     | [], Computational (sname,sbt,_) -> 
-       fail loc_call (Call_error (Missing_A (sname, sbt)))
+       fail loc_call (Missing_A (sname, sbt))
     | ((aname,(abt,_lname)),arg_loc) :: _, Return _ -> 
-       fail arg_loc (Call_error (Surplus_A (aname, abt)))
+       fail arg_loc (Surplus_A (aname, abt))
     | ((aname,(abt,lname)),arg_loc) :: args, Computational (sname,sbt,rtyp) ->
        if BT.equal abt sbt then
          let spec = CTS.{ spec with typ = rtyp} in
-         let spec = CTS.subst_var {substitute=sname;swith=S lname} spec in
-         let local = add_l local (lname,Base abt) in
+         let spec = CTS.subst_var {s=sname;swith=S lname} spec in
+         let local = add (mL lname (Base abt)) local in
          aux local args unis spec
        else
-         let msm = Mismatch {mname = Some aname; has = Base abt; expected = Base sbt} in
-         fail loc_call (Call_error msm)
+         fail loc_call (Mismatch {has = Base abt; expected = Base sbt})
     | _, Logical (sname,sls,rtyp) ->
        let sym = Sym.fresh () in
        let uni = Uni.{ resolved = None } in
        let unis = SymMap.add sym uni unis in
        let spec = CTS.{ spec with lvars = spec.lvars @ [(sym,sls)]; typ = rtyp} in
-       let spec = CTS.subst_var {substitute=sname;swith=S sym} spec in
+       let spec = CTS.subst_var {s=sname;swith=S sym} spec in
        aux local args unis spec
     | _, Resource (re,rtyp) -> 
        let* matched = match_concrete_resource loc_call {local;global} re in
        begin match matched with
        | None -> 
-          fail loc_call (Call_error (Missing_R re))
+          fail loc_call (Missing_R re)
        | Some (resource',r) ->
           let* () = debug_print 3 (action ("trying resource " ^ plain (RE.pp false resource'))) in
           let* () = debug_print 3 (blank 3 ^^ item "unis" (pp_unis unis)) in
           match RE.unify_non_pointer re resource' unis with
-          | None -> fail loc_call (Return_error (Missing_R re))
+          | None -> fail loc_call (Missing_R re)
           | Some unis ->
              let* local = use_resource loc_call local r [loc_call] in
              let (_,new_substs) = Uni.find_resolved local unis in
@@ -690,14 +624,12 @@ let infer_constructor loc {local;global} constructor asyms =
   | M_Cnil mbt -> 
      let new_lname = fresh () in
      let* item_bt = Conversions.bt_of_core_base_type loc mbt in
-     begin match asyms with
-     | [] -> 
+     if asyms = [] then
         return (Computational (new_lname, List item_bt, 
                 Constraint (LC (S new_lname %= Nil item_bt),I)))
-     | _ ->
+     else
         fail loc (Constructor_wrong_argument_number 
                     {constructor; has=List.length asyms; expected=0})
-     end     
   | M_Ccons -> 
      let new_lname = fresh () in
      begin match asyms with
@@ -706,7 +638,7 @@ let infer_constructor loc {local;global} constructor asyms =
         let (sym2, loc2) = aunpack loc asym2 in
         let* (bt1,lname1) = get_a loc local sym1 in
         let* (bt2,lname2) = get_a loc local sym2 in
-        let* () = check_base_type loc2 (Some sym2) bt2 (List bt1) in
+        let* () = check_base_type loc2 bt2 (List bt1) in
         return (Computational (new_lname, bt2, 
                 Constraint (LC (S new_lname %= Cons (S lname1, S lname2)),I)))
      | _ ->
@@ -748,7 +680,7 @@ let rec infer_mem_value loc {local;global} mem =
       let* type_constr = Conversions.integerType_constraint loc (S new_lname) it in
       let* (holds,_,_) = 
         Solver.constraint_holds_given_constraints loc 
-          {local=add_l local (new_lname, Base BT.Int);global} 
+          {local=add (mL new_lname (Base BT.Int)) local; global} 
           [val_constr] type_constr in
       match holds with
       | true -> 
@@ -841,7 +773,7 @@ let infer_value loc {local;global} v : ReturnTypes.t m =
        mapM (fun asym -> 
            let (sym, loc) = aunpack loc asym in
            let* (ibt',lname) = get_a loc local sym in
-           let* () = check_base_type loc (Some sym) ibt' ibt in
+           let* () = check_base_type loc ibt' ibt in
            return (S lname)
          ) asyms 
      in
@@ -1039,7 +971,7 @@ let args_from_asyms loc local asyms =
  *      let rec aux = function
  *        | [] -> return I
  *        | (has_bt,(LC c,lname))::rest ->
- *           let* () = check_base_type loc None has_bt bt in
+ *           let* () = check_base_type loc has_bt bt in
  *           let* rt = aux rest in
  *           return (Constraint (LC (c %==> (S newname %= S lname)), rt))
  *      in
@@ -1104,19 +1036,19 @@ let rec infer_pexpr loc {local;global} pe : (RT.t * Local.t) m =
        let tag = Tag tag in
        let (sym, aloc) = aunpack loc asym in
        let* (bt,lname) = get_a loc local sym in
-       let* () = check_base_type loc (Some sym) bt Loc in
+       let* () = check_base_type loc bt Loc in
        let* stored_struct = stored_struct_to_of_tag loc {local;global} (S lname) tag in
        let* members = match stored_struct with
          | Some (_,{members; _}) -> return members
          | _ -> fail loc (Generic_error (!^"this location does not contain a struct with tag" ^^^ pp_tag tag))
        in
-       let* faddr = assoc_err loc member members "check store field access" in
+       let* faddr = assoc_err loc member members (Unreachable !^"check store field access") in
        let constr = LC (S ret %= faddr) in
        return (Computational (ret, Loc, Constraint (constr,I)), local)
     | M_PEnot asym ->
        let (sym,loc) = aunpack loc asym in
        let* (bt,lname) = get_a loc local sym in
-       let* () = check_base_type loc (Some sym) Bool bt in
+       let* () = check_base_type loc Bool bt in
        let ret = fresh () in 
        let constr = (LC (S ret %= Not (S lname))) in
        let rt = Computational (sym, Bool, Constraint (constr, I)) in
@@ -1127,7 +1059,7 @@ let rec infer_pexpr loc {local;global} pe : (RT.t * Local.t) m =
        let* (bt1,lname1) = get_a loc1 local sym1 in
        let* (bt2,lname2) = get_a loc2 local sym2 in
        let (((ebt1,ebt2),rbt),c) = binop_typ op in
-       let* () = check_base_type loc1 (Some sym1) bt1 ebt1 in
+       let* () = check_base_type loc1 bt1 ebt1 in
        let ret = fresh () in
        let constr = LC (S ret %= c (S lname1) (S lname2)) in
        return (Computational (ret, rbt, Constraint (constr, I)), local)
@@ -1147,17 +1079,17 @@ let rec infer_pexpr loc {local;global} pe : (RT.t * Local.t) m =
        calltyp loc {local;global} args decl_typ
     | M_PElet (p, e1, e2) ->
        let* (rt, local) = infer_pexpr loc {local;global} e1 in
-       let* (local',anames,rnames) = match p with
+       let* local' = match p with
          | M_Symbol asym -> 
             let sym, loc = aunpack loc asym in
-            bind_to_name loc sym rt
+            return (bind sym rt)
          | M_Pat pat -> 
             pattern_match_rt loc pat rt
        in
        let local = local' ++ local in
        let* (rt2,local) = infer_pexpr loc {local;global} e2 in
-       let* local = remove_list loc local anames in
-       let* () = ensure_resources_used loc local rnames in
+       let* local = removeS loc (all_a local') local in
+       let* () = ensure_resources_used loc local (all_r local') in
        return (rt2,local)
     | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
     | M_PEif (casym, e1, e2) -> fail loc (Unreachable !^"PEif in inferring position")
@@ -1170,10 +1102,9 @@ let rec infer_pexpr loc {local;global} pe : (RT.t * Local.t) m =
 
 let for_reachable loc {local;global} paths f =
   filter_mapM (fun (lc, local, e) ->
-      let local = add_c local lc in
+      let local = add (mUC lc) local in
       let* unreachable = Solver.is_unreachable loc {local;global} in
-      if unreachable then return None
-      else f
+      if unreachable then return None else f
     ) paths
 
 
@@ -1194,10 +1125,10 @@ let rec check_pexpr loc {local;global} e typ : Local.t m =
   | M_PEif (casym, e1, e2) ->
      let csym, cloc = aunpack loc casym in
      let* (cbt,clname) = get_a cloc local csym in
-     let* () = check_base_type cloc (Some csym) cbt Bool in
+     let* () = check_base_type cloc cbt Bool in
      let* paths =
        filter_mapM (fun (lc, e) ->
-           let local = add_uc local lc in
+           let local = add (mUC lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_pexpr loc {local;global} e typ in
@@ -1214,35 +1145,35 @@ let rec check_pexpr loc {local;global} e typ : Local.t m =
            let local = local' ++ local in
            (* fix *)
            let lc = LC (Bool true) in
-           let local = add_uc local lc in
+           let local = add (mUC lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_pexpr loc {local;global} e typ in
-             let* local = remove_list loc local anames in
+             let* local = removeS loc anames local in
              return (Some (lc, local))
          ) pats_es
      in
      merge_local_environments loc {local;global} paths
   | M_PElet (p, e1, e2) ->
      let* (rt, local) = infer_pexpr loc {local;global} e1 in
-     let* (local',anames,rnames) = match p with
+     let* local' = match p with
        | M_Symbol asym -> 
           let sym, loc = aunpack loc asym in
-          bind_to_name loc sym rt
+          return (bind sym rt)
        | M_Pat pat -> 
           pattern_match_rt loc pat rt
      in
      let local = local' ++ local in
      let* local = check_pexpr loc {local;global} e2 typ in
-     let* () = ensure_resources_used loc local rnames in
-     remove_list loc local anames
+     let* () = ensure_resources_used loc local (all_r local') in
+     removeS loc (all_a local') local
   | _ ->
      let* (rt, local) = infer_pexpr loc {local;global} e in
-     let* (local',(abt,lname),rnames) = bind_other loc rt in
+     let* (local',(abt,lname)) = bind_other loc rt in
      let local = local' ++ local in
      let* local = subtype loc {local;global} ((fresh (),(abt,lname)),loc)
                   typ "function return type" in
-     let* () = ensure_resources_used loc local rnames in
+     let* () = ensure_resources_used loc local (all_r local') in
      return local
 
 
@@ -1276,7 +1207,7 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
           let (sym, loc) = aunpack loc asym in
           let ret = fresh () in
           let* (bt,lname) = get_a loc local sym in
-          let* () = check_base_type loc (Some sym) bt Loc in
+          let* () = check_base_type loc bt Loc in
           (* check more things? *)
           let* constr = match ct with
             | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
@@ -1305,7 +1236,7 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
           let (ct, ct_loc) = aunpack loc a_ct in
           let (sym, a_loc) = aunpack loc asym in
           let* (abt,_lname) = get_a loc local sym in
-          let* () = check_base_type loc (Some sym) Int abt in
+          let* () = check_base_type loc Int abt in
           let ret = fresh () in
           let* size = Memory.size_of_ctype loc ct in
           let* rt = match ct with
@@ -1327,9 +1258,9 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
           let (sym,loc) = aunpack loc asym in
           (* have remove resources of location instead? *)
           let* (abt,lname) = get_a loc local sym in
-          let* () = check_base_type loc (Some sym) Loc abt in
+          let* () = check_base_type loc Loc abt in
           (* revisit *)
-          let* otyp = loc_type loc {local;global} (S lname) in
+          let* otyp = guess_loc_type loc {local;global} (S lname) in
           begin match otyp with
             | None -> fail loc (Generic_error !^"cannot deallocate unowned location")
             | Some typ -> 
@@ -1350,7 +1281,7 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
           (* for consistency check value against Core annotation *)
           let* _ =
             let* t = Conversions.ctype false loc (fresh ()) ct in
-            subtype loc {local=add_l local (vlname,Base vbt);global} 
+            subtype loc {local=add (mL vlname (Base vbt)) local; global} 
               ((vsym,(vbt,vlname)),vloc) t 
               "checking store value against ctype annotation"
           in
@@ -1371,7 +1302,7 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
                let rec aux (local,acc_bindings) = function
                  | (member,member_pointer) :: members ->
                     let* decl = Global.get_struct_decl loc global (Tag tag) in
-                    let* ct = Tools.assoc_err loc member decl.ctypes "struct store" in
+                    let* ct = Tools.assoc_err loc member decl.ctypes (Unreachable !^"struct store") in
                     let* size = Memory.size_of_ctype loc ct in
                     let* (local, bindings) = 
                       store local member_pointer true ct size (Member (Tag tag, this, member)) in
@@ -1427,12 +1358,12 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
                let rec aux acc_constrs = function
                  | (member,member_pointer) :: members ->
                     let* decl = Global.get_struct_decl loc global (Tag tag) in
-                    let* spec_bt = Tools.assoc_err loc member decl.raw "struct load" in
-                    let* ct = Tools.assoc_err loc member decl.ctypes "struct load" in
+                    let* spec_bt = Tools.assoc_err loc member decl.raw (Unreachable !^"struct load") in
+                    let* ct = Tools.assoc_err loc member decl.ctypes (Unreachable !^"struct load") in
                     let* size = Memory.size_of_ctype loc ct in
                     let* (has_bt, constrs) = 
                       load member_pointer true ct size (Member (Tag tag, this, member)) in
-                    let* () = check_base_type ploc None has_bt spec_bt in
+                    let* () = check_base_type ploc has_bt spec_bt in
                     aux (acc_constrs@constrs) members
                  | [] ->
                     return acc_constrs
@@ -1458,8 +1389,8 @@ let rec infer_expr loc {local;global} e : (RT.t * Local.t) m =
                let* _ = 
                  let* t = Conversions.ctype false loc (fresh ()) ct in
                  let temp_lname = fresh () in
-                 let temp_local = add_l local (temp_lname, Base bt) in
-                 let temp_local = add_uc temp_local (LC (S temp_lname %= pointee)) in
+                 let temp_local = add (mL temp_lname (Base bt)) local in
+                 let temp_local = add (mUC (LC (S temp_lname %= pointee))) temp_local in
                  subtype loc {local=temp_local;global} ((fresh (),(bt,temp_lname)),ploc) t 
                    "checking load value against expected type"
                in
@@ -1546,10 +1477,10 @@ let rec check_expr loc {local;global} (e : ('a,'bty) mu_expr) typ =
   | M_Eif (casym, e1, e2) ->
      let csym, cloc = aunpack loc casym in
      let* (cbt,clname) = get_a cloc local csym in
-     let* () = check_base_type cloc (Some csym) cbt Bool in
+     let* () = check_base_type cloc cbt Bool in
      let* paths =
        filter_mapM (fun (lc, e) ->
-           let local = add_uc local lc in
+           let local = add (mUC lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_expr loc {local;global} e typ in
@@ -1566,11 +1497,11 @@ let rec check_expr loc {local;global} (e : ('a,'bty) mu_expr) typ =
            let local = local' ++ local in
            (* fix *)
            let lc = LC (Bool true) in
-           let local = add_uc local lc in
+           let local = add (mUC lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_expr loc {local;global} e typ in
-             let* local = remove_list loc local names in
+             let* local = removeS loc names local in
              return (Some (lc, local))
          ) pats_es
      in
@@ -1579,45 +1510,45 @@ let rec check_expr loc {local;global} (e : ('a,'bty) mu_expr) typ =
      check_pexpr loc {local;global} pe typ
   | M_Elet (p, e1, e2) ->
      let* (rt, local) = infer_pexpr loc {local;global} e1 in
-     let* (local',anames,rnames) = match p with 
+     let* local' = match p with 
        | M_Symbol asym ->
           let sym, loc = aunpack loc asym in
-          bind_to_name loc sym rt
+          return (bind sym rt)
        | M_Pat pat ->
           pattern_match_rt loc pat rt
      in
      let local = local' ++ local in
      let* local = check_expr loc {local;global} e2 typ in
-     let* () = ensure_resources_used loc local rnames in
-     remove_list loc local anames
+     let* () = ensure_resources_used loc local (all_r local') in
+     removeS loc (all_a local') local
   | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (pat, e1, e2) ->
      let* (rt, local) = infer_expr loc {local;global} e1 in
-     let* (local',anames,rnames) = pattern_match_rt loc pat rt in
+     let* local' = pattern_match_rt loc pat rt in
      let local = local' ++ local in
      let* local = check_expr loc {local;global} e2 typ in
-     let* () = ensure_resources_used loc local rnames in
-     remove_list loc local anames
+     let* () = ensure_resources_used loc local (all_r local') in
+     removeS loc (all_a local') local
   | M_Esave (_ret, args, body) ->
      let* {local;global} = 
        fold_leftM (fun {local;global} (sym, (_, asym)) ->
            let (vsym,loc) = aunpack loc asym in
            let new_lname = fresh () in
            let* (bt,lname) = get_a loc local vsym in
-           let local = (add_l local (new_lname, Base bt)) in
-           let local = (add_a local (sym, (bt,new_lname))) in
-           let local = add_uc local (LC (S new_lname %= S lname)) in
+           let local = add (mL new_lname (Base bt)) local in
+           let local = add (mA sym (bt,new_lname)) local in
+           let local = add (mUC (LC (S new_lname %= S lname))) local in
            return {local;global}
          ) {local;global} args
      in
      check_expr loc {local;global} body typ
   | _ ->
      let* (rt, local) = infer_expr loc {local;global} e in
-     let* (local',(abt,lname),rnames) = bind_other loc rt in
+     let* (local',(abt,lname)) = bind_other loc rt in
      let local = local' ++ local in
      let* local = subtype loc {local;global} ((fresh (),(abt,lname)),loc) 
                   typ "function return type" in
-     let* () = ensure_resources_used loc local rnames in
+     let* () = ensure_resources_used loc local (all_r local') in
      return local
      
 
@@ -1632,9 +1563,7 @@ let check_function loc global fsym args rbt body ftyp =
 
   let rt_consistent rbt (Computational (sname,sbt,t)) =
     if BT.equal rbt sbt then return ()
-    else 
-      let mismatch = Mismatch {mname = None; has = (Base rbt); expected = Base sbt} in
-      fail loc (Return_error mismatch)
+    else fail loc (Mismatch {has = (Base rbt); expected = Base sbt})
   in
 
   let rec check local args rbt body ftyp =
@@ -1642,23 +1571,23 @@ let check_function loc global fsym args rbt body ftyp =
     | (aname,abt)::args, FT.Computational (lname,sbt,ftyp) 
          when BT.equal abt sbt ->
        let new_lname = fresh () in
-       let ftyp' = FT.subst_var {substitute=lname;swith=S new_lname} ftyp in
-       let local = add_l local (new_lname, Base abt) in
-       let local = add_a local (aname,(abt,new_lname)) in
+       let ftyp' = FT.subst_var {s=lname;swith=S new_lname} ftyp in
+       let local = add (mL new_lname (Base abt)) local in
+       let local = add (mA aname (abt,new_lname)) local in
        check local args rbt body ftyp'
     | (aname,abt)::args, FT.Computational (sname,sbt,ftyp) ->
-       let mis = Mismatch {mname = Some aname; has = (Base abt); expected = Base sbt} in
-       fail loc (Call_error mis)
+       fail loc (Mismatch {has = (Base abt); expected = Base sbt})
     | [], FT.Computational (sname,sbt,ftyp) ->
-       fail loc (Call_error (Missing_A (sname, sbt)))
+       fail loc (Missing_A (sname, sbt))
     | args, FT.Logical (sname,sls,ftyp) ->
        let new_lname = fresh () in
-       let ftyp' = FT.subst_var {substitute=sname;swith=S new_lname} ftyp in
-       check (add_l local (new_lname,sls)) args rbt body ftyp'       
+       let ftyp' = FT.subst_var {s=sname;swith=S new_lname} ftyp in
+       check (add (mL new_lname sls) local) args rbt body ftyp'       
     | args, FT.Resource (re,ftyp) ->
-       check (add_r local (fresh (), re)) args rbt body ftyp
+       (* check linearity *)
+       check (add (mR (fresh ()) re) local) args rbt body ftyp
     | args, FT.Constraint (lc,ftyp) ->
-       check (add_uc local lc) args rbt body ftyp
+       check (add (mUC lc) local) args rbt body ftyp
     | [], FT.Return rt ->
        let* () = rt_consistent rbt rt in
        begin match body with
@@ -1666,7 +1595,7 @@ let check_function loc global fsym args rbt body ftyp =
          | `PEXPR body -> check_pexpr loc {local;global} body rt
        end
     | (aname,abt)::_, FT.Return _ ->
-       fail loc (Call_error (Surplus_A (aname, abt)))
+       fail loc (Surplus_A (aname, abt))
   in
   (* check environment has no resources? *)
   let* _env = check Local.empty args rbt body ftyp in

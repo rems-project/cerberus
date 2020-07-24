@@ -9,7 +9,7 @@ let find_resolved env unis =
     (fun usym {resolved} (unresolveds,resolveds) ->
       match resolved with
       | None -> (usym :: unresolveds, resolveds)
-      | Some sym -> (unresolveds, ({substitute=usym; swith=sym}) :: resolveds)
+      | Some sym -> (unresolveds, ({s=usym; swith=sym}) :: resolveds)
     ) unis ([], [])
 
 end

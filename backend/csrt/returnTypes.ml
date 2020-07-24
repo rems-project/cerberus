@@ -46,11 +46,11 @@ let rec (@@) (t1: l) (t2: l) : l =
 let rec subst_var_l substitution = function
   | I -> I
   | Logical (name,ls,t) -> 
-     if name = substitution.substitute then 
+     if name = substitution.s then 
        Logical (name,ls,t) 
      else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let t' = subst_var_l {substitute=name; swith=IT.S newname} t in
+       let t' = subst_var_l {s=name; swith=IT.S newname} t in
        let t'' = subst_var_l substitution t' in
        Logical (newname,ls,t'')
      else
@@ -67,11 +67,11 @@ let rec subst_var_l substitution = function
 
 let subst_var substitution = function
   | Computational (name,bt,t) -> 
-     if name = substitution.substitute then 
+     if name = substitution.s then 
        Computational (name,bt,t) 
      else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let t' = subst_var_l {substitute=name; swith=IT.S newname} t in
+       let t' = subst_var_l {s=name; swith=IT.S newname} t in
        let t'' = subst_var_l substitution t' in
        Computational (newname,bt,t'')
      else

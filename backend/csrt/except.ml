@@ -10,12 +10,7 @@ let return : 'a -> ('a,'e) t = except_return
 let fail : Locations.t -> 'e -> ('a, Locations.t * 'e) t = 
   fun loc e -> fail (loc,e)
 
-let (>>=) = except_bind
 let (let*) = except_bind
-
-(* this is dangerous when combined with effects: ">>" does not enforce
-   evluation order in the right way *)
-(* let (>>) m m' = m >>= fun _ -> m' *)
 
 let liftM = except_fmap
 
@@ -29,10 +24,10 @@ let mapM : ('a -> ('b,'e) t) -> 'a list -> ('b list, 'e) t =
   except_mapM
 
 let iterM : ('a -> (unit,'e) t) -> 'a list -> (unit, 'e) t = 
-  fun f l -> mapM f l >>= fun _ -> return ()
+  fun f l -> let* _ = mapM f l in return ()
 
 let concat_mapM f l = 
-  seq (List.map f l) >>= fun xs ->
+  let* xs = seq (List.map f l) in
   return (List.concat xs)
 
 let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
@@ -44,25 +39,25 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | Some y -> y :: filter_map f xs
 
 let filter_mapM f l = 
-  seq (List.map f l) >>= fun xs ->
+  let* xs = seq (List.map f l) in
   return (filter_map (fun x -> x) xs)
 
 
 let fold_leftM (f : 'a -> 'b -> ('c,'e) t) (a : 'a) (bs : 'b list) =
-  List.fold_left (fun a b -> a >>= fun a -> f a b) (return a) bs
+  List.fold_left (fun aM b -> let* a = aM in f a b) (return a) bs
 
 (* maybe from Exception.lem *)
 let fold_rightM (f : 'b -> 'a -> ('c,'e) t) (bs : 'b list) (a : 'a) =
-  List.fold_right (fun b a -> a >>= fun a -> f b a) bs (return a)
+  List.fold_right (fun b aM -> let* a = aM in f b a) bs (return a)
 
 
 let pmap_foldM 
       (f : 'k -> 'x -> 'y -> ('y,'e) t)
       (map : ('k,'x) Pmap.map) (init: 'y) : ('y,'e) t =
-  Pmap.fold (fun k v a -> a >>= f k v) map (return init)
+  Pmap.fold (fun k v aM -> let* a = aM in f k v a) map (return init)
 
 let pmap_iterM f m = 
-  Pmap.fold (fun k v a -> a >>= fun () -> f k v) 
+  Pmap.fold (fun k v m -> let* () = m in f k v) 
     m (return ())
 
 let tryM (m : ('a,'e1) exceptM) (m' : ('a,'e2) exceptM) =
@@ -75,6 +70,10 @@ let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
   | Result a, _ -> Result a
   | Exception _, m' :: ms' -> tryMs m' ms'
   | Exception e, [] -> Exception e
+
+
+
+
 
 
 let of_option (type a) loc err (o : a option) : (a,'e) exceptM =
@@ -92,11 +91,14 @@ let warn pp =
   let open Pp in
   print (blank 3 ^^ !^(yellowb "[!] Warning:") ^^^ pp)
 
-
-
 let debug_print print_level pp =
   let open Pp in
   if !debug_level >= print_level then print pp else return ()
+
+let at_most_one loc err_str = function
+  | [] -> return None
+  | [x] -> return (Some x)
+  | _ -> fail loc (TypeErrors.Generic_error err_str)
 
 
 

@@ -47,21 +47,21 @@ let mresource bound t =
 let rec subst_var substitution = function
   | Return t -> Return (ReturnTypes.subst_var substitution t)
   | Computational (name,bt,t) -> 
-     if name = substitution.substitute then 
+     if name = substitution.s then 
        Computational (name,bt,t) 
      else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let t' = subst_var {substitute=name; swith=IT.S newname} t in
+       let t' = subst_var {s=name; swith=IT.S newname} t in
        let t'' = subst_var substitution t' in
        Computational (newname,bt,t'')
      else
        Computational (name,bt,subst_var substitution t)
   | Logical (name,ls,t) -> 
-     if name = substitution.substitute then 
+     if name = substitution.s then 
        Logical (name,ls,t) 
      else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let t' = subst_var {substitute=name; swith=IT.S newname} t in
+       let t' = subst_var {s=name; swith=IT.S newname} t in
        let t'' = subst_var substitution t' in
        Logical (newname,ls,t'')
      else

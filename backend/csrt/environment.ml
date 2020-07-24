@@ -132,15 +132,25 @@ module Local = struct
     | UsedResource of RE.t * Loc.t list
     | Constraint of LC.t
 
+
   type binder = Sym.t * binding
 
-  type t = binder list
+  type t = Bindings of binder list
 
-  let empty = []
+  let empty = Bindings []
 
-  let (++) local' local = local' @ local
+  let concat (Bindings local') (Bindings local) = 
+    Bindings (local' @ local)
 
-  let print_constraint_names = false
+
+
+  let mA sym (bt,lname) = (sym, Computational (lname,bt))
+  let mL sym ls = (sym, Logical ls)
+  let mR sym re = (sym, Resource re)
+  let mC sym lc = (sym, Constraint lc)
+  let mUR re = mR (Sym.fresh ()) re
+  let mUC lc = mC (Sym.fresh ()) lc
+
 
   let pp_binder print_used (sym,binding) =
     match binding with
@@ -156,14 +166,14 @@ module Local = struct
     | Constraint lc -> 
        !^"C" ^^^ parens (LC.pp false lc )
 
-  let pp local = 
+  let pp (Bindings local) = 
     match local with
     | [] -> !^"(empty)"
     | _ -> flow_map (comma ^^ break 1) (pp_binder false) local
 
 
 
-  let get = lookup_sym_list
+  let get loc (Bindings e) sym = lookup_sym_list loc e sym
 
   let wanted_but_found loc wanted found = 
     let err = match wanted with
@@ -202,16 +212,21 @@ module Local = struct
     | Constraint lc -> return lc
     | _ -> wanted_but_found loc `Resource (name,b)
       
-  let remove loc local name = remove_sym_list loc local name
-  let remove_list loc local names = fold_leftM (remove loc) local names
+  let remove loc name (Bindings e) = 
+    let* e = remove_sym_list loc e name in
+    return (Bindings e)
 
-  let add local (name, b) = (name, b) :: local
-  let add_a local (aname, (bt,lname)) = add local (aname, Computational (lname,bt))
-  let add_l local (lname, ls)         = add local (lname, Logical ls)
-  let add_r local (rname, re)         = add local (rname, Resource re)
-  let add_c local (cname, lc)         = add local (cname, Constraint lc)
-  let add_ur local re = add_r local (Sym.fresh (), re)
-  let add_uc local lc = add_c local (Sym.fresh (), lc)
+  let add (name, b) (Bindings e) = Bindings ((name, b) :: e)
+
+  let removeS loc names local = 
+    fold_leftM (fun local name -> remove loc name local) local names
+
+  let addA aname (bt,lname) = add (aname, Computational (lname,bt))
+  let addL lname ls         = add (lname, Logical ls)
+  let addR rname re         = add (rname, Resource re)
+  let addC cname lc         = add (cname, Constraint lc)
+  let addUR re = addR (Sym.fresh ()) re
+  let addUC lc = addC (Sym.fresh ()) lc
 
   let ensure_resource_used loc local sym = 
     let* b = get loc local sym in
@@ -230,39 +245,58 @@ module Local = struct
     | UsedResource (re,where) -> 
        fail loc (Unreachable (!^"resource already used" ^^^ pp_binder true (sym,b)))
     | Resource re -> 
-       let* local = remove loc local sym in
-       return (add local (sym, UsedResource (re,where)))
+       let* local = remove loc sym local in
+       return (add (sym, UsedResource (re,where)) local)
     | _ -> wanted_but_found loc `Resource (sym,b)
 
 
-  let all_constraints local = 
+  let all_constraints (Bindings e) = 
     List.filter_map (fun (_,b) ->
         match b with
         | Constraint lc -> Some lc
         | _ -> None
-      ) local
+      ) e
+
+
+  let filter p (Bindings e) = filter_map (fun (sym,b) -> p sym b) e
+  let filterM p (Bindings e) = filter_mapM (fun (sym,b) -> p sym b) e
 
 
   let filter_a p (local : t) = 
-    filter_mapM (fun (sym,b) -> 
+    filter (fun sym b -> 
         match b with
         | Computational (lname,bt) -> p sym lname bt
-        | _ -> return None
+        | _ -> None
       )
       local
 
   let filter_r p (local : t) = 
-    filter_mapM (fun (sym,b) -> 
+    filter (fun sym b -> 
+        match b with
+        | Resource t -> p sym t
+        | _ -> None
+      )
+      local
+
+  let filter_rM p (local : t) = 
+    filterM (fun sym b -> 
         match b with
         | Resource t -> p sym t
         | _ -> return None
       )
       local
 
-  let is_bound sym local =
+
+  let all_a = filter_a (fun s _ _ -> Some s) 
+  let all_r = filter_r (fun s _ -> Some s) 
+
+
+  let is_bound sym (Bindings local) =
     match List.find_opt (fun (sym',_) -> Sym.equal sym' sym) local with
     | Some _ -> true
     | None -> false
+
+  let (++) = concat
 
 end
 

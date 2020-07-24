@@ -101,19 +101,26 @@ let aunpack loc (CF.Mucore.Annotated (annots, _, x)) =
 
 
 
-let assoc_err loc entry list err =
-  let open Pp in
-  match List.assoc_opt entry list with
-  | Some result -> Except.return result
-  | None -> Except.fail loc (TypeErrors.Unreachable (!^"list assoc failed:" ^^^ !^err))
 
-let rassoc_err loc entry list err =
-  let open Pp in
-  let rec aux = function
-    | [] -> None
-    | (a,entry') :: rest -> 
-       if entry = entry' then Some a else aux rest
-  in
-  match aux list with
-  | Some result -> Except.return result
-  | None -> Except.fail loc (TypeErrors.Unreachable (!^"list assoc failed:" ^^^ !^err))
+
+open Except
+
+let at_most_one loc err_str = function
+  | [] -> return None
+  | [x] -> return (Some x)
+  | _ -> fail loc (TypeErrors.Generic_error err_str)
+
+let assoc_err loc entry list err =
+  match List.assoc_opt entry list with
+  | Some result -> return result
+  | None -> fail loc err
+
+(* let rassoc_err loc entry list err =
+ *   let rec aux = function
+ *     | [] -> None
+ *     | (a,entry') :: rest -> 
+ *        if entry = entry' then Some a else aux rest
+ *   in
+ *   match aux list with
+ *   | Some result -> return result
+ *   | None -> fail loc err *)
