@@ -27,21 +27,21 @@ let mresource bound t =
   Resource (bound,t)
 
 
-let rec args_and_ret = function
-  | Return rt -> 
-     (RT.I,rt)
-  | Computational (name,bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Computational (name,bound,args_rt), ret)
-  | Logical (name,bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Logical (name,bound,args_rt), ret)
-  | Resource (bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Resource (bound,args_rt), ret)
-  | Constraint (bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Constraint (bound,args_rt), ret)
+(* let rec args_and_ret = function
+ *   | Return rt -> 
+ *      (RT.I,rt)
+ *   | Computational (name,bound,t) ->
+ *      let (args_rt, ret) = args_and_ret t in
+ *      (RT.Computational (name,bound,args_rt), ret)
+ *   | Logical (name,bound,t) ->
+ *      let (args_rt, ret) = args_and_ret t in
+ *      (RT.Logical (name,bound,args_rt), ret)
+ *   | Resource (bound,t) ->
+ *      let (args_rt, ret) = args_and_ret t in
+ *      (RT.Resource (bound,args_rt), ret)
+ *   | Constraint (bound,t) ->
+ *      let (args_rt, ret) = args_and_ret t in
+ *      (RT.Constraint (bound,args_rt), ret) *)
 
 
 let rec subst_var substitution = function

@@ -166,25 +166,29 @@ let explode_struct_in_binding loc genv (Tag tag) logical_struct binding =
   let* substs = explode_struct loc genv (Tag tag) logical_struct in
   let binding' = 
     fold_right (fun (name,bt,it) binding -> 
-        Logical (name,Base bt, instantiate_struct_member {substitute=it;swith=S name} binding)
+        Logical (name,Base bt, 
+                 instantiate_struct_member_l {substitute=it;swith=S name} binding)
       ) substs binding
   in
   return binding'
 
 
 
-let rec returnType_to_argumentType args return = 
+let rec logical_returnType_to_argumentType 
+          (args : RT.l)
+          (more_args : FT.t)
+        : FT.t = 
   match args with
   | RT.I -> 
-     FT.Return return
-  | RT.Computational (name, t, args) -> 
-     FT.Computational (name, t, returnType_to_argumentType args return)
+     more_args
+  (* | RT.Computational (name, t, args) -> 
+   *    FT.Computational (name, t, returnType_to_argumentType args return) *)
   | RT.Logical (name, t, args) -> 
-     FT.Logical (name, t, returnType_to_argumentType args return)
+     FT.Logical (name, t, logical_returnType_to_argumentType args more_args)
   | RT.Resource (t, args) -> 
-     FT.Resource (t, returnType_to_argumentType args return)
+     FT.Resource (t, logical_returnType_to_argumentType args more_args)
   | RT.Constraint (t, args) -> 
-     FT.Constraint (t, returnType_to_argumentType args return)
+     FT.Constraint (t, logical_returnType_to_argumentType args more_args)
 
 
 (* brittle. revisit later *)
@@ -226,7 +230,7 @@ let make_fun_arg_type genv asym loc ct =
             return (Loc, abindings)
           in
           let* ret = 
-            let r_rbindings = RT.subst_var {substitute=aname2;swith=S rname2} a_rbindings in
+            let r_rbindings = RT.subst_var_l {substitute=aname2;swith=S rname2} a_rbindings in
             let rpoints = StoredStruct stored in
             let* rbindings = 
               explode_struct_in_binding loc genv (Tag s) (S rname2)
@@ -253,9 +257,9 @@ let make_fun_arg_type genv asym loc ct =
        aux pointed (aname,rname) ct
     | Struct tag -> 
        let* decl = Environment.Global.get_struct_decl loc genv (Tag tag) in
-       let ftt = RT.subst_var {substitute=decl.closed_type.sbinder; swith=S aname }
+       let ftt = RT.subst_var_l {substitute=decl.closed_type.sbinder; swith=S aname }
                    decl.closed_type.souter in
-       let rtt = RT.subst_var {substitute=decl.closed_type.sbinder; swith=S rname }
+       let rtt = RT.subst_var_l {substitute=decl.closed_type.sbinder; swith=S rname }
                    decl.closed_type.souter in
        let arg = (Struct (Tag tag), ftt) in
        let ret = (Struct (Tag tag), rtt) in
@@ -267,26 +271,30 @@ let make_fun_arg_type genv asym loc ct =
 
   let* ((abt,arg),(_,ret)) = aux false (asym, fresh_pretty "return") ct in
   
-  (* let arg = fun rt -> returnType_to_argumentType rt 
-   *                       (Computational (asym, abt, ftt)) in *)
-  return (Computational (asym, abt, arg),ret)
+  let ftt = logical_returnType_to_argumentType arg in
+  let arg = comp (FT.mcomputational asym abt) ftt in
+  return ((arg : FT.t -> FT.t),(ret : RT.l))
 
 
 
 let make_fun_spec loc genv attrs args ret_ctype = 
   let open FT in
   let open RT in
-  let* (arguments, returns, names) = 
-    fold_leftM (fun (args,returns,names) (msym, ct) ->
+  let* (arguments, returns) = 
+    fold_leftM (fun (args,returns) (msym, ct) ->
         let name = match msym with
           | Some sym -> sym
           | None -> Sym.fresh ()
         in
-        let* (arg,ret) = make_fun_arg_type genv name loc ct in
-        return (args @@ arg, returns @@ ret, name::names)
-      ) (I, I, []) args
+        let* (arg,ret) = 
+          make_fun_arg_type genv name loc ct in
+        let args = comp args arg in
+        return (args, returns @@ ret)
+      ) 
+      ((fun ft -> ft), I) args
   in
-  let* ret = ctype true loc (fresh ()) ret_ctype in
-  let ftyp = returnType_to_argumentType arguments (ret @@ returns) in
+  let* (Computational (ret_name,bound,ret)) = 
+    ctype true loc (fresh ()) ret_ctype in
+  let ftyp = arguments (Return (RT.Computational (ret_name,bound, RT.(@@) ret returns))) in
   return ftyp
 

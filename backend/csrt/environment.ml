@@ -53,7 +53,7 @@ let rec remove_sym_list (loc : Loc.t) (local: (Sym.t * 'a) list) (sym: Sym.t) =
 
 module Global = struct 
 
-  type struct_sig = { sbinder: Sym.t; souter: RT.t }
+  type struct_sig = { sbinder: Sym.t; souter: RT.l }
                   
   type struct_decl = 
     { raw: (BT.member * BT.t) list;

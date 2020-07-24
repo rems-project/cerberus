@@ -88,12 +88,12 @@ let struct_decl loc tag fields genv =
        let sopen = 
          let subst = {substitute=decl.open_type.sbinder; 
                       swith=IT.Member (tag, S thisstruct, member)} in
-         RT.subst_var subst decl.open_type.souter
+         RT.subst_var_l subst decl.open_type.souter
        in
        let sclosed = 
          let subst = {substitute=decl.closed_type.sbinder; 
                       swith=IT.Member (tag, S thisstruct, member)} in
-         RT.subst_var subst decl.closed_type.souter
+         RT.subst_var_l subst decl.closed_type.souter
        in
        return ((member, Struct (Tag tag2))::acc_members, 
                sopen@@acc_sopen, 

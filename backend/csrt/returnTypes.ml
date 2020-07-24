@@ -8,12 +8,14 @@ module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
 
-type t = 
+type l = 
   | I
-  | Computational of Sym.t * BT.t * t
-  | Logical of Sym.t * LS.t * t
-  | Resource of RE.t * t
-  | Constraint of LC.t * t
+  | Logical of Sym.t * LS.t * l
+  | Resource of RE.t * l
+  | Constraint of LC.t * l
+
+type t = Computational of Sym.t * BT.t * l
+
 
 
 
@@ -28,11 +30,11 @@ let mresource bound t =
 
 
 
-let rec (@@) (t1: t) (t2: t) :t = 
+let rec (@@) (t1: l) (t2: l) : l = 
   match t1 with
   | I -> t2
-  | Computational (name,bound,t) -> 
-     Computational (name,bound, t@@t2)
+  (* | Computational (name,bound,t) -> 
+   *    Computational (name,bound, t@@t2) *)
   | Logical (name,bound,t) -> 
      Logical (name,bound, t@@t2)
   | Resource (bound,t) -> 
@@ -41,78 +43,86 @@ let rec (@@) (t1: t) (t2: t) :t =
      Constraint (bound, t@@t2)
 
 
-
-let rec subst_var substitution = function
+let rec subst_var_l substitution = function
   | I -> I
-  | Computational (name,bt,t) -> 
-     if name = substitution.substitute then 
-       Computational (name,bt,t) 
-     else if SymSet.mem name (IT.vars_in substitution.swith) then
-       let newname = Sym.fresh () in
-       let t' = subst_var {substitute=name; swith=IT.S newname} t in
-       let t'' = subst_var substitution t' in
-       Computational (newname,bt,t'')
-     else
-       Computational (name,bt,subst_var substitution t)
   | Logical (name,ls,t) -> 
      if name = substitution.substitute then 
        Logical (name,ls,t) 
      else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let t' = subst_var {substitute=name; swith=IT.S newname} t in
-       let t'' = subst_var substitution t' in
+       let t' = subst_var_l {substitute=name; swith=IT.S newname} t in
+       let t'' = subst_var_l substitution t' in
        Logical (newname,ls,t'')
      else
-       let t' = subst_var substitution t in
+       let t' = subst_var_l substitution t in
        Logical (name,ls,t')
   | Resource (re,t) -> 
      let re = RE.subst_var substitution re in
-     let t = subst_var substitution t in
+     let t = subst_var_l substitution t in
      Resource (re,t)
   | Constraint (lc,t) -> 
      let lc = LC.subst_var substitution lc in
-     let t = subst_var substitution t in
+     let t = subst_var_l substitution t in
      Constraint (lc,t)
+
+let subst_var substitution = function
+  | Computational (name,bt,t) -> 
+     if name = substitution.substitute then 
+       Computational (name,bt,t) 
+     else if SymSet.mem name (IT.vars_in substitution.swith) then
+       let newname = Sym.fresh () in
+       let t' = subst_var_l {substitute=name; swith=IT.S newname} t in
+       let t'' = subst_var_l substitution t' in
+       Computational (newname,bt,t'')
+     else
+       Computational (name,bt,subst_var_l substitution t)
 
 let subst_vars = Subst.make_substs subst_var
 
 
-let rec instantiate_struct_member subst rt =
+let rec instantiate_struct_member_l subst rt =
   match rt with
   | I -> I
-  | Computational (name,bound,t) -> 
-     Computational (name,bound,instantiate_struct_member subst t)
   | Logical (name,bound,t) -> 
-     Logical (name,bound,instantiate_struct_member subst t)
+     Logical (name,bound,instantiate_struct_member_l subst t)
   | Resource (bound,t) -> 
      Resource (RE.instantiate_struct_member subst bound, 
-               instantiate_struct_member subst t)
+               instantiate_struct_member_l subst t)
   | Constraint (bound,t) -> 
      Constraint (LC.instantiate_struct_member subst bound, 
-                 instantiate_struct_member subst t)
+                 instantiate_struct_member_l subst t)
+
+let instantiate_struct_member subst = function
+  | Computational (name,bound,t) -> 
+     Computational (name,bound,instantiate_struct_member_l subst t)
 
 
-let pp rt = 
+let (pp,pp_l) = 
+  
   let open Pp in
-  let rec aux = function
-    | Computational (name,bt,t) ->
-       let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
-       (op ^^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot) :: aux t
+
+  let rec aux_l = function
     | Logical (name,ls,t) ->
        let op = if !unicode then utf8string "\u{2203}" else !^"E" in
-       (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux t
+       (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux_l t
     | Resource (re,t) ->
        let op = if !unicode then utf8string "\u{2217}" else star in
-       (RE.pp false re ^^^ op) :: aux t
+       (RE.pp false re ^^^ op) :: aux_l t
     | Constraint (lc,t) ->
        let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
-       (LC.pp false lc ^^^ op) :: aux t
+       (LC.pp false lc ^^^ op) :: aux_l t
     | I -> 
        [!^"I"]
   in
-  flow (break 1) (aux rt)
 
+  let aux = function
+    | Computational (name,bt,t) ->
+       let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
+       (op ^^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot) :: aux_l t
+  in
 
+  let pp_l rt = flow (break 1) (aux_l rt) in
+  let pp rt = flow (break 1) (aux rt) in
 
-
+  (pp,pp_l)
 
