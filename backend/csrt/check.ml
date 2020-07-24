@@ -83,9 +83,8 @@ let bind_l loc rt =
 
 let bind loc aname = function
   | Computational (lname,bound,rt) ->
-     let local' = Local.empty in
      let new_lname = fresh () in
-     let local' = add_l local' (new_lname,Base bound) in
+     let local' = add_l Local.empty (new_lname,Base bound) in
      let local' = add_a local' (aname,(bound,new_lname)) in
      let rt = subst_var_l {substitute=lname;swith=S new_lname} rt in
      let local'' = bind_l loc rt in
@@ -98,10 +97,14 @@ let bind_to_name loc aname rt =
   let* new_r = Local.filter_r (fun s _ -> return (Some s)) local' in
   return (local',new_a,new_r)
 
-let bind_other loc (Computational (alname,abt,rt)) =
-  let local' = bind_l loc rt in
-  let* new_r = Local.filter_r (fun s _ -> return (Some s)) local' in
-  return (local',(abt,alname),new_r)
+let bind_other loc = function
+  | Computational (lname,bound,rt) ->
+     let new_lname = fresh () in
+     let local' = add_l Local.empty (new_lname,Base bound) in
+     let rt = subst_var_l {substitute=lname;swith=S new_lname} rt in
+     let local'' = bind_l loc rt in
+     let* new_r = Local.filter_r (fun s _ -> return (Some s)) local'' in
+     return (local'' ++ local', (bound,new_lname),new_r)
 
 
 let pattern_match loc this pat expected_bt =
