@@ -42,8 +42,6 @@ let error pp =
     );
   exit 1
 
-type 'a m = ('a, Loc.t * TypeErrors.t) Except.t
-
 
 
 

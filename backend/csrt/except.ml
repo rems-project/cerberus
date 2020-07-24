@@ -95,10 +95,7 @@ let debug_print print_level pp =
   let open Pp in
   if !debug_level >= print_level then print pp else return ()
 
-let at_most_one loc err_str = function
-  | [] -> return None
-  | [x] -> return (Some x)
-  | _ -> fail loc (TypeErrors.Generic_error err_str)
+
 
 
 
