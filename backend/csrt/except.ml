@@ -77,7 +77,10 @@ let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
   | Exception e, [] -> Exception e
 
 
-
+let of_option (type a) loc err (o : a option) : (a,'e) exceptM =
+  match o with
+  | Some r -> return r
+  | None -> fail loc err
 
 
 let print pp = 

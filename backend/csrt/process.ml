@@ -113,6 +113,7 @@ let struct_decl loc tag fields genv =
         aux thisstruct loc acc (Member (Id.s id)) ct
       ) fields (return ([],I,I,[])) 
   in
+  let open Global in
   let open_type = {sbinder = thisstruct; souter=sopen } in
   let closed_type = {sbinder = thisstruct; souter=sclosed } in
   return { raw; open_type; closed_type; ctypes }

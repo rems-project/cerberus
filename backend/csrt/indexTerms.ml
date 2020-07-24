@@ -31,6 +31,7 @@ type t =
   | Null of t
   | And of t * t
   | Or of t * t
+  | Impl of t * t
   | Not of t
 
   | Tuple of t list
@@ -62,6 +63,7 @@ let (%>=) t1 t2 = GE (t1, t2)
 
 let (%&) t1 t2 = And (t1, t2)
 let (%|) t1 t2 = Or (t1, t2)
+let (%==>) t1 t2 = Impl (t1, t2)
 
 let rec pp atomic it : PPrint.document = 
 
@@ -96,6 +98,7 @@ let rec pp atomic it : PPrint.document =
   | Null o1 -> mparens (!^"null" ^^^ pp o1)
   | And (o1,o2) -> mparens (pp o1 ^^^ ampersand ^^^ pp o2)
   | Or (o1,o2) -> mparens (pp o1 ^^^ bar ^^^ pp o2)
+  | Impl (o1,o2) -> mparens (pp o1 ^^^ equals ^^ rangle ^^^ pp o2)
   | Not (o1) -> mparens (!^"not" ^^^ pp o1)
 
   | Nth (n,it2) -> mparens (!^"nth" ^^^ !^(string_of_int n) ^^^ pp it2)
@@ -137,6 +140,7 @@ let rec vars_in it : SymSet.t =
   | GE (it, it') 
   | And (it, it')
   | Or (it, it')
+  | Impl (it, it')
   | Cons (it, it')  ->
      SymSet.union (vars_in it) (vars_in it')
   | Nth (_, it)
@@ -181,6 +185,7 @@ let rec subst_var subst it : t =
   | Null it -> Null (subst_var subst it)
   | And (it, it') -> And (subst_var subst it, subst_var subst it')
   | Or (it, it') -> Or (subst_var subst it, subst_var subst it')
+  | Impl (it, it') -> Impl (subst_var subst it, subst_var subst it')
   | Not it -> Not (subst_var subst it)
   | Tuple its ->
      Tuple (map (fun it -> subst_var subst it) its)
@@ -256,6 +261,9 @@ let rec instantiate_struct_member subst it : t =
   | Or (it, it') -> 
      Or (instantiate_struct_member subst it, 
          instantiate_struct_member subst it')
+  | Impl (it, it') -> 
+     Impl (instantiate_struct_member subst it, 
+           instantiate_struct_member subst it')
   | Not it -> 
      Not (instantiate_struct_member subst it)
   | Tuple its ->
@@ -322,7 +330,7 @@ let rec unify it it' (res : (t Uni.t) SymMap.t) =
     -> 
      unify it it' res
 
-  | List (its,bt), List (its',bt') when BaseTypes.type_equal bt bt' ->
+  | List (its,bt), List (its',bt') when BT.equal bt bt' ->
      unify_list its its' res
 
   | Member (tag, t, m), Member (tag', t', m') 
@@ -351,3 +359,62 @@ and unify_list its its' res =
   | _, _ ->
      fail
 
+let rec equal it it' = 
+  match it, it' with
+  | Num n, Num n' -> Num.equal n n'
+  | Bool b, Bool b' -> b = b'
+
+  | Add (t1,t2), Add (t1',t2')
+  | Sub (t1,t2), Sub (t1',t2')
+  | Mul (t1,t2), Mul (t1',t2')
+  | Div (t1,t2), Div (t1',t2')
+  | Exp (t1,t2), Exp (t1',t2')
+  | Rem_t (t1,t2), Rem_t (t1',t2')
+  | Rem_f (t1,t2), Rem_f (t1',t2') 
+    -> equal t1 t2 && equal t1' t2' 
+
+  | EQ (t1,t2), EQ (t1',t2')
+  | NE (t1,t2), NE (t1',t2')
+  | LT (t1,t2), LT (t1',t2')
+  | GT (t1,t2), GT (t1',t2')
+  | LE (t1,t2), LE (t1',t2')
+  | GE (t1,t2), GE (t1',t2') 
+    -> equal t1 t1' && equal t2 t2' 
+
+  | And (t1,t2), And (t1',t2')
+  | Or (t1,t2), Or (t1',t2')
+  | Impl (t1,t2), Impl (t1',t2')
+    -> equal t1 t1' && equal t2 t2' 
+
+  | Null t, Null t'
+  | Not t, Not t' 
+    -> equal t t' 
+
+  | Tuple its, Tuple its' 
+    -> equal_list its its'
+  | Nth (n,t), Nth (n',t') 
+    -> n = n' && equal t t' 
+
+  | Member (tag,t,member), Member (tag',t',member')
+  | MemberOffset (tag,t,member), MemberOffset (tag',t',member') 
+    -> tag = tag' && equal t t' && member = member'
+
+  | Nil bt, Nil bt' 
+    -> BT.equal bt bt'
+  | Cons (t1,t2), Cons (t1',t2') 
+    -> equal t1 t1' && equal t2 t2'
+  | List (its,bt), List (its',bt') 
+    -> equal_list its its' && BT.equal bt bt'
+
+  | Head t, Head t'
+  | Tail t, Tail t'
+    -> equal t t'
+
+  | S sym, S sym' 
+    -> Sym.equal sym sym'
+
+  | _ -> 
+     false
+
+and equal_list its its' =
+  for_all (fun (t1,t2) -> equal t1 t2) (combine its its')

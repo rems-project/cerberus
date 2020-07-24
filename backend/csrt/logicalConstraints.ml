@@ -11,3 +11,5 @@ let instantiate_struct_member subst (LC c) =
   LC (IT.instantiate_struct_member subst c)
 
 let vars_in (LC c) = IT.vars_in c
+
+let equal (LC c) (LC c') = IT.equal c c'

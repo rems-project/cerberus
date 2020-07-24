@@ -23,7 +23,7 @@ type type_error =
       expected: int;
       has: int;
     }
-  | Resource_used of Resources.t * Loc.t
+  | Resource_used of Resources.t * Loc.t list
   | Unbound_name of Sym.t
   | Unbound_impl_const of CF.Implementation.implementation_constant
   | Unreachable of PPrint.document
@@ -123,7 +123,7 @@ let pp (loc : Loc.t) (err : t) =
        !^"Unsupported feature" ^^ colon ^^^ unsupported
     | Resource_used (resource,where) ->
        !^"Resource" ^^^ Resources.pp false resource ^^^ 
-         !^"has already been used:" ^^^ parens (Loc.pp where)
+         !^"has already been used:" ^^^ braces (pp_list Loc.pp where)
     | Unbound_name unbound ->
        !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
     (* | Inconsistent_fundef {loc; decl; defn} ->

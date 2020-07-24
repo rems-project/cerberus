@@ -15,10 +15,11 @@ type t =
 let pp atomic = function
   | Base bt -> BaseTypes.pp atomic bt
 
-let type_equal t1 t2 = t1 = t2
+let equal t1 t2 = t1 = t2
 
-let types_equal ts1 ts2 = 
-  for_all (fun (t1,t2) -> type_equal t1 t2) (combine ts1 ts2)
+let equals ts1 ts2 = 
+  List.length ts1 = List.length ts2 &&
+  for_all (fun (t1,t2) -> equal t1 t2) (combine ts1 ts2)
 
 (* let subst_var subst ls =
  *   match ls with

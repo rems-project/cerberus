@@ -91,6 +91,12 @@ let ctype owned loc (name : Sym.t) (ct : CF.Ctype.ctype) =
   let* ((name,bt),t) = ctype_aux owned loc name ct in
   return (RT.Computational (name,bt,t))
 
+let bt_of_ctype loc ct = 
+  let* ((_,bt),_) = ctype_aux false loc (Sym.fresh ()) ct in
+  return bt
+  
+
+
 let make_pointer_ctype ct = 
   let open CF.Ctype in
   (* fix *)

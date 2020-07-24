@@ -23,10 +23,11 @@ type t =
 
 
 (* TODO *)
-let type_equal t1 t2 = t1 = t2
+let equal t1 t2 = t1 = t2
 
-let types_equal ts1 ts2 = 
-  for_all (fun (t1,t2) -> type_equal t1 t2) (combine ts1 ts2)
+let equals ts1 ts2 = 
+  List.length ts1 = List.length ts2 &&
+  for_all (fun (t1,t2) -> equal t1 t2) (combine ts1 ts2)
 
 let rec pp atomic = 
   let mparens pped = if atomic then parens pped else pped in

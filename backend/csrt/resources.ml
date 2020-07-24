@@ -5,6 +5,7 @@ module Loc = Locations
 module BT = BaseTypes
 module IT = IndexTerms
 module CF = Cerb_frontend
+module SymSet = Set.Make(Sym)
 
 
 
@@ -20,11 +21,14 @@ type stored_struct =
   { pointer: IT.t;
     tag: BT.tag;
     size: Num.t;
-    members: (BT.member * IT.t) list }
+    members: (BT.member * IT.t) list 
+  }
 
 type t = 
   | Points of points
   | StoredStruct of stored_struct 
+
+type resource = t
 
 let pp_addrmap members =
   flow_map (semi ^^ break 1) 
@@ -81,17 +85,22 @@ let instantiate_struct_member subst resource =
      StoredStruct {s with pointer; members}
 
 
-let type_equal env t1 t2 = t1 = t2
+let equal t1 t2 = 
+  t1 = t2
 
-let types_equal env ts1 ts2 = 
-  for_all (fun (t1,t2) -> type_equal env t1 t2) (combine ts1 ts2)
+let equals ts1 ts2 = 
+  List.length ts1 = List.length ts2 &&
+  for_all (fun (t1,t2) -> equal t1 t2) (combine ts1 ts2)
 
 
-
-
-let associated = function
+let pointer = function
   | Points p -> p.pointer
   | StoredStruct s -> s.pointer
+
+let children = function
+  | Points {pointee=None;_} -> []
+  | Points {pointee=Some pointee;_} -> [pointee]
+  | StoredStruct {members;_} -> map snd members
 
 
 
@@ -121,3 +130,22 @@ let unify r1 r2 res =
      else 
        fail
   | _ -> fail
+
+
+let unify_non_pointer r1 r2 res = 
+  match r1, r2 with
+  | Points p, Points p' 
+       when CF.Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
+     begin match p.pointee, p'.pointee with
+     | Some s, Some s' -> IT.unify s s' res
+     | None, None -> return res
+     | _, _ -> fail
+     end
+  | StoredStruct s, StoredStruct s' ->
+     if s.tag = s'.tag && Num.equal s.size s'.size then
+       unify_memberlist s.members s'.members res
+     else 
+       fail
+  | _ -> fail
+
+     

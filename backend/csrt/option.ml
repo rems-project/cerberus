@@ -14,3 +14,10 @@ let (>>=) : 'a m -> ('a -> 'b m) -> 'b m =
 
 
 let (let*) = (>>=)
+
+
+let map f = function
+  | Some a -> Some (f a)
+  | None -> None
+
+
