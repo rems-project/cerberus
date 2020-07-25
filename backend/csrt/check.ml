@@ -1583,7 +1583,11 @@ let check_function loc global fsym args rbt body ftyp =
        check (add (mL new_lname sls) local) args rbt body ftyp'       
     | args, FT.Resource (re,ftyp) ->
        (* check linearity *)
-       check (add (mR (fresh ()) re) local) args rbt body ftyp
+       let s = fresh () in
+       let local = add (mR s re) local in
+       let* local = check local args rbt body ftyp in
+       let* () = ensure_resource_used loc local s in
+       return local 
     | args, FT.Constraint (lc,ftyp) ->
        check (add (mUC lc) local) args rbt body ftyp
     | [], FT.Return rt ->
