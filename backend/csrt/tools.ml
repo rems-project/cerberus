@@ -1,5 +1,6 @@
 module CF = Cerb_frontend
 module CB = Cerb_backend
+module Loc = Locations
 
 module StringMap = Map.Make(String)
 
@@ -27,6 +28,13 @@ let is_none = function
   | Some _ -> false
 
 
+
+
+let symmap_lookup (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =
+  let open Except in
+  match SymMap.find_opt name e with
+  | None -> fail loc (TypeErrors.Unbound_name name)
+  | Some v -> return v
 
 
 let symmap_foldM 

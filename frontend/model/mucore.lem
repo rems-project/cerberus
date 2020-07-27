@@ -96,7 +96,6 @@ type mu_sym_or_pattern 'bty =
   | M_Symbol of annotated symbol 'bty
   | M_Pat of mu_pattern
 
-
 type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEsym of symbol
  | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)

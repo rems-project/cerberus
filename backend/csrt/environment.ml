@@ -2,6 +2,7 @@ open Pp
 open List
 open Except
 open TypeErrors
+open Tools
 
 module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend
@@ -26,17 +27,14 @@ module ImplMap =
      end)
 
 
-let lookup_sym_map (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =
-  match SymMap.find_opt name e with
-  | None -> fail loc (Unbound_name name)
-  | Some v -> return v
 
-let lookup_impl (loc : Loc.t) (e: 'v ImplMap.t) i =
+
+let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
   match ImplMap.find_opt i e with
   | None -> fail loc (Unbound_impl_const i)
   | Some v -> return v
 
-let lookup_sym_list (loc : Loc.t) (local: (Sym.t * 'a) list) (sym: Sym.t) =
+let symlist_lookup (loc : Loc.t) (local: (Sym.t * 'a) list) (sym: Sym.t) =
   match List.find_opt (fun (sym',_) -> Sym.equal sym' sym) local with
   | None -> fail loc (Unbound_name sym)
   | Some (n,t) -> return t
@@ -82,9 +80,9 @@ module Global = struct
     | None -> 
        fail loc (Generic_error (!^"struct" ^^^ Sym.pp s ^^^ !^"not defined"))
 
-  let get_fun_decl loc global sym = lookup_sym_map loc global.fun_decls sym
-  let get_impl_fun_decl loc global i = lookup_impl loc global.impl_fun_decls i
-  let get_impl_constant loc global i = lookup_impl loc global.impl_constants i
+  let get_fun_decl loc global sym = symmap_lookup loc global.fun_decls sym
+  let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i
+  let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 
   let pp_struct_decl (sym,decl) = 
     let tag = BT.Tag sym in
@@ -173,7 +171,7 @@ module Local = struct
 
 
 
-  let get loc (Bindings e) sym = lookup_sym_list loc e sym
+  let get loc (Bindings e) sym = symlist_lookup loc e sym
 
   let wanted_but_found loc wanted found = 
     let err = match wanted with
