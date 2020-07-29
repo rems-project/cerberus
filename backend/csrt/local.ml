@@ -71,7 +71,7 @@ let use_resource loc sym where (Local local) =
   | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
      begin match b with
      | Resource re -> return (Binding (sym',UsedResource (re,where)) :: rest)
-     | UsedResource (re,_) -> fail loc (Unreachable (!^"resource already used" ^^^ VB.pp true (sym,b)))
+     | UsedResource (re,where) -> fail loc (Resource_already_used (re,where))
      | b -> wanted_but_found loc `Resource (sym,b)
      end
   | i::rest -> let* rest' = aux rest in return (i::rest')
@@ -97,7 +97,7 @@ let new_old (Local local) =
 let ensure_resource_used loc local sym = 
   let* b = get loc sym local in
   match b with
-  | Resource re -> fail loc (Generic_error (!^"leftover unused resource" ^^^ VB.pp true (sym,b)))
+  | Resource resource -> fail loc (Unused_resource {resource;is_merge=false})
   | UsedResource (re,where) -> return ()
   | _ -> wanted_but_found loc `Resource (sym,b)
 
@@ -143,8 +143,7 @@ let merge loc (Local l1) (Local l2) =
               | VB.Resource re, VB.UsedResource (used_re,where) 
               | VB.UsedResource (used_re,where), VB.Resource re
                    when RE.equal used_re re ->
-                 fail loc (Generic_error (!^"resource" ^^^ RE.pp false re ^^^ 
-                                            !^"used only on one control-flow path"))
+                 fail loc (Unused_resource {resource=re;is_merge=true})
               | _ -> 
                  fail loc incompatible
             in

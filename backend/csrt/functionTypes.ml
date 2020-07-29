@@ -9,11 +9,11 @@ module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
 type t = 
-  | Return of ReturnTypes.t
   | Computational of Sym.t * BT.t * t
   | Logical of Sym.t * LS.t * t
   | Resource of RE.t * t
   | Constraint of LC.t * t
+  | Return of ReturnTypes.t
 
 
 
@@ -26,22 +26,6 @@ let mconstraint bound t =
 let mresource bound t = 
   Resource (bound,t)
 
-
-(* let rec args_and_ret = function
- *   | Return rt -> 
- *      (RT.I,rt)
- *   | Computational (name,bound,t) ->
- *      let (args_rt, ret) = args_and_ret t in
- *      (RT.Computational (name,bound,args_rt), ret)
- *   | Logical (name,bound,t) ->
- *      let (args_rt, ret) = args_and_ret t in
- *      (RT.Logical (name,bound,args_rt), ret)
- *   | Resource (bound,t) ->
- *      let (args_rt, ret) = args_and_ret t in
- *      (RT.Resource (bound,args_rt), ret)
- *   | Constraint (bound,t) ->
- *      let (args_rt, ret) = args_and_ret t in
- *      (RT.Constraint (bound,args_rt), ret) *)
 
 
 let rec subst_var substitution = function
@@ -114,3 +98,11 @@ let pp rt =
 
 
 
+let rec count_computational = function
+  | Computational (_,_,ft) -> 
+     1 + count_computational ft
+  | Logical (_,_,ft) 
+    | Resource (_,ft)
+    | Constraint (_,ft) -> 
+     count_computational ft
+  | Return _ -> 0

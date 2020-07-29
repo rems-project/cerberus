@@ -247,7 +247,7 @@ let rec merge_merge_trees loc mtree1 mtree2 =
      | Some cp1, Some cp2 ->
         return (TPoints { p1 with pointee = Some (cp1@cp2) })
      | _ -> 
-        fail loc (TypeErrors.Generic_error !^"incompatible resources")
+        fail loc (TypeErrors.Generic !^"incompatible resources")
      end
   | TStoredStruct s1, TStoredStruct s2
        when s1.tag = s2.tag && Num.equal s1.size s2.size ->
@@ -263,12 +263,12 @@ let rec merge_merge_trees loc mtree1 mtree2 =
        | [], [] -> 
           return []
        | _ ->
-          fail loc (TypeErrors.Generic_error !^"incompatible resources")
+          fail loc (TypeErrors.Generic !^"incompatible resources")
      in
      let* members = merge_members s1.members s2.members in
      return (TStoredStruct { s1 with members } )
   | _ ->
-     fail loc (TypeErrors.Generic_error !^"incompatible resources")
+     fail loc (TypeErrors.Generic !^"incompatible resources")
 
 
 

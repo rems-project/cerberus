@@ -61,8 +61,7 @@ let empty =
 let get_struct_decl loc global (BT.Tag s) = 
   match SymMap.find_opt s global.struct_decls with
   | Some decl -> return decl 
-  | None -> 
-     fail loc (Generic_error (!^"struct" ^^^ Sym.pp s ^^^ !^"not defined"))
+  | None -> fail loc (Struct_not_defined (BT.Tag s))
 
 let get_fun_decl loc global sym = symmap_lookup loc global.fun_decls sym
 let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i

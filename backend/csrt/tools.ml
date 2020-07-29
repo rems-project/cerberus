@@ -111,7 +111,7 @@ open Except
 let at_most_one loc err_str = function
   | [] -> return None
   | [x] -> return (Some x)
-  | _ -> fail loc (TypeErrors.Generic_error err_str)
+  | _ -> fail loc (TypeErrors.Generic err_str)
 
 let assoc_err loc entry list err =
   match List.assoc_opt entry list with

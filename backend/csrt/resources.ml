@@ -1,4 +1,3 @@
-open Option
 open Pp
 open List
 module Loc = Locations
@@ -105,6 +104,7 @@ let children = function
 
 
 let rec unify_memberlist ms ms' res = 
+  let open Option in
   match ms, ms' with
   | (BT.Member mname,m) :: ms, (BT.Member mname',m') :: ms' 
        when String.equal mname mname' ->
@@ -114,6 +114,7 @@ let rec unify_memberlist ms ms' res =
   | _, _ -> fail
 
 let unify r1 r2 res = 
+  let open Option in
   match r1, r2 with
   | Points p, Points p' 
        when CF.Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
@@ -129,10 +130,12 @@ let unify r1 r2 res =
        unify_memberlist s.members s'.members res
      else 
        fail
-  | _ -> fail
+  | _ -> 
+     fail
 
 
 let unify_non_pointer r1 r2 res = 
+  let open Option in
   match r1, r2 with
   | Points p, Points p' 
        when CF.Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
@@ -149,3 +152,23 @@ let unify_non_pointer r1 r2 res =
   | _ -> fail
 
      
+
+
+type shape = 
+  | Points_ of IT.t
+  | StoredStruct_ of IT.t * BT.tag
+
+let shape = function
+  | Points p -> Points_ p.pointer
+  | StoredStruct s -> StoredStruct_ (s.pointer,s.tag)
+
+let shape_pointer = function
+  | Points_ p -> p
+  | StoredStruct_ (p,_) -> p
+
+let match_shape shape resource = 
+  match shape, resource with
+  | Points_ pointer, Points p' -> true
+  | StoredStruct_ (pointer,tag), StoredStruct s' -> tag = s'.tag
+  | _ -> false
+

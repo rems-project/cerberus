@@ -180,19 +180,19 @@ let rec of_index_term loc {local;global} ctxt it =
      let member_const = Z3.Expr.mk_const_s ctxt member membersort in
      return (Z3.Expr.mk_app ctxt fundecl [loc_const;member_const])
   | Nil _ ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: Nil")
   | Cons _ ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: Cons")
   | Tuple ts ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: Tuple")
   | Head t ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: Head")
   | Tail t ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: Tail")
   | Nth (i,t) ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: Nth")
   | List (ts,bt) ->
-     fail loc (Z3_IT_not_implemented_yet it)
+     fail loc (Unsupported !^"Z3: List")
 
 
 

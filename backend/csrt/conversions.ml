@@ -13,6 +13,34 @@ open BaseTypes
 open LogicalConstraints
 open Resources
 
+
+
+
+let integer_value_to_num loc iv = 
+  match CF.Impl_mem.eval_integer_value iv with
+  | Some v -> return v
+  | None -> fail loc (Unreachable !^"integer_value_to_num")
+
+let size_of_ctype loc ct = 
+  let s = CF.Impl_mem.sizeof_ival ct in
+  integer_value_to_num loc s
+
+let size_of_struct_type loc (Tag s) =
+  size_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct s))
+  
+let integer_value_min loc it = 
+  integer_value_to_num loc (CF.Impl_mem.min_ival it)
+
+let integer_value_max loc it = 
+  integer_value_to_num loc (CF.Impl_mem.max_ival it)
+
+
+
+
+
+
+
+
 (* convert from other types *)
 
 let bt_of_core_object_type loc ot =
@@ -45,8 +73,8 @@ let rec bt_of_core_base_type loc cbt =
 
 
 let integerType_constraint loc about it =
-  let* min = Memory.integer_value_min loc it in
-  let* max = Memory.integer_value_max loc it in
+  let* min = integer_value_min loc it in
+  let* max = integer_value_max loc it in
   return (LC ((Num min %<= about) %& (about %<= Num max)))
 
 let integerType loc name it =
@@ -72,7 +100,7 @@ let rec ctype_aux owned loc name (CF.Ctype.Ctype (annots, ct_)) =
   | Pointer (_qualifiers, ct) ->
      if owned then
        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
-       let* size = Memory.size_of_ctype loc ct in
+       let* size = size_of_ctype loc ct in
        let points = Points {pointer = S name; pointee = Some (S pointee_name); 
                             typ = ct; size} in
        let t = Logical (pointee_name, Base bt, Resource (points, t)) in
@@ -130,7 +158,7 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
                     Resource (StoredStruct stored_struct, rbindings2@@rbindings))
          | _ -> 
             let* ct = assoc_err loc member decl.ctypes (Unreachable !^"make_stored_struct") in
-            let* size = Memory.size_of_ctype loc ct in
+            let* size = size_of_ctype loc ct in
             let points = {pointer = S pointer; pointee = this; typ = ct ; size} in
             return (Logical (pointer, Base Loc,
                       Constraint (pointer_constraint, I)),
@@ -141,7 +169,7 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
   in  
   let* (members,lbindings,rbindings) = aux decl.raw in
   let ct = (CF.Ctype.Ctype ([], CF.Ctype.Struct tag)) in
-  let* size = Memory.size_of_ctype loc ct in
+  let* size = size_of_ctype loc ct in
   let stored = {pointer = spointer; tag = Tag tag; size; members} in
   return (stored, lbindings, rbindings)
 
@@ -216,7 +244,7 @@ let make_fun_arg_type genv asym loc ct =
        let aname2 = fresh () in
        let rname2 = fresh () in
        let* ((abt,ftt),(rbt,rtt)) = aux true (aname2,rname2) ct in
-       let* size = Memory.size_of_ctype loc ct in
+       let* size = size_of_ctype loc ct in
        begin match ct with
        | CF.Ctype.Ctype (_, Struct s) ->
           let* (stored,a_lbindings,a_rbindings) = 

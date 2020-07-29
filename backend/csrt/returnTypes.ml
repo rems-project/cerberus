@@ -9,10 +9,10 @@ module SymSet = Set.Make(Sym)
 
 
 type l = 
-  | I
   | Logical of Sym.t * LS.t * l
   | Resource of RE.t * l
   | Constraint of LC.t * l
+  | I
 
 type t = Computational of Sym.t * BT.t * l
 
