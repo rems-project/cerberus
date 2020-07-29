@@ -22,6 +22,10 @@ type t =
   | FunctionPointer of Sym.t
 
 
+let is_struct = function
+  | Struct tag -> Some tag
+  | _ -> None
+
 (* TODO *)
 let equal t1 t2 = t1 = t2
 

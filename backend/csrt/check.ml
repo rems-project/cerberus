@@ -1075,7 +1075,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
                return (Computational (ret, Loc, lbindings @@
                        Resource (StoredStruct stored, rbindings)))
             | _ ->
-               let r = Points {pointer = S ret; pointee = None; typ = ct; size} in
+               let r = Points {pointer = S ret; pointee = None; size} in
                return (Computational (ret, Loc, Resource (r, I)))
           in
           return (rt, local)
@@ -1090,14 +1090,8 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
           (* revisit *)
           let* found = 
             filter_rM (fun name t ->
-                match t with
-                | RE.Points p' ->
-                   let* holds = Solver.equal loc {local;global} (S lname) p'.pointer in
-                   return (if holds then Some p'.typ else None)
-                | RE.StoredStruct ({tag = Tag tag; _} as s') ->
-                   let* holds = Solver.equal loc {local;global} (S lname) s'.pointer in
-                   let ct = CF.Ctype.Ctype ([], CF.Ctype.Struct tag) in
-                   return (if holds then Some ct else None)
+                let* holds = Solver.equal loc {local;global} (S lname) (RE.pointer t) in
+                return (if holds then Some t else None)
               ) local
           in
           begin match found with
@@ -1105,19 +1099,20 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
              fail loc (Generic !^"cannot deallocate unowned location")
           | _ :: _ :: _ -> 
              fail loc (Generic !^"cannot guess type of pointer to de-allocate" )
-          | [typ] -> 
-             let rec remove_owned_subtree loc {local;global} is_field pointer ct =
-               match ct with
-               | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
-                  let* decl = Global.get_struct_decl loc global (Tag tag) in
-                  let* stored = stored_struct_to_of_tag loc {local;global} pointer (Tag tag) in
+          | [resource] -> 
+             let rec remove_owned_subtree loc {local;global} is_field pointer is_struct =
+               match is_struct with
+               | Some tag -> 
+                  let* decl = Global.get_struct_decl loc global tag in
+                  let* stored = stored_struct_to_of_tag loc {local;global} pointer tag in
                   begin match stored with
                   | None -> fail loc (Generic !^"missing ownership for de-allocating")
                   | Some (r,stored) -> 
                      fold_leftM (fun local (member,member_pointer) ->
-                         let ct = List.assoc member decl.ctypes  in
+                         let bt = List.assoc member decl.raw  in
                          let* local = use_resource loc r [loc] local in
-                         remove_owned_subtree loc {local;global} true member_pointer ct
+                         remove_owned_subtree loc {local;global} true member_pointer 
+                                              (BT.is_struct bt)
                        ) local stored.members
                   end
                | _ ->
@@ -1127,7 +1122,8 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
                   | None -> fail loc (Generic !^"missing ownership for de-allocating")
                   end
              in
-             let* local = remove_owned_subtree loc {local;global} false (S lname) typ in
+             let* local = remove_owned_subtree loc {local;global} false (S lname) 
+                            (Option.map (fun s -> s.tag) (RE.is_StoredStruct resource)) in
              let rt = Computational (Sym.fresh (), Unit, I) in
              return (rt, local)
           end
@@ -1138,12 +1134,9 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
           let* (vbt,vlname) = get_a vloc vsym local in
           let* size = Conversions.size_of_ctype loc ct in
           let* () = check_base_type loc pbt BT.Loc in
-          (* for consistency check value against Core annotation *)
-          let* _ =
-            let* t = Conversions.ctype false loc (fresh ()) ct in
-            subtype loc {local=add (mL vlname (Base vbt)) local; global} ((vbt,vlname),vloc) t 
-              "checking store value against ctype annotation"
-          in
+          (* The generated Core program will before this already have
+             checked whether the store value is representable and done
+             the right thing. *)
           let rec store (local: L.t) (pointer: IT.t) (is_field: bool) ct size (this: IT.t) : (L.t * RT.l) m =
             let* () = debug_print 3 (action ("checking store at pointer " ^ plain (IT.pp false pointer))) in
             let* () = debug_print 3 (blank 3 ^^ item "ctype" (pp_ctype ct)) in
@@ -1182,8 +1175,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
                     else fail loc (Generic !^"missing ownership of store location" )
                in
                let* local = use_resource loc r [loc] local in
-               let bindings = 
-                 Resource (Points {p with pointee = Some this; typ = ct}, I) in
+               let bindings = Resource (Points {p with pointee = Some this}, I) in
                return (local,bindings)
           end in
           let* (local,bindings) = store local (S plname) false ct size (S vlname) in
@@ -1227,7 +1219,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
             | _ ->
                let* does_point = points_to ploc {local;global} pointer in
                let* (pointee,ct') = match does_point with
-                 | Some (r,{pointee = Some pointee;typ;size=size';_}) -> 
+                 | Some (r,{pointee = Some pointee;size=size';_}) -> 
                     if not (Num.equal size size') 
                     then fail loc (Generic !^"load of different size")
                     else return (pointee,typ)
@@ -1240,14 +1232,6 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
                in
                let* (Base bt) = infer_index_term ploc {local;global} pointee in
                let constr = LC (this %= pointee) in
-               let* _ = 
-                 let* t = Conversions.ctype false loc (fresh ()) ct in
-                 let temp_lname = fresh () in
-                 let temp_local = add (mL temp_lname (Base bt)) local in
-                 let temp_local = add (mUC (LC (S temp_lname %= pointee))) temp_local in
-                 subtype loc {local=temp_local;global} ((bt,temp_lname),ploc) t 
-                   "checking load value against expected type"
-               in
                return (bt, [constr])
           in
           let* (bt,constrs) = load (S plname) false ct size (S ret) in

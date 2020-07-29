@@ -12,7 +12,6 @@ module SymSet = Set.Make(Sym)
 type points = 
   { pointer: IT.t; 
     pointee: IT.t option; 
-    typ: CF.Ctype.ctype;
     size: Num.t 
   }
 
@@ -37,12 +36,12 @@ let pp_addrmap members =
 let pp atomic resource = 
   let mparens pp = if atomic then parens pp else pp in
   match resource with
-  | Points {typ; size; pointer; pointee} ->
+  | Points {size; pointer; pointee} ->
      !^"Points" ^^^ 
-       parens (pp_ctype typ ^^ comma ^^
-                 match pointee with 
-                 | Some v -> IT.pp true pointer ^^ comma ^^ IT.pp true v
-                 | None -> IT.pp true pointer ^^ comma ^^ !^"uninit")
+       parens (match pointee with 
+               | Some v -> IT.pp true pointer ^^ comma ^^ IT.pp true v
+               | None -> IT.pp true pointer ^^ comma ^^ !^"uninit"
+              )
   | StoredStruct {pointer; tag = Tag s; size; members} ->
      mparens (!^"StoredStruct" ^^^ Sym.pp s ^^^ 
                  parens (IT.pp true pointer ^^ comma ^^ brackets (pp_addrmap members)))
@@ -116,8 +115,7 @@ let rec unify_memberlist ms ms' res =
 let unify r1 r2 res = 
   let open Option in
   match r1, r2 with
-  | Points p, Points p' 
-       when CF.Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
+  | Points p, Points p' when Num.equal p.size p'.size ->
      let* res = IT.unify p.pointer p'.pointer res in
      begin match p.pointee, p'.pointee with
      | Some s, Some s' -> IT.unify s s' res
@@ -137,8 +135,7 @@ let unify r1 r2 res =
 let unify_non_pointer r1 r2 res = 
   let open Option in
   match r1, r2 with
-  | Points p, Points p' 
-       when CF.Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
+  | Points p, Points p' when Num.equal p.size p'.size ->
      begin match p.pointee, p'.pointee with
      | Some s, Some s' -> IT.unify s s' res
      | None, None -> return res
@@ -152,6 +149,11 @@ let unify_non_pointer r1 r2 res =
   | _ -> fail
 
      
+
+
+let is_StoredStruct = function
+  | StoredStruct s -> Some s 
+  | Points _ -> None
 
 
 type shape = 

@@ -101,8 +101,7 @@ let rec ctype_aux owned loc name (CF.Ctype.Ctype (annots, ct_)) =
      if owned then
        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
        let* size = size_of_ctype loc ct in
-       let points = Points {pointer = S name; pointee = Some (S pointee_name); 
-                            typ = ct; size} in
+       let points = Points {pointer = S name; pointee = Some (S pointee_name); size} in
        let t = Logical (pointee_name, Base bt, Resource (points, t)) in
        return ((name,Loc),t)
      else
@@ -159,7 +158,7 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
          | _ -> 
             let* ct = assoc_err loc member decl.ctypes (Unreachable !^"make_stored_struct") in
             let* size = size_of_ctype loc ct in
-            let points = {pointer = S pointer; pointee = this; typ = ct ; size} in
+            let points = {pointer = S pointer; pointee = this; size} in
             return (Logical (pointer, Base Loc,
                       Constraint (pointer_constraint, I)),
                     Resource (Points points, I))
@@ -269,13 +268,11 @@ let make_fun_arg_type genv asym loc ct =
           return (arg, ret)
        | _ ->
           let* arg = 
-            let apoints = Points {pointer = S aname; pointee = Some (S aname2); 
-                                  typ = ct; size}  in
+            let apoints = Points {pointer = S aname; pointee = Some (S aname2); size}  in
             return (Loc, Logical (aname2, Base abt, Resource (apoints, ftt)))
           in
           let* ret = 
-            let rpoints = Points {pointer = S aname; pointee = Some (S rname2); 
-                                  typ = ct; size} in
+            let rpoints = Points {pointer = S aname; pointee = Some (S rname2); size} in
             return (Loc, Logical (rname2, Base rbt, Resource (rpoints, rtt)))
           in
           return (arg, ret)
