@@ -259,11 +259,11 @@ let pp_mem_addr (pref, addr) =
 
 
 
-let pp_asym (Annotated (_annots,_bty,sym)) = 
-  pp_symbol sym
+let pp_asym asym = 
+  pp_symbol (a_unpack asym)
 
-let pp_actype (Annotated (_annots,_bty,ct)) = 
-  pp_ctype ct
+let pp_actype actype = 
+  pp_ctype (a_unpack actype)
 
 let pp_actype_or_asym = function 
   | Left ct -> pp_actype ct 
@@ -395,8 +395,8 @@ let rec pp_pattern (M_Pattern (_, pat)) =
       pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_sym_or_pattern = function
-  | M_Symbol (Annotated (_annots, _bty, sym)) ->
-     pp_symbol sym
+  | M_Symbol asym ->
+     pp_symbol (a_unpack asym)
   | M_Pat pat ->
      pp_pattern pat
 

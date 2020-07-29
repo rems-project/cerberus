@@ -115,8 +115,8 @@ let precise_loc loc mlock =
 let update_loc loc annots =
   precise_loc loc (CF.Annot.get_loc annots)
   
-let aunpack loc (CF.Mucore.Annotated (annots, _, x)) = 
-  (x, update_loc loc annots)
+(* let aunpack loc (CF.Mucore.Annotated (annots, _, x)) = 
+ *   (x, update_loc loc annots) *)
 
 
 

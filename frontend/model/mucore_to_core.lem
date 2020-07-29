@@ -24,7 +24,7 @@ let insert_symbol sym v env =
   Map.insert sym v env
 
 let get_pexpr _where env asym = 
-  let (Annotated annots bty sym) = asym in
+  let (A annots bty sym) = asym in
   match Map.lookup sym env with
   | Just pexpr -> pexpr
   (* Maybe there was already a symbol before a-normalisation. Then the
@@ -59,10 +59,10 @@ let get_value env asym =
   end
 
 
-let make_symbol_pexpr (Annotated annots bty sym) : Core.generic_pexpr 'bty symbol =
+let make_symbol_pexpr (A annots bty sym) : Core.generic_pexpr 'bty symbol =
   Core.Pexpr annots bty (Core.PEsym sym)
 
-let make_ctype_pexpr (Annotated annots bty ctype) : Core.generic_pexpr 'bty symbol =
+let make_ctype_pexpr (A annots bty ctype) : Core.generic_pexpr 'bty symbol =
   Core.Pexpr annots bty (Core.PEval (Core.Vctype ctype))
 
 
@@ -184,7 +184,7 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
      wrap (Core.PEcall name (map (get_pexpr "PEcall" env) args))
   | M_PElet pat p1 p2 ->
      match pat with
-     | M_Symbol (Annotated _ _ sym) ->
+     | M_Symbol (A _ _ sym) ->
         let p1 = mu_to_core__pexpr env p1 in
         let env' = insert_symbol sym p1 env in
         mu_to_core__pexpr env' p2
@@ -473,7 +473,7 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                      mu_to_core__expr env e)) es))
     | M_Elet pat pe e ->
        match pat with
-       | M_Symbol (Annotated _ _ sym) ->
+       | M_Symbol (A _ _ sym) ->
           let pe = mu_to_core__pexpr env pe in
           let env' = insert_symbol sym pe env in
           mu_to_core__expr env' e
@@ -489,7 +489,7 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                (mu_to_core__expr env e2))
     | M_Eskip ->
        wrap Core.Eskip
-    | M_Eccall a (Annotated annots bty ct) pe2 pes ->
+    | M_Eccall a (A annots bty ct) pe2 pes ->
        wrap (Core.Eccall a 
                (Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)))
                (get_pexpr "Eccall" env pe2) 

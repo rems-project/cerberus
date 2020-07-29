@@ -25,8 +25,9 @@ type mu_base_type = Core.core_base_type
 (* type bty = mu_base_type *)
 type mu_name = Core.generic_name symbol
 
-type annotated 'a 'bty = Annotated of list Annot.annot * 'bty * 'a
-let a_unpack (Annotated _ _ a) = a
+type annotated 'a 'bty = A of list Annot.annot * 'bty * 'a
+let a_unpack (A _ _ a) = a
+let a_pack annots bty a = A annots bty a
 
 type asym 'bty = annotated Symbol.sym 'bty
 type actype 'bty = annotated ctype 'bty

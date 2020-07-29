@@ -52,7 +52,7 @@ let bty_of_mu_pexpr (M_Pexpr _ bty _) = bty
 
 let is_symbol (M_Pexpr annots bty e) = 
   match e with
-  | M_PEsym sym -> Just (Annotated annots bty sym)
+  | M_PEsym sym -> Just (a_pack annots bty sym)
   | _ -> Nothing
   end
 
@@ -66,7 +66,7 @@ let var_pexpr sym annots bty =
 
 let ensure_ctype__pexpr = function
   | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
-     Just (Annotated annots bty ct)
+     Just (a_pack annots bty ct)
   | _ -> Nothing
 end
 
@@ -144,7 +144,7 @@ val letbind_pexpr :
 let letbind_pexpr outer_annots letbinder pexpr ctxt  = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
-  let asym = Annotated annots bty sym in
+  let asym = a_pack annots bty sym in
   let pat = M_Symbol asym in
   let body = ctxt asym in
   letbinder outer_annots pat pexpr body
@@ -771,7 +771,7 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
   | Eccall a ct e2 es ->
      let ct = match ct with
        | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
-          (Annotated annots bty ct)
+          (a_pack annots bty ct)
        | _ -> failwith "core_anormalisation: Eccall with non-ctype first argument"
      end in
      (* n_pexpr_in_expr_name e1 (fun e1 -> *)
