@@ -102,23 +102,7 @@ let symmap_for_all
       let* c = f sym a in
       return (acc && c)
     )
-    m true
-
-
-
-let precise_loc loc mlock = 
-  match mlock with
-  | Some loc2 -> loc2
-  | None -> loc
-
-
-let update_loc loc annots =
-  precise_loc loc (CF.Annot.get_loc annots)
-  
-(* let aunpack loc (CF.Mucore.Annotated (annots, _, x)) = 
- *   (x, update_loc loc annots) *)
-
-
+    m true  
 
 
 

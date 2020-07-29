@@ -17,11 +17,6 @@ type type_error =
   | Unbound_impl_const of CF.Implementation.implementation_constant
   | Unreachable of PPrint.document
   | Unsupported of PPrint.document
-  | Var_kind_error of {
-      sym: Sym.t;
-      expected : VarTypes.kind;
-      has : VarTypes.kind;
-    }
   | Illtyped_it of IndexTerms.t
   | Variadic_function of Sym.t
   | Surplus_A of BaseTypes.t
@@ -41,15 +36,14 @@ type type_error =
 
 type t = type_error
 
+
+
+let withloc loc p : PPrint.document = 
+  flow (break 1) [Loc.pp loc;p]
+
 let pp (loc : Loc.t) (err : t) = 
-  Loc.withloc loc
+  withloc loc
     begin match err with
-    | Var_kind_error err ->
-       flow (break 1)
-         (List.concat 
-            [[ !^"Symbol" ]; [Sym.pp err.sym];
-              words "Expected kind"; [VarTypes.pp_kind err.expected];
-             (words "but found kind"); [VarTypes.pp_kind err.has]])
     | Name_bound_twice name ->
        !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
     | Constructor_wrong_argument_number {constructor;expected;has} ->

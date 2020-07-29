@@ -53,7 +53,7 @@ let struct_decl loc tag fields genv =
   let rec aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts) 
             member ct =
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Tools.update_loc loc annots in
+    let loc = Loc.update loc annots in
     match ct_ with
     | Void -> 
        return ((member,Unit)::acc_members, 

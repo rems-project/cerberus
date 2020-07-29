@@ -60,7 +60,7 @@ let floatingType loc =
 
 let rec ctype_aux owned loc name (CF.Ctype.Ctype (annots, ct_)) =
   let open RT in
-  let loc = update_loc loc annots in
+  let loc = Loc.update loc annots in
   match ct_ with
   | Void -> 
      return ((name, BT.Unit), I)
