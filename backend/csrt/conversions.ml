@@ -109,7 +109,7 @@ let make_pointer_ctype ct =
 
 let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct =
   let open RT in
-  let* decl = Environment.Global.get_struct_decl loc genv (Tag tag) in
+  let* decl = Global.get_struct_decl loc genv (Tag tag) in
   let rec aux = function
     | (member,bt)::members ->
        let pointer = fresh () in
@@ -149,7 +149,7 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
 let explode_struct_in_binding loc genv (Tag tag) logical_struct binding = 
   let open RT in
   let rec explode_struct loc genv (Tag tag) logical_struct = 
-    let* decl = Environment.Global.get_struct_decl loc genv (Tag tag) in
+    let* decl = Global.get_struct_decl loc genv (Tag tag) in
     let rec aux = function
       | (member,bt)::members ->
          let this = IT.Member (Tag tag, logical_struct, member) in
@@ -256,7 +256,7 @@ let make_fun_arg_type genv asym loc ct =
     | Atomic ct -> 
        aux pointed (aname,rname) ct
     | Struct tag -> 
-       let* decl = Environment.Global.get_struct_decl loc genv (Tag tag) in
+       let* decl = Global.get_struct_decl loc genv (Tag tag) in
        let ftt = RT.subst_var_l {s=decl.closed_type.sbinder; swith=S aname }
                    decl.closed_type.souter in
        let rtt = RT.subst_var_l {s=decl.closed_type.sbinder; swith=S rname }

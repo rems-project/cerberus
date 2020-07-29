@@ -24,8 +24,8 @@ type type_error =
     }
   | Illtyped_it of IndexTerms.t
   | Variadic_function of Sym.t
-  | Surplus_A of Sym.t * BaseTypes.t
-  | Missing_A of Sym.t * BaseTypes.t
+  | Surplus_A of BaseTypes.t
+  | Missing_A of BaseTypes.t
   | Missing_R of Resources.t
   | Mismatch of { has: LS.t; expected: LS.t; }
   | Unsat_constraint of LogicalConstraints.t
@@ -91,9 +91,9 @@ let pp (loc : Loc.t) (err : t) =
            CF.Implementation.string_of_implementation_constant i)
     | Variadic_function fn ->
        !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
-    | Surplus_A (_name,t) ->
+    | Surplus_A t ->
        !^"Unexpected value of type" ^^^ BaseTypes.pp false t
-    | Missing_A (_name,t) ->
+    | Missing_A t ->
        !^"Missing value of type" ^^^ BaseTypes.pp false t
     | Missing_R t ->
        !^"Missing resource of type" ^^^ Resources.pp false t

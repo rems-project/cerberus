@@ -30,6 +30,17 @@ let is_none = function
 
 
 
+
+let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
+  match xs with
+  | [] -> []
+  | x :: xs ->
+     match f x with
+     | None -> filter_map f xs
+     | Some y -> y :: filter_map f xs
+
+
+
 let symmap_lookup (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =
   let open Except in
   match SymMap.find_opt name e with

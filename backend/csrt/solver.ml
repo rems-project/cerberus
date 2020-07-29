@@ -1,8 +1,9 @@
-open Environment
+open Global
 open List
 open Pp
 open TypeErrors
 open Except
+open Environment
 module LC=LogicalConstraints
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
@@ -40,7 +41,7 @@ let rec bt_to_sort loc {local;global} ctxt bt =
      let* sorts = mapM (bt_to_sort loc {local;global} ctxt) bts in
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts)
   | Struct tag ->
-     let* decl = Environment.Global.get_struct_decl loc global tag in
+     let* decl = Global.get_struct_decl loc global tag in
      let rec aux = function
        | (member,bt) :: members ->
           let* (names,sorts) = aux members in
@@ -70,7 +71,7 @@ let rec of_index_term loc {local;global} ctxt it =
   let open IndexTerms in
 
   let member_to_fundecl tag member = 
-    let* decl = Environment.Global.get_struct_decl loc global tag in
+    let* decl = Global.get_struct_decl loc global tag in
     let* sort = ls_to_sort loc {local;global} ctxt (Base (Struct tag)) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in

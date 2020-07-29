@@ -1,6 +1,5 @@
 open Pp
 open Except
-open Environment
 module CF=Cerb_frontend
 open CF.Mucore
 open Check
