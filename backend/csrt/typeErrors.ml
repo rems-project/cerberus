@@ -30,7 +30,7 @@ type type_error =
   | Unused_resource of {resource: Resources.t; is_merge: bool}
 
   | Undefined_behaviour of CF.Undefined.undefined_behaviour
-  | Unspecified
+  | Unspecified of CF.Ctype.ctype
   | StaticError of string * Sym.t
 
   | Generic of PPrint.document
@@ -90,7 +90,7 @@ let pp (loc : Loc.t) (err : t) =
     | Undefined_behaviour undef ->
        !^"Undefined behaviour" ^^ colon ^^^ 
          !^(CF.Undefined.pretty_string_of_undefined_behaviour undef)
-    | Unspecified ->
+    | Unspecified _ctype ->
        !^"Unspecified value"
     | StaticError (err, _pe) ->
        !^("Static error: " ^ err)

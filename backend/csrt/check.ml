@@ -613,32 +613,24 @@ let infer_ptrval (loc: Loc.t) {local;global} (ptrval: CF.Impl_mem.pointer_value)
 
 
 let rec infer_mem_value (loc: Loc.t) {local;global} (mem: CF.Impl_mem.mem_value) : RT.t m = 
-  let open CF.Ctype in
   CF.Impl_mem.case_mem_value mem
-    ( fun _ctyp -> fail loc (Unsupported !^"ctypes as values") )
-    ( fun it _sym -> 
-      (* todo: do something with sym *)
-      let* t = Conversions.ctype false loc (fresh ()) (Ctype ([], Basic (Integer it))) in
-      return t )
+    ( fun ctyp -> fail loc (Unspecified ctyp) )
+    ( fun _ _ -> fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
     ( fun it iv -> 
-      let new_lname = fresh () in
-      let* v = Conversions.integer_value_to_num loc iv in
-      let val_constr = LC (S new_lname %= Num v) in
-      let rt = Computational (new_lname, Int, Constraint (val_constr, I)) in
-      let* type_constr = Conversions.integerType_constraint loc (S new_lname) it in
+      let* v = Memory.integer_value_to_num loc iv in
+      let* (min,max) = Memory.integer_range loc it in
+      let s = fresh () in
+      let val_constr = LC (S s %= Num v) in
       let* (holds,_,_) = 
-        Solver.constraint_holds_given_constraints loc 
-          {local=add (mL new_lname (Base BT.Int)) local; global} 
-          [val_constr] type_constr in
-      match holds with
-      | true -> return rt
-      | false -> fail loc (Generic !^"Integer value does not satisfy range constraint")
+        Solver.constraint_holds loc 
+          {local=add (mL s (Base BT.Int)) (add (mUC val_constr) Local.empty); global} 
+          (LC ((Num min %<= S s) %& (S s %<= Num max))) in
+      if holds 
+      then return (Computational (s, Int, Constraint (val_constr, I)))
+      else fail loc (Generic !^"Integer value does not satisfy range constraint")
     )
-    ( fun ft fv -> Conversions.floatingType loc )
-    ( fun _ctype ptrval ->
-      (* maybe revisit and take ctype into account *)
-      let* t = infer_ptrval loc {local;global} ptrval in
-      return t )
+    ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
+    ( fun _ ptrval -> infer_ptrval loc {local;global} ptrval  )
     ( fun mem_values -> infer_array loc {local;global} mem_values )
     ( fun tag fields -> infer_struct loc {local;global} (Tag tag) fields )
     ( fun tag id mv -> infer_union loc {local;global} (Tag tag) id mv )
@@ -683,7 +675,7 @@ let infer_object_value (loc: Loc.t) {local;global} (ov: 'bty mu_object_value) : 
   match ov with
   | M_OVinteger iv ->
      let new_lname = fresh () in
-     let* i = Conversions.integer_value_to_num loc iv in
+     let* i = Memory.integer_value_to_num loc iv in
      let constr = (LC (S new_lname %= Num i)) in
      return (Computational (new_lname, Int, Constraint (constr, I)))
   | M_OVpointer p -> 
@@ -1067,7 +1059,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
           let* (abt,_lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) Int abt in
           let ret = fresh () in
-          let* size = Conversions.size_of_ctype loc ct in
+          let* size = Memory.size_of_ctype loc ct in
           let* rt = match ct with
             | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
                let* (stored,lbindings,rbindings) = 
@@ -1132,7 +1124,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
           let vloc = Loc.update loc av in
           let* (pbt,plname) = get_a ploc psym local in
           let* (vbt,vlname) = get_a vloc vsym local in
-          let* size = Conversions.size_of_ctype loc ct in
+          let* size = Memory.size_of_ctype loc ct in
           let* () = check_base_type loc pbt BT.Loc in
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
@@ -1155,7 +1147,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
                  | (member,member_pointer) :: members ->
                     let* decl = Global.get_struct_decl loc global (Tag tag) in
                     let ct = assoc member decl.ctypes in
-                    let* size = Conversions.size_of_ctype loc ct in
+                    let* size = Memory.size_of_ctype loc ct in
                     let* (local, bindings) = 
                       store local member_pointer true ct size (Member (Tag tag, this, member)) in
                     aux (local, acc_bindings@@bindings) members
@@ -1182,7 +1174,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
           let rt = Computational (fresh (), Unit, bindings) in
           return (rt, local)
        | M_Load (A (_,_,ct), A (ap,_,psym), _mo) -> 
-          let* size = Conversions.size_of_ctype loc ct in
+          let* size = Memory.size_of_ctype loc ct in
           let ploc = Loc.update loc ap in
           let* (pbt,plname) = get_a ploc psym local in
           (* check pointer *)
@@ -1206,7 +1198,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
                     let* decl = Global.get_struct_decl loc global (Tag tag) in
                     let spec_bt = List.assoc member decl.raw in
                     let ct = assoc member decl.ctypes in
-                    let* size = Conversions.size_of_ctype loc ct in
+                    let* size = Memory.size_of_ctype loc ct in
                     let* (has_bt, constrs) = 
                       load member_pointer true ct size (Member (Tag tag, this, member)) in
                     let* () = check_base_type ploc has_bt spec_bt in

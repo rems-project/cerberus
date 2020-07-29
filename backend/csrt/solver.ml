@@ -216,11 +216,11 @@ let z3_check loc ctxt solver constrs : Z3.Solver.status m =
 let negate (LogicalConstraints.LC c) = 
   (LogicalConstraints.LC (Not c))
 
-let constraint_holds_given_constraints loc {local;global} constraints c = 
+let constraint_holds loc {local;global} c = 
   let open PPrint in
   let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
-  let lcs = (negate c :: constraints) in
+  let lcs = (negate c :: Local.all_constraints local) in
   let* constrs = 
     mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
   let* () = debug_print 4 (action "checking satisfiability of constraints") in
@@ -238,9 +238,6 @@ let constraint_holds_given_constraints loc {local;global} constraints c =
      return (false,ctxt,solver)
 
 
-let constraint_holds loc {local;global} c = 
-  constraint_holds_given_constraints loc {local;global} 
-    (Local.all_constraints local) c 
 
 
 let is_unreachable loc {local;global} =
