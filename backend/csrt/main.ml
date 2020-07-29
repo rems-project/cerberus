@@ -10,7 +10,7 @@ let return = CF.Exception.except_return
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = (unit,unit) CF.Mucore.mu_file
+type mu_file = unit CF.Mucore.mu_file
 type file = 
   | CORE of core_file
   | MUCORE of mu_file

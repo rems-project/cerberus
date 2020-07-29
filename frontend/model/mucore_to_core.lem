@@ -299,8 +299,8 @@ let mu_to_core__action_ env (action_ : mu_action_ 'bty)
        mo
   end
 
-let mu_to_core__action env (M_Action t a action_) = 
-  Core.Action t a (mu_to_core__action_ env action_)
+let mu_to_core__action env (M_Action t action_) = 
+  Core.Action t () (mu_to_core__action_ env action_)
 
 let mu_to_core__paction env (M_Paction p action) = 
   Core.Paction p (mu_to_core__action env action)
@@ -454,8 +454,8 @@ let mu_to_core__memop env memop =
       [msym "Va_end" sym])
   end
 
-let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
-        : Core.generic_expr 'a 'bty symbol =
+let rec mu_to_core__expr env (expr : mu_expr 'bty)
+        : Core.generic_expr unit 'bty symbol =
   let (M_Expr annots expr_) = expr in
   let wrap expr_ = Core.Expr annots expr_ in
   match expr_ with
@@ -489,13 +489,13 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                (mu_to_core__expr env e2))
     | M_Eskip ->
        wrap Core.Eskip
-    | M_Eccall a (A annots bty ct) pe2 pes ->
-       wrap (Core.Eccall a 
+    | M_Eccall (A annots bty ct) pe2 pes ->
+       wrap (Core.Eccall ()
                (Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)))
                (get_pexpr "Eccall" env pe2) 
                (map (get_pexpr "Eccall" env) pes))
-    | M_Eproc a name pes ->
-       wrap (Core.Eproc a name (map (get_pexpr "Eproc" env) pes))
+    | M_Eproc name pes ->
+       wrap (Core.Eproc () name (map (get_pexpr "Eproc" env) pes))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     | M_Ewseq pat e1 e2 ->
@@ -508,7 +508,7 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                (mu_to_core__pattern pat)
                (mu_to_core__expr env e1)
                (mu_to_core__expr env e2))
-    (* | M_Easeq (s,bt) a pa ->
+    (* | M_Easeq (s,bt) pa ->
      *    Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa) *)
     (* | M_Eindet n e ->
      *    Core.Eindet n (mu_to_core__expr env e) *)
@@ -520,8 +520,8 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
        let sbp = 
          map (fun (sym,(bt,pe)) -> (sym,(bt,get_pexpr "Esave" env pe))) sbp in
        wrap (Core.Esave (sym,bt) sbp (mu_to_core__expr env e))
-    | M_Erun a sym pes ->
-       wrap (Core.Erun a sym (map (get_pexpr "Erun" env) pes))
+    | M_Erun sym pes ->
+       wrap (Core.Erun () sym (map (get_pexpr "Erun" env) pes))
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)
     (* | M_Ewait tid -> 
@@ -543,8 +543,8 @@ let mu_to_core__impl (i : mu_impl 'bty)
   Map.map mu_to_core__impl_decl i
 
 
-let mu_to_core__fun_map_decl (d : mu_fun_map_decl 'bty 'a) 
-    : Core.generic_fun_map_decl 'bty 'a =
+let mu_to_core__fun_map_decl (d : mu_fun_map_decl 'bty) 
+    : Core.generic_fun_map_decl 'bty unit =
   match d with
   | M_Fun bt args pe ->
      Core.Fun bt args (mu_to_core__pexpr Map.empty pe)
@@ -556,24 +556,24 @@ let mu_to_core__fun_map_decl (d : mu_fun_map_decl 'bty 'a)
      Core.BuiltinDecl loc bt bts
   end
 
-let mu_to_core__fun_map (fmap : mu_fun_map 'bty 'a) 
-    : Core.generic_fun_map 'bty 'a = 
+let mu_to_core__fun_map (fmap : mu_fun_map 'bty) 
+    : Core.generic_fun_map 'bty unit = 
   Map.map mu_to_core__fun_map_decl fmap
   
 
-let mu_to_core__globs (g : mu_globs 'a 'bty) 
-    : Core.generic_globs 'a 'bty = 
+let mu_to_core__globs (g : mu_globs 'bty) 
+    : Core.generic_globs unit 'bty = 
   match g with
   | M_GlobalDef bt e -> Core.GlobalDef bt (mu_to_core__expr Map.empty e)
   | M_GlobalDecl bt -> Core.GlobalDecl bt 
   end
 
-(* let mu_to_core__globs_map (g : Core.generic_globs_map 'a bty) 
- *     : mu_globs_map 'a bty = 
+(* let mu_to_core__globs_map (g : Core.generic_globs_map bty) 
+ *     : mu_globs_map unit bty = 
  *   Map.map mu_to_core__globs g *)
   
-let mu_to_core__globs_list (gs : list (symbol * mu_globs 'a 'bty) )
-    : list (symbol * Core.generic_globs 'a 'bty) = 
+let mu_to_core__globs_list (gs : list (symbol * mu_globs 'bty) )
+    : list (symbol * Core.generic_globs unit 'bty) = 
   map (fun (sym,g) -> (sym, mu_to_core__globs g)) gs
 
 

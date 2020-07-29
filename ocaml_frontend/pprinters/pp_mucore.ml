@@ -34,8 +34,8 @@ sig
   val pp_value: 'bty mu_value -> PPrint.document
   val pp_params: (Symbol.sym * mu_base_type) list -> PPrint.document
   val pp_pexpr: budget -> ('ty) mu_pexpr -> PPrint.document
-  val pp_expr: budget -> ('a, 'b) mu_expr -> PPrint.document
-  val pp_file: budget -> ('a, 'b) mu_file -> PPrint.document
+  val pp_expr: budget -> 'a mu_expr -> PPrint.document
+  val pp_file: budget -> 'a mu_file -> PPrint.document
 
   val pp_funinfo: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
@@ -652,7 +652,7 @@ let pp_expr budget expr =
         | M_Ememop memop ->
            let (memop, pes) = Mucore_to_core.mu_to_core__memop__ memop in
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
-        | M_Eaction (M_Paction (p, (M_Action (_, bs, act)))) ->
+        | M_Eaction (M_Paction (p, (M_Action (_, act)))) ->
             pp_polarity p (pp_action act)
         | M_Ecase (pe, pat_es) ->
             pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
@@ -676,9 +676,9 @@ let pp_expr budget expr =
             pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
         | M_Eskip ->
             pp_keyword "skip"
-        | M_Eproc (_, nm, pes) ->
+        | M_Eproc (nm, pes) ->
             pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_asym pes)
-        | M_Eccall (_, pe_ty, pe, pes) ->
+        | M_Eccall (pe_ty, pe, pes) ->
             pp_keyword "ccall" ^^ P.parens (comma_list pp_actype_or_asym (Left pe_ty :: Right pe :: (map (fun pe -> Right pe)) pes))
         (* | M_Eunseq [] ->
          *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
@@ -714,7 +714,7 @@ let pp_expr budget expr =
             ) sym_bTy_pes) ^^^
             pp_control "in" ^^^
             P.nest 2 (P.break 1 ^^ pp e)
-        | M_Erun (_, sym, pes) ->
+        | M_Erun (sym, pes) ->
             pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
         (* | M_Epar es ->
          *     pp_keyword "par" ^^ P.parens (comma_list pp es) *)

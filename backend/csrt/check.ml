@@ -979,7 +979,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
 
 
 
-let rec infer_expr_pop (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t * L.t) m =
+let rec infer_expr_pop (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) m =
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
   match e_ with
@@ -1003,7 +1003,7 @@ let rec infer_expr_pop (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.
   
 
 
-and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t * L.t) m = 
+and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) m = 
 
   let* () = debug_print 1 (action "inferring expression type") in
   let* () = debug_print 1 (blank 3 ^^ item "environment" (L.pp local)) in
@@ -1053,7 +1053,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
        | M_Va_end _ (* (asym 'bty) *) 
          -> fail loc (Unsupported !^"todo: ememop")
        end
-    | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
+    | M_Eaction (M_Paction (_pol, M_Action (aloc,action_))) ->
        begin match action_ with
        | M_Create (A (a,_,sym), A (_,_,ct), _prefix) -> 
           let* (abt,_lname) = get_a (Loc.update loc a) sym local in
@@ -1253,7 +1253,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
     | M_Eskip -> 
        let rt = Computational (fresh (), Unit, I) in
        return (rt, local)
-    | M_Eccall (_, _ctype, A(af,_,fsym), asyms) ->
+    | M_Eccall (_ctype, A(af,_,fsym), asyms) ->
        let* (bt,_) = get_a (Loc.update loc af) fsym local in
        let* fun_sym = match bt with
          | FunctionPointer sym -> return sym
@@ -1263,7 +1263,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
        let* args = get_a_loc_asyms loc local asyms in
        let* (rt,local) = calltyp loc {local;global} args decl_typ in
        return (rt, local)
-    | M_Eproc (_, fname, asyms) ->
+    | M_Eproc (fname, asyms) ->
        let* decl_typ = match fname with
          | CF.Core.Impl impl -> 
             get_impl_fun_decl loc global impl
@@ -1305,7 +1305,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) : (RT.t *
   return (typ,local)
 
 
-let rec check_expr (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) (typ: RT.t) = 
+let rec check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) = 
 
   let* () = debug_print 1 (action "checking expression type") in
   let* () = debug_print 1 (blank 3 ^^ item "type" (RT.pp typ)) in
@@ -1390,7 +1390,7 @@ let check_function (loc: Loc.t)
                    (fsym: Sym.t)
                    (arguments: (Sym.t * BT.t) list) 
                    (rbt: BT.t) 
-                   (body : [< `EXPR of ('a, 'b) mu_expr | `PEXPR of 'd mu_pexpr ])
+                   (body : [< `EXPR of 'bty mu_expr | `PEXPR of 'bty mu_pexpr ])
                    (function_typ: FT.t) =
   
   let* () = match body with

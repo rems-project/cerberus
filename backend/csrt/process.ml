@@ -50,8 +50,7 @@ let struct_decl loc tag fields genv =
   let open Sym in
   let open BaseTypes in
 
-  let rec aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts) 
-            member ct =
+  let rec aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts) member ct =
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
     let loc = Loc.update loc annots in
     match ct_ with
