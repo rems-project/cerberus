@@ -3,6 +3,10 @@ open List
 open Except
 open TypeErrors
 
+module BT = BaseTypes
+module LS = LogicalSorts
+module RE = Resources
+module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend
 module Loc = Locations
@@ -110,9 +114,53 @@ let is_bound sym (Local local) =
 
 
 
+let merge loc (Local l1) (Local l2) =
+  let incompatible = Unreachable !^"trying to merge incompatible environments" in
+  let rec aux l1 l2 = 
+    match l1, l2 with
+    | [], [] -> return []
+    | i1::l1, i2::l2 ->
+       let* i = match i1, i2 with
+         | Marker, Marker -> 
+            return Marker
+         | Binding (s1,vb1), Binding(s2,vb2) when Sym.equal s1 s2 ->
+            let* vb = match vb1, vb2 with
+              | VB.Computational (sl1,bt1), VB.Computational (sl2,bt2) 
+                   when Sym.equal sl1 sl2 && BT.equal bt1 bt2 ->
+                 return (VB.Computational (sl1,bt1))
+              | VB.Logical ls1, VB.Logical ls2  
+                   when LS.equal ls1 ls2 ->
+                 return (VB.Logical ls1)
+              | VB.Resource re1, VB.Resource re2 
+                   when RE.equal re1 re2 -> 
+                 return (VB.Resource re1)
+              | VB.UsedResource (re1,where1), VB.UsedResource (re2,where2) 
+                   when RE.equal re1 re2 ->
+                 return (VB.UsedResource (re1,where1@where2))
+              | VB.Constraint lc1, VB.Constraint lc2 
+                   when LC.equal lc1 lc2 ->
+                 return (VB.Constraint lc1)
+              | VB.Resource re, VB.UsedResource (used_re,where) 
+              | VB.UsedResource (used_re,where), VB.Resource re
+                   when RE.equal used_re re ->
+                 fail loc (Generic_error (!^"resource" ^^^ RE.pp false re ^^^ 
+                                            !^"used only on one control-flow path"))
+              | _ -> 
+                 fail loc incompatible
+            in
+            return (Binding (s1,vb))
+         | _ -> 
+            fail loc incompatible
+       in
+       let* l = aux l1 l2 in
+       return (i :: l)
+    | _, _ -> 
+       fail loc incompatible
+  in
+  let* l = aux l1 l2 in
+  return (Local l)
 
 
-(* derived *)
 
 let mA sym (bt,lname) = (sym, VB.Computational (lname,bt))
 let mL sym ls = (sym, VB.Logical ls)

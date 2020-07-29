@@ -783,174 +783,11 @@ let get_a_loc_asyms loc local asyms =
 
 
 
-(* let union_used loc urmap1 urmap2 = 
- *   let open Option in
- *   SymMap.fold (fun sym (r,where) m ->
- *       let* m = m in
- *       match SymMap.find_opt sym m with
- *       | Some (r',where') when RE.equal r r' -> 
- *          let m = SymMap.remove sym m in
- *          return (SymMap.add sym (r,where@where') m)
- *       | Some (r',where') ->
- *          fail
- *       | None ->
- *          return (SymMap.add sym (r,where) m)
- *     )
- *     urmap1
- *     (return urmap2)
- *   
- * 
- * let merge_resources loc {local;global} first others =
- * 
- *     let module T = TreeResources in
- *     let solver_eq = Solver.equal loc {local;global} in
- * 
- *     let* first_mt = T.merge_trees_of_map loc global solver_eq first in
- *     let* others_mt = mapM (T.merge_trees_of_map loc global solver_eq) others in
- * 
- *     let rec merge_mtrees mtrees1 mtrees2 =
- *       match mtrees1 with
- *       | [] ->
- *          if mtrees2 = [] then return [] 
- *          else fail loc (Generic_error !^"cannot merge environments")
- *       | (sym1,r1)::mtrees1 ->
- *          let* filtered = 
- *            filter_mapM (fun (sym2,r2) -> 
- *                match r1, r2 with 
- *                | T.TPoints p1, T.TPoints p2 ->
- *                   let* holds = solver_eq p1.pointer p2.pointer in
- *                   return (if holds then Some (sym2,r2) else None)
- *                | T.TStoredStruct s1, T.TStoredStruct s2 when s1.tag = s2.tag ->
- *                   let* holds = solver_eq s1.pointer s2.pointer in
- *                   return (if holds then Some (sym2,r2) else None)
- *                | _ -> 
- *                   return None
- *              ) mtrees2 
- *          in
- *          let* found = at_most_one loc !^"points-to not unique" filtered in
- *          begin match found with
- *          | None -> fail loc (Generic_error !^"cannot merge resources")
- *          | Some (sym2,r2) ->
- *             let mtrees2 = List.filter (fun (sym,_) -> not (Sym.equal sym sym2)) mtrees2 in
- *             let* merged = T.merge_merge_trees loc r1 r2 in
- *             let* mergeds = merge_mtrees mtrees1 mtrees2 in
- *             return ((sym1,merged) :: mergeds)
- *          end
- *     in
- * 
- *     let* merged_trees = fold_leftM merge_mtrees first_mt others_mt in
- *     let* (trees,news) = T.merge_trees_to_trees loc (map snd merged_trees) in
- *     let local = 
- *       fold_left 
- *         (fun local (name,bt,cs) -> 
- *           let local = add_l local (name, Base bt) in
- *           fold_left (fun local (LC c, it) -> 
- *               add_uc local (LC (c %==> (S name %= it)))) local cs 
- *         ) 
- *         local news 
- *     in
- *     return { local with rvars = T.trees_to_map trees }
- * 
- * 
- * let mapped_differently loc pp sym v v' =
- *   fail loc (Unreachable (Sym.pp sym ^^ !^" mapped to " ^^ 
- *                            pp v ^^ !^" and to " ^^ pp v'))
- * 
- * 
- * (\* similar to D. Walker Substructural type systems 1 *\)
- * let minus_symmap loc (equality,pp) m1 m2 =
- *   symmap_foldM (fun sym v acc ->
- *       match SymMap.find_opt sym m2 with
- *       | None -> return (SymMap.add sym v acc)
- *       | Some v' when equality v v' -> return acc
- *       | Some v' -> mapped_differently loc pp sym v v'
- *     ) m1 (SymMap.empty)
- * 
- * let union_symmap loc (equality,pp) m1 m2 = 
- *   symmap_foldM (fun sym v acc ->
- *       match SymMap.find_opt sym acc with
- *       | None -> return (SymMap.add sym v acc)
- *       | Some v' when equality v v' -> return acc
- *       | Some v' -> mapped_differently loc pp sym v v'
- *     ) m1 m2
- * 
- * 
- * let eq equality m1 m2 =
- *   let all_symbols = List.map fst (SymMap.bindings m1 @ SymMap.bindings m2) in
- *   List.for_all (fun sym ->
- *       match SymMap.find_opt sym m1, 
- *             SymMap.find_opt sym m2 with
- *       | None, None -> true
- *       | Some v1, Some v2 -> equality v1 v2
- *       | _ -> false
- *     ) all_symbols
- * 
- * 
- * let rec avars_equal avars1 avars2 = 
- *   match avars1, avars2 with
- *   | [], [] -> true
- *   | (cs1,(bt1,ls1))::avars1, (cs2,(bt2,ls2))::avars2 ->
- *      Sym.equal cs1 cs2 && BT.equal bt1 bt2 && Sym.equal ls1 ls2 &&
- *      avars_equal avars1 avars2
- *   | _ -> false
- * 
- * let merge_local_environments loc {local=old_local;global} paths =
- *   let* () = debug_print 1 (action "merging local environments") in
- *   let* () = debug_print 1 (blank 3 ^^ item "old" (L.pp old_local)) in
- *   match paths with
- *   | [] -> fail loc (Unreachable !^"no reachable control-flow path")
- *   | (first_cond,first_local) :: others ->
- *      let* pre_local = 
- *        fold_leftM (fun acc (LC cond,new_local) -> 
- *            let err s = Generic_error !^("error computing pre_local: " ^ s) in
- *            let* () = debug_print 1 (blank 3 ^^ item "new" (L.pp new_local)) in
- *            if avars_equal acc.avars new_local.avars then
- *              let* lvars = union_symmap loc (LS.equal,LS.pp false) acc.lvars new_local.lvars in
- *              let* cvar_diff = minus_symmap loc (LC.equal,LC.pp false) new_local.cvars old_local.cvars in
- *              let* cvars = union_symmap loc (LC.equal,LC.pp false) acc.cvars (SymMap.map (fun (LC c) -> LC (cond %==> c)) cvar_diff) in
- *              let* urvars = of_option loc (err "uvars") (union_used loc acc.urvars new_local.urvars) in
- *              return { acc with lvars; cvars }
- *            else 
- *              fail loc (Generic_error !^"error computing pre_local")
- *          ) {L.empty with avars = first_local.avars;
- *                              cvars = old_local.cvars } paths
- *      in
- *      let* local = 
- *        merge_resources loc {local=pre_local;global}
- *                        (first_cond,first_local.rvars) 
- *                        (List.map (fun (cond,local) -> (cond,local.rvars)) others)
- *      in
- *      let* () = debug_print 1 (blank 3 ^^ item "merged" (L.pp local)) in
- *      return local
- * 
- * 
- * let merge_path_rts loc rts = 
- *   let* () = debug_print 1 (action "merging return types") in
- *   let* () = debug_print 1 (blank 3 ^^ item "rts" (pp_list (fun (bt,(lc,lname)) -> (LC.pp false lc ^^ colon ^^^ BT.pp false bt ^^^ bar ^^^ (Sym.pp lname))) rts)) in
- *   let newname = fresh () in
- *   match rts with
- *   | [] -> fail loc (Unreachable !^"no reachable control-flow path")
- *   | (bt,_)::_ -> 
- *      let rec aux = function
- *        | [] -> return I
- *        | (has_bt,(LC c,lname))::rest ->
- *           let* () = check_base_type loc has_bt bt in
- *           let* rt = aux rest in
- *           return (Constraint (LC (c %==> (S newname %= S lname)), rt))
- *      in
- *      let* rt = aux rts in
- *      let rt = Computational (newname, bt, rt) in
- *      let* () = debug_print 1 (blank 3 ^^ item "merged" (RT.pp rt)) in
- *      return rt *)
-     
-
-
-(* FIX THIS *)
-let merge_local_environments (loc: Loc.t) {local;global} (new_locals: (LC.t * L.t) list) : L.t m =
+let merge_local_environments (loc: Loc.t) (new_locals: L.t list) : L.t m =
+  let* () = debug_print 1 (action "merging environments at control-flow join point") in
   match new_locals with
   | [] -> fail loc (Unreachable !^"no reachable control-flow path")
-  | first::others ->
-     return (snd first)
+  | first::others -> fold_leftM (Local.merge loc) first new_locals
 
 
 let ensure_reachable (loc: Loc.t) {local;global} : unit m = 
@@ -1142,10 +979,10 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_pexpr loc {local;global} e typ in
-             return (Some (lc, local))
+             return (Some (local))
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
      in
-     merge_local_environments loc {local;global} paths
+     merge_local_environments loc paths
   | M_PEcase (asym, pats_es) ->
      let (sym,loc) = aunpack loc asym in
      let* (bt,lname) = get_a loc sym local in
@@ -1159,10 +996,10 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_pexpr loc {local;global} e typ in
-             return (Some (lc, local))
+             return (Some (local))
          ) pats_es
      in
-     merge_local_environments loc {local;global} paths
+     merge_local_environments loc paths
   | M_PElet (p, e1, e2) ->
      let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
      let* local' = match p with
@@ -1570,10 +1407,10 @@ let rec check_expr (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) (typ: RT.t
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_expr loc {local;global} e typ in
-             return (Some (lc, local))
+             return (Some (local))
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
      in
-     merge_local_environments loc {local;global} paths
+     merge_local_environments loc paths
   | M_Ecase (asym, pats_es) ->
      let (sym,loc) = aunpack loc asym in
      let* (bt,lname) = get_a loc sym local in
@@ -1587,10 +1424,10 @@ let rec check_expr (loc: Loc.t) {local;global} (e: ('a,'bty) mu_expr) (typ: RT.t
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
              let* local = check_expr loc {local;global} e typ in
-             return (Some (lc, local))
+             return (Some (local))
          ) pats_es
      in
-     merge_local_environments loc {local;global} paths
+     merge_local_environments loc paths
   | M_Epure pe -> 
      check_pexpr loc {local;global} pe typ
   | M_Elet (p, e1, e2) ->
