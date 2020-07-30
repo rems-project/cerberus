@@ -259,7 +259,27 @@ let pp_unis (unis: (IT.t Uni.t) SymMap.t) : Pp.document =
 
 
 
-  
+
+let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:RE.t)) = 
+  match re with
+  | StoredStruct s ->
+     let* decl = Global.get_struct_decl loc global s.tag in
+     fold_leftM (fun local (member,member_pointer) ->
+         let bt = List.assoc member decl.raw  in
+         let* local = use_resource loc re_name [loc] local in
+         let shape = match bt with
+           | Struct tag -> StoredStruct_ (member_pointer, tag)
+           | _ -> Points_ member_pointer
+         in
+         let* o_member_resource = match_resource loc {local;global} shape in
+         match o_member_resource with
+         | Some (rname,r) -> remove_owned_subtree loc {local;global} (rname,r)
+         | None -> fail loc (Generic !^"missing ownership for de-allocating")
+       ) local s.members
+  | Points _ ->
+     use_resource loc re_name [loc] local
+
+
 
 
 
@@ -1107,7 +1127,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           let* found = 
             filter_rM (fun name t ->
                 let* holds = Solver.equal loc {local;global} (S lname) (RE.pointer t) in
-                return (if holds then Some t else None)
+                return (if holds then Some (name,t) else None)
               ) local
           in
           begin match found with
@@ -1115,31 +1135,8 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
              fail loc (Generic !^"cannot deallocate unowned location")
           | _ :: _ :: _ -> 
              fail loc (Generic !^"cannot guess type of pointer to de-allocate" )
-          | [resource] -> 
-             let rec remove_owned_subtree loc {local;global} is_field pointer is_struct =
-               match is_struct with
-               | Some tag -> 
-                  let* decl = Global.get_struct_decl loc global tag in
-                  let* stored = stored_struct_to_of_tag loc {local;global} pointer tag in
-                  begin match stored with
-                  | None -> fail loc (Generic !^"missing ownership for de-allocating")
-                  | Some (r,stored) -> 
-                     fold_leftM (fun local (member,member_pointer) ->
-                         let bt = List.assoc member decl.raw  in
-                         let* local = use_resource loc r [loc] local in
-                         remove_owned_subtree loc {local;global} true member_pointer 
-                                              (BT.is_struct bt)
-                       ) local stored.members
-                  end
-               | _ ->
-                  let* points = points_to loc {local;global} pointer in
-                  begin match points with
-                  | Some (r,_) -> use_resource loc r [loc] local
-                  | None -> fail loc (Generic !^"missing ownership for de-allocating")
-                  end
-             in
-             let* local = remove_owned_subtree loc {local;global} false (S lname) 
-                            (Option.map (fun s -> s.tag) (RE.is_StoredStruct resource)) in
+          | [(re_name,re)] -> 
+             let* local = remove_owned_subtree loc {local;global} (re_name,re) in
              let rt = Computational (Sym.fresh (), Unit, I) in
              return (rt, local)
           end
