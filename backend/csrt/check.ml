@@ -37,18 +37,18 @@ module SymSet = Set.Make(Sym)
 
 type mu_pattern = BT.t CF.Mucore.mu_pattern
 type mu_ctor = BT.t CF.Mucore.mu_ctor
-type 'bty mu_pexpr = (BT.t,'bty) CF.Mucore.mu_pexpr
-type 'bty mu_expr = (BT.t,'bty) CF.Mucore.mu_expr
-type 'bty mu_value = (BT.t,'bty) CF.Mucore.mu_value
+type 'bty mu_pexpr = (CF.Ctype.ctype,BT.t,'bty) CF.Mucore.mu_pexpr
+type 'bty mu_expr = (CF.Ctype.ctype,BT.t,'bty) CF.Mucore.mu_expr
+type 'bty mu_value = (CF.Ctype.ctype,BT.t,'bty) CF.Mucore.mu_value
+type 'bty mu_object_value = (CF.Ctype.ctype,'bty) CF.Mucore.mu_object_value
 
 
-
-module PP_BT = struct
+module Pp_bt = struct
   type base_type = BT.t
   let pp_base_type = BT.pp true
 end
 
-module PP_MUCORE = CF.Pp_mucore.Basic(PP_BT)
+module PP_MUCORE = CF.Pp_mucore.Basic(Pp_bt)(CF.Pp_mucore.Pp_ct)
 
 let pp_expr e = nocolour PP_MUCORE.pp_expr e
 let pp_pexpr e = nocolour PP_MUCORE.pp_pexpr e

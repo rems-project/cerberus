@@ -86,7 +86,7 @@ and mu_to_core__loaded_value (env : env 'bty) lv =
   end
 
 
-let rec mu_to_core__value (env : env 'bty) (v : mu_value mu_base_type 'bty)
+let rec mu_to_core__value (env : env 'bty) (v : mu_value Ctype.ctype mu_base_type 'bty)
         : Core.generic_value symbol =
   match v with
   | M_Vobject ov -> Core.Vobject (mu_to_core__object_value env ov)
@@ -129,7 +129,7 @@ let rec mu_to_core__pattern (M_Pattern annots pat_) =
              (map mu_to_core__pattern pats))
   end
 
-let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr mu_base_type 'bty)
+let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr Ctype.ctype mu_base_type 'bty)
         : Core.generic_pexpr 'bty symbol =
   let (M_Pexpr annots bty pexpr_) = pexpr in
   let wrap pexpr_ = Core.Pexpr annots bty pexpr_ in
@@ -215,7 +215,7 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr mu_base_type 'bty)
 
   end
 
-let mu_to_core__action_ env (action_ : mu_action_ 'bty)
+let mu_to_core__action_ env (action_ : mu_action_ Ctype.ctype 'bty)
         : Core.generic_action_ 'bty symbol =
   match action_ with
   | M_Create p1 p2 prefix ->
@@ -454,7 +454,7 @@ let mu_to_core__memop env memop =
       [msym "Va_end" sym])
   end
 
-let rec mu_to_core__expr env (expr : mu_expr mu_base_type 'bty)
+let rec mu_to_core__expr env (expr : mu_expr Ctype.ctype mu_base_type 'bty)
         : Core.generic_expr unit 'bty symbol =
   let (M_Expr annots expr_) = expr in
   let wrap expr_ = Core.Expr annots expr_ in
@@ -529,7 +529,7 @@ let rec mu_to_core__expr env (expr : mu_expr mu_base_type 'bty)
   end
 
 
-let mu_to_core__impl_decl (i : mu_impl_decl mu_base_type 'bty) 
+let mu_to_core__impl_decl (i : mu_impl_decl Ctype.ctype mu_base_type 'bty) 
     : Core.generic_impl_decl 'bty =
   match i with
   | M_Def bt p -> 
@@ -538,12 +538,12 @@ let mu_to_core__impl_decl (i : mu_impl_decl mu_base_type 'bty)
      Core.IFun bt args (mu_to_core__pexpr Map.empty body)
   end
 
-let mu_to_core__impl (i : mu_impl mu_base_type 'bty) 
+let mu_to_core__impl (i : mu_impl Ctype.ctype mu_base_type 'bty) 
     : Core.generic_impl 'bty =
   Map.map mu_to_core__impl_decl i
 
 
-let mu_to_core__fun_map_decl (d : mu_fun_map_decl mu_base_type 'bty) 
+let mu_to_core__fun_map_decl (d : mu_fun_map_decl Ctype.ctype mu_base_type 'bty) 
     : Core.generic_fun_map_decl 'bty unit =
   match d with
   | M_Fun bt args pe ->
@@ -556,12 +556,12 @@ let mu_to_core__fun_map_decl (d : mu_fun_map_decl mu_base_type 'bty)
      Core.BuiltinDecl loc bt bts
   end
 
-let mu_to_core__fun_map (fmap : mu_fun_map mu_base_type 'bty) 
+let mu_to_core__fun_map (fmap : mu_fun_map Ctype.ctype mu_base_type 'bty) 
     : Core.generic_fun_map 'bty unit = 
   Map.map mu_to_core__fun_map_decl fmap
   
 
-let mu_to_core__globs (g : mu_globs mu_base_type 'bty) 
+let mu_to_core__globs (g : mu_globs Ctype.ctype mu_base_type 'bty) 
     : Core.generic_globs unit 'bty = 
   match g with
   | M_GlobalDef bt e -> Core.GlobalDef bt (mu_to_core__expr Map.empty e)
@@ -571,15 +571,24 @@ let mu_to_core__globs (g : mu_globs mu_base_type 'bty)
 (* let mu_to_core__globs_map (g : Core.generic_globs_map bty) 
  *     : mu_globs_map unit bty = 
  *   Map.map mu_to_core__globs g *)
+
+let mu_to_core__tag_definition = function
+  | M_StructDef l mf -> StructDef l mf
+  | M_UnionDef l -> UnionDef l
+end
+
+let mu_to_core__tag_definitions tagDefs = 
+  Map.map mu_to_core__tag_definition tagDefs
+
   
-let mu_to_core__globs_list (gs : list (symbol * mu_globs mu_base_type 'bty) )
+let mu_to_core__globs_list (gs : list (symbol * mu_globs Ctype.ctype mu_base_type 'bty) )
     : list (symbol * Core.generic_globs unit 'bty) = 
   map (fun (sym,g) -> (sym, mu_to_core__globs g)) gs
 
 
 let mu_to_core__file file = 
   <| Core.main = file.mu_main
-   ; Core.tagDefs = file.mu_tagDefs
+   ; Core.tagDefs = mu_to_core__tag_definitions file.mu_tagDefs
    ; Core.stdlib = mu_to_core__fun_map file.mu_stdlib
    ; Core.impl = mu_to_core__impl file.mu_impl
    ; Core.globs = mu_to_core__globs_list file.mu_globs

@@ -128,7 +128,7 @@ let make_fun_spec loc genv attrs args ret_ctype =
 
 let record_functions genv funinfo : (Global.t, Locations.t * 'e) Except.t  = 
   pmap_foldM 
-    (fun fsym ((loc,attrs,ret_ctype,args,is_variadic,_has_proto) : CF.Mucore.mu_funinfo) genv ->
+    (fun fsym (loc,attrs,ret_ctype,args,is_variadic,_has_proto) genv ->
       if is_variadic 
       then fail loc (Variadic_function fsym) 
       else
@@ -233,9 +233,9 @@ let struct_decl loc tag fields genv =
 
 let record_tagDef file sym def genv =
   match def with
-  | CF.Ctype.UnionDef _ -> 
+  | M_UnionDef _ -> 
      fail Loc.unknown (Unsupported !^"todo: union types")
-  | CF.Ctype.StructDef (fields, _) ->
+  | M_StructDef (fields, _) ->
      let* decl = struct_decl Loc.unknown (Tag sym) fields genv in
 let genv = { genv with struct_decls = SymMap.add sym decl genv.struct_decls } in
      return genv
