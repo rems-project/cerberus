@@ -34,6 +34,34 @@ module FT = FunctionTypes
 module SymSet = Set.Make(Sym)
 
 
+
+type mu_pattern = BT.t CF.Mucore.mu_pattern
+type mu_ctor = BT.t CF.Mucore.mu_ctor
+type 'bty mu_pexpr = (BT.t,'bty) CF.Mucore.mu_pexpr
+type 'bty mu_expr = (BT.t,'bty) CF.Mucore.mu_expr
+type 'bty mu_value = (BT.t,'bty) CF.Mucore.mu_value
+
+
+
+module PP_BT = struct
+  type base_type = BT.t
+  let pp_base_type = BT.pp true
+end
+
+module PP_MUCORE = CF.Pp_mucore.Basic(PP_BT)
+
+let pp_expr e = nocolour PP_MUCORE.pp_expr e
+let pp_pexpr e = nocolour PP_MUCORE.pp_pexpr e
+
+let pp_ctype = CF.Pp_core_ctype.pp_ctype
+
+
+type 'bty pexpr_or_expr = 
+  | PEXPR of 'bty mu_pexpr
+  | EXPR of 'bty mu_expr
+
+
+
 let pp_budget = Some 7
 
 let error pp =
@@ -87,8 +115,7 @@ let bind_other (loc: Loc.t) (Computational (s,bt,rt): RT.t) : (L.t * (BT.t * Sym
 let pattern_match (loc: Loc.t) (this: IT.t) (pat: mu_pattern) (expect_bt: BT.t) : L.t m =
   let rec aux local' this pat expect_bt = 
     match pat with
-    | M_Pattern (annots, M_CaseBase (o_s, mbt)) ->
-       let* has_bt = Conversions.bt_of_core_base_type loc mbt in
+    | M_Pattern (annots, M_CaseBase (o_s, has_bt)) ->
        let* () = check_base_type loc has_bt expect_bt in
        let s' = fresh () in 
        let local' = add (mL s' (Base has_bt)) local' in
@@ -103,8 +130,7 @@ let pattern_match (loc: Loc.t) (this: IT.t) (pat: mu_pattern) (expect_bt: BT.t) 
        return local'
     | M_Pattern (annots, M_CaseCtor (constructor, pats)) ->
        match constructor with
-       | M_Cnil mbt ->
-          let* item_bt = Conversions.bt_of_core_base_type loc mbt in
+       | M_Cnil item_bt ->
           begin match pats with
           | [] ->
              if BT.equal (List item_bt) expect_bt 
@@ -572,9 +598,8 @@ let infer_constructor (loc: Loc.t) {local;global} (constructor: mu_ctor) (asyms:
      | _ ->
         fail loc (Number_arguments {has=length asyms; expect=1})
      end
-  | M_Cnil mbt -> 
+  | M_Cnil item_bt -> 
      let new_lname = fresh () in
-     let* item_bt = Conversions.bt_of_core_base_type loc mbt in
      if asyms = [] then
         return (Computational (new_lname, List item_bt, 
                 Constraint (LC (S new_lname %= Nil item_bt),I)))
@@ -705,9 +730,8 @@ let infer_value (loc: Loc.t) {local;global} (v: 'bty mu_value) : RT.t m =
      let new_lname = fresh () in
      let constr = LC (Not (S new_lname)) in
      return (Computational (new_lname, Bool, Constraint (constr,I)))
-  | M_Vlist (cbt, asyms) ->
+  | M_Vlist (ibt, asyms) ->
      let new_lname = fresh () in
-     let* ibt = Conversions.bt_of_core_base_type loc cbt in
      let* lnames = 
        mapM (fun (A (a,_,sym)) -> 
            let* (ibt',lname) = get_a (Loc.update loc a) sym local in
@@ -1390,12 +1414,12 @@ let check_function (loc: Loc.t)
                    (fsym: Sym.t)
                    (arguments: (Sym.t * BT.t) list) 
                    (rbt: BT.t) 
-                   (body : [< `EXPR of 'bty mu_expr | `PEXPR of 'bty mu_pexpr ])
+                   (body : 'bty pexpr_or_expr)
                    (function_typ: FT.t) =
   
   let* () = match body with
-    | `EXPR body -> debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) 
-    | `PEXPR body -> debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) 
+    | EXPR body -> debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) 
+    | PEXPR body -> debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) 
   in
 
   let rt_consistent rbt (Computational (sname,sbt,t)) =
@@ -1430,8 +1454,8 @@ let check_function (loc: Loc.t)
     | [], FT.Return rt ->
        let* () = rt_consistent rbt rt in
        begin match body with
-         | `EXPR body -> check_expr loc {local;global} body rt
-         | `PEXPR body -> check_pexpr loc {local;global} body rt
+         | EXPR body -> check_expr loc {local;global} body rt
+         | PEXPR body -> check_pexpr loc {local;global} body rt
        end
   in
   (* check environment has no resources? *)

@@ -20,22 +20,22 @@ type values = list value
 type pexpr 'bty = generic_pexpr 'bty Symbol.sym
 type pexprs 'bty = list (pexpr 'bty)
 type expr 'a 'bty = generic_expr 'a 'bty Symbol.sym
-type pattern = mu_pattern
+type pattern = mu_pattern mu_base_type
 type annot = Annot.annot
 type annots = list annot
 type outer_annots = annots
 type action 'a 'bty = generic_action 'a 'bty Symbol.sym
 type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
 
-type mu_value = Mucore.mu_value unit
+type mu_value = Mucore.mu_value mu_base_type unit
 type mu_values = list mu_value
-type mu_pexpr = Mucore.mu_pexpr unit
+type mu_pexpr = Mucore.mu_pexpr mu_base_type unit
 type mu_pexprs = list mu_pexpr
-type mu_expr = Mucore.mu_expr unit
-type mu_pattern = Mucore.mu_pattern
+type mu_expr = Mucore.mu_expr mu_base_type unit
+type mu_pattern = Mucore.mu_pattern mu_base_type
 type mu_action = Mucore.mu_action unit
 type mu_paction = Mucore.mu_paction unit
-type mu_sym_or_pattern = Mucore.mu_sym_or_pattern unit
+type mu_sym_or_pattern = Mucore.mu_sym_or_pattern mu_base_type unit
 
 type asym = Mucore.asym unit
 type asyms = list asym
@@ -817,17 +817,17 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
 
 
 
-let normalise_impl_decl (i : generic_impl_decl unit) : mu_impl_decl unit =
+let normalise_impl_decl (i : generic_impl_decl unit) : mu_impl_decl mu_base_type unit =
   match i with
   | Def bt p -> M_Def bt (normalise_pexpr p)
   | IFun bt args body -> M_IFun bt args (normalise_pexpr body)
   end
 
-let normalise_impl (i : generic_impl unit) : mu_impl unit =
+let normalise_impl (i : generic_impl unit) : mu_impl mu_base_type unit =
   Map.map normalise_impl_decl i
 
 let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a) 
-    : mu_fun_map_decl unit =
+    : mu_fun_map_decl mu_base_type unit =
   better_error_messages (show name)
     (match d with
      | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
@@ -836,18 +836,18 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
      | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
      end)
 
-let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map unit = 
+let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map mu_base_type unit = 
   Map.mapi normalise_fun_map_decl fmap
   
 
-let normalise_globs (g : generic_globs 'a unit) : mu_globs unit = 
+let normalise_globs (g : generic_globs 'a unit) : mu_globs mu_base_type unit = 
   match g with
   | GlobalDef bt e -> M_GlobalDef bt (normalise_expr e)
   | GlobalDecl bt -> M_GlobalDecl bt 
   end
 
 let normalise_globs_list (gs : list (Symbol.sym * generic_globs 'a unit) )
-    : list (Symbol.sym * mu_globs unit) = 
+    : list (Symbol.sym * mu_globs mu_base_type unit) = 
   map (fun (sym,g) -> (sym, normalise_globs g)) gs
 
 

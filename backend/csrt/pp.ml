@@ -61,11 +61,6 @@ let nocolour f x =
 
 let pp_num n = !^(Nat_big_num.to_string n)
 
-let pp_expr e = nocolour CF.Pp_mucore.Basic.pp_expr e
-let pp_pexpr e = nocolour CF.Pp_mucore.Basic.pp_pexpr e
-
-let pp_ctype = CF.Pp_core_ctype.pp_ctype
-
 
 
 

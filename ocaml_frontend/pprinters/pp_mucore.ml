@@ -17,6 +17,18 @@ type budget = int option
 let do_compact = true
 
 
+
+
+
+module type PP_BT = sig
+  (* type object_type *)
+  type base_type
+  (* val pp_object_type: object_type -> PPrint.document *)
+  val pp_base_type: base_type -> PPrint.document
+end
+
+
+
 module type CONFIG =
 sig
   val show_std: bool
@@ -28,14 +40,16 @@ end
 
 module type PP_CORE =
 sig
-  val pp_core_object_type: mu_object_type -> PPrint.document
-  val pp_core_base_type: mu_base_type -> PPrint.document
-  val pp_object_value: 'bty mu_value -> PPrint.document
-  val pp_value: 'bty mu_value -> PPrint.document
-  val pp_params: (Symbol.sym * mu_base_type) list -> PPrint.document
-  val pp_pexpr: budget -> ('ty) mu_pexpr -> PPrint.document
-  val pp_expr: budget -> 'a mu_expr -> PPrint.document
-  val pp_file: budget -> 'a mu_file -> PPrint.document
+  (* type object_type *)
+  type base_type
+  (* val pp_object_type: object_type -> PPrint.document *)
+  val pp_base_type: base_type -> PPrint.document
+  val pp_object_value: 'bty mu_object_value -> PPrint.document
+  val pp_value: (base_type,'bty) mu_value -> PPrint.document
+  val pp_params: (Symbol.sym * base_type) list -> PPrint.document
+  val pp_pexpr: budget -> (base_type,'ty) mu_pexpr -> PPrint.document
+  val pp_expr: budget -> (base_type,'ty) mu_expr -> PPrint.document
+  val pp_file: budget -> (base_type,'ty) mu_file -> PPrint.document
 
   val pp_funinfo: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
@@ -44,9 +58,13 @@ sig
   val pp_action: 'a mu_action_ -> PPrint.document
 end
 
-module Make (Config: CONFIG) =
+module Make (Config: CONFIG) (Pp_bt: PP_BT) =
 struct
+
 open Config
+
+include Pp_bt
+
 
 
 let maybe_print_location : Annot.annot list -> P.document =
@@ -149,43 +167,12 @@ let pp_number  n = !^ (ansi_format [Yellow] n)
 let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_implementation_constant i)))
 
 
-let rec pp_core_object_type = function
-  | OTy_integer ->
-      !^ "integer"
-  | OTy_floating ->
-      !^ "floating"
-  | OTy_pointer ->
-      !^ "pointer"
-  | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
-      !^ "array" ^^ P.parens (pp_core_object_type bty)
-  | OTy_struct ident ->
-      !^ "struct" ^^^ !^(Pp_symbol.to_string ~compact:do_compact ident)
-  | OTy_union ident  ->
-      !^ "union" ^^^ !^(Pp_symbol.to_string ~compact:do_compact ident)
-  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
-      let pp_ret = match ret_oTy_opt with
-        | Some ret_oTy ->
-            pp_core_object_type ret_oTy
-        | None ->
-            P.underscore in
-      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-*)
-let rec pp_core_base_type = function
-  | BTy_storable   -> !^ "storable"
-  | BTy_object bty ->
-      pp_core_object_type bty
-  | BTy_loaded bty ->
-      !^ "loaded" ^^^ pp_core_object_type bty
-  | BTy_boolean    -> !^ "boolean"
-  | BTy_ctype      -> !^ "ctype"
-  | BTy_unit       -> !^ "unit"
-  | BTy_list bTy  -> P.brackets (pp_core_base_type bTy)
-  | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
 
 
-let pp_core_type = function
-  | TyBase   baseTy -> pp_core_base_type baseTy
-  | TyEffect baseTy -> P.brackets (pp_core_base_type baseTy)
+
+(* let pp_core_type = function
+ *   | TyBase   baseTy -> pp_base_type baseTy
+ *   | TyEffect baseTy -> P.brackets (pp_base_type baseTy) *)
 
 
 let pp_binop = function
@@ -385,9 +372,9 @@ let pp_ctor = function
 let rec pp_pattern (M_Pattern (_, pat)) =
   match pat with
   | M_CaseBase (None, bTy) ->
-      P.underscore ^^ P.colon ^^^ pp_core_base_type bTy
+      P.underscore ^^ P.colon ^^^ pp_base_type bTy
   | M_CaseBase (Some sym, bTy) ->
-      pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
+      pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy
 (* Syntactic sugar for tuples and lists *)
   | M_CaseCtor (M_Ctuple, pats) ->
       P.parens (comma_list pp_pattern pats)
@@ -590,9 +577,9 @@ let pp_action act =
                   pp_linux_memory_order mo)
 
 
-let pp_expr budget expr =
+let pp_expr budget (expr : (base_type,'ty) mu_expr) =
 
-  let rec pp budget is_semi prec (M_Expr (annot, e)) =
+  let rec pp budget is_semi prec (M_Expr (annot, e) : (base_type,'ty) mu_expr) =
   
     match budget with
     | Some 0 -> P.dot ^^ P.dot ^^ P.dot ^^^ P.parens (!^"abbreviated")
@@ -607,7 +594,7 @@ let pp_expr budget expr =
 
 
     let prec' = precedence_expr e in
-    let pp_ z = pp budget' true prec' z in  (* TODO: this is sad *)
+    (* let pp_ z = pp budget' true prec' z in  (\* TODO: this is sad *\) *)
     let pp  z = pp budget' false prec' z in
 
     begin
@@ -636,17 +623,17 @@ let pp_expr budget expr =
       (maybe_print_location annot) ^^
       begin
         (* Here we check whether parentheses are needed *)
-        if compare_precedence prec' prec then
-          (* right associativity of ; *)
-          match (is_semi, e) with
-            | (true, M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), _, _)) ->
-                P.parens
-            | _ ->
-                fun z -> z
-        else
+        (* if compare_precedence prec' prec then
+         *   (\* right associativity of ; *\)
+         *   match (is_semi, e) with
+         *     | (true, M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), _, _)) ->
+         *         P.parens
+         *     | _ ->
+         *         fun z -> z
+         * else *)
           P.parens
       end
-      begin match e with
+      begin match (e : (base_type,'ty) mu_expr_) with
         | M_Epure pe ->
             pp_keyword "pure" ^^ P.parens (pp_pexpr budget pe)
         | M_Ememop memop ->
@@ -693,8 +680,8 @@ let pp_expr budget expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), e1, e2) ->
-            (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
+        (* | M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), e1, e2) ->
+         *     (pp_ e1 ^^^ P.semi) ^/^ (pp e2) *)
         | M_Esseq (pat, e1, e2) ->
             P.group (
               pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
@@ -703,14 +690,14 @@ let pp_expr budget expr =
             ) ^^
             P.break 1 ^^ (pp e2)
         (* | M_Easeq ((sym, bTy), act1, pact2) ->
-         *     pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
+         *     pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^^ P.equals ^^^
          *     pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2)) *)
         (* | M_Eindet (i, e) ->
          *     pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e) *)
         | M_Esave ((sym, bTy), sym_bTy_pes, e) ->
-            pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+            pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^^
             P.parens (comma_list (fun (sym, (bTy, pe)) ->
-              pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
+              pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
             ) sym_bTy_pes) ^^^
             pp_control "in" ^^^
             P.nest 2 (P.break 1 ^^ pp e)
@@ -786,7 +773,7 @@ let pp_tagDefinitions tagDefs =
   in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
 
 let pp_argument (sym, bTy) =
-  pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
+  pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy
 
 let pp_params params =
   P.parens (comma_list pp_argument params)
@@ -799,18 +786,18 @@ let pp_fun_map budget funs =
     acc ^^
     match decl with
       | M_Fun  (bTy, params, pe) ->
-          pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.hardline ^^ P.hardline
       | M_ProcDecl (loc, bTy, bTys) ->
           pp_cond loc @@
-          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.hardline ^^ P.hardline
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_base_type bTys) ^^ P.hardline ^^ P.hardline
       | M_BuiltinDecl (loc, bTy, bTys) ->
           pp_cond loc @@
-          pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.hardline ^^ P.hardline
+          pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_base_type bTys) ^^ P.hardline ^^ P.hardline
       | M_Proc (loc, bTy, params, e) ->
           pp_cond loc @@
-          pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
     ) funs P.empty
@@ -825,7 +812,7 @@ let pp_impl budget impl =
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
 
       | M_IFun (bTy, params, pe) ->
-          pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
   ) impl P.empty
@@ -860,7 +847,7 @@ let pp_globs budget globs =
   List.fold_left (fun acc (sym, decl) ->
       match decl with
       | M_GlobalDef (bTy, e) ->
-        acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+        acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^^
               P.colon ^^ P.equals ^^
               P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
       | M_GlobalDecl _ ->
@@ -910,6 +897,47 @@ let pp_file budget file =
 end
 
 
+let rec pp_core_object_type = function
+  | OTy_integer ->
+      !^ "integer"
+  | OTy_floating ->
+      !^ "floating"
+  | OTy_pointer ->
+      !^ "pointer"
+  | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
+      !^ "array" ^^ P.parens (pp_core_object_type bty)
+  | OTy_struct ident ->
+      !^ "struct" ^^^ !^(Pp_symbol.to_string ~compact:do_compact ident)
+  | OTy_union ident  ->
+      !^ "union" ^^^ !^(Pp_symbol.to_string ~compact:do_compact ident)
+  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
+      let pp_ret = match ret_oTy_opt with
+        | Some ret_oTy ->
+            pp_core_object_type ret_oTy
+        | None ->
+            P.underscore in
+      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+*)
+let rec pp_core_base_type = function
+  | BTy_storable   -> !^ "storable"
+  | BTy_object bty ->
+      pp_core_object_type bty
+  | BTy_loaded bty ->
+      !^ "loaded" ^^^ pp_core_object_type bty
+  | BTy_boolean    -> !^ "boolean"
+  | BTy_ctype      -> !^ "ctype"
+  | BTy_unit       -> !^ "unit"
+  | BTy_list bTy  -> P.brackets (pp_core_base_type bTy)
+  | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
+
+
+
+module PP_CBT = (struct
+  type object_type = core_object_type
+  type base_type = core_base_type
+  let pp_object_type = pp_core_object_type
+  let pp_base_type = pp_core_base_type
+end)
 
 
 module Basic = Make (struct
@@ -935,3 +963,8 @@ module WithLocations = Make (struct
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
 end)
+
+
+module Basic_CBT = Basic(PP_CBT)
+module All_CBT = All(PP_CBT)
+module WithLocations_CBT = WithLocations(PP_CBT)

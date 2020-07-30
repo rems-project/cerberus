@@ -11,8 +11,6 @@ open Subst
 
 
 
-
-
 let record_functions genv funinfo : (Global.t, Locations.t * 'e) Except.t  = 
   pmap_foldM 
     (fun fsym ((loc,attrs,ret_ctype,args,is_variadic,_has_proto) : CF.Mucore.mu_funinfo) genv ->
@@ -144,24 +142,14 @@ let pp_fun_map_decl funinfo =
 
 
 let process_functions genv fns =
-
-  let convert_arg loc (name,mbt) = 
-    let* bt = Conversions.bt_of_core_base_type loc mbt in
-    return (name,bt)
-  in
-
   pmap_iterM (fun fsym fn -> 
       match fn with
-      | M_Fun (ret, args, body) ->
+      | M_Fun (rbt, args, body) ->
          let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
-         let* args = mapM (convert_arg loc) args in
-         let* rbt = Conversions.bt_of_core_base_type Loc.unknown ret in
-         check_function loc genv fsym args rbt (`PEXPR body) ftyp
-      | M_Proc (loc, ret, args, body) ->
+         check_function loc genv fsym args rbt (PEXPR body) ftyp
+      | M_Proc (loc, rbt, args, body) ->
          let* (loc,ftyp) = Global.get_fun_decl loc genv fsym in
-         let* args = mapM (convert_arg loc) args in
-         let* rbt = Conversions.bt_of_core_base_type Loc.unknown ret in
-         check_function loc genv fsym args rbt (`EXPR body) ftyp
+         check_function loc genv fsym args rbt (EXPR body) ftyp
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()
@@ -172,6 +160,7 @@ let process_functions genv fns =
 
 
 let process mu_file =
+  let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
   pp_fun_map_decl mu_file.mu_funinfo;
   let genv = Global.empty in
   let* genv = record_tagDefs mu_file genv mu_file.mu_tagDefs in
@@ -180,8 +169,8 @@ let process mu_file =
   process_functions genv mu_file.mu_funs
 
 
-let process_and_report core_file = 
-  match process core_file with
+let process_and_report mu_file = 
+  match process mu_file with
   | Result () -> ()
   | Exception (loc,err) -> 
      let pped = TypeErrors.pp loc err in

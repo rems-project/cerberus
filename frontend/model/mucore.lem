@@ -55,20 +55,20 @@ type mu_loaded_value 'bty =  (* potentially unspecified C object values *)
 
 (* again, we might remove something from the definition here,
    e.g. Vctype *)
-type mu_value 'bty =  (* Core values *)
+type mu_value 'DBTY 'bty =  (* Core values *)
  | M_Vobject of mu_object_value 'bty (* C object value *)
  | M_Vloaded of mu_loaded_value 'bty (* loaded C object value *)
  | M_Vunit
  | M_Vtrue
  | M_Vfalse
  (* | M_Vctype of ctype (\* C type as value *\) *)
- | M_Vlist of Core.core_base_type * list (asym 'bty)
+ | M_Vlist of 'DBTY * list (asym 'bty)
  | M_Vtuple of list (asym 'bty) (* tuple *)
 
 
 
-type mu_ctor =  (* data constructors *)
- | M_Cnil of mu_base_type (* empty list *) 
+type mu_ctor 'DBTY =  (* data constructors *)
+ | M_Cnil of 'DBTY (* empty list *) 
  (* annotated with the type of the list items *)
  | M_Ccons (* list cons *)
  | M_Ctuple (* tuple *)
@@ -86,26 +86,26 @@ type mu_ctor =  (* data constructors *)
   * | M_Civsizeof (\* sizeof value *\)
   * | M_Civalignof (\* alignof value *\) *)
 
-type mu_pattern_ = 
- | M_CaseBase of (maybe Symbol.sym * mu_base_type)
- | M_CaseCtor of mu_ctor * list mu_pattern
+type mu_pattern_ 'DBTY = 
+ | M_CaseBase of (maybe Symbol.sym * 'DBTY)
+ | M_CaseCtor of mu_ctor 'DBTY * list (mu_pattern 'DBTY)
 
-and mu_pattern = 
- | M_Pattern of list annot * mu_pattern_
+and mu_pattern 'DBTY = 
+ | M_Pattern of list annot * (mu_pattern_ 'DBTY)
 
-type mu_sym_or_pattern 'bty = 
+type mu_sym_or_pattern 'DBTY 'bty = 
   | M_Symbol of annotated symbol 'bty
-  | M_Pat of mu_pattern
+  | M_Pat of mu_pattern 'DBTY
 
-type mu_pexpr_ 'bty =  (* Core pure expressions *)
+type mu_pexpr_ 'DBTY 'bty =  (* Core pure expressions *)
  | M_PEsym of symbol
  | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
- | M_PEval of mu_value 'bty
+ | M_PEval of mu_value 'DBTY 'bty
  | M_PEconstrained of list (Mem.mem_iv_constraint * asym 'bty) (* constrained value *)
  | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * asym 'bty (* impl-defined static error *)
- | M_PEctor of mu_ctor * list (asym 'bty) (* data constructor application *)
- | M_PEcase of (asym 'bty) * list (mu_pattern * mu_pexpr 'bty) (* pattern matching *)
+ | M_PEctor of mu_ctor 'DBTY * list (asym 'bty) (* data constructor application *)
+ | M_PEcase of (asym 'bty) * list (mu_pattern 'DBTY * mu_pexpr 'DBTY 'bty) (* pattern matching *)
  | M_PEarray_shift of (asym 'bty) * ctype * (asym 'bty) (* pointer array shift *)
  | M_PEmember_shift of (asym 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of asym 'bty (* boolean not *)
@@ -115,8 +115,8 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
  (* | M_PEcfunction of asym 'bty (\* C function pointer expression *\) *)
  | M_PEmemberof of symbol * Symbol.identifier * asym 'bty (* C struct/union member access *)
  | M_PEcall of mu_name * list (asym 'bty) (* pure function call *)
- | M_PElet of (mu_sym_or_pattern 'bty) * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure let *)
- | M_PEif of asym 'bty * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure if *)
+ | M_PElet of (mu_sym_or_pattern 'DBTY 'bty) * (mu_pexpr 'DBTY 'bty) * (mu_pexpr 'DBTY 'bty) (* pure let *)
+ | M_PEif of asym 'bty * (mu_pexpr 'DBTY 'bty) * (mu_pexpr 'DBTY 'bty) (* pure if *)
  (* | M_PEis_scalar of asym 'bty
   * | M_PEis_integer of asym 'bty
   * | M_PEis_signed of asym 'bty
@@ -124,8 +124,8 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
   * | M_PEis_unsigned of asym 'bty
   * | M_PEare_compatible of asym 'bty * asym 'bty *)
 
-and mu_pexpr 'bty = 
- | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'bty)
+and mu_pexpr 'DBTY 'bty = 
+ | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'DBTY 'bty)
 
 
 
@@ -174,30 +174,30 @@ type mu_memop 'bty =
   | M_Va_arg of (asym 'bty * actype 'bty)
   | M_Va_end of (asym 'bty)
 
-type mu_expr_ 'bty =  (* (effectful) expression *)
- | M_Epure of (mu_pexpr 'bty)
+type mu_expr_ 'DBTY 'bty =  (* (effectful) expression *)
+ | M_Epure of (mu_pexpr 'DBTY 'bty)
  | M_Ememop of mu_memop 'bty
  | M_Eaction of (mu_paction 'bty) (* memory action *)
- | M_Ecase of asym 'bty * list (mu_pattern * (mu_expr 'bty)) (* pattern matching *)
- | M_Elet of (mu_sym_or_pattern 'bty) * (mu_pexpr 'bty) * (mu_expr 'bty)
- | M_Eif of asym 'bty * (mu_expr 'bty) * (mu_expr 'bty)
+ | M_Ecase of asym 'bty * list (mu_pattern 'DBTY * (mu_expr 'DBTY 'bty)) (* pattern matching *)
+ | M_Elet of (mu_sym_or_pattern 'DBTY 'bty) * (mu_pexpr 'DBTY 'bty) * (mu_expr 'DBTY 'bty)
+ | M_Eif of asym 'bty * (mu_expr 'DBTY 'bty) * (mu_expr 'DBTY 'bty)
  | M_Eskip
  | M_Eccall of (actype 'bty) * asym 'bty * list (asym 'bty) (* C function call *)
  | M_Eproc of mu_name * list (asym 'bty) (* Core procedure call *)
- (* | M_Eunseq of list (mu_expr 'bty) (\* unsequenced expressions *\) *)
- | M_Ewseq of mu_pattern * (mu_expr 'bty) * (mu_expr 'bty) (* weak sequencing *)
- | M_Esseq of mu_pattern * (mu_expr 'bty) * (mu_expr 'bty) (* strong sequencing *)
- (* | M_Easeq of (symbol * mu_base_type) * (mu_action 'bty) * (mu_paction 'bty) (\* atomic sequencing *\) *)
- (* | M_Eindet of nat * (mu_expr 'bty) (\* indeterminately sequenced expr *)
- | M_Ebound of nat * (mu_expr 'bty) (* $\ldots$and boundary *)
- | M_End of list (mu_expr 'bty) (* nondeterministic choice *)
- | M_Esave of (symbol * mu_base_type) * list (symbol * (mu_base_type * asym 'bty)) * (mu_expr 'bty) (* save label *)
+ (* | M_Eunseq of list (mu_expr 'DBTY 'bty) (\* unsequenced expressions *\) *)
+ | M_Ewseq of mu_pattern 'DBTY * (mu_expr 'DBTY 'bty) * (mu_expr 'DBTY 'bty) (* weak sequencing *)
+ | M_Esseq of mu_pattern 'DBTY * (mu_expr 'DBTY 'bty) * (mu_expr 'DBTY 'bty) (* strong sequencing *)
+ (* | M_Easeq of (symbol * 'DBTY) * (mu_action 'bty) * (mu_paction 'bty) (\* atomic sequencing *\) *)
+ (* | M_Eindet of nat * (mu_expr 'DBTY 'bty) (\* indeterminately sequenced expr *)
+ | M_Ebound of nat * (mu_expr 'DBTY 'bty) (* $\ldots$and boundary *)
+ | M_End of list (mu_expr 'DBTY 'bty) (* nondeterministic choice *)
+ | M_Esave of (symbol * 'DBTY) * list (symbol * ('DBTY * asym 'bty)) * (mu_expr 'DBTY 'bty) (* save label *)
  | M_Erun of symbol * list (asym 'bty) (* run from label *)
- (* | M_Epar of list (mu_expr 'bty) (\* cppmem-like thread creation *\) *)
+ (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
  (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
 
-and mu_expr 'bty = 
- | M_Expr of list annot * (mu_expr_ 'bty)
+and mu_expr 'DBTY 'bty = 
+ | M_Expr of list annot * (mu_expr_ 'DBTY 'bty)
 
 
 
@@ -207,27 +207,27 @@ let embed_pexpr_expr pe =
   M_Expr annots (M_Epure pe)
 
 
-type mu_impl_decl 'bty =
-  | M_Def of mu_base_type * mu_pexpr 'bty
-  | M_IFun of mu_base_type * list (symbol * mu_base_type) * mu_pexpr 'bty
+type mu_impl_decl 'DBTY 'bty =
+  | M_Def of 'DBTY * mu_pexpr 'DBTY 'bty
+  | M_IFun of 'DBTY * list (symbol * 'DBTY) * mu_pexpr 'DBTY 'bty
 
-type mu_impl 'bty = map Implementation.implementation_constant (mu_impl_decl 'bty)
+type mu_impl 'DBTY 'bty = map Implementation.implementation_constant (mu_impl_decl 'DBTY 'bty)
 
-type mu_fun_map_decl 'bty =
-  | M_Fun of mu_base_type * list (symbol * mu_base_type) * mu_pexpr 'bty
-  | M_Proc of Loc.t * mu_base_type * list (symbol * mu_base_type) * mu_expr 'bty
-  | M_ProcDecl of Loc.t * mu_base_type * list mu_base_type
-  | M_BuiltinDecl of Loc.t * mu_base_type * list mu_base_type
+type mu_fun_map_decl 'DBTY 'bty =
+  | M_Fun of 'DBTY * list (symbol * 'DBTY) * mu_pexpr 'DBTY 'bty
+  | M_Proc of Loc.t * 'DBTY * list (symbol * 'DBTY) * mu_expr 'DBTY 'bty
+  | M_ProcDecl of Loc.t * 'DBTY * list 'DBTY
+  | M_BuiltinDecl of Loc.t * 'DBTY * list 'DBTY
 
-type mu_fun_map 'bty = map symbol (mu_fun_map_decl 'bty)
+type mu_fun_map 'DBTY 'bty = map symbol (mu_fun_map_decl 'DBTY 'bty)
 
-instance forall 'bty. (Located (mu_pexpr 'bty))
+instance forall 'DBTY 'bty. (Located (mu_pexpr 'DBTY 'bty))
   let locOf pe =
     let (M_Pexpr annots _ _) = pe in
     get_loc_ annots
 end
 
-instance forall 'bty. (Located (mu_expr 'bty))
+instance forall 'DBTY 'bty. (Located (mu_expr 'DBTY 'bty))
   let locOf e =
     let (M_Expr annots _) = e in
     get_loc_ annots
@@ -238,25 +238,25 @@ type mu_linking_kind = Core.linking_kind
 
 type mu_extern_map = Core.extern_map
 
-type mu_globs 'bty=
-  | M_GlobalDef of mu_base_type * mu_expr 'bty
-  | M_GlobalDecl of mu_base_type
+type mu_globs 'DBTY 'bty =
+  | M_GlobalDef of 'DBTY * mu_expr 'DBTY 'bty
+  | M_GlobalDecl of 'DBTY
 
-type mu_globs_map 'bty =
-  map symbol (mu_globs 'bty)
+type mu_globs_map 'DBTY 'bty =
+  map symbol (mu_globs 'DBTY 'bty)
 
 type mu_tag_definitions = Core.core_tag_definitions
 
 type mu_funinfo = Loc.t * Annot.attributes * ctype * list (maybe symbol * ctype) * bool * bool
 
 (* a Core file is just a set of named functions *)
-type mu_file 'bty = <|
+type mu_file 'DBTY 'bty = <|
   mu_main    : maybe symbol;
   mu_tagDefs : mu_tag_definitions;
-  mu_stdlib  : mu_fun_map 'bty;
-  mu_impl    : mu_impl 'bty;
-  mu_globs   : list (symbol * mu_globs 'bty);
-  mu_funs    : mu_fun_map 'bty;
+  mu_stdlib  : mu_fun_map 'DBTY 'bty;
+  mu_impl    : mu_impl 'DBTY 'bty;
+  mu_globs   : list (symbol * mu_globs 'DBTY 'bty);
+  mu_funs    : mu_fun_map 'DBTY 'bty;
   mu_extern  : mu_extern_map;
   mu_funinfo : map symbol mu_funinfo;
 |>

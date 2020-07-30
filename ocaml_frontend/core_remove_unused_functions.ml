@@ -451,10 +451,11 @@ let remove_unused_functions file =
 
   (* transitively close deps first? *)
 
-  let nothing_depends deps d = 
-    not ((DefRel.exists (fun (a,b) -> b = d)) deps) in
+  let nothing_else_depends deps this = 
+    not ((DefRel.exists (fun (a,b) -> a <> this && b = this)) deps) in
 
-  let can_remove deps d = not (DefSet.mem d s.keep) && nothing_depends deps d in
+  let can_remove deps d = not (DefSet.mem d s.keep) && 
+                            nothing_else_depends deps d in
 
   let rec only_used maybe_remove deps = 
     match List.filter (can_remove deps) maybe_remove with

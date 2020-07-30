@@ -10,7 +10,7 @@ let return = CF.Exception.except_return
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = unit CF.Mucore.mu_file
+type mu_file = (CF.Core.core_base_type,unit) CF.Mucore.mu_file
 type file = 
   | CORE of core_file
   | MUCORE of mu_file
@@ -23,7 +23,7 @@ let print_file ?(remove_path = false) filename file =
        (CF.Pp_core.Basic.pp_file file);
   | MUCORE file ->
      CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
-       (CF.Pp_mucore.Basic.pp_file None file);
+       (CF.Pp_mucore.Basic_CBT.pp_file None file);
 
 
 module Log : sig 

@@ -60,6 +60,18 @@ let pmap_iterM f m =
   Pmap.fold (fun k v m -> let* () = m in f k v) 
     m (return ())
 
+let pmap_mapM 
+      (f: 'k -> 'v -> ('w,'e) t)
+      (m : ('k,'v) Pmap.map)
+      (cmp: 'k -> 'k -> int)
+    : (('k,'w) Pmap.map, 'e) t
+  = 
+  pmap_foldM (fun k v m -> 
+      let* v' = f k v in 
+      return (Pmap.add k v' m)
+    ) m (Pmap.empty cmp)
+
+
 let tryM (m : ('a,'e1) exceptM) (m' : ('a,'e2) exceptM) =
   match m with
   | Result a -> Result a
