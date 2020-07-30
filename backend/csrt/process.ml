@@ -7,6 +7,121 @@ open TypeErrors
 open FunctionTypes
 open ReturnTypes
 open Subst
+open BaseTypes
+
+module RE = Resources
+
+
+
+
+(* brittle. revisit later *)
+let make_fun_arg_type genv asym loc ct =
+  let open RT in
+  let ct = Conversions.make_pointer_ctype ct in
+
+  let rec aux pointed (aname,rname) (CF.Ctype.Ctype (annots, ct_)) =
+    let open Conversions in
+    match ct_ with
+    | Void -> 
+       let arg = (BT.Unit, I) in
+       let ret = (BT.Unit, I) in
+       return (arg,ret)
+    | Basic (Integer it) -> 
+       let* ((_,abt), aconstr) = integerType loc aname it in
+       let* ((_,rbt), rconstr) = integerType loc rname it in
+       let arg = (abt, Constraint (aconstr,I)) in
+       let ret = (rbt, Constraint (rconstr,I)) in
+       return (arg, ret)
+    | Array (ct, _maybe_integer) ->
+       let arg = (Array, I) in
+       let ret = (Array, I) in
+       return (arg, ret)
+    | Pointer (_qualifiers, ct) ->
+       let aname2 = Sym.fresh () in
+       let rname2 = Sym.fresh () in
+       let* ((abt,ftt),(rbt,rtt)) = aux true (aname2,rname2) ct in
+       let* size = Memory.size_of_ctype loc ct in
+       begin match ct with
+       | CF.Ctype.Ctype (_, Struct s) ->
+          let* arg = 
+            let* (stored,lbindings,rbindings) = 
+              Check.store_struct loc genv (Tag s) (S aname) (Some (S aname2)) in
+            let* abindings = 
+              explode_struct_in_binding loc genv (Tag s) (S aname2)
+                (lbindings @@ Resource (StoredStruct stored, I) @@ 
+                 rbindings @@ ftt)
+            in
+            return (Loc, abindings)
+          in
+          let* ret = 
+            let* (stored,lbindings,rbindings) = 
+              Check.store_struct loc genv (Tag s) (S aname) (Some (S rname2)) in
+            let* abindings = 
+              explode_struct_in_binding loc genv (Tag s) (S rname2)
+                (lbindings @@ Resource (StoredStruct stored, I) @@ 
+                 rbindings @@ rtt)
+            in
+            return (Loc, abindings)
+          in
+          return (arg, ret)
+       | _ ->
+          let* arg = 
+            let apoints = RE.Points {pointer = S aname; pointee = Some (S aname2); size}  in
+            return (Loc, Logical (aname2, Base abt, Resource (apoints, ftt)))
+          in
+          let* ret = 
+            let rpoints = RE.Points {pointer = S aname; pointee = Some (S rname2); size} in
+            return (Loc, Logical (rname2, Base rbt, Resource (rpoints, rtt)))
+          in
+          return (arg, ret)
+       end
+    (* fix *)
+    | Atomic ct -> 
+       aux pointed (aname,rname) ct
+    | Struct tag -> 
+       let* decl = Global.get_struct_decl loc genv (Tag tag) in
+       let ftt = RT.subst_var_l {s=decl.closed_type.sbinder; swith=S aname }
+                   decl.closed_type.souter in
+       let rtt = RT.subst_var_l {s=decl.closed_type.sbinder; swith=S rname }
+                   decl.closed_type.souter in
+       let arg = (Struct (Tag tag), ftt) in
+       let ret = (Struct (Tag tag), rtt) in
+       return (arg, ret)
+    | Basic (Floating _) -> floatingType loc 
+    | Union sym -> fail loc (Unsupported !^"todo: union types")
+    | Function _ -> fail loc (Unsupported !^"function pointers")
+  in
+
+  let* ((abt,arg),(_,ret)) = aux false (asym, Sym.fresh_pretty "return") ct in
+  
+  let ftt = Conversions.logical_returnType_to_argumentType arg in
+  let arg = Tools.comp (FT.mcomputational asym abt) ftt in
+  return ((arg : FT.t -> FT.t),(ret : RT.l))
+
+
+
+let make_fun_spec loc genv attrs args ret_ctype = 
+  let open FT in
+  let open RT in
+  let* (arguments, returns) = 
+    fold_leftM (fun (args,returns) (msym, ct) ->
+        let name = match msym with
+          | Some sym -> sym
+          | None -> Sym.fresh ()
+        in
+        let* (arg,ret) = 
+          make_fun_arg_type genv name loc ct in
+        let args = Tools.comp args arg in
+        return (args, returns @@ ret)
+      ) 
+      ((fun ft -> ft), I) args
+  in
+  let* (Computational (ret_name,bound,ret)) = 
+    Conversions.ctype true loc (Sym.fresh ()) ret_ctype in
+  let ftyp = arguments (Return (RT.Computational (ret_name,bound, RT.(@@) ret returns))) in
+  return ftyp
+
+
 
 
 
@@ -17,7 +132,7 @@ let record_functions genv funinfo : (Global.t, Locations.t * 'e) Except.t  =
       if is_variadic 
       then fail loc (Variadic_function fsym) 
       else
-        let* ftyp = Conversions.make_fun_spec loc genv attrs args ret_ctype in
+        let* ftyp = make_fun_spec loc genv attrs args ret_ctype in
         return { genv with fun_decls = SymMap.add fsym (loc,ftyp) genv.fun_decls }
     ) funinfo genv
 

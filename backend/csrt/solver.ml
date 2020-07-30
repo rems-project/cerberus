@@ -217,24 +217,21 @@ let negate (LogicalConstraints.LC c) =
   (LogicalConstraints.LC (Not c))
 
 let constraint_holds loc {local;global} c = 
-  let open PPrint in
   let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: Local.all_constraints local) in
   let* constrs = 
     mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
-  let* () = debug_print 4 (action "checking satisfiability of constraints") in
-  let* () = debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) (LogicalConstraints.pp true) lcs)) in
   let* checked = z3_check loc ctxt solver constrs in
   match checked with
   | UNSATISFIABLE -> 
-     let* () = debug_print 2 (blank 3 ^^ !^"unsatisfiable") in
+     (* let* () = debug_print 2 (blank 3 ^^ !^"unsatisfiable") in *)
      return (true,ctxt,solver)
   | SATISFIABLE -> 
-     let* () = debug_print 2 (blank 3 ^^ !^"satisfiable") in
+     (* let* () = debug_print 2 (blank 3 ^^ !^"satisfiable") in *)
      return (false,ctxt,solver)
   | UNKNOWN ->
-     let* () = warn !^"constraint solver returned unknown" in
+     (* let* () = warn !^"constraint solver returned unknown" in *)
      return (false,ctxt,solver)
 
 

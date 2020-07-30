@@ -80,9 +80,100 @@ let error pp =
 type 'a asyms = ('a asym) list
 
 
-let check_base_type (loc: Loc.t) (has: BT.t) (expected: BT.t) : unit m =
-  if BT.equal has expected then return () 
-  else fail loc (Mismatch {has = (Base has); expect = Base expected})
+let check_logical_sort (loc: Loc.t) (has: LS.t) (expect: LS.t) : unit m =
+  if BT.equal has expect then return () else fail loc (Mismatch {has; expect})
+
+let check_base_type (loc: Loc.t) (has: BT.t) (expect: BT.t) : unit m =
+  check_logical_sort loc (LS.Base has) (LS.Base expect)
+
+
+
+
+
+
+let rec infer_index_term (loc: Loc.t) (env: E.t) (it: IT.t) : LS.t m = 
+  match it with
+  | Num _ -> return (Base Int)
+  | Bool _ -> return (Base Bool)
+  | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
+  | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t')  ->
+     let* () = check_index_term loc env (Base Int) t in
+     let* () = check_index_term loc env (Base Int) t' in
+     return (Base Int)
+  | EQ (t,t') | NE (t,t') | LT (t,t')
+  | GT (t,t') | LE (t,t') | GE (t,t') ->
+     let* () = check_index_term loc env (Base Int) t in
+     let* () = check_index_term loc env (Base Int) t' in
+     return (Base Bool)
+  | Null t ->
+     let* () = check_index_term loc env (Base Loc) t in
+     return (Base Bool)
+  | And (t,t') | Or (t,t') | Impl (t,t') ->
+     let* () = check_index_term loc env (Base Bool) t in
+     let* () = check_index_term loc env (Base Bool) t' in
+     return (Base Bool)
+  | Not t ->
+     let* () = check_index_term loc env (Base Bool) t in
+     return (Base Bool)
+  | Tuple its ->
+     let* ts = 
+       mapM (fun it -> 
+           let* (Base bt) = infer_index_term loc env it in
+           return bt
+         ) its in
+     return (Base (BT.Tuple ts))
+  | Nth (n,it') ->
+     let* t = infer_index_term loc env it' in
+     begin match t with
+     | Base (Tuple ts) ->
+        begin match List.nth_opt ts n with
+        | Some t -> return (Base t)
+        | None -> fail loc (Illtyped_it it)
+        end
+     | _ -> fail loc (Illtyped_it it)
+     end
+  | Member (tag, it', member) ->
+     let* () = check_index_term loc env (Base (Struct tag)) it' in
+     let* decl = Global.get_struct_decl loc env.global tag in
+     let* bt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
+     return (Base bt)
+  | MemberOffset (tag, it', member) ->
+     let* () = check_index_term loc env (Base (Struct tag)) it' in
+     let* decl = Global.get_struct_decl loc env.global tag in
+     let* _ = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
+     return (Base Loc)
+  | Nil bt -> 
+     return (Base bt)
+  | Cons (it1,it2) ->
+     let* (Base item_bt) = infer_index_term loc env it1 in
+     let* () = check_index_term loc env (Base (List item_bt)) it2 in
+     return (Base (List item_bt))
+  | List (its,bt) ->
+     let* _ = mapM (check_index_term loc env (Base bt)) its in
+     return (Base bt)
+  | Head it' ->
+     let* ls = infer_index_term loc env it' in
+     begin match ls with
+     | Base (List bt) -> return (Base bt)
+     | _ -> fail loc (Illtyped_it it)
+     end
+  | Tail it' ->
+     let* ls = infer_index_term loc env it in
+     begin match ls with
+     | Base (List bt) -> return (Base (List bt))
+     | _ -> fail loc (Illtyped_it it)
+     end
+  | S s ->
+     get_l loc env.local s
+
+and check_index_term loc env (ls: LS.t) (it: IT.t) : unit m = 
+  let* ls' = infer_index_term loc env it in
+  if LS.equal ls ls' then return ()
+  else fail loc (Illtyped_it it)
+
+
+
+
 
 
 
@@ -215,11 +306,12 @@ let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m
   at_most_one loc !^"multiple matching resources" found
 
 
-let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) : ((Sym.t * RE.points) option) m = 
+let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size) 
+    : ((Sym.t * RE.points) option) m = 
   let* points = 
     filter_rM (fun name t ->
         match t with
-        | RE.Points p ->
+        | RE.Points p when Num.equal p.size size ->
            let* holds = Solver.equal loc {local;global} loc_it p.pointer in
            return (if holds then Some (name,p) else None)
         | _ -> 
@@ -229,7 +321,7 @@ let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) : ((Sym.t * RE.points) 
   at_most_one loc !^"multiple points-to for same pointer" points
 
 
-let stored_struct_to_of_tag (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: tag) : ((Sym.t * RE.stored_struct) option) m = 
+let stored_struct_to (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: tag) : ((Sym.t * RE.stored_struct) option) m = 
   let* stored = 
     filter_rM (fun name t ->
         match t with
@@ -266,10 +358,12 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:R
      let* decl = Global.get_struct_decl loc global s.tag in
      fold_leftM (fun local (member,member_pointer) ->
          let bt = List.assoc member decl.raw  in
+         let ct = List.assoc member decl.ctypes  in
+         let* size = Memory.size_of_ctype loc ct in
          let* local = use_resource loc re_name [loc] local in
          let shape = match bt with
            | Struct tag -> StoredStruct_ (member_pointer, tag)
-           | _ -> Points_ member_pointer
+           | _ -> Points_ (member_pointer,size)
          in
          let* o_member_resource = match_resource loc {local;global} shape in
          match o_member_resource with
@@ -280,90 +374,77 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:R
      use_resource loc re_name [loc] local
 
 
+let rec store_struct (loc: Loc.t) (global: Global.t) (tag: BT.tag) (pointer: IT.t) (o_value: IT.t option) =
+  (* does not check for the right to write, this is done elsewhere *)
+  let open RT in
+  let* decl = Global.get_struct_decl loc global tag in
+  let rec aux = function
+    | (member,bt)::members ->
+       let member_pointer = fresh () in
+       let pointer_constraint = 
+         LC (IT.S member_pointer %= IT.MemberOffset (tag,pointer,member)) in
+       let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
+       let* (mapping,lbindings,rbindings) = aux members in
+       let* (lbindings',rbindings') = match bt with
+         | Struct tag2 -> 
+            let* (stored_struct,lbindings2,rbindings2) = 
+              store_struct loc global tag2 (S member_pointer) o_member_value in
+            return (Logical (member_pointer, Base Loc, 
+                      Constraint (pointer_constraint, lbindings2@@lbindings)),
+                    Resource (StoredStruct stored_struct, rbindings2@@rbindings))
+         | _ -> 
+            let* size = Memory.size_of_ctype loc (assoc member decl.ctypes) in
+            let points = {pointer = S member_pointer; pointee = o_member_value; size} in
+            return (Logical (member_pointer, Base Loc, Constraint (pointer_constraint, I)),
+                    Resource (Points points, I))
+       in
+       return ((member,S member_pointer)::mapping, lbindings', rbindings')
+    | [] -> return ([],I,I)
+  in  
+  let* (members,lbindings,rbindings) = aux decl.raw in
+  let* size = Memory.size_of_struct_type loc tag in
+  let stored = {pointer; tag; size; members} in
+  return (stored, lbindings, rbindings)
+
+let load_point loc {local;global} pointer size bt path is_field = 
+  let* o_resource = points_to loc {local;global} pointer size in
+  let* pointee = match o_resource, is_field with
+    | None, false -> fail loc (Generic !^"missing ownership of load location")
+    | None, true -> fail loc (Generic !^"missing ownership of struct field")
+    | Some (_,{pointee = None; _}), false -> fail loc (Generic !^"load location uninitialised")
+    | Some (_,{pointee = None; _}), true -> fail loc (Generic !^"load location uninitialised")
+    | Some (_,{pointee = Some pointee; _}),_  -> 
+       return pointee
+  in
+  let* vbt = infer_index_term loc {local;global} pointee in
+  let* () = check_logical_sort loc vbt (Base bt) in
+  return [LC (path %= pointee)]
+  
+let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (path: IT.t) =
+  let open RT in
+  let* o_resource = stored_struct_to loc {local;global} pointer tag in
+  let* decl = Global.get_struct_decl loc global tag in
+  let* (_,stored) = match o_resource with
+    | None -> fail loc (Generic !^"missing ownership for loading the struct")
+    | Some s -> return s
+  in
+  let rec aux = function
+    | (member,member_pointer)::members ->
+       let member_bt = assoc member decl.raw in
+       let member_path = IT.Member (tag, path, member) in
+       let* member_size = Memory.size_of_ctype loc (assoc member decl.ctypes) in
+       let* constraints = aux members in
+       let* constraints2 = match member_bt with
+         | Struct tag2 -> load_struct loc {local;global} tag2 member_pointer member_path
+         | _ -> load_point loc {local;global} member_pointer member_size member_bt member_path true
+       in
+       return (constraints2@constraints)
+    | [] -> return []
+  in  
+  aux stored.members
 
 
 
-
-
-let rec infer_index_term (loc: Loc.t) (env: E.t) (it: IT.t) : LS.t m = 
-  match it with
-  | Num _ -> return (Base Int)
-  | Bool _ -> return (Base Bool)
-  | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
-  | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t')  ->
-     let* () = check_index_term loc env (Base Int) t in
-     let* () = check_index_term loc env (Base Int) t' in
-     return (Base Int)
-  | EQ (t,t') | NE (t,t') | LT (t,t')
-  | GT (t,t') | LE (t,t') | GE (t,t') ->
-     let* () = check_index_term loc env (Base Int) t in
-     let* () = check_index_term loc env (Base Int) t' in
-     return (Base Bool)
-  | Null t ->
-     let* () = check_index_term loc env (Base Loc) t in
-     return (Base Bool)
-  | And (t,t') | Or (t,t') | Impl (t,t') ->
-     let* () = check_index_term loc env (Base Bool) t in
-     let* () = check_index_term loc env (Base Bool) t' in
-     return (Base Bool)
-  | Not t ->
-     let* () = check_index_term loc env (Base Bool) t in
-     return (Base Bool)
-  | Tuple its ->
-     let* ts = 
-       mapM (fun it -> 
-           let* (Base bt) = infer_index_term loc env it in
-           return bt
-         ) its in
-     return (Base (BT.Tuple ts))
-  | Nth (n,it') ->
-     let* t = infer_index_term loc env it' in
-     begin match t with
-     | Base (Tuple ts) ->
-        begin match List.nth_opt ts n with
-        | Some t -> return (Base t)
-        | None -> fail loc (Illtyped_it it)
-        end
-     | _ -> fail loc (Illtyped_it it)
-     end
-  | Member (tag, it', member) ->
-     let* () = check_index_term loc env (Base (Struct tag)) it' in
-     let* decl = Global.get_struct_decl loc env.global tag in
-     let* bt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
-     return (Base bt)
-  | MemberOffset (tag, it', member) ->
-     let* () = check_index_term loc env (Base (Struct tag)) it' in
-     let* decl = Global.get_struct_decl loc env.global tag in
-     let* _ = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
-     return (Base Loc)
-  | Nil bt -> 
-     return (Base bt)
-  | Cons (it1,it2) ->
-     let* (Base item_bt) = infer_index_term loc env it1 in
-     let* () = check_index_term loc env (Base (List item_bt)) it2 in
-     return (Base (List item_bt))
-  | List (its,bt) ->
-     let* _ = mapM (check_index_term loc env (Base bt)) its in
-     return (Base bt)
-  | Head it' ->
-     let* ls = infer_index_term loc env it' in
-     begin match ls with
-     | Base (List bt) -> return (Base bt)
-     | _ -> fail loc (Illtyped_it it)
-     end
-  | Tail it' ->
-     let* ls = infer_index_term loc env it in
-     begin match ls with
-     | Base (List bt) -> return (Base (List bt))
-     | _ -> fail loc (Illtyped_it it)
-     end
-  | S s ->
-     get_l loc env.local s
-
-and check_index_term loc env (ls: LS.t) (it: IT.t) : unit m = 
-  let* ls' = infer_index_term loc env it in
-  if LS.equal ls ls' then return ()
-  else fail loc (Illtyped_it it)
 
 
 
@@ -901,7 +982,7 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
        let tag = Tag tag in
        let* (bt,lname) = get_a loc sym local in
        let* () = check_base_type loc bt Loc in
-       let* stored_struct = stored_struct_to_of_tag loc {local;global} (S lname) tag in
+       let* stored_struct = stored_struct_to loc {local;global} (S lname) tag in
        let* members = match stored_struct with
          | Some (_,{members; _}) -> return members
          | _ -> fail loc (Generic (!^"this location does not contain a struct with tag" ^^^ pp_tag tag))
@@ -1076,14 +1157,13 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           let* (bt,lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) bt Loc in
           (* check more things? *)
-          let* constr = match ct with
-            | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
-               let* stored = stored_struct_to_of_tag loc {local;global} (S lname) (Tag tag) in
-               return (LC (S ret %= Bool (is_some stored)))
-            | _ ->
-               let* points = points_to loc {local;global} (S lname) in
-               return (LC (S ret %= Bool (is_some points)))
+          let* size = Memory.size_of_ctype loc ct in
+          let shape = match bt with
+            | Struct tag -> StoredStruct_ (S lname, tag)
+            | _ -> Points_ (S lname,size)
           in
+          let* o_resource = match_resource loc {local;global} shape in
+          let constr = LC (S ret %= Bool (is_some o_resource)) in
           let ret = Computational (ret, Bool, Constraint (constr, I)) in
           return (ret, local)
        | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
@@ -1107,7 +1187,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           let* rt = match ct with
             | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
                let* (stored,lbindings,rbindings) = 
-                 Conversions.make_stored_struct loc global (Tag tag) (S ret) None in
+                 store_struct loc global (Tag tag) (S ret) None in
                return (Computational (ret, Loc, lbindings @@
                        Resource (StoredStruct stored, rbindings)))
             | _ ->
@@ -1150,109 +1230,39 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
              the right thing. *)
-          let rec store (local: L.t) (pointer: IT.t) (is_field: bool) ct size (this: IT.t) : (L.t * RT.l) m =
-            let* () = debug_print 3 (action ("checking store at pointer " ^ plain (IT.pp false pointer))) in
-            let* () = debug_print 3 (blank 3 ^^ item "ctype" (pp_ctype ct)) in
-            let* () = debug_print 3 (blank 3 ^^ item "value" (IT.pp false this)) in
-            begin match ct with
-            | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
-               let* owned = stored_struct_to_of_tag loc {local;global} pointer (Tag tag) in
-               let* (r,stored) = match owned with
-                 | Some (r,stored) ->
-                    if not (Num.equal size stored.size)
-                    then fail loc (Generic !^"store of different size")
-                    else return (r,stored)
-                 | None -> fail loc (Generic !^"store location is not of struct type" )
-               in
-               let rec aux (local,acc_bindings) = function
-                 | (member,member_pointer) :: members ->
-                    let* decl = Global.get_struct_decl loc global (Tag tag) in
-                    let ct = assoc member decl.ctypes in
-                    let* size = Memory.size_of_ctype loc ct in
-                    let* (local, bindings) = 
-                      store local member_pointer true ct size (Member (Tag tag, this, member)) in
-                    aux (local, acc_bindings@@bindings) members
-                 | [] ->
-                    return (local, acc_bindings)
-               in
-               aux (local,I) stored.members
-            | _ ->                
-               let* does_point = points_to ploc {local;global} pointer in
-               let* (r,p) = match does_point with
-                 | Some (r,p) -> 
-                    if Num.equal size p.size
-                    then return (r,p)
-                    else fail loc (Generic !^"store of different size")
-                 | None -> 
-                    if is_field then fail loc (Generic !^"missing ownership of struct field" )
-                    else fail loc (Generic !^"missing ownership of store location" )
-               in
-               let* local = use_resource loc r [loc] local in
-               let bindings = Resource (Points {p with pointee = Some this}, I) in
-               return (local,bindings)
-          end in
-          let* (local,bindings) = store local (S plname) false ct size (S vlname) in
+          let resource_shape = match vbt with
+            | Struct tag -> StoredStruct_ (S plname, tag)
+            | _ -> Points_ (S plname,size)
+          in
+          let* o_resource = match_resource loc {local;global} resource_shape in
+          let* local = match o_resource with
+            | Some (rname,r) -> remove_owned_subtree loc {local;global} (rname,r)
+            | None -> fail loc (Generic !^"missing ownership for store")
+          in
+          let* bindings = match vbt with
+          | Struct tag -> 
+             let* (stored,lbindings,rbindings) = 
+               store_struct loc global tag (S plname) (Some (S vlname)) in
+             return (lbindings @@ Resource (StoredStruct stored, rbindings))
+           | _ -> 
+             let resource = Points {pointer = S plname; pointee = Some (S vlname); size} in
+             return (Resource (resource, I))
+          in
           let rt = Computational (fresh (), Unit, bindings) in
-          return (rt, local)
+          return (rt,local)
        | M_Load (A (_,_,ct), A (ap,_,psym), _mo) -> 
-          let* size = Memory.size_of_ctype loc ct in
           let ploc = Loc.update loc ap in
           let* (pbt,plname) = get_a ploc psym local in
-          (* check pointer *)
           let* () = check_base_type loc pbt BT.Loc in
+          let* bt = Conversions.bt_of_ctype loc ct in
+          let* size = Memory.size_of_ctype loc ct in
           let ret = fresh () in
-          let rec load (pointer: IT.t) (is_field: bool) ct size (this: IT.t) : (BT.t * LC.t list, Loc.t * TypeErrors.t) Except.t = 
-            let* () = debug_print 3 (action ("checking load at pointer " ^ plain (IT.pp false pointer))) in
-            let* () = debug_print 3 (blank 3 ^^ item "ctype" (pp_ctype ct)) in
-            match ct with
-            | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
-               let* owned = stored_struct_to_of_tag loc {local;global} pointer (Tag tag) in
-               let* (r,stored) = match owned with
-                 | Some (r,stored) -> 
-                    if not (Num.equal size stored.size) 
-                    then fail loc (Generic !^"load of different size")
-                    else return (r,stored)
-                 | None -> fail loc (Generic !^"load location does not contain a stored struct" )
-               in 
-               let rec aux acc_constrs = function
-                 | (member,member_pointer) :: members ->
-                    let* decl = Global.get_struct_decl loc global (Tag tag) in
-                    let spec_bt = List.assoc member decl.raw in
-                    let ct = assoc member decl.ctypes in
-                    let* size = Memory.size_of_ctype loc ct in
-                    let* (has_bt, constrs) = 
-                      load member_pointer true ct size (Member (Tag tag, this, member)) in
-                    let* () = check_base_type ploc has_bt spec_bt in
-                    aux (acc_constrs@constrs) members
-                 | [] ->
-                    return acc_constrs
-               in
-               let* constrs = aux [] stored.members in
-               return (Struct (Tag tag), constrs)
-            | _ ->
-               let* does_point = points_to ploc {local;global} pointer in
-               let* (pointee,ct') = match does_point with
-                 | Some (r,{pointee = Some pointee;size=size';_}) -> 
-                    if not (Num.equal size size') 
-                    then fail loc (Generic !^"load of different size")
-                    else return (pointee,typ)
-                 | Some (r,_) -> 
-                    if is_field then fail loc (Generic !^"struct field uninitialised" )
-                    else fail loc (Generic !^"load location uninitialised" )
-                 | None -> 
-                    if is_field then fail loc (Generic !^"missing ownership of struct field" )
-                    else fail loc (Generic !^"missing ownership of load location" )
-               in
-               let* (Base bt) = infer_index_term ploc {local;global} pointee in
-               let constr = LC (this %= pointee) in
-               return (bt, [constr])
+          let* lcs = match bt with
+            | Struct tag -> load_struct loc {local;global} tag (S plname) (S ret)
+            | _ -> load_point loc {local;global} (S plname) size bt (S ret) false
           in
-          let* (bt,constrs) = load (S plname) false ct size (S ret) in
-          let rec make_constrs = function
-            | [] -> I
-            | constr :: constrs -> Constraint (constr, make_constrs constrs)
-          in
-          let rt = Computational (ret, bt, make_constrs constrs) in
+          let constraints = fold_right RT.mconstraint lcs RT.I in
+          let rt = Computational (ret, bt, constraints) in
           return (rt,local)
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
           fail loc (Unsupported !^"todo: RMW")

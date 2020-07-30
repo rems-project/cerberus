@@ -6,19 +6,19 @@ module IT = IndexTerms
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 
-
+type size = Num.t
 
 
 type points = 
   { pointer: IT.t; 
     pointee: IT.t option; 
-    size: Num.t 
+    size: size 
   }
 
 type stored_struct =
   { pointer: IT.t;
     tag: BT.tag;
-    size: Num.t;
+    size: size;
     members: (BT.member * IT.t) list 
   }
 
@@ -157,20 +157,20 @@ let is_StoredStruct = function
 
 
 type shape = 
-  | Points_ of IT.t
+  | Points_ of IT.t * size
   | StoredStruct_ of IT.t * BT.tag
 
 let shape = function
-  | Points p -> Points_ p.pointer
+  | Points p -> Points_ (p.pointer,p.size)
   | StoredStruct s -> StoredStruct_ (s.pointer,s.tag)
 
 let shape_pointer = function
-  | Points_ p -> p
+  | Points_ (p,_) -> p
   | StoredStruct_ (p,_) -> p
 
 let match_shape shape resource = 
   match shape, resource with
-  | Points_ pointer, Points p' -> true
+  | Points_ (pointer,size), Points p' when Num.equal size p'.size -> true
   | StoredStruct_ (pointer,tag), StoredStruct s' -> tag = s'.tag
   | _ -> false
 

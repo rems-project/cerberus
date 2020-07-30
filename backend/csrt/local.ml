@@ -171,7 +171,7 @@ let mUC lc = mC (Sym.fresh ()) lc
 
 let pp_context_item print_used = function
   | Binding (sym,binding) -> VB.pp print_used (sym,binding)
-  | Marker -> fancystring (Colour.ansi_format [Magenta] "\u{2B1B}") 2
+  | Marker -> fancystring (Colour.ansi_format [Blue] "\u{25CF}") 2
 
 let pp (Local local) = 
   match local with
