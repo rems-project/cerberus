@@ -47,18 +47,46 @@ end
 
 module type PP_CORE =
 sig
-  (* type object_type *)
+
   type base_type
   type ct
-  (* val pp_object_type: object_type -> PPrint.document *)
-  val pp_base_type: base_type -> PPrint.document
-  val pp_object_value: (ct,'bty) mu_object_value -> PPrint.document
-  val pp_value: (ct,base_type,'bty) mu_value -> PPrint.document
-  val pp_params: (Symbol.sym * base_type) list -> PPrint.document
-  val pp_pexpr: budget -> (ct,base_type,'ty) mu_pexpr -> PPrint.document
-  val pp_expr: budget -> (ct,base_type,'ty) mu_expr -> PPrint.document
-  val pp_file: budget -> (ct,base_type,'ty) mu_file -> PPrint.document
 
+  val pp_base_type: 
+    base_type -> 
+    PPrint.document
+
+  val pp_object_value: 
+    (ct,'bty) mu_object_value -> 
+    PPrint.document
+
+  val pp_value: 
+    (ct,base_type,'bty) mu_value -> 
+    PPrint.document
+
+  val pp_params: 
+    (Symbol.sym * base_type) list -> 
+    PPrint.document
+
+  val pp_pexpr: 
+    budget -> 
+    (ct,base_type,'ty) mu_pexpr -> 
+    PPrint.document
+
+  val pp_expr: 
+    budget -> 
+    (ct,base_type,'ty) mu_expr -> 
+    PPrint.document
+
+  val pp_file: 
+    budget -> 
+    (ct mu_funinfo_type,
+     ct,
+     base_type,
+     ct mu_struct_def,
+     ct mu_union_def,
+     'ty) mu_file -> 
+    PPrint.document
+    
   val pp_funinfo: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * ct * (Symbol.sym option * ct) list * bool * bool) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * ct * (Symbol.sym option * ct) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document

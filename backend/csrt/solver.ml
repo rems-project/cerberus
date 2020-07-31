@@ -41,7 +41,7 @@ let rec bt_to_sort loc {local;global} ctxt bt =
      let* sorts = mapM (bt_to_sort loc {local;global} ctxt) bts in
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts)
   | Struct tag ->
-     let* decl = Global.get_struct_decl loc global tag in
+     let* decl = Global.get_struct_decl loc global.struct_decls tag in
      let rec aux = function
        | (member,bt) :: members ->
           let* (names,sorts) = aux members in
@@ -71,7 +71,7 @@ let rec of_index_term loc {local;global} ctxt it =
   let open IndexTerms in
 
   let member_to_fundecl tag member = 
-    let* decl = Global.get_struct_decl loc global tag in
+    let* decl = Global.get_struct_decl loc global.struct_decls tag in
     let* sort = ls_to_sort loc {local;global} ctxt (Base (Struct tag)) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in

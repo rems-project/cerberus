@@ -134,12 +134,12 @@ let rec infer_index_term (loc: Loc.t) (env: E.t) (it: IT.t) : LS.t m =
      end
   | Member (tag, it', member) ->
      let* () = check_index_term loc env (Base (Struct tag)) it' in
-     let* decl = Global.get_struct_decl loc env.global tag in
+     let* decl = Global.get_struct_decl loc env.global.struct_decls tag in
      let* bt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
      return (Base bt)
   | MemberOffset (tag, it', member) ->
      let* () = check_index_term loc env (Base (Struct tag)) it' in
-     let* decl = Global.get_struct_decl loc env.global tag in
+     let* decl = Global.get_struct_decl loc env.global.struct_decls tag in
      let* _ = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
      return (Base Loc)
   | Nil bt -> 
@@ -293,49 +293,7 @@ let pattern_match_rt (loc: Loc.t) (pat: mu_pattern) (Computational (s,bt,rt): RT
 
 
 
-let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m = 
-  let* found = 
-    filter_rM (fun name t -> 
-        if match_shape shape t then
-          let* equal = Solver.equal loc {local;global} (shape_pointer shape) (pointer t) in
-          return (if equal then Some (name,t) else None)
-        else 
-          return None
-      ) local
-  in
-  at_most_one loc !^"multiple matching resources" found
 
-
-let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size) 
-    : ((Sym.t * RE.points) option) m = 
-  let* points = 
-    filter_rM (fun name t ->
-        match t with
-        | RE.Points p when Num.equal p.size size ->
-           let* holds = Solver.equal loc {local;global} loc_it p.pointer in
-           return (if holds then Some (name,p) else None)
-        | _ -> 
-           return None
-      ) local
-  in
-  at_most_one loc !^"multiple points-to for same pointer" points
-
-
-let stored_struct_to (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: tag) : ((Sym.t * RE.stored_struct) option) m = 
-  let* stored = 
-    filter_rM (fun name t ->
-        match t with
-        | RE.StoredStruct s when s.tag = tag ->
-           let* holds = Solver.equal loc {local;global} loc_it s.pointer in
-           return (if holds then Some (name,s) else None)
-        | _ -> 
-           return None
-      ) local
-  in
-  at_most_one loc !^"multiple points-to for same pointer" stored
-
-let match_concrete_resource (loc: Loc.t) {local;global} (resource: RE.t) : ((Sym.t * RE.t) option) m = 
-  match_resource loc {local;global} (RE.shape resource)
 
 
 
@@ -352,15 +310,63 @@ let pp_unis (unis: (IT.t Uni.t) SymMap.t) : Pp.document =
 
 
 
+let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m = 
+  let* found = 
+    Local.filter_rM (fun name t -> 
+        if match_shape shape t then
+          let* equal = Solver.equal loc {local;global} (shape_pointer shape) (pointer t) in
+          return (if equal then Some (name,t) else None)
+        else 
+          return None
+      ) local
+  in
+  Tools.at_most_one loc !^"multiple matching resources" found
+
+
+let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size) 
+    : ((Sym.t * RE.points) option) m = 
+  let* points = 
+    Local.filter_rM (fun name t ->
+        match t with
+        | RE.Points p when Num.equal p.size size ->
+           let* holds = Solver.equal loc {local;global} loc_it p.pointer in
+           return (if holds then Some (name,p) else None)
+        | _ -> 
+           return None
+      ) local
+  in
+  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+
+let stored_struct_to (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: BT.tag) : ((Sym.t * RE.stored_struct) option) m = 
+  let* stored = 
+    Local.filter_rM (fun name t ->
+        match t with
+        | RE.StoredStruct s when s.tag = tag ->
+           let* holds = Solver.equal loc {local;global} loc_it s.pointer in
+           return (if holds then Some (name,s) else None)
+        | _ -> 
+           return None
+      ) local
+  in
+  Tools.at_most_one loc !^"multiple points-to for same pointer" stored
+
+
+
+let match_concrete_resource (loc: Loc.t) {local;global} (resource: RE.t) : ((Sym.t * RE.t) option) m = 
+  match_resource loc {local;global} (RE.shape resource)
+
+
+
 let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:RE.t)) = 
   match re with
   | StoredStruct s ->
-     let* decl = Global.get_struct_decl loc global s.tag in
+     let* decl = Global.get_struct_decl loc global.struct_decls s.tag in
      fold_leftM (fun local (member,member_pointer) ->
          let bt = List.assoc member decl.raw  in
          let ct = List.assoc member decl.ctypes  in
          let* size = Memory.size_of_ctype loc ct in
-         let* local = use_resource loc re_name [loc] local in
+         let* local = Local.use_resource loc re_name [loc] local in
          let shape = match bt with
            | Struct tag -> StoredStruct_ (member_pointer, tag)
            | _ -> Points_ (member_pointer,size)
@@ -371,40 +377,8 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:R
          | None -> fail loc (Generic !^"missing ownership for de-allocating")
        ) local s.members
   | Points _ ->
-     use_resource loc re_name [loc] local
+     Local.use_resource loc re_name [loc] local
 
-
-let rec store_struct (loc: Loc.t) (global: Global.t) (tag: BT.tag) (pointer: IT.t) (o_value: IT.t option) =
-  (* does not check for the right to write, this is done elsewhere *)
-  let open RT in
-  let* decl = Global.get_struct_decl loc global tag in
-  let rec aux = function
-    | (member,bt)::members ->
-       let member_pointer = fresh () in
-       let pointer_constraint = 
-         LC (IT.S member_pointer %= IT.MemberOffset (tag,pointer,member)) in
-       let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
-       let* (mapping,lbindings,rbindings) = aux members in
-       let* (lbindings',rbindings') = match bt with
-         | Struct tag2 -> 
-            let* (stored_struct,lbindings2,rbindings2) = 
-              store_struct loc global tag2 (S member_pointer) o_member_value in
-            return (Logical (member_pointer, Base Loc, 
-                      Constraint (pointer_constraint, lbindings2@@lbindings)),
-                    Resource (StoredStruct stored_struct, rbindings2@@rbindings))
-         | _ -> 
-            let* size = Memory.size_of_ctype loc (assoc member decl.ctypes) in
-            let points = {pointer = S member_pointer; pointee = o_member_value; size} in
-            return (Logical (member_pointer, Base Loc, Constraint (pointer_constraint, I)),
-                    Resource (Points points, I))
-       in
-       return ((member,S member_pointer)::mapping, lbindings', rbindings')
-    | [] -> return ([],I,I)
-  in  
-  let* (members,lbindings,rbindings) = aux decl.raw in
-  let* size = Memory.size_of_struct_type loc tag in
-  let stored = {pointer; tag; size; members} in
-  return (stored, lbindings, rbindings)
 
 let load_point loc {local;global} pointer size bt path is_field = 
   let* o_resource = points_to loc {local;global} pointer size in
@@ -423,7 +397,7 @@ let load_point loc {local;global} pointer size bt path is_field =
 let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (path: IT.t) =
   let open RT in
   let* o_resource = stored_struct_to loc {local;global} pointer tag in
-  let* decl = Global.get_struct_decl loc global tag in
+  let* decl = Global.get_struct_decl loc global.struct_decls tag in
   let* (_,stored) = match o_resource with
     | None -> fail loc (Generic !^"missing ownership for loading the struct")
     | Some s -> return s
@@ -442,9 +416,6 @@ let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (p
     | [] -> return []
   in  
   aux stored.members
-
-
-
 
 
 
@@ -1187,7 +1158,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           let* rt = match ct with
             | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
                let* (stored,lbindings,rbindings) = 
-                 store_struct loc global (Tag tag) (S ret) None in
+                 Memory.store_struct loc global.struct_decls (Tag tag) (S ret) None in
                return (Computational (ret, Loc, lbindings @@
                        Resource (StoredStruct stored, rbindings)))
             | _ ->
@@ -1242,7 +1213,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           let* bindings = match vbt with
           | Struct tag -> 
              let* (stored,lbindings,rbindings) = 
-               store_struct loc global tag (S plname) (Some (S vlname)) in
+               Memory.store_struct loc global.struct_decls tag (S plname) (Some (S vlname)) in
              return (lbindings @@ Resource (StoredStruct stored, rbindings))
            | _ -> 
              let resource = Points {pointer = S plname; pointee = Some (S vlname); size} in

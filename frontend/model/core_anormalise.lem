@@ -853,12 +853,18 @@ let normalise_globs_list (gs : list (Symbol.sym * generic_globs 'a unit) )
 
 
 let normalise_tag_definition = function
-  | StructDef l mf -> M_StructDef l mf
+  | StructDef l mf -> M_StructDef (l, mf)
   | UnionDef l -> M_UnionDef l
 end
 
 let normalise_tag_definitions tagDefs = 
   Map.map normalise_tag_definition tagDefs
+
+let normalise_funinfo (loc,annots,ret,args,b1,b2) =
+  M_funinfo (loc,annots,(ret,args),b1,b2)
+
+let normalise_funinfos funinfos = 
+  Map.map normalise_funinfo funinfos
 
 
 let normalise_file file = 
@@ -869,6 +875,6 @@ let normalise_file file =
    ; mu_globs = normalise_globs_list file.globs
    ; mu_funs = normalise_fun_map file.funs
    ; mu_extern = file.extern
-   ; mu_funinfo = file.funinfo
+   ; mu_funinfo = normalise_funinfos file.funinfo
   |>
 

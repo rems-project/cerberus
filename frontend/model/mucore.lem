@@ -245,25 +245,33 @@ type mu_globs 'DCTY 'DBTY 'bty =
 type mu_globs_map 'DCTY 'DBTY 'bty =
   map symbol (mu_globs 'DCTY 'DBTY 'bty)
 
-type mu_tag_definition 'DCTY =
-  | M_StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * 'DCTY)) * maybe flexible_array_member
-  | M_UnionDef of list (Symbol.identifier * (Annot.attributes * qualifiers * 'DCTY))
 
-type mu_tag_definitions 'DCTY = map Symbol.sym (mu_tag_definition 'DCTY)
 
-type mu_funinfo 'DCTY = 
-  Loc.t * Annot.attributes * 'DCTY * list (maybe symbol * 'DCTY) * bool * bool
+type mu_struct_def 'DCTY = list (Symbol.identifier * (Annot.attributes * qualifiers * 'DCTY)) * maybe flexible_array_member
+type mu_union_def 'DCTY = list (Symbol.identifier * (Annot.attributes * qualifiers * 'DCTY))
+
+type mu_tag_definition 'DSTRUCT_DEF 'DUNION_DEF =
+  | M_StructDef of 'DSTRUCT_DEF
+  | M_UnionDef of 'DUNION_DEF
+
+type mu_tag_definitions 'DSTRUCT_DEF 'DUNION_DEF = 
+  map Symbol.sym (mu_tag_definition 'DSTRUCT_DEF 'DUNION_DEF)
+
+type mu_funinfo_type 'DCTY = 'DCTY * list (maybe symbol * 'DCTY)
+
+type mu_funinfo 'DFTY = 
+  M_funinfo of (Loc.t * Annot.attributes * 'DFTY * bool * bool)
 
 (* a Core file is just a set of named functions *)
-type mu_file 'DCTY 'DBTY 'bty = <|
+type mu_file 'DFTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
   mu_main    : maybe symbol;
-  mu_tagDefs : mu_tag_definitions 'DCTY;
+  mu_tagDefs : mu_tag_definitions 'DSTRUCT_DEF 'DUNION_DEF;
   mu_stdlib  : mu_fun_map 'DCTY 'DBTY 'bty;
   mu_impl    : mu_impl 'DCTY 'DBTY 'bty;
   mu_globs   : list (symbol * mu_globs 'DCTY 'DBTY 'bty);
   mu_funs    : mu_fun_map 'DCTY 'DBTY 'bty;
   mu_extern  : mu_extern_map;
-  mu_funinfo : map symbol (mu_funinfo 'DCTY);
+  mu_funinfo : map symbol (mu_funinfo 'DFTY);
 |>
 
 

@@ -44,8 +44,10 @@ type struct_decl =
     closed_type: struct_sig; 
   }
 
+type struct_decls = struct_decl SymMap.t
+
 type t = 
-  { struct_decls : struct_decl SymMap.t; 
+  { struct_decls : struct_decls; 
     fun_decls : (Loc.t * FT.t) SymMap.t;
     impl_fun_decls : FT.t ImplMap.t;
     impl_constants : BT.t ImplMap.t;
@@ -58,8 +60,8 @@ let empty =
     impl_constants = ImplMap.empty;
   }
 
-let get_struct_decl loc global (BT.Tag s) = 
-  match SymMap.find_opt s global.struct_decls with
+let get_struct_decl loc struct_decls (BT.Tag s) = 
+  match SymMap.find_opt s struct_decls with
   | Some decl -> return decl 
   | None -> fail loc (Struct_not_defined (BT.Tag s))
 

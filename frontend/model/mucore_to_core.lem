@@ -573,7 +573,7 @@ let mu_to_core__globs (g : mu_globs Ctype.ctype mu_base_type 'bty)
  *   Map.map mu_to_core__globs g *)
 
 let mu_to_core__tag_definition = function
-  | M_StructDef l mf -> StructDef l mf
+  | M_StructDef (l, mf) -> StructDef l mf
   | M_UnionDef l -> UnionDef l
 end
 
@@ -586,6 +586,14 @@ let mu_to_core__globs_list (gs : list (symbol * mu_globs Ctype.ctype mu_base_typ
   map (fun (sym,g) -> (sym, mu_to_core__globs g)) gs
 
 
+let mu_to_core__funinfo (M_funinfo (loc,annots,(ret,args),b1,b2)) =
+  (loc,annots,ret,args,b1,b2)
+
+let mu_to_core__funinfos funinfos = 
+  Map.map mu_to_core__funinfo funinfos
+
+
+
 let mu_to_core__file file = 
   <| Core.main = file.mu_main
    ; Core.tagDefs = mu_to_core__tag_definitions file.mu_tagDefs
@@ -594,6 +602,6 @@ let mu_to_core__file file =
    ; Core.globs = mu_to_core__globs_list file.mu_globs
    ; Core.funs = mu_to_core__fun_map file.mu_funs
    ; Core.extern = file.mu_extern
-   ; Core.funinfo = file.mu_funinfo
+   ; Core.funinfo = mu_to_core__funinfos file.mu_funinfo
   |>
 

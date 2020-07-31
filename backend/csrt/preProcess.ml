@@ -4,7 +4,7 @@ module CF=Cerb_frontend
 module Symbol=CF.Symbol
 module Loc=Locations
 open CF.Mucore
-(* open TypeErrors *)
+open TypeErrors
 (* open FunctionTypes
  * open ReturnTypes *)
 
@@ -258,7 +258,47 @@ let retype_globs_map loc globs_map =
   pmap_mapM (fun _ globs -> retype_globs loc globs) 
             globs_map Symbol.symbol_compare
 
-let retype_file loc file =
+
+
+
+
+
+
+
+let retype_tagDefs loc tagDefs = 
+  let open Pp in
+  pmap_foldM 
+    (fun sym def (acc,acc_structs,acc_unions) -> 
+      match def with
+      | M_UnionDef _ -> 
+         fail Loc.unknown (Unsupported !^"todo: union types")
+      | M_StructDef (fields, _f) ->
+         let* decl = Conversions.struct_decl Loc.unknown (Tag sym) fields acc_structs in
+         let acc = Pmap.add sym (M_StructDef decl) acc in
+         let acc_structs = SymMap.add sym decl acc_structs in
+         return (acc,acc_structs,acc_unions)
+    ) 
+    tagDefs (Pmap.empty Symbol.symbol_compare,SymMap.empty,SymMap.empty)
+
+
+let retype_funinfo struct_decls funinfo =
+  pmap_mapM
+    (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) ->
+      if is_variadic 
+      then fail loc (Variadic_function fsym) 
+      else
+        let* ftyp = Conversions.make_fun_spec loc struct_decls attrs args ret_ctype in
+        return (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto))
+    ) funinfo Symbol.symbol_compare
+
+
+let retype_file loc file 
+    : ((FunctionTypes.t, 
+        CF.Ctype.ctype, 
+        BT.t, 
+        Global.struct_decl, 
+        CF.Ctype.ctype CF.Mucore.mu_union_def,
+        'bty) mu_file) m =
   let* stdlib = retype_fun_map loc file.mu_stdlib in
   let* impls = retype_impls loc file.mu_impl in
   let* globs = 
@@ -268,12 +308,14 @@ let retype_file loc file =
       ) file.mu_globs 
   in
   let* funs = retype_fun_map loc file.mu_funs in
+  let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
+  let* funinfo = retype_funinfo structs                                           file.mu_funinfo in
   return { mu_main = file.mu_main;
-           mu_tagDefs = file.mu_tagDefs;
+           mu_tagDefs = tagDefs;
            mu_stdlib = stdlib;
            mu_impl = impls;
            mu_globs = globs;
            mu_funs = funs;
            mu_extern = file.mu_extern;
-           mu_funinfo = file.mu_funinfo; }
+           mu_funinfo = funinfo; }
     
