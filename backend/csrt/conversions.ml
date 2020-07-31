@@ -100,7 +100,7 @@ let ctype owned loc (name : Sym.t) (ct : CF.Ctype.ctype) =
 let bt_of_ctype loc ct = 
   let* ((_,bt),_) = ctype_aux false loc (Sym.fresh ()) ct in
   return bt
-  
+
 
 
 let make_pointer_ctype ct = 

@@ -73,9 +73,7 @@ let process_functions genv fns =
 
 
 let process mu_file =
-  let* mu_file : 
-         (FunctionTypes.t, CF.Ctype.ctype, BT.t, Global.struct_decl, 
-          CF.Ctype.ctype CF.Mucore.mu_union_def,'bty) mu_file =
+  let* mu_file : (FT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file =
     PreProcess.retype_file Loc.unknown mu_file in
   (* pp_fun_map_decl mu_file.mu_funinfo; *)
   let global = Global.empty in

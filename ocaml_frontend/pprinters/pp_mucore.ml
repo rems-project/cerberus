@@ -20,20 +20,18 @@ let do_compact = true
 
 
 
-module type PP_BT = sig
+module type PP_Typ = sig
   (* type object_type *)
-  type base_type
-  (* val pp_object_type: object_type -> PPrint.document *)
-  val pp_base_type: base_type -> PPrint.document
-end
-
-module type PP_CT = sig
-  (* type object_type *)
+  type bt
   type ct
+  type ft
+  (* val pp_object_type: object_type -> PPrint.document *)
+  val pp_bt: bt -> PPrint.document
+  (* type object_type *)
   (* val pp_object_type: object_type -> PPrint.document *)
   val pp_ct: ct -> PPrint.document
-  val pp_funinfo: (Symbol.sym, Location_ocaml.t * Annot.attributes * ct * (Symbol.sym option * ct) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym, Location_ocaml.t * Annot.attributes * ct * (Symbol.sym option * ct) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
 end
 
 module type CONFIG =
@@ -108,13 +106,12 @@ let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_
 
 
 
-module Make (Config: CONFIG) (Pp_bt: PP_BT) (Pp_ct: PP_CT) =
+module Make (Config: CONFIG) (Pp_typ: PP_Typ) =
 struct
 
 open Config
 
-include Pp_bt
-include Pp_ct
+include Pp_typ
 
 
 
@@ -412,9 +409,9 @@ let pp_ctor = function
 let rec pp_pattern (M_Pattern (_, pat)) =
   match pat with
   | M_CaseBase (None, bTy) ->
-      P.underscore ^^ P.colon ^^^ pp_base_type bTy
+      P.underscore ^^ P.colon ^^^ pp_bt bTy
   | M_CaseBase (Some sym, bTy) ->
-      pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy
+      pp_symbol sym ^^ P.colon ^^^ pp_bt bTy
 (* Syntactic sugar for tuples and lists *)
   | M_CaseCtor (M_Ctuple, pats) ->
       P.parens (comma_list pp_pattern pats)
@@ -617,9 +614,9 @@ let pp_action act =
                   pp_linux_memory_order mo)
 
 
-let pp_expr budget (expr : (ct,base_type,'ty) mu_expr) =
+let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
 
-  let rec pp budget is_semi prec (M_Expr (annot, e) : (ct,base_type,'ty) mu_expr) =
+  let rec pp budget is_semi prec (M_Expr (annot, e) : (ct,bt,'ty) mu_expr) =
   
     match budget with
     | Some 0 -> P.dot ^^ P.dot ^^ P.dot ^^^ P.parens (!^"abbreviated")
@@ -673,7 +670,7 @@ let pp_expr budget (expr : (ct,base_type,'ty) mu_expr) =
          * else *)
           P.parens
       end
-      begin match (e : (ct,base_type,'ty) mu_expr_) with
+      begin match (e : (ct,bt,'ty) mu_expr_) with
         | M_Epure pe ->
             pp_keyword "pure" ^^ P.parens (pp_pexpr budget pe)
         | M_Ememop memop ->
@@ -735,9 +732,9 @@ let pp_expr budget (expr : (ct,base_type,'ty) mu_expr) =
         (* | M_Eindet (i, e) ->
          *     pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e) *)
         | M_Esave ((sym, bTy), sym_bTy_pes, e) ->
-            pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^^
+            pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
             P.parens (comma_list (fun (sym, (bTy, pe)) ->
-              pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
+              pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
             ) sym_bTy_pes) ^^^
             pp_control "in" ^^^
             P.nest 2 (P.break 1 ^^ pp e)
@@ -816,7 +813,7 @@ let pp_tagDefinitions tagDefs =
   in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
 
 let pp_argument (sym, bTy) =
-  pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy
+  pp_symbol sym ^^ P.colon ^^^ pp_bt bTy
 
 let pp_params params =
   P.parens (comma_list pp_argument params)
@@ -829,18 +826,18 @@ let pp_fun_map budget funs =
     acc ^^
     match decl with
       | M_Fun  (bTy, params, pe) ->
-          pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_base_type bTy ^^^
+          pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.hardline ^^ P.hardline
       | M_ProcDecl (loc, bTy, bTys) ->
           pp_cond loc @@
-          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_base_type bTys) ^^ P.hardline ^^ P.hardline
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) ^^ P.hardline ^^ P.hardline
       | M_BuiltinDecl (loc, bTy, bTys) ->
           pp_cond loc @@
-          pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_base_type bTys) ^^ P.hardline ^^ P.hardline
+          pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) ^^ P.hardline ^^ P.hardline
       | M_Proc (loc, bTy, params, e) ->
           pp_cond loc @@
-          pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_base_type bTy ^^^
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
     ) funs P.empty
@@ -855,7 +852,7 @@ let pp_impl budget impl =
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
 
       | M_IFun (bTy, params, pe) ->
-          pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_base_type bTy ^^^
+          pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
   ) impl P.empty
@@ -875,7 +872,7 @@ let pp_globs budget globs =
   List.fold_left (fun acc (sym, decl) ->
       match decl with
       | M_GlobalDef (bTy, e) ->
-        acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_base_type bTy ^^^
+        acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
               P.colon ^^ P.equals ^^
               P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
       | M_GlobalDecl _ ->
@@ -900,16 +897,16 @@ let pp_file budget file =
   end
 
   begin
-    (* guard show_aggregate begin
-     *   !^ "-- Aggregates" ^^ P.break 1 ^^
-     *   pp_tagDefinitions file.mu_tagDefs ^^
-     *   P.break 1 ^^ P.break 1
-     * end ^^
-     * 
-     * guard (show_include || Debug_ocaml.get_debug_level () > 1) begin
-     *   !^ "-- C function types" ^^ P.break 1 ^^
-     *   pp_funinfo file.mu_funinfo
-     * end ^^ *)
+    guard show_aggregate begin
+      !^ "-- Aggregates" ^^ P.break 1 ^^
+      pp_tagDefinitions file.mu_tagDefs ^^
+      P.break 1 ^^ P.break 1
+    end ^^
+    
+    guard (show_include || Debug_ocaml.get_debug_level () > 1) begin
+      !^ "-- C function types" ^^ P.break 1 ^^
+      pp_funinfo file.mu_funinfo
+    end ^^
 
     guard show_globs begin
       !^ "-- Globals" ^^ P.break 1 ^^
@@ -960,28 +957,29 @@ let rec pp_core_base_type = function
 
 
 
-module Pp_cbt = (struct
+module Pp_standard_typ = (struct
   type object_type = core_object_type
-  type base_type = core_base_type
+  type bt = core_base_type
   let pp_object_type = pp_core_object_type
-  let pp_base_type = pp_core_base_type
-end)
+  let pp_bt = pp_core_base_type
 
-module Pp_ct = (struct
   type ct = Ctype.ctype
   let pp_ct ty =
     P.squotes (Pp_core_ctype.pp_ctype ~compact:true ty)
 
+  type ft = ct mu_funinfo_type
+
+
   let pp_funinfo finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    Pmap.fold (fun sym (_, _, ret_ty, params, is_variadic, has_proto) acc ->
+    Pmap.fold (fun sym (M_funinfo (_, _, (ret_ty, params), is_variadic, has_proto)) acc ->
         acc ^^ pp_raw_symbol sym ^^ P.colon
         ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^ P.hardline) finfos P.empty
     
   let pp_funinfo_with_attributes finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    Pmap.fold (fun sym (loc, attrs, ret_ty, params, is_variadic, has_proto) acc ->
+    Pmap.fold (fun sym (M_funinfo (loc, attrs, (ret_ty, params), is_variadic, has_proto)) acc ->
         acc ^^ pp_raw_symbol sym ^^ P.colon
         ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
@@ -990,7 +988,7 @@ end)
 
 
 
-module Basic = Make (struct
+module Basic = (struct
   let show_std = false
   let show_include = false
   let show_locations = false
@@ -998,7 +996,7 @@ module Basic = Make (struct
   let handle_uid _ _ = ()
 end)
 
-module All = Make (struct
+module All = (struct
   let show_std = true
   let show_include = true
   let show_locations = false
@@ -1006,7 +1004,7 @@ module All = Make (struct
   let handle_uid _ _ = ()
 end)
 
-module WithLocations = Make (struct
+module WithLocations = (struct
   let show_std = false
   let show_include = false
   let show_locations = true
@@ -1015,6 +1013,6 @@ module WithLocations = Make (struct
 end)
 
 
-module Basic_CBT = Basic(Pp_cbt)(Pp_ct)
-module All_CBT = All(Pp_cbt)(Pp_ct)
-module WithLocations_CBT = WithLocations(Pp_cbt)(Pp_ct)
+module Basic_standard_typ = Make(Basic)(Pp_standard_typ)
+module All_standard_typ = Make(All)(Pp_standard_typ)
+module WithLocations_standard_typ = Make(WithLocations)(Pp_standard_typ)

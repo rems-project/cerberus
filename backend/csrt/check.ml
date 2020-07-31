@@ -37,23 +37,26 @@ module SymSet = Set.Make(Sym)
 
 type mu_pattern = BT.t CF.Mucore.mu_pattern
 type mu_ctor = BT.t CF.Mucore.mu_ctor
-type 'bty mu_pexpr = (CF.Ctype.ctype,BT.t,'bty) CF.Mucore.mu_pexpr
-type 'bty mu_expr = (CF.Ctype.ctype,BT.t,'bty) CF.Mucore.mu_expr
-type 'bty mu_value = (CF.Ctype.ctype,BT.t,'bty) CF.Mucore.mu_value
-type 'bty mu_object_value = (CF.Ctype.ctype,'bty) CF.Mucore.mu_object_value
+type 'bty mu_pexpr = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_pexpr
+type 'bty mu_expr = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_expr
+type 'bty mu_value = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_value
+type 'bty mu_object_value = ((BT.t * RE.size),'bty) CF.Mucore.mu_object_value
 
 
-module Pp_bt = struct
-  type base_type = BT.t
-  let pp_base_type = BT.pp true
+module Pp_srt_typ = struct
+  type bt = BT.t
+  type ct = (BT.t * RE.size)
+  type ft = FT.t
+  let pp_bt = BT.pp true
+  let pp_ct (bt,size) = parens (BT.pp false bt ^^ comma ^^ Num.pp size)
+  let pp_funinfo _ = failwith "not implementeed"
+  let pp_funinfo_with_attributes _  = failwith "not implementeed"
 end
 
-module PP_MUCORE = CF.Pp_mucore.Basic(Pp_bt)(CF.Pp_mucore.Pp_ct)
+module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_srt_typ)
 
 let pp_expr e = nocolour PP_MUCORE.pp_expr e
 let pp_pexpr e = nocolour PP_MUCORE.pp_pexpr e
-
-let pp_ctype = CF.Pp_core_ctype.pp_ctype
 
 
 type 'bty pexpr_or_expr = 
@@ -709,57 +712,51 @@ let infer_ptrval (loc: Loc.t) {local;global} (ptrval: CF.Impl_mem.pointer_value)
     ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
 
 
+
 let rec infer_mem_value (loc: Loc.t) {local;global} (mem: CF.Impl_mem.mem_value) : RT.t m = 
   CF.Impl_mem.case_mem_value mem
     ( fun ctyp -> fail loc (Unspecified ctyp) )
     ( fun _ _ -> fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
     ( fun it iv -> 
       let* v = Memory.integer_value_to_num loc iv in
-      let* (min,max) = Memory.integer_range loc it in
       let s = fresh () in
-      let val_constr = LC (S s %= Num v) in
-      let* (holds,_,_) = 
-        Solver.constraint_holds loc 
-          {local=add (mL s (Base BT.Int)) (add (mUC val_constr) Local.empty); global} 
-          (LC ((Num min %<= S s) %& (S s %<= Num max))) in
-      if holds 
-      then return (Computational (s, Int, Constraint (val_constr, I)))
-      else fail loc (Generic !^"Integer value does not satisfy range constraint")
+      return (Computational (s, Int, Constraint (LC (S s %= Num v), I)))
     )
     ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
     ( fun _ ptrval -> infer_ptrval loc {local;global} ptrval  )
     ( fun mem_values -> infer_array loc {local;global} mem_values )
-    ( fun tag fields -> infer_struct loc {local;global} (Tag tag) fields )
+    ( fun tag fields -> 
+      infer_struct loc {local;global} (Tag tag) 
+                   (map (fun (mem,_,mv) -> (mem,mv)) fields) )
     ( fun tag id mv -> infer_union loc {local;global} (Tag tag) id mv )
 
-
-and infer_struct (loc: Loc.t) {local;global} (tag: tag) fields : RT.t m=
+and infer_struct (loc: Loc.t) {local;global} (tag: tag)
+(fields: (Id.t * CF.Impl_mem.mem_value) list) : RT.t m =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
-  fail loc (Unsupported !^"implement again")
-  (* let* decl = Global.get_struct_decl loc env.global (Tag tag) in
-   * let ret = fresh () in
-   * let rec check fields decl =
-   *   match fields, decl with
-   *   | (id,_ct,mv)::fields, (smember,sbt)::decl when Member (Id.s id) = smember ->
-   *      let* (constrs,env) = check fields decl in
-   *      let* (rt, env) = infer_mem_value loc env mv in
-   *      let* (env,(abt,lname),rnames) = bind_other loc env rt in
-   *      let* () = check_base_type loc None abt sbt in
-   *      let constr = LC (Member (Tag tag, S ret, Member (Id.s id)) %= S lname) in
-   *      let constrs = Constraint (constr, constrs) in
-   *      return (constrs, env)
-   *   | [], [] -> 
-   *      return (I,env)
-   *   | (id,_ct,mv)::fields, (smember,sbt)::decl ->
-   *      fail loc (Unreachable !^"mismatch in fields in infer_struct")
-   *   | [], (Member smember,sbt)::_ ->
-   *      fail loc (Generic_error (!^"field" ^^^ !^smember ^^^ !^"missing"))
-   *   | (id,_,_)::_, [] ->
-   *      fail loc (Generic_error (!^"supplying unexpected field" ^^^ !^(Id.s id)))
-   * in
-   * let* (constrs,env) = check fields decl.raw in
-   * return (Computational (ret, Struct (Tag tag), constrs), env) *)
+  let* decl = Global.get_struct_decl loc global.struct_decls tag in
+  let ret = fresh () in
+  let rec check fields decl =
+    match fields, decl with
+    | (id,mv)::fields, (smember,sbt)::decl when Member (Id.s id) = smember ->
+       let* l = check fields decl in
+       let* (Computational (lname,abt,mv_lrt)) = infer_mem_value loc {local;global} mv in
+       let* () = check_base_type loc abt sbt in
+       let constr = LC (Member (tag, S ret, Member (Id.s id)) %= S lname) in
+       let l = Logical (lname, Base abt, Constraint (constr, mv_lrt @@ l)) in
+       return l
+    | [], [] -> 
+       return I
+    | (id,mv)::fields, (smember,sbt)::decl ->
+       fail loc (Unreachable !^"mismatch in fields in infer_struct")
+    | [], (Member smember,sbt)::_ ->
+       fail loc (Generic (!^"field" ^^^ !^smember ^^^ !^"missing"))
+    | (id,_)::_, [] ->
+       fail loc (Generic (!^"supplying unexpected field" ^^^ !^(Id.s id)))
+  in
+  let* l = check fields decl.raw in
+  return (Computational (ret, Struct tag, l))
+
 
 
 and infer_union (loc: Loc.t) {local;global} (tag: tag) (id: Id.t) (mv: CF.Impl_mem.mem_value) : RT.t m =
@@ -780,7 +777,8 @@ let infer_object_value (loc: Loc.t) {local;global} (ov: 'bty mu_object_value) : 
   | M_OVarray items ->
      fail loc (Unsupported !^"todo: array types")
   | M_OVstruct (tag, fields) -> 
-     infer_struct loc {local;global} (Tag tag) fields
+     infer_struct loc {local;global} (Tag tag) 
+                  (map (fun (id,_,mv) -> (id,mv)) fields)
   | M_OVunion (sym,id,mv) -> 
      infer_union loc {local;global} (Tag sym) id mv
   | M_OVfloating iv ->
@@ -1123,12 +1121,11 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
        | M_IntFromPtr _ (* (actype 'bty * asym 'bty) *)
        | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
          -> fail loc (Unsupported !^"todo: ememop")
-       | M_PtrValidForDeref (A (_,_,ct), A (a,_,sym)) ->
+       | M_PtrValidForDeref (A (_,_,(_,size)), A (a,_,sym)) ->
           let ret = fresh () in
           let* (bt,lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) bt Loc in
           (* check more things? *)
-          let* size = Memory.size_of_ctype loc ct in
           let shape = match bt with
             | Struct tag -> StoredStruct_ (S lname, tag)
             | _ -> Points_ (S lname,size)
@@ -1150,15 +1147,14 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
        end
     | M_Eaction (M_Paction (_pol, M_Action (aloc,action_))) ->
        begin match action_ with
-       | M_Create (A (a,_,sym), A (_,_,ct), _prefix) -> 
+       | M_Create (A (a,_,sym), A (_,_,(bt,size)), _prefix) -> 
           let* (abt,_lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) Int abt in
           let ret = fresh () in
-          let* size = Memory.size_of_ctype loc ct in
-          let* rt = match ct with
-            | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
+          let* rt = match bt with
+            | Struct tag -> 
                let* (stored,lbindings,rbindings) = 
-                 Memory.store_struct loc global.struct_decls (Tag tag) (S ret) None in
+                 Memory.store_struct loc global.struct_decls tag (S ret) None in
                return (Computational (ret, Loc, lbindings @@
                        Resource (StoredStruct stored, rbindings)))
             | _ ->
@@ -1191,12 +1187,12 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
              let rt = Computational (Sym.fresh (), Unit, I) in
              return (rt, local)
           end
-       | M_Store (_is_locking, A(_,_,ct), A(ap,_,psym), A(av,_,vsym), mo) -> 
+       | M_Store (_is_locking, A(_,_,(s_vbt,size)), A(ap,_,psym), A(av,_,vsym), mo) -> 
           let ploc = Loc.update loc ap in
           let vloc = Loc.update loc av in
           let* (pbt,plname) = get_a ploc psym local in
           let* (vbt,vlname) = get_a vloc vsym local in
-          let* size = Memory.size_of_ctype loc ct in
+          let* () = check_base_type loc vbt s_vbt in
           let* () = check_base_type loc pbt BT.Loc in
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
@@ -1221,12 +1217,10 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
           in
           let rt = Computational (fresh (), Unit, bindings) in
           return (rt,local)
-       | M_Load (A (_,_,ct), A (ap,_,psym), _mo) -> 
+       | M_Load (A (_,_,(bt,size)), A (ap,_,psym), _mo) -> 
           let ploc = Loc.update loc ap in
           let* (pbt,plname) = get_a ploc psym local in
           let* () = check_base_type loc pbt BT.Loc in
-          let* bt = Conversions.bt_of_ctype loc ct in
-          let* size = Memory.size_of_ctype loc ct in
           let ret = fresh () in
           let* lcs = match bt with
             | Struct tag -> load_struct loc {local;global} tag (S plname) (S ret)
