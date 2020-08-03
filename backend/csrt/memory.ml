@@ -56,13 +56,13 @@ let rec store_struct (loc: Loc.t) (struct_decls: Global.struct_decls) (tag: BT.t
          | BT.Struct tag2 -> 
             let* (stored_struct,lbindings2,rbindings2) = 
               store_struct loc struct_decls tag2 (S member_pointer) o_member_value in
-            return (Logical (member_pointer, Base Loc, 
+            return (Logical ((member_pointer, Base Loc), 
                       Constraint (pointer_constraint, lbindings2@@lbindings)),
                     Resource (StoredStruct stored_struct, rbindings2@@rbindings))
          | _ -> 
             let* size = size_of_ctype loc (List.assoc member decl.ctypes) in
             let points = {pointer = S member_pointer; pointee = o_member_value; size} in
-            return (Logical (member_pointer, Base Loc, Constraint (pointer_constraint, I)),
+            return (Logical ((member_pointer, Base Loc), Constraint (pointer_constraint, I)),
                     Resource (Points points, I))
        in
        return ((member,IT.S member_pointer)::mapping, lbindings', rbindings')

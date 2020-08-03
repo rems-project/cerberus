@@ -147,14 +147,12 @@ let rec of_index_term loc {local;global} ctxt it =
      let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
      let* a = of_index_term loc {local;global} ctxt t in
      return (Z3.Expr.mk_app ctxt fundecl [a])
-  | And (it,it') -> 
-     let* a = of_index_term loc {local;global} ctxt it in
-     let* a' = of_index_term loc {local;global} ctxt it' in
-     return (Z3.Boolean.mk_and ctxt [a; a'])
-  | Or (it,it') -> 
-     let* a = of_index_term loc {local;global} ctxt it in
-     let* a' = of_index_term loc {local;global} ctxt it' in
-     return (Z3.Boolean.mk_or ctxt [a; a'])
+  | And its -> 
+     let* ts = mapM (of_index_term loc {local;global} ctxt) its in
+     return (Z3.Boolean.mk_and ctxt ts)
+  | Or its -> 
+     let* ts = mapM (of_index_term loc {local;global} ctxt) its in
+     return (Z3.Boolean.mk_or ctxt ts)
   | Impl (it,it') -> 
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in

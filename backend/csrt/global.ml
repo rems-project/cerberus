@@ -72,13 +72,11 @@ let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 let pp_struct_decl (sym,decl) = 
   let tag = BT.Tag sym in
   let open_typ = 
-    RT.Computational (decl.open_type.sbinder, 
-                      BT.Struct tag, 
+    RT.Computational ((decl.open_type.sbinder, BT.Struct tag), 
                       decl.open_type.souter) 
   in
   let closed_typ = 
-    RT.Computational (decl.closed_type.sbinder, 
-                      BT.Struct tag, 
+    RT.Computational ((decl.closed_type.sbinder, BT.Struct tag), 
                       decl.closed_type.souter) 
   in
   item (plain (Sym.pp sym) ^ " (raw)") 

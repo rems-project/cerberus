@@ -52,7 +52,7 @@ let rec bt_of_core_base_type loc cbt =
 
 let integerType_constraint loc about it =
   let* (min,max) = Memory.integer_range loc it in
-  return (LC ((Num min %<= about) %& (about %<= Num max)))
+  return (LC (And [Num min %<= about; about %<= Num max]))
 
 
 let integerType loc name it =
@@ -81,7 +81,7 @@ let rec ctype_aux owned loc name (CF.Ctype.Ctype (annots, ct_)) =
        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
        let* size = Memory.size_of_ctype loc ct in
        let points = Points {pointer = S name; pointee = Some (S pointee_name); size} in
-       let t = Logical (pointee_name, Base bt, Resource (points, t)) in
+       let t = Logical ((pointee_name, Base bt), Resource (points, t)) in
        return ((name,Loc),t)
      else
        return ((name,Loc),I)
@@ -95,7 +95,7 @@ let rec ctype_aux owned loc name (CF.Ctype.Ctype (annots, ct_)) =
 
 let ctype owned loc (name : Sym.t) (ct : CF.Ctype.ctype) =
   let* ((name,bt),t) = ctype_aux owned loc name ct in
-  return (RT.Computational (name,bt,t))
+  return (RT.Computational ((name,bt),t))
 
 let bt_of_ctype loc ct = 
   let* ((_,bt),_) = ctype_aux false loc (Sym.fresh ()) ct in
@@ -135,7 +135,7 @@ let explode_struct_in_binding loc global (Tag tag) logical_struct binding =
   let* substs = explode_struct loc global (Tag tag) logical_struct in
   let binding' = 
     fold_right (fun (name,bt,it) binding -> 
-        Logical (name,Base bt, 
+        Logical ((name,Base bt), 
                  instantiate_struct_member_l {s=it;swith=S name} binding)
       ) substs binding
   in
@@ -152,8 +152,8 @@ let rec logical_returnType_to_argumentType
      more_args
   (* | RT.Computational (name, t, args) -> 
    *    FT.Computational (name, t, returnType_to_argumentType args return) *)
-  | RT.Logical (name, t, args) -> 
-     FT.Logical (name, t, logical_returnType_to_argumentType args more_args)
+  | RT.Logical ((name, t), args) -> 
+     FT.Logical ((name, t), logical_returnType_to_argumentType args more_args)
   | RT.Resource (t, args) -> 
      FT.Resource (t, logical_returnType_to_argumentType args more_args)
   | RT.Constraint (t, args) -> 
@@ -288,11 +288,11 @@ let make_fun_arg_type struct_decls asym loc ct =
        | _ ->
           let* arg = 
             let apoints = RE.Points {pointer = S aname; pointee = Some (S aname2); size}  in
-            return (Loc, Logical (aname2, Base abt, Resource (apoints, ftt)))
+            return (Loc, Logical ((aname2, Base abt), Resource (apoints, ftt)))
           in
           let* ret = 
             let rpoints = RE.Points {pointer = S aname; pointee = Some (S rname2); size} in
-            return (Loc, Logical (rname2, Base rbt, Resource (rpoints, rtt)))
+            return (Loc, Logical ((rname2, Base rbt), Resource (rpoints, rtt)))
           in
           return (arg, ret)
        end
@@ -337,7 +337,7 @@ let make_fun_spec loc genv attrs args ret_ctype =
       ) 
       ((fun ft -> ft), I) args
   in
-  let* (Computational (ret_name,bound,ret)) = 
+  let* (Computational ((ret_name,bound),ret)) = 
     ctype true loc (Sym.fresh ()) ret_ctype in
-  let ftyp = arguments (Return (RT.Computational (ret_name,bound, RT.(@@) ret returns))) in
+  let ftyp = arguments (Return (RT.Computational ((ret_name,bound), RT.(@@) ret returns))) in
   return ftyp

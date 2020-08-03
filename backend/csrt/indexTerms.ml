@@ -29,8 +29,8 @@ type t =
   | GE of t * t
 
   | Null of t
-  | And of t * t
-  | Or of t * t
+  | And of t list
+  | Or of t list
   | Impl of t * t
   | Not of t
 
@@ -61,8 +61,8 @@ let (%>) t1 t2 = GT (t1, t2)
 let (%<=) t1 t2 = LE (t1, t2)
 let (%>=) t1 t2 = GE (t1, t2)
 
-let (%&) t1 t2 = And (t1, t2)
-let (%|) t1 t2 = Or (t1, t2)
+(* let (%&) t1 t2 = And (t1, t2)
+ * let (%|) t1 t2 = Or (t1, t2) *)
 let (%==>) t1 t2 = Impl (t1, t2)
 
 let rec pp atomic it : PPrint.document = 
@@ -96,8 +96,8 @@ let rec pp atomic it : PPrint.document =
      else mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
 
   | Null o1 -> mparens (!^"null" ^^^ pp o1)
-  | And (o1,o2) -> mparens (pp o1 ^^^ ampersand ^^^ pp o2)
-  | Or (o1,o2) -> mparens (pp o1 ^^^ bar ^^^ pp o2)
+  | And o -> mparens (separate_map (space ^^ ampersand ^^ space) pp o)
+  | Or o -> mparens (separate_map (space ^^ bar ^^ bar ^^ space) pp o)
   | Impl (o1,o2) -> mparens (pp o1 ^^^ equals ^^ rangle ^^^ pp o2)
   | Not (o1) -> mparens (!^"not" ^^^ pp o1)
 
@@ -137,12 +137,13 @@ let rec vars_in it : SymSet.t =
   | LT (it, it') 
   | GT (it, it') 
   | LE (it, it') 
-  | GE (it, it') 
-  | And (it, it')
-  | Or (it, it')
+  | GE (it, it')
   | Impl (it, it')
   | Cons (it, it')  ->
      SymSet.union (vars_in it) (vars_in it')
+  | And its
+  | Or its ->
+     vars_in_list its
   | Nth (_, it)
   | Null it
   | Not it 
@@ -183,8 +184,8 @@ let rec subst_var subst it : t =
   | LE (it, it') -> LE (subst_var subst it, subst_var subst it')
   | GE (it, it') -> GE (subst_var subst it, subst_var subst it')
   | Null it -> Null (subst_var subst it)
-  | And (it, it') -> And (subst_var subst it, subst_var subst it')
-  | Or (it, it') -> Or (subst_var subst it, subst_var subst it')
+  | And its -> And (map (subst_var subst) its)
+  | Or its -> Or (map (subst_var subst) its)
   | Impl (it, it') -> Impl (subst_var subst it, subst_var subst it')
   | Not it -> Not (subst_var subst it)
   | Tuple its ->
@@ -255,12 +256,10 @@ let rec instantiate_struct_member subst it : t =
          instantiate_struct_member subst it')
   | Null it -> 
      Null (instantiate_struct_member subst it)
-  | And (it, it') -> 
-     And (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | Or (it, it') -> 
-     Or (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
+  | And its -> 
+     And (map (instantiate_struct_member subst) its)
+  | Or its -> 
+     Or (map (instantiate_struct_member subst) its)
   | Impl (it, it') -> 
      Impl (instantiate_struct_member subst it, 
            instantiate_struct_member subst it')
@@ -309,12 +308,15 @@ let rec unify it it' (res : (t Uni.t) SymMap.t) =
   | GT (it1, it2), GT (it1', it2')
   | LE (it1, it2), LE (it1', it2')
   | GE (it1, it2), GE (it1', it2')
-
-  | And (it1, it2), And (it1', it2')
-  | Or (it1, it2), Or (it1', it2')
     ->
      let* res = unify it1 it1' res in
      unify it2 it2' res
+
+
+  | And its, And its'
+  | Or its, Or its' 
+    ->
+     unify_list its its' res
 
   | Null it, Null it'
   | Not it, Not it' 
@@ -380,10 +382,13 @@ let rec equal it it' =
   | GE (t1,t2), GE (t1',t2') 
     -> equal t1 t1' && equal t2 t2' 
 
-  | And (t1,t2), And (t1',t2')
-  | Or (t1,t2), Or (t1',t2')
   | Impl (t1,t2), Impl (t1',t2')
     -> equal t1 t1' && equal t2 t2' 
+
+
+  | And ts, And ts'
+  | Or ts, Or ts'
+    -> equal_list ts ts'
 
   | Null t, Null t'
   | Not t, Not t' 

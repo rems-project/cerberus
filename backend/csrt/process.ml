@@ -41,7 +41,7 @@ let record_impl genv impls =
          { genv with impl_constants = ImplMap.add impl bt genv.impl_constants}
       | M_IFun (bt, args, _body) ->
          let args_ts = List.map (fun (sym,a_bt) -> FT.mcomputational sym a_bt) args in
-         let ftyp = (Tools.comps args_ts) (Return (Computational (Sym.fresh (), bt, I))) in
+         let ftyp = (Tools.comps args_ts) (Return (Computational ((Sym.fresh (), bt), I))) in
          { genv with impl_fun_decls = ImplMap.add impl ftyp genv.impl_fun_decls }
     ) impls genv
 
