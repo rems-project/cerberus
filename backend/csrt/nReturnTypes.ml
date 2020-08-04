@@ -17,8 +17,8 @@ type t = a
 
 
 
-let mcomputational name bound t = Computational ((name,bound),t)
-let mlogical name bound t = Logical ((name,bound),t)
+let mcomputational (name,bound) t = Computational ((name,bound),t)
+let mlogical (name,bound) t = Logical ((name,bound),t)
 let mconstraint bound t = Constraint (bound,t)
 let mresource bound t = Resource (bound,t)
 

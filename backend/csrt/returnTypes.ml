@@ -17,14 +17,10 @@ type l =
 type t = Computational of (Sym.t * BT.t) * l
 
 
-let mcomputational name bound t = 
-  Computational ((name,bound),t)
-let mlogical name bound t = 
-  Logical ((name,bound),t)
-let mconstraint bound t = 
-  Constraint (bound,t)
-let mresource bound t = 
-  Resource (bound,t)
+let mcomputational (name,bound) t = Computational ((name,bound),t)
+let mlogical (name,bound) t = Logical ((name,bound),t)
+let mconstraint bound t = Constraint (bound,t)
+let mresource bound t = Resource (bound,t)
 
 
 
@@ -128,27 +124,22 @@ let (pp,pp_l) =
 
 module NRT = NReturnTypes
 
-let normalise_l l_rt : (NRT.l) = 
-  let open Tools in
-  let rec aux (l_t: NRT.l -> NRT.l) (r_t: NRT.r -> NRT.r) (c_t: NRT.c -> NRT.c) 
-              (l_rt: l) : NRT.l
-    =
-    match l_rt with
-    | Logical ((name,ls),l_rt) ->
-       aux (comp l_t (NRT.mlogical name ls)) r_t c_t l_rt
-    | Resource (re,l_rt) ->
-       aux l_t (comp (NRT.mresource re) r_t) c_t l_rt
-    | Constraint (lc,l_rt) ->
-       aux l_t r_t (comp (NRT.mconstraint lc) c_t) l_rt
+let normalise_l rt : (NRT.l) = 
+  let rec aux l r c = function
+    | Logical ((name,ls),rt) -> aux (l@[(name,ls)]) r c rt
+    | Resource (re,rt) -> aux l (r@[re]) c rt
+    | Constraint (lc,rt) -> aux l r (c@[lc]) rt
     | I ->
-       (l_t (NRT.R (r_t (NRT.C (c_t NRT.I)))))
+       (List.fold_right NRT.mlogical l)
+         (NRT.R ((List.fold_right NRT.mresource r)
+                   (NRT.C (List.fold_right NRT.mconstraint c NRT.I))))
   in
-  aux (fun l -> l) (fun r -> r) (fun c -> c) l_rt
+  aux [] [] [] rt
 
 let normalise_a rt : (NRT.t) =
   match rt with
-  | Computational ((name,bt),l_rt) -> 
-     NRT.Computational ((name,bt), normalise_l l_rt)
+  | Computational ((name,bt),rt) -> 
+     NRT.Computational ((name,bt), normalise_l rt)
 
 let normalise = normalise_a
 

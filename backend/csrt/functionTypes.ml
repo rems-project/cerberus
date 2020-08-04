@@ -110,24 +110,38 @@ let rec count_computational = function
 
 module NFT = NFunctionTypes
 
-let rec normalise rt : (NFT.t) = 
-  let open Tools in
-  let rec aux (l_t: NFT.l -> NFT.l) (r_t: NFT.r -> NFT.r) (c_t: NFT.c -> NFT.c) 
-              (rt: t) : NFT.t
-    =
-    match rt with
-    | Computational ((name,bt),rt) -> 
-       NFT.Computational ((name,bt), normalise rt)
-    | Logical ((name,ls),rt) ->
-       aux (comp l_t (NFT.mlogical name ls)) r_t c_t rt
-    | Resource (re,rt) ->
-       aux l_t (comp (NFT.mresource re) r_t) c_t rt
-    | Constraint (lc,rt) ->
-       aux l_t r_t (comp (NFT.mconstraint lc) c_t) rt
+let normalise ft : (NFT.t) = 
+  let rec aux l r c = function
+    | Computational ((name,bt),ft) -> NFT.Computational ((name,bt), aux l r c ft)
+    | Logical ((name,ls),ft) -> aux (l@[(name,ls)]) r c ft
+    | Resource (re,ft) -> aux l (r@[re]) c ft
+    | Constraint (lc,ft) -> aux l r (c@[lc]) ft
     | Return rt ->
-       let rt = RT.normalise rt in
-       NFT.L (l_t (NFT.R (r_t (NFT.C (c_t (NFT.Return rt))))))
+       (NFT.L ((List.fold_right NFT.mlogical l)
+                 (NFT.R ((List.fold_right NFT.mresource r)
+                           (NFT.C (List.fold_right NFT.mconstraint c
+                             (NFT.Return (RT.normalise rt))))))))
   in
-  aux (fun l -> l) (fun r -> r) (fun c -> c) rt
+  aux [] [] [] ft
 
 
+
+
+
+let rec unnormalise_c = function
+  | NFT.Constraint (lc,t) -> Constraint (lc,unnormalise_c t)
+  | NFT.Return rt -> Return (RT.unnormalise rt)
+
+let rec unnormalise_r = function
+  | NFT.Resource (re,t) -> Resource (re,unnormalise_r t)
+  | NFT.C t -> unnormalise_c t
+
+let rec unnormalise_l = function
+  | NFT.Logical ((name,ls),t) -> Logical ((name,ls),unnormalise_l t)
+  | NFT.R t -> unnormalise_r t
+
+let rec unnormalise_a = function
+  | NFT.Computational ((name,bt),t) -> Computational ((name,bt),unnormalise_a t)
+  | NFT.L t -> unnormalise_l t
+
+let unnormalise = unnormalise_a

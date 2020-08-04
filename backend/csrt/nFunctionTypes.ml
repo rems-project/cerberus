@@ -17,14 +17,10 @@ type a = Computational of (Sym.t * BT.t) * a | L of l
 type t = a
 
 
-let mcomputational name bound t = 
-  Computational ((name,bound),t)
-let mlogical name bound t = 
-  Logical ((name,bound),t)
-let mconstraint bound t = 
-  Constraint (bound,t)
-let mresource bound t = 
-  Resource (bound,t)
+let mcomputational (name,bound) t = Computational ((name,bound),t)
+let mlogical (name,bound) t = Logical ((name,bound),t)
+let mconstraint bound t = Constraint (bound,t)
+let mresource bound t = Resource (bound,t)
 
 
 let rec subst_var_c substitution = function

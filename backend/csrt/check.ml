@@ -437,7 +437,7 @@ let pp_argslocs =
 
 
 
-let subtype_new (loc: Loc.t)
+let subtype (loc: Loc.t)
             {local;global}
             (arg: (BT.t * Sym.t) * Loc.t)
             (rtyp: RT.t)
@@ -454,7 +454,7 @@ let subtype_new (loc: Loc.t)
     else fail loc (Mismatch {has = Base abt; expect = Base sbt})
   in
   let* rtyp = check_computational arg rtyp in
-  
+
   let rec delay_logical (unis,lspec) rtyp = 
     match rtyp with
     | Logical ((sname,sls),rtyp) ->
@@ -487,7 +487,7 @@ let subtype_new (loc: Loc.t)
 
   let rec check_logical unis lspec = 
     match lspec with
-    | (sname,sls) :: lvars ->
+    | (sname,sls) :: lspec ->
        let* found = symmap_lookup loc unis sname in
        begin match found with
        | Uni.{resolved = None} -> 
@@ -501,7 +501,7 @@ let subtype_new (loc: Loc.t)
     | [] -> return ()
   in
   let* () = check_logical unis lspec in
-
+  
   let rec check_constraints rtyp =
     match rtyp with
     | Constraint (c, rtyp) ->
@@ -515,7 +515,7 @@ let subtype_new (loc: Loc.t)
 
 
 
-let calltyp_new (loc: Loc.t) 
+let calltyp (loc: Loc.t) 
             {local;global} 
             (arguments: ((BT.t * Sym.t) * Loc.t) list) 
             (ftyp: FT.t)
@@ -575,7 +575,7 @@ let calltyp_new (loc: Loc.t)
 
   let rec check_logical unis lspec = 
     match lspec with
-    | (sname,sls) :: lvars ->
+    | (sname,sls) :: lspec ->
        let* found = symmap_lookup loc unis sname in
        begin match found with
        | Uni.{resolved = None} -> 
@@ -604,13 +604,18 @@ let calltyp_new (loc: Loc.t)
 
 
 
-let subtype (loc: Loc.t)
+let subtype_old (loc: Loc.t)
             {local;global}
             (arg: (BT.t * Sym.t) * Loc.t)
             (rtyp: RT.t)
             ppdescr 
     : L.t m 
   =
+
+
+  let* () = debug_print 2 (blank 3 ^^ item "specification before" (RT.pp rtyp)) in
+  let rtyp = RT.unnormalise (RT.normalise rtyp) in
+  let* () = debug_print 2 (blank 3 ^^ item "specification after" (RT.pp rtyp)) in
 
   let module STS = struct
 
@@ -708,12 +713,14 @@ let subtype (loc: Loc.t)
 
 
 
-let calltyp (loc: Loc.t) 
+let calltyp_old (loc: Loc.t) 
             {local;global} 
             (arguments: ((BT.t * Sym.t) * Loc.t) list) 
             (ftyp: FT.t)
     : (RT.t * L.t) m 
   =
+
+  let ftyp = FT.unnormalise (FT.normalise ftyp) in
 
   let module CTS = struct
 
