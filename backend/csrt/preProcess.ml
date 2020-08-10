@@ -249,7 +249,8 @@ let retype_paction loc = function
     let* action = retype_action loc action in
     return (M_Paction (pol,action))
 
-let rec retype_expr loc (M_Expr (annots,expr_)) = 
+let rec retype_expr struct_decls loc (M_Expr (annots,expr_)) = 
+  let retype_expr = retype_expr struct_decls in
   let* expr_ = match expr_ with
     | M_Epure pexpr -> 
        let* pexpr = retype_pexpr loc pexpr in
@@ -308,6 +309,9 @@ let rec retype_expr loc (M_Expr (annots,expr_)) =
     | M_Esave (ft,(sym,(cbt,ct)),args,expr) ->
        let* size = Memory.size_of_ctype loc ct in
        let* bt = Conversions.bt_of_core_base_type loc cbt in
+       let* ft = Conversions.make_fun_spec loc struct_decls 
+                   (CF.Annot.get_attrs annots) 
+                   (List.map (fun (sym,((_,ct),_)) -> (Some sym,ct)) args) ct in
        let* args = 
          mapM (fun (sym,((acbt,act),asym)) ->
              let* size = Memory.size_of_ctype loc ct in
@@ -374,7 +378,7 @@ let rec collect_labels acc (M_Expr (_,expr_)) =
     collect_labels (SymMap.add name (args,rbt) acc) e
  | M_Erun _ -> acc
 
-let retype_fun_map_decl loc = function
+let retype_fun_map_decl struct_decls loc = function
   | M_Fun (cbt,args,pexpr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      let* args = 
@@ -393,7 +397,7 @@ let retype_fun_map_decl loc = function
            return (sym,abt)
          ) args
      in
-     let* expr = retype_expr loc expr in
+     let* expr = retype_expr struct_decls loc expr in
      return (M_Proc (loc,bt,args,expr))
   | M_ProcDecl (loc,cbt,args) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
@@ -404,23 +408,23 @@ let retype_fun_map_decl loc = function
      let* args = mapM (Conversions.bt_of_core_base_type loc) args in
      return (M_BuiltinDecl (loc,bt,args))
 
-let retype_fun_map loc fun_map = 
-  pmap_mapM (fun _ decl -> retype_fun_map_decl loc decl) 
+let retype_fun_map struct_decls loc fun_map = 
+  pmap_mapM (fun _ decl -> retype_fun_map_decl struct_decls loc decl) 
             fun_map Symbol.symbol_compare
 
 
-let retype_globs loc = function
+let retype_globs struct_decls loc = function
   | M_GlobalDef (cbt,expr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* expr = retype_expr loc expr in
+     let* expr = retype_expr struct_decls loc expr in
      return (M_GlobalDef (bt,expr))
   | M_GlobalDecl cbt ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      return (M_GlobalDecl bt)
 
 
-let retype_globs_map loc globs_map = 
-  pmap_mapM (fun _ globs -> retype_globs loc globs) 
+let retype_globs_map struct_decls loc globs_map = 
+  pmap_mapM (fun _ globs -> retype_globs struct_decls loc globs) 
             globs_map Symbol.symbol_compare
 
 
@@ -457,16 +461,16 @@ let retype_funinfo struct_decls funinfo =
 
 let retype_file loc file 
     : ((FT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
-  let* stdlib = retype_fun_map loc file.mu_stdlib in
+  let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
+  let* stdlib = retype_fun_map structs loc file.mu_stdlib in
   let* impls = retype_impls loc file.mu_impl in
   let* globs = 
     mapM (fun (sym, glob) -> 
-        let* glob = retype_globs loc glob in
+        let* glob = retype_globs structs loc glob in
         return (sym,glob)
       ) file.mu_globs 
   in
-  let* funs = retype_fun_map loc file.mu_funs in
-  let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
+  let* funs = retype_fun_map structs loc file.mu_funs in
   let* funinfo = retype_funinfo structs file.mu_funinfo in
   return { mu_main = file.mu_main;
            mu_tagDefs = tagDefs;

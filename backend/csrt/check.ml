@@ -40,7 +40,7 @@ module SymSet = Set.Make(Sym)
 type mu_pattern = BT.t CF.Mucore.mu_pattern
 type mu_ctor = BT.t CF.Mucore.mu_ctor
 type 'bty mu_pexpr = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_pexpr
-type 'bty mu_expr = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_expr
+type 'bty mu_expr = (FT.t, (BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_expr
 type 'bty mu_value = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_value
 type 'bty mu_object_value = ((BT.t * RE.size),'bty) CF.Mucore.mu_object_value
 
@@ -1448,12 +1448,19 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
        infer_expr_pure loc {local;global} e
     | M_End _ ->
        fail loc (Unsupported !^"todo: End")
-    | M_Esave _ ->
-       fail loc (Unsupported !^"todo: Esave")
     | M_Erun _ ->
        fail loc (Unsupported !^"todo: Erun")
     | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
     | M_Eif _ -> fail loc (Unreachable !^"Eif in inferring position")
+    | M_Esave (ft, (sym,(rbt,rct)), args, body) ->
+       (* check that assyming a list of (any) arguments satisfying the
+          argument specification the body produces the right return type *)
+       let* () = check_function loc global sym
+                   (map (fun (sym, ((abt,_), _)) -> (sym,abt)) args) 
+                   rbt (EXPR body) ft in
+       (* check that the default arguments satisfy the specification *)
+       let* args = get_a_loc_asyms loc local (map (fun (_, (_, asym)) -> asym) args) in
+       calltyp loc {local;global} args ft
     | M_Elet (p, e1, e2) ->
        let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
        let* local' = match p with
@@ -1475,7 +1482,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
   return (typ,local)
 
 
-let rec check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) = 
+and check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) = 
 
   let* () = debug_print 1 (action "checking expression type") in
   let* () = debug_print 1 (blank 3 ^^ item "type" (RT.pp typ)) in
@@ -1533,18 +1540,6 @@ let rec check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) =
      let* local' = pattern_match_rt loc pat rt in
      let local = local' ++ local in
      check_expr loc {local;global} e2 typ
-  | M_Esave (_ret, args, body) ->
-     let* {local;global} = 
-       fold_leftM (fun {local;global} (sym, (_, A (a,_,vsym))) ->
-           let new_lname = fresh () in
-           let* (bt,lname) = get_a (Loc.update loc a) vsym local in
-           let local = add (mL new_lname (Base bt)) local in
-           let local = add (mA sym (bt,new_lname)) local in
-           let local = add (mUC (LC (S new_lname %= S lname))) local in
-           return {local;global}
-         ) {local;global} args
-     in
-     check_expr loc {local;global} body typ
   | _ ->
      let* (rt, local) = infer_expr_pure loc {local;global} e in
      let* (local',(abt,lname)) = bind_logically rt in
@@ -1553,9 +1548,7 @@ let rec check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) =
      empty_pop loc local
      
 
-
-
-let check_function (loc: Loc.t) 
+and check_function (loc: Loc.t) 
                    (global: Global.t)
                    (fsym: Sym.t)
                    (arguments: (Sym.t * BT.t) list) 
@@ -1611,6 +1604,8 @@ let check_function (loc: Loc.t)
   let* () = debug_print 1 (!^(greenb "...checked ok")) in
 
   return ()
+
+
 
 
 

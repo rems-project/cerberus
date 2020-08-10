@@ -330,8 +330,7 @@ let make_fun_spec loc genv attrs args ret_ctype =
           | Some sym -> sym
           | None -> Sym.fresh ()
         in
-        let* (arg,ret) = 
-          make_fun_arg_type genv name loc ct in
+        let* (arg,ret) = make_fun_arg_type genv name loc ct in
         let args = Tools.comp args arg in
         return (args, returns @@ ret)
       ) 

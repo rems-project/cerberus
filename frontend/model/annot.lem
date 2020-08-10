@@ -61,6 +61,34 @@ let get_loc_ annots =
     | Nothing -> Loc.unknown
   end
 
+
+val     get_attrs: list annot -> maybe attributes
+let rec get_attrs annots = 
+  match annots with
+    | [] ->
+        Nothing
+    | (Aloc loc :: annots') ->
+        get_attrs annots'
+    | (Astd _ :: annots') ->
+        get_attrs annots'
+    | (Auid _ :: annots') ->
+        get_attrs annots'
+    | (Abmc _ :: annots') ->
+        get_attrs annots'
+    | (Aattrs (Attrs attributes) :: annots') ->
+       match get_attrs annots' with
+       | Just (Attrs attributes') -> Just (Attrs (attributes ++ attributes'))
+       | Nothing -> Just (Attrs attributes)       
+       end
+  end
+
+val get_attrs_: list annot -> attributes
+let get_attrs_ annots = 
+  match get_attrs annots with
+  | Just attrs -> attrs
+  | Nothing -> Attrs []
+  end
+
 val     get_uid: list annot -> maybe string
 let rec get_uid annots =
   match annots with
