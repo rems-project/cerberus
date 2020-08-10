@@ -1481,8 +1481,8 @@ let rec collect_labels env (Expr _ expr_) =
         E.foldlM (fun env' e ->
           collect_labels env' e
         ) env es
-    | Esave (sym, bTy) sym_bTy_pes e ->
-        collect_labels <| env with labs= Map.insert sym (bTy, List.map (fun (_, (z, _)) -> z) sym_bTy_pes) env.labs |> e
+    | Esave (sym, (bTy,_)) sym_bTy_pes e ->
+        collect_labels <| env with labs= Map.insert sym (bTy, List.map (fun (_, ((z,_), _)) -> z) sym_bTy_pes) env.labs |> e
     | Erun _ _ _ ->
         E.return env
     | Epar es ->
@@ -1641,12 +1641,12 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
           E.return (End es')
     | Esave sym_bTy sym_bTy_pes e ->
         (* TODO: check *)
-        E.mapM (fun (sym, (bTy, pe)) ->
+        E.mapM (fun (sym, ((bTy,ct), pe)) ->
           typecheck_pexpr tagDefs env bTy pe
             >>= export_pexpr >>= fun pe' ->
-           E.return (sym, (bTy, pe'))
+           E.return (sym, (((bTy,ct), pe')))
         ) sym_bTy_pes >>= fun sym_bTy_pes' ->
-        let env' = <| decls= Map.fromList (List.map (fun (sym, (bTy, _)) -> (Sym sym, TDsym bTy)) sym_bTy_pes'); labs= Map.empty |> in
+        let env' = <| decls= Map.fromList (List.map (fun (sym, ((bTy,_), _)) -> (Sym sym, TDsym bTy)) sym_bTy_pes'); labs= Map.empty |> in
         Esave sym_bTy sym_bTy_pes' <$> typecheck_expr tagDefs (env_union env env') expected_bTy e
     | Erun annot sym pes ->
         match Map.lookup sym env.labs with

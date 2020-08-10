@@ -305,16 +305,18 @@ let rec retype_expr loc (M_Expr (annots,expr_)) =
     | M_End es ->
        let* es = mapM (retype_expr loc) es in
        return (M_End es)
-    | M_Esave ((sym,cbt),args,expr) ->
+    | M_Esave (ft,(sym,(cbt,ct)),args,expr) ->
+       let* size = Memory.size_of_ctype loc ct in
        let* bt = Conversions.bt_of_core_base_type loc cbt in
        let* args = 
-         mapM (fun (sym,(acbt,asym)) ->
+         mapM (fun (sym,((acbt,act),asym)) ->
+             let* size = Memory.size_of_ctype loc ct in
              let* abt = Conversions.bt_of_core_base_type loc acbt in
-             return (sym,(abt,asym))
+             return (sym,((abt,(abt,size)),asym))
            ) args
        in
        let* expr = retype_expr loc expr in
-       return (M_Esave ((sym,bt),args,expr))
+       return (M_Esave (ft,(sym,(bt,(bt,size))),args,expr))
     | M_Erun (sym,asyms) ->
        return (M_Erun (sym,asyms))
     (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
@@ -344,6 +346,33 @@ let retype_impls loc impls =
   pmap_mapM (fun _ decl -> retype_impl_decl loc decl) 
             impls CF.Implementation.implementation_constant_compare
 
+
+(* adapting from Core_typing.lem *)
+let rec collect_labels acc (M_Expr (_,expr_)) =
+  match expr_ with
+  | M_Epure _ 
+  | M_Ememop _ 
+  | M_Eaction _ -> 
+     acc
+  | M_Ecase (_,pats_pes) ->
+     List.fold_left (fun acc (_,e) -> collect_labels acc e) acc pats_pes
+  | M_Elet (_,_,e) -> 
+     collect_labels acc e
+  | M_Eif (_,e1,e2) ->
+     collect_labels (collect_labels acc e1) e2
+ | M_Eskip -> acc
+ | M_Eccall _ -> acc
+ | M_Eproc _ -> acc
+ | M_Ewseq (_,e1,e2) 
+ | M_Esseq (_,e1,e2) ->
+    collect_labels (collect_labels acc e1) e2
+ | M_Ebound (_, e) -> 
+    collect_labels acc e
+ | M_End es -> 
+    List.fold_left collect_labels acc es
+ | M_Esave (_,(name,rbt),args,e) ->
+    collect_labels (SymMap.add name (args,rbt) acc) e
+ | M_Erun _ -> acc
 
 let retype_fun_map_decl loc = function
   | M_Fun (cbt,args,pexpr) ->

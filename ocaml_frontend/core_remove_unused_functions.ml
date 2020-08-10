@@ -299,11 +299,14 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
           | Easeq ((sym,cbt),_,_) ->
              let a () = record_dep (Sym sym) >> names_in_core_base_type cbt in
              PostTraverseAction a
-          | Esave ((sym,cbt),ls,_) ->
+          | Esave ((sym,(cbt,_)),ls,_) ->
              let a () = 
                record_dep (Sym sym) >> 
                names_in_core_base_type cbt >>
-               iterate ls (fun (sym,_) -> record_dep (Sym sym))
+               iterate ls (fun (sym,((cbt,_),_)) -> 
+                         names_in_core_base_type cbt >>
+                         record_dep (Sym sym)
+                       )
              in
              PostTraverseAction a
           | Erun (_,sym,_) ->

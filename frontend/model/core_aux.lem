@@ -2099,9 +2099,9 @@ val mk_sseq_e: pattern -> expr unit -> expr unit -> expr unit
 let mk_sseq_e pat e1 e2 =
   Expr [] (Esseq pat e1 e2)
 
-val mk_save_e: (Symbol.sym * core_base_type) -> list (Symbol.sym * (core_base_type * pexpr)) -> expr unit -> expr unit
-let mk_save_e sym_bTy sym_bTy_pes e =
-  Expr [] (Esave sym_bTy sym_bTy_pes e)
+val mk_save_e: (Symbol.sym * (core_base_type * maybe Ctype.ctype)) -> list (Symbol.sym * ((core_base_type * maybe Ctype.ctype) * pexpr)) -> expr unit -> expr unit
+let mk_save_e sym_ty sym_ty_pes e =
+  Expr [] (Esave sym_ty sym_ty_pes e)
 
 val mk_run_e: Symbol.sym -> list pexpr -> expr unit
 let mk_run_e sym pes =

@@ -48,6 +48,7 @@ sig
 
   type base_type
   type ct
+  type ft
 
   val pp_base_type: 
     base_type -> 
@@ -72,7 +73,7 @@ sig
 
   val pp_expr: 
     budget -> 
-    (ct,base_type,'ty) mu_expr -> 
+    (ft,ct,base_type,'ty) mu_expr -> 
     PPrint.document
 
   val pp_file: 
@@ -614,9 +615,9 @@ let pp_action act =
                   pp_linux_memory_order mo)
 
 
-let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
+let pp_expr budget (expr : (ft,ct,bt,'ty) mu_expr) =
 
-  let rec pp budget is_semi prec (M_Expr (annot, e) : (ct,bt,'ty) mu_expr) =
+  let rec pp budget is_semi prec (M_Expr (annot, e) : (ft,ct,bt,'ty) mu_expr) =
   
     match budget with
     | Some 0 -> P.dot ^^ P.dot ^^ P.dot ^^^ P.parens (!^"abbreviated")
@@ -670,7 +671,7 @@ let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
          * else *)
           P.parens
       end
-      begin match (e : (ct,bt,'ty) mu_expr_) with
+      begin match (e : (ft,ct,bt,'ty) mu_expr_) with
         | M_Epure pe ->
             pp_keyword "pure" ^^ P.parens (pp_pexpr budget pe)
         | M_Ememop memop ->
@@ -731,9 +732,9 @@ let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
          *     pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2)) *)
         (* | M_Eindet (i, e) ->
          *     pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e) *)
-        | M_Esave ((sym, bTy), sym_bTy_pes, e) ->
+        | M_Esave (_, (sym, (bTy,_)), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
-            P.parens (comma_list (fun (sym, (bTy, pe)) ->
+            P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
               pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
             ) sym_bTy_pes) ^^^
             pp_control "in" ^^^

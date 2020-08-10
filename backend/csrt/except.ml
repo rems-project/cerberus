@@ -12,13 +12,7 @@ let fail : Locations.t -> 'e -> ('a, Locations.t * 'e) t =
 
 let (let*) = except_bind
 
-let liftM = except_fmap
-
 let seq = except_sequence
-
-let of_maybe = of_maybe
-
-let to_bool = to_bool
 
 let mapM : ('a -> ('b,'e) t) -> 'a list -> ('b list, 'e) t = 
   except_mapM
@@ -72,26 +66,7 @@ let pmap_mapM
     ) m (Pmap.empty cmp)
 
 
-let tryM (m : ('a,'e1) exceptM) (m' : ('a,'e2) exceptM) =
-  match m with
-  | Result a -> Result a
-  | Exception _ -> m'
 
-let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
-  match m, ms with
-  | Result a, _ -> Result a
-  | Exception _, m' :: ms' -> tryMs m' ms'
-  | Exception e, [] -> Exception e
-
-
-
-
-
-
-let of_option (type a) loc err (o : a option) : (a,'e) exceptM =
-  match o with
-  | Some r -> return r
-  | None -> fail loc err
 
 
 let print pp = 
@@ -112,3 +87,8 @@ let debug_print print_level pp =
 
 
 type 'a m = ('a, Locations.t * TypeErrors.t) t
+
+
+
+
+

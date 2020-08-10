@@ -635,9 +635,9 @@ let rec pp_expr expr =
             pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
         | Eindet (i, e) ->
             pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
-        | Esave ((sym, bTy), sym_bTy_pes, e) ->
+        | Esave ((sym, (bTy,_)), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
-            P.parens (comma_list (fun (sym, (bTy, pe)) ->
+            P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
               pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
             ) sym_bTy_pes) ^^^
             pp_control "in" ^^^

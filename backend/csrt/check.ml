@@ -455,8 +455,7 @@ let subtype (loc: Loc.t)
   in
   let* rtyp = check_computational arg rtyp in
 
-  let rec delay_logical (unis,lspec) rtyp = 
-    match rtyp with
+  let rec delay_logical (unis,lspec) = function
     | Logical ((sname,sls),rtyp) ->
        let sym = Sym.fresh () in
        let unis = SymMap.add sym (Uni.{ resolved = None }) unis in
@@ -466,8 +465,7 @@ let subtype (loc: Loc.t)
   in
   let* ((unis,lspec), rtyp) = delay_logical (SymMap.empty,[]) rtyp in
 
-  let rec infer_resources local unis rtyp = 
-    match rtyp with
+  let rec infer_resources local unis = function
     | Resource (re,rtyp) -> 
        let* matched = match_concrete_resource loc {local;global} re in
        begin match matched with
@@ -485,8 +483,7 @@ let subtype (loc: Loc.t)
   in
   let* (local,unis,rtyp) = infer_resources local unis rtyp in
 
-  let rec check_logical unis lspec = 
-    match lspec with
+  let rec check_logical unis = function
     | (sname,sls) :: lspec ->
        let* found = symmap_lookup loc unis sname in
        begin match found with
@@ -494,19 +491,18 @@ let subtype (loc: Loc.t)
           fail loc (Unconstrained_logical_variable sname)
        | Uni.{resolved = Some it} ->
           let* als = infer_index_term loc {local;global} it in
-          if LS.equal als sls 
-          then check_logical unis lspec
+          if LS.equal als sls then check_logical unis lspec
           else fail loc (Mismatch {has = als; expect = sls})
        end
     | [] -> return ()
   in
   let* () = check_logical unis lspec in
   
-  let rec check_constraints rtyp =
-    match rtyp with
+  let rec check_constraints = function
     | Constraint (c, rtyp) ->
        let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-       if holds then check_constraints rtyp else fail loc (Unsat_constraint c)
+       if holds then check_constraints rtyp 
+       else fail loc (Unsat_constraint c)
     | I -> return ()
   in
   let* () = check_constraints rtyp in
@@ -543,8 +539,7 @@ let calltyp (loc: Loc.t)
   in
   let* ftyp = check_computational arguments ftyp in
 
-  let rec delay_logical (unis,lspec) ftyp = 
-    match ftyp with
+  let rec delay_logical (unis,lspec) = function
     | Logical ((sname,sls),ftyp) ->
        let sym = Sym.fresh () in
        let unis = SymMap.add sym (Uni.{ resolved = None }) unis in
@@ -554,8 +549,7 @@ let calltyp (loc: Loc.t)
   in
   let* ((unis,lspec), ftyp) = delay_logical (SymMap.empty,[]) ftyp in
 
-  let rec infer_resources local unis ftyp = 
-    match ftyp with
+  let rec infer_resources local unis = function
     | Resource (re,ftyp) -> 
        let* matched = match_concrete_resource loc {local;global} re in
        begin match matched with
@@ -573,8 +567,7 @@ let calltyp (loc: Loc.t)
   in
   let* (local,unis,ftyp) = infer_resources local unis ftyp in
 
-  let rec check_logical unis lspec = 
-    match lspec with
+  let rec check_logical unis = function
     | (sname,sls) :: lspec ->
        let* found = symmap_lookup loc unis sname in
        begin match found with
@@ -582,19 +575,18 @@ let calltyp (loc: Loc.t)
           fail loc (Unconstrained_logical_variable sname)
        | Uni.{resolved = Some it} ->
           let* als = infer_index_term loc {local;global} it in
-          if LS.equal als sls 
-          then check_logical unis lspec
+          if LS.equal als sls then check_logical unis lspec
           else fail loc (Mismatch {has = als; expect = sls})
        end
     | [] -> return ()
   in
   let* () = check_logical unis lspec in
 
-  let rec check_constraints ftyp =
-    match ftyp with
+  let rec check_constraints = function
     | Constraint (c, ftyp) ->
        let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-       if holds then check_constraints ftyp else fail loc (Unsat_constraint c)
+       if holds then check_constraints ftyp 
+       else fail loc (Unsat_constraint c)
     | Return rt -> return rt
   in
   let* rt = check_constraints ftyp in
@@ -1249,6 +1241,9 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
      let* local = subtype loc {local;global} ((abt,lname),loc)
                   typ "function return type" in
      empty_pop loc local
+
+
+
 
 
 
