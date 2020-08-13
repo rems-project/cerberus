@@ -237,9 +237,9 @@ let struct_decl loc tag fields struct_decls =
 
 
 (* brittle. revisit later *)
-let make_fun_arg_type struct_decls asym loc ct =
+let make_fun_arg_type lift struct_decls asym loc ct =
   let open RT in
-  let ct = make_pointer_ctype ct in
+  let ct = if lift then make_pointer_ctype ct else ct in
 
   let rec aux pointed (aname,rname) (CF.Ctype.Ctype (annots, ct_)) =
     match ct_ with
@@ -261,7 +261,7 @@ let make_fun_arg_type struct_decls asym loc ct =
        let aname2 = Sym.fresh () in
        let rname2 = Sym.fresh () in
        let* ((abt,ftt),(rbt,rtt)) = aux true (aname2,rname2) ct in
-       let* size = Memory.size_of_ctype loc ct in
+       let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
        begin match ct with
        | CF.Ctype.Ctype (_, Struct s) ->
           let* arg = 
@@ -330,7 +330,7 @@ let make_fun_spec loc genv attrs args ret_ctype =
           | Some sym -> sym
           | None -> Sym.fresh ()
         in
-        let* (arg,ret) = make_fun_arg_type genv name loc ct in
+        let* (arg,ret) = make_fun_arg_type true genv name loc ct in
         let args = Tools.comp args arg in
         return (args, returns @@ ret)
       ) 
@@ -339,4 +339,23 @@ let make_fun_spec loc genv attrs args ret_ctype =
   let* (Computational ((ret_name,bound),ret)) = 
     ctype true loc (Sym.fresh ()) ret_ctype in
   let ftyp = arguments (Return (RT.Computational ((ret_name,bound), RT.(@@) ret returns))) in
+  return ftyp
+
+
+let make_esave_spec loc genv attrs args ret_ctype = 
+  let open FT in
+  let open RT in
+  let* arguments = 
+    fold_leftM (fun args (msym, ct) ->
+        let name = match msym with
+          | Some sym -> sym
+          | None -> Sym.fresh ()
+        in
+        let* (arg,_) = make_fun_arg_type false genv name loc ct in
+        let args = Tools.comp args arg in
+        return args
+      ) 
+      (fun ft -> ft) args
+  in
+  let ftyp = arguments (Return (RT.Computational ((fresh (), BT.Unit), I))) in
   return ftyp

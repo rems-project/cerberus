@@ -1244,10 +1244,74 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
 
 
 
+type labels = FunctionTypes.t SymMap.t
+
+(* adapting from Core_typing.lem *)
+let collect_labels expr =
+  let rec aux acc (M_Expr (_,expr_)) =
+    match expr_ with
+    | M_Epure _ 
+    | M_Ememop _ 
+    | M_Eaction _ -> 
+       acc
+    | M_Ecase (_,pats_pes) ->
+       List.fold_left (fun acc (_,e) -> aux acc e) acc pats_pes
+    | M_Elet (_,_,e) -> 
+       aux acc e
+    | M_Eif (_,e1,e2) ->
+       aux (aux acc e1) e2
+    | M_Eskip -> acc
+    | M_Eccall _ -> acc
+    | M_Eproc _ -> acc
+    | M_Ewseq (_,e1,e2) 
+    | M_Esseq (_,e1,e2) ->
+       aux (aux acc e1) e2
+    | M_Ebound (_, e) -> 
+       aux acc e
+    | M_End es -> 
+       List.fold_left aux acc es
+    | M_Esave (ft,(name,_),_,e) ->
+       aux (SymMap.add name ft acc) e
+    | M_Erun _ -> acc
+  in
+  aux SymMap.empty expr
 
 
 
-let rec infer_expr_pop (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) m =
+
+     
+let check_and_bind_function_arguments loc local arguments function_typ = 
+  let rec check local args ftyp =
+    match args, ftyp with
+    | (aname,abt)::args, FT.Computational ((lname,sbt),ftyp) 
+         when BT.equal abt sbt ->
+       let new_lname = fresh () in
+       let ftyp' = FT.subst_var {s=lname;swith=S new_lname} ftyp in
+       let local = add (mL new_lname (Base abt)) local in
+       let local = add (mA aname (abt,new_lname)) local in
+       check local args ftyp'
+    | (aname,abt)::args, FT.Computational ((sname,sbt),ftyp) ->
+       fail loc (Mismatch {has = (Base abt); expect = Base sbt})
+    | [], FT.Computational (_,_)
+    | _::_, FT.Return _ ->
+       let expect = FT.count_computational function_typ in
+       let has = length arguments in
+       fail loc (Number_arguments {expect;has})
+    | args, FT.Logical ((sname,sls),ftyp) ->
+       let new_lname = fresh () in
+       let ftyp' = FT.subst_var {s=sname;swith=S new_lname} ftyp in
+       check (add (mL new_lname sls) local) args ftyp'
+    | args, FT.Resource (re,ftyp) ->
+       check (add (mUR re) local) args ftyp
+    | args, FT.Constraint (lc,ftyp) ->
+       check (add (mUC lc) local) args ftyp
+    | [], FT.Return rt ->
+       return (rt,local)
+  in
+  check local arguments function_typ
+
+
+let rec infer_expr_pop (loc: Loc.t) labels {local;global} (e: 'bty mu_expr) : (RT.t * L.t) m =
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
   match e_ with
@@ -1258,20 +1322,20 @@ let rec infer_expr_pop (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L
        | M_Pat pat -> pattern_match_rt loc pat rt
      in
      let local = local' ++ local in
-     infer_expr_pure loc {local;global} e2
+     infer_expr_pure loc labels {local;global} e2
   | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (pat, e1, e2) ->
-     let* (rt, local) = infer_expr_pop loc {local = mark ++ local;global} e1 in
+     let* (rt, local) = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
      let* local' = pattern_match_rt loc pat rt in
      let local = local' ++ local in
-     infer_expr_pop loc {local;global} e2
+     infer_expr_pop loc labels {local;global} e2
   | _ ->
-     let* (rt, local) = infer_expr_pure loc {local;global} e in
+     let* (rt, local) = infer_expr_pure loc labels {local;global} e in
      return (rt_pop (rt, local))
   
 
 
-and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) m = 
+and infer_expr_pure (loc: Loc.t) labels {local;global} (e: 'bty mu_expr) : (RT.t * L.t) m = 
 
   let* () = debug_print 1 (action "inferring expression type") in
   let* () = debug_print 1 (blank 3 ^^ item "environment" (L.pp local)) in
@@ -1445,22 +1509,31 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
        let* (rt, local) = calltyp loc {local;global} args decl_typ in
        return (rt, local)
     | M_Ebound (n, e) ->
-       infer_expr_pure loc {local;global} e
+       infer_expr_pure loc labels {local;global} e
     | M_End _ ->
        fail loc (Unsupported !^"todo: End")
-    | M_Erun _ ->
-       fail loc (Unsupported !^"todo: Erun")
+    | M_Erun (label_sym,asyms) ->
+       let* ft = match SymMap.find_opt label_sym labels with
+       | None -> fail loc (Generic (!^"undefined label" ^^^ Sym.pp label_sym))
+       | Some ft -> return ft
+       in
+       let* args = get_a_loc_asyms loc local asyms in
+       let* (_rt, _local) = calltyp loc {local;global} args ft in
+       return (Computational ((fresh (), BT.Unit), I), local)
     | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
     | M_Eif _ -> fail loc (Unreachable !^"Eif in inferring position")
     | M_Esave (ft, (sym,(rbt,rct)), args, body) ->
-       (* check that assyming a list of (any) arguments satisfying the
-          argument specification the body produces the right return type *)
-       let* () = check_function loc global sym
-                   (map (fun (sym, ((abt,_), _)) -> (sym,abt)) args) 
-                   rbt (EXPR body) ft in
-       (* check that the default arguments satisfy the specification *)
-       let* args = get_a_loc_asyms loc local (map (fun (_, (_, asym)) -> asym) args) in
-       calltyp loc {local;global} args ft
+       (* check that the default arguments satisfy the specification,
+          which consumes the needed resources *)
+       let* default_args = get_a_loc_asyms loc local (map (fun (_, (_, asym)) -> asym) args) in
+       let* (_,local) = calltyp loc {local;global} default_args ft in
+       (* Check that assuming a list of (any) arguments satisfying the
+          argument specification the body produces the right return
+          type. This includes the logical facts (for the general case)
+          into the environment. *)
+       let* (_,local) = check_and_bind_function_arguments loc local
+                          (map (fun (sym, ((abt,_), _)) -> (sym,abt)) args) ft in
+       infer_expr_pure loc labels {local;global} body
     | M_Elet (p, e1, e2) ->
        let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
        let* local' = match p with
@@ -1468,13 +1541,13 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
          | M_Pat pat -> pattern_match_rt loc pat rt
        in
        let local = local' ++ local in
-       infer_expr_pure loc {local;global} e2
+       infer_expr_pure loc labels {local;global} e2
     | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
     | M_Esseq (pat, e1, e2) ->
-       let* (rt, local) = infer_expr_pop loc {local = mark ++ local;global} e1 in
+       let* (rt, local) = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
        let* local' = pattern_match_rt loc pat rt in
        let local = local' ++ local in
-       infer_expr_pure loc {local;global} e2
+       infer_expr_pure loc labels {local;global} e2
   in
 
   let* () = debug_print 3 (blank 3 ^^ item "inferred" (RT.pp typ)) in
@@ -1482,7 +1555,7 @@ and infer_expr_pure (loc: Loc.t) {local;global} (e: 'bty mu_expr) : (RT.t * L.t)
   return (typ,local)
 
 
-and check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) = 
+and check_expr (loc: Loc.t) labels {local;global} (e: 'bty mu_expr) (typ: RT.t) = 
 
   let* () = debug_print 1 (action "checking expression type") in
   let* () = debug_print 1 (blank 3 ^^ item "type" (RT.pp typ)) in
@@ -1503,7 +1576,7 @@ and check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) =
            let local = add (mUC lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
-             let* local = check_expr loc {local;global} e typ in
+             let* local = check_expr loc labels {local;global} e typ in
              return (Some (local))
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
      in
@@ -1519,7 +1592,7 @@ and check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) =
            let local = add (mUC lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then return None else 
-             let* local = check_expr loc {local;global} e typ in
+             let* local = check_expr loc labels {local;global} e typ in
              return (Some (local))
          ) pats_es
      in
@@ -1533,22 +1606,22 @@ and check_expr (loc: Loc.t) {local;global} (e: 'bty mu_expr) (typ: RT.t) =
        | M_Pat pat -> pattern_match_rt loc pat rt
      in
      let local = local' ++ local in
-     check_expr loc {local;global} e2 typ
+     check_expr loc labels {local;global} e2 typ
   | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (pat, e1, e2) ->
-     let* (rt, local) = infer_expr_pop loc {local = mark ++ local;global} e1 in
+     let* (rt, local) = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
      let* local' = pattern_match_rt loc pat rt in
      let local = local' ++ local in
-     check_expr loc {local;global} e2 typ
+     check_expr loc labels {local;global} e2 typ
   | _ ->
-     let* (rt, local) = infer_expr_pure loc {local;global} e in
+     let* (rt, local) = infer_expr_pure loc labels {local;global} e in
      let* (local',(abt,lname)) = bind_logically rt in
      let local = local' ++ local in
      let* local = subtype loc {local;global} ((abt,lname),loc) typ "function return type" in
      empty_pop loc local
-     
 
-and check_function (loc: Loc.t) 
+
+let check_function (loc: Loc.t) 
                    (global: Global.t)
                    (fsym: Sym.t)
                    (arguments: (Sym.t * BT.t) list) 
@@ -1561,44 +1634,20 @@ and check_function (loc: Loc.t)
     | PEXPR body -> debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) 
   in
 
-  let rt_consistent rbt (Computational ((sname,sbt),t)) =
+  let* (rt,local) = check_and_bind_function_arguments loc L.empty arguments function_typ in
+
+  (* rbt consistency *)
+  let* () = 
+    let Computational ((sname,sbt),t) = rt in
     if BT.equal rbt sbt then return ()
     else fail loc (Mismatch {has = (Base rbt); expect = Base sbt})
   in
 
-  let rec check local args rbt body ftyp =
-    match args, ftyp with
-    | (aname,abt)::args, FT.Computational ((lname,sbt),ftyp) 
-         when BT.equal abt sbt ->
-       let new_lname = fresh () in
-       let ftyp' = FT.subst_var {s=lname;swith=S new_lname} ftyp in
-       let local = add (mL new_lname (Base abt)) local in
-       let local = add (mA aname (abt,new_lname)) local in
-       check local args rbt body ftyp'
-    | (aname,abt)::args, FT.Computational ((sname,sbt),ftyp) ->
-       fail loc (Mismatch {has = (Base abt); expect = Base sbt})
-    | [], FT.Computational (_,_)
-    | _::_, FT.Return _ ->
-       let expect = FT.count_computational function_typ in
-       let has = length arguments in
-       fail loc (Number_arguments {expect;has})
-    | args, FT.Logical ((sname,sls),ftyp) ->
-       let new_lname = fresh () in
-       let ftyp' = FT.subst_var {s=sname;swith=S new_lname} ftyp in
-       check (add (mL new_lname sls) local) args rbt body ftyp'       
-    | args, FT.Resource (re,ftyp) ->
-       check (add (mUR re) local) args rbt body ftyp
-    | args, FT.Constraint (lc,ftyp) ->
-       check (add (mUC lc) local) args rbt body ftyp
-    | [], FT.Return rt ->
-       let* () = rt_consistent rbt rt in
-       begin match body with
-         | EXPR body -> check_expr loc {local;global} body rt
-         | PEXPR body -> check_pexpr loc {local;global} body rt
-       end
+  let* local = match body with
+  | EXPR body -> check_expr loc (collect_labels body) {local;global} body rt
+  | PEXPR body -> check_pexpr loc {local;global} body rt
   in
-  (* check environment has no resources? *)
-  let* local = check L.empty arguments rbt body function_typ in
+
   let* () = debug_print 1 hardline in
   let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in
   let* () = debug_print 1 (!^(greenb "...checked ok")) in
