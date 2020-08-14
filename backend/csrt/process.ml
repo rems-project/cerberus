@@ -57,10 +57,10 @@ let process_functions genv fns =
       match fn with
       | M_Fun (rbt, args, body) ->
          let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
-         check_function loc genv fsym args rbt (PEXPR body) ftyp
+         check_function loc genv fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body) ->
          let* (loc,ftyp) = Global.get_fun_decl loc genv fsym in
-         check_function loc genv fsym args rbt (EXPR body) ftyp
+         check_procedure loc genv fsym args rbt body ftyp
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()

@@ -351,7 +351,7 @@ let make_esave_spec loc genv attrs args ret_ctype =
           | Some sym -> sym
           | None -> Sym.fresh ()
         in
-        let* (arg,_) = make_fun_arg_type false genv name loc ct in
+        let* (arg,_) = make_fun_arg_type true genv name loc ct in
         let args = Tools.comp args arg in
         return args
       ) 

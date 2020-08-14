@@ -12,8 +12,6 @@ let fail : Locations.t -> 'e -> ('a, Locations.t * 'e) t =
 
 let (let*) = except_bind
 
-let seq = except_sequence
-
 let mapM : ('a -> ('b,'e) t) -> 'a list -> ('b list, 'e) t = 
   except_mapM
 
@@ -21,7 +19,7 @@ let iterM : ('a -> (unit,'e) t) -> 'a list -> (unit, 'e) t =
   fun f l -> let* _ = mapM f l in return ()
 
 let concat_mapM f l = 
-  let* xs = seq (List.map f l) in
+  let* xs = mapM f l in
   return (List.concat xs)
 
 let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
@@ -33,7 +31,7 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | Some y -> y :: filter_map f xs
 
 let filter_mapM f l = 
-  let* xs = seq (List.map f l) in
+  let* xs = mapM f l in
   return (filter_map (fun x -> x) xs)
 
 
