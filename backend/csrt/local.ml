@@ -17,14 +17,14 @@ type binding
 
 type context_item = 
   | Binding of Sym.t * VB.t
-  | Marker
+  | Marker of Sym.t
 
 
 type t = Local of context_item list
 
 let empty = Local []
 
-let mark = Local [Marker]
+let marked sym = Local [Marker sym]
 
 let concat (Local local') (Local local) = Local (local' @ local)
 
@@ -82,14 +82,16 @@ let use_resource loc sym where (Local local) =
 
 
 
-let new_old (Local local) = 
+let new_since sym (Local local) = 
   let rec aux = function
     | [] -> ([],[])
     | Binding (sym,b) :: rest -> 
        let (newl,oldl) = aux rest in
        ((sym,b) :: newl,oldl)
-    | Marker :: rest ->
+    | Marker sym' :: rest when Sym.equal sym sym' ->
        ([],rest)
+    | Marker _ :: rest ->
+       aux rest
   in
   let (newl,oldl) = (aux local) in
   (newl, Local oldl)
@@ -121,8 +123,8 @@ let merge loc (Local l1) (Local l2) =
     | [], [] -> return []
     | i1::l1, i2::l2 ->
        let* i = match i1, i2 with
-         | Marker, Marker -> 
-            return Marker
+         | Marker sym, Marker sym' when Sym.equal sym sym' -> 
+            return (Marker sym)
          | Binding (s1,vb1), Binding(s2,vb2) when Sym.equal s1 s2 ->
             let* vb = match vb1, vb2 with
               | VB.Computational (sl1,bt1), VB.Computational (sl2,bt2) 
@@ -171,7 +173,8 @@ let mUC lc = mC (Sym.fresh ()) lc
 
 let pp_context_item print_used = function
   | Binding (sym,binding) -> VB.pp print_used (sym,binding)
-  | Marker -> fancystring (Colour.ansi_format [Blue] "\u{25CF}") 2
+  | Marker sym -> 
+     fancystring (Colour.ansi_format [Blue] "\u{25CF}") 2 ^^ parens (Sym.pp sym)
 
 let pp (Local local) = 
   match local with

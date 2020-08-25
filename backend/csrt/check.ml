@@ -1096,8 +1096,8 @@ let ensure_reachable (loc: Loc.t) {local;global} : unit m =
 
 
 
-let rt_pop (Computational ((lname,bt),rt), local) = 
-  let (new_local,old_local) = new_old local in
+let rt_pop mark (Computational ((lname,bt),rt), local) = 
+  let (new_local,old_local) = new_since mark local in
   let rec aux vbs acc = 
     match vbs with
     | [] -> acc
@@ -1116,8 +1116,8 @@ let rt_pop (Computational ((lname,bt),rt), local) =
   in
   (RT.Computational ((lname,bt), aux new_local rt), old_local)
 
-let empty_pop loc local = 
-  let (new_local,old_local) = new_old local in
+let empty_pop mark loc local = 
+  let (new_local,old_local) = new_since mark local in
   let rec aux = function
     | (s, VB.Resource resource) :: _ -> 
        fail loc (Unused_resource {resource;is_merge=false})
@@ -1128,21 +1128,13 @@ let empty_pop loc local =
   return old_local
 
 
-let rec infer_pexpr_pop (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L.t) m = 
+let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L.t) m = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Loc.update loc annots in
-  match pe_ with
-  | M_PElet (p, e1, e2) ->
-     let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
-     let* local' = match p with
-       | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
-       | M_Pat pat -> pattern_match_rt loc pat rt
-     in
-     let local = local' ++ local in
-     infer_pexpr_pop loc {local;global} e2
-  | _ ->
-     let* (rt, local) = infer_pexpr_pure loc {local;global} pe in
-     return (rt_pop (rt, local))
+  let mark = Sym.fresh () in
+  let local = marked mark ++ local in 
+  let* (rt, local) = infer_pexpr_pure loc {local;global} pe in
+  return (rt_pop mark (rt, local))
 
 and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L.t) m = 
 
@@ -1227,7 +1219,7 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
        let* (rt, local) = calltyp loc {local;global} args decl_typ in
        return (rt, local)
     | M_PElet (p, e1, e2) ->
-       let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
+       let* (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
          | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt loc pat rt
@@ -1240,13 +1232,15 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
        let* () = check_base_type (Loc.update loc a) cbt Bool in
        let* rts_locals =
          filter_mapM (fun (lc, e) ->
-             let local = add (mUC lc) (mark ++ local) in
+             let cname = fresh () in
+             let local = add (mC cname lc) local in
              let* unreachable = Solver.is_unreachable loc {local;global} in
              if unreachable then 
                let* () = debug_print 2 (blank 3 ^^ !^"(branch unreachable)") in
                return None 
              else 
-               let* (rt,local) = infer_pexpr_pop loc {local;global} e in
+               let* (rt,local) = infer_pexpr_pure loc {local;global} e in
+               let* local = remove loc cname local in
                return (Some ((lc,rt),local))
            ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
        in
@@ -1278,14 +1272,16 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
      let* () = check_base_type (Loc.update loc a) cbt Bool in
      let* paths =
        filter_mapM (fun (lc, e) ->
-           let local = add (mUC lc) local in
+           let cname = fresh () in
+           let local = add (mC cname lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then 
              let* () = debug_print 2 (blank 3 ^^ !^"(branch unreachable)") in
              return None 
            else 
-             let* r = check_pexpr loc {local;global} e typ in
-             return (Some r)
+             let* local = check_pexpr loc {local;global} e typ in
+             let* local = remove loc cname local in
+             return (Some local)
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
      in
      merge_local_environments loc paths
@@ -1306,7 +1302,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
      in
      merge_local_environments loc paths
   | M_PElet (p, e1, e2) ->
-     let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
+     let* (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with
        | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
        | M_Pat pat -> pattern_match_rt loc pat rt
@@ -1314,12 +1310,14 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
      let local = local' ++ local in
      check_pexpr loc {local;global} e2 typ
   | _ ->
+     let mark = Sym.fresh () in
+     let local = marked mark ++ local in
      let* (rt, local) = infer_pexpr_pure loc {local;global} e in
      let* (local',(abt,lname)) = bind_logically rt in
      let local = local' ++ local in
      let* local = subtype loc {local;global} ((abt,lname),loc)
                   typ "function return type" in
-     empty_pop loc local
+     empty_pop mark loc local
 
 
 
@@ -1330,33 +1328,15 @@ type labels = FunctionTypes.t SymMap.t
 
 
 
-let rec infer_expr_pop (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) or_goto m =
+let rec infer_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) or_goto m =
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  match e_ with
-  | M_Elet (p, e1, e2) ->
-     let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
-     let* local' = match p with
-       | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
-       | M_Pat pat -> pattern_match_rt loc pat rt
-     in
-     let local = local' ++ local in
-     infer_expr_pure loc labels {local;global} e2
-  | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
-  | M_Esseq (pat, e1, e2) ->
-     let* r = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
-     begin match r with
-     | Goto -> return Goto
-     | Normal (rt, local) ->
-        let* local' = pattern_match_rt loc pat rt in
-        let local = local' ++ local in
-        infer_expr_pop loc labels {local;global} e2
-     end
-  | _ ->
-     let* r = infer_expr_pure loc labels {local;global} e in
-     match r with
-     | Normal (rt, local) -> return (Normal (rt_pop (rt, local)))
-     | Goto -> return Goto
+  let mark = Sym.fresh () in
+  let local = marked mark ++ local in 
+  let* r = infer_expr_pure loc labels {local;global} e in
+  match r with
+  | Normal (rt, local) -> return (Normal (rt_pop mark (rt, local)))
+  | Goto -> return Goto
 
   
 
@@ -1553,7 +1533,7 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
        let* (_,local) = calltyp loc {local;global} default_args ft in
        return Goto
     | M_Elet (p, e1, e2) ->
-       let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
+       let* (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
          | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt loc pat rt
@@ -1562,7 +1542,7 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
        infer_expr_pure loc labels {local;global} e2
     | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
     | M_Esseq (pat, e1, e2) ->
-       let* r = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
+       let* r = infer_expr loc labels {local;global} e1 in
        begin match r with
        | Goto -> return Goto
        | Normal (rt, local) ->
@@ -1594,14 +1574,20 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
      let* () = check_base_type (Loc.update loc a) cbt Bool in
      let* paths =
        filter_mapM (fun (lc, e) ->
-           let local = add (mUC lc) local in
+           let cname = fresh () in
+           let local = add (mC cname lc) local in
            let* unreachable = Solver.is_unreachable loc {local;global} in
            if unreachable then 
              let* () = debug_print 2 (blank 3 ^^ !^"(branch unreachable)") in
              return None 
            else 
-             let* local = check_expr loc labels {local;global} e typ in
-             return (Some local)
+             let* r = check_expr loc labels {local;global} e typ in
+             match r with
+             | Normal local ->
+                let* local = remove loc cname local in
+                return (Some (Normal local))
+             | Goto ->
+                return (Some Goto)
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
      in
      merge_local_environments_or_goto loc paths
@@ -1625,7 +1611,7 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
      let* local = check_pexpr loc {local;global} pe typ in
      return (Normal local)
   | M_Elet (p, e1, e2) ->
-     let* (rt, local) = infer_pexpr_pop loc {local = mark ++ local;global} e1 in
+     let* (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with 
        | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
        | M_Pat pat -> pattern_match_rt loc pat rt
@@ -1634,7 +1620,7 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
      check_expr loc labels {local;global} e2 typ
   | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (pat, e1, e2) ->
-     let* r = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
+     let* r = infer_expr loc labels {local;global} e1 in
      begin match r with
      | Goto -> return Goto
      | Normal (rt, local) -> 
@@ -1643,6 +1629,8 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
         check_expr loc labels {local;global} e2 typ
      end
   | _ ->
+     let mark = Sym.fresh () in
+     let local = marked mark ++ local in
      let* r = infer_expr_pure loc labels {local;global} e in
      match r with
      | Goto -> return Goto
@@ -1650,7 +1638,7 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
         let* (local',(abt,lname)) = bind_logically rt in
         let local = local' ++ local in
         let* local = subtype loc {local;global} ((abt,lname),loc) typ "function return type" in
-        let* local = empty_pop loc local in
+        let* local = empty_pop mark loc local in
         return (Normal local)
 
 

@@ -562,6 +562,8 @@ let rec pp_expr expr =
                 !^ "TODO(Aattrs)"
             | Anot_explode ->
                !^"{-not-explode-}" ^^ acc
+            | Areturn ->
+               !^"{-return-}" ^^ acc
         ) doc annot
     end
     begin

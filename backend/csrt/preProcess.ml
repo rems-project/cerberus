@@ -249,6 +249,12 @@ let retype_paction loc = function
     let* action = retype_action loc action in
     return (M_Paction (pol,action))
 
+(* adapting code from get_loc *)
+let rec is_return = function
+  | CF.Annot.Areturn :: _ -> true
+  | _ :: annots -> is_return annots
+  | [] -> false
+
 let rec retype_expr struct_decls loc (M_Expr (annots,expr_)) = 
   let retype_expr = retype_expr struct_decls in
   let* expr_ = match expr_ with
