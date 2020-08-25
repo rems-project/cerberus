@@ -352,9 +352,10 @@ val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
 let mk_let_pe pat pe1 pe2 =
   Pexpr [] () (PElet pat pe1 pe2)
 
-val mk_if_pe_ : forall 'bty. list Annot.annot -> 'bty -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym
-let mk_if_pe_ annots bty pe1 pe2 pe3 =
-  Pexpr annots bty (PEif pe1 pe2 pe3)
+val mk_if_pe_: list annot -> pexpr -> pexpr -> pexpr -> pexpr
+let mk_if_pe_ annots pe1 pe2 pe3 =
+  Pexpr annots () (PEif pe1 pe2 pe3)
+
 
 val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
 let mk_if_pe pe1 pe2 pe3 =
@@ -2110,6 +2111,10 @@ let mk_run_e sym pes =
 val mk_nd_e: list (expr unit) -> expr unit
 let mk_nd_e es =
   Expr [] (End es)
+
+val mk_if_e_: list annot -> pexpr -> expr unit -> expr unit -> expr unit
+let mk_if_e_ annots pe e1 e2 =
+  Expr annots (Eif pe e1 e2)
 
 val mk_if_e: pexpr -> expr unit -> expr unit -> expr unit
 let mk_if_e pe e1 e2 =

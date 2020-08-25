@@ -560,6 +560,8 @@ let rec pp_expr expr =
                 end
             | Aattrs _ ->
                 !^ "TODO(Aattrs)"
+            | Anot_explode ->
+               !^"{-not-explode-}" ^^ acc
         ) doc annot
     end
     begin

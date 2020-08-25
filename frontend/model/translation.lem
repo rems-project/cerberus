@@ -403,10 +403,10 @@ else
                                     ; Caux.mk_specified_pat obj2_sym_pat ]
                 , Caux.mk_let_pe conv1_sym_pat promoted1_pe (
                     Caux.mk_let_pe conv2_sym_pat promoted2_pe (
-                      Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_sym_pe zero_pe)
+                      Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpEq conv2_sym_pe zero_pe)
                         (Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub)
                         (* if a/b is representable *)
-                        (Caux.mk_if_pe (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe) result_ty)
+                        (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe) result_ty)
                            begin
                              Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" $
                                if AilTypesAux.is_signed_integer_type result_ty then
@@ -458,7 +458,7 @@ and translate_relational_operator self usual_arithmetic_conversion result_ty bop
                  let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.8#3" $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
                  C.Expr [Annot.Astd "§6.5.8#6"] (
                    C.Epure (
-                     Caux.mk_if_pe (Caux.mk_op_pe real_bop promoted1_pe promoted2_pe)
+                     Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe real_bop promoted1_pe promoted2_pe)
                        (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                        (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                    )
@@ -475,7 +475,7 @@ else
                    C.Ewseq memop_sym_pat (C.Expr [] (C.Ememop memop [obj1_sym_pe; obj2_sym_pe])) (
                      C.Expr [Annot.Astd "§6.5.8#6"] (
                        C.Epure (
-                         Caux.mk_if_pe memop_sym_pe
+                         Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
                            (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                            (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                        )
@@ -516,7 +516,7 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   [ (Caux.mk_specified_pat obj_sym_pat,
            Caux.mk_wseq_e (Caux.mk_sym_pat memop_sym C.BTy_boolean) (C.Expr [] (C.Ememop memop [obj_sym_pe; nullptr_pe])) (
              C.Expr [Annot.Astd "§6.5.9#3"] $ C.Epure (
-               Caux.mk_if_pe memop_sym_pe
+               Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
              )
@@ -562,7 +562,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
             [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy1))
                                  ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy2)) ],
                let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.9#4, sentence 1" $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
-               Caux.mk_std_pe "§6.5.9#3" $ Caux.mk_if_pe (Caux.mk_std_pe "§6.5.9#4, sentence 3" $ mk_op_pe promoted1_pe promoted2_pe)
+               Caux.mk_std_pe "§6.5.9#3" $ Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_std_pe "§6.5.9#4, sentence 3" $ mk_op_pe promoted1_pe promoted2_pe)
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 0)))
             ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2]),
@@ -583,7 +583,7 @@ else (* both operand have pointer type *)
   end in
                Caux.mk_wseq_e (Caux.mk_sym_pat memop_sym C.BTy_boolean) (C.Expr [] (C.Ememop memop [obj1_sym_pe; obj2_sym_pe])) (
                  Caux.mk_pure_e (
-                   Caux.mk_std_pe "§6.5.9#3" $ Caux.mk_if_pe memop_sym_pe
+                   Caux.mk_std_pe "§6.5.9#3" $ Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
                      (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                      (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                    )
@@ -709,13 +709,13 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
                      (stdlib.mkcall_conv_int (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e2)
                   )
 *)
-                  (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
+                  (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty2' ty1')
                      (stdlib.mkcall_conv_int ty1' e1)
                      (* "Otherwise, both operands are converted to the unsigned integer type corresponding to the type
                          of the operand with signed integer type". *)
                      (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e1)
                   ,
-                  Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
+                  Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty2' ty1')
                      (stdlib.mkcall_conv_int ty1' e2)
                      (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e2)
                   )
@@ -732,11 +732,11 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
                      (stdlib.mkcall_conv_int (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e2)
                   )
 *)
-                  (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
+                  (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty1' ty2')
                      (stdlib.mkcall_conv_int ty2' e1)
                      (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e1)
                   ,
-                  Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
+                  Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_all_values_representable_in ty1' ty2')
                      (stdlib.mkcall_conv_int ty2' e2)
                      (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e2)
                   )
@@ -1111,10 +1111,10 @@ else
                            (Caux.mk_let_pe (Caux.mk_sym_pat promoted2_sym (C.BTy_object C.OTy_integer))
                              (Caux.mk_std_pe "§6.5.7#3, sentence 1" $ integer_promotion (ctype_of e2) obj2_sym_pe)
                            (* (§6.5.7#2) if promoted2 < 0 then undef *)
-                           (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
+                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
                              (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
                            (* ctype_width(result_ty) <= promoted2 *)
-                           (Caux.mk_if_pe (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
+                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
                                                                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe))
                               (Caux.mk_std_undef_pe loc "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
@@ -1124,11 +1124,11 @@ else
                             )))
 else
                            Caux.mk_std_pe "§6.5.7#4, sentence 3" $
-                           (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted1_sym_pe (Caux.mk_integer_pe 0))
+                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted1_sym_pe (Caux.mk_integer_pe 0))
                              (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052a_negative_left_shift)
                            (Caux.mk_let_pe (Caux.mk_sym_pat res_sym (C.BTy_object C.OTy_integer))
                              (Caux.mk_op_pe C.OpMul promoted1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe))
-                           (Caux.mk_if_pe (stdlib.mkcall_is_representable res_sym_pe result_ty)
+                           (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable res_sym_pe result_ty)
                               (Caux.mk_specified_pe res_sym_pe)
                             (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
 )
@@ -1176,11 +1176,11 @@ else
                            (Caux.mk_let_pe (Caux.mk_sym_pat promoted2_sym (C.BTy_object C.OTy_integer))
                              (integer_promotion (ctype_of e2) obj2_sym_pe)
                            (* (§6.5.7#2) if promoted2 < 0 then undef *)
-                           (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
+                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
                              (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
                            
                            (* ctype_width(result_ty) <= promoted2 *)
-                           (Caux.mk_if_pe (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
+                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
                                                                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe))
                               (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
                               (let expr = Caux.mk_op_pe C.OpDiv obj1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe) in
@@ -1188,7 +1188,7 @@ else
 if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                                Caux.mk_std_pe "6.5.7#5, sentence 2" expr
 else
-                               Caux.mk_std_pe "6.5.7#5, sentence 3" $ Caux.mk_if_pe (Caux.mk_op_pe C.OpGe promoted1_sym_pe (Caux.mk_integer_pe 0))
+                               Caux.mk_std_pe "6.5.7#5, sentence 3" $ Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpGe promoted1_sym_pe (Caux.mk_integer_pe 0))
                                  expr
                                  (C.Pexpr [] () (
                                     C.PEcall (C.Impl Implementation.SHR_signed_negative) [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_sym_pe; promoted2_sym_pe]
@@ -1314,7 +1314,7 @@ else (* pointer <-> pointer cast *)
                         [ ( Caux.mk_specified_pat obj_sym_pat
                           , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym C.BTy_boolean)
                               (C.Expr [] (C.Ememop Mem_common.PtrWellAligned [Caux.mk_ail_ctype_pe cast_ref_ty; obj_sym_pe]))
-                              (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_if_pe (Caux.mk_sym_pe let_sym) obj_sym_pe ub_pe))) )
+                              (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_sym_pe let_sym) obj_sym_pe ub_pe))) )
                         ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                           , (* we are being daemonic (case where the resulting pointer would be misaligned) *)
                             Caux.mk_pure_e ub_pe ) ]
@@ -1486,7 +1486,7 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                         (C.Expr [] (C.Ememop Mem_common.Ptrdiff [diff_ty_pe; obj1_sym_pe; obj2_sym_pe]))
                         begin
                           Caux.mk_pure_e begin
-                            Caux.mk_if_pe (stdlib.mkcall_is_representable memop_sym_pe Ctype.ptrdiff_t)
+                            Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable memop_sym_pe Ctype.ptrdiff_t)
                               (Caux.mk_specified_pe memop_sym_pe)
                               (Caux.mk_undef_pe loc Undefined.UB050_pointers_subtraction_not_representable)
                           end
@@ -2324,9 +2324,9 @@ TODO: #9
             (Caux.mk_sseq_e
               (Caux.mk_tuple_pat [ret_sym_pat; params_sym_pat; Caux.mk_empty_pat C.BTy_boolean; Caux.mk_empty_pat C.BTy_boolean])
               (Caux.mk_pure_e (Caux.mk_cfunction_pe fun_sym_pe))
-              (Caux.mk_if_e
+              (Caux.mk_if_e_ [Annot.Anot_explode]
                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_params_length params_sym_pe) (Caux.mk_integer_pe 0))
-                (Caux.mk_if_e
+                (Caux.mk_if_e_ [Annot.Anot_explode]
                   (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe ret_ty) ret_sym_pe)
                   (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe [])
                   (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
@@ -2378,7 +2378,7 @@ TODO: #9
             E.return $
               (n+1,
                 (Caux.mk_let_e param_ty_sym_pat (stdlib.mkcall_params_nth params_sym_pe (Caux.mk_integer_pe n))
-                (Caux.mk_if_e
+                (Caux.mk_if_e_ [Annot.Anot_explode]
                   (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_param_ty) param_ty_sym_pe))
                   (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
                   (let conv_value =
@@ -2461,12 +2461,12 @@ TODO: #9
               )
 begin if expect_is_variadic then
               (* check number of parameters *)
-              (Caux.mk_if_e
+              (Caux.mk_if_e_ [Annot.Anot_explode]
                 (Caux.mk_not_pe (Caux.mk_op_pe C.OpLe (stdlib.mkcall_params_length params_sym_pe)
                                                       (Caux.mk_integer_pe (integerFromNat n_args))))
                 (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
                 (* check if function types are compatible *)
-                (Caux.mk_if_e
+                (Caux.mk_if_e_ [Annot.Anot_explode]
                   (Caux.mk_op_pe C.OpOr (Caux.mk_not_pe is_variadic_sym_pe)
                                  (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
                   (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
@@ -2497,12 +2497,12 @@ begin if expect_is_variadic then
               )
 else
               (* check number of parameters *)
-              (Caux.mk_if_e
+              (Caux.mk_if_e_ [Annot.Anot_explode]
                 (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (stdlib.mkcall_params_length params_sym_pe)
                                                       (Caux.mk_integer_pe (integerFromNat n_args))))
                 (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
                 (* check if function types are compatible *)
-                (Caux.mk_if_e
+                (Caux.mk_if_e_ [Annot.Anot_explode]
                   (Caux.mk_op_pe C.OpOr is_variadic_sym_pe
                                  (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
                   (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
@@ -2544,7 +2544,7 @@ if AilTypesAux.is_arithmetic (ctype_of e) then
               Caux.mk_pure_e (
                 Caux.mk_case_pe e_sym_pe
                   [ (Caux.mk_specified_pat obj_sym_pat,
-                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)
+                     Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)
                        (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
                       Caux.mk_unit_pe
                      )
@@ -2558,7 +2558,7 @@ else (* is_pointer *)
                      (C.Expr [] (C.Ememop Mem_common.PtrEq [obj_sym_pe; Caux.mk_nullptr_pe Cty.void]))
                      begin
                        Caux.mk_pure_e begin
-                         Caux.mk_if_pe memop_sym_pe
+                         Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
                            (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
                            Caux.mk_unit_pe
                        end
@@ -2792,7 +2792,7 @@ else (* is_pointer *)
                           (Caux.mk_memop_e Mem_common.PtrValidForDeref [Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe])
                           begin
                             Caux.mk_pure_e begin
-                              Caux.mk_if_pe test_sym_pe
+                              Caux.mk_if_pe_ [Annot.Anot_explode] test_sym_pe
                                 (Caux.mk_member_shift_pe obj_sym_pe tag_sym ident)
                                 (* TODO: make a new UB for this particular case *)
                                 (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)
@@ -3450,7 +3450,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
               Caux.mk_case_e test_sym_pe
                 [ (Caux.mk_specified_pat case_sym_pat,
                    Caux.mk_pure_e begin
-                     Caux.mk_if_pe (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
+                     Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
                        (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
                    end)
                   (* non-deterministic branching if the test expression had unspecified value *)
@@ -3512,7 +3512,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
                 Caux.mk_case_e test_sym_pe
                   [ (Caux.mk_specified_pat case_sym_pat,
                      Caux.mk_pure_e begin
-                       Caux.mk_if_pe (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
+                       Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
                          (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
                      end)
                     (* non-deterministic branching if the test expression had unspecified value *)

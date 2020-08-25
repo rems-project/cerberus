@@ -35,6 +35,7 @@ type annot =
   | Aattrs of attributes (* C2X attributes *)
   | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
                               must only be used on a ctype to indicate it is a unfolding of a typedef *)
+  | Anot_explode (* tell the a-normalisation not to explode if-then-else *)
 
 
 val     get_loc: list annot -> maybe Loc.t
@@ -51,6 +52,8 @@ let rec get_loc annots =
     | (Abmc _ :: annots') ->
         get_loc annots'
     | (Aattrs _ :: annots') ->
+        get_loc annots'
+    | (Anot_explode :: annots') ->
         get_loc annots'
   end
 
@@ -80,6 +83,8 @@ let rec get_attrs annots =
        | Just (Attrs attributes') -> Just (Attrs (attributes ++ attributes'))
        | Nothing -> Just (Attrs attributes)       
        end
+    | (Anot_explode :: annots') ->
+        get_attrs annots'
   end
 
 val get_attrs_: list annot -> attributes
@@ -103,6 +108,8 @@ let rec get_uid annots =
     | (Abmc _ :: annots') ->
         get_uid annots'
     | (Aattrs _ :: annots') ->
+        get_uid annots'
+    | (Anot_explode :: annots') ->
         get_uid annots'
   end
 

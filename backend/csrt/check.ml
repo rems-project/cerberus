@@ -1027,6 +1027,7 @@ type 'a or_goto =
 
 let merge_local_environments (loc: Loc.t) (new_locals: L.t list) : L.t m =
   let* () = debug_print 1 (action "merging environments at control-flow join point") in
+  let* () = debug_print 1 (blank 3 ^^ item "environments" (pp_list (fun l -> L.pp l) new_locals)) in
   match new_locals with
   | [] -> fail loc (Unreachable !^"no reachable control-flow path")
   | first::others -> fold_leftM (Local.merge loc) first new_locals
@@ -1047,6 +1048,45 @@ let merge_local_environments_or_goto (loc: Loc.t) (new_locals: L.t or_goto list)
   | first::others, _ -> 
      let* new_local = fold_leftM (Local.merge loc) first new_locals in
      return (Normal new_local)
+
+
+let merge_return_types loc (LC c,rt) (LC c2,rt2) = 
+  let* () = debug_print 1 (action "merging environments at control-flow join point") in
+  let Computational ((lname,bt),lrt) = rt in
+  let Computational ((lname2,bt2),lrt2) = rt2 in
+  let* () = check_base_type loc bt2 bt in
+  let rec aux lrt lrt2 = 
+    match lrt, lrt2 with
+    | I, I -> 
+       return I
+    | Logical ((s,ls),lrt1), _ ->
+       let* lrt = aux lrt1 lrt2 in
+       return (Logical ((s,ls), lrt))
+    | Constraint (LC lc, lrt1), _ ->
+       let* lrt = aux lrt1 lrt2 in
+       return (Constraint (LC lc, lrt))
+    | _, Logical ((s,ls),lrt2) ->
+       let s' = fresh () in
+       let* lrt = aux lrt (subst_var_l {s; swith=S s'} lrt2) in
+       return (Logical ((s',ls), lrt))
+    | _, Constraint (LC lc,lrt2) ->
+       let* lrt = aux lrt lrt2 in
+       return (Constraint (LC (c2 %==> lc), lrt))
+    | Resource _, _
+    | _, Resource _ -> 
+       fail loc (Generic !^"cannot infer type of this expression (cannot merge)")
+  in
+  let lrt2' = subst_var_l {s= lname2; swith=S lname} lrt2 in
+  let* lrt = aux lrt lrt2' in
+  return (LC (IT.Or [c; c2]), Computational ((lname,bt), lrt))
+
+let merge_return_types (loc: Loc.t) new_rts =
+  let* () = debug_print 1 (action "merging environments at control-flow join point") in
+  match new_rts with
+  | [] -> fail loc (Unreachable !^"no reachable control-flow path")
+  | first::others -> 
+     fold_leftM (merge_return_types loc) first new_rts
+
 
 
 let ensure_reachable (loc: Loc.t) {local;global} : unit m = 
@@ -1195,7 +1235,25 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
        let local = local' ++ local in
        infer_pexpr_pure loc {local;global} e2
     | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
-    | M_PEif (casym, e1, e2) -> fail loc (Unreachable !^"PEif in inferring position")
+    | M_PEif (A (a,_,csym), e1, e2) ->
+       let* (cbt,clname) = get_a (Loc.update loc a) csym local in
+       let* () = check_base_type (Loc.update loc a) cbt Bool in
+       let* rts_locals =
+         filter_mapM (fun (lc, e) ->
+             let local = add (mUC lc) (mark ++ local) in
+             let* unreachable = Solver.is_unreachable loc {local;global} in
+             if unreachable then 
+               let* () = debug_print 2 (blank 3 ^^ !^"(branch unreachable)") in
+               return None 
+             else 
+               let* (rt,local) = infer_pexpr_pop loc {local;global} e in
+               return (Some ((lc,rt),local))
+           ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
+       in
+       let rts,locals = List.split rts_locals in
+       let* (_,rt) = merge_return_types loc rts in
+       let* local = merge_local_environments loc locals in
+       return (rt,local)
   in
   
   let* () = debug_print 3 (blank 3 ^^ item "inferred" (RT.pp rt)) in
@@ -1505,12 +1563,13 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
     | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
     | M_Esseq (pat, e1, e2) ->
        let* r = infer_expr_pop loc labels {local = mark ++ local;global} e1 in
-       match r with
+       begin match r with
        | Goto -> return Goto
        | Normal (rt, local) ->
           let* local' = pattern_match_rt loc pat rt in
           let local = local' ++ local in
           infer_expr_pure loc labels {local;global} e2
+       end
   in
   match r with
   | Goto -> return Goto

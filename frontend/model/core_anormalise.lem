@@ -4,14 +4,23 @@ open import Assert_extra
 import Symbol
 
 open import Core
-open import Mucore
-     import Core_typing Core_typing_aux
+open import Mucore 
+     import Annot Core_typing Core_typing_aux
 
 (* The a-normalisation should happen after some partial evaluation and
    rewrites that remove expressions passing ctypes and function
    pointers as values. The embedding into mucore then is partial in
    those places. *)
 
+
+(* adapting code from get_loc *)
+val     explode: list Annot.annot -> bool
+let rec explode annots =
+  match annots with
+    | Annot.Anot_explode :: _ -> false
+    | _ :: annots -> explode annots
+    | [] -> true
+  end
 
 
 (* type bty = core_base_type *)
@@ -369,11 +378,17 @@ and n_pexpr loc (e : pexpr unit) k =
        (M_Pat (core_to_mu__pattern pat))
        e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
-     (* this changes the type of the PEif expression *)
-     n_pexpr_name e' (fun e' ->
-     let e'' = n_pexpr e'' k in
-     let e''' = n_pexpr e''' k in
-     annotate (M_PEif e' e'' e'''))
+     if explode annots then
+       (* this changes the type of the PEif expression *)
+        n_pexpr_name e' (fun e' ->
+        let e'' = n_pexpr e'' k in
+        let e''' = n_pexpr e''' k in
+        annotate (M_PEif e' e'' e'''))
+     else
+        n_pexpr_name e' (fun e' ->
+        let e'' = normalise_pexpr e'' in
+        let e''' = normalise_pexpr e''' in
+        k (annotate (M_PEif e' e'' e''')))
   | PEis_scalar e' ->
      failwith "core_anormalisation: PEis_scalar"
      (* n_pexpr_name e' (fun e' ->
@@ -405,7 +420,7 @@ and n_pexpr loc (e : pexpr unit) k =
 
 (* 2 begin *)
 
-let rec n_pexpr_in_expr_name loc outer_annots e k : mu_expr = 
+and n_pexpr_in_expr_name loc outer_annots e k : mu_expr = 
   n_pexpr_in_expr loc e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
@@ -514,10 +529,16 @@ and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr) : mu_expr =
        e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
      (* this changes the type of the PEif expression *)
-     n_pexpr_in_expr_name e' (fun e' ->
-     let e'' = n_pexpr_in_expr e'' k in
-     let e''' = n_pexpr_in_expr e''' k in
-     M_Expr annots (M_Eif e' e'' e'''))
+     if explode annots then
+        n_pexpr_in_expr_name e' (fun e' ->
+        let e'' = n_pexpr_in_expr e'' k in
+        let e''' = n_pexpr_in_expr e''' k in
+        M_Expr annots (M_Eif e' e'' e'''))
+     else
+        n_pexpr_in_expr_name e' (fun e' ->
+        let e'' = normalise_pexpr e'' in
+        let e''' = normalise_pexpr e''' in
+        k (annotate (M_PEif e' e'' e''')))
   | PEis_scalar e' ->
      failwith "core_anormalisation: PEis_scalar"
      (* n_pexpr_in_expr_name e' (fun e' ->
@@ -550,7 +571,7 @@ and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr) : mu_expr =
 (* 2 end *)
 
 
-let normalise_pexpr (e : pexpr unit) = 
+and normalise_pexpr (e : pexpr unit) = 
   n_pexpr (Loc.locOf e) e (fun e -> e)
 
 
@@ -761,10 +782,16 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
      wrap (M_Elet (M_Pat (core_to_mu__pattern pat) )
              e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
-     let e2 = n_expr e2 k in
-     let e3 = n_expr e3 k in
-     wrap (M_Eif e1 e2 e3))
+     if explode annots then
+       n_pexpr_in_expr_name e1 (fun e1 ->
+       let e2 = n_expr e2 k in
+       let e3 = n_expr e3 k in
+       wrap (M_Eif e1 e2 e3))
+     else
+       n_pexpr_in_expr_name e1 (fun e1 ->
+       let e2 = normalise_expr e2 in
+       let e3 = normalise_expr e3 in
+       k (wrap (M_Eif e1 e2 e3)))
   | Eskip ->
      k (wrap (M_Eskip))
   | Eccall _a ct e2 es ->

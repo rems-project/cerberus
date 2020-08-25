@@ -655,6 +655,8 @@ let pp_expr budget (expr : (ft,ct,bt,'ty) mu_expr) =
                 end
             | Aattrs _ ->
                 !^ "TODO(Aattrs)"
+            | Anot_explode ->
+               !^"{-not-explode-}" ^^ acc
         ) doc annot
     end
     begin
