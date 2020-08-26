@@ -13,16 +13,6 @@ open import Mucore
    those places. *)
 
 
-(* adapting code from get_loc *)
-val     explode: list Annot.annot -> bool
-let rec explode annots =
-  match annots with
-    | Annot.Anot_explode :: _ -> false
-    | _ :: annots -> explode annots
-    | [] -> true
-  end
-
-
 (* type bty = core_base_type *)
 type value = generic_value Symbol.sym
 type values = list value

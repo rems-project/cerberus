@@ -1,6 +1,9 @@
 module CF = Cerb_frontend
 module S = CF.Symbol
 
+include S
+
+
 type symbol = S.sym
 type t = symbol
 

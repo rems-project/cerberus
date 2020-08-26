@@ -145,19 +145,19 @@ let explode_struct_in_binding loc global (Tag tag) logical_struct binding =
 
 let rec logical_returnType_to_argumentType 
           (args : RT.l)
-          (more_args : FT.t)
+          (rest : FT.t)
         : FT.t = 
   match args with
   | RT.I -> 
-     more_args
+     rest
   (* | RT.Computational (name, t, args) -> 
    *    FT.Computational (name, t, returnType_to_argumentType args return) *)
   | RT.Logical ((name, t), args) -> 
-     FT.Logical ((name, t), logical_returnType_to_argumentType args more_args)
+     FT.Logical ((name, t), logical_returnType_to_argumentType args rest)
   | RT.Resource (t, args) -> 
-     FT.Resource (t, logical_returnType_to_argumentType args more_args)
+     FT.Resource (t, logical_returnType_to_argumentType args rest)
   | RT.Constraint (t, args) -> 
-     FT.Constraint (t, logical_returnType_to_argumentType args more_args)
+     FT.Constraint (t, logical_returnType_to_argumentType args rest)
 
 
 
@@ -327,7 +327,8 @@ let make_fun_spec loc genv attrs args ret_ctype =
   let* (arguments, returns) = 
     fold_leftM (fun (args,returns) (msym, ct) ->
         let name = match msym with
-          | Some sym -> sym
+          | Some (Symbol (_,_,Some name)) -> Sym.fresh_pretty (name ^ "_l")
+          | Some (Symbol (_,_,None)) -> Sym.fresh ()
           | None -> Sym.fresh ()
         in
         let* (arg,ret) = make_fun_arg_type true genv name loc ct in

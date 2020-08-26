@@ -328,7 +328,10 @@ let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m
           return None
       ) local
   in
-  Tools.at_most_one loc !^"multiple matching resources" found
+  match found with
+  | [] -> return None
+  | [r] -> return (Some r)
+  | _ -> fail loc (unreachable (!^"multiple matching resources:" ^^^ pp_list (fun (_,r) -> RE.pp false r) found))
 
 
 let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size) 
@@ -362,6 +365,8 @@ let stored_struct_to (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: BT.tag) : 
 
 
 let match_concrete_resource (loc: Loc.t) {local;global} (resource: RE.t) : ((Sym.t * RE.t) option) m = 
+  let* () = debug_print 2 (action "trying to match resource") in
+  let* () = debug_print 2 (blank 3 ^^ item "resource" (RE.pp false resource)) in
   match_resource loc {local;global} (RE.shape resource)
 
 
@@ -448,6 +453,11 @@ let subtype (loc: Loc.t)
   let rtyp = RT.normalise rtyp in
   let open NRT in
 
+  let* () = debug_print 1 (action ppdescr) in
+  let* () = debug_print 2 (blank 3 ^^ item "value" (pp_argslocs [arg])) in
+  let* () = debug_print 2 (blank 3 ^^ item "spec" (NRT.pp rtyp)) in
+  let* () = debug_print 2 (blank 3 ^^ item "env" (L.pp local)) in
+
   let check_computational ((abt,lname),arg_loc) (Computational ((sname,sbt),rtyp)) = 
     if BT.equal abt sbt 
     then return (NRT.subst_var_l {s=sname;swith=S lname} rtyp)
@@ -518,6 +528,10 @@ let calltyp (loc: Loc.t)
     : (RT.t * L.t) m 
   =
 
+  let* () = debug_print 1 (action "calltyp") in
+  let* () = debug_print 2 (blank 3 ^^ item "value" (pp_argslocs arguments)) in
+  let* () = debug_print 2 (blank 3 ^^ item "spec" (FT.pp ftyp)) in
+  let* () = debug_print 2 (blank 3 ^^ item "env" (L.pp local)) in
 
   let ftyp = FT.normalise ftyp in
   let open NFT in
@@ -882,7 +896,7 @@ let infer_ptrval (loc: Loc.t) {local;global} (ptrval: CF.Impl_mem.pointer_value)
     ( fun _prov loc ->      
       let constr = LC (S new_lname %= Num loc) in
       return (new_lname, Loc, constr) )
-    ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
+    ( fun () -> fail loc (unreachable !^"unspecified pointer value") )
 
 
 
@@ -920,7 +934,7 @@ and infer_struct (loc: Loc.t) {local;global} (tag: tag)
     | [], [] -> 
        return []
     | (id,mv)::fields, (smember,sbt)::decl ->
-       fail loc (Unreachable !^"mismatch in fields in infer_struct")
+       fail loc (unreachable !^"mismatch in fields in infer_struct")
     | [], (Member smember,sbt)::_ ->
        fail loc (Generic (!^"field" ^^^ !^smember ^^^ !^"missing"))
     | (id,_)::_, [] ->
@@ -1029,7 +1043,7 @@ let merge_local_environments (loc: Loc.t) (new_locals: L.t list) : L.t m =
   let* () = debug_print 1 (action "merging environments at control-flow join point") in
   let* () = debug_print 1 (blank 3 ^^ item "environments" (pp_list (fun l -> L.pp l) new_locals)) in
   match new_locals with
-  | [] -> fail loc (Unreachable !^"no reachable control-flow path")
+  | [] -> fail loc (unreachable !^"no reachable control-flow path")
   | first::others -> fold_leftM (Local.merge loc) first new_locals
 
 
@@ -1043,7 +1057,7 @@ let merge_local_environments_or_goto (loc: Loc.t) (new_locals: L.t or_goto list)
       ) (false,[]) new_locals
   in
   match new_locals, does_goto with
-  | [], false -> fail loc (Unreachable !^"no reachable control-flow path")
+  | [], false -> fail loc (unreachable !^"no reachable control-flow path")
   | [], true -> return Goto
   | first::others, _ -> 
      let* new_local = fold_leftM (Local.merge loc) first new_locals in
@@ -1083,16 +1097,16 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
 let merge_return_types (loc: Loc.t) new_rts =
   let* () = debug_print 1 (action "merging environments at control-flow join point") in
   match new_rts with
-  | [] -> fail loc (Unreachable !^"no reachable control-flow path")
+  | [] -> fail loc (unreachable !^"no reachable control-flow path")
   | first::others -> 
      fold_leftM (merge_return_types loc) first new_rts
 
 
 
 let ensure_reachable (loc: Loc.t) {local;global} : unit m = 
-  let* unreachable = Solver.is_unreachable loc {local;global} in
-  if not unreachable then return ()
-  else fail loc (Unreachable !^"inconsistent environment") 
+  let* is_unreachable = Solver.is_unreachable loc {local;global} in
+  if not is_unreachable then return ()
+  else fail loc (unreachable !^"inconsistent environment") 
 
 
 
@@ -1181,7 +1195,7 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
          | Some (_,{members; _}) -> return members
          | _ -> fail loc (Generic (!^"this location does not contain a struct with tag" ^^^ pp_tag tag))
        in
-       let* faddr = assoc_err loc member members (Unreachable !^"check store field access") in
+       let* faddr = assoc_err loc member members (unreachable !^"check store field access") in
        let constr = LC (S ret %= faddr) in
        let rt = Computational ((ret, Loc), Constraint (constr,I)) in
        return (rt, local)
@@ -1226,7 +1240,7 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
        in
        let local = local' ++ local in
        infer_pexpr_pure loc {local;global} e2
-    | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
+    | M_PEcase _ -> fail loc (unreachable !^"PEcase in inferring position")
     | M_PEif (A (a,_,csym), e1, e2) ->
        let* (cbt,clname) = get_a (Loc.update loc a) csym local in
        let* () = check_base_type (Loc.update loc a) cbt Bool in
@@ -1524,8 +1538,8 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
        let* args = get_a_loc_asyms loc local asyms in
        let* (_rt, local) = calltyp loc {local;global} args ft in
        return Goto
-    | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
-    | M_Eif _ -> fail loc (Unreachable !^"Eif in inferring position")
+    | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
+    | M_Eif _ -> fail loc (unreachable !^"Eif in inferring position")
     | M_Esave (ft, (sym,(rbt,rct)), args, body) ->
        (* check that the default arguments satisfy the specification,
           which consumes the needed resources *)
@@ -1643,15 +1657,16 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
 
 
 let check_and_bind_function_arguments loc local arguments function_typ = 
-  let rec check local args ftyp =
+  let rec check acc_substs local args ftyp =
     match args, ftyp with
     | (aname,abt)::args, FT.Computational ((lname,sbt),ftyp) 
          when BT.equal abt sbt ->
        let new_lname = fresh () in
-       let ftyp' = FT.subst_var {s=lname;swith=S new_lname} ftyp in
+       let subst = {s=lname;swith=S new_lname} in
+       let ftyp' = FT.subst_var subst ftyp in
        let local = add (mL new_lname (Base abt)) local in
        let local = add (mA aname (abt,new_lname)) local in
-       check local args ftyp'
+       check (acc_substs@[subst]) local args ftyp'
     | (aname,abt)::args, FT.Computational ((sname,sbt),ftyp) ->
        fail loc (Mismatch {has = (Base abt); expect = Base sbt})
     | [], FT.Computational (_,_)
@@ -1661,16 +1676,17 @@ let check_and_bind_function_arguments loc local arguments function_typ =
        fail loc (Number_arguments {expect;has})
     | args, FT.Logical ((sname,sls),ftyp) ->
        let new_lname = fresh () in
-       let ftyp' = FT.subst_var {s=sname;swith=S new_lname} ftyp in
-       check (add (mL new_lname sls) local) args ftyp'
+       let subst = {s=sname;swith=S new_lname} in
+       let ftyp' = FT.subst_var subst ftyp in
+       check (acc_substs@[subst]) (add (mL new_lname sls) local) args ftyp'
     | args, FT.Resource (re,ftyp) ->
-       check (add (mUR re) local) args ftyp
+       check acc_substs (add (mUR re) local) args ftyp
     | args, FT.Constraint (lc,ftyp) ->
-       check (add (mUC lc) local) args ftyp
+       check acc_substs (add (mUC lc) local) args ftyp
     | [], FT.Return rt ->
-       return (rt,local)
+       return (rt,local,acc_substs)
   in
-  check local arguments function_typ
+  check [] local arguments function_typ
 
 
 let check_function (loc: Loc.t) 
@@ -1682,7 +1698,7 @@ let check_function (loc: Loc.t)
                    (function_typ: FT.t) 
   =
   let* () = debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) in
-  let* (rt,local) = check_and_bind_function_arguments loc L.empty arguments function_typ in
+  let* (rt,local,_substs) = check_and_bind_function_arguments loc L.empty arguments function_typ in
   (* rbt consistency *)
   let* () = 
     let Computational ((sname,sbt),t) = rt in
@@ -1704,7 +1720,14 @@ let check_procedure (loc: Loc.t)
                     (function_typ: FT.t) 
   =
   let* () = debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) in
-  let* (rt,local) = check_and_bind_function_arguments loc L.empty arguments function_typ in
+  let* () = debug_print 2 (blank 3 ^^ item "type" (FT.pp function_typ)) in
+  let* (rt,local,substs) = check_and_bind_function_arguments loc L.empty arguments function_typ in
+  let body = 
+    fold_left (fun body subst -> 
+        CF.Mucore.instantiate_esave_type_symbol (FT.subst_var subst) body
+      ) body substs
+  in
+  let* () = debug_print 2 (blank 3 ^^ item "rt" (RT.pp rt)) in
   (* rbt consistency *)
   let* () = 
     let Computational ((sname,sbt),t) = rt in
@@ -1771,18 +1794,26 @@ let check_procedure (loc: Loc.t)
     | M_End es -> 
        fold_leftM (fun () e -> check_labels loc e) () es
     | M_Esave (ft,(lsym,_),args,body) ->
-       (* Check that assuming a list of (any) arguments satisfying the
-          label's argument specification the body produces the right
-          return type. This includes the logical facts (for the
-          general case) into the environment. *)
-       let* () = debug_print 1 hardline in
-       let* () = debug_print 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
-       let* (_,local) = check_and_bind_function_arguments loc local
-                          (map (fun (sym, ((abt,_), _)) -> (sym,abt)) args) ft in
-       let* local = check_expr loc labels {local;global} body rt in
-       (* let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
-       let* () = debug_print 1 (!^(greenb "...label checked ok")) in
-       check_labels loc body
+       if CF.Mucore.is_return annots then 
+         (* Is it correct to just skip the return label? It's
+            implemented as an identity, so should be fine. *)
+         check_labels loc body
+       else 
+         (* Check that assuming a list of (any) arguments satisfying the
+            label's argument specification the body produces the right
+            return type. This includes the logical facts (for the
+            general case) into the environment. *)
+         let* () = debug_print 1 hardline in
+         let* () = debug_print 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
+         let* () = debug_print 2 (blank 3 ^^ item "against" (FT.pp ft)) in
+         let* (_,local,_) = 
+           check_and_bind_function_arguments loc L.empty 
+             (map (fun (sym, ((abt,_), _)) -> (sym,abt)) args) ft 
+         in
+         let* local = check_expr loc labels {local;global} body rt in
+         (* let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
+         let* () = debug_print 1 (!^(greenb "...label checked ok")) in
+         check_labels loc body
     | M_Erun _ -> 
        return ()
   in

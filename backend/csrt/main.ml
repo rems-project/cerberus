@@ -120,9 +120,10 @@ let frontend filename =
 let main filename debug_level type_debug_level =
   Debug_ocaml.debug_level := debug_level;
   Pp.debug_level := type_debug_level;
+  if debug_level > 0 then Printexc.record_backtrace true else ();
   match frontend filename with
   | CF.Exception.Exception err ->
-     prerr_endline (CF.Pp_errors.to_string err)
+     prerr_endline (CF.Pp_errors.to_string err);
   | CF.Exception.Result core_file ->
      Process.process_and_report core_file
 

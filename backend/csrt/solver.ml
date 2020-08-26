@@ -76,7 +76,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in
     let member_funs = combine member_names member_fun_decls in
-    Tools.assoc_err loc member member_funs (Unreachable !^"member_to_fundecl")
+    Tools.assoc_err loc member member_funs (unreachable !^"member_to_fundecl")
   in
 
   match it with

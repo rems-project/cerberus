@@ -42,7 +42,7 @@ let wanted_but_found loc wanted found =
   | `Resource -> !^"wanted resource variable but found" ^^^ VB.pp true found
   | `Constraint -> !^"wanted resource variable but found" ^^^ VB.pp true found
   in
-  fail loc (Unreachable err)
+  fail loc (unreachable err)
 
 
 
@@ -117,7 +117,7 @@ let is_bound sym (Local local) =
 
 
 let merge loc (Local l1) (Local l2) =
-  let incompatible = Unreachable !^"trying to merge incompatible environments" in
+  let incompatible = unreachable !^"trying to merge incompatible environments" in
   let rec aux l1 l2 = 
     match l1, l2 with
     | [], [] -> return []

@@ -38,6 +38,13 @@ type type_error =
 type t = type_error
 
 
+let unreachable err = 
+  if !debug_level > 0 then 
+    let backtrace = Printexc.get_callstack (!debug_level * 10) in
+    Unreachable (err ^^ !^"." ^/^ !^(Printexc.raw_backtrace_to_string backtrace))
+  else 
+    Unreachable err
+
 
 let withloc loc p : PPrint.document = 
   flow (break 1) [Loc.pp loc;p]

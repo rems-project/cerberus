@@ -98,6 +98,15 @@ let pp rt =
 
 
 
+
+let rec get_return = function
+  | Computational (_,ft) -> get_return ft
+  | Logical (_,ft) -> get_return ft
+  | Resource (_,ft) -> get_return ft
+  | Constraint (_,ft) -> get_return ft
+  | Return rt -> rt
+
+
 let rec count_computational = function
   | Computational (_,ft) -> 
      1 + count_computational ft
