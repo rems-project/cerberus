@@ -2235,6 +2235,114 @@ let collect_saves expr =
   Map.(union) st.tmp_acc st.closed_acc
 
 
+
+
+
+
+(* The same again, now collecting more information about the
+   esave. The above could be defined in terms of the below, but I
+   didn't want to mess that up, so leaving for now. *)
+
+type m_labeled_continuations 'a = 
+  map Symbol.sym (((core_base_type * maybe Ctype.ctype) * 
+                     list (Symbol.sym * ((core_base_type * maybe Ctype.ctype))) *
+                       bool *   (* whether return *)
+                       list Annot.annot) *
+                    expr 'a)
+
+type m_collect_saves_state 'a = <|
+  m_tmp_acc:    m_labeled_continuations 'a;
+  m_closed_acc: m_labeled_continuations 'a;
+|>
+
+let m_empty_saves = <| m_tmp_acc= Map.empty; m_closed_acc= Map.empty |>
+
+let m_union_saves st1 st2 =
+  <| m_tmp_acc= Map.(union) st1.m_tmp_acc st2.m_tmp_acc;
+     m_closed_acc= Map.(union) st1.m_closed_acc st2.m_closed_acc |>
+
+(* NOTE: assumes the expression is well formed/typed *)
+val     m_collect_saves_aux: forall 'a. m_collect_saves_state 'a -> expr 'a -> m_collect_saves_state 'a
+let rec m_collect_saves_aux st (Expr annots expr_) =
+  match expr_ with
+    | Epure _ ->
+        st
+    | Ememop _ _ ->
+        st
+    | Eaction _ ->
+        st
+    | Ecase _ pat_es ->
+        List.foldl (fun acc (_, e) ->
+          m_collect_saves_aux acc e
+        ) st pat_es
+    | Elet _ _ e ->
+        m_collect_saves_aux st e
+    | Eif _ e1 e2 ->
+        m_collect_saves_aux (m_collect_saves_aux st e1) e2
+    | Eskip ->
+        st
+    | Eccall _ _ _ _ ->
+        st
+    | Eproc _ _ _ ->
+        st
+    | Eunseq es ->
+        List.foldl m_collect_saves_aux st es
+    | Ewseq pat e1 e2 ->
+        let st1 = m_collect_saves_aux m_empty_saves e1 in
+        let st2 = m_collect_saves_aux m_empty_saves e2 in
+        m_union_saves st begin
+          m_union_saves
+            <| st1 with
+              m_tmp_acc= Map.map (fun (info, e) -> (info, Expr annots (Ewseq pat e e2))) st1.m_tmp_acc
+            |>
+            st2
+        end
+    | Esseq pat e1 e2 ->
+        let st1 = m_collect_saves_aux m_empty_saves e1 in
+        let st2 = m_collect_saves_aux m_empty_saves e2 in
+        m_union_saves st begin
+          m_union_saves
+            <| st1 with
+              m_tmp_acc= Map.map (fun (info, e) -> (info, Expr annots (Esseq pat e e2))) st1.m_tmp_acc
+            |>
+            st2
+        end
+    | Easeq _ _ _ ->
+        st
+    | Eindet _ _ ->
+        (* typing forbids "saves" inside an "indet()" *)
+        st
+    | Ebound _ _ ->
+        (* typing forbids "saves" inside a "bound()" *)
+        st
+    | End _ ->
+        (* typing forbids "saves" inside a "nd()" *)
+        st
+    | Esave (sym, ty) params e ->
+        m_collect_saves_aux
+          <| st with m_tmp_acc= Map.insert sym ((ty,List.map (fun (sym,(ty,_)) -> (sym,ty)) params, is_return annots, annots), e) st.m_tmp_acc |>
+          e
+    | Erun _ _ _ ->
+        st
+    | Epar es ->
+        let acc = List.foldl m_collect_saves_aux
+          m_empty_saves es in
+        <| st with m_closed_acc=
+          Map.(union) (Map.(union) acc.m_tmp_acc acc.m_closed_acc)
+                      st.m_closed_acc |>
+    | Ewait _ ->
+        st
+  end
+
+val m_collect_saves: forall 'a. expr 'a -> m_labeled_continuations 'a
+let m_collect_saves expr =
+  let st = m_collect_saves_aux <| m_tmp_acc= Map.empty; m_closed_acc= Map.empty |> expr in
+  Map.(union) st.m_tmp_acc st.m_closed_acc
+
+
+
+
+
 import Map_extra
 
 val collect_labeled_continuations_NEW: forall 'a. file 'a -> map Symbol.sym (labeled_continuations 'a)

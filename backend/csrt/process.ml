@@ -13,6 +13,7 @@ module RE = Resources
 
 
 
+
 let record_tagDefs (global: Global.t) tagDefs = 
   pmap_foldM (fun sym def (global: Global.t) ->
       match def with
@@ -58,9 +59,9 @@ let process_functions genv fns =
       | M_Fun (rbt, args, body) ->
          let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
          check_function loc genv fsym args rbt body ftyp
-      | M_Proc (loc, rbt, args, body) ->
+      | M_Proc (loc, rbt, args, body, labels) ->
          let* (loc,ftyp) = Global.get_fun_decl loc genv fsym in
-         check_procedure loc genv fsym args rbt body ftyp
+         check_procedure loc genv fsym args rbt labels body ftyp
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()

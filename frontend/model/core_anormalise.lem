@@ -5,7 +5,7 @@ import Symbol
 
 open import Core
 open import Mucore 
-     import Annot Core_typing Core_typing_aux
+     import Annot Core_typing Core_typing_aux Maybe_extra
 
 (* The a-normalisation should happen after some partial evaluation and
    rewrites that remove expressions passing ctypes and function
@@ -26,15 +26,20 @@ type outer_annots = annots
 type action 'a 'bty = generic_action 'a 'bty Symbol.sym
 type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
 
-type mu_value = Mucore.mu_value Ctype.ctype mu_base_type unit
+type ct = Ctype.ctype
+type ft = Mucore.mu_funinfo_type ct
+type bt = Mucore.mu_base_type
+
+type mu_value = Mucore.mu_value ct bt unit
 type mu_values = list mu_value
-type mu_pexpr = Mucore.mu_pexpr Ctype.ctype mu_base_type unit
+type mu_pexpr = Mucore.mu_pexpr ct bt unit
 type mu_pexprs = list mu_pexpr
-type mu_expr = Mucore.mu_expr (mu_funinfo_type Ctype.ctype) Ctype.ctype mu_base_type unit
-type mu_pattern = Mucore.mu_pattern mu_base_type
-type mu_action = Mucore.mu_action Ctype.ctype unit
-type mu_paction = Mucore.mu_paction Ctype.ctype unit
-type mu_sym_or_pattern = Mucore.mu_sym_or_pattern mu_base_type unit
+type mu_expr = Mucore.mu_expr ft ct bt unit
+type mu_pattern = Mucore.mu_pattern bt
+type mu_action = Mucore.mu_action ct unit
+type mu_paction = Mucore.mu_paction ct unit
+type mu_sym_or_pattern = Mucore.mu_sym_or_pattern bt unit
+
 
 type asym = Mucore.asym unit
 type asyms = list asym
@@ -368,7 +373,7 @@ and n_pexpr loc (e : pexpr unit) k =
        (M_Pat (core_to_mu__pattern pat))
        e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
-     if explode annots then
+     if Annot.explode annots then
        (* this changes the type of the PEif expression *)
         n_pexpr_name e' (fun e' ->
         let e'' = n_pexpr e'' k in
@@ -519,7 +524,7 @@ and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr) : mu_expr =
        e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
      (* this changes the type of the PEif expression *)
-     if explode annots then
+     if Annot.explode annots then
         n_pexpr_in_expr_name e' (fun e' ->
         let e'' = n_pexpr_in_expr e'' k in
         let e''' = n_pexpr_in_expr e''' k in
@@ -772,7 +777,7 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
      wrap (M_Elet (M_Pat (core_to_mu__pattern pat) )
              e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
-     if explode annots then
+     if Annot.explode annots then
        n_pexpr_in_expr_name e1 (fun e1 ->
        let e2 = n_expr e2 k in
        let e3 = n_expr e3 k in
@@ -833,10 +838,11 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
      let syms_typs_pes = zip syms typs_pes in
      let e = normalise_expr e in
      let fty = (ct, map (fun (sym,((_,ct),_)) -> (Just sym,ct)) syms_typs_pes) in
-     k (wrap (M_Esave fty (s,(bt,ct)) syms_typs_pes e)))
+     let esave = M_Esave fty (s,(bt,ct)) syms_typs_pes e in
+     k (wrap (M_Erun s pes (Just esave))))
   | Erun _a sym pes ->
      n_pexpr_in_expr_names pes (fun pes ->
-     k (wrap (M_Erun sym pes)))
+     k (wrap (M_Erun sym pes Nothing)))
   | Epar es -> 
      failwith "todo Epar"
   | Ewait tid ->
@@ -860,7 +866,23 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
   better_error_messages (show name)
     (match d with
      | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
-     | Proc loc bt args e -> M_Proc loc bt args (normalise_expr e)
+     | Proc loc bt args e -> 
+        let saves = Core_aux.m_collect_saves e in
+        let saves' = 
+          Map.map (fun (((bt,mrct),params,is_return,annots),body) ->
+              let get_ct mct = match mct with
+                | Just ct -> ct
+                | Nothing -> failwith "normalise_fun_map_decl: no ctype"
+              end in
+              let ft = 
+                (get_ct mrct, map (fun (sym,((_,mact))) -> (Just sym, get_ct mact)) params) in
+              if is_return then M_Return ft
+              else 
+                let params = map (fun (sym,((bt,_))) -> (sym,bt)) params in
+                M_Label ft (bt, params) annots (normalise_expr body)
+            ) saves 
+        in
+        M_Proc loc bt args (normalise_expr e) saves'
      | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
      | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
      end)
@@ -896,7 +918,7 @@ let normalise_funinfos funinfos =
   Map.map normalise_funinfo funinfos
 
 
-let normalise_file file = 
+let normalise_file file : Mucore.mu_file ft ct bt (mu_struct_def ct) (mu_union_def ct) unit = 
   <| mu_main = file.main
    ; mu_tagDefs = normalise_tag_definitions file.tagDefs
    ; mu_stdlib = normalise_fun_map file.stdlib

@@ -3,6 +3,8 @@ module CB=Cerb_backend
 open CB.Pipeline
 open Setup
 
+module CA=CF.Core_anormalise
+
 let (>>=) = CF.Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = CF.Exception.except_return
@@ -10,11 +12,11 @@ let return = CF.Exception.except_return
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = (CF.Ctype.ctype CF.Mucore.mu_funinfo_type,
-                CF.Ctype.ctype,
-                CF.Core.core_base_type,
-                CF.Ctype.ctype CF.Mucore.mu_struct_def,
-                CF.Ctype.ctype CF.Mucore.mu_union_def,
+type mu_file = (CA.ft,
+                CA.ct,
+                CA.bt,
+                CA.ct CF.Mucore.mu_struct_def,
+                CA.ct CF.Mucore.mu_union_def,
                 unit) CF.Mucore.mu_file
 type file = 
   | CORE of core_file
@@ -124,8 +126,8 @@ let main filename debug_level type_debug_level =
   match frontend filename with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err);
-  | CF.Exception.Result core_file ->
-     Process.process_and_report core_file
+  | CF.Exception.Result (file: (CA.ft, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, unit) CF.Mucore.mu_file ) ->
+     Process.process_and_report file
 
 
 open Cmdliner

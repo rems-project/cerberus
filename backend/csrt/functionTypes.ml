@@ -60,6 +60,9 @@ let rec subst_var substitution = function
      let t = subst_var substitution t in
      Constraint (lc,t)
 
+let subst_vars = make_substs subst_var
+
+
 let rec instantiate_struct_member subst ft =
   match ft with
   | Return rt -> 

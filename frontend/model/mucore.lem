@@ -38,24 +38,7 @@ type va_asym 'bty = asym 'bty       (* value *)
 
 
 
-(* adapting code from get_loc *)
-val     explode: list Annot.annot -> bool
-let rec explode annots =
-  match annots with
-  | Annot.Anot_explode :: _ -> false
-  | _ :: annots -> explode annots
-  | [] -> true
-  end
 
-
-(* adapting code from get_loc *)
-val     is_return: list Annot.annot -> bool
-let rec is_return annots =
-  match annots with
-  | Annot.Areturn :: _ -> true
-  | _ :: annots -> is_return annots
-  | [] -> false
-  end
 
 
 
@@ -193,6 +176,7 @@ type mu_memop 'DCTY 'bty =
   | M_Va_arg of (asym 'bty * (A 'DCTY 'bty))
   | M_Va_end of (asym 'bty)
 
+
 type mu_expr_ 'DFTY 'DCTY 'DBTY 'bty =  (* (effectful) expression *)
  | M_Epure of (mu_pexpr 'DCTY 'DBTY 'bty)
  | M_Ememop of mu_memop 'DCTY 'bty
@@ -210,10 +194,12 @@ type mu_expr_ 'DFTY 'DCTY 'DBTY 'bty =  (* (effectful) expression *)
  (* | M_Eindet of nat * (mu_expr 'DBTY 'bty) (\* indeterminately sequenced expr *)
  | M_Ebound of nat * (mu_expr 'DFTY 'DCTY 'DBTY 'bty) (* $\ldots$and boundary *)
  | M_End of list (mu_expr 'DFTY 'DCTY 'DBTY 'bty) (* nondeterministic choice *)
- | M_Esave of 'DFTY * (symbol * ('DBTY * 'DCTY)) * list (symbol * (('DBTY * 'DCTY) * asym 'bty)) * (mu_expr 'DFTY 'DCTY 'DBTY 'bty) (* save label *)
- | M_Erun of symbol * list (asym 'bty) (* run from label *)
+ | M_Erun of symbol * list (asym 'bty) * maybe (esave 'DFTY 'DCTY 'DBTY 'bty) (* run from label *)
  (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
  (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
+
+and esave 'DFTY 'DCTY 'DBTY 'bty = 
+  | M_Esave of 'DFTY * (symbol * ('DBTY * 'DCTY)) * list (symbol * (('DBTY * 'DCTY) * asym 'bty)) * (mu_expr 'DFTY 'DCTY 'DBTY 'bty)
 
 and mu_expr 'DFTY 'DCTY 'DBTY 'bty = 
  | M_Expr of list annot * (mu_expr_ 'DFTY 'DCTY 'DBTY 'bty)
@@ -233,9 +219,16 @@ type mu_impl_decl 'DCTY 'DBTY 'bty =
 type mu_impl 'DCTY 'DBTY 'bty = 
   map Implementation.implementation_constant (mu_impl_decl 'DCTY 'DBTY 'bty)
 
+type mu_label_def 'DFTY 'DCTY 'DBTY 'bty =
+  | M_Label of 'DFTY * ('DBTY * list (symbol * 'DBTY)) * list annot * mu_expr 'DFTY 'DCTY 'DBTY 'bty
+  | M_Return of 'DFTY
+
+type mu_label_defs 'DFTY 'DCTY 'DBTY 'bty =
+  map symbol (mu_label_def 'DFTY 'DCTY 'DBTY 'bty)
+
 type mu_fun_map_decl 'DFTY 'DCTY 'DBTY 'bty =
   | M_Fun of 'DBTY * list (symbol * 'DBTY) * mu_pexpr 'DCTY 'DBTY 'bty
-  | M_Proc of Loc.t * 'DBTY * list (symbol * 'DBTY) * mu_expr 'DFTY 'DCTY 'DBTY 'bty
+  | M_Proc of Loc.t * 'DBTY * list (symbol * 'DBTY) * mu_expr 'DFTY 'DCTY 'DBTY 'bty * mu_label_defs 'DFTY 'DCTY 'DBTY 'bty
   | M_ProcDecl of Loc.t * 'DBTY * list 'DBTY
   | M_BuiltinDecl of Loc.t * 'DBTY * list 'DBTY
 
@@ -296,32 +289,32 @@ type mu_file 'DFTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
 
 
 
-let rec instantiate_esave_type_symbol typ_subst e = 
-  let do_rec e = instantiate_esave_type_symbol typ_subst e in
-  let (M_Expr annots expr_) = e in
-  let wrap expr_' = M_Expr annots expr_' in
-  match expr_ with
-  | M_Epure _ -> e
-  | M_Ememop _ -> e
-  | M_Eaction _ -> e
-  | M_Ecase asym pats_es ->
-     wrap (M_Ecase asym (map (fun (pat,e) -> (pat, do_rec e)) pats_es))
-  | M_Elet sym_or_pattern pe e ->
-     wrap (M_Elet sym_or_pattern pe (do_rec e))
-  | M_Eif asym e e' ->
-     wrap (M_Eif asym (do_rec e) (do_rec e'))
-  | M_Eskip -> e
-  | M_Eccall _ _ _ -> e
-  | M_Eproc _ _ -> e
-  (* | M_Eunseq of list (mu_expr 'DBTY 'bty) (\* unsequenced expressions *\) *)
-  | M_Ewseq pat e e' -> wrap (M_Ewseq pat (do_rec e) (do_rec e'))
-  | M_Esseq pat e e' -> wrap (M_Esseq pat (do_rec e) (do_rec e'))
-  (* | M_Easeq of (symbol * 'DBTY) * (mu_action 'bty) * (mu_paction 'bty) (\* atomic sequencing *\) *)
-  (* | M_Eindet of nat * (mu_expr 'DBTY 'bty) (\* indeterminately sequenced expr *)
-  | M_Ebound n e -> wrap (M_Ebound n (do_rec e))
-  | M_End es -> wrap (M_End (map do_rec es))
-  | M_Esave typ s args e -> wrap (M_Esave (typ_subst typ) s args (do_rec e))
-  | M_Erun s asyms -> e
-  (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
-  (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
-  end
+(* let rec instantiate_esave_type_symbol typ_subst e = 
+ *   let do_rec e = instantiate_esave_type_symbol typ_subst e in
+ *   let (M_Expr annots expr_) = e in
+ *   let wrap expr_' = M_Expr annots expr_' in
+ *   match expr_ with
+ *   | M_Epure _ -> e
+ *   | M_Ememop _ -> e
+ *   | M_Eaction _ -> e
+ *   | M_Ecase asym pats_es ->
+ *      wrap (M_Ecase asym (map (fun (pat,e) -> (pat, do_rec e)) pats_es))
+ *   | M_Elet sym_or_pattern pe e ->
+ *      wrap (M_Elet sym_or_pattern pe (do_rec e))
+ *   | M_Eif asym e e' ->
+ *      wrap (M_Eif asym (do_rec e) (do_rec e'))
+ *   | M_Eskip -> e
+ *   | M_Eccall _ _ _ -> e
+ *   | M_Eproc _ _ -> e
+ *   (\* | M_Eunseq of list (mu_expr 'DBTY 'bty) (\\* unsequenced expressions *\\) *\)
+ *   | M_Ewseq pat e e' -> wrap (M_Ewseq pat (do_rec e) (do_rec e'))
+ *   | M_Esseq pat e e' -> wrap (M_Esseq pat (do_rec e) (do_rec e'))
+ *   (\* | M_Easeq of (symbol * 'DBTY) * (mu_action 'bty) * (mu_paction 'bty) (\\* atomic sequencing *\\) *\)
+ *   (\* | M_Eindet of nat * (mu_expr 'DBTY 'bty) (\\* indeterminately sequenced expr *\)
+ *   | M_Ebound n e -> wrap (M_Ebound n (do_rec e))
+ *   | M_End es -> wrap (M_End (map do_rec es))
+ *   | M_Esave typ s args e -> wrap (M_Esave (typ_subst typ) s args (do_rec e))
+ *   | M_Erun s asyms -> e
+ *   (\* | M_Epar of list (mu_expr 'DBTY 'bty) (\\* cppmem-like thread creation *\\) *\)
+ *   (\* | M_Ewait of Mem_common.thread_id (\\* wait for thread termination *\\) *\)
+ *   end *)

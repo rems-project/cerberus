@@ -6,6 +6,7 @@ module Loc=Locations
 module RT=ReturnTypes
 module FT=FunctionTypes
 open CF.Mucore
+module CA=CF.Core_anormalise
 open TypeErrors
 open Pp
 
@@ -310,38 +311,15 @@ let rec retype_expr loc struct_decls oftyp (M_Expr (annots,expr_)) =
     | M_End es ->
        let* es = mapM (retype_expr loc) es in
        return (M_End es)
-    | M_Esave (ft,(sym,(cbt,ct)),args,expr) ->
-       let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
-       let* bt = Conversions.bt_of_core_base_type loc cbt in
-       let* ft = 
-         match is_return annots, oftyp with
-         | true, Some ftyp -> 
-            let RT.Computational ((s,bt),f_lrt) = FT.get_return ftyp in
-            let rt = RT.Computational ((Sym.fresh (), BT.Unit), RT.I) in
-            let ft = FT.Computational ((s,bt), Conversions.logical_returnType_to_argumentType f_lrt (FT.Return rt)) in
-            return ft
-         | true, None -> fail loc (unreachable !^"Esave in expression without ftyp")
-         | false, _ ->
-           Conversions.make_esave_spec loc struct_decls 
-             (CF.Annot.get_attrs annots) 
-             (List.map (fun (sym,((_,ct),_)) -> (Some sym,ct)) args) ct 
-       in
-       let* args = 
-         mapM (fun (sym,((acbt,act),asym)) ->
-             let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
-             let* abt = Conversions.bt_of_core_base_type loc acbt in
-             return (sym,((abt,(abt,size)),asym))
-           ) args
-       in
-       let* expr = retype_expr loc expr in
-       return (M_Esave (ft,(sym,(bt,(bt,size))),args,expr))
-    | M_Erun (sym,asyms) ->
-       return (M_Erun (sym,asyms))
+    | M_Erun (sym,asyms,None) ->
+       return (M_Erun (sym,asyms,None))
+    | M_Erun (sym,asyms,Some esave) ->
+       (* todo *)
+       return (M_Erun (sym,asyms,None))
     (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
     (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
   in
   return (M_Expr (annots,expr_))
-
 
 let retype_impl_decl loc = function
   | M_Def (cbt,pexpr) ->
@@ -365,7 +343,8 @@ let retype_impls loc impls =
             impls CF.Implementation.implementation_constant_compare
 
 
-let retype_fun_map_decl loc structs funinfo fsym = function
+let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.ft, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
+  match decl with
   | M_Fun (cbt,args,pexpr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      let* args = 
@@ -376,7 +355,7 @@ let retype_fun_map_decl loc structs funinfo fsym = function
      in
      let* pexpr = retype_pexpr loc pexpr in
      return (M_Fun (bt,args,pexpr))
-  | M_Proc (loc,cbt,args,expr) ->
+  | M_Proc (loc,cbt,args,expr,labels) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      let* args = 
        mapM (fun (sym,acbt) ->
@@ -389,7 +368,32 @@ let retype_fun_map_decl loc structs funinfo fsym = function
        | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
      in
      let* expr = retype_expr loc structs (Some ftyp) expr in
-     return (M_Proc (loc,bt,args,expr))
+     let* labels = 
+       pmap_mapM (fun lsym (def: (CA.ft, CA.ct, CA.bt, 'bty) mu_label_def) -> 
+           match def with
+           | M_Return _ -> 
+              let RT.Computational ((s,bt),f_lrt) = FT.get_return ftyp in
+              let rt = RT.Computational ((Sym.fresh (), BT.Unit), RT.I) in
+              let ft = FT.Computational ((s,bt), Conversions.logical_returnType_to_argumentType f_lrt (FT.Return rt)) in
+              return (M_Return ft)
+           | M_Label ((ct,args_spec),(bt,args),annots,e) ->
+              let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
+              let* bt = Conversions.bt_of_core_base_type loc cbt in
+              let* ft = 
+                Conversions.make_esave_spec loc structs
+                  (CF.Annot.get_attrs annots) args_spec ct 
+              in
+              let* args = 
+                mapM (fun (sym,acbt) ->
+                    let* abt = Conversions.bt_of_core_base_type loc acbt in
+                    return (sym,abt)
+                  ) args
+              in
+              let* e = retype_expr loc structs (Some ftyp) e in
+              return (M_Label (ft,(bt,args),annots,e))
+         ) labels Symbol.symbol_compare
+     in
+     return (M_Proc (loc,bt,args,expr,labels))
   | M_ProcDecl (loc,cbt,args) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      let* args = mapM (Conversions.bt_of_core_base_type loc) args in
@@ -399,7 +403,7 @@ let retype_fun_map_decl loc structs funinfo fsym = function
      let* args = mapM (Conversions.bt_of_core_base_type loc) args in
      return (M_BuiltinDecl (loc,bt,args))
 
-let retype_fun_map loc structs funinfo fun_map = 
+let retype_fun_map loc structs funinfo (fun_map : (CA.ft, CA.ct, CA.bt, 'bty) mu_fun_map) = 
   pmap_mapM (fun fsym decl -> 
       retype_fun_map_decl loc structs funinfo fsym decl
     ) fun_map Symbol.symbol_compare
@@ -451,7 +455,7 @@ let retype_funinfo struct_decls funinfo =
     ) funinfo Symbol.symbol_compare
 
 
-let retype_file loc file 
+let retype_file loc (file : (CA.ft, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, 'bty) mu_file)
     : ((FT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
 
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in

@@ -120,3 +120,22 @@ let rec get_uid annots =
         get_uid annots'
   end
 
+
+(* adapting code from get_loc *)
+val     explode: list annot -> bool
+let rec explode annots =
+  match annots with
+  | Anot_explode :: _ -> false
+  | _ :: annots -> explode annots
+  | [] -> true
+  end
+
+
+(* adapting code from get_loc *)
+val     is_return: list annot -> bool
+let rec is_return annots =
+  match annots with
+  | Areturn :: _ -> true
+  | _ :: annots -> is_return annots
+  | [] -> false
+  end

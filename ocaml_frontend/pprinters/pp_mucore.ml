@@ -30,6 +30,7 @@ module type PP_Typ = sig
   (* type object_type *)
   (* val pp_object_type: object_type -> PPrint.document *)
   val pp_ct: ct -> PPrint.document
+  val pp_ft: ft -> PPrint.document
   val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
 end
@@ -196,8 +197,8 @@ let rec precedence_expr = function
       Some 3
   | M_Ewseq _ ->
       Some 4
-  | M_Esave _ ->
-      Some 5
+  (* | M_Esave _ ->
+   *     Some 5 *)
 
 
 let compare_precedence p1 p2 =
@@ -736,14 +737,14 @@ let pp_expr budget (expr : (ft,ct,bt,'ty) mu_expr) =
          *     pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2)) *)
         (* | M_Eindet (i, e) ->
          *     pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e) *)
-        | M_Esave (_, (sym, (bTy,_)), sym_bTy_pes, e) ->
-            pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
-            P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
-              pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
-            ) sym_bTy_pes) ^^^
-            pp_control "in" ^^^
-            P.nest 2 (P.break 1 ^^ pp e)
-        | M_Erun (sym, pes) ->
+        (* | M_Esave (_, (sym, (bTy,_)), sym_bTy_pes, e) ->
+         *     pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
+         *     P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
+         *       pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
+         *     ) sym_bTy_pes) ^^^
+         *     pp_control "in" ^^^
+         *     P.nest 2 (P.break 1 ^^ pp e) *)
+        | M_Erun (sym, pes, _) ->
             pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
         (* | M_Epar es ->
          *     pp_keyword "par" ^^ P.parens (comma_list pp es) *)
@@ -840,11 +841,25 @@ let pp_fun_map budget funs =
       | M_BuiltinDecl (loc, bTy, bTys) ->
           pp_cond loc @@
           pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) ^^ P.hardline ^^ P.hardline
-      | M_Proc (loc, bTy, params, e) ->
+      | M_Proc (loc, bTy, params, e, labels) ->
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
+          P.hardline ^^
+          P.nest 2 (
+            (Pmap.fold (fun sym decl acc ->
+                 acc ^^
+                 match decl with
+                 | M_Label (ft,(bt,args),annots,lbody) ->
+                    P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_ft ft ^^ 
+                    P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
+                      P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bTy) args) ^^ P.colon ^^^ pp_bt bt ^^^ P.equals ^^
+                       P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline
+                 | M_Return ft -> 
+                    P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_ft ft ^^ P.hardline
+               ) labels P.empty) ^^ 
+            P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
+            )
     ) funs P.empty
 
 
@@ -974,6 +989,13 @@ module Pp_standard_typ = (struct
 
   type ft = ct mu_funinfo_type
 
+  let pp_ctype ty =
+    P.squotes (Pp_core_ctype.pp_ctype ty)
+
+  (* stealing from Pp_core *)
+  let pp_ft (ret_ty, params) = 
+    let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
+    pp_ctype (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, false)))
 
   let pp_funinfo finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in

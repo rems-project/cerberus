@@ -43,6 +43,7 @@ type 'bty mu_pexpr = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_pexpr
 type 'bty mu_expr = (FT.t, (BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_expr
 type 'bty mu_value = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_value
 type 'bty mu_object_value = ((BT.t * RE.size),'bty) CF.Mucore.mu_object_value
+type 'bty mu_label_defs = (FT.t,(BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_label_defs
 
 
 module Pp_srt_typ = struct
@@ -51,14 +52,15 @@ module Pp_srt_typ = struct
   type ft = FT.t
   let pp_bt = BT.pp true
   let pp_ct (bt,size) = parens (BT.pp false bt ^^ comma ^^ Num.pp size)
+  let pp_ft = FT.pp
   let pp_funinfo _ = failwith "not implementeed"
   let pp_funinfo_with_attributes _  = failwith "not implementeed"
 end
 
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_srt_typ)
 
-let pp_expr e = nocolour PP_MUCORE.pp_expr e
-let pp_pexpr e = nocolour PP_MUCORE.pp_pexpr e
+let pp_expr e = PP_MUCORE.pp_expr e
+let pp_pexpr e = PP_MUCORE.pp_pexpr e
 
 
 type 'bty pexpr_or_expr = 
@@ -1335,11 +1337,11 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
 
 
 
+
+
+
+
 type labels = FunctionTypes.t SymMap.t
-
-
-
-
 
 
 let rec infer_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) or_goto m =
@@ -1530,7 +1532,7 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
        infer_expr_pure loc labels {local;global} e
     | M_End _ ->
        fail loc (Unsupported !^"todo: End")
-    | M_Erun (label_sym,asyms) ->
+    | M_Erun (label_sym,asyms,_) ->
        let* ft = match SymMap.find_opt label_sym labels with
        | None -> fail loc (Generic (!^"undefined label" ^^^ Sym.pp label_sym))
        | Some ft -> return ft
@@ -1540,12 +1542,12 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
        return Goto
     | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
     | M_Eif _ -> fail loc (unreachable !^"Eif in inferring position")
-    | M_Esave (ft, (sym,(rbt,rct)), args, body) ->
-       (* check that the default arguments satisfy the specification,
-          which consumes the needed resources *)
-       let* default_args = get_a_loc_asyms loc local (map (fun (_, (_, asym)) -> asym) args) in
-       let* (_,local) = calltyp loc {local;global} default_args ft in
-       return Goto
+    (* | M_Esave (ft, (sym,(rbt,rct)), args, body) ->
+     *    (\* check that the default arguments satisfy the specification,
+     *       which consumes the needed resources *\)
+     *    let* default_args = get_a_loc_asyms loc local (map (fun (_, (_, asym)) -> asym) args) in
+     *    let* (_,local) = calltyp loc {local;global} default_args ft in
+     *    return Goto *)
     | M_Elet (p, e1, e2) ->
        let* (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
@@ -1716,17 +1718,13 @@ let check_procedure (loc: Loc.t)
                     (fsym: Sym.t)
                     (arguments: (Sym.t * BT.t) list) 
                     (rbt: BT.t) 
+                    (label_defs: 'bty mu_label_defs)
                     (body : 'bty mu_expr)
                     (function_typ: FT.t) 
   =
   let* () = debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) in
   let* () = debug_print 2 (blank 3 ^^ item "type" (FT.pp function_typ)) in
   let* (rt,local,substs) = check_and_bind_function_arguments loc L.empty arguments function_typ in
-  let body = 
-    fold_left (fun body subst -> 
-        CF.Mucore.instantiate_esave_type_symbol (FT.subst_var subst) body
-      ) body substs
-  in
   let* () = debug_print 2 (blank 3 ^^ item "rt" (RT.pp rt)) in
   (* rbt consistency *)
   let* () = 
@@ -1735,90 +1733,41 @@ let check_procedure (loc: Loc.t)
     else fail loc (Mismatch {has = (Base rbt); expect = Base sbt})
   in
 
-  (* adapting from Core_typing.lem *)
-  let labels =
-    let rec aux acc (M_Expr (_,expr_)) =
-      match expr_ with
-      | M_Epure _ 
-      | M_Ememop _ 
-      | M_Eaction _ -> 
-         acc
-      | M_Ecase (_,pats_pes) ->
-         List.fold_left (fun acc (_,e) -> aux acc e) acc pats_pes
-      | M_Elet (_,_,e) -> 
-         aux acc e
-      | M_Eif (_,e1,e2) ->
-         aux (aux acc e1) e2
-      | M_Eskip -> acc
-      | M_Eccall _ -> acc
-      | M_Eproc _ -> acc
-      | M_Ewseq (_,e1,e2) 
-      | M_Esseq (_,e1,e2) ->
-         aux (aux acc e1) e2
-      | M_Ebound (_, e) -> 
-         aux acc e
-      | M_End es -> 
-         List.fold_left aux acc es
-      | M_Esave (ft,(name,_),_,e) ->
-         aux (SymMap.add name ft acc) e
-      | M_Erun _ -> acc
-    in
-    aux SymMap.empty body
+  let label_defs = 
+    Pmap.map (fun def ->
+        match def with
+        | M_Return ft -> 
+           M_Return (FT.subst_vars substs ft)
+        | M_Label (ft,(bt,args),annots,body) ->
+           M_Label (FT.subst_vars substs ft,(bt,args),annots,body)
+      ) label_defs
   in
-  
-  (* adapting from Core_typing.lem *)
-  let rec check_labels loc (M_Expr (annots,expr_)) =
-    let loc = Loc.update loc annots in
-    match expr_ with
-    | M_Epure _ 
-    | M_Ememop _ 
-    | M_Eaction _ -> 
+
+  let labels = 
+    Pmap.fold (fun sym def acc ->
+        match def with
+        | M_Return ft -> SymMap.add sym ft acc
+        | M_Label (ft,_,_,_) -> SymMap.add sym ft acc
+      ) label_defs SymMap.empty
+  in
+
+  let check_label lsym def () = 
+    match def with
+    | M_Return _ -> 
        return ()
-    | M_Ecase (_,pats_pes) ->
-       fold_leftM (fun _ (_,e) -> check_labels loc e) () pats_pes
-    | M_Elet (_,_,e) -> 
-       check_labels loc e
-    | M_Eif (_,e1,e2) ->
-       let* () = check_labels loc e1 in
-       check_labels loc e2
-    | M_Eskip
-    | M_Eccall _
-    | M_Eproc _ -> 
-       return ()
-    | M_Ewseq (_,e1,e2) 
-    | M_Esseq (_,e1,e2) ->
-       let* () = check_labels loc e1 in
-       check_labels loc e2
-    | M_Ebound (_, e) -> 
-       check_labels loc e
-    | M_End es -> 
-       fold_leftM (fun () e -> check_labels loc e) () es
-    | M_Esave (ft,(lsym,_),args,body) ->
-       if CF.Mucore.is_return annots then 
-         (* Is it correct to just skip the return label? It's
-            implemented as an identity, so should be fine. *)
-         check_labels loc body
-       else 
-         (* Check that assuming a list of (any) arguments satisfying the
-            label's argument specification the body produces the right
-            return type. This includes the logical facts (for the
-            general case) into the environment. *)
-         let* () = debug_print 1 hardline in
-         let* () = debug_print 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
-         let* () = debug_print 2 (blank 3 ^^ item "against" (FT.pp ft)) in
-         let* (_,local,_) = 
-           check_and_bind_function_arguments loc L.empty 
-             (map (fun (sym, ((abt,_), _)) -> (sym,abt)) args) ft 
-         in
-         let* local = check_expr loc labels {local;global} body rt in
-         (* let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
-         let* () = debug_print 1 (!^(greenb "...label checked ok")) in
-         check_labels loc body
-    | M_Erun _ -> 
+    | M_Label (ft,(bt,args),annots,body) ->
+       let* () = debug_print 1 hardline in
+       let* () = debug_print 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
+       let* () = debug_print 2 (blank 3 ^^ item "against" (FT.pp ft)) in
+       let* (_,local,_) = check_and_bind_function_arguments loc L.empty args ft in
+       let* local = check_expr loc labels {local;global} body rt in
+       (* let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
+       let* () = debug_print 1 (!^(greenb "...label checked ok")) in
        return ()
   in
 
-  let* () = check_labels loc body in
+
+  let* () = pmap_foldM check_label label_defs () in
 
   let* () = debug_print 1 hardline in
   let* () = debug_print 1 (h1 ("Checking function body " ^ (plain (Sym.pp fsym)))) in

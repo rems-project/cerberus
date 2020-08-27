@@ -515,12 +515,12 @@ let rec mu_to_core__expr env expr : Core.generic_expr unit 'bty symbol =
        wrap (Core.Ebound n (mu_to_core__expr env e))
     | M_End es ->
        wrap (Core.End (map (mu_to_core__expr env) es))
-    | M_Esave _ (sym,(bt,ct)) sbp e ->
+    | M_Erun sym pes Nothing ->
+       wrap (Core.Erun () sym (map (get_pexpr "Erun" env) pes))
+    | M_Erun _sym _pes (Just (M_Esave _ (sym,(bt,ct)) sbp e)) ->
        let sbp = 
          map (fun (sym,((bt,ct),pe)) -> (sym,((bt,Just ct),get_pexpr "Esave" env pe))) sbp in
        wrap (Core.Esave (sym,(bt,Just ct)) sbp (mu_to_core__expr env e))
-    | M_Erun sym pes ->
-       wrap (Core.Erun () sym (map (get_pexpr "Erun" env) pes))
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)
     (* | M_Ewait tid -> 
@@ -546,7 +546,7 @@ let mu_to_core__fun_map_decl d : Core.generic_fun_map_decl 'bty unit =
   match d with
   | M_Fun bt args pe ->
      Core.Fun bt args (mu_to_core__pexpr Map.empty pe)
-  | M_Proc loc bt args e ->
+  | M_Proc loc bt args e _labels ->
      Core.Proc loc bt args (mu_to_core__expr Map.empty e)
   | M_ProcDecl loc bt bts ->
      Core.ProcDecl loc bt bts
