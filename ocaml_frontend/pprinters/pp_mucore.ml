@@ -421,10 +421,8 @@ let rec pp_pattern (M_Pattern (_, pat)) =
       pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_sym_or_pattern = function
-  | M_Symbol asym ->
-     pp_symbol (a_unpack asym)
-  | M_Pat pat ->
-     pp_pattern pat
+  | M_Symbol symbol -> pp_symbol symbol
+  | M_Pat pat -> pp_pattern pat
 
 
 let pp_pexpr budget pe =

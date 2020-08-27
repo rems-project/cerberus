@@ -1237,7 +1237,7 @@ and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L
     | M_PElet (p, e1, e2) ->
        let* (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
-         | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
+         | M_Symbol sym -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt loc pat rt
        in
        let local = local' ++ local in
@@ -1320,7 +1320,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
   | M_PElet (p, e1, e2) ->
      let* (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with
-       | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
+       | M_Symbol sym -> return (bind sym rt)
        | M_Pat pat -> pattern_match_rt loc pat rt
      in
      let local = local' ++ local in
@@ -1551,7 +1551,7 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
     | M_Elet (p, e1, e2) ->
        let* (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
-         | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
+         | M_Symbol sym -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt loc pat rt
        in
        let local = local' ++ local in
@@ -1629,7 +1629,7 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
   | M_Elet (p, e1, e2) ->
      let* (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with 
-       | M_Symbol (A (_,_,sym)) -> return (bind sym rt)
+       | M_Symbol sym -> return (bind sym rt)
        | M_Pat pat -> pattern_match_rt loc pat rt
      in
      let local = local' ++ local in

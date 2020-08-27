@@ -184,7 +184,7 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr Ctype.ctype mu_base
      wrap (Core.PEcall name (map (get_pexpr "PEcall" env) args))
   | M_PElet pat p1 p2 ->
      match pat with
-     | M_Symbol (A _ _ sym) ->
+     | M_Symbol sym ->
         let p1 = mu_to_core__pexpr env p1 in
         let env' = insert_symbol sym p1 env in
         mu_to_core__pexpr env' p2
@@ -472,7 +472,7 @@ let rec mu_to_core__expr env expr : Core.generic_expr unit 'bty symbol =
                      mu_to_core__expr env e)) es))
     | M_Elet pat pe e ->
        match pat with
-       | M_Symbol (A _ _ sym) ->
+       | M_Symbol sym ->
           let pe = mu_to_core__pexpr env pe in
           let env' = insert_symbol sym pe env in
           mu_to_core__expr env' e

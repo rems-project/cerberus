@@ -4,7 +4,7 @@ open import Assert_extra
 import Symbol
 
 open import Core
-open import Mucore 
+open import Mucore Annot
      import Annot Core_typing Core_typing_aux Maybe_extra
 
 (* The a-normalisation should happen after some partial evaluation and
@@ -148,10 +148,9 @@ val letbind_pexpr :
 let letbind_pexpr outer_annots letbinder pexpr ctxt  = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
-  let asym = a_pack annots bty sym in
-  let pat = M_Symbol asym in
+  let asym = a_pack (only_loc annots) bty sym in
   let body = ctxt asym in
-  letbinder outer_annots pat pexpr body
+  letbinder (only_loc outer_annots) (M_Symbol sym) pexpr body
 
 val n_val : 
   forall 'a.

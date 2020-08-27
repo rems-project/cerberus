@@ -96,7 +96,7 @@ and mu_pattern 'DBTY =
  | M_Pattern of list annot * (mu_pattern_ 'DBTY)
 
 type mu_sym_or_pattern 'DBTY 'bty = 
-  | M_Symbol of A symbol 'bty
+  | M_Symbol of symbol
   | M_Pat of mu_pattern 'DBTY
 
 type mu_pexpr_ 'DCTY 'DBTY 'bty =  (* Core pure expressions *)

@@ -67,6 +67,11 @@ let get_loc_ annots =
     | Nothing -> Loc.unknown
   end
 
+val only_loc: list annot -> list annot
+let only_loc annots = 
+  List.filter (function Aloc _ -> true | _ -> false end) annots
+
+
 
 val     get_attrs: list annot -> maybe attributes
 let rec get_attrs annots = 
