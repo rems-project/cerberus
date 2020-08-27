@@ -1784,6 +1784,5 @@ let check_procedure (loc: Loc.t)
 (* TODO: 
   - make call_typ and subtype accept non-A arguments  
   - constrain return type shape, maybe also function type shape
-  - check preProcess and remove "try" 
   - fix Ecase "LC (Bool true)"
  *)

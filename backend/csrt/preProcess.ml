@@ -377,7 +377,6 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.ft, CA.ct, CA.bt, 'b
               let ft = FT.Computational ((s,bt), Conversions.logical_returnType_to_argumentType f_lrt (FT.Return rt)) in
               return (M_Return ft)
            | M_Label ((ct,args_spec),(bt,args),annots,e) ->
-              let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
               let* bt = Conversions.bt_of_core_base_type loc cbt in
               let* ft = 
                 Conversions.make_esave_spec loc structs
