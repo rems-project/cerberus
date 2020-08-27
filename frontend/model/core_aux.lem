@@ -2319,8 +2319,15 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         (* typing forbids "saves" inside a "nd()" *)
         st
     | Esave (sym, ty) params e ->
+       (* let () = Debug.print_debug 0 [] (fun () -> "label: " ^ show sym) in *)
+       let params = 
+         List.map (fun (sym,((bt,mct),_)) -> 
+             (* let () = Debug.print_debug 0 [] (fun () -> "argument: " ^ show sym ^ " " ^ Pp.stringFromCore_core_base_type bt) in *)
+             (sym,(bt,mct))
+           ) params 
+       in
         m_collect_saves_aux
-          <| st with m_tmp_acc= Map.insert sym ((ty,List.map (fun (sym,(ty,_)) -> (sym,ty)) params, is_return annots, annots), e) st.m_tmp_acc |>
+          <| st with m_tmp_acc= Map.insert sym ((ty,params,is_return annots, annots), e) st.m_tmp_acc |>
           e
     | Erun _ _ _ ->
         st

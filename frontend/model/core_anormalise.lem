@@ -868,7 +868,9 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
      | Proc loc bt args e -> 
         let saves = Core_aux.m_collect_saves e in
         let saves' = 
-          Map.map (fun (((bt,mrct),params,is_return,annots),body) ->
+          Map.mapi (fun _label (((bt,mrct),params,is_return,annots),body) ->
+              (* let () = Debug.print_debug 0 [] (fun () -> "label: " ^ show label) in
+               * let () = Debug.print_debug 0 [] (fun () -> "body: " ^  Pp.stringFromCore_expr body) in *)
               let get_ct mct = match mct with
                 | Just ct -> ct
                 | Nothing -> failwith "normalise_fun_map_decl: no ctype"
@@ -877,7 +879,12 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
                 (get_ct mrct, map (fun (sym,((_,mact))) -> (Just sym, get_ct mact)) params) in
               if is_return then M_Return ft
               else 
-                let params = map (fun (sym,((bt,_))) -> (sym,bt)) params in
+                let params = 
+                  map (fun (sym,((bt,_))) -> 
+                      (* let () = Debug.print_debug 0 [] (fun () -> "argument: " ^ show sym ^ " " ^ Pp.stringFromCore_core_base_type bt) in *)
+                      (sym,bt)
+                    ) params 
+                in
                 M_Label ft (bt, params) annots (normalise_expr body)
             ) saves 
         in

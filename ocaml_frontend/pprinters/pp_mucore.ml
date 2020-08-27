@@ -845,19 +845,25 @@ let pp_fun_map budget funs =
           P.colon ^^ P.equals ^^
           P.hardline ^^
           P.nest 2 (
+              (* pp label definitions *)
             (Pmap.fold (fun sym decl acc ->
                  acc ^^
                  match decl with
                  | M_Label (ft,(bt,args),annots,lbody) ->
+                    (* label ctype definition *)
                     P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_ft ft ^^ 
+                      (* label core function definition *)
                     P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
-                      P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bTy) args) ^^ P.colon ^^^ pp_bt bt ^^^ P.equals ^^
-                       P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline
+                      P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.colon ^^^ pp_bt bt ^^^ P.equals ^^
+                       P.nest 2 (P.break 1 ^^ pp_expr budget lbody) ^^ P.hardline
                  | M_Return ft -> 
                     P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_ft ft ^^ P.hardline
-               ) labels P.empty) ^^ 
+               ) labels P.empty
+            ) 
+            ^^ 
+              (* pp body *)
             P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
-            )
+          )
     ) funs P.empty
 
 
