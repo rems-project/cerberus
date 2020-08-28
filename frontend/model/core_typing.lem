@@ -1481,7 +1481,7 @@ let rec collect_labels env (Expr _ expr_) =
         E.foldlM (fun env' e ->
           collect_labels env' e
         ) env es
-    | Esave (sym, (bTy,_)) sym_bTy_pes e ->
+    | Esave (sym, bTy) sym_bTy_pes e ->
         collect_labels <| env with labs= Map.insert sym (bTy, List.map (fun (_, ((z,_), _)) -> z) sym_bTy_pes) env.labs |> e
     | Erun _ _ _ ->
         E.return env

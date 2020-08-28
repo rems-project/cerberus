@@ -2100,11 +2100,11 @@ val mk_sseq_e: pattern -> expr unit -> expr unit -> expr unit
 let mk_sseq_e pat e1 e2 =
   Expr [] (Esseq pat e1 e2)
 
-val mk_save_e_: list annot -> (Symbol.sym * (core_base_type * maybe Ctype.ctype)) -> list (Symbol.sym * ((core_base_type * maybe Ctype.ctype) * pexpr)) -> expr unit -> expr unit
+val mk_save_e_: list annot -> (Symbol.sym * core_base_type) -> list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * bool)) * pexpr)) -> expr unit -> expr unit
 let mk_save_e_ annots sym_ty sym_ty_pes e =
   Expr annots (Esave sym_ty sym_ty_pes e)
 
-val mk_save_e: (Symbol.sym * (core_base_type * maybe Ctype.ctype)) -> list (Symbol.sym * ((core_base_type * maybe Ctype.ctype) * pexpr)) -> expr unit -> expr unit
+val mk_save_e: (Symbol.sym * core_base_type) -> list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * bool)) * pexpr)) -> expr unit -> expr unit
 let mk_save_e sym_ty sym_ty_pes e =
   Expr [] (Esave sym_ty sym_ty_pes e)
 
@@ -2243,12 +2243,11 @@ let collect_saves expr =
    esave. The above could be defined in terms of the below, but I
    didn't want to mess that up, so leaving for now. *)
 
+type m_labeled_continuation 'a = 
+  (core_base_type * list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * bool)) * pexpr)) * (expr 'a) * list Annot.annot)
+
 type m_labeled_continuations 'a = 
-  map Symbol.sym (((core_base_type * maybe Ctype.ctype) * 
-                     list (Symbol.sym * ((core_base_type * maybe Ctype.ctype))) *
-                       bool *   (* whether return *)
-                       list Annot.annot) *
-                    expr 'a)
+  map Symbol.sym (m_labeled_continuation 'a)
 
 type m_collect_saves_state 'a = <|
   m_tmp_acc:    m_labeled_continuations 'a;
@@ -2293,7 +2292,9 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_union_saves st begin
           m_union_saves
             <| st1 with
-              m_tmp_acc= Map.map (fun (info, e) -> (info, Expr annots (Ewseq pat e e2))) st1.m_tmp_acc
+              m_tmp_acc= Map.map (fun (cbt,args,body,annots) -> 
+                             (cbt, args, Expr annots (Ewseq pat body e2), annots) )
+                               st1.m_tmp_acc
             |>
             st2
         end
@@ -2303,7 +2304,9 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_union_saves st begin
           m_union_saves
             <| st1 with
-              m_tmp_acc= Map.map (fun (info, e) -> (info, Expr annots (Esseq pat e e2))) st1.m_tmp_acc
+              m_tmp_acc= Map.map (fun (cbt,args,body,annots) -> 
+                             (cbt, args, Expr annots (Esseq pat body e2), annots) )
+                               st1.m_tmp_acc
             |>
             st2
         end
@@ -2320,14 +2323,8 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         st
     | Esave (sym, ty) params e ->
        (* let () = Debug.print_debug 0 [] (fun () -> "label: " ^ show sym) in *)
-       let params = 
-         List.map (fun (sym,((bt,mct),_)) -> 
-             (* let () = Debug.print_debug 0 [] (fun () -> "argument: " ^ show sym ^ " " ^ Pp.stringFromCore_core_base_type bt) in *)
-             (sym,(bt,mct))
-           ) params 
-       in
         m_collect_saves_aux
-          <| st with m_tmp_acc= Map.insert sym ((ty,params,is_return annots, annots), e) st.m_tmp_acc |>
+          <| st with m_tmp_acc= Map.insert sym (ty,params,e,annots) st.m_tmp_acc |>
           e
     | Erun _ _ _ ->
         st

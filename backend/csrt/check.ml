@@ -50,9 +50,11 @@ module Pp_srt_typ = struct
   type bt = BT.t
   type ct = (BT.t * RE.size)
   type ft = FT.t
+  type lt = FT.t
   let pp_bt = BT.pp true
   let pp_ct (bt,size) = parens (BT.pp false bt ^^ comma ^^ Num.pp size)
   let pp_ft = FT.pp
+  let pp_lt = FT.pp
   let pp_funinfo _ = failwith "not implementeed"
   let pp_funinfo_with_attributes _  = failwith "not implementeed"
 end
@@ -1665,17 +1667,17 @@ let check_expr (frt: RT.t) =
   check_expr
 
 
-let check_and_bind_function_arguments loc local arguments function_typ = 
-  let rec check acc_substs local args ftyp =
+let check_and_bind_function_arguments loc arguments function_typ = 
+  let rec check acc_substs local pure_local args ftyp =
     match args, ftyp with
     | (aname,abt)::args, FT.Computational ((lname,sbt),ftyp) 
          when BT.equal abt sbt ->
        let new_lname = fresh () in
        let subst = {s=lname;swith=S new_lname} in
        let ftyp' = FT.subst_var subst ftyp in
-       let local = add (mL new_lname (Base abt)) local in
-       let local = add (mA aname (abt,new_lname)) local in
-       check (acc_substs@[subst]) local args ftyp'
+       let local = add (mA aname (abt,new_lname)) (add (mL new_lname (Base abt)) local) in
+       let pure_local = add (mA aname (abt,new_lname)) (add (mL new_lname (Base abt)) pure_local) in
+       check (acc_substs@[subst]) local pure_local args ftyp'
     | (aname,abt)::args, FT.Computational ((sname,sbt),ftyp) ->
        fail loc (Mismatch {has = (Base abt); expect = Base sbt})
     | [], FT.Computational (_,_)
@@ -1687,15 +1689,17 @@ let check_and_bind_function_arguments loc local arguments function_typ =
        let new_lname = fresh () in
        let subst = {s=sname;swith=S new_lname} in
        let ftyp' = FT.subst_var subst ftyp in
-       check (acc_substs@[subst]) (add (mL new_lname sls) local) args ftyp'
+       check (acc_substs@[subst]) 
+         (add (mL new_lname sls) local) 
+         (add (mL new_lname sls) pure_local) args ftyp'
     | args, FT.Resource (re,ftyp) ->
-       check acc_substs (add (mUR re) local) args ftyp
+       check acc_substs (add (mUR re) local) pure_local args ftyp
     | args, FT.Constraint (lc,ftyp) ->
-       check acc_substs (add (mUC lc) local) args ftyp
+       check acc_substs (add (mUC lc) local) pure_local args ftyp
     | [], FT.Return rt ->
-       return (rt,local,acc_substs)
+       return (rt,local,pure_local,acc_substs)
   in
-  check [] local arguments function_typ
+  check [] L.empty L.empty arguments function_typ
 
 
 let check_function (loc: Loc.t) 
@@ -1707,7 +1711,7 @@ let check_function (loc: Loc.t)
                    (function_typ: FT.t) 
   =
   let* () = debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) in
-  let* (rt,local,_substs) = check_and_bind_function_arguments loc L.empty arguments function_typ in
+  let* (rt,local,_,_substs) = check_and_bind_function_arguments loc arguments function_typ in
   (* rbt consistency *)
   let* () = 
     let Computational ((sname,sbt),t) = rt in
@@ -1731,7 +1735,7 @@ let check_procedure (loc: Loc.t)
   =
   let* () = debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) in
   let* () = debug_print 2 (blank 3 ^^ item "type" (FT.pp function_typ)) in
-  let* (rt,local,substs) = check_and_bind_function_arguments loc L.empty arguments function_typ in
+  let* (rt,local,pure_local,substs) = check_and_bind_function_arguments loc arguments function_typ in
   let* () = debug_print 2 (blank 3 ^^ item "rt" (RT.pp rt)) in
   (* rbt consistency *)
   let* () = 
@@ -1741,8 +1745,7 @@ let check_procedure (loc: Loc.t)
   in
 
   let label_defs = 
-    Pmap.map (fun (ft,(bt,args),annots,body) -> (FT.subst_vars substs ft,(bt,args),annots,body))
-      label_defs
+    Pmap.map (fun (ft,args,body,annots) -> (FT.subst_vars substs ft,args,body,annots)) label_defs
   in
 
   let labels = 
@@ -1750,12 +1753,12 @@ let check_procedure (loc: Loc.t)
       label_defs SymMap.empty
   in
 
-  let check_label lsym (ft,(bt,args),annots,body) () = 
+  let check_label lsym (ft,args,body,annots) () = 
     let* () = debug_print 1 hardline in
     let* () = debug_print 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
     let* () = debug_print 2 (blank 3 ^^ item "against" (FT.pp ft)) in
-    let* (_,local,_) = check_and_bind_function_arguments loc L.empty args ft in
-    let* local = check_expr rt loc labels {local;global} body rt in
+    let* (_,local,_,_) = check_and_bind_function_arguments loc args ft in
+    let* local = check_expr rt loc labels {local = pure_local ++ local;global} body rt in
     (* let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
     let* () = debug_print 1 (!^(greenb "...label checked ok")) in
     return ()

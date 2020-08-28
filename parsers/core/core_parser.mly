@@ -652,7 +652,7 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | End _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (End es)
-   | Esave ((_sym, (bTy,mct)), _xs, _e) ->
+   | Esave ((_sym, bTy), _xs, _e) ->
        (* NOTE: the scope of Esave symbols is the whole function and these are
           therefore registered in a preliminary pass *)
        lookup_label _sym >>= begin function
@@ -669,7 +669,7 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
                  Eff.return (sym, ((bTy,mct), pe))
                ) _xs' >>= fun xs ->
                symbolify_expr _e >>= fun e ->
-               Eff.return (Esave ((sym, (bTy,mct)), xs, e))
+               Eff.return (Esave ((sym, bTy), xs, e))
              end
        end
    | Erun ((), _sym, _pes) ->
@@ -1595,7 +1595,7 @@ expr:
                 separated_pair(SYM, COLON, separated_pair(core_base_type, COLON_EQ, pexpr))),
             RPAREN) IN _e= expr
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
-           , Esave ((_sym, (bTy, None)), map do_esave_arg _xs, _e) ) }
+           , Esave ((_sym, bTy), map do_esave_arg _xs, _e) ) }
 | RUN _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Erun ((), _sym, _pes) ) }

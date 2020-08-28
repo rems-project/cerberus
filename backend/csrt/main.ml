@@ -13,6 +13,7 @@ let return = CF.Exception.except_return
 
 type core_file = (unit,unit) CF.Core.generic_file
 type mu_file = (CA.ft,
+                CA.lt,
                 CA.ct,
                 CA.bt,
                 CA.ct CF.Mucore.mu_struct_def,
@@ -126,7 +127,7 @@ let main filename debug_level type_debug_level =
   match frontend filename with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err);
-  | CF.Exception.Result (file: (CA.ft, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, unit) CF.Mucore.mu_file ) ->
+  | CF.Exception.Result (file: (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, unit) CF.Mucore.mu_file ) ->
      Process.process_and_report file
 
 

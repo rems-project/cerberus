@@ -343,16 +343,16 @@ let make_fun_spec loc genv attrs args ret_ctype =
   return ftyp
 
 
-let make_esave_spec loc genv attrs args ret_ctype = 
+let make_esave_spec loc genv attrs args = 
   let open FT in
   let open RT in
   let* arguments = 
-    fold_leftM (fun args (msym, ct) ->
+    fold_leftM (fun args (msym, (ct,by_pointer)) ->
         let name = match msym with
-          | Some sym -> sym
-          | None -> Sym.fresh ()
+          | Symbol (_,_,Some name) -> Sym.fresh_pretty (name ^ "_l")
+          | Symbol (_,_,None) -> Sym.fresh ()
         in
-        let* (arg,_) = make_fun_arg_type true genv name loc ct in
+        let* (arg,_) = make_fun_arg_type by_pointer genv name loc ct in
         let args = Tools.comp args arg in
         return args
       ) 

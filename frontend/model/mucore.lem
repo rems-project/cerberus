@@ -217,19 +217,19 @@ type mu_impl_decl 'DCTY 'DBTY 'bty =
 type mu_impl 'DCTY 'DBTY 'bty = 
   map Implementation.implementation_constant (mu_impl_decl 'DCTY 'DBTY 'bty)
 
-type mu_label_def 'DFTY 'DCTY 'DBTY 'bty = 
-  'DFTY * ('DBTY * list (symbol * 'DBTY)) * list annot * mu_expr 'DCTY 'DBTY 'bty
+type mu_label_def 'DLTY 'DCTY 'DBTY 'bty = 
+  'DLTY * (list (symbol * 'DBTY)) * mu_expr 'DCTY 'DBTY 'bty * list annot
 
-type mu_label_defs 'DFTY 'DCTY 'DBTY 'bty =
-  map symbol (mu_label_def 'DFTY 'DCTY 'DBTY 'bty)
+type mu_label_defs 'DLTY 'DCTY 'DBTY 'bty =
+  map symbol (mu_label_def 'DLTY 'DCTY 'DBTY 'bty)
 
-type mu_fun_map_decl 'DFTY 'DCTY 'DBTY 'bty =
+type mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty =
   | M_Fun of 'DBTY * list (symbol * 'DBTY) * mu_pexpr 'DCTY 'DBTY 'bty
-  | M_Proc of Loc.t * 'DBTY * list (symbol * 'DBTY) * mu_expr 'DCTY 'DBTY 'bty * mu_label_defs 'DFTY 'DCTY 'DBTY 'bty
+  | M_Proc of Loc.t * 'DBTY * list (symbol * 'DBTY) * mu_expr 'DCTY 'DBTY 'bty * mu_label_defs 'DLTY 'DCTY 'DBTY 'bty
   | M_ProcDecl of Loc.t * 'DBTY * list 'DBTY
   | M_BuiltinDecl of Loc.t * 'DBTY * list 'DBTY
 
-type mu_fun_map 'DFTY 'DCTY 'DBTY 'bty = map symbol (mu_fun_map_decl 'DFTY 'DCTY 'DBTY 'bty)
+type mu_fun_map 'DLTY 'DCTY 'DBTY 'bty = map symbol (mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty)
 
 instance forall 'DCTY 'DBTY 'bty. (Located (mu_pexpr 'DCTY 'DBTY 'bty))
   let locOf pe =
@@ -273,13 +273,13 @@ type mu_funinfo 'DFTY =
   M_funinfo of (Loc.t * Annot.attributes * 'DFTY * bool * bool)
 
 (* a Core file is just a set of named functions *)
-type mu_file 'DFTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
+type mu_file 'DFTY 'DLTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
   mu_main    : maybe symbol;
   mu_tagDefs : mu_tag_definitions 'DSTRUCT_DEF 'DUNION_DEF;
-  mu_stdlib  : mu_fun_map 'DFTY 'DCTY 'DBTY 'bty;
+  mu_stdlib  : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty;
   mu_impl    : mu_impl 'DCTY 'DBTY 'bty;
   mu_globs   : list (symbol * mu_globs 'DCTY 'DBTY 'bty);
-  mu_funs    : mu_fun_map 'DFTY 'DCTY 'DBTY 'bty;
+  mu_funs    : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty;
   mu_extern  : mu_extern_map;
   mu_funinfo : map symbol (mu_funinfo 'DFTY);
 |>

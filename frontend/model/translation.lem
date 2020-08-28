@@ -3489,10 +3489,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
             (Caux.mk_run_e (*default*) sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ]) in
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_qualifiers,oty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just oty), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return $
-          Caux.mk_save_e (sym_loop, (C.BTy_unit, Just (Ctype.Ctype [] Ctype.Void)))
+          Caux.mk_save_e (sym_loop, C.BTy_unit)
              args (
 (*
             Caux.mk_sseq_e test_sym_pat core_test (
@@ -3537,10 +3537,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
 
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_qualifiers,oty) ->            
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just oty), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return $
-          Caux.mk_save_e (sym_loop, (C.BTy_unit, Just (Ctype.Ctype [] Ctype.Void))) args (
+          Caux.mk_save_e (sym_loop, C.BTy_unit) args (
             (* loop body *)
             Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
               (* controlling expression *)
@@ -3672,11 +3672,11 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_qualifiers,oty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just oty), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
         match List.lookup iCst env.case_labs with
         | Just lab ->
-          E.return $ Caux.mk_save_e (lab, (C.BTy_unit, Just (Ctype.Ctype [] Ctype.Void))) visible_pes core_s
+          E.return $ Caux.mk_save_e (lab, C.BTy_unit) visible_pes core_s
         | (*BISECT-IGNORE*) Nothing ->
           error "Translation.translate_stmt2: case label not found."
         end
@@ -3685,7 +3685,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
         self s                >>= fun core_s ->
         match env.default_lab with
         | Just lab ->
-          E.return $ Caux.mk_save_e (lab, (C.BTy_unit, Just (Ctype.Ctype [] Ctype.Void))) [] core_s
+          E.return $ Caux.mk_save_e (lab, C.BTy_unit) [] core_s
         | (*BISECT-IGNORE*) Nothing ->
           error "Translation.translate_stmt2: default label not found."
         end
@@ -3695,10 +3695,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_qualifiers,oty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just oty), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms      >>= fun args ->
         E.return $
-          Caux.mk_save_e (sym, (C.BTy_unit, Just (Ctype.Ctype [] Ctype.Void))) args core_s
+          Caux.mk_save_e (sym, C.BTy_unit) args core_s
     
     | A.AilSgoto sym ->
         E.get_visible_objects >>= fun visible_syms ->
@@ -3961,8 +3961,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     else
                       Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
                   Caux.mk_save_e_ [Annot.Areturn]
-                                  (ret_label, (ret_bTy, Just return_ty)) 
-                                  [(ret_sym, ((ret_bTy,Just return_ty), ret_pe))]
+                                  (ret_label, ret_bTy) 
+                                  [(ret_sym, ((ret_bTy, Just (return_ty, false)), ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))
 
 (*

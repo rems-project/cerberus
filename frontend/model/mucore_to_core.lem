@@ -552,7 +552,7 @@ let mu_to_core__fun_map_decl d : Core.generic_fun_map_decl 'bty unit =
      Core.BuiltinDecl loc bt bts
   end
 
-let mu_to_core__fun_map (fmap : mu_fun_map 'DFTY Ctype.ctype mu_base_type 'bty) 
+let mu_to_core__fun_map (fmap :mu_fun_map 'DLTY Ctype.ctype mu_base_type 'bty) 
     : Core.generic_fun_map 'bty unit = 
   Map.map mu_to_core__fun_map_decl fmap
   
