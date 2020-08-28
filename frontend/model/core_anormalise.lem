@@ -34,7 +34,7 @@ type mu_value = Mucore.mu_value ct bt unit
 type mu_values = list mu_value
 type mu_pexpr = Mucore.mu_pexpr ct bt unit
 type mu_pexprs = list mu_pexpr
-type mu_expr = Mucore.mu_expr ft ct bt unit
+type mu_expr = Mucore.mu_expr ct bt unit
 type mu_pattern = Mucore.mu_pattern bt
 type mu_action = Mucore.mu_action ct unit
 type mu_paction = Mucore.mu_paction ct unit
@@ -131,7 +131,7 @@ val letbinder_pexpr_in_pexpr : letbinder mu_pexpr mu_pexpr
 let letbinder_pexpr_in_pexpr annots pat pexpr body : mu_pexpr = 
   M_Pexpr annots (bty_of_mu_pexpr body) (M_PElet pat pexpr body)
 
-val letbinder_pexpr_in_expr : forall 'DFTY. letbinder mu_pexpr mu_expr
+val letbinder_pexpr_in_expr : letbinder mu_pexpr mu_expr
 let letbinder_pexpr_in_expr annots pat pexpr body : mu_expr = 
   M_Expr annots (M_Elet pat pexpr body)
 
@@ -654,11 +654,10 @@ let n_paction loc annots pa (k : mu_paction -> mu_expr) =
   k (wrap a))
 
 
-let rec normalise_expr e =
-  n_expr (Loc.locOf e) e (fun e -> e)
 
 
-and n_memop loc annots memop pexprs k = 
+
+let n_memop loc annots memop pexprs k = 
   let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
   let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 loc annots in
   let n_pexpr_in_expr_name_3 = n_pexpr_in_expr_name_3 loc annots in
@@ -733,7 +732,10 @@ and n_memop loc annots memop pexprs k =
                  show (List.length pexprs) ^ " arguments")
   end
 
-and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr = 
+let rec normalise_expr (returns : set symbol) e =
+  n_expr (Loc.locOf e) returns e (fun e -> e)
+
+and n_expr loc (returns : set symbol) (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr = 
   let (Expr annots pe) = e in
   let wrap pe : mu_expr = M_Expr annots pe in
 
@@ -746,8 +748,9 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
   let n_pexpr_in_expr_names = n_pexpr_in_expr_names loc annots in
   let n_pexpr_in_expr = n_pexpr_in_expr loc in
   let n_paction = n_paction loc in
-  let n_expr = n_expr loc in
+  let n_expr = n_expr loc returns in
   let n_memop = n_memop loc in
+  let normalise_expr = normalise_expr returns in
 
   match pe with
   | Epure pexpr -> 
@@ -818,30 +821,28 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
   | End es ->
      let es = map normalise_expr es in
      k (wrap (M_End es))
-  | Esave (s,(bt,mct)) syms_typs_pes e ->  (* have to check *)
-     let ct = match mct with
-       | Just ct -> ct
-       | None -> failwith "core_anormalise: Esave return not annotated with Ctype"
-     end in
-     let (syms,typs_pes) = unzip syms_typs_pes in
-     let (typs,pes) = unzip typs_pes in
-     let typs = 
-       map (function
-            | (bt, Just ct) -> (bt,ct)
-            | (_,Nothing) -> failwith "core_anormalise: Esave arguments not annotated with Ctype"
-            end
-         ) typs
-     in
+  | Esave (sym,(bt,mct)) syms_typs_pes e ->  (* have to check *)
+     let (_,typs_pes) = unzip syms_typs_pes in
+     let (_,pes) = unzip typs_pes in
      n_pexpr_in_expr_names pes (fun pes ->
-     let typs_pes = zip typs pes in
-     let syms_typs_pes = zip syms typs_pes in
-     let e = normalise_expr e in
-     let fty = (ct, map (fun (sym,((_,ct),_)) -> (Just sym,ct)) syms_typs_pes) in
-     let esave = M_Esave fty (s,(bt,ct)) syms_typs_pes e in
-     k (wrap (M_Erun s pes (Just esave))))
+     if sym IN returns then
+       match pes with
+       | [asym] -> k (wrap (M_Ereturn sym asym))
+       | _ -> failwith "return with no or multiple arguments"
+       end
+     else
+        k (wrap (M_Erun sym pes))
+     )
   | Erun _a sym pes ->
      n_pexpr_in_expr_names pes (fun pes ->
-     k (wrap (M_Erun sym pes Nothing)))
+     if sym IN returns then
+       match pes with
+       | [asym] -> k (wrap (M_Ereturn sym asym))
+       | _ -> failwith "return with no or multiple arguments"
+       end
+     else
+        k (wrap (M_Erun sym pes))
+     )
   | Epar es -> 
      failwith "todo Epar"
   | Ewait tid ->
@@ -867,28 +868,30 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
      | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
      | Proc loc bt args e -> 
         let saves = Core_aux.m_collect_saves e in
+        let returns = Map_extra.fold (fun label ((_,_,is_return,_),_) acc -> 
+                          if is_return then Set.insert label acc else acc) saves Set.empty in
         let saves' = 
-          Map.mapi (fun _label (((bt,mrct),params,is_return,annots),body) ->
+          Map_extra.mapMaybe (fun _label (((bt,mrct),params,is_return,annots),body) ->
               (* let () = Debug.print_debug 0 [] (fun () -> "label: " ^ show label) in
                * let () = Debug.print_debug 0 [] (fun () -> "body: " ^  Pp.stringFromCore_expr body) in *)
-              let get_ct mct = match mct with
-                | Just ct -> ct
-                | Nothing -> failwith "normalise_fun_map_decl: no ctype"
-              end in
-              let ft = 
-                (get_ct mrct, map (fun (sym,((_,mact))) -> (Just sym, get_ct mact)) params) in
-              if is_return then M_Return ft
-              else 
-                let params = 
-                  map (fun (sym,((bt,_))) -> 
-                      (* let () = Debug.print_debug 0 [] (fun () -> "argument: " ^ show sym ^ " " ^ Pp.stringFromCore_core_base_type bt) in *)
-                      (sym,bt)
-                    ) params 
-                in
-                M_Label ft (bt, params) annots (normalise_expr body)
+              if is_return then Nothing
+              else
+                let get_ct mct = match mct with
+                  | Just ct -> ct
+                  | Nothing -> failwith "normalise_fun_map_decl: no ctype"
+                end in
+                let ft = 
+                  (get_ct mrct, map (fun (sym,((_,mact))) -> (Just sym, get_ct mact)) params) in
+                  let params = 
+                    map (fun (sym,((bt,_))) -> 
+                        (* let () = Debug.print_debug 0 [] (fun () -> "argument: " ^ show sym ^ " " ^ Pp.stringFromCore_core_base_type bt) in *)
+                        (sym,bt)
+                      ) params 
+                  in
+                  Just (ft, (bt, params), annots, (normalise_expr returns body))
             ) saves 
         in
-        M_Proc loc bt args (normalise_expr e) saves'
+        M_Proc loc bt args (normalise_expr returns e) saves'
      | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
      | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
      end)
@@ -897,14 +900,14 @@ let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map (mu_funinfo_
   Map.mapi normalise_fun_map_decl fmap
   
 
-let normalise_globs (g : generic_globs 'a unit) : mu_globs (mu_funinfo_type Ctype.ctype) Ctype.ctype mu_base_type unit = 
+let normalise_globs (g : generic_globs 'a unit) : mu_globs Ctype.ctype mu_base_type unit = 
   match g with
-  | GlobalDef bt e -> M_GlobalDef bt (normalise_expr e)
+  | GlobalDef bt e -> M_GlobalDef bt (normalise_expr Set.empty e)
   | GlobalDecl bt -> M_GlobalDecl bt 
   end
 
 let normalise_globs_list (gs : list (Symbol.sym * generic_globs 'a unit) )
-    : list (Symbol.sym * mu_globs (mu_funinfo_type Ctype.ctype) Ctype.ctype mu_base_type unit) = 
+    : list (Symbol.sym * mu_globs Ctype.ctype mu_base_type unit) = 
   map (fun (sym,g) -> (sym, normalise_globs g)) gs
 
 

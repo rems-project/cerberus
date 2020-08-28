@@ -311,11 +311,10 @@ let rec retype_expr loc struct_decls oftyp (M_Expr (annots,expr_)) =
     | M_End es ->
        let* es = mapM (retype_expr loc) es in
        return (M_End es)
-    | M_Erun (sym,asyms,None) ->
-       return (M_Erun (sym,asyms,None))
-    | M_Erun (sym,asyms,Some esave) ->
-       (* todo *)
-       return (M_Erun (sym,asyms,None))
+    | M_Erun (sym,asyms) ->
+       return (M_Erun (sym,asyms))
+    | M_Ereturn (sym,asym) ->
+       return (M_Ereturn (sym,asym))
     (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
     (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
   in
@@ -369,27 +368,20 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.ft, CA.ct, CA.bt, 'b
      in
      let* expr = retype_expr loc structs (Some ftyp) expr in
      let* labels = 
-       pmap_mapM (fun lsym (def: (CA.ft, CA.ct, CA.bt, 'bty) mu_label_def) -> 
-           match def with
-           | M_Return _ -> 
-              let RT.Computational ((s,bt),f_lrt) = FT.get_return ftyp in
-              let rt = RT.Computational ((Sym.fresh (), BT.Unit), RT.I) in
-              let ft = FT.Computational ((s,bt), Conversions.logical_returnType_to_argumentType f_lrt (FT.Return rt)) in
-              return (M_Return ft)
-           | M_Label ((ct,args_spec),(bt,args),annots,e) ->
-              let* bt = Conversions.bt_of_core_base_type loc cbt in
-              let* ft = 
-                Conversions.make_esave_spec loc structs
-                  (CF.Annot.get_attrs annots) args_spec ct 
-              in
-              let* args = 
-                mapM (fun (sym,acbt) ->
-                    let* abt = Conversions.bt_of_core_base_type loc acbt in
-                    return (sym,abt)
-                  ) args
-              in
-              let* e = retype_expr loc structs (Some ftyp) e in
-              return (M_Label (ft,(bt,args),annots,e))
+       pmap_mapM (fun lsym (((ct,args_spec),(bt,args),annots,e): (CA.ft, CA.ct, CA.bt, 'bty) mu_label_def) -> 
+           let* bt = Conversions.bt_of_core_base_type loc cbt in
+           let* ft = 
+             Conversions.make_esave_spec loc structs
+               (CF.Annot.get_attrs annots) args_spec ct 
+           in
+           let* args = 
+             mapM (fun (sym,acbt) ->
+                 let* abt = Conversions.bt_of_core_base_type loc acbt in
+                 return (sym,abt)
+               ) args
+           in
+           let* e = retype_expr loc structs (Some ftyp) e in
+           return (ft,(bt,args),annots,e)
          ) labels Symbol.symbol_compare
      in
      return (M_Proc (loc,bt,args,expr,labels))

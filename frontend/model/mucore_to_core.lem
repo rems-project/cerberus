@@ -515,12 +515,10 @@ let rec mu_to_core__expr env expr : Core.generic_expr unit 'bty symbol =
        wrap (Core.Ebound n (mu_to_core__expr env e))
     | M_End es ->
        wrap (Core.End (map (mu_to_core__expr env) es))
-    | M_Erun sym pes Nothing ->
+    | M_Erun sym pes ->
        wrap (Core.Erun () sym (map (get_pexpr "Erun" env) pes))
-    | M_Erun _sym _pes (Just (M_Esave _ (sym,(bt,ct)) sbp e)) ->
-       let sbp = 
-         map (fun (sym,((bt,ct),pe)) -> (sym,((bt,Just ct),get_pexpr "Esave" env pe))) sbp in
-       wrap (Core.Esave (sym,(bt,Just ct)) sbp (mu_to_core__expr env e))
+    | M_Ereturn sym pe ->
+       wrap (Core.Erun () sym (map (get_pexpr "Ereturn" env) [pe]))
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)
     (* | M_Ewait tid -> 
@@ -559,7 +557,7 @@ let mu_to_core__fun_map (fmap : mu_fun_map 'DFTY Ctype.ctype mu_base_type 'bty)
   Map.map mu_to_core__fun_map_decl fmap
   
 
-let mu_to_core__globs (g : mu_globs 'DFTY Ctype.ctype mu_base_type 'bty) 
+let mu_to_core__globs (g : mu_globs Ctype.ctype mu_base_type 'bty) 
     : Core.generic_globs unit 'bty = 
   match g with
   | M_GlobalDef bt e -> Core.GlobalDef bt (mu_to_core__expr Map.empty e)
@@ -579,7 +577,7 @@ let mu_to_core__tag_definitions tagDefs =
   Map.map mu_to_core__tag_definition tagDefs
 
   
-let mu_to_core__globs_list (gs : list (symbol * mu_globs 'DFTY Ctype.ctype mu_base_type 'bty) )
+let mu_to_core__globs_list (gs : list (symbol * mu_globs Ctype.ctype mu_base_type 'bty) )
     : list (symbol * Core.generic_globs unit 'bty) = 
   map (fun (sym,g) -> (sym, mu_to_core__globs g)) gs
 
