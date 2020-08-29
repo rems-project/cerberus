@@ -14,6 +14,7 @@ open LogicalConstraints
 open Resources
 
 
+module SymSet = Set.Make(Sym)
 
 
 
@@ -143,22 +144,16 @@ let explode_struct_in_binding loc global (Tag tag) logical_struct binding =
 
 
 
-let rec logical_returnType_to_argumentType 
-          (args : RT.l)
-          (rest : FT.t)
-        : FT.t = 
-  match args with
-  | RT.I -> 
-     rest
-  (* | RT.Computational (name, t, args) -> 
-   *    FT.Computational (name, t, returnType_to_argumentType args return) *)
-  | RT.Logical ((name, t), args) -> 
-     FT.Logical ((name, t), logical_returnType_to_argumentType args rest)
-  | RT.Resource (t, args) -> 
-     FT.Resource (t, logical_returnType_to_argumentType args rest)
-  | RT.Constraint (t, args) -> 
-     FT.Constraint (t, logical_returnType_to_argumentType args rest)
+let rec lrt_to_at (lrt : RT.l) (rest : FT.t) : FT.t = 
+  match lrt with
+  | RT.I -> rest
+  | RT.Logical ((name, t), args) -> FT.Logical ((name, t), lrt_to_at args rest)
+  | RT.Resource (t, args) -> FT.Resource (t, lrt_to_at args rest)
+  | RT.Constraint (t, args) -> FT.Constraint (t, lrt_to_at args rest)
 
+let rt_to_at rt rest = 
+  let (RT.Computational ((name, t), lrt)) = rt in
+  FT.Computational ((name, t), lrt_to_at lrt rest)
 
 
 let struct_decl loc tag fields struct_decls = 
@@ -315,22 +310,22 @@ let make_fun_arg_type lift struct_decls asym loc ct =
 
   let* ((abt,arg),(_,ret)) = aux false (asym, Sym.fresh_pretty "return") ct in
   
-  let ftt = logical_returnType_to_argumentType arg in
+  let ftt = lrt_to_at arg in
   let arg = Tools.comp (FT.mcomputational asym abt) ftt in
   return ((arg : FT.t -> FT.t),(ret : RT.l))
 
 
+let make_name = function
+  | Some (Symbol (_,_,Some name)) -> Sym.fresh_pretty (name ^ "_l")
+  | Some (Symbol (_,_,None)) -> Sym.fresh ()
+  | None -> Sym.fresh ()
 
 let make_fun_spec loc genv attrs args ret_ctype = 
   let open FT in
   let open RT in
   let* (arguments, returns) = 
     fold_leftM (fun (args,returns) (msym, ct) ->
-        let name = match msym with
-          | Some (Symbol (_,_,Some name)) -> Sym.fresh_pretty (name ^ "_l")
-          | Some (Symbol (_,_,None)) -> Sym.fresh ()
-          | None -> Sym.fresh ()
-        in
+        let name = make_name msym in
         let* (arg,ret) = make_fun_arg_type true genv name loc ct in
         let args = Tools.comp args arg in
         return (args, returns @@ ret)
@@ -348,10 +343,7 @@ let make_esave_spec loc genv attrs args =
   let open RT in
   let* arguments = 
     fold_leftM (fun args (msym, (ct,by_pointer)) ->
-        let name = match msym with
-          | Symbol (_,_,Some name) -> Sym.fresh_pretty (name ^ "_l")
-          | Symbol (_,_,None) -> Sym.fresh ()
-        in
+        let name = make_name msym in
         let* (arg,_) = make_fun_arg_type by_pointer genv name loc ct in
         let args = Tools.comp args arg in
         return args
@@ -360,3 +352,7 @@ let make_esave_spec loc genv attrs args =
   in
   let ftyp = arguments (Return (RT.Computational ((fresh (), BT.Unit), I))) in
   return ftyp
+
+let make_return_esave_spec ftyp =
+  let rt = FT.get_return ftyp in
+  rt_to_at rt (FT.Return rt)

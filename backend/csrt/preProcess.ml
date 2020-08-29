@@ -371,13 +371,11 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
        pmap_mapM (fun lsym ((lt,args,e,annots): (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) -> 
            let* lt = 
              if CF.Annot.is_return annots then
-               let RT.Computational ((s,bt),f_lrt) = FT.get_return ftyp in
-               let rt = RT.Computational ((Sym.fresh (), BT.Unit), RT.I) in
-               let ft = FT.Computational ((s,bt), Conversions.logical_returnType_to_argumentType f_lrt (FT.Return rt)) in
-               return ft
+               return (Conversions.make_return_esave_spec ftyp)
              else
-               Conversions.make_esave_spec loc structs
-                 (CF.Annot.get_attrs annots) lt
+               fail loc (Generic (!^"label" ^^^ Sym.pp lsym ^^^ !^"needs an annotation"))
+               (* Conversions.make_esave_spec loc structs
+                *   (CF.Annot.get_attrs annots) lt *)
            in
            let* args = 
              mapM (fun (sym,acbt) ->

@@ -82,29 +82,21 @@ let use_resource loc sym where (Local local) =
 
 
 
-let new_since sym (Local local) = 
-  let rec aux = function
-    | [] -> ([],[])
-    | Binding (sym,b) :: rest -> 
+let since msym (Local local) = 
+  let rec aux local =
+    match msym, local with
+    | _, [] -> ([],[])
+    | _, Binding (sym,b) :: rest -> 
        let (newl,oldl) = aux rest in
        ((sym,b) :: newl,oldl)
-    | Marker sym' :: rest when Sym.equal sym sym' ->
+    | Some sym, Marker sym' :: rest when Sym.equal sym sym' ->
        ([],rest)
-    | Marker _ :: rest ->
+    | _, Marker _ :: rest ->
        aux rest
   in
   let (newl,oldl) = (aux local) in
   (newl, Local oldl)
 
-let ensure_resource_used loc local sym = 
-  let* b = get loc sym local in
-  match b with
-  | Resource resource -> fail loc (Unused_resource {resource;is_merge=false})
-  | UsedResource (re,where) -> return ()
-  | _ -> wanted_but_found loc `Resource (sym,b)
-
-let ensure_resources_used loc local syms = 
-  fold_leftM (fun () sym -> ensure_resource_used loc local sym) () syms
 
 
 let is_bound sym (Local local) =

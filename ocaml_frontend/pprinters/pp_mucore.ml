@@ -32,7 +32,7 @@ module type PP_Typ = sig
   (* val pp_object_type: object_type -> PPrint.document *)
   val pp_ct: ct -> PPrint.document
   val pp_ft: ft -> PPrint.document
-  val pp_lt: lt -> PPrint.document
+  val pp_lt: (lt -> PPrint.document) option
   val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
 end
@@ -856,9 +856,11 @@ let pp_fun_map budget funs =
             (Pmap.fold (fun sym (lt,args,lbody,annots) acc ->
                  acc ^^
                    begin
-                    (* label ctype definition *)
-                    P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt ^^ 
-                      (* label core function definition *)
+                     begin match pp_lt with
+                     | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
+                     | None -> P.empty
+                     end ^^
+                       (* label core function definition *)
                     P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
                       P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
                        P.nest 2 (P.break 1 ^^ pp_expr budget lbody) ^^ P.hardline
@@ -1009,11 +1011,12 @@ module Pp_standard_typ = (struct
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
     pp_ctype (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, false)))
 
+    let pp_lt = None
   (* stealing from Pp_core *)
-  let pp_lt params = 
-    comma_list (fun (_,(ty,by_pointer)) -> 
-        if by_pointer then pp_ctype ty else pp_ctype ty ^^^ P.parens (P.string "val")
-      ) params
+  (* let pp_lt params = 
+   *   comma_list (fun (_,(ty,by_pointer)) -> 
+   *       if by_pointer then pp_ctype ty else pp_ctype ty ^^^ P.parens (P.string "val")
+   *     ) params *)
 
 
   let pp_funinfo finfos =

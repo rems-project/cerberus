@@ -54,7 +54,7 @@ module Pp_srt_typ = struct
   let pp_bt = BT.pp true
   let pp_ct (bt,size) = parens (BT.pp false bt ^^ comma ^^ Num.pp size)
   let pp_ft = FT.pp
-  let pp_lt = FT.pp
+  let pp_lt = Some FT.pp
   let pp_funinfo _ = failwith "not implementeed"
   let pp_funinfo_with_attributes _  = failwith "not implementeed"
 end
@@ -481,6 +481,10 @@ let subtype (loc: Loc.t)
 
   let rec infer_resources local unis = function
     | Resource (re,rtyp) -> 
+       let* () =  match unresolved_var unis (IT.vars_in (RE.pointer re)) with
+         | Some var -> fail loc (Unconstrained_logical_variable var)
+         | _ -> return ()
+       in
        let* matched = match_concrete_resource loc {local;global} re in
        begin match matched with
        | None -> fail loc (Missing_resource re)
@@ -569,6 +573,10 @@ let calltyp (loc: Loc.t)
 
   let rec infer_resources local unis = function
     | Resource (re,ftyp) -> 
+       let* () =  match unresolved_var unis (IT.vars_in (RE.pointer re)) with
+         | Some var -> fail loc (Unconstrained_logical_variable var)
+         | _ -> return ()
+       in
        let* matched = match_concrete_resource loc {local;global} re in
        begin match matched with
        | None -> fail loc (Missing_resource re)
@@ -1114,8 +1122,8 @@ let ensure_reachable (loc: Loc.t) {local;global} : unit m =
 
 
 
-let rt_pop mark (Computational ((lname,bt),rt), local) = 
-  let (new_local,old_local) = new_since mark local in
+let pop_return mark (Computational ((lname,bt),rt), local) = 
+  let (new_local,old_local) = since (Some mark) local in
   let rec aux vbs acc = 
     match vbs with
     | [] -> acc
@@ -1134,16 +1142,27 @@ let rt_pop mark (Computational ((lname,bt),rt), local) =
   in
   (RT.Computational ((lname,bt), aux new_local rt), old_local)
 
-let empty_pop mark loc local = 
-  let (new_local,old_local) = new_since mark local in
-  let rec aux = function
-    | (s, VB.Resource resource) :: _ -> 
-       fail loc (Unused_resource {resource;is_merge=false})
-    | _ :: rest -> aux rest
-    | [] -> return ()
+let (pop_empty,all_empty) = 
+    let rec aux loc = function
+      | (s, VB.Resource resource) :: _ -> 
+         fail loc (Unused_resource {resource;is_merge=false})
+      | _ :: rest -> aux loc rest
+      | [] -> return ()
+    in
+  let pop_empty mark loc local = 
+    let (new_local,old_local) = since (Some mark) local in
+    let* () = aux loc new_local in
+    return old_local
   in
-  let* () = aux new_local in
-  return old_local
+  let all_empty loc local = 
+    let (new_local,_) = since None local in
+    let* () = aux loc new_local in
+    return ()
+  in
+  (pop_empty,all_empty)
+
+
+
 
 
 let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L.t) m = 
@@ -1152,7 +1171,7 @@ let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L.
   let mark = Sym.fresh () in
   let local = marked mark ++ local in 
   let* (rt, local) = infer_pexpr_pure loc {local;global} pe in
-  return (rt_pop mark (rt, local))
+  return (pop_return mark (rt, local))
 
 and infer_pexpr_pure (loc: Loc.t) {local;global} (pe: 'bty mu_pexpr) : (RT.t * L.t) m = 
 
@@ -1335,7 +1354,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty mu_pexpr) (typ: RT.t) :
      let local = local' ++ local in
      let* local = subtype loc {local;global} ((abt,lname),loc)
                   typ "function return type" in
-     empty_pop mark loc local
+     pop_empty mark loc local
 
 
 
@@ -1355,7 +1374,7 @@ let check_expr (frt: RT.t) =
     let local = marked mark ++ local in 
     let* r = infer_expr_pure loc labels {local;global} e in
     match r with
-    | Normal (rt, local) -> return (Normal (rt_pop mark (rt, local)))
+    | Normal (rt, local) -> return (Normal (pop_return mark (rt, local)))
     | Goto -> return Goto
 
   and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) or_goto m = 
@@ -1540,6 +1559,7 @@ let check_expr (frt: RT.t) =
          in
          let* args = get_a_loc_asyms loc local asyms in
          let* (_rt, local) = calltyp loc {local;global} args ft in
+         let* () = all_empty loc local in
          return Goto
       | M_Ereturn (_,asym) ->
          let* arg = get_a_loc_asym loc local asym in
@@ -1660,7 +1680,7 @@ let check_expr (frt: RT.t) =
           let* (local',(abt,lname)) = bind_logically rt in
           let local = local' ++ local in
           let* local = subtype loc {local;global} ((abt,lname),loc) typ "function return type" in
-          let* local = empty_pop mark loc local in
+          let* local = pop_empty mark loc local in
           return (Normal local)
   in
 
@@ -1757,7 +1777,7 @@ let check_procedure (loc: Loc.t)
     let* () = debug_print 1 hardline in
     let* () = debug_print 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
     let* () = debug_print 2 (blank 3 ^^ item "against" (FT.pp ft)) in
-    let* (_,local,_,_) = check_and_bind_function_arguments loc args ft in
+    let* (rt,local,_,_) = check_and_bind_function_arguments loc args ft in
     let* local = check_expr rt loc labels {local = pure_local ++ local;global} body rt in
     (* let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
     let* () = debug_print 1 (!^(greenb "...label checked ok")) in

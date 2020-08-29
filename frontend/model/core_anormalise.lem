@@ -28,7 +28,7 @@ type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
 
 type ct = Ctype.ctype
 type ft = Mucore.mu_funinfo_type ct
-type lt = list (Symbol.sym * (Ctype.ctype * bool))
+type lt = unit (* list (maybe Symbol.sym * (Ctype.ctype * bool)) *)
 type bt = Mucore.mu_base_type
 
 type mu_value = Mucore.mu_value ct bt unit
@@ -733,10 +733,10 @@ let n_memop loc annots memop pexprs k =
                  show (List.length pexprs) ^ " arguments")
   end
 
-let rec normalise_expr (returns : set symbol) e =
-  n_expr (Loc.locOf e) returns e (fun e -> e)
+let rec normalise_expr e =
+  n_expr (Loc.locOf e) e (fun e -> e)
 
-and n_expr loc (returns : set symbol) (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr = 
+and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr = 
   let (Expr annots pe) = e in
   let wrap pe : mu_expr = M_Expr annots pe in
 
@@ -749,9 +749,9 @@ and n_expr loc (returns : set symbol) (e : expr 'a unit) (k : mu_expr -> mu_expr
   let n_pexpr_in_expr_names = n_pexpr_in_expr_names loc annots in
   let n_pexpr_in_expr = n_pexpr_in_expr loc in
   let n_paction = n_paction loc in
-  let n_expr = n_expr loc returns in
   let n_memop = n_memop loc in
-  let normalise_expr = normalise_expr returns in
+  let n_expr = n_expr loc in
+  let normalise_expr = normalise_expr in
 
   match pe with
   | Epure pexpr -> 
@@ -826,24 +826,10 @@ and n_expr loc (returns : set symbol) (e : expr 'a unit) (k : mu_expr -> mu_expr
      let (_,typs_pes) = unzip syms_typs_pes in
      let (_,pes) = unzip typs_pes in
      n_pexpr_in_expr_names pes (fun pes ->
-     if sym IN returns then
-       match pes with
-       | [asym] -> k (wrap (M_Ereturn sym asym))
-       | _ -> failwith "return with no or multiple arguments"
-       end
-     else
-        k (wrap (M_Erun sym pes))
-     )
+     k (wrap (M_Erun sym pes)))
   | Erun _a sym pes ->
      n_pexpr_in_expr_names pes (fun pes ->
-     if sym IN returns then
-       match pes with
-       | [asym] -> k (wrap (M_Ereturn sym asym))
-       | _ -> failwith "return with no or multiple arguments"
-       end
-     else
-        k (wrap (M_Erun sym pes))
-     )
+     k (wrap (M_Erun sym pes)))
   | Epar es -> 
      failwith "todo Epar"
   | Ewait tid ->
@@ -868,39 +854,24 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
     (match d with
      | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
      | Proc loc bt args e -> 
-        let saves = Core_aux.m_collect_saves e in
-        let returns = Set.empty in
-          (* Map_extra.fold (fun label ((_,_,is_return,_),_) acc -> 
-           *     if is_return then Set.insert label acc else acc) saves Set.empty in *)
         let saves' = 
           Map.mapi (fun _label ((_,params,body,annots) : Core_aux.m_labeled_continuation 'a) ->
-              (* let () = Debug.print_debug 0 [] (fun () -> "label: " ^ show label) in
-               * let () = Debug.print_debug 0 [] (fun () -> "body: " ^  Pp.stringFromCore_expr body) in *)
-              (* if is_return then Nothing
-               * else *)
-                let lt = 
-                  map (fun (sym,((_,ty_info),_)) -> 
-                      match ty_info with
-                      | Just (ct,by_pointer) -> (sym, (ct,by_pointer))
-                      | Nothing -> failwith "normalise_fun_map_decl: no ctype"
-                       end
-                    ) params in
-                let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
-                ((lt, params, normalise_expr returns body, annots) : mu_label_def lt ct bt unit)
-            ) saves 
+              let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
+              (((), params, normalise_expr body, annots) : mu_label_def lt ct bt unit)
+            ) (Core_aux.m_collect_saves e)
         in
-        M_Proc loc bt args (normalise_expr returns e) saves'
+        M_Proc loc bt args (normalise_expr e) saves'
      | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
      | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
      end)
 
 let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map lt ct bt unit = 
-  Map.mapi normalise_fun_map_decl fmap
+  Map.mapi (normalise_fun_map_decl) fmap
   
 
 let normalise_globs (g : generic_globs 'a unit) : mu_globs ct bt unit = 
   match g with
-  | GlobalDef bt e -> M_GlobalDef bt (normalise_expr Set.empty e)
+  | GlobalDef bt e -> M_GlobalDef bt (normalise_expr e)
   | GlobalDecl bt -> M_GlobalDecl bt 
   end
 
