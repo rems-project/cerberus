@@ -1,6 +1,5 @@
 open Subst
-
-module Uni = struct
+module SymSet = Set.Make(Sym)
 
 type 'res t = { resolved : 'res option }
 
@@ -12,6 +11,13 @@ let find_resolved env unis =
       | Some sym -> (unresolveds, ({s=usym; swith=sym}) :: resolveds)
     ) unis ([], [])
 
-end
-    
+
+let unresolved_var unis (vars : SymSet.t) =
+  SymMap.fold
+    (fun usym {resolved} found ->
+      match resolved with
+      | None when SymSet.mem usym vars -> Some usym
+      | _ -> found
+    ) unis None
+
 

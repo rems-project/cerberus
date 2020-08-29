@@ -102,6 +102,20 @@ let children = function
 
 
 
+let vars_in = function
+  | Points p -> 
+     SymSet.union (IT.vars_in p.pointer)
+       (match p.pointee with
+        | Some pointee -> IT.vars_in pointee
+        | None -> SymSet.empty)
+  | StoredStruct s ->
+     List.fold_left 
+       SymSet.union 
+       (IT.vars_in s.pointer)
+       (map (fun (_,i) -> IT.vars_in i) s.members)
+     
+
+
 let rec unify_memberlist ms ms' res = 
   let open Option in
   match ms, ms' with
