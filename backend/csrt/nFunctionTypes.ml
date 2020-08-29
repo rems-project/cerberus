@@ -122,7 +122,7 @@ let (pp_a,pp_l,pp_r,pp_c) =
   in
   let pp_a rt = flow (break 1) (aux_a rt) in
   let pp_l rt = flow (break 1) (aux_l rt) in
-  let pp_r rt = flow (break 1) (aux_l rt) in
+  let pp_r rt = flow (break 1) (aux_r rt) in
   let pp_c rt = flow (break 1) (aux_l rt) in
   (pp_a,pp_l,pp_r,pp_c)
 

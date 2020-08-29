@@ -63,6 +63,13 @@ let rec subst_var substitution = function
 let subst_vars = make_substs subst_var
 
 
+let rec free_vars = function
+  | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)
+  | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
+  | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars t)
+  | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars t)
+  | Return rt -> RT.free_vars rt
+
 let rec instantiate_struct_member subst ft =
   match ft with
   | Return rt -> 
