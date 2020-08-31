@@ -55,8 +55,8 @@ module Pp_srt_typ = struct
   let pp_ct (bt,size) = parens (BT.pp false bt ^^ comma ^^ Num.pp size)
   let pp_ft = FT.pp
   let pp_lt = Some FT.pp
-  let pp_funinfo _ = failwith "not implementeed"
-  let pp_funinfo_with_attributes _  = failwith "not implementeed"
+  let pp_funinfo _ = failwith "not implemented"
+  let pp_funinfo_with_attributes _  = failwith "not implemented"
 end
 
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_srt_typ)
@@ -454,7 +454,7 @@ let subtype (loc: Loc.t)
     : L.t m 
   =
 
-  let rtyp = RT.normalise rtyp in
+  let rtyp = NRT.normalise rtyp in
   let open NRT in
 
   let* () = debug_print 1 (action ppdescr) in
@@ -541,7 +541,7 @@ let calltyp (loc: Loc.t)
   let* () = debug_print 2 (blank 3 ^^ item "spec" (FT.pp ftyp)) in
   let* () = debug_print 2 (blank 3 ^^ item "env" (L.pp local)) in
 
-  let ftyp = FT.normalise ftyp in
+  let ftyp = NFT.normalise ftyp in
   let open NFT in
 
   let rec check_computational args ftyp = 
@@ -617,221 +617,7 @@ let calltyp (loc: Loc.t)
   in
   let* rt = check_constraints ftyp in
 
-  return (RT.unnormalise rt,local)
-
-
-
-
-let subtype_old (loc: Loc.t)
-            {local;global}
-            (arg: (BT.t * Sym.t) * Loc.t)
-            (rtyp: RT.t)
-            ppdescr 
-    : L.t m 
-  =
-
-
-  let* () = debug_print 2 (blank 3 ^^ item "specification before" (RT.pp rtyp)) in
-  let rtyp = RT.unnormalise (RT.normalise rtyp) in
-  let* () = debug_print 2 (blank 3 ^^ item "specification after" (RT.pp rtyp)) in
-
-  let module STS = struct
-
-    type t = 
-      { typ: RT.l;
-        lvars: (Sym.t * LS.t) list;
-        constraints: LC.t list }
-
-    let subst_var s spec = 
-      { spec with 
-        typ = RT.subst_var_l s spec.typ;
-        constraints = List.map (LC.subst_var s) spec.constraints }
-
-    let subst_vars = Subst.make_substs subst_var
-
-  end in
-
-
-  let ((abt,lname),arg_loc) = arg in
-  let Computational ((sname,sbt),rtyp) = rtyp in
-
-  let* () = 
-    if BT.equal abt sbt then return ()
-    else fail loc (Mismatch {has = Base abt; expect = Base sbt})
-  in
-
-  let spec = STS.{ typ = rtyp ; lvars = []; constraints = []} in
-  let spec = STS.subst_var {s=sname;swith=S lname} spec in
-
-  let* () = debug_print 1 (action ppdescr) in
-  let* () = debug_print 2 PPrint.empty in
-
-  let* () = debug_print 2 (blank 3 ^^ item "value" (pp_argslocs [arg])) in
-  let* () = debug_print 2 (blank 3 ^^ item "specification" (RT.pp_l spec.STS.typ)) in
-
-
-  let rec aux local (unis: (IT.t Uni.t) SymMap.t) spec = 
-    let* () = debug_print 2 (blank 3 ^^ item "specification" (RT.pp_l spec.STS.typ)) in
-    let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in
-    match spec.typ with
-    | I -> 
-       begin match spec.lvars, spec.constraints with
-       | (sname,sls) :: lvars, _ ->
-          let* found = symmap_lookup loc unis sname in
-          begin match found with
-          | Uni.{resolved = None} -> 
-             fail loc (Unconstrained_logical_variable sname)
-          | Uni.{resolved = Some it} ->
-             let* als = infer_index_term loc {local;global} it in
-             if LS.equal als sls then
-               let spec = STS.{ spec with lvars } in
-               let spec = STS.subst_var {s=sname;swith=it} spec in
-               aux local unis spec
-             else
-               fail loc (Mismatch {has = als; expect = sls})
-          end
-       | [], (c :: constraints) -> 
-          let spec = STS.{ spec with constraints } in
-          let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-          if holds then aux local unis spec
-          else fail loc (Unsat_constraint c)
-       | [], [] ->
-          return local
-       end
-    | Logical ((sname,sls),rtyp) ->
-       let sym = Sym.fresh () in
-       let uni = Uni.{ resolved = None } in
-       let unis = SymMap.add sym uni unis in
-       let spec = STS.{ spec with lvars = spec.lvars @ [(sym,sls)]; typ = rtyp } in
-       let spec = STS.subst_var {s=sname;swith=S sym} spec in
-       aux local unis spec
-    | Resource (re,rtyp) -> 
-       let* matched = match_concrete_resource loc {local;global} re in
-       begin match matched with
-       | None -> fail loc (Missing_resource re)
-       | Some (r,resource') ->
-          let* () = debug_print 3 (blank 3 ^^ item "unis" (pp_unis unis)) in
-          match RE.unify_non_pointer re resource' unis with
-          | None -> fail loc (Missing_resource re)
-          | Some unis ->
-             let* () = debug_print 3 (blank 3 ^^ item "unis" (pp_unis unis)) in
-             let* local = use_resource loc r [loc] local in
-             let (_,new_substs) = Uni.find_resolved local unis in
-             let spec = STS.{ spec with typ = rtyp } in
-             let spec = STS.subst_vars new_substs spec in
-             aux local unis spec
-       end
-    | Constraint (constr,rtyp) ->
-       let spec = { spec with constraints = spec.constraints @ [constr]; typ = rtyp} in
-       aux local unis spec  
-  in
-
-  aux local SymMap.empty spec
-
-
-
-
-let calltyp_old (loc: Loc.t) 
-            {local;global} 
-            (arguments: ((BT.t * Sym.t) * Loc.t) list) 
-            (ftyp: FT.t)
-    : (RT.t * L.t) m 
-  =
-
-  let ftyp = FT.unnormalise (FT.normalise ftyp) in
-
-  let module CTS = struct
-
-    type calltyp_spec = 
-      { typ: FT.t; 
-        lvars: (Sym.t * LS.t) list;
-        constraints: LC.t list }
-
-    let subst_var s spec = 
-      { spec with typ = FT.subst_var s spec.typ;
-                  constraints = List.map (LC.subst_var s) spec.constraints }
-
-    let subst_vars = Subst.make_substs subst_var
-
-  end in
-
-  let open FT in
-  let open CTS in
-
-  let* () = debug_print 1 (action "function call type") in
-  let* () = debug_print 2 PPrint.empty in
-
-  let rec aux local args unis (spec: calltyp_spec) = 
-    let* () = debug_print 2 (blank 3 ^^ item "arguments" (pp_argslocs args)) in
-    let* () = debug_print 2 (blank 3 ^^ item "specification" (FT.pp spec.typ)) in
-    let* () = debug_print 2 (blank 3 ^^ item "environment" (L.pp local)) in
-    match args, spec.typ with
-    | [], Return rt -> 
-       begin match spec.lvars, spec.constraints with
-       | (sname,sls) :: lvars, _ ->
-          let* found = symmap_lookup loc unis sname in
-          begin match found with
-          | Uni.{resolved = None} -> 
-             fail loc (Unconstrained_logical_variable sname)
-          | Uni.{resolved = Some it} ->
-             let* als = infer_index_term loc {local;global} it in
-             if LS.equal als sls then
-               let spec = CTS.{ spec with lvars } in
-               let spec = CTS.subst_var {s=sname;swith=it} spec in
-               aux local args unis spec
-             else
-               fail loc (Mismatch {has = als; expect = sls})
-          end
-       | [], (c :: constraints) -> 
-          let spec = CTS.{ spec with constraints } in
-          let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-          if holds then aux local args unis spec
-          else fail loc (Unsat_constraint c)
-       | [], [] ->
-          return (rt,local)
-       end
-    | [], Computational (_,_)
-      | _ :: _, Return _ -> 
-       let expect = FT.count_computational ftyp in
-       let has = length arguments in
-       fail loc (Number_arguments {expect; has})
-    | ((abt,lname),arg_loc) :: args, Computational ((sname,sbt),ftyp) ->
-       if BT.equal abt sbt then
-         let spec = CTS.{ spec with typ = ftyp} in
-         let spec = CTS.subst_var {s=sname;swith=S lname} spec in
-         aux local args unis spec
-       else
-         fail loc (Mismatch {has = Base abt; expect = Base sbt})
-    | _, Logical ((sname,sls),ftyp) ->
-       let sym = Sym.fresh () in
-       let uni = Uni.{ resolved = None } in
-       let unis = SymMap.add sym uni unis in
-       let spec = CTS.{ spec with lvars = spec.lvars @ [(sym,sls)]; typ = ftyp} in
-       let spec = CTS.subst_var {s=sname;swith=S sym} spec in
-       aux local args unis spec
-    | _, Resource (re,ftyp) -> 
-       let* matched = match_concrete_resource loc {local;global} re in
-       begin match matched with
-       | None -> fail loc (Missing_resource re)
-       | Some (r,resource') ->
-          let* () = debug_print 3 (action ("trying resource " ^ plain (RE.pp false resource'))) in
-          let* () = debug_print 3 (blank 3 ^^ item "unis" (pp_unis unis)) in
-          match RE.unify_non_pointer re resource' unis with
-          | None -> fail loc (Missing_resource re)
-          | Some unis ->
-             let* () = debug_print 3 (blank 3 ^^ item "unis" (pp_unis unis)) in
-             let* local = use_resource loc r [loc] local in
-             let (_,new_substs) = Uni.find_resolved local unis in
-             let spec = CTS.{ spec with typ = ftyp } in
-             let spec = CTS.subst_vars new_substs spec in
-             aux local args unis spec
-       end
-    | _, Constraint (constr,ftyp) ->
-       let spec = { spec with constraints = spec.constraints @ [constr]; typ = ftyp} in
-       aux local args unis spec  
-  in
-
-  aux local arguments SymMap.empty { typ = ftyp ; lvars = []; constraints = []}
+  return (NRT.unnormalise rt,local)
 
 
 
