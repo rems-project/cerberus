@@ -136,10 +136,10 @@ let normalise ft : (NFT.t) =
     | Resource (re,ft) -> aux l (r@[re]) c ft
     | Constraint (lc,ft) -> aux l r (c@[lc]) ft
     | Return rt ->
-       (NFT.L ((List.fold_right NFT.mlogical l)
-                 (NFT.R ((List.fold_right NFT.mresource r)
-                           (NFT.C (List.fold_right NFT.mconstraint c
-                             (NFT.Return (RT.normalise rt))))))))
+       NFT.L ((List.fold_right NFT.mlogical l)
+                (NFT.R ((List.fold_right NFT.mresource r)
+                          (NFT.C (List.fold_right NFT.mconstraint c
+                                    (NFT.Return rt))))))
   in
   aux [] [] [] ft
 
@@ -149,7 +149,7 @@ let normalise ft : (NFT.t) =
 
 let rec unnormalise_c = function
   | NFT.Constraint (lc,t) -> Constraint (lc,unnormalise_c t)
-  | NFT.Return rt -> Return (RT.unnormalise rt)
+  | NFT.Return rt -> Return rt
 
 let rec unnormalise_r = function
   | NFT.Resource (re,t) -> Resource (re,unnormalise_r t)

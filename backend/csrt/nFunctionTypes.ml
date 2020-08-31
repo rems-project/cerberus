@@ -5,14 +5,18 @@ module IT = IndexTerms
 module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
-module NRT = NReturnTypes
+module RT = ReturnTypes
 module SymSet = Set.Make(Sym)
 
 
-type c = Constraint of LC.t * c | Return of NRT.t
-type r = Resource of RE.t * r | C of c
-type l = Logical of (Sym.t * LS.t) * l | R of r
-type a = Computational of (Sym.t * BT.t) * a | L of l
+type c = Return of RT.t
+       | Constraint of LC.t * c
+type r = C of c 
+       | Resource of RE.t * r 
+type l = R of r
+       | Logical of (Sym.t * LS.t) * l
+type a = L of l 
+       | Computational of (Sym.t * BT.t) * a
 
 type t = a
 
@@ -26,7 +30,7 @@ let mresource bound t = Resource (bound,t)
 let rec subst_var_c substitution = function
   | Constraint (lc, t) -> 
      Constraint (LC.subst_var substitution lc, subst_var_c substitution t)
-  | Return rt -> Return (NRT.subst_var substitution rt)
+  | Return rt -> Return (RT.subst_var substitution rt)
 
 let rec subst_var_r substitution = function
   | Resource (re, t) ->
@@ -73,7 +77,7 @@ let rec instantiate_struct_member_c subst = function
   | Constraint (lc,t) ->
      Constraint (LC.instantiate_struct_member subst lc, 
                  instantiate_struct_member_c subst t)
-  | Return rt -> Return (NRT.instantiate_struct_member subst rt)
+  | Return rt -> Return (RT.instantiate_struct_member subst rt)
 
 let rec instantiate_struct_member_r subst = function
   | Resource (bound,t) -> 
@@ -100,7 +104,7 @@ let (pp_a,pp_l,pp_r,pp_c) =
     | Constraint (lc,t) ->
        let op = equals ^^ rangle in
        (LC.pp false lc ^^^ op) :: aux_c t
-    | Return rt -> [NRT.pp rt]
+    | Return rt -> [RT.pp rt]
   in
   let rec aux_r = function
     | Resource (re,t) ->

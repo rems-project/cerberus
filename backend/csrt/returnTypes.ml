@@ -141,7 +141,7 @@ let normalise_l rt : (NRT.l) =
     | Resource (re,rt) -> aux l (r@[re]) c rt
     | Constraint (lc,rt) -> aux l r (c@[lc]) rt
     | I ->
-       (List.fold_right NRT.mlogical l)
+       List.fold_right NRT.mlogical l
          (NRT.R ((List.fold_right NRT.mresource r)
                    (NRT.C (List.fold_right NRT.mconstraint c NRT.I))))
   in

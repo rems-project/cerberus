@@ -8,9 +8,12 @@ module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
 
-type c = Constraint of LC.t * c | I
-type r = Resource of RE.t * r | C of c
-type l = Logical of (Sym.t * LS.t) * l | R of r
+type c = I
+       | Constraint of LC.t * c
+type r = C of c
+       | Resource of RE.t * r
+type l = R of r
+       | Logical of (Sym.t * LS.t) * l
 type a = Computational of (Sym.t * BT.t) * l
 
 type t = a
