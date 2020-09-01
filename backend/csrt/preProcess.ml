@@ -4,7 +4,8 @@ module CF=Cerb_frontend
 module Symbol=CF.Symbol
 module Loc=Locations
 module RT=ReturnTypes
-module FT=FunctionTypes
+module FT=ArgumentTypes.Make(RT)
+module LT=ArgumentTypes.Make(NoReturn)
 open CF.Mucore
 module CA=CF.Core_anormalise
 open TypeErrors
@@ -313,8 +314,8 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
        return (M_End es)
     | M_Erun (sym,asyms) ->
        return (M_Erun (sym,asyms))
-    | M_Ereturn (sym,asym) ->
-       return (M_Ereturn (sym,asym))
+    | M_Ereturn ->
+       return M_Ereturn
     (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
     (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
   in
@@ -450,7 +451,7 @@ let retype_funinfo struct_decls funinfo =
 
 
 let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, 'bty) mu_file)
-    : ((FT.t, FT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
+    : ((FT.t, LT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
 
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
   let* funinfo = retype_funinfo structs file.mu_funinfo in

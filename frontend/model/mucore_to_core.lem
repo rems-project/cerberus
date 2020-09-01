@@ -517,8 +517,9 @@ let rec mu_to_core__expr env expr : Core.generic_expr unit 'bty symbol =
        wrap (Core.End (map (mu_to_core__expr env) es))
     | M_Erun sym pes ->
        wrap (Core.Erun () sym (map (get_pexpr "Erun" env) pes))
-    | M_Ereturn sym pe ->
-       wrap (Core.Erun () sym (map (get_pexpr "Ereturn" env) [pe]))
+    | M_Ereturn ->
+       failwith "have to implement"
+       (* wrap (Core.Erun () sym (map (get_pexpr "Ereturn" env) [pe])) *)
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)
     (* | M_Ewait tid -> 

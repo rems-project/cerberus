@@ -100,7 +100,7 @@ let process core_file =
     core_file >>= fun core_file ->
   let mu_file = CF.Core_anormalise.normalise_file core_file in
   print_log_file "after_anf" (MUCORE mu_file);
-  print_log_file "back_to_core" (CORE (CF.Mucore_to_core.mu_to_core__file mu_file));
+  (* print_log_file "back_to_core" (CORE (CF.Mucore_to_core.mu_to_core__file mu_file)); *)
   Colour.do_colour := true;
   return mu_file
 

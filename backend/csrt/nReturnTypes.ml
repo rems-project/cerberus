@@ -5,6 +5,7 @@ module IT = IndexTerms
 module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
+module RT = ReturnTypes
 module SymSet = Set.Make(Sym)
 
 
@@ -157,3 +158,39 @@ let (@@) = concat_l
 
 
 
+
+let normalise_l rt : l = 
+  let rec aux l r c = function
+    | RT.Logical ((name,ls),rt) -> aux (l@[(name,ls)]) r c rt
+    | RT.Resource (re,rt) -> aux l (r@[re]) c rt
+    | RT.Constraint (lc,rt) -> aux l r (c@[lc]) rt
+    | RT.I ->
+       List.fold_right mlogical l
+         (R ((List.fold_right mresource r)
+                   (C (List.fold_right mconstraint c I))))
+  in
+  aux [] [] [] rt
+
+let normalise_a rt : t =
+  match rt with
+  | RT.Computational ((name,bt),rt) -> Computational ((name,bt), normalise_l rt)
+
+let normalise = normalise_a
+
+
+let rec unnormalise_c = function
+  | Constraint (lc,t) -> RT.Constraint (lc,unnormalise_c t)
+  | I -> RT.I
+
+let rec unnormalise_r = function
+  | Resource (re,t) -> RT.Resource (re,unnormalise_r t)
+  | C t -> unnormalise_c t
+
+let rec unnormalise_l = function
+  | Logical ((name,ls),t) -> RT.Logical ((name,ls),unnormalise_l t)
+  | R t -> unnormalise_r t
+
+let unnormalise_a = function
+  | Computational ((name,bt),t) -> RT.Computational ((name,bt),unnormalise_l t)
+
+let unnormalise = unnormalise_a

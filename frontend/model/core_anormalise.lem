@@ -46,6 +46,10 @@ type asym = Mucore.asym unit
 type asyms = list asym
 
 
+let always_explode_eif = true
+
+
+
 (* ... adapting the algorithm from
    http://matt.might.net/articles/a-normalization/ for core *)
 
@@ -373,13 +377,13 @@ and n_pexpr loc (e : pexpr unit) k =
        (M_Pat (core_to_mu__pattern pat))
        e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
-     if Annot.explode annots then
-       (* this changes the type of the PEif expression *)
-        n_pexpr_name e' (fun e' ->
-        let e'' = n_pexpr e'' k in
-        let e''' = n_pexpr e''' k in
-        annotate (M_PEif e' e'' e'''))
-     else
+     (* if Annot.explode annots then
+      *   (\* this changes the type of the PEif expression *\)
+      *    n_pexpr_name e' (fun e' ->
+      *    let e'' = n_pexpr e'' k in
+      *    let e''' = n_pexpr e''' k in
+      *    annotate (M_PEif e' e'' e'''))
+      * else *)
         n_pexpr_name e' (fun e' ->
         let e'' = normalise_pexpr e'' in
         let e''' = normalise_pexpr e''' in
@@ -523,13 +527,13 @@ and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr) : mu_expr =
        (M_Pat (core_to_mu__pattern pat))
        e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
-     (* this changes the type of the PEif expression *)
-     if Annot.explode annots then
-        n_pexpr_in_expr_name e' (fun e' ->
-        let e'' = n_pexpr_in_expr e'' k in
-        let e''' = n_pexpr_in_expr e''' k in
-        M_Expr annots (M_Eif e' e'' e'''))
-     else
+     (* (\* this changes the type of the PEif expression *\)
+      * if Annot.explode annots then
+      *    n_pexpr_in_expr_name e' (fun e' ->
+      *    let e'' = n_pexpr_in_expr e'' k in
+      *    let e''' = n_pexpr_in_expr e''' k in
+      *    M_Expr annots (M_Eif e' e'' e'''))
+      * else *)
         n_pexpr_in_expr_name e' (fun e' ->
         let e'' = normalise_pexpr e'' in
         let e''' = normalise_pexpr e''' in
@@ -780,7 +784,7 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr -> mu_expr) : mu_expr =
      wrap (M_Elet (M_Pat (core_to_mu__pattern pat) )
              e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
-     if Annot.explode annots then
+     if always_explode_eif || Annot.explode annots then
        n_pexpr_in_expr_name e1 (fun e1 ->
        let e2 = n_expr e2 k in
        let e3 = n_expr e3 k in
@@ -856,8 +860,13 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
      | Proc loc bt args e -> 
         let saves' = 
           Map.mapi (fun _label ((_,params,body,annots) : Core_aux.m_labeled_continuation 'a) ->
+              let body = 
+                if is_return annots 
+                then M_Expr annots M_Ereturn
+                else normalise_expr body
+              in
               let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
-              (((), params, normalise_expr body, annots) : mu_label_def lt ct bt unit)
+              (((), params, body, annots) : mu_label_def lt ct bt unit)
             ) (Core_aux.m_collect_saves e)
         in
         M_Proc loc bt args (normalise_expr e) saves'

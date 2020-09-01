@@ -195,7 +195,7 @@ type mu_expr_ 'DCTY 'DBTY 'bty =  (* (effectful) expression *)
  | M_Ebound of nat * (mu_expr 'DCTY 'DBTY 'bty) (* $\ldots$and boundary *)
  | M_End of list (mu_expr 'DCTY 'DBTY 'bty) (* nondeterministic choice *)
  | M_Erun of symbol * list (asym 'bty) (* run from label *)
- | M_Ereturn of symbol * asym 'bty
+ | M_Ereturn
  (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
  (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
 

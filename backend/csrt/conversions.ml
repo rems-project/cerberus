@@ -6,7 +6,8 @@ open Pp
 (* open Tools *)
 module BT = BaseTypes
 module RT = ReturnTypes
-module FT = FunctionTypes
+module FT = ArgumentTypes.Make(RT)
+module LT = ArgumentTypes.Make(NoReturn)
 open TypeErrors
 open IndexTerms
 open BaseTypes
@@ -154,6 +155,19 @@ let rec lrt_to_at (lrt : RT.l) (rest : FT.t) : FT.t =
 let rt_to_at rt rest = 
   let (RT.Computational ((name, t), lrt)) = rt in
   FT.Computational ((name, t), lrt_to_at lrt rest)
+
+
+let rec lrt_to_lt (lrt : RT.l) : LT.t = 
+  match lrt with
+  | RT.I -> I False
+  | RT.Logical ((name, t), args) -> LT.Logical ((name, t), lrt_to_lt args)
+  | RT.Resource (t, args) -> LT.Resource (t, lrt_to_lt args)
+  | RT.Constraint (t, args) -> LT.Constraint (t, lrt_to_lt args)
+
+let rt_to_lt rt = 
+  let (RT.Computational ((name, t), lrt)) = rt in
+  LT.Computational ((name, t), lrt_to_lt lrt)
+
 
 
 let struct_decl loc tag fields struct_decls = 
@@ -334,7 +348,7 @@ let make_fun_spec loc genv attrs args ret_ctype =
   in
   let* (Computational ((ret_name,bound),ret)) = 
     ctype true loc (Sym.fresh ()) ret_ctype in
-  let ftyp = arguments (Return (RT.Computational ((ret_name,bound), RT.(@@) ret returns))) in
+  let ftyp = arguments (I (RT.Computational ((ret_name,bound), RT.(@@) ret returns))) in
   return ftyp
 
 
@@ -350,9 +364,8 @@ let make_esave_spec loc genv attrs args =
       ) 
       (fun ft -> ft) args
   in
-  let ftyp = arguments (Return (RT.Computational ((fresh (), BT.Unit), I))) in
+  let ftyp = arguments (I (RT.Computational ((fresh (), BT.Unit), I))) in
   return ftyp
 
 let make_return_esave_spec ftyp =
-  let rt = FT.get_return ftyp in
-  rt_to_at rt (FT.Return rt)
+  rt_to_lt (FT.get_return ftyp)

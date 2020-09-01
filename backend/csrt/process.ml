@@ -4,11 +4,12 @@ module CF=Cerb_frontend
 open CF.Mucore
 open Check
 open TypeErrors
-open FunctionTypes
 open ReturnTypes
 open BaseTypes
 
 module RE = Resources
+module LT = ArgumentTypes.Make(NoReturn)
+module FT = ArgumentTypes.Make(ReturnTypes)
 
 
 
@@ -42,7 +43,7 @@ let record_impl genv impls =
          { genv with impl_constants = ImplMap.add impl bt genv.impl_constants}
       | M_IFun (bt, args, _body) ->
          let args_ts = List.map (fun (sym,a_bt) -> FT.mcomputational sym a_bt) args in
-         let ftyp = (Tools.comps args_ts) (Return (Computational ((Sym.fresh (), bt), I))) in
+         let ftyp = (Tools.comps args_ts) (FT.I (Computational ((Sym.fresh (), bt), I))) in
          { genv with impl_fun_decls = ImplMap.add impl ftyp genv.impl_fun_decls }
     ) impls genv
 
@@ -74,7 +75,7 @@ let process_functions genv fns =
 
 
 let process mu_file =
-  let* mu_file : (FT.t, FT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file =
+  let* mu_file : (FT.t, LT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file =
     PreProcess.retype_file Loc.unknown mu_file in
   (* pp_fun_map_decl mu_file.mu_funinfo; *)
   let global = Global.empty in

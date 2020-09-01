@@ -13,7 +13,7 @@ module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
 module RT = ReturnTypes
-module FT = FunctionTypes
+module FT = ArgumentTypes.Make(RT)
 
 
 
@@ -49,7 +49,7 @@ type struct_decls = struct_decl SymMap.t
 type t = 
   { struct_decls : struct_decls; 
     fun_decls : (Loc.t * FT.t) SymMap.t;
-    impl_fun_decls : FT.t ImplMap.t;
+    impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
   } 
 
