@@ -1,5 +1,5 @@
 open Pp
-open Except
+open Result
 module CF=Cerb_frontend
 open CF.Mucore
 open Check
@@ -89,7 +89,7 @@ let process mu_file =
 let process_and_report mu_file = 
   if !debug_level > 0 then Printexc.record_backtrace true else ();
   match process mu_file with
-  | Result () -> ()
-  | Exception (loc,err) -> 
+  | Ok () -> ()
+  | Error (loc,err) -> 
      let pped = TypeErrors.pp loc err in
      error pped

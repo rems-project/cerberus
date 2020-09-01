@@ -1,6 +1,8 @@
 open Cerb_backend
 open Pipeline
-open Except
+open Cerb_frontend.Exception
+
+let return = except_return
 
 
 let cpp_str =

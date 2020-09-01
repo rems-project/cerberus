@@ -1,8 +1,8 @@
 open Global
+open Result
 open List
 open Pp
 open TypeErrors
-open Except
 open Environment
 module LC=LogicalConstraints
 

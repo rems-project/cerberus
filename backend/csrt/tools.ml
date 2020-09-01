@@ -1,5 +1,3 @@
-module CF = Cerb_frontend
-module CB = Cerb_backend
 module Loc = Locations
 
 module StringMap = Map.Make(String)
@@ -14,7 +12,7 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   | f :: fs -> f (comps fs a)
 
 
-open Except
+open Result
 
 let at_most_one loc err_str = function
   | [] -> return None
@@ -26,12 +24,4 @@ let assoc_err loc entry list err =
   | Some result -> return result
   | None -> fail loc err
 
-(* let rassoc_err loc entry list err =
- *   let rec aux = function
- *     | [] -> None
- *     | (a,entry') :: rest -> 
- *        if entry = entry' then Some a else aux rest
- *   in
- *   match aux list with
- *   | Some result -> return result
- *   | None -> fail loc err *)
+

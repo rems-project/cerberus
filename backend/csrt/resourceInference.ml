@@ -1,7 +1,7 @@
 module Loc = Locations
 module RE = Resources
 open Environment
-open Except
+open Result
 open RE
 open TypeErrors
 open Pp

@@ -1,6 +1,6 @@
 module CF = Cerb_frontend
 open TypeErrors
-open Except
+open Result
 open Pp
 
 open Resources

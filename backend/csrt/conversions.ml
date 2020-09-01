@@ -1,7 +1,7 @@
 module CF=Cerb_frontend
 open List
 open Sym
-open Except
+open Result
 open Pp
 (* open Tools *)
 module BT = BaseTypes

@@ -1,34 +1,32 @@
+open Result
 module Loc = Locations
 
 let lookup (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =
-  let open Except in
   match SymMap.find_opt name e with
   | None -> fail loc (TypeErrors.Unbound_name name)
   | Some v -> return v
 
 
 let foldM 
-      (f : Sym.t -> 'a -> 'b -> ('b,'e) Except.t)
+      (f : Sym.t -> 'a -> 'b -> ('b,'e) result)
       (m : 'a SymMap.t)
       (acc : 'b)
-    : ('b,'e) Except.t =
-  let open Except in
+    : ('b,'e) result =
   SymMap.fold (fun sym a m_acc ->
       let* acc = m_acc in
       f sym a acc
     ) m (return acc)
 
 let iterM 
-      (f : Sym.t -> 'a -> 'b -> (unit,'e) Except.t)
+      (f : Sym.t -> 'a -> 'b -> (unit,'e) result)
       (m : 'a SymMap.t)
-    : (unit,'e) Except.t =
+    : (unit,'e) result =
   foldM f m ()
 
 let filter
-      (f : Sym.t -> 'a -> (bool,'e) Except.t)
+      (f : Sym.t -> 'a -> (bool,'e) result)
       (m : 'a SymMap.t)
-    : ('a SymMap.t,'e) Except.t =
-  let open Except in
+    : ('a SymMap.t,'e) result =
   foldM 
     (fun sym a acc ->
       let* c = f sym a in
@@ -37,10 +35,9 @@ let filter
     m SymMap.empty
 
 let filter_map_list
-      (f : Sym.t -> 'a -> ('b option,'e) Except.t)
+      (f : Sym.t -> 'a -> ('b option,'e) result)
       (m : 'a SymMap.t)
-    : ('b list,'e) Except.t =
-  let open Except in
+    : ('b list,'e) result =
   foldM 
     (fun sym a acc ->
       let* c = f sym a in
@@ -52,10 +49,9 @@ let filter_map_list
 
 
 let for_all
-      (f : Sym.t -> 'a -> (bool,'e) Except.t)
+      (f : Sym.t -> 'a -> (bool,'e) result)
       (m : 'a SymMap.t)
-    : (bool,'e) Except.t =
-  let open Except in
+    : (bool,'e) result =
   foldM 
     (fun sym a acc ->
       let* c = f sym a in

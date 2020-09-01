@@ -1,4 +1,4 @@
-open Except
+open Result
 
 let foldM 
       (f : 'k -> 'x -> 'y -> ('y,'e) t)

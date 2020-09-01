@@ -5,7 +5,7 @@ open Global
 open Local
 open Tools
 open Pp
-open Except
+open Result
 open List
 open ListM
 open Sym

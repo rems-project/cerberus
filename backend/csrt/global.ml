@@ -1,6 +1,6 @@
 open Pp
+open Result
 open List
-open Except
 open TypeErrors
 
 module SymSet = Set.Make(Sym)
