@@ -11,6 +11,8 @@ module CA=CF.Core_anormalise
 open TypeErrors
 open Pp
 
+open ListM
+
 let retype_ctor loc = function
   | M_Cnil cbt -> 
      let* bt = Conversions.bt_of_core_base_type loc cbt in
@@ -339,7 +341,7 @@ let retype_impl_decl loc = function
 
 
 let retype_impls loc impls = 
-  pmap_mapM (fun _ decl -> retype_impl_decl loc decl) 
+  PmapM.mapM (fun _ decl -> retype_impl_decl loc decl) 
             impls CF.Implementation.implementation_constant_compare
 
 
@@ -369,7 +371,7 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
      in
      let* expr = retype_expr loc structs expr in
      let* labels = 
-       pmap_mapM (fun lsym ((lt,args,e,annots): (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) -> 
+       PmapM.mapM (fun lsym ((lt,args,e,annots): (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) -> 
            let* lt = 
              if CF.Annot.is_return annots then
                return (Conversions.make_return_esave_spec ftyp)
@@ -399,7 +401,7 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
      return (M_BuiltinDecl (loc,bt,args))
 
 let retype_fun_map loc structs funinfo (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
-  pmap_mapM (fun fsym decl -> 
+  PmapM.mapM (fun fsym decl -> 
       retype_fun_map_decl loc structs funinfo fsym decl
     ) fun_map Symbol.symbol_compare
 
@@ -415,7 +417,7 @@ let retype_globs loc struct_decls = function
 
 
 let retype_globs_map loc struct_decls funinfo globs_map = 
-  pmap_mapM (fun _ globs -> retype_globs loc struct_decls globs) 
+  PmapM.mapM (fun _ globs -> retype_globs loc struct_decls globs) 
             globs_map Symbol.symbol_compare
 
 
@@ -427,7 +429,7 @@ let retype_globs_map loc struct_decls funinfo globs_map =
 
 let retype_tagDefs loc tagDefs = 
   let open Pp in
-  pmap_foldM 
+  PmapM.foldM 
     (fun sym def (acc,acc_structs,acc_unions) -> 
       match def with
       | M_UnionDef _ -> 
@@ -442,7 +444,7 @@ let retype_tagDefs loc tagDefs =
 
 
 let retype_funinfo struct_decls funinfo =
-  pmap_mapM
+  PmapM.mapM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) ->
       if is_variadic then fail loc (Variadic_function fsym) else
         let* ftyp = Conversions.make_fun_spec loc struct_decls attrs args ret_ctype in

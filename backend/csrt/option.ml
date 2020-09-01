@@ -21,3 +21,10 @@ let map f = function
   | None -> None
 
 
+let is_some = function
+  | Some _ -> true
+  | None -> false
+
+let is_none = function
+  | None -> true
+  | Some _ -> false

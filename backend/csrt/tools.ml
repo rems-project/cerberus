@@ -5,10 +5,6 @@ module Loc = Locations
 module StringMap = Map.Make(String)
 
 
-let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
-    List.concat (List.map f xs)
-
-
 let id = fun x -> x
 
 let comp (f : 'b -> 'c) (g : 'a -> 'b) (x : 'a) : 'c = f (g (x))
@@ -16,94 +12,6 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   match fs with
   | [] -> a
   | f :: fs -> f (comps fs a)
-
-
-
-let is_some = function
-  | Some _ -> true
-  | None -> false
-
-let is_none = function
-  | None -> true
-  | Some _ -> false
-
-
-
-
-
-let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
-  match xs with
-  | [] -> []
-  | x :: xs ->
-     match f x with
-     | None -> filter_map f xs
-     | Some y -> y :: filter_map f xs
-
-
-
-let symmap_lookup (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =
-  let open Except in
-  match SymMap.find_opt name e with
-  | None -> fail loc (TypeErrors.Unbound_name name)
-  | Some v -> return v
-
-
-let symmap_foldM 
-      (f : Sym.t -> 'a -> 'b -> 'b Except.m)
-      (m : 'a SymMap.t)
-      (acc : 'b)
-    : 'b Except.m =
-  let open Except in
-  SymMap.fold (fun sym a m_acc ->
-      let* acc = m_acc in
-      f sym a acc
-    ) m (return acc)
-
-let symmap_iterM 
-      (f : Sym.t -> 'a -> 'b -> (unit,'e) Except.t)
-      (m : 'a SymMap.t)
-    : unit Except.m =
-  symmap_foldM f m ()
-
-let symmap_filter
-      (f : Sym.t -> 'a -> bool Except.m)
-      (m : 'a SymMap.t)
-    : ('a SymMap.t) Except.m =
-  let open Except in
-  symmap_foldM 
-    (fun sym a acc ->
-      let* c = f sym a in
-      return (if c then SymMap.add sym a acc else acc)
-    )
-    m SymMap.empty
-
-let symmap_filter_map_list
-      (f : Sym.t -> 'a -> ('b option) Except.m)
-      (m : 'a SymMap.t)
-    : ('b list) Except.m =
-  let open Except in
-  symmap_foldM 
-    (fun sym a acc ->
-      let* c = f sym a in
-      match c with
-      | Some r -> return (acc@[r])
-      | None -> return acc
-    )
-    m []
-
-
-let symmap_for_all
-      (f : Sym.t -> 'a -> bool Except.m)
-      (m : 'a SymMap.t)
-    : bool Except.m =
-  let open Except in
-  symmap_foldM 
-    (fun sym a acc ->
-      let* c = f sym a in
-      return (acc && c)
-    )
-    m true  
-
 
 
 open Except

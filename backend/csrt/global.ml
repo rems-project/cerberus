@@ -2,7 +2,6 @@ open Pp
 open List
 open Except
 open TypeErrors
-open Tools
 
 module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend
@@ -65,7 +64,7 @@ let get_struct_decl loc struct_decls (BT.Tag s) =
   | Some decl -> return decl 
   | None -> fail loc (Struct_not_defined (BT.Tag s))
 
-let get_fun_decl loc global sym = symmap_lookup loc global.fun_decls sym
+let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
 let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i
 let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 

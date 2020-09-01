@@ -38,7 +38,7 @@ let rec bt_to_sort loc {local;global} ctxt bt =
   | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | Tuple bts ->
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
-     let* sorts = mapM (bt_to_sort loc {local;global} ctxt) bts in
+     let* sorts = ListM.mapM (bt_to_sort loc {local;global} ctxt) bts in
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts)
   | Struct tag ->
      let* decl = Global.get_struct_decl loc global.struct_decls tag in
@@ -148,10 +148,10 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt t in
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | And its -> 
-     let* ts = mapM (of_index_term loc {local;global} ctxt) its in
+     let* ts = ListM.mapM (of_index_term loc {local;global} ctxt) its in
      return (Z3.Boolean.mk_and ctxt ts)
   | Or its -> 
-     let* ts = mapM (of_index_term loc {local;global} ctxt) its in
+     let* ts = ListM.mapM (of_index_term loc {local;global} ctxt) its in
      return (Z3.Boolean.mk_or ctxt ts)
   | Impl (it,it') -> 
      let* a = of_index_term loc {local;global} ctxt it in
@@ -219,7 +219,7 @@ let constraint_holds loc {local;global} c =
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: Local.all_constraints local) in
   let* constrs = 
-    mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
+    ListM.mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
   let* checked = z3_check loc ctxt solver constrs in
   match checked with
   | UNSATISFIABLE -> 

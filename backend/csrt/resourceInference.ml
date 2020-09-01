@@ -63,7 +63,7 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:R
   match re with
   | StoredStruct s ->
      let* decl = Global.get_struct_decl loc global.struct_decls s.tag in
-     fold_leftM (fun local (member,member_pointer) ->
+     ListM.fold_leftM (fun local (member,member_pointer) ->
          let bt = List.assoc member decl.raw  in
          let ct = List.assoc member decl.ctypes  in
          let* size = Memory.size_of_ctype loc ct in

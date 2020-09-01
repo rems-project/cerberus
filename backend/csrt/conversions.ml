@@ -45,7 +45,7 @@ let rec bt_of_core_base_type loc cbt =
      let* bt = bt_of_core_base_type loc bt in
      return (BT.List bt)
   | BTy_tuple bts -> 
-     let* bts = mapM (bt_of_core_base_type loc) bts in
+     let* bts = ListM.mapM (bt_of_core_base_type loc) bts in
      return (BT.Tuple bts)
   | BTy_storable -> fail loc (Unsupported !^"BTy_storable")
   | BTy_ctype -> fail loc (Unsupported !^"ctype")
@@ -338,7 +338,7 @@ let make_fun_spec loc genv attrs args ret_ctype =
   let open FT in
   let open RT in
   let* (arguments, returns) = 
-    fold_leftM (fun (args,returns) (msym, ct) ->
+    ListM.fold_leftM (fun (args,returns) (msym, ct) ->
         let name = make_name msym in
         let* (arg,ret) = make_fun_arg_type true genv name loc ct in
         let args = Tools.comp args arg in
@@ -356,7 +356,7 @@ let make_esave_spec loc genv attrs args =
   let open FT in
   let open RT in
   let* arguments = 
-    fold_leftM (fun args (msym, (ct,by_pointer)) ->
+    ListM.fold_leftM (fun args (msym, (ct,by_pointer)) ->
         let name = make_name msym in
         let* (arg,_) = make_fun_arg_type by_pointer genv name loc ct in
         let args = Tools.comp args arg in

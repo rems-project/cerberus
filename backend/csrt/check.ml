@@ -7,6 +7,7 @@ open Tools
 open Pp
 open Except
 open List
+open ListM
 open Sym
 open LogicalConstraints
 open Resources
@@ -344,7 +345,7 @@ let subtype (loc: Loc.t)
 
   let rec check_logical unis = function
     | (sname,sls) :: lspec ->
-       let* found = symmap_lookup loc unis sname in
+       let* found = SymMapM.lookup loc unis sname in
        begin match found with
        | Uni.{resolved = None} -> 
           fail loc (Unconstrained_logical_variable sname)
@@ -440,7 +441,7 @@ module Calltyp (RT: AT.RT_Sig) = struct
 
     let rec check_logical unis = function
       | (sname,sls) :: lspec ->
-         let* found = symmap_lookup loc unis sname in
+         let* found = SymMapM.lookup loc unis sname in
          begin match found with
          | Uni.{resolved = None} -> 
             fail loc (Unconstrained_logical_variable sname)
@@ -1046,7 +1047,7 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
             | _ -> Points_ (S lname,size)
           in
           let* o_resource = RI.match_resource loc {local;global} shape in
-          let constr = LC (S ret %= Bool (is_some o_resource)) in
+          let constr = LC (S ret %= Bool (Option.is_some o_resource)) in
           let ret = Computational ((ret, Bool), Constraint (constr, I)) in
           return (Normal (ret, local))
        | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
@@ -1412,7 +1413,7 @@ let check_procedure (loc: Loc.t)
   in
 
 
-  let* () = pmap_foldM check_label label_defs () in
+  let* () = PmapM.foldM check_label label_defs () in
 
   let* () = debug_print 1 hardline in
   let* () = debug_print 1 (h1 ("Checking function body " ^ (plain (Sym.pp fsym)))) in

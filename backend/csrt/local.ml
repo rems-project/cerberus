@@ -202,7 +202,7 @@ let get_c (loc : Loc.t) local (name: Sym.t) =
   | _ -> wanted_but_found loc `Resource (name,b)
 
 let removeS loc syms (local: t) = 
-  fold_leftM (fun local sym -> remove loc sym local) local syms
+  ListM.fold_leftM (fun local sym -> remove loc sym local) local syms
 
 let addA aname (bt,lname) = add (aname, Computational (lname,bt))
 let addL lname ls         = add (lname, Logical ls)
@@ -223,7 +223,7 @@ let all_constraints local =
     ) local
 
 let filterM p (Local e) = 
-  filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
+  ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
 
 
 let filter_a p (local : t) = 

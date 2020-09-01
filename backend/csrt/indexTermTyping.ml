@@ -28,7 +28,7 @@ let rec infer_index_term (loc: Loc.t) (env: E.t) (it: IT.t) : LS.t m =
      let* () = check_index_term loc env (Base Loc) t in
      return (Base Bool)
   | And ts | Or ts ->
-     let* () = iterM (check_index_term loc env (Base Bool)) ts in
+     let* () = ListM.iterM (check_index_term loc env (Base Bool)) ts in
      return (Base Bool)
   | Impl (t,t') ->
      let* () = check_index_term loc env (Base Bool) t in
@@ -39,7 +39,7 @@ let rec infer_index_term (loc: Loc.t) (env: E.t) (it: IT.t) : LS.t m =
      return (Base Bool)
   | Tuple its ->
      let* ts = 
-       mapM (fun it -> 
+       ListM.mapM (fun it -> 
            let* (Base bt) = infer_index_term loc env it in
            return bt
          ) its in
@@ -71,7 +71,7 @@ let rec infer_index_term (loc: Loc.t) (env: E.t) (it: IT.t) : LS.t m =
      let* () = check_index_term loc env (Base (List item_bt)) it2 in
      return (Base (List item_bt))
   | List (its,bt) ->
-     let* _ = mapM (check_index_term loc env (Base bt)) its in
+     let* _ = ListM.mapM (check_index_term loc env (Base bt)) its in
      return (Base bt)
   | Head it' ->
      let* ls = infer_index_term loc env it' in

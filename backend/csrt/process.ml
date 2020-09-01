@@ -16,7 +16,7 @@ module FT = ArgumentTypes.Make(ReturnTypes)
 
 
 let record_tagDefs (global: Global.t) tagDefs = 
-  pmap_foldM (fun sym def (global: Global.t) ->
+  PmapM.foldM (fun sym def (global: Global.t) ->
       match def with
       | M_UnionDef _ -> fail Loc.unknown (Unsupported !^"todo: union types")
       | M_StructDef decl -> 
@@ -26,7 +26,7 @@ let record_tagDefs (global: Global.t) tagDefs =
 
 
 let record_funinfo global funinfo =
-  pmap_foldM
+  PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) global ->
       if is_variadic then fail loc (Variadic_function fsym) else
         let fun_decls = SymMap.add fsym (loc,ftyp) global.Global.fun_decls in
@@ -55,7 +55,7 @@ let print_initial_environment genv =
 
 
 let process_functions genv fns =
-  pmap_iterM (fun fsym fn -> 
+  PmapM.iterM (fun fsym fn -> 
       match fn with
       | M_Fun (rbt, args, body) ->
          let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
