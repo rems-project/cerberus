@@ -684,6 +684,14 @@ type 'a or_false =
   | Normal of 'a
   | False
 
+let or_false (m: ('a or_false) m) (c: 'a -> ('b or_false) m) : ('b or_false) m =
+  let* aof = m in
+  match aof with
+  | Normal a -> c a
+  | False -> return False
+
+let (let*!!!) = or_false
+
 let or_false_pp pp = function
   | Normal a -> pp a
   | False -> if !unicode then !^"\u{22A5}" else !^"bot"
@@ -1003,10 +1011,8 @@ let rec infer_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
   let loc = Loc.update loc annots in
   let mark = Sym.fresh () in
   let local = marked mark ++ local in 
-  let* r = infer_expr_pure loc labels {local;global} e in
-  match r with
-  | Normal (rt, local) -> return (Normal (pop_return mark (rt, local)))
-  | False -> return False
+  let*!!! (rt, local) = infer_expr_pure loc labels {local;global} e in
+  return (Normal (pop_return mark (rt, local)))
 
 and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr) : (RT.t * L.t) or_false m = 
   let* () = debug_print 1 (action "inferring expression type") in
@@ -1014,7 +1020,7 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
   let* () = debug_print 3 (blank 3 ^^ item "expression" (pp_expr pp_budget e)) in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  let* r = match e_ with
+  let*!!! (typ,local) = match e_ with
     | M_Epure pe -> 
        let* r = infer_pexpr_pure loc {local;global} pe in
        return (Normal r)
@@ -1212,21 +1218,14 @@ and infer_expr_pure (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_exp
        infer_expr_pure loc labels {local;global} e2
     | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
     | M_Esseq (pat, e1, e2) ->
-       let* r = infer_expr loc labels {local;global} e1 in
-       begin match r with
-       | False -> return False
-       | Normal (rt, local) ->
-          let* local' = pattern_match_rt loc pat rt in
-          let local = local' ++ local in
-          infer_expr_pure loc labels {local;global} e2
-       end
+       let*!!! (rt,local) = infer_expr loc labels {local;global} e1 in
+       let* local' = pattern_match_rt loc pat rt in
+       let local = local' ++ local in
+       infer_expr_pure loc labels {local;global} e2
   in
-  match r with
-  | False -> return False
-  | Normal (typ,local) -> 
-     let* () = debug_print 3 (blank 3 ^^ item "inferred" (RT.pp typ)) in
-     let* () = debug_print 1 PPrint.empty in
-     return (Normal (typ,local))
+  let* () = debug_print 3 (blank 3 ^^ item "inferred" (RT.pp typ)) in
+  let* () = debug_print 1 PPrint.empty in
+  return (Normal (typ,local))
 
 
 let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr) (typ: RT.t or_false) = 
@@ -1277,14 +1276,6 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
          ) pats_es
      in
      merge_local_environments_or_false loc paths
-  | M_Epure pe -> 
-     begin match typ with
-     | Normal typ ->
-        let* local = check_pexpr loc {local;global} pe typ in
-        return (Normal local)
-     | False ->
-        fail loc (Unreachable !^"pure expressions cannot produce False")
-     end
   | M_Elet (p, e1, e2) ->
      let* (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with 
@@ -1295,30 +1286,23 @@ let rec check_expr (loc: Loc.t) (labels: labels) {local;global} (e: 'bty mu_expr
      check_expr loc labels {local;global} e2 typ
   | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (pat, e1, e2) ->
-     let* r = infer_expr loc labels {local;global} e1 in
-     begin match r with
-     | False -> return False
-     | Normal (rt, local) -> 
-        let* local' = pattern_match_rt loc pat rt in
-        let local = local' ++ local in
-        check_expr loc labels {local;global} e2 typ
-     end
+     let*!!! (rt, local) = infer_expr loc labels {local;global} e1 in
+     let* local' = pattern_match_rt loc pat rt in
+     let local = local' ++ local in
+     check_expr loc labels {local;global} e2 typ
   | _ ->
      let mark = Sym.fresh () in
      let local = marked mark ++ local in
-     let* r = infer_expr_pure loc labels {local;global} e in
-     match r with
-     | False -> return False
-     | Normal (rt, local) -> 
-        let* (local',(abt,lname)) = bind_logically rt in
-        let local = local' ++ local in
-        match typ with
-        | Normal typ ->
-           let* local = subtype loc {local;global} ((abt,lname),loc) typ "function return type" in
-           let* local = pop_empty mark loc local in
-           return (Normal local)
-        | False ->
-           fail loc (Generic !^"This expression returns but is expected to have noreturn-type.")
+     let*!!! (rt, local) = infer_expr_pure loc labels {local;global} e in
+     let* (local',(abt,lname)) = bind_logically rt in
+     let local = local' ++ local in
+     match typ with
+     | Normal typ ->
+        let* local = subtype loc {local;global} ((abt,lname),loc) typ "function return type" in
+        let* local = pop_empty mark loc local in
+        return (Normal local)
+     | False ->
+        fail loc (Generic !^"This expression returns but is expected to have noreturn-type.")
 
 
 
