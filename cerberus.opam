@@ -30,6 +30,7 @@ depends: [
   "menhir" {= "20190924"}
   "lem" {= "2020-06-03"}
   "menhir" {>= "20190924"}
+  "result" {>= "1.4"}
 ]
 build: [
   ["dune" "subst"] {pinned}
