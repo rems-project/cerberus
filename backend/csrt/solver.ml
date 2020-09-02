@@ -108,12 +108,12 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.mk_power ctxt a a')
   | Rem_t (it,it') -> 
-     let* () = warn !^"Rem_t constraint" in
+     let* () = warnM !^"Rem_t constraint" in
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
   | Rem_f (it,it') -> 
-     let* () = warn !^"Rem_f constraint" in
+     let* () = warnM !^"Rem_f constraint" in
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')

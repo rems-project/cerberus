@@ -30,6 +30,8 @@ let a_unpack (A _ _ a) = a
 let a_pack annots bty a = A annots bty a
 
 type asym 'bty = A Symbol.sym 'bty
+type asyms 'bty = list (asym 'bty)
+
 
 (* type mv_tsymbol = tsymbol       (\* Mem.mem_value *\) *)
 type ov_asym 'bty = asym 'bty       (* object_value *)

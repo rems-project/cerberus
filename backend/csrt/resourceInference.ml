@@ -53,8 +53,6 @@ let stored_struct_to (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: BT.tag) : 
 
 
 let match_concrete_resource (loc: Loc.t) {local;global} (resource: RE.t) : ((Sym.t * RE.t) option) m = 
-  let* () = debug_print 2 (action "trying to match resource") in
-  let* () = debug_print 2 (blank 3 ^^ item "resource" (RE.pp false resource)) in
   match_resource loc {local;global} (RE.shape resource)
 
 

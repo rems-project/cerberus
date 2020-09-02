@@ -49,8 +49,8 @@ let record_impl genv impls =
 
 
 let print_initial_environment genv = 
-  let* () = debug_print 1 (h1 "initial environment") in
-  let* () = debug_print 1 (Global.pp genv) in
+  let* () = dprintM 1 (h1 "initial environment") in
+  let* () = dprintM 1 (Global.pp genv) in
   return ()
 
 
@@ -90,6 +90,4 @@ let process_and_report mu_file =
   if !debug_level > 0 then Printexc.record_backtrace true else ();
   match process mu_file with
   | Ok () -> ()
-  | Error (loc,err) -> 
-     let pped = TypeErrors.pp loc err in
-     error pped
+  | Error (loc,err) -> Pp.error (TypeErrors.pp loc err); exit 1
