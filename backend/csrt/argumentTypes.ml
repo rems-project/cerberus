@@ -28,14 +28,10 @@ type t =
 
 
 
-let mcomputational name bound t = 
-  Computational ((name,bound),t)
-let mlogical name bound t = 
-  Logical ((name,bound),t)
-let mconstraint bound t = 
-  Constraint (bound,t)
-let mresource bound t = 
-  Resource (bound,t)
+let mComputational name bound t = Computational ((name,bound),t)
+let mLogical name bound t = Logical ((name,bound),t)
+let mConstraint bound t = Constraint (bound,t)
+let mResource bound t = Resource (bound,t)
 
 
 
@@ -73,13 +69,6 @@ let mresource bound t =
 
   let subst_vars = make_substs subst_var
 
-  let rec free_vars = function
-    | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)
-    | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
-    | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars t)
-    | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars t)
-    | I i -> RT.free_vars i
-
   let rec instantiate_struct_member subst = function
     | Computational ((name,bound),t) -> 
        Computational ((name,bound),
@@ -95,6 +84,13 @@ let mresource bound t =
                    instantiate_struct_member subst t)
     | I i -> 
        I (RT.instantiate_struct_member subst i)
+
+  let rec free_vars = function
+    | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)
+    | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
+    | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars t)
+    | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars t)
+    | I i -> RT.free_vars i
 
 
   let pp ft = 

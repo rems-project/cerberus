@@ -835,8 +835,8 @@ let pp_fun_map budget funs =
   in
   Pmap.fold (fun sym decl acc ->
     acc ^^
-    match decl with
-      | M_Fun  (bTy, params, pe) ->
+    begin match decl with
+      | M_Fun (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.hardline ^^ P.hardline
@@ -863,7 +863,7 @@ let pp_fun_map budget funs =
                        (* label core function definition *)
                     P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
                       P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
-                       P.nest 2 (P.break 1 ^^ pp_expr budget lbody) ^^ P.hardline
+                       (P.nest 2 (P.break 1 ^^ pp_expr budget lbody)) ^^ P.hardline
                    end
                ) labels P.empty
             ) 
@@ -871,6 +871,7 @@ let pp_fun_map budget funs =
               (* pp body *)
             P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
           )
+    end
     ) funs P.empty
 
 

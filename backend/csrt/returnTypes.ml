@@ -17,24 +17,19 @@ type l =
 type t = Computational of (Sym.t * BT.t) * l
 
 
-let mcomputational (name,bound) t = Computational ((name,bound),t)
-let mlogical (name,bound) t = Logical ((name,bound),t)
-let mconstraint bound t = Constraint (bound,t)
-let mresource bound t = Resource (bound,t)
+let mComputational (name,bound) t = Computational ((name,bound),t)
+let mLogical (name,bound) t = Logical ((name,bound),t)
+let mConstraint bound t = Constraint (bound,t)
+let mResource bound t = Resource (bound,t)
 
 
 
 let rec (@@) (t1: l) (t2: l) : l = 
   match t1 with
   | I -> t2
-  (* | Computational (name,bound,t) -> 
-   *    Computational (name,bound, t@@t2) *)
-  | Logical ((name,bound),t) -> 
-     Logical ((name,bound), t@@t2)
-  | Resource (bound,t) -> 
-     Resource (bound, t@@t2)
-  | Constraint (bound,t) -> 
-     Constraint (bound, t@@t2)
+  | Logical ((name,bound),t) -> Logical ((name,bound), t@@t2)
+  | Resource (bound,t) -> Resource (bound, t@@t2)
+  | Constraint (bound,t) -> Constraint (bound, t@@t2)
 
 
 let rec subst_var_l substitution = function
@@ -73,18 +68,6 @@ let subst_var substitution = function
 
 let subst_vars = Subst.make_substs subst_var
 
-
-let rec free_vars_l = function
-  | Logical ((sym,_),t) -> SymSet.remove sym (free_vars_l t)
-  | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars_l t)
-  | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars_l t)
-  | I -> SymSet.empty
-
-let free_vars = function
-  | Computational ((sym,_),t) -> SymSet.remove sym (free_vars_l t)
-
-
-
 let rec instantiate_struct_member_l subst rt =
   match rt with
   | I -> I
@@ -100,6 +83,15 @@ let rec instantiate_struct_member_l subst rt =
 let instantiate_struct_member subst = function
   | Computational ((name,bound),t) -> 
      Computational ((name,bound),instantiate_struct_member_l subst t)
+
+let rec free_vars_l = function
+  | Logical ((sym,_),t) -> SymSet.remove sym (free_vars_l t)
+  | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars_l t)
+  | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars_l t)
+  | I -> SymSet.empty
+
+let free_vars = function
+  | Computational ((sym,_),t) -> SymSet.remove sym (free_vars_l t)
 
 
 let (pp,pp_l) = 

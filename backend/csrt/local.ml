@@ -153,6 +153,8 @@ let merge loc (Local l1) (Local l2) =
   let* l = aux l1 l2 in
   return (Local l)
 
+let big_merge (loc: Loc.t) (local: t) (locals: t list) : t m = 
+  ListM.fold_leftM (merge loc) local locals
 
 
 let mA sym (bt,lname) = (sym, VB.Computational (lname,bt))

@@ -325,7 +325,7 @@ let make_fun_arg_type lift struct_decls asym loc ct =
   let* ((abt,arg),(_,ret)) = aux false (asym, Sym.fresh_pretty "return") ct in
   
   let ftt = lrt_to_at arg in
-  let arg = Tools.comp (FT.mcomputational asym abt) ftt in
+  let arg = Tools.comp (FT.mComputational asym abt) ftt in
   return ((arg : FT.t -> FT.t),(ret : RT.l))
 
 
