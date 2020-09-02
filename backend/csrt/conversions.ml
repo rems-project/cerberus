@@ -275,7 +275,7 @@ let make_fun_arg_type lift struct_decls asym loc ct =
        | CF.Ctype.Ctype (_, Struct s) ->
           let* arg = 
             let* (stored,lbindings,rbindings) = 
-              Memory.store_struct loc struct_decls (Tag s) (S aname) (Some (S aname2)) in
+              ResourceInference.store_struct loc struct_decls (Tag s) (S aname) (Some (S aname2)) in
             let* abindings = 
               explode_struct_in_binding loc struct_decls (Tag s) (S aname2)
                 (lbindings @@ Resource (StoredStruct stored, I) @@ 
@@ -285,7 +285,7 @@ let make_fun_arg_type lift struct_decls asym loc ct =
           in
           let* ret = 
             let* (stored,lbindings,rbindings) = 
-              Memory.store_struct loc struct_decls (Tag s) (S aname) (Some (S rname2)) in
+              ResourceInference.store_struct loc struct_decls (Tag s) (S aname) (Some (S rname2)) in
             let* abindings = 
               explode_struct_in_binding loc struct_decls (Tag s) (S rname2)
                 (lbindings @@ Resource (StoredStruct stored, I) @@ 
