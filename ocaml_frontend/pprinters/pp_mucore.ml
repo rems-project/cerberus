@@ -186,7 +186,7 @@ let rec precedence_expr = function
   | M_Ebound _
   | M_End _
   | M_Erun _
-  | M_Ereturn
+  | M_Efinish
   (* | M_Epar _ *)
   (* | M_Ewait _ -> *)
     -> 
@@ -749,8 +749,8 @@ let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
          *     P.nest 2 (P.break 1 ^^ pp e) *)
         | M_Erun (sym, pes) ->
             pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
-        | M_Ereturn ->
-            pp_keyword "return"
+        | M_Efinish ->
+            pp_keyword "finish"
         (* | M_Epar es ->
          *     pp_keyword "par" ^^ P.parens (comma_list pp es) *)
         (* | M_Ewait tid ->

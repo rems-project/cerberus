@@ -316,8 +316,8 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
        return (M_End es)
     | M_Erun (sym,asyms) ->
        return (M_Erun (sym,asyms))
-    | M_Ereturn ->
-       return M_Ereturn
+    | M_Efinish ->
+       return M_Efinish
     (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
     (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
   in

@@ -33,18 +33,11 @@ type 'bty value = ((BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_value
 type 'bty object_value = ((BT.t * RE.size),'bty) CF.Mucore.mu_object_value
 type 'bty label_defs = (LT.t,(BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_label_defs
 
-(* mucore pp setup ************************************************************)
+(*** mucore pp setup **********************************************************)
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_typs)
 let pp_budget = Some 7
 let pp_expr e = PP_MUCORE.pp_expr pp_budget e
 let pp_pexpr e = PP_MUCORE.pp_pexpr pp_budget e
-
-
-let check_logical_sort (loc: Loc.t) (has: LS.t) (expect: LS.t) : unit m =
-  if BT.equal has expect then return () else fail loc (Mismatch {has; expect})
-
-let check_base_type (loc: Loc.t) (has: BT.t) (expect: BT.t) : unit m =
-  check_logical_sort loc (LS.Base has) (LS.Base expect)
 
 
 
@@ -77,6 +70,13 @@ let bind_logically (rt: RT.t) : (L.t * (BT.t * Sym.t)) m =
 
 
 (*** pattern matching *********************************************************)
+
+let check_logical_sort (loc: Loc.t) (has: LS.t) (expect: LS.t) : unit m =
+  if BT.equal has expect then return () else fail loc (Mismatch {has; expect})
+
+let check_base_type (loc: Loc.t) (has: BT.t) (expect: BT.t) : unit m =
+  check_logical_sort loc (LS.Base has) (LS.Base expect)
+
 
 let pattern_match (loc: Loc.t) (this: IT.t) (pat: pattern) (expect_bt: BT.t) : L.t m =
   let rec aux (local': L.t) (this: IT.t) (pat: pattern) (expect_bt: BT.t) : L.t m = 
@@ -255,8 +255,7 @@ let subtype (loc: Loc.t)
   let rec check_constraints = function
     | Constraint (c, rtyp) ->
        let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-       if holds then check_constraints rtyp 
-       else fail loc (Unsat_constraint c)
+       if holds then check_constraints rtyp else fail loc (Unsat_constraint c)
     | I -> return ()
   in
   let* () = check_constraints rtyp in
@@ -353,8 +352,7 @@ module Calltyp (RT: AT.RT_Sig) = struct
     let rec check_constraints = function
       | Constraint (c, ftyp) ->
          let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-         if holds then check_constraints ftyp 
-         else fail loc (Unsat_constraint c)
+         if holds then check_constraints ftyp else fail loc (Unsat_constraint c)
       | I rt -> return rt
     in
     let* rt = check_constraints ftyp in
@@ -1119,7 +1117,7 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        let* (NoReturn.False, local) = calltyp_lt loc {local;global} args lt in
        let* () = all_empty loc local in
        return False
-    | M_Ereturn ->
+    | M_Efinish ->
        return False
     | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
     | M_Eif _ -> fail loc (unreachable !^"Eif in inferring position")

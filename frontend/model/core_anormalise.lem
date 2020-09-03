@@ -862,7 +862,7 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
           Map.mapi (fun _label ((_,params,body,annots) : Core_aux.m_labeled_continuation 'a) ->
               let body = 
                 if is_return annots 
-                then M_Expr annots M_Ereturn
+                then M_Expr annots M_Efinish
                 else normalise_expr body
               in
               let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
