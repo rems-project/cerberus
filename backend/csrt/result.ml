@@ -11,8 +11,6 @@ let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * 'e) t =
 
 let (let*) = bind
 
-
-
 type 'a m = ('a, Locations.t * TypeErrors.t) t
 
 

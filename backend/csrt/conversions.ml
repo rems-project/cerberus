@@ -54,7 +54,7 @@ let rec bt_of_core_base_type loc cbt =
 
 let integerType_constraint loc about it =
   let* (min,max) = Memory.integer_range loc it in
-  return (LC (And [Num min %<= about; about %<= Num max]))
+  return (LC (And [IT.LE (Num min, about); IT.LE (about, Num max)]))
 
 
 let integerType loc name it =

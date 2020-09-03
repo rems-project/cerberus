@@ -13,10 +13,10 @@ module Loc = Locations
 module VB = VariableBinding
 
 
-type binding
+type binding = Sym.t * VB.t
 
 type context_item = 
-  | Binding of Sym.t * VB.t
+  | Binding of binding
   | Marker of Sym.t
 
 
@@ -179,25 +179,25 @@ let pp (Local local) =
 
 
 
-let get_a (loc : Loc.t) (name: Sym.t) local = 
+let get_a (loc : Loc.t) (name: Sym.t) (local:t)  = 
   let* b = get loc name local in
   match b with 
   | Computational (lname,bt) -> return (bt,lname)
   | _ -> wanted_but_found loc `Computational (name,b)
 
-let get_l (loc : Loc.t) (local:t) (name: Sym.t) = 
+let get_l (loc : Loc.t) (name: Sym.t) (local:t) = 
   let* b = get loc name local in
   match b with 
   | Logical ls -> return ls
   | _ -> wanted_but_found loc `Logical (name,b)
 
-let get_r (loc : Loc.t) local (name: Sym.t) = 
+let get_r (loc : Loc.t) (name: Sym.t) (local:t) = 
   let* b = get loc name local in
   match b with 
   | Resource re -> return re
   | _ -> wanted_but_found loc `Resource (name,b)
 
-let get_c (loc : Loc.t) local (name: Sym.t) = 
+let get_c (loc : Loc.t) (name: Sym.t) (local:t) = 
   let* b = get loc name local in
   match b with 
   | Constraint lc -> return lc
@@ -228,14 +228,6 @@ let filterM p (Local e) =
   ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
 
 
-let filter_a p (local : t) = 
-  filter (fun sym b -> 
-      match b with
-      | Computational (lname,bt) -> p sym lname bt
-      | _ -> None
-    )
-    local
-
 let filter_r p (local : t) = 
   filter (fun sym b -> 
       match b with
@@ -252,9 +244,6 @@ let filter_rM p (local : t) =
     )
     local
 
-
-let all_a = filter_a (fun s _ _ -> Some s) 
-let all_r = filter_r (fun s _ -> Some s) 
 
 let (++) = concat
 

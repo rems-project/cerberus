@@ -4,7 +4,9 @@ open List
 open Pp
 open TypeErrors
 open Environment
+module IT=IndexTerms
 module LC=LogicalConstraints
+
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
@@ -161,7 +163,7 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt it in
      return (Z3.Boolean.mk_not ctxt a)
   | S s -> 
-     let* ls = Local.get_l loc local s in
+     let* ls = Local.get_l loc s local in
      let s = sym_to_symbol ctxt s in
      let* bt = ls_to_sort loc {local;global} ctxt ls in
      return (Z3.Expr.mk_const ctxt s bt)
@@ -241,7 +243,6 @@ let is_unreachable loc {local;global} =
 
 
 let equal loc {local;global} it1 it2 =
-  let open IT in
-  let c = LC.LC (it1 %= it2) in
+  let c = LC.LC (IT.EQ (it1, it2)) in
   let* (holds,_,_) = constraint_holds loc {local;global} c in
   return holds

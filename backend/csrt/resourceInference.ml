@@ -1,5 +1,6 @@
 module Loc = Locations
 module RE = Resources
+module IT = IndexTerms
 open Environment
 open Result
 open RE
@@ -88,7 +89,6 @@ module RT = ReturnTypes
 
 let load_point loc {local;global} pointer size bt path is_field = 
   let open Result in
-  let open IndexTerms in
   let* o_resource = points_to loc {local;global} pointer size in
   let* pointee = match o_resource, is_field with
     | None, false -> fail loc (Generic !^"missing ownership of load location")
@@ -101,7 +101,7 @@ let load_point loc {local;global} pointer size bt path is_field =
   let* vbt = IndexTermTyping.infer_index_term loc {local;global} pointee in
   let* () = if BT.equal vbt (Base bt) then return () 
             else fail loc (Mismatch {has=vbt; expect=Base bt}) in
-  return [LC (path %= pointee)]
+  return [LC (IT.EQ (path, pointee))]
   
 let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (path: IT.t) =
   let open RT in
@@ -137,7 +137,7 @@ let rec store_struct (loc: Loc.t) (struct_decls: Global.struct_decls) (tag: BT.t
     | (member,bt)::members ->
        let member_pointer = Sym.fresh () in
        let pointer_constraint = 
-         LC.LC (IT.S member_pointer %= IT.MemberOffset (tag,pointer,member)) in
+         LC.LC (IT.EQ (IT.S member_pointer, IT.MemberOffset (tag,pointer,member))) in
        let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
        let* (mapping,lbindings,rbindings) = aux members in
        let* (lbindings',rbindings') = match bt with

@@ -48,22 +48,23 @@ type t =
 
   | S of Sym.t
 
-let (%+) t1 t2 = Add (t1,t2)
-let (%-) t1 t2 = Sub (t1,t2)
-let (%*) t1 t2 = Mul (t1,t2)
-let (%/) t1 t2 = Div (t1,t2)
-let (%^) t1 t2 = Exp (t1,t2)
 
-let (%=) t1 t2 = EQ (t1, t2)
-let (%!=) t1 t2 = NE (t1, t2)
-let (%<) t1 t2 = LT (t1, t2)
-let (%>) t1 t2 = GT (t1, t2)
-let (%<=) t1 t2 = LE (t1, t2)
-let (%>=) t1 t2 = GE (t1, t2)
+(* let (%+) t1 t2 = Add (t1,t2)
+ * let (%-) t1 t2 = Sub (t1,t2)
+ * let (%*\) t1 t2 = Mul (t1,t2)
+ * let (%/) t1 t2 = Div (t1,t2)
+ * let (%^) t1 t2 = Exp (t1,t2)
+ * 
+ * let (%=) t1 t2 = EQ (t1, t2)
+ * let (%!=) t1 t2 = NE (t1, t2)
+ * let (%<) t1 t2 = LT (t1, t2)
+ * let (%>) t1 t2 = GT (t1, t2)
+ * let (%<=) t1 t2 = LE (t1, t2)
+ * let (%>=) t1 t2 = GE (t1, t2) *)
 
 (* let (%&) t1 t2 = And (t1, t2)
  * let (%|) t1 t2 = Or (t1, t2) *)
-let (%==>) t1 t2 = Impl (t1, t2)
+(* let (%==>) t1 t2 = Impl (t1, t2) *)
 
 let rec pp atomic it : PPrint.document = 
 
