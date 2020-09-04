@@ -22,7 +22,6 @@ open Result
 open LogicalConstraints
 open CF.Mucore
 
-type lc = LC.t
 
 (*** meta types ***************************************************************)
 type pattern = BT.t CF.Mucore.mu_pattern
@@ -1117,8 +1116,6 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        let* (NoReturn.False, local) = calltyp_lt loc {local;global} args lt in
        let* () = all_empty loc local in
        return False
-    | M_Efinish ->
-       return False
     | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
     | M_Eif _ -> fail loc (unreachable !^"Eif in inferring position")
     | M_Elet (p, e1, e2) ->
@@ -1310,20 +1307,33 @@ let check_procedure (loc: Loc.t)
     else fail loc (Mismatch {has = (Base rbt); expect = Base sbt})
   in
   let label_defs = 
-    Pmap.map (fun (lt,args,body,annots) -> 
-        (LT.subst_vars substs lt,args,body,annots)) label_defs in
+    Pmap.map (function
+        | M_Return lt -> 
+           M_Return (LT.subst_vars substs lt)
+        | M_Label (lt,args,body,annots) -> 
+           M_Label (LT.subst_vars substs lt,args,body,annots)
+      ) label_defs 
+  in
   let labels = 
-    Pmap.fold (fun sym (lt,_,_,_) acc -> SymMap.add sym lt acc)
-      label_defs SymMap.empty in
-  let check_label lsym (lt,args,body,annots) () = 
-    let* () = dprintM 1 hardline in
-    let* () = dprintM 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
-    let* () = dprintM 2 (blank 3 ^^ item "against" (LT.pp lt)) in
-    let* (rt,local,_,_) = CBF_LT.check_and_bind_arguments loc args lt in
-    let* local = check_expr loc {local = pure_local ++ local;labels;global} body False in
-    (* let* () = dprintM 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
-    let* () = dprintM 1 (!^(greenb "...label checked ok")) in
-    return ()
+    Pmap.fold (fun sym def acc ->
+        match def with
+        | M_Return lt -> SymMap.add sym lt acc
+        | M_Label (lt,_,_,_) -> SymMap.add sym lt acc
+      ) label_defs SymMap.empty 
+  in
+  let check_label lsym def () = 
+    match def with
+    | M_Return lt ->
+       return ()
+    | M_Label (lt,args,body,annots) ->
+       let* () = dprintM 1 hardline in
+       let* () = dprintM 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
+       let* () = dprintM 2 (blank 3 ^^ item "against" (LT.pp lt)) in
+       let* (rt,local,_,_) = CBF_LT.check_and_bind_arguments loc args lt in
+       let* local = check_expr loc {local = pure_local ++ local;labels;global} body False in
+       (* let* () = dprintM 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
+       let* () = dprintM 1 (!^(greenb "...label checked ok")) in
+       return ()
   in
   let* () = PmapM.foldM check_label label_defs () in
   let* () = dprintM 1 hardline in

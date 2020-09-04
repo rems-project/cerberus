@@ -316,8 +316,6 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
        return (M_End es)
     | M_Erun (sym,asyms) ->
        return (M_Erun (sym,asyms))
-    | M_Efinish ->
-       return M_Efinish
     (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
     (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
   in
@@ -371,24 +369,23 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
      in
      let* expr = retype_expr loc structs expr in
      let* labels = 
-       PmapM.mapM (fun lsym ((lt,args,e,annots): (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) -> 
-           let* lt = 
-             if CF.Annot.is_return annots then
-               return (Conversions.make_return_esave_spec ftyp)
-             else
-               fail loc (Generic (!^"label" ^^^ Sym.pp lsym ^^^ !^"needs an annotation"))
-               (* Conversions.make_esave_spec loc structs
-                *   (CF.Annot.get_attrs annots) lt *)
-           in
-           let* args = 
-             mapM (fun (sym,acbt) ->
-                 let* abt = Conversions.bt_of_core_base_type loc acbt in
-                 return (sym,abt)
-               ) args
-           in
-           let* e = retype_expr loc structs e in
-           return (lt,args,e,annots)
-         ) labels Symbol.symbol_compare
+       PmapM.mapM (fun lsym (def: (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) -> 
+           match def with
+           | M_Return _ ->
+              return (M_Return (Conversions.make_return_esave_spec ftyp))
+           | M_Label (_,args,e,annots) -> 
+              let* lt = 
+                fail loc (Generic (!^"label" ^^^ Sym.pp lsym ^^^ 
+                                     !^"needs an annotation")) in
+              let* args = 
+                mapM (fun (sym,acbt) ->
+                    let* abt = Conversions.bt_of_core_base_type loc acbt in
+                    return (sym,abt)
+                  ) args
+              in
+              let* e = retype_expr loc structs e in
+              return (M_Label (lt,args,e,annots))
+            ) labels Symbol.symbol_compare
      in
      return (M_Proc (loc,bt,args,expr,labels))
   | M_ProcDecl (loc,cbt,args) ->

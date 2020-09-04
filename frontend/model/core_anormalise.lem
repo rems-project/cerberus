@@ -5,7 +5,7 @@ import Symbol
 
 open import Core
 open import Mucore Annot
-     import Annot Core_typing Core_typing_aux Maybe_extra
+     import Annot Core_typing Core_typing_aux 
 
 (* The a-normalisation should happen after some partial evaluation and
    rewrites that remove expressions passing ctypes and function
@@ -858,15 +858,11 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
     (match d with
      | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
      | Proc loc bt args e -> 
-        let saves' = 
-          Map.mapi (fun _label ((_,params,body,annots) : Core_aux.m_labeled_continuation 'a) ->
-              let body = 
-                if is_return annots 
-                then M_Expr annots M_Efinish
-                else normalise_expr body
-              in
-              let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
-              (((), params, body, annots) : mu_label_def lt ct bt unit)
+        let saves' =
+          Map.map (fun (_,params,body,annots) ->
+              if is_return annots then M_Return () else
+                let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
+                M_Label () params (normalise_expr body) annots
             ) (Core_aux.m_collect_saves e)
         in
         M_Proc loc bt args (normalise_expr e) saves'

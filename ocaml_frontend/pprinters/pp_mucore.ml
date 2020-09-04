@@ -186,7 +186,6 @@ let rec precedence_expr = function
   | M_Ebound _
   | M_End _
   | M_Erun _
-  | M_Efinish
   (* | M_Epar _ *)
   (* | M_Ewait _ -> *)
     -> 
@@ -749,8 +748,6 @@ let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
          *     P.nest 2 (P.break 1 ^^ pp e) *)
         | M_Erun (sym, pes) ->
             pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
-        | M_Efinish ->
-            pp_keyword "finish"
         (* | M_Epar es ->
          *     pp_keyword "par" ^^ P.parens (comma_list pp es) *)
         (* | M_Ewait tid ->
@@ -853,18 +850,26 @@ let pp_fun_map budget funs =
           P.hardline ^^
           P.nest 2 (
               (* pp label definitions *)
-            (Pmap.fold (fun sym (lt,args,lbody,annots) acc ->
-                 acc ^^
-                   begin
-                     begin match pp_lt with
-                     | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
-                     | None -> P.empty
-                     end ^^
-                       (* label core function definition *)
-                    P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
-                      P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
-                       (P.nest 2 (P.break 1 ^^ pp_expr budget lbody)) ^^ P.hardline
-                   end
+            (Pmap.fold (fun sym def acc ->
+                 match def with
+                 | M_Return lt -> 
+                    P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ 
+                      begin match pp_lt with
+                      | Some pp_lt -> P.colon ^^^ pp_lt lt
+                      | None -> P.empty
+                      end
+                 | M_Label (lt, args, lbody, annots) ->
+                    acc ^^
+                      begin
+                        begin match pp_lt with
+                        | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
+                        | None -> P.empty
+                        end ^^
+                          (* label core function definition *)
+                       P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
+                         P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
+                          (P.nest 2 (P.break 1 ^^ pp_expr budget lbody)) ^^ P.hardline
+                      end
                ) labels P.empty
             ) 
             ^^ 

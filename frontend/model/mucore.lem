@@ -197,7 +197,6 @@ type mu_expr_ 'DCTY 'DBTY 'bty =  (* (effectful) expression *)
  | M_Ebound of nat * (mu_expr 'DCTY 'DBTY 'bty) (* $\ldots$and boundary *)
  | M_End of list (mu_expr 'DCTY 'DBTY 'bty) (* nondeterministic choice *)
  | M_Erun of symbol * list (asym 'bty) (* run from label *)
- | M_Efinish
  (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
  (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
 
@@ -220,10 +219,14 @@ type mu_impl 'DCTY 'DBTY 'bty =
   map Implementation.implementation_constant (mu_impl_decl 'DCTY 'DBTY 'bty)
 
 type mu_label_def 'DLTY 'DCTY 'DBTY 'bty = 
-  'DLTY * (list (symbol * 'DBTY)) * mu_expr 'DCTY 'DBTY 'bty * list annot
+  | M_Return of 'DLTY
+  | M_Label of 'DLTY * (list (symbol * 'DBTY)) * mu_expr 'DCTY 'DBTY 'bty * list annot
 
 type mu_label_defs 'DLTY 'DCTY 'DBTY 'bty =
   map symbol (mu_label_def 'DLTY 'DCTY 'DBTY 'bty)
+
+(* type mu_return_def 'DLTY = 
+ *   M_Return of symbol * 'DLTY *)
 
 type mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty =
   | M_Fun of 'DBTY * list (symbol * 'DBTY) * mu_pexpr 'DCTY 'DBTY 'bty
