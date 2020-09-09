@@ -1148,7 +1148,6 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
   let* () = dprintM 1 PPrint.empty in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  let* () = ensure_reachable loc {local;global} in
   match e_ with
   | M_Eif (A (a,_,csym), e1, e2) ->
      let* (cbt,clname) = get_a (Loc.update loc a) csym local in
