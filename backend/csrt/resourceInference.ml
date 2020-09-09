@@ -98,7 +98,7 @@ let load_point loc {local;global} pointer size bt path is_field =
        return pointee
   in
   let* vbt = IndexTermTyping.infer_index_term loc {local;global} pointee in
-  let* () = if BT.equal vbt (Base bt) then return () 
+  let* () = if LS.equal vbt (Base bt) then return () 
             else fail loc (Mismatch {has=vbt; expect=Base bt}) in
   return [LC (IT.EQ (path, pointee))]
   

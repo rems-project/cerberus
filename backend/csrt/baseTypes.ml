@@ -27,7 +27,25 @@ let is_struct = function
   | _ -> None
 
 (* TODO *)
-let equal t1 t2 = t1 = t2
+let rec equal t1 t2 = 
+  match t1, t2 with
+  | Unit, Unit -> true
+  | Bool, Bool -> true
+  | Int, Int -> true
+  | Loc, Loc -> true
+  | Array, Array -> true
+  | List t1', List t2' -> equal t1' t2'
+  | Tuple ts1', Tuple ts2' -> equals ts1' ts2'
+  | Struct (Tag tag1), Struct (Tag tag2) -> Sym.equal tag1 tag2
+  | FunctionPointer s1, FunctionPointer s2 -> Sym.equal s1 s2
+  | _, _ -> false
+
+and equals ts1 ts2 = 
+  match ts1, ts2 with
+  | [], [] -> true
+  | t1::ts1', t2::ts2' -> equal t1 t2 && equals ts1' ts2'
+  | _, _ -> false
+
 
 let equals ts1 ts2 = 
   List.length ts1 = List.length ts2 &&

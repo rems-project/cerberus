@@ -5,6 +5,27 @@
  (public_name csrt)
  (package csrt)
  (flags (:standard -w -27))
- (preprocess future_syntax)
+ (preprocess 
+   (per_module 
+     ((action (run pa_ocaml %{input-file})) rc_annot)
+     (future_syntax 
+        check 
+        conversions 
+        indexTermTyping 
+        indexTerms 
+        listM 
+        local 
+        memory 
+        option 
+        pmapM 
+        preProcess 
+        process 
+        resourceInference 
+        resources resultat 
+        solver 
+        symMapM
+     )
+   )
+ )
  (libraries cmdliner str unix stdlib-shims result
   cerb_frontend cerb_backend mem_concrete util))

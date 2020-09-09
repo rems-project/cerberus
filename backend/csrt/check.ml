@@ -71,7 +71,7 @@ let bind_logically (rt: RT.t) : (L.t * (BT.t * Sym.t)) m =
 (*** pattern matching *********************************************************)
 
 let check_logical_sort (loc: Loc.t) (has: LS.t) (expect: LS.t) : unit m =
-  if BT.equal has expect then return () else fail loc (Mismatch {has; expect})
+  if LS.equal has expect then return () else fail loc (Mismatch {has; expect})
 
 let check_base_type (loc: Loc.t) (has: BT.t) (expect: BT.t) : unit m =
   check_logical_sort loc (LS.Base has) (LS.Base expect)
@@ -634,7 +634,7 @@ let non_false (aofs: ('a or_false) list) : 'a list =
 (* merging information after control-flow join points  *)
 
 let merge_return_types loc (LC c,rt) (LC c2,rt2) = 
-  let* () = dprintM 1 (action "merging environments at control-flow join point") in
+  let* () = dprintM 1 (action "merging return types at control-flow join point") in
   let RT.Computational ((lname,bt),lrt) = rt in
   let RT.Computational ((lname2,bt2),lrt2) = rt2 in
   let* () = check_base_type loc bt2 bt in

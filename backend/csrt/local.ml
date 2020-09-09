@@ -31,16 +31,30 @@ let concat (Local local') (Local local) = Local (local' @ local)
 
 
 
+let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
+  | Binding (sym,binding) -> 
+     VB.pp ~print_all_names ~print_used (sym,binding)
+  | Marker sym -> 
+     fancystring (Colour.ansi_format [Blue] "\u{25CF}") 2 ^^ parens (Sym.pp sym)
+
+let pp ?(print_all_names = false) ?(print_used = false) (Local local) = 
+  match local with
+  | [] -> !^"(empty)"
+  | _ -> flow_map (comma ^^ break 1) 
+           (pp_context_item ~print_all_names ~print_used) 
+           (rev local)
+
+
 
 
 
 
 let wanted_but_found loc wanted found = 
   let err = match wanted with
-  | `Computational -> !^"wanted computational variable but found" ^^^ VB.pp true found
-  | `Logical -> !^"wanted logical variable but found" ^^^ VB.pp true found
-  | `Resource -> !^"wanted resource variable but found" ^^^ VB.pp true found
-  | `Constraint -> !^"wanted resource variable but found" ^^^ VB.pp true found
+  | `Computational -> !^"wanted computational variable but found" ^^^ VB.pp found
+  | `Logical -> !^"wanted logical variable but found" ^^^ VB.pp found
+  | `Resource -> !^"wanted resource variable but found" ^^^ VB.pp found
+  | `Constraint -> !^"wanted resource variable but found" ^^^ VB.pp found
   in
   fail loc (unreachable err)
 
@@ -109,46 +123,67 @@ let is_bound sym (Local local) =
 
 
 let merge loc (Local l1) (Local l2) =
-  let incompatible = unreachable !^"trying to merge incompatible environments" in
+  let incompatible hint msymbols = 
+    let symbols_hint = match msymbols with
+      | Some (s1,s2) -> space ^^ parens (Sym.pp s1 ^^ slash ^^ Sym.pp s2)
+      | None -> Pp.empty
+    in
+    unreachable (!^"trying to merge incompatible environments" ^^^ 
+                   hint ^^ symbols_hint ^/^
+                   (pp ~print_used:true ~print_all_names:true (Local l1)) ^^ 
+                   hardline ^^ !^"and" ^^ hardline ^^ 
+                   (pp ~print_used:true ~print_all_names:true (Local l2)))
+  in
   let rec aux l1 l2 = 
     match l1, l2 with
     | [], [] -> return []
     | i1::l1, i2::l2 ->
        let* i = match i1, i2 with
-         | Marker sym, Marker sym' when Sym.equal sym sym' -> 
-            return (Marker sym)
-         | Binding (s1,vb1), Binding(s2,vb2) when Sym.equal s1 s2 ->
+         | Marker s1, Marker s2 ->
+            if Sym.equal s1 s2 
+            then return (Marker s1)
+            else fail loc (incompatible !^"marker name mismatch" (Some (s1,s2)))
+         | Binding (s1,vb1), Binding(s2,vb2) ->
+            let* () = if Sym.equal s1 s2 then return () 
+                      else fail loc (incompatible !^"binding name mismatch" (Some (s1,s2)))
+            in
             let* vb = match vb1, vb2 with
-              | VB.Computational (sl1,bt1), VB.Computational (sl2,bt2) 
-                   when Sym.equal sl1 sl2 && BT.equal bt1 bt2 ->
-                 return (VB.Computational (sl1,bt1))
-              | VB.Logical ls1, VB.Logical ls2  
-                   when LS.equal ls1 ls2 ->
-                 return (VB.Logical ls1)
-              | VB.Resource re1, VB.Resource re2 
-                   when RE.equal re1 re2 -> 
-                 return (VB.Resource re1)
-              | VB.UsedResource (re1,where1), VB.UsedResource (re2,where2) 
-                   when RE.equal re1 re2 ->
-                 return (VB.UsedResource (re1,where1@where2))
-              | VB.Constraint lc1, VB.Constraint lc2 
-                   when LC.equal lc1 lc2 ->
-                 return (VB.Constraint lc1)
+              | VB.Computational (sl1,bt1), VB.Computational (sl2,bt2) ->
+                 if Sym.equal sl1 sl2 && BT.equal bt1 bt2 
+                 then return (VB.Computational (sl1,bt1))
+                 else fail loc (incompatible !^"computational variable mismatch" (Some (s1,s2)))
+              | VB.Logical ls1, VB.Logical ls2 ->
+                 if LS.equal ls1 ls2 
+                 then return (VB.Logical ls1)
+                 else fail loc (incompatible !^"logical variable mismatch" (Some (s1,s2)))
+              | VB.Resource re1, VB.Resource re2 ->
+                 if RE.equal re1 re2 
+                 then return (VB.Resource re1)
+                 else fail loc (incompatible !^"resource mismatch" (Some (s1,s2)))
+              | VB.UsedResource (re1,where1), VB.UsedResource (re2,where2) ->
+                 if RE.equal re1 re2
+                 then return (VB.UsedResource (re1,where1@where2))
+                 else fail loc (incompatible !^"used resource mismatch" (Some (s1,s2)))
+              | VB.Constraint lc1, VB.Constraint lc2 ->
+                 if LC.equal lc1 lc2 
+                 then return (VB.Constraint lc1)
+                 else fail loc (incompatible !^"constraint mismatch" (Some (s1,s2)))
               | VB.Resource re, VB.UsedResource (used_re,where) 
               | VB.UsedResource (used_re,where), VB.Resource re
                    when RE.equal used_re re ->
                  fail loc (Unused_resource {resource=re;is_merge=true})
-              | _ -> 
-                 fail loc incompatible
+              | _ ->
+                 fail loc (incompatible !^"variable binding kind mismatch" (Some (s1,s2)))
             in
             return (Binding (s1,vb))
-         | _ -> 
-            fail loc incompatible
+         | Marker s1, Binding (s2,_)
+         | Binding (s1,_), Marker s2 ->
+            fail loc (incompatible !^"marker/binding mismatch" (Some (s1, s2)))
        in
        let* l = aux l1 l2 in
        return (i :: l)
     | _, _ -> 
-       fail loc incompatible
+       fail loc (incompatible !^"length mismatch" None)
   in
   let* l = aux l1 l2 in
   return (Local l)
@@ -163,17 +198,6 @@ let mR sym re = (sym, VB.Resource re)
 let mC sym lc = (sym, VB.Constraint lc)
 let mUR re = mR (Sym.fresh ()) re
 let mUC lc = mC (Sym.fresh ()) lc
-
-
-let pp_context_item print_used = function
-  | Binding (sym,binding) -> VB.pp print_used (sym,binding)
-  | Marker sym -> 
-     fancystring (Colour.ansi_format [Blue] "\u{25CF}") 2 ^^ parens (Sym.pp sym)
-
-let pp (Local local) = 
-  match local with
-  | [] -> !^"(empty)"
-  | _ -> flow_map (comma ^^ break 1) (pp_context_item false) (rev local)
 
 
 

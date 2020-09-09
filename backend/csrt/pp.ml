@@ -64,6 +64,6 @@ let pp_num n = !^(Nat_big_num.to_string n)
 
 let print pp = CB.Pipeline.run_pp None (pp ^^ hardline)
 let error pp = print (hardline ^^ hardline ^^ !^(redb "[!] Error") ^/^ pp ^^ hardline)
-let warn pp = print (hardline ^^ hardline ^^ !^(yellowb "[!] Error") ^/^ pp ^^ hardline)
+let warn pp = print (hardline ^^ hardline ^^ !^(yellowb "[!] Warning:") ^^^ pp)
 
 let dprint print_level pp = if !debug_level >= print_level then print pp else ()

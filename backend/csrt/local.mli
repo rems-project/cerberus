@@ -46,7 +46,7 @@ val mC : Sym.t -> LC.t -> binding
 val mUR : RE.t -> binding
 val mUC : LC.t -> binding
 
-val pp : t -> Pp.document
+val pp : ?print_all_names:bool -> ?print_used:bool -> t -> Pp.document
 
 val get_a : Loc.t -> Sym.t -> t -> (BT.t * Sym.t) m
 val get_l : Loc.t -> Sym.t -> t -> LS.t m

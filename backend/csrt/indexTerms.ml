@@ -373,13 +373,14 @@ let rec equal it it' =
   | Exp (t1,t2), Exp (t1',t2')
   | Rem_t (t1,t2), Rem_t (t1',t2')
   | Rem_f (t1,t2), Rem_f (t1',t2') 
-    -> equal t1 t2 && equal t1' t2' 
+    -> equal t1 t1' && equal t2 t2' 
 
   | EQ (t1,t2), EQ (t1',t2')
   | NE (t1,t2), NE (t1',t2')
   | LT (t1,t2), LT (t1',t2')
   | GT (t1,t2), GT (t1',t2')
   | LE (t1,t2), LE (t1',t2')
+
   | GE (t1,t2), GE (t1',t2') 
     -> equal t1 t1' && equal t2 t2' 
 
@@ -420,6 +421,7 @@ let rec equal it it' =
 
   | _ -> 
      false
+
 
 and equal_list its its' =
   for_all (fun (t1,t2) -> equal t1 t2) (combine its its')

@@ -1,6 +1,7 @@
 open List
 module Loc=Locations
 module SymSet = Set.Make(Sym)
+module BT = BaseTypes
 (* open PPrint *)
 (* open Pp_tools *)
 
@@ -15,7 +16,8 @@ type t =
 let pp atomic = function
   | Base bt -> BaseTypes.pp atomic bt
 
-let equal t1 t2 = t1 = t2
+let equal (Base t1) (Base t2) = 
+  BT.equal t1 t2
 
 let equals ts1 ts2 = 
   List.length ts1 = List.length ts2 &&
