@@ -1,13 +1,16 @@
-include Stdlib.Result
+include Result
 
 
-
-type ('a,'e) t = ('a,'e) result
-
-let return : 'a -> ('a,'e) t = ok
+let return (a: 'a) : ('a,'e) t = 
+  Ok a
 
 let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * 'e) t = 
-  error (loc,e)
+  Error (loc,e)
+
+let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
+  match m with
+  | Ok a -> f a
+  | Error e -> Error e
 
 let (let*) = bind
 

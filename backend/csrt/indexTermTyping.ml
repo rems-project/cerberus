@@ -3,7 +3,7 @@ module IT = IndexTerms
 module Loc = Locations
 module BT = BaseTypes
 module LS = LogicalSorts
-open Result
+open Resultat
 open BT
 open LS
 open TypeErrors

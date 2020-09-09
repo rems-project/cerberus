@@ -1,4 +1,4 @@
-open Result
+open Resultat
 
 module BT = BaseTypes
 module LS = LogicalSorts

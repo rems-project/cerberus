@@ -1,4 +1,4 @@
-open Result
+open Resultat
 open List
 
 let rec mapM (f: 'a -> ('b,'e) result) (l: 'a list) : ('b list, 'e) result = 

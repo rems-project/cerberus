@@ -1,5 +1,5 @@
 (* open Pp *)
-open Result
+open Resultat
 module CF=Cerb_frontend
 module Symbol=CF.Symbol
 module Loc=Locations

@@ -3,7 +3,7 @@
  (public_name cerberus)
  (package cerberus)
  (modules main)
- (libraries cmdliner str unix
+ (libraries result cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util))
 
 (executable
@@ -11,7 +11,7 @@
  (public_name cerberus-symbolic)
  (package cerberus)
  (modules main_symbolic)
- (libraries cmdliner str unix
+ (libraries result cmdliner str unix
   cerb_frontend cerb_backend mem_symbolic util))
 
 (rule

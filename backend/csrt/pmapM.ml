@@ -1,4 +1,4 @@
-open Result
+open Resultat
 
 let foldM 
       (f : 'k -> 'x -> 'y -> ('y,'e) t)

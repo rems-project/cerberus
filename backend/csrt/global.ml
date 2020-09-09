@@ -1,5 +1,5 @@
 open Pp
-open Result
+open Resultat
 open List
 open TypeErrors
 

@@ -12,7 +12,7 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   | f :: fs -> f (comps fs a)
 
 
-open Result
+open Resultat
 
 let at_most_one loc err_str = function
   | [] -> return None

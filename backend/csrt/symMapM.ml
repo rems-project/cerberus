@@ -1,4 +1,4 @@
-open Result
+open Resultat
 module Loc = Locations
 
 let lookup (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =

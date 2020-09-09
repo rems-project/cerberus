@@ -1,5 +1,5 @@
 open Global
-open Result
+open Resultat
 open List
 open Pp
 open TypeErrors

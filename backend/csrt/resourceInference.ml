@@ -2,7 +2,7 @@ module Loc = Locations
 module RE = Resources
 module IT = IndexTerms
 open Environment
-open Result
+open Resultat
 open RE
 open TypeErrors
 open Pp
@@ -88,7 +88,6 @@ open LogicalConstraints
 module RT = ReturnTypes
 
 let load_point loc {local;global} pointer size bt path is_field = 
-  let open Result in
   let* o_resource = points_to loc {local;global} pointer size in
   let* pointee = match o_resource, is_field with
     | None, false -> fail loc (Generic !^"missing ownership of load location")

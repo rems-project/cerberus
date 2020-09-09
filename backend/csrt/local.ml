@@ -1,6 +1,6 @@
 open Pp
 open List
-open Result
+open Resultat
 open TypeErrors
 
 module BT = BaseTypes

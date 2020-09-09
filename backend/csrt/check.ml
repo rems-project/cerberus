@@ -18,7 +18,7 @@ open TypeErrors
 open Environment
 open Local
 open Pp
-open Result
+open Resultat
 open LogicalConstraints
 open CF.Mucore
 
