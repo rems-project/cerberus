@@ -84,11 +84,19 @@ let instantiate_struct_member subst resource =
 
 
 let equal t1 t2 = 
-  t1 = t2
-
-let equals ts1 ts2 = 
-  List.length ts1 = List.length ts2 &&
-  for_all (fun (t1,t2) -> equal t1 t2) (combine ts1 ts2)
+  match t1, t2 with
+  | Points p1, Points p2 ->
+     IT.equal p1.pointer p2.pointer &&
+     Option.equal IT.equal p1.pointee p2.pointee &&
+     Num.equal p1.size p2.size
+  | StoredStruct s1, StoredStruct s2 ->
+     IT.equal s1.pointer s2.pointer &&
+     BT.tag_equal s1.tag s2.tag &&
+     Num.equal s1.size s2.size &&
+     List.equal (fun (member,it) (member',it') -> 
+         member = member' && IT.equal it it'
+       ) s1.members s2.members
+  | _, _ -> false
 
 
 let pointer = function

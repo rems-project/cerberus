@@ -390,14 +390,14 @@ let rec equal it it' =
 
   | And ts, And ts'
   | Or ts, Or ts'
-    -> equal_list ts ts'
+    -> List.equal equal ts ts'
 
   | Null t, Null t'
   | Not t, Not t' 
     -> equal t t' 
 
   | Tuple its, Tuple its' 
-    -> equal_list its its'
+    -> List.equal equal its its'
   | Nth (n,t), Nth (n',t') 
     -> n = n' && equal t t' 
 
@@ -410,7 +410,7 @@ let rec equal it it' =
   | Cons (t1,t2), Cons (t1',t2') 
     -> equal t1 t1' && equal t2 t2'
   | List (its,bt), List (its',bt') 
-    -> equal_list its its' && BT.equal bt bt'
+    -> List.equal equal its its' && BT.equal bt bt'
 
   | Head t, Head t'
   | Tail t, Tail t'
@@ -421,7 +421,3 @@ let rec equal it it' =
 
   | _ -> 
      false
-
-
-and equal_list its its' =
-  for_all (fun (t1,t2) -> equal t1 t2) (combine its its')

@@ -1,4 +1,3 @@
-open List
 open Pp
 module Loc=Locations
 
@@ -6,8 +5,8 @@ module Loc=Locations
 type tag = Tag of Sym.t
 type member = Member of string
 
-let pp_tag (Tag s) = 
-  Sym.pp s
+let pp_tag (Tag s) = Sym.pp s
+let tag_equal (Tag s) (Tag s') = Sym.equal s s'
 
 
 type t =
@@ -35,21 +34,10 @@ let rec equal t1 t2 =
   | Loc, Loc -> true
   | Array, Array -> true
   | List t1', List t2' -> equal t1' t2'
-  | Tuple ts1', Tuple ts2' -> equals ts1' ts2'
-  | Struct (Tag tag1), Struct (Tag tag2) -> Sym.equal tag1 tag2
+  | Tuple ts1', Tuple ts2' -> List.equal equal ts1' ts2'
+  | Struct t1, Struct t2 -> tag_equal t1 t2
   | FunctionPointer s1, FunctionPointer s2 -> Sym.equal s1 s2
   | _, _ -> false
-
-and equals ts1 ts2 = 
-  match ts1, ts2 with
-  | [], [] -> true
-  | t1::ts1', t2::ts2' -> equal t1 t2 && equals ts1' ts2'
-  | _, _ -> false
-
-
-let equals ts1 ts2 = 
-  List.length ts1 = List.length ts2 &&
-  for_all (fun (t1,t2) -> equal t1 t2) (combine ts1 ts2)
 
 let rec pp atomic = 
   let mparens pped = if atomic then parens pped else pped in

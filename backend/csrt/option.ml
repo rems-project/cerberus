@@ -22,4 +22,10 @@ let bind (a: 'a m) (f: 'a -> 'b m) : 'b m =
   | None -> None
 
 
+let equal equality oa oa' = 
+  match oa, oa' with
+  | Some a, Some a' -> equality a a'
+  | None, None -> true
+  | _, _ -> false
+
 let (let*) = bind

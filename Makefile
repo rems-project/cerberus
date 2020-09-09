@@ -58,6 +58,7 @@ rustic: prelude-src
 csrt: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build cerberus.install csrt.install
+	@echo "\nDONE"
 
 
 # .PHONY: cerberus-ocaml ocaml

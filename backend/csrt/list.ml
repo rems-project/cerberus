@@ -13,3 +13,8 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | Some y -> y :: filter_map f xs
 
 
+let rec equal (equality : 'a -> 'a -> bool) (xs : 'a list) (xs' : 'a list) : bool = 
+  match xs, xs' with
+  | [], [] -> true
+  | x::xs, x'::xs' -> equality x x' && equal equality xs xs'
+  | _, _ -> false
