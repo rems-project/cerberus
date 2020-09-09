@@ -37,8 +37,7 @@ module type PP_Typ = sig
   val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
 end
 
-module type CONFIG =
-sig
+module type CONFIG = sig
   val show_std: bool
   val show_include: bool
   val show_locations: bool
@@ -46,16 +45,15 @@ sig
   val handle_uid: string -> P.range -> unit
 end
 
-module type PP_CORE =
-sig
+module type PP_CORE = sig
 
-  type base_type
+  type bt
   type ct
   type ft
   type lt
 
-  val pp_base_type: 
-    base_type -> 
+  val pp_bt: 
+    bt -> 
     PPrint.document
 
   val pp_object_value: 
@@ -63,36 +61,36 @@ sig
     PPrint.document
 
   val pp_value: 
-    (ct,base_type,'bty) mu_value -> 
+    (ct,bt,'bty) mu_value -> 
     PPrint.document
 
   val pp_params: 
-    (Symbol.sym * base_type) list -> 
+    (Symbol.sym * bt) list -> 
     PPrint.document
 
   val pp_pexpr: 
     budget -> 
-    (ct,base_type,'ty) mu_pexpr -> 
+    (ct,bt,'ty) mu_pexpr -> 
     PPrint.document
 
   val pp_expr: 
     budget -> 
-    (ct,base_type,'ty) mu_expr -> 
+    (ct,bt,'ty) mu_expr -> 
     PPrint.document
+    
+  val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
 
   val pp_file: 
     budget -> 
-    (ct mu_funinfo_type,
+    (ft,
      lt,
      ct,
-     base_type,
+     bt,
      ct mu_struct_def,
      ct mu_union_def,
      'ty) mu_file -> 
     PPrint.document
-    
-  val pp_funinfo: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * ct * (Symbol.sym option * ct) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * ct * (Symbol.sym option * ct) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: (ct,'a) mu_action_ -> PPrint.document
@@ -112,8 +110,12 @@ let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_
 
 
 
-module Make (Config: CONFIG) (Pp_typ: PP_Typ) =
-struct
+module Make (Config: CONFIG) (Pp_typ: PP_Typ) 
+       : PP_CORE with type bt = Pp_typ.bt 
+                  and type ct = Pp_typ.ct
+                  and type lt = Pp_typ.lt
+                  and type ft = Pp_typ.ft
+  = struct
 
 open Config
 
@@ -1028,14 +1030,14 @@ module Pp_standard_typ = (struct
   let pp_funinfo finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
     Pmap.fold (fun sym (M_funinfo (_, _, (ret_ty, params), is_variadic, has_proto)) acc ->
-        acc ^^ pp_raw_symbol sym ^^ P.colon
+        acc ^^ pp_symbol sym ^^ P.colon
         ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^ P.hardline) finfos P.empty
     
   let pp_funinfo_with_attributes finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
     Pmap.fold (fun sym (M_funinfo (loc, attrs, (ret_ty, params), is_variadic, has_proto)) acc ->
-        acc ^^ pp_raw_symbol sym ^^ P.colon
+        acc ^^ pp_symbol sym ^^ P.colon
         ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
         ^^ P.hardline) finfos P.empty

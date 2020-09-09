@@ -27,8 +27,7 @@ let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
      else !^"R" ^^^ parens (RE.pp false re )
   | UsedResource (re,_locs) -> 
      if not print_used then underscore 
-     else if print_all_names then parens (!^"R" ^^^ (typ (Sym.pp sym) (!^"used" ^^^ RE.pp false re)
-))
+     else if print_all_names then parens (!^"R" ^^^ (typ (Sym.pp sym) (!^"used" ^^^ RE.pp false re)))
      else parens (!^"R used" ^^^ RE.pp false re) 
   | Constraint lc -> 
      if print_all_names 
