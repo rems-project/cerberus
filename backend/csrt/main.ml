@@ -1,7 +1,6 @@
 module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
-open Setup
 
 module CA=CF.Core_anormalise
 
@@ -22,6 +21,68 @@ type mu_file = (CA.ft,
 type file = 
   | CORE of core_file
   | MUCORE of mu_file
+
+
+
+
+
+
+
+let cpp_str =
+    "cc -E -C -Werror -nostdinc -undef -D__cerb__"
+    ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
+    ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
+    ^ " -DDEBUG"
+
+let io =
+  { pass_message = begin
+        let ref = ref 0 in
+        fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
+                   incr ref;
+                   return ()
+      end;
+    set_progress = begin
+      fun str -> return ()
+      end;
+    run_pp = begin
+      fun opts doc -> run_pp opts doc;
+                      return ()
+      end;
+    print_endline = begin
+      fun str -> print_endline str;
+                 return ();
+      end;
+    print_debug = begin
+      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
+                      return ()
+      end;
+    warn = begin
+      fun mk_str -> Debug_ocaml.warn [] mk_str;
+                    return ()
+      end;
+  }
+
+
+let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
+
+
+
+let conf (* cpp_str *) = {
+    debug_level = 0
+  ; pprints = []
+  ; astprints = []
+  ; ppflags = []
+  ; typecheck_core = true
+  ; rewrite_core = true
+  ; sequentialise_core = true
+  ; cpp_cmd = cpp_str
+  ; cpp_stderr = true
+}
+ 
+
+
+
+
 
 
 let print_file ?(remove_path = false) filename file =
@@ -108,7 +169,7 @@ let frontend filename =
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
   load_core_stdlib () >>= fun stdlib ->
-  load_core_impl stdlib Setup.impl_name >>= fun impl ->
+  load_core_impl stdlib impl_name >>= fun impl ->
   match Filename.extension filename with
   | ".c" ->
      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->

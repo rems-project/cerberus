@@ -8,7 +8,7 @@ open ReturnTypes
 open BaseTypes
 
 module RE = Resources
-module LT = ArgumentTypes.Make(NoReturn)
+module LT = ArgumentTypes.Make(False)
 module FT = ArgumentTypes.Make(ReturnTypes)
 
 

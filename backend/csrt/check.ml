@@ -9,8 +9,8 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module RT = ReturnTypes
 module AT = ArgumentTypes
-module FT = AT.Make(RT)
-module LT = AT.Make(NoReturn)
+module FT = ArgumentTypes.Make(ReturnTypes)
+module LT = ArgumentTypes.Make(False)
 module RI = ResourceInference
 module SymSet = Set.Make(Sym)
 
@@ -164,119 +164,36 @@ let pattern_match_rt (loc: Loc.t) (pat: pattern) (rt: RT.t) : L.t m =
 
 
 
-(*** subtyping and function call typing ***************************************)
+(*** function call typing and subtyping ***************************************)
 
-(* pp auxiliaries *)
-let pp_argslocs =
-  pp_list (fun ((bt,lname),(_l:Loc.t)) -> 
-      parens (BT.pp false bt ^^^ bar ^^^ Sym.pp lname))
-
-let pp_unis (unis: (IT.t Uni.t) SymMap.t) : Pp.document = 
-  let pp_entry (sym, Uni.{resolved}) =
-    match resolved with
-    | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp true res
-    | None -> Sym.pp sym ^^^ !^"unresolved"
-  in
-  pp_list pp_entry (SymMap.bindings unis)
-
-
-let subtype (loc: Loc.t)
-            {local;global}
-            (arg: (BT.t * Sym.t) * Loc.t)
-            (rtyp: RT.t)
-            ppdescr 
-    : L.t m 
-  =
-
-  let module NRT = NormalisedReturnTypes in
-  let open NRT in
-  let rtyp = NRT.normalise rtyp in
-
-  let* () = dprintM 1 (action ppdescr) in
-  let* () = dprintM 2 (blank 3 ^^ item "value" (pp_argslocs [arg])) in
-  let* () = dprintM 2 (blank 3 ^^ item "spec" (NRT.pp rtyp)) in
-  let* () = dprintM 2 (blank 3 ^^ item "env" (L.pp local)) in
-
-  let check_computational ((abt,lname),arg_loc) (Computational ((sname,sbt),rtyp)) = 
-    if BT.equal abt sbt 
-    then return (NRT.subst_var_l {s=sname;swith=S lname} rtyp)
-    else fail loc (Mismatch {has = Base abt; expect = Base sbt})
-  in
-  let* rtyp = check_computational arg rtyp in
-
-  let rec delay_logical (unis,lspec) = function
-    | Logical ((sname,sls),rtyp) ->
-       let sym = Sym.fresh () in
-       let unis = SymMap.add sym (Uni.{ resolved = None }) unis in
-       delay_logical (unis,lspec @ [(sym,sls)]) 
-                     (NRT.subst_var_l {s=sname;swith=S sym} rtyp)
-    | R rtyp -> return ((unis,lspec), rtyp)
-  in
-  let* ((unis,lspec), rtyp) = delay_logical (SymMap.empty,[]) rtyp in
-
-  let rec infer_resources local unis = function
-    | Resource (re,rtyp) -> 
-       let* () =  match Uni.unresolved_var unis (IT.vars_in (RE.pointer re)) with
-         | Some var -> fail loc (Unconstrained_logical_variable var)
-         | _ -> return ()
-       in
-       let* matched = RI.match_concrete_resource loc {local;global} re in
-       begin match matched with
-       | None -> fail loc (Missing_resource re)
-       | Some (r,resource') ->
-          match RE.unify_non_pointer re resource' unis with
-          | None -> fail loc (Missing_resource re)
-          | Some unis ->
-             let* local = use_resource loc r [loc] local in
-             let (_,new_substs) = Uni.find_resolved local unis in
-             infer_resources local unis (NRT.subst_vars_r new_substs rtyp)
-       end
-    | C rtyp ->
-       return (local,unis,rtyp)
-  in
-  let* (local,unis,rtyp) = infer_resources local unis rtyp in
-
-  let rec check_logical unis = function
-    | (sname,sls) :: lspec ->
-       let* found = SymMapM.lookup loc unis sname in
-       begin match found with
-       | Uni.{resolved = None} -> 
-          fail loc (Unconstrained_logical_variable sname)
-       | Uni.{resolved = Some it} ->
-          let* als = IndexTermTyping.infer_index_term loc {local;global} it in
-          if LS.equal als sls then check_logical unis lspec
-          else fail loc (Mismatch {has = als; expect = sls})
-       end
-    | [] -> return ()
-  in
-  let* () = check_logical unis lspec in
-  
-  let rec check_constraints = function
-    | Constraint (c, rtyp) ->
-       let* (holds,_,_) = Solver.constraint_holds loc {local;global} c in
-       if holds then check_constraints rtyp else fail loc (Unsat_constraint c)
-    | I -> return ()
-  in
-  let* () = check_constraints rtyp in
-
-  return local
-
-
-(* calltyp is parameterised by RT_Sig, so it can be used both for
+(* Spine is parameterised by RT_Sig, so it can be used both for
    function and label types (which don't have a return type) *)
-module Calltyp (RT: AT.RT_Sig) = struct
+module Spine (RT: AT.RT_Sig) = struct
 
   module FT = AT.Make(RT)
   module NFT = NormalisedArgumentTypes.Make(RT)
 
-  let calltyp (loc: Loc.t) 
-              {local;global} 
-              (arguments: ((BT.t * Sym.t) * Loc.t) list) 
-              (ftyp: FT.t)
+  let pp_argslocs =
+    pp_list (fun ((bt,lname),(_l:Loc.t)) -> 
+        parens (BT.pp false bt ^^^ bar ^^^ Sym.pp lname))
+
+  let pp_unis (unis: (IT.t Uni.t) SymMap.t) : Pp.document = 
+    let pp_entry (sym, Uni.{resolved}) =
+      match resolved with
+      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp true res
+      | None -> Sym.pp sym ^^^ !^"unresolved"
+    in
+    pp_list pp_entry (SymMap.bindings unis)
+
+  let spine (loc: Loc.t) 
+            {local;global} 
+            (arguments: ((BT.t * Sym.t) * Loc.t) list) 
+            (ftyp: FT.t)
+            (descr: string)
       : (RT.t * L.t) m 
     =
 
-    let* () = dprintM 1 (action "calltyp") in
+    let* () = dprintM 1 (action descr) in
     let* () = dprintM 2 (blank 3 ^^ item "value" (pp_argslocs arguments)) in
     let* () = dprintM 2 (blank 3 ^^ item "spec" (FT.pp ftyp)) in
     let* () = dprintM 2 (blank 3 ^^ item "env" (L.pp local)) in
@@ -360,11 +277,24 @@ module Calltyp (RT: AT.RT_Sig) = struct
 
 end
 
-module Calltyp_FT = Calltyp(RT)
-module Calltyp_LT = Calltyp(NoReturn)
+module Spine_FT = Spine(ReturnTypes)
+module Spine_LT = Spine(False)
 
-let calltyp_ft = Calltyp_FT.calltyp
-let calltyp_lt = Calltyp_LT.calltyp
+
+let calltype_ft loc {local;global} args (ftyp: FT.t) : (RT.t * L.t) m =
+  Spine_FT.spine loc {local;global} args ftyp "function call type"
+
+let calltype_lt loc {local;global} args (ltyp: LT.t) : (False.t * L.t) m =
+  Spine_LT.spine loc {local;global} args ltyp "label call type"
+
+(* The "subtyping" judgment needs the same resource/lvar/constraint
+   inference as the spine judgment. So implement the subtyping
+   judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
+let subtype (loc: Loc.t) {local;global} arg (rtyp: RT.t) : L.t m =
+  let* (False, local) = Spine_LT.spine loc {local;global} [arg] 
+                          (Conversions.rt_to_lt rtyp) "subtype" in
+  return local
+  
 
 
 (*** pure value inference *****************************************************)
@@ -813,7 +743,7 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
             return t
        in
        let* args = asyms_to_args loc local asyms in
-       let* (rt, local) = calltyp_ft loc {local;global} args decl_typ in
+       let* (rt, local) = calltype_ft loc {local;global} args decl_typ in
        return (Normal (rt, local))
     | M_PElet (p, e1, e2) ->
        let*!!! (rt, local) = infer_pexpr loc {local;global} e1 in
@@ -903,18 +833,13 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
      let*!!! (rt, local) = infer_pexpr_raw loc {local;global} e in
      let* (local',(abt,lname)) = bind_logically rt in
      let local = local' ++ local in
-     let* local = subtype loc {local;global} ((abt,lname),loc)
-                  typ "function return type" in
+     let* local = subtype loc {local;global} ((abt,lname),loc) typ in
      let* local = pop_empty mark loc local in
      return (Normal local)
 
 
 
 (*** impure expression inference **********************************************)
-
-
-
-
 
 
 (* type inference of impure expressions; returns either a return type
@@ -1090,7 +1015,7 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        in
        let* (_loc,decl_typ) = G.get_fun_decl loc global fun_sym in
        let* args = asyms_to_args loc local asyms in
-       let* (rt,local) = calltyp_ft loc {local;global} args decl_typ in
+       let* (rt,local) = calltype_ft loc {local;global} args decl_typ in
        return (Normal (rt, local))
     | M_Eproc (fname, asyms) ->
        let* decl_typ = match fname with
@@ -1101,7 +1026,7 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
             return decl_typ
        in
        let* args = asyms_to_args loc local asyms in
-       let* (rt, local) = calltyp_ft loc {local;global} args decl_typ in
+       let* (rt, local) = calltype_ft loc {local;global} args decl_typ in
        return (Normal (rt, local))
     | M_Ebound (n, e) ->
        infer_expr_raw loc {local;labels;global} e
@@ -1113,7 +1038,7 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        | Some lt -> return lt
        in
        let* args = asyms_to_args loc local asyms in
-       let* (NoReturn.False, local) = calltyp_lt loc {local;global} args lt in
+       let* (False, local) = calltype_lt loc {local;global} args lt in
        let* () = all_empty loc local in
        return False
     | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
@@ -1197,7 +1122,7 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
      let local = local' ++ local in
      match typ with
      | Normal typ ->
-        let* local = subtype loc {local;global} ((abt,lname),loc) typ "function return type" in
+        let* local = subtype loc {local;global} ((abt,lname),loc) typ in
         let* local = pop_empty mark loc local in
         return (Normal local)
      | False ->
@@ -1259,8 +1184,8 @@ module CBF (RT: AT.RT_Sig) = struct
 
 end
 
-module CBF_FT = CBF(RT)
-module CBF_LT = CBF(NoReturn)
+module CBF_FT = CBF(ReturnTypes)
+module CBF_LT = CBF(False)
 
 (* check_function: type check a (pure) function *)
 let check_function (loc: Loc.t) 

@@ -6,8 +6,8 @@ open Pp
 (* open Tools *)
 module BT = BaseTypes
 module RT = ReturnTypes
-module FT = ArgumentTypes.Make(RT)
-module LT = ArgumentTypes.Make(NoReturn)
+module FT = ArgumentTypes.Make(ReturnTypes)
+module LT = ArgumentTypes.Make(False)
 open TypeErrors
 open IndexTerms
 open BaseTypes
@@ -145,16 +145,16 @@ let explode_struct_in_binding loc global (Tag tag) logical_struct binding =
 
 
 
-let rec lrt_to_at (lrt : RT.l) (rest : FT.t) : FT.t = 
+let rec lrt_to_ft (lrt : RT.l) (rest : FT.t) : FT.t = 
   match lrt with
   | RT.I -> rest
-  | RT.Logical ((name, t), args) -> FT.Logical ((name, t), lrt_to_at args rest)
-  | RT.Resource (t, args) -> FT.Resource (t, lrt_to_at args rest)
-  | RT.Constraint (t, args) -> FT.Constraint (t, lrt_to_at args rest)
+  | RT.Logical ((name, t), args) -> FT.Logical ((name, t), lrt_to_ft args rest)
+  | RT.Resource (t, args) -> FT.Resource (t, lrt_to_ft args rest)
+  | RT.Constraint (t, args) -> FT.Constraint (t, lrt_to_ft args rest)
 
-let rt_to_at rt rest = 
+let rt_to_ft rt rest = 
   let (RT.Computational ((name, t), lrt)) = rt in
-  FT.Computational ((name, t), lrt_to_at lrt rest)
+  FT.Computational ((name, t), lrt_to_ft lrt rest)
 
 
 let rec lrt_to_lt (lrt : RT.l) : LT.t = 
@@ -324,7 +324,7 @@ let make_fun_arg_type lift struct_decls asym loc ct =
 
   let* ((abt,arg),(_,ret)) = aux false (asym, Sym.fresh_pretty "return") ct in
   
-  let ftt = lrt_to_at arg in
+  let ftt = lrt_to_ft arg in
   let arg = Tools.comp (FT.mComputational asym abt) ftt in
   return ((arg : FT.t -> FT.t),(ret : RT.l))
 

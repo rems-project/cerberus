@@ -3,7 +3,7 @@ module RE = Resources
 module RT = ReturnTypes
 module AT = ArgumentTypes
 module FT = AT.Make(RT)
-module LT = AT.Make(NoReturn)
+module LT = AT.Make(False)
 open Pp
 
 

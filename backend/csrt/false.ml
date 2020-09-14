@@ -16,6 +16,6 @@ let free_vars = function
   | False -> SymSet.empty
 
 let pp = function
-  | False -> if !unicode then !^"\u{22A5}" else !^"bot"
+  | False -> if !unicode then !^"\u{22A5}" else !^"false"
 
 

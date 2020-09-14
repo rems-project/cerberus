@@ -1,4 +1,4 @@
-module LT = ArgumentTypes.Make(NoReturn)
+module LT = ArgumentTypes.Make(False)
 
 
 type labels = LT.t SymMap.t

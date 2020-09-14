@@ -4,8 +4,8 @@ module CF=Cerb_frontend
 module Symbol=CF.Symbol
 module Loc=Locations
 module RT=ReturnTypes
-module FT=ArgumentTypes.Make(RT)
-module LT=ArgumentTypes.Make(NoReturn)
+module FT=ArgumentTypes.Make(ReturnTypes)
+module LT=ArgumentTypes.Make(False)
 open CF.Mucore
 module CA=CF.Core_anormalise
 open TypeErrors
