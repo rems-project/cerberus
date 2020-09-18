@@ -16,7 +16,8 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
   | Num _ -> return (Base Int)
   | Bool _ -> return (Base Bool)
   | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
-  | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t')  ->
+  | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t') 
+  | Min (t,t') | Max (t,t') ->
      let* () = check_index_term loc {local;global} (Base Int) t in
      let* () = check_index_term loc {local;global} (Base Int) t' in
      return (Base Int)
@@ -38,6 +39,11 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
   | Not t ->
      let* () = check_index_term loc {local;global} (Base Bool) t in
      return (Base Bool)
+  | ITE (t,t',t'') ->
+     let* () = check_index_term loc {local;global} (Base Bool) t in
+     let* () = check_index_term loc {local;global} (Base Int) t' in
+     let* () = check_index_term loc {local;global} (Base Int) t'' in
+     return (Base Int)
   | Tuple its ->
      let* ts = 
        ListM.mapM (fun it -> 
@@ -45,10 +51,10 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
            return bt
          ) its in
      return (Base (BT.Tuple ts))
-  | Nth (n,it') ->
-     let* t = infer_index_term loc {local;global} it' in
-     begin match t with
-     | Base (Tuple ts) ->
+  | Nth (bt, n, it') ->
+     let* t = check_index_term loc {local;global} (Base bt) it' in
+     begin match bt with
+     | Tuple ts ->
         begin match List.nth_opt ts n with
         | Some t -> return (Base t)
         | None -> fail loc (Illtyped_it it)

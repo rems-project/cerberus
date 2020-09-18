@@ -26,10 +26,14 @@ let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m
 
 let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size) 
     : ((Sym.t * RE.points) option) m = 
+  let* () = dprintM 3 (blank 3 ^^ item "pointer" (IT.pp false loc_it)) in
+  let* () = dprintM 3 (blank 3 ^^ item "size" (Num.pp size)) in
   let* points = 
     Local.filter_rM (fun name t ->
         match t with
         | RE.Points p when Num.equal p.size size ->
+           let* () = dprintM 3 (blank 3 ^^ item "r.pointer" (IT.pp false p.pointer)) in
+           let* () = dprintM 3 (blank 3 ^^ item "r.size" (Num.pp p.size)) in
            let* holds = Solver.equal loc {local;global} loc_it p.pointer in
            return (if holds then Some (name,p) else None)
         | _ -> 

@@ -13,6 +13,9 @@ open Pp
 
 open ListM
 
+
+
+
 let retype_ctor loc = function
   | M_Cnil cbt -> 
      let* bt = Conversions.bt_of_core_base_type loc cbt in
@@ -444,7 +447,12 @@ let retype_funinfo struct_decls funinfo =
   PmapM.mapM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) ->
       if is_variadic then fail loc (Variadic_function fsym) else
-        let* ftyp = Conversions.make_fun_spec loc struct_decls attrs args ret_ctype in
+        let* ftyp = match Collect_rc_attrs.collect_rc_attrs attrs with
+        | [] -> 
+           Conversions.make_fun_spec loc struct_decls args ret_ctype
+        | rc_attrs ->
+           Conversions.make_fun_spec_annot loc struct_decls rc_attrs args ret_ctype
+        in
         return (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto))
     ) funinfo Symbol.symbol_compare
 

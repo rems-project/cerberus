@@ -10,6 +10,7 @@ module RE=Resources
 
 type type_error = 
   | Name_bound_twice of Sym.t
+  | Unbound_string_name of string
   | Unbound_name of Sym.t
   | Unbound_impl_const of CF.Implementation.implementation_constant
   | Struct_not_defined of BT.tag
@@ -54,6 +55,8 @@ let pp (loc : Loc.t) (err : t) =
     begin match err with
     | Name_bound_twice name ->
        !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
+    | Unbound_string_name unbound ->
+       !^"Unbound symbol" ^^ colon ^^^ !^unbound
     | Unbound_name unbound ->
        !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
     | Unbound_impl_const i ->

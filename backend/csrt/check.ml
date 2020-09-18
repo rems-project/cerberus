@@ -23,6 +23,8 @@ open LogicalConstraints
 open CF.Mucore
 
 
+
+
 (*** meta types ***************************************************************)
 type pattern = BT.t CF.Mucore.mu_pattern
 type ctor = BT.t CF.Mucore.mu_ctor
@@ -122,7 +124,7 @@ let pattern_match (loc: Loc.t) (this: IT.t) (pat: pattern) (expect_bt: BT.t) : L
                match pats, bts with
                | [], [] -> return local'
                | pat :: pats, bt :: bts ->
-                  let* local' = aux local' (Nth (i, this)) pat bt in
+                  let* local' = aux local' (Nth (expect_bt, i, this)) pat bt in
                   components local' (i+1) pats bts
                | _, _ ->
                   fail loc (Number_arguments {expect=i+List.length bts; 
@@ -307,10 +309,11 @@ let infer_tuple (loc: Loc.t) {local;global} (asyms: 'a asyms) : vt m =
   let* (bts,constrs,_) = 
     ListM.fold_leftM (fun (bts,constrs,i) (A (a, _, sym)) -> 
         let* (bt,lname) = get_a (Loc.update loc a) sym local in
-        return (bts@[bt],constrs @ [(IT.EQ (Nth (i, S new_lname), S lname))],i+1)
+        return (bts@[bt],constrs @ [(fun tbt -> IT.EQ (Nth (tbt, i, S new_lname), S lname))],i+1)
       ) ([],[], 0) asyms 
   in
   let bt = BT.Tuple bts in
+  let constrs = List.map (fun f -> f bt) constrs in
   return (new_lname, bt, LC (And constrs))
 
 let infer_constructor (loc: Loc.t) {local;global} (constructor: ctor) (asyms: 'a asyms) : vt m = 
@@ -761,7 +764,7 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
          ListM.mapM (fun (lc, e) ->
              let cname = Sym.fresh () in
              let local = add (mC cname lc) local in
-             let*!!! (rt,local) = infer_pexpr_raw loc {local;global} e in
+             let*!!! (rt,local) = infer_pexpr loc {local;global} e in
              let* local = remove loc cname local in
              return (Normal ((lc,rt),local))
            ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]

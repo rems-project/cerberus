@@ -10,12 +10,16 @@ module LC=LogicalConstraints
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
+
+
+let logfile = "/tmp/z3.log"
+
+
+
 let sym_to_symbol ctxt sym =
   let open Cerb_frontend.Symbol in
   let (Symbol (_digest, num, _mstring)) = sym in
   Z3.Symbol.mk_int ctxt num
-
-
 
 let bt_name bt = 
   plain (BT.pp false bt)
@@ -72,6 +76,14 @@ let rec of_index_term loc {local;global} ctxt it =
   let open Pp in
   let open IndexTerms in
 
+  let nth_to_fundecl bt i = 
+    let* sort = ls_to_sort loc {local;global} ctxt (Base bt) in
+    let member_fun_decls = Z3.Tuple.get_field_decls sort in
+    match List.nth_opt member_fun_decls i with
+    | Some fundecl -> return fundecl
+    | None -> fail loc (unreachable !^"nth_to_fundecl")
+  in
+
   let member_to_fundecl tag member = 
     let* decl = Global.get_struct_decl loc global.struct_decls tag in
     let* sort = ls_to_sort loc {local;global} ctxt (Base (Struct tag)) in
@@ -119,6 +131,12 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
+  | Min (it,it') -> 
+     let it_elab = ITE (it %< it', it, it') in
+     of_index_term loc {local;global} ctxt it_elab 
+  | Max (it,it') -> 
+     let it_elab = ITE (it %> it', it, it') in
+     of_index_term loc {local;global} ctxt it_elab 
   | EQ (it,it') -> 
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
@@ -162,6 +180,11 @@ let rec of_index_term loc {local;global} ctxt it =
   | Not it -> 
      let* a = of_index_term loc {local;global} ctxt it in
      return (Z3.Boolean.mk_not ctxt a)
+  | ITE (it,it',it'') -> 
+     let* a = of_index_term loc {local;global} ctxt it in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     let* a'' = of_index_term loc {local;global} ctxt it'' in
+     return (Z3.Boolean.mk_ite ctxt a a' a'')
   | S s -> 
      let* ls = Local.get_l loc s local in
      let s = sym_to_symbol ctxt s in
@@ -189,20 +212,46 @@ let rec of_index_term loc {local;global} ctxt it =
      fail loc (Unsupported !^"Z3: Head")
   | Tail t ->
      fail loc (Unsupported !^"Z3: Tail")
-  | Nth (i,t) ->
-     fail loc (Unsupported !^"Z3: Nth")
+  | Nth (bt,i,t) ->
+     let* a = of_index_term loc {local;global} ctxt t in
+     let* fundecl = nth_to_fundecl bt i in
+     return (Z3.Expr.mk_app ctxt fundecl [a])
   | List (ts,bt) ->
      fail loc (Unsupported !^"Z3: List")
 
 
 
-let z3_check loc ctxt solver constrs : Z3.Solver.status m = 
-  begin 
-    let logfile = "/tmp/z3.log" in
-    if not (Z3.Log.open_ logfile) 
-    then fail loc (TypeErrors.Z3_fail "could not open /tmp/z3.log")
+(* let z3_check loc ctxt solver lcs : Z3.Solver.status m = 
+ *   let logfile = "/tmp/z3.log" in
+ *   if not (Z3.Log.open_ logfile) 
+ *   then fail loc (TypeErrors.Z3_fail "could not open /tmp/z3.log")
+ *   else 
+ *     try 
+ *       let* constrs = 
+ *         ListM.mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
+ *       Z3.Solver.add solver constrs;
+ *       let result = Z3.Solver.check solver [] in
+ *       Z3.Log.close ();
+ *         return result
+ *     with Z3.Error (msg : string) -> 
+ *       Z3.Log.close ();
+ *       fail loc (TypeErrors.Z3_fail msg) *)
+
+let negate (LogicalConstraints.LC c) = LogicalConstraints.LC (Not c)
+
+let constraint_holds loc {local;global} c = 
+  let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
+  let solver = Z3.Solver.mk_simple_solver ctxt in
+  let lcs = (negate c :: Local.all_constraints local) in
+  let* checked = 
+    if not (Z3.Log.open_ logfile) then 
+      fail loc (TypeErrors.Z3_fail ("could not open " ^ logfile))
     else 
       try 
+        let* constrs = 
+          ListM.mapM (fun (LC.LC it) -> 
+              of_index_term loc {local;global} ctxt it
+            ) lcs in
         Z3.Solver.add solver constrs;
         let result = Z3.Solver.check solver [] in
         Z3.Log.close ();
@@ -210,29 +259,12 @@ let z3_check loc ctxt solver constrs : Z3.Solver.status m =
       with Z3.Error (msg : string) -> 
         Z3.Log.close ();
         fail loc (TypeErrors.Z3_fail msg)
-  end
 
-
-let negate (LogicalConstraints.LC c) = 
-  (LogicalConstraints.LC (Not c))
-
-let constraint_holds loc {local;global} c = 
-  let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
-  let solver = Z3.Solver.mk_simple_solver ctxt in
-  let lcs = (negate c :: Local.all_constraints local) in
-  let* constrs = 
-    ListM.mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
-  let* checked = z3_check loc ctxt solver constrs in
+  in
   match checked with
-  | UNSATISFIABLE -> 
-     (* let* () = debug_print 2 (blank 3 ^^ !^"unsatisfiable") in *)
-     return (true,ctxt,solver)
-  | SATISFIABLE -> 
-     (* let* () = debug_print 2 (blank 3 ^^ !^"satisfiable") in *)
-     return (false,ctxt,solver)
-  | UNKNOWN ->
-     (* let* () = warn !^"constraint solver returned unknown" in *)
-     return (false,ctxt,solver)
+  | UNSATISFIABLE -> return (true,ctxt,solver)
+  | SATISFIABLE -> return (false,ctxt,solver)
+  | UNKNOWN -> return (false,ctxt,solver)
 
 
 

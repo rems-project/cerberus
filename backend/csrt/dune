@@ -13,6 +13,7 @@
         conversions 
         indexTermTyping 
         indexTerms 
+        indexTermParser
         listM 
         local 
         memory 
@@ -21,11 +22,15 @@
         preProcess 
         process 
         resourceInference 
-        resources resultat 
+        resources 
+        resultat 
         solver 
         symMapM
      )
    )
  )
  (libraries cmdliner str unix stdlib-shims result
-  cerb_frontend cerb_backend mem_concrete util))
+  cerb_frontend cerb_backend mem_concrete util earley.core))
+
+(ocamllex lexer)
+(menhir (modules parser))
