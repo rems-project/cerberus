@@ -70,3 +70,11 @@ let dprint print_level pp =
   if !debug_level >= print_level then print (Lazy.force pp) else ()
 
 
+
+
+let time descr f = 
+  let t = Unix.gettimeofday () in
+  let res = Lazy.force f in
+  let t' = Unix.gettimeofday () in
+  let () = print (item descr !^(Printf.sprintf "%f" (t' -. t))) in
+  res

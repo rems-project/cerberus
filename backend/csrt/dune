@@ -2,6 +2,7 @@
 
 (executable
  (name main)
+ (modes exe)
  (public_name csrt)
  (package csrt)
  (flags (:standard -w -27))

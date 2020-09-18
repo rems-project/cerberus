@@ -660,7 +660,6 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
   let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_pexpr pe))) in
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Loc.update loc annots in
-  let*!!! () = false_if_unreachable loc {local;global} in
   let*!!! (rt,local) = match pe_ with
     | M_PEsym sym ->
        let ret = Sym.fresh () in
@@ -769,6 +768,7 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
          ListM.mapM (fun (lc, e) ->
              let cname = Sym.fresh () in
              let local = add (mC cname lc) local in
+             let*!!! () = false_if_unreachable loc {local;global} in
              let*!!! (rt,local) = infer_pexpr loc {local;global} e in
              let* local = remove loc cname local in
              return (Normal ((lc,rt),local))
@@ -797,7 +797,6 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
   let* () = dprintM 1 (lazy PPrint.empty) in
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Loc.update loc annots in
-  let*!!! () = false_if_unreachable loc {local;global} in
   match e_ with
   | M_PEif (A (a,_,csym), e1, e2) ->
      let* (cbt,clname) = get_a (Loc.update loc a) csym local in
@@ -806,6 +805,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
        ListM.mapM (fun (lc, e) ->
            let cname = Sym.fresh () in
            let local = add (mC cname lc) local in
+           let*!!! () = false_if_unreachable loc {local;global} in
            let*!!! local = check_pexpr loc {local;global} e typ in
            let* local = remove loc cname local in
            return (Normal local)
@@ -821,6 +821,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
            (* fix *)
            let lc = LC (Bool true) in
            let local = add (mUC lc) local in
+           let*!!! () = false_if_unreachable loc {local;global} in
            check_pexpr loc {local;global} e typ
          ) pats_es
      in
@@ -867,7 +868,6 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
   let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_expr e))) in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  let*!!! () = false_if_unreachable loc {local;global} in
   let*!!! (typ,local) = match e_ with
     | M_Epure pe -> 
        infer_pexpr_raw loc {local;global} pe
@@ -1085,6 +1085,7 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
        ListM.mapM (fun (lc, e) ->
            let cname = Sym.fresh () in
            let local = add (mC cname lc) local in
+           let*!!! () = false_if_unreachable loc {local;global} in
            let*!!! local = check_expr loc {local;labels;global} e typ in
            let* local = remove loc cname local in
            return (Normal local)
@@ -1100,6 +1101,7 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
            (* fix *)
            let lc = LC (Bool true) in
            let local = add (mUC lc) local in
+           let*!!! () = false_if_unreachable loc {local;global} in
            check_expr loc {local;labels;global} e typ
          ) pats_es
      in
@@ -1131,6 +1133,10 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
         return (Normal local)
      | False ->
         fail loc (Generic !^"This expression returns but is expected to have noreturn-type.")
+
+
+let infer_expr loc env pe = time "infer_expr" (lazy (infer_expr loc env pe))
+let check_expr loc env pe typ = time "check_expr" (lazy (check_expr loc env pe typ))
 
 
 

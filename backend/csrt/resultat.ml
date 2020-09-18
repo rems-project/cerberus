@@ -24,10 +24,3 @@ let dprintM l pp = let () = Pp.dprint l pp in return ()
 
 
 
-
-let time f = 
-  let t = Unix.gettimeofday () in
-  let* res = Lazy.force f in
-  let t' = Unix.gettimeofday () in
-  let* () = printM (Pp.item "time" (Pp.string (Printf.sprintf "%f" (t' -. t)))) in
-  return res
