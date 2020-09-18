@@ -14,6 +14,8 @@ module LC=LogicalConstraints
 
 let logfile = "/tmp/z3.log"
 
+let rem_t_warned = ref false
+let rem_f_warned = ref false
 
 
 let sym_to_symbol ctxt sym =
@@ -122,12 +124,20 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.mk_power ctxt a a')
   | Rem_t (it,it') -> 
-     let* () = warnM !^"Rem_t constraint" in
+     let* () = 
+       if !rem_t_warned then return () else
+         let () = rem_t_warned := true in
+         warnM !^"Rem_t constraint" 
+     in
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
   | Rem_f (it,it') -> 
-     let* () = warnM !^"Rem_f constraint" in
+     let* () = 
+       if !rem_f_warned then return () else
+         let () = rem_f_warned := true in
+         warnM !^"Rem_f constraint" 
+     in
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
@@ -221,22 +231,6 @@ let rec of_index_term loc {local;global} ctxt it =
 
 
 
-(* let z3_check loc ctxt solver lcs : Z3.Solver.status m = 
- *   let logfile = "/tmp/z3.log" in
- *   if not (Z3.Log.open_ logfile) 
- *   then fail loc (TypeErrors.Z3_fail "could not open /tmp/z3.log")
- *   else 
- *     try 
- *       let* constrs = 
- *         ListM.mapM (fun (LC.LC it) -> of_index_term loc {local;global} ctxt it) lcs in
- *       Z3.Solver.add solver constrs;
- *       let result = Z3.Solver.check solver [] in
- *       Z3.Log.close ();
- *         return result
- *     with Z3.Error (msg : string) -> 
- *       Z3.Log.close ();
- *       fail loc (TypeErrors.Z3_fail msg) *)
-
 let negate (LogicalConstraints.LC c) = LogicalConstraints.LC (Not c)
 
 let constraint_holds loc {local;global} c = 
@@ -259,14 +253,11 @@ let constraint_holds loc {local;global} c =
       with Z3.Error (msg : string) -> 
         Z3.Log.close ();
         fail loc (TypeErrors.Z3_fail msg)
-
   in
   match checked with
   | UNSATISFIABLE -> return (true,ctxt,solver)
   | SATISFIABLE -> return (false,ctxt,solver)
   | UNKNOWN -> return (false,ctxt,solver)
-
-
 
 
 let is_unreachable loc {local;global} =

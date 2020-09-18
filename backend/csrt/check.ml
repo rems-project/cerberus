@@ -25,6 +25,9 @@ open CF.Mucore
 
 
 
+
+
+
 (*** meta types ***************************************************************)
 type pattern = BT.t CF.Mucore.mu_pattern
 type ctor = BT.t CF.Mucore.mu_ctor
@@ -596,6 +599,7 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
   let* lrt = aux lrt lrt2' in
   return (LC (Or [c; c2]), RT.Computational ((lname,bt), lrt))
 
+
 let big_merge_return_types (loc: Loc.t) (rt: LC.t * RT.t) (rts: (LC.t * RT.t) list) : (LC.t * RT.t) m =
   ListM.fold_leftM (merge_return_types loc) rt rts
 
@@ -616,6 +620,7 @@ let merge_locals_and_return_types (loc: Loc.t) (rts_locals_or_false: (((LC.t * R
      let* (_,rt) = big_merge_return_types loc first_rt rts in 
      let* local = L.big_merge loc first_local locals in 
      return (Normal (rt,local))
+
 
 
 (* auxiliary functions *)
@@ -771,7 +776,7 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
        in
        merge_locals_and_return_types loc paths
   in  
-  let* () = dprintM 3 (lazy (blank 3 ^^ item "inferred" (RT.pp rt))) in
+  let* () = dprintM 1 (lazy (blank 3 ^^ item "inferred" (RT.pp rt))) in
   let* () = dprintM 1 (lazy (PPrint.empty)) in
   return (Normal (rt,local))
 

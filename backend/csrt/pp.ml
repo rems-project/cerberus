@@ -63,8 +63,10 @@ let nocolour f x =
 let pp_num n = !^(Nat_big_num.to_string n)
 
 let print pp = CB.Pipeline.run_pp None (pp ^^ hardline)
-let error pp = print (hardline ^^ hardline ^^ !^(redb "[!] Error") ^/^ pp ^^ hardline)
-let warn pp = print (hardline ^^ hardline ^^ !^(yellowb "[!] Warning:") ^^^ pp)
+let error pp = print (!^(redb "[!] Error") ^/^ pp ^^ hardline)
+let warn pp = print (!^(yellowb "[!] Warning:") ^^^ pp)
 
 let dprint print_level pp = 
   if !debug_level >= print_level then print (Lazy.force pp) else ()
+
+

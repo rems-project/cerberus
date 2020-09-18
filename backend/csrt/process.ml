@@ -68,14 +68,14 @@ let process_functions genv fns =
          return ()
     ) fns
 
-let pp_fun_map_decl funinfo = 
-  let pp = CF.Pp_mucore.All_standard_typ.pp_funinfo_with_attributes funinfo in
-  print_string (plain pp)
+(* let pp_fun_map_decl funinfo = 
+ *   let pp = CF.Pp_mucore.All_standard_typ.pp_funinfo_with_attributes funinfo in
+ *   print_string (plain pp) *)
 
 
 
 let process mu_file =
-  pp_fun_map_decl mu_file.mu_funinfo;
+  (* pp_fun_map_decl mu_file.mu_funinfo; *)
   let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
   let global = Global.empty in
   let* global = record_tagDefs global mu_file.mu_tagDefs in
