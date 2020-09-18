@@ -195,10 +195,10 @@ module Spine (RT: AT.RT_Sig) = struct
       : (RT.t * L.t) m 
     =
 
-    let* () = dprintM 1 (action descr) in
-    let* () = dprintM 2 (blank 3 ^^ item "value" (pp_argslocs arguments)) in
-    let* () = dprintM 2 (blank 3 ^^ item "spec" (FT.pp ftyp)) in
-    let* () = dprintM 2 (blank 3 ^^ item "env" (L.pp local)) in
+    let* () = dprintM 1 (lazy (action descr)) in
+    let* () = dprintM 2 (lazy (blank 3 ^^ item "value" (pp_argslocs arguments))) in
+    let* () = dprintM 2 (lazy (blank 3 ^^ item "spec" (FT.pp ftyp))) in
+    let* () = dprintM 2 (lazy (blank 3 ^^ item "env" (L.pp local))) in
 
     let open NFT in
     let ftyp = NFT.normalise ftyp in
@@ -567,7 +567,7 @@ let non_false (aofs: ('a or_false) list) : 'a list =
 (* merging information after control-flow join points  *)
 
 let merge_return_types loc (LC c,rt) (LC c2,rt2) = 
-  let* () = dprintM 1 (action "merging return types at control-flow join point") in
+  let* () = dprintM 1 (lazy (action "merging return types at control-flow join point")) in
   let RT.Computational ((lname,bt),lrt) = rt in
   let RT.Computational ((lname2,bt2),lrt2) = rt2 in
   let* () = check_base_type loc bt2 bt in
@@ -650,9 +650,9 @@ let ensure_reachable (loc: Loc.t) {local;global} : unit m =
 
 
 let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
-  let* () = dprintM 1 (action "inferring pure expression type") in
-  let* () = dprintM 1 (blank 3 ^^ item "environment" (L.pp local)) in
-  let* () = dprintM 3 (blank 3 ^^ item "expression" (pp_pexpr pe)) in
+  let* () = dprintM 1 (lazy (action "inferring pure expression type")) in
+  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
+  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_pexpr pe))) in
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Loc.update loc annots in
   let*!!! () = false_if_unreachable loc {local;global} in
@@ -771,8 +771,8 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
        in
        merge_locals_and_return_types loc paths
   in  
-  let* () = dprintM 3 (blank 3 ^^ item "inferred" (RT.pp rt)) in
-  let* () = dprintM 1 PPrint.empty in
+  let* () = dprintM 3 (lazy (blank 3 ^^ item "inferred" (RT.pp rt))) in
+  let* () = dprintM 1 (lazy (PPrint.empty)) in
   return (Normal (rt,local))
 
 and infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
@@ -785,11 +785,11 @@ and infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_
 (* check_pexpr: type check the pure expression `e` against return type
    `typ`; returns a "reduced" local environment *)
 let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L.t or_false) m = 
-  let* () = dprintM 1 (action "checking pure expression type") in
-  let* () = dprintM 1 (blank 3 ^^ item "type" (RT.pp typ)) in
-  let* () = dprintM 1 (blank 3 ^^ item "environment" (L.pp local)) in
-  let* () = dprintM 3 (blank 3 ^^ item "expression" (pp_pexpr e)) in
-  let* () = dprintM 1 PPrint.empty in
+  let* () = dprintM 1 (lazy (action "checking pure expression type")) in
+  let* () = dprintM 1 (lazy (blank 3 ^^ item "type" (RT.pp typ))) in
+  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
+  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_pexpr e))) in
+  let* () = dprintM 1 (lazy PPrint.empty) in
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Loc.update loc annots in
   let*!!! () = false_if_unreachable loc {local;global} in
@@ -857,9 +857,9 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
   return (Normal (pop_return mark (rt, local)))
 
 and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * L.t) or_false) m = 
-  let* () = dprintM 1 (action "inferring expression type") in
-  let* () = dprintM 1 (blank 3 ^^ item "environment" (L.pp local)) in
-  let* () = dprintM 3 (blank 3 ^^ item "expression" (pp_expr e)) in
+  let* () = dprintM 1 (lazy (action "inferring expression type")) in
+  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
+  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_expr e))) in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
   let*!!! () = false_if_unreachable loc {local;global} in
@@ -1057,19 +1057,19 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        let local = local' ++ local in
        infer_expr_raw loc {local;labels;global} e2
   in
-  let* () = dprintM 3 (blank 3 ^^ item "inferred" (RT.pp typ)) in
-  let* () = dprintM 1 PPrint.empty in
+  let* () = dprintM 3 (lazy (blank 3 ^^ item "inferred" (RT.pp typ))) in
+  let* () = dprintM 1 (lazy PPrint.empty) in
   return (Normal (typ,local))
 
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
    either an updated environment, or `False` in case of Goto *)
 let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t or_false) = 
-  let* () = dprintM 1 (action "checking expression type") in
-  let* () = dprintM 1 (blank 3 ^^ item "type" (or_false_pp RT.pp typ)) in
-  let* () = dprintM 1 (blank 3 ^^ item "environment" (L.pp local)) in
-  let* () = dprintM 3 (blank 3 ^^ item "expression" (pp_expr e)) in
-  let* () = dprintM 1 PPrint.empty in
+  let* () = dprintM 1 (lazy (action "checking expression type")) in
+  let* () = dprintM 1 (lazy (blank 3 ^^ item "type" (or_false_pp RT.pp typ))) in
+  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
+  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_expr e))) in
+  let* () = dprintM 1 (lazy PPrint.empty) in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
   match e_ with
@@ -1195,7 +1195,7 @@ let check_function (loc: Loc.t)
                    (body : 'bty pexpr)
                    (function_typ: FT.t) 
   =
-  let* () = dprintM 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) in
+  let* () = dprintM 1 (lazy (h1 ("Checking function " ^ (plain (Sym.pp fsym))))) in
   let* (rt,local,_,_substs) = CBF_FT.check_and_bind_arguments loc arguments function_typ in
   (* rbt consistency *)
   let* () = 
@@ -1204,11 +1204,11 @@ let check_function (loc: Loc.t)
     else fail loc (Mismatch {has = (Base rbt); expect = Base sbt})
   in
   let* local_or_false = check_pexpr loc {local;global} body rt in
-  let* () = dprintM 1 (!^(greenb "...checked ok")) in
+  let* () = dprintM 1 (lazy (!^(greenb "...checked ok"))) in
   match local_or_false with
-  | False -> dprintM 2 (blank 3 ^^ parens !^"unreachable control flow")
+  | False -> dprintM 2 (lazy (blank 3 ^^ parens !^"unreachable control flow"))
   | Normal local -> 
-     let* () = dprintM 2 (blank 3 ^^ item "with environment" (L.pp local)) in
+     let* () = dprintM 2 (lazy (blank 3 ^^ item "with environment" (L.pp local))) in
      all_empty loc local
 
 
@@ -1222,10 +1222,10 @@ let check_procedure (loc: Loc.t)
                     (body : 'bty expr)
                     (function_typ: FT.t) 
   =
-  let* () = dprintM 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) in
-  let* () = dprintM 2 (blank 3 ^^ item "type" (FT.pp function_typ)) in
+  let* () = dprintM 1 (lazy (h1 ("Checking procedure " ^ (plain (Sym.pp fsym))))) in
+  let* () = dprintM 2 (lazy (blank 3 ^^ item "type" (FT.pp function_typ))) in
   let* (rt,local,pure_local,substs) = CBF_FT.check_and_bind_arguments loc arguments function_typ in
-  let* () = dprintM 2 (blank 3 ^^ item "rt" (RT.pp rt)) in
+  let* () = dprintM 2 (lazy (blank 3 ^^ item "rt" (RT.pp rt))) in
   (* rbt consistency *)
   let* () = 
     let Computational ((sname,sbt),t) = rt in
@@ -1252,27 +1252,27 @@ let check_procedure (loc: Loc.t)
     | M_Return lt ->
        return ()
     | M_Label (lt,args,body,annots) ->
-       let* () = dprintM 1 hardline in
-       let* () = dprintM 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
-       let* () = dprintM 2 (blank 3 ^^ item "against" (LT.pp lt)) in
+       let* () = dprintM 1 (lazy hardline) in
+       let* () = dprintM 1 (lazy (h1 ("Checking label " ^ (plain (Sym.pp lsym))))) in
+       let* () = dprintM 2 (lazy (blank 3 ^^ item "against" (LT.pp lt))) in
        let* (rt,local,_,_) = CBF_LT.check_and_bind_arguments loc args lt in
        let* local_or_false = check_expr loc {local = pure_local ++ local;labels;global} body False in
-       let* () = dprintM 1 (!^(greenb "...label checked ok")) in
+       let* () = dprintM 1 (lazy (!^(greenb "...label checked ok"))) in
        match local_or_false with
-       | False -> dprintM 2 (blank 3 ^^ parens !^"unreachable control flow")
+       | False -> dprintM 2 (lazy (blank 3 ^^ parens !^"unreachable control flow"))
        | Normal local -> 
-          let* () = dprintM 2 (blank 3 ^^ item "with environment" (L.pp local)) in
+          let* () = dprintM 2 (lazy (blank 3 ^^ item "with environment" (L.pp local))) in
           all_empty loc local
   in
   let* () = PmapM.foldM check_label label_defs () in
-  let* () = dprintM 1 hardline in
-  let* () = dprintM 1 (h1 ("Checking function body " ^ (plain (Sym.pp fsym)))) in
+  let* () = dprintM 1 (lazy hardline) in
+  let* () = dprintM 1 (lazy (h1 ("Checking function body " ^ (plain (Sym.pp fsym))))) in
   let* local_or_false = check_expr loc {local;labels;global} body (Normal rt) in
-  let* () = dprintM 1 (!^(greenb "...checked ok")) in
+  let* () = dprintM 1 (lazy (!^(greenb "...checked ok"))) in
   match local_or_false with
-  | False -> dprintM 2 (blank 3 ^^ parens !^"unreachable control flow")
+  | False -> dprintM 2 (lazy (blank 3 ^^ parens !^"unreachable control flow"))
   | Normal local -> 
-     let* () = dprintM 2 (blank 3 ^^ item "with environment" (L.pp local)) in
+     let* () = dprintM 2 (lazy (blank 3 ^^ item "with environment" (L.pp local))) in
      all_empty loc local
 
 

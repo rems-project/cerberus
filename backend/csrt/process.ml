@@ -49,8 +49,8 @@ let record_impl genv impls =
 
 
 let print_initial_environment genv = 
-  let* () = dprintM 1 (h1 "initial environment") in
-  let* () = dprintM 1 (Global.pp genv) in
+  let* () = dprintM 1 (lazy (h1 "initial environment")) in
+  let* () = dprintM 1 (lazy (Global.pp genv)) in
   return ()
 
 
