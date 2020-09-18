@@ -776,8 +776,6 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
   return (Normal (rt,local))
 
 and infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
-  let (M_Pexpr (annots, _bty, pe_)) = pe in
-  let loc = Loc.update loc annots in
   let mark = Sym.fresh () in
   let local = marked mark ++ local in 
   let*!!! (rt, local) = infer_pexpr_raw loc {local;global} pe in
@@ -853,8 +851,6 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
    local environment since that marker (except for computational
    variables) *)
 let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * L.t) or_false) m =
-  let (M_Expr (annots, e_)) = e in
-  let loc = Loc.update loc annots in
   let mark = Sym.fresh () in
   let local = marked mark ++ local in 
   let*!!! (rt, local) = infer_expr_raw loc {local;labels;global} e in
@@ -1207,11 +1203,14 @@ let check_function (loc: Loc.t)
     if BT.equal rbt sbt then return ()
     else fail loc (Mismatch {has = (Base rbt); expect = Base sbt})
   in
-  let* local = check_pexpr loc {local;global} body rt in
-  let* () = dprintM 1 hardline in
+  let* local_or_false = check_pexpr loc {local;global} body rt in
   let* () = dprintM 1 (!^(greenb "...checked ok")) in
-  let* () = dprintM 2 (blank 3 ^^ item "with (environment or False)" (or_false_pp L.pp local)) in
-  return ()
+  match local_or_false with
+  | False -> dprintM 2 (blank 3 ^^ parens !^"unreachable control flow")
+  | Normal local -> 
+     let* () = dprintM 2 (blank 3 ^^ item "with environment" (L.pp local)) in
+     all_empty loc local
+
 
 (* check_procedure: type check an (impure) procedure *)
 let check_procedure (loc: Loc.t) 
@@ -1257,18 +1256,26 @@ let check_procedure (loc: Loc.t)
        let* () = dprintM 1 (h1 ("Checking label " ^ (plain (Sym.pp lsym)))) in
        let* () = dprintM 2 (blank 3 ^^ item "against" (LT.pp lt)) in
        let* (rt,local,_,_) = CBF_LT.check_and_bind_arguments loc args lt in
-       let* local = check_expr loc {local = pure_local ++ local;labels;global} body False in
-       (* let* () = dprintM 2 (blank 3 ^^ item "environment" (L.pp local)) in *)
+       let* local_or_false = check_expr loc {local = pure_local ++ local;labels;global} body False in
        let* () = dprintM 1 (!^(greenb "...label checked ok")) in
-       return ()
+       match local_or_false with
+       | False -> dprintM 2 (blank 3 ^^ parens !^"unreachable control flow")
+       | Normal local -> 
+          let* () = dprintM 2 (blank 3 ^^ item "with environment" (L.pp local)) in
+          all_empty loc local
   in
   let* () = PmapM.foldM check_label label_defs () in
   let* () = dprintM 1 hardline in
   let* () = dprintM 1 (h1 ("Checking function body " ^ (plain (Sym.pp fsym)))) in
-  let* local = check_expr loc {local;labels;global} body (Normal rt) in
+  let* local_or_false = check_expr loc {local;labels;global} body (Normal rt) in
   let* () = dprintM 1 (!^(greenb "...checked ok")) in
-  let* () = dprintM 2 (blank 3 ^^ item "with (environment or False)" (or_false_pp L.pp local)) in
-  return ()
+  match local_or_false with
+  | False -> dprintM 2 (blank 3 ^^ parens !^"unreachable control flow")
+  | Normal local -> 
+     let* () = dprintM 2 (blank 3 ^^ item "with environment" (L.pp local)) in
+     all_empty loc local
+
+
 
 
 
