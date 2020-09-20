@@ -35,7 +35,7 @@ let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
   | Binding (sym,binding) -> 
      VB.pp ~print_all_names ~print_used (sym,binding)
   | Marker sym -> 
-     fancystring (Colour.ansi_format [Blue] "\u{25CF}") 2 ^^ parens (Sym.pp sym)
+     uformat [FG (Blue,Dark)] "\u{25CF}" 1 ^^ parens (Sym.pp sym)
 
 let pp ?(print_all_names = false) ?(print_used = false) (Local local) = 
   match local with

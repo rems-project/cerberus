@@ -12,7 +12,7 @@ let tag_equal (Tag s) (Tag s') = Sym.equal s s'
 type t =
   | Unit 
   | Bool
-  | Int
+  | Integer
   | Loc
   | Array
   | List of t
@@ -30,7 +30,7 @@ let rec equal t1 t2 =
   match t1, t2 with
   | Unit, Unit -> true
   | Bool, Bool -> true
-  | Int, Int -> true
+  | Integer, Integer -> true
   | Loc, Loc -> true
   | Array, Array -> true
   | List t1', List t2' -> equal t1' t2'
@@ -42,14 +42,14 @@ let rec equal t1 t2 =
 let rec pp atomic = 
   let mparens pped = if atomic then parens pped else pped in
   function
-  | Unit -> !^ "unit"
-  | Bool -> !^ "bool"
-  | Int -> !^ "integer"
-  | Loc -> !^ "loc"
+  | Unit -> !^"void"
+  | Bool -> !^"bool"
+  | Integer -> !^"integer"
+  | Loc -> !^"pointer"
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^^^ pp true bt)
   | Tuple nbts -> 
-     mparens (!^ "tuple" ^^^ parens (flow_map (comma ^^ break 1) (pp false) nbts))
+     parens (flow_map (comma) (pp false) nbts)
   | Struct (Tag sym) -> 
      mparens (!^"struct" ^^^ Sym.pp sym)
   | FunctionPointer p ->

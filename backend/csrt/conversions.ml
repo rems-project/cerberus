@@ -29,7 +29,7 @@ module StringMap = Map.Make(String)
 let bt_of_core_object_type loc ot =
   let open CF.Core in
   match ot with
-  | OTy_integer -> return BT.Int
+  | OTy_integer -> return BT.Integer
   | OTy_pointer -> return BT.Loc
   | OTy_array cbt -> return BT.Array
   | OTy_struct sym -> return (BT.Struct (Tag sym))
@@ -62,7 +62,7 @@ let integerType_constraint loc about it =
 let integerType loc name it =
   let* (min,max) = Memory.integer_range loc it in
   let* constr = integerType_constraint loc (S name) it in
-  return ((name,Int), constr)
+  return ((name,Integer), constr)
 
 let floatingType loc =
   fail loc (Unsupported !^"floats")
@@ -190,7 +190,7 @@ let struct_decl loc tag fields struct_decls =
        let* lc1 = integerType_constraint loc (Member (tag, S thisstruct, member)) it in
        let spec_name = fresh () in
        let* lc2 = integerType_constraint loc (S spec_name) it in
-       return ((member,Int)::acc_members, 
+       return ((member,Integer)::acc_members, 
                Constraint (lc1,acc_sopen), 
                Constraint (lc1,acc_sclosed),
                (member,ct)::acc_cts)
@@ -446,9 +446,9 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
     | Coq_ident ident ->
        begin match ident with
        | "Z" -> 
-          return ((BT.Int, None), [], [], [])
+          return ((BT.Integer, None), [], [], [])
        | "nat" -> 
-          return ((BT.Int, None), [], [], [LC.LC (IT.GE (S newname, Num Num.zero))])
+          return ((BT.Integer, None), [], [], [LC.LC (IT.GE (S newname, Num Num.zero))])
        | "loc" -> 
           return ((BT.Loc, None), [], [], [])
        | _ -> 
@@ -458,9 +458,9 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
     | Coq_all coq_term -> 
        begin match coq_term with
        | [Quot_plain "Z"] -> 
-          return ((BT.Int, None), [], [], [])
+          return ((BT.Integer, None), [], [], [])
        | [Quot_plain "nat"] -> 
-          return ((BT.Int, None), [], [], [LC.LC (IT.GE (S newname, Num Num.zero))])
+          return ((BT.Integer, None), [], [], [LC.LC (IT.GE (S newname, Num Num.zero))])
        | _ -> 
           fail loc (Unsupported (!^"cannot process coq type term:" ^/^ 
                                    pp_coq_expr coq_expr))
@@ -587,10 +587,10 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
           begin match bits, signedness with
           | 32, `Signed ->
              let constr = LC.LC (in_range (S newname) (int 0) max_u32) in
-             return ((BT.Int, Some (Num.of_int bytes)), [], [], [constr])
+             return ((BT.Integer, Some (Num.of_int bytes)), [], [], [constr])
           | 32, `Unsigned ->
              let constr = LC.LC (in_range (S newname) min_i32 max_i32) in
-             return ((BT.Int, Some (Num.of_int bytes)), [], [], [constr])
+             return ((BT.Integer, Some (Num.of_int bytes)), [], [], [constr])
           | _ -> 
              fail loc (Generic (!^"This type application is not supported yet:" ^/^
                                   pp_type_expr te))

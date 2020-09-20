@@ -17,10 +17,10 @@ module SymSet = Set.Make(Sym)
 open TypeErrors
 open Environment
 open Local
-open Pp
 open Resultat
 open LogicalConstraints
 open CF.Mucore
+open Pp
 
 
 
@@ -39,9 +39,10 @@ type 'bty label_defs = (LT.t,(BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_label_defs
 
 (*** mucore pp setup **********************************************************)
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_typs)
-let pp_budget = Some 7
-let pp_expr e = PP_MUCORE.pp_expr pp_budget e
-let pp_pexpr e = PP_MUCORE.pp_pexpr pp_budget e
+(* let pp_budget () = Some !debug_level *)
+let pp_budget () = Some !debug_level
+let pp_expr e = PP_MUCORE.pp_expr (pp_budget ()) e
+let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
 
 
 
@@ -197,11 +198,6 @@ module Spine (RT: AT.RT_Sig) = struct
             (descr: string)
       : (RT.t * L.t) m 
     =
-
-    let* () = dprintM 1 (lazy (action descr)) in
-    let* () = dprintM 2 (lazy (blank 3 ^^ item "value" (pp_argslocs arguments))) in
-    let* () = dprintM 2 (lazy (blank 3 ^^ item "spec" (FT.pp ftyp))) in
-    let* () = dprintM 2 (lazy (blank 3 ^^ item "env" (L.pp local))) in
 
     let open NFT in
     let ftyp = NFT.normalise ftyp in
@@ -379,7 +375,7 @@ let rec infer_mem_value (loc: Loc.t) {local;global} (mem: CF.Impl_mem.mem_value)
     ( fun it iv -> 
       let* v = Memory.integer_value_to_num loc iv in
       let s = Sym.fresh () in
-      return (s, BT.Int, LC (EQ (S s, Num v)) )
+      return (s, BT.Integer, LC (EQ (S s, Num v)) )
     )
     ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
     ( fun _ ptrval -> infer_ptrval loc {local;global} ptrval  )
@@ -427,7 +423,7 @@ let infer_object_value (loc: Loc.t) {local;global} (ov: 'bty object_value) : vt 
      let new_lname = Sym.fresh () in
      let* i = Memory.integer_value_to_num loc iv in
      let constr = LC (EQ (S new_lname, Num i)) in
-     return (new_lname, BT.Int, constr)
+     return (new_lname, BT.Integer, constr)
   | M_OVpointer p -> 
      infer_ptrval loc {local;global} p
   | M_OVarray items ->
@@ -551,9 +547,9 @@ let or_false (m: ('a or_false) m) (c: 'a -> ('b or_false) m) : ('b or_false) m =
   | False -> return False
 
 (* special syntax for `or_false` *)
-let (let*!!!) = or_false
+let (let*?) = or_false
 
-let or_false_pp pp = function
+let pp_or_false pp = function
   | Normal a -> pp a
   | False -> if !unicode then !^"\u{22A5}" else !^"bot"
 
@@ -570,7 +566,6 @@ let non_false (aofs: ('a or_false) list) : 'a list =
 (* merging information after control-flow join points  *)
 
 let merge_return_types loc (LC c,rt) (LC c2,rt2) = 
-  let* () = dprintM 1 (lazy (action "merging return types at control-flow join point")) in
   let RT.Computational ((lname,bt),lrt) = rt in
   let RT.Computational ((lname2,bt2),lrt2) = rt2 in
   let* () = check_base_type loc bt2 bt in
@@ -655,12 +650,12 @@ let ensure_reachable (loc: Loc.t) {local;global} : unit m =
 
 
 let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
-  let* () = dprintM 1 (lazy (action "inferring pure expression type")) in
-  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
-  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_pexpr pe))) in
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Loc.update loc annots in
-  let*!!! (rt,local) = match pe_ with
+  Pp.d 2 (lazy (action "inferring pure expression"));
+  Pp.d 2 (lazy (item "expr" (group (pp_pexpr pe))));
+  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
+  let*? (rt,local) = match pe_ with
     | M_PEsym sym ->
        let ret = Sym.fresh () in
        let* (bt,lname) = get_a loc sym local in
@@ -712,18 +707,18 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
        let binop_typ (op: CF.Core.binop) (v1: IT.t) (v2: IT.t) =
          let open BT in
          match op with
-         | OpAdd -> (((Int, Int), Int), IT.Add (v1, v2))
-         | OpSub -> (((Int, Int), Int), IT.Sub (v1, v2))
-         | OpMul -> (((Int, Int), Int), IT.Mul (v1, v2))
-         | OpDiv -> (((Int, Int), Int), IT.Div (v1, v2))
-         | OpRem_t -> (((Int, Int), Int), IT.Rem_t (v1, v2))
-         | OpRem_f -> (((Int, Int), Int), IT.Rem_f (v1, v2))
-         | OpExp -> (((Int, Int), Int), IT.Exp (v1, v2))
-         | OpEq -> (((Int, Int), Bool), IT.EQ (v1, v2))
-         | OpGt -> (((Int, Int), Bool), IT.GT (v1, v2))
-         | OpLt -> (((Int, Int), Bool), IT.LT (v1, v2))
-         | OpGe -> (((Int, Int), Bool), IT.GE (v1, v2))
-         | OpLe -> (((Int, Int), Bool), IT.LE (v1, v2))
+         | OpAdd -> (((Integer, Integer), Integer), IT.Add (v1, v2))
+         | OpSub -> (((Integer, Integer), Integer), IT.Sub (v1, v2))
+         | OpMul -> (((Integer, Integer), Integer), IT.Mul (v1, v2))
+         | OpDiv -> (((Integer, Integer), Integer), IT.Div (v1, v2))
+         | OpRem_t -> (((Integer, Integer), Integer), IT.Rem_t (v1, v2))
+         | OpRem_f -> (((Integer, Integer), Integer), IT.Rem_f (v1, v2))
+         | OpExp -> (((Integer, Integer), Integer), IT.Exp (v1, v2))
+         | OpEq -> (((Integer, Integer), Bool), IT.EQ (v1, v2))
+         | OpGt -> (((Integer, Integer), Bool), IT.GT (v1, v2))
+         | OpLt -> (((Integer, Integer), Bool), IT.LT (v1, v2))
+         | OpGe -> (((Integer, Integer), Bool), IT.GE (v1, v2))
+         | OpLe -> (((Integer, Integer), Bool), IT.LE (v1, v2))
          | OpAnd -> (((Bool, Bool), Bool), IT.And [v1; v2])
          | OpOr -> (((Bool, Bool), Bool), IT.Or [v1; v2])
        in
@@ -753,7 +748,7 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
        let* (rt, local) = calltype_ft loc {local;global} args decl_typ in
        return (Normal (rt, local))
     | M_PElet (p, e1, e2) ->
-       let*!!! (rt, local) = infer_pexpr loc {local;global} e1 in
+       let*? (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
          | M_Symbol sym -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt loc pat rt
@@ -768,35 +763,33 @@ let rec infer_pexpr_raw (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * 
          ListM.mapM (fun (lc, e) ->
              let cname = Sym.fresh () in
              let local = add (mC cname lc) local in
-             let*!!! () = false_if_unreachable loc {local;global} in
-             let*!!! (rt,local) = infer_pexpr loc {local;global} e in
+             let*? () = false_if_unreachable loc {local;global} in
+             let*? (rt,local) = infer_pexpr loc {local;global} e in
              let* local = remove loc cname local in
              return (Normal ((lc,rt),local))
            ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
        in
        merge_locals_and_return_types loc paths
   in  
-  let* () = dprintM 1 (lazy (blank 3 ^^ item "inferred" (RT.pp rt))) in
-  let* () = dprintM 1 (lazy (PPrint.empty)) in
+  Pp.d 2 (lazy (item "type" (RT.pp rt)));
   return (Normal (rt,local))
 
 and infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
   let mark = Sym.fresh () in
   let local = marked mark ++ local in 
-  let*!!! (rt, local) = infer_pexpr_raw loc {local;global} pe in
+  let*? (rt, local) = infer_pexpr_raw loc {local;global} pe in
   return (Normal (pop_return mark (rt, local)))
 
 
 (* check_pexpr: type check the pure expression `e` against return type
    `typ`; returns a "reduced" local environment *)
 let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L.t or_false) m = 
-  let* () = dprintM 1 (lazy (action "checking pure expression type")) in
-  let* () = dprintM 1 (lazy (blank 3 ^^ item "type" (RT.pp typ))) in
-  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
-  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_pexpr e))) in
-  let* () = dprintM 1 (lazy PPrint.empty) in
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Loc.update loc annots in
+  Pp.d 2 (lazy (action "checking pure expression"));
+  Pp.d 2 (lazy (item "expr" (group (pp_pexpr e))));
+  Pp.d 2 (lazy (item "type" (RT.pp typ)));
+  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
   match e_ with
   | M_PEif (A (a,_,csym), e1, e2) ->
      let* (cbt,clname) = get_a (Loc.update loc a) csym local in
@@ -805,8 +798,8 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
        ListM.mapM (fun (lc, e) ->
            let cname = Sym.fresh () in
            let local = add (mC cname lc) local in
-           let*!!! () = false_if_unreachable loc {local;global} in
-           let*!!! local = check_pexpr loc {local;global} e typ in
+           let*? () = false_if_unreachable loc {local;global} in
+           let*? local = check_pexpr loc {local;global} e typ in
            let* local = remove loc cname local in
            return (Normal local)
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
@@ -821,13 +814,13 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
            (* fix *)
            let lc = LC (Bool true) in
            let local = add (mUC lc) local in
-           let*!!! () = false_if_unreachable loc {local;global} in
+           let*? () = false_if_unreachable loc {local;global} in
            check_pexpr loc {local;global} e typ
          ) pats_es
      in
      merge_locals loc paths
   | M_PElet (p, e1, e2) ->
-     let*!!! (rt, local) = infer_pexpr loc {local;global} e1 in
+     let*? (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with
        | M_Symbol sym -> return (bind sym rt)
        | M_Pat pat -> pattern_match_rt loc pat rt
@@ -837,7 +830,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
   | _ ->
      let mark = Sym.fresh () in
      let local = marked mark ++ local in
-     let*!!! (rt, local) = infer_pexpr_raw loc {local;global} e in
+     let*? (rt, local) = infer_pexpr_raw loc {local;global} e in
      let* (local',(abt,lname)) = bind_logically rt in
      let local = local' ++ local in
      let* local = subtype loc {local;global} ((abt,lname),loc) typ in
@@ -859,16 +852,16 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
 let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * L.t) or_false) m =
   let mark = Sym.fresh () in
   let local = marked mark ++ local in 
-  let*!!! (rt, local) = infer_expr_raw loc {local;labels;global} e in
+  let*? (rt, local) = infer_expr_raw loc {local;labels;global} e in
   return (Normal (pop_return mark (rt, local)))
 
 and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * L.t) or_false) m = 
-  let* () = dprintM 1 (lazy (action "inferring expression type")) in
-  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
-  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_expr e))) in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  let*!!! (typ,local) = match e_ with
+  Pp.d 2 (lazy (action "inferring expression"));
+  Pp.d 2 (lazy (item "expr" (group (pp_expr e))));
+  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
+  let* r = match e_ with
     | M_Epure pe -> 
        infer_pexpr_raw loc {local;global} pe
     | M_Ememop memop ->
@@ -911,7 +904,7 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        begin match action_ with
        | M_Create (A (a,_,sym), A (_,_,(bt,size)), _prefix) -> 
           let* (abt,_lname) = get_a (Loc.update loc a) sym local in
-          let* () = check_base_type (Loc.update loc a) Int abt in
+          let* () = check_base_type (Loc.update loc a) Integer abt in
           let ret = Sym.fresh () in
           let* rt = match bt with
             | Struct tag -> 
@@ -1048,7 +1041,7 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
     | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
     | M_Eif _ -> fail loc (unreachable !^"Eif in inferring position")
     | M_Elet (p, e1, e2) ->
-       let*!!! (rt, local) = infer_pexpr loc {local;global} e1 in
+       let*? (rt, local) = infer_pexpr loc {local;global} e1 in
        let* local' = match p with
          | M_Symbol sym -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt loc pat rt
@@ -1057,26 +1050,26 @@ and infer_expr_raw (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        infer_expr_raw loc {local;labels;global} e2
     | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
     | M_Esseq (pat, e1, e2) ->
-       let*!!! (rt,local) = infer_expr loc {local;labels;global} e1 in
+       let*? (rt,local) = infer_expr loc {local;labels;global} e1 in
        let* local' = pattern_match_rt loc pat rt in
        let local = local' ++ local in
        infer_expr_raw loc {local;labels;global} e2
   in
-  let* () = dprintM 3 (lazy (blank 3 ^^ item "inferred" (RT.pp typ))) in
-  let* () = dprintM 1 (lazy PPrint.empty) in
-  return (Normal (typ,local))
+  Pp.d 2 (lazy (match r with
+                    | False -> item "type" (parens !^"no return")
+                    | Normal (rt,_) -> item "type" (RT.pp rt)));
+  return r
 
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
    either an updated environment, or `False` in case of Goto *)
 let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t or_false) = 
-  let* () = dprintM 1 (lazy (action "checking expression type")) in
-  let* () = dprintM 1 (lazy (blank 3 ^^ item "type" (or_false_pp RT.pp typ))) in
-  let* () = dprintM 2 (lazy (blank 3 ^^ item "environment" (L.pp local))) in
-  let* () = dprintM 3 (lazy (blank 3 ^^ item "expression" (pp_expr e))) in
-  let* () = dprintM 1 (lazy PPrint.empty) in
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
+  Pp.d 2 (lazy (action "checking expression"));
+  Pp.d 2 (lazy (item "expr" (group (pp_expr e))));
+  Pp.d 2 (lazy (item "type" (pp_or_false RT.pp typ)));
+  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
   match e_ with
   | M_Eif (A (a,_,csym), e1, e2) ->
      let* (cbt,clname) = get_a (Loc.update loc a) csym local in
@@ -1085,8 +1078,8 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
        ListM.mapM (fun (lc, e) ->
            let cname = Sym.fresh () in
            let local = add (mC cname lc) local in
-           let*!!! () = false_if_unreachable loc {local;global} in
-           let*!!! local = check_expr loc {local;labels;global} e typ in
+           let*? () = false_if_unreachable loc {local;global} in
+           let*? local = check_expr loc {local;labels;global} e typ in
            let* local = remove loc cname local in
            return (Normal local)
          ) [(LC (S clname), e1); (LC (Not (S clname)), e2)]
@@ -1101,13 +1094,13 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
            (* fix *)
            let lc = LC (Bool true) in
            let local = add (mUC lc) local in
-           let*!!! () = false_if_unreachable loc {local;global} in
+           let*? () = false_if_unreachable loc {local;global} in
            check_expr loc {local;labels;global} e typ
          ) pats_es
      in
      merge_locals loc paths
   | M_Elet (p, e1, e2) ->
-     let*!!! (rt, local) = infer_pexpr loc {local;global} e1 in
+     let*? (rt, local) = infer_pexpr loc {local;global} e1 in
      let* local' = match p with 
        | M_Symbol sym -> return (bind sym rt)
        | M_Pat pat -> pattern_match_rt loc pat rt
@@ -1116,14 +1109,14 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
      check_expr loc {local;labels;global} e2 typ
   | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (pat, e1, e2) ->
-     let*!!! (rt, local) = infer_expr loc {local;labels;global} e1 in
+     let*? (rt, local) = infer_expr loc {local;labels;global} e1 in
      let* local' = pattern_match_rt loc pat rt in
      let local = local' ++ local in
      check_expr loc {local;labels;global} e2 typ
   | _ ->
      let mark = Sym.fresh () in
      let local = marked mark ++ local in
-     let*!!! (rt, local) = infer_expr_raw loc {local;labels;global} e in
+     let*? (rt, local) = infer_expr_raw loc {local;labels;global} e in
      let* (local',(abt,lname)) = bind_logically rt in
      let local = local' ++ local in
      match typ with
@@ -1133,11 +1126,6 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
         return (Normal local)
      | False ->
         fail loc (Generic !^"This expression returns but is expected to have noreturn-type.")
-
-
-let infer_expr loc env pe = time "infer_expr" (lazy (infer_expr loc env pe))
-let check_expr loc env pe typ = time "check_expr" (lazy (check_expr loc env pe typ))
-
 
 
 (* check_and_bind_arguments: typecheck the function/procedure/label
@@ -1206,7 +1194,7 @@ let check_function (loc: Loc.t)
                    (body : 'bty pexpr)
                    (function_typ: FT.t) 
   =
-  let* () = dprintM 1 (lazy (h1 ("Checking function " ^ (plain (Sym.pp fsym))))) in
+  Pp.p (headline ("checking function " ^ Sym.pp_string fsym));
   let* (rt,local,_,_substs) = CBF_FT.check_and_bind_arguments loc arguments function_typ in
   (* rbt consistency *)
   let* () = 
@@ -1215,12 +1203,9 @@ let check_function (loc: Loc.t)
     else fail loc (Mismatch {has = (Base rbt); expect = Base sbt})
   in
   let* local_or_false = check_pexpr loc {local;global} body rt in
-  let* () = dprintM 1 (lazy (!^(greenb "...checked ok"))) in
   match local_or_false with
-  | False -> dprintM 2 (lazy (blank 3 ^^ parens !^"unreachable control flow"))
-  | Normal local -> 
-     let* () = dprintM 2 (lazy (blank 3 ^^ item "with environment" (L.pp local))) in
-     all_empty loc local
+  | False -> return ()
+  | Normal local -> all_empty loc local
 
 
 (* check_procedure: type check an (impure) procedure *)
@@ -1233,10 +1218,8 @@ let check_procedure (loc: Loc.t)
                     (body : 'bty expr)
                     (function_typ: FT.t) 
   =
-  let* () = dprintM 1 (lazy (h1 ("Checking procedure " ^ (plain (Sym.pp fsym))))) in
-  let* () = dprintM 2 (lazy (blank 3 ^^ item "type" (FT.pp function_typ))) in
+  Pp.p (headline ("checking procedure " ^ Sym.pp_string fsym));
   let* (rt,local,pure_local,substs) = CBF_FT.check_and_bind_arguments loc arguments function_typ in
-  let* () = dprintM 2 (lazy (blank 3 ^^ item "rt" (RT.pp rt))) in
   (* rbt consistency *)
   let* () = 
     let Computational ((sname,sbt),t) = rt in
@@ -1263,28 +1246,20 @@ let check_procedure (loc: Loc.t)
     | M_Return lt ->
        return ()
     | M_Label (lt,args,body,annots) ->
-       let* () = dprintM 1 (lazy hardline) in
-       let* () = dprintM 1 (lazy (h1 ("Checking label " ^ (plain (Sym.pp lsym))))) in
-       let* () = dprintM 2 (lazy (blank 3 ^^ item "against" (LT.pp lt))) in
+       Pp.p (headline ("checking label " ^ Sym.pp_string lsym));
        let* (rt,local,_,_) = CBF_LT.check_and_bind_arguments loc args lt in
-       let* local_or_false = check_expr loc {local = pure_local ++ local;labels;global} body False in
-       let* () = dprintM 1 (lazy (!^(greenb "...label checked ok"))) in
+       let* local_or_false = 
+         check_expr loc {local = pure_local ++ local;labels;global} body False in
        match local_or_false with
-       | False -> dprintM 2 (lazy (blank 3 ^^ parens !^"unreachable control flow"))
-       | Normal local -> 
-          let* () = dprintM 2 (lazy (blank 3 ^^ item "with environment" (L.pp local))) in
-          all_empty loc local
+       | False -> return ()
+       | Normal local -> all_empty loc local
   in
   let* () = PmapM.foldM check_label label_defs () in
-  let* () = dprintM 1 (lazy hardline) in
-  let* () = dprintM 1 (lazy (h1 ("Checking function body " ^ (plain (Sym.pp fsym))))) in
+  Pp.p (headline ("checking function body " ^ Sym.pp_string fsym));
   let* local_or_false = check_expr loc {local;labels;global} body (Normal rt) in
-  let* () = dprintM 1 (lazy (!^(greenb "...checked ok"))) in
   match local_or_false with
-  | False -> dprintM 2 (lazy (blank 3 ^^ parens !^"unreachable control flow"))
-  | Normal local -> 
-     let* () = dprintM 2 (lazy (blank 3 ^^ item "with environment" (L.pp local))) in
-     all_empty loc local
+  | False -> return ()
+  | Normal local -> all_empty loc local
 
 
 

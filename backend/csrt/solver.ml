@@ -42,7 +42,7 @@ let rec bt_to_sort loc {local;global} ctxt bt =
   match bt with
   | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | Bool -> return (Z3.Boolean.mk_sort ctxt)
-  | Int -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
+  | Integer -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
   | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | Tuple bts ->
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
@@ -124,20 +124,14 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.mk_power ctxt a a')
   | Rem_t (it,it') -> 
-     let* () = 
-       if !rem_t_warned then return () else
-         let () = rem_t_warned := true in
-         warnM !^"Rem_t constraint" 
-     in
+     if not !rem_t_warned then
+       (rem_t_warned := true; Pp.warn !^"Rem_t constraint");
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
   | Rem_f (it,it') -> 
-     let* () = 
-       if !rem_f_warned then return () else
-         let () = rem_f_warned := true in
-         warnM !^"Rem_f constraint" 
-     in
+     if not !rem_f_warned then
+       (rem_f_warned := true; Pp.warn !^"Rem_f constraint");
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')

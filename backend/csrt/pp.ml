@@ -2,7 +2,7 @@ module CB = Cerb_backend
 module CF = Cerb_frontend
 include PPrint
 
-open Colour
+(* open Colour *)
 
 
 let unicode = ref true
@@ -10,25 +10,74 @@ let debug_level = ref 0
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
-
-(* let arrow = minus ^^ rangle
- * let sepimp = minus ^^ star
- * let implies = equals ^^ rangle *)
-
 let (^^^) = Pp_prelude.(^^^)
 
-let bold = pp_ansi_format [Bold]
-let underline c s = string s ^/^ repeat (String.length s) (char c)
+(* adapting from colour.ml *)
+(* https://en.wikipedia.org/wiki/ANSI_escape_code#Colors *)
 
-let h1 s = bold (break 1 ^^ break 1 ^^ underline '=' s ^^ break 1 ^^ break 1)
-let h2 s = bold (break 1 ^^ underline '-' s ^^ break 1)
+type colour =
+  | Default
+  | Black
+  | Red
+  | Green
+  | Yellow
+  | Blue
+  | Magenta
+  | Cyan
+  | White
 
-let action a = 
-  fancystring (ansi_format [Bold;Magenta] " * ") 3 ^^ !^a ^^ !^"..."
+type brightness = 
+  | Bright 
+  | Dark
 
-let greenb = ansi_format [Bold;Green]
-let redb = ansi_format [Bold;Red]
-let yellowb = ansi_format [Bold;Yellow]
+type format = 
+  | BG of colour * brightness
+  | FG of colour * brightness
+  | Blinking
+  | Underline
+
+let bg_item_code = function
+  | Default -> ""
+  | Black -> "40"
+  | Red -> "41"
+  | Green -> "42"
+  | Yellow -> "43"
+  | Blue -> "44"
+  | Magenta -> "45"
+  | Cyan -> "46"
+  | White -> "47"
+
+let fg_item_code = function
+  | Default -> ""
+  | Black -> "30"
+  | Red -> "31"
+  | Green -> "32"
+  | Yellow -> "33"
+  | Blue -> "34"
+  | Magenta -> "35"
+  | Cyan -> "36"
+  | White -> "37"
+
+
+let format_item_code = function
+  | Blinking -> "5"
+  | Underline -> "4"
+  | BG (colour,Dark) -> bg_item_code colour
+  | BG (colour,Bright) -> bg_item_code colour ^ ";1"
+  | FG (colour,Dark) -> fg_item_code colour
+  | FG (colour,Bright) -> fg_item_code colour ^ ";1"
+
+(* from colour.ml *)
+let format_string format str =
+  let code = String.concat ";" (List.map (fun z -> format_item_code z) format) ^ "m" in
+  "\x1b[" ^ code ^ str ^ "\x1b[0m"
+
+let format format string = 
+  let n = String.length string in
+  fancystring (format_string format string) n
+
+let uformat format string n = 
+  fancystring (format_string format string) n
 
 
 let pp_list f l = 
@@ -36,45 +85,29 @@ let pp_list f l =
   | [] -> !^"(empty)"
   | l -> flow_map (comma ^^ break 1) f l
 
-
-
 let typ n typ = n ^^ colon ^^^ typ
+let item item content = format [FG(Default,Bright)] item ^^ colon ^^ space ^^ align content
 
-let inline_item item content = 
-  fancystring (ansi_format [Bold] item) (String.length item) ^^ 
-    colon ^^ space ^^ content
+let headline a = 
+  (if !debug_level >= 2 then hardline else empty) ^^
+    format [FG(Magenta,Bright)] ("# " ^ a)
 
-let item item content = 
-  fancystring (ansi_format [Bold] item) (String.length item) ^^ 
-    colon ^^ space ^^ align content
+let action a = format [FG (Cyan,Bright)] ("## " ^ a ^ " ")
 
+let p pp = CB.Pipeline.run_pp None (pp ^^ hardline)
+let o_p = function
+  | None -> ()
+  | Some pp -> CB.Pipeline.run_pp None (pp ^^ hardline)
+let level l pp = if !debug_level >= l then Some (Lazy.force pp) else None
+let d l pp = o_p (level l pp)
 
-
-
-(* ugly *)
-let nocolour f x = 
-  let before = !Colour.do_colour in
-  Colour.do_colour := false;
-  let pp = f x in
-  Colour.do_colour := before;
-  pp
-
-
-let pp_num n = !^(Nat_big_num.to_string n)
-
-let print pp = CB.Pipeline.run_pp None (pp ^^ hardline)
-let error pp = print (!^(redb "[!] Error") ^/^ pp ^^ hardline)
-let warn pp = print (!^(yellowb "[!] Warning:") ^^^ pp)
-
-let dprint print_level pp = 
-  if !debug_level >= print_level then print (Lazy.force pp) else ()
-
-
+let error pp = p (format [FG (Red,Bright)] "Error" ^/^ pp ^^ hardline)
+let warn pp = p (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
 
 
 let time descr f = 
   let t = Unix.gettimeofday () in
   let res = Lazy.force f in
   let t' = Unix.gettimeofday () in
-  let () = print (item descr !^(Printf.sprintf "%f" (t' -. t))) in
+  let () = p (item descr !^(Printf.sprintf "%f" (t' -. t))) in
   res

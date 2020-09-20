@@ -13,18 +13,18 @@ open Environment
 
 let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m = 
   match it with
-  | Num _ -> return (Base Int)
+  | Num _ -> return (Base Integer)
   | Bool _ -> return (Base Bool)
   | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
   | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t') 
   | Min (t,t') | Max (t,t') ->
-     let* () = check_index_term loc {local;global} (Base Int) t in
-     let* () = check_index_term loc {local;global} (Base Int) t' in
-     return (Base Int)
+     let* () = check_index_term loc {local;global} (Base Integer) t in
+     let* () = check_index_term loc {local;global} (Base Integer) t' in
+     return (Base Integer)
   | EQ (t,t') | NE (t,t') | LT (t,t')
   | GT (t,t') | LE (t,t') | GE (t,t') ->
-     let* () = check_index_term loc {local;global} (Base Int) t in
-     let* () = check_index_term loc {local;global} (Base Int) t' in
+     let* () = check_index_term loc {local;global} (Base Integer) t in
+     let* () = check_index_term loc {local;global} (Base Integer) t' in
      return (Base Bool)
   | Null t ->
      let* () = check_index_term loc {local;global} (Base Loc) t in
@@ -41,9 +41,9 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
      return (Base Bool)
   | ITE (t,t',t'') ->
      let* () = check_index_term loc {local;global} (Base Bool) t in
-     let* () = check_index_term loc {local;global} (Base Int) t' in
-     let* () = check_index_term loc {local;global} (Base Int) t'' in
-     return (Base Int)
+     let* () = check_index_term loc {local;global} (Base Integer) t' in
+     let* () = check_index_term loc {local;global} (Base Integer) t'' in
+     return (Base Integer)
   | Tuple its ->
      let* ts = 
        ListM.mapM (fun it -> 

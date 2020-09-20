@@ -1,6 +1,5 @@
 open Pp
 open Resultat
-open List
 open TypeErrors
 
 module SymSet = Set.Make(Sym)
@@ -78,12 +77,12 @@ let pp_struct_decl (sym,decl) =
     RT.Computational ((decl.closed_type.sbinder, BT.Struct tag), 
                       decl.closed_type.souter) 
   in
-  item (plain (Sym.pp sym) ^ " (raw)") 
+  item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
        (pp_list (fun (BT.Member m, bt) -> typ !^m (BT.pp true bt)) decl.raw) 
   ^/^
-  item (plain (Sym.pp sym) ^ " (open)") (RT.pp open_typ) 
+  item ("struct " ^ plain (Sym.pp sym) ^ " (open)") (RT.pp open_typ) 
   ^/^
-  item (plain (Sym.pp sym) ^ " (closed)") 
+  item ("struct " ^ plain (Sym.pp sym) ^ " (closed)") 
        (RT.pp closed_typ)
 
 let pp_struct_decls decls = pp_list pp_struct_decl (SymMap.bindings decls) 
@@ -91,12 +90,8 @@ let pp_struct_decls decls = pp_list pp_struct_decl (SymMap.bindings decls)
 let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (FT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
-let pp_items global = 
-  [ (1, h2 "Structs")
-  ; (1, pp_struct_decls global.struct_decls)
-  ; (1, h2 "Functions")
-  ; (1, pp_fun_decls global.fun_decls)
-  ]
+let pp global = 
+  pp_struct_decls global.struct_decls ^^ hardline ^^
+  pp_fun_decls global.fun_decls
 
-let pp global = separate (break 1) (map snd (pp_items global))
 

@@ -17,10 +17,9 @@ let (let*) = bind
 type 'a m = ('a, Locations.t * TypeErrors.t) t
 
 
-
-let printM pp = let () = Pp.print pp in return ()
-let warnM pp = let () = Pp.warn pp in return ()
-let dprintM l pp = let () = Pp.dprint l pp in return ()
+(* let actionM level pp = return (Pp.action level pp)
+ * let printM level pp = let () = Pp.print level pp in return ()
+ * let warnM pp = let () = Pp.warn pp in return () *)
 
 
 

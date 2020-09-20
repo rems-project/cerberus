@@ -16,20 +16,23 @@ type t =
 
 
 let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
+  let btyp sym pped = 
+    format [Pp.Underline] (Sym.pp_string sym) ^^ colon ^^^ pped in
   match binding with
   | Computational (lname,bt) -> 
-     !^"A" ^^^ parens (typ (Sym.pp sym) (parens (BT.pp false bt ^^ bar ^^ Sym.pp lname)))
+     btyp sym (BT.pp true bt ^^ tilde ^^ Sym.pp lname)
   | Logical ls -> 
-     !^"L" ^^^ parens (typ (Sym.pp sym) (LS.pp false ls))
+     btyp sym (LS.pp false ls)
   | Resource re -> 
      if print_all_names 
-     then !^"R" ^^^ parens (typ (Sym.pp sym) (RE.pp false re))
-     else !^"R" ^^^ parens (RE.pp false re )
+     then btyp sym (squotes (RE.pp false re))
+     else squotes (RE.pp false re)
   | UsedResource (re,_locs) -> 
      if not print_used then underscore 
-     else if print_all_names then parens (!^"R" ^^^ (typ (Sym.pp sym) (!^"used" ^^^ RE.pp false re)))
-     else parens (!^"R used" ^^^ RE.pp false re) 
+     else if print_all_names 
+     then btyp sym (!^"used" ^^^ (squotes (RE.pp false re)))
+     else !^"used" ^^^ squotes (RE.pp false re)
   | Constraint lc -> 
      if print_all_names 
-     then !^"C" ^^^ parens (typ (Sym.pp sym) (LC.pp false lc))
-     else !^"C" ^^^ parens (LC.pp false lc )
+     then btyp sym (dquotes (LC.pp false lc))
+     else dquotes (LC.pp false lc)
