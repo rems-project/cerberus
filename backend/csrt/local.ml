@@ -17,7 +17,7 @@ type binding = Sym.t * VB.t
 
 type context_item = 
   | Binding of binding
-  | Marker of Sym.t
+  | Marker
 
 
 (* left-most is most recent *)
@@ -25,7 +25,7 @@ type t = Local of context_item list
 
 let empty = Local []
 
-let marked sym = Local [Marker sym]
+let marked = Local [Marker]
 
 let concat (Local local') (Local local) = Local (local' @ local)
 
@@ -33,11 +33,8 @@ let concat (Local local') (Local local) = Local (local' @ local)
 
 
 let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
-  | Binding (sym,binding) -> 
-     VB.pp ~print_all_names ~print_used (sym,binding)
-  | Marker sym -> 
-     uformat [FG (Blue,Dark)] "\u{25CF}" 1 ^^ 
-       (if print_all_names then parens (Sym.pp sym) else Pp.empty)
+  | Binding (sym,binding) -> VB.pp ~print_all_names ~print_used (sym,binding)
+  | Marker -> uformat [FG (Blue,Dark)] "\u{25CF}" 1 
 
 (* reverses the list order for matching standard mathematical
    presentation *)
@@ -100,17 +97,19 @@ let use_resource loc sym where (Local local) =
 
 
 
-let since msym (Local local) = 
-  let rec aux local =
-    match msym, local with
-    | _, [] -> ([],[])
-    | _, Binding (sym,b) :: rest -> 
+let all (Local local) =
+  List.filter_map (function 
+      | Binding b -> Some b 
+      | Marker -> None
+    ) local
+
+let since (Local local) = 
+  let rec aux = function
+    | [] -> ([],[])
+    | Marker :: rest -> ([],rest)
+    | Binding (sym,b) :: rest -> 
        let (newl,oldl) = aux rest in
        ((sym,b) :: newl,oldl)
-    | Some sym, Marker sym' :: rest when Sym.equal sym sym' ->
-       ([],rest)
-    | _, Marker _ :: rest ->
-       aux rest
   in
   let (newl,oldl) = (aux local) in
   (newl, Local oldl)
@@ -143,10 +142,8 @@ let merge loc (Local l1) (Local l2) =
     | [], [] -> return []
     | i1::l1, i2::l2 ->
        let* i = match i1, i2 with
-         | Marker s1, Marker s2 ->
-            if Sym.equal s1 s2 
-            then return (Marker s1)
-            else fail loc (incompatible !^"marker name mismatch" (Some (s1,s2)))
+         | Marker, Marker -> 
+            return Marker
          | Binding (s1,vb1), Binding(s2,vb2) ->
             let* () = if Sym.equal s1 s2 then return () 
                       else fail loc (incompatible !^"binding name mismatch" (Some (s1,s2)))
@@ -180,9 +177,9 @@ let merge loc (Local l1) (Local l2) =
                  fail loc (incompatible !^"variable binding kind mismatch" (Some (s1,s2)))
             in
             return (Binding (s1,vb))
-         | Marker s1, Binding (s2,_)
-         | Binding (s1,_), Marker s2 ->
-            fail loc (incompatible !^"marker/binding mismatch" (Some (s1, s2)))
+         | Marker, Binding (_,_)
+         | Binding (_,_), Marker ->
+            fail loc (incompatible !^"marker/binding mismatch" None)
        in
        let* l = aux l1 l2 in
        return (i :: l)

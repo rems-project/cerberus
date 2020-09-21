@@ -19,7 +19,7 @@ type t (* = Local of context_item list *)
 
 val empty : t
 
-val marked : Sym.t ->  t
+val marked : t
 
 val concat : t -> t -> t
 
@@ -31,7 +31,8 @@ val remove : Loc.t -> Sym.t -> t -> t m
 
 val use_resource : Loc.t -> Sym.t -> Loc.t list -> t -> t m
 
-val since : Sym.t option -> t -> binding list * t
+val since : t -> binding list * t
+val all : t -> binding list
 
 val is_bound : Sym.t -> t -> bool
 

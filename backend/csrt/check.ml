@@ -472,11 +472,11 @@ let infer_value (loc: Loc.t) {local;global} (v: 'bty value) : vt m =
 
 (* logic around markers in the environment *)
 
-(* pop_return: "pop" the local environment back until `mark` and add
-   to `rt` *)
-let pop_return mark (rt, local) = 
+(* pop_return: "pop" the local environment back until last mark and
+   add to `rt` *)
+let pop_return (rt, local) = 
   let (RT.Computational ((lname,bt),rt)) = rt in
-  let (new_local,old_local) = since (Some mark) local in
+  let (new_local,old_local) = since local in
   let rec aux vbs acc = 
     match vbs with
     | [] -> acc
@@ -494,8 +494,8 @@ let pop_return mark (rt, local) =
   in
   (RT.Computational ((lname,bt), aux new_local rt), old_local)
 
-(* pop_empty: "pop" the local environment back until `mark` and drop
-   the content, while ensuring that it does not contain unused
+(* pop_empty: "pop" the local environment back until last mark and
+   drop the content, while ensuring that it does not contain unused
    resources *)
 (* all_empty: do the same for the whole local environment (without
    supplying a marker) *)
@@ -506,13 +506,13 @@ let (pop_empty,all_empty) =
       | _ :: rest -> aux loc rest
       | [] -> return ()
     in
-  let pop_empty mark loc local = 
-    let (new_local,old_local) = since (Some mark) local in
+  let pop_empty loc local = 
+    let (new_local,old_local) = since local in
     let* () = aux loc new_local in
     return old_local
   in
   let all_empty loc local = 
-    let (new_local,_) = since None local in
+    let new_local = all local in
     let* () = aux loc new_local in
     return ()
   in
@@ -767,10 +767,9 @@ let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t)
   return (Normal (rt,local))
 
 and infer_pexpr_and_pop (loc: Loc.t) delta {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
-  let mark = Sym.fresh () in
-  let local = delta ++ marked mark ++ local in 
+  let local = delta ++ marked ++ local in 
   let*? (rt, local) = infer_pexpr loc {local;global} pe in
-  return (Normal (pop_return mark (rt, local)))
+  return (Normal (pop_return (rt, local)))
 
 
 (* check_pexpr: type check the pure expression `e` against return type
@@ -816,17 +815,15 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
   | _ ->
      let*? (rt, local) = infer_pexpr loc {local;global} e in
      let* ((abt,lname),delta) = bind_logically rt in
-     let mark = Sym.fresh () in
-     let local = delta ++ marked mark ++ local in
+     let local = delta ++ marked ++ local in
      let* local = subtype loc {local;global} ((abt,lname),loc) typ in
-     let* local = pop_empty mark loc local in
+     let* local = pop_empty loc local in
      return (Normal local)
 
 and check_pexpr_and_pop (loc: Loc.t) delta {local;global} (pe: 'bty pexpr) (typ: RT.t) : (L.t or_false) m =
-  let mark = Sym.fresh () in
-  let local = delta ++ marked mark ++ local in 
+  let local = delta ++ marked ++ local in 
   let*? local = check_pexpr loc {local;global} pe typ in
-  let* local = pop_empty mark loc local in
+  let* local = pop_empty loc local in
   return (Normal local)
 
 
@@ -1046,10 +1043,9 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
   return r
 
 and infer_expr_and_pop (loc: Loc.t) delta {local;labels;global} (e: 'bty expr) : ((RT.t * L.t) or_false) m =
-  let mark = Sym.fresh () in
-  let local = delta ++ marked mark ++ local in 
+  let local = delta ++ marked ++ local in 
   let*? (rt, local) = infer_expr loc {local;labels;global} e in
-  return (Normal (pop_return mark (rt, local)))
+  return (Normal (pop_return (rt, local)))
 
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
@@ -1100,21 +1096,19 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
   | _ ->
      let*? (rt, local) = infer_expr loc {local;labels;global} e in
      let* ((abt,lname),delta) = bind_logically rt in
-     let mark = Sym.fresh () in
-     let local = delta ++ marked mark ++ local in
+     let local = delta ++ marked ++ local in
      match typ with
      | Normal typ ->
         let* local = subtype loc {local;global} ((abt,lname),loc) typ in
-        let* local = pop_empty mark loc local in
+        let* local = pop_empty loc local in
         return (Normal local)
      | False ->
         fail loc (Generic !^"This expression returns but is expected to have noreturn-type.")
 
 and check_expr_and_pop (loc: Loc.t) delta {labels;local;global} (pe: 'bty expr) (typ: RT.t or_false) : (L.t or_false) m =
-  let mark = Sym.fresh () in
-  let local = delta ++ marked mark ++ local in 
+  let local = delta ++ marked ++ local in 
   let*? local = check_expr loc {labels;local;global} pe typ in
-  let* local = pop_empty mark loc local in
+  let* local = pop_empty loc local in
   return (Normal local)
 
 
