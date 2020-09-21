@@ -636,13 +636,12 @@ let ensure_reachable (loc: Loc.t) {local;global} : unit m =
 
 (*** pure expression inference ************************************************)
 
-(* infer_pexpr_raw: the raw type inference logic for pure expressions;
+(* infer_pexpr: the raw type inference logic for pure expressions;
    returns a return type and a "reduced" local environment *)
-(* infer_pexpr: place a marker in the local environment, run the raw
-   type inference, and return, in addition to what the raw inference
-   returns, all logical (logical variables, resources, constraints) in
-   the local environment *)
-
+(* infer_pexpr_and_pop: place a marker in the local environment, run
+   the raw type inference, and return, in addition to what the raw
+   inference returns, all logical (logical variables, resources,
+   constraints) in the local environment *)
 
 let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t) or_false) m = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
@@ -774,6 +773,7 @@ and infer_pexpr_and_pop (loc: Loc.t) delta {local;global} (pe: 'bty pexpr) : ((R
 
 (* check_pexpr: type check the pure expression `e` against return type
    `typ`; returns a "reduced" local environment *)
+
 let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L.t or_false) m = 
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Loc.update loc annots in
@@ -833,10 +833,10 @@ and check_pexpr_and_pop (loc: Loc.t) delta {local;global} (pe: 'bty pexpr) (typ:
 
 (* type inference of impure expressions; returns either a return type
    and new local environment or False *)
-(* infer_expr_raw: the raw type inference for impure expressions. *)
-(* infer_expr: analogously to infer_pexpr: place a marker, run the raw
-   type inference, and additionally return whatever is left in the
-   local environment since that marker (except for computational
+(* infer_expr: the raw type inference for impure expressions. *)
+(* infer_expr_and_pop: analogously to infer_pexpr: place a marker, run
+   the raw type inference, and additionally return whatever is left in
+   the local environment since that marker (except for computational
    variables) *)
 
 let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * L.t) or_false) m = 
