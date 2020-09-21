@@ -25,9 +25,6 @@ open Pp
 
 
 
-
-
-
 (*** meta types ***************************************************************)
 type pattern = BT.t CF.Mucore.mu_pattern
 type ctor = BT.t CF.Mucore.mu_ctor
@@ -66,12 +63,12 @@ let bind_computational (delta: L.t) (name: Sym.t) (rt: RT.t) : L.t =
 let bind (name: Sym.t) (rt: RT.t) : L.t =
   bind_computational L.empty name  rt
   
-let bind_logically (rt: RT.t) : (L.t * (BT.t * Sym.t)) m =
+let bind_logically (rt: RT.t) : ((BT.t * Sym.t) * L.t) m =
   let Computational ((s,bt),rt) = rt in
   let s' = Sym.fresh () in
   let delta = bind_logical (add (mL s' (Base bt)) L.empty)
                 (RT.subst_var_l {s;swith=S s'} rt) in
-  return (delta, (bt,s'))
+  return ((bt,s'), delta)
 
 
 (*** pattern matching *********************************************************)
@@ -164,7 +161,7 @@ let pattern_match (loc: Loc.t) (this: IT.t) (pat: pattern) (expect_bt: BT.t) : L
    logical variable and record constraints about how the variables
    introduced in the pattern-matching relate to (name,bound). *)
 let pattern_match_rt (loc: Loc.t) (pat: pattern) (rt: RT.t) : L.t m =
-  let* (delta, (bt,s')) = bind_logically rt in
+  let* ((bt,s'), delta) = bind_logically rt in
   let* delta' = pattern_match loc (S s') pat bt in
   return (delta' ++ delta)
 
@@ -819,7 +816,7 @@ let rec check_pexpr (loc: Loc.t) {local;global} (e: 'bty pexpr) (typ: RT.t) : (L
      check_pexpr_and_pop loc delta {local;global} e2 typ
   | _ ->
      let*? (rt, local) = infer_pexpr loc {local;global} e in
-     let* (delta,(abt,lname)) = bind_logically rt in
+     let* ((abt,lname),delta) = bind_logically rt in
      let mark = Sym.fresh () in
      let local = delta ++ marked mark ++ local in
      let* local = subtype loc {local;global} ((abt,lname),loc) typ in
@@ -1103,7 +1100,7 @@ let rec check_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) (typ: RT.t 
      check_expr_and_pop loc delta {local;labels;global} e2 typ
   | _ ->
      let*? (rt, local) = infer_expr loc {local;labels;global} e in
-     let* (delta,(abt,lname)) = bind_logically rt in
+     let* ((abt,lname),delta) = bind_logically rt in
      let mark = Sym.fresh () in
      let local = delta ++ marked mark ++ local in
      match typ with
