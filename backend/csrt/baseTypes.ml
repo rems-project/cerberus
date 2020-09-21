@@ -39,21 +39,18 @@ let rec equal t1 t2 =
   | FunctionPointer s1, FunctionPointer s2 -> Sym.equal s1 s2
   | _, _ -> false
 
-let rec pp atomic = 
+let rec pp atomic bt = 
   let mparens pped = if atomic then parens pped else pped in
-  function
+  match bt with
   | Unit -> !^"void"
   | Bool -> !^"bool"
   | Integer -> !^"integer"
   | Loc -> !^"pointer"
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^^^ pp true bt)
-  | Tuple nbts -> 
-     parens (flow_map (comma) (pp false) nbts)
-  | Struct (Tag sym) -> 
-     mparens (!^"struct" ^^^ Sym.pp sym)
-  | FunctionPointer p ->
-     parens (!^"function" ^^^ Sym.pp p)
+  | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)
+  | Struct (Tag sym) -> mparens (!^"struct" ^^^ Sym.pp sym)
+  | FunctionPointer p -> mparens (!^"function" ^^^ Sym.pp p)
 
 
 
