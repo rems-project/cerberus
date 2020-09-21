@@ -1127,9 +1127,7 @@ and check_expr_and_pop (loc: Loc.t) delta {labels;local;global} (pe: 'bty expr) 
    for functions and procedures (with return type) and labels with
    no-return (False) type. *)
 module CBF (RT: AT.RT_Sig) = struct
-
   module T = AT.Make(RT)
-
   let check_and_bind_arguments loc arguments (function_typ: T.t) = 
     let rec check acc_substs local pure_local args (ftyp: T.t) =
       match args, ftyp with
@@ -1163,7 +1161,6 @@ module CBF (RT: AT.RT_Sig) = struct
          return (rt,local,pure_local,acc_substs)
     in
     check [] L.empty L.empty arguments function_typ
-
 end
 
 module CBF_FT = CBF(ReturnTypes)

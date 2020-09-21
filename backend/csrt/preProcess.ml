@@ -378,8 +378,8 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
               return (M_Return (Conversions.make_return_esave_spec ftyp))
            | M_Label (_,args,e,annots) -> 
               let* lt = 
-                fail loc (Generic (!^"label" ^^^ Sym.pp lsym ^^^ 
-                                     !^"needs an annotation")) in
+                fail (Loc.update loc annots) 
+                  (Generic (!^"need a type annotation here")) in
               let* args = 
                 mapM (fun (sym,acbt) ->
                     let* abt = Conversions.bt_of_core_base_type loc acbt in
