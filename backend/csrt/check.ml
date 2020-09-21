@@ -372,8 +372,7 @@ let rec infer_mem_value (loc: Loc.t) {local;global} (mem: CF.Impl_mem.mem_value)
     ( fun it iv -> 
       let* v = Memory.integer_value_to_num loc iv in
       let s = Sym.fresh () in
-      return (s, BT.Integer, LC (EQ (S s, Num v)) )
-    )
+      return (s, BT.Integer, LC (EQ (S s, Num v))) )
     ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
     ( fun _ ptrval -> infer_ptrval loc {local;global} ptrval  )
     ( fun mem_values -> infer_array loc {local;global} mem_values )

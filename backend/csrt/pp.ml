@@ -92,7 +92,7 @@ let headline a =
   (if !debug_level >= 2 then hardline else empty) ^^
     format [FG(Magenta,Bright)] ("# " ^ a)
 
-let action a = format [FG (Cyan,Bright)] ("## " ^ a ^ " ")
+let action a = format [FG (Cyan,Dark)] ("## " ^ a ^ " ")
 
 let p pp = CB.Pipeline.run_pp None (pp ^^ hardline)
 let o_p = function

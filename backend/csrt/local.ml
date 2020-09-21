@@ -20,6 +20,7 @@ type context_item =
   | Marker of Sym.t
 
 
+(* left-most is most recent *)
 type t = Local of context_item list
 
 let empty = Local []
@@ -35,8 +36,11 @@ let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
   | Binding (sym,binding) -> 
      VB.pp ~print_all_names ~print_used (sym,binding)
   | Marker sym -> 
-     uformat [FG (Blue,Dark)] "\u{25CF}" 1 ^^ parens (Sym.pp sym)
+     uformat [FG (Blue,Dark)] "\u{25CF}" 1 ^^ 
+       (if print_all_names then parens (Sym.pp sym) else Pp.empty)
 
+(* reverses the list order for matching standard mathematical
+   presentation *)
 let pp ?(print_all_names = false) ?(print_used = false) (Local local) = 
   match local with
   | [] -> !^"(empty)"
