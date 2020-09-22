@@ -234,7 +234,8 @@ type mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty =
   | M_ProcDecl of Loc.t * 'DBTY * list 'DBTY
   | M_BuiltinDecl of Loc.t * 'DBTY * list 'DBTY
 
-type mu_fun_map 'DLTY 'DCTY 'DBTY 'bty = map symbol (mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty)
+type mu_fun_map 'DLTY 'DCTY 'DBTY 'bty = 
+  map symbol (mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty)
 
 instance forall 'DCTY 'DBTY 'bty. (Located (mu_pexpr 'DCTY 'DBTY 'bty))
   let locOf pe =
@@ -272,10 +273,12 @@ type mu_tag_definition 'DSTRUCT_DEF 'DUNION_DEF =
 type mu_tag_definitions 'DSTRUCT_DEF 'DUNION_DEF = 
   map Symbol.sym (mu_tag_definition 'DSTRUCT_DEF 'DUNION_DEF)
 
-type mu_funinfo_type 'DCTY = 'DCTY * list (maybe symbol * 'DCTY)
+ type mu_funinfo_type 'DCTY = 'DCTY * list (maybe symbol * 'DCTY)
 
 type mu_funinfo 'DFTY = 
   M_funinfo of (Loc.t * Annot.attributes * 'DFTY * bool * bool)
+
+type mu_funinfos 'DFTY = map symbol (mu_funinfo 'DFTY)
 
 (* a Core file is just a set of named functions *)
 type mu_file 'DFTY 'DLTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
@@ -286,7 +289,7 @@ type mu_file 'DFTY 'DLTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
   mu_globs   : list (symbol * mu_globs 'DCTY 'DBTY 'bty);
   mu_funs    : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty;
   mu_extern  : mu_extern_map;
-  mu_funinfo : map symbol (mu_funinfo 'DFTY);
+  mu_funinfo : mu_funinfos 'DFTY;
 |>
 
 

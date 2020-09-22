@@ -28,7 +28,7 @@ type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
 
 type ct = Ctype.ctype
 type ft = Mucore.mu_funinfo_type ct
-type lt = unit (* list (maybe Symbol.sym * (Ctype.ctype * bool)) *)
+type lt = list (maybe Symbol.sym * (Ctype.ctype * bool))
 type bt = Mucore.mu_base_type
 
 type mu_value = Mucore.mu_value ct bt unit
@@ -852,18 +852,31 @@ let normalise_impl_decl (i : generic_impl_decl unit) : mu_impl_decl ct bt unit =
 let normalise_impl (i : generic_impl unit) : mu_impl ct bt unit =
   Map.map normalise_impl_decl i
 
-let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a) 
+let normalise_fun_map_decl 
+      (name: symbol)
+      (d : generic_fun_map_decl unit 'a) 
     : mu_fun_map_decl lt ct bt unit =
   better_error_messages (show name)
     (match d with
-     | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
+     | Fun bt args pe -> 
+        M_Fun bt args (normalise_pexpr pe)
      | Proc loc bt args e -> 
+        let saves = Core_aux.m_collect_saves e in
         let saves' =
           Map.map (fun (_,params,body,annots) ->
-              if is_return annots then M_Return () else
-                let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
-                M_Label () params (normalise_expr body) annots
-            ) (Core_aux.m_collect_saves e)
+              let param_tys = 
+                 map (fun (sym,(((_,mctb),_))) -> 
+                     match mctb with
+                     | Just ctb -> (Just sym, ctb)
+                     | Nothing -> failwith "label without c-type argument annotation"
+                      end
+                   ) params 
+              in
+              let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
+              if is_return annots 
+              then M_Return param_tys
+              else M_Label param_tys params (normalise_expr body) annots
+            ) saves
         in
         M_Proc loc bt args (normalise_expr e) saves'
      | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
@@ -871,7 +884,7 @@ let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a)
      end)
 
 let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map lt ct bt unit = 
-  Map.mapi (normalise_fun_map_decl) fmap
+  Map.mapi normalise_fun_map_decl fmap
   
 
 let normalise_globs (g : generic_globs 'a unit) : mu_globs ct bt unit = 

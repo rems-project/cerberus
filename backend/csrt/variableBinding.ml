@@ -17,7 +17,7 @@ type t =
 
 let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
   let btyp sym pped = 
-    format [Pp.Underline] (Sym.pp_string sym) ^^ colon ^^^ pped in
+    format [Pp.FG(Default,Bright)] (Sym.pp_string sym) ^^ colon ^^ pped in
   match binding with
   | Computational (lname,bt) -> 
      btyp sym (BT.pp true bt ^^ tilde ^^ Sym.pp lname)

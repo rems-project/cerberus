@@ -857,6 +857,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
             P.nest 2 (
                 (* pp label definitions *)
               (Pmap.fold (fun sym def acc ->
+                   acc ^^
                    match def with
                    | M_Return lt -> 
                       P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ 
@@ -865,7 +866,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                         | None -> P.empty
                         end
                    | M_Label (lt, args, lbody, annots) ->
-                      acc ^^
                         begin
                           begin match pp_lt with
                           | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
