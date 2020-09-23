@@ -84,7 +84,7 @@ let rec ctype_aux owned loc (name: Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
      if owned then
        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
        let* size = Memory.size_of_ctype loc ct in
-       let points = Points {pointer = name; pointee = Some pointee_name; size} in
+       let points = Points {pointer = S name; pointee = Some (S pointee_name); size} in
        let t = Logical ((pointee_name, Base bt), Resource (points, t)) in
        return ((name,Loc),t)
      else
@@ -225,7 +225,7 @@ let struct_decl_closed loc tag fields struct_decls =
        let Computational ((s,_struct),tag2_bindings) = decl.closed in
        let acc = 
          let s' = Sym.fresh () in
-         RT.subst_var_l (Subst.{s; swith=s'}) tag2_bindings @@
+         RT.subst_var_l (Subst.{before=s;after=S s'}) tag2_bindings @@
            RT.Constraint (LC (EQ (S s', this)), acc)
        in
        return acc
@@ -255,7 +255,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
     let loc = Loc.update loc annots in
     let this_p, this_v = Sym.fresh (), Sym.fresh () in
     let p_constr = IT.EQ (S this_p, IT.MemberOffset (tag,struct_p,member)) in
-    let points = RE.Points {pointer=this_p;pointee= Some this_v; size} in
+    let points = RE.Points {pointer=S this_p;pointee= Some (S this_v); size} in
     let new_lbs bt = 
       RT.Logical ((this_p, Base Loc),
       RT.Logical ((this_v, Base bt), 
@@ -264,7 +264,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
     let new_rbs = 
       RT.Resource (points, I)
     in
-    let mapping = (member,this_p) :: acc_mapping in
+    let mapping = (member,S this_p) :: acc_mapping in
     match ct_ with
     | Void -> 
        fail loc (Generic !^"void member of struct")
@@ -286,7 +286,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
          RT.freshify (decl.closed_stored) in
        let lbs = Logical ((this_p, Base Loc), lbs) in
        let rbs = 
-         RT.subst_var_l (Subst.{s; swith=this_p}) tag2_bindings @@
+         RT.subst_var_l (Subst.{before=s; after=S this_p}) tag2_bindings @@
          RT.Constraint (LC p_constr, rbs)
        in
        return (mapping, lbs, rbs)
@@ -302,7 +302,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
   in
   let* struct_size = Memory.size_of_struct_type loc tag in
   let stored_struct = 
-    StoredStruct {pointer = struct_pointer;
+    StoredStruct {pointer = S struct_pointer;
                   members = mapping;
                   tag;
                   size = struct_size}
@@ -341,13 +341,13 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
        | CF.Ctype.Ctype (_, Struct s) ->
           let* decl = Global.get_struct_decl loc struct_decls (Tag s) in
           let Computational ((s,bt), lrt) = RT.freshify decl.Global.closed_stored in
-          return (bt, RT.subst_var_l {s; swith=name} lrt)
+          return (bt, RT.subst_var_l {before=s; after=S name} lrt)
        | _ ->
           let name2 = Sym.fresh () in
           let* (bt,lrt) = aux name2 ct in
           (* fix *)
           let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
-          let points = RE.Points {pointer = name; pointee = Some name2; size} in
+          let points = RE.Points {pointer = S name; pointee = Some (S name2); size} in
           return (Loc, Logical ((name2, Base bt), Resource (points, lrt)))
        end
     (* fix *)
@@ -356,7 +356,7 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
     | Struct tag -> 
        let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
        let Computational ((s,bt),lrt) = RT.freshify decl.Global.closed in
-       return (bt, RT.subst_var_l {s; swith=name} lrt)
+       return (bt, RT.subst_var_l {before=s; after=S name} lrt)
     | Basic (Floating _) -> floatingType loc 
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")
@@ -427,7 +427,7 @@ let make_return_from_argument_lrt lrt =
   let rec aux = function
     | RT.Logical ((s,ls),lrt) ->
        let s' = Sym.fresh () in
-       let lrt' = subst_non_pointer {s;swith=s'} lrt in
+       let lrt' = subst_non_pointer {before=s;after=S s'} lrt in
        RT.Logical ((s',ls), aux lrt')
     | RT.Resource (re,lrt) -> RT.Resource (re,aux lrt)
     | RT.Constraint (lc,lrt) -> RT.Constraint (lc,aux lrt)
@@ -702,15 +702,15 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
     | Own, Some integer_type_expr -> 
        let* (_, _, bytes) = of_integer_type_expr loc integer_type_expr in
        let size = Num.of_int bytes in
-       let points = Points {pointer = existing_pointer; 
+       let points = Points {pointer = S existing_pointer; 
                             pointee = None; size} in
        return ([], [points], [])
     | Own, None -> 
        let* ((bt,osize),l,r,c) = of_type_expr loc names newname' type_expr in
        let* points = match osize with
          | Some size ->
-            return (Points {pointer = existing_pointer; 
-                            pointee = Some newname'; size})
+            return (Points {pointer = S existing_pointer; 
+                            pointee = Some (S newname'); size})
          | None -> fail loc (Generic !^"pointer to non-object")
        in
        return ((newname', LS.Base bt) :: l, r @ [points], c)
@@ -791,8 +791,8 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
           | Some size -> return size
           | None -> fail loc (Generic !^"argument type without size")
         in
-        let pointsa = RE.Points {pointer = s; pointee = Some sa; size} in
-        let pointsr = RE.Points {pointer = s; pointee = Some sr; size} in
+        let pointsa = RE.Points {pointer = S s; pointee = Some (S sa); size} in
+        let pointsr = RE.Points {pointer = S s; pointee = Some (S sr); size} in
         return ((a @ [(s,BT.Loc)], l @ [(sa, LS.Base bt)] @ l', r @ [pointsa] @ r', c @ c'),
                 (rl @ [(sr, LS.Base bt)], rr @ [pointsr], rc))
       ) ((a, l, r, c), (rl, rr, rc)) annot.fa_args

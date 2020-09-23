@@ -21,4 +21,5 @@ let compare = S.symbol_compare
 
 open Subst
 
-let subst {s;swith} symbol = if symbol = s then swith else symbol
+let subst {before;after} symbol = 
+  if symbol = before then after else symbol

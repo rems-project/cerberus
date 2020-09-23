@@ -4,8 +4,7 @@ type t = LC of IT.t
 
 let pp atomic (LC c) = IT.pp atomic c
 
-let subst_var Subst.{s;swith=s'} (LC c) = 
-  LC (IT.subst_var Subst.{s;swith= S s'} c)
+let subst_var substitution (LC c) = LC (IT.subst_var substitution c)
 let subst_vars = Subst.make_substs subst_var
 
 let instantiate_struct_member subst (LC c) = 

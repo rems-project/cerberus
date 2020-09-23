@@ -46,11 +46,11 @@ module Make (RT: AT.RT_Sig) = struct
 
   let rec subst_var_l substitution = function
     | Logical ((name,ls),t) -> 
-       if name = substitution.s then 
+       if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if Sym.equal name substitution.swith then
+       else if SymSet.mem name (IT.vars_in substitution.after) then
          let newname = Sym.fresh () in
-         let t' = subst_var_l {s=name; swith=newname} t in
+         let t' = subst_var_l {before=name; after=S newname} t in
          let t'' = subst_var_l substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -60,11 +60,11 @@ module Make (RT: AT.RT_Sig) = struct
 
   let rec subst_var_a substitution = function
     | Computational ((name,bt),t) -> 
-       if name = substitution.s then 
+       if Sym.equal name substitution.before then 
          Computational ((name,bt),t) 
-       else if Sym.equal name substitution.swith then
+       else if SymSet.mem name (IT.vars_in substitution.after) then
          let newname = Sym.fresh () in
-         let t' = subst_var_a {s=name; swith=newname} t in
+         let t' = subst_var_a {before=name; after=S newname} t in
          let t'' = subst_var_a substitution t' in
          Computational ((newname,bt),t'')
        else

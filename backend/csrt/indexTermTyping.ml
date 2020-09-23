@@ -61,6 +61,15 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
         end
      | _ -> fail loc (Illtyped_it it)
      end
+  | Struct (tag, members) ->
+     let* decl = Global.get_struct_decl loc global.struct_decls tag in
+     let* () = 
+       ListM.iterM (fun (member,it') ->
+           let* mbt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
+           check_index_term loc {local;global} (Base mbt) it'
+         ) members
+     in
+     return (Base (Struct tag))
   | Member (tag, it', member) ->
      let* () = check_index_term loc {local;global} (Base (Struct tag)) it' in
      let* decl = Global.get_struct_decl loc global.struct_decls tag in

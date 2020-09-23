@@ -48,7 +48,7 @@ let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
 let rec bind_logical (delta: L.t) : RT.l -> L.t = function
   | Logical ((s,ls),rt) ->
      let s' = Sym.fresh () in
-     bind_logical (add (mL s' ls) delta) (RT.subst_var_l {s; swith=s'} rt)
+     bind_logical (add (mL s' ls) delta) (RT.subst_var_l {before=s; after=S s'} rt)
   | Resource (re,rt) -> bind_logical (add (mUR re) delta) rt
   | Constraint (lc,rt) -> bind_logical (add (mUC lc) delta) rt
   | I -> delta
@@ -58,7 +58,7 @@ let bind_computational (delta: L.t) (name: Sym.t) (rt: RT.t) : L.t =
   let s' = Sym.fresh () in
   bind_logical 
     (add (mA name (bt,s')) (add (mL s' (Base bt)) delta))
-    (RT.subst_var_l {s;swith=s'} rt)
+    (RT.subst_var_l {before=s;after=S s'} rt)
 
 let bind (name: Sym.t) (rt: RT.t) : L.t =
   bind_computational L.empty name  rt
@@ -67,7 +67,7 @@ let bind_logically (rt: RT.t) : ((BT.t * Sym.t) * L.t) m =
   let Computational ((s,bt),rt) = rt in
   let s' = Sym.fresh () in
   let delta = bind_logical (add (mL s' (Base bt)) L.empty)
-                (RT.subst_var_l {s;swith=s'} rt) in
+                (RT.subst_var_l {before=s;after=S s'} rt) in
   return ((bt,s'), delta)
 
 
@@ -180,10 +180,10 @@ module Spine (RT: AT.RT_Sig) = struct
     pp_list (fun ((bt,lname),(_l:Loc.t)) -> 
         parens (BT.pp false bt ^^^ bar ^^^ Sym.pp lname))
 
-  let pp_unis (unis: (Sym.t Uni.t) SymMap.t) : Pp.document = 
+  let pp_unis (unis: (IT.t Uni.t) SymMap.t) : Pp.document = 
     let pp_entry (sym, Uni.{resolved}) =
       match resolved with
-      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ Sym.pp res
+      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp false res
       | None -> Sym.pp sym ^^^ !^"unresolved"
     in
     pp_list pp_entry (SymMap.bindings unis)
@@ -204,7 +204,7 @@ module Spine (RT: AT.RT_Sig) = struct
       | ((abt,lname),arg_loc) :: args, Computational ((sname,sbt),ftyp) ->
          if BT.equal abt sbt 
          then check_computational args 
-                (NFT.subst_var {s=sname;swith=lname} ftyp)
+                (NFT.subst_var {before=sname;after=S lname} ftyp)
          else fail loc (Mismatch {has = Base abt; expect = Base sbt})
       | [], L ftyp -> 
          return ftyp
@@ -221,7 +221,7 @@ module Spine (RT: AT.RT_Sig) = struct
          let sym = Sym.fresh () in
          let unis = SymMap.add sym (Uni.{ resolved = None }) unis in
          delay_logical (unis,lspec @ [(sym,sls)]) 
-                       (NFT.subst_var_l {s=sname;swith=sym} ftyp)
+                       (NFT.subst_var_l {before=sname;after=S sym} ftyp)
       | R ftyp -> return ((unis,lspec), ftyp)
     in
     let* ((unis,lspec), ftyp) = delay_logical (SymMap.empty,[]) ftyp in
@@ -232,7 +232,7 @@ module Spine (RT: AT.RT_Sig) = struct
 
     let rec infer_resources local unis = function
       | Resource (re,ftyp) -> 
-         let* () = match Uni.unresolved_var unis (SymSet.singleton (RE.pointer re)) with
+         let* () = match Uni.unresolved_var unis (IT.vars_in (RE.pointer re)) with
            | Some var -> fail loc (Unconstrained_logical_variable var)
            | _ -> return ()
          in
@@ -264,7 +264,7 @@ module Spine (RT: AT.RT_Sig) = struct
          | Uni.{resolved = None} -> 
             fail loc (Unconstrained_logical_variable sname)
          | Uni.{resolved = Some sym} ->
-            let* als = get_l loc sym local in
+            let* als = IndexTermTyping.infer_index_term loc {local;global} sym in
             if LS.equal als sls then check_logical unis lspec
             else fail loc (Mismatch {has = als; expect = sls})
          end
@@ -402,7 +402,8 @@ and infer_struct (loc: Loc.t) {local;global} (tag: BT.tag)
        let* constraints = check fields decl in
        let* (lname,abt,LC lc) = infer_mem_value loc {local;global} mv in
        let* () = check_base_type loc abt sbt in
-       let member_constraint = IT.subst_var {s=lname;swith = Member (tag, S ret, Member (Id.s id))} lc in
+       let member_constraint = 
+         IT.subst_var {before=lname;after=Member (tag, S ret, Member (Id.s id))} lc in
        return (constraints @ [member_constraint])
     | [], [] -> 
        return []
@@ -493,7 +494,7 @@ let pop_return (rt, local) =
        aux vbs acc
     | (s, VB.Logical ls) :: vbs ->
        let s' = Sym.fresh () in
-       aux vbs (RT.Logical ((s',ls), RT.subst_var_l {s;swith=s'} acc))
+       aux vbs (RT.Logical ((s',ls), RT.subst_var_l {before=s;after=S s'} acc))
     | (_, VB.Resource re) :: vbs ->
        aux vbs (RT.Resource (re,acc))
     | (_, VB.UsedResource _) :: vbs ->
@@ -585,7 +586,7 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
        return (RT.Constraint (LC lc, lrt))
     | _, RT.Logical ((s,ls),lrt2) ->
        let s' = Sym.fresh () in
-       let* lrt = aux lrt (RT.subst_var_l {s; swith=s'} lrt2) in
+       let* lrt = aux lrt (RT.subst_var_l {before=s; after=S s'} lrt2) in
        return (RT.Logical ((s',ls), lrt))
     | _, Constraint (LC lc,lrt2) ->
        let* lrt = aux lrt lrt2 in
@@ -594,7 +595,7 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
     | _, Resource _ -> 
        fail loc (Generic !^"cannot infer type of this expression (cannot merge)")
   in
-  let lrt2' = RT.subst_var_l {s=lname2; swith=lname} lrt2 in
+  let lrt2' = RT.subst_var_l {before=lname2; after=S lname} lrt2 in
   let* lrt = aux lrt lrt2' in
   return (LC (Or [c; c2]), RT.Computational ((lname,bt), lrt))
 
@@ -689,13 +690,13 @@ let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t)
        let tag = BT.Tag tag in
        let* (bt,lname) = get_a loc sym local in
        let* () = check_base_type loc bt Loc in
-       let* stored_struct = RI.stored_struct_to loc {local;global} lname tag in
+       let* stored_struct = RI.stored_struct_to loc {local;global} (S lname) tag in
        let* members = match stored_struct with
          | Some (_,{members; _}) -> return members
          | _ -> fail loc (Generic (!^"this location does not contain a struct with tag" ^^^ BT.pp_tag tag))
        in
        let* faddr = Tools.assoc_err loc member members (unreachable !^"check store field access") in
-       let constr = LC (EQ (S ret, S faddr)) in
+       let constr = LC (EQ (S ret, faddr)) in
        let rt = RT.Computational ((ret, Loc), Constraint (constr,I)) in
        return (Normal (rt, local))
     | M_PEnot (A (a,_,sym)) ->
@@ -875,8 +876,8 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* () = check_base_type (Loc.update loc a) bt Loc in
           (* check more things? *)
           let shape = match bt with
-            | Struct tag -> RE.StoredStruct_ (lname, tag)
-            | _ -> RE.Points_ (lname,size)
+            | Struct tag -> RE.StoredStruct_ (S lname, tag)
+            | _ -> RE.Points_ (S lname,size)
           in
           let* o_resource = RI.match_resource loc {local;global} shape in
           let constr = LC (EQ (S ret, Bool (Option.is_some o_resource))) in
@@ -902,11 +903,11 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* rt = match bt with
             | Struct tag -> 
                let* (stored,lbindings,rbindings) = 
-                 RI.store_struct loc global.struct_decls tag ret None in
+                 RI.store_struct loc global.struct_decls tag (S ret) None in
                return (RT.Computational ((ret, Loc), 
                        RT.(@@) lbindings (RT.Resource (StoredStruct stored, rbindings))))
             | _ ->
-               let r = RE.Points {pointer = ret; pointee = None; size} in
+               let r = RE.Points {pointer = S ret; pointee = None; size} in
                return (RT.Computational ((ret, Loc), Resource (r, I)))
           in
           return (Normal (rt, local))
@@ -921,7 +922,7 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           (* revisit *)
           let* found = 
             filter_rM (fun name t ->
-                let* holds = Solver.equal loc {local;global} (S lname) (S (RE.pointer t)) in
+                let* holds = Solver.equal loc {local;global} (S lname) (RE.pointer t) in
                 return (if holds then Some (name,t) else None)
               ) local
           in
@@ -946,8 +947,8 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
              checked whether the store value is representable and done
              the right thing. *)
           let resource_shape = match vbt with
-            | Struct tag -> RE.StoredStruct_ (plname, tag)
-            | _ -> RE.Points_ (plname,size)
+            | Struct tag -> RE.StoredStruct_ (S plname, tag)
+            | _ -> RE.Points_ (S plname,size)
           in
           let* o_resource = RI.match_resource loc {local;global} resource_shape in
           let* local = match o_resource with
@@ -957,10 +958,11 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* bindings = match vbt with
           | Struct tag -> 
              let* (stored,lbindings,rbindings) = 
-               RI.store_struct loc global.struct_decls tag plname (Some (S vlname)) in
+               RI.store_struct loc global.struct_decls tag (S plname) (Some (S vlname)) in
              return (RT.(@@) lbindings (Resource (StoredStruct stored, rbindings)))
            | _ -> 
-             let resource = RE.Points {pointer = plname; pointee = Some vlname; size} in
+             let resource = RE.Points {pointer = S plname; 
+                                       pointee = Some (S vlname); size} in
              return (RT.Resource (resource, I))
           in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
@@ -971,8 +973,8 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* () = check_base_type loc pbt BT.Loc in
           let ret = Sym.fresh () in
           let* lcs = match bt with
-            | Struct tag -> RI.load_struct loc {local;global} tag plname (S ret)
-            | _ -> RI.load_point loc {local;global} plname size bt (S ret) false
+            | Struct tag -> RI.load_struct loc {local;global} tag (S plname) (S ret)
+            | _ -> RI.load_point loc {local;global} (S plname) size bt (S ret) false
           in
           let constraints = List.fold_right RT.mConstraint lcs RT.I in
           let rt = RT.Computational ((ret, bt), constraints) in
@@ -1143,7 +1145,7 @@ module CBF (RT: AT.RT_Sig) = struct
       | (aname,abt) :: args, T.Computational ((lname,sbt),ftyp) 
            when BT.equal abt sbt ->
          let new_lname = Sym.fresh () in
-         let subst = Subst.{s=lname;swith=new_lname} in
+         let subst = Subst.{before=lname;after=IT.S new_lname} in
          let ftyp' = T.subst_var subst ftyp in
          let local = add (mA aname (abt,new_lname)) (add (mL new_lname (Base abt)) local) in
          let pure_local = add (mA aname (abt,new_lname)) (add (mL new_lname (Base abt)) pure_local) in
@@ -1157,7 +1159,7 @@ module CBF (RT: AT.RT_Sig) = struct
          fail loc (Number_arguments {expect;has})
       | args, T.Logical ((sname,sls),ftyp) ->
          let new_lname = Sym.fresh () in
-         let subst = Subst.{s=sname;swith=new_lname} in
+         let subst = Subst.{before=sname;after=IT.S new_lname} in
          let ftyp' = T.subst_var subst ftyp in
          check (acc_substs@[subst]) 
            (add (mL new_lname sls) local) 

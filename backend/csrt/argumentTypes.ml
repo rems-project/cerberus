@@ -10,7 +10,7 @@ module SymSet = Set.Make(Sym)
 
 module type RT_Sig = sig
   type t
-  val subst_var: (Sym.t,Sym.t) Subst.t -> t -> t
+  val subst_var: (Sym.t,IT.t) Subst.t -> t -> t
   val free_vars: t -> SymSet.t
   val instantiate_struct_member: (IT.t,IT.t) Subst.t -> t -> t
   val pp: t -> Pp.document
@@ -37,21 +37,21 @@ let mResource bound t = Resource (bound,t)
 
   let rec subst_var substitution = function
     | Computational ((name,bt),t) -> 
-       if name = substitution.s then 
+       if Sym.equal name substitution.before then 
          Computational ((name,bt),t) 
-       else if Sym.equal name substitution.swith then
+       else if SymSet.mem name (IT.vars_in substitution.after) then
          let newname = Sym.fresh () in
-         let t' = subst_var {s=name; swith=newname} t in
+         let t' = subst_var {before=name; after=S newname} t in
          let t'' = subst_var substitution t' in
          Computational ((newname,bt),t'')
        else
          Computational ((name,bt),subst_var substitution t)
     | Logical ((name,ls),t) -> 
-       if name = substitution.s then 
+       if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if Sym.equal name substitution.swith then
+       else if SymSet.mem name (IT.vars_in substitution.after) then
          let newname = Sym.fresh () in
-         let t' = subst_var {s=name; swith=newname} t in
+         let t' = subst_var {before=name; after=S newname} t in
          let t'' = subst_var substitution t' in
          Logical ((newname,ls),t'')
        else

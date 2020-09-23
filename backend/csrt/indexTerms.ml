@@ -222,7 +222,7 @@ let rec subst_var subst it : t =
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_var subst t, f)
   | S symbol -> 
-     if symbol = subst.s then subst.swith else S symbol
+     if symbol = subst.before then subst.after else S symbol
 
 
 let subst_vars = make_substs subst_var
@@ -315,7 +315,7 @@ let rec instantiate_struct_member subst it : t =
      in
      Struct (tag, members)
   | (Member (tag, t, f)) as member ->
-     if subst.s = member then subst.swith 
+     if subst.before = member then subst.after
      else Member (tag, instantiate_struct_member subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,instantiate_struct_member subst t, f)

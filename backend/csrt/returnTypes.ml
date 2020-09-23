@@ -36,11 +36,11 @@ let subst_var_l ?(re_subst_var=RE.subst_var) substitution lrt =
   let rec aux substitution = function
     | I -> I
     | Logical ((name,ls),t) -> 
-       if name = substitution.s then 
+       if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if Sym.equal name substitution.swith then
+       else if SymSet.mem name (IT.vars_in substitution.after) then
          let newname = Sym.fresh () in
-         let t' = aux {s=name; swith=newname} t in
+         let t' = aux {before=name;after=S newname} t in
          let t'' = aux substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -60,11 +60,11 @@ let subst_var_l ?(re_subst_var=RE.subst_var) substitution lrt =
 
 let subst_var substitution = function
   | Computational ((name,bt),t) -> 
-     if name = substitution.s then 
+     if Sym.equal name substitution.before then 
        Computational ((name,bt),t) 
-     else if Sym.equal name substitution.swith then
+     else if SymSet.mem name (IT.vars_in substitution.after) then
        let newname = Sym.fresh () in
-       let t' = subst_var_l {s=name; swith=newname} t in
+       let t' = subst_var_l {before=name; after=S newname} t in
        let t'' = subst_var_l substitution t' in
        Computational ((newname,bt),t'')
      else
@@ -77,7 +77,7 @@ let subst_vars = Subst.make_substs subst_var
 let rec freshify_l = function
   | Logical ((s,ls),t) ->
      let s' = Sym.fresh () in
-     let t' = subst_var_l {s; swith=s'} t in
+     let t' = subst_var_l {before=s;after=S s'} t in
      Logical ((s',ls), freshify_l t')
   | Resource (re,t) ->
      Resource (re, freshify_l t)
@@ -90,7 +90,7 @@ let rec freshify_l = function
 let freshify = function
   | Computational ((s,bt),t) ->
      let s' = Sym.fresh () in
-     let t' = subst_var_l {s; swith=s'} t in
+     let t' = subst_var_l {before = s; after=S s'} t in
      Computational ((s',bt), freshify_l t')
      
 
