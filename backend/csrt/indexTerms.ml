@@ -40,6 +40,7 @@ type 'id term =
   | Tuple of 'id term list
   | Nth of BT.t * int * 'id term
 
+  | Struct of BT.tag * (BT.member * 'id term) list
   | Member of BT.tag * 'id term * BT.member
   | MemberOffset of BT.tag * 'id term * BT.member
 
@@ -111,6 +112,9 @@ let rec pp atomic it : PPrint.document =
   | List (its, bt) -> 
      mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BT.pp false bt)
 
+  | Struct (_tag, members) ->
+     braces (separate_map comma (fun (BT.Member member,it) -> 
+                 !^member ^^^ equals ^^^ pp it ) members)
   | Member (_tag, t, Member s) ->
      pp t ^^ dot ^^ !^s
   | MemberOffset (_tag, t, Member s) ->
@@ -157,6 +161,8 @@ let rec vars_in it : SymSet.t =
      vars_in_list [it;it';it'']
   | Tuple its -> 
      vars_in_list (it :: its)
+  | Struct (_tag, members) ->
+     vars_in_list (map snd members)
   | Member (_tag, it, s)
   | MemberOffset (_tag, it, s) -> 
      vars_in_list [it;it]
@@ -208,6 +214,9 @@ let rec subst_var subst it : t =
      Head (subst_var subst it)
   | Tail it ->
      Tail (subst_var subst it)
+  | Struct (tag, members) ->
+     let members = map (fun (member,it) -> (member,subst_var subst it)) members in
+     Struct (tag, members)
   | Member (tag, t, f) ->
      Member (tag, subst_var subst t, f)
   | MemberOffset (tag,t,f) ->
@@ -298,6 +307,13 @@ let rec instantiate_struct_member subst it : t =
      Head (instantiate_struct_member subst it)
   | Tail it ->
      Tail (instantiate_struct_member subst it)
+  | Struct (tag, members) ->
+     let members = 
+       map (fun (member,it) -> 
+           (member,instantiate_struct_member subst it)
+         ) members 
+     in
+     Struct (tag, members)
   | (Member (tag, t, f)) as member ->
      if subst.s = member then subst.swith 
      else Member (tag, instantiate_struct_member subst t, f)
@@ -355,6 +371,19 @@ let rec unify it it' (res : (t Uni.t) SymMap.t) =
 
   | List (its,bt), List (its',bt') when BT.equal bt bt' ->
      unify_list its its' res
+
+  | Struct (tag, members), Struct (tag', members') 
+       when tag = tag' ->
+     let rec aux members members' res = 
+       match members, members' with
+       | [], [] -> return res
+       | (BT.Member m, it)::members, (BT.Member m', it')::members' 
+            when m = m' ->
+          let* res = unify it it' res in
+          aux members members' res
+       | _ -> fail
+     in
+     aux members members' res
 
   | Member (tag, t, m), Member (tag', t', m') 
   | MemberOffset (tag, t, m), MemberOffset (tag', t', m') 

@@ -206,6 +206,15 @@ let rec of_index_term loc {local;global} ctxt it =
      let* loc_const = of_index_term loc {local;global} ctxt t in
      let member_const = Z3.Expr.mk_const_s ctxt member membersort in
      return (Z3.Expr.mk_app ctxt fundecl [loc_const;member_const])
+  | Struct (tag,members) ->
+     let* sort = bt_to_sort loc {local;global} ctxt (Struct tag) in
+     let constructor = Z3.Tuple.get_mk_decl sort in
+     let* member_vals = 
+       ListM.mapM (fun (_member,it) ->
+           of_index_term loc {local;global} ctxt it
+         ) members
+     in
+     return (Z3.Expr.mk_app ctxt constructor member_vals)
   | Nil _ ->
      fail loc (Unsupported !^"Z3: Nil")
   | Cons _ ->

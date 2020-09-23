@@ -12,7 +12,8 @@ let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m
   let* found = 
     Local.filter_rM (fun name t -> 
         if match_shape shape t then
-          let* equal = Solver.equal loc {local;global} (shape_pointer shape) (pointer t) in
+          let* equal = Solver.equal loc {local;global} 
+                         (S (shape_pointer shape)) (S (pointer t)) in
           return (if equal then Some (name,t) else None)
         else 
           return None
@@ -24,13 +25,14 @@ let match_resource (loc: Loc.t) {local;global} shape : ((Sym.t * RE.t) option) m
   | _ -> fail loc (unreachable (!^"multiple matching resources:" ^^^ pp_list (fun (_,r) -> RE.pp false r) found))
 
 
-let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size) 
+let points_to (loc: Loc.t) {local;global} (loc_it: Sym.t) (size: size) 
     : ((Sym.t * RE.points) option) m = 
   let* points = 
     Local.filter_rM (fun name t ->
         match t with
         | RE.Points p when Num.equal p.size size ->
-           let* holds = Solver.equal loc {local;global} loc_it p.pointer in
+           let* holds = Solver.equal loc {local;global} 
+                          (S loc_it) (S p.pointer) in
            return (if holds then Some (name,p) else None)
         | _ -> 
            return None
@@ -39,12 +41,12 @@ let points_to (loc: Loc.t) {local;global} (loc_it: IT.t) (size: size)
   Tools.at_most_one loc !^"multiple points-to for same pointer" points
 
 
-let stored_struct_to (loc: Loc.t) {local;global} (loc_it: IT.t) (tag: BT.tag) : ((Sym.t * RE.stored_struct) option) m = 
+let stored_struct_to (loc: Loc.t) {local;global} (loc_it: Sym.t) (tag: BT.tag) : ((Sym.t * RE.stored_struct) option) m = 
   let* stored = 
     Local.filter_rM (fun name t ->
         match t with
         | RE.StoredStruct s when s.tag = tag ->
-           let* holds = Solver.equal loc {local;global} loc_it s.pointer in
+           let* holds = Solver.equal loc {local;global} (S loc_it) (S s.pointer) in
            return (if holds then Some (name,s) else None)
         | _ -> 
            return None
@@ -65,8 +67,7 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} ((re_name:Sym.t), (re:R
      let* decl = Global.get_struct_decl loc global.struct_decls s.tag in
      ListM.fold_leftM (fun local (member,member_pointer) ->
          let bt = List.assoc member decl.raw  in
-         let ct = List.assoc member decl.ctypes  in
-         let* size = Memory.size_of_ctype loc ct in
+         let size = List.assoc member decl.sizes in
          let* local = Local.use_resource loc re_name [loc] local in
          let shape = match bt with
            | Struct tag -> StoredStruct_ (member_pointer, tag)
@@ -97,12 +98,12 @@ let load_point loc {local;global} pointer size bt path is_field =
     | Some (_,{pointee = Some pointee; _}),_  -> 
        return pointee
   in
-  let* vbt = IndexTermTyping.infer_index_term loc {local;global} pointee in
+  let* vbt = Local.get_l loc pointee local in
   let* () = if LS.equal vbt (Base bt) then return () 
             else fail loc (Mismatch {has=vbt; expect=Base bt}) in
-  return [LC (IT.EQ (path, pointee))]
+  return [LC (IT.EQ (path, S pointee))]
   
-let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (path: IT.t) =
+let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: Sym.t) (path: IT.t) =
   let open RT in
   let* o_resource = stored_struct_to loc {local;global} pointer tag in
   let* decl = Global.get_struct_decl loc global.struct_decls tag in
@@ -114,7 +115,7 @@ let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (p
     | (member,member_pointer)::members ->
        let member_bt = assoc member decl.raw in
        let member_path = IT.Member (tag, path, member) in
-       let* member_size = Memory.size_of_ctype loc (assoc member decl.ctypes) in
+       let member_size = assoc member decl.sizes in
        let* constraints = aux members in
        let* constraints2 = match member_bt with
          | Struct tag2 -> load_struct loc {local;global} tag2 member_pointer member_path
@@ -126,9 +127,12 @@ let rec load_struct (loc: Loc.t) {local;global} (tag: BT.tag) (pointer: IT.t) (p
   aux stored.members
 
 
-let rec store_struct (loc: Loc.t) (struct_decls: Global.struct_decls) (tag: BT.tag) (pointer: IT.t) (o_value: IT.t option) =
+let rec store_struct
+          (loc: Loc.t)
+          (struct_decls: Global.struct_decls) (tag: BT.tag)
+          (pointer: Sym.t)
+          (o_value: IT.t option) =
   let open IT in
-   
   (* does not check for the right to write, this is done elsewhere *)
   let open RT in
   let* decl = Global.get_struct_decl loc struct_decls tag in
@@ -136,23 +140,33 @@ let rec store_struct (loc: Loc.t) (struct_decls: Global.struct_decls) (tag: BT.t
     | (member,bt)::members ->
        let member_pointer = Sym.fresh () in
        let pointer_constraint = 
-         LC.LC (IT.EQ (IT.S member_pointer, IT.MemberOffset (tag,pointer,member))) in
+         LC.LC (IT.EQ (IT.S member_pointer, IT.MemberOffset (tag,S pointer,member))) in
+       let o_member_s = Sym.fresh () in
        let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
        let* (mapping,lbindings,rbindings) = aux members in
        let* (lbindings',rbindings') = match bt with
          | BT.Struct tag2 -> 
             let* (stored_struct,lbindings2,rbindings2) = 
-              store_struct loc struct_decls tag2 (S member_pointer) o_member_value in
+              store_struct loc struct_decls tag2 member_pointer o_member_value in
             return (Logical ((member_pointer, Base Loc), 
                       Constraint (pointer_constraint, lbindings2@@lbindings)),
                     Resource (StoredStruct stored_struct, rbindings2@@rbindings))
          | _ -> 
-            let* size = Memory.size_of_ctype loc (List.assoc member decl.ctypes) in
-            let points = {pointer = S member_pointer; pointee = o_member_value; size} in
-            return (Logical ((member_pointer, Base Loc), Constraint (pointer_constraint, I)),
+            let size = List.assoc member decl.sizes in
+            let points = {pointer = member_pointer; pointee = Some o_member_s; size} in
+            let mconstraint = match o_member_value with
+              | Some member_value -> 
+                 Constraint (LC (EQ (S o_member_s, member_value)), I)
+              | None ->
+                 I
+            in
+            return (Logical ((member_pointer, Base Loc), 
+                    Logical ((o_member_s, Base bt), 
+                    Constraint (pointer_constraint,
+                      mconstraint))),
                     Resource (Points points, I))
        in
-       return ((member,IT.S member_pointer)::mapping, lbindings', rbindings')
+       return ((member,member_pointer)::mapping, lbindings', rbindings')
     | [] -> return ([],I,I)
   in  
   let* (members,lbindings,rbindings) = aux decl.raw in

@@ -48,9 +48,9 @@ module Make (RT: AT.RT_Sig) = struct
     | Logical ((name,ls),t) -> 
        if name = substitution.s then 
          Logical ((name,ls),t) 
-       else if SymSet.mem name (IT.vars_in substitution.swith) then
+       else if Sym.equal name substitution.swith then
          let newname = Sym.fresh () in
-         let t' = subst_var_l {s=name; swith=IT.S newname} t in
+         let t' = subst_var_l {s=name; swith=newname} t in
          let t'' = subst_var_l substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -62,9 +62,9 @@ module Make (RT: AT.RT_Sig) = struct
     | Computational ((name,bt),t) -> 
        if name = substitution.s then 
          Computational ((name,bt),t) 
-       else if SymSet.mem name (IT.vars_in substitution.swith) then
+       else if Sym.equal name substitution.swith then
          let newname = Sym.fresh () in
-         let t' = subst_var_a {s=name; swith=IT.S newname} t in
+         let t' = subst_var_a {s=name; swith=newname} t in
          let t'' = subst_var_a substitution t' in
          Computational ((newname,bt),t'')
        else
@@ -89,7 +89,7 @@ module Make (RT: AT.RT_Sig) = struct
 
   let rec instantiate_struct_member_r subst = function
     | Resource (bound,t) -> 
-       Resource (RE.instantiate_struct_member subst bound, 
+       Resource (bound, 
                  instantiate_struct_member_r 
                    subst t)
     | C c -> C (instantiate_struct_member_c subst c)
@@ -140,7 +140,7 @@ module Make (RT: AT.RT_Sig) = struct
     let pp_a t = flow (break 1) (aux_a t) in
     let pp_l t = flow (break 1) (aux_l t) in
     let pp_r t = flow (break 1) (aux_r t) in
-    let pp_c t = flow (break 1) (aux_l t) in
+    let pp_c t = flow (break 1) (aux_c t) in
     (pp_a,pp_l,pp_r,pp_c)
 
   let pp = pp_a

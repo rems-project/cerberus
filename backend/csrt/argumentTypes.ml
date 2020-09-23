@@ -10,7 +10,7 @@ module SymSet = Set.Make(Sym)
 
 module type RT_Sig = sig
   type t
-  val subst_var: (Sym.t,IT.t) Subst.t -> t -> t
+  val subst_var: (Sym.t,Sym.t) Subst.t -> t -> t
   val free_vars: t -> SymSet.t
   val instantiate_struct_member: (IT.t,IT.t) Subst.t -> t -> t
   val pp: t -> Pp.document
@@ -39,9 +39,9 @@ let mResource bound t = Resource (bound,t)
     | Computational ((name,bt),t) -> 
        if name = substitution.s then 
          Computational ((name,bt),t) 
-       else if SymSet.mem name (IT.vars_in substitution.swith) then
+       else if Sym.equal name substitution.swith then
          let newname = Sym.fresh () in
-         let t' = subst_var {s=name; swith=IT.S newname} t in
+         let t' = subst_var {s=name; swith=newname} t in
          let t'' = subst_var substitution t' in
          Computational ((newname,bt),t'')
        else
@@ -49,9 +49,9 @@ let mResource bound t = Resource (bound,t)
     | Logical ((name,ls),t) -> 
        if name = substitution.s then 
          Logical ((name,ls),t) 
-       else if SymSet.mem name (IT.vars_in substitution.swith) then
+       else if Sym.equal name substitution.swith then
          let newname = Sym.fresh () in
-         let t' = subst_var {s=name; swith=IT.S newname} t in
+         let t' = subst_var {s=name; swith=newname} t in
          let t'' = subst_var substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -77,8 +77,7 @@ let mResource bound t = Resource (bound,t)
        Logical ((name,bound),
                 instantiate_struct_member subst t)
     | Resource (bound,t) -> 
-       Resource (RE.instantiate_struct_member subst bound, 
-                 instantiate_struct_member subst t)
+       Resource (bound, instantiate_struct_member subst t)
     | Constraint (bound,t) -> 
        Constraint (LC.instantiate_struct_member subst bound, 
                    instantiate_struct_member subst t)

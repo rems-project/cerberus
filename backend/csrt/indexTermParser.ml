@@ -114,6 +114,14 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
   | Tail it ->
      let* it = parse_ast_to_t loc names it in
      return (Tail it)
+  | Struct (tag, members) ->
+     let* members = 
+       ListM.mapM (fun (m,it) -> 
+          let* it = parse_ast_to_t loc names it in
+          return (m,it)
+         ) members 
+     in
+     return (Struct (tag, members))
   | Member (tag, it, f) ->
      let* it = parse_ast_to_t loc names it in
      return (Member (tag, it, f))

@@ -33,13 +33,11 @@ let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
   | Some v -> return v
 
 
-type struct_sig = { sbinder: Sym.t; souter: RT.l }
-
 type struct_decl = 
   { raw: (BT.member * BT.t) list;
-    ctypes: (BaseTypes.member * CF.Ctype.ctype) list;
-    open_type: struct_sig;
-    closed_type: struct_sig; 
+    sizes: (BT.member * RE.size) list;
+    closed: RT.t; 
+    closed_stored: RT.t;
   }
 
 type struct_decls = struct_decl SymMap.t
@@ -68,22 +66,14 @@ let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i
 let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 
 let pp_struct_decl (sym,decl) = 
-  let tag = BT.Tag sym in
-  let open_typ = 
-    RT.Computational ((decl.open_type.sbinder, BT.Struct tag), 
-                      decl.open_type.souter) 
-  in
-  let closed_typ = 
-    RT.Computational ((decl.closed_type.sbinder, BT.Struct tag), 
-                      decl.closed_type.souter) 
-  in
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
        (pp_list (fun (BT.Member m, bt) -> typ !^m (BT.pp true bt)) decl.raw) 
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (open)") (RT.pp open_typ) 
-  ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed)") 
-       (RT.pp closed_typ)
+       (RT.pp decl.closed)
+  ^/^
+  item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
+       (RT.pp decl.closed_stored)
 
 let pp_struct_decls decls = pp_list pp_struct_decl (SymMap.bindings decls) 
 
