@@ -240,6 +240,14 @@ let constraint_holds loc {local;global} c =
   let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: Local.all_constraints local) in
+  let* () =
+    if !Debug_ocaml.debug_level < 1 then return () else
+      ListM.iterM (fun (LC.LC lc) -> 
+          let* _ = IndexTermTyping.infer_index_term (loc: Loc.t) {local;global} lc in
+          return ()
+        ) lcs
+  in
+
   let* checked = 
     if not (Z3.Log.open_ logfile) then 
       fail loc (TypeErrors.Z3_fail ("could not open " ^ logfile))

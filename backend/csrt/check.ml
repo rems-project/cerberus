@@ -36,7 +36,7 @@ type 'bty label_defs = (LT.t,(BT.t * RE.size),BT.t,'bty) CF.Mucore.mu_label_defs
 (*** mucore pp setup **********************************************************)
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_typs)
 (* let pp_budget () = Some !debug_level *)
-let pp_budget () = Some !print_debug_level
+let pp_budget () = Some !print_level
 let pp_expr e = PP_MUCORE.pp_expr (pp_budget ()) e
 let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
 
@@ -1241,5 +1241,4 @@ let check_procedure (loc: Loc.t)
   - make call_typ and subtype accept non-A arguments  
   - constrain return type shape, maybe also function type shape
   - fix Ecase "LC (Bool true)"
-  - todo: when debugging, add index term type checker
  *)

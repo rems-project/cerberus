@@ -6,7 +6,7 @@ include PPrint
 
 
 let unicode = ref true
-let print_debug_level = ref 0
+let print_level = ref 0
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
@@ -89,7 +89,7 @@ let typ n typ = n ^^ colon ^^^ typ
 let item item content = format [FG(Default,Bright)] item ^^ colon ^^ space ^^ align content
 
 let headline a = 
-  (if !print_debug_level >= 2 then hardline else empty) ^^
+  (if !print_level >= 2 then hardline else empty) ^^
     format [FG(Magenta,Bright)] ("# " ^ a)
 
 let action a = format [FG (Cyan,Dark)] ("## " ^ a ^ " ")
@@ -98,7 +98,7 @@ let p pp = CB.Pipeline.run_pp None (pp ^^ hardline)
 let o_p = function
   | None -> ()
   | Some pp -> CB.Pipeline.run_pp None (pp ^^ hardline)
-let level l pp = if !print_debug_level >= l then Some (Lazy.force pp) else None
+let level l pp = if !print_level >= l then Some (Lazy.force pp) else None
 let d l pp = o_p (level l pp)
 
 let error pp = p (format [FG (Red,Bright)] "Error" ^/^ pp ^^ hardline)

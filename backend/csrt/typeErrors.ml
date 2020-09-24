@@ -47,8 +47,8 @@ type t = type_error
 
 
 let unreachable err = 
-  if !print_debug_level > 0 then 
-    let backtrace = Printexc.get_callstack (!print_debug_level * 10) in
+  if !Debug_ocaml.debug_level > 0 then 
+    let backtrace = Printexc.get_callstack (!print_level * 10) in
     Unreachable (err ^^ !^"." ^^ hardline ^^ hardline ^^ !^(Printexc.raw_backtrace_to_string backtrace))
   else 
     Unreachable err

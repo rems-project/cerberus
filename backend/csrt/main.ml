@@ -181,9 +181,9 @@ let frontend filename =
 
 
 
-let main filename debug_level type_debug_level =
+let main filename debug_level print_level =
   Debug_ocaml.debug_level := debug_level;
-  Pp.print_debug_level := type_debug_level;
+  Pp.print_level := print_level;
   if debug_level > 0 then Printexc.record_backtrace true else ();
   match frontend filename with
   | CF.Exception.Exception err ->
@@ -203,12 +203,12 @@ let debug_level =
   let doc = "Set the debug message level for cerberus to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
-let type_debug_level =
+let print_level =
   (* stolen from backend/driver *)
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-3])." in
-  Arg.(value & opt int 0 & info ["td"; "type-debug"] ~docv:"N" ~doc)
+  Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
 
 let () =
-  let check_t = Term.(pure main $ file $ debug_level $ type_debug_level) in
+  let check_t = Term.(pure main $ file $ debug_level $ print_level) in
   Term.exit @@ Term.eval (check_t, Term.info "csrt")
