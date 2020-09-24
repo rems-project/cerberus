@@ -191,9 +191,9 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Boolean.mk_ite ctxt a a' a'')
   | S s -> 
      let* ls = Local.get_l loc s local in
-     let s = sym_to_symbol ctxt s in
-     let* bt = ls_to_sort loc {local;global} ctxt ls in
-     return (Z3.Expr.mk_const ctxt s bt)
+     let sym = sym_to_symbol ctxt s in
+     let* sort = ls_to_sort loc {local;global} ctxt ls in
+     return (Z3.Expr.mk_const ctxt sym sort)
   | Member (tag, t, member) ->
      let* a = of_index_term loc {local;global} ctxt t in
      let* fundecl = member_to_fundecl tag member in

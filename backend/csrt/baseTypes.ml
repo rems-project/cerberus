@@ -8,6 +8,7 @@ type member = Member of string
 let pp_tag (Tag s) = Sym.pp s
 let tag_equal (Tag s) (Tag s') = Sym.equal s s'
 
+let pp_member (Member s) = !^s
 
 type t =
   | Unit 

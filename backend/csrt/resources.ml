@@ -1,5 +1,4 @@
 open Pp
-open List
 module Loc = Locations
 module BT = BaseTypes
 module IT = IndexTerms
@@ -24,7 +23,6 @@ type stored_struct =
 
 type t = 
   | Points of points
-  | StoredStruct of stored_struct 
 
 type resource = t
 
@@ -34,7 +32,6 @@ let pp_addrmap members =
     members
 
 let pp atomic resource = 
-  let mparens pp = if atomic then parens pp else pp in
   match resource with
   | Points {size; pointer; pointee} ->
      !^"Points" ^^^ 
@@ -42,14 +39,10 @@ let pp atomic resource =
                | Some v -> IT.pp false pointer ^^ comma ^^ IT.pp false v
                | None -> IT.pp false pointer ^^ comma ^^ !^"uninit"
               )
-  | StoredStruct {pointer; tag = Tag s; size; members} ->
-     mparens (!^"StoredStruct" ^^^ Sym.pp s ^^^ 
-                 parens (IT.pp false pointer ^^ comma ^^ brackets (pp_addrmap members)))
+
 
 
 let subst_var (subst: (Sym.t,IT.t) Subst.t) resource = 
-  let subst_membermap subst members = 
-    List.map (fun (m,mvar) -> (m,IT.subst_var subst mvar)) members in
   match resource with
   | Points p -> 
      let pointee = match p.pointee with
@@ -58,10 +51,7 @@ let subst_var (subst: (Sym.t,IT.t) Subst.t) resource =
      in
      let pointer = IT.subst_var subst p.pointer in
      Points {p with pointer; pointee}
-  | StoredStruct s ->
-     let pointer = IT.subst_var subst s.pointer in
-     let members = subst_membermap subst s.members in
-     StoredStruct {s with pointer; members}
+
 
 let subst_vars = Subst.make_substs subst_var
 
@@ -72,26 +62,14 @@ let equal t1 t2 =
      IT.equal p1.pointer p2.pointer &&
      Option.equal IT.equal p1.pointee p2.pointee &&
      Num.equal p1.size p2.size
-  | StoredStruct s1, StoredStruct s2 ->
-     IT.equal s1.pointer s2.pointer &&
-     BT.tag_equal s1.tag s2.tag &&
-     Num.equal s1.size s2.size &&
-     List.equal (fun (member,it) (member',it') -> 
-         member = member' && IT.equal it it'
-       ) s1.members s2.members
-  | _, _ -> false
 
 
 let pointer = function
   | Points p -> p.pointer
-  | StoredStruct s -> s.pointer
 
 let children = function
   | Points {pointee=None;_} -> []
   | Points {pointee=Some pointee;_} -> [pointee]
-  | StoredStruct {members;_} -> map snd members
-
-
 
 let vars_in = function
   | Points p -> 
@@ -99,10 +77,7 @@ let vars_in = function
        (match p.pointee with
         | Some pointee -> IT.vars_in pointee
         | None -> SymSet.empty)
-  | StoredStruct s ->
-     List.fold_left (fun s (_,i) -> SymSet.union (IT.vars_in i) s) 
-       SymSet.empty s.members
-     
+
 
 
 let rec unify_memberlist ms ms' res = 
@@ -125,12 +100,6 @@ let unify r1 r2 res =
      | None, None -> return res
      | _, _ -> fail
      end
-  | StoredStruct s, StoredStruct s' ->
-     if s.tag = s'.tag && Num.equal s.size s'.size then
-       let* res = IT.unify s.pointer s'.pointer res in
-       unify_memberlist s.members s'.members res
-     else 
-       fail
   | _ -> 
      fail
 
@@ -144,18 +113,11 @@ let unify_non_pointer r1 r2 res =
      | None, None -> return res
      | _, _ -> fail
      end
-  | StoredStruct s, StoredStruct s' ->
-     if s.tag = s'.tag && Num.equal s.size s'.size then
-       unify_memberlist s.members s'.members res
-     else 
-       fail
   | _ -> fail
 
      
 
 let subst_non_pointer subst resource = 
-  let subst_membermap subst members = 
-    List.map (fun (m,mvar) -> (m,IT.subst_var subst mvar)) members in
   match resource with
   | Points p -> 
      let pointee = match p.pointee with
@@ -163,32 +125,20 @@ let subst_non_pointer subst resource =
        | None -> None
      in
      Points {p with pointee}
-  | StoredStruct s ->
-     let members = subst_membermap subst s.members in
-     StoredStruct {s with members}
 
-
-
-let is_StoredStruct = function
-  | StoredStruct s -> Some s 
-  | Points _ -> None
 
 
 type shape = 
   | Points_ of IT.t * size
-  | StoredStruct_ of IT.t * BT.tag
 
 let shape = function
   | Points p -> Points_ (p.pointer,p.size)
-  | StoredStruct s -> StoredStruct_ (s.pointer,s.tag)
 
 let shape_pointer = function
   | Points_ (p,_) -> p
-  | StoredStruct_ (p,_) -> p
 
 let match_shape shape resource = 
   match shape, resource with
   | Points_ (pointer,size), Points p' when Num.equal size p'.size -> true
-  | StoredStruct_ (pointer,tag), StoredStruct s' -> tag = s'.tag
   | _ -> false
 

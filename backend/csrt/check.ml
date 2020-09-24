@@ -593,7 +593,7 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
        return (RT.Constraint (LC (Impl (c2, lc)), lrt))
     | Resource _, _
     | _, Resource _ -> 
-       fail loc (Generic !^"cannot infer type of this expression (cannot merge)")
+       fail loc (Generic !^"Cannot infer type of this expression (cannot merge)")
   in
   let lrt2' = RT.subst_var_l {before=lname2; after=S lname} lrt2 in
   let* lrt = aux lrt lrt2' in
@@ -690,13 +690,13 @@ let rec infer_pexpr (loc: Loc.t) {local;global} (pe: 'bty pexpr) : ((RT.t * L.t)
        let tag = BT.Tag tag in
        let* (bt,lname) = get_a loc sym local in
        let* () = check_base_type loc bt Loc in
-       let* stored_struct = RI.stored_struct_to loc {local;global} (S lname) tag in
-       let* members = match stored_struct with
-         | Some (_,{members; _}) -> return members
-         | _ -> fail loc (Generic (!^"this location does not contain a struct with tag" ^^^ BT.pp_tag tag))
+       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let* () = match List.assoc_opt member decl.raw with
+         | None -> fail loc (Generic (!^"struct" ^^^ BT.pp_tag tag ^^^ 
+                                        !^"does not have field" ^^^ squotes !^(Id.s id)))
+         | Some _ -> return ()
        in
-       let* faddr = Tools.assoc_err loc member members (unreachable !^"check store field access") in
-       let constr = LC (EQ (S ret, faddr)) in
+       let constr = LC (EQ (S ret, IT.MemberOffset (tag,S lname,member))) in
        let rt = RT.Computational ((ret, Loc), Constraint (constr,I)) in
        return (Normal (rt, local))
     | M_PEnot (A (a,_,sym)) ->
@@ -870,15 +870,12 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        | M_IntFromPtr _ (* (actype 'bty * asym 'bty) *)
        | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
          -> fail loc (Unsupported !^"todo: ememop")
-       | M_PtrValidForDeref (A (_,_,(_,size)), A (a,_,sym)) ->
+       | M_PtrValidForDeref (A (_,_,(dbt,size)), A (a,_,sym)) ->
           let ret = Sym.fresh () in
           let* (bt,lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) bt Loc in
           (* check more things? *)
-          let shape = match bt with
-            | Struct tag -> RE.StoredStruct_ (S lname, tag)
-            | _ -> RE.Points_ (S lname,size)
-          in
+          let shape = RE.Points_ (S lname,size) in
           let* o_resource = RI.match_resource loc {local;global} shape in
           let constr = LC (EQ (S ret, Bool (Option.is_some o_resource))) in
           let ret = RT.Computational ((ret, Bool), Constraint (constr, I)) in
@@ -902,10 +899,9 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let ret = Sym.fresh () in
           let* rt = match bt with
             | Struct tag -> 
-               let* (stored,lbindings,rbindings) = 
+               let* (lbindings,rbindings) = 
                  RI.store_struct loc global.struct_decls tag (S ret) None in
-               return (RT.Computational ((ret, Loc), 
-                       RT.(@@) lbindings (RT.Resource (StoredStruct stored, rbindings))))
+               return (RT.Computational ((ret, Loc), RT.(@@) lbindings rbindings))
             | _ ->
                let r = RE.Points {pointer = S ret; pointee = None; size} in
                return (RT.Computational ((ret, Loc), Resource (r, I)))
@@ -916,7 +912,6 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
        | M_Alloc (ct, sym, _prefix) -> 
           fail loc (Unsupported !^"todo: Alloc")
        | M_Kill (_is_dynamic, A (a,_,sym)) -> 
-          (* have remove resources of location instead? *)
           let* (abt,lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) Loc abt in
           (* revisit *)
@@ -928,11 +923,17 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           in
           begin match found with
           | [] -> 
-             fail loc (Generic !^"cannot deallocate unowned location")
+             fail loc (Generic !^"Cannot deallocate unowned location")
           | _ :: _ :: _ -> 
-             fail loc (Generic !^"cannot guess type of pointer to de-allocate" )
+             fail loc (Generic !^"Cannot guess type of pointer to de-allocate" )
           | [(re_name,re)] -> 
-             let* local = RI.remove_owned_subtree loc {local;global} (re_name,re) in
+             let Points p = re in
+             let* local = match p.pointee with
+             | None -> Local.use_resource loc re_name [loc] local
+             | Some pointee -> 
+                let* (Base bt) = IndexTermTyping.infer_index_term loc {local;global} pointee in
+                RI.remove_owned_subtree loc {local;global} bt p.pointer p.size Kill None
+             in
              let rt = RT.Computational ((Sym.fresh (), Unit), I) in
              return (Normal (rt, local))
           end
@@ -946,20 +947,13 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
              the right thing. *)
-          let resource_shape = match vbt with
-            | Struct tag -> RE.StoredStruct_ (S plname, tag)
-            | _ -> RE.Points_ (S plname,size)
-          in
-          let* o_resource = RI.match_resource loc {local;global} resource_shape in
-          let* local = match o_resource with
-            | Some (rname,r) -> RI.remove_owned_subtree loc {local;global} (rname,r)
-            | None -> fail loc (Generic !^"missing ownership for store")
-          in
+          let* local = RI.remove_owned_subtree ploc {local;global} vbt 
+                         (S plname) size Store None in
           let* bindings = match vbt with
           | Struct tag -> 
-             let* (stored,lbindings,rbindings) = 
+             let* (lbindings,rbindings) = 
                RI.store_struct loc global.struct_decls tag (S plname) (Some (S vlname)) in
-             return (RT.(@@) lbindings (Resource (StoredStruct stored, rbindings)))
+             return (RT.(@@) lbindings rbindings)
            | _ -> 
              let resource = RE.Points {pointer = S plname; 
                                        pointee = Some (S vlname); size} in
@@ -974,7 +968,7 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let ret = Sym.fresh () in
           let* lcs = match bt with
             | Struct tag -> RI.load_struct loc {local;global} tag (S plname) (S ret)
-            | _ -> RI.load_point loc {local;global} (S plname) size bt (S ret) false
+            | _ -> RI.load_point loc {local;global} bt (S plname) size (S ret) None
           in
           let constraints = List.fold_right RT.mConstraint lcs RT.I in
           let rt = RT.Computational ((ret, bt), constraints) in
@@ -1266,4 +1260,5 @@ let check_procedure (loc: Loc.t)
   - make call_typ and subtype accept non-A arguments  
   - constrain return type shape, maybe also function type shape
   - fix Ecase "LC (Bool true)"
+  - todo: when debugging, add index term type checker
  *)

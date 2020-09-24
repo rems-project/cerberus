@@ -8,7 +8,14 @@ module RE=Resources
 
 
 
+type access = 
+  | Load 
+  | Store
+  | Kill
+
 type type_error = 
+  | Missing_ownership of access * BT.member option
+  | Uninitialised of BT.member option
   | Name_bound_twice of Sym.t
   | Unbound_string_name of string
   | Unbound_name of Sym.t
@@ -53,6 +60,20 @@ let withloc loc p : PPrint.document =
 let pp (loc : Loc.t) (err : t) = 
   withloc loc
     begin match err with
+    | Missing_ownership (access,omember) ->
+       begin match access, omember with
+       | Kill, None -> !^"Missing ownership for de-allocating"
+       | Kill, Some m -> !^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m
+       | Load, None -> !^"Missing ownership for reading"
+       | Load, Some m -> !^"Missing ownership for reading struct member" ^^^ BT.pp_member m
+       | Store, None -> !^"Missing ownership for writing"
+       | Store, Some m -> !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
+       end
+    | Uninitialised omember ->
+       begin match omember with
+       | None -> !^"Trying to read uninitialised data"
+       | Some m -> !^"Trying to read uninitialised struct member" ^^^ BT.pp_member m
+       end
     | Name_bound_twice name ->
        !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
     | Unbound_string_name unbound ->

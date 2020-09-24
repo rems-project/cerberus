@@ -223,12 +223,7 @@ let struct_decl_closed loc tag fields struct_decls =
        let open Global in
        let* decl = Global.get_struct_decl loc struct_decls (Tag tag2) in
        let Computational ((s,_struct),tag2_bindings) = decl.closed in
-       let acc = 
-         let s' = Sym.fresh () in
-         RT.subst_var_l (Subst.{before=s;after=S s'}) tag2_bindings @@
-           RT.Constraint (LC (EQ (S s', this)), acc)
-       in
-       return acc
+       return (RT.subst_var_l (Subst.{before=s;after=this}) tag2_bindings @@ acc)
     | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")
@@ -248,70 +243,49 @@ let struct_decl_closed loc tag fields struct_decls =
 
 let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls) = 
   let open Sym in
-  let rec aux loc (acc_mapping,lbs,rbs) struct_p member ct =
+  let rec aux loc (lbs,rbs) struct_p member ct =
     let open RT in
     let* size = Memory.size_of_ctype loc ct in
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
     let loc = Loc.update loc annots in
-    let this_p, this_v = Sym.fresh (), Sym.fresh () in
-    let p_constr = IT.EQ (S this_p, IT.MemberOffset (tag,struct_p,member)) in
-    let points = RE.Points {pointer=S this_p;pointee= Some (S this_v); size} in
-    let new_lbs bt = 
-      RT.Logical ((this_p, Base Loc),
-      RT.Logical ((this_v, Base bt), 
-      RT.Constraint (LC p_constr, I)))
-    in
-    let new_rbs = 
-      RT.Resource (points, I)
-    in
-    let mapping = (member,S this_p) :: acc_mapping in
+    let this_p = IT.MemberOffset (tag,struct_p,member) in
+    let this_v = Sym.fresh () in
+    let points = RE.Points {pointer=this_p;pointee= Some (S this_v); size} in
+    let new_lbs bt = RT.Logical ((this_v, Base bt), I) in
+    let new_rbs = RT.Resource (points, I) in
     match ct_ with
     | Void -> 
        fail loc (Generic !^"void member of struct")
     | Basic (Integer it) -> 
        let* lc = integerType_constraint loc (S this_v) it in
-       return (mapping, new_lbs Integer @@ RT.Constraint (lc,lbs), new_rbs)
+       return (new_lbs Integer @@ RT.Constraint (lc,lbs), new_rbs)
     | Array (ct, _maybe_integer) -> 
-       return (mapping, new_lbs Array @@ lbs, new_rbs)
+       return (new_lbs Array @@ lbs, new_rbs)
     | Pointer (_qualifiers, ct) -> 
-       return (mapping, new_lbs Loc @@ lbs, new_rbs)
+       return (new_lbs Loc @@ lbs, new_rbs)
     | Atomic ct -> 
        (* fix *)
-       aux loc (acc_mapping,lbs,rbs) struct_p member ct
+       aux loc (lbs,rbs) struct_p member ct
     | Struct tag2 -> 
        let open RT in
        let open Global in
        let* decl = Global.get_struct_decl loc struct_decls (Tag tag2) in
        let (RT.Computational ((s,_loc),tag2_bindings)) = 
          RT.freshify (decl.closed_stored) in
-       let lbs = Logical ((this_p, Base Loc), lbs) in
        let rbs = 
-         RT.subst_var_l (Subst.{before=s; after=S this_p}) tag2_bindings @@
-         RT.Constraint (LC p_constr, rbs)
-       in
-       return (mapping, lbs, rbs)
+         RT.subst_var_l (Subst.{before=s; after=this_p}) tag2_bindings @@ rbs in
+       return (lbs, rbs)
     | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")
   in
   let struct_pointer = Sym.fresh () in
-  let* (mapping,lbs,rbs) = 
+  let* (lbs,rbs) = 
     ListM.fold_rightM (fun (id, (_attributes, _qualifier, ct)) acc ->
         aux loc acc (S struct_pointer) (BT.Member (Id.s id)) ct
-      ) fields ([],RT.I,RT.I)
+      ) fields (RT.I,RT.I)
   in
-  let* struct_size = Memory.size_of_struct_type loc tag in
-  let stored_struct = 
-    StoredStruct {pointer = S struct_pointer;
-                  members = mapping;
-                  tag;
-                  size = struct_size}
-  in
-  let bindings = 
-    RT.Computational ((struct_pointer, Loc),
-    (RT.(@@) lbs (RT.Resource (stored_struct, rbs))))
-  in
-  return bindings
+  return (RT.Computational ((struct_pointer, Loc), RT.(@@) lbs rbs))
 
 
 
