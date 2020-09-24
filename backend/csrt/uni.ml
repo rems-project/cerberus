@@ -4,8 +4,7 @@ module SymSet = Set.Make(Sym)
 type 'res t = { resolved : 'res option }
 
 let find_resolved env unis = 
-  SymMap.fold
-    (fun usym {resolved} (unresolveds,resolveds) ->
+  SymMap.fold (fun usym {resolved} (unresolveds,resolveds) ->
       match resolved with
       | None -> (usym :: unresolveds, resolveds)
       | Some sym -> (unresolveds, ({before=usym; after=sym}) :: resolveds)
@@ -13,8 +12,7 @@ let find_resolved env unis =
 
 
 let unresolved_var unis (vars : SymSet.t) =
-  SymMap.fold
-    (fun usym {resolved} found ->
+  SymMap.fold (fun usym {resolved} found ->
       match resolved with
       | None when SymSet.mem usym vars -> Some usym
       | _ -> found
