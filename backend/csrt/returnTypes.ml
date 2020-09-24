@@ -130,7 +130,7 @@ let (pp,pp_l) =
        (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux_l t
     | Resource (re,t) ->
        let op = if !unicode then utf8string "\u{2217}" else star in
-       (RE.pp false re ^^^ op) :: aux_l t
+       (RE.pp re ^^^ op) :: aux_l t
     | Constraint (lc,t) ->
        let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
        (LC.pp false lc ^^^ op) :: aux_l t

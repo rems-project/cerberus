@@ -25,13 +25,13 @@ let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
      btyp sym (LS.pp false ls)
   | Resource re -> 
      if print_all_names 
-     then btyp sym (squotes (RE.pp false re))
-     else squotes (RE.pp false re)
+     then btyp sym (squotes (RE.pp re))
+     else squotes (RE.pp re)
   | UsedResource (re,_locs) -> 
      if not print_used then underscore 
      else if print_all_names 
-     then btyp sym (!^"used" ^^^ (squotes (RE.pp false re)))
-     else !^"used" ^^^ squotes (RE.pp false re)
+     then btyp sym (!^"used" ^^^ (squotes (RE.pp re)))
+     else !^"used" ^^^ squotes (RE.pp re)
   | Constraint lc -> 
      if print_all_names 
      then btyp sym (dquotes (LC.pp false lc))

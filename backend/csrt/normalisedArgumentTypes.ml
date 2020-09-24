@@ -122,7 +122,7 @@ module Make (RT: AT.RT_Sig) = struct
     let rec aux_r = function
       | Resource (re,t) ->
          let op = if !unicode then equals ^^ utf8string "\u{2217}" else minus ^^ star in
-         (RE.pp false re ^^^ op) :: aux_r t
+         (RE.pp re ^^^ op) :: aux_r t
       | C c -> aux_c c
     in
     let rec aux_l = function

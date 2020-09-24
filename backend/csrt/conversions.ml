@@ -84,7 +84,7 @@ let rec ctype_aux owned loc (name: Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
      if owned then
        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
        let* size = Memory.size_of_ctype loc ct in
-       let points = Points {pointer = S name; pointee = Some (S pointee_name); size} in
+       let points = Points {pointer = S name; pointee = S pointee_name; size} in
        let t = Logical ((pointee_name, Base bt), Resource (points, t)) in
        return ((name,Loc),t)
      else
@@ -250,7 +250,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
     let loc = Loc.update loc annots in
     let this_p = IT.MemberOffset (tag,struct_p,member) in
     let this_v = Sym.fresh () in
-    let points = RE.Points {pointer=this_p;pointee= Some (S this_v); size} in
+    let points = RE.Points {pointer=this_p;pointee= S this_v; size} in
     let new_lbs bt = RT.Logical ((this_v, Base bt), I) in
     let new_rbs = RT.Resource (points, I) in
     match ct_ with
@@ -321,7 +321,7 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
           let* (bt,lrt) = aux name2 ct in
           (* fix *)
           let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
-          let points = RE.Points {pointer = S name; pointee = Some (S name2); size} in
+          let points = RE.Points {pointer = S name; pointee = S name2; size} in
           return (Loc, Logical ((name2, Base bt), Resource (points, lrt)))
        end
     (* fix *)
@@ -676,15 +676,14 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
     | Own, Some integer_type_expr -> 
        let* (_, _, bytes) = of_integer_type_expr loc integer_type_expr in
        let size = Num.of_int bytes in
-       let points = Points {pointer = S existing_pointer; 
-                            pointee = None; size} in
+       let points = Uninit {pointer = S existing_pointer; size} in
        return ([], [points], [])
     | Own, None -> 
        let* ((bt,osize),l,r,c) = of_type_expr loc names newname' type_expr in
        let* points = match osize with
          | Some size ->
             return (Points {pointer = S existing_pointer; 
-                            pointee = Some (S newname'); size})
+                            pointee = S newname'; size})
          | None -> fail loc (Generic !^"pointer to non-object")
        in
        return ((newname', LS.Base bt) :: l, r @ [points], c)
@@ -765,8 +764,8 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
           | Some size -> return size
           | None -> fail loc (Generic !^"argument type without size")
         in
-        let pointsa = RE.Points {pointer = S s; pointee = Some (S sa); size} in
-        let pointsr = RE.Points {pointer = S s; pointee = Some (S sr); size} in
+        let pointsa = RE.Points {pointer = S s; pointee = S sa; size} in
+        let pointsr = RE.Points {pointer = S s; pointee = S sr; size} in
         return ((a @ [(s,BT.Loc)], l @ [(sa, LS.Base bt)] @ l', r @ [pointsa] @ r', c @ c'),
                 (rl @ [(sr, LS.Base bt)], rr @ [pointsr], rc))
       ) ((a, l, r, c), (rl, rr, rc)) annot.fa_args

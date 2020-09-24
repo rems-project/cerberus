@@ -11,7 +11,6 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
-module RI = ResourceInference
 module SymSet = Set.Make(Sym)
 
 open TypeErrors
@@ -241,7 +240,7 @@ module Spine (RT: AT.RT_Sig) = struct
           * Pp.d 4 (lazy (item "ftyp" (NFT.pp_r ftyp)));
           * Pp.d 4 (lazy (item "unis" (pp_unis unis)));
           * Pp.d 4 (lazy Pp.empty); *)
-         let* matched = RI.match_concrete_resource loc {local;global} re in
+         let* matched = Memory.for_fp loc {local;global} (RE.fp re) in
          begin match matched with
          | None -> fail loc (Missing_resource re)
          | Some (r,resource') ->
@@ -875,8 +874,7 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* (bt,lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) bt Loc in
           (* check more things? *)
-          let shape = RE.Points_ (S lname,size) in
-          let* o_resource = RI.match_resource loc {local;global} shape in
+          let* o_resource = Memory.for_fp loc {local;global} (S lname,size) in
           let constr = LC (EQ (S ret, Bool (Option.is_some o_resource))) in
           let ret = RT.Computational ((ret, Bool), Constraint (constr, I)) in
           return (Normal (ret, local))
@@ -897,15 +895,8 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* (abt,_lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) Integer abt in
           let ret = Sym.fresh () in
-          let* rt = match bt with
-            | Struct tag -> 
-               let* (lbindings,rbindings) = 
-                 RI.store_struct loc global.struct_decls tag (S ret) None in
-               return (RT.Computational ((ret, Loc), RT.(@@) lbindings rbindings))
-            | _ ->
-               let r = RE.Points {pointer = S ret; pointee = None; size} in
-               return (RT.Computational ((ret, Loc), Resource (r, I)))
-          in
+          let* rbindings = Memory.store loc {local;global} bt (S ret) size None in
+          let rt = RT.Computational ((ret, Loc), rbindings) in
           return (Normal (rt, local))
        | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
           fail loc (Unsupported !^"todo: CreateReadOnly")
@@ -922,20 +913,19 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
               ) local
           in
           begin match found with
-          | [] -> 
-             fail loc (Generic !^"Cannot deallocate unowned location")
-          | _ :: _ :: _ -> 
-             fail loc (Generic !^"Cannot guess type of pointer to de-allocate" )
           | [(re_name,re)] -> 
-             let Points p = re in
-             let* local = match p.pointee with
-             | None -> Local.use_resource loc re_name [loc] local
-             | Some pointee -> 
-                let* (Base bt) = IndexTermTyping.infer_index_term loc {local;global} pointee in
-                RI.remove_owned_subtree loc {local;global} bt p.pointer p.size Kill None
+             let* local = match re with
+             | Uninit _ -> Local.use_resource loc re_name [loc] local
+             | Points p -> 
+                let* (Base bt) = IndexTermTyping.infer_index_term loc 
+                                   {local;global} p.pointee in
+                Memory.remove_owned_subtree loc {local;global} bt 
+                  p.pointer p.size Kill None
              in
              let rt = RT.Computational ((Sym.fresh (), Unit), I) in
              return (Normal (rt, local))
+          | [] -> fail loc (Generic !^"Cannot deallocate unowned location")
+          | _ -> fail loc (Generic !^"Cannot guess type of pointer to de-allocate")
           end
        | M_Store (_is_locking, A(_,_,(s_vbt,size)), A(ap,_,psym), A(av,_,vsym), mo) -> 
           let ploc = Loc.update loc ap in
@@ -947,18 +937,12 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
              the right thing. *)
-          let* local = RI.remove_owned_subtree ploc {local;global} vbt 
-                         (S plname) size Store None in
-          let* bindings = match vbt with
-          | Struct tag -> 
-             let* (lbindings,rbindings) = 
-               RI.store_struct loc global.struct_decls tag (S plname) (Some (S vlname)) in
-             return (RT.(@@) lbindings rbindings)
-           | _ -> 
-             let resource = RE.Points {pointer = S plname; 
-                                       pointee = Some (S vlname); size} in
-             return (RT.Resource (resource, I))
-          in
+          let* local = 
+            Memory.remove_owned_subtree ploc {local;global} vbt 
+              (S plname) size Store None in
+          let* bindings = 
+            Memory.store loc {local;global} vbt (S plname) 
+              size (Some (S vlname)) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt,local))
        | M_Load (A (_,_,(bt,size)), A (ap,_,psym), _mo) -> 
@@ -966,11 +950,8 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           let* (pbt,plname) = get_a ploc psym local in
           let* () = check_base_type loc pbt BT.Loc in
           let ret = Sym.fresh () in
-          let* lcs = match bt with
-            | Struct tag -> RI.load_struct loc {local;global} tag (S plname) (S ret)
-            | _ -> RI.load_point loc {local;global} bt (S plname) size (S ret) None
-          in
-          let constraints = List.fold_right RT.mConstraint lcs RT.I in
+          let* constraints = 
+            Memory.load loc {local;global} bt (S plname) size (S ret) None in
           let rt = RT.Computational ((ret, bt), constraints) in
           return (Normal (rt,local))
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 

@@ -103,7 +103,7 @@ let mResource bound t = Resource (bound,t)
          (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux t
       | Resource (re,t) ->
          let op = if !unicode then equals ^^ utf8string "\u{2217}" else minus ^^ star in
-         (RE.pp false re ^^^ op) :: aux t
+         (RE.pp re ^^^ op) :: aux t
       | Constraint (lc,t) ->
          let op = equals ^^ rangle in
          (LC.pp false lc ^^^ op) :: aux t

@@ -111,12 +111,12 @@ let pp (loc : Loc.t) (err : t) =
        !^"Unconstrained logical variable" ^^^ Sym.pp name
 
     | Missing_resource t ->
-       !^"Missing resource of type" ^^^ Resources.pp false t
+       !^"Missing resource of type" ^^^ Resources.pp t
     | Resource_already_used (resource,where) ->
-       !^"Resource" ^^^ Resources.pp false resource ^^^ 
+       !^"Resource" ^^^ Resources.pp resource ^^^ 
          !^"has already been used:" ^^^ braces (pp_list Loc.pp where)
     | Unused_resource {resource;_} ->
-       !^"Left-over unused resource" ^^^ Resources.pp false resource
+       !^"Left-over unused resource" ^^^ Resources.pp resource
 
     | Undefined_behaviour undef ->
        !^"Undefined behaviour" ^^ colon ^^^ 
