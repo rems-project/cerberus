@@ -133,7 +133,7 @@ let (pp,pp_l) =
        (RE.pp re ^^^ op) :: aux_l t
     | Constraint (lc,t) ->
        let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
-       (LC.pp false lc ^^^ op) :: aux_l t
+       (LC.pp lc ^^^ op) :: aux_l t
     | I -> 
        [!^"I"]
   in

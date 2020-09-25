@@ -180,7 +180,7 @@ module Spine (RT: AT.RT_Sig) = struct
   let pp_unis (unis: (IT.t Uni.t) SymMap.t) : Pp.document = 
     let pp_entry (sym, Uni.{resolved}) =
       match resolved with
-      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp false res
+      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp res
       | None -> Sym.pp sym ^^^ !^"unresolved"
     in
     pp_list pp_entry (SymMap.bindings unis)

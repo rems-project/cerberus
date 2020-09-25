@@ -63,64 +63,67 @@ let in_range between min max =
 
 
 
-let rec pp atomic it : PPrint.document = 
+let pp it : PPrint.document = 
 
-  let mparens pped = if atomic then parens pped else pped in
-  let pp = pp true in
-  match it with
-  | Num i -> Num.pp i
-  | Bool true -> !^"true"
-  | Bool false -> !^"false"
+  let rec aux atomic it = 
+    let mparens pped = if atomic then parens pped else pped in
+    let aux = aux true in
+    match it with
+    | Num i -> Num.pp i
+    | Bool true -> !^"true"
+    | Bool false -> !^"false"
 
-  | Add (it1,it2) -> mparens (pp it1 ^^^ plus ^^^ pp it2)
-  | Sub (it1,it2) -> mparens (pp it1 ^^^ minus ^^^ pp it2)
-  | Mul (it1,it2) -> mparens (pp it1 ^^^ star ^^^ pp it2)
-  | Div (it1,it2) -> mparens (pp it1 ^^^ slash ^^^ pp it2)
-  | Exp (it1,it2) -> mparens (pp it1 ^^^ caret ^^^ pp it2)
-  | Rem_t (it1,it2) -> mparens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
-  | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
-  | Min (it1,it2) -> mparens (!^ "min" ^^^ pp it1 ^^^ pp it2)
-  | Max (it1,it2) -> mparens (!^ "max" ^^^ pp it1 ^^^ pp it2)
+    | Add (it1,it2) -> mparens (aux it1 ^^^ plus ^^^ aux it2)
+    | Sub (it1,it2) -> mparens (aux it1 ^^^ minus ^^^ aux it2)
+    | Mul (it1,it2) -> mparens (aux it1 ^^^ star ^^^ aux it2)
+    | Div (it1,it2) -> mparens (aux it1 ^^^ slash ^^^ aux it2)
+    | Exp (it1,it2) -> mparens (aux it1 ^^^ caret ^^^ aux it2)
+    | Rem_t (it1,it2) -> mparens (!^ "rem_t" ^^^ aux it1 ^^^ aux it2)
+    | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ aux it1 ^^^ aux it2)
+    | Min (it1,it2) -> mparens (!^ "min" ^^^ aux it1 ^^^ aux it2)
+    | Max (it1,it2) -> mparens (!^ "max" ^^^ aux it1 ^^^ aux it2)
 
-  | EQ (o1,o2) -> mparens (pp o1 ^^^ equals ^^^ pp o2)
-  | NE (o1,o2) -> 
-     if !unicode then mparens (pp o1 ^^^ utf8string "\u{2260}" ^^^ pp o2)
-     else mparens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
-  | LT (o1,o2) -> mparens (pp o1 ^^^ langle ^^^ pp o2)
-  | GT (o1,o2) -> mparens (pp o1 ^^^ rangle ^^^ pp o2)
-  | LE (o1,o2) -> 
-     if !unicode then mparens (pp o1 ^^^ utf8string "\u{2264}"  ^^^ pp o2)
-     else mparens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
-  | GE (o1,o2) -> 
-     if !unicode then mparens (pp o1 ^^^ utf8string "\u{2265}"  ^^^ pp o2)
-     else mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
+    | EQ (o1,o2) -> mparens (aux o1 ^^^ equals ^^^ aux o2)
+    | NE (o1,o2) -> 
+       if !unicode then mparens (aux o1 ^^^ utf8string "\u{2260}" ^^^ aux o2)
+       else mparens (aux o1 ^^^ langle ^^ rangle ^^^ aux o2)
+    | LT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
+    | GT (o1,o2) -> mparens (aux o1 ^^^ rangle ^^^ aux o2)
+    | LE (o1,o2) -> 
+       if !unicode then mparens (aux o1 ^^^ utf8string "\u{2264}"  ^^^ aux o2)
+       else mparens (aux o1 ^^^ langle ^^ equals ^^^ aux o2)
+    | GE (o1,o2) -> 
+       if !unicode then mparens (aux o1 ^^^ utf8string "\u{2265}"  ^^^ aux o2)
+       else mparens (aux o1 ^^^ rangle ^^ equals ^^^ aux o2)
 
-  | Null o1 -> mparens (!^"null" ^^^ pp o1)
-  | And o -> mparens (separate_map (space ^^ ampersand ^^ space) pp o)
-  | Or o -> mparens (separate_map (space ^^ bar ^^ bar ^^ space) pp o)
-  | Impl (o1,o2) -> mparens (pp o1 ^^^ equals ^^ rangle ^^^ pp o2)
-  | Not (o1) -> mparens (!^"not" ^^^ pp o1)
-  | ITE (o1,o2,o3) -> mparens (!^"ite" ^^^ pp o1 ^^^ pp o2 ^^^ pp o3)
+    | Null o1 -> mparens (!^"null" ^^^ aux o1)
+    | And o -> mparens (separate_map (space ^^ ampersand ^^ space) aux o)
+    | Or o -> mparens (separate_map (space ^^ bar ^^ bar ^^ space) aux o)
+    | Impl (o1,o2) -> mparens (aux o1 ^^^ equals ^^ rangle ^^^ aux o2)
+    | Not (o1) -> mparens (!^"not" ^^^ aux o1)
+    | ITE (o1,o2,o3) -> mparens (!^"ite" ^^^ aux o1 ^^^ aux o2 ^^^ aux o3)
 
-  | Nth (bt,n,it2) -> mparens (!^"nth" ^^^ !^(string_of_int n) ^^^ pp it2)
-  | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
-  | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
+    | Nth (bt,n,it2) -> mparens (!^"nth" ^^^ !^(string_of_int n) ^^^ aux it2)
+    | Head (o1) -> mparens (!^"hd" ^^^ aux o1)
+    | Tail (o1) -> mparens (!^"tl" ^^^ aux o1)
 
-  | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
-  | Nil _ -> brackets empty
-  | Cons (t1,t2) -> mparens (pp t1 ^^ colon ^^ colon ^^ pp t2)
-  | List (its, bt) -> 
-     mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BT.pp false bt)
+    | Tuple its -> mparens (!^"tuple" ^^^ separate_map space aux its)
+    | Nil _ -> brackets empty
+    | Cons (t1,t2) -> mparens (aux t1 ^^ colon ^^ colon ^^ aux t2)
+    | List (its, bt) -> 
+       mparens (brackets (separate_map comma aux its) ^^^ colon ^^ BT.pp false bt)
 
-  | Struct (_tag, members) ->
-     braces (separate_map comma (fun (BT.Member member,it) -> 
-                 !^member ^^^ equals ^^^ pp it ) members)
-  | Member (_tag, t, Member s) ->
-     pp t ^^ dot ^^ !^s
-  | MemberOffset (_tag, t, Member s) ->
-     mparens (!^"offset" ^^^ pp t ^^^ !^s)
+    | Struct (_tag, members) ->
+       braces (separate_map comma (fun (BT.Member member,it) -> 
+                   !^member ^^^ equals ^^^ aux it ) members)
+    | Member (_tag, t, Member s) ->
+       aux t ^^ dot ^^ !^s
+    | MemberOffset (_tag, t, Member s) ->
+       mparens (ampersand ^^ aux t ^^ !^"->" ^^ !^s)
 
-  | S sym -> Sym.pp sym
+    | S sym -> Sym.pp sym
+  in
+  dquotes (aux false it)
 
 
 let rec vars_in it : SymSet.t = 

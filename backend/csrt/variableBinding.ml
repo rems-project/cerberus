@@ -34,5 +34,5 @@ let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
      else !^"used" ^^^ squotes (RE.pp re)
   | Constraint lc -> 
      if print_all_names 
-     then btyp sym (dquotes (LC.pp false lc))
-     else dquotes (LC.pp false lc)
+     then btyp sym (LC.pp lc)
+     else LC.pp lc

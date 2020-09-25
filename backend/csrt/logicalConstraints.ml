@@ -2,7 +2,7 @@ module IT=IndexTerms
 
 type t = LC of IT.t
 
-let pp atomic (LC c) = IT.pp atomic c
+let pp (LC c) = IT.pp c
 
 let subst_var substitution (LC c) = LC (IT.subst_var substitution c)
 let subst_vars = Subst.make_substs subst_var

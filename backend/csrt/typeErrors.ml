@@ -103,10 +103,10 @@ let pp (loc : Loc.t) (err : t) =
          !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
            !^"has" ^^^ !^(string_of_int has)
     | Illtyped_it it ->
-       !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp false it)
+       !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it)
     | Unsat_constraint c ->
        !^"Unsatisfied constraint" ^^^
-         LogicalConstraints.pp false c
+         LogicalConstraints.pp c
     | Unconstrained_logical_variable name ->
        !^"Unconstrained logical variable" ^^^ Sym.pp name
 

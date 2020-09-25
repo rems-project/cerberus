@@ -106,7 +106,7 @@ let mResource bound t = Resource (bound,t)
          (RE.pp re ^^^ op) :: aux t
       | Constraint (lc,t) ->
          let op = equals ^^ rangle in
-         (LC.pp false lc ^^^ op) :: aux t
+         (LC.pp lc ^^^ op) :: aux t
       | I i -> 
          [RT.pp i]
     in

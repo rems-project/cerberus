@@ -116,7 +116,7 @@ module Make (RT: AT.RT_Sig) = struct
     let rec aux_c = function
       | Constraint (lc,t) ->
          let op = equals ^^ rangle in
-         (LC.pp false lc ^^^ op) :: aux_c t
+         (LC.pp lc ^^^ op) :: aux_c t
       | I rt -> [RT.pp rt]
     in
     let rec aux_r = function
