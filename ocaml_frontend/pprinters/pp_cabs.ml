@@ -624,6 +624,8 @@ let rec dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dleaf (pp_stmt_ctor "CabsSpar" ^^^ !^ "empty")
   | CabsSpar ss ->
       Dnode (pp_stmt_ctor "CabsSpar", List.map dtree_of_cabs_statement ss)
+  | CabsSasm _ ->
+      Dleaf (pp_stmt_ctor "CabsSasm") (* TODO *)
   end
 
 and dtree_of_for_clause = function

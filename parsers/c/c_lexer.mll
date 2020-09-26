@@ -71,6 +71,11 @@ let keywords: (string * Tokens.token) list = [
     "__cerb_printtype", PRINT_TYPE;
 
     "__BMC_ASSUME", BMC_ASSUME;
+
+    (* some GCC extensions *)
+    "asm", ASM;
+    "__asm__", ASM;
+    "__volatile__", ASM_VOLATILE;
   ]
 
 let lexicon: (string, token) Hashtbl.t = Hashtbl.create 0

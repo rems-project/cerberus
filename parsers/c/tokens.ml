@@ -124,6 +124,8 @@ type token =
   | VA_END
   | BMC_ASSUME
   | PRINT_TYPE
+  | ASM
+  | ASM_VOLATILE
 
 let string_of_token = function
   | AUTO -> "AUTO"
@@ -235,4 +237,6 @@ let string_of_token = function
   | VA_END -> "__cerbvar_va_end"
   | BMC_ASSUME -> "__bmc_assume"
   | PRINT_TYPE -> "__cerb_printtype"
+  | ASM -> "ASM"
+  | ASM_VOLATILE -> "ASM_VOLATILE"
   | EOF -> "EOF"

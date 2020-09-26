@@ -101,7 +101,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE
+%token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
 (* BMC syntax *)
 %token BMC_ASSUME
@@ -813,10 +813,10 @@ init_declarator_list(declarator): (* NOTE: the list is in reverse *)
 ;
 
 init_declarator(declarator):
-| decl= declarator
+| decl= declarator ioption(asm_register) 
     { InitDecl (Location_ocaml.region ($startpos, $endpos) None,
                 LF.cabs_of_declarator decl, None) }
-| decl= declarator EQ init= initializer_
+| decl= declarator ioption(asm_register) EQ init= initializer_
     { InitDecl (Location_ocaml.region ($startpos, $endpos) None,
                 LF.cabs_of_declarator decl, Some init) }
 ;
@@ -1215,6 +1215,8 @@ statement:
 | attr_opt= attribute_specifier_sequence? stmt= scoped(iteration_statement)
 | attr_opt= attribute_specifier_sequence? stmt= jump_statement
     { inject_attr attr_opt stmt }
+| stmt= asm_statement
+    { stmt }
 ;
 
 (* §6.8.1 Labeled statements *)
@@ -1334,6 +1336,91 @@ jump_statement:
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
                      Annot.no_attributes,
                      CabsSreturn expr_opt) }
+;
+
+(* GCC inline assembly extension *)
+asm_register:
+| ASM LPAREN STRING_LITERAL RPAREN
+    { () }
+
+asm_qualifier:
+| VOLATILE
+| ASM_VOLATILE
+    { `VOLATILE }
+| INLINE
+    { `INLINE }
+;
+
+asm_output_input:
+|                    STRING_LITERAL LPAREN expression RPAREN
+| LBRACK NAME VARIABLE RBRACK STRING_LITERAL LPAREN expression RPAREN
+    { () }
+
+asm_clobber:
+| STRING_LITERAL
+    { () }
+
+asm_label:
+| NAME VARIABLE
+    { () }
+
+asm_with_output:
+| COLON xs= separated_list(COMMA, asm_output_input) _ys= asm_with_input?
+    { let (ys, zs, ws) = match _ys with
+        | None ->
+            ([], [], [])
+        | Some z ->
+            z in
+      (xs, ys, zs, ws) }
+
+asm_with_input:
+| COLON xs= separated_list(COMMA, asm_output_input) _ys= asm_with_clobbers?
+    { let (ys, zs) = match _ys with
+        | None ->
+            ([], [])
+        | Some z ->
+            z in
+      (xs, ys, zs) }
+
+asm_with_clobbers:
+| COLON xs= separated_list(COMMA, asm_clobber) _ys= asm_with_labels?
+    { let ys = match _ys with
+        | None ->
+            []
+        | Some z ->
+            z in
+      (xs, ys) }
+
+asm_with_labels:
+| COLON xs= asm_label*
+    { xs }
+
+asm_statement:
+| ASM qs= asm_qualifier* LPAREN xs= STRING_LITERAL+ RPAREN
+    { let is_volatile = List.mem `VOLATILE qs in
+      let is_inline = List.mem `INLINE qs in
+      let strs = List.map (function
+        | Some _, _ ->
+            (* TODO: better error *)
+            failwith "encoding prefix found inside a __asm__ ()"
+        | None, str ->
+            str
+      ) xs in
+      CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes,
+        CabsSasm (is_volatile, is_inline, strs)) }
+| ASM qs= asm_qualifier* LPAREN xs= STRING_LITERAL+ args= asm_with_output RPAREN
+    { let is_volatile = List.mem `VOLATILE qs in
+      let is_inline = List.mem `INLINE qs in
+      let strs = List.map (function
+        | Some _, _ ->
+            (* TODO: better error *)
+            failwith "encoding prefix found inside a __asm__ ()"
+        | None, str ->
+            str
+      ) xs in
+(*      let (outputs, inputs, clobbers, labels) = args in *)
+      CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes,
+        CabsSasm (is_volatile, is_inline, strs(*, outputs, intputs, clobbers, labels*))) }
 ;
 
 (* §6.9 External definitions *)
