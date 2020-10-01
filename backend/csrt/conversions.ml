@@ -800,18 +800,18 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
   let rt = 
     RT.mComputational ra
       (Tools.comps 
-         (map RT.mLogical rl @ 
-          map RT.mResource rr @ 
-          map RT.mConstraint rc)
+         (List.map RT.mLogical rl @ 
+          List.map RT.mResource rr @ 
+          List.map RT.mConstraint rc)
          RT.I)
   in
   
   let ft =
     Tools.comps 
-      (map FT.mComputational a @
-       map FT.mLogical l @ 
-       map FT.mResource r @ 
-       map FT.mConstraint c)
+      (List.map FT.mComputational a @
+       List.map FT.mLogical l @ 
+       List.map FT.mResource r @ 
+       List.map FT.mConstraint c)
       (FT.I rt)
   in
   return ft
