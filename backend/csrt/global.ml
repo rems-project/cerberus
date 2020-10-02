@@ -38,6 +38,7 @@ type struct_decl =
     sizes: (BT.member * RE.size) list;
     closed: RT.t; 
     closed_stored: RT.t;
+    closed_stored_aux: IT.t -> RT.l;
   }
 
 type struct_decls = struct_decl SymMap.t

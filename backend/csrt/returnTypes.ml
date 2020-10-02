@@ -32,15 +32,15 @@ let rec (@@) (t1: l) (t2: l) : l =
   | Constraint (bound,t) -> Constraint (bound, t@@t2)
 
 
-let subst_var_l ?(re_subst_var=RE.subst_var) substitution lrt = 
+let subst_var_l ?(re_subst_var=RE.subst_var) (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
   let rec aux substitution = function
     | I -> I
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if Sym.equal name substitution.after then
          let newname = Sym.fresh () in
-         let t' = aux {before=name;after=S newname} t in
+         let t' = aux {before=name;after=newname} t in
          let t'' = aux substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -57,14 +57,13 @@ let subst_var_l ?(re_subst_var=RE.subst_var) substitution lrt =
   in
   aux substitution lrt
 
-
-let subst_var substitution = function
+let subst_var (substitution: (Sym.t, Sym.t) Subst.t) = function
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
        Computational ((name,bt),t) 
-     else if SymSet.mem name (IT.vars_in substitution.after) then
+     else if Sym.equal name substitution.after then
        let newname = Sym.fresh () in
-       let t' = subst_var_l {before=name; after=S newname} t in
+       let t' = subst_var_l {before=name; after=newname} t in
        let t'' = subst_var_l substitution t' in
        Computational ((newname,bt),t'')
      else
@@ -74,10 +73,11 @@ let subst_vars = Subst.make_substs subst_var
 
 
 
+
 let rec freshify_l = function
   | Logical ((s,ls),t) ->
      let s' = Sym.fresh () in
-     let t' = subst_var_l {before=s;after=S s'} t in
+     let t' = subst_var_l {before=s;after=s'} t in
      Logical ((s',ls), freshify_l t')
   | Resource (re,t) ->
      Resource (re, freshify_l t)
@@ -90,25 +90,10 @@ let rec freshify_l = function
 let freshify = function
   | Computational ((s,bt),t) ->
      let s' = Sym.fresh () in
-     let t' = subst_var_l {before = s; after=S s'} t in
+     let t' = subst_var_l {before = s; after=s'} t in
      Computational ((s',bt), freshify_l t')
      
 
-
-let rec instantiate_struct_member_l subst rt =
-  match rt with
-  | I -> I
-  | Logical ((name,bound),t) -> 
-     Logical ((name,bound),instantiate_struct_member_l subst t)
-  | Resource (bound,t) -> 
-     Resource (bound, instantiate_struct_member_l subst t)
-  | Constraint (bound,t) -> 
-     Constraint (LC.instantiate_struct_member subst bound, 
-                 instantiate_struct_member_l subst t)
-
-let instantiate_struct_member subst = function
-  | Computational ((name,bound),t) -> 
-     Computational ((name,bound),instantiate_struct_member_l subst t)
 
 let rec free_vars_l = function
   | Logical ((sym,_),t) -> SymSet.remove sym (free_vars_l t)

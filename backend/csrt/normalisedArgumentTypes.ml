@@ -48,9 +48,9 @@ module Make (RT: AT.RT_Sig) = struct
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if Sym.equal name substitution.after then
          let newname = Sym.fresh () in
-         let t' = subst_var_l {before=name; after=S newname} t in
+         let t' = subst_var_l {before=name; after=newname} t in
          let t'' = subst_var_l substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -62,9 +62,9 @@ module Make (RT: AT.RT_Sig) = struct
     | Computational ((name,bt),t) -> 
        if Sym.equal name substitution.before then 
          Computational ((name,bt),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if Sym.equal name substitution.after then
          let newname = Sym.fresh () in
-         let t' = subst_var_a {before=name; after=S newname} t in
+         let t' = subst_var_a {before=name; after=newname} t in
          let t'' = subst_var_a substitution t' in
          Computational ((newname,bt),t'')
        else
@@ -78,37 +78,6 @@ module Make (RT: AT.RT_Sig) = struct
 
   let subst_var = subst_var_a
   let subst_vars_a = subst_vars_a
-
-
-  let rec instantiate_struct_member_c subst = function
-    | Constraint (lc,t) ->
-       Constraint (LC.instantiate_struct_member subst lc, 
-                   instantiate_struct_member_c 
-                     subst t)
-    | I rt -> I (RT.instantiate_struct_member subst rt)
-
-  let rec instantiate_struct_member_r subst = function
-    | Resource (bound,t) -> 
-       Resource (bound, 
-                 instantiate_struct_member_r 
-                   subst t)
-    | C c -> C (instantiate_struct_member_c subst c)
-
-  let rec instantiate_struct_member_l subst = function
-    | Logical ((name,bound),t) -> 
-       Logical ((name,bound),
-                instantiate_struct_member_l 
-                  subst t)
-    | R r -> R (instantiate_struct_member_r subst r)
-
-  let rec instantiate_struct_member_a subst = function
-    | Computational ((name,bound),t) -> 
-       Computational ((name,bound),
-                      instantiate_struct_member_a 
-                        subst t)
-    | L l -> L (instantiate_struct_member_l subst l)
-
-
 
 
   let (pp_a,pp_l,pp_r,pp_c) =

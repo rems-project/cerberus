@@ -84,7 +84,7 @@ let rec ctype_aux owned loc (name: Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
      if owned then
        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
        let* size = Memory.size_of_ctype loc ct in
-       let points = Points {pointer = S name; pointee = S pointee_name; size} in
+       let points = Points {pointer = S name; pointee = pointee_name; size} in
        let t = Logical ((pointee_name, Base bt), Resource (points, t)) in
        return ((name,Loc),t)
      else
@@ -116,34 +116,6 @@ let make_pointer_ctype ct =
 
 
 
-
-
-
-(* let explode_struct_in_binding loc global (Tag tag) logical_struct binding = 
- *   let open RT in
- *   let rec explode_struct loc global (Tag tag) logical_struct = 
- *     let* decl = Global.get_struct_decl loc global (Tag tag) in
- *     let rec aux = function
- *       | (member,bt)::members ->
- *          let this = IT.Member (Tag tag, logical_struct, member) in
- *          let* substs = aux members in
- *          let* substs2 = match bt with
- *            | Struct tag2 -> explode_struct loc global tag2 this
- *            | _ -> return [(fresh (), bt, this)]
- *          in
- *          return (substs @ substs2)
- *       | [] -> return []
- *     in
- *     aux decl.Global.raw 
- *   in
- *   let* substs = explode_struct loc global (Tag tag) logical_struct in
- *   let binding' = 
- *     fold_right (fun (name,bt,it) binding -> 
- *         Logical ((name,Base bt), 
- *                  instantiate_struct_member_l {s=it;swith=S name} binding)
- *       ) substs binding
- *   in
- *   return binding' *)
 
 
 
@@ -222,8 +194,10 @@ let struct_decl_closed loc tag fields struct_decls =
        let open RT in
        let open Global in
        let* decl = Global.get_struct_decl loc struct_decls (Tag tag2) in
+       let s' = Sym.fresh () in 
        let Computational ((s,_struct),tag2_bindings) = decl.closed in
-       return (RT.subst_var_l (Subst.{before=s;after=this}) tag2_bindings @@ acc)
+       return (RT.subst_var_l (Subst.{before=s;after=s'}) tag2_bindings @@ 
+                 Constraint (LC (EQ (S s', this)), acc))
     | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")
@@ -241,51 +215,68 @@ let struct_decl_closed loc tag fields struct_decls =
 
 
 
+(* could do better, performance-wise by not making this recursive *)
 let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls) = 
   let open Sym in
-  let rec aux loc (lbs,rbs) struct_p member ct =
+  let rec aux loc member ct =
     let open RT in
     let* size = Memory.size_of_ctype loc ct in
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
     let loc = Loc.update loc annots in
-    let this_p = IT.MemberOffset (tag,struct_p,member) in
     let this_v = Sym.fresh () in
-    let points = RE.Points {pointer=this_p;pointee= S this_v; size} in
-    let new_lbs bt = RT.Logical ((this_v, Base bt), I) in
-    let new_rbs = RT.Resource (points, I) in
     match ct_ with
     | Void -> 
        fail loc (Generic !^"void member of struct")
     | Basic (Integer it) -> 
        let* lc = integerType_constraint loc (S this_v) it in
-       return (new_lbs Integer @@ RT.Constraint (lc,lbs), new_rbs)
+       let make struct_p = 
+         let this_p = IT.MemberOffset (tag,struct_p,member) in
+         let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
+         RT.Logical ((this_v, Base Integer), 
+           RT.Resource (points struct_p, 
+             RT.Constraint (lc, I)))
+       in
+       return make
     | Array (ct, _maybe_integer) -> 
-       return (new_lbs Array @@ lbs, new_rbs)
+       let make struct_p = 
+         let this_p = IT.MemberOffset (tag,struct_p,member) in
+         let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
+         RT.Logical ((this_v, Base Array), 
+           RT.Resource (points struct_p, I))
+       in
+       return make
     | Pointer (_qualifiers, ct) -> 
-       return (new_lbs Loc @@ lbs, new_rbs)
+       let make struct_p = 
+         let this_p = IT.MemberOffset (tag,struct_p,member) in
+         let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
+         RT.Logical ((this_v, Base Loc), 
+           RT.Resource (points struct_p, I))
+       in
+       return make
     | Atomic ct -> 
        (* fix *)
-       aux loc (lbs,rbs) struct_p member ct
+       aux loc member ct
     | Struct tag2 -> 
-       let open RT in
-       let open Global in
+       (* let open RT in
+        * let open Global in *)
        let* decl = Global.get_struct_decl loc struct_decls (Tag tag2) in
-       let (RT.Computational ((s,_loc),tag2_bindings)) = 
-         RT.freshify (decl.closed_stored) in
-       let rbs = 
-         RT.subst_var_l (Subst.{before=s; after=this_p}) tag2_bindings @@ rbs in
-       return (lbs, rbs)
+       let make struct_p = 
+         RT.freshify_l (decl.closed_stored_aux 
+                          (IT.MemberOffset (tag,struct_p,member)))
+       in
+       return make
     | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")
   in
-  let struct_pointer = Sym.fresh () in
-  let* (lbs,rbs) = 
-    ListM.fold_rightM (fun (id, (_attributes, _qualifier, ct)) acc ->
-        aux loc acc (S struct_pointer) (BT.Member (Id.s id)) ct
-      ) fields (RT.I,RT.I)
+  let* make = 
+    ListM.fold_rightM (fun (id, (_attributes, _qualifier, ct)) acc_make ->
+        let* make = aux loc (BT.Member (Id.s id)) ct in
+        return 
+          (fun struct_p -> RT.(@@) (make struct_p) (acc_make struct_p))
+      ) fields (fun struct_p -> RT.I)
   in
-  return (RT.Computational ((struct_pointer, Loc), RT.(@@) lbs rbs))
+  return make
 
 
 
@@ -293,8 +284,12 @@ let struct_decl loc tag fields struct_decls =
   let* raw = struct_decl_raw loc fields in
   let* sizes = struct_decl_sizes loc fields in
   let* closed = struct_decl_closed loc tag fields struct_decls in
-  let* closed_stored = struct_decl_closed_stored loc tag fields struct_decls in
-  return Global.{ raw; sizes; closed; closed_stored }
+  let* closed_stored_aux = struct_decl_closed_stored loc tag fields struct_decls in
+  let closed_stored = 
+    let s = Sym.fresh () in 
+    RT.Computational ((s, BT.Loc), closed_stored_aux (S s))
+  in
+  return Global.{ raw; sizes; closed; closed_stored; closed_stored_aux }
 
 
 
@@ -315,13 +310,13 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
        | CF.Ctype.Ctype (_, Struct s) ->
           let* decl = Global.get_struct_decl loc struct_decls (Tag s) in
           let Computational ((s,bt), lrt) = RT.freshify decl.Global.closed_stored in
-          return (bt, RT.subst_var_l {before=s; after=S name} lrt)
+          return (bt, RT.subst_var_l {before=s; after=name} lrt)
        | _ ->
           let name2 = Sym.fresh () in
           let* (bt,lrt) = aux name2 ct in
           (* fix *)
           let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
-          let points = RE.Points {pointer = S name; pointee = S name2; size} in
+          let points = RE.Points {pointer = S name; pointee = name2; size} in
           return (Loc, Logical ((name2, Base bt), Resource (points, lrt)))
        end
     (* fix *)
@@ -330,7 +325,7 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
     | Struct tag -> 
        let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
        let Computational ((s,bt),lrt) = RT.freshify decl.Global.closed in
-       return (bt, RT.subst_var_l {before=s; after=S name} lrt)
+       return (bt, RT.subst_var_l {before=s; after=name} lrt)
     | Basic (Floating _) -> floatingType loc 
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")
@@ -347,61 +342,13 @@ let make_name = function
 
 
 
-(* let rec logical_variables_lrt = function
- *   | RT.Logical ((s,ls),lrt) -> SymMap.add s ls (logical_variables_lrt lrt)
- *   | RT.Resource (_,lrt) -> logical_variables_lrt lrt
- *   | RT.Constraint (_,lrt) -> logical_variables_lrt lrt
- *   | RT.I -> SymMap.empty
- * 
- * let logical_variables_rt = function
- *   | RT.Computational (_,lrt) -> logical_variables_lrt lrt
- * 
- * 
- * let return_resources_lrt loc lvars lrt =
- *   let find_lvar lvar = 
- *     match SymMap.find_opt lvar lvars with
- *     | None -> fail loc (Unreachable (!^"unbound lvar" ^^^ Sym.pp lvar))
- *     | Some ls -> return ls
- *   in
- *   let rec aux = function
- *     | RT.Resource (re,lrt) -> 
- *        let* rt' = aux lrt in
- *        begin match re with
- *        | Points ({pointee=None;_} as p) -> (\* this is not very good *\)
- *           return (RT.Resource (Points p, rt'))
- *        | Points ({pointee=Some lvar;_} as p) ->
- *           let lvar' = Sym.fresh () in
- *           let* ls = find_lvar lvar in
- *           return (RT.Logical ((lvar', ls), 
- *                   RT.Resource (RE.Points {p with pointee = Some lvar'}, rt')))
- *        | StoredStruct s ->
- *           let* (members,rt') = 
- *             ListM.fold_rightM (fun (member,lvar) (members,rt') ->
- *                 (\* has to be Loc, though *\)
- *                 let* ls = find_lvar lvar in
- *                 let lvar' = Sym.fresh () in
- *                 return ((member,lvar') :: members, RT.Logical ((lvar',ls), rt'))
- *               ) s.members ([],rt')
- *           in
- *           return (RT.Resource (StoredStruct {s with members}, rt'))
- *        end
- *     | RT.Logical (_,lrt) -> aux lrt
- *     | RT.Constraint (_,lrt) -> aux lrt
- *     | RT.I -> return RT.I
- *   in
- *   aux lrt
- * 
- * let return_resources_rt loc lvars = function
- *   | RT.Computational (_,lrt) -> 
- *      return_resources_lrt loc lvars lrt *)
-
 
 let make_return_from_argument_lrt lrt =
   let subst_non_pointer = RT.subst_var_l ~re_subst_var:RE.subst_non_pointer in
   let rec aux = function
     | RT.Logical ((s,ls),lrt) ->
        let s' = Sym.fresh () in
-       let lrt' = subst_non_pointer {before=s;after=S s'} lrt in
+       let lrt' = subst_non_pointer {before=s;after=s'} lrt in
        RT.Logical ((s',ls), aux lrt')
     | RT.Resource (re,lrt) -> RT.Resource (re,aux lrt)
     | RT.Constraint (lc,lrt) -> RT.Constraint (lc,aux lrt)
@@ -683,7 +630,7 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
        let* points = match osize with
          | Some size ->
             return (Points {pointer = S existing_pointer; 
-                            pointee = S newname'; size})
+                            pointee = newname'; size})
          | None -> fail loc (Generic !^"pointer to non-object")
        in
        return ((newname', LS.Base bt) :: l, r @ [points], c)
@@ -764,8 +711,8 @@ let make_fun_spec_annot loc genv attrs args ret_ctype =
           | Some size -> return size
           | None -> fail loc (Generic !^"argument type without size")
         in
-        let pointsa = RE.Points {pointer = S s; pointee = S sa; size} in
-        let pointsr = RE.Points {pointer = S s; pointee = S sr; size} in
+        let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
+        let pointsr = RE.Points {pointer = S s; pointee = sr; size} in
         return ((a @ [(s,BT.Loc)], l @ [(sa, LS.Base bt)] @ l', r @ [pointsa] @ r', c @ c'),
                 (rl @ [(sr, LS.Base bt)], rr @ [pointsr], rc))
       ) ((a, l, r, c), (rl, rr, rc)) annot.fa_args

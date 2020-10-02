@@ -102,10 +102,11 @@ let rec load (loc: Loc.t)
        | Some (_,Uninit _) -> fail loc (Uninitialised is_field)
        | None -> fail loc (Missing_ownership (Load, is_field))
      in
-     let* vbt = IndexTermTyping.infer_index_term loc {local;global} pointee in
-     if LS.equal vbt (Base bt) 
-     then return (Constraint (LC (IT.EQ (path, pointee)),I))
-     else fail loc (Mismatch {has=vbt; expect=Base bt})
+     let* vls = Local.get_l loc pointee local in
+     (* let* vbt = IndexTermTyping.infer_index_term loc {local;global} pointee in *)
+     if LS.equal vls (Base bt) 
+     then return (Constraint (LC (IT.EQ (path, S pointee)),I))
+     else fail loc (Mismatch {has=vls; expect=Base bt})
 
 
 
@@ -127,16 +128,21 @@ let rec store (loc: Loc.t)
           let member_pointer = IT.MemberOffset (tag,pointer,member) in
           let member_size = List.assoc member decl.sizes in
           let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
-          let* rbindings = aux members in
-          let* rbindings2 = store loc {local;global} member_bt member_pointer 
+          let* rt = aux members in
+          let* rt2 = store loc {local;global} member_bt member_pointer 
                               member_size o_member_value in
-          return (rbindings2@@rbindings)
+          return (rt@@rt2)
      in  
      aux decl.raw
   | _ -> 
-     let resource = match o_value with
-       | Some v -> Points {pointer; pointee = v; size}
-       | None -> Uninit {pointer; size}
-     in
-     return (Resource (resource, I))
-
+     let vsym = Sym.fresh () in 
+     match o_value with
+       | Some v -> 
+          let rt = 
+            Logical ((vsym, Base bt), 
+            Resource (Points {pointer; pointee = vsym; size}, 
+            Constraint (LC (EQ (S vsym, v)), I)))
+          in
+          return rt
+       | None -> 
+          return (Resource (Uninit {pointer; size}, I))

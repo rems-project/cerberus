@@ -10,9 +10,8 @@ module SymSet = Set.Make(Sym)
 
 module type RT_Sig = sig
   type t
-  val subst_var: (Sym.t,IT.t) Subst.t -> t -> t
+  val subst_var: (Sym.t,Sym.t) Subst.t -> t -> t
   val free_vars: t -> SymSet.t
-  val instantiate_struct_member: (IT.t,IT.t) Subst.t -> t -> t
   val pp: t -> Pp.document
 end
 
@@ -35,13 +34,13 @@ let mResource bound t = Resource (bound,t)
 
 
 
-  let rec subst_var substitution = function
+  let rec subst_var (substitution: (Sym.t, Sym.t) Subst.t) = function
     | Computational ((name,bt),t) -> 
        if Sym.equal name substitution.before then 
          Computational ((name,bt),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if Sym.equal name substitution.after then
          let newname = Sym.fresh () in
-         let t' = subst_var {before=name; after=S newname} t in
+         let t' = subst_var {before=name; after=newname} t in
          let t'' = subst_var substitution t' in
          Computational ((newname,bt),t'')
        else
@@ -49,9 +48,9 @@ let mResource bound t = Resource (bound,t)
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if Sym.equal name substitution.after then
          let newname = Sym.fresh () in
-         let t' = subst_var {before=name; after=S newname} t in
+         let t' = subst_var {before=name; after=newname} t in
          let t'' = subst_var substitution t' in
          Logical ((newname,ls),t'')
        else
@@ -68,21 +67,6 @@ let mResource bound t = Resource (bound,t)
     | I i -> I (RT.subst_var substitution i)
 
   let subst_vars = make_substs subst_var
-
-  let rec instantiate_struct_member subst = function
-    | Computational ((name,bound),t) -> 
-       Computational ((name,bound),
-                      instantiate_struct_member subst t)
-    | Logical ((name,bound),t) -> 
-       Logical ((name,bound),
-                instantiate_struct_member subst t)
-    | Resource (bound,t) -> 
-       Resource (bound, instantiate_struct_member subst t)
-    | Constraint (bound,t) -> 
-       Constraint (LC.instantiate_struct_member subst bound, 
-                   instantiate_struct_member subst t)
-    | I i -> 
-       I (RT.instantiate_struct_member subst i)
 
   let rec free_vars = function
     | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)

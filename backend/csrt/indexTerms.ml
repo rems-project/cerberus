@@ -1,6 +1,6 @@
 open Subst
-open Uni
-open Option
+(* open Uni *)
+(* open Option *)
 open List
 open Pp
 module Loc=Locations
@@ -60,6 +60,72 @@ let int x = Num (Num.of_int x)
 
 let in_range between min max = 
   And [LE (min, between); LE (between, max)]
+
+
+
+let rec equal it it' = 
+  match it, it' with
+  | Num n, Num n' -> Num.equal n n'
+  | Bool b, Bool b' -> b = b'
+
+  | Add (t1,t2), Add (t1',t2')
+  | Sub (t1,t2), Sub (t1',t2')
+  | Mul (t1,t2), Mul (t1',t2')
+  | Div (t1,t2), Div (t1',t2')
+  | Exp (t1,t2), Exp (t1',t2')
+  | Rem_t (t1,t2), Rem_t (t1',t2')
+  | Rem_f (t1,t2), Rem_f (t1',t2') 
+  | Min (t1,t2), Min (t1',t2')
+  | Max (t1,t2), Max (t1',t2') 
+    -> equal t1 t1' && equal t2 t2' 
+
+  | EQ (t1,t2), EQ (t1',t2')
+  | NE (t1,t2), NE (t1',t2')
+  | LT (t1,t2), LT (t1',t2')
+  | GT (t1,t2), GT (t1',t2')
+  | LE (t1,t2), LE (t1',t2')
+
+  | GE (t1,t2), GE (t1',t2') 
+    -> equal t1 t1' && equal t2 t2' 
+
+  | Impl (t1,t2), Impl (t1',t2')
+    -> equal t1 t1' && equal t2 t2' 
+
+
+  | And ts, And ts'
+  | Or ts, Or ts'
+    -> List.equal equal ts ts'
+
+  | Null t, Null t'
+  | Not t, Not t' 
+    -> equal t t' 
+
+  | Tuple its, Tuple its' 
+    -> List.equal equal its its'
+  | Nth (bt, n,t), Nth (bt', n',t') 
+    -> BT.equal bt bt' && n = n' && equal t t' 
+
+  | Member (tag,t,member), Member (tag',t',member')
+  | MemberOffset (tag,t,member), MemberOffset (tag',t',member') 
+    -> tag = tag' && equal t t' && member = member'
+
+  | Nil bt, Nil bt' 
+    -> BT.equal bt bt'
+  | Cons (t1,t2), Cons (t1',t2') 
+    -> equal t1 t1' && equal t2 t2'
+  | List (its,bt), List (its',bt') 
+    -> List.equal equal its its' && BT.equal bt bt'
+
+  | Head t, Head t'
+  | Tail t, Tail t'
+    -> equal t t'
+
+  | S sym, S sym' 
+    -> Sym.equal sym sym'
+
+  | _ -> 
+     false
+
 
 
 
@@ -225,257 +291,151 @@ let rec subst_var subst it : t =
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_var subst t, f)
   | S symbol -> 
-     if symbol = subst.before then subst.after else S symbol
+     if symbol = subst.before then S subst.after else S symbol
 
 
 let subst_vars = make_substs subst_var
 
 
-let rec instantiate_struct_member subst it : t = 
+
+let rec subst_it subst it : t = 
   match it with
   | Num _ -> it
   | Bool _ -> it
-  | Add (it, it') -> 
-     Add (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | Sub (it, it') -> 
-     Sub (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | Mul (it, it') -> 
-     Mul (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | Div (it, it') -> 
-     Div (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | Exp (it, it') -> 
-     Exp (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | Rem_t (it, it') -> 
-     Rem_t (instantiate_struct_member subst it, 
-            instantiate_struct_member subst it')
-  | Rem_f (it, it') -> 
-     Rem_f (instantiate_struct_member subst it, 
-            instantiate_struct_member subst it')
-  | Min (it, it') -> 
-     Min (instantiate_struct_member subst it, 
-            instantiate_struct_member subst it')
-  | Max (it, it') -> 
-     Max (instantiate_struct_member subst it, 
-          instantiate_struct_member subst it')
-  | EQ (it, it') -> 
-     EQ (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
-  | NE (it, it') -> 
-     NE (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
-  | LT (it, it') -> 
-     LT (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
-  | GT (it, it') -> 
-     GT (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
-  | LE (it, it') -> 
-     LE (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
-  | GE (it, it') -> 
-     GE (instantiate_struct_member subst it, 
-         instantiate_struct_member subst it')
-  | Null it -> 
-     Null (instantiate_struct_member subst it)
-  | And its -> 
-     And (map (instantiate_struct_member subst) its)
-  | Or its -> 
-     Or (map (instantiate_struct_member subst) its)
-  | Impl (it, it') -> 
-     Impl (instantiate_struct_member subst it, 
-           instantiate_struct_member subst it')
-  | Not it -> 
-     Not (instantiate_struct_member subst it)
+  | Add (it, it') -> Add (subst_it subst it, subst_it subst it')
+  | Sub (it, it') -> Sub (subst_it subst it, subst_it subst it')
+  | Mul (it, it') -> Mul (subst_it subst it, subst_it subst it')
+  | Div (it, it') -> Div (subst_it subst it, subst_it subst it')
+  | Exp (it, it') -> Exp (subst_it subst it, subst_it subst it')
+  | Rem_t (it, it') -> Rem_t (subst_it subst it, subst_it subst it')
+  | Rem_f (it, it') -> Rem_f (subst_it subst it, subst_it subst it')
+  | Min (it, it') -> Min (subst_it subst it, subst_it subst it')
+  | Max (it, it') -> Max (subst_it subst it, subst_it subst it')
+  | EQ (it, it') -> EQ (subst_it subst it, subst_it subst it')
+  | NE (it, it') -> NE (subst_it subst it, subst_it subst it')
+  | LT (it, it') -> LT (subst_it subst it, subst_it subst it')
+  | GT (it, it') -> GT (subst_it subst it, subst_it subst it')
+  | LE (it, it') -> LE (subst_it subst it, subst_it subst it')
+  | GE (it, it') -> GE (subst_it subst it, subst_it subst it')
+  | Null it -> Null (subst_it subst it)
+  | And its -> And (map (subst_it subst) its)
+  | Or its -> Or (map (subst_it subst) its)
+  | Impl (it, it') -> Impl (subst_it subst it, subst_it subst it')
+  | Not it -> Not (subst_it subst it)
   | ITE (it,it',it'') -> 
-     ITE (instantiate_struct_member subst it,
-          instantiate_struct_member subst it,
-          instantiate_struct_member subst it)
+     ITE (subst_it subst it, subst_it subst it', subst_it subst it'')
   | Tuple its ->
-     Tuple (map (fun it -> instantiate_struct_member subst it) its)
+     Tuple (map (fun it -> subst_it subst it) its)
   | Nth (bt, n, it') ->
-     Nth (bt, n, instantiate_struct_member subst it')
-  | Nil bt -> 
-     Nil bt
-  | Cons (it1,it2) -> 
-     Cons (instantiate_struct_member subst it1,
-           instantiate_struct_member subst it2)
+     Nth (bt, n, subst_it subst it')
+  | Nil _ -> it
+  | Cons (it1,it2) -> Cons (subst_it subst it1, subst_it subst it2)
   | List (its,bt) -> 
-     List (map (fun it -> instantiate_struct_member subst it) its, bt)
+     List (map (fun it -> subst_it subst it) its, bt)
   | Head it ->
-     Head (instantiate_struct_member subst it)
+     Head (subst_it subst it)
   | Tail it ->
-     Tail (instantiate_struct_member subst it)
+     Tail (subst_it subst it)
   | Struct (tag, members) ->
-     let members = 
-       map (fun (member,it) -> 
-           (member,instantiate_struct_member subst it)
-         ) members 
-     in
+     let members = map (fun (member,it) -> (member,subst_it subst it)) members in
      Struct (tag, members)
-  | (Member (tag, t, f)) as member ->
-     if subst.before = member then subst.after
-     else Member (tag, instantiate_struct_member subst t, f)
+  | Member (tag, t, f) ->
+     Member (tag, subst_it subst t, f)
   | MemberOffset (tag,t,f) ->
-     MemberOffset (tag,instantiate_struct_member subst t, f)
-  | S symbol -> S symbol
+     MemberOffset (tag,subst_it subst t, f)
+  | S symbol -> 
+     if symbol = subst.before then subst.after else S symbol
 
 
-
-let rec unify it it' (res : (t Uni.t) SymMap.t) = 
-  match it, it' with
-  | Num n, Num n' when n = n' -> return res
-  | Bool b, Bool b' when b = b' -> return res
-
-  | Add (it1, it2), Add (it1', it2')
-  | Sub (it1, it2), Sub (it1', it2')
-  | Mul (it1, it2), Mul (it1', it2')
-  | Div (it1, it2), Div (it1', it2')
-  | Exp (it1, it2), Exp (it1', it2')
-  | Rem_t (it1, it2), Rem_t (it1', it2')
-  | Rem_f (it1, it2), Rem_f (it1', it2')
-  | Min (it1, it2), Min (it1', it2')
-  | Max (it1, it2), Max (it1', it2')
-
-  | EQ (it1, it2), EQ (it1', it2')
-  | NE (it1, it2), NE (it1', it2')
-  | LT (it1, it2), LT (it1', it2')
-  | GT (it1, it2), GT (it1', it2')
-  | LE (it1, it2), LE (it1', it2')
-  | GE (it1, it2), GE (it1', it2')
-    ->
-     let* res = unify it1 it1' res in
-     unify it2 it2' res
-
-
-  | And its, And its'
-  | Or its, Or its' 
-    ->
-     unify_list its its' res
-
-  | Null it, Null it'
-  | Not it, Not it' 
-  | Head it, Head it' 
-  | Tail it, Tail it' 
-    -> 
-     unify it it' res
-  | ITE (it1,it2,it3), ITE (it1',it2',it3') ->
-     unify_list [it1;it2;it3] [it1';it2';it3'] res
-
-  | Tuple its, Tuple its' ->
-     unify_list (it::its) (it'::its') res
-  | Nth (bt, n, it2), Nth (bt', n', it2') when BT.equal bt bt' && n = n'
-    -> 
-     unify it it' res
-
-  | List (its,bt), List (its',bt') when BT.equal bt bt' ->
-     unify_list its its' res
-
-  | Struct (tag, members), Struct (tag', members') 
-       when tag = tag' ->
-     let rec aux members members' res = 
-       match members, members' with
-       | [], [] -> return res
-       | (BT.Member m, it)::members, (BT.Member m', it')::members' 
-            when m = m' ->
-          let* res = unify it it' res in
-          aux members members' res
-       | _ -> fail
-     in
-     aux members members' res
-
-  | Member (tag, t, m), Member (tag', t', m') 
-  | MemberOffset (tag, t, m), MemberOffset (tag', t', m') 
-       when tag = tag' && m = m' ->
-     unify t t' res
-
-  | S sym, it' ->
-     if S sym = it' then Some res else
-       let* uni = SymMap.find_opt sym res in
-       begin match uni.resolved with
-       | Some s when s = it' -> return res 
-       | Some s -> fail
-       | None -> return (SymMap.add sym (Uni.{resolved = Some it'}) res)
-       end
-
-  | _, _ ->
-     fail
-
-and unify_list its its' res =
-  match its, its' with
-  | [], [] -> return res
-  | (it :: its), (it' :: its') ->
-     let* res = unify it it' res in
-     unify_list its its' res
-  | _, _ ->
-     fail
-
-let rec equal it it' = 
-  match it, it' with
-  | Num n, Num n' -> Num.equal n n'
-  | Bool b, Bool b' -> b = b'
-
-  | Add (t1,t2), Add (t1',t2')
-  | Sub (t1,t2), Sub (t1',t2')
-  | Mul (t1,t2), Mul (t1',t2')
-  | Div (t1,t2), Div (t1',t2')
-  | Exp (t1,t2), Exp (t1',t2')
-  | Rem_t (t1,t2), Rem_t (t1',t2')
-  | Rem_f (t1,t2), Rem_f (t1',t2') 
-  | Min (t1,t2), Min (t1',t2')
-  | Max (t1,t2), Max (t1',t2') 
-    -> equal t1 t1' && equal t2 t2' 
-
-  | EQ (t1,t2), EQ (t1',t2')
-  | NE (t1,t2), NE (t1',t2')
-  | LT (t1,t2), LT (t1',t2')
-  | GT (t1,t2), GT (t1',t2')
-  | LE (t1,t2), LE (t1',t2')
-
-  | GE (t1,t2), GE (t1',t2') 
-    -> equal t1 t1' && equal t2 t2' 
-
-  | Impl (t1,t2), Impl (t1',t2')
-    -> equal t1 t1' && equal t2 t2' 
+(* let rec unify it it' (res : (t Uni.t) SymMap.t) = 
+ *   match it, it' with
+ *   | Num n, Num n' when n = n' -> return res
+ *   | Bool b, Bool b' when b = b' -> return res
+ * 
+ *   | Add (it1, it2), Add (it1', it2')
+ *   | Sub (it1, it2), Sub (it1', it2')
+ *   | Mul (it1, it2), Mul (it1', it2')
+ *   | Div (it1, it2), Div (it1', it2')
+ *   | Exp (it1, it2), Exp (it1', it2')
+ *   | Rem_t (it1, it2), Rem_t (it1', it2')
+ *   | Rem_f (it1, it2), Rem_f (it1', it2')
+ *   | Min (it1, it2), Min (it1', it2')
+ *   | Max (it1, it2), Max (it1', it2')
+ * 
+ *   | EQ (it1, it2), EQ (it1', it2')
+ *   | NE (it1, it2), NE (it1', it2')
+ *   | LT (it1, it2), LT (it1', it2')
+ *   | GT (it1, it2), GT (it1', it2')
+ *   | LE (it1, it2), LE (it1', it2')
+ *   | GE (it1, it2), GE (it1', it2')
+ *     ->
+ *      let* res = unify it1 it1' res in
+ *      unify it2 it2' res
+ * 
+ * 
+ *   | And its, And its'
+ *   | Or its, Or its' 
+ *     ->
+ *      unify_list its its' res
+ * 
+ *   | Null it, Null it'
+ *   | Not it, Not it' 
+ *   | Head it, Head it' 
+ *   | Tail it, Tail it' 
+ *     -> 
+ *      unify it it' res
+ *   | ITE (it1,it2,it3), ITE (it1',it2',it3') ->
+ *      unify_list [it1;it2;it3] [it1';it2';it3'] res
+ * 
+ *   | Tuple its, Tuple its' ->
+ *      unify_list (it::its) (it'::its') res
+ *   | Nth (bt, n, it2), Nth (bt', n', it2') when BT.equal bt bt' && n = n'
+ *     -> 
+ *      unify it it' res
+ * 
+ *   | List (its,bt), List (its',bt') when BT.equal bt bt' ->
+ *      unify_list its its' res
+ * 
+ *   | Struct (tag, members), Struct (tag', members') 
+ *        when tag = tag' ->
+ *      let rec aux members members' res = 
+ *        match members, members' with
+ *        | [], [] -> return res
+ *        | (BT.Member m, it)::members, (BT.Member m', it')::members' 
+ *             when m = m' ->
+ *           let* res = unify it it' res in
+ *           aux members members' res
+ *        | _ -> fail
+ *      in
+ *      aux members members' res
+ * 
+ *   | Member (tag, t, m), Member (tag', t', m') 
+ *   | MemberOffset (tag, t, m), MemberOffset (tag', t', m') 
+ *        when tag = tag' && m = m' ->
+ *      unify t t' res
+ * 
+ *   | S sym, it' ->
+ *      if S sym = it' then Some res else
+ *        let* uni = SymMap.find_opt sym res in
+ *        begin match uni.resolved with
+ *        | Some s when s = it' -> return res 
+ *        | Some s -> fail
+ *        | None -> return (SymMap.add sym (Uni.{resolved = Some it'}) res)
+ *        end
+ * 
+ *   | _, _ ->
+ *      fail
+ * 
+ * and unify_list its its' res =
+ *   match its, its' with
+ *   | [], [] -> return res
+ *   | (it :: its), (it' :: its') ->
+ *      let* res = unify it it' res in
+ *      unify_list its its' res
+ *   | _, _ ->
+ *      fail *)
 
 
-  | And ts, And ts'
-  | Or ts, Or ts'
-    -> List.equal equal ts ts'
-
-  | Null t, Null t'
-  | Not t, Not t' 
-    -> equal t t' 
-
-  | Tuple its, Tuple its' 
-    -> List.equal equal its its'
-  | Nth (bt, n,t), Nth (bt', n',t') 
-    -> BT.equal bt bt' && n = n' && equal t t' 
-
-  | Member (tag,t,member), Member (tag',t',member')
-  | MemberOffset (tag,t,member), MemberOffset (tag',t',member') 
-    -> tag = tag' && equal t t' && member = member'
-
-  | Nil bt, Nil bt' 
-    -> BT.equal bt bt'
-  | Cons (t1,t2), Cons (t1',t2') 
-    -> equal t1 t1' && equal t2 t2'
-  | List (its,bt), List (its',bt') 
-    -> List.equal equal its its' && BT.equal bt bt'
-
-  | Head t, Head t'
-  | Tail t, Tail t'
-    -> equal t t'
-
-  | S sym, S sym' 
-    -> Sym.equal sym sym'
-
-  | _ -> 
-     false
 
 
 let (%+) t1 t2 = Add (t1,t2)

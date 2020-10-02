@@ -48,7 +48,7 @@ let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
 let rec bind_logical (delta: L.t) : RT.l -> L.t = function
   | Logical ((s,ls),rt) ->
      let s' = Sym.fresh () in
-     let rt' = RT.subst_var_l {before=s; after=S s'} rt in
+     let rt' = RT.subst_var_l {before=s; after=s'} rt in
      bind_logical (add (mL s' ls) delta) rt'
   | Resource (re,rt) -> bind_logical (add (mUR re) delta) rt
   | Constraint (lc,rt) -> bind_logical (add (mUC lc) delta) rt
@@ -57,7 +57,7 @@ let rec bind_logical (delta: L.t) : RT.l -> L.t = function
 let bind_computational (delta: L.t) (name: Sym.t) (rt: RT.t) : L.t =
   let Computational ((s,bt),rt) = rt in
   let s' = Sym.fresh () in
-  let rt' = RT.subst_var_l {before=s;after=S s'} rt in
+  let rt' = RT.subst_var_l {before=s;after=s'} rt in
   let delta' = add (mA name (bt,s')) (add (mL s' (Base bt)) delta) in
   bind_logical delta' rt'
     
@@ -68,7 +68,7 @@ let bind (name: Sym.t) (rt: RT.t) : L.t =
 let bind_logically (rt: RT.t) : ((BT.t * Sym.t) * L.t) m =
   let Computational ((s,bt),rt) = rt in
   let s' = Sym.fresh () in
-  let rt' = RT.subst_var_l {before=s;after=S s'} rt in
+  let rt' = RT.subst_var_l {before=s;after=s'} rt in
   let delta = add (mL s' (Base bt)) L.empty in
   let delta' = bind_logical delta rt' in
   return ((bt,s'), delta')
@@ -200,7 +200,7 @@ module Spine (RT: AT.RT_Sig) = struct
       match args, ftyp with
       | ((abt,lname),arg_loc) :: args, Computational ((sname,sbt),ftyp) ->
          if BT.equal abt sbt then 
-           let ftyp' = NFT.subst_var {before=sname;after=S lname} ftyp in
+           let ftyp' = NFT.subst_var {before=sname;after=lname} ftyp in
            check_computational args ftyp'
          else 
            fail loc (Mismatch {has = Base abt; expect = Base sbt})
@@ -219,7 +219,7 @@ module Spine (RT: AT.RT_Sig) = struct
         | Logical ((sname,sls),ftyp) ->
            let sym = Sym.fresh () in
            let unis = SymMap.add sym (Uni.{ resolved = None }) unis in
-           let ftyp' = NFT.subst_var_l {before=sname;after=S sym} ftyp in
+           let ftyp' = NFT.subst_var_l {before=sname;after=sym} ftyp in
            delay_logical (unis,lspec @ [(sym,sls)]) ftyp'
         | R ftyp -> 
            return ((unis,lspec), ftyp)
@@ -261,7 +261,8 @@ module Spine (RT: AT.RT_Sig) = struct
          | None -> 
             fail loc (Unconstrained_logical_variable sname)
          | Some sym ->
-            let* als = ITT.infer_index_term loc {local;global} sym in
+            let* als = get_l loc sym local in
+            (* let* als = ITT.infer_index_term loc {local;global} sym in *)
             if LS.equal als sls 
             then check_logical unis lspec
             else fail loc (Mismatch {has = als; expect = sls})
@@ -405,7 +406,7 @@ and infer_struct (loc: Loc.t) {local;global} (tag: BT.tag)
        let* (lname,abt,LC lc) = infer_mem_value loc {local;global} mv in
        let* () = check_base_type loc abt sbt in
        let member_constraint = 
-         IT.subst_var {before=lname;after=Member (tag, S ret, Member (Id.s id))} lc in
+         IT.subst_it {before=lname;after=Member (tag, S ret, Member (Id.s id))} lc in
        return (constraints @ [member_constraint])
     | [], [] -> 
        return []
@@ -496,7 +497,7 @@ let pop_return (rt, local) =
        aux vbs acc
     | (s, VB.Logical ls) :: vbs ->
        let s' = Sym.fresh () in
-       aux vbs (RT.Logical ((s',ls), RT.subst_var_l {before=s;after=S s'} acc))
+       aux vbs (RT.Logical ((s',ls), RT.subst_var_l {before=s;after=s'} acc))
     | (_, VB.Resource re) :: vbs ->
        aux vbs (RT.Resource (re,acc))
     | (_, VB.UsedResource _) :: vbs ->
@@ -588,7 +589,7 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
        return (RT.Constraint (LC lc, lrt))
     | _, RT.Logical ((s,ls),lrt2) ->
        let s' = Sym.fresh () in
-       let* lrt = aux lrt (RT.subst_var_l {before=s; after=S s'} lrt2) in
+       let* lrt = aux lrt (RT.subst_var_l {before=s; after=s'} lrt2) in
        return (RT.Logical ((s',ls), lrt))
     | _, Constraint (LC lc,lrt2) ->
        let* lrt = aux lrt lrt2 in
@@ -597,7 +598,7 @@ let merge_return_types loc (LC c,rt) (LC c2,rt2) =
     | _, Resource _ -> 
        fail loc (Generic !^"Cannot infer type of this expression (cannot merge)")
   in
-  let lrt2' = RT.subst_var_l {before=lname2; after=S lname} lrt2 in
+  let lrt2' = RT.subst_var_l {before=lname2; after=lname} lrt2 in
   let* lrt = aux lrt lrt2' in
   return (LC (Or [c; c2]), RT.Computational ((lname,bt), lrt))
 
@@ -920,8 +921,9 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
              let* local = match re with
              | Uninit _ -> Local.use_resource loc re_name [loc] local
              | Points p -> 
-                let* (Base bt) = ITT.infer_index_term loc 
-                                   {local;global} p.pointee in
+                let* (Base bt) = get_l loc p.pointee local in
+                (* let* (Base bt) = ITT.infer_index_term loc 
+                 *                    {local;global} p.pointee in *)
                 Memory.remove_owned_subtree loc {local;global} bt 
                   p.pointer p.size Kill None
              in
@@ -1123,7 +1125,7 @@ module CBF (RT: AT.RT_Sig) = struct
       | (aname,abt) :: args, T.Computational ((lname,sbt),ftyp) 
            when BT.equal abt sbt ->
          let new_lname = Sym.fresh () in
-         let subst = Subst.{before=lname;after=IT.S new_lname} in
+         let subst = Subst.{before=lname;after=new_lname} in
          let ftyp' = T.subst_var subst ftyp in
          let local = add (mA aname (abt,new_lname)) (add (mL new_lname (Base abt)) local) in
          let pure_local = add (mA aname (abt,new_lname)) (add (mL new_lname (Base abt)) pure_local) in
@@ -1137,7 +1139,7 @@ module CBF (RT: AT.RT_Sig) = struct
          fail loc (Number_arguments {expect;has})
       | args, T.Logical ((sname,sls),ftyp) ->
          let new_lname = Sym.fresh () in
-         let subst = Subst.{before=sname;after=IT.S new_lname} in
+         let subst = Subst.{before=sname;after=new_lname} in
          let ftyp' = T.subst_var subst ftyp in
          check (acc_substs@[subst]) 
            (add (mL new_lname sls) local) 
