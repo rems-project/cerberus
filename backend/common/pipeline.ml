@@ -350,8 +350,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
                    CreateReadOnly (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, pref)
                | Alloc0 (pe1, pe2, pref) ->
                    Alloc0 (untype_pexpr pe1, untype_pexpr pe2, pref)
-               | Kill (b, pe) ->
-                   Kill (b, untype_pexpr pe)
+               | Kill (kind, pe) ->
+                   Kill (kind, untype_pexpr pe)
                | Store0 (b, pe1, pe2, pe3, mo) ->
                    Store0 (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
                | Load0 (pe1, pe2, mo) ->

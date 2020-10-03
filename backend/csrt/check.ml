@@ -262,7 +262,6 @@ module Spine (RT: AT.RT_Sig) = struct
             fail loc (Unconstrained_logical_variable sname)
          | Some sym ->
             let* als = get_l loc sym local in
-            (* let* als = ITT.infer_index_term loc {local;global} sym in *)
             if LS.equal als sls 
             then check_logical unis lspec
             else fail loc (Mismatch {has = als; expect = sls})
@@ -922,8 +921,6 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
              | Uninit _ -> Local.use_resource loc re_name [loc] local
              | Points p -> 
                 let* (Base bt) = get_l loc p.pointee local in
-                (* let* (Base bt) = ITT.infer_index_term loc 
-                 *                    {local;global} p.pointee in *)
                 Memory.remove_owned_subtree loc {local;global} bt 
                   p.pointer p.size Kill None
              in

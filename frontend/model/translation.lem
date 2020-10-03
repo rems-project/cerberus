@@ -2355,7 +2355,8 @@ TODO: #9
           self e >>= fun core_e ->
           (* symbolic names for the arguments temporary objects *)
           let n_args = List.length es in
-          let arg_ptr_syms = list_init n_args (fun _ -> Symbol.fresh ()) in
+          let arg_ptr_syms_tys = map (fun arg_e -> (Symbol.fresh (), ctype_of arg_e)) es in
+          let arg_ptr_syms = map fst arg_ptr_syms_tys in
           let arg_ptr_sym_pats = match arg_ptr_syms with
             | [sym] -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             | _ -> Caux.mk_tuple_pat $ List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
@@ -2487,7 +2488,7 @@ begin if expect_is_variadic then
                       )
                       (Caux.mk_sseq_e killall_pat
                         (* kill temporary objects *)
-                        (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                        (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
                         (* return function call result *)
                         (Caux.mk_pure_e call_ret_sym_pe)
                       )
@@ -2514,7 +2515,7 @@ else
                       (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe arg_ptr_sym_pes)
                       (Caux.mk_sseq_e killall_pat
                         (* kill temporary objects *)
-                        (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                        (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
                         (* return function call result *)
                         (Caux.mk_pure_e call_ret_sym_pe)
                       )
@@ -3293,23 +3294,23 @@ let collect_visibles stmt =
 
 
 (* TODO: morally the kills and creates should be unseq() *)
-val mk_run_e: Loc.t -> Symbol.sym -> list Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
+val mk_run_e: Loc.t -> Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
 let translation_mk_run_e loc sym visibles_before visibles_after pes =
-  let killed_syms =
-    List.filter (fun sym ->
+  let killed_syms_tys =
+    List.filter (fun (sym,_ty) ->
       Maybe.isNothing (List.lookup sym visibles_after)
     ) visibles_before in
   
   let mk_kills_e =
     Caux.mk_unit_sseq (
-      List.map (fun sym ->
-        Caux.pkill loc false (Caux.mk_sym_pe sym)
-      ) killed_syms
+      List.map (fun (sym,ty) ->
+        Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)
+      ) killed_syms_tys
     ) in
   
   let created_sym_tys =
     List.filter (fun (sym, _) ->
-      not (List.elem sym visibles_before)
+      not (List.any (fun (sym',_) -> sym = sym') visibles_before)
     ) visibles_after in
   
   let mk_creates_e =
@@ -3402,7 +3403,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
              (Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym])) (
             List.foldr (fun core_s acc ->
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
-            ) (Caux.pkill loc false (Caux.mk_sym_pe sym)) core_ss
+            ) (Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)) core_ss
           )
     
     | A.AilSblock binds ss ->
@@ -3420,7 +3421,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
                    For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
           (* the kill actions for the local variables *)
           let core_kills : list (C.expr unit) =
-            List.map (Caux.pkill loc false -| (Caux.mk_sym_pe) -| fst) decls in
+            List.map (fun (sym,ty) -> Caux.pkill loc (C.Static (snd ty)) (Caux.mk_sym_pe sym)) decls in
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
@@ -3568,6 +3569,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
     
     | A.AilSreturnVoid ->
         E.get_visible_objects >>= fun visible_syms ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_qualifiers,ty) ->
+            E.return (sym, ty)
+          ) visible_syms >>= fun visible_syms_tys ->
         E.return $ begin
           if env.is_Noreturn then
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
@@ -3578,7 +3583,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
               else
                 C.BTy_tuple (List.replicate (List.length visible_syms) C.BTy_unit) in
             Caux.mk_sseq_e (Caux.mk_empty_pat bTy)
-              (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) visible_syms)
+              (Caux.mk_unseq $ List.map (fun (sym,ty) -> Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)) visible_syms_tys)
               (* TODO: check the symbols *)
               (Caux.mk_run_e env.return_lab [Caux.mk_unit_pe])
         end
@@ -3588,6 +3593,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
         translate_expression e                    >>= fun core_e                       ->
         E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
         E.get_visible_objects                     >>= fun visible_syms                 ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_qualifiers,ty) ->
+            E.return (sym, ty)
+          ) visible_syms >>= fun visible_syms_tys ->
 
         
         (* TODO: typing is not enough (should do like assignments) *)
@@ -3608,7 +3617,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
             Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound 0 core_e)) (
-              mk_run_e loc env.return_lab visible_syms [] [ret_pe]
+              mk_run_e loc env.return_lab visible_syms_tys [] [ret_pe]
             )
         end
 
@@ -3702,9 +3711,13 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
     
     | A.AilSgoto sym ->
         E.get_visible_objects >>= fun visible_syms ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_qualifiers,ty) ->
+            E.return (sym, ty)
+          ) visible_syms >>= fun visible_syms_tys ->
         let visibles_after = fromJust "Translation.translation_statement, AilSgoto" (Map.lookup sym env.label_visibles) in
         E.return $
-          mk_run_e loc sym visible_syms visibles_after []
+          mk_run_e loc sym visible_syms_tys visibles_after []
     
     | A.AilSdeclaration sym_es ->
         (* This pass translate the declarations *)

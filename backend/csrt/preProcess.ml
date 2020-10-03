@@ -211,8 +211,12 @@ let retype_action loc (M_Action (loc,action_)) =
        let* bt = Conversions.bt_of_ctype loc ct in
        let* size = Memory.size_of_ctype loc ct in
        return (M_Alloc (A (annots,bty,(bt,size)), asym, prefix))
-    | M_Kill (b, asym) -> 
-       return (M_Kill (b, asym))
+    | M_Kill (M_Dynamic, asym) -> 
+       return (M_Kill (M_Dynamic, asym))
+    | M_Kill (M_Static ct, asym) -> 
+       let* bt = Conversions.bt_of_ctype loc ct in
+       let* size = Memory.size_of_ctype loc ct in
+       return (M_Kill (M_Static (bt,size), asym))
     | M_Store (m, A (annots,bty,ct), asym1, asym2, mo) ->
        let* bt = Conversions.bt_of_ctype loc ct in
        let* size = Memory.size_of_ctype loc ct in

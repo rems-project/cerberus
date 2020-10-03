@@ -50,7 +50,7 @@ function report {
 # Running ci tests
 for file in "${citests[@]}"
 do
-  ../cerberus --exec --batch ci/$file > tmp/result 2> tmp/stderr
+    dune exec cerberus -- --exec --batch ci/$file > tmp/result 2> tmp/stderr
   if [ -f ./ci/expected/$file.expected ]; then
     if [[ $file == *.error.c ]]; then 
       cmp --silent tmp/stderr ci/expected/$file.expected

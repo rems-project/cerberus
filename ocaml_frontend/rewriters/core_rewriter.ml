@@ -195,9 +195,9 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
           return_wrap (Alloc0 (pe1', pe2', pref))
-      | Kill (b, pe) ->
+      | Kill (kind, pe) ->
           aux_pexpr pe >>= fun pe' ->
-          return_wrap (Kill (b, pe'))
+          return_wrap (Kill (kind, pe'))
       | Store0 (b, pe1, pe2, pe3, mo) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->

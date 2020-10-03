@@ -103,7 +103,6 @@ let rec load (loc: Loc.t)
        | None -> fail loc (Missing_ownership (Load, is_field))
      in
      let* vls = Local.get_l loc pointee local in
-     (* let* vbt = IndexTermTyping.infer_index_term loc {local;global} pointee in *)
      if LS.equal vls (Base bt) 
      then return (Constraint (LC (IT.EQ (path, S pointee)),I))
      else fail loc (Mismatch {has=vls; expect=Base bt})

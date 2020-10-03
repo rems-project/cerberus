@@ -133,11 +133,15 @@ and mu_pexpr 'DCTY 'DBTY 'bty =
 
 
 
+type m_kill_kind 'DCTY = 
+  | M_Dynamic
+  | M_Static of 'DCTY
+
 type mu_action_ 'DCTY 'bty =  (* memory actions *)
  | M_Create of asym 'bty * (A 'DCTY 'bty) * Symbol.prefix
  | M_CreateReadOnly of asym 'bty * (A 'DCTY 'bty) * asym 'bty * Symbol.prefix
  | M_Alloc of (A 'DCTY 'bty) * asym 'bty * Symbol.prefix
- | M_Kill of bool * asym 'bty (* the boolean indicates whether the action is dynamic (i.e. free()) *)
+ | M_Kill of m_kill_kind 'DCTY * asym 'bty (* the boolean indicates whether the action is dynamic (i.e. free()) *)
  | M_Store of bool * (A 'DCTY 'bty) * asym 'bty * asym 'bty * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
  | M_Load of (A 'DCTY 'bty) * asym 'bty * Cmm_csem.memory_order
  | M_RMW of (A 'DCTY 'bty) * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
