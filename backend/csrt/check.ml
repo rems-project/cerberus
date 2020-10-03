@@ -905,30 +905,15 @@ let rec infer_expr (loc: Loc.t) {local;labels;global} (e: 'bty expr) : ((RT.t * 
           fail loc (Unsupported !^"todo: CreateReadOnly")
        | M_Alloc (ct, sym, _prefix) -> 
           fail loc (Unsupported !^"todo: Alloc")
-       | M_Kill (_is_dynamic, A (a,_,sym)) -> 
+       | M_Kill (M_Dynamic, A (a,_,sym)) -> 
+          fail loc (Unsupported !^"todo: free")
+       | M_Kill (M_Static (bt,size), A (a,_,sym)) -> 
           let* (abt,lname) = get_a (Loc.update loc a) sym local in
           let* () = check_base_type (Loc.update loc a) Loc abt in
-          (* revisit *)
-          let* found = 
-            filter_rM (fun name t ->
-                let* holds = Solver.equal loc {local;global} (S lname) (RE.pointer t) in
-                return (if holds then Some (name,t) else None)
-              ) local
-          in
-          begin match found with
-          | [(re_name,re)] -> 
-             let* local = match re with
-             | Uninit _ -> Local.use_resource loc re_name [loc] local
-             | Points p -> 
-                let* (Base bt) = get_l loc p.pointee local in
-                Memory.remove_owned_subtree loc {local;global} bt 
-                  p.pointer p.size Kill None
-             in
-             let rt = RT.Computational ((Sym.fresh (), Unit), I) in
-             return (Normal (rt, local))
-          | [] -> fail loc (Generic !^"Cannot deallocate unowned location")
-          | _ -> fail loc (Generic !^"Cannot guess type of pointer to de-allocate")
-          end
+          let* local = Memory.remove_owned_subtree loc {local;global} bt 
+                         (S lname) size Kill None in
+          let rt = RT.Computational ((Sym.fresh (), Unit), I) in
+          return (Normal (rt, local))
        | M_Store (_is_locking, A(_,_,(s_vbt,size)), A(ap,_,psym), A(av,_,vsym), mo) -> 
           let ploc = Loc.update loc ap in
           let vloc = Loc.update loc av in
