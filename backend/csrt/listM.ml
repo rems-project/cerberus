@@ -1,16 +1,32 @@
 open Resultat
 open List
 
-let rec mapM (f: 'a -> ('b,'e) result) (l: 'a list) : ('b list, 'e) result = 
-  match l with
-  | [] -> return []
-  | x::xs -> 
-     let* y = f x in
-     let* ys = mapM f xs in
-     return (y :: ys)
+let mapM (f : 'a -> ('b,'e) result) (l : 'a list) : ('b list, 'e) result = 
+  let rec aux = function
+    | [] -> return []
+    | x :: xs -> 
+       let* y = f x in
+       let* ys = aux xs in
+       return (y :: ys)
+  in
+  aux l
 
-let iterM : ('a -> (unit,'e) result) -> 'a list -> (unit, 'e) result = 
-  fun f l -> let* _ = mapM f l in return ()
+
+let mapiM (f : int -> 'a -> ('b,'e) result) 
+          (l : 'a list) : ('b list, 'e) result = 
+  let rec aux i l =
+    match l with
+    | [] -> return []
+    | x :: xs -> 
+       let* y = f i x in
+       let* ys = aux (i + 1) xs in
+       return (y :: ys)
+  in
+  aux 0 l
+
+let iterM (f : ('a -> (unit,'e) result)) (l : 'a list) : (unit, 'e) result = 
+  let* _ = mapM f l in 
+  return ()
 
 let concat_mapM f l = 
   let* xs = mapM f l in

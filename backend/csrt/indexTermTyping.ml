@@ -21,10 +21,13 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
      let* () = check_index_term loc {local;global} (Base Integer) t in
      let* () = check_index_term loc {local;global} (Base Integer) t' in
      return (Base Integer)
-  | EQ (t,t') | NE (t,t') | LT (t,t')
-  | GT (t,t') | LE (t,t') | GE (t,t') ->
+  | LT (t,t') | GT (t,t') | LE (t,t') | GE (t,t') ->
      let* () = check_index_term loc {local;global} (Base Integer) t in
      let* () = check_index_term loc {local;global} (Base Integer) t' in
+     return (Base Bool)
+  | EQ (t,t') | NE (t,t') ->
+     let* ls = infer_index_term loc {local;global} t in
+     let* () = check_index_term loc {local;global} ls t' in
      return (Base Bool)
   | Null t ->
      let* () = check_index_term loc {local;global} (Base Loc) t in
@@ -41,9 +44,9 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
      return (Base Bool)
   | ITE (t,t',t'') ->
      let* () = check_index_term loc {local;global} (Base Bool) t in
-     let* () = check_index_term loc {local;global} (Base Integer) t' in
-     let* () = check_index_term loc {local;global} (Base Integer) t'' in
-     return (Base Integer)
+     let* ls = infer_index_term loc {local;global} t' in
+     let* () = check_index_term loc {local;global} ls t'' in
+     return ls
   | Tuple its ->
      let* ts = 
        ListM.mapM (fun it -> 
@@ -87,7 +90,7 @@ let rec infer_index_term (loc: Loc.t) {local;global} (it: IT.t) : LS.t m =
      let* () = check_index_term loc {local;global} (Base (List item_bt)) it2 in
      return (Base (List item_bt))
   | List (its,bt) ->
-     let* _ = ListM.mapM (check_index_term loc {local;global} (Base bt)) its in
+     let* () = ListM.iterM (check_index_term loc {local;global} (Base bt)) its in
      return (Base bt)
   | Head it' ->
      let* ls = infer_index_term loc {local;global} it' in

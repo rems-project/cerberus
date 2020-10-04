@@ -69,41 +69,41 @@ let floatingType loc =
 
 
 
-let rec ctype_aux owned loc (name: Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
-  let open RT in
-  let loc = Loc.update loc annots in
-  match ct_ with
-  | Void -> 
-     return ((name, BT.Unit), I)
-  | Basic (Integer it) -> 
-     let* constr = integerType_constraint loc (S name) it in
-     return ((name, Integer), Constraint (constr, I))
-  | Array (ct, _maybe_integer) -> 
-     return ((name,BT.Array), I)
-  | Pointer (_qualifiers, ct) ->
-     if owned then
-       let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
-       let* size = Memory.size_of_ctype loc ct in
-       let points = Points {pointer = S name; pointee = pointee_name; size} in
-       let t = Logical ((pointee_name, Base bt), Resource (points, t)) in
-       return ((name,Loc),t)
-     else
-       return ((name,Loc),I)
-  (* fix *)
-  | Atomic ct -> ctype_aux owned loc name ct
-  | Struct sym -> return ((name, Struct (Tag sym)),I)
-  | Basic (Floating _) -> floatingType loc 
-  | Union sym -> fail loc (Unsupported !^"todo: union types")
-  | Function _ -> fail loc (Unsupported !^"function pointers")
-
-
-let ctype owned loc (name : Sym.t) (ct : CF.Ctype.ctype) =
-  let* ((name,bt),t) = ctype_aux owned loc name ct in
-  return (RT.Computational ((name,bt),t))
-
-let bt_of_ctype loc ct = 
-  let* ((_,bt),_) = ctype_aux false loc (Sym.fresh ()) ct in
-  return bt
+(* let rec ctype_aux owned loc (name: Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
+ *   let open RT in
+ *   let loc = Loc.update loc annots in
+ *   match ct_ with
+ *   | Void -> 
+ *      return ((name, BT.Unit), I)
+ *   | Basic (Integer it) -> 
+ *      let* constr = integerType_constraint loc (S name) it in
+ *      return ((name, Integer), Constraint (constr, I))
+ *   | Array (ct, _maybe_integer) -> 
+ *      return ((name,BT.Array), I)
+ *   | Pointer (_qualifiers, ct) ->
+ *      if owned then
+ *        let* ((pointee_name,bt),t) = ctype_aux owned loc (fresh ()) ct in
+ *        let* size = Memory.size_of_ctype loc ct in
+ *        let points = Points {pointer = S name; pointee = pointee_name; size} in
+ *        let t = Logical ((pointee_name, Base bt), Resource (points, t)) in
+ *        return ((name,Loc),t)
+ *      else
+ *        return ((name,Loc),I)
+ *   (\* fix *\)
+ *   | Atomic ct -> ctype_aux owned loc name ct
+ *   | Struct sym -> return ((name, Struct (Tag sym)),I)
+ *   | Basic (Floating _) -> floatingType loc 
+ *   | Union sym -> fail loc (Unsupported !^"todo: union types")
+ *   | Function _ -> fail loc (Unsupported !^"function pointers")
+ * 
+ * 
+ * let ctype owned loc (name : Sym.t) (ct : CF.Ctype.ctype) =
+ *   let* ((name,bt),t) = ctype_aux owned loc name ct in
+ *   return (RT.Computational ((name,bt),t))
+ * 
+ * let bt_of_ctype loc ct = 
+ *   let* ((_,bt),_) = ctype_aux false loc (Sym.fresh ()) ct in
+ *   return bt *)
 
 
 
@@ -294,9 +294,8 @@ let struct_decl loc tag fields struct_decls =
 
 
 (* revisit later *)
-let make_fun_arg_type_rt loc struct_decls lift asym ct =
+let rt_of_ctype loc struct_decls asym ct =
   let open RT in
-  let ct = if lift then make_pointer_ctype ct else ct in
   let rec aux name (CF.Ctype.Ctype (annots, ct_)) =
     match ct_ with
     | Void -> return (BT.Unit, I)
@@ -306,16 +305,19 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
     | Array (ct, _maybe_integer) ->
        return (Array, I)
     | Pointer (_qualifiers, ct) ->
-       begin match ct with
-       | CF.Ctype.Ctype (_, Struct s) ->
+       let CF.Ctype.Ctype (_, ct_) = ct in
+       begin match ct_ with
+       | CF.Ctype.Struct s ->
           let* decl = Global.get_struct_decl loc struct_decls (Tag s) in
           let Computational ((s,bt), lrt) = RT.freshify decl.Global.closed_stored in
           return (bt, RT.subst_var_l {before=s; after=name} lrt)
+       | CF.Ctype.Void -> 
+          fail loc (Unsupported !^"todo: void*")
        | _ ->
           let name2 = Sym.fresh () in
           let* (bt,lrt) = aux name2 ct in
           (* fix *)
-          let* size = try Memory.size_of_ctype loc ct with _ -> return Num.zero in
+          let* size = Memory.size_of_ctype loc ct in
           let points = RE.Points {pointer = S name; pointee = name2; size} in
           return (Loc, Logical ((name2, Base bt), Resource (points, lrt)))
        end
@@ -333,6 +335,20 @@ let make_fun_arg_type_rt loc struct_decls lift asym ct =
   let* (bt,lrt) = aux asym ct in
   return (Computational ((asym, bt), lrt))
 
+let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
+  match ct_ with
+  | CF.Ctype.Void -> return BT.Unit
+  | CF.Ctype.Basic (Integer _) -> return BT.Integer
+  | CF.Ctype.Basic (Floating _) -> fail loc (Unsupported !^"floats")
+  | CF.Ctype.Array _ -> fail loc (Unsupported !^"arrays")
+  | CF.Ctype.Function _ -> fail loc (Unsupported !^"todo: function pointers")
+  | CF.Ctype.Pointer _ -> return BT.Loc
+  | CF.Ctype.Atomic ct -> bt_of_ctype loc ct  (* check? *)
+  | CF.Ctype.Struct tag -> return (BT.Struct (BT.Tag tag))
+  | CF.Ctype.Union _ -> fail loc (Unsupported !^"union types")
+
+
+
 
 let make_name = function
   | Some (Symbol (_,_,Some name)) -> Sym.fresh_pretty (name ^ "_l")
@@ -340,7 +356,9 @@ let make_name = function
   | None -> Sym.fresh ()
 
 
-
+let make_fun_arg_type_rt loc struct_decls lift asym ct =
+  rt_of_ctype loc struct_decls asym
+    (if lift then make_pointer_ctype ct else ct)
 
 
 let make_return_from_argument_lrt lrt =
@@ -372,20 +390,20 @@ let make_fun_arg_and_return_type loc genv lift name ct =
   let ret = make_return_from_argument_rt arg_rt in
   return (rt_to_ft arg_rt, ret)
 
-let make_fun_spec loc genv args ret_ctype = 
+let make_fun_spec loc struct_decls args ret_ctype = 
   let open FT in
   let open RT in
   let* (arguments, returns) = 
     ListM.fold_leftM (fun (args,returns) (msym, ct) ->
         let name = make_name msym in
-        let* (arg,ret) = make_fun_arg_and_return_type loc genv true name ct in
+        let* (arg,ret) = make_fun_arg_and_return_type loc struct_decls true name ct in
         let args = Tools.comp args arg in
         return (args, returns @@ ret)
       ) 
       ((fun ft -> ft), I) args
   in
   let* (Computational ((ret_name,bound),ret)) = 
-    ctype true loc (Sym.fresh ()) ret_ctype in
+    rt_of_ctype loc struct_decls (Sym.fresh ()) ret_ctype in
   let ftyp = arguments (I (RT.Computational ((ret_name,bound), RT.(@@) ret returns))) in
   return ftyp
 

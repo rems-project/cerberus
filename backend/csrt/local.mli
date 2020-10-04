@@ -56,12 +56,12 @@ val get_c : Loc.t -> Sym.t -> t -> LC.t m
 
 val removeS : Loc.t -> Sym.t list -> t -> t m
 
-val addA : Sym.t -> (BT.t * Sym.t) -> t -> t
-val addL : Sym.t -> LS.t -> t -> t
-val addR : Sym.t -> RE.t -> t -> t
-val addC : Sym.t -> LC.t -> t -> t
-val addUR : RE.t -> t -> t
-val addUC : LC.t -> t -> t
+val add_a : Sym.t -> (BT.t * Sym.t) -> t -> t
+val add_l : Sym.t -> LS.t -> t -> t
+val add_r : Sym.t -> RE.t -> t -> t
+val add_c : Sym.t -> LC.t -> t -> t
+val add_ur : RE.t -> t -> t
+val add_uc : LC.t -> t -> t
 
 val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
 
