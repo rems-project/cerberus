@@ -350,7 +350,9 @@ let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
 
 
 
-let make_name = function
+let make_name = 
+let open CF.Symbol in
+  function
   | Some (Symbol (_,_,Some name)) -> Sym.fresh_pretty (name ^ "_l")
   | Some (Symbol (_,_,None)) -> Sym.fresh ()
   | None -> Sym.fresh ()

@@ -18,7 +18,8 @@ module FT = ArgumentTypes.Make(ReturnTypes)
 let record_tagDefs (global: Global.t) tagDefs = 
   PmapM.foldM (fun sym def (global: Global.t) ->
       match def with
-      | M_UnionDef _ -> fail Loc.unknown (Unsupported !^"todo: union types")
+      | M_UnionDef _ -> 
+         fail Loc.unknown (Unsupported !^"todo: union types")
       | M_StructDef decl -> 
          let struct_decls = SymMap.add sym decl global.struct_decls in
          return { global with struct_decls }
@@ -27,9 +28,9 @@ let record_tagDefs (global: Global.t) tagDefs =
 
 let record_funinfo global funinfo =
   PmapM.foldM
-    (fun fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) global ->
+    (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
       if is_variadic then fail loc (Variadic_function fsym) else
-        let fun_decls = SymMap.add fsym (loc,ftyp) global.Global.fun_decls in
+        let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global
 
@@ -41,10 +42,12 @@ let record_impl genv impls =
       match impl_decl with
       | M_Def (bt, _p) -> 
          { genv with impl_constants = ImplMap.add impl bt genv.impl_constants}
-      | M_IFun (bt, args, _body) ->
+      | M_IFun (rbt, args, _body) ->
          let args_ts = List.map FT.mComputational args in
-         let ftyp = (Tools.comps args_ts) (FT.I (Computational ((Sym.fresh (), bt), I))) in
-         { genv with impl_fun_decls = ImplMap.add impl ftyp genv.impl_fun_decls }
+         let rt = FT.I (Computational ((Sym.fresh (), rbt), I)) in
+         let ftyp = (Tools.comps args_ts) rt in
+         let impl_fun_decls = ImplMap.add impl ftyp genv.impl_fun_decls in
+         { genv with impl_fun_decls }
     ) impls genv
 
 
@@ -62,7 +65,7 @@ let process_functions genv fns =
          check_function loc genv fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels) ->
          let* (loc,ftyp) = Global.get_fun_decl loc genv fsym in
-         check_procedure loc genv fsym args rbt labels body ftyp
+         check_procedure loc genv fsym args rbt body ftyp labels
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()

@@ -4,8 +4,7 @@ module S = CF.Symbol
 include S
 
 
-type symbol = S.sym
-type t = symbol
+type t = S.sym
 
 let fresh = S.fresh
 let fresh_pretty = S.fresh_pretty
