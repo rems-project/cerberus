@@ -1881,20 +1881,20 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
           E.return (AilSif e' s1' s2')
         else
           E.constraint_violation (Loc.locOf e) IfStatementControllingExpressionNotScalar
-    | AilSwhile e s ->
+    | AilSwhile e s id ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.5#2" >>
         if is_scalar gty then
           annotate_statement s >>= fun s' ->
-          E.return (AilSwhile e' s')
+          E.return (AilSwhile e' s' id)
         else
           E.constraint_violation (Loc.locOf e) IterationStatementControllingExpressionNotScalar
-    | AilSdo s e ->
+    | AilSdo s e id ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.add "§6.8.5#2" >>
         if is_scalar gty then
           annotate_statement s >>= fun s' ->
-          E.return (AilSdo s' e')
+          E.return (AilSdo s' e' id)
         else
           E.constraint_violation (Loc.locOf e) IterationStatementControllingExpressionNotScalar
     | AilSbreak ->
@@ -1923,9 +1923,9 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSdefault s ->
         annotate_statement s >>= fun s' ->
         E.return (AilSdefault s')
-    | AilSlabel sym s ->
+    | AilSlabel sym s la ->
         annotate_statement s >>= fun s' ->
-        E.return (AilSlabel sym s')
+        E.return (AilSlabel sym s' la)
     | AilSgoto sym ->
         E.return (AilSgoto sym)
     | AilSdeclaration sym_es ->

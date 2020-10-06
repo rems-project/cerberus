@@ -668,7 +668,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                   !^ "TODO(Aattrs)"
               | Anot_explode ->
                  !^"{-not-explode-}" ^^ acc
-              | Areturn -> acc
+              | Alabel _ -> acc
                  (* !^"{-return-}" ^^ acc *)
           ) doc annot
       end

@@ -665,9 +665,9 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
           P.nest 2 (pp_statement s1) ^^^
         pp_keyword "else" ^/^
           pp_statement s2
-    | AilSwhile (e, s) ->
+    | AilSwhile (e, s, _) ->
         pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement s
-    | AilSdo (s, e) ->
+    | AilSdo (s, e, _) ->
         pp_keyword "do" ^^^ pp_statement s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e)
     | AilSbreak ->
         pp_keyword "break" ^^ P.semi
@@ -683,7 +683,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
         pp_keyword "case" ^^^ pp_integerConstant ic ^^ P.colon ^/^ pp_statement s
     | AilSdefault s ->
         pp_keyword "default" ^^ P.colon ^/^ pp_statement s
-    | AilSlabel (l, s) ->
+    | AilSlabel (l, s, _) ->
         pp_id_label l ^^ P.colon ^/^ pp_statement s
     | AilSgoto l ->
         pp_keyword "goto" ^^^ pp_id_label l ^^ P.semi
