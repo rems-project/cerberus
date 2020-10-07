@@ -4090,7 +4090,8 @@ let translate_extern_map (_, sigm) =
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
-    C.impl -> A.ail_program GenTypes.genTypeCategory ->
+    C.impl -> 
+    A.ail_program GenTypes.genTypeCategory ->
     C.file unit
 
 let translate (ailnames, stdlib_fun_map) impl prog =
@@ -4109,4 +4110,5 @@ let translate (ailnames, stdlib_fun_map) impl prog =
     C.funs= cfuns;
     C.extern = translate_extern_map prog;
     C.funinfo= funinfo;
+    C.loop_attributes= (snd prog).A.loop_attributes;
   |>

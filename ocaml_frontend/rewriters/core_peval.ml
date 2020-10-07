@@ -777,6 +777,7 @@ let rewrite_file file =
   ; funs = rewrite_fun_map file.funs
   ; extern = file.extern
   ; funinfo = file.funinfo
+  ; loop_attributes0= file.loop_attributes0
   }
 
 

@@ -222,6 +222,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.funs=   funs;
            Core.extern=  Pmap.empty compare;
            Core.funinfo= Pmap.empty compare; (* TODO: need to parse funinfo! *)
+           Core.loop_attributes0= Pmap.empty compare;
          }
     | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"
@@ -442,6 +443,7 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   ; funs= Pmap.map untype_generic_fun_map_decl  file.funs
   ; extern= file.extern
   ; funinfo= file.funinfo
+  ; loop_attributes0= file.loop_attributes0
 
  }
 
@@ -537,6 +539,7 @@ type 'a core_dump =
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
     dump_funinfo: (Symbol.sym * (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
+    dump_loop_attributes: (int * Annot.attributes) list;
   }
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
@@ -562,6 +565,7 @@ let read_core_object (core_stdlib, core_impl) fname =
     funs=    map_from_assoc sym_compare dump.dump_funs;
     extern=  map_from_assoc cabsid_compare dump.dump_extern;
     funinfo= map_from_assoc sym_compare dump.dump_funinfo;
+    loop_attributes0= map_from_assoc compare dump.dump_loop_attributes;
   }
 
 let write_core_object core_file fname =
@@ -573,6 +577,7 @@ let write_core_object core_file fname =
       dump_funs = Pmap.bindings_list core_file.funs;
       dump_extern = Pmap.bindings_list core_file.extern;
       dump_funinfo = Pmap.bindings_list core_file.funinfo;
+      dump_loop_attributes = Pmap.bindings_list core_file.loop_attributes0;
     }
   in
   let oc = open_out_bin fname in

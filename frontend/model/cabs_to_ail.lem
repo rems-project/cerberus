@@ -2385,6 +2385,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
             ) [] (Map_extra.toList ident_tagDefs);
           extern_idmap= Map.empty;
           typedef_attributes= Map.empty;
+          loop_attributes= Map.empty;
         |> in
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_complete_object fake_ail_sigma ty && not (AilTypesAux.is_vla ty)) ) then
@@ -3637,6 +3638,7 @@ let desugar_declaration_base attrs specifs idecltors =
                       ) [] (Map_extra.toList ident_tagDefs);
                     extern_idmap= Map.empty;
                     typedef_attributes= Map.empty;
+                    loop_attributes= Map.empty;
                   |> in
                   let dur = determinate_storage_duration link specifs.storage_classes in
                   match link with
@@ -3808,6 +3810,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           desugar_expression e         >>= fun d_e ->
           desugar_statement_aux ctx' s >>= fun d_s ->
           let loop_id = Symbol.fresh_int () in
+          E.record_loop_attribute loop_id attrs >> 
           E.return begin
               AilSwhile d_e begin
                 AnnotatedStatement loc Annot.no_attributes begin
@@ -3825,6 +3828,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           desugar_expression e         >>= fun d_e ->
           desugar_statement_aux ctx' s >>= fun d_s ->
           let loop_id = Symbol.fresh_int () in
+          E.record_loop_attribute loop_id attrs >> 
           E.return begin
               AilSdo begin
                 AnnotatedStatement loc Annot.no_attributes begin
@@ -3851,6 +3855,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               desugar_init_declarator attrs isAtomic base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             let loop_id = Symbol.fresh_int () in
+            E.record_loop_attribute loop_id attrs >> 
             (* for each [init_declarator] *)
             E.foldrM (fun opt (acc1, acc2) ->
               match opt with
@@ -3940,6 +3945,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let loop_id = Symbol.fresh_int () in
+          E.record_loop_attribute loop_id attrs >> 
           let ctx' =
             <| ctx with cont_ident_opt= Just cont_ident |> in
           
@@ -4289,6 +4295,7 @@ let desugar_and_register_external_declaration edecl =
                         end;
                       extern_idmap= Map.empty;
                       typedef_attributes= Map.empty;
+                      loop_attributes= Map.empty;
                     |> in
                     
                     mk_desug_init () >>= function
@@ -4435,4 +4442,4 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
       E.mapM_ desugar_and_register_external_declaration edecls >>= fun () ->
       E.extract_program startup_str
     )
-  )
+  ) 

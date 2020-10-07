@@ -375,6 +375,7 @@ type generic_file 'bty 'a = <|
   funs    : generic_fun_map 'bty 'a;
   extern  : extern_map;
   funinfo : map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool);
+  loop_attributes : Annot.loop_attributes;
 |>
 
 

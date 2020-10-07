@@ -123,4 +123,6 @@ let rewrite_file file =
   ; globs = List.map (fun (sym, glob) -> (sym, rewrite_globs glob)) file.globs
   ; funs = Pmap.map rewrite_fun_map_decl file.funs
   ; extern = file.extern
-  ; funinfo = file.funinfo }
+  ; funinfo = file.funinfo 
+  ; loop_attributes0 = file.loop_attributes0
+  }

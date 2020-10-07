@@ -1,7 +1,7 @@
 module CF=Cerb_frontend
 module CB=Cerb_backend
 open List
-open Sym
+(* open Sym *)
 open Resultat
 open Pp
 (* open Tools *)
@@ -131,16 +131,16 @@ let rt_to_ft rt rest =
   FT.Computational ((name, t), lrt_to_ft lrt rest)
 
 
-let rec lrt_to_lt (lrt : RT.l) : LT.t = 
+let rec lrt_to_lt (lrt : RT.l) rest : LT.t = 
   match lrt with
-  | RT.I -> I False
-  | RT.Logical ((name, t), args) -> LT.Logical ((name, t), lrt_to_lt args)
-  | RT.Resource (t, args) -> LT.Resource (t, lrt_to_lt args)
-  | RT.Constraint (t, args) -> LT.Constraint (t, lrt_to_lt args)
+  | RT.I -> rest
+  | RT.Logical ((name, t), args) -> LT.Logical ((name, t), lrt_to_lt args rest)
+  | RT.Resource (t, args) -> LT.Resource (t, lrt_to_lt args rest)
+  | RT.Constraint (t, args) -> LT.Constraint (t, lrt_to_lt args rest)
 
-let rt_to_lt rt = 
+let rt_to_lt rt rest = 
   let (RT.Computational ((name, t), lrt)) = rt in
-  LT.Computational ((name, t), lrt_to_lt lrt)
+  LT.Computational ((name, t), lrt_to_lt lrt rest)
 
 
 
@@ -351,7 +351,7 @@ let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
 
 
 let make_name = 
-let open CF.Symbol in
+  let open CF.Symbol in
   function
   | Some (Symbol (_,_,Some name)) -> Sym.fresh_pretty (name ^ "_l")
   | Some (Symbol (_,_,None)) -> Sym.fresh ()
@@ -387,6 +387,7 @@ let make_fun_arg_type loc genv lift name ct =
   let* arg_rt = make_fun_arg_type_rt loc genv lift name ct in
   return (rt_to_ft arg_rt)
 
+
 let make_fun_arg_and_return_type loc genv lift name ct =
   let* arg_rt = make_fun_arg_type_rt loc genv lift name ct in
   let ret = make_return_from_argument_rt arg_rt in
@@ -410,23 +411,43 @@ let make_fun_spec loc struct_decls args ret_ctype =
   return ftyp
 
 
-let make_esave_spec loc genv attrs args = 
-  let open FT in
-  let open RT in
-  let* arguments = 
-    ListM.fold_leftM (fun args (msym, (ct,by_pointer)) ->
-        let name = make_name msym in
-        let* arg = make_fun_arg_type loc genv by_pointer name ct in
-        let args = Tools.comp args arg in
-        return args
-      ) 
-      (fun ft -> ft) args
+let make_label_spec (loc : Loc.t) (ftyp : FT.t) 
+                    (struct_decls : Global.struct_decls) 
+                    (args : (Sym.t option * CF.Ctype.ctype) list) : LT.t m =
+  let subst_non_pointer = FT.subst_var ~re_subst_var:RE.subst_non_pointer in
+  let rec aux = function
+    | FT.Computational (_,lt) -> aux lt
+    | FT.Logical ((s,ls),lt) ->
+       let s' = Sym.fresh () in
+       let lt' = subst_non_pointer {before=s;after=s'} lt in
+       let* lt' = aux lt' in
+       return (LT.Logical ((s',ls), lt'))
+    | FT.Resource (re,lrt) -> 
+       let* lrt = aux lrt in
+       return (LT.Resource (re,lrt))
+    | FT.Constraint (lc,lrt) -> 
+       let* lrt = aux lrt in
+       return (LT.Constraint (lc,lrt))
+    | FT.I _ -> 
+       let* arguments = 
+         ListM.fold_leftM (fun args (msym, ct) ->
+             let name = make_name msym in
+             let* arg_rt = make_fun_arg_type_rt loc struct_decls true name ct in
+             let arg = rt_to_lt arg_rt in
+             let args = Tools.comp args arg in
+             return args
+           ) 
+           (fun ft -> ft) args
+       in
+       let ftyp = arguments (LT.I False.False) in
+       return ftyp
   in
-  let ftyp = arguments (I (RT.Computational ((fresh (), BT.Unit), I))) in
-  return ftyp
+  aux ftyp
 
-let make_return_esave_spec ftyp =
-  rt_to_lt (FT.get_return ftyp)
+
+
+let make_return_esave_spec ftyp : LT.t =
+  rt_to_lt (FT.get_return ftyp) (LT.I False.False)
 
 
 

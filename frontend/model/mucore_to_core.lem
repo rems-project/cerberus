@@ -603,5 +603,6 @@ let mu_to_core__file file =
    ; Core.funs = mu_to_core__fun_map file.mu_funs
    ; Core.extern = file.mu_extern
    ; Core.funinfo = mu_to_core__funinfos file.mu_funinfo
+   ; Core.loop_attributes = file.mu_loop_attributes
   |>
 

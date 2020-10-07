@@ -554,5 +554,6 @@ let convert_file file =
   funs=    Map.map convert_fun_map_decl file.funs;
   extern=  file.extern;
   funinfo= file.funinfo;
+  loop_attributes= file.loop_attributes;
  |>
 (* END silly *)

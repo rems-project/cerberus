@@ -330,7 +330,7 @@ let calltype_lt loc {local; global} args (ltyp : LT.t) : (False.t * L.t) m =
 let subtype (loc : Loc.t) {local; global} arg (rtyp : RT.t) : L.t m =
   let* (False, local) = 
     Spine_LT.spine loc {local; global} [arg] 
-      (Conversions.rt_to_lt rtyp) "subtype" 
+      (Conversions.rt_to_lt rtyp (LT.I False.False)) "subtype" 
   in
   return local
   
@@ -1243,6 +1243,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
        return ()
     | M_Label (lt, args, body, annots) ->
        Pp.p (headline ("checking label " ^ Sym.pp_string lsym));
+       Pp.d 2 (lazy (item "type" (LT.pp lt)));
        let* (rt, delta_label, _, _) = 
          CBF_LT.check_and_bind_arguments loc args lt 
        in

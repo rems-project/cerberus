@@ -294,6 +294,7 @@ type mu_file 'DFTY 'DLTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
   mu_funs    : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty;
   mu_extern  : mu_extern_map;
   mu_funinfo : mu_funinfos 'DFTY;
+  mu_loop_attributes : Annot.loop_attributes;
 |>
 
 

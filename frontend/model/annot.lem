@@ -50,6 +50,8 @@ type annot =
   | Alabel of label_annot
 
 
+type loop_attributes = map loop_id attributes
+
 val     get_loc: list annot -> maybe Loc.t
 let rec get_loc annots =
   match annots with

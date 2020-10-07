@@ -872,13 +872,13 @@ let normalise_fun_map_decl
               let param_tys = 
                  map (fun (sym,(((_,mctb),_))) -> 
                      match mctb with
-                     | Just ctb -> (Just sym, ctb)
+                     | Just (ct,b) -> (Just sym, (ct,b))
                      | Nothing -> failwith "label without c-type argument annotation"
                       end
                    ) params 
               in
               let params = map (fun (sym,(((bt,_),_))) -> (sym,bt)) params in
-              if is_return annots 
+              if is_return annots
               then M_Return param_tys
               else M_Label param_tys params (normalise_expr body) annots
             ) saves
@@ -928,5 +928,6 @@ let normalise_file file : Mucore.mu_file ft lt ct bt (mu_struct_def ct) (mu_unio
    ; mu_funs = normalise_fun_map file.funs
    ; mu_extern = file.extern
    ; mu_funinfo = normalise_funinfos file.funinfo
+   ; mu_loop_attributes = file.loop_attributes
   |>
 

@@ -32,7 +32,8 @@ let rec (@@) (t1: l) (t2: l) : l =
   | Constraint (bound,t) -> Constraint (bound, t@@t2)
 
 
-let subst_var_l ?(re_subst_var=RE.subst_var) (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
+let subst_var_l ?(re_subst_var=RE.subst_var) 
+                 (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
   let rec aux substitution = function
     | I -> I
     | Logical ((name,ls),t) -> 

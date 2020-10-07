@@ -1791,6 +1791,7 @@ let typecheck_program file =
       funs= funs';
       extern= file.extern;
       funinfo= file.funinfo;
+      loop_attributes= file.loop_attributes;
     |>
   in
   match E.runM aux with
