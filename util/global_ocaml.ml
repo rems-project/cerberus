@@ -20,6 +20,7 @@ type cerberus_conf = {
   concurrency:        bool;
   error_verbosity:    error_verbosity;
   defacto:            bool;
+  permissive:         bool; (* allows GCC extensions and stuff *)
   agnostic:           bool;
   n1570:              Yojson.Basic.t option;
 }
@@ -29,13 +30,13 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf exec exec_mode concurrency error_verbosity defacto agnostic _bmc =
+let set_cerb_conf exec exec_mode concurrency error_verbosity defacto permissive agnostic _bmc =
   let exec_mode_opt = if exec then Some exec_mode else None in
   let n1570 =
     if error_verbosity <> QuoteStd then None else Some (Lazy.force N1570.data)
   in
   let conf =
-    {defacto; concurrency; error_verbosity; agnostic; exec_mode_opt; n1570}
+    {defacto; concurrency; error_verbosity; agnostic; permissive; exec_mode_opt; n1570}
   in
   cerb_conf := fun () -> conf
 
@@ -44,6 +45,9 @@ let concurrency_mode () =
 
 let isDefacto () =
   !!cerb_conf.defacto
+
+let isPermissive () =
+  !!cerb_conf.permissive
 
 let isAgnostic () =
   !!cerb_conf.agnostic

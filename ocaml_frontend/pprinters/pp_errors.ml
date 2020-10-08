@@ -36,10 +36,13 @@ let string_of_cparser_cause = function
       "invalid line directive:" ^ n
   | Cparser_unexpected_eof ->
       "unexpected end of file"
-  | Cparser_non_standard_string_concatenation ->
-      "unsupported non-standard concatenation of string literals"
   | Cparser_unexpected_token str ->
       "unexpected token '"^ str ^ "'"
+  | Cparser_non_standard_string_concatenation ->
+      "unsupported non-standard concatenation of string literals"
+  | Cparser_extra_semi ->
+      "found a semicolon after a function definition"
+
 
 let string_of_constraint_violation = function
   | FunctionCallIncompleteReturnType ty ->

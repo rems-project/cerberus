@@ -407,6 +407,11 @@ primary_expression:
       CabsExpression (Location_ocaml.region ($startpos, $endpos) None, expr_ ) }
 | gs= generic_selection
     { gs }
+(* GCC extension: Statement Exprs *)
+| LPAREN stmt= scoped(compound_statement) RPAREN
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
+                        (Some $startpos(stmt)),
+                      CabsEgcc_statement stmt) }
 ;
 
 (* §6.5.1.1 Generic selection *)
@@ -1449,8 +1454,13 @@ function_definition1:
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
-  stmt= compound_statement
-    { let loc = Location_ocaml.region ($startpos, $endpos) None in
+  stmt= compound_statement has_semi= boption(SEMICOLON)
+    { if has_semi && not (Global_ocaml.isPermissive ()) then
+        prerr_endline (Pp_errors.make_message
+                         (Location_ocaml.point $startpos(has_semi))
+                         Errors.(CPARSER Cparser_extra_semi)
+                         Warning);
+      let loc = Location_ocaml.region ($startpos, $endpos) None in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
       LF.restore_context ctxt;
       LF.create_function_definition loc attr_opt specifs decltor stmt rev_decl_opt }

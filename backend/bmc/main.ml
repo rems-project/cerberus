@@ -127,7 +127,7 @@ let cerberus debug_level progress core_obj
   (* TODO: add bmc flags *)
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
       bmc_all_execs bmc_output_model bmc_cat bmc_mode;
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false bmc;
+  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false false bmc;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
