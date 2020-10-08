@@ -307,7 +307,8 @@ let string_at_line fname lnum cpos =
       let ic = open_in fname in
       let sub l start n =
         if start + n < String.length l then String.sub l start n
-        else "(?error: Location_ocaml.string_at_line)"
+        else Printf.sprintf "(?error: Location_ocaml.string_at_line with %S, %i-%i)"
+               l start n
       in
       let l =
         let l_ = get_line lnum ic in
