@@ -439,14 +439,14 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
     
     | Kill _ (Pexpr [] () (PEconstrained xs)) ->
         error "Kill PEconstrained"
-    | Kill is_dynamic pe ->
+    | Kill kind pe ->
         match valueFromPexpr pe with
           | Just (Vobject (OVpointer ptr_val)) ->
               Step_action_request "KillRequest" (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
                   KillRequest loc sb_before dd_before asw_before
-                    kill_aid current_tid is_dynamic ptr_val
+                    kill_aid current_tid (is_dynamic kind) ptr_val
                     <| th_st with
                       arena= Expr arena_annots Eskip;
                       stack= add_to_sb_stack {(p, (current_tid, kill_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
@@ -459,7 +459,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
               Step_eval "operand of kill()" (
                 E.wrapped_eval_pexpr2 th_st core_extern mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena=
-                  Expr arena_annots (Eaction (Paction p (Action loc annots (Kill is_dynamic pe'))))
+                  Expr arena_annots (Eaction (Paction p (Action loc annots (Kill kind pe'))))
                 |>
               )
         end

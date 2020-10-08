@@ -826,8 +826,8 @@ and remove_conv_int_action_ act_ =
         CreateReadOnly (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) pref
     | Alloc pe1 pe2 pref ->
         Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
-    | Kill b pe ->
-        Kill b (remove_conv_int_pexpr pe)
+    | Kill kind pe ->
+        Kill kind (remove_conv_int_pexpr pe)
     | Store b pe1 pe2 pe3 mo ->
         Store b (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
     | Load pe1 pe2 mo ->

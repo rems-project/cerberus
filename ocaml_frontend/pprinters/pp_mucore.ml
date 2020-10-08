@@ -585,8 +585,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
           pp_keyword "create_readonly" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty ^^ P.comma ^^^ pp_asym init)
       | M_Alloc (al, n, _) ->
           pp_keyword "alloc" ^^ P.parens (pp_actype al ^^ P.comma ^^^ pp_asym n)
-      | M_Kill (b, e) ->
-          pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_asym e)
+      | M_Kill (M_Dynamic, e) ->
+          pp_keyword "free" ^^ P.parens (pp_asym e)
+      | M_Kill (M_Static ct, e) ->
+          pp_keyword "kill" ^^ P.parens (pp_ct ct ^^ P.comma ^^^ pp_asym e)
       | M_Store (is_locking, ty, e1, e2, mo) ->
          pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [Left ty; Right e1; Right e2] mo
       | M_Load (ty, e, mo) ->
@@ -666,7 +668,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                   !^ "TODO(Aattrs)"
               | Anot_explode ->
                  !^"{-not-explode-}" ^^ acc
-              | Areturn -> acc
+              | Alabel _ -> acc
                  (* !^"{-return-}" ^^ acc *)
           ) doc annot
       end

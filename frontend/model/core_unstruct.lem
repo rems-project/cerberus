@@ -131,14 +131,14 @@ let explode_paction env (Paction pol (Action loc a act_)) =
     | Alloc e1 e2 pref ->
         error "WIP"
 *)
-    | Kill is_dynamic ptr_pe ->
+    | Kill kind ptr_pe ->
         match explode_ptr_pexpr env ptr_pe with
           | Nothing ->
               Nothing
           | Just xs ->
               Just begin
                 List.map (fun (ident, pe') ->
-                  (ident, wrap (Kill is_dynamic pe'))
+                  (ident, wrap (Kill kind pe'))
                 ) xs
               end
         end
@@ -229,7 +229,7 @@ let rec explode_expr env (Expr annot expr_ as expr) =
   let self e = explode_expr env e in
   let wrap z = Expr annot z in
   match expr_ with
-    | Eaction (Paction pol (Action loc a (Kill is_dynamic ptr_pe))) ->
+    | Eaction (Paction pol (Action loc a (Kill kind ptr_pe))) ->
         match explode_ptr_pexpr env ptr_pe with
           | Nothing ->
               expr
@@ -237,7 +237,7 @@ let rec explode_expr env (Expr annot expr_ as expr) =
               begin
                 List.foldl (fun acc (_, pe') ->
                   Expr [] (Esseq (Pattern [] (CaseBase (Nothing, BTy_unit)))
-                                 (Expr [] (Eaction (Paction pol (Action loc a (Kill is_dynamic pe')))))
+                                 (Expr [] (Eaction (Paction pol (Action loc a (Kill kind pe')))))
                                  acc)
                 ) (Expr [] Eskip) xs
               end

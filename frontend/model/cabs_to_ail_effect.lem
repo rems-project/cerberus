@@ -251,8 +251,8 @@ type state = <|
   used_identifier: list A.ail_identifier;
   current_return_type : Ctype.ctype;
   
-  
-  
+  loop_attributes: Annot.loop_attributes;
+
   (* TODO TODO TODO *)
   core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
 |>
@@ -499,6 +499,8 @@ let initial_state core_eval_stuff = <|
   
   used_identifier= [];
   current_return_type= Ctype.Ctype [] Ctype.Void; (* TODO: this is morally wrong *)
+
+  loop_attributes = Map.empty;
   
   core_eval_stuff= core_eval_stuff;
 |>
@@ -712,6 +714,19 @@ let resolve_typedef sym =
       | _ -> error "TODO(msg) Cabs_to_ail_effect.resolve_typedef"
     end
   )
+
+
+
+val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
+let record_loop_attribute id attr = 
+  State_exception.get >>= fun st ->
+  State_exception.put <|st with loop_attributes = Map.insert id attr st.loop_attributes |>
+
+val get_loop_attributes: unit -> desugM Annot.loop_attributes
+let get_loop_attributes () = 
+  State_exception.get >>= fun st ->
+  State_exception.return st.loop_attributes
+
 
 
 (*
@@ -1870,6 +1885,7 @@ let extract_program startup_str =
                         ) [] $ Map_extra.toList st.tag_definitions;
     A.extern_idmap= extern_idmap;
     A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
+    A.loop_attributes = st.loop_attributes;
    |>)
 
 
@@ -1944,6 +1960,7 @@ let get_sigma_sofar =
                           ) [] $ Map_extra.toList st.tag_definitions;
        A.extern_idmap= Map.empty;
        A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
+       A.loop_attributes= st.loop_attributes;
      |>
   )
 
@@ -1969,6 +1986,7 @@ let cabs_to_ail_effect_is_incomplete ty =
       ) [] (Map_extra.toList ident_tagDefs);
     A.extern_idmap= Map.empty;
     A.typedef_attributes= Map.empty;
+    A.loop_attributes= Map.empty;
   |> in
   return (AilTypesAux.is_incomplete fake_ail_sigma ty)
 let inline is_incomplete = cabs_to_ail_effect_is_incomplete

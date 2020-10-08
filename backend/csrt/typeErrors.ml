@@ -39,7 +39,7 @@ type type_error =
 
   | Undefined_behaviour of CF.Undefined.undefined_behaviour
   | Unspecified of CF.Ctype.ctype
-  | StaticError of string * Sym.t
+  | StaticError of string
 
   | Generic of PPrint.document
 
@@ -123,7 +123,7 @@ let pp (loc : Loc.t) (err : t) =
          !^(CF.Undefined.pretty_string_of_undefined_behaviour undef)
     | Unspecified _ctype ->
        !^"Unspecified value"
-    | StaticError (err, _pe) ->
+    | StaticError err ->
        !^("Static error: " ^ err)
 
     | Generic err ->

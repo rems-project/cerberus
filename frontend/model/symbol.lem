@@ -156,6 +156,7 @@ type prefix =
   | PrefMalloc
   | PrefOther of string
 
+(* TODO: "nat", "int" *)
 val fresh_int: unit -> nat
 declare ocaml target_rep function fresh_int = `Fresh.int`
 

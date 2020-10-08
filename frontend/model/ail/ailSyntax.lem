@@ -186,8 +186,8 @@ type statement_ 'a [name="s*"] =
   | AilSexpr of expression 'a
   | AilSblock of bindings * list (statement 'a)
   | AilSif of expression 'a * statement 'a * statement 'a
-  | AilSwhile of expression 'a * statement 'a
-  | AilSdo of statement 'a * expression 'a
+  | AilSwhile of expression 'a * statement 'a * Annot.loop_id
+  | AilSdo of statement 'a * expression 'a * Annot.loop_id
   | AilSbreak
   | AilScontinue
   | AilSreturnVoid
@@ -195,7 +195,7 @@ type statement_ 'a [name="s*"] =
   | AilSswitch of expression 'a * statement 'a
   | AilScase of integerConstant * statement 'a
   | AilSdefault of statement 'a
-  | AilSlabel of ail_identifier * statement 'a
+  | AilSlabel of ail_identifier * statement 'a * maybe Annot.label_annot 
   | AilSgoto of ail_identifier
   | AilSdeclaration of list (ail_identifier * expression 'a)
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
@@ -233,6 +233,7 @@ type sigma 'a = <|
   tag_definitions: list (ail_identifier * (Annot.attributes * tag_definition));
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
   typedef_attributes: map ail_identifier Annot.attributes;
+  loop_attributes: Annot.loop_attributes;
 |>
 
 

@@ -2355,7 +2355,8 @@ TODO: #9
           self e >>= fun core_e ->
           (* symbolic names for the arguments temporary objects *)
           let n_args = List.length es in
-          let arg_ptr_syms = list_init n_args (fun _ -> Symbol.fresh ()) in
+          let arg_ptr_syms_tys = map (fun arg_e -> (Symbol.fresh (), ctype_of arg_e)) es in
+          let arg_ptr_syms = map fst arg_ptr_syms_tys in
           let arg_ptr_sym_pats = match arg_ptr_syms with
             | [sym] -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             | _ -> Caux.mk_tuple_pat $ List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
@@ -2487,7 +2488,7 @@ begin if expect_is_variadic then
                       )
                       (Caux.mk_sseq_e killall_pat
                         (* kill temporary objects *)
-                        (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                        (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
                         (* return function call result *)
                         (Caux.mk_pure_e call_ret_sym_pe)
                       )
@@ -2514,7 +2515,7 @@ else
                       (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe arg_ptr_sym_pes)
                       (Caux.mk_sseq_e killall_pat
                         (* kill temporary objects *)
-                        (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                        (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
                         (* return function call result *)
                         (Caux.mk_pure_e call_ret_sym_pe)
                       )
@@ -3092,9 +3093,9 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         St.mapM_ collect_cases_ ss
     | A.AilSif _ s1 s2 ->
         collect_cases_ s1 >> collect_cases_ s2
-    | A.AilSwhile _ s ->
+    | A.AilSwhile _ s _ ->
         collect_cases_ s
-    | A.AilSdo s _ ->
+    | A.AilSdo s _ _ ->
         collect_cases_ s
     | A.AilSbreak ->
         St.return ()
@@ -3110,7 +3111,7 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         register_case ic_n >> collect_cases_ s
     | A.AilSdefault s ->
         register_default >> collect_cases_ s
-    | A.AilSlabel _ s ->
+    | A.AilSlabel _ s _ ->
         collect_cases_ s
     | A.AilSgoto _ ->
         St.return ()
@@ -3156,23 +3157,23 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
         A.AilSblock binds <$> St.mapM erase_loop_control_aux ss
     | A.AilSif e s1 s2 ->
         A.AilSif e <$> erase_loop_control_aux s1 <*> erase_loop_control_aux s2
-    | A.AilSwhile e s ->
+    | A.AilSwhile e s loop_id ->
         (* STD §6.8.6.2#2 and §6.8.6.3#2 *)
         with_fresh_labels (erase_loop_control_aux s) >>= fun (continue_sym, break_sym, s') ->
         St.return $
           A.AilSblock []
             [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSwhile e (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
-                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip))])))
-            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
+                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip) (Just (Annot.LAloop_continue loop_id)))])) loop_id)
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip) (Just (Annot.LAloop_break loop_id))) ]
 
-    | A.AilSdo s e ->
+    | A.AilSdo s e loop_id ->
         (* STD §6.8.6.2#2 and §6.8.6.3#2 *)
         with_fresh_labels (erase_loop_control_aux s) >>= fun (continue_sym, break_sym, s') ->
         St.return $
           A.AilSblock []
             [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSdo (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
-                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip))])) e)
-            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
+                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip) (Just (Annot.LAloop_continue loop_id)))])) e loop_id)
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip) (Just (Annot.LAloop_break loop_id))) ]
     | A.AilSbreak ->
         St.get >>= function
           | <| elc_break= Just break_sym |> ->
@@ -3197,15 +3198,16 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
           A.AilSblock []
             [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSswitch e (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
                 [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSgoto break_sym); s' ])))
-            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip) (Just Annot.LAswitch)) ]
     | A.AilScase iCst s ->
         A.AilScase iCst <$> erase_loop_control_aux s
     | A.AilSdefault s ->
         A.AilSdefault <$> erase_loop_control_aux s
         (* TODO: not sure about this
         error "WIP: erase_loop_control_aux, AilSdefault" *)
-    | A.AilSlabel sym s ->
-        A.AilSlabel sym <$> erase_loop_control_aux s
+    | A.AilSlabel sym s m_loop_annot ->
+        erase_loop_control_aux s >>= fun s ->
+        St.return $ A.AilSlabel sym s m_loop_annot
     | A.AilSgoto _ ->
         St.return stmt_
     | A.AilSdeclaration _ ->
@@ -3244,9 +3246,9 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
         )
     | A.AilSif _ s1 s2 ->
         collect_visibles_ s1 >> collect_visibles_ s2
-    | A.AilSwhile _ s ->
+    | A.AilSwhile _ s _ ->
         collect_visibles_ s
-    | A.AilSdo s _ ->
+    | A.AilSdo s _ _ ->
         collect_visibles_ s
     | A.AilSbreak ->
         St.return ()
@@ -3262,7 +3264,7 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
         collect_visibles_ s
     | A.AilSdefault s ->
         collect_visibles_ s
-    | A.AilSlabel label s ->
+    | A.AilSlabel label s _ ->
         St.update (fun st -> <| st with
           label_visibles_= Map.insert label st.visible_syms st.label_visibles_
         |>) >>
@@ -3293,23 +3295,23 @@ let collect_visibles stmt =
 
 
 (* TODO: morally the kills and creates should be unseq() *)
-val mk_run_e: Loc.t -> Symbol.sym -> list Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
+val mk_run_e: Loc.t -> Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
 let translation_mk_run_e loc sym visibles_before visibles_after pes =
-  let killed_syms =
-    List.filter (fun sym ->
+  let killed_syms_tys =
+    List.filter (fun (sym,_ty) ->
       Maybe.isNothing (List.lookup sym visibles_after)
     ) visibles_before in
   
   let mk_kills_e =
     Caux.mk_unit_sseq (
-      List.map (fun sym ->
-        Caux.pkill loc false (Caux.mk_sym_pe sym)
-      ) killed_syms
+      List.map (fun (sym,ty) ->
+        Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)
+      ) killed_syms_tys
     ) in
   
   let created_sym_tys =
     List.filter (fun (sym, _) ->
-      not (List.elem sym visibles_before)
+      not (List.any (fun (sym',_) -> sym = sym') visibles_before)
     ) visibles_after in
   
   let mk_creates_e =
@@ -3402,7 +3404,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
              (Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym])) (
             List.foldr (fun core_s acc ->
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
-            ) (Caux.pkill loc false (Caux.mk_sym_pe sym)) core_ss
+            ) (Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)) core_ss
           )
     
     | A.AilSblock binds ss ->
@@ -3420,7 +3422,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
                    For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
           (* the kill actions for the local variables *)
           let core_kills : list (C.expr unit) =
-            List.map (Caux.pkill loc false -| (Caux.mk_sym_pe) -| fst) decls in
+            List.map (fun (sym,ty) -> Caux.pkill loc (C.Static (snd ty)) (Caux.mk_sym_pe sym)) decls in
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
@@ -3474,7 +3476,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
           )
 >>>>>>> bmc_v3 *)
     
-    | A.AilSwhile e s ->
+    | A.AilSwhile e s loop_id ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
         let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "while_" ^ show x) in
         E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, do_loop_sym_pat, do_loop_sym_pe) ->
@@ -3492,7 +3494,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return $
-          Caux.mk_save_e (sym_loop, C.BTy_unit)
+          Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id)] (sym_loop, C.BTy_unit)
              args (
 (*
             Caux.mk_sseq_e test_sym_pat core_test (
@@ -3523,7 +3525,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
             end
           )
     
-    | A.AilSdo s e ->
+    | A.AilSdo s e loop_id ->
         let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSdo use mkTestExpression") in
         let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "do_" ^ show x) in
         let sym_case = Symbol.fresh () in
@@ -3540,7 +3542,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return $
-          Caux.mk_save_e (sym_loop, C.BTy_unit) args (
+          Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id)] (sym_loop, C.BTy_unit) args (
             (* loop body *)
             Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
               (* controlling expression *)
@@ -3568,6 +3570,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
     
     | A.AilSreturnVoid ->
         E.get_visible_objects >>= fun visible_syms ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_qualifiers,ty) ->
+            E.return (sym, ty)
+          ) visible_syms >>= fun visible_syms_tys ->
         E.return $ begin
           if env.is_Noreturn then
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
@@ -3578,7 +3584,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
               else
                 C.BTy_tuple (List.replicate (List.length visible_syms) C.BTy_unit) in
             Caux.mk_sseq_e (Caux.mk_empty_pat bTy)
-              (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) visible_syms)
+              (Caux.mk_unseq $ List.map (fun (sym,ty) -> Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)) visible_syms_tys)
               (* TODO: check the symbols *)
               (Caux.mk_run_e env.return_lab [Caux.mk_unit_pe])
         end
@@ -3588,6 +3594,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
         translate_expression e                    >>= fun core_e                       ->
         E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
         E.get_visible_objects                     >>= fun visible_syms                 ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_qualifiers,ty) ->
+            E.return (sym, ty)
+          ) visible_syms >>= fun visible_syms_tys ->
 
         
         (* TODO: typing is not enough (should do like assignments) *)
@@ -3608,7 +3618,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
             Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound 0 core_e)) (
-              mk_run_e loc env.return_lab visible_syms [] [ret_pe]
+              mk_run_e loc env.return_lab visible_syms_tys [] [ret_pe]
             )
         end
 
@@ -3690,7 +3700,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
           error "Translation.translate_stmt2: default label not found."
         end
     
-    | A.AilSlabel sym s ->
+    | A.AilSlabel sym s loop_id ->
         self s                >>= fun core_s       ->
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
@@ -3702,9 +3712,13 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
     
     | A.AilSgoto sym ->
         E.get_visible_objects >>= fun visible_syms ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_qualifiers,ty) ->
+            E.return (sym, ty)
+          ) visible_syms >>= fun visible_syms_tys ->
         let visibles_after = fromJust "Translation.translation_statement, AilSgoto" (Map.lookup sym env.label_visibles) in
         E.return $
-          mk_run_e loc sym visible_syms visibles_after []
+          mk_run_e loc sym visible_syms_tys visibles_after []
     
     | A.AilSdeclaration sym_es ->
         (* This pass translate the declarations *)
@@ -3960,7 +3974,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_unit_pe
                     else
                       Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
-                  Caux.mk_save_e_ [Annot.Areturn]
+                  Caux.mk_save_e_ [Annot.Alabel Annot.LAreturn]
                                   (ret_label, ret_bTy) 
                                   [(ret_sym, ((ret_bTy, Just (return_ty, false)), ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))
@@ -4076,7 +4090,8 @@ let translate_extern_map (_, sigm) =
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
-    C.impl -> A.ail_program GenTypes.genTypeCategory ->
+    C.impl -> 
+    A.ail_program GenTypes.genTypeCategory ->
     C.file unit
 
 let translate (ailnames, stdlib_fun_map) impl prog =
@@ -4095,4 +4110,5 @@ let translate (ailnames, stdlib_fun_map) impl prog =
     C.funs= cfuns;
     C.extern = translate_extern_map prog;
     C.funinfo= funinfo;
+    C.loop_attributes= (snd prog).A.loop_attributes;
   |>

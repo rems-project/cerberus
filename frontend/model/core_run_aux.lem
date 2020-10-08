@@ -480,8 +480,8 @@ and convert_action_ act_ =
         CreateReadOnly (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) pref
     | Alloc pe1 pe2 pref ->
         Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
-    | Kill b pe ->
-        Kill b (convert_pexpr pe)
+    | Kill kind pe ->
+        Kill kind (convert_pexpr pe)
     | Store b pe1 pe2 pe3 mo ->
         Store b (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
     | Load pe1 pe2 mo ->
@@ -554,5 +554,6 @@ let convert_file file =
   funs=    Map.map convert_fun_map_decl file.funs;
   extern=  file.extern;
   funinfo= file.funinfo;
+  loop_attributes= file.loop_attributes;
  |>
 (* END silly *)

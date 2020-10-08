@@ -21,7 +21,6 @@ type t =
   | Struct of tag
   | FunctionPointer of Sym.t
 
-
 let is_struct = function
   | Struct tag -> Some tag
   | _ -> None

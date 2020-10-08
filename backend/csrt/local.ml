@@ -231,12 +231,12 @@ let get_c (loc : Loc.t) (name: Sym.t) (local:t) =
 let removeS loc syms (local: t) = 
   ListM.fold_leftM (fun local sym -> remove loc sym local) local syms
 
-let addA aname (bt,lname) = add (aname, Computational (lname,bt))
-let addL lname ls         = add (lname, Logical ls)
-let addR rname re         = add (rname, Resource re)
-let addC cname lc         = add (cname, Constraint lc)
-let addUR re = addR (Sym.fresh ()) re
-let addUC lc = addC (Sym.fresh ()) lc
+let add_a aname (bt,lname) = add (aname, Computational (lname,bt))
+let add_l lname ls         = add (lname, Logical ls)
+let add_r rname re         = add (rname, Resource re)
+let add_c cname lc         = add (cname, Constraint lc)
+let add_ur re = add_r (Sym.fresh ()) re
+let add_uc lc = add_c (Sym.fresh ()) lc
 
 
 let filter p (Local e) = 

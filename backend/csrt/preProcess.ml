@@ -211,8 +211,12 @@ let retype_action loc (M_Action (loc,action_)) =
        let* bt = Conversions.bt_of_ctype loc ct in
        let* size = Memory.size_of_ctype loc ct in
        return (M_Alloc (A (annots,bty,(bt,size)), asym, prefix))
-    | M_Kill (b, asym) -> 
-       return (M_Kill (b, asym))
+    | M_Kill (M_Dynamic, asym) -> 
+       return (M_Kill (M_Dynamic, asym))
+    | M_Kill (M_Static ct, asym) -> 
+       let* bt = Conversions.bt_of_ctype loc ct in
+       let* size = Memory.size_of_ctype loc ct in
+       return (M_Kill (M_Static (bt,size), asym))
     | M_Store (m, A (annots,bty,ct), asym1, asym2, mo) ->
        let* bt = Conversions.bt_of_ctype loc ct in
        let* size = Memory.size_of_ctype loc ct in
@@ -372,11 +376,10 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
      in
      let* expr = retype_expr loc structs expr in
      let* labels = 
-       PmapM.mapM (fun lsym (def: (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) -> 
+       PmapM.mapM (fun lsym (def: (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) 
+                       : (LT.t, BT.t * RE.size, BT.t, 'bty) mu_label_def m  -> 
            match def with
-           | M_Return _ ->
-              return (M_Return (Conversions.make_return_esave_spec ftyp))
-           | M_Label (_,args,e,annots) -> 
+           | M_Label (argtyps,args,e,annots) -> 
               let* lt = 
                 fail (Loc.update loc annots) 
                   (Generic (!^"need a type annotation here")) in
@@ -386,8 +389,20 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
                     return (sym,abt)
                   ) args
               in
+              (* let* argtyps = 
+               *   mapM (fun (msym, (ct,by_pointer)) ->
+               *       if by_pointer 
+               *       then return (msym,ct)
+               *       else 
+               *         let err = "non-return label passing argument by value" in
+               *         fail loc (Unreachable !^err)
+               *     ) argtyps
+               * in
+               * let* lt = Conversions.make_label_spec loc ftyp structs argtyps in *)
               let* e = retype_expr loc structs e in
               return (M_Label (lt,args,e,annots))
+           | M_Return _ ->
+              return (M_Return (Conversions.make_return_esave_spec ftyp))
             ) labels Symbol.symbol_compare
      in
      return (M_Proc (loc,bt,args,expr,labels))
@@ -473,12 +488,17 @@ let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct CF.Mucore.mu_stru
         return (sym,glob)
       ) file.mu_globs 
   in
-  return { mu_main = file.mu_main;
-           mu_tagDefs = tagDefs;
-           mu_stdlib = stdlib;
-           mu_impl = impls;
-           mu_globs = globs;
-           mu_funs = funs;
-           mu_extern = file.mu_extern;
-           mu_funinfo = funinfo; }
+  let file = 
+    { mu_main = file.mu_main;
+      mu_tagDefs = tagDefs;
+      mu_stdlib = stdlib;
+      mu_impl = impls;
+      mu_globs = globs;
+      mu_funs = funs;
+      mu_extern = file.mu_extern;
+      mu_funinfo = funinfo; 
+      mu_loop_attributes = file.mu_loop_attributes;
+    }
+  in
+  return file
     

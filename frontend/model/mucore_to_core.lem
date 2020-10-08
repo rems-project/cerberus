@@ -215,6 +215,11 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr Ctype.ctype mu_base
 
   end
 
+let mu_to_core__kill_kind = function
+  | M_Dynamic -> Core.Dynamic
+  | M_Static ct -> Core.Static ct
+  end
+
 let mu_to_core__action_ env (action_ : mu_action_ Ctype.ctype 'bty)
         : Core.generic_action_ 'bty symbol =
   match action_ with
@@ -234,9 +239,9 @@ let mu_to_core__action_ env (action_ : mu_action_ Ctype.ctype 'bty)
        (make_ctype_pexpr p1)
        (get_pexpr "Alloc" env p2)
        prefix
-  | M_Kill b p ->
+  | M_Kill kind p ->
      Core.Kill 
-       b
+       (mu_to_core__kill_kind kind)
        (get_pexpr "Kill" env p)
   | M_Store b p1 p2 p3 mo ->
      Core.Store 
@@ -598,5 +603,6 @@ let mu_to_core__file file =
    ; Core.funs = mu_to_core__fun_map file.mu_funs
    ; Core.extern = file.mu_extern
    ; Core.funinfo = mu_to_core__funinfos file.mu_funinfo
+   ; Core.loop_attributes = file.mu_loop_attributes
   |>
 

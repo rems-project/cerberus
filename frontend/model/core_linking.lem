@@ -263,6 +263,7 @@ let link_aux f1 f2 =
        funs=    f1.funs union f2.funs;
        extern=  extern;
        funinfo= f1.funinfo union f2.funinfo;
+       loop_attributes= f1.loop_attributes union f2.loop_attributes;
     |>
 
 val link: forall 'a 'b. list (generic_file 'a 'b) ->

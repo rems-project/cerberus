@@ -18,23 +18,24 @@ end
 module Make (RT: RT_Sig) = struct
 
 
-type t = 
-  | Computational of (Sym.t * BT.t) * t
-  | Logical of (Sym.t * LS.t) * t
-  | Resource of RE.t * t
-  | Constraint of LC.t * t
-  | I of RT.t
+  type t = 
+    | Computational of (Sym.t * BT.t) * t
+    | Logical of (Sym.t * LS.t) * t
+    | Resource of RE.t * t
+    | Constraint of LC.t * t
+    | I of RT.t
 
 
 
-let mComputational (name, bound) t = Computational ((name,bound),t)
-let mLogical (name, bound) t = Logical ((name,bound),t)
-let mConstraint bound t = Constraint (bound,t)
-let mResource bound t = Resource (bound,t)
+  let mComputational (name, bound) t = Computational ((name,bound),t)
+  let mLogical (name, bound) t = Logical ((name,bound),t)
+  let mConstraint bound t = Constraint (bound,t)
+  let mResource bound t = Resource (bound,t)
 
 
 
-  let rec subst_var (substitution: (Sym.t, Sym.t) Subst.t) = function
+  let rec subst_var ?(re_subst_var=RE.subst_var) 
+                     (substitution: (Sym.t, Sym.t) Subst.t) = function
     | Computational ((name,bt),t) -> 
        if Sym.equal name substitution.before then 
          Computational ((name,bt),t) 
@@ -57,7 +58,7 @@ let mResource bound t = Resource (bound,t)
          let t' = subst_var substitution t in
          Logical ((name,ls),t')
     | Resource (re,t) -> 
-       let re = RE.subst_var substitution re in
+       let re = re_subst_var substitution re in
        let t = subst_var substitution t in
        Resource (re,t)
     | Constraint (lc,t) -> 

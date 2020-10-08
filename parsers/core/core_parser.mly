@@ -700,9 +700,9 @@ and symbolify_action_ = function
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (Alloc0 (pe1, pe2, pref))
- | Kill (b, _pe) -> 
+ | Kill (kind, _pe) -> 
      symbolify_pexpr _pe >>= fun pe ->
-     Eff.return (Kill (b, pe))
+     Eff.return (Kill (kind, pe))
  | Store0 (b, _pe1, _pe2, _pe3, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -1615,9 +1615,9 @@ action:
 | ALLOC LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
     { Alloc0 (_pe1, _pe2, Symbol.PrefOther "Core") }
 | FREE _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Kill (true, _pe) }
-| KILL _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Kill (false, _pe) }
+    { Kill (Dynamic, _pe) }
+| KILL LPAREN _ct = core_ctype COMMA _pe= pexpr RPAREN
+    { Kill (Static0 _ct, _pe) }
 | STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
     { Store0 (false, _pe1, _pe2, _pe3, Cmm.NA) }
 | STORE_LOCK LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN

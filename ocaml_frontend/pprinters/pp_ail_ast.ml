@@ -395,10 +395,10 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
         Dnode ( pp_stmt_ctor "AilSif"
               , [dtree_of_expression e;
                  dtree_of_statement s1; dtree_of_statement s2] )
-    | AilSwhile (e, s) ->
+    | AilSwhile (e, s, _) ->
         Dnode ( pp_stmt_ctor "AilSwhile"
               , [dtree_of_expression e; dtree_of_statement s] )
-    | AilSdo (s, e) ->
+    | AilSdo (s, e, _) ->
         Dnode ( pp_stmt_ctor "AilSdo"
               , [dtree_of_statement s; dtree_of_expression e] )
     | AilSbreak ->
@@ -419,7 +419,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
     | AilSdefault s ->
         Dnode ( pp_stmt_ctor "AilSdefault"
               , [dtree_of_statement s] )
-    | AilSlabel (sym, s) ->
+    | AilSlabel (sym, s, _) ->
         Dnode ( pp_stmt_ctor "AilSlabel" ^^^ Pp_ail.pp_id sym
               , [dtree_of_statement s] )
     | AilSgoto sym ->

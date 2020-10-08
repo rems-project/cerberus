@@ -364,8 +364,8 @@ and subst_sym_action_2 sym z = function
       CreateReadOnly (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3, pref)
   | Alloc0 (pe1, pe2, pref) ->
       Alloc0 (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, pref)
-  | Kill (b, pe) ->
-      Kill (b, subst_sym_pexpr2 sym z pe)
+  | Kill (kind, pe) ->
+      Kill (kind, subst_sym_pexpr2 sym z pe)
   | Store0 (b, pe1, pe2, pe3, mo) ->
       Store0 (b, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3, mo)
   | Load0 (pe1, pe2, mo) ->
@@ -777,6 +777,7 @@ let rewrite_file file =
   ; funs = rewrite_fun_map file.funs
   ; extern = file.extern
   ; funinfo = file.funinfo
+  ; loop_attributes0= file.loop_attributes0
   }
 
 

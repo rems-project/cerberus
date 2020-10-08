@@ -4,7 +4,7 @@ module BT = BaseTypes
 
 
 type t = Base of BaseTypes.t
-                      
+type sort = t                      
 
 let pp atomic (Base bt) = 
   BaseTypes.pp atomic bt

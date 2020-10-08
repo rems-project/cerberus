@@ -27,6 +27,17 @@ val combine_attributes: attributes -> attributes -> attributes
 let combine_attributes (Attrs xs1) (Attrs xs2) =
   Attrs (xs1 ++ xs2)
 
+type loop_id = nat
+
+(* records where a label comes from *)
+type label_annot = 
+  | LAloop_body of loop_id
+  | LAloop_continue of loop_id
+  | LAloop_break of loop_id
+  | LAreturn (* when an Esave is annotated with this it indicates it is the
+                return label *)
+  | LAswitch
+
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)
@@ -36,8 +47,10 @@ type annot =
   | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
                               must only be used on a ctype to indicate it is a unfolding of a typedef *)
   | Anot_explode (* tell the a-normalisation not to explode if-then-else *)
-  | Areturn      (* when an Esave is annotated with this it indicates it is the return label *)
+  | Alabel of label_annot
 
+
+type loop_attributes = map loop_id attributes
 
 val     get_loc: list annot -> maybe Loc.t
 let rec get_loc annots =
@@ -56,7 +69,7 @@ let rec get_loc annots =
         get_loc annots'
     | (Anot_explode :: annots') ->
         get_loc annots'
-    | (Areturn :: annots') ->
+    | (Alabel _ :: annots') ->
         get_loc annots'
   end
 
@@ -93,7 +106,7 @@ let rec get_attrs annots =
        end
     | (Anot_explode :: annots') ->
         get_attrs annots'
-    | (Areturn :: annots') ->
+    | (Alabel _ :: annots') ->
         get_attrs annots'
   end
 
@@ -121,7 +134,7 @@ let rec get_uid annots =
         get_uid annots'
     | (Anot_explode :: annots') ->
         get_uid annots'
-    | (Areturn :: annots') ->
+    | (Alabel _ :: annots') ->
         get_uid annots'
   end
 
@@ -140,7 +153,7 @@ let rec explode annots =
 val     is_return: list annot -> bool
 let rec is_return annots =
   match annots with
-  | Areturn :: _ -> true
+  | Alabel LAreturn :: _ -> true
   | _ :: annots -> is_return annots
   | [] -> false
   end
