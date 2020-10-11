@@ -1,3 +1,4 @@
+module SymMap = Map.Make(Sym)
 module LT = ArgumentTypes.Make(False)
 
 

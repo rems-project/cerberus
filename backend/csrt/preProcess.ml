@@ -1,5 +1,7 @@
 (* open Pp *)
 open Resultat
+module SymMap = Map.Make(Sym)
+module StringMap = Map.Make(String)
 module CF=Cerb_frontend
 module Symbol=CF.Symbol
 module Loc=Locations
@@ -14,6 +16,12 @@ open Pp
 open ListM
 
 
+
+(* for convenience *)
+let bt_and_size_of_ctype loc ct = 
+  let* bt = Conversions.bt_of_ctype loc ct in
+  let* size = Memory.size_of_ctype loc ct in
+  return (bt,size)
 
 
 let retype_ctor loc = function
@@ -58,10 +66,9 @@ let retype_object_value loc = function
   | M_OVarray asyms -> return (M_OVarray asyms)
   | M_OVstruct (s, members) ->
      let* members = 
-       mapM (fun (id,ct,mv) ->
-           let* bt = Conversions.bt_of_ctype loc ct in
-           let* size = Memory.size_of_ctype loc ct in
-           return (id,(bt,size),mv)
+       mapM (fun (id, ct, mv) ->
+           let* (bt, size) = bt_and_size_of_ctype loc ct in
+           return (id, (bt, size), mv)
          ) members
      in
      return (M_OVstruct (s, members))
@@ -84,7 +91,6 @@ let retype_value loc = function
  | M_Vunit -> return (M_Vunit)
  | M_Vtrue -> return (M_Vtrue)
  | M_Vfalse -> return (M_Vfalse)
- (* | M_Vctype of ctype (\* C type as value *\) *)
  | M_Vlist (cbt,asyms) -> 
     let* bt = Conversions.bt_of_core_base_type loc cbt in
     return (M_Vlist (bt,asyms))
@@ -119,9 +125,8 @@ let rec retype_pexpr loc (M_Pexpr (annots,bty,pexpr_)) =
        in
        return (M_PEcase (asym,pats_pes))
     | M_PEarray_shift (asym,ct,asym') ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_PEarray_shift (asym,(bt,size),asym'))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_PEarray_shift (asym,(bt, size),asym'))
     | M_PEmember_shift (asym,sym,id) ->
        return (M_PEmember_shift (asym,sym,id))
     | M_PEnot asym -> 
@@ -132,7 +137,6 @@ let rec retype_pexpr loc (M_Pexpr (annots,bty,pexpr_)) =
        return (M_PEstruct (sym,members))
     | M_PEunion (sym,id,asym) ->
        return (M_PEunion (sym,id,asym))
-    (* | M_PEcfunction of asym 'bty (\* C function pointer expression *\) *)
     | M_PEmemberof (sym,id,asym) ->
        return (M_PEmemberof (sym,id,asym))
     | M_PEcall (name,asyms) ->
@@ -146,12 +150,6 @@ let rec retype_pexpr loc (M_Pexpr (annots,bty,pexpr_)) =
        let* pexpr1 = retype_pexpr loc pexpr1 in
        let* pexpr2 = retype_pexpr loc pexpr2 in
        return (M_PEif (asym,pexpr1,pexpr2))
-    (* | M_PEis_scalar of asym 'bty
-     * | M_PEis_integer of asym 'bty
-     * | M_PEis_signed of asym 'bty
-     * | M_PEbmc_assume of asym 'bty
-     * | M_PEis_unsigned of asym 'bty
-     * | M_PEare_compatible of asym 'bty * asym 'bty *)
   in
   return (M_Pexpr (annots,bty,pexpr_))
 
@@ -163,96 +161,77 @@ let retype_memop loc = function
   | M_PtrLe (asym1,asym2) -> return (M_PtrLe (asym1,asym2))
   | M_PtrGe (asym1,asym2) -> return (M_PtrGe (asym1,asym2))
   | M_Ptrdiff (A (annots,bty,ct), asym1, asym2) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_Ptrdiff (A (annots,bty,(bt,size)), asym1, asym2))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_Ptrdiff (A (annots,bty,(bt, size)), asym1, asym2))
   | M_IntFromPtr (A (annots,bty,ct), asym) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_IntFromPtr (A (annots,bty,(bt,size)), asym))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_IntFromPtr (A (annots,bty,(bt, size)), asym))
   | M_PtrFromInt (A (annots,bty,ct), asym) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_PtrFromInt (A (annots,bty,(bt,size)), asym))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_PtrFromInt (A (annots,bty,(bt, size)), asym))
   | M_PtrValidForDeref (A (annots,bty,ct), asym) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_PtrValidForDeref (A (annots,bty,(bt,size)), asym))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_PtrValidForDeref (A (annots,bty,(bt, size)), asym))
   | M_PtrWellAligned (A (annots,bty,ct), asym) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_PtrWellAligned (A (annots,bty,(bt,size)), asym))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_PtrWellAligned (A (annots,bty,(bt, size)), asym))
   | M_PtrArrayShift (asym1, A (annots,bty,ct), asym2) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_PtrArrayShift (asym1, A (annots,bty,(bt,size)), asym2))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_PtrArrayShift (asym1, A (annots,bty,(bt, size)), asym2))
   | M_Memcpy (asym1,asym2,asym3) -> return (M_Memcpy (asym1,asym2,asym3))
   | M_Memcmp (asym1,asym2,asym3) -> return (M_Memcmp (asym1,asym2,asym3))
   | M_Realloc (asym1,asym2,asym3) -> return (M_Realloc (asym1,asym2,asym3))
   | M_Va_start (asym1,asym2) -> return (M_Va_start (asym1,asym2))
   | M_Va_copy asym -> return (M_Va_copy asym)
   | M_Va_arg (asym, A (annots,bty,ct)) ->
-     let* bt = Conversions.bt_of_ctype loc ct in
-     let* size = Memory.size_of_ctype loc ct in
-     return (M_Va_arg (asym, A (annots,bty,(bt,size))))
+     let* (bt, size) = bt_and_size_of_ctype loc ct in
+     return (M_Va_arg (asym, A (annots,bty,(bt, size))))
   | M_Va_end asym -> return (M_Va_end asym)
 
 let retype_action loc (M_Action (loc,action_)) =
   let* action_ = match action_ with
     | M_Create (asym, A (annots,bty,ct), prefix) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_Create (asym, A (annots,bty,(bt,size)), prefix))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_Create (asym, A (annots,bty,(bt, size)), prefix))
     | M_CreateReadOnly (asym1, A (annots,bty,ct), asym2, prefix) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_CreateReadOnly (asym1, A (annots,bty,(bt,size)), asym2, prefix))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_CreateReadOnly (asym1, A (annots,bty,(bt, size)), asym2, prefix))
     | M_Alloc (A (annots,bty,ct), asym, prefix) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_Alloc (A (annots,bty,(bt,size)), asym, prefix))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_Alloc (A (annots,bty,(bt, size)), asym, prefix))
     | M_Kill (M_Dynamic, asym) -> 
        return (M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_Kill (M_Static (bt,size), asym))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_Kill (M_Static (bt, size), asym))
     | M_Store (m, A (annots,bty,ct), asym1, asym2, mo) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_Store (m, A (annots,bty,(bt,size)), asym1, asym2, mo))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_Store (m, A (annots,bty,(bt, size)), asym1, asym2, mo))
     | M_Load (A (annots,bty,ct), asym, mo) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_Load (A (annots,bty,(bt,size)), asym, mo))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_Load (A (annots,bty,(bt, size)), asym, mo))
     | M_RMW (A (annots,bty,ct), asym1, asym2, asym3, mo1, mo2) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_RMW (A (annots,bty,(bt,size)), asym1, asym2, asym3, mo1, mo2))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_RMW (A (annots,bty,(bt, size)), asym1, asym2, asym3, mo1, mo2))
     | M_Fence mo ->
        return (M_Fence mo)
     | M_CompareExchangeStrong (A (annots,bty,ct), asym1, asym2, asym3, mo1, mo2) -> 
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_CompareExchangeStrong (A (annots,bty,(bt,size)), asym1, asym2, asym3, mo1, mo2))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_CompareExchangeStrong (A (annots,bty,(bt, size)), asym1, asym2, asym3, mo1, mo2))
     | M_CompareExchangeWeak (A (annots,bty,ct), asym1, asym2, asym3, mo1, mo2) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_CompareExchangeWeak (A (annots,bty,(bt,size)), asym1, asym2, asym3, mo1, mo2))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_CompareExchangeWeak (A (annots,bty,(bt, size)), asym1, asym2, asym3, mo1, mo2))
     | M_LinuxFence mo ->
        return (M_LinuxFence mo)
     | M_LinuxLoad (A (annots,bty,ct), asym, mo) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_LinuxLoad (A (annots,bty,(bt,size)), asym, mo))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_LinuxLoad (A (annots,bty,(bt, size)), asym, mo))
     | M_LinuxStore (A (annots,bty,ct), asym1, asym2, mo) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_LinuxStore (A (annots,bty,(bt,size)), asym1, asym2, mo))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_LinuxStore (A (annots,bty,(bt, size)), asym1, asym2, mo))
     | M_LinuxRMW (A (annots,bty,ct), asym1, asym2, mo) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_LinuxRMW (A (annots,bty,(bt,size)), asym1, asym2, mo))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_LinuxRMW (A (annots,bty,(bt, size)), asym1, asym2, mo))
   in
   return (M_Action (loc,action_))
 
@@ -261,7 +240,6 @@ let retype_paction loc = function
  | M_Paction (pol,action) ->
     let* action = retype_action loc action in
     return (M_Paction (pol,action))
-
 
 
 let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) = 
@@ -297,12 +275,10 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
     | M_Eskip ->
        return (M_Eskip)
     | M_Eccall (A (annots,bty,ct),asym,asyms) ->
-       let* bt = Conversions.bt_of_ctype loc ct in
-       let* size = Memory.size_of_ctype loc ct in
-       return (M_Eccall (A (annots,bty,(bt,size)),asym,asyms))
+       let* (bt, size) = bt_and_size_of_ctype loc ct in
+       return (M_Eccall (A (annots,bty,(bt, size)),asym,asyms))
     | M_Eproc (name,asyms) ->
        return (M_Eproc (name,asyms))
-    (* | M_Eunseq of list (mu_expr 'DBTY 'bty) (\* unsequenced expressions *\) *)
     | M_Ewseq (pat,expr1,expr2) ->
        let* pat = retype_pattern loc pat in
        let* expr1 = retype_expr loc expr1 in
@@ -313,8 +289,6 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
        let* expr1 = retype_expr loc expr1 in
        let* expr2 = retype_expr loc expr2 in
        return (M_Esseq (pat,expr1,expr2))
-    (* | M_Easeq of (symbol * 'DBTY) * (mu_action 'bty) * (mu_paction 'bty) (\* atomic sequencing *\) *)
-    (* | M_Eindet of nat * (mu_expr 'DBTY 'bty) (\* indeterminately sequenced expr *)
     | M_Ebound (n,expr) ->
        let* expr = retype_expr loc expr in
        return (M_Ebound (n,expr))
@@ -323,10 +297,13 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
        return (M_End es)
     | M_Erun (sym,asyms) ->
        return (M_Erun (sym,asyms))
-    (* | M_Epar of list (mu_expr 'DBTY 'bty) (\* cppmem-like thread creation *\) *)
-    (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
   in
   return (M_Expr (annots,expr_))
+
+
+let retype_arg loc (sym,acbt) = 
+  let* abt = Conversions.bt_of_core_base_type loc acbt in
+  return (sym,abt)
 
 let retype_impl_decl loc = function
   | M_Def (cbt,pexpr) ->
@@ -335,75 +312,94 @@ let retype_impl_decl loc = function
      return (M_Def (bt,pexpr))
   | M_IFun (cbt,args,pexpr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = 
-       mapM (fun (sym,acbt) ->
-           let* abt = Conversions.bt_of_core_base_type loc acbt in
-           return (sym,abt)
-         ) args
-     in
+     let* args = mapM (retype_arg loc) args in
      let* pexpr = retype_pexpr loc pexpr in
      return (M_IFun (bt,args,pexpr))
 
 
 let retype_impls loc impls = 
   PmapM.mapM (fun _ decl -> retype_impl_decl loc decl) 
-            impls CF.Implementation.implementation_constant_compare
+    impls CF.Implementation.implementation_constant_compare
 
 
-let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
+let retype_label loc ~namemap ~funinfo ~loop_attributes ~structs ~fsym lsym def = 
+  Pp.d 5 (lazy (!^"pre-processing label" ^^^ Sym.pp lsym));
+  (* let names = 
+   *   match Pmap.lookup fsym namemap with
+   *   | None -> StringMap.empty
+   *   | Some names -> names
+   * in *)
+  let* ftyp = match Pmap.lookup fsym funinfo with
+    | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
+    | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+  in
+  (* let* arg_rts = match Pmap.lookup fsym arg_rts_map with
+   *   | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
+   *   | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+   * in *)
+  match def with
+  | M_Return _ ->
+     let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
+     return (M_Return lt)
+  | M_Label (argtyps,args,e,annots) -> 
+     let loc = Loc.update loc annots in
+     let* args = mapM (retype_arg loc) args in
+     let* argtyps = 
+       mapM (fun (msym, (ct,by_pointer)) ->
+           if by_pointer 
+           then return (msym,ct) 
+           else fail loc (Unreachable !^"label argument passed as value")
+         ) argtyps
+     in
+     begin match CF.Annot.get_label_annot annots with
+     | Some (LAloop_body loop_id)
+     | Some (LAloop_continue loop_id)
+     | Some (LAloop_break loop_id) 
+       ->
+        begin match Pmap.lookup loop_id loop_attributes with
+        | Some attrs -> 
+           begin match Collect_rc_attrs.collect_rc_attrs attrs with
+           | [] -> 
+              fail loc (Generic (!^"need a type annotation here"))
+           | rc_attrs ->
+              let* (_,lt) = 
+              fail loc (Generic (!^"todo: label"))
+                (* Rc_conversions.make_loop_label_spec_annot 
+                 *   loc names structs rc_attrs  *)
+              in
+              let* e = retype_expr loc structs e in
+              return (M_Label (lt,args,e,annots))
+           end
+        | None -> 
+           fail loc (Generic (!^"need a type annotation for this loop"))
+        end
+     | Some LAswitch -> 
+        fail loc (Unsupported (!^"todo: switch labels"))
+     | Some LAreturn -> 
+        fail loc (Unreachable (!^"return label has not been mapped to return"))
+     | None -> 
+        fail loc (Unsupported (!^"todo: non-loop labels"))
+     end
+
+
+
+let retype_fun_map_decl loc ~namemap ~funinfo ~loop_attributes ~structs
+                        fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
+  let () = Pp.d 5 (lazy (!^"pre-processing function" ^^^ Sym.pp fsym)) in
   match decl with
   | M_Fun (cbt,args,pexpr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = 
-       mapM (fun (sym,acbt) ->
-           let* abt = Conversions.bt_of_core_base_type loc acbt in
-           return (sym,abt)
-         ) args
-     in
+     let* args = mapM (retype_arg loc) args in
      let* pexpr = retype_pexpr loc pexpr in
      return (M_Fun (bt,args,pexpr))
   | M_Proc (loc,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = 
-       mapM (fun (sym,acbt) ->
-           let* abt = Conversions.bt_of_core_base_type loc acbt in
-           return (sym,abt)
-         ) args
-     in
-     let* ftyp = match Pmap.lookup fsym funinfo with
-       | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
-       | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
-     in
+     let* args = mapM (retype_arg loc) args in
      let* expr = retype_expr loc structs expr in
      let* labels = 
-       PmapM.mapM (fun lsym (def: (CA.lt, CA.ct, CA.bt, 'bty) mu_label_def) 
-                       : (LT.t, BT.t * RE.size, BT.t, 'bty) mu_label_def m  -> 
-           match def with
-           | M_Label (argtyps,args,e,annots) -> 
-              let* lt = 
-                fail (Loc.update loc annots) 
-                  (Generic (!^"need a type annotation here")) in
-              let* args = 
-                mapM (fun (sym,acbt) ->
-                    let* abt = Conversions.bt_of_core_base_type loc acbt in
-                    return (sym,abt)
-                  ) args
-              in
-              (* let* argtyps = 
-               *   mapM (fun (msym, (ct,by_pointer)) ->
-               *       if by_pointer 
-               *       then return (msym,ct)
-               *       else 
-               *         let err = "non-return label passing argument by value" in
-               *         fail loc (Unreachable !^err)
-               *     ) argtyps
-               * in
-               * let* lt = Conversions.make_label_spec loc ftyp structs argtyps in *)
-              let* e = retype_expr loc structs e in
-              return (M_Label (lt,args,e,annots))
-           | M_Return _ ->
-              return (M_Return (Conversions.make_return_esave_spec ftyp))
-            ) labels Symbol.symbol_compare
+       PmapM.mapM (
+           retype_label loc ~namemap ~funinfo ~loop_attributes ~structs ~fsym
+         ) labels Sym.compare
      in
      return (M_Proc (loc,bt,args,expr,labels))
   | M_ProcDecl (loc,cbt,args) ->
@@ -415,34 +411,39 @@ let retype_fun_map_decl loc structs funinfo fsym (decl: (CA.lt, CA.ct, CA.bt, 'b
      let* args = mapM (Conversions.bt_of_core_base_type loc) args in
      return (M_BuiltinDecl (loc,bt,args))
 
-let retype_fun_map loc structs funinfo (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
-  PmapM.mapM (fun fsym decl -> 
-      retype_fun_map_decl loc structs funinfo fsym decl
-    ) fun_map Symbol.symbol_compare
+let retype_fun_map loc ~namemap ~funinfo ~loop_attributes ~structs
+                   (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
+  PmapM.mapM (fun fsym decl ->
+      retype_fun_map_decl loc ~namemap ~funinfo ~loop_attributes 
+        ~structs fsym decl
+    ) fun_map Sym.compare
 
 
-let retype_globs loc struct_decls = function
+let retype_globs loc struct_decls (sym, glob) =
+  match glob with
   | M_GlobalDef (cbt,expr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      let* expr = retype_expr loc struct_decls expr in
-     return (M_GlobalDef (bt,expr))
+     return (sym, M_GlobalDef (bt,expr))
   | M_GlobalDecl cbt ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     return (M_GlobalDecl bt)
+     return (sym, M_GlobalDecl bt)
 
 
 let retype_globs_map loc struct_decls funinfo globs_map = 
   PmapM.mapM (fun _ globs -> retype_globs loc struct_decls globs) 
-            globs_map Symbol.symbol_compare
+            globs_map Sym.compare
 
 
 
 
-
-
-
-
-let retype_tagDefs loc tagDefs = 
+let retype_tagDefs 
+      (loc : Loc.t) 
+      (tagDefs : (CA.ct mu_struct_def, CA.ct mu_union_def) mu_tag_definitions) 
+    : ((Global.struct_decl, unit) mu_tag_definitions *
+         Global.struct_decl SymMap.t * 
+           unit SymMap.t) m
+  = 
   let open Pp in
   PmapM.foldM 
     (fun sym def (acc,acc_structs,acc_unions) -> 
@@ -455,39 +456,40 @@ let retype_tagDefs loc tagDefs =
          let acc_structs = SymMap.add sym decl acc_structs in
          return (acc,acc_structs,acc_unions)
     ) 
-    tagDefs (Pmap.empty Symbol.symbol_compare,SymMap.empty,SymMap.empty)
+    tagDefs (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)
 
 
 let retype_funinfo struct_decls funinfo =
-  PmapM.mapM
-    (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) ->
+  PmapM.foldM
+    (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (namemap,funinfo) ->
       if is_variadic then fail loc (Variadic_function fsym) else
-        let* ftyp = match Collect_rc_attrs.collect_rc_attrs attrs with
+        let* (names,ftyp) = match Collect_rc_attrs.collect_rc_attrs attrs with
         | [] -> 
-           Conversions.make_fun_spec loc struct_decls args ret_ctype
+           let* (arg_rts,ftyp) = Conversions.make_fun_spec loc struct_decls args ret_ctype in
+           return (StringMap.empty,ftyp)
         | rc_attrs ->
-           Conversions.make_fun_spec_annot loc struct_decls rc_attrs args ret_ctype
+           Rc_conversions.make_fun_spec_annot loc struct_decls rc_attrs args ret_ctype
         in
-        return (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto))
-    ) funinfo Symbol.symbol_compare
+        return (Pmap.add fsym names namemap,
+                Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo)
+    ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare) 
 
 
-let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, 'bty) mu_file)
+let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
     : ((FT.t, LT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
-
+  let loop_attributes = file.mu_loop_attributes in
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
-  let* funinfo = retype_funinfo structs file.mu_funinfo in
-  let* stdlib = retype_fun_map loc structs funinfo file.mu_stdlib in
-  let* funs = retype_fun_map loc structs funinfo file.mu_funs in
-
-
-  let* impls = retype_impls loc file.mu_impl in
-  let* globs = 
-    mapM (fun (sym, glob) -> 
-        let* glob = retype_globs loc structs glob in
-        return (sym,glob)
-      ) file.mu_globs 
+  let* (namemap,funinfo) = retype_funinfo structs file.mu_funinfo in
+  let* stdlib = 
+    retype_fun_map loc ~namemap ~loop_attributes ~structs 
+      ~funinfo file.mu_stdlib 
   in
+  let* funs = 
+    retype_fun_map loc ~namemap ~loop_attributes ~structs 
+      ~funinfo file.mu_funs 
+  in
+  let* impls = retype_impls loc file.mu_impl in
+  let* globs = mapM (retype_globs loc structs) file.mu_globs in
   let file = 
     { mu_main = file.mu_main;
       mu_tagDefs = tagDefs;

@@ -10,9 +10,9 @@ module SymSet = Set.Make(Sym)
 
 
 
-module Make (RT: AT.RT_Sig) = struct
+module Make (I: AT.I_Sig) = struct
 
-  module UT = AT.Make(RT)
+  module UT = AT.Make(I)
 
   type 'rt c = I of 'rt
              | Constraint of LC.t * 'rt c
@@ -36,7 +36,7 @@ module Make (RT: AT.RT_Sig) = struct
     | Constraint (lc, t) -> 
        Constraint (LC.subst_var substitution lc, 
                    subst_var_c substitution t)
-    | I rt -> I (RT.subst_var substitution rt)
+    | I rt -> I (I.subst_var substitution rt)
 
   let rec subst_var_r substitution = function
     | Resource (re, t) ->
@@ -86,7 +86,7 @@ module Make (RT: AT.RT_Sig) = struct
       | Constraint (lc,t) ->
          let op = equals ^^ rangle in
          (LC.pp lc ^^^ op) :: aux_c t
-      | I rt -> [RT.pp rt]
+      | I rt -> [I.pp rt]
     in
     let rec aux_r = function
       | Resource (re,t) ->

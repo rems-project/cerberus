@@ -22,3 +22,4 @@ open Subst
 
 let subst {before;after} symbol = 
   if symbol = before then after else symbol
+

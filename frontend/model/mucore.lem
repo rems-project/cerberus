@@ -284,13 +284,15 @@ type mu_funinfo 'DFTY =
 
 type mu_funinfos 'DFTY = map symbol (mu_funinfo 'DFTY)
 
+type mu_globs_list 'DCTY 'DBTY 'bty = list (symbol * mu_globs 'DCTY 'DBTY 'bty)
+
 (* a Core file is just a set of named functions *)
 type mu_file 'DFTY 'DLTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
   mu_main    : maybe symbol;
   mu_tagDefs : mu_tag_definitions 'DSTRUCT_DEF 'DUNION_DEF;
   mu_stdlib  : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty;
   mu_impl    : mu_impl 'DCTY 'DBTY 'bty;
-  mu_globs   : list (symbol * mu_globs 'DCTY 'DBTY 'bty);
+  mu_globs   : mu_globs_list 'DCTY 'DBTY 'bty;
   mu_funs    : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty;
   mu_extern  : mu_extern_map;
   mu_funinfo : mu_funinfos 'DFTY;

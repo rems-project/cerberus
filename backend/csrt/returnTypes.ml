@@ -16,6 +16,8 @@ type l =
 
 type t = Computational of (Sym.t * BT.t) * l
 
+let lrt (Computational (_, lrt)) = lrt
+
 
 let mComputational (name,bound) t = Computational ((name,bound),t)
 let mLogical (name,bound) t = Logical ((name,bound),t)

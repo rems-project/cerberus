@@ -1,5 +1,6 @@
 open Subst
 module SymSet = Set.Make(Sym)
+module SymMap = Map.Make(Sym)
 
 type 'res t = { resolved : 'res option }
 

@@ -7,6 +7,7 @@ open TypeErrors
 open ReturnTypes
 open BaseTypes
 
+module SymMap = Map.Make(Sym)
 module RE = Resources
 module LT = ArgumentTypes.Make(False)
 module FT = ArgumentTypes.Make(ReturnTypes)
@@ -52,8 +53,8 @@ let record_impl genv impls =
 
 
 let print_initial_environment genv = 
-  Pp.p (headline "initial environment");
-  Pp.p (Global.pp genv);
+  Pp.d 1 (lazy (headline "initial environment"));
+  Pp.d 1 (lazy (Global.pp genv));
   return ()
 
 

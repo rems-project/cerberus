@@ -3,6 +3,7 @@ open Resultat
 open TypeErrors
 
 module SymSet = Set.Make(Sym)
+module SymMap = Map.Make(Sym)
 module CF = Cerb_frontend
 module Loc = Locations
 module LC = LogicalConstraints

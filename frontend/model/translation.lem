@@ -3700,15 +3700,19 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
           error "Translation.translate_stmt2: default label not found."
         end
     
-    | A.AilSlabel sym s loop_id ->
+    | A.AilSlabel sym s m_label_annot ->
         self s                >>= fun core_s       ->
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_qualifiers,oty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (oty, true)), Caux.mk_sym_pe sym))
           ) visible_syms      >>= fun args ->
+        let annots = match m_label_annot with
+          | Just loop_annot -> [Annot.Alabel loop_annot]
+          | Nothing -> []
+        end in
         E.return $
-          Caux.mk_save_e (sym, C.BTy_unit) args core_s
+          Caux.mk_save_e_ annots (sym, C.BTy_unit) args core_s
     
     | A.AilSgoto sym ->
         E.get_visible_objects >>= fun visible_syms ->

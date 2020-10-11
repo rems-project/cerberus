@@ -8,14 +8,14 @@ module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
 
-module type RT_Sig = sig
+module type I_Sig = sig
   type t
   val subst_var: (Sym.t,Sym.t) Subst.t -> t -> t
   val free_vars: t -> SymSet.t
   val pp: t -> Pp.document
 end
 
-module Make (RT: RT_Sig) = struct
+module Make (I: I_Sig) = struct
 
 
   type t = 
@@ -23,7 +23,7 @@ module Make (RT: RT_Sig) = struct
     | Logical of (Sym.t * LS.t) * t
     | Resource of RE.t * t
     | Constraint of LC.t * t
-    | I of RT.t
+    | I of I.t
 
 
 
@@ -65,7 +65,7 @@ module Make (RT: RT_Sig) = struct
        let lc = LC.subst_var substitution lc in
        let t = subst_var substitution t in
        Constraint (lc,t)
-    | I i -> I (RT.subst_var substitution i)
+    | I i -> I (I.subst_var substitution i)
 
   let subst_vars = make_substs subst_var
 
@@ -74,7 +74,7 @@ module Make (RT: RT_Sig) = struct
     | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
     | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars t)
     | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars t)
-    | I i -> RT.free_vars i
+    | I i -> I.free_vars i
 
 
   let pp ft = 
@@ -93,27 +93,42 @@ module Make (RT: RT_Sig) = struct
          let op = equals ^^ rangle in
          (LC.pp lc ^^^ op) :: aux t
       | I i -> 
-         [RT.pp i]
+         [I.pp i]
     in
     flow (break 1) (aux ft)
 
 
-let rec get_return = function
-  | Computational (_,ft) -> get_return ft
-  | Logical (_,ft) -> get_return ft
-  | Resource (_,ft) -> get_return ft
-  | Constraint (_,ft) -> get_return ft
-  | I rt -> rt
+  let rec get_return = function
+    | Computational (_,ft) -> get_return ft
+    | Logical (_,ft) -> get_return ft
+    | Resource (_,ft) -> get_return ft
+    | Constraint (_,ft) -> get_return ft
+    | I rt -> rt
 
 
-let rec count_computational = function
-  | Computational (_,ft) -> 
-     1 + count_computational ft
-  | Logical (_,ft) 
-    | Resource (_,ft)
-    | Constraint (_,ft) -> 
-     count_computational ft
-  | I _ -> 0
+  let rec count_computational = function
+    | Computational (_,ft) -> 
+       1 + count_computational ft
+    | Logical (_,ft) 
+      | Resource (_,ft)
+      | Constraint (_,ft) -> 
+       count_computational ft
+    | I _ -> 0
+
+
+  module RT = ReturnTypes
+
+  let rec of_lrt (lrt : RT.l) (rest : t) : t = 
+    match lrt with
+    | RT.I -> rest
+    | RT.Logical ((name, t), args) -> Logical ((name, t), of_lrt args rest)
+    | RT.Resource (t, args) -> Resource (t, of_lrt args rest)
+    | RT.Constraint (t, args) -> Constraint (t, of_lrt args rest)
+
+
+  let of_rt (rt : RT.t) (rest : t) : t = 
+    let (RT.Computational ((name, t), lrt)) = rt in
+    Computational ((name, t), of_lrt lrt rest)
 
 
 end

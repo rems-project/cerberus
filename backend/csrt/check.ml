@@ -192,7 +192,7 @@ let args_of_asyms (loc : Loc.t) (local : L.t) (asyms : 'bty asyms) : args m=
   ListM.mapM (arg_of_asym loc local) asyms
 
 
-module Spine (RT : AT.RT_Sig) = struct
+module Spine (RT : AT.I_Sig) = struct
 
   module FT = AT.Make(RT)
   module NFT = NormalisedArgumentTypes.Make(RT)
@@ -330,7 +330,7 @@ let calltype_lt loc {local; global} args (ltyp : LT.t) : (False.t * L.t) m =
 let subtype (loc : Loc.t) {local; global} arg (rtyp : RT.t) : L.t m =
   let* (False, local) = 
     Spine_LT.spine loc {local; global} [arg] 
-      (Conversions.rt_to_lt rtyp (LT.I False.False)) "subtype" 
+      (LT.of_rt rtyp (LT.I False.False)) "subtype" 
   in
   return local
   
@@ -620,7 +620,7 @@ let merge_return_types loc (LC c, rt) (LC c2, rt2) =
        return (RT.Constraint (LC (Impl (c2, lc)), lrt))
     | Resource _, _
     | _, Resource _ -> 
-       fail loc (Generic !^"Cannot infer type of this expression (cannot merge)")
+       fail loc (Generic !^"Cannot infer type of this (cannot merge)")
   in
   let lrt2' = RT.subst_var_l {before = lname2; after = lname} lrt2 in
   let* lrt = aux lrt lrt2' in
@@ -1147,7 +1147,7 @@ and check_expr_pop (loc : Loc.t) delta {labels; local; global} (pe : 'bty expr)
 (* the logic is parameterised by RT_Sig so it can be used uniformly
    for functions and procedures (with return type) and labels with
    no-return (False) type. *)
-module CBF (RT : AT.RT_Sig) = struct
+module CBF (RT : AT.I_Sig) = struct
   module T = AT.Make(RT)
   let check_and_bind_arguments loc arguments (function_typ : T.t) = 
     let rec check acc_substs local pure_local args (ftyp : T.t) =

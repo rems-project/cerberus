@@ -117,6 +117,15 @@ let get_attrs_ annots =
   | Nothing -> Attrs []
   end
 
+val get_label_annot : list annot -> maybe label_annot
+let rec get_label_annot annots = 
+  match annots with
+  | [] -> Nothing
+  | Alabel la :: _ -> Just la
+  | _ :: annots -> get_label_annot annots
+  end
+
+
 val     get_uid: list annot -> maybe string
 let rec get_uid annots =
   match annots with

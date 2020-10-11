@@ -4,6 +4,7 @@ module BT = BaseTypes
 module IT = IndexTerms
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
+module SymMap = Map.Make(Sym)
 open Option
 
 type size = Num.t
