@@ -166,7 +166,7 @@ let process core_file =
   return mu_file
 
 let frontend filename = 
-  Global_ocaml.(set_cerb_conf false Random false Basic false false false);
+  Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->

@@ -1415,6 +1415,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEfunction_decay _ ->
         (* This should be impossible because the Desugaring doesn't emit any AilEfunction_decay *)
         error "annotate_expression(AilEfunction_decay)"
+    | AilEgcc_statement ->
+        E.return (AilEgcc_statement, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))) (*TODO*))
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->

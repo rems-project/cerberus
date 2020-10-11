@@ -618,6 +618,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             else
               pp e
 *)
+        | AilEgcc_statement ->
+            pp_keyword "gcc_statement" (* TODO *)
       )) in
   pp None a_expr
 

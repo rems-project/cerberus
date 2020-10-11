@@ -106,7 +106,7 @@ let cerberus debug_level progress core_obj
              impl_name
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
-             sequentialise_core rewrite_core typecheck_core defacto
+             sequentialise_core rewrite_core typecheck_core defacto permissive
              fs_dump fs trace
              output_name
              files args_opt =
@@ -119,7 +119,7 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto agnostic false;
+  set_cerb_conf exec exec_mode concurrency QuoteStd defacto permissive agnostic false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -260,7 +260,7 @@ let output_file =
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string ("cc -E -C -Werror -nostdinc -undef -D__cerb__")
+  Arg.(value & opt string ("cc -E -C -Werror -Wno-builtin-macro-redefined -nostdinc -undef -D__cerb__")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let cpp_only =
@@ -379,6 +379,10 @@ let defacto =
   let doc = "relax some of the ISO constraints (outside of the memory)" in
   Arg.(value & flag & info["defacto"] ~doc)
 
+let permissive =
+  let doc = "allow extensions to ISO (by default Cerberus behaves like compilers with -pedantic)" in
+  Arg.(value & flag & info["permissive"] ~doc)
+
 let fs_dump =
   let doc = "dump the file system at the end of the execution" in
   Arg.(value & flag & info["fs-dump"] ~doc)
@@ -405,7 +409,7 @@ let () =
                          exec $ exec_mode $ switches $ batch $
                          experimental_unseq $ concurrency $
                          astprints $ pprints $ ppflags $
-                         sequentialise $ rewrite $ typecheck_core $ defacto $
+                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $
                          fs_dump $ fs $ trace $
                          output_file $
                          files $ args) in

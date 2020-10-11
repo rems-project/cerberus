@@ -13,3 +13,5 @@ sibylfs/generated
 *~
 cerberus-webserver
 config.json
+webcerb.symbolic
+webcerb.concrete

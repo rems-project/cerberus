@@ -50,7 +50,7 @@ let frontend cpp_str filename =
     ; cpp_cmd= cpp_str
     ; cpp_stderr= true
   } in
-  Global_ocaml.(set_cerb_conf false Random false Basic false false false);
+  Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   load_core_stdlib ()                                  >>= fun stdlib ->
   load_core_impl stdlib impl_name                      >>= fun impl   ->
   c_frontend (conf, io) (stdlib, impl) ~filename

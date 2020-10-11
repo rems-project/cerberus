@@ -84,8 +84,9 @@ type cabs_expression_ =
   | CabsEva_copy of cabs_expression * cabs_expression
   | CabsEva_arg of cabs_expression * type_name
   | CabsEva_end of cabs_expression
-  | CabsEprint_type of cabs_expression (* CERBERUS EXTENSION *)
-  | CabsEbmc_assume of cabs_expression
+  | CabsEprint_type of cabs_expression (* Cerberus extension *)
+  | CabsEbmc_assume of cabs_expression (* Cerberus-bmc extension *)
+  | CabsEgcc_statement of cabs_statement (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html *)
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_
 
@@ -276,11 +277,9 @@ and designator =
 and static_assert_declaration =
  | Static_assert of cabs_expression * cabs_string_literal
 
-(* §6.7.2.2 Enumeration specifiers, Syntax *)
-type enumerator = Symbol.identifier * maybe cabs_expression
 
 (* §6.8 Statements and blocks, Syntax *)
-type cabs_statement_ =
+and cabs_statement_ =
   (* §6.8.1 Labeled statements, Syntax *)
   | CabsSlabel of Symbol.identifier * cabs_statement
   | CabsScase of cabs_expression * cabs_statement
@@ -315,6 +314,10 @@ and cabs_statement =
 and for_clause =
  | FC_expr of cabs_expression
  | FC_decl of declaration
+
+
+(* §6.7.2.2 Enumeration specifiers, Syntax *)
+type enumerator = Symbol.identifier * maybe cabs_expression
 
 
 (* §6.9 External definitions, Syntax *)

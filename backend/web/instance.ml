@@ -71,6 +71,7 @@ let hack ~conf mode =
       concurrency=      false;
       error_verbosity=  Global_ocaml.QuoteStd;
       defacto=          false;
+      permissive=       false;
       agnostic=         false;
       n1570=            Some conf.instance.n1570;
     }
