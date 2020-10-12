@@ -16,6 +16,7 @@ open LogicalConstraints
 open Resources
 
 
+module StringMap = Map.Make(String)
 module SymSet = Set.Make(Sym)
 
 
@@ -289,23 +290,27 @@ let update_values_lrt lrt =
 let make_fun_spec loc struct_decls args ret_ctype = 
   let open FT in
   let open RT in
-  let* (arg_rts, args, rets) = 
-    ListM.fold_rightM (fun (msym, ct) (arg_rts, args, rets) ->
+  let* (names, arg_rts, args, rets) = 
+    ListM.fold_rightM (fun (msym, ct) (names, arg_rts, args, rets) ->
         let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
         let s = Sym.fresh_fancy mname in
+        let names = match mname with
+          | Some ident -> StringMap.add ident s names 
+          | None -> names
+        in
         let* arg_rt = rt_of_ctype loc struct_decls s (lift ct) in
         let arg_rts = (mname, arg_rt) :: arg_rts in
         let arg = FT.of_rt arg_rt in
         let args = Tools.comp arg args in
         let ret = update_values_lrt (RT.lrt arg_rt) in
-        return (arg_rts, args, ret @@ rets)
+        return (names, arg_rts, args, ret @@ rets)
       ) 
-      args ([], (fun ft -> ft), I)
+      args (StringMap.empty, [], (fun ft -> ft), I)
   in
   let* (Computational ((ret_name,bound),ret)) = 
     rt_of_ctype loc struct_decls (Sym.fresh ()) ret_ctype in
   let ftyp = args (I (RT.Computational ((ret_name,bound), RT.(@@) ret rets))) in
-  return (arg_rts, ftyp)
+  return (names, ftyp, arg_rts)
 
 
 

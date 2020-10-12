@@ -33,6 +33,12 @@ module Make (I: I_Sig) = struct
   let mResource bound t = Resource (bound,t)
 
 
+  let mComputationals = List.fold_right mComputational
+  let mLogicals = List.fold_right mLogical
+  let mConstraints = List.fold_right mConstraint
+  let mResources = List.fold_right mResource
+
+
 
   let rec subst_var ?(re_subst_var=RE.subst_var) 
                      (substitution: (Sym.t, Sym.t) Subst.t) = function

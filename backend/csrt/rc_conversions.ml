@@ -164,7 +164,7 @@ and of_coq_expr loc names coq_expr =
   | Coq_ident ident ->
      begin match StringMap.find_opt ident names with
      | Some sym -> return ([], IT.S sym)
-     | None -> fail loc (Generic !^("unknown name" ^ ident))
+     | None -> fail loc (Generic !^("unknown name " ^ ident))
      end
   | Coq_all coq_term -> 
      of_coq_term loc names coq_term
@@ -187,7 +187,7 @@ and of_constr loc names constr : ((Sym.t * LS.t) list * RE.t list * LC.t list) m
   | Constr_own (ident,ptr_kind,type_expr) ->
      let* sym = match StringMap.find_opt ident names with
      | Some sym -> return sym
-     | None -> fail loc (Generic !^("unknown name" ^ ident))
+     | None -> fail loc (Generic !^("unknown name " ^ ident))
      in
      make_owned_pointer loc names sym ptr_kind type_expr
   | Constr_Coq coq_expr ->
@@ -280,11 +280,19 @@ and of_type_expr loc names newname te =
      of_coq_expr_typ loc names newname coq_expr
 
 
-(* let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym)) *)
-let log_name_add sym = ()
+let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym))
+(* let log_name_add sym = () *)
 
 let make_fun_spec_annot loc struct_decls attrs args ret_ctype = 
   let (annot: function_annot) = function_annot attrs in
+  (* in order to to the List.combine below *)
+  let* () = 
+    let nargs = List.length args in
+    let nargs_spec = List.length annot.fa_args in
+    if nargs <> nargs_spec 
+    then fail loc (Number_arguments {has = nargs; expect = nargs_spec})
+    else return ()
+  in
   let a, l, r, c = [], [], [], [] in
   let rl, rr, rc = [], [], [] in
   let names = StringMap.empty in
@@ -297,9 +305,16 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         return (names, (a, l @ [(s, LS.Base bt)] @ l', r @ r', c @ c'))
       ) (names, (a, l, r, c)) annot.fa_parameters
   in
-  let* ((a, l, r, c), (rl, rr, rc)) =
-    ListM.fold_leftM (fun ((a, l, r, c), (rl, rr, rc)) type_expr ->
-        let s = Sym.fresh () in
+  let* (names, (a, l, r, c), (rl, rr, rc), arg_rts) =
+    ListM.fold_leftM (fun (names, (a, l, r, c), (rl, rr, rc), arg_rts) ((msym,_), type_expr) ->
+        let mname = Option.bind (Option.map Sym.symbol_name msym) 
+                      (fun x -> x) in
+        let s = Sym.fresh_fancy mname in
+        let names = match mname with
+          | Some ident -> StringMap.add ident s names 
+          | None -> names
+        in
+        log_name_add s;
         let sa, sr = Sym.fresh (), Sym.fresh () in
         let* ((bt, osize), l', r', c') = of_type_expr loc names sa type_expr in
         let* size = match osize with
@@ -308,9 +323,30 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         in
         let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
         let pointsr = RE.Points {pointer = S s; pointee = sr; size} in
-        return ((a @ [(s,BT.Loc)], l @ [(sa, LS.Base bt)] @ l', r @ [pointsa] @ r', c @ c'),
-                (rl @ [(sr, LS.Base bt)], rr @ [pointsr], rc))
-      ) ((a, l, r, c), (rl, rr, rc)) annot.fa_args
+
+        let arg_rt = 
+          let lrt = 
+            Tools.comps 
+              [RT.mLogicals ((sa, LS.Base bt) :: l');
+               RT.mResources (pointsr :: r');
+               RT.mConstraints c']
+              RT.I
+          in
+          (mname, RT.Computational ((s,Loc), lrt))
+        in
+        let a, l, r, c = 
+          a @ [(s,BT.Loc)], 
+          l @ [(sa, LS.Base bt)] @ l', 
+          r @ [pointsa] @ r', 
+          c @ c'
+        in
+        let rl, rr, rc = 
+          rl @ [(sr, LS.Base bt)], 
+          rr @ [pointsr], 
+          rc 
+        in
+        return (names, (a, l, r, c), (rl, rr, rc), arg_rts @ [arg_rt])
+      ) (names, (a, l, r, c), (rl, rr, rc), []) (List.combine args annot.fa_args)
   in
   let* (ra, rl, rr, rc) =
     let type_expr = annot.fa_returns in
@@ -355,14 +391,14 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
        List.map FT.mConstraint c)
       (FT.I rt)
   in
-  return (names,ft)
+  return (names,ft, arg_rts)
 
 
 
 let make_loop_label_spec_annot (loc : Loc.t) 
                                names
                                structs 
-                               (fargs : (Sym.t option * CF.Ctype.ctype) list) 
+                               (fargs : (string option * RT.t) list) 
                                (args : (Sym.t option * CF.Ctype.ctype) list) attrs = 
   let (annot: loop_annot) = loop_annot attrs in
   let* (names, ltt) = 
@@ -387,25 +423,20 @@ let make_loop_label_spec_annot (loc : Loc.t)
       ) (names, fun t -> t) annot.la_exists
   in
   let* (names, ltt) = 
-    ListM.fold_leftM (fun (names,(ltt : LT.t -> LT.t)) (msym, ct) ->
-        let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
+    ListM.fold_leftM (fun (names,(ltt : LT.t -> LT.t)) ((mname : string option), rt) ->
         match Option.map (fun n -> (n, List.assoc_opt n annot.la_inv_vars)) mname with
         | None
         | Some (_,None) ->
-           let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-           let s = Sym.fresh_fancy mname in
-           let* size = Memory.size_of_ctype loc ct in
-           let* RT.Computational ((la,bt), lrt) = 
-             rt_of_ctype loc structs (Sym.fresh ()) ct in
-           let arg_rt = RT.Resource (Points {pointer=S s; pointee=la; size}, lrt) in
-           let arg = LT.of_lrt arg_rt in
-           let ltt = Tools.comp ltt arg in
+           let (RT.Computational (_, lrt)) = rt in
+           let rt' = update_values_lrt lrt in
+           let ltt = Tools.comp ltt (LT.of_lrt rt')  in
            return (names,ltt)
         | Some (ident, Some type_expr) ->
-           let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-           let s = Sym.fresh_fancy mname in
-           let names = StringMap.add ident s names in
-           log_name_add s;
+           Pp.d 6 (lazy (item ("invariant type " ^ ident) (pp_type_expr type_expr)));
+           let* s = match StringMap.find_opt ident names with
+           | Some sym -> return sym
+           | None -> fail loc (Generic !^("unknown name " ^ ident))
+           in
            let sa = Sym.fresh () in
            let* ((bt, osize), l', r', c') = of_type_expr loc names sa type_expr in
            let* size = match osize with

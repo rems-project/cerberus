@@ -1156,6 +1156,7 @@ module CBF (RT : AT.I_Sig) = struct
            when equal abt sbt ->
          let new_lname = Sym.fresh () in
          let subst = Subst.{before=lname;after=new_lname} in
+         Pp.d 6 (lazy (item "subst" (Subst.pp Sym.pp Sym.pp subst)));
          let ftyp' = T.subst_var subst ftyp in
          let local = add_l new_lname (Base abt) local in
          let local = add_a aname (abt,new_lname) local in

@@ -25,6 +25,9 @@ let mConstraint bound t = Constraint (bound,t)
 let mResource bound t = Resource (bound,t)
 
 
+let mLogicals = List.fold_right mLogical
+let mConstraints = List.fold_right mConstraint
+let mResources = List.fold_right mResource
 
 let rec (@@) (t1: l) (t2: l) : l = 
   match t1 with

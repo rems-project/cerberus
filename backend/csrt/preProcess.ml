@@ -322,21 +322,16 @@ let retype_impls loc impls =
     impls CF.Implementation.implementation_constant_compare
 
 
-let retype_label loc ~namemap ~funinfo ~loop_attributes ~structs ~fsym lsym def = 
+let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
   Pp.d 5 (lazy (!^"pre-processing label" ^^^ Sym.pp lsym));
-  (* let names = 
-   *   match Pmap.lookup fsym namemap with
-   *   | None -> StringMap.empty
-   *   | Some names -> names
-   * in *)
   let* ftyp = match Pmap.lookup fsym funinfo with
     | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
     | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
   in
-  (* let* arg_rts = match Pmap.lookup fsym arg_rts_map with
-   *   | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
-   *   | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
-   * in *)
+  let* (names,farg_rts) = match Pmap.lookup fsym funinfo_extra with
+    | Some (names,arg_rts) -> return (names,arg_rts)
+    | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+  in
   match def with
   | M_Return _ ->
      let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
@@ -363,9 +358,8 @@ let retype_label loc ~namemap ~funinfo ~loop_attributes ~structs ~fsym lsym def 
               fail loc (Generic (!^"need a type annotation here"))
            | rc_attrs ->
               let* (_,lt) = 
-              fail loc (Generic (!^"todo: label"))
-                (* Rc_conversions.make_loop_label_spec_annot 
-                 *   loc names structs rc_attrs  *)
+                Rc_conversions.make_loop_label_spec_annot 
+                  loc names structs farg_rts argtyps rc_attrs 
               in
               let* e = retype_expr loc structs e in
               return (M_Label (lt,args,e,annots))
@@ -383,7 +377,7 @@ let retype_label loc ~namemap ~funinfo ~loop_attributes ~structs ~fsym lsym def 
 
 
 
-let retype_fun_map_decl loc ~namemap ~funinfo ~loop_attributes ~structs
+let retype_fun_map_decl loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
                         fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
   let () = Pp.d 5 (lazy (!^"pre-processing function" ^^^ Sym.pp fsym)) in
   match decl with
@@ -398,7 +392,8 @@ let retype_fun_map_decl loc ~namemap ~funinfo ~loop_attributes ~structs
      let* expr = retype_expr loc structs expr in
      let* labels = 
        PmapM.mapM (
-           retype_label loc ~namemap ~funinfo ~loop_attributes ~structs ~fsym
+           retype_label loc ~funinfo  ~funinfo_extra 
+             ~loop_attributes ~structs ~fsym
          ) labels Sym.compare
      in
      return (M_Proc (loc,bt,args,expr,labels))
@@ -411,11 +406,11 @@ let retype_fun_map_decl loc ~namemap ~funinfo ~loop_attributes ~structs
      let* args = mapM (Conversions.bt_of_core_base_type loc) args in
      return (M_BuiltinDecl (loc,bt,args))
 
-let retype_fun_map loc ~namemap ~funinfo ~loop_attributes ~structs
+let retype_fun_map loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
                    (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
   PmapM.mapM (fun fsym decl ->
-      retype_fun_map_decl loc ~namemap ~funinfo ~loop_attributes 
-        ~structs fsym decl
+      retype_fun_map_decl loc ~funinfo ~funinfo_extra 
+        ~loop_attributes ~structs fsym decl
     ) fun_map Sym.compare
 
 
@@ -461,17 +456,16 @@ let retype_tagDefs
 
 let retype_funinfo struct_decls funinfo =
   PmapM.foldM
-    (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (namemap,funinfo) ->
+    (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
       if is_variadic then fail loc (Variadic_function fsym) else
-        let* (names,ftyp) = match Collect_rc_attrs.collect_rc_attrs attrs with
-        | [] -> 
-           let* (arg_rts,ftyp) = Conversions.make_fun_spec loc struct_decls args ret_ctype in
-           return (StringMap.empty,ftyp)
+        let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
+        | [] ->  
+           Conversions.make_fun_spec loc struct_decls args ret_ctype
         | rc_attrs ->
            Rc_conversions.make_fun_spec_annot loc struct_decls rc_attrs args ret_ctype
         in
-        return (Pmap.add fsym names namemap,
-                Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo)
+        return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
+                Pmap.add fsym (names,arg_rts) funinfo_extra)
     ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare) 
 
 
@@ -479,14 +473,14 @@ let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA
     : ((FT.t, LT.t, (BT.t * RE.size), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
   let loop_attributes = file.mu_loop_attributes in
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
-  let* (namemap,funinfo) = retype_funinfo structs file.mu_funinfo in
+  let* (funinfo,funinfo_extra) = retype_funinfo structs file.mu_funinfo in
   let* stdlib = 
-    retype_fun_map loc ~namemap ~loop_attributes ~structs 
-      ~funinfo file.mu_stdlib 
+    retype_fun_map loc ~loop_attributes ~structs 
+      ~funinfo ~funinfo_extra file.mu_stdlib 
   in
   let* funs = 
-    retype_fun_map loc ~namemap ~loop_attributes ~structs 
-      ~funinfo file.mu_funs 
+    retype_fun_map loc ~loop_attributes ~structs 
+      ~funinfo ~funinfo_extra file.mu_funs 
   in
   let* impls = retype_impls loc file.mu_impl in
   let* globs = mapM (retype_globs loc structs) file.mu_globs in
