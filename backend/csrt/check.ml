@@ -12,6 +12,7 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
+module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 
 open TypeErrors
@@ -1190,6 +1191,17 @@ end
 module CBF_FT = CBF(ReturnTypes)
 module CBF_LT = CBF(False)
 
+
+let check_well_formed loc bound wf_f ftyp = 
+  match wf_f bound ftyp with
+  | Resultat.Ok () -> 
+     return ()
+  | Resultat.Error (Wf.Unbound_name s) -> 
+     fail loc (TE.Unbound_name s)
+  | Resultat.Error (Wf.Unconstrained_lvar s) -> 
+     fail loc (TE.Unconstrained_logical_variable s)
+
+
 (* check_function: type check a (pure) function *)
 let check_function (loc : Loc.t) (global : Global.t) (fsym : Sym.t) 
                    (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
@@ -1231,11 +1243,14 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
            M_Label (LT.subst_vars substs lt, args, body, annots)
       ) label_defs 
   in
-  let labels = 
-    Pmap.fold (fun sym def acc ->
+  let* labels = 
+    let bound = SymSet.of_list (L.filter (fun sym _ -> Some sym) pure_delta) in
+    PmapM.foldM (fun sym def acc ->
         match def with
-        | M_Return lt -> SymMap.add sym lt acc
-        | M_Label (lt, _, _, _) -> SymMap.add sym lt acc
+        | M_Return lt
+        | M_Label (lt, _, _, _) -> 
+           let* () = check_well_formed loc bound LT.well_formed lt in
+           return (SymMap.add sym lt acc)
       ) label_defs SymMap.empty 
   in
   let check_label lsym def () = 
@@ -1267,10 +1282,11 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
 
 
-
                              
 (* TODO: 
   - make call_typ and subtype accept non-A arguments  
   - constrain return type shape, maybe also function type shape
   - fix Ecase "LC (Bool true)"
+  - should check type correctness of function signatures in 
+    well-formedness check, to detect errors in user-written specifications
  *)

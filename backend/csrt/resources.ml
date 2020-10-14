@@ -102,3 +102,12 @@ let subst_non_pointer subst = function
 
 
 
+
+
+let input = function
+  | Uninit u -> IT.vars_in u.pointer
+  | Points p -> IT.vars_in p.pointer
+
+let output = function
+  | Uninit _ -> SymSet.empty
+  | Points p -> SymSet.singleton p.pointee

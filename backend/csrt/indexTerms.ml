@@ -1,6 +1,4 @@
 open Subst
-(* open Uni *)
-(* open Option *)
 open List
 open Pp
 module Loc=Locations

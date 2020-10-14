@@ -141,3 +141,28 @@ let (pp,pp_l) =
   (pp,pp_l)
 
 
+
+let rec closed_l bound lrt = 
+  let open Resultat in
+  match lrt with
+  | Logical ((s,_), lrt) -> 
+     closed_l (SymSet.add s bound) lrt
+  | Resource (re, lrt) -> 
+     begin match SymSet.elements (SymSet.diff (RE.vars_in re) bound) with
+     | s :: _ -> error (Wf.Unbound_name s)
+     | [] -> closed_l bound lrt
+     end
+  | Constraint (lc, lrt) ->
+     begin match SymSet.elements (SymSet.diff (LC.vars_in lc) bound) with
+     | s :: _ -> error (Wf.Unbound_name s)
+     | [] -> closed_l bound lrt
+     end
+  | I -> 
+     return ()
+
+let closed bound (Computational ((s,_), rt)) = 
+  closed_l (SymSet.add s bound) rt
+
+
+let well_formed bound rt = 
+  closed bound rt
