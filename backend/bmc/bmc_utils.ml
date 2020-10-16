@@ -410,6 +410,7 @@ let set_uid file1 =
   funs=    (Pmap.mapi set_uid_fun file1.funs);
   funinfo= (file1.funinfo);
   extern=  file1.extern;
+  loop_attributes0= file1.loop_attributes0;
  })
 
 let get_uid_or_fail annots : string =
