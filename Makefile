@@ -21,7 +21,7 @@ Q = @
 normal: cerberus
 
 .PHONY: all
-all: cerberus cerberus-bmc cerberus-web csrt rustic
+all: cerberus cerberus-bmc cerberus-web csrt #rustic
 
 .PHONY: full-build
 full-build: prelude-src
