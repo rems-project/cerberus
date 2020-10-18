@@ -1483,12 +1483,16 @@ module BmcZ3 = struct
         mk_create_read_only ctype align prefix z3d_initial_value
     | Alloc0 _ ->
         failwith "TODO: dynamic allocation"
-    | Kill (b, pe) ->
+    | Kill (kind, pe) ->
+        let is_dynamic =
+          match kind with
+            | Dynamic -> true
+            | _ -> false in
         get_fresh_aid >>= fun aid ->
         (* TODO: bool for free dynamic ignored *)
         bmc_debug_print 7 "TODO: kill ignored";
         z3_pe pe >>= fun z3d_pe ->
-        return (UnitSort.mk_unit, IKill (aid, z3d_pe,b))
+        return (UnitSort.mk_unit, IKill (aid, z3d_pe, is_dynamic))
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->

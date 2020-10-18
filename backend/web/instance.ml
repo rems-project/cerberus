@@ -318,6 +318,7 @@ let set_uid file =
     funs=    Pmap.mapi set_fun file.funs;
     extern=  file.extern;
     funinfo= file.funinfo;
+    loop_attributes0= file.loop_attributes0;
   }
 
 (* WARN: fresh new ids *)
