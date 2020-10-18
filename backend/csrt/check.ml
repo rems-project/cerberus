@@ -1236,11 +1236,16 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
     ensure_base_type loc ~expect:sbt rbt
   in
   let label_defs = 
-    Pmap.map (function
+    Pmap.mapi (fun lsym def ->
+        match def with
         | M_Return lt -> 
-           M_Return (LT.subst_vars substs lt)
+           let lt = LT.subst_vars substs lt in
+           let () = Pp.d 2 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
+           M_Return lt
         | M_Label (lt, args, body, annots) -> 
-           M_Label (LT.subst_vars substs lt, args, body, annots)
+           let lt = LT.subst_vars substs lt in
+           let () = Pp.d 2 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
+           M_Label (lt, args, body, annots)
       ) label_defs 
   in
   let* labels = 

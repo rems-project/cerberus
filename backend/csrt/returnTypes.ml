@@ -29,12 +29,20 @@ let mLogicals = List.fold_right mLogical
 let mConstraints = List.fold_right mConstraint
 let mResources = List.fold_right mResource
 
-let rec (@@) (t1: l) (t2: l) : l = 
+let rec concat_l (t1: l) (t2: l) : l = 
   match t1 with
   | I -> t2
-  | Logical ((name,bound),t) -> Logical ((name,bound), t@@t2)
-  | Resource (bound,t) -> Resource (bound, t@@t2)
-  | Constraint (bound,t) -> Constraint (bound, t@@t2)
+  | Logical (bound,t) -> Logical (bound, concat_l t t2)
+  | Resource (bound,t) -> Resource (bound, concat_l t t2)
+  | Constraint (bound,t) -> Constraint (bound, concat_l t t2)
+
+let (@@) = concat_l
+
+let concat (t1: t) (t2: l) : t = 
+  match t1 with
+  | Computational (bound, t1') -> 
+     Computational (bound, concat_l t1' t2)
+
 
 
 let subst_var_l ?(re_subst_var=RE.subst_var) 

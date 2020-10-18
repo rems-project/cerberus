@@ -250,7 +250,7 @@ let constraint_holds loc {local;global} c =
 
   let* checked = 
     if not (Z3.Log.open_ logfile) then 
-      fail loc (TypeErrors.Z3_fail ("could not open " ^ logfile))
+      fail loc (TypeErrors.z3_fail (!^("could not open " ^ logfile)))
     else 
       try 
         let* constrs = 
@@ -263,7 +263,7 @@ let constraint_holds loc {local;global} c =
         return result
       with Z3.Error (msg : string) -> 
         Z3.Log.close ();
-        fail loc (TypeErrors.Z3_fail msg)
+        fail loc (TypeErrors.z3_fail !^msg)
   in
   match checked with
   | UNSATISFIABLE -> return (true,ctxt,solver)

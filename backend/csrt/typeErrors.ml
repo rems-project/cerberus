@@ -22,10 +22,10 @@ type type_error =
   | Unbound_impl_const of CF.Implementation.implementation_constant
   | Struct_not_defined of BT.tag
 
-  | Unreachable of PPrint.document
-  | Z3_fail of string
+  | Unreachable of Pp.document
+  | Z3_fail of Pp.document
 
-  | Unsupported of PPrint.document
+  | Unsupported of Pp.document
   | Variadic_function of Sym.t
 
   | Mismatch of { has: LS.t; expect: LS.t; }
@@ -41,20 +41,27 @@ type type_error =
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
-  | Generic of PPrint.document
+  | Generic of Pp.document
 
 type t = type_error
 
 
-let unreachable err = 
+let do_stack_trace err = 
+  let open Pp in
   if !Debug_ocaml.debug_level > 0 then 
     let backtrace = Printexc.get_callstack (!print_level * 10) in
-    Unreachable (err ^^ !^"." ^^ hardline ^^ hardline ^^ !^(Printexc.raw_backtrace_to_string backtrace))
+    (err ^^ !^"." ^^ hardline ^^ hardline ^^ !^(Printexc.raw_backtrace_to_string backtrace))
   else 
-    Unreachable err
+    err
+
+let unreachable err = 
+  Unreachable (do_stack_trace err)
+
+let z3_fail err = 
+  Z3_fail (do_stack_trace err)
 
 
-let withloc loc p : PPrint.document = 
+let withloc loc p : Pp.document = 
   flow (break 1) [Loc.pp loc;p]
 
 let pp (loc : Loc.t) (err : t) = 
@@ -89,7 +96,7 @@ let pp (loc : Loc.t) (err : t) =
     | Unreachable unreachable ->
        !^"Internal error, should be unreachable" ^^ colon ^^^ unreachable
     | Z3_fail err ->
-       !^("Z3 failure: ^ err")
+       !^"Z3 failure:" ^^^ err
     | Unsupported unsupported ->
        !^"Unsupported feature" ^^ colon ^^^ unsupported
     | Variadic_function fn ->

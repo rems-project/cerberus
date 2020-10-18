@@ -31,6 +31,7 @@ let record_funinfo global funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
       if is_variadic then fail loc (Variadic_function fsym) else
+        let () = Pp.d 2 (lazy (item "recording function type" (FT.pp ftyp))) in
         let* () = check_well_formed loc SymSet.empty FT.well_formed ftyp in
         let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
