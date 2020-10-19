@@ -1290,7 +1290,5 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
   - make call_typ and subtype accept non-A arguments  
   - constrain return type shape, maybe also function type shape
   - fix Ecase "LC (Bool true)"
-  - should check type correctness of function signatures in 
-    well-formedness check, to detect errors in user-written specifications
   - go over files and look for `fresh ()`: give good names
  *)

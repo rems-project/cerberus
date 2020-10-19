@@ -262,7 +262,7 @@ let constraint_holds loc {local;global} c =
         return (Z3.Solver.check solver [])
       )
   in
-  let () = Pp.p !^(Z3.Solver.to_string solver) in
+  (* let () = Pp.p !^(Z3.Solver.to_string solver) in *)
   match checked with
   | UNSATISFIABLE -> return (true,ctxt,solver)
   | SATISFIABLE -> return (false,ctxt,solver)
@@ -296,24 +296,23 @@ let model loc {local;global} solver : (TypeErrors.model option) m =
      let z3_model = Z3.Model.get_const_decls model in
      let* consts =
        ListM.filter_mapM (fun decl -> 
-           let n = Z3.Symbol.get_int (Z3.FuncDecl.get_name decl) in
-           let ov = Z3.Model.get_const_interp model decl in
-           match matching_symbol syms n, ov with
-           | Some sym, Some v -> 
-              return (Some (sym, Z3.Expr.to_string v))
-           | None, _ -> 
-              let err = 
-                "reconstructing counter model: " ^
-                  "missing symbol for " ^ string_of_int n
-              in
-              fail loc (Unreachable !^err)
-           | Some s, None ->
-              let err = 
-                "reconstructing counter model: " ^
-                  "missing value for " ^ Sym.pp_string s
-              in
-              fail loc (Unreachable !^err)
-
+           (* this ignores constants that can't be mapped back to
+              symbols *)
+           let name = Z3.FuncDecl.get_name decl in
+           if not (Z3.Symbol.is_int_symbol name) then return None else 
+             let osym = matching_symbol syms (Z3.Symbol.get_int name) in
+             match osym with
+             | None -> return None
+             | Some sym -> 
+                let ov = Z3.Model.get_const_interp model decl in
+                match ov with
+                | Some v -> return (Some (sym, Z3.Expr.to_string v))
+                | None ->
+                   let err = 
+                     "reconstructing counter model: " ^
+                       "missing value for " ^ Sym.pp_string sym
+                   in
+                   fail loc (Unreachable !^err)
          ) z3_model
      in
      return (Some consts)
@@ -321,7 +320,10 @@ let model loc {local;global} solver : (TypeErrors.model option) m =
 let is_reachable_and_model loc {local;global} =
   let* (unreachable,_, solver) = 
     constraint_holds loc {local;global} (LC (Bool false)) in
-  let* model = model loc {local;global} solver in
+  let* model = 
+    handle_z3_problems loc
+      (fun () -> model loc {local;global} solver) 
+  in
   return (not unreachable, model)
 
 
