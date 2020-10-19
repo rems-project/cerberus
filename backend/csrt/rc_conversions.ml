@@ -143,10 +143,10 @@ let cannot_process loc pp_f to_pp =
 
 let bytes_of_integer_type_expr loc te =
   match te with
-  | Ty_Coq (Coq_ident "u32") -> return (Num.of_int 4)
-  | Ty_params ("u32", []) -> return (Num.of_int 4)
-  | Ty_Coq (Coq_ident "i32") -> return (Num.of_int 4)
-  | Ty_params ("i32", []) -> return (Num.of_int 4)
+  | Ty_Coq (Coq_ident "u32") -> return (Z.of_int 4)
+  | Ty_params ("u32", []) -> return (Z.of_int 4)
+  | Ty_Coq (Coq_ident "i32") -> return (Z.of_int 4)
+  | Ty_params ("i32", []) -> return (Z.of_int 4)
   | _ -> cannot_process loc pp_type_expr te
 
 let bits_of_integer_type_expr loc te = 
@@ -183,7 +183,7 @@ let rec of_coq_expr_typ loc names coq_expr name =
      | "Z" -> 
         return (BT.Integer, None, RT.I)
      | "nat" -> 
-        let c = LC.LC (IT.GE (S name, Num Num.zero)) in
+        let c = LC.LC (IT.GE (S name, Num Z.zero)) in
         return (BT.Integer, None, RT.Constraint (c, I))
      | "loc" -> 
         return (BT.Loc, None, RT.I)
@@ -195,7 +195,7 @@ let rec of_coq_expr_typ loc names coq_expr name =
      | [Quot_plain "Z"] -> 
         return (BT.Integer, None, RT.I)
      | [Quot_plain "nat"] -> 
-        let c = LC.LC (IT.GE (S name, Num Num.zero)) in
+        let c = LC.LC (IT.GE (S name, Num Z.zero)) in
         return (BT.Integer, None, RT.Constraint (c, I))
      | _ -> 
         cannot_process loc pp_coq_expr coq_expr
@@ -226,7 +226,7 @@ and of_constr loc names constr : RT.l m =
      let* name = get_name loc names ident in
      let impl = CF.Ocaml_implementation.get () in
      let* psize = match impl.sizeof_pointer with
-       | Some n -> return (Some (Num.of_int n))
+       | Some n -> return (Some (Z.of_int n))
        | None -> fail loc (Generic !^"sizeof_pointer returned None")
      in
      begin match ptr_kind, is_uninit_type_expr type_expr with
@@ -269,7 +269,7 @@ and of_type_expr loc names te : tb m =
      (* from impl_mem *)
      let impl = CF.Ocaml_implementation.get () in
      let* psize = match impl.sizeof_pointer with
-       | Some n -> return (Some (Num.of_int n))
+       | Some n -> return (Some (Z.of_int n))
        | None -> fail loc (Generic !^"sizeof_pointer returned None")
      in
      begin match ptr_kind, is_uninit_type_expr type_expr with
@@ -304,7 +304,6 @@ and of_type_expr loc names te : tb m =
      let* lrt' = of_constr loc names constr in
      return (B ((bnew, pointee, bt, osize), lrt @@ lrt'))
   | _, Ty_params ("int",[Ty_arg_expr arg]) ->
-     Pp.p (item "HERE" (pp_type_expr te));
      let* size = bytes_of_integer_type_expr loc arg in
      let* sign = sign_of_integer_type_expr loc arg in
      let* bits = bits_of_integer_type_expr loc arg in
@@ -325,7 +324,8 @@ and of_type_expr loc names te : tb m =
         return (B ((Old, s, BT.Integer, Some size), lrt))
      | Some (Coq_all coq_term) -> 
         let* it = of_coq_term loc names coq_term in
-        let lrt = Constraint (LC.LC (constr name), Constraint (LC.LC it, I)) in
+        let lc = LC.LC (IT.EQ (it, S name)) in
+        let lrt = Constraint (LC.LC (constr name), Constraint (lc, I)) in
         return (B ((New, name, BT.Integer, Some size), lrt))
      end
   | None, Ty_params ("void", []) ->
@@ -338,8 +338,8 @@ and of_type_expr loc names te : tb m =
      cannot_process loc pp_type_expr te'
 
 
-let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym))
-(* let log_name_add sym = () *)
+(* let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym)) *)
+let log_name_add sym = ()
 
 let (@@) = RT.(@@)
 

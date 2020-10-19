@@ -33,7 +33,7 @@ expr:
   | MIN_I64                 { IndexTerms.max_i64 }
   | MAX_I32                 { IndexTerms.max_i32 }
   | MAX_I64                 { IndexTerms.max_i64 }
-  | i = INT                 { IndexTerms.Num (Num.of_int i) }
+  | i = INT                 { IndexTerms.Num (Z.of_int i) }
   | id = ID                 { IndexTerms.S id }
   | LPAREN expr RPAREN      { $2 }
   | expr LT expr            { IndexTerms.LT ($1,$3) }

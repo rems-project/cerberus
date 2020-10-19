@@ -8,7 +8,7 @@ module SymSet = Set.Make(Sym)
 
 
 type 'id term =
-  | Num of Num.t
+  | Num of Z.t
   | Bool of bool
 
   | Add of 'id term * 'id term
@@ -54,7 +54,7 @@ type 'id term =
 type parse_ast = string term
 type t = Sym.t term
 
-let int x = Num (Num.of_int x)
+let int x = Num (Z.of_int x)
 
 let in_range between min max = 
   And [LE (min, between); LE (between, max)]
@@ -63,7 +63,7 @@ let in_range between min max =
 
 let rec equal it it' = 
   match it, it' with
-  | Num n, Num n' -> Num.equal n n'
+  | Num n, Num n' -> Z.equal n n'
   | Bool b, Bool b' -> b = b'
 
   | Add (t1,t2), Add (t1',t2')
@@ -133,7 +133,7 @@ let pp it : PPrint.document =
     let mparens pped = if atomic then parens pped else pped in
     let aux = aux true in
     match it with
-    | Num i -> Num.pp i
+    | Num i -> Z.pp i
     | Bool true -> !^"true"
     | Bool false -> !^"false"
 
@@ -450,12 +450,14 @@ let (%<=) t1 t2 = LE (t1, t2)
 let (%>=) t1 t2 = GE (t1, t2)
 
 
-let min_u32 = Num Num.zero
-let min_u62 = Num Num.zero
-let max_u32 = (int 2 %^ int 32) %- int 1
-let max_u64 = (int 2 %^ int 64) %- int 1
+open Z
 
-let min_i32 = int 1 %- (int 2 %^ (int 32 %- int 1))
-let min_i64 = int 1 %- (int 2 %^ (int 64 %- int 1))
-let max_i32 = (int 2 %^ (int 32 %- int 1)) %- int 1
-let max_i64 = (int 2 %^ (int 64 %- int 1)) %- int 1
+let min_u32 = Num zero
+let min_u62 = Num zero
+let max_u32 = Num (sub (pow_int (of_int 2) 32) (of_int 1))
+let max_u64 = Num (sub (pow_int (of_int 2) 64) (of_int 1))
+
+let min_i32 = Num (sub (of_int 1) (pow_int (of_int 2) (32 - 1)))
+let min_i64 = Num (sub (of_int 1) (pow_int (of_int 2) (64 - 1)))
+let max_i32 = Num (sub (pow_int (of_int 2) (32 - 1)) (of_int 1))
+let max_i64 = Num (sub (pow_int (of_int 2) (64 - 1)) (of_int 1))

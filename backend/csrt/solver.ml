@@ -243,7 +243,8 @@ let constraint_holds loc {local;global} c =
   let* () =
     if !Debug_ocaml.debug_level < 1 then return () else
       ListM.iterM (fun (LC.LC lc) -> 
-          let* _ = IndexTermTyping.infer_index_term (loc: Loc.t) {local;global} lc in
+          let* _ = IndexTermTyping.check_index_term (loc: Loc.t) {local;global} 
+                     (LS.Base BT.Bool) lc in
           return ()
         ) lcs
   in

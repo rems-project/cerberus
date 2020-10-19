@@ -1155,7 +1155,8 @@ module CBF (RT : AT.I_Sig) = struct
       match args, ftyp with
       | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
            when equal abt sbt ->
-         let new_lname = Sym.fresh () in
+         let mname = Option.map (fun s -> s^"_l") (Sym.symbol_name aname) in
+         let new_lname = Sym.fresh_fancy (mname) in
          let subst = Subst.{before=lname;after=new_lname} in
          Pp.d 6 (lazy (item "subst" (Subst.pp Sym.pp Sym.pp subst)));
          let ftyp' = T.subst_var subst ftyp in

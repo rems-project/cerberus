@@ -41,7 +41,7 @@ let for_fp (loc: Loc.t) {local;global} (pointer_it, size)
     : ((Sym.t * RE.t) option) m = 
   let* points = 
     Local.filter_rM (fun name t ->
-        if Num.equal (RE.size t) size then 
+        if Z.equal (RE.size t) size then 
           let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer t) in
           if holds then return (Some (name,t)) else return None
         else 

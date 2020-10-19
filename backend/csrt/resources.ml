@@ -7,7 +7,7 @@ module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 open Option
 
-type size = Num.t
+type size = Z.t
 
 type uninit = {pointer: IT.t; size: size}
 type points = {pointer: IT.t; pointee: Sym.t; size: size}
@@ -20,10 +20,10 @@ type resource = t
 
 let pp = function
   | Uninit {pointer; size} ->
-     !^"Uninit" ^^^ parens (IT.pp pointer ^^ comma ^^^ Num.pp size)
+     !^"Uninit" ^^^ parens (IT.pp pointer ^^ comma ^^^ Z.pp size)
   | Points {pointer; pointee; size} ->
      !^"Points" ^^^ 
-       parens (IT.pp pointer ^^ comma ^^^ Sym.pp pointee ^^ comma ^^^ Num.pp size)
+       parens (IT.pp pointer ^^ comma ^^^ Sym.pp pointee ^^ comma ^^^ Z.pp size)
 
 
 
@@ -44,11 +44,11 @@ let equal t1 t2 =
   match t1, t2 with
   | Uninit u1, Uninit u2 ->
      IT.equal u1.pointer u2.pointer &&
-     Num.equal u1.size u2.size
+     Z.equal u1.size u2.size
   | Points p1, Points p2 ->
      IT.equal p1.pointer p2.pointer &&
      Sym.equal p1.pointee p2.pointee &&
-     Num.equal p1.size p2.size
+     Z.equal p1.size p2.size
   | _, _ -> false
 
 
@@ -82,9 +82,9 @@ let vars_in = function
 
 let unify_non_pointer r1 r2 res = 
   match r1, r2 with
-  | Uninit u, Uninit u' when Num.equal u.size u'.size ->
+  | Uninit u, Uninit u' when Z.equal u.size u'.size ->
      Option.return res
-  | Points p, Points p' when Num.equal p.size p'.size ->
+  | Points p, Points p' when Z.equal p.size p'.size ->
      if Sym.equal p.pointee p'.pointee then Some res else
        let* uni = SymMap.find_opt p.pointee res in
        begin match uni.Uni.resolved with
