@@ -13,6 +13,13 @@ type access =
   | Store
   | Kill
 
+type model = (Sym.t * string) list
+
+let pp_model model = 
+  Pp.flow_map (comma ^^ break 1) (fun (sym,s) -> 
+      item (Sym.pp_string sym) !^s
+    ) model
+
 type type_error = 
   | Missing_ownership of access * BT.member option
   | Uninitialised of BT.member option
@@ -37,7 +44,8 @@ type type_error =
   | Resource_already_used of Resources.t * Loc.t list
   | Unused_resource of {resource: Resources.t; is_merge: bool}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * 
+                             model option (* * string *)
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -125,9 +133,14 @@ let pp (loc : Loc.t) (err : t) =
     | Unused_resource {resource;_} ->
        !^"Left-over unused resource" ^^^ Resources.pp resource
 
-    | Undefined_behaviour undef ->
+    | Undefined_behaviour (undef, omodel) -> 
        !^"Undefined behaviour" ^^ colon ^^^ 
-         !^(CF.Undefined.pretty_string_of_undefined_behaviour undef)
+         !^(CF.Undefined.pretty_string_of_undefined_behaviour undef) ^^
+           begin match omodel with
+           | Some model -> hardline ^^ item "model" (pp_model model)
+           | None -> break 1 ^^ parens !^"no model"
+           end
+           (* item "unsatisfied core" !^unsat_core *)
     | Unspecified _ctype ->
        !^"Unspecified value"
     | StaticError err ->

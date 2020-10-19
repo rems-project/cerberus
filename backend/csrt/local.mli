@@ -74,9 +74,4 @@ val filter_rM : (Sym.t -> RE.t -> ('a option) m) -> t -> ('a list) m
 
 val (++) : t -> t -> t
 
-
-
-
-
-
-
+val all_names : t -> Sym.t list

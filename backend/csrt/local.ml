@@ -272,4 +272,4 @@ let filter_rM p (local : t) =
 
 let (++) = concat
 
-
+let all_names = filter (fun sym _ -> Some sym)

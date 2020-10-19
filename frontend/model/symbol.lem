@@ -188,3 +188,4 @@ let from_same_translation_unit sym1 sym2 =
 
 
 let symbol_name (Symbol _ _ mname) = mname
+let symbol_num (Symbol _ num _) = num

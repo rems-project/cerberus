@@ -660,8 +660,8 @@ let merge_return_paths
 
 
 let false_if_unreachable (loc : Loc.t) {local; global} : (unit fallible) m =
-  let* is_unreachable = Solver.is_unreachable loc {local; global} in
-  if is_unreachable then return False else return (Normal ())  
+  let* is_reachable = Solver.is_reachable loc {local; global} in
+  if is_reachable then return (Normal ()) else return False 
 
 
 (*** pure expression inference ************************************************)
@@ -696,7 +696,12 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
     | M_PEconstrained _ ->
        fail loc (Unsupported !^"todo: PEconstrained")
     | M_PEundef (loc, undef) ->
-       fail loc (Undefined_behaviour undef)
+       let* (reachable, omodel) = 
+         Solver.is_reachable_and_model loc {local; global} 
+       in
+       if not reachable 
+       then (Pp.warn !^"unexpected unreachable Undefined"; return False)
+       else fail loc (Undefined_behaviour (undef, omodel))
     | M_PEerror (err, asym) ->
        let* arg = arg_of_asym loc local asym in
        fail arg.loc (StaticError err)
@@ -1249,7 +1254,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
       ) label_defs 
   in
   let* labels = 
-    let bound = SymSet.of_list (L.filter (fun sym _ -> Some sym) pure_delta) in
+    let bound = SymSet.of_list (L.all_names pure_delta) in
     PmapM.foldM (fun sym def acc ->
         match def with
         | M_Return lt

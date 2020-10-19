@@ -6,7 +6,7 @@ open TypeErrors
 open Environment
 module IT=IndexTerms
 module LC=LogicalConstraints
-
+module TE=TypeErrors
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
@@ -77,7 +77,6 @@ let ls_to_sort loc {local;global} ctxt (LS.Base bt) =
 let rec of_index_term loc {local;global} ctxt it = 
   let open Pp in
   let open IndexTerms in
-
   let nth_to_fundecl bt i = 
     let* sort = ls_to_sort loc {local;global} ctxt (Base bt) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
@@ -85,7 +84,6 @@ let rec of_index_term loc {local;global} ctxt it =
     | Some fundecl -> return fundecl
     | None -> fail loc (unreachable !^"nth_to_fundecl")
   in
-
   let member_to_fundecl tag member = 
     let* decl = Global.get_struct_decl loc global.struct_decls tag in
     let* sort = ls_to_sort loc {local;global} ctxt (Base (Struct tag)) in
@@ -94,7 +92,6 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_funs = combine member_names member_fun_decls in
     Tools.assoc_err loc member member_funs (unreachable !^"member_to_fundecl")
   in
-
   match it with
   | Num n -> 
      let nstr = Nat_big_num.to_string n in
@@ -215,6 +212,10 @@ let rec of_index_term loc {local;global} ctxt it =
          ) members
      in
      return (Z3.Expr.mk_app ctxt constructor member_vals)
+  | Nth (bt,i,t) ->
+     let* a = of_index_term loc {local;global} ctxt t in
+     let* fundecl = nth_to_fundecl bt i in
+     return (Z3.Expr.mk_app ctxt fundecl [a])
   | Nil _ ->
      fail loc (Unsupported !^"Z3: Nil")
   | Cons _ ->
@@ -225,10 +226,6 @@ let rec of_index_term loc {local;global} ctxt it =
      fail loc (Unsupported !^"Z3: Head")
   | Tail t ->
      fail loc (Unsupported !^"Z3: Tail")
-  | Nth (bt,i,t) ->
-     let* a = of_index_term loc {local;global} ctxt t in
-     let* fundecl = nth_to_fundecl bt i in
-     return (Z3.Expr.mk_app ctxt fundecl [a])
   | List (ts,bt) ->
      fail loc (Unsupported !^"Z3: List")
 
@@ -236,35 +233,40 @@ let rec of_index_term loc {local;global} ctxt it =
 
 let negate (LogicalConstraints.LC c) = LogicalConstraints.LC (Not c)
 
+let handle_z3_problems loc todo =
+  if not (Z3.Log.open_ logfile) then 
+    fail loc (TypeErrors.z3_fail (!^("could not open " ^ logfile)))
+  else 
+    try let* result = todo () in Z3.Log.close (); return result with
+    | Z3.Error (msg : string) -> 
+       Z3.Log.close ();
+       fail loc (TypeErrors.z3_fail !^msg)
+
+
+let debug_typecheck_lcs loc lcs {local;global} =
+  if !Debug_ocaml.debug_level < 1 then return () else
+    ListM.iterM (fun (LC.LC lc) -> 
+        let* _ = IndexTermTyping.check_index_term (loc: Loc.t) {local;global} 
+                   (LS.Base BT.Bool) lc in
+        return ()
+      ) lcs
+
 let constraint_holds loc {local;global} c = 
   let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: Local.all_constraints local) in
-  let* () =
-    if !Debug_ocaml.debug_level < 1 then return () else
-      ListM.iterM (fun (LC.LC lc) -> 
-          let* _ = IndexTermTyping.check_index_term (loc: Loc.t) {local;global} 
-                     (LS.Base BT.Bool) lc in
-          return ()
-        ) lcs
-  in
-
+  let* () = debug_typecheck_lcs loc lcs {local;global} in
   let* checked = 
-    if not (Z3.Log.open_ logfile) then 
-      fail loc (TypeErrors.z3_fail (!^("could not open " ^ logfile)))
-    else 
-      try 
+    handle_z3_problems loc 
+      (fun () ->
         let* constrs = 
           ListM.mapM (fun (LC.LC it) -> 
               of_index_term loc {local;global} ctxt it
-            ) lcs in
+            ) lcs 
+        in
         Z3.Solver.add solver constrs;
-        let result = Z3.Solver.check solver [] in
-        Z3.Log.close ();
-        return result
-      with Z3.Error (msg : string) -> 
-        Z3.Log.close ();
-        fail loc (TypeErrors.z3_fail !^msg)
+        return (Z3.Solver.check solver [])
+      )
   in
   match checked with
   | UNSATISFIABLE -> return (true,ctxt,solver)
@@ -272,9 +274,60 @@ let constraint_holds loc {local;global} c =
   | UNKNOWN -> return (false,ctxt,solver)
 
 
-let is_unreachable loc {local;global} =
-  let* (unreachable,_,_) = constraint_holds loc {local;global} (LC (Bool false)) in
-  return unreachable
+let is_reachable loc {local;global} =
+  let* (unreachable,_,_) = 
+    constraint_holds loc {local;global} (LC (Bool false)) in
+  return (not unreachable)
+
+
+let rec matching_symbol syms num = 
+  match syms with
+  | sym :: syms when Sym.symbol_num sym = num -> Some sym
+  | sym :: syms -> matching_symbol syms num
+  | [] -> None
+
+
+
+(* maybe should fail if symbol mapping is missing? *)
+let model loc {local;global} solver : (TE.model option) m = 
+  (* let unsat_core = 
+   *   String.concat ", "
+   *     (map Z3.Expr.to_string (Z3.Solver.get_unsat_core solver))
+   * in *)
+  match Z3.Solver.get_model solver with
+  | None -> return None
+  | Some model ->
+     let syms = Local.all_names local in
+     let z3_model = Z3.Model.get_const_decls model in
+     let* consts =
+       ListM.filter_mapM (fun decl -> 
+           let n = Z3.Symbol.get_int (Z3.FuncDecl.get_name decl) in
+           let ov = Z3.Model.get_const_interp model decl in
+           match matching_symbol syms n, ov with
+           | Some sym, Some v -> 
+              return (Some (sym, Z3.Expr.to_string v))
+           | None, _ -> 
+              let err = 
+                "reconstructing counter model: " ^
+                  "missing symbol for " ^ string_of_int n
+              in
+              fail loc (Unreachable !^err)
+           | Some s, None ->
+              let err = 
+                "reconstructing counter model: " ^
+                  "missing value for " ^ Sym.pp_string s
+              in
+              fail loc (Unreachable !^err)
+
+         ) z3_model
+     in
+     return (Some consts)
+
+let is_reachable_and_model loc {local;global} =
+  let* (unreachable,_, solver) = 
+    constraint_holds loc {local;global} (LC (Bool false)) in
+  let* model = model loc {local;global} solver in
+  return (not unreachable, model)
 
 
 let equal loc {local;global} it1 it2 =
