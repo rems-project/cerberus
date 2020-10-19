@@ -1186,7 +1186,10 @@ module CBF (RT : AT.I_Sig) = struct
       | args, (T.Resource (re, ftyp)) ->
          check acc_substs (add_ur re local) pure_local args ftyp
       | args, (T.Constraint (lc, ftyp)) ->
-         check acc_substs (add_uc lc local) pure_local args ftyp
+         let cname = Sym.fresh () in
+         let local = add_c cname lc local in
+         let pure_local = add_c cname lc pure_local in
+         check acc_substs local pure_local args ftyp
       | [], (T.I rt) ->
          return (rt, local, pure_local, acc_substs)
     in
