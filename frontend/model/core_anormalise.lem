@@ -150,7 +150,7 @@ val letbind_pexpr :
   (asym -> 'a) -> 
   'a
 
-let letbind_pexpr outer_annots letbinder pexpr ctxt  = 
+let letbind_pexpr outer_annots letbinder pexpr ctxt = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
   let asym = a_pack (only_loc annots) bty sym in

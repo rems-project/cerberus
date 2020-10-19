@@ -277,7 +277,7 @@ type mu_tag_definition 'DSTRUCT_DEF 'DUNION_DEF =
 type mu_tag_definitions 'DSTRUCT_DEF 'DUNION_DEF = 
   map Symbol.sym (mu_tag_definition 'DSTRUCT_DEF 'DUNION_DEF)
 
- type mu_funinfo_type 'DCTY = 'DCTY * list (maybe symbol * 'DCTY)
+type mu_funinfo_type 'DCTY = 'DCTY * list (maybe symbol * 'DCTY)
 
 type mu_funinfo 'DFTY = 
   M_funinfo of (Loc.t * Annot.attributes * 'DFTY * bool * bool)
@@ -298,6 +298,5 @@ type mu_file 'DFTY 'DLTY 'DCTY 'DBTY 'DSTRUCT_DEF 'DUNION_DEF 'bty = <|
   mu_funinfo : mu_funinfos 'DFTY;
   mu_loop_attributes : Annot.loop_attributes;
 |>
-
 
 

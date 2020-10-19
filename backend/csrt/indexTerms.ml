@@ -453,11 +453,11 @@ let (%>=) t1 t2 = GE (t1, t2)
 open Z
 
 let min_u32 = Num zero
-let min_u62 = Num zero
 let max_u32 = Num (sub (pow_int (of_int 2) 32) (of_int 1))
+let min_u64 = Num zero
 let max_u64 = Num (sub (pow_int (of_int 2) 64) (of_int 1))
 
 let min_i32 = Num (sub (of_int 1) (pow_int (of_int 2) (32 - 1)))
-let min_i64 = Num (sub (of_int 1) (pow_int (of_int 2) (64 - 1)))
 let max_i32 = Num (sub (pow_int (of_int 2) (32 - 1)) (of_int 1))
+let min_i64 = Num (sub (of_int 1) (pow_int (of_int 2) (64 - 1)))
 let max_i64 = Num (sub (pow_int (of_int 2) (64 - 1)) (of_int 1))

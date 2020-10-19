@@ -20,10 +20,10 @@ type resource = t
 
 let pp = function
   | Uninit {pointer; size} ->
-     !^"Uninit" ^^^ parens (IT.pp pointer ^^ comma ^^^ Z.pp size)
+     !^"Uninit" ^^ parens (IT.pp pointer ^^ comma ^^ Z.pp size)
   | Points {pointer; pointee; size} ->
-     !^"Points" ^^^ 
-       parens (IT.pp pointer ^^ comma ^^^ Sym.pp pointee ^^ comma ^^^ Z.pp size)
+     !^"Points" ^^ 
+       parens (IT.pp pointer ^^ comma ^^ Sym.pp pointee ^^ comma ^^ Z.pp size)
 
 
 

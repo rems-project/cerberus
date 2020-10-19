@@ -1,0 +1,124 @@
+open import Pervasives Ctype
+open import Assert_extra
+
+import Symbol
+
+open import Core
+open import Mucore Annot
+     import Annot Core_typing Core_typing_aux 
+
+
+
+let rec ib_expr 
+          (label : symbol * list symbol * mu_expr 'DCTY 'DBTY 'bty)
+          (e : mu_expr 'DCTY 'DBTY 'bty) 
+           : mu_expr 'DCTY 'DBTY 'bty =
+  let (M_Expr oannots e_) = e in
+  let wrap e_ = M_Expr oannots e_ in
+  let aux = ib_expr label in
+  match e_ with
+  | M_Epure _ -> wrap e_
+  | M_Ememop _ -> wrap e_
+  | M_Eaction _ -> wrap e_
+  | M_Ecase asym pats_es ->
+     let pats_es = 
+       List.map (fun (pat,e) -> 
+           (pat, aux e)
+         ) pats_es
+     in
+     wrap (M_Ecase asym pats_es)
+ | M_Elet sym_or_pat pe e ->
+    wrap (M_Elet sym_or_pat pe (aux e))
+ | M_Eif asym e1 e2 ->
+    let e1 = aux e1 in
+    let e2 = aux e2 in
+    wrap (M_Eif asym e1 e2)
+ | M_Eskip -> wrap e_
+ | M_Eccall _ _ _ -> wrap e_
+ | M_Eproc _ _ -> wrap e_
+ | M_Ewseq pat e1 e2 -> 
+    let e1 = aux e1 in
+    let e2 = aux e2 in
+    wrap (M_Ewseq pat e1 e2)
+ | M_Esseq pat e1 e2 ->
+    let e1 = aux e1 in
+    let e2 = aux e2 in
+    wrap (M_Esseq pat e1 e2)
+ | M_Ebound n e ->
+    let e = aux e in
+    wrap (M_Ebound n e)
+ | M_End es ->
+    let es = map aux es in
+    wrap (M_End es)
+ | M_Erun l args -> 
+    let (label_sym, label_arg_syms, label_body) = label in
+    if not (Symbol.symbolEqual label_sym l) then e
+    else if List.length label_arg_syms <> List.length args then
+      failwith "M_Erun supplied wrong number of arguments"
+    else
+      let arguments = List.zip label_arg_syms args in
+      let (M_Expr annots e_) = 
+        List.foldr (fun (spec_arg, A annots bty app_arg) body ->
+            let pe = M_Pexpr annots bty (M_PEsym app_arg) in
+            M_Expr [] (M_Elet (M_Symbol spec_arg) pe body)
+          ) label_body arguments
+      in
+      (* this combines annotations *)
+      M_Expr (annots ++ oannots) e_
+  end
+    
+
+
+
+let ib_fun_map_decl 
+      (name: symbol)
+      (d : mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty) 
+    : mu_fun_map_decl 'DLTY 'DCTY 'DBTY 'bty =
+  better_error_messages (show name)
+    (match d with
+     | M_Proc loc rbt arg_bts body label_defs -> 
+        let (body, label_defs) = 
+          let aux label def 
+                ((body : mu_expr 'DCTY 'DBTY 'bty),
+                 (acc_label_defs : mu_label_defs 'DLTY 'DCTY 'DBTY 'bty))
+            =
+            match def with
+            | M_Return _ -> 
+               (body, Map.insert label def acc_label_defs)
+            | M_Label lt args lbody annot ->
+               if not (is_loop_break annot) then
+                 (body, Map.insert label def acc_label_defs)
+               else
+                 let l = (label, map fst args, lbody) in
+                 (ib_expr l body, acc_label_defs)
+            end 
+          in
+          Map_extra.fold aux label_defs (body, Map.empty)
+        in
+        M_Proc loc rbt arg_bts body label_defs
+     | _ -> d
+     end)
+
+let ib_fun_map (fmap : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty) 
+    : mu_fun_map 'DLTY 'DCTY 'DBTY 'bty = 
+  Map.mapi ib_fun_map_decl fmap
+  
+
+let ib_globs (g : mu_globs 'DCTY 'DBTY 'bty) 
+    : mu_globs 'DCTY 'DBTY 'bty = 
+  match g with
+  | M_GlobalDef bt e -> M_GlobalDef bt e
+  | M_GlobalDecl bt -> M_GlobalDecl bt 
+  end
+
+let ib_globs_list (gs : mu_globs_list 'DCTY 'DBTY 'bty)
+    : mu_globs_list 'DCTY 'DBTY 'bty = 
+  map (fun (sym,g) -> (sym, ib_globs g)) gs
+
+
+let ib_file file =
+  <| file with mu_stdlib = ib_fun_map file.mu_stdlib
+             ; mu_globs = ib_globs_list file.mu_globs
+             ; mu_funs = ib_fun_map file.mu_funs
+  |>
+

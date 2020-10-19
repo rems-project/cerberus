@@ -158,11 +158,16 @@ let rec explode annots =
   end
 
 
-(* adapting code from get_loc *)
+
+
 val     is_return: list annot -> bool
 let rec is_return annots =
-  match annots with
-  | Alabel LAreturn :: _ -> true
-  | _ :: annots -> is_return annots
-  | [] -> false
+  get_label_annot annots = Just LAreturn
+
+val     is_loop_break: list annot -> bool
+let rec is_loop_break annots =
+  match get_label_annot annots with
+  | Just (LAloop_break _) -> true
+  | _ -> false
   end
+

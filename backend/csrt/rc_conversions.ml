@@ -310,8 +310,8 @@ and of_type_expr loc names te : tb m =
      let* constr = 
        let open IT in
        match bits, sign with
-       | 32, `Signed -> return (fun s -> (in_range (S s) (int 0) max_u32))
-       | 32, `Unsigned -> return (fun s -> (in_range (S s) min_i32 max_i32))
+       | 32, `Signed -> return (fun s -> (in_range (S s) min_i32 max_i32))
+       | 32, `Unsigned -> return (fun s -> (in_range (S s) min_u32 max_u32))
        | _ -> cannot_process loc pp_type_expr te
      in
      begin match mrefinement with
