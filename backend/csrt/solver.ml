@@ -4,9 +4,7 @@ open List
 open Pp
 open TypeErrors
 open Environment
-module IT=IndexTerms
-module LC=LogicalConstraints
-module TE=TypeErrors
+open LogicalConstraints
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
@@ -235,21 +233,17 @@ let negate (LogicalConstraints.LC c) = LogicalConstraints.LC (Not c)
 
 let handle_z3_problems loc todo =
   if not (Z3.Log.open_ logfile) then 
-    fail loc (TypeErrors.z3_fail (!^("could not open " ^ logfile)))
+    fail loc (z3_fail (!^("could not open " ^ logfile)))
   else 
     try let* result = todo () in Z3.Log.close (); return result with
     | Z3.Error (msg : string) -> 
        Z3.Log.close ();
-       fail loc (TypeErrors.z3_fail !^msg)
+       fail loc (z3_fail !^msg)
 
 
 let debug_typecheck_lcs loc lcs {local;global} =
-  if !Debug_ocaml.debug_level < 1 then return () else
-    ListM.iterM (fun (LC.LC lc) -> 
-        let* _ = IndexTermTyping.check_index_term (loc: Loc.t) {local;global} 
-                   (LS.Base BT.Bool) lc in
-        return ()
-      ) lcs
+  if !Debug_ocaml.debug_level > 0 then return () else
+    ListM.iterM (WellTyped.WLC.welltyped (loc: Loc.t) {local;global}) lcs
 
 let constraint_holds loc {local;global} c = 
   let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
@@ -268,6 +262,7 @@ let constraint_holds loc {local;global} c =
         return (Z3.Solver.check solver [])
       )
   in
+  let () = Pp.p !^(Z3.Solver.to_string solver) in
   match checked with
   | UNSATISFIABLE -> return (true,ctxt,solver)
   | SATISFIABLE -> return (false,ctxt,solver)
@@ -289,7 +284,7 @@ let rec matching_symbol syms num =
 
 
 (* maybe should fail if symbol mapping is missing? *)
-let model loc {local;global} solver : (TE.model option) m = 
+let model loc {local;global} solver : (TypeErrors.model option) m = 
   (* let unsat_core = 
    *   String.concat ", "
    *     (map Z3.Expr.to_string (Z3.Solver.get_unsat_core solver))
@@ -331,6 +326,6 @@ let is_reachable_and_model loc {local;global} =
 
 
 let equal loc {local;global} it1 it2 =
-  let c = LC.LC (IT.EQ (it1, it2)) in
+  let c = LC.LC (IndexTerms.EQ (it1, it2)) in
   let* (holds,_,_) = constraint_holds loc {local;global} c in
   return holds

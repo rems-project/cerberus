@@ -13,11 +13,10 @@ module type I_Sig = sig
   val subst_var : (Sym.t, Sym.t) Subst.t -> t -> t
   val free_vars : t -> SymSet.t
   val pp : t -> Pp.document
-  val closed : SymSet.t -> t -> (unit, Wf.error) result
 end
 
-module Make (I: I_Sig) = struct
 
+module Make (I: I_Sig) = struct
 
   type t = 
     | Computational of (Sym.t * BT.t) * t
@@ -25,8 +24,6 @@ module Make (I: I_Sig) = struct
     | Resource of RE.t * t
     | Constraint of LC.t * t
     | I of I.t
-
-
 
   let mComputational (name, bound) t = Computational ((name,bound),t)
   let mLogical (name, bound) t = Logical ((name,bound),t)
@@ -137,55 +134,5 @@ module Make (I: I_Sig) = struct
     let (RT.Computational ((name, t), lrt)) = rt in
     Computational ((name, t), of_lrt lrt rest)
 
-
-  let rec closed bound ft =
-    let open Resultat in
-    match ft with
-    | Computational ((s, _), ft)
-    | Logical ((s,_), ft) -> 
-       closed (SymSet.add s bound) ft
-    | Resource (re, ft) -> 
-       begin match SymSet.elements (SymSet.diff (RE.vars_in re) bound) with
-       | s :: _ -> error (Wf.Unbound_name s)
-       | [] -> closed bound ft
-       end
-    | Constraint (lc, ft) ->
-       begin match SymSet.elements (SymSet.diff (LC.vars_in lc) bound) with
-       | s :: _ -> error (Wf.Unbound_name s)
-       | [] -> closed bound ft
-       end
-    | I rt -> 
-       I.closed bound rt
-  
-
-  let well_polarised determined ft = 
-    let open Resultat in
-    let rec aux determined undetermined ft = 
-    match ft with
-    | Computational ((s, _), ft) ->
-       aux (SymSet.add s determined) undetermined ft
-    | Logical ((s, _), ft) ->
-       aux determined (SymSet.add s undetermined) ft
-    | Resource (re, ft) ->
-       begin match SymSet.elements (SymSet.diff (RE.input re) determined) with
-       | [] ->
-          let fixed = RE.output re in
-          aux (SymSet.union determined fixed) (SymSet.diff undetermined fixed) ft
-       | s :: _ -> 
-          error (Wf.Unconstrained_lvar s)
-       end
-    | Constraint (_, ft) ->
-       aux determined undetermined ft
-    | I _ ->
-       match SymSet.elements undetermined with
-       | [] -> return ()
-       | s :: _ ->  error (Wf.Unconstrained_lvar s)
-    in
-    aux determined SymSet.empty ft
-
-  let well_formed bound ft = 
-    let open Resultat in
-    let* () = closed bound ft in
-    well_polarised bound ft
 
 end

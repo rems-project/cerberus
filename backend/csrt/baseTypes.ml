@@ -1,5 +1,4 @@
 open Pp
-module Loc=Locations
 
 
 type tag = Tag of Sym.t

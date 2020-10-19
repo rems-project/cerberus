@@ -1,12 +1,12 @@
-module IT=IndexTerms
+type t = LC of IndexTerms.t
 
-type t = LC of IT.t
+let pp (LC c) = IndexTerms.pp c
 
-let pp (LC c) = IT.pp c
+let subst_var substitution (LC c) = 
+  LC (IndexTerms.subst_var substitution c)
 
-let subst_var substitution (LC c) = LC (IT.subst_var substitution c)
 let subst_vars = Subst.make_substs subst_var
 
-let vars_in (LC c) = IT.vars_in c
+let vars_in (LC c) = IndexTerms.vars_in c
 
-let equal (LC c) (LC c') = IT.equal c c'
+let equal (LC c) (LC c') = IndexTerms.equal c c'

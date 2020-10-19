@@ -5,7 +5,7 @@ open CF.Mucore
 open Check
 open TypeErrors
 open ReturnTypes
-open BaseTypes
+
 
 module SymMap = Map.Make(Sym)
 module RE = Resources
@@ -32,7 +32,7 @@ let record_funinfo global funinfo =
     (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
       if is_variadic then fail loc (Variadic_function fsym) else
         let () = Pp.d 2 (lazy (item "recording function type" (FT.pp ftyp))) in
-        let* () = check_well_formed loc SymSet.empty FT.well_formed ftyp in
+        (* let* () = WellTyped.WFT.welltyped loc {local = L.empty; global} ftyp in *)
         let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global

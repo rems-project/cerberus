@@ -5,7 +5,6 @@ module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
 module IT = IndexTerms
-module ITT = IndexTermTyping
 module BT = BaseTypes
 module LS = LogicalSorts
 module RT = ReturnTypes
@@ -193,10 +192,10 @@ let args_of_asyms (loc : Loc.t) (local : L.t) (asyms : 'bty asyms) : args m=
   ListM.mapM (arg_of_asym loc local) asyms
 
 
-module Spine (RT : AT.I_Sig) = struct
+module Spine (I : AT.I_Sig) = struct
 
-  module FT = AT.Make(RT)
-  module NFT = NormalisedArgumentTypes.Make(RT)
+  module FT = AT.Make(I)
+  module NFT = NormalisedArgumentTypes.Make(I)
 
   let pp_argslocs =
     pp_list (fun ca -> parens (BT.pp false ca.bt ^^^ bar ^^^ Sym.pp ca.lname))
@@ -211,7 +210,7 @@ module Spine (RT : AT.I_Sig) = struct
 
 
   let spine (loc : Loc.t) {local; global} (arguments : arg list) 
-            (ftyp : FT.t) (descr : string) : (RT.t * L.t) m =
+            (ftyp : FT.t) (descr : string) : (I.t * L.t) m =
 
     let ftyp = NFT.normalise ftyp in
     let open NFT in
@@ -1153,8 +1152,8 @@ and check_expr_pop (loc : Loc.t) delta {labels; local; global} (pe : 'bty expr)
 (* the logic is parameterised by RT_Sig so it can be used uniformly
    for functions and procedures (with return type) and labels with
    no-return (False) type. *)
-module CBF (RT : AT.I_Sig) = struct
-  module T = AT.Make(RT)
+module CBF (I : AT.I_Sig) = struct
+  module T = AT.Make(I)
   let check_and_bind_arguments loc arguments (function_typ : T.t) = 
     let rec check acc_substs local pure_local args (ftyp : T.t) =
       match args, ftyp with
@@ -1198,16 +1197,6 @@ end
 
 module CBF_FT = CBF(ReturnTypes)
 module CBF_LT = CBF(False)
-
-
-let check_well_formed loc bound wf_f ftyp = 
-  match wf_f bound ftyp with
-  | Resultat.Ok () -> 
-     return ()
-  | Resultat.Error (Wf.Unbound_name s) -> 
-     fail loc (TE.Unbound_name s)
-  | Resultat.Error (Wf.Unconstrained_lvar s) -> 
-     fail loc (TE.Unconstrained_logical_variable s)
 
 
 (* check_function: type check a (pure) function *)
@@ -1257,12 +1246,13 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
       ) label_defs 
   in
   let* labels = 
-    let bound = SymSet.of_list (L.all_names pure_delta) in
     PmapM.foldM (fun sym def acc ->
         match def with
         | M_Return lt
         | M_Label (lt, _, _, _) -> 
-           let* () = check_well_formed loc bound LT.well_formed lt in
+           let* () = 
+             WellTyped.WLT.welltyped loc {local = pure_delta; global} lt
+           in
            return (SymMap.add sym lt acc)
       ) label_defs SymMap.empty 
   in

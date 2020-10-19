@@ -1,20 +1,14 @@
 open Subst
-
-module BT = BaseTypes
-module IT = IndexTerms
-module LS = LogicalSorts
-module RE = Resources
-module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
 
 type l = 
-  | Logical of (Sym.t * LS.t) * l
-  | Resource of RE.t * l
-  | Constraint of LC.t * l
+  | Logical of (Sym.t * LogicalSorts.t) * l
+  | Resource of Resources.t * l
+  | Constraint of LogicalConstraints.t * l
   | I
 
-type t = Computational of (Sym.t * BT.t) * l
+type t = Computational of (Sym.t * BaseTypes.t) * l
 
 let lrt (Computational (_, lrt)) = lrt
 
@@ -45,7 +39,7 @@ let concat (t1: t) (t2: l) : t =
 
 
 
-let subst_var_l ?(re_subst_var=RE.subst_var) 
+let subst_var_l ?(re_subst_var=Resources.subst_var) 
                  (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
   let rec aux substitution = function
     | I -> I
@@ -65,7 +59,7 @@ let subst_var_l ?(re_subst_var=RE.subst_var)
        let t = aux substitution t in
        Resource (re,t)
     | Constraint (lc,t) -> 
-       let lc = LC.subst_var substitution lc in
+       let lc = LogicalConstraints.subst_var substitution lc in
        let t = aux substitution t in
        Constraint (lc,t)
   in
@@ -111,8 +105,8 @@ let freshify = function
 
 let rec free_vars_l = function
   | Logical ((sym,_),t) -> SymSet.remove sym (free_vars_l t)
-  | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars_l t)
-  | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars_l t)
+  | Resource (r,t) -> SymSet.union (Resources.vars_in r) (free_vars_l t)
+  | Constraint (c,t) -> SymSet.union (LogicalConstraints.vars_in c) (free_vars_l t)
   | I -> SymSet.empty
 
 let free_vars = function
@@ -126,13 +120,13 @@ let (pp,pp_l) =
   let rec aux_l = function
     | Logical ((name,ls),t) ->
        let op = if !unicode then utf8string "\u{2203}" else !^"E" in
-       (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux_l t
+       (op ^^^ typ (Sym.pp name) (LogicalSorts.pp false ls) ^^ dot) :: aux_l t
     | Resource (re,t) ->
        let op = if !unicode then utf8string "\u{2217}" else star in
-       (RE.pp re ^^^ op) :: aux_l t
+       (Resources.pp re ^^^ op) :: aux_l t
     | Constraint (lc,t) ->
        let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
-       (LC.pp lc ^^^ op) :: aux_l t
+       (LogicalConstraints.pp lc ^^^ op) :: aux_l t
     | I -> 
        [!^"I"]
   in
@@ -140,7 +134,7 @@ let (pp,pp_l) =
   let aux = function
     | Computational ((name,bt),t) ->
        let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
-       (op ^^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot) :: aux_l t
+       (op ^^^ typ (Sym.pp name) (BaseTypes.pp false bt) ^^ dot) :: aux_l t
   in
 
   let pp_l rt = flow (break 1) (aux_l rt) in
@@ -150,27 +144,8 @@ let (pp,pp_l) =
 
 
 
-let rec closed_l bound lrt = 
-  let open Resultat in
-  match lrt with
-  | Logical ((s,_), lrt) -> 
-     closed_l (SymSet.add s bound) lrt
-  | Resource (re, lrt) -> 
-     begin match SymSet.elements (SymSet.diff (RE.vars_in re) bound) with
-     | s :: _ -> error (Wf.Unbound_name s)
-     | [] -> closed_l bound lrt
-     end
-  | Constraint (lc, lrt) ->
-     begin match SymSet.elements (SymSet.diff (LC.vars_in lc) bound) with
-     | s :: _ -> error (Wf.Unbound_name s)
-     | [] -> closed_l bound lrt
-     end
-  | I -> 
-     return ()
-
-let closed bound (Computational ((s,_), rt)) = 
-  closed_l (SymSet.add s bound) rt
 
 
-let well_formed bound rt = 
-  closed bound rt
+
+
+
