@@ -356,7 +356,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   let names = StringMap.empty in
   let* (names, params_lrt) = 
     ListM.fold_leftM (fun (names, acc_lrt) (ident, coq_expr) : (Sym.t StringMap.t * RT.l) m ->
-        let s = Sym.fresh_pretty ident in
+        let s = Sym.fresh_named ident in
         let names = StringMap.add ident s names in
         log_name_add s;
         let* (bt,_,lrt) = of_coq_expr_typ loc names coq_expr s in
@@ -365,13 +365,12 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let* (names, args_rts, ret_lrt) =
     ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((msym,_), type_expr) ->
-        let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-        let s = Sym.fresh_fancy mname in
-        let names = match mname with
-          | Some ident -> StringMap.add ident s names 
+        let oname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
+        let s = Sym.fresh_onamed oname in
+        let names = match oname with
+          | Some ident -> log_name_add s; StringMap.add ident s names 
           | None -> names
         in
-        log_name_add s;
         let* (B ((bnew, pointee, bt, osize), lrt)) = 
           of_type_expr loc names type_expr in
         let sa = pointee in
@@ -388,7 +387,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         in
         let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
         let ret_rt = RT.Logical ((sr, LS.Base bt), Resource (pointsr, I)) in
-        return (names, args_rts @ [(mname, arg_rt)], rets_lrt @@ ret_rt)
+        return (names, args_rts @ [(oname, arg_rt)], rets_lrt @@ ret_rt)
       ) (names, [], RT.I) (List.combine args annot.fa_args)
   in
   let args_ftt = 
@@ -406,7 +405,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let* (names, exists_lrt) = 
     ListM.fold_leftM (fun (names, lrt) (ident,coq_expr) ->
-        let s = Sym.fresh_pretty ident in
+        let s = Sym.fresh_named ident in
         let names = StringMap.add ident s names in
         log_name_add s;
         let* (bt, _, lrt') = of_coq_expr_typ loc names coq_expr s in
@@ -520,8 +519,8 @@ let make_loop_label_spec_annot (loc : Loc.t)
   in
   let args_ltt = 
     List.fold_left (fun acc lrt -> 
-        Tools.comp acc (LT.of_lrt lrt)
-      ) (fun ft -> ft) fargs_lrts
+        Tools.comp acc (LT.of_rt lrt)
+      ) (fun ft -> ft) args_rts
   in
   let* constrs_lrt = 
     ListM.fold_leftM (fun lrt constr ->

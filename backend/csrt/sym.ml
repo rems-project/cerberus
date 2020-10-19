@@ -7,7 +7,15 @@ include S
 type t = S.sym
 
 let fresh = S.fresh
-let fresh_pretty = S.fresh_pretty
+let fresh_named = S.fresh_pretty
+let fresh_onamed = S.fresh_fancy
+
+let fresh_relative (s : t) (f : string -> string) : t =
+  match symbol_name s with
+  | Some name -> fresh_named (f name)
+  | None -> fresh ()
+
+let fresh_same s = fresh_relative s (fun id -> id)
 
 
 let pp_string = CF.Pp_symbol.to_string_pretty ~compact:true

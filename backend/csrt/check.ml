@@ -1155,8 +1155,7 @@ module CBF (RT : AT.I_Sig) = struct
       match args, ftyp with
       | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
            when equal abt sbt ->
-         let mname = Option.map (fun s -> s^"_l") (Sym.symbol_name aname) in
-         let new_lname = Sym.fresh_fancy (mname) in
+         let new_lname = Sym.fresh_relative aname (fun s -> s^"_l") in
          let subst = Subst.{before=lname;after=new_lname} in
          Pp.d 6 (lazy (item "subst" (Subst.pp Sym.pp Sym.pp subst)));
          let ftyp' = T.subst_var subst ftyp in
@@ -1295,4 +1294,5 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
   - fix Ecase "LC (Bool true)"
   - should check type correctness of function signatures in 
     well-formedness check, to detect errors in user-written specifications
+  - go over files and look for `fresh ()`: give good names
  *)

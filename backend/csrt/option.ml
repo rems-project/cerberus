@@ -28,4 +28,9 @@ let equal equality oa oa' =
   | None, None -> true
   | _, _ -> false
 
+
+let value (oa : 'a option) (default : 'a) = function
+  | Some a -> a
+  | None -> default
+
 let (let*) = bind
