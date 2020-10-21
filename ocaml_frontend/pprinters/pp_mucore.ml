@@ -95,6 +95,9 @@ module type PP_CORE = sig
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: (ct,'a) mu_action_ -> PPrint.document
+
+  val pp_pattern: bt mu_pattern -> PPrint.document
+
 end
 
 

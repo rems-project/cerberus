@@ -8,6 +8,20 @@ module RE=Resources
 
 
 
+type stacktrace = Pp.document
+type ostacktrace = stacktrace option
+
+let do_stack_trace () = 
+  let open Pp in
+  if !Debug_ocaml.debug_level > 0 then 
+    let backtrace = Printexc.get_callstack (!print_level * 10) in
+    Some (!^(Printexc.raw_backtrace_to_string backtrace))
+  else 
+    None
+
+
+
+
 type access = 
   | Load 
   | Store
@@ -48,101 +62,97 @@ type type_error =
 type t = type_error
 
 
-let do_stack_trace err = 
-  let open Pp in
-  if !Debug_ocaml.debug_level > 0 then 
-    let backtrace = Printexc.get_callstack (!print_level * 10) in
-    (err ^^ !^"." ^^ hardline ^^ hardline ^^ !^(Printexc.raw_backtrace_to_string backtrace))
-  else 
-    err
-
-let unreachable err = 
-  Unreachable (do_stack_trace err)
-
-let z3_fail err = 
-  Z3_fail (do_stack_trace err)
 
 
-let withloc loc p : Pp.document = 
-  flow (break 1) [Loc.pp loc;p]
 
-let pp (loc : Loc.t) (err : t) = 
-  withloc loc
-    begin match err with
-    | Missing_ownership (access,omember) ->
-       begin match access, omember with
-       | Kill, None -> !^"Missing ownership for de-allocating"
-       | Kill, Some m -> !^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m
-       | Load, None -> !^"Missing ownership for reading"
-       | Load, Some m -> !^"Missing ownership for reading struct member" ^^^ BT.pp_member m
-       | Store, None -> !^"Missing ownership for writing"
-       | Store, Some m -> !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
-       end
-    | Uninitialised omember ->
-       begin match omember with
-       | None -> !^"Trying to read uninitialised data"
-       | Some m -> !^"Trying to read uninitialised struct member" ^^^ BT.pp_member m
-       end
-    | Name_bound_twice name ->
-       !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
-    | Unbound_string_name unbound ->
-       !^"Unbound symbol" ^^ colon ^^^ !^unbound
-    | Unbound_name unbound ->
-       !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
-    | Unbound_impl_const i ->
-       !^("Unbound implementation defined constant" ^
-           CF.Implementation.string_of_implementation_constant i)
-    | Struct_not_defined (BT.Tag tag) ->
-       !^"struct" ^^^ Sym.pp tag ^^^ !^"not defined"
 
-    | Unreachable unreachable ->
-       !^"Internal error, should be unreachable" ^^ colon ^^^ unreachable
-    | Z3_fail err ->
-       !^"Z3 failure:" ^^^ err
-    | Unsupported unsupported ->
-       !^"Unsupported feature" ^^ colon ^^^ unsupported
-    | Variadic_function fn ->
-       !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
 
-    | Mismatch {has; expect} ->
-       !^"Expected value of type" ^^^ LS.pp false expect ^^^
-         !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
-    | Number_arguments {has;expect} ->
-       !^"Wrong number of arguments:" ^^^
-         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
-           !^"has" ^^^ !^(string_of_int has)
-    | Illtyped_it it ->
-       !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it)
-    | Unsat_constraint c ->
-       !^"Unsatisfied constraint" ^^^
-         LogicalConstraints.pp c
-    | Unconstrained_logical_variable name ->
-       !^"Unconstrained logical variable" ^^^ Sym.pp name
 
-    | Missing_resource t ->
-       !^"Missing resource of type" ^^^ Resources.pp t
-    | Resource_already_used (resource,where) ->
-       !^"Resource" ^^^ Resources.pp resource ^^^ 
-         !^"has already been used:" ^^^ braces (pp_list Loc.pp where)
-    | Unused_resource {resource;_} ->
-       !^"Left-over unused resource" ^^^ Resources.pp resource
+let pp_type_error = function
+  | Missing_ownership (access,omember) ->
+     begin match access, omember with
+     | Kill, None -> !^"Missing ownership for de-allocating"
+     | Kill, Some m -> !^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m
+     | Load, None -> !^"Missing ownership for reading"
+     | Load, Some m -> !^"Missing ownership for reading struct member" ^^^ BT.pp_member m
+     | Store, None -> !^"Missing ownership for writing"
+     | Store, Some m -> !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
+     end
+  | Uninitialised omember ->
+     begin match omember with
+     | None -> !^"Trying to read uninitialised data"
+     | Some m -> !^"Trying to read uninitialised struct member" ^^^ BT.pp_member m
+     end
+  | Name_bound_twice name ->
+     !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
+  | Unbound_string_name unbound ->
+     !^"Unbound symbol" ^^ colon ^^^ !^unbound
+  | Unbound_name unbound ->
+     !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
+  | Unbound_impl_const i ->
+     !^("Unbound implementation defined constant" ^
+         CF.Implementation.string_of_implementation_constant i)
+  | Struct_not_defined (BT.Tag tag) ->
+     !^"struct" ^^^ Sym.pp tag ^^^ !^"not defined"
+  | Unreachable unreachable ->
+     !^"Internal error, should be unreachable" ^^ colon ^^^ unreachable
+  | Z3_fail err ->
+     !^"Z3 failure:" ^^^ err
+  | Unsupported unsupported ->
+     !^"Unsupported feature" ^^ colon ^^^ unsupported
+  | Variadic_function fn ->
+     !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
+  | Mismatch {has; expect} ->
+     !^"Expected value of type" ^^^ LS.pp false expect ^^^
+       !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
+  | Number_arguments {has;expect} ->
+     !^"Wrong number of arguments:" ^^^
+       !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+         !^"has" ^^^ !^(string_of_int has)
+  | Illtyped_it it ->
+     !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it)
+  | Unsat_constraint c ->
+     !^"Unsatisfied constraint" ^^^
+       LogicalConstraints.pp c
+  | Unconstrained_logical_variable name ->
+     !^"Unconstrained logical variable" ^^^ Sym.pp name
+  | Missing_resource t ->
+     !^"Missing resource of type" ^^^ Resources.pp t
+  | Resource_already_used (resource,where) ->
+     !^"Resource" ^^^ Resources.pp resource ^^^ 
+       !^"has already been used:" ^^^ braces (pp_list Loc.pp where)
+  | Unused_resource {resource;_} ->
+     !^"Left-over unused resource" ^^^ Resources.pp resource
+  | Undefined_behaviour (undef, omodel) -> 
+     !^"Undefined behaviour" ^^ colon ^^^ 
+       !^(CF.Undefined.pretty_string_of_undefined_behaviour undef) ^^
+         begin match omodel with
+         | Some pped_model -> hardline ^^ item "model" pped_model
+         | None -> break 1 ^^ parens !^"no model"
+         end
+         (* item "unsatisfied core" !^unsat_core *)
+  | Unspecified _ctype ->
+     !^"Unspecified value"
+  | StaticError err ->
+     !^("Static error: " ^ err)
+  | Generic err ->
+     err
 
-    | Undefined_behaviour (undef, omodel) -> 
-       !^"Undefined behaviour" ^^ colon ^^^ 
-         !^(CF.Undefined.pretty_string_of_undefined_behaviour undef) ^^
-           begin match omodel with
-           | Some pped_model -> hardline ^^ item "model" pped_model
-           | None -> break 1 ^^ parens !^"no model"
-           end
-           (* item "unsatisfied core" !^unsat_core *)
-    | Unspecified _ctype ->
-       !^"Unspecified value"
-    | StaticError err ->
-       !^("Static error: " ^ err)
 
-    | Generic err ->
-       err
+let pp (loc : Loc.t) (ostacktrace : ostacktrace) (err : t) = 
+  separate hardline
+    begin match ostacktrace with
+    | Some stacktrace -> 
+       [Loc.pp loc; 
+        pp_type_error err; 
+        empty;
+        format [FG (Black,Bright)] "stack trace";
+        stacktrace]
+    | None -> 
+       [Loc.pp loc; pp_type_error err]
     end
+
+
 
 
 

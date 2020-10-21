@@ -90,4 +90,6 @@ let process_and_report mu_file =
   if !print_level > 0 then Printexc.record_backtrace true else ();
   match process mu_file with
   | Ok () -> ()
-  | Error (loc,err) -> Pp.error (TypeErrors.pp loc err); exit 1
+  | Error (loc,ostacktrace,err) -> 
+     Pp.error (TypeErrors.pp loc ostacktrace err); 
+     exit 1

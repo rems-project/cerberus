@@ -57,7 +57,7 @@ let wanted_but_found loc wanted found =
   | `Resource -> !^"wanted resource variable but found" ^^^ VB.pp found
   | `Constraint -> !^"wanted resource variable but found" ^^^ VB.pp found
   in
-  fail loc (unreachable err)
+  fail loc (Unreachable err)
 
 
 
@@ -131,7 +131,7 @@ let merge loc (Local l1) (Local l2) =
       | Some (s1,s2) -> space ^^ parens (Sym.pp s1 ^^ slash ^^ Sym.pp s2)
       | None -> Pp.empty
     in
-    unreachable (!^"trying to merge incompatible environments" ^^^ 
+    Unreachable (!^"trying to merge incompatible environments" ^^^ 
                    hint ^^ symbols_hint ^/^
                    (pp ~print_used:true ~print_all_names:true (Local l1)) ^^ 
                    hardline ^^ !^"and" ^^ hardline ^^ 

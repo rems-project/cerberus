@@ -326,11 +326,11 @@ let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsy
   Pp.d 5 (lazy (!^"pre-processing label" ^^^ Sym.pp lsym));
   let* ftyp = match Pmap.lookup fsym funinfo with
     | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
-    | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+    | None -> fail loc (Unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
   in
   let* (names,farg_rts) = match Pmap.lookup fsym funinfo_extra with
     | Some (names,arg_rts) -> return (names,arg_rts)
-    | None -> fail loc (unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+    | None -> fail loc (Unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
   in
   match def with
   | M_Return _ ->

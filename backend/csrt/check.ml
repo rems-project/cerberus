@@ -93,7 +93,7 @@ let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : unit m =
 let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern) 
                   (expect : BT.t) : L.t m =
   let rec aux (local' : L.t) (this : IT.t) (pat : pattern) 
-              (expect_bt : BT.t) : L.t m = 
+              (expect : BT.t) : L.t m = 
     match pat with
     | M_Pattern (annots, M_CaseBase (o_s, has_bt)) ->
        let* () = ensure_base_type loc ~expect has_bt in
@@ -108,30 +108,30 @@ let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern)
        let local' = add_uc (LC (EQ (this, S s'))) local' in
        return local'
     | M_Pattern (annots, M_CaseCtor (constructor, pats)) ->
-       match constructor, expect_bt, pats with
-       | (M_Cnil item_bt), _, [] ->
+       match expect, constructor, pats with
+       | expect, (M_Cnil item_bt), [] ->
           let* () = ensure_base_type loc ~expect (List item_bt) in
           return local'
-       | (M_Cnil item_bt), _, _ ->
+       | _, (M_Cnil item_bt), _ ->
           fail loc (Number_arguments {has = List.length pats; expect = 0})
-       | M_Ccons, (List item_bt), [p1; p2] ->
+       | (List item_bt), M_Ccons, [p1; p2] ->
           let* local' = aux local' (Head this) p1 item_bt in
-          let* local' = aux local' (Tail this) p2 expect_bt in
+          let* local' = aux local' (Tail this) p2 expect in
           return local'
-       | M_Ccons, _, [p1; p2] ->
+       | _, M_Ccons, [p1; p2] ->
           let err = 
             !^"cons pattern incompatible with expect type" ^^^ 
-              BT.pp false expect_bt 
+              BT.pp false expect 
           in
           fail loc (Generic err)
-       | M_Ccons, _, _ -> 
+       | _, M_Ccons, _ -> 
           fail loc (Number_arguments {has = List.length pats; expect = 2})
-       | M_Ctuple, (Tuple bts), _ ->
+       | (Tuple bts), M_Ctuple, pats ->
           let rec components local' i pats bts =
             match pats, bts with
-            | pat :: pats, bt :: bts ->
-               let* local' = aux local' (Nth (expect_bt, i, this)) pat bt in
-               components local' (i+1) pats bts
+            | pat :: pats', bt :: bts' ->
+               let* local' = aux local' (Nth (expect, i, this)) pat bt in
+               components local' (i+1) pats' bts'
             | [], [] -> 
                return local'
             | _, _ ->
@@ -140,24 +140,24 @@ let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern)
                fail loc (Number_arguments {expect; has})
           in
           components local' 0 pats bts
-       | M_Ctuple, _, _ ->
+       | _, M_Ctuple, _ ->
           let err = 
             !^"tuple pattern incompatible with expect type" ^^^ 
-              BT.pp false expect_bt
+              BT.pp false expect
           in
           fail loc (Generic err)
-       | M_Cspecified, _, [pat] ->
-          aux local' this pat expect_bt
-       | M_Cspecified, _, _ ->
+       | _, M_Cspecified, [pat] ->
+          aux local' this pat expect
+       | _, M_Cspecified, _ ->
           fail loc (Number_arguments {expect = 1; has = List.length pats})
-       | M_Carray, _, _ ->
+       | _, M_Carray, _ ->
           fail loc (Unsupported !^"todo: array types")
-       | M_CivCOMPL, _, _
-       | M_CivAND, _, _
-       | M_CivOR, _, _
-       | M_CivXOR, _, _
-       | M_Cfvfromint, _, _
-       | M_Civfromfloat, _, _
+       | _, M_CivCOMPL, _
+       | _, M_CivAND, _
+       | _, M_CivOR, _
+       | _, M_CivXOR, _
+       | _, M_Cfvfromint, _
+       | _, M_Civfromfloat, _
          ->
           fail loc (Unsupported !^"todo: Civ..")
   in
@@ -393,7 +393,7 @@ let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
     ( fun _cbt -> return (ret, Loc, LC (Null (S ret))) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
-    ( fun () -> fail loc (unreachable !^"unspecified pointer value") )
+    ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
 
 let rec infer_mem_value (loc : Loc.t) {local; global} (mem : mem_value) : vt m =
   let open BT in
@@ -432,7 +432,7 @@ and infer_struct (loc : Loc.t) {local; global} (tag : tag)
     | [], [] -> 
        return []
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-       fail loc (unreachable !^"mismatch in fields in infer_struct")
+       fail loc (Unreachable !^"mismatch in fields in infer_struct")
     | [], ((Member id, _) :: _) ->
        fail loc (Generic (!^"field" ^^^ !^id ^^^ !^"missing"))
     | ((Member id,_) :: _), [] ->
@@ -791,7 +791,7 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
          | M_Pat pat -> pattern_match_rt loc pat rt
        in
        infer_pexpr_pop loc delta {local; global} e2
-    | M_PEcase _ -> fail loc (unreachable !^"PEcase in inferring position")
+    | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
     | M_PEif (casym, e1, e2) ->
        let* carg = arg_of_asym loc local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
@@ -1038,8 +1038,8 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        let* (False, local) = calltype_lt loc {local; global} args lt in
        let* () = all_empty loc local in
        return False
-    | M_Ecase _ -> fail loc (unreachable !^"Ecase in inferring position")
-    | M_Eif _ -> fail loc (unreachable !^"Eif in inferring position")
+    | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
+    | M_Eif _ -> fail loc (Unreachable !^"Eif in inferring position")
     | M_Elet (p, e1, e2) ->
        let*? (rt, local) = infer_pexpr loc {local; global} e1 in
        let* delta = match p with

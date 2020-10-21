@@ -127,7 +127,7 @@ let get_name loc names ident : Sym.t m =
 let parse_it loc names s context_pp : IT.t m = 
   match IndexTermParser.parse loc names s with
   | Ok r -> return r
-  | Error (loc,msg) -> 
+  | Error (loc,_stacktrace, msg) ->
      let err = 
        !^"cannot process coq term" ^^^ 
          parens (!^"returned" ^^^ squotes !^msg) ^^ colon ^/^ 
@@ -402,9 +402,15 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
     let type_expr = annot.fa_returns in
     let* (B ((bnew, name, bt, osize), lrt)) = 
       of_type_expr loc names type_expr in
-    if bnew = Old
-    then fail loc (Unconstrained_logical_variable name) 
-    else return (RT.Computational ((name, bt), lrt))
+    let rt = 
+      if bnew = Old then 
+        let s = Sym.fresh () in
+        let lc = LC.LC (IT.EQ (S s, S name)) in
+        RT.Computational ((s, bt), lrt @@ Constraint (lc, RT.I))
+      else 
+        RT.Computational ((name, bt), lrt)
+    in
+    return rt
   in
   let* (names, exists_lrt) = 
     ListM.fold_leftM (fun (names, lrt) (ident,coq_expr) ->

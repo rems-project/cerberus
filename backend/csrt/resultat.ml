@@ -4,8 +4,8 @@ include Result
 let return (a: 'a) : ('a,'e) t = 
   Ok a
 
-let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * 'e) t = 
-  Error (loc,e)
+let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * TypeErrors.ostacktrace * 'e) t = 
+  Error (loc, TypeErrors.do_stack_trace (),  e)
 
 let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
   match m with
@@ -14,7 +14,7 @@ let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t =
 
 let (let*) = bind
 
-type 'a m = ('a, Locations.t * TypeErrors.t) t
+type 'a m = ('a, Locations.t * TypeErrors.ostacktrace * TypeErrors.t) t
 
 
 (* let actionM level pp = return (Pp.action level pp)

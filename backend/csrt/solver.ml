@@ -80,7 +80,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     match List.nth_opt member_fun_decls i with
     | Some fundecl -> return fundecl
-    | None -> fail loc (unreachable !^"nth_to_fundecl")
+    | None -> fail loc (Unreachable !^"nth_to_fundecl")
   in
   let member_to_fundecl tag member = 
     let* decl = Global.get_struct_decl loc global.struct_decls tag in
@@ -88,7 +88,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in
     let member_funs = combine member_names member_fun_decls in
-    Tools.assoc_err loc member member_funs (unreachable !^"member_to_fundecl")
+    Tools.assoc_err loc member member_funs (Unreachable !^"member_to_fundecl")
   in
   match it with
   | Num n -> 
@@ -233,12 +233,12 @@ let negate (LogicalConstraints.LC c) = LogicalConstraints.LC (Not c)
 
 let handle_z3_problems loc todo =
   if not (Z3.Log.open_ logfile) then 
-    fail loc (z3_fail (!^("could not open " ^ logfile)))
+    fail loc (Z3_fail (!^("could not open " ^ logfile)))
   else 
     try let* result = todo () in Z3.Log.close (); return result with
     | Z3.Error (msg : string) -> 
        Z3.Log.close ();
-       fail loc (z3_fail !^msg)
+       fail loc (Z3_fail !^msg)
 
 
 let debug_typecheck_lcs loc lcs {local;global} =
