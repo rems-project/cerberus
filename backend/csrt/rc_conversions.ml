@@ -139,30 +139,37 @@ let cannot_process loc pp_f to_pp =
   fail loc (Unsupported (!^"cannot process term:" ^/^ pp_f to_pp))
 
 
-
-
 let bytes_of_integer_type_expr loc te =
+  let aux = function
+    | ("u32" | "i32") -> return (Z.of_int 4)
+    | ("u64" | "i64") -> return (Z.of_int 8)
+    | _ -> cannot_process loc pp_type_expr te
+  in
   match te with
-  | Ty_Coq (Coq_ident "u32") -> return (Z.of_int 4)
-  | Ty_params ("u32", []) -> return (Z.of_int 4)
-  | Ty_Coq (Coq_ident "i32") -> return (Z.of_int 4)
-  | Ty_params ("i32", []) -> return (Z.of_int 4)
+  | Ty_Coq (Coq_ident s) -> aux s
+  | Ty_params (s, []) -> aux s
   | _ -> cannot_process loc pp_type_expr te
 
 let bits_of_integer_type_expr loc te = 
+  let aux = function
+    | ("u32" | "i32") -> return 32
+    | ("u64" | "i64") -> return 64
+    | _ -> cannot_process loc pp_type_expr te
+  in
   match te with
-  | Ty_Coq (Coq_ident "u32") -> return 32
-  | Ty_params ("u32", []) -> return 32
-  | Ty_Coq (Coq_ident "i32") -> return 32
-  | Ty_params ("i32", []) -> return 32
+  | Ty_Coq (Coq_ident s) -> aux s
+  | Ty_params (s, []) -> aux s
   | _ -> cannot_process loc pp_type_expr te
 
 let sign_of_integer_type_expr loc te = 
+  let aux = function
+    | ("u32" | "u64") -> return `Unsigned
+    | ("i32" | "i64") -> return `Signed
+    | _ -> cannot_process loc pp_type_expr te
+  in
   match te with
-  | Ty_Coq (Coq_ident "u32") -> return `Unsigned
-  | Ty_params ("u32", []) -> return `Unsigned
-  | Ty_Coq (Coq_ident "i32") -> return `Signed
-  | Ty_params ("i32", []) -> return `Signed
+  | Ty_Coq (Coq_ident s) -> aux s
+  | Ty_params (s, []) -> aux s
   | _ -> cannot_process loc pp_type_expr te
 
 
@@ -301,7 +308,7 @@ and of_type_expr loc names te : tb m =
           | New -> Logical ((pointee, LS.Base bt), Resource (points, lrt)) 
           | Old -> Resource (points, lrt)
         in
-        return (B ((bnewp, name, BT.Loc, osize), lrt))
+        return (B ((bnewp, name, BT.Loc, psize), lrt))
      | _, Shr, _ -> 
         fail loc (Generic !^"Shared pointers not supported yet")
      | _, Frac _, _ -> 
@@ -325,6 +332,8 @@ and of_type_expr loc names te : tb m =
        match bits, sign with
        | 32, `Signed -> return (fun s -> (in_range (S s) min_i32 max_i32))
        | 32, `Unsigned -> return (fun s -> (in_range (S s) min_u32 max_u32))
+       | 64, `Signed -> return (fun s -> (in_range (S s) min_i64 max_i64))
+       | 64, `Unsigned -> return (fun s -> (in_range (S s) min_u64 max_u64))
        | _ -> cannot_process loc pp_type_expr te
      in
      begin match mrefinement with

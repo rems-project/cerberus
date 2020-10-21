@@ -39,6 +39,8 @@ open Environment
 
 let for_fp (loc: Loc.t) {local;global} (pointer_it, size) 
     : ((Sym.t * RE.t) option) m = 
+  (* Pp.p (item "pointer" (IT.pp pointer_it));
+   * Pp.p (item "size" (Z.pp size)); *)
   let* points = 
     Local.filter_rM (fun name t ->
         if Z.equal (RE.size t) size then 
