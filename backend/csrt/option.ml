@@ -34,3 +34,9 @@ let value (oa : 'a option) (default : 'a) = function
   | None -> default
 
 let (let*) = bind
+
+let pp ppf oa =
+  let open Pp in
+  match oa with
+  | Some a -> !^"Some" ^^^ parens (ppf a)
+  | None -> !^"None"

@@ -242,8 +242,8 @@ and of_constr loc names constr : RT.l m =
             | None -> fail loc (Generic !^"pointer to non-object")
           in
           let lrt = match bnew with
-            | New -> Logical ((pointee, LS.Base bt), Resource (points, I)) 
-            | Old -> Resource (points, I)
+            | New -> Logical ((pointee, LS.Base bt), Resource (points, lrt)) 
+            | Old -> Resource (points, lrt)
           in
           return lrt
        | Shr, _ -> 
@@ -262,37 +262,50 @@ and is_uninit_type_expr = function
 
 and of_type_expr loc names te : tb m =
   let open RT in
-  let name = Sym.fresh () in
   let (mrefinement, te') = maybe_refinement te in
-  match maybe_refinement te' with
-  | None, Ty_ptr (ptr_kind, type_expr) ->
+  match mrefinement, te' with
+  | _, Ty_ptr (ptr_kind, type_expr) ->
      (* from impl_mem *)
      let impl = CF.Ocaml_implementation.get () in
      let* psize = match impl.sizeof_pointer with
        | Some n -> return (Some (Z.of_int n))
        | None -> fail loc (Generic !^"sizeof_pointer returned None")
      in
-     begin match ptr_kind, is_uninit_type_expr type_expr with
-       | Own, Some integer_type_expr -> 
-          let* size = bytes_of_integer_type_expr loc integer_type_expr in
-          let r = RE.Uninit {pointer = S name; size} in
-          return (B ((New, name, BT.Loc, psize), Resource (r, I)))
-       | Own, None -> 
-          let* B ((bnew, pointee, bt, osize), lrt) = 
-            of_type_expr loc names type_expr in
-          let* points = match osize with
-            | Some size -> return (RE.Points {pointer = S name; pointee; size})
-            | None -> fail loc (Generic !^"pointer to non-object")
-          in
-          let lrt = match bnew with
-            | New -> Logical ((pointee, LS.Base bt), Resource (points, I)) 
-            | Old -> Resource (points, I)
-          in
-          return (B ((New, name, BT.Loc, osize), lrt))
-       | Shr, _ -> 
-          fail loc (Generic !^"Shared pointers not supported yet")
-       | Frac _, _ -> 
-          fail loc (Generic !^"Fractional pointers not supported yet")
+     begin match mrefinement, ptr_kind, is_uninit_type_expr type_expr with
+     | _, Own, Some integer_type_expr -> 
+        let* name, bnewp = match mrefinement with
+          | None -> return (Sym.fresh (), New)
+          | Some (Coq_ident s) -> 
+             let* name = get_name loc names s in
+             return (name, Old)
+          | _ -> cannot_process loc pp_type_expr te
+        in
+        let* size = bytes_of_integer_type_expr loc integer_type_expr in
+        let r = RE.Uninit {pointer = S name; size} in
+        return (B ((bnewp, name, BT.Loc, psize), Resource (r, I)))
+     | _, Own, None -> 
+        let* name, bnewp = match mrefinement with
+          | None -> return (Sym.fresh (), New)
+          | Some (Coq_ident s) -> 
+             let* name = get_name loc names s in
+             return (name, Old)
+          | _ -> cannot_process loc pp_type_expr te
+        in
+        let* B ((bnew, pointee, bt, osize), lrt) = 
+          of_type_expr loc names type_expr in
+        let* points = match osize with
+          | Some size -> return (RE.Points {pointer = S name; pointee; size})
+          | None -> fail loc (Generic !^"pointer to non-object")
+        in
+        let lrt = match bnew with
+          | New -> Logical ((pointee, LS.Base bt), Resource (points, lrt)) 
+          | Old -> Resource (points, lrt)
+        in
+        return (B ((bnewp, name, BT.Loc, osize), lrt))
+     | _, Shr, _ -> 
+        fail loc (Generic !^"Shared pointers not supported yet")
+     | _, Frac _, _ -> 
+        fail loc (Generic !^"Fractional pointers not supported yet")
      end
   | None, Ty_dots ->
      fail loc (Generic !^"Recursive types not supported yet")
@@ -316,26 +329,30 @@ and of_type_expr loc names te : tb m =
      in
      begin match mrefinement with
      | None ->
+        let name = Sym.fresh () in
         let lrt = Constraint (LC.LC (constr name), I) in
         return (B ((New, name, BT.Integer, Some size), lrt))
      | Some (Coq_ident ident) ->
         let* s = get_name loc names ident in
         let lrt = Constraint (LC.LC (constr s), I) in
         return (B ((Old, s, BT.Integer, Some size), lrt))
-     | Some (Coq_all coq_term) -> 
+     | Some (Coq_all coq_term) ->
+        let name = Sym.fresh () in 
         let* it = of_coq_term loc names coq_term in
         let lc = LC.LC (IT.EQ (S name, it)) in
         let lrt = Constraint (LC.LC (constr name), Constraint (lc, I)) in
         return (B ((New, name, BT.Integer, Some size), lrt))
      end
   | None, Ty_params ("void", []) ->
+     let name = Sym.fresh () in
      return (B ((New, name, BT.Unit, None), RT.I))
   | None, Ty_Coq coq_expr ->
+     let name = Sym.fresh () in
      let* (bt, osize, lrt) = 
        of_coq_expr_typ loc names coq_expr name in
      return (B ((New, name, bt, osize), lrt))
   | _, _ ->
-     cannot_process loc pp_type_expr te'
+     cannot_process loc pp_type_expr te
 
 
 (* let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym)) *)
