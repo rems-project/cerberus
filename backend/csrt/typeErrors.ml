@@ -52,7 +52,7 @@ type type_error =
   | Resource_already_used of Resources.t * Loc.t list
   | Unused_resource of {resource: Resources.t; is_merge: bool}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * string option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * document option
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -69,24 +69,25 @@ type t = type_error
 
 let pp_type_error = function
   | Missing_ownership (access,omember) ->
-     begin match access, omember with
+     let msg = match access, omember with
      | Kill, None ->  
-        (!^"Missing ownership for de-allocating", [])
+        !^"Missing ownership for de-allocating"
      | Kill, Some m ->  
-        (!^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m, [])
+        !^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m
      | Load, None   ->  
-        (!^"Missing ownership for reading", [])
+        !^"Missing ownership for reading"
      | Load, Some m -> 
-        (!^"Missing ownership for reading struct member" ^^^ BT.pp_member m, [])
+        !^"Missing ownership for reading struct member" ^^^ BT.pp_member m
      | Store, None   -> 
-        (!^"Missing ownership for writing", [])
+        !^"Missing ownership for writing"
      | Store, Some m -> 
-        (!^"Missing ownership for writing struct member" ^^^ BT.pp_member m, [])
-     end
+        !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
+     in
+     (msg, [])
   | Uninitialised omember ->
      begin match omember with
      | None -> 
-        (!^"Trying to read uninitialised location", [])
+        (!^"Trying to read uninitialised data", [])
      | Some m -> 
         (!^"Trying to read uninitialised struct member" ^^^ BT.pp_member m, [])
      end
@@ -134,11 +135,8 @@ let pp_type_error = function
   | Undefined_behaviour (undef, omodel) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
      let extras = match omodel with
-       | Some model -> 
-          [Pp.plain (Pp.item "UB" !^ub); 
-           Pp.plain (Pp.item "model" !^model)]
-       | None -> 
-          [Pp.plain (item "UB" !^ub)]
+       | Some model -> [("UB",!^ub); ("model", model)]
+       | None -> [("UB",!^ub)]
      in
      (!^"Undefined behaviour", extras)
   | Unspecified _ctype ->
@@ -151,29 +149,16 @@ let pp_type_error = function
 
 (* stealing some logic from pp_errors *)
 let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) = 
+  let open Pp in
   let (head, pos) = Location_ocaml.head_pos_of_location loc in
   let (msg, extras) = pp_type_error err in
   let extras = match ostacktrace with
-    | Some stacktrace -> 
-       extras @ [Pp.plain (item "stacktrace" !^stacktrace)]
-    | None -> 
-       extras
+    | Some stacktrace -> extras @ [("stacktrace", !^stacktrace)]
+    | None -> extras
   in
-  let pped = 
-    Printf.sprintf "%s %s\n%s%s" head (Pp.plain msg) pos
-      begin 
-        if extras = []
-        then "" 
-        else ("\n" ^ String.concat "\n" extras)
-      end
-  in
-  CF.Pp_errors.fatal pped
-
-
-
-
-
-
-(* let report_type_error loc err : unit = 
- *   unsafe_error (pp loc err) *)
+  debug 1 (lazy hardline);
+  print stderr (format [FG (Red, Bright)] "error:" ^^^ 
+                format [FG (Black, Bright)] head ^^^ msg);
+  print stderr !^pos;
+  List.iter (fun (descr, pp) -> print stderr (item descr pp)) extras
 

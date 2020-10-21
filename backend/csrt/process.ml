@@ -31,7 +31,7 @@ let record_funinfo global funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
       if is_variadic then fail loc (Variadic_function fsym) else
-        let () = Pp.d 2 (lazy (item "recording function type" (FT.pp ftyp))) in
+        let () = debug 2 (lazy (item "recording function type" (FT.pp ftyp))) in
         (* let* () = WellTyped.WFT.welltyped loc {local = L.empty; global} ftyp in *)
         let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
@@ -55,8 +55,8 @@ let record_impl genv impls =
 
 
 let print_initial_environment genv = 
-  Pp.d 1 (lazy (headline "initial environment"));
-  Pp.d 1 (lazy (Global.pp genv));
+  debug 1 (lazy (headline "initial environment"));
+  debug 1 (lazy (Global.pp genv));
   return ()
 
 

@@ -11,18 +11,13 @@ let return = CF.Exception.except_return
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = (CA.ft,
-                CA.lt,
-                CA.ct,
-                CA.bt,
+type mu_file = (CA.ft, CA.lt, CA.ct, CA.bt,
                 CA.ct CF.Mucore.mu_struct_def,
                 CA.ct CF.Mucore.mu_union_def,
                 unit) CF.Mucore.mu_file
 type file = 
   | CORE of core_file
   | MUCORE of mu_file
-
-
 
 
 

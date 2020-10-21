@@ -1,19 +1,29 @@
-module CB = Cerb_backend
 module CF = Cerb_frontend
+
 include PPrint
 
-(* open Colour *)
+(* copying from backend.ml *)
+external get_terminal_size: unit -> (int * int) option = "terminal_size"
 
+(* copying from backend.ml *)
+let term_col = match get_terminal_size () with
+  | Some (_, col) -> col
+  | _ -> 80
 
 let unicode = ref true
 let print_level = ref 0
+
+(* from run_pp *)
+let print channel doc = 
+  PPrint.ToChannel.pretty 1.0 term_col channel (doc ^^ hardline)
+
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
 let (^^^) = Pp_prelude.(^^^)
 
 (* adapting from colour.ml *)
-(* https://en.wikipedia.org/wiki/ANSI_escape_code#Colors *)
+(* and https://en.wikipedia.org/wiki/ANSI_escape_code#Colors *)
 
 type colour =
   | Default
@@ -94,20 +104,12 @@ let headline a =
 
 let action a = format [FG (Cyan,Dark)] ("## " ^ a ^ " ")
 
-let print pp = CB.Pipeline.run_pp None (pp ^^ hardline)
-let o_p = function
-  | None -> ()
-  | Some pp -> CB.Pipeline.run_pp None (pp ^^ hardline)
-let level l pp = if !print_level >= l then Some (Lazy.force pp) else None
-let d l pp = o_p (level l pp)
+let debug l pp = 
+  if !print_level >= l 
+  then print stderr (Lazy.force pp) 
 
-(* let error pp = print (format [FG (Red,Bright)] "Error:" ^^^ pp ^^ hardline) *)
-let warn pp = print (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
+let warn pp = 
+  print stderr (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
 
 
-let time descr f = 
-  let t = Unix.gettimeofday () in
-  let res = Lazy.force f in
-  let t' = Unix.gettimeofday () in
-  let () = print (item descr !^(Printf.sprintf "%f" (t' -. t))) in
-  res
+

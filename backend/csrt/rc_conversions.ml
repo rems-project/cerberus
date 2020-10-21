@@ -558,7 +558,6 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let arg_lrt = update_values_lrt lrt in
            return (names,args_lrts @ [arg_lrt])
         | Some (ident, Some type_expr) ->
-           Pp.d 6 (lazy (item ("invariant type " ^ ident) (pp_type_expr type_expr)));
            let* s = get_name loc names ident in
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
              of_type_expr loc names type_expr in

@@ -323,7 +323,6 @@ let retype_impls loc impls =
 
 
 let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
-  Pp.d 5 (lazy (!^"pre-processing label" ^^^ Sym.pp lsym));
   let* ftyp = match Pmap.lookup fsym funinfo with
     | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
     | None -> fail loc (Unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
@@ -379,7 +378,6 @@ let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsy
 
 let retype_fun_map_decl loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
                         fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
-  let () = Pp.d 5 (lazy (!^"pre-processing function" ^^^ Sym.pp fsym)) in
   match decl with
   | M_Fun (cbt,args,pexpr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in

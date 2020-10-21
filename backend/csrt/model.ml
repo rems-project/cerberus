@@ -26,15 +26,6 @@ let pp {local; global; consts} =
    *     ) [] a
    * in *)
 
-  let pped = 
-    Pp.flow_map (comma ^^ break 1) (fun (sym,s) -> 
-        (item (Sym.pp_string sym) !^s)
-      ) consts
-  in
-  Pp.plain pped
-
-
-
-           
-
-
+  Pp.flow_map (comma ^^ break 1) (fun (sym,s) -> 
+      typ (Sym.pp sym) !^s
+    ) consts
