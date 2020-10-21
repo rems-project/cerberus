@@ -63,7 +63,10 @@ let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   | Union _ -> fail loc (Unsupported !^"union types")
 
 let integerType_constraint loc about it =
-  let* (min,max) = Memory.integer_range loc it in
+  let* (min,max) = match it with
+    | CF.Ctype.Bool -> return (Z.of_int 0, Z.of_int 1)
+    | _ -> Memory.integer_range loc it 
+  in
   return (LC (And [IT.LE (Num min, about); IT.LE (about, Num max)]))
 
 

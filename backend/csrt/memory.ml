@@ -22,15 +22,9 @@ let size_of_ctype loc ct =
 let size_of_struct_type loc (BT.Tag s) =
   size_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct s))
   
-let integer_value_min loc it = 
-  integer_value_to_num loc (CF.Impl_mem.min_ival it)
-
-let integer_value_max loc it = 
-  integer_value_to_num loc (CF.Impl_mem.max_ival it)
-
 let integer_range loc it =
-  let* min = integer_value_min loc it in
-  let* max = integer_value_max loc it in
+  let* min = integer_value_to_num loc (CF.Impl_mem.min_ival it) in
+  let* max = integer_value_to_num loc (CF.Impl_mem.max_ival it) in
   return (min,max)
 
 

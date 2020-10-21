@@ -32,6 +32,7 @@ type type_error =
   | Missing_ownership of access * BT.member option
   | Uninitialised of BT.member option
   | Name_bound_twice of Sym.t
+  | NameS_bound_twice of string
   | Unbound_string_name of string
   | Unbound_name of Sym.t
   | Unbound_impl_const of CF.Implementation.implementation_constant
@@ -85,6 +86,8 @@ let pp_type_error = function
      end
   | Name_bound_twice name ->
      !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
+  | NameS_bound_twice name ->
+     !^"Name bound twice" ^^ colon ^^^ squotes !^name
   | Unbound_string_name unbound ->
      !^"Unbound symbol" ^^ colon ^^^ !^unbound
   | Unbound_name unbound ->

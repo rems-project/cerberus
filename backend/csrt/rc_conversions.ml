@@ -119,10 +119,25 @@ and pp_type_expr_arg type_expr_arg =
 
 
 
+(* let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym)) *)
+let log_name_add sym = ()
+
+
+let add_name loc names ident sym : (Sym.t StringMap.t) m = 
+  match StringMap.find_opt ident names with
+  | Some sym -> fail loc (NameS_bound_twice ident)
+  | None -> return (StringMap.add ident sym names)
+
 let get_name loc names ident : Sym.t m = 
   match StringMap.find_opt ident names with
   | Some sym -> return sym
   | None -> fail loc (Generic !^("unknown name " ^ ident))
+
+let is_named (s : Sym.t) (names : Sym.t StringMap.t) = 
+  StringMap.exists (fun _ s' -> Sym.equal s s') names
+
+
+
 
 let parse_it loc names s context_pp : IT.t m = 
   match IndexTermParser.parse loc names s with
@@ -352,6 +367,12 @@ and of_type_expr loc names te : tb m =
         let lrt = Constraint (LC.LC (constr name), Constraint (lc, I)) in
         return (B ((New, name, BT.Integer, Some size), lrt))
      end
+  | None, Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
+     let name = Sym.fresh () in
+     let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
+     let* size = Memory.size_of_ctype loc ct in
+     let* lc = integerType_constraint loc (S name) (CF.Ctype.Bool) in
+     return (B ((New, name, BT.Integer, Some size), RT.Constraint (lc, I)))
   | None, Ty_params ("void", []) ->
      let name = Sym.fresh () in
      return (B ((New, name, BT.Unit, None), RT.I))
@@ -364,13 +385,8 @@ and of_type_expr loc names te : tb m =
      cannot_process loc pp_type_expr te
 
 
-(* let log_name_add sym = Pp.d 6 (lazy (!^"adding name" ^^^ Sym.pp sym)) *)
-let log_name_add sym = ()
 
 let (@@) = RT.(@@)
-
-let is_named (s : Sym.t) (names : Sym.t StringMap.t) = 
-  StringMap.exists (fun _ s' -> Sym.equal s s') names
 
 let make_fun_spec_annot loc struct_decls attrs args ret_ctype = 
   let (annot: function_annot) = function_annot attrs in
@@ -386,7 +402,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   let* (names, params_lrt) = 
     ListM.fold_leftM (fun (names, acc_lrt) (ident, coq_expr) : (Sym.t StringMap.t * RT.l) m ->
         let s = Sym.fresh_named ident in
-        let names = StringMap.add ident s names in
+        let* names = add_name loc names ident s in
         log_name_add s;
         let* (bt,_,lrt) = of_coq_expr_typ loc names coq_expr s in
         return (names, acc_lrt @@ (RT.Logical ((s, LS.Base bt), lrt)))
@@ -396,9 +412,9 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
     ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((msym,_), type_expr) ->
         let oname = Option.bind msym (Sym.symbol_name) in
         let s = Sym.fresh_onamed oname in
-        let names = match oname with
-          | Some ident -> log_name_add s; StringMap.add ident s names 
-          | None -> names
+        let* names = match oname with
+          | Some ident -> add_name loc names ident s
+          | None -> return names
         in
         let* (B ((bnew, pointee, bt, osize), lrt)) = 
           of_type_expr loc names type_expr in
@@ -441,7 +457,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   let* (names, exists_lrt) = 
     ListM.fold_leftM (fun (names, lrt) (ident,coq_expr) ->
         let s = Sym.fresh_named ident in
-        let names = StringMap.add ident s names in
+        let* names = add_name loc names ident s in
         log_name_add s;
         let* (bt, _, lrt') = of_coq_expr_typ loc names coq_expr s in
         return (names, lrt @@ RT.Logical ((s, LS.Base bt), lrt))
@@ -479,7 +495,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
   let* (names, exists_lrt) = 
     ListM.fold_leftM (fun (names, lrt) (ident,coq_expr) ->
         let s = Sym.fresh_named ident in
-        let names = StringMap.add ident s names in
+        let* names = add_name loc names ident s in
         log_name_add s;
         let* (bt, _, lrt') = of_coq_expr_typ loc names coq_expr s in
         return (names, lrt @@ RT.Logical ((s, LS.Base bt), lrt))
@@ -495,10 +511,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
            return (names,args_lrts @ [arg_lrt])
         | Some (ident, Some type_expr) ->
            Pp.d 6 (lazy (item ("invariant type " ^ ident) (pp_type_expr type_expr)));
-           let* s = match StringMap.find_opt ident names with
-           | Some sym -> return sym
-           | None -> fail loc (Generic !^("unknown name " ^ ident))
-           in
+           let* s = get_name loc names ident in
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
              of_type_expr loc names type_expr in
            let sa = pointee in
@@ -525,7 +538,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let* arg_rt = rt_of_pointer_ctype loc structs s ct in
            return (names,args_rts @ [arg_rt])
         | Some (ident, Some type_expr) ->
-           let names = StringMap.add ident s names in
+           let* names = add_name loc names ident s in
            log_name_add s;
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
              of_type_expr loc names type_expr in
