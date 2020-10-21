@@ -334,7 +334,6 @@ let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsy
   in
   match def with
   | M_Return _ ->
-     Pp.p (item "ftyp" (FT.pp ftyp));
      let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
      return (M_Return lt)
   | M_Label (argtyps,args,e,annots) -> 

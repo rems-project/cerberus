@@ -1,3 +1,5 @@
+(* include Stdlib.Option *)
+
 type 'a m = 'a option
 
 let map f = function
@@ -40,3 +42,8 @@ let pp ppf oa =
   match oa with
   | Some a -> !^"Some" ^^^ parens (ppf a)
   | None -> !^"None"
+
+
+let to_list = function
+  | Some a -> [a]
+  | None -> []

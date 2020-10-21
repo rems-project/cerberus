@@ -6,16 +6,15 @@ module LS=LogicalSorts
 module CF=Cerb_frontend
 module RE=Resources
 
+type stacktrace = string
 
 
-type stacktrace = Pp.document
-type ostacktrace = stacktrace option
 
 let do_stack_trace () = 
   let open Pp in
   if !Debug_ocaml.debug_level > 0 then 
     let backtrace = Printexc.get_callstack (!print_level * 10) in
-    Some (!^(Printexc.raw_backtrace_to_string backtrace))
+    Some (Printexc.raw_backtrace_to_string backtrace)
   else 
     None
 
@@ -53,8 +52,7 @@ type type_error =
   | Resource_already_used of Resources.t * Loc.t list
   | Unused_resource of {resource: Resources.t; is_merge: bool}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * 
-                             document option (* * string *)
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * string option
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -72,88 +70,104 @@ type t = type_error
 let pp_type_error = function
   | Missing_ownership (access,omember) ->
      begin match access, omember with
-     | Kill, None -> !^"Missing ownership for de-allocating"
-     | Kill, Some m -> !^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m
-     | Load, None -> !^"Missing ownership for reading"
-     | Load, Some m -> !^"Missing ownership for reading struct member" ^^^ BT.pp_member m
-     | Store, None -> !^"Missing ownership for writing"
-     | Store, Some m -> !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
+     | Kill, None ->  
+        (!^"Missing ownership for de-allocating", [])
+     | Kill, Some m ->  
+        (!^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m, [])
+     | Load, None   ->  
+        (!^"Missing ownership for reading", [])
+     | Load, Some m -> 
+        (!^"Missing ownership for reading struct member" ^^^ BT.pp_member m, [])
+     | Store, None   -> 
+        (!^"Missing ownership for writing", [])
+     | Store, Some m -> 
+        (!^"Missing ownership for writing struct member" ^^^ BT.pp_member m, [])
      end
   | Uninitialised omember ->
      begin match omember with
-     | None -> !^"Trying to read uninitialised data"
-     | Some m -> !^"Trying to read uninitialised struct member" ^^^ BT.pp_member m
+     | None -> 
+        (!^"Trying to read uninitialised location", [])
+     | Some m -> 
+        (!^"Trying to read uninitialised struct member" ^^^ BT.pp_member m, [])
      end
   | Name_bound_twice name ->
-     !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
+     (!^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name), [])
   | NameS_bound_twice name ->
-     !^"Name bound twice" ^^ colon ^^^ squotes !^name
+     (!^"Name bound twice" ^^ colon ^^^ squotes !^name, [])
   | Unbound_string_name unbound ->
-     !^"Unbound symbol" ^^ colon ^^^ !^unbound
+     (!^"Unbound symbol" ^^ colon ^^^ !^unbound, [])
   | Unbound_name unbound ->
-     !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
+     (!^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound, [])
   | Unbound_impl_const i ->
-     !^("Unbound implementation defined constant" ^
-         CF.Implementation.string_of_implementation_constant i)
+     (!^("Unbound implementation defined constant" ^
+           CF.Implementation.string_of_implementation_constant i), [])
   | Struct_not_defined (BT.Tag tag) ->
-     !^"struct" ^^^ Sym.pp tag ^^^ !^"not defined"
+     (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined", [])
   | Unreachable unreachable ->
-     !^"Internal error, should be unreachable" ^^ colon ^^^ unreachable
+     (!^"Internal error, should be unreachable" ^^ colon ^^^ unreachable, [])
   | Z3_fail err ->
-     !^"Z3 failure:" ^^^ err
+     (!^"Z3 failure:" ^^^ err, [])
   | Unsupported unsupported ->
-     !^"Unsupported feature" ^^ colon ^^^ unsupported
+     (!^"Unsupported feature" ^^ colon ^^^ unsupported, [])
   | Variadic_function fn ->
-     !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
+     (!^"Variadic functions unsupported" ^^^ parens (Sym.pp fn), [])
   | Mismatch {has; expect} ->
-     !^"Expected value of type" ^^^ LS.pp false expect ^^^
-       !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
+     (!^"Expected value of type" ^^^ LS.pp false expect ^^^
+        !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has, [])
   | Number_arguments {has;expect} ->
-     !^"Wrong number of arguments:" ^^^
-       !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
-         !^"has" ^^^ !^(string_of_int has)
+     (!^"Wrong number of arguments:" ^^^
+        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+          !^"has" ^^^ !^(string_of_int has), [])
   | Illtyped_it it ->
-     !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it)
+     (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Unsat_constraint c ->
-     !^"Unsatisfied constraint" ^^^
-       LogicalConstraints.pp c
+     (!^"Unsatisfied constraint" ^^^ LogicalConstraints.pp c, [])
   | Unconstrained_logical_variable name ->
-     !^"Unconstrained logical variable" ^^^ Sym.pp name
+     (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
   | Missing_resource t ->
-     !^"Missing resource of type" ^^^ Resources.pp t
+     (!^"Missing resource of type" ^^^ Resources.pp t, [])
   | Resource_already_used (resource,where) ->
-     !^"Resource" ^^^ Resources.pp resource ^^^ 
-       !^"has already been used:" ^^^ braces (pp_list Loc.pp where)
+     (!^"Resource" ^^^ Resources.pp resource ^^^ 
+        !^"has already been used:" ^^^ braces (pp_list Loc.pp where), [])
   | Unused_resource {resource;_} ->
-     !^"Left-over unused resource" ^^^ Resources.pp resource
+     (!^"Left-over unused resource" ^^^ Resources.pp resource, [])
   | Undefined_behaviour (undef, omodel) -> 
-     !^"Undefined behaviour" ^^ colon ^^^ 
-       !^(CF.Undefined.pretty_string_of_undefined_behaviour undef) ^^
-         begin match omodel with
-         | Some pped_model -> hardline ^^ item "model" pped_model
-         | None -> break 1 ^^ parens !^"no model"
-         end
-         (* item "unsatisfied core" !^unsat_core *)
+     let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
+     let extras = match omodel with
+       | Some model -> 
+          [Pp.plain (Pp.item "UB" !^ub); 
+           Pp.plain (Pp.item "model" !^model)]
+       | None -> 
+          [Pp.plain (item "UB" !^ub)]
+     in
+     (!^"Undefined behaviour", extras)
   | Unspecified _ctype ->
-     !^"Unspecified value"
+     (!^"Unspecified value", [])
   | StaticError err ->
-     !^("Static error: " ^ err)
+     (!^("Static error: " ^ err), [])
   | Generic err ->
-     err
+     (err, [])
 
 
-let pp (loc : Loc.t) (ostacktrace : ostacktrace) (err : t) = 
-  separate hardline
-    begin match ostacktrace with
+(* stealing some logic from pp_errors *)
+let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) = 
+  let (head, pos) = Location_ocaml.head_pos_of_location loc in
+  let (msg, extras) = pp_type_error err in
+  let extras = match ostacktrace with
     | Some stacktrace -> 
-       [Loc.pp loc; 
-        pp_type_error err; 
-        empty;
-        format [FG (Black,Bright)] "stack trace";
-        stacktrace]
+       extras @ [Pp.plain (item "stacktrace" !^stacktrace)]
     | None -> 
-       [Loc.pp loc; pp_type_error err]
-    end
+       extras
+  in
+  let pped = 
+    Printf.sprintf "%s %s\n%s%s" head (Pp.plain msg) pos
+      begin 
+        if extras = []
+        then "" 
+        else ("\n" ^ String.concat "\n" extras)
+      end
+  in
+  CF.Pp_errors.fatal pped
 
 
 

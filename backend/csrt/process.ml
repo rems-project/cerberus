@@ -91,5 +91,4 @@ let process_and_report mu_file =
   match process mu_file with
   | Ok () -> ()
   | Error (loc,ostacktrace,err) -> 
-     Pp.error (TypeErrors.pp loc ostacktrace err); 
-     exit 1
+     TypeErrors.type_error loc ostacktrace err

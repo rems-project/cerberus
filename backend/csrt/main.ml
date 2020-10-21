@@ -171,26 +171,26 @@ let frontend filename =
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
-  match Filename.extension filename with
-  | ".c" ->
-     c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
-     CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
-     process core_file
-  | ext ->
-     failwith (Printf.sprintf "wrong file extension %s" ext)
-
+  c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
+  CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
+  process core_file
 
 
 
 let main filename debug_level print_level =
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
-  if debug_level > 0 then Printexc.record_backtrace true else ();
-  match frontend filename with
-  | CF.Exception.Exception err ->
-     prerr_endline (CF.Pp_errors.to_string err);
-  | CF.Exception.Result (file: (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct CF.Mucore.mu_struct_def, CA.ct CF.Mucore.mu_union_def, unit) CF.Mucore.mu_file ) ->
-     Process.process_and_report file
+  if not (Sys.file_exists filename) then
+    CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
+  else if not (String.equal (Filename.extension filename) ".c") then
+    CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
+  else
+    if debug_level > 0 then Printexc.record_backtrace true else ();
+    match frontend filename with
+    | CF.Exception.Exception err ->
+       prerr_endline (CF.Pp_errors.to_string err);
+    | CF.Exception.Result file ->
+       Process.process_and_report file
 
 
 open Cmdliner

@@ -94,20 +94,20 @@ let headline a =
 
 let action a = format [FG (Cyan,Dark)] ("## " ^ a ^ " ")
 
-let p pp = CB.Pipeline.run_pp None (pp ^^ hardline)
+let print pp = CB.Pipeline.run_pp None (pp ^^ hardline)
 let o_p = function
   | None -> ()
   | Some pp -> CB.Pipeline.run_pp None (pp ^^ hardline)
 let level l pp = if !print_level >= l then Some (Lazy.force pp) else None
 let d l pp = o_p (level l pp)
 
-let error pp = p (format [FG (Red,Bright)] "Error:" ^^^ pp ^^ hardline)
-let warn pp = p (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
+(* let error pp = print (format [FG (Red,Bright)] "Error:" ^^^ pp ^^ hardline) *)
+let warn pp = print (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
 
 
 let time descr f = 
   let t = Unix.gettimeofday () in
   let res = Lazy.force f in
   let t' = Unix.gettimeofday () in
-  let () = p (item descr !^(Printf.sprintf "%f" (t' -. t))) in
+  let () = print (item descr !^(Printf.sprintf "%f" (t' -. t))) in
   res

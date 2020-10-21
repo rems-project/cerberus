@@ -247,10 +247,6 @@ module Spine (I : AT.I_Sig) = struct
       in
       delay_logical (SymMap.empty, []) ftyp_l
     in
-    
-    (* Pp.d 4 (lazy (!^"starting resource inference"));
-     * Pp.d 4 (lazy (item "ftyp" (NFT.pp_r ftyp)));
-     * Pp.d 4 (lazy (item "unis" (pp_unis unis))); *)
 
     let* (local, unis, ftyp_c) = 
       let rec infer_resources local unis = function
@@ -676,9 +672,9 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible) m = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Loc.update loc annots in
-  Pp.d 2 (lazy (action "inferring pure expression"));
-  Pp.d 2 (lazy (item "expr" (pp_pexpr pe)));
-  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
+  Pp.d 3 (lazy (action "inferring pure expression"));
+  Pp.d 3 (lazy (item "expr" (pp_pexpr pe)));
+  Pp.d 3 (lazy (item "ctxt" (L.pp local)));
   let*? (rt, local) = match pe_ with
     | M_PEsym sym ->
        let ret = Sym.fresh () in
@@ -807,7 +803,7 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
        in
        merge_return_paths loc paths
   in  
-  Pp.d 2 (lazy (item "type" (RT.pp rt)));
+  Pp.d 3 (lazy (item "type" (RT.pp rt)));
   return (Normal (rt, local))
 
 and infer_pexpr_pop (loc : Loc.t) delta {local; global} 
@@ -824,10 +820,10 @@ let rec check_pexpr (loc : Loc.t) {local; global} (e : 'bty pexpr)
                     (typ : RT.t) : (L.t fallible) m = 
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Loc.update loc annots in
-  Pp.d 2 (lazy (action "checking pure expression"));
-  Pp.d 2 (lazy (item "expr" (group (pp_pexpr e))));
-  Pp.d 2 (lazy (item "type" (RT.pp typ)));
-  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
+  Pp.d 3 (lazy (action "checking pure expression"));
+  Pp.d 3 (lazy (item "expr" (group (pp_pexpr e))));
+  Pp.d 3 (lazy (item "type" (RT.pp typ)));
+  Pp.d 3 (lazy (item "ctxt" (L.pp local)));
   match e_ with
   | M_PEif (casym, e1, e2) ->
      let* carg = arg_of_asym loc local casym in
@@ -895,9 +891,9 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
                    (e : 'bty expr) : ((RT.t * L.t) fallible) m = 
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  Pp.d 2 (lazy (action "inferring expression"));
-  Pp.d 2 (lazy (item "expr" (group (pp_expr e))));
-  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
+  Pp.d 3 (lazy (action "inferring expression"));
+  Pp.d 3 (lazy (item "expr" (group (pp_expr e))));
+  Pp.d 3 (lazy (item "ctxt" (L.pp local)));
   let* r = match e_ with
     | M_Epure pe -> 
        infer_pexpr loc {local; global} pe
@@ -1053,7 +1049,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        let* delta = pattern_match_rt loc pat rt in
        infer_expr_pop loc delta {local; labels; global} e2
   in
-  Pp.d 2 (lazy (match r with
+  Pp.d 3 (lazy (match r with
                     | False -> item "type" (parens !^"no return")
                     | Normal (rt,_) -> item "type" (RT.pp rt)));
   return r
@@ -1071,10 +1067,10 @@ let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr)
                    (typ : RT.t fallible) : (L.t fallible) m = 
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update loc annots in
-  Pp.d 2 (lazy (action "checking expression"));
-  Pp.d 2 (lazy (item "expr" (group (pp_expr e))));
-  Pp.d 2 (lazy (item "type" (Fallible.pp RT.pp typ)));
-  Pp.d 2 (lazy (item "ctxt" (L.pp local)));
+  Pp.d 3 (lazy (action "checking expression"));
+  Pp.d 3 (lazy (item "expr" (group (pp_expr e))));
+  Pp.d 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
+  Pp.d 3 (lazy (item "ctxt" (L.pp local)));
   match e_ with
   | M_Eif (casym, e1, e2) ->
      let* carg = arg_of_asym loc local casym in
@@ -1162,7 +1158,6 @@ module CBF (I : AT.I_Sig) = struct
            when equal abt sbt ->
          let new_lname = Sym.fresh_relative aname (fun s -> s^"^") in
          let subst = Subst.{before=lname;after=new_lname} in
-         Pp.d 6 (lazy (item "subst" (Subst.pp Sym.pp Sym.pp subst)));
          let ftyp' = T.subst_var subst ftyp in
          let local = add_l new_lname (Base abt) local in
          let local = add_a aname (abt,new_lname) local in
@@ -1204,7 +1199,7 @@ module CBF_LT = CBF(False)
 let check_function (loc : Loc.t) (global : Global.t) (fsym : Sym.t) 
                    (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                    (body : 'bty pexpr) (function_typ : FT.t) : unit m =
-  Pp.p (headline ("checking function " ^ Sym.pp_string fsym));
+  Pp.d 2 (lazy (headline ("checking function " ^ Sym.pp_string fsym)));
   let* (rt, delta, _, _substs) = 
     CBF_FT.check_and_bind_arguments loc arguments function_typ 
   in
@@ -1224,7 +1219,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
                     (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                     (body : 'bty expr) (function_typ : FT.t) (
                     label_defs : 'bty label_defs) : unit m =
-  Pp.p (headline ("checking procedure " ^ Sym.pp_string fsym));
+  Pp.d 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
   let* (rt, delta, pure_delta, substs) = 
     CBF_FT.check_and_bind_arguments loc arguments function_typ 
   in
@@ -1238,11 +1233,11 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
         match def with
         | M_Return lt -> 
            let lt = LT.subst_vars substs lt in
-           let () = Pp.d 2 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
+           let () = Pp.d 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
            M_Return lt
         | M_Label (lt, args, body, annots) -> 
            let lt = LT.subst_vars substs lt in
-           let () = Pp.d 2 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
+           let () = Pp.d 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
            M_Label (lt, args, body, annots)
       ) label_defs 
   in
@@ -1262,8 +1257,8 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
     | M_Return lt ->
        return ()
     | M_Label (lt, args, body, annots) ->
-       Pp.p (headline ("checking label " ^ Sym.pp_string lsym));
-       Pp.d 2 (lazy (item "type" (LT.pp lt)));
+       Pp.d 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
+       Pp.d 3 (lazy (item "type" (LT.pp lt)));
        let* (rt, delta_label, _, _) = 
          CBF_LT.check_and_bind_arguments loc args lt 
        in
@@ -1274,7 +1269,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
        return ()
   in
   let* () = PmapM.foldM check_label label_defs () in
-  Pp.p (headline ("checking function body " ^ Sym.pp_string fsym));
+  Pp.d 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
   let* local_or_false = 
     check_expr_pop loc delta 
       {local = L.empty; labels; global} body (Normal rt)
