@@ -122,7 +122,7 @@ let (pp,pp_l) =
        let op = if !unicode then utf8string "\u{2203}" else !^"E" in
        (op ^^^ typ (Sym.pp name) (LogicalSorts.pp false ls) ^^ dot) :: aux_l t
     | Resource (re,t) ->
-       let op = if !unicode then utf8string "\u{2217}" else star in
+       let op = star in
        (Resources.pp re ^^^ op) :: aux_l t
     | Constraint (lc,t) ->
        let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in

@@ -698,9 +698,10 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
        let* (reachable, omodel) = 
          Solver.is_reachable_and_model loc {local; global} 
        in
+       let pped_omodel = Option.map Model.pp omodel in
        if not reachable 
        then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-       else fail loc (Undefined_behaviour (undef, omodel))
+       else fail loc (Undefined_behaviour (undef, pped_omodel))
     | M_PEerror (err, asym) ->
        let* arg = arg_of_asym loc local asym in
        fail arg.loc (StaticError err)
@@ -1159,7 +1160,7 @@ module CBF (I : AT.I_Sig) = struct
       match args, ftyp with
       | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
            when equal abt sbt ->
-         let new_lname = Sym.fresh_relative aname (fun s -> s^"_l") in
+         let new_lname = Sym.fresh_relative aname (fun s -> s^"^") in
          let subst = Subst.{before=lname;after=new_lname} in
          Pp.d 6 (lazy (item "subst" (Subst.pp Sym.pp Sym.pp subst)));
          let ftyp' = T.subst_var subst ftyp in
@@ -1176,7 +1177,7 @@ module CBF (I : AT.I_Sig) = struct
          let has = List.length arguments in
          fail loc (Number_arguments {expect; has})
       | args, (T.Logical ((sname, sls), ftyp)) ->
-         let new_lname = Sym.fresh () in
+         let new_lname = Sym.fresh_same sname in
          let subst = Subst.{before = sname; after = new_lname} in
          let ftyp' = T.subst_var subst ftyp in
          let local = add_l new_lname sls local in

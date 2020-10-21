@@ -284,7 +284,7 @@ let rec matching_symbol syms num =
 
 
 (* maybe should fail if symbol mapping is missing? *)
-let model loc {local;global} solver : (TypeErrors.model option) m = 
+let model loc {local;global} solver : (Model.t option) m = 
   (* let unsat_core = 
    *   String.concat ", "
    *     (map Z3.Expr.to_string (Z3.Solver.get_unsat_core solver))
@@ -315,7 +315,7 @@ let model loc {local;global} solver : (TypeErrors.model option) m =
                    fail loc (Unreachable !^err)
          ) z3_model
      in
-     return (Some consts)
+     return (Some Model.{local; global; consts})
 
 let is_reachable_and_model loc {local;global} =
   let* (unreachable,_, solver) = 

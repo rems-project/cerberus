@@ -324,7 +324,7 @@ and of_type_expr loc names te : tb m =
         return (B ((Old, s, BT.Integer, Some size), lrt))
      | Some (Coq_all coq_term) -> 
         let* it = of_coq_term loc names coq_term in
-        let lc = LC.LC (IT.EQ (it, S name)) in
+        let lc = LC.LC (IT.EQ (S name, it)) in
         let lrt = Constraint (LC.LC (constr name), Constraint (lc, I)) in
         return (B ((New, name, BT.Integer, Some size), lrt))
      end
@@ -342,6 +342,9 @@ and of_type_expr loc names te : tb m =
 let log_name_add sym = ()
 
 let (@@) = RT.(@@)
+
+let is_named (s : Sym.t) (names : Sym.t StringMap.t) = 
+  StringMap.exists (fun _ s' -> Sym.equal s s') names
 
 let make_fun_spec_annot loc struct_decls attrs args ret_ctype = 
   let (annot: function_annot) = function_annot attrs in
@@ -365,7 +368,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let* (names, args_rts, ret_lrt) =
     ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((msym,_), type_expr) ->
-        let oname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
+        let oname = Option.bind msym (Sym.symbol_name) in
         let s = Sym.fresh_onamed oname in
         let names = match oname with
           | Some ident -> log_name_add s; StringMap.add ident s names 
@@ -443,7 +446,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
   let (annot: loop_annot) = loop_annot attrs in
   let* (names, exists_lrt) = 
     ListM.fold_leftM (fun (names, lrt) (ident,coq_expr) ->
-        let s = Sym.fresh_pretty ident in
+        let s = Sym.fresh_named ident in
         let names = StringMap.add ident s names in
         log_name_add s;
         let* (bt, _, lrt') = of_coq_expr_typ loc names coq_expr s in
@@ -482,17 +485,14 @@ let make_loop_label_spec_annot (loc : Loc.t)
   in
   let* (names, args_rts) = 
     ListM.fold_leftM (fun (names, args_rts) (msym, ct) ->
-        let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
+        let mname = Option.bind msym (Sym.symbol_name) in
+        let s = Sym.fresh_onamed mname in
         match Option.map (fun n -> (n, List.assoc_opt n annot.la_inv_vars)) mname with
         | None
         | Some (_,None) ->
-           let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-           let s = Sym.fresh_fancy mname in
-           let* arg_rt = rt_of_ctype loc structs s (lift ct) in
+           let* arg_rt = rt_of_pointer_ctype loc structs s ct in
            return (names,args_rts @ [arg_rt])
         | Some (ident, Some type_expr) ->
-           let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-           let s = Sym.fresh_fancy mname in
            let names = StringMap.add ident s names in
            log_name_add s;
            let* (B ((bnew, pointee, bt, osize), lrt)) = 

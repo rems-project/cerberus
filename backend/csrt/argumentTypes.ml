@@ -91,7 +91,7 @@ module Make (I: I_Sig) = struct
          let op = if !unicode then utf8string "\u{2200}" else !^"AL" in
          (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux t
       | Resource (re,t) ->
-         let op = if !unicode then equals ^^ utf8string "\u{2217}" else minus ^^ star in
+         let op = minus ^^ star in
          (RE.pp re ^^^ op) :: aux t
       | Constraint (lc,t) ->
          let op = equals ^^ rangle in

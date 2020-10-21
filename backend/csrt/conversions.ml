@@ -1,5 +1,4 @@
 module CF=Cerb_frontend
-module CB=Cerb_backend
 open List
 (* open Sym *)
 open Resultat
@@ -215,60 +214,62 @@ let struct_decl loc tag fields struct_decls =
 
 (* return types *)
 
-let rt_of_ctype loc struct_decls asym ct =
+let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct = 
   let open RT in
-  let rec aux (s : Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
-    match ct_ with
-    | Void -> return (Computational ((s, BT.Unit), I))
-    | Basic (Integer it) -> 
-       let* constr = integerType_constraint loc (S s) it in
-       return (Computational ((s, Integer), Constraint (constr,I)))
-    | Array (ct, _maybe_integer) ->
-       return (Computational ((s, Array), I))
-    | Pointer (_qualifiers, ct) ->
-       let CF.Ctype.Ctype (_, ct_) = ct in
-       begin match ct_ with
-       | CF.Ctype.Struct tag ->
-          let open Global in
-          let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
-          let Computational ((s',bt), lrt) = RT.freshify decl.closed_stored in
-          let lrt' = RT.subst_var_l {before = s'; after = s} lrt in
-          return (Computational ((s, bt), lrt'))
-       | CF.Ctype.Void -> 
-          fail loc (Unsupported !^"todo: void*")
-       | _ ->
-          let s2 = Sym.fresh () in
-          let* (Computational ((s2,bt),lrt)) = aux s2 ct in
-          (* fix *)
-          let* size = Memory.size_of_ctype loc ct in
-          let points = RE.Points {pointer = S s; pointee = s2; size} in
-          let lrt = Logical ((s2, Base bt), Resource (points, lrt)) in
-          return (Computational ((s,Loc), lrt))
-       end
-    (* fix *)
-    | Atomic ct -> 
-       aux s ct
-    | Struct tag -> 
-       let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
-       let Computational ((s',bt),lrt) = RT.freshify decl.Global.closed in
-       return (Computational ((s, bt), RT.subst_var_l {before=s; after=s} lrt))
-    | Basic (Floating _) -> 
-       fail loc (Unsupported !^"floats")
-    | Union sym -> 
-       fail loc (Unsupported !^"todo: union types")
-    | Function _ -> 
-       fail loc (Unsupported !^"function pointers")
-  in
-  aux asym ct
+  let CF.Ctype.Ctype (_, ct_) = ct in
+  begin match ct_ with
+  | CF.Ctype.Struct tag ->
+     let open Global in
+     let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
+     let Computational ((s',bt), lrt) = RT.freshify decl.closed_stored in
+     let lrt' = RT.subst_var_l {before = s'; after = pointer} lrt in
+     return (Computational ((pointer, bt), lrt'))
+  | CF.Ctype.Void -> 
+     fail loc (Unsupported !^"todo: void*")
+  | _ ->
+     let s2 = Sym.fresh () in
+     let* (Computational ((s2,bt),lrt)) = 
+       rt_of_ctype loc struct_decls s2 ct in
+     (* fix *)
+     let* size = Memory.size_of_ctype loc ct in
+     let points = RE.Points {pointer = S pointer; pointee = s2; size} in
+     let lrt = Logical ((s2, Base bt), Resource (points, lrt)) in
+     return (Computational ((pointer,Loc), lrt))
+  end
+
+and rt_of_ctype loc struct_decls (s : Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
+  let open RT in
+  match ct_ with
+  | Void -> return (Computational ((s, BT.Unit), I))
+  | Basic (Integer it) -> 
+     let* constr = integerType_constraint loc (S s) it in
+     return (Computational ((s, Integer), Constraint (constr,I)))
+  | Array (ct, _maybe_integer) ->
+     return (Computational ((s, Array), I))
+  | Pointer (_qualifiers, ct) ->
+     rt_of_pointer_ctype loc struct_decls s ct
+  (* fix *)
+  | Atomic ct -> 
+     rt_of_ctype loc struct_decls s ct
+  | Struct tag -> 
+     let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
+     let Computational ((s',bt),lrt) = RT.freshify decl.Global.closed in
+     return (Computational ((s, bt), RT.subst_var_l {before=s; after=s} lrt))
+  | Basic (Floating _) -> 
+     fail loc (Unsupported !^"floats")
+  | Union sym -> 
+     fail loc (Unsupported !^"todo: union types")
+  | Function _ -> 
+     fail loc (Unsupported !^"function pointers")
 
 
 
 (* function types *)
 
 (* fix *)
-let lift ct = 
-  let q = CF.Ctype.{const = false; restrict = false; volatile = false} in
-  CF.Ctype.Ctype ([], Pointer (q, ct))
+(* let lift ct = 
+ *   let q = CF.Ctype.{const = false; restrict = false; volatile = false} in
+ *   CF.Ctype.Ctype ([], Pointer (q, ct)) *)
 
 (* let do_name (msym : Sym.t option) : Sym.t =  *)
   
@@ -292,14 +293,14 @@ let make_fun_spec loc struct_decls args ret_ctype =
   let open RT in
   let* (names, arg_rts, args, rets) = 
     ListM.fold_rightM (fun (msym, ct) (names, arg_rts, args, rets) ->
-        let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-        let s = Sym.fresh_fancy mname in
-        let names = match mname with
-          | Some ident -> StringMap.add ident s names 
+        let oname = Option.bind msym (Sym.symbol_name) in
+        let sl = Sym.fresh_onamed oname in
+        let names = match oname with
+          | Some ident -> StringMap.add ident sl names
           | None -> names
         in
-        let* arg_rt = rt_of_ctype loc struct_decls s (lift ct) in
-        let arg_rts = (mname, arg_rt) :: arg_rts in
+        let* arg_rt = rt_of_pointer_ctype loc struct_decls sl ct in
+        let arg_rts = (oname, arg_rt) :: arg_rts in
         let arg = FT.of_rt arg_rt in
         let args = Tools.comp arg args in
         let ret = update_values_lrt (RT.lrt arg_rt) in
@@ -337,9 +338,8 @@ let make_label_spec (loc : Loc.t) (ftyp : FT.t)
     | FT.I _ -> 
        let* arguments = 
          ListM.fold_leftM (fun args (msym, ct) ->
-             let mname = Option.bind (Option.map Sym.symbol_name msym) (fun x -> x) in
-             let s = Sym.fresh_fancy mname in
-             let* arg_rt = rt_of_ctype loc struct_decls s (lift ct) in
+             let s = Sym.fresh_onamed (Option.bind msym Sym.symbol_name) in
+             let* arg_rt = rt_of_pointer_ctype loc struct_decls s ct in
              let arg = LT.of_rt arg_rt in
              let args = Tools.comp args arg in
              return args

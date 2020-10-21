@@ -26,8 +26,14 @@ let equal = S.symbolEquality
 let compare = S.symbol_compare
 
 
+let named (s : t) : bool =
+  Option.is_some (symbol_name s)
+
+
 open Subst
 
 let subst {before;after} symbol = 
   if symbol = before then after else symbol
+
+
 

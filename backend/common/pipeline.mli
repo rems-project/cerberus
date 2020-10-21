@@ -29,6 +29,8 @@ type io_helpers = {
 
 val run_pp: ?remove_path:bool -> (string * string) option -> PPrint.document -> unit
 
+val core_stdlib_path: unit -> string
+
 val load_core_stdlib:
   unit -> ((string, Symbol.sym) Pmap.map * unit Core.fun_map, Location_ocaml.t * Errors.cause) Exception.exceptM
 

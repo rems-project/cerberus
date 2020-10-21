@@ -15,6 +15,7 @@ type t =
   | Constraint of LC.t
 
 
+
 let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
   let btyp sym pped = 
     format [Pp.FG(Default,Bright)] (Sym.pp_string sym) ^^ colon ^^ pped in
