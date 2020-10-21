@@ -1288,8 +1288,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - better location information
-  - check compatibility of ctypes and refinement types: integer sizes
+  - better location information (also from refined_c annotations)
   - go over files and look for `fresh ()`: give good names
   - fix Ecase "LC (Bool true)"
   - constrain return type shape, maybe also function type shape

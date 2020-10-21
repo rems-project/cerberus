@@ -153,6 +153,14 @@ let parse_it loc names s context_pp : IT.t m =
 let cannot_process loc pp_f to_pp = 
   fail loc (Unsupported (!^"cannot process term:" ^/^ pp_f to_pp))
 
+let incompatible loc ct te = 
+  let err = 
+    !^"annotation incompatible with C type:" ^^^
+    !^"annotation:" ^^^ pp_type_expr te ^^ comma ^^^
+    !^"C type:" ^^^ CF.Pp_core_ctype.pp_ctype ct
+  in
+  fail loc (Unsupported err)
+
 
 let bytes_of_integer_type_expr loc te =
   let aux = function
@@ -176,10 +184,10 @@ let bits_of_integer_type_expr loc te =
   | Ty_params (s, []) -> aux s
   | _ -> cannot_process loc pp_type_expr te
 
-let sign_of_integer_type_expr loc te = 
+let signed_integer_type_expr loc te = 
   let aux = function
-    | ("u32" | "u64") -> return `Unsigned
-    | ("i32" | "i64") -> return `Signed
+    | ("u32" | "u64") -> return false
+    | ("i32" | "i64") -> return true
     | _ -> cannot_process loc pp_type_expr te
   in
   match te with
@@ -340,15 +348,15 @@ and of_type_expr loc names te : tb m =
      return (B ((bnew, pointee, bt, osize), lrt @@ lrt'))
   | _, Ty_params ("int",[Ty_arg_expr arg]) ->
      let* size = bytes_of_integer_type_expr loc arg in
-     let* sign = sign_of_integer_type_expr loc arg in
+     let* signed = signed_integer_type_expr loc arg in
      let* bits = bits_of_integer_type_expr loc arg in
      let* constr = 
        let open IT in
-       match bits, sign with
-       | 32, `Signed -> return (fun s -> (in_range (S s) min_i32 max_i32))
-       | 32, `Unsigned -> return (fun s -> (in_range (S s) min_u32 max_u32))
-       | 64, `Signed -> return (fun s -> (in_range (S s) min_i64 max_i64))
-       | 64, `Unsigned -> return (fun s -> (in_range (S s) min_u64 max_u64))
+       match bits, signed with
+       | 32, true -> return (fun s -> (in_range (S s) min_i32 max_i32))
+       | 32, false -> return (fun s -> (in_range (S s) min_u32 max_u32))
+       | 64, true -> return (fun s -> (in_range (S s) min_i64 max_i64))
+       | 64, false -> return (fun s -> (in_range (S s) min_u64 max_u64))
        | _ -> cannot_process loc pp_type_expr te
      in
      begin match mrefinement with
@@ -388,6 +396,45 @@ and of_type_expr loc names te : tb m =
 
 let (@@) = RT.(@@)
 
+let rec rc_type_compatible_with_ctype loc oname ct type_expr = 
+  let open CF.Ctype in
+  let (CF.Ctype.Ctype (_, ct_)) = ct in
+  match ct_, type_expr with
+  | _, (Ty_refine (_,type_expr))
+  | _, (Ty_exists (_,_,type_expr))
+  | _, (Ty_constr (type_expr, _)) ->
+     rc_type_compatible_with_ctype loc oname ct type_expr
+  | (Pointer (_,ct)), (Ty_ptr (_, type_expr)) ->
+     rc_type_compatible_with_ctype loc oname ct type_expr
+  | (Basic (Integer Bool)), Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
+     return ()
+  | _, (Ty_params ("uninit", [Ty_arg_expr integer_type_expr])) ->
+     let* size = bytes_of_integer_type_expr loc integer_type_expr in
+     let* ct_size = Memory.size_of_ctype loc ct in
+     if Z.equal ct_size size 
+     then return ()
+     else incompatible loc ct type_expr
+  | (Basic (Integer it)), (Ty_params ("int", [Ty_arg_expr arg])) ->
+     let* size = bytes_of_integer_type_expr loc arg in
+     let* signed = signed_integer_type_expr loc arg in
+     let* bits = bits_of_integer_type_expr loc arg in
+     let* ct_signed = match it with
+       | Signed _ -> return true
+       | Unsigned _ -> return false
+       | _ -> incompatible loc ct type_expr
+     in
+     let* ct_size = Memory.size_of_ctype loc ct in
+     if ct_signed = signed && Z.equal ct_size size 
+     then return ()
+     else incompatible loc ct type_expr
+  | Void, Ty_params ("void", []) ->
+     return ()
+  | _, _ ->
+     cannot_process loc pp_type_expr type_expr
+
+
+
+
 let make_fun_spec_annot loc struct_decls attrs args ret_ctype = 
   let (annot: function_annot) = function_annot attrs in
   (* in order to to the List.combine below *)
@@ -409,8 +456,9 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
       ) (names, RT.I) annot.fa_parameters
   in
   let* (names, args_rts, ret_lrt) =
-    ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((msym,_), type_expr) ->
-        let oname = Option.bind msym (Sym.symbol_name) in
+    ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((osym,ct), type_expr) ->
+        let oname = Option.bind osym (Sym.symbol_name) in
+        let* () = rc_type_compatible_with_ctype loc oname ct type_expr in
         let s = Sym.fresh_onamed oname in
         let* names = match oname with
           | Some ident -> add_name loc names ident s

@@ -101,7 +101,7 @@ let o_p = function
 let level l pp = if !print_level >= l then Some (Lazy.force pp) else None
 let d l pp = o_p (level l pp)
 
-let error pp = p (format [FG (Red,Bright)] "Error" ^/^ pp ^^ hardline)
+let error pp = p (format [FG (Red,Bright)] "Error:" ^^^ pp ^^ hardline)
 let warn pp = p (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
 
 
