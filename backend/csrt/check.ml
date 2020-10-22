@@ -1035,7 +1035,20 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        let* () = all_empty loc local in
        return False
     | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
-    | M_Eif _ -> fail loc (Unreachable !^"Eif in inferring position")
+    | M_Eif (casym, e1, e2) ->
+       let* carg = arg_of_asym loc local casym in
+       let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+       let* paths =
+         ListM.mapM (fun (lc, e) ->
+             let delta = add_uc lc L.empty in
+             let*? () = 
+               false_if_unreachable loc {local = delta ++ local; global} 
+             in
+             let*? (rt, local) = infer_expr_pop loc delta {local; labels; global} e in
+             return (Normal ((lc, rt), local))
+           ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
+       in
+       merge_return_paths loc paths
     | M_Elet (p, e1, e2) ->
        let*? (rt, local) = infer_pexpr loc {local; global} e1 in
        let* delta = match p with

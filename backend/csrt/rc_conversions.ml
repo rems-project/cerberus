@@ -430,7 +430,7 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
   | Void, Ty_params ("void", []) ->
      return ()
   | _, _ ->
-     cannot_process loc pp_type_expr type_expr
+     incompatible loc ct type_expr
 
 
 

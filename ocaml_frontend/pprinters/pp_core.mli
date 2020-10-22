@@ -8,6 +8,7 @@ sig
   val show_include: bool
   (* handle_location c_loc core_range *)
   val show_locations: bool
+  val show_explode_annot: bool
   (* print locations *)
   val handle_location: Location_ocaml.t -> PPrint.range -> unit
   (* handle_uid uid core_range *)
@@ -38,4 +39,5 @@ module Make (C : CONFIG) : PP_CORE
 module Basic : PP_CORE
 module All : PP_CORE
 module WithLocations : PP_CORE
+module WithExplode : PP_CORE
 

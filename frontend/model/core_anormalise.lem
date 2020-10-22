@@ -46,7 +46,7 @@ type asym = Mucore.asym unit
 type asyms = list asym
 
 
-let always_explode_eif = true
+let always_explode_eif = false
 
 
 

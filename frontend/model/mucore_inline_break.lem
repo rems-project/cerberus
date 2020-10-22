@@ -52,10 +52,11 @@ let rec ib_expr
     wrap (M_End es)
  | M_Erun l args -> 
     let (label_sym, label_arg_syms, label_body) = label in
-    if not (Symbol.symbolEqual label_sym l) then e
+    if not (label_sym = l) then e
     else if List.length label_arg_syms <> List.length args then
       failwith "M_Erun supplied wrong number of arguments"
     else
+      let () = Debug.print_debug 1 [] (fun () -> ("REPLACING LABEL " ^ show l)) in
       let arguments = List.zip label_arg_syms args in
       let (M_Expr annots e_) = 
         List.foldr (fun (spec_arg, A annots bty app_arg) body ->
@@ -69,6 +70,26 @@ let rec ib_expr
     
 
 
+let rec inline_label_labels_and_body to_inline to_keep body =
+  match to_inline with
+  | [] -> (to_keep, body)
+  | l :: to_inline' ->
+     let to_inline' = 
+       map (fun (lname,arg_syms,lbody) -> 
+           (lname,arg_syms,ib_expr l lbody)
+         ) to_inline'
+     in
+     let to_keep' = 
+       Map.map (fun def -> match def with
+         | M_Return _ -> def
+         | M_Label lt args lbody2 annot -> 
+            M_Label lt args (ib_expr l lbody2) annot
+         end) to_keep
+     in
+     let body' = ib_expr l body in
+     inline_label_labels_and_body to_inline' to_keep' body'
+  end
+
 
 let ib_fun_map_decl 
       (name: symbol)
@@ -77,23 +98,20 @@ let ib_fun_map_decl
   better_error_messages (show name)
     (match d with
      | M_Proc loc rbt arg_bts body label_defs -> 
-        let (body, label_defs) = 
-          let aux label def 
-                ((body : mu_expr 'DCTY 'DBTY 'bty),
-                 (acc_label_defs : mu_label_defs 'DLTY 'DCTY 'DBTY 'bty))
-            =
+        let (to_keep, to_inline) =
+          let aux label def (to_keep, to_inline) =
             match def with
-            | M_Return _ -> 
-               (body, Map.insert label def acc_label_defs)
+            | M_Return _ -> (Map.insert label def to_keep, to_inline)
             | M_Label lt args lbody annot ->
-               if not (is_loop_break annot) then
-                 (body, Map.insert label def acc_label_defs)
-               else
-                 let l = (label, map fst args, lbody) in
-                 (ib_expr l body, acc_label_defs)
+               if is_loop_break annot
+               then (to_keep, (label, map fst args, lbody) :: to_inline)
+               else (Map.insert label def to_keep, to_inline)
             end 
           in
-          Map_extra.fold aux label_defs (body, Map.empty)
+          Map_extra.fold aux label_defs (Map.empty, [])
+        in
+        let (label_defs, body) = 
+          inline_label_labels_and_body to_inline to_keep body
         in
         M_Proc loc rbt arg_bts body label_defs
      | _ -> d

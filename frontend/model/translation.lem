@@ -1036,7 +1036,7 @@ else match AilTypesAux.referenced_type (ctype_of e) with
                       , C.Expr [] (
                           C.Ewseq (Caux.mk_sym_pat test_sym C.BTy_boolean)
                             (C.Expr [] (C.Ememop Mem_common.PtrValidForDeref [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_sym_pe obj_sym])) (
-                              C.Expr [] (
+                              C.Expr [Annot.Anot_explode] (
                                 C.Eif (Caux.mk_sym_pe test_sym)
                                   begin
                                     let obj_sym_pe = 

@@ -84,10 +84,10 @@ let print_file ?(remove_path = false) filename file =
   match file with
   | CORE file ->
      CB.Pipeline.run_pp ~remove_path (Some (filename,"core")) 
-       (CF.Pp_core.Basic.pp_file file);
+       (CF.Pp_core.WithExplode.pp_file file);
   | MUCORE file ->
      CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
-       (CF.Pp_mucore.WithLocations_standard_typ.pp_file None file);
+       (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
 
 
 module Log : sig 

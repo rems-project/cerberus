@@ -14,6 +14,7 @@ sig
   val show_std: bool
   val show_include: bool
   val show_locations: bool
+  val show_explode_annot: bool
   val handle_location: Location_ocaml.t -> P.range -> unit
   val handle_uid: string -> P.range -> unit
 end
@@ -47,8 +48,17 @@ let maybe_print_location : Annot.annot list -> P.document =
     fun annot -> P.empty
   else
     fun annot -> 
-    match show_locations, Annot.get_loc annot with
-    | true, Some loc -> P.parens (Location_ocaml.pp_location loc) ^^ P.space
+    match Annot.get_loc annot with
+    | Some loc -> P.parens (Location_ocaml.pp_location loc) ^^ P.space
+    | _ -> P.empty
+
+let maybe_print_explode_annot : Annot.annot list -> P.document =
+  if not show_explode_annot then 
+    fun annot -> P.empty
+  else
+    fun annot -> 
+    match Annot.explode annot with
+    | false -> !^"{-not-explode-}" ^^ P.space
     | _ -> P.empty
 
 
@@ -398,6 +408,7 @@ let pp_pexpr pe =
     let prec' = precedence pe in
     let pp z = P.group (pp prec' z) in
     (maybe_print_location annot) ^^
+    (maybe_print_explode_annot annot) ^^
     (if compare_precedence prec' prec then fun z -> z else P.parens)
     begin
       match pe with
@@ -925,6 +936,7 @@ module Basic = Make (struct
   let show_std = false
   let show_include = false
   let show_locations = false
+  let show_explode_annot = false
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
 end)
@@ -933,6 +945,7 @@ module All = Make (struct
   let show_std = true
   let show_include = true
   let show_locations = false
+  let show_explode_annot = false
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
 end)
@@ -942,6 +955,16 @@ module WithLocations = Make (struct
   let show_std = false
   let show_include = false
   let show_locations = true
+  let show_explode_annot = false
+  let handle_location _ _ = ()
+  let handle_uid _ _ = ()
+end)
+
+module WithExplode = Make (struct
+  let show_std = false
+  let show_include = false
+  let show_locations = false
+  let show_explode_annot = true
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
 end)
