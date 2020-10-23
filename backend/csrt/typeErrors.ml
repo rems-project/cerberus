@@ -158,7 +158,7 @@ let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) =
   in
   debug 1 (lazy hardline);
   print stderr (format [FG (Red, Bright)] "error:" ^^^ 
-                format [FG (Black, Bright)] head ^^^ msg);
+                format [FG (Default, Bright)] head ^^^ msg);
   print stderr !^pos;
   List.iter (fun (descr, pp) -> print stderr (item descr pp)) extras
 

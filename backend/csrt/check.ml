@@ -1210,6 +1210,14 @@ module CBF_FT = CBF(ReturnTypes)
 module CBF_LT = CBF(False)
 
 
+let check_initial_environment_consistent loc info {local;global} =
+  let* consistent = Solver.is_reachable loc {local; global} in
+  if consistent then return () else
+    match info with
+    | `Label -> fail loc (Generic !^"this label makes inconsistent assumptions")
+    | `Fun ->   fail loc (Generic !^"this function makes inconsistent assumptions")
+
+
 (* check_function: type check a (pure) function *)
 let check_function (loc : Loc.t) (global : Global.t) (fsym : Sym.t) 
                    (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
@@ -1217,6 +1225,9 @@ let check_function (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
   debug 2 (lazy (headline ("checking function " ^ Sym.pp_string fsym)));
   let* (rt, delta, _, _substs) = 
     CBF_FT.check_and_bind_arguments loc arguments function_typ 
+  in
+  let* () = check_initial_environment_consistent loc `Fun
+              {local = delta; global}  
   in
   (* rbt consistency *)
   let* () = 
@@ -1237,6 +1248,9 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
   let* (rt, delta, pure_delta, substs) = 
     CBF_FT.check_and_bind_arguments loc arguments function_typ 
+  in
+  let* () = check_initial_environment_consistent loc `Fun
+              {local = delta; global}  
   in
   (* rbt consistency *)
   let* () = 
@@ -1277,6 +1291,10 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
        let* (rt, delta_label, _, _) = 
          CBF_LT.check_and_bind_arguments loc args lt 
        in
+       let* () = check_initial_environment_consistent loc `Label
+                   {local = delta; global}  
+       in
+       let* consistent = Solver.is_reachable loc {local = delta; global} in
        let* local_or_false = 
          check_expr_pop loc (delta_label ++ pure_delta) 
            {local = L.empty; labels; global} body False
@@ -1298,7 +1316,6 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - report when loop invariants go ignored (easy)
   - better location information (also from refined_c annotations)
   - go over files and look for `fresh ()`: give good names
   - fix Ecase "LC (Bool true)"

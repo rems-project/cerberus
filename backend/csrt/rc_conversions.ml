@@ -549,15 +549,26 @@ let make_loop_label_spec_annot (loc : Loc.t)
         return (names, lrt @@ RT.Logical ((s, LS.Base bt), lrt))
       ) (names, RT.I) annot.la_exists
   in
-  let* (names, fargs_lrts) = 
-    ListM.fold_leftM (fun (names,args_lrts) ((mname : string option), rt) ->
-        match Option.map (fun n -> (n, List.assoc_opt n annot.la_inv_vars)) mname with
-        | None
-        | Some (_,None) ->
+  let lookup_and_use_oname_inv loc inv_vars oname =
+    match oname with
+    | None -> return None
+    | Some name ->
+       match List.partition (fun (n,_) -> String.equal name n) inv_vars with
+       | [], _ -> return None
+       | [(_, te)], unused -> return (Some (name, te, unused))
+       | _ :: _ :: _, _ -> 
+          fail loc (Generic (!^"multiple annotations for variable" ^^ !^name))
+  in
+  let unused_inv_vars = annot.la_inv_vars in
+  let* (names, fargs_lrts, unused_inv_vars) = 
+    ListM.fold_leftM (fun (names,args_lrts,unused_inv_vars) ((mname : string option), rt) ->
+        let* looked_up = lookup_and_use_oname_inv loc unused_inv_vars mname in
+        match looked_up with
+        | None ->
            let (RT.Computational (_, lrt)) = rt in
            let arg_lrt = update_values_lrt lrt in
-           return (names,args_lrts @ [arg_lrt])
-        | Some (ident, Some type_expr) ->
+           return (names,args_lrts @ [arg_lrt], unused_inv_vars)
+        | Some (ident, type_expr, unused_inv_vars) ->
            let* s = get_name loc names ident in
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
              of_type_expr loc names type_expr in
@@ -571,20 +582,20 @@ let make_loop_label_spec_annot (loc : Loc.t)
              | New -> RT.Logical ((sa, LS.Base bt), RT.Resource (pointsa, lrt))
              | Old -> RT.Resource (pointsa, lrt)
            in
-        return (names, args_lrts @ [arg_lrt])
+           return (names, args_lrts @ [arg_lrt], unused_inv_vars)
       )
-      (names, []) fargs
+      (names, [], unused_inv_vars) fargs
   in
-  let* (names, args_rts) = 
-    ListM.fold_leftM (fun (names, args_rts) (msym, ct) ->
+  let* (names, args_rts, unused_inv_vars) = 
+    ListM.fold_leftM (fun (names, args_rts, unused_inv_vars) (msym, ct) ->
         let mname = Option.bind msym (Sym.symbol_name) in
         let s = Sym.fresh_onamed mname in
-        match Option.map (fun n -> (n, List.assoc_opt n annot.la_inv_vars)) mname with
-        | None
-        | Some (_,None) ->
+        let* looked_up = lookup_and_use_oname_inv loc unused_inv_vars mname in
+        match looked_up with
+        | None ->
            let* arg_rt = rt_of_pointer_ctype loc structs s ct in
-           return (names,args_rts @ [arg_rt])
-        | Some (ident, Some type_expr) ->
+           return (names,args_rts @ [arg_rt], unused_inv_vars)
+        | Some (ident, type_expr, unused_inv_vars) ->
            let* names = add_name loc names ident s in
            log_name_add s;
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
@@ -600,10 +611,14 @@ let make_loop_label_spec_annot (loc : Loc.t)
              | Old -> RT.Resource (pointsa, lrt)
            in
            let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
-           return (names, args_rts @ [arg_rt])
+           return (names, args_rts @ [arg_rt], unused_inv_vars)
       )
-      (names, []) args
+      (names, [], unused_inv_vars) args
   in    
+  let* () = match unused_inv_vars with
+    | (ident, _) :: _ -> fail loc (Generic (!^"unknown variable" ^^^ !^ident))
+    | _ -> return ()
+  in
   let fargs_ltt = 
     List.fold_left (fun acc lrt -> 
         Tools.comp acc (LT.of_lrt lrt)
