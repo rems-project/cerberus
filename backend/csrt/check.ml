@@ -623,9 +623,10 @@ let merge_return_types loc (LC c, rt) (LC c2, rt2) =
   return (LC (Or [c; c2]), RT.Computational ((lname, bt), lrt))
 
 
-let big_merge_return_types (loc : Loc.t) (crt : LC.t * RT.t) 
+let big_merge_return_types (loc : Loc.t) (name, bt) 
                            (crts : (LC.t * RT.t) list) : (LC.t * RT.t) m =
-  ListM.fold_leftM (merge_return_types loc) crt crts
+  ListM.fold_leftM (merge_return_types loc) 
+    (LC.LC (IT.Bool true), RT.Computational ((name, bt), RT.I)) crts
 
 let merge_paths 
       (loc : Loc.t) 
@@ -638,25 +639,42 @@ let merge_paths
      let* local = L.big_merge loc first locals in 
      return (Normal local)
 
+let pp_rt_local_or_false a = 
+  Pp.debug 5 (lazy !^"to merge");
+  match a with
+  | False -> 
+     Pp.debug 5 (lazy !^"false")
+  | Normal ((lc, rt), l) -> 
+     Pp.debug 5 (lazy (item "lc" (LC.pp lc)));
+     Pp.debug 5 (lazy (item "rt" (RT.pp rt)));
+     Pp.debug 5 (lazy (item "local" (L.pp l)))
+
+
 let merge_return_paths
       (loc : Loc.t)
       (rt_local_or_falses : (((LC.t * RT.t) * L.t) fallible) list) 
     : (RT.t * L.t) fallible m =
+  List.iter pp_rt_local_or_false rt_local_or_falses;
   let rts_locals = non_false rt_local_or_falses in
   let rts, locals = List.split rts_locals in
   match rts_locals with
   | [] -> return False
-  | (first_rt, first_local) :: _ -> 
-     let* (_, rt) = big_merge_return_types loc first_rt rts in 
+  | ((_,RT.Computational (b,_)), first_local) :: _ -> 
+     let* (_, rt) = big_merge_return_types loc b rts in 
      let* local = L.big_merge loc first_local locals in 
-     return (Normal (rt, local))
+     let result = (Normal (rt, local)) in
+     Pp.debug 5 (lazy !^"merged");
+     Pp.debug 5 (lazy (item "rt" (RT.pp rt)));
+     Pp.debug 5 (lazy (item "local" (L.pp local)));
+     return result
 
 
 
 
 let false_if_unreachable (loc : Loc.t) {local; global} : (unit fallible) m =
   let* is_reachable = Solver.is_reachable loc {local; global} in
-  if is_reachable then return (Normal ()) else return False 
+  if is_reachable then return (Normal ()) 
+  else (Pp.warn !^"dropping unreachable control-flow path"; return False)
 
 
 (*** pure expression inference ************************************************)
@@ -894,6 +912,11 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
   debug 3 (lazy (action "inferring expression"));
   debug 3 (lazy (item "expr" (group (pp_expr e))));
   debug 3 (lazy (item "ctxt" (L.pp local)));
+
+  let* is_reachable = Solver.is_reachable loc {local; global} in
+  if not is_reachable then fail loc (Generic !^"unexpectedly unreachable") else
+
+
   let* r = match e_ with
     | M_Epure pe -> 
        infer_pexpr loc {local; global} pe
@@ -1084,6 +1107,13 @@ let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr)
   debug 3 (lazy (item "expr" (group (pp_expr e))));
   debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
   debug 3 (lazy (item "ctxt" (L.pp local)));
+
+
+
+  let* is_reachable = Solver.is_reachable loc {local; global} in
+  if not is_reachable then fail loc (Generic !^"unexpectedly unreachable") else
+
+
   match e_ with
   | M_Eif (casym, e1, e2) ->
      let* carg = arg_of_asym loc local casym in
@@ -1296,6 +1326,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
+  - report when loop invariants go ignored (easy)
   - better location information (also from refined_c annotations)
   - go over files and look for `fresh ()`: give good names
   - fix Ecase "LC (Bool true)"
