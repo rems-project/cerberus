@@ -7,8 +7,8 @@ external get_terminal_size: unit -> (int * int) option = "terminal_size"
 
 (* copying from backend.ml *)
 let term_col = match get_terminal_size () with
-  | Some (_, col) -> col
-  | _ -> 80
+  | Some (_, col) -> col - 1
+  | _ -> 80 - 1
 
 let unicode = ref true
 let print_level = ref 0
