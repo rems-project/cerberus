@@ -44,6 +44,7 @@ type type_error =
   | Variadic_function of Sym.t
 
   | Mismatch of { has: LS.t; expect: LS.t; }
+  | ResourceMismatch of { has: RE.t; expect: RE.t; }
   | Number_arguments of {has: int; expect: int}
   | Illtyped_it of IndexTerms.t
   | Unsat_constraint of LogicalConstraints.t
@@ -114,7 +115,10 @@ let pp_type_error = function
      (!^"Variadic functions unsupported" ^^^ parens (Sym.pp fn), [])
   | Mismatch {has; expect} ->
      (!^"Expected value of type" ^^^ LS.pp false expect ^^^
-        !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has, [])
+        !^"but found value of type" ^^^ LS.pp false has, [])
+  | ResourceMismatch {has; expect} ->
+     (!^"Need a resource" ^^^ RE.pp expect ^^^
+        !^"but have resource" ^^^ RE.pp has, [])
   | Number_arguments {has;expect} ->
      (!^"Wrong number of arguments:" ^^^
         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
