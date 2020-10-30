@@ -2,7 +2,6 @@ open Pp
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
-open Option
 
 type size = Z.t
 
@@ -65,33 +64,24 @@ let vars_in = function
   | Points p -> SymSet.add p.pointee (IndexTerms.vars_in p.pointer)
 
 
-(* let unify r1 r2 res = 
- *   let open Option in
- *   match r1, r2 with
- *   | Uninit u, Uninit u' when Num.equal u.size u'.size ->
- *      IT.unify u.pointer u'.pointer res
- *   | Points p, Points p' when Num.equal p.size p'.size ->
- *      let* res = IT.unify p.pointer p'.pointer res in
- *      let* res = IT.unify p.pointee p'.pointee res in
- *      return res
- *   | _ -> 
- *      fail *)
+let set_pointer re pointer = 
+  match re with
+  | Uninit u -> Uninit { u with pointer }
+  | Points p -> Points { p with pointer }
 
 
-let unify_non_pointer r1 r2 res = 
+(* requires equality on index terms (does not try to unify them) *)
+let unify r1 r2 res = 
+  let open Option in
   match r1, r2 with
-  | Uninit u, Uninit u' when Z.equal u.size u'.size ->
-     Option.return res
-  | Points p, Points p' when Z.equal p.size p'.size ->
-     if Sym.equal p.pointee p'.pointee then Some res else
-       let* uni = SymMap.find_opt p.pointee res in
-       begin match uni.Uni.resolved with
-       | Some s when s = p'.pointee -> return res 
-       | Some s -> fail
-       | None -> return (SymMap.add p.pointee (Uni.{resolved = Some p'.pointee}) res)
-         end
+  | Uninit u, Uninit u' 
+       when Z.equal u.size u'.size && IndexTerms.equal u.pointer u'.pointer ->
+     return res
+  | Points p, Points p' 
+       when Z.equal p.size p'.size && IndexTerms.equal p.pointer p'.pointer ->
+     Uni.unify_sym p.pointee p'.pointee res
   | _ -> 
-     Option.fail
+     fail
 
 
 let subst_non_pointer subst = function

@@ -260,7 +260,8 @@ module Spine (I : AT.I_Sig) = struct
            begin match matched with
            | None -> fail loc (Missing_resource re)
            | Some (s, re') ->
-              match RE.unify_non_pointer re re' unis with
+              let re' = RE.set_pointer re' (RE.pointer re) in
+              match RE.unify re re' unis with
               | None -> fail loc (Missing_resource re)
               | Some unis ->
                  let* local = use_resource loc s [loc] local in
@@ -1137,10 +1138,10 @@ let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr)
         return (Normal local)
      | False ->
         let err = 
-          "This expression returns but is expected " ^
-            "to have noreturn-type." 
+          !^"This expression returns but is expected" ^^^
+            !^"to have noreturn-type." 
         in
-        fail loc (Generic !^err)
+        fail loc (Generic err)
 
 and check_expr_pop (loc : Loc.t) delta {labels; local; global} (pe : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible) m =
@@ -1316,6 +1317,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
+  - better error messages for resource mismatches
   - better location information (also from refined_c annotations)
   - go over files and look for `fresh ()`: give good names
   - fix Ecase "LC (Bool true)"
