@@ -260,8 +260,7 @@ module Spine (I : AT.I_Sig) = struct
            begin match matched with
            | None -> fail loc (Missing_resource re)
            | Some (s, re') ->
-              let re' = RE.set_pointer re' (RE.pointer re) in
-              match RE.unify re re' unis with
+              match RE.unify re (RE.set_pointer re' (RE.pointer re)) unis with
               | None -> fail loc (Missing_resource re)
               | Some unis ->
                  let* local = use_resource loc s [loc] local in
