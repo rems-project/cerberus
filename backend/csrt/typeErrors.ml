@@ -154,7 +154,7 @@ let pp_type_error = function
 (* stealing some logic from pp_errors *)
 let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) = 
   let open Pp in
-  let (head, pos) = Location_ocaml.head_pos_of_location loc in
+  let (head, pos) = Locations.head_pos_of_location loc in
   let (msg, extras) = pp_type_error err in
   let extras = match ostacktrace with
     | Some stacktrace -> extras @ [("stacktrace", !^stacktrace)]

@@ -693,7 +693,8 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
        return (Normal (rt_of_vt vt, local))
     | M_PEconstrained _ ->
        fail loc (Unsupported !^"todo: PEconstrained")
-    | M_PEundef (loc, undef) ->
+    | M_PEundef (loc2, undef) ->
+       let loc = Loc.precise loc loc2 in
        let* (reachable, omodel) = 
          Solver.is_reachable_and_model loc {local; global} 
        in

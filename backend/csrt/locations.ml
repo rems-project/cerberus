@@ -1,15 +1,34 @@
-include Location_ocaml
+module StringSet = Set.Make(String)
 
-module CF = Cerb_frontend
+type t = Location_ocaml.t
+
+let unknown = Location_ocaml.unknown
 
 
-let pp loc = Location_ocaml.pp_location loc
+let pp loc = Location_ocaml.pp_location ~clever:false loc
 
-let precise loc mlock = 
-  match mlock with
-  | Some loc2 -> loc2
+
+
+let dirs_to_ignore = 
+  StringSet.of_list
+    [ Cerb_runtime.in_runtime "libc/include"
+    ; Cerb_runtime.in_runtime "libcore" 
+    ; Cerb_runtime.in_runtime ("impls/" ^ Setup.impl_name ^ ".impl")
+    ]
+
+let precise (loc : t) (loc2 : Location_ocaml.t) = 
+  if !Debug_ocaml.debug_level > 0 then loc2 else
+  match Location_ocaml.get_filename loc2 with
   | None -> loc
+  | Some filename ->
+     let dir = Filename.dirname filename in
+     if StringSet.mem dir dirs_to_ignore
+     then loc else loc2
 
 
 let update loc annots =
-  precise loc (CF.Annot.get_loc annots)
+  precise loc (Cerb_frontend.Annot.get_loc_ annots)
+
+
+let head_pos_of_location = 
+  Location_ocaml.head_pos_of_location

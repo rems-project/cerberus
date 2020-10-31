@@ -244,13 +244,13 @@ let to_json loc =
 
 open Colour
 
-let pp_location =
+let pp_location ?(clever = true) =
   let last_pos = ref Lexing.dummy_pos in
   fun loc ->
   let string_of_pos p =
     let open Lexing in
     let ret =
-      if !last_pos.pos_fname <> p.pos_fname then
+      if !last_pos.pos_fname <> p.pos_fname || not clever then
         p.pos_fname ^ ":" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
       else if !last_pos.pos_lnum <> p.pos_lnum then
         "line:" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
@@ -411,3 +411,7 @@ let get_filename = function
   | Loc_region (pos, _, _)
   | Loc_regions ((pos, _) :: _, _) ->
       Some pos.pos_fname
+
+let is_unknown = function
+  | Loc_unknown -> true 
+  | _ -> false

@@ -23,11 +23,7 @@ type file =
 
 
 
-let cpp_str =
-    "cc -E -C -Werror -nostdinc -undef -D__cerb__"
-    ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
-    ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
-    ^ " -DDEBUG"
+
 
 let io =
   { pass_message = begin
@@ -58,25 +54,7 @@ let io =
   }
 
 
-let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
-
-
-
-let conf (* cpp_str *) = {
-    debug_level = 0
-  ; pprints = []
-  ; astprints = []
-  ; ppflags = []
-  ; typecheck_core = true
-  ; rewrite_core = true
-  ; sequentialise_core = true
-  ; cpp_cmd = cpp_str
-  ; cpp_stderr = true
-}
- 
-
-
-
+open Setup
 
 
 
@@ -173,6 +151,7 @@ let frontend filename =
 
 
 let main filename debug_level print_level =
+  if debug_level > 0 then Printexc.record_backtrace true else ();
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
   if not (Sys.file_exists filename) then
@@ -180,7 +159,6 @@ let main filename debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    if debug_level > 0 then Printexc.record_backtrace true else ();
     match frontend filename with
     | CF.Exception.Exception err ->
        prerr_endline (CF.Pp_errors.to_string err);

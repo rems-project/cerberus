@@ -18,13 +18,13 @@ open ListM
 
 
 (* for convenience *)
-let bt_and_size_of_ctype loc ct = 
+let bt_and_size_of_ctype (loc : Loc.t) ct = 
   let* bt = Conversions.bt_of_ctype loc ct in
   let* size = Memory.size_of_ctype loc ct in
   return (bt,size)
 
 
-let retype_ctor loc = function
+let retype_ctor (loc : Loc.t) = function
   | M_Cnil cbt -> 
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      return (M_Cnil bt)
@@ -40,7 +40,7 @@ let retype_ctor loc = function
   | M_Civfromfloat -> return M_Civfromfloat
 
 
-let rec retype_pattern loc (M_Pattern (annots,pattern_)) =
+let rec retype_pattern (loc : Loc.t) (M_Pattern (annots,pattern_)) =
   match pattern_ with
   | M_CaseBase (msym, cbt) -> 
      let* bt = Conversions.bt_of_core_base_type loc cbt in
@@ -50,7 +50,7 @@ let rec retype_pattern loc (M_Pattern (annots,pattern_)) =
      let* pats = mapM (retype_pattern loc) pats in
      return (M_Pattern (annots,M_CaseCtor (ctor,pats)))
 
-let retype_sym_or_pattern loc = function
+let retype_sym_or_pattern (loc : Loc.t) = function
   | M_Symbol s -> 
      return (M_Symbol s)
   | M_Pat pat -> 
@@ -59,7 +59,7 @@ let retype_sym_or_pattern loc = function
 
 
 
-let retype_object_value loc = function
+let retype_object_value (loc : Loc.t) = function
   | M_OVinteger iv -> return (M_OVinteger iv)
   | M_OVfloating fv -> return (M_OVfloating fv)
   | M_OVpointer pv -> return (M_OVpointer pv)
@@ -76,12 +76,12 @@ let retype_object_value loc = function
      return (M_OVunion (s,id,mv))
 
 
-let retype_loaded_value loc = function
+let retype_loaded_value (loc : Loc.t) = function
   | M_LVspecified ov ->
      let* ov = retype_object_value loc ov in
      return (M_LVspecified ov)
 
-let retype_value loc = function 
+let retype_value (loc : Loc.t) = function 
  | M_Vobject ov -> 
     let* ov = retype_object_value loc ov in
     return (M_Vobject ov)
@@ -96,7 +96,7 @@ let retype_value loc = function
     return (M_Vlist (bt,asyms))
  | M_Vtuple asyms -> return (M_Vtuple asyms)
 
-let rec retype_pexpr loc (M_Pexpr (annots,bty,pexpr_)) = 
+let rec retype_pexpr (loc : Loc.t) (M_Pexpr (annots,bty,pexpr_)) = 
   let loc = Loc.update loc annots in
   let* pexpr_ = match pexpr_ with
     | M_PEsym sym -> 
@@ -153,7 +153,7 @@ let rec retype_pexpr loc (M_Pexpr (annots,bty,pexpr_)) =
   in
   return (M_Pexpr (annots,bty,pexpr_))
 
-let retype_memop loc = function
+let retype_memop (loc : Loc.t) = function
   | M_PtrEq (asym1,asym2) -> return (M_PtrEq (asym1,asym2))
   | M_PtrNe (asym1,asym2) -> return (M_PtrNe (asym1,asym2))
   | M_PtrLt (asym1,asym2) -> return (M_PtrLt (asym1,asym2))
@@ -188,7 +188,8 @@ let retype_memop loc = function
      return (M_Va_arg (asym, A (annots,bty,(bt, size))))
   | M_Va_end asym -> return (M_Va_end asym)
 
-let retype_action loc (M_Action (loc,action_)) =
+let retype_action (loc : Loc.t) (M_Action (loc2,action_)) =
+  let loc = Loc.precise loc loc2 in
   let* action_ = match action_ with
     | M_Create (asym, A (annots,bty,ct), prefix) ->
        let* (bt, size) = bt_and_size_of_ctype loc ct in
@@ -233,16 +234,16 @@ let retype_action loc (M_Action (loc,action_)) =
        let* (bt, size) = bt_and_size_of_ctype loc ct in
        return (M_LinuxRMW (A (annots,bty,(bt, size)), asym1, asym2, mo))
   in
-  return (M_Action (loc,action_))
+  return (M_Action (loc2,action_))
 
 
-let retype_paction loc = function
+let retype_paction (loc : Loc.t) = function
  | M_Paction (pol,action) ->
     let* action = retype_action loc action in
     return (M_Paction (pol,action))
 
 
-let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) = 
+let rec retype_expr (loc : Loc.t) struct_decls (M_Expr (annots,expr_)) = 
   let retype_expr loc = retype_expr loc struct_decls in
   let* expr_ = match expr_ with
     | M_Epure pexpr -> 
@@ -301,11 +302,11 @@ let rec retype_expr loc struct_decls (M_Expr (annots,expr_)) =
   return (M_Expr (annots,expr_))
 
 
-let retype_arg loc (sym,acbt) = 
+let retype_arg (loc : Loc.t) (sym,acbt) = 
   let* abt = Conversions.bt_of_core_base_type loc acbt in
   return (sym,abt)
 
-let retype_impl_decl loc = function
+let retype_impl_decl (loc : Loc.t) = function
   | M_Def (cbt,pexpr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
      let* pexpr = retype_pexpr loc pexpr in
@@ -317,12 +318,12 @@ let retype_impl_decl loc = function
      return (M_IFun (bt,args,pexpr))
 
 
-let retype_impls loc impls = 
+let retype_impls (loc : Loc.t) impls = 
   PmapM.mapM (fun _ decl -> retype_impl_decl loc decl) 
     impls CF.Implementation.implementation_constant_compare
 
 
-let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
+let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
   let* ftyp = match Pmap.lookup fsym funinfo with
     | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
     | None -> fail loc (Unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
@@ -376,7 +377,7 @@ let retype_label loc ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsy
 
 
 
-let retype_fun_map_decl loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
+let retype_fun_map_decl (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
                         fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
   match decl with
   | M_Fun (cbt,args,pexpr) ->
@@ -384,8 +385,9 @@ let retype_fun_map_decl loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
      let* args = mapM (retype_arg loc) args in
      let* pexpr = retype_pexpr loc pexpr in
      return (M_Fun (bt,args,pexpr))
-  | M_Proc (loc,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
+  | M_Proc (loc2,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
+     let loc' = Loc.precise loc loc2 in
+     let* bt = Conversions.bt_of_core_base_type loc' cbt in
      let* args = mapM (retype_arg loc) args in
      let* expr = retype_expr loc structs expr in
      let* labels = 
@@ -394,17 +396,19 @@ let retype_fun_map_decl loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
              ~loop_attributes ~structs ~fsym
          ) labels Sym.compare
      in
-     return (M_Proc (loc,bt,args,expr,labels))
-  | M_ProcDecl (loc,cbt,args) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = mapM (Conversions.bt_of_core_base_type loc) args in
-     return (M_ProcDecl (loc,bt,args))
-  | M_BuiltinDecl (loc,cbt,args) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = mapM (Conversions.bt_of_core_base_type loc) args in
-     return (M_BuiltinDecl (loc,bt,args))
+     return (M_Proc (loc2,bt,args,expr,labels))
+  | M_ProcDecl (loc2,cbt,args) ->
+     let loc' = Loc.precise loc loc2 in
+     let* bt = Conversions.bt_of_core_base_type loc' cbt in
+     let* args = mapM (Conversions.bt_of_core_base_type loc') args in
+     return (M_ProcDecl (loc2,bt,args))
+  | M_BuiltinDecl (loc2,cbt,args) ->
+     let loc' = Loc.precise loc loc2 in
+     let* bt = Conversions.bt_of_core_base_type loc' cbt in
+     let* args = mapM (Conversions.bt_of_core_base_type loc') args in
+     return (M_BuiltinDecl (loc2,bt,args))
 
-let retype_fun_map loc ~funinfo ~funinfo_extra ~loop_attributes ~structs
+let retype_fun_map (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
                    (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
   PmapM.mapM (fun fsym decl ->
       retype_fun_map_decl loc ~funinfo ~funinfo_extra 
@@ -442,9 +446,9 @@ let retype_tagDefs
     (fun sym def (acc,acc_structs,acc_unions) -> 
       match def with
       | M_UnionDef _ -> 
-         fail Loc.unknown (Unsupported !^"todo: union types")
+         fail loc (Unsupported !^"todo: union types")
       | M_StructDef (fields, _f) ->
-         let* decl = Conversions.struct_decl Loc.unknown (Tag sym) fields acc_structs in
+         let* decl = Conversions.struct_decl loc (Tag sym) fields acc_structs in
          let acc = Pmap.add sym (M_StructDef decl) acc in
          let acc_structs = SymMap.add sym decl acc_structs in
          return (acc,acc_structs,acc_unions)
@@ -455,12 +459,13 @@ let retype_tagDefs
 let retype_funinfo struct_decls funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
-      if is_variadic then fail loc (Variadic_function fsym) else
+      let loc' = Loc.precise Loc.unknown loc in
+      if is_variadic then fail loc' (Variadic_function fsym) else
         let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
         | [] ->  
-           Conversions.make_fun_spec loc struct_decls args ret_ctype
+           Conversions.make_fun_spec loc' struct_decls args ret_ctype
         | rc_attrs ->
-           Rc_conversions.make_fun_spec_annot loc struct_decls rc_attrs args ret_ctype
+           Rc_conversions.make_fun_spec_annot loc' struct_decls rc_attrs args ret_ctype
         in
         return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
                 Pmap.add fsym (names,arg_rts) funinfo_extra)

@@ -30,10 +30,11 @@ let record_tagDefs (global: Global.t) tagDefs =
 let record_funinfo global funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
-      if is_variadic then fail loc (Variadic_function fsym) else
+      let loc' = Loc.precise Loc.unknown loc in
+      if is_variadic then fail loc' (Variadic_function fsym) else
         let () = debug 2 (lazy (item "recording function type" (FT.pp ftyp))) in
         (* let* () = WellTyped.WFT.welltyped loc {local = L.empty; global} ftyp in *)
-        let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
+        let fun_decls = SymMap.add fsym (loc', ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global
 
@@ -67,7 +68,8 @@ let process_functions genv fns =
          let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
          check_function loc genv fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels) ->
-         let* (loc,ftyp) = Global.get_fun_decl loc genv fsym in
+         let loc' = Loc.precise Loc.unknown loc in
+         let* (loc,ftyp) = Global.get_fun_decl loc' genv fsym in
          check_procedure loc genv fsym args rbt body ftyp labels
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
