@@ -75,7 +75,7 @@ let use_resource loc sym where (Local local) =
   | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
      begin match b with
      | Resource re -> 
-        return (Binding (sym',UsedResource (re,where)) :: rest)
+        return (Binding (sym', UsedResource (re,where)) :: rest)
      | _ ->
         fail loc (Kind_mismatch {expect = KResource; has = VB.kind b})
      end
@@ -192,6 +192,9 @@ let add_uc lc = add_c (Sym.fresh ()) lc
 let filter p (Local e) = 
   filter_map (function Binding (sym,b) -> p sym b | _ -> None) e
 
+let filterM p (Local e) = 
+  ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
+
 let all_constraints local = 
   filter (fun _ b ->
       match b with
@@ -199,25 +202,6 @@ let all_constraints local =
       | _ -> None
     ) local
 
-let filterM p (Local e) = 
-  ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
-
-
-let filter_r p (local : t) = 
-  filter (fun sym b -> 
-      match b with
-      | Resource t -> p sym t
-      | _ -> None
-    )
-    local
-
-let filter_rM p (local : t) = 
-  filterM (fun sym b -> 
-      match b with
-      | Resource t -> p sym t
-      | _ -> return None
-    )
-    local
 
 
 let (++) = concat

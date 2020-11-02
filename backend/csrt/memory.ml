@@ -31,18 +31,44 @@ let integer_range loc it =
 open Environment
 
 
+let for_fp_filter (loc: Loc.t) {local;global} (pointer_it, size) =
+  fun name re ->
+  if Z.equal (RE.size re) size then 
+    let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer re) in
+    return holds
+  else 
+    return false
+
 let for_fp (loc: Loc.t) {local;global} (pointer_it, size) 
     : ((Sym.t * RE.t) option) m = 
   let* points = 
-    Local.filter_rM (fun name t ->
-        if Z.equal (RE.size t) size then 
-          let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer t) in
-          if holds then return (Some (name,t)) else return None
-        else 
-          return None
+    Local.filterM (fun name vb ->
+        match vb with 
+        | VariableBinding.Resource re -> 
+           let* holds = for_fp_filter loc {local; global} (pointer_it, size) name re in
+           return (if holds then Some (name, re) else None)
+        | _ -> 
+           return None
       ) local
   in
   Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+let for_fp_used (loc: Loc.t) {local;global} (pointer_it, size) 
+    : ((Loc.t list) option) m = 
+  let* points = 
+    Local.filterM (fun name vb ->
+        match vb with 
+        | VariableBinding.UsedResource (re, where) -> 
+           let* holds = for_fp_filter loc {local; global} (pointer_it, size) name re in
+           return (if holds then Some (where) else None)
+        | _ -> 
+           return None
+      ) local
+  in
+  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+
+
 
 open LogicalConstraints
 
@@ -59,8 +85,10 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} (bt : BT.t) (pointer: I
   | _ ->
      let* o_member_resource = for_fp loc {local;global} (pointer,size) in
      match o_member_resource with
-     | None -> fail loc (Missing_ownership (access_kind,is_field))
      | Some (rname,_) -> Local.use_resource loc rname [loc] local
+     | None -> 
+        let* olast_used = for_fp_used loc {local;global} (pointer,size) in
+        fail loc (Missing_ownership (access_kind, is_field, olast_used))
 
 
 
@@ -94,7 +122,9 @@ let rec load (loc: Loc.t)
      let* pointee = match o_resource with
        | Some (_,Points p) -> return p.pointee
        | Some (_,Uninit _) -> fail loc (Uninitialised is_field)
-       | None -> fail loc (Missing_ownership (Load, is_field))
+       | None -> 
+          let* olast_used = for_fp_used loc {local;global} (pointer,size) in
+          fail loc (Missing_ownership (Load, is_field, olast_used))
      in
      let* vls = Local.get_l loc pointee local in
      if LS.equal vls (Base bt) 

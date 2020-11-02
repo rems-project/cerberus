@@ -63,14 +63,10 @@ val add_c : Sym.t -> LC.t -> t -> t
 val add_ur : RE.t -> t -> t
 val add_uc : LC.t -> t -> t
 
-val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
-
 val all_constraints : t -> LC.t list
 
+val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
 val filterM : (Sym.t -> VB.t -> ('a option) m) -> t -> ('a list) m
-
-val filter_r : (Sym.t -> RE.t -> 'a option) -> t -> 'a list
-val filter_rM : (Sym.t -> RE.t -> ('a option) m) -> t -> ('a list) m
 
 val (++) : t -> t -> t
 

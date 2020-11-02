@@ -258,7 +258,10 @@ module Spine (I : AT.I_Sig) = struct
            in
            let* matched = Memory.for_fp loc {local; global} (RE.fp re) in
            begin match matched with
-           | None -> fail loc (Missing_resource re)
+           | None -> 
+              let* o_last_used = 
+                Memory.for_fp_used loc {local; global} (RE.fp re) in
+              fail loc (Missing_resource (re, o_last_used))
            | Some (s, re') ->
               let re' = RE.set_pointer re' (RE.pointer re) in
               match RE.unify re re' unis with
