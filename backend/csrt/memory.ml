@@ -13,7 +13,7 @@ module IT = IndexTerms
 let integer_value_to_num loc iv = 
   match CF.Impl_mem.eval_integer_value iv with
   | Some v -> return v
-  | None -> fail loc (Unreachable !^"integer_value_to_num")
+  | None -> fail loc (Internal !^"integer_value_to_num")
 
 let size_of_ctype loc ct = 
   let s = CF.Impl_mem.sizeof_ival ct in

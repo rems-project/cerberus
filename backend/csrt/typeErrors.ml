@@ -19,43 +19,41 @@ let do_stack_trace () =
   else 
     None
 
-
-
-
 type access = 
   | Load 
   | Store
   | Kill
 
+
 type sym_or_string = 
   | Sym of Sym.t
   | String of string
 
+
 type type_error = 
-  | Missing_ownership of access * BT.member option
+  | Unbound_name of sym_or_string
+  | Name_bound_twice of sym_or_string
+
   | Uninitialised of BT.member option
   | Missing_resource of Resources.t
-  | Unused_resource of { resource: Resources.t }
+  | Missing_ownership of access * BT.member option
   | ResourceMismatch of { has: RE.t; expect: RE.t; }
+  | Unused_resource of { resource: Resources.t }
 
-  | Name_bound_twice of sym_or_string
-  | Unbound_name of sym_or_string
-
-  | Unreachable of Pp.document
-  | Z3_fail of Pp.document
-
-  | Unsupported of Pp.document
-
-  | Mismatch of { has: LS.t; expect: LS.t; }
   | Number_arguments of {has: int; expect: int}
+  | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it of IndexTerms.t
   | Unsat_constraint of LogicalConstraints.t
   | Unconstrained_logical_variable of Sym.t
+  | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
 
   | Undefined_behaviour of CF.Undefined.undefined_behaviour * document option
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
+  | Internal of Pp.document
+  | Z3_fail of Pp.document
+  | Unsupported of Pp.document
   | Generic of Pp.document
 
 type t = type_error
@@ -103,8 +101,8 @@ let pp_type_error = function
        | String str -> !^str
      in
      (!^"Unbound symbol" ^^ colon ^^^ name_pp, [])
-  | Unreachable unreachable ->
-     (!^"Internal error, should be unreachable" ^^ colon ^^^ unreachable, [])
+  | Internal err ->
+     (!^"Internal error" ^^ colon ^^^ err, [])
   | Z3_fail err ->
      (!^"Z3 failure:" ^^^ err, [])
   | Unsupported unsupported ->
@@ -119,6 +117,9 @@ let pp_type_error = function
      (!^"Wrong number of arguments:" ^^^
         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
           !^"has" ^^^ !^(string_of_int has), [])
+  | Kind_mismatch {has; expect} ->
+     (!^"Expected" ^^^ VariableBinding.kind_pp expect ^^^ 
+        !^"but found" ^^^ VariableBinding.kind_pp has, [])
   | Illtyped_it it ->
      (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Unsat_constraint c ->

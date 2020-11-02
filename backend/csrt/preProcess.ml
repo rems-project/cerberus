@@ -326,11 +326,11 @@ let retype_impls (loc : Loc.t) impls =
 let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
   let* ftyp = match Pmap.lookup fsym funinfo with
     | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
-    | None -> fail loc (Unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+    | None -> fail loc (Internal (Sym.pp fsym ^^^ !^"not found in funinfo"))
   in
   let* (names,farg_rts) = match Pmap.lookup fsym funinfo_extra with
     | Some (names,arg_rts) -> return (names,arg_rts)
-    | None -> fail loc (Unreachable (Sym.pp fsym ^^^ !^"not found in funinfo"))
+    | None -> fail loc (Internal (Sym.pp fsym ^^^ !^"not found in funinfo"))
   in
   match def with
   | M_Return _ ->
@@ -343,7 +343,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
        mapM (fun (msym, (ct,by_pointer)) ->
            if by_pointer 
            then return (msym,ct) 
-           else fail loc (Unreachable !^"label argument passed as value")
+           else fail loc (Internal !^"label argument passed as value")
          ) argtyps
      in
      begin match CF.Annot.get_label_annot annots with
@@ -370,7 +370,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
      | Some LAswitch -> 
         fail loc (Unsupported (!^"todo: switch labels"))
      | Some LAreturn -> 
-        fail loc (Unreachable (!^"return label has not been mapped to return"))
+        fail loc (Internal (!^"return label has not been mapped to return"))
      | None -> 
         fail loc (Unsupported (!^"todo: non-loop labels"))
      end

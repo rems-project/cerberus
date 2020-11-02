@@ -50,17 +50,6 @@ let pp ?(print_all_names = false) ?(print_used = false) (Local local) =
 
 
 
-let wanted_but_found loc wanted found = 
-  let err = match wanted with
-  | `Computational -> !^"wanted computational variable but found" ^^^ VB.pp found
-  | `Logical -> !^"wanted logical variable but found" ^^^ VB.pp found
-  | `Resource -> !^"wanted resource variable but found" ^^^ VB.pp found
-  | `Constraint -> !^"wanted resource variable but found" ^^^ VB.pp found
-  in
-  fail loc (Unreachable err)
-
-
-
 let get (loc : Loc.t) (sym: Sym.t) (Local local) : VB.t m =
   let rec aux = function
   | Binding (sym',b) :: _ when Sym.equal sym' sym -> return b
@@ -85,8 +74,10 @@ let use_resource loc sym where (Local local) =
   let rec aux = function
   | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
      begin match b with
-     | Resource re -> return (Binding (sym',UsedResource (re,where)) :: rest)
-     | b -> wanted_but_found loc `Resource (sym,b)
+     | Resource re -> 
+        return (Binding (sym',UsedResource (re,where)) :: rest)
+     | _ ->
+        fail loc (Kind_mismatch {expect = KResource; has = VB.kind b})
      end
   | i::rest -> let* rest' = aux rest in return (i::rest')
   | [] -> fail loc (Unbound_name (Sym sym))
@@ -130,7 +121,7 @@ let incompatible_environments loc l1 l2=
       item "ctxt1" (pp ~print_used:true ~print_all_names:true l1) ^/^
       item "ctxt2" (pp ~print_used:true ~print_all_names:true l2)
   in
-  fail loc (Unreachable msg)
+  fail loc (Internal msg)
 
 let merge loc (Local l1) (Local l2) =
   let incompatible () = incompatible_environments loc (Local l1) (Local l2) in
@@ -167,25 +158,25 @@ let get_a (loc : Loc.t) (name: Sym.t) (local:t)  =
   let* b = get loc name local in
   match b with 
   | Computational (lname,bt) -> return (bt,lname)
-  | _ -> wanted_but_found loc `Computational (name,b)
+  | _ -> fail loc (Kind_mismatch {expect = KComputational; has = VB.kind b})
 
 let get_l (loc : Loc.t) (name: Sym.t) (local:t) = 
   let* b = get loc name local in
   match b with 
   | Logical ls -> return ls
-  | _ -> wanted_but_found loc `Logical (name,b)
+  | _ -> fail loc (Kind_mismatch {expect = KLogical; has = VB.kind b})
 
 let get_r (loc : Loc.t) (name: Sym.t) (local:t) = 
   let* b = get loc name local in
   match b with 
   | Resource re -> return re
-  | _ -> wanted_but_found loc `Resource (name,b)
+  | _ -> fail loc (Kind_mismatch {expect = KResource; has = VB.kind b})
 
 let get_c (loc : Loc.t) (name: Sym.t) (local:t) = 
   let* b = get loc name local in
   match b with 
   | Constraint lc -> return lc
-  | _ -> wanted_but_found loc `Resource (name,b)
+  | _ -> fail loc (Kind_mismatch {expect = KConstraint; has = VB.kind b})
 
 let removeS loc syms (local: t) = 
   ListM.fold_leftM (fun local sym -> remove loc sym local) local syms

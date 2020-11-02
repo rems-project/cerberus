@@ -14,6 +14,29 @@ type t =
   | UsedResource of RE.t * Loc.t list
   | Constraint of LC.t
 
+type kind = 
+  | KComputational
+  | KLogical
+  | KResource
+  | KConstraint
+  | KUsedResource
+
+
+let kind = function
+  | Computational _ -> KComputational
+  | Logical _ -> KLogical
+  | Resource _ -> KResource
+  | Constraint _ -> KConstraint
+  | UsedResource _ -> KUsedResource 
+
+let kind_pp = function
+  | KComputational -> !^"C variable"
+  | KLogical -> !^"logical variable"
+  | KResource -> !^"resource"
+  | KConstraint -> !^"constraint"
+  | KUsedResource -> !^"used resource"
+
+
 
 
 let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =

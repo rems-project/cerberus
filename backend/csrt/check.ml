@@ -390,7 +390,7 @@ let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
     ( fun _cbt -> return (ret, Loc, LC (Null (S ret))) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
-    ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
+    ( fun () -> fail loc (Internal !^"unspecified pointer value") )
 
 let rec infer_mem_value (loc : Loc.t) {local; global} (mem : mem_value) : vt m =
   let open BT in
@@ -429,7 +429,7 @@ and infer_struct (loc : Loc.t) {local; global} (tag : tag)
     | [], [] -> 
        return []
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-       fail loc (Unreachable !^"mismatch in fields in infer_struct")
+       fail loc (Internal !^"mismatch in fields in infer_struct")
     | [], ((Member id, _) :: _) ->
        fail loc (Generic (!^"field" ^^^ !^id ^^^ !^"missing"))
     | ((Member id,_) :: _), [] ->
@@ -791,7 +791,7 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
          | M_Pat pat -> pattern_match_rt loc pat rt
        in
        infer_pexpr_pop loc delta {local; global} e2
-    | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
+    | M_PEcase _ -> fail loc (Internal !^"PEcase in inferring position")
     | M_PEif (casym, e1, e2) ->
        let* carg = arg_of_asym loc local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
@@ -1038,7 +1038,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        let* (False, local) = calltype_lt loc {local; global} args lt in
        let* () = all_empty loc local in
        return False
-    | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
+    | M_Ecase _ -> fail loc (Internal !^"Ecase in inferring position")
     | M_Eif (casym, e1, e2) ->
        let* carg = arg_of_asym loc local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in

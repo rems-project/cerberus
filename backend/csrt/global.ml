@@ -35,7 +35,7 @@ let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
        !^"Unbound implementation defined constant" ^^^
          !^(CF.Implementation.string_of_implementation_constant i)
      in
-     fail loc (Unreachable err)
+     fail loc (Internal err)
   | Some v -> return v
 
 
