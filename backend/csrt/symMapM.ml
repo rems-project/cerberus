@@ -4,7 +4,7 @@ module SymMap = Map.Make(Sym)
 
 let lookup (loc : Loc.t) (e: 'v SymMap.t) (name: Sym.t) =
   match SymMap.find_opt name e with
-  | None -> fail loc (TypeErrors.Unbound_name name)
+  | None -> fail loc (TypeErrors.Unbound_name (Sym name))
   | Some v -> return v
 
 

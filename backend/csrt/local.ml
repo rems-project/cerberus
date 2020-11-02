@@ -65,7 +65,7 @@ let get (loc : Loc.t) (sym: Sym.t) (Local local) : VB.t m =
   let rec aux = function
   | Binding (sym',b) :: _ when Sym.equal sym' sym -> return b
   | _ :: local -> aux local
-  | [] -> fail loc (Unbound_name sym)
+  | [] -> fail loc (Unbound_name (Sym sym))
   in
   aux local
 
@@ -76,7 +76,7 @@ let remove (loc : Loc.t) (sym: Sym.t) (Local local) : t m =
   let rec aux = function
   | Binding (sym',_) :: rest when Sym.equal sym sym' -> return rest
   | i::rest -> let* rest' = aux rest in return (i::rest')
-  | [] -> fail loc (Unbound_name sym)
+  | [] -> fail loc (Unbound_name (Sym sym))
   in
   let* local = aux local in
   return (Local local)
@@ -90,7 +90,7 @@ let use_resource loc sym where (Local local) =
      | b -> wanted_but_found loc `Resource (sym,b)
      end
   | i::rest -> let* rest' = aux rest in return (i::rest')
-  | [] -> fail loc (Unbound_name sym)
+  | [] -> fail loc (Unbound_name (Sym sym))
   in
   let* local = aux local in
   return (Local local)

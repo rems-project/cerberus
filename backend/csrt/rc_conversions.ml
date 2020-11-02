@@ -125,7 +125,7 @@ let log_name_add sym = ()
 
 let add_name loc names ident sym : (Sym.t StringMap.t) m = 
   match StringMap.find_opt ident names with
-  | Some sym -> fail loc (NameS_bound_twice ident)
+  | Some sym -> fail loc (Name_bound_twice (String ident))
   | None -> return (StringMap.add ident sym names)
 
 let get_name loc names ident : Sym.t m = 

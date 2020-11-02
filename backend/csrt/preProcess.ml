@@ -460,7 +460,10 @@ let retype_funinfo struct_decls funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
       let loc' = Loc.precise Loc.unknown loc in
-      if is_variadic then fail loc' (Variadic_function fsym) else
+      if is_variadic then 
+        let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
+        fail loc' (Unsupported err) 
+      else
         let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
         | [] ->  
            Conversions.make_fun_spec loc' struct_decls args ret_ctype

@@ -30,7 +30,12 @@ module ImplMap =
 
 let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
   match ImplMap.find_opt i e with
-  | None -> fail loc (Unbound_impl_const i)
+  | None -> 
+     let err = 
+       !^"Unbound implementation defined constant" ^^^
+         !^(CF.Implementation.string_of_implementation_constant i)
+     in
+     fail loc (Unreachable err)
   | Some v -> return v
 
 
@@ -61,7 +66,9 @@ let empty =
 let get_struct_decl loc struct_decls (BT.Tag s) = 
   match SymMap.find_opt s struct_decls with
   | Some decl -> return decl 
-  | None -> fail loc (Struct_not_defined (BT.Tag s))
+  | None -> 
+     let err = !^"struct" ^^^ BT.pp_tag (BT.Tag s) ^^^ !^"not defined" in
+     fail loc (Generic err)
 
 let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
 let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i

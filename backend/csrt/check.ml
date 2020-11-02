@@ -101,7 +101,7 @@ let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern)
        let local' = add_l s' (Base has_bt) local' in
        let* local' = 
          match o_s with
-         | Some s when is_bound s local' -> fail loc (Name_bound_twice s)
+         | Some s when is_bound s local' -> fail loc (Name_bound_twice (Sym s))
          | Some s -> return (add_a s (has_bt, s') local')
          | None -> return local'
        in
@@ -1318,10 +1318,11 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - better error messages for resource mismatches
-  - better location information (also from refined_c annotations)
+  - make error messages take into account used resources
+  - check if we can make infer_pexpr etc. not return an environment
+  - give types for standard library functions
+  - better location information for refined_c annotations
   - go over files and look for `fresh ()`: give good names
   - fix Ecase "LC (Bool true)"
   - constrain return type shape, maybe also function type shape
-  - maybe: make call_typ and subtype accept non-A arguments  
  *)

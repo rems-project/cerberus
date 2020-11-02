@@ -26,32 +26,31 @@ type access =
   | Store
   | Kill
 
+type sym_or_string = 
+  | Sym of Sym.t
+  | String of string
 
 type type_error = 
   | Missing_ownership of access * BT.member option
   | Uninitialised of BT.member option
-  | Name_bound_twice of Sym.t
-  | NameS_bound_twice of string
-  | Unbound_string_name of string
-  | Unbound_name of Sym.t
-  | Unbound_impl_const of CF.Implementation.implementation_constant
-  | Struct_not_defined of BT.tag
+  | Missing_resource of Resources.t
+  | Resource_already_used of Resources.t * Loc.t list
+  | Unused_resource of {resource: Resources.t; is_merge: bool}
+  | ResourceMismatch of { has: RE.t; expect: RE.t; }
+
+  | Name_bound_twice of sym_or_string
+  | Unbound_name of sym_or_string
 
   | Unreachable of Pp.document
   | Z3_fail of Pp.document
 
   | Unsupported of Pp.document
-  | Variadic_function of Sym.t
 
   | Mismatch of { has: LS.t; expect: LS.t; }
-  | ResourceMismatch of { has: RE.t; expect: RE.t; }
   | Number_arguments of {has: int; expect: int}
   | Illtyped_it of IndexTerms.t
   | Unsat_constraint of LogicalConstraints.t
   | Unconstrained_logical_variable of Sym.t
-  | Missing_resource of Resources.t
-  | Resource_already_used of Resources.t * Loc.t list
-  | Unused_resource of {resource: Resources.t; is_merge: bool}
 
   | Undefined_behaviour of CF.Undefined.undefined_behaviour * document option
   | Unspecified of CF.Ctype.ctype
@@ -93,26 +92,23 @@ let pp_type_error = function
         (!^"Trying to read uninitialised struct member" ^^^ BT.pp_member m, [])
      end
   | Name_bound_twice name ->
-     (!^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name), [])
-  | NameS_bound_twice name ->
-     (!^"Name bound twice" ^^ colon ^^^ squotes !^name, [])
-  | Unbound_string_name unbound ->
-     (!^"Unbound symbol" ^^ colon ^^^ !^unbound, [])
+     let name_pp = match name with
+       | Sym s -> Sym.pp s
+       | String str -> !^str
+     in
+     (!^"Name bound twice" ^^ colon ^^^ squotes name_pp, [])
   | Unbound_name unbound ->
-     (!^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound, [])
-  | Unbound_impl_const i ->
-     (!^("Unbound implementation defined constant" ^
-           CF.Implementation.string_of_implementation_constant i), [])
-  | Struct_not_defined (BT.Tag tag) ->
-     (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined", [])
+     let name_pp = match unbound with
+       | Sym s -> Sym.pp s
+       | String str -> !^str
+     in
+     (!^"Unbound symbol" ^^ colon ^^^ name_pp, [])
   | Unreachable unreachable ->
      (!^"Internal error, should be unreachable" ^^ colon ^^^ unreachable, [])
   | Z3_fail err ->
      (!^"Z3 failure:" ^^^ err, [])
   | Unsupported unsupported ->
      (!^"Unsupported feature" ^^ colon ^^^ unsupported, [])
-  | Variadic_function fn ->
-     (!^"Variadic functions unsupported" ^^^ parens (Sym.pp fn), [])
   | Mismatch {has; expect} ->
      (!^"Expected value of type" ^^^ LS.pp false expect ^^^
         !^"but found value of type" ^^^ LS.pp false has, [])
