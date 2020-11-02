@@ -5,6 +5,7 @@ module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
 module RE=Resources
+module VB=VariableBinding
 
 type stacktrace = string
 
@@ -34,8 +35,7 @@ type type_error =
   | Missing_ownership of access * BT.member option
   | Uninitialised of BT.member option
   | Missing_resource of Resources.t
-  | Resource_already_used of Resources.t * Loc.t list
-  | Unused_resource of {resource: Resources.t; is_merge: bool}
+  | Unused_resource of { resource: Resources.t }
   | ResourceMismatch of { has: RE.t; expect: RE.t; }
 
   | Name_bound_twice of sym_or_string
@@ -127,9 +127,6 @@ let pp_type_error = function
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
   | Missing_resource t ->
      (!^"Missing resource of type" ^^^ Resources.pp t, [])
-  | Resource_already_used (resource,where) ->
-     (!^"Resource" ^^^ Resources.pp resource ^^^ 
-        !^"has already been used:" ^^^ braces (pp_list Loc.pp where), [])
   | Unused_resource {resource;_} ->
      (!^"Left-over unused resource" ^^^ Resources.pp resource, [])
   | Undefined_behaviour (undef, omodel) -> 

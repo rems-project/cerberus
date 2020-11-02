@@ -531,7 +531,7 @@ let pop_return (rt : RT.t) (local : L.t) : RT.t * L.t =
 let (pop_empty, all_empty) = 
     let rec aux loc = function
       | (s, VB.Resource resource) :: _ -> 
-         fail loc (Unused_resource {resource; is_merge = false})
+         fail loc (Unused_resource {resource})
       | _ :: rest -> aux loc rest
       | [] -> return ()
     in

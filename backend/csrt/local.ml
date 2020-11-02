@@ -86,7 +86,6 @@ let use_resource loc sym where (Local local) =
   | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
      begin match b with
      | Resource re -> return (Binding (sym',UsedResource (re,where)) :: rest)
-     | UsedResource (re,where) -> fail loc (Resource_already_used (re,where))
      | b -> wanted_but_found loc `Resource (sym,b)
      end
   | i::rest -> let* rest' = aux rest in return (i::rest')
