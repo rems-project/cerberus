@@ -10,11 +10,13 @@ let pp loc = Location_ocaml.pp_location ~clever:false loc
 
 
 let dirs_to_ignore = 
-  StringSet.of_list
-    [ Cerb_runtime.in_runtime "libc/include"
-    ; Cerb_runtime.in_runtime "libcore" 
-    ; Cerb_runtime.in_runtime ("impls/" ^ Setup.impl_name ^ ".impl")
-    ]
+  StringSet.of_list 
+    (List.map Cerb_runtime.in_runtime
+       [ "libc/include"
+       ; "libcore" 
+       ; ("impls/" ^ Setup.impl_name ^ ".impl")
+       ]
+    )
 
 let update (loc : t) (loc2 : Location_ocaml.t) = 
   if !Debug_ocaml.debug_level > 0 then loc2 else
