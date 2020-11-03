@@ -457,7 +457,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let* (names, args_rts, ret_lrt) =
     ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((osym,ct), type_expr) ->
-        let oname = Option.bind osym (Sym.symbol_name) in
+        let oname = Option.bind osym Sym.name in
         let* () = rc_type_compatible_with_ctype loc oname ct type_expr in
         let s = Sym.fresh_onamed oname in
         let* names = match oname with
@@ -588,7 +588,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
   in
   let* (names, args_rts, unused_inv_vars) = 
     ListM.fold_leftM (fun (names, args_rts, unused_inv_vars) (msym, ct) ->
-        let mname = Option.bind msym (Sym.symbol_name) in
+        let mname = Option.bind msym Sym.name in
         let s = Sym.fresh_onamed mname in
         let* looked_up = lookup_and_use_oname_inv loc unused_inv_vars mname in
         match looked_up with

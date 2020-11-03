@@ -296,7 +296,7 @@ let make_fun_spec loc struct_decls args ret_ctype =
   let open RT in
   let* (names, arg_rts, args, rets) = 
     ListM.fold_rightM (fun (msym, ct) (names, arg_rts, args, rets) ->
-        let oname = Option.bind msym (Sym.symbol_name) in
+        let oname = Option.bind msym Sym.name in
         let sl = Sym.fresh_onamed oname in
         let names = match oname with
           | Some ident -> StringMap.add ident sl names
@@ -341,7 +341,7 @@ let make_label_spec (loc : Loc.t) (ftyp : FT.t)
     | FT.I _ -> 
        let* arguments = 
          ListM.fold_leftM (fun args (msym, ct) ->
-             let s = Sym.fresh_onamed (Option.bind msym Sym.symbol_name) in
+             let s = Sym.fresh_onamed (Option.bind msym Sym.name) in
              let* arg_rt = rt_of_pointer_ctype loc struct_decls s ct in
              let arg = LT.of_rt arg_rt in
              let args = Tools.comp args arg in

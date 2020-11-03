@@ -277,7 +277,7 @@ let is_reachable loc {local;global} =
 
 let rec matching_symbol syms num = 
   match syms with
-  | sym :: syms when Sym.symbol_num sym = num -> Some sym
+  | sym :: syms when Sym.num sym = num -> Some sym
   | sym :: syms -> matching_symbol syms num
   | [] -> None
 
