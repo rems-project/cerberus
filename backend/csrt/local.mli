@@ -63,7 +63,10 @@ val add_c : Sym.t -> LC.t -> t -> t
 val add_ur : RE.t -> t -> t
 val add_uc : LC.t -> t -> t
 
+val all_computational : t -> (Sym.t * (Sym.t * BT.t)) list
 val all_constraints : t -> LC.t list
+val all_logical : t -> (Sym.t * LS.t) list
+val all_resources : t -> (Sym.t * RE.t) list
 
 val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
 val filterM : (Sym.t -> VB.t -> ('a option) m) -> t -> ('a list) m
@@ -71,3 +74,6 @@ val filterM : (Sym.t -> VB.t -> ('a option) m) -> t -> ('a list) m
 val (++) : t -> t -> t
 
 val all_names : t -> Sym.t list
+
+
+val cvar_for_lvar : t -> Sym.t -> ((Sym.t, Sym.t) Subst.t) option

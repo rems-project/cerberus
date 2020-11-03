@@ -127,7 +127,7 @@ let rec equal it it' =
 
 
 
-let pp it : PPrint.document = 
+let pp ?(quote=true) it : PPrint.document = 
 
   let rec aux atomic it = 
     let mparens pped = if atomic then parens pped else pped in
@@ -187,7 +187,7 @@ let pp it : PPrint.document =
 
     | S sym -> Sym.pp sym
   in
-  dquotes (aux false it)
+  (if quote then dquotes else (fun pp -> pp)) (aux false it)
 
 
 let rec vars_in it : SymSet.t = 
