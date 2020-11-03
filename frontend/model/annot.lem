@@ -182,3 +182,15 @@ let rec is_loop_break annots =
   | _ -> false
   end
 
+
+
+
+val set_loc : Loc.t -> list annot -> list annot
+let set_loc loc annots = 
+  let annots' = 
+    List.mapMaybe (function
+        | Aloc l -> Nothing
+        | a -> Just a
+    end) annots
+  in
+  Aloc loc :: annots'

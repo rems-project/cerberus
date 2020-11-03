@@ -107,8 +107,7 @@ LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \
 LEM_CABS          = cabs.lem undefined.lem constraint.lem ctype.lem
 LEM_AIL           = typingError.lem errorMonad.lem ailSyntax.lem genTypes.lem
 LEM_CORE_CTYPE    = core_ctype_aux.lem
-LEM_CORE          = core.lem mucore.lem mucore_to_core.lem errors.lem core_aux.lem \
-                    core_anormalise.lem mucore_inline_break.lem core_linking.lem
+LEM_CORE          = core.lem errors.lem core_aux.lem core_linking.lem
 LEM_CORE_TYPING   = core_typing.lem core_typing_aux.lem core_typing_effect.lem
 LEM_UTILS         = boot.lem decode.lem exception_undefined.lem multiset.lem \
                     state_exception.lem state_exception_undefined.lem \
