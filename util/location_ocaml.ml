@@ -250,13 +250,13 @@ let pp_location ?(clever = true) =
   let string_of_pos p =
     let open Lexing in
     let ret =
-      if !last_pos.pos_fname <> p.pos_fname || not clever then
+      if !last_pos.pos_fname <> p.pos_fname then
         p.pos_fname ^ ":" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
       else if !last_pos.pos_lnum <> p.pos_lnum then
         "line:" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
       else
         "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
-    last_pos := p;
+    if clever then last_pos := p;
     ret in
   let aux_region start_p _end_p cursor_p_opt =
     let start_p_str = string_of_pos start_p in

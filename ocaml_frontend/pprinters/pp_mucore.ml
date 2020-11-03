@@ -136,7 +136,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
     else
       fun annot -> 
       match show_locations, Annot.get_loc annot with
-      | true, Some loc -> P.parens (Location_ocaml.pp_location loc) ^^ P.space
+      | true, Some loc -> P.parens (Location_ocaml.pp_location ~clever:true loc) ^^ P.space
       | _ -> P.empty
 
 
