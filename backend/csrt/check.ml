@@ -184,7 +184,7 @@ type arg = {lname : Sym.t; bt : BT.t; loc : Loc.t}
 type args = arg list
 
 let arg_of_asym (loc : Loc.t) (local : L.t) (A (a, _, s) : 'bty asym) : arg m = 
-  let loc = Loc.update loc a in
+  let loc = Loc.update_a loc a in
   let* (bt,lname) = get_a loc s local in
   return {lname; bt; loc}
 
@@ -677,7 +677,7 @@ let false_if_unreachable (loc : Loc.t) {local; global} : (unit fallible) m =
 let rec infer_pexpr (loc : Loc.t) {local; global} 
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible) m = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
-  let loc = Loc.update loc annots in
+  let loc = Loc.update_a loc annots in
   debug 3 (lazy (action "inferring pure expression"));
   debug 3 (lazy (item "expr" (pp_pexpr pe)));
   debug 3 (lazy (item "ctxt" (L.pp local)));
@@ -697,7 +697,7 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
     | M_PEconstrained _ ->
        fail loc (Unsupported !^"todo: PEconstrained")
     | M_PEundef (loc2, undef) ->
-       let loc = Loc.precise loc loc2 in
+       let loc = Loc.update loc loc2 in
        let* (reachable, omodel) = 
          Solver.is_reachable_and_model loc {local; global} 
        in
@@ -826,7 +826,7 @@ and infer_pexpr_pop (loc : Loc.t) delta {local; global}
 let rec check_pexpr (loc : Loc.t) {local; global} (e : 'bty pexpr) 
                     (typ : RT.t) : (L.t fallible) m = 
   let (M_Pexpr (annots, _, e_)) = e in
-  let loc = Loc.update loc annots in
+  let loc = Loc.update_a loc annots in
   debug 3 (lazy (action "checking pure expression"));
   debug 3 (lazy (item "expr" (group (pp_pexpr e))));
   debug 3 (lazy (item "type" (RT.pp typ)));
@@ -897,7 +897,7 @@ and check_pexpr_pop (loc : Loc.t) delta {local; global} (pe : 'bty pexpr)
 let rec infer_expr (loc : Loc.t) {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible) m = 
   let (M_Expr (annots, e_)) = e in
-  let loc = Loc.update loc annots in
+  let loc = Loc.update_a loc annots in
   debug 3 (lazy (action "inferring expression"));
   debug 3 (lazy (item "expr" (group (pp_expr e))));
   debug 3 (lazy (item "ctxt" (L.pp local)));
@@ -1008,10 +1008,10 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        let rt = RT.Computational ((Sym.fresh (), Unit), I) in
        return (Normal (rt, local))
     | M_Eccall (_ctype, A(af, _, fsym), asyms) ->
-       let* (bt, _) = get_a (Loc.update loc af) fsym local in
+       let* (bt, _) = get_a (Loc.update_a loc af) fsym local in
        let* fun_sym = match bt with
          | FunctionPointer sym -> return sym
-         | _ -> fail (Loc.update loc af) (Generic !^"not a function pointer")
+         | _ -> fail (Loc.update_a loc af) (Generic !^"not a function pointer")
        in
        let* (_loc, decl_typ) = G.get_fun_decl loc global fun_sym in
        let* args = args_of_asyms loc local asyms in
@@ -1086,7 +1086,7 @@ and infer_expr_pop (loc : Loc.t) delta {local; labels; global}
 let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible) m = 
   let (M_Expr (annots, e_)) = e in
-  let loc = Loc.update loc annots in
+  let loc = Loc.update_a loc annots in
   debug 3 (lazy (action "checking expression"));
   debug 3 (lazy (item "expr" (group (pp_expr e))));
   debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
@@ -1321,8 +1321,6 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - make error messages take into account used resources
-  - check if we can make infer_pexpr etc. not return an environment
   - give types for standard library functions
   - better location information for refined_c annotations
   - go over files and look for `fresh ()`: give good names

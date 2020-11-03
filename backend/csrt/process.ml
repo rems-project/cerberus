@@ -30,7 +30,7 @@ let record_tagDefs (global: Global.t) tagDefs =
 let record_funinfo global funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
-      let loc' = Loc.precise Loc.unknown loc in
+      let loc' = Loc.update Loc.unknown loc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc' (Unsupported err)
@@ -71,7 +71,7 @@ let process_functions genv fns =
          let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
          check_function loc genv fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels) ->
-         let loc' = Loc.precise Loc.unknown loc in
+         let loc' = Loc.update Loc.unknown loc in
          let* (loc,ftyp) = Global.get_fun_decl loc' genv fsym in
          check_procedure loc genv fsym args rbt body ftyp labels
       | M_ProcDecl _

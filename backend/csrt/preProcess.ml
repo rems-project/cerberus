@@ -97,7 +97,7 @@ let retype_value (loc : Loc.t) = function
  | M_Vtuple asyms -> return (M_Vtuple asyms)
 
 let rec retype_pexpr (loc : Loc.t) (M_Pexpr (annots,bty,pexpr_)) = 
-  let loc = Loc.update loc annots in
+  let loc = Loc.update_a loc annots in
   let* pexpr_ = match pexpr_ with
     | M_PEsym sym -> 
        return (M_PEsym sym)
@@ -189,7 +189,7 @@ let retype_memop (loc : Loc.t) = function
   | M_Va_end asym -> return (M_Va_end asym)
 
 let retype_action (loc : Loc.t) (M_Action (loc2,action_)) =
-  let loc = Loc.precise loc loc2 in
+  let loc = Loc.update loc loc2 in
   let* action_ = match action_ with
     | M_Create (asym, A (annots,bty,ct), prefix) ->
        let* (bt, size) = bt_and_size_of_ctype loc ct in
@@ -337,7 +337,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
      let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
      return (M_Return lt)
   | M_Label (argtyps,args,e,annots) -> 
-     let loc = Loc.update loc annots in
+     let loc = Loc.update_a loc annots in
      let* args = mapM (retype_arg loc) args in
      let* argtyps = 
        mapM (fun (msym, (ct,by_pointer)) ->
@@ -386,7 +386,7 @@ let retype_fun_map_decl (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~
      let* pexpr = retype_pexpr loc pexpr in
      return (M_Fun (bt,args,pexpr))
   | M_Proc (loc2,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
-     let loc' = Loc.precise loc loc2 in
+     let loc' = Loc.update loc loc2 in
      let* bt = Conversions.bt_of_core_base_type loc' cbt in
      let* args = mapM (retype_arg loc) args in
      let* expr = retype_expr loc structs expr in
@@ -398,12 +398,12 @@ let retype_fun_map_decl (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~
      in
      return (M_Proc (loc2,bt,args,expr,labels))
   | M_ProcDecl (loc2,cbt,args) ->
-     let loc' = Loc.precise loc loc2 in
+     let loc' = Loc.update loc loc2 in
      let* bt = Conversions.bt_of_core_base_type loc' cbt in
      let* args = mapM (Conversions.bt_of_core_base_type loc') args in
      return (M_ProcDecl (loc2,bt,args))
   | M_BuiltinDecl (loc2,cbt,args) ->
-     let loc' = Loc.precise loc loc2 in
+     let loc' = Loc.update loc loc2 in
      let* bt = Conversions.bt_of_core_base_type loc' cbt in
      let* args = mapM (Conversions.bt_of_core_base_type loc') args in
      return (M_BuiltinDecl (loc2,bt,args))
@@ -459,7 +459,7 @@ let retype_tagDefs
 let retype_funinfo struct_decls funinfo =
   PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
-      let loc' = Loc.precise Loc.unknown loc in
+      let loc' = Loc.update Loc.unknown loc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc' (Unsupported err) 

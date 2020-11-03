@@ -16,7 +16,7 @@ let dirs_to_ignore =
     ; Cerb_runtime.in_runtime ("impls/" ^ Setup.impl_name ^ ".impl")
     ]
 
-let precise (loc : t) (loc2 : Location_ocaml.t) = 
+let update (loc : t) (loc2 : Location_ocaml.t) = 
   if !Debug_ocaml.debug_level > 0 then loc2 else
   match Location_ocaml.get_filename loc2 with
   | None -> loc
@@ -26,8 +26,8 @@ let precise (loc : t) (loc2 : Location_ocaml.t) =
      then loc else loc2
 
 
-let update loc annots =
-  precise loc (Cerb_frontend.Annot.get_loc_ annots)
+let update_a loc annots =
+  update loc (Cerb_frontend.Annot.get_loc_ annots)
 
 
 let head_pos_of_location = 

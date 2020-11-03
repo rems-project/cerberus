@@ -77,7 +77,7 @@ let struct_decl_raw loc fields =
   let rec aux id ct = 
     let member = Member (Id.s id) in
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Loc.update loc annots in
+    let loc = Loc.update_a loc annots in
     match ct_ with
     | Void -> return (member,Unit)
     | Basic (Integer it) -> return (member,Integer)
@@ -104,7 +104,7 @@ let struct_decl_closed loc tag fields struct_decls =
   let open Sym in
   let rec aux loc acc the_struct member ct =
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Loc.update loc annots in
+    let loc = Loc.update_a loc annots in
     let this = IT.Member (tag, S the_struct, member) in
     match ct_ with
     | Void -> 
@@ -146,7 +146,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
     let open RT in
     let* size = Memory.size_of_ctype loc ct in
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Loc.update loc annots in
+    let loc = Loc.update_a loc annots in
     let this_v = Sym.fresh () in
     match ct_ with
     | Void -> 
