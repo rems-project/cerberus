@@ -31,7 +31,8 @@ let equal equality oa oa' =
   | _, _ -> false
 
 
-let value (oa : 'a option) (default : 'a) = function
+let value (default : 'a) (oa : 'a option) =
+  match oa with
   | Some a -> a
   | None -> default
 

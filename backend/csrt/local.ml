@@ -195,6 +195,27 @@ let filter p (Local e) =
 let filterM p (Local e) = 
   ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
 
+let all_computational local = 
+  filter (fun name b ->
+      match b with
+      | Computational (lname, b) -> Some (name, (lname, b))
+      | _ -> None
+    ) local
+
+let all_logical local = 
+  filter (fun name b ->
+      match b with
+      | Logical ls -> Some (name, ls)
+      | _ -> None
+    ) local
+
+let all_resources local = 
+  filter (fun name b ->
+      match b with
+      | Resource re -> Some (name, re)
+      | _ -> None
+    ) local
+
 let all_constraints local = 
   filter (fun _ b ->
       match b with
@@ -207,3 +228,24 @@ let all_constraints local =
 let (++) = concat
 
 let all_names = filter (fun sym _ -> Some sym)
+
+
+
+
+let cvar_for_lvar (Local local) (lvar : Sym.t) :
+      ((Sym.t, Sym.t) Subst.t) option = 
+  let rec aux = function
+    | Marker :: rest -> aux rest
+    | Binding (aname, VB.Computational (lvar', _)) :: _ 
+         when Sym.equal lvar lvar' ->
+       Some (Subst.{before = lvar; after = aname})
+    | _ :: rest ->
+       aux rest
+    | [] -> None
+  in
+  aux local
+
+
+
+
+  

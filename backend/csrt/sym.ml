@@ -5,6 +5,7 @@ module S = CF.Symbol
 
 
 type t = S.sym
+type symbol = t
 
 let equal = S.symbolEquality
 let compare = S.symbol_compare
@@ -35,8 +36,10 @@ let fresh_same s = fresh_relative s (fun id -> id)
 
 open Subst
 
-let subst {before;after} symbol = 
+let subst (subst: (symbol, symbol) Subst.t) symbol = 
+  let {before;after} = subst in
   if symbol = before then after else symbol
 
 
 
+let substs = make_substs subst

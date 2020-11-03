@@ -113,3 +113,5 @@ let warn pp =
 
 
 
+let c_comment pp = 
+  !^"/*" ^^ pp ^^ !^"*/"
