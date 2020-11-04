@@ -37,13 +37,14 @@ type type_error =
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * document option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * document
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
   | Internal of Pp.document
   | Unsupported of Pp.document
   | Generic of Pp.document
+
 
 type t = type_error
 
@@ -132,12 +133,9 @@ let pp_type_error = function
      (!^"Expected" ^^^ VariableBinding.kind_pp expect ^^^ 
         !^"but found" ^^^ VariableBinding.kind_pp has, [])
 
-  | Undefined_behaviour (undef, omodel) -> 
+  | Undefined_behaviour (undef, model) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
-     let extras = match omodel with
-       | Some model -> [item "UB"!^ub; (item "model" model)]
-       | None -> [item "UB"!^ub]
-     in
+     let extras = [item "UB"!^ub; (item "model" model)] in
      (!^"Undefined behaviour", extras)
   | Unspecified _ctype ->
      (!^"Unspecified value", [])

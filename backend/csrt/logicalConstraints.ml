@@ -10,3 +10,5 @@ let subst_vars = Subst.make_substs subst_var
 let vars_in (LC c) = IndexTerms.vars_in c
 
 let equal (LC c) (LC c') = IndexTerms.equal c c'
+
+let negate (LC c) = LC (Not c)

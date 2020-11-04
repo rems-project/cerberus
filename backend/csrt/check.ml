@@ -698,12 +698,13 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
        fail loc (Unsupported !^"todo: PEconstrained")
     | M_PEundef (loc2, undef) ->
        let loc = Loc.update loc loc2 in
-       let* (reachable, omodel) = 
+       let* (reachable, oconsts) = 
          Solver.is_reachable_and_model loc {local; global} 
        in
+       let* counter_model = CounterModel.make loc {local; global} oconsts in
        if not reachable 
        then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-       else fail loc (Undefined_behaviour (undef, omodel))
+       else fail loc (Undefined_behaviour (undef, counter_model))
     | M_PEerror (err, asym) ->
        let* arg = arg_of_asym loc local asym in
        fail arg.loc (StaticError err)
