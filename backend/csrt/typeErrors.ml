@@ -7,17 +7,7 @@ module CF=Cerb_frontend
 module RE=Resources
 module VB=VariableBinding
 
-type stacktrace = string
 
-
-
-let do_stack_trace () = 
-  let open Pp in
-  if !Debug_ocaml.debug_level > 0 then 
-    let backtrace = Printexc.get_callstack (!print_level * 10) in
-    Some (Printexc.raw_backtrace_to_string backtrace)
-  else 
-    None
 
 type access = 
   | Load 
