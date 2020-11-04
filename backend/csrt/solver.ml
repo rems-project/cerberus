@@ -299,7 +299,7 @@ let handle_z3_problems loc todo =
     try let* result = todo () in Z3.Log.close (); return result with
     | Z3.Error (msg : string) -> 
        Z3.Log.close ();
-       fail loc (Internal (!^"Z3 error:" ^^^ !^msg))
+       fail loc (Internal (!^"Z3 error:" ^/^ !^msg))
 
 
 let debug_typecheck_lcs loc lcs {local;global} =

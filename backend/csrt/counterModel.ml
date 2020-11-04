@@ -11,7 +11,7 @@ module SymSet = Set.Make(Sym)
 
 
 
-let for_pointer (loc: Loc.t) {local;global} pointer_it
+let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
     : ((Sym.t * RE.t) option) m = 
   let* points = 
     Local.filterM (fun name vb ->
@@ -26,20 +26,8 @@ let for_pointer (loc: Loc.t) {local;global} pointer_it
   Tools.at_most_one loc !^"multiple points-to for same pointer" points
 
 
-let equal_lvars loc {local;global} lname =
-  L.filterM (fun name b ->
-      match b with
-      | VariableBinding.Logical ls -> 
-         let* equal = Solver.equal loc {local; global} (S lname) (S name) in
-         return (if equal then Some (name, ls) else None)
-      | _ -> 
-         return None
-    ) local
-
-
-
-
 type lvar_equivalence_classes = (Sym.t * LS.t * SymSet.t) list
+
 
 let lvar_equivalence_classes loc {local; global} lvars : lvar_equivalence_classes m = 
   ListM.fold_leftM (fun classes (l, ls) ->
@@ -72,16 +60,15 @@ let find_good_name_subst loc lvar_eq_classes l =
     | (representative, _ls, clss) :: _ when SymSet.mem l clss ->
        return representative
     | _ :: rest -> aux rest
-    | [] -> fail loc (Internal (!^"error finding equivalence class for" ^^^ Sym.pp l))
+    | [] -> fail loc (Internal (!^"no equivalence class for" ^^^ Sym.pp l))
   in
   let* representative = aux lvar_eq_classes in
   return (Subst.{before = l; after = representative})
 
 
-let dedup symlist = SymSet.elements (SymSet.of_list symlist)
-
 
 let bigunion = List.fold_left SymSet.union SymSet.empty
+
 
 let all_it_names_good it = 
   SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it)
@@ -113,7 +100,7 @@ let make loc {local; global} oconsts : Pp.document m =
   let* cvars = 
     ListM.fold_rightM (fun (c,(l,bt)) vars ->
         if Sym.named c && bt = BT.Loc then
-          let* o_re = for_pointer loc {local; global} (S l) in
+          let* o_re = resource_for_pointer loc {local; global} (S l) in
           return ((c, (l, bt), o_re) :: vars)
         else return vars
       ) cvars []
@@ -133,32 +120,31 @@ let make loc {local; global} oconsts : Pp.document m =
         begin match o_re with
         | Some (_, RE.Uninit u) -> 
            let pp = 
-             Sym.pp s ^^^
-               !^"at location" ^^^ IT.pp ~quote:false u.RE.pointer ^^^
-                 !^"uninitialised" ^^^ Pp.c_comment (!^"of size" ^^^ Z.pp u.size)
+             Sym.pp s ^^^ !^"uninitialised" ^^^
+             Pp.c_comment (
+                 ifpp (all_it_names_good u.RE.pointer)
+                      (!^"at location" ^^^ IT.pp ~quote:false u.RE.pointer ^^ break 1) ^^
+                 !^"of size" ^^^ Z.pp u.size
+               )
            in
-           let mentioned = 
-             SymSet.union (IT.vars_in u.RE.pointer) 
-               acc_mentioned 
-           in
-           (pp :: acc_pp, mentioned)
+           (pp :: acc_pp, acc_mentioned)
         | Some (_, RE.Points p) -> 
            let pp = 
-             Sym.pp s ^^^
-               !^"at location" ^^^ IT.pp ~quote:false p.RE.pointer ^^^
-                 equals ^^^ Sym.pp p.pointee ^^^
-                   Pp.c_comment (!^"size" ^^^ Z.pp p.size)
+             Sym.pp s ^^^ equals ^^ equals ^^^ Sym.pp p.pointee ^^^
+             Pp.c_comment (
+                 ifpp (all_it_names_good p.RE.pointer)
+                      (!^"at location" ^^^ IT.pp ~quote:false p.RE.pointer ^^ break 1) ^^
+                 !^"of size" ^^^ Z.pp p.size
+               )
            in
-           let mentioned = 
-             SymSet.add p.pointee
-               (SymSet.union (IT.vars_in p.RE.pointer) acc_mentioned)
-           in
-           (pp :: acc_pp, mentioned)
+           (pp :: acc_pp, SymSet.add p.pointee acc_mentioned)
         | None ->
            let pp = 
              Sym.pp s ^^^
-               !^"at location" ^^^ Sym.pp lname ^^^
+             Pp.c_comment (
+                 ifpp (Sym.named lname) (!^"at location" ^^^ Sym.pp lname ^^ break 1) ^^
                  parens (!^"no ownership of memory")
+               )
            in
            (pp :: acc_pp, acc_mentioned)
         end
@@ -177,9 +163,8 @@ let make loc {local; global} oconsts : Pp.document m =
         match re with
         | RE.Uninit u -> 
            let pp = 
-             IT.pp ~quote:false u.RE.pointer ^^^ 
-               !^"uninitialised" ^^^
-                 Pp.c_comment (!^"size" ^^^ Z.pp u.size)
+             IT.pp ~quote:false u.RE.pointer ^^^ !^"uninitialised" ^^^
+             Pp.c_comment (!^"of size" ^^^ Z.pp u.size)
            in
            let mentioned = 
              SymSet.union (IT.vars_in u.RE.pointer) acc_mentioned 
@@ -187,9 +172,8 @@ let make loc {local; global} oconsts : Pp.document m =
            (pp :: acc_pp, mentioned)
         | RE.Points p -> 
            let pp = 
-             IT.pp ~quote:false p.RE.pointer ^^^ 
-               equals ^^^ Sym.pp p.pointee ^^^
-                 Pp.c_comment (!^"size" ^^^ Z.pp p.size)
+             IT.pp ~quote:false p.RE.pointer ^^^ equals ^^ equals ^^^ Sym.pp p.pointee ^^^
+             Pp.c_comment (!^"of size" ^^^ Z.pp p.size)
            in
            let mentioned = 
              SymSet.add p.pointee
@@ -219,23 +203,24 @@ let make loc {local; global} oconsts : Pp.document m =
 
   let pped_lvars = 
     List.map (fun (name,ls,ov) ->
-        match ov with
-        | None -> typ (Sym.pp name) (LogicalSorts.pp false ls)
-        | Some v ->
-           typ (Sym.pp name) (LogicalSorts.pp false ls) ^^^
-             !^":=" ^^^ !^v
+        let val_pp = match ov with
+        | Some v when not (LS.equal ls (LS.Base (BT.Loc))) -> 
+           space ^^ !^":=" ^^^ !^v
+        | _ -> Pp.empty
+        in
+        typ (Sym.pp name) (LogicalSorts.pp false ls) ^^ val_pp
       ) lvar_info
   in
 
   let pped_aliases = match aliases with
     | []-> Pp.empty
     | _ ->
-       flow_map (comma ^^ break 1) (fun l ->
+       flow_map (break 1) (fun l ->
              pp_list Sym.pp l ^^^ !^"alias"
          ) aliases
   in
   let pp = 
-    flow (comma ^^ hardline) 
+    flow hardline
       (pped_cvars @ pped_extra_memory @ pped_lvars) ^^^
       pped_aliases
   in

@@ -120,7 +120,7 @@ let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern)
           return local'
        | _, M_Ccons, [p1; p2] ->
           let err = 
-            !^"cons pattern incompatible with expect type" ^^^ 
+            !^"cons pattern incompatible with expect type" ^/^ 
               BT.pp false expect 
           in
           fail loc (Generic err)
@@ -142,7 +142,7 @@ let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern)
           components local' 0 pats bts
        | _, M_Ctuple, _ ->
           let err = 
-            !^"tuple pattern incompatible with expect type" ^^^ 
+            !^"tuple pattern incompatible with expect type" ^/^ 
               BT.pp false expect
           in
           fail loc (Generic err)
@@ -198,13 +198,13 @@ module Spine (I : AT.I_Sig) = struct
   module NFT = NormalisedArgumentTypes.Make(I)
 
   let pp_argslocs =
-    pp_list (fun ca -> parens (BT.pp false ca.bt ^^^ bar ^^^ Sym.pp ca.lname))
+    pp_list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
 
   let pp_unis (unis : (Sym.t Uni.t) SymMap.t) : Pp.document = 
     let pp_entry (sym, Uni.{resolved}) =
       match resolved with
-      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ Sym.pp res
-      | None -> Sym.pp sym ^^^ !^"unresolved"
+      | Some res -> Sym.pp sym ^/^ !^"resolved as" ^/^ Sym.pp res
+      | None -> Sym.pp sym ^/^ !^"unresolved"
     in
     pp_list pp_entry (SymMap.bindings unis)
 
@@ -434,9 +434,9 @@ and infer_struct (loc : Loc.t) {local; global} (tag : tag)
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
        fail loc (Internal !^"mismatch in fields in infer_struct")
     | [], ((Member id, _) :: _) ->
-       fail loc (Generic (!^"field" ^^^ !^id ^^^ !^"missing"))
+       fail loc (Generic (!^"field" ^/^ !^id ^/^ !^"missing"))
     | ((Member id,_) :: _), [] ->
-       fail loc (Generic (!^"supplying unexpected field" ^^^ !^id))
+       fail loc (Generic (!^"supplying unexpected field" ^/^ !^id))
   in
   let* constraints = check member_values spec.raw in
   return (ret, Struct tag, LC (And constraints))
@@ -724,7 +724,7 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
          | Some _ -> return ()
          | None -> 
             let err = 
-              !^"struct" ^^^ pp_tag (Tag tag) ^^^ !^"does not have field" ^^^
+              !^"struct" ^/^ pp_tag (Tag tag) ^/^ !^"does not have field" ^/^
                 squotes !^(Id.s id)
             in
             fail arg.loc (Generic err)
@@ -1034,7 +1034,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        fail loc (Unsupported !^"todo: End")
     | M_Erun (label_sym, asyms) ->
        let* lt = match SymMap.find_opt label_sym labels with
-       | None -> fail loc (Generic (!^"undefined label" ^^^ Sym.pp label_sym))
+       | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
        | Some lt -> return lt
        in
        let* args = args_of_asyms loc local asyms in
@@ -1142,7 +1142,7 @@ let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr)
         return (Normal local)
      | False ->
         let err = 
-          !^"This expression returns but is expected" ^^^
+          !^"This expression returns but is expected" ^/^
             !^"to have noreturn-type." 
         in
         fail loc (Generic err)

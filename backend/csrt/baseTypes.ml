@@ -46,10 +46,10 @@ let rec pp atomic bt =
   | Integer -> !^"integer"
   | Loc -> !^"location"
   | Array -> !^ "array"
-  | List bt -> mparens ((!^ "list") ^^^ pp true bt)
+  | List bt -> mparens ((!^ "list") ^/^ pp true bt)
   | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)
-  | Struct (Tag sym) -> mparens (!^"struct" ^^^ Sym.pp sym)
-  | FunctionPointer p -> mparens (!^"function" ^^^ Sym.pp p)
+  | Struct (Tag sym) -> mparens (!^"struct" ^/^ Sym.pp sym)
+  | FunctionPointer p -> mparens (!^"function" ^/^ Sym.pp p)
 
 
 
