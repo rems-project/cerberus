@@ -248,8 +248,9 @@ type ('DCTY, 'DBTY, 'bty) mu_globs_list = (symbol * ('DCTY, 'DBTY, 'bty) mu_glob
 
 (* a Core file is just a set of named functions *)
 type ('DFTY, 'DLTY, 'DCTY, 'DBTY, 'DSTRUCT_DEF, 'DUNION_DEF, 'bty) mu_file = {
-  mu_main    :  symbol option;
+  mu_main    : symbol option;
   mu_tagDefs : ('DSTRUCT_DEF, 'DUNION_DEF) mu_tag_definitions;
+  mu_core_tagDefs : Core.core_tag_definitions;
   mu_stdlib  : ('DLTY, 'DCTY, 'DBTY, 'bty) mu_fun_map;
   mu_impl    : ('DCTY, 'DBTY, 'bty) mu_impl;
   mu_globs   : ('DCTY, 'DBTY, 'bty) mu_globs_list;

@@ -20,7 +20,7 @@ open ListM
 (* for convenience *)
 let bt_and_size_of_ctype (loc : Loc.t) ct = 
   let* bt = Conversions.bt_of_ctype loc ct in
-  let* size = Memory.size_of_ctype loc ct in
+  let* size = Memory_aux.size_of_ctype loc ct in
   return (bt,size)
 
 
@@ -492,6 +492,7 @@ let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA
   let* globs = mapM (retype_globs loc structs) file.mu_globs in
   let file = 
     { mu_main = file.mu_main;
+      mu_core_tagDefs = file.mu_core_tagDefs;
       mu_tagDefs = tagDefs;
       mu_stdlib = stdlib;
       mu_impl = impls;

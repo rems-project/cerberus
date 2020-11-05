@@ -740,6 +740,7 @@ let normalise_file file1 : (ft, lt, ct, bt, (ct mu_struct_def), (ct mu_union_def
    ; mu_tagDefs = (normalise_tag_definitions 
   (instance_Map_MapKeyType_var_dict
      Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) file1.tagDefs)
+   ; mu_core_tagDefs = file1.tagDefs
    ; mu_stdlib = (normalise_fun_map file1.stdlib)
    ; mu_impl = (normalise_impl file1.impl)
    ; mu_globs = (normalise_globs_list file1.globs)

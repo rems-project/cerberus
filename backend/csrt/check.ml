@@ -403,7 +403,7 @@ let rec infer_mem_value (loc : Loc.t) {local; global} (mem : mem_value) : vt m =
       fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
     ( fun it iv -> 
       let ret = Sym.fresh () in
-      let* v = Memory.integer_value_to_num loc iv in
+      let* v = Memory_aux.integer_value_to_num loc iv in
       return (ret, Integer, LC (EQ (S ret, Num v))) )
     ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
     ( fun _ ptrval -> infer_ptrval loc {local; global} ptrval  )
@@ -453,7 +453,7 @@ let infer_object_value (loc : Loc.t) {local; global}
   match ov with
   | M_OVinteger iv ->
      let ret = Sym.fresh () in
-     let* i = Memory.integer_value_to_num loc iv in
+     let* i = Memory_aux.integer_value_to_num loc iv in
      return (ret, Integer, LC (EQ (S ret, Num i)))
   | M_OVpointer p -> 
      infer_ptrval loc {local; global} p
@@ -1322,6 +1322,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
+  - alignment constraints
   - give types for standard library functions
   - better location information for refined_c annotations
   - go over files and look for `fresh ()`: give good names

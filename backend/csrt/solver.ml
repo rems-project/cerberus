@@ -45,7 +45,8 @@ let rec bt_to_sort loc {local;global} ctxt bt =
   | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | Bool -> return (Z3.Boolean.mk_sort ctxt)
   | Integer -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
-  | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
+  | Loc -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
+  (* | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname) *)
   | Tuple bts ->
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
      let* sorts = ListM.mapM (bt_to_sort loc {local;global} ctxt) bts in
@@ -197,14 +198,29 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt t in
      let* fundecl = member_to_fundecl tag member in
      return (Z3.Expr.mk_app ctxt fundecl [a])
-  | MemberOffset (_tag, t, Member member) ->
-     let* locsort = ls_to_sort loc {local;global} ctxt (Base Loc) in
-     let membersort = member_sort ctxt in
-     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt 
-                     "memberOffset" [locsort;membersort] locsort in
-     let* loc_const = of_index_term loc {local;global} ctxt t in
-     let member_const = Z3.Expr.mk_const_s ctxt member membersort in
-     return (Z3.Expr.mk_app ctxt fundecl [loc_const;member_const])
+  | MemberOffset (tag, t, member) ->
+     let* a = of_index_term loc {local;global} ctxt t in
+     let* offset = Memory_aux.offset loc {local; global} tag member in
+     let offset_s = Nat_big_num.to_string offset in
+     let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
+     return (Z3.Arithmetic.mk_add ctxt [a;offset_n])
+  | Offset (it,it') -> 
+     let* a = of_index_term loc {local;global} ctxt it in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     return (Z3.Arithmetic.mk_add ctxt [a;a'])
+  | Aligned (it,it') -> 
+     let* a = of_index_term loc {local;global} ctxt it in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     let t = 
+       Z3.Boolean.mk_eq ctxt
+         (Z3.Arithmetic.mk_div ctxt a a') 
+         (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+     in
+     return t
+  | LocLT (it,it') -> 
+     let* a = of_index_term loc {local;global} ctxt it in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     return (Z3.Arithmetic.mk_lt ctxt a a')
   | Struct (tag,members) ->
      let* sort = bt_to_sort loc {local;global} ctxt (Struct tag) in
      let constructor = Z3.Tuple.get_mk_decl sort in
@@ -306,10 +322,38 @@ let debug_typecheck_lcs loc lcs {local;global} =
   if !Debug_ocaml.debug_level > 0 then return () else
     ListM.iterM (WellTyped.WLC.welltyped (loc: Loc.t) {local;global}) lcs
 
+let footprints_disjoint (location1, size1) (location2, size2) = 
+  let fp1_before_fp2 = IT.LocLT (Offset (location1, Num size1), location2) in
+  let fp2_before_fp1 = IT.LocLT (Offset (location2, Num size2), location1) in
+  IT.Or [fp1_before_fp2; fp2_before_fp1]
+
+
+
+
+let disjoint_footprints footprints = 
+  let rec aux before after = 
+    match after with
+    | [] -> []
+    | fp :: after -> 
+       let disjoint = before @ after in
+       (map (footprints_disjoint fp) disjoint) @ (aux (fp :: before) after)
+  in
+  aux [] footprints
+
+  
+
+
 let constraint_holds loc {local;global} c = 
   let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
-  let lcs = (negate c :: Local.all_constraints local) in
+  let disjointness_lc = 
+    let footprints = 
+      map (fun (_, r) -> (RE.pointer r, RE.size r)) (L.all_resources local) in
+    LC.LC (IT.And (disjoint_footprints footprints))
+  in
+  let lcs = 
+    negate c :: disjointness_lc :: Local.all_constraints local
+  in
   let* () = debug_typecheck_lcs loc lcs {local;global} in
   let* checked = 
     handle_z3_problems loc 

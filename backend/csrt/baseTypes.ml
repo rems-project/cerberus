@@ -2,7 +2,7 @@ open Pp
 
 
 type tag = Tag of Sym.t
-type member = Member of string
+type member = Member of string  (* fix this to hav eID *)
 
 let pp_tag (Tag s) = Sym.pp s
 let tag_equal (Tag s) (Tag s') = Sym.equal s s'

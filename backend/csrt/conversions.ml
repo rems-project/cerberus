@@ -65,7 +65,7 @@ let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
 let integerType_constraint loc about it =
   let* (min,max) = match it with
     | CF.Ctype.Bool -> return (Z.of_int 0, Z.of_int 1)
-    | _ -> Memory.integer_range loc it 
+    | _ -> Memory_aux.integer_range loc it 
   in
   return (LC (And [IT.LE (Num min, about); IT.LE (about, Num max)]))
 
@@ -95,7 +95,7 @@ let struct_decl_raw loc fields =
 let struct_decl_sizes loc fields = 
   ListM.mapM (fun (id, (_, _, ct)) ->
       let member = Member (Id.s id) in
-      let* size = Memory.size_of_ctype loc ct in
+      let* size = Memory_aux.size_of_ctype loc ct in
       return (member,size)
     ) fields
 
@@ -144,7 +144,7 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
   let open Sym in
   let rec aux loc member ct =
     let open RT in
-    let* size = Memory.size_of_ctype loc ct in
+    let* size = Memory_aux.size_of_ctype loc ct in
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
     let loc = Loc.update_a loc annots in
     let this_v = Sym.fresh () in
@@ -234,7 +234,8 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let* (Computational ((s2,bt),lrt)) = 
        rt_of_ctype loc struct_decls s2 ct in
      (* fix *)
-     let* size = Memory.size_of_ctype loc ct in
+     let* size = Memory_aux.size_of_ctype loc ct in
+     let* align = Memory_aux.align_of_ctype loc ct in
      let points = RE.Points {pointer = S pointer; pointee = s2; size} in
      let lrt = Logical ((s2, Base bt), Resource (points, lrt)) in
      return (Computational ((pointer,Loc), lrt))

@@ -100,6 +100,18 @@ module WIT = struct
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
        let* _ = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
        return (Base Loc)
+    | Offset (t, t') ->
+       let* () = check_aux loc it {local;global} (Base Loc) t in
+       let* () = check_aux loc it {local;global} (Base Integer) t' in
+       return (Base Loc)
+    | Aligned (t, t') ->
+       let* () = check_aux loc it {local;global} (Base Loc) t in
+       let* () = check_aux loc it {local;global} (Base Integer) t' in
+       return (Base Bool)
+    | LocLT (t, t') ->
+       let* () = check_aux loc it {local;global} (Base Loc) t in
+       let* () = check_aux loc it {local;global} (Base Loc) t' in
+       return (Base Bool)
     | Nil bt -> 
        return (Base bt)
     | Cons (it1,it2) ->

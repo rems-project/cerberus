@@ -97,9 +97,22 @@ end
 open VarEquivalenceClass
 
 
+let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
+     : ((Sym.t * RE.t) option) m = 
+   let* points = 
+     Local.filterM (fun name vb ->
+         match vb with 
+         | VariableBinding.Resource re -> 
+            let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer re) in
+            return (if holds then Some (name, re) else None)
+         | _ -> 
+            return None
+       ) local
+   in
+   Tools.at_most_one loc !^"multiple points-to for same pointer" points
 
-let all_it_names_good it = 
-  SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it)
+(* let all_it_names_good it = 
+ *   SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it) *)
 
 let make loc {local; global} oconsts : Pp.document m = 
   let c = L.all_computational local in
@@ -118,6 +131,8 @@ let make loc {local; global} oconsts : Pp.document m =
     in
     return with_c
   in
+
+
   let print_substs =
     List.fold_right (fun veclass substs ->
       let name = print_name veclass in
@@ -147,6 +162,26 @@ let make loc {local; global} oconsts : Pp.document m =
         (pp :: acc_pp, SymSet.union acc_mentioned mentioned)
       ) r ([], SymSet.empty)
   in
+
+
+
+
+  (* let pped_c_vars = 
+   *   List.fold_right (fun veclass acc_pp ->
+   *       SymSet.fold (fun c -> 
+   *           begin match Sym.named c && veclass.sort = LS.Base BT.Loc with
+   *           | false -> acc_pp
+   *           | true ->
+   *              
+   *           end
+   *         ) veclass.celements acc_pp
+   *     ) veclasses []
+   * in *)
+
+
+
+
+
 
   let* (lvar_info, _) = 
     let consts = Option.value [] oconsts in

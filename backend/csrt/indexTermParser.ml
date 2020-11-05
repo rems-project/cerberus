@@ -128,6 +128,18 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
   | MemberOffset (tag,t,f) ->
      let* it = parse_ast_to_t loc names it in
      return (MemberOffset (tag,it, f))
+  | Offset (it, it') -> 
+     let* it = parse_ast_to_t loc names it in
+     let* it' = parse_ast_to_t loc names it' in
+     return (Offset (it, it'))
+  | Aligned (it, it') -> 
+     let* it = parse_ast_to_t loc names it in
+     let* it' = parse_ast_to_t loc names it' in
+     return (Aligned (it, it'))
+  | LocLT (it, it') -> 
+     let* it = parse_ast_to_t loc names it in
+     let* it' = parse_ast_to_t loc names it' in
+     return (LocLT (it, it'))
   | S string -> 
      begin match StringMap.find_opt string names with
      | Some sym -> return (S sym)

@@ -378,7 +378,7 @@ and of_type_expr loc names te : tb m =
   | None, Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      let name = Sym.fresh () in
      let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
-     let* size = Memory.size_of_ctype loc ct in
+     let* size = Memory_aux.size_of_ctype loc ct in
      let* lc = integerType_constraint loc (S name) (CF.Ctype.Bool) in
      return (B ((New, name, BT.Integer, Some size), RT.Constraint (lc, I)))
   | None, Ty_params ("void", []) ->
@@ -410,7 +410,7 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
      return ()
   | _, (Ty_params ("uninit", [Ty_arg_expr integer_type_expr])) ->
      let* size = bytes_of_integer_type_expr loc integer_type_expr in
-     let* ct_size = Memory.size_of_ctype loc ct in
+     let* ct_size = Memory_aux.size_of_ctype loc ct in
      if Z.equal ct_size size 
      then return ()
      else incompatible loc ct type_expr
@@ -423,7 +423,7 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
        | Unsigned _ -> return false
        | _ -> incompatible loc ct type_expr
      in
-     let* ct_size = Memory.size_of_ctype loc ct in
+     let* ct_size = Memory_aux.size_of_ctype loc ct in
      if ct_signed = signed && Z.equal ct_size size 
      then return ()
      else incompatible loc ct type_expr

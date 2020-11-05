@@ -34,3 +34,6 @@ let update_a loc annots =
 
 let head_pos_of_location = 
   Location_ocaml.head_pos_of_location
+
+
+let unpack l = l

@@ -83,7 +83,7 @@ let process_functions genv fns =
 
 let process mu_file =
   let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
-  let global = Global.empty in
+  let global = Global.empty mu_file.mu_core_tagDefs in
   let* global = record_tagDefs global mu_file.mu_tagDefs in
   let global = record_impl global mu_file.mu_impl in
   let* global = record_funinfo global mu_file.mu_funinfo in

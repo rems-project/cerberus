@@ -38,6 +38,10 @@ type 'id term =
   | Tuple of 'id term list
   | Nth of BT.t * int * 'id term
 
+  | Aligned of 'id term * 'id term
+  | Offset of 'id term * 'id term
+  | LocLT of 'id term * 'id term
+
   | Struct of BT.tag * (BT.member * 'id term) list
   | Member of BT.tag * 'id term * BT.member
   | MemberOffset of BT.tag * 'id term * BT.member
@@ -184,6 +188,11 @@ let pp ?(quote=true) it : PPrint.document =
        aux t ^^ dot ^^ !^s
     | MemberOffset (_tag, t, Member s) ->
        mparens (ampersand ^^ aux t ^^ !^"->" ^^ !^s)
+    | Aligned (t1, t2) ->
+       mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
+    | Offset (t1, t2) ->
+       mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
+    | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
 
     | S sym -> Sym.pp sym
   in
@@ -212,7 +221,10 @@ let rec vars_in it : SymSet.t =
   | LE (it, it') 
   | GE (it, it')
   | Impl (it, it')
-  | Cons (it, it')  ->
+  | Cons (it, it')
+  | Aligned (it, it')
+  | Offset (it, it')
+  | LocLT (it, it')  ->
      vars_in_list [it; it']
   | And its
   | Or its ->
@@ -288,6 +300,9 @@ let rec subst_var subst it : t =
      Member (tag, subst_var subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_var subst t, f)
+  | Aligned (it, it') -> Aligned (subst_var subst it, subst_var subst it')
+  | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
+  | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
   | S symbol -> 
      if symbol = subst.before then S subst.after else S symbol
 
@@ -341,6 +356,9 @@ let rec subst_it subst it : t =
      Member (tag, subst_it subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_it subst t, f)
+  | Aligned (it, it') -> Aligned (subst_it subst it, subst_it subst it')
+  | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
+  | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
   | S symbol -> 
      if symbol = subst.before then subst.after else S symbol
 
