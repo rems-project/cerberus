@@ -1220,8 +1220,8 @@ let check_initial_environment_consistent loc info {local;global} =
   let* consistent = Solver.is_reachable loc {local; global} in
   if consistent then return () else
     match info with
-    | `Label -> fail loc (Generic !^"this label makes inconsistent assumptions")
-    | `Fun ->   fail loc (Generic !^"this function makes inconsistent assumptions")
+    | `Label -> fail loc (Generic (!^"this label makes inconsistent assumptions"))
+    | `Fun ->   fail loc (Generic (!^"this function makes inconsistent assumptions"))
 
 
 (* check_function: type check a (pure) function *)

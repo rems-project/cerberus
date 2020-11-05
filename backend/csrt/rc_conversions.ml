@@ -173,6 +173,18 @@ let bytes_of_integer_type_expr loc te =
   | Ty_params (s, []) -> aux s
   | _ -> cannot_process loc pp_type_expr te
 
+let align_of_integer_type_expr loc te = 
+  let aux = function
+    | ("u32" | "i32") -> return (Z.of_int 4)
+    | ("u64" | "i64") -> return (Z.of_int 8)
+    | _ -> cannot_process loc pp_type_expr te
+  in
+  match te with
+  | Ty_Coq (Coq_ident s) -> aux s
+  | Ty_params (s, []) -> aux s
+  | _ -> cannot_process loc pp_type_expr te
+
+
 let bits_of_integer_type_expr loc te = 
   let aux = function
     | ("u32" | "i32") -> return 32
@@ -204,7 +216,7 @@ let maybe_refinement = function
 type bnew = New | Old
 
 type tb =
-  | B of (bnew * Sym.t * BT.t * RE.size option) * RT.l
+  | B of (bnew * Sym.t * BT.t * (RE.size * Z.t) option) * RT.l
 
 let rec of_coq_expr_typ loc names coq_expr name =
   match coq_expr with
@@ -254,21 +266,18 @@ and of_constr loc names constr : RT.l m =
      fail loc (Unsupported !^"Constr_exist")
   | Constr_own (ident,ptr_kind,type_expr) ->
      let* name = get_name loc names ident in
-     let impl = CF.Ocaml_implementation.get () in
-     let* psize = match impl.sizeof_pointer with
-       | Some n -> return (Some (Z.of_int n))
-       | None -> fail loc (Generic !^"sizeof_pointer returned None")
-     in
+     let* psize = Memory_aux.size_of_pointer loc in
      begin match ptr_kind, is_uninit_type_expr type_expr with
        | Own, Some integer_type_expr -> 
           let* size = bytes_of_integer_type_expr loc integer_type_expr in
           let r = RE.Uninit {pointer = S name; size} in
           return (Resource (r, I))
        | Own, None -> 
-          let* B ((bnew, pointee, bt, osize), lrt) = 
+          let* B ((bnew, pointee, bt, o_size_and_alignment), lrt) = 
             of_type_expr loc names type_expr in
-          let* points = match osize with
-            | Some size -> return (RE.Points {pointer = S name; pointee; size})
+          let* points, align = match o_size_and_alignment with
+            | Some (size, align) -> 
+               return (RE.Points {pointer = S name; pointee; size}, align)
             | None -> fail loc (Generic !^"pointer to non-object")
           in
           let lrt = match bnew with
@@ -295,12 +304,8 @@ and of_type_expr loc names te : tb m =
   let (mrefinement, te') = maybe_refinement te in
   match mrefinement, te' with
   | _, Ty_ptr (ptr_kind, type_expr) ->
-     (* from impl_mem *)
-     let impl = CF.Ocaml_implementation.get () in
-     let* psize = match impl.sizeof_pointer with
-       | Some n -> return (Some (Z.of_int n))
-       | None -> fail loc (Generic !^"sizeof_pointer returned None")
-     in
+     let* psize = Memory_aux.size_of_pointer loc in
+     let* palign = Memory_aux.align_of_pointer loc in
      begin match mrefinement, ptr_kind, is_uninit_type_expr type_expr with
      | _, Own, Some integer_type_expr -> 
         let* name, bnewp = match mrefinement with
@@ -312,7 +317,7 @@ and of_type_expr loc names te : tb m =
         in
         let* size = bytes_of_integer_type_expr loc integer_type_expr in
         let r = RE.Uninit {pointer = S name; size} in
-        return (B ((bnewp, name, BT.Loc, psize), Resource (r, I)))
+        return (B ((bnewp, name, BT.Loc, Some (psize, palign)), Resource (r, I)))
      | _, Own, None -> 
         let* name, bnewp = match mrefinement with
           | None -> return (Sym.fresh (), New)
@@ -321,17 +326,20 @@ and of_type_expr loc names te : tb m =
              return (name, Old)
           | _ -> cannot_process loc pp_type_expr te
         in
-        let* B ((bnew, pointee, bt, osize), lrt) = 
+        let* B ((bnew, pointee, bt, o_size_and_alignment), lrt) = 
           of_type_expr loc names type_expr in
-        let* points = match osize with
-          | Some size -> return (RE.Points {pointer = S name; pointee; size})
+        let* points, align = match o_size_and_alignment with
+          | Some (size,align) -> return (RE.Points {pointer = S name; pointee; size}, align)
           | None -> fail loc (Generic !^"pointer to non-object")
         in
         let lrt = match bnew with
-          | New -> Logical ((pointee, LS.Base bt), Resource (points, lrt)) 
-          | Old -> Resource (points, lrt)
+          | New -> Logical ((pointee, LS.Base bt), 
+                   Resource (points, 
+                   Constraint (LC (Aligned (S name, Num align)), lrt)))
+          | Old -> Resource (points, 
+                   Constraint (LC (Aligned (S name, Num align)), lrt))
         in
-        return (B ((bnewp, name, BT.Loc, psize), lrt))
+        return (B ((bnewp, name, BT.Loc, Some (psize, palign)), lrt))
      | _, Shr, _ -> 
         fail loc (Generic !^"Shared pointers not supported yet")
      | _, Frac _, _ -> 
@@ -342,12 +350,13 @@ and of_type_expr loc names te : tb m =
   | None, Ty_exists _ ->
      fail loc (Unsupported !^"existential types")
   | None, Ty_constr (type_expr,constr) ->
-     let* B ((bnew, pointee, bt, osize), lrt) = 
+     let* B ((bnew, pointee, bt, o_size_and_alignment), lrt) = 
        of_type_expr loc names type_expr in
      let* lrt' = of_constr loc names constr in
-     return (B ((bnew, pointee, bt, osize), lrt @@ lrt'))
+     return (B ((bnew, pointee, bt, o_size_and_alignment), lrt @@ lrt'))
   | _, Ty_params ("int",[Ty_arg_expr arg]) ->
      let* size = bytes_of_integer_type_expr loc arg in
+     let* align = align_of_integer_type_expr loc arg in
      let* signed = signed_integer_type_expr loc arg in
      let* bits = bits_of_integer_type_expr loc arg in
      let* constr = 
@@ -363,24 +372,25 @@ and of_type_expr loc names te : tb m =
      | None ->
         let name = Sym.fresh () in
         let lrt = Constraint (LC.LC (constr name), I) in
-        return (B ((New, name, BT.Integer, Some size), lrt))
+        return (B ((New, name, BT.Integer, Some (size,align)), lrt))
      | Some (Coq_ident ident) ->
         let* s = get_name loc names ident in
         let lrt = Constraint (LC.LC (constr s), I) in
-        return (B ((Old, s, BT.Integer, Some size), lrt))
+        return (B ((Old, s, BT.Integer, Some (size,align)), lrt))
      | Some (Coq_all coq_term) ->
         let name = Sym.fresh () in 
         let* it = of_coq_term loc names coq_term in
         let lc = LC.LC (IT.EQ (S name, it)) in
         let lrt = Constraint (LC.LC (constr name), Constraint (lc, I)) in
-        return (B ((New, name, BT.Integer, Some size), lrt))
+        return (B ((New, name, BT.Integer, Some (size,align)), lrt))
      end
   | None, Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      let name = Sym.fresh () in
      let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
      let* size = Memory_aux.size_of_ctype loc ct in
+     let* align = Memory_aux.align_of_ctype loc ct in
      let* lc = integerType_constraint loc (S name) (CF.Ctype.Bool) in
-     return (B ((New, name, BT.Integer, Some size), RT.Constraint (lc, I)))
+     return (B ((New, name, BT.Integer, Some (size,align)), RT.Constraint (lc, I)))
   | None, Ty_params ("void", []) ->
      let name = Sym.fresh () in
      return (B ((New, name, BT.Unit, None), RT.I))
@@ -468,15 +478,20 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
           of_type_expr loc names type_expr in
         let sa = pointee in
         let sr = Sym.fresh () in
-        let* size = match osize with
-          | Some size -> return size
+        let* size, align = match osize with
+          | Some (size, align) -> return (size, align)
           | None -> fail loc (Generic !^"argument type without size")
         in
         let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
         let pointsr = RE.Points {pointer = S s; pointee = sr; size} in
         let arg_lrt = match bnew with
-          | New -> RT.Logical ((sa, LS.Base bt), RT.Resource (pointsa, lrt))
-          | Old -> RT.Resource (pointsa, lrt)
+          | New -> RT.Logical ((sa, LS.Base bt), 
+                   RT.Resource (pointsa, 
+                   RT.Constraint (LC.LC (IT.Aligned (S s, Num align)), 
+                   lrt)))
+          | Old -> RT.Resource (pointsa, 
+                   RT.Constraint (LC.LC (IT.Aligned (S s, Num align)), 
+                   lrt))
         in
         let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
         let ret_rt = RT.Logical ((sr, LS.Base bt), Resource (pointsr, I)) in
@@ -490,6 +505,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let* ret_rt =
     let type_expr = annot.fa_returns in
+    let* () = rc_type_compatible_with_ctype loc None ret_ctype type_expr in
     let* (B ((bnew, name, bt, osize), lrt)) = 
       of_type_expr loc names type_expr in
     let rt = 
@@ -573,14 +589,19 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
              of_type_expr loc names type_expr in
            let sa = pointee in
-           let* size = match osize with
-             | Some size -> return size
+           let* (size,align) = match osize with
+             | Some (size, align) -> return (size, align)
              | None -> fail loc (Generic !^"argument type without size")
            in
            let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
            let arg_lrt = match bnew with
-             | New -> RT.Logical ((sa, LS.Base bt), RT.Resource (pointsa, lrt))
-             | Old -> RT.Resource (pointsa, lrt)
+             | New -> RT.Logical ((sa, LS.Base bt), 
+                      RT.Resource (pointsa, 
+                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      lrt)))
+             | Old -> RT.Resource (pointsa, 
+                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      lrt))
            in
            return (names, args_lrts @ [arg_lrt], unused_inv_vars)
       )
@@ -601,14 +622,19 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let* (B ((bnew, pointee, bt, osize), lrt)) = 
              of_type_expr loc names type_expr in
            let sa = pointee in
-           let* size = match osize with
+           let* (size, align) = match osize with
              | Some size -> return size
              | None -> fail loc (Generic !^"argument type without size")
            in
            let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
            let arg_lrt = match bnew with
-             | New -> RT.Logical ((sa, LS.Base bt), RT.Resource (pointsa, lrt))
-             | Old -> RT.Resource (pointsa, lrt)
+             | New -> RT.Logical ((sa, LS.Base bt), 
+                      RT.Resource (pointsa, 
+                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      lrt)))
+             | Old -> RT.Resource (pointsa, 
+                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      lrt))
            in
            let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
            return (names, args_rts @ [arg_rt], unused_inv_vars)

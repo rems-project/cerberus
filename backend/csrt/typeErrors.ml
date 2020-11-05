@@ -44,6 +44,7 @@ type type_error =
   | Internal of Pp.document
   | Unsupported of Pp.document
   | Generic of Pp.document
+  | Generic_extra of Pp.document * document
 
 
 type t = type_error
@@ -148,6 +149,8 @@ let pp_type_error = function
      (!^"Unsupported feature" ^^ colon ^^^ unsupported, [])
   | Generic err ->
      (err, [])
+  | Generic_extra (err, extra) ->
+     (err, [extra])
 
 
 (* stealing some logic from pp_errors *)

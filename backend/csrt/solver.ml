@@ -213,7 +213,7 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a' = of_index_term loc {local;global} ctxt it' in
      let t = 
        Z3.Boolean.mk_eq ctxt
-         (Z3.Arithmetic.mk_div ctxt a a') 
+         (Z3.Arithmetic.Integer.mk_mod ctxt a a')
          (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
      in
      return t
@@ -322,23 +322,18 @@ let debug_typecheck_lcs loc lcs {local;global} =
   if !Debug_ocaml.debug_level > 0 then return () else
     ListM.iterM (WellTyped.WLC.welltyped (loc: Loc.t) {local;global}) lcs
 
+
+
 let footprints_disjoint (location1, size1) (location2, size2) = 
   let fp1_before_fp2 = IT.LocLT (Offset (location1, Num size1), location2) in
   let fp2_before_fp1 = IT.LocLT (Offset (location2, Num size2), location1) in
   IT.Or [fp1_before_fp2; fp2_before_fp1]
 
-
-
-
-let disjoint_footprints footprints = 
-  let rec aux before after = 
-    match after with
-    | [] -> []
-    | fp :: after -> 
-       let disjoint = before @ after in
-       (map (footprints_disjoint fp) disjoint) @ (aux (fp :: before) after)
-  in
-  aux [] footprints
+let rec disjoint_footprints = function
+  | [] -> []
+  | fp :: after -> 
+     map (footprints_disjoint fp) after @ 
+       disjoint_footprints after
 
   
 
@@ -349,10 +344,10 @@ let constraint_holds loc {local;global} c =
   let disjointness_lc = 
     let footprints = 
       map (fun (_, r) -> (RE.pointer r, RE.size r)) (L.all_resources local) in
-    LC.LC (IT.And (disjoint_footprints footprints))
+    map (fun lc -> LC.LC lc) (disjoint_footprints footprints)
   in
   let lcs = 
-    negate c :: disjointness_lc :: Local.all_constraints local
+    negate c :: (disjointness_lc @ Local.all_constraints local)
   in
   let* () = debug_typecheck_lcs loc lcs {local;global} in
   let* checked = 
