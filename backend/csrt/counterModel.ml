@@ -11,200 +11,162 @@ module SymSet = Set.Make(Sym)
 
 
 
-let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
-    : ((Sym.t * RE.t) option) m = 
-  let* points = 
-    Local.filterM (fun name vb ->
-        match vb with 
-        | VariableBinding.Resource re -> 
-           let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer re) in
-           return (if holds then Some (name, re) else None)
-        | _ -> 
-           return None
-      ) local
-  in
-  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+module VarEquivalenceClass = struct
+
+  let counter = ref 0
+
+  type t = 
+    { representative : Sym.t;
+      sort: LS.t;
+      lelements : SymSet.t;
+      celements : SymSet.t;
+    }
 
 
-type lvar_equivalence_classes = (Sym.t * LS.t * SymSet.t) list
+  let ls_prefix (LS.Base bt) = 
+    match bt with
+    | Unit -> "u"
+    | Bool -> "b"
+    | Integer -> "i"
+    | Loc -> "l"
+    | Array -> "a"
+    | List _ -> "l"
+    | Tuple _ -> "p"
+    | Struct _ -> "s"
+    | FunctionPointer _ -> "f"
+
+  let name veclass = 
+    match SymSet.find_first_opt Sym.named veclass.celements with
+    | Some s -> s
+    | None -> 
+       match SymSet.find_first_opt Sym.named veclass.lelements with
+       | Some s -> s
+       | None -> veclass.representative
+
+  let print_name veclass = 
+    match SymSet.find_first_opt Sym.named veclass.celements with
+    | Some s -> s
+    | None -> 
+       match SymSet.find_first_opt Sym.named veclass.lelements with
+       | Some s -> s
+       | None -> veclass.representative
+
+  let new_class l ls = 
+    counter := !counter + 1;
+    { representative = l;
+      sort = ls;
+      lelements = SymSet.singleton l;
+      celements = SymSet.empty;
+    }
+
+  let insert_l l veclass = 
+    { veclass with lelements = SymSet.add l veclass.lelements }
+
+  let insert_c c veclass = 
+    { veclass with celements = SymSet.add c veclass.celements }
+
+  let o_insert_c o_c veclass = 
+    match o_c with
+    | None -> veclass
+    | Some c -> insert_c c veclass
+
+  let classify loc {local; global} classes l ls o_c : t list m =
+    let rec aux = function
+      | veclass :: veclasses ->
+         let* found_class = 
+           if not (LS.equal veclass.sort ls) then return false else
+             Solver.equal loc {local; global} 
+               (S veclass.representative) (S l)
+         in
+         if found_class then 
+           return (o_insert_c o_c (insert_l l veclass) :: veclasses) 
+         else 
+           let* veclasses' = aux veclasses in
+           return (veclass :: veclasses')
+      | [] -> 
+         return [o_insert_c o_c (new_class l ls)]
+    in
+    aux classes
+
+  
+
+end
+  
 
 
-let lvar_equivalence_classes loc {local; global} lvars : lvar_equivalence_classes m = 
-  ListM.fold_leftM (fun classes (l, ls) ->
-      let rec aux = function
-        | (representative, ls', clss) :: classes ->
-           if LS.equal ls ls' then
-             let* equal = Solver.equal loc {local; global} (S l) (S representative) in
-             if equal then
-               let clss' = SymSet.add l clss in
-               let representative' = 
-                 if Sym.named representative 
-                 then representative else l
-               in
-               return ((representative', ls', clss') :: classes)
-             else 
-               let* classes' = aux classes in
-               return ((representative, ls', clss) :: classes')
-           else
-             let* classes' = aux classes in
-             return ((representative, ls', clss) :: classes')
-        | [] -> 
-           return [(l, ls, SymSet.singleton l)]
-      in
-      aux classes
-    ) [] lvars
+open VarEquivalenceClass
 
-
-let find_good_name_subst loc lvar_eq_classes l =
-  let rec aux = function
-    | (representative, _ls, clss) :: _ when SymSet.mem l clss ->
-       return representative
-    | _ :: rest -> aux rest
-    | [] -> fail loc (Internal (!^"no equivalence class for" ^^^ Sym.pp l))
-  in
-  let* representative = aux lvar_eq_classes in
-  return (Subst.{before = l; after = representative})
-
-
-
-let bigunion = List.fold_left SymSet.union SymSet.empty
 
 
 let all_it_names_good it = 
   SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it)
 
-
-
-
-
 let make loc {local; global} oconsts : Pp.document m = 
-  let cvars = L.all_computational local in
-  let lvars = L.all_logical local in
-  let resources = L.all_resources local in
-  let* substs = 
-    let* lvar_classes = lvar_equivalence_classes loc {local; global} lvars in
-    let relevant_lvars = 
-      let lvarses1 = List.map (fun (_,r) -> (RE.vars_in r)) resources in
-      let lvarses2 = List.map (fun (_,(l,_)) -> SymSet.singleton l) cvars in
-      bigunion (lvarses1 @ lvarses2)
+  let c = L.all_computational local in
+  let l = L.all_logical local in
+  let r = L.all_resources local in
+  let* veclasses = 
+    let* with_l = 
+      ListM.fold_leftM (fun classes (l, ls) ->
+          classify loc {local; global} classes l ls None
+        ) [] l
     in
-    ListM.mapM (find_good_name_subst loc lvar_classes)
-      (SymSet.elements relevant_lvars) 
+    let* with_c = 
+      ListM.fold_leftM (fun classes (c, (l, bt)) ->
+          classify loc {local; global} classes l (LS.Base bt) (Some c)
+        ) with_l c
+    in
+    return with_c
   in
-  let resources = 
-    List.map (fun (rname,r) -> (rname, RE.subst_vars substs r)) resources
+  let print_substs =
+    List.fold_right (fun veclass substs ->
+      let name = print_name veclass in
+      let to_substitute = SymSet.union veclass.celements veclass.lelements in
+      SymSet.fold (fun sym substs ->
+          Subst.{ before = sym; after = name } :: substs
+        ) to_substitute substs 
+      ) veclasses []
   in
-  let cvars = 
-    List.map (fun (c,(l,bt)) -> (c, (Sym.substs substs l, bt))) cvars
-  in
-  let* cvars = 
-    ListM.fold_rightM (fun (c,(l,bt)) vars ->
-        if Sym.named c && bt = BT.Loc then
-          let* o_re = resource_for_pointer loc {local; global} (S l) in
-          return ((c, (l, bt), o_re) :: vars)
-        else return vars
-      ) cvars []
-  in
-  let mentioned_resources = 
-    List.fold_left (fun acc (c, _, o_r) ->
-        match o_r with
-        | None -> acc
-        | Some (rname, _) ->
-           let already_mentioned = Option.value [] (SymMap.find_opt rname acc) in
-           SymMap.add rname (c :: already_mentioned) acc
-      ) SymMap.empty cvars
-  in
-
-  let (pped_cvars, mentioned_lvars) = 
-    List.fold_right (fun (s, (lname, bt), o_re) (acc_pp, acc_mentioned) ->
-        begin match o_re with
-        | Some (_, RE.Uninit u) -> 
-           let pp = 
-             Sym.pp s ^^^ !^"uninitialised" ^^^
-             Pp.c_comment (
-                 ifpp (all_it_names_good u.RE.pointer)
-                      (!^"at location" ^^^ IT.pp ~quote:false u.RE.pointer ^^ break 1) ^^
-                 !^"of size" ^^^ Z.pp u.size
-               )
-           in
-           (pp :: acc_pp, acc_mentioned)
-        | Some (_, RE.Points p) -> 
-           let pp = 
-             Sym.pp s ^^^ equals ^^ equals ^^^ Sym.pp p.pointee ^^^
-             Pp.c_comment (
-                 ifpp (all_it_names_good p.RE.pointer)
-                      (!^"at location" ^^^ IT.pp ~quote:false p.RE.pointer ^^ break 1) ^^
-                 !^"of size" ^^^ Z.pp p.size
-               )
-           in
-           (pp :: acc_pp, SymSet.add p.pointee acc_mentioned)
-        | None ->
-           let pp = 
-             Sym.pp s ^^^
-             Pp.c_comment (
-                 ifpp (Sym.named lname) (!^"at location" ^^^ Sym.pp lname ^^ break 1) ^^
-                 parens (!^"no ownership of memory")
-               )
-           in
-           (pp :: acc_pp, acc_mentioned)
-        end
-      ) cvars ([], SymSet.empty)
-  in
-
-  let unmentioned_resources = 
-    List.filter (fun (name,re) ->
-        Option.is_none (SymMap.find_opt name mentioned_resources)
-      ) 
-      resources
-  in
-
-  let (pped_extra_memory, mentioned_lvars) = 
-    List.fold_right (fun re (acc_pp, acc_mentioned) ->
-        match re with
-        | RE.Uninit u -> 
-           let pp = 
+  
+  let (pped_resources, mentioned_lvars) = 
+    List.fold_right (fun (_,r) (acc_pp, acc_mentioned) ->
+        let mentioned = SymSet.diff (RE.vars_in r) (IT.vars_in (RE.pointer r)) in
+        let pp = match RE.subst_vars print_substs r with
+          | RE.Uninit u -> 
              IT.pp ~quote:false u.RE.pointer ^^^ !^"uninitialised" ^^^
-             Pp.c_comment (!^"of size" ^^^ Z.pp u.size)
-           in
-           let mentioned = 
-             SymSet.union (IT.vars_in u.RE.pointer) acc_mentioned 
-           in
-           (pp :: acc_pp, mentioned)
-        | RE.Points p -> 
-           let pp = 
-             IT.pp ~quote:false p.RE.pointer ^^^ equals ^^ equals ^^^ Sym.pp p.pointee ^^^
-             Pp.c_comment (!^"of size" ^^^ Z.pp p.size)
-           in
-           let mentioned = 
-             SymSet.add p.pointee
-               (SymSet.union (IT.vars_in p.RE.pointer) acc_mentioned)
-           in
-           (pp :: acc_pp, mentioned)
-      ) 
-      (List.map snd unmentioned_resources) ([], mentioned_lvars)
+               Pp.c_comment (
+                   !^"of size" ^^^ Z.pp u.size
+                 )
+          | RE.Points p -> 
+             IT.pp ~quote:false p.RE.pointer ^^^
+               equals ^^ equals ^^^ Sym.pp p.pointee ^^^
+                 Pp.c_comment (
+                     !^"of size" ^^^ Z.pp p.size
+                   )
+        in
+        (pp :: acc_pp, SymSet.union acc_mentioned mentioned)
+      ) r ([], SymSet.empty)
   in
 
-
-
-  let aliases = 
-    List.filter_map (fun (_,vars) -> 
-        if List.length vars > 1 then Some vars else None
-      ) (SymMap.bindings mentioned_resources)
-  in
-
-  let* lvar_info = 
+  let* (lvar_info, _) = 
     let consts = Option.value [] oconsts in
-    ListM.mapM (fun s ->
-        let* ls = L.get_l loc s local in
-        let ov = List.assoc_opt s consts in
-        return (s, ls, ov)
-      ) (SymSet.elements mentioned_lvars)
+    ListM.fold_rightM (fun s (acc_pp,acc_done) ->
+        let print_name = Sym.substs print_substs s in
+        if SymSet.mem print_name acc_done 
+        then return (acc_pp, acc_done)
+        else
+          let* ls = L.get_l loc s local in
+          let ov = List.assoc_opt s consts in
+          let acc_pp = (print_name, ls, ov) :: acc_pp in
+          let acc_done = SymSet.add print_name acc_done in
+          return (acc_pp, acc_done)
+      ) (SymSet.elements mentioned_lvars) ([], SymSet.empty)
   in
 
   let pped_lvars = 
     List.map (fun (name,ls,ov) ->
         let val_pp = match ov with
-        | Some v when not (LS.equal ls (LS.Base (BT.Loc))) -> 
+        | Some v (* when not (LS.equal ls (LS.Base (BT.Loc))) *) -> 
            space ^^ !^":=" ^^^ !^v
         | _ -> Pp.empty
         in
@@ -212,17 +174,11 @@ let make loc {local; global} oconsts : Pp.document m =
       ) lvar_info
   in
 
-  let pped_aliases = match aliases with
-    | []-> Pp.empty
-    | _ ->
-       flow_map (break 1) (fun l ->
-             pp_list Sym.pp l ^^^ !^"alias"
-         ) aliases
-  in
   let pp = 
-    flow hardline
-      (pped_cvars @ pped_extra_memory @ pped_lvars) ^^^
-      pped_aliases
+    flow hardline (pped_resources @ pped_lvars)
   in
-
+  
   return pp
+
+
+

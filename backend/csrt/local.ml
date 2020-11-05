@@ -178,6 +178,15 @@ let get_c (loc : Loc.t) (name: Sym.t) (local:t) =
   | Constraint lc -> return lc
   | _ -> fail loc (Kind_mismatch {expect = KConstraint; has = VB.kind b})
 
+(* only used for user interface things *)
+let get_computational_or_logical (loc : Loc.t) (name: Sym.t) (local:t) = 
+  let* b = get loc name local in
+  match b with 
+  | Computational (_,bt) -> return (LS.Base bt)
+  | Logical ls -> return ls
+  | _ -> fail loc (Kind_mismatch {expect = KLogical; has = VB.kind b})
+
+
 let removeS loc syms (local: t) = 
   ListM.fold_leftM (fun local sym -> remove loc sym local) local syms
 

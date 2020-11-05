@@ -53,6 +53,7 @@ val get_a : Loc.t -> Sym.t -> t -> (BT.t * Sym.t) m
 val get_l : Loc.t -> Sym.t -> t -> LS.t m
 val get_r : Loc.t -> Sym.t -> t -> RE.t m
 val get_c : Loc.t -> Sym.t -> t -> LC.t m
+val get_computational_or_logical : Loc.t -> Sym.t -> t -> LS.t m
 
 val removeS : Loc.t -> Sym.t list -> t -> t m
 
