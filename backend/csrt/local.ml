@@ -117,7 +117,7 @@ let is_bound sym (Local local) =
 
 let incompatible_environments loc l1 l2=
   let msg = 
-    !^"Merging incompatible contexts." ^^^ 
+    !^"Merging incompatible contexts." ^/^ 
       item "ctxt1" (pp ~print_used:true ~print_all_names:true l1) ^/^
       item "ctxt2" (pp ~print_used:true ~print_all_names:true l2)
   in

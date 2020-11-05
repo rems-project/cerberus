@@ -225,7 +225,9 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let open Global in
      let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
      let Computational ((s',bt), lrt) = RT.freshify decl.closed_stored in
+     let* align = Memory_aux.align_of_ctype loc ct in
      let lrt' = RT.subst_var_l {before = s'; after = pointer} lrt in
+     let lrt' = Constraint (LC (IT.Aligned (S pointer, Num align)), lrt') in
      return (Computational ((pointer, bt), lrt'))
   | CF.Ctype.Void -> 
      fail loc (Unsupported !^"todo: void*")
@@ -237,7 +239,12 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let* size = Memory_aux.size_of_ctype loc ct in
      let* align = Memory_aux.align_of_ctype loc ct in
      let points = RE.Points {pointer = S pointer; pointee = s2; size} in
-     let lrt = Logical ((s2, Base bt), Resource (points, lrt)) in
+     let lrt = 
+       Logical ((s2, Base bt), 
+       Resource ((points, 
+       Constraint (LC (IT.Aligned (S pointer, Num align)),
+       lrt))))
+     in
      return (Computational ((pointer,Loc), lrt))
   end
 

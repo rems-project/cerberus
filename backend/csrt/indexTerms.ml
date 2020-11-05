@@ -86,27 +86,29 @@ let rec equal it it' =
   | LT (t1,t2), LT (t1',t2')
   | GT (t1,t2), GT (t1',t2')
   | LE (t1,t2), LE (t1',t2')
-
   | GE (t1,t2), GE (t1',t2') 
     -> equal t1 t1' && equal t2 t2' 
 
-  | Impl (t1,t2), Impl (t1',t2')
-    -> equal t1 t1' && equal t2 t2' 
+  | Null t, Null t' -> equal t t' 
+  | And ts, And ts' -> List.equal equal ts ts'
+  | Or ts, Or ts' -> List.equal equal ts ts'
+  | Impl (t1,t2), Impl (t1',t2') -> equal t1 t1' && equal t2 t2' 
+  | Not t, Not t' -> equal t t' 
+  | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
+     equal t1 t1' && equal t2 t2' && equal t3 t3'
+
+  | Tuple its, Tuple its' -> List.equal equal its its'
+  | Nth (bt, n,t), Nth (bt', n',t') -> BT.equal bt bt' && n = n' && equal t t' 
 
 
-  | And ts, And ts'
-  | Or ts, Or ts'
-    -> List.equal equal ts ts'
+  | Aligned (t1, t2), Aligned (t1', t2') -> equal t1 t1' && equal t2 t2'
+  | Offset (t1, t2), Offset (t1', t2') -> equal t1 t1' && equal t2 t2'
+  | LocLT (t1, t2), LocLT (t1', t2') -> equal t1 t1' && equal t2 t2'
 
-  | Null t, Null t'
-  | Not t, Not t' 
-    -> equal t t' 
-
-  | Tuple its, Tuple its' 
-    -> List.equal equal its its'
-  | Nth (bt, n,t), Nth (bt', n',t') 
-    -> BT.equal bt bt' && n = n' && equal t t' 
-
+  | Struct (tag, members), Struct (tag2, members2) ->
+     tag = tag2 && 
+       List.equal (fun (m,t) (m',t') -> m = m' && equal t t') 
+         members members2
   | Member (tag,t,member), Member (tag',t',member')
   | MemberOffset (tag,t,member), MemberOffset (tag',t',member') 
     -> tag = tag' && equal t t' && member = member'
@@ -117,7 +119,6 @@ let rec equal it it' =
     -> equal t1 t1' && equal t2 t2'
   | List (its,bt), List (its',bt') 
     -> List.equal equal its its' && BT.equal bt bt'
-
   | Head t, Head t'
   | Tail t, Tail t'
     -> equal t t'
@@ -189,7 +190,7 @@ let pp ?(quote=true) it : PPrint.document =
     | MemberOffset (_tag, t, Member s) ->
        mparens (ampersand ^^ aux t ^^ !^"->" ^^ !^s)
     | Aligned (t1, t2) ->
-       mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
+       mparens (!^"aligned" ^^^ aux t1 ^^^ aux t2)
     | Offset (t1, t2) ->
        mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
     | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
