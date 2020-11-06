@@ -741,13 +741,12 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
        fail loc (Unsupported !^"todo: PEconstrained")
     | M_PEundef (loc2, undef) ->
        let loc = Loc.update loc loc2 in
-       let* (reachable, oconsts) = 
+       let* (reachable, model) = 
          Solver.is_reachable_and_model loc {local; global} 
        in
-       let* counter_model = CounterModel.make loc {local; global} oconsts in
        if not reachable 
        then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-       else fail loc (Undefined_behaviour (undef, counter_model))
+       else fail loc (Undefined_behaviour (undef, model))
     | M_PEerror (err, asym) ->
        let* arg = arg_of_asym loc local asym in
        fail arg.loc (StaticError err)
@@ -1500,7 +1499,8 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - have an InRange constraint
+  - make struct Conversion logic use InRange, check InRange in store 
+    rules so that pointers are handled correctly
   - give types for standard library functions
   - better location information for refined_c annotations
   - go over files and look for `fresh ()`: give good names

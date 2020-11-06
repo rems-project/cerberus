@@ -132,16 +132,14 @@ let struct_decl_raw loc fields =
 
 let struct_decl_sizes loc fields = 
   ListM.mapM (fun (id, (_, _, ct)) ->
-      let member = Member (Id.s id) in
       let* size = Memory.size_of_ctype loc ct in
-      return (member,size)
+      return (Member (Id.s id),size)
     ) fields
 
 let struct_decl_ranges loc struct_decls fields = 
   ListM.mapM (fun (id, (_, _, ct)) ->
-      let member = Member (Id.s id) in
       let* rangef = in_range_of_ctype loc struct_decls ct in
-      return (member,rangef)
+      return (Member (Id.s id),rangef)
     ) fields
 
 

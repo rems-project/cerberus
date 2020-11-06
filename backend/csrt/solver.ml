@@ -260,57 +260,6 @@ let rec of_index_term loc {local;global} ctxt it =
 
 
 
-(*** counter models ***********************************************************)
-
-
-let rec matching_symbol syms num = 
-  match syms with
-  | sym :: syms when Sym.num sym = num -> Some sym
-  | sym :: syms -> matching_symbol syms num
-  | [] -> None
-
-
-type constant_mapping = (Sym.t * string) list
-
-
-(* maybe should fail if symbol mapping is missing? *)
-let model loc {local;global} solver : (constant_mapping option) m =
-  (* let unsat_core = 
-   *   String.concat ", "
-   *     (map Z3.Expr.to_string (Z3.Solver.get_unsat_core solver))
-   * in *)
-  match Z3.Solver.get_model solver with
-  | None -> 
-     return None
-  | Some model ->
-     let syms = Local.all_names local in
-     let z3_model = Z3.Model.get_const_decls model in
-     let* consts =
-       ListM.filter_mapM (fun decl -> 
-           (* this ignores constants that can't be mapped back to
-              symbols *)
-           let name = Z3.FuncDecl.get_name decl in
-           if not (Z3.Symbol.is_int_symbol name) then return None else 
-             let osym = matching_symbol syms (Z3.Symbol.get_int name) in
-             match osym with
-             | None -> return None
-             | Some sym -> 
-                let ov = Z3.Model.get_const_interp model decl in
-                match ov with
-                | Some v -> return (Some (sym, Z3.Expr.to_string v))
-                | None ->
-                   let err = 
-                     "reconstructing counter model: " ^
-                       "missing value for " ^ Sym.pp_string sym
-                   in
-                   fail loc (Internal !^err)
-         ) z3_model
-     in
-     return (Some consts)
-
-
-
-
 
 (*** running Z3 **************************************************************)
 
@@ -394,11 +343,249 @@ let equal loc {local;global} it1 it2 =
 
 
 
+
+
+
+
+(*** counter models ***********************************************************)
+
+
+
+module VarEquivalenceClass = struct
+
+  let counter = ref 0
+
+  type t = 
+    { representative : Sym.t;
+      sort: LS.t;
+      lelements : SymSet.t;
+      celements : SymSet.t;
+    }
+
+
+  let ls_prefix (LS.Base bt) = 
+    match bt with
+    | Unit -> "u"
+    | Bool -> "b"
+    | Integer -> "i"
+    | Loc -> "l"
+    | Array -> "a"
+    | List _ -> "l"
+    | Tuple _ -> "p"
+    | Struct _ -> "s"
+    | FunctionPointer _ -> "f"
+
+  let name veclass = 
+    match SymSet.find_first_opt Sym.named veclass.celements with
+    | Some s -> s
+    | None -> 
+       match SymSet.find_first_opt Sym.named veclass.lelements with
+       | Some s -> s
+       | None -> veclass.representative
+
+  let print_name veclass = 
+    match SymSet.find_first_opt Sym.named veclass.celements with
+    | Some s -> s
+    | None -> 
+       match SymSet.find_first_opt Sym.named veclass.lelements with
+       | Some s -> s
+       | None -> veclass.representative
+
+  let new_class l ls = 
+    counter := !counter + 1;
+    { representative = l;
+      sort = ls;
+      lelements = SymSet.singleton l;
+      celements = SymSet.empty;
+    }
+
+  let insert_l l veclass = 
+    { veclass with lelements = SymSet.add l veclass.lelements }
+
+  let insert_c c veclass = 
+    { veclass with celements = SymSet.add c veclass.celements }
+
+  let o_insert_c o_c veclass = 
+    match o_c with
+    | None -> veclass
+    | Some c -> insert_c c veclass
+
+  let classify loc {local; global} classes l ls o_c : t list m =
+    let rec aux = function
+      | veclass :: veclasses ->
+         let* found_class = 
+           if not (LS.equal veclass.sort ls) then return false else
+             equal loc {local; global} 
+               (S veclass.representative) (S l)
+         in
+         if found_class then 
+           return (o_insert_c o_c (insert_l l veclass) :: veclasses) 
+         else 
+           let* veclasses' = aux veclasses in
+           return (veclass :: veclasses')
+      | [] -> 
+         return [o_insert_c o_c (new_class l ls)]
+    in
+    aux classes
+
+  
+
+end
+  
+
+
+
+
+
+let rec matching_symbol syms num = 
+  match syms with
+  | sym :: syms when Sym.num sym = num -> Some sym
+  | sym :: syms -> matching_symbol syms num
+  | [] -> None
+
+
+type constant_mapping = (Sym.t * Z3.Expr.expr) list
+
+
+(* Maybe should fail if symbol mapping is missing? The code below
+   ignores constants that can't be mapped back to symbols. Also look
+   at unsat_core? *)
+
+let const_mapping_of_model all_syms (model : Z3.Model.model) : constant_mapping = 
+  let open Option in
+  let z3_model = Z3.Model.get_const_decls model in
+  List.filter_map (fun decl -> 
+      let name = Z3.FuncDecl.get_name decl in
+      if not (Z3.Symbol.is_int_symbol name) then fail else 
+        let* sym = matching_symbol all_syms (Z3.Symbol.get_int name) in
+        let* expr = Z3.Model.get_const_interp model decl in
+        return (sym, expr)
+    ) z3_model
+
+
+open VarEquivalenceClass
+
+
+
+let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
+     : ((Sym.t * RE.t) option) m = 
+   let* points = 
+     Local.filterM (fun name vb ->
+         match vb with 
+         | VariableBinding.Resource re -> 
+            let* holds = equal loc {local;global} pointer_it (RE.pointer re) in
+            return (if holds then Some (name, re) else None)
+         | _ -> 
+            return None
+       ) local
+   in
+   Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+
+module StringMap = Map.Make(String)
+
+let evaluate loc model expr = 
+  match Z3.Model.evaluate model expr true with
+  | None -> fail loc (Internal !^"failure constructing counter model")
+  | Some evaluated_expr -> return evaluated_expr
+
+
+let all_it_names_good it = 
+  SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it)
+
+
+let model loc {local;global} context solver : Pp.document option m =
+  match Z3.Solver.get_model solver with
+  | None -> 
+     return None
+  | Some model ->
+     let c = L.all_computational local in
+     let l = L.all_logical local in
+     let r = L.all_resources local in
+     let* veclasses = 
+       let* with_l = 
+         ListM.fold_leftM (fun classes (l, ls) ->
+             classify loc {local; global} classes l ls None
+           ) [] l
+       in
+       let* with_c = 
+         ListM.fold_leftM (fun classes (c, (l, bt)) ->
+             classify loc {local; global} classes l (LS.Base bt) (Some c)
+           ) with_l c
+       in
+       return with_c
+     in
+     let print_substs =
+       List.fold_right (fun veclass substs ->
+         let name = print_name veclass in
+         let to_substitute = SymSet.union veclass.celements veclass.lelements in
+         SymSet.fold (fun sym substs ->
+             Subst.{ before = sym; after = name } :: substs
+           ) to_substitute substs 
+         ) veclasses []
+     in
+     let* all_locations = 
+       let from_context = 
+         filter_map (fun (s, ls) -> 
+             if LS.equal ls (LS.Base Loc) then Some (IT.S s) else None
+           ) l
+       in
+       let from_resources = 
+         map (fun (_, r) -> RE.pointer r) r in
+       ListM.fold_rightM (fun location_it acc ->
+           let* expr = of_index_term loc {local; global} context location_it in
+           let* evaluated_expr = evaluate loc model expr in
+           return (StringMap.add (Z3.Expr.to_string evaluated_expr) location_it acc)
+         ) (from_context @ from_resources) StringMap.empty
+     in
+     let* pped_state = 
+       ListM.fold_rightM (fun (location_string, location_it) acc_pp ->
+           let* o_resource = resource_for_pointer loc {local; global} location_it in
+           let* pp = match o_resource with
+             | None -> 
+                return (!^"location" ^^^ !^location_string ^^^ !^"unowned")
+             | Some (_, RE.Uninit u) -> 
+                return (!^"location" ^^^ !^location_string ^^^ parens (Z.pp u.size ^^^ !^"bytes size") ^^^ 
+                          !^"uninitialised")
+             | Some (_, RE.Points p) -> 
+                let* (Base ls) = L.get_l loc p.pointee local in
+                let* expr = of_index_term loc {local; global} context (S p.pointee) in
+                let* evaluated_expr = evaluate loc model expr in
+                let loc_pp = !^location_string ^^^ parens (Z.pp p.size ^^^ !^"bytes size") in
+                let val_pp = !^(Z3.Expr.to_string evaluated_expr) in
+                let location_it_pp = 
+                  let it = IT.subst_vars print_substs location_it in
+                  if all_it_names_good it then IT.pp it ^^^ !^"at" ^^ space else Pp.empty 
+                in
+                match ls with
+                | Integer -> 
+                   return (location_it_pp ^^ !^"location" ^^^ loc_pp ^^^ !^"stores integer" ^^^ val_pp)
+                | Loc -> 
+                   return (location_it_pp ^^ !^"location" ^^^ loc_pp ^^^ !^"stores pointer to location" ^^^ val_pp)
+                | Array ->
+                   fail loc (Internal !^"todo: array print reporting")
+                | Struct _ ->
+                   fail loc (Internal !^"todo: struct print reporting")
+                | Unit 
+                | Bool
+                | List _
+                | Tuple _
+                | FunctionPointer _ -> fail loc (Internal !^"non-object stored in memory")
+           in
+           return (pp :: acc_pp)
+         ) (StringMap.bindings all_locations) []
+     in
+
+
+  return (Some (flow hardline pped_state))
+
+
+
+
 let is_reachable_and_model loc {local;global} =
-  let* (unreachable,_, solver) = 
+  let* (unreachable, context, solver) = 
     constraint_holds loc {local;global} true (LC (Bool false)) in
   let* model = 
-    handle_z3_problems loc
-      (fun () -> model loc {local;global} solver) 
-  in
+    handle_z3_problems loc (fun () -> model loc {local;global} context solver) in
+
   return (not unreachable, model)
