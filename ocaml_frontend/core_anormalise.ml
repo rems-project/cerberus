@@ -720,35 +720,31 @@ let normalise_globs_list (gs : (Symbol.sym * ('a, unit) generic_globs) list)
 
 
 
-let normalise_tag_definition:tag_definition ->(((Symbol.identifier*(attributes*qualifiers*ctype))list*(flexible_array_member)option),((Symbol.identifier*(attributes*qualifiers*ctype))list))mu_tag_definition=  ((function
+let normalise_tag_definition = function
   | StructDef(l, mf) -> M_StructDef (l, mf)
   | UnionDef l -> M_UnionDef l
-))
 
-let normalise_tag_definitions dict_Map_MapKeyType_a tagDefs1:('a,((((Symbol.identifier*(attributes*qualifiers*ctype))list*(flexible_array_member)option),((Symbol.identifier*(attributes*qualifiers*ctype))list))mu_tag_definition))Pmap.map= 
-   (Pmap.map normalise_tag_definition tagDefs1)
 
-let normalise_funinfo (loc,annots2,ret,args,b1,b2):('a*'b)mu_funinfo=
+let normalise_tag_definitions tagDefs =
+   (Pmap.map normalise_tag_definition tagDefs)
+
+let normalise_funinfo (loc,annots2,ret,args,b1,b2) = 
    (M_funinfo (loc,annots2,(ret,args),b1,b2))
 
-let normalise_funinfos dict_Map_MapKeyType_c funinfos:('c,(('b*'a)mu_funinfo))Pmap.map= 
+let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)
 
 
 let normalise_file file1 : (ft, lt, ct, bt, (ct mu_struct_def), (ct mu_union_def), unit) Mucore.mu_file= 
    ({ mu_main = (file1.main)
-   ; mu_tagDefs = (normalise_tag_definitions 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) file1.tagDefs)
+   ; mu_tagDefs = (normalise_tag_definitions file1.tagDefs)
    ; mu_core_tagDefs = file1.tagDefs
    ; mu_stdlib = (normalise_fun_map file1.stdlib)
    ; mu_impl = (normalise_impl file1.impl)
    ; mu_globs = (normalise_globs_list file1.globs)
    ; mu_funs = (normalise_fun_map file1.funs)
    ; mu_extern = (file1.extern)
-   ; mu_funinfo = (normalise_funinfos 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) file1.funinfo)
+   ; mu_funinfo = (normalise_funinfos file1.funinfo)
    ; mu_loop_attributes = file1.loop_attributes0
   })
 

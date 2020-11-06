@@ -298,11 +298,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
 
 
 
-  let pp_asym asym = 
-    pp_symbol (a_unpack asym)
+  let pp_asym asym = pp_symbol asym.item
 
-  let pp_actype actype = 
-    pp_ct (a_unpack actype)
+  let pp_actype actype = pp_ct actype.item
 
   let pp_actype_or_asym = function 
     | Left ct -> pp_actype ct 

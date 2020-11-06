@@ -16,10 +16,15 @@ type mu_object_type = Core.core_object_type
 type mu_base_type = Core.core_base_type
 type mu_name = symbol Core.generic_name
 
-type ('o, 'bty) a = A of Annot.annot list * 'bty * 'o
+type ('o, 'bty) a = 
+  { annot: Annot.annot list;
+    type_annot : 'bty;
+    item: 'o }
 
-let a_unpack (A (_, _, a)) = a
-let a_pack annots2 bty a = A (annots2, bty, a)
+let a_unpack a = 
+  (a.annot, a.type_annot, a.item)
+let a_pack annot type_annot item = 
+  {annot; type_annot; item}
 
 type 'bty asym = (Symbol.sym, 'bty) a
 type 'bty asyms = ('bty asym) list

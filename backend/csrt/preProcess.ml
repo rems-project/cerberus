@@ -16,6 +16,9 @@ open Pp
 open ListM
 
 
+let mapM_a f a =
+  let* item = f a.item in
+  return {a with item}
 
 (* for convenience *)
 let information_of_ctype (loc : Loc.t) ct = 
@@ -161,79 +164,83 @@ let retype_memop (loc : Loc.t) = function
   | M_PtrGt (asym1,asym2) -> return (M_PtrGt (asym1,asym2))
   | M_PtrLe (asym1,asym2) -> return (M_PtrLe (asym1,asym2))
   | M_PtrGe (asym1,asym2) -> return (M_PtrGe (asym1,asym2))
-  | M_Ptrdiff (A (annots,bty,ct), asym1, asym2) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_Ptrdiff (A (annots,bty,(bt, size, align)), asym1, asym2))
-  | M_IntFromPtr (A (annots,bty,ct), asym) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_IntFromPtr (A (annots,bty,(bt, size, align)), asym))
-  | M_PtrFromInt (A (annots,bty,ct), asym) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_PtrFromInt (A (annots,bty,(bt, size, align)), asym))
-  | M_PtrValidForDeref (A (annots,bty,ct), asym) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_PtrValidForDeref (A (annots,bty,(bt, size, align)), asym))
-  | M_PtrWellAligned (A (annots,bty,ct), asym) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_PtrWellAligned (A (annots,bty,(bt, size, align)), asym))
-  | M_PtrArrayShift (asym1, A (annots,bty,ct), asym2) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_PtrArrayShift (asym1, A (annots,bty,(bt, size, align)), asym2))
-  | M_Memcpy (asym1,asym2,asym3) -> return (M_Memcpy (asym1,asym2,asym3))
-  | M_Memcmp (asym1,asym2,asym3) -> return (M_Memcmp (asym1,asym2,asym3))
-  | M_Realloc (asym1,asym2,asym3) -> return (M_Realloc (asym1,asym2,asym3))
-  | M_Va_start (asym1,asym2) -> return (M_Va_start (asym1,asym2))
+  | M_Ptrdiff (act, asym1, asym2) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_Ptrdiff (act, asym1, asym2))
+  | M_IntFromPtr (act, asym) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_IntFromPtr (act, asym))
+  | M_PtrFromInt (act, asym) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_PtrFromInt (act, asym))
+  | M_PtrValidForDeref (act, asym) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_PtrValidForDeref (act, asym))
+  | M_PtrWellAligned (act, asym) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_PtrWellAligned (act, asym))
+  | M_PtrArrayShift (asym1, act, asym2) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_PtrArrayShift (asym1, act, asym2))
+  | M_Memcpy (asym1,asym2,asym3) -> 
+     return (M_Memcpy (asym1,asym2,asym3))
+  | M_Memcmp (asym1,asym2,asym3) -> 
+     return (M_Memcmp (asym1,asym2,asym3))
+  | M_Realloc (asym1,asym2,asym3) -> 
+     return (M_Realloc (asym1,asym2,asym3))
+  | M_Va_start (asym1,asym2) -> 
+     return (M_Va_start (asym1,asym2))
   | M_Va_copy asym -> return (M_Va_copy asym)
-  | M_Va_arg (asym, A (annots,bty,ct)) ->
-     let* (bt, size, align) = information_of_ctype loc ct in
-     return (M_Va_arg (asym, A (annots,bty,(bt, size, align))))
+  | M_Va_arg (asym, act) ->
+     let* act = mapM_a (information_of_ctype loc) act in
+     return (M_Va_arg (asym, act))
   | M_Va_end asym -> return (M_Va_end asym)
 
 let retype_action (loc : Loc.t) (M_Action (loc2,action_)) =
   let loc = Loc.update loc loc2 in
   let* action_ = match action_ with
-    | M_Create (asym, A (annots,bty,ct), prefix) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_Create (asym, A (annots,bty,(bt, size, align)), prefix))
-    | M_CreateReadOnly (asym1, A (annots,bty,ct), asym2, prefix) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_CreateReadOnly (asym1, A (annots,bty,(bt, size, align)), asym2, prefix))
-    | M_Alloc (A (annots,bty,ct), asym, prefix) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_Alloc (A (annots,bty,(bt, size, align)), asym, prefix))
+    | M_Create (asym, act, prefix) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_Create (asym, act, prefix))
+    | M_CreateReadOnly (asym1, act, asym2, prefix) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_CreateReadOnly (asym1, act, asym2, prefix))
+    | M_Alloc (act, asym, prefix) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_Alloc (act, asym, prefix))
     | M_Kill (M_Dynamic, asym) -> 
        return (M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 
        let* (bt, size, align) = information_of_ctype loc ct in
        return (M_Kill (M_Static (bt, size, align), asym))
-    | M_Store (m, A (annots,bty,ct), asym1, asym2, mo) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_Store (m, A (annots,bty,(bt, size, align)), asym1, asym2, mo))
-    | M_Load (A (annots,bty,ct), asym, mo) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_Load (A (annots,bty,(bt, size, align)), asym, mo))
-    | M_RMW (A (annots,bty,ct), asym1, asym2, asym3, mo1, mo2) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_RMW (A (annots,bty,(bt, size, align)), asym1, asym2, asym3, mo1, mo2))
+    | M_Store (m, act, asym1, asym2, mo) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_Store (m, act, asym1, asym2, mo))
+    | M_Load (act, asym, mo) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_Load (act, asym, mo))
+    | M_RMW (act, asym1, asym2, asym3, mo1, mo2) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_RMW (act, asym1, asym2, asym3, mo1, mo2))
     | M_Fence mo ->
        return (M_Fence mo)
-    | M_CompareExchangeStrong (A (annots,bty,ct), asym1, asym2, asym3, mo1, mo2) -> 
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_CompareExchangeStrong (A (annots,bty,(bt, size, align)), asym1, asym2, asym3, mo1, mo2))
-    | M_CompareExchangeWeak (A (annots,bty,ct), asym1, asym2, asym3, mo1, mo2) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_CompareExchangeWeak (A (annots,bty,(bt, size, align)), asym1, asym2, asym3, mo1, mo2))
+    | M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2) -> 
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2))
+    | M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2))
     | M_LinuxFence mo ->
        return (M_LinuxFence mo)
-    | M_LinuxLoad (A (annots,bty,ct), asym, mo) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_LinuxLoad (A (annots,bty,(bt, size, align)), asym, mo))
-    | M_LinuxStore (A (annots,bty,ct), asym1, asym2, mo) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_LinuxStore (A (annots,bty,(bt, size, align)), asym1, asym2, mo))
-    | M_LinuxRMW (A (annots,bty,ct), asym1, asym2, mo) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_LinuxRMW (A (annots,bty,(bt, size, align)), asym1, asym2, mo))
+    | M_LinuxLoad (act, asym, mo) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_LinuxLoad (act, asym, mo))
+    | M_LinuxStore (act, asym1, asym2, mo) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_LinuxStore (act, asym1, asym2, mo))
+    | M_LinuxRMW (act, asym1, asym2, mo) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_LinuxRMW (act, asym1, asym2, mo))
   in
   return (M_Action (loc2,action_))
 
@@ -276,9 +283,9 @@ let rec retype_expr (loc : Loc.t) struct_decls (M_Expr (annots,expr_)) =
        return (M_Eif (asym,expr1,expr2))
     | M_Eskip ->
        return (M_Eskip)
-    | M_Eccall (A (annots,bty,ct),asym,asyms) ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_Eccall (A (annots,bty,(bt, size, align)),asym,asyms))
+    | M_Eccall (act,asym,asyms) ->
+       let* act = mapM_a (information_of_ctype loc) act in
+       return (M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (M_Eproc (name,asyms))
     | M_Ewseq (pat,expr1,expr2) ->

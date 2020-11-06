@@ -24,52 +24,46 @@ let mapsnd (f : 'b -> 'c) (l : ('a * 'b) list) : ('a * 'c) list=
 
 type 'bty env = (symbol, ( ('bty, symbol)Core.generic_pexpr)) Pmap.map
 
-let insert_symbol dict_Map_MapKeyType_b sym1 v env1:('b,'a)Pmap.map=
+let insert_symbol sym1 v env1:('b,'a)Pmap.map=
    (Pmap.add sym1 v env1)
 
-let get_pexpr dict_Map_MapKeyType_a _where env1 asym2:('b,'a)Core.generic_pexpr= 
-   (let (A( annots2, bty, sym1)) = asym2 in
-  (match Pmap.lookup sym1 env1 with
+let get_pexpr _where env asym:('b,'a)Core.generic_pexpr= 
+  match Pmap.lookup asym.item env with
   | Some pexpr2 -> pexpr2
   (* Maybe there was already a symbol before a-normalisation. Then the
      a-normalisation would not have added a new let-expression. So
      when reverting, we have to turn those symbols into PEsym
      expressions. *)
-  | None -> Core.Pexpr( annots2, bty, (Core.PEsym sym1))
-  ))
+  | None -> Core.Pexpr(asym.annot, asym.type_annot, (Core.PEsym asym.item))
 
-let get_loaded_value dict_Map_MapKeyType_c dict_Show_Show_c env1 asym2:'a Core.generic_loaded_value= 
-   (let sym1 = (a_unpack asym2) in
-  (match Pmap.lookup sym1 env1 with
+
+let get_loaded_value env1 asym2:'a Core.generic_loaded_value= 
+  match Pmap.lookup asym2.item env1 with
   | Some (Core.Pexpr( _, _, (Core.PEval (Core.Vloaded lv)))) -> lv
   | Some _ -> failwith "not a loaded value"
-  | None -> failwith ("get_loaded_value: " ^ (
-  dict_Show_Show_c.show_method sym1 ^ " not found"))
-  ))
+  | None -> failwith ("get_loaded_value: symbol not found")
 
-let get_object_value dict_Show_Show_c dict_Basic_classes_Eq_c env1 asym2:'a Core.generic_object_value= 
-   (let sym1 = (a_unpack asym2) in
-  (match (lookupBy  dict_Basic_classes_Eq_c.isEqual_method sym1 env1) with
+let get_object_value env1 asym:'a Core.generic_object_value= 
+  match (lookupBy Symbol.symbolEquality asym.item env1) with
   | Some (Core.Pexpr( _, _, (Core.PEval (Core.Vobject ov)))) -> ov
   | Some _ -> failwith "not an object value"
-  | None -> failwith ("get_object_value: " ^ (
-  dict_Show_Show_c.show_method sym1 ^ " not found"))
-  ))
+  | None -> failwith ("get_object_value: symbol not found")
 
-let get_value dict_Map_MapKeyType_c dict_Show_Show_c env1 asym2:'a Core.generic_value= 
-   (let sym1 = (a_unpack asym2) in
-  (match Pmap.lookup sym1 env1 with
+
+let get_value env1 asym:'a Core.generic_value= 
+  match Pmap.lookup asym.item env1 with
   | Some (Core.Pexpr( _, _, (Core.PEval v))) -> v
   | Some _ -> failwith "not an object value"
-  | None -> failwith ("get_value: " ^ (
-  dict_Show_Show_c.show_method sym1 ^ " not found"))
-  ))
+  | None -> failwith ("get_value: symbol not found")
 
 
-let make_symbol_pexpr (A( annots2, bty, sym1)) : ('bty, symbol) Core.generic_pexpr=
+
+let make_symbol_pexpr asym : ('bty, symbol) Core.generic_pexpr=
+  let (annots2, bty, sym1) = a_unpack asym in
    (Core.Pexpr( annots2, bty, (Core.PEsym sym1)))
 
-let make_ctype_pexpr (A( annots2, bty, ctype1)) : ('bty, symbol) Core.generic_pexpr=
+let make_ctype_pexpr asym : ('bty, symbol) Core.generic_pexpr=
+  let (annots2, bty, ctype1) = a_unpack asym in
    (Core.Pexpr( annots2, bty, (Core.PEval (Core.Vctype ctype1))))
 
 
@@ -81,9 +75,7 @@ let rec mu_to_core__object_value (env1 : 'bty env) ov:(Symbol.sym)Core.generic_o
   | M_OVstruct( s, is) -> Core.OVstruct( s, is)
   | M_OVunion( s, i, mv) -> Core.OVunion( s, i, mv)
   | M_OVarray is ->
-     let is = (map (get_loaded_value 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) Symbol.instance_Show_Show_Symbol_sym_dict env1) is) in
+     let is = (map (get_loaded_value env1) is) in
      Core.OVarray is
   ))
 
@@ -105,14 +97,10 @@ let rec mu_to_core__value (env1 : 'bty env) (v : (Ctype.ctype, mu_base_type, 'bt
   | M_Vfalse -> Core.Vfalse
   (* | M_Vctype ct -> Core.Vctype ct *)
   | M_Vlist( cbt, is) -> 
-     let is = (map (get_value 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) Symbol.instance_Show_Show_Symbol_sym_dict env1) is) in
+     let is = (map (get_value env1) is) in
      Core.Vlist( cbt, is)
   | M_Vtuple is ->
-     let is = (map (get_value 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) Symbol.instance_Show_Show_Symbol_sym_dict env1) is) in
+     let is = (map (get_value env1) is) in
      Core.Vtuple is
   ))
   
@@ -154,82 +142,52 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : (Ctype.ctype, mu_base_type
   | M_PEval v -> 
      wrap (Core.PEval (mu_to_core__value env1 v))
   | M_PEconstrained l -> 
-     let l = (mapsnd (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEconstrained" env1) l) in
+     let l = (mapsnd (get_pexpr "PEconstrained" env1) l) in
      wrap (Core.PEconstrained l)
   | M_PEundef( loc, undef1) ->
      wrap (Core.PEundef( loc, undef1))
   | M_PEerror( err, p) -> 
-     wrap (Core.PEerror( err, (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEerror" env1 p)))
+     wrap (Core.PEerror( err, (get_pexpr "PEerror" env1 p)))
   | M_PEctor( ctor1, pes) -> 
      wrap (Core.PEctor( 
              (mu_to_core__ctor ctor1),
-             (map (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEctor" env1) pes)))
+             (map (get_pexpr "PEctor" env1) pes)))
   | M_PEcase( p, pats_pes) ->
      let pats_pes = 
        (map (fun (pat,e) -> 
            (mu_to_core__pattern pat, 
             mu_to_core__pexpr env1 e)) 
          pats_pes) in
-     wrap (Core.PEcase( (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEcase" env1 p), pats_pes))
+     wrap (Core.PEcase( (get_pexpr "PEcase" env1 p), pats_pes))
   | M_PEarray_shift( pe1, ctype1, pe2) ->
      wrap (Core.PEarray_shift( 
-             (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEarray_shift" env1 pe1), 
+             (get_pexpr "PEarray_shift" env1 pe1), 
              ctype1, 
-             (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEarray_shift" env1 pe2)))
+             (get_pexpr "PEarray_shift" env1 pe2)))
   | M_PEmember_shift( p, s, id1)  ->
-     wrap (Core.PEmember_shift( (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEmember_shift" env1 p), s, id1))
+     wrap (Core.PEmember_shift( (get_pexpr "PEmember_shift" env1 p), s, id1))
   | M_PEnot p ->
-     wrap (Core.PEnot (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEnot" env1 p))
+     wrap (Core.PEnot (get_pexpr "PEnot" env1 p))
   | M_PEop( binop1, p11, p21) ->
      wrap (Core.PEop( binop1, 
-             (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEop" env1 p11), 
-             (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEop" env1 p21)))
+             (get_pexpr "PEop" env1 p11), 
+             (get_pexpr "PEop" env1 p21)))
   | M_PEstruct( sym1, fields) ->
-     let fields = (mapsnd (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEstruct" env1) fields) in
+     let fields = (mapsnd (get_pexpr "PEstruct" env1) fields) in
      wrap (Core.PEstruct( sym1, fields))
   | M_PEunion( sym1, id1, p) ->
-     wrap (Core.PEunion( sym1, id1, (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEunion" env1 p)))
+     wrap (Core.PEunion( sym1, id1, (get_pexpr "PEunion" env1 p)))
   (* | M_PEcfunction f ->
    *    Core.PEcfunction (get_pexpr f) *)
   | M_PEmemberof( sym1, id1, p) ->
-     wrap (Core.PEmemberof( sym1, id1, (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEmemberof" env1 p)))
+     wrap (Core.PEmemberof( sym1, id1, (get_pexpr "PEmemberof" env1 p)))
   | M_PEcall( name1, args) ->
-     wrap (Core.PEcall( name1, (map (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEcall" env1) args)))
+     wrap (Core.PEcall( name1, (map (get_pexpr "PEcall" env1) args)))
   | M_PElet( pat, p11, p21) ->
      (match pat with
      | M_Symbol sym1 ->
         let p11 = (mu_to_core__pexpr env1 p11) in
-        let env' = (insert_symbol 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) sym1 p11 env1) in
+        let env' = (insert_symbol sym1 p11 env1) in
         mu_to_core__pexpr env' p21
      | M_Pat pat ->
         wrap (Core.PElet( 
@@ -239,9 +197,7 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : (Ctype.ctype, mu_base_type
      )
   | M_PEif( p0, p11, p21) ->
      wrap (Core.PEif( 
-             (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "PEif" env1 p0),
+             (get_pexpr "PEif" env1 p0),
                 (mu_to_core__pexpr env1 p11), 
                 (mu_to_core__pexpr env1 p21)))
   (* | M_PEis_scalar p ->
@@ -270,53 +226,42 @@ let mu_to_core__action_ env1 (action_ : (Ctype.ctype, 'bty) mu_action_)
    ((match action_ with
   | M_Create( p11, p21, prefix1) ->
      Core.Create( 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Create" env1 p11),
+       (get_pexpr "Create" env1 p11),
        (make_ctype_pexpr p21),
        prefix1)
   | M_CreateReadOnly( p11, p21, p3, prefix1) ->
      Core.CreateReadOnly( 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CreateReadOnly" env1 p11),
+       (get_pexpr "CreateReadOnly" env1 p11),
        (make_ctype_pexpr p21),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CreateReadOnly" env1 p3),
+       (get_pexpr "CreateReadOnly" env1 p3),
        prefix1)
   | M_Alloc( p11, p21, prefix1) ->
      Core.Alloc0( 
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Alloc" env1 p21),
+       (get_pexpr "Alloc" env1 p21),
        prefix1)
   | M_Kill( kind, p) ->
      Core.Kill( 
        (mu_to_core__kill_kind kind),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Kill" env1 p))
+       (get_pexpr "Kill" env1 p))
   | M_Store( b, p11, p21, p3, mo1) ->
      Core.Store0( 
        b,
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Store" env1 p21), 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Store" env1 p3),
+       (get_pexpr "Store" env1 p21), 
+       (get_pexpr "Store" env1 p3),
        mo1)
   | M_Load( p11, p21, mo1) ->
      Core.Load0( 
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Load" env1 p21),
+       (get_pexpr "Load" env1 p21),
        mo1)
   | M_RMW( p11, p21, p3, p4, mo1, mo2) ->
      Core.RMW0( 
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "RMW" env1 p21), 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "RMW" env1 p3),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "RMW" env1 p4),
+       (get_pexpr "RMW" env1 p21), 
+       (get_pexpr "RMW" env1 p3),
+       (get_pexpr "RMW" env1 p4),
        mo1,
        mo2)
   | M_Fence mo1 ->
@@ -325,23 +270,17 @@ let mu_to_core__action_ env1 (action_ : (Ctype.ctype, 'bty) mu_action_)
   | M_CompareExchangeStrong( p11, p21, p3, p4, mo1, mo2) ->
      Core.CompareExchangeStrong( 
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CompareExchangeStrong" env1 p21), 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CompareExchangeStrong" env1 p3),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CompareExchangeStrong" env1 p4),
+       (get_pexpr "CompareExchangeStrong" env1 p21), 
+       (get_pexpr "CompareExchangeStrong" env1 p3),
+       (get_pexpr "CompareExchangeStrong" env1 p4),
        mo1,
        mo2)
   | M_CompareExchangeWeak( p11, p21, p3, p4, mo1, mo2) ->
      Core.CompareExchangeWeak(
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CompareExchangeWeak" env1 p21), 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CompareExchangeWeak" env1 p3),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "CompareExchangeWeak" env1 p4),
+       (get_pexpr "CompareExchangeWeak" env1 p21), 
+       (get_pexpr "CompareExchangeWeak" env1 p3),
+       (get_pexpr "CompareExchangeWeak" env1 p4),
        mo1,
        mo2)
   | M_LinuxFence mo1 ->
@@ -350,24 +289,19 @@ let mu_to_core__action_ env1 (action_ : (Ctype.ctype, 'bty) mu_action_)
   | M_LinuxLoad( p11, p21, mo1) ->
      Core.LinuxLoad( 
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "LinuxLoad" env1 p21),
+       (get_pexpr "LinuxLoad" env1 p21),
        mo1)
   | M_LinuxStore( p11, p21, p3, mo1) ->
      Core.LinuxStore(
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "LinuxStore" env1 p21), 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "LinuxStore" env1 p3),
+       (get_pexpr "LinuxStore" env1 p21), 
+       (get_pexpr "LinuxStore" env1 p3),
        mo1)
   | M_LinuxRMW( p11, p21, p3, mo1) ->
      Core.LinuxRMW(
        (make_ctype_pexpr p11),
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "LinuxRMW" env1 p21), 
-       (get_pexpr (instance_Map_MapKeyType_var_dict
-   Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "LinuxRMW" env1 p3),
+       (get_pexpr "LinuxRMW" env1 p21), 
+       (get_pexpr "LinuxRMW" env1 p3),
        mo1)
   ))
 
@@ -443,9 +377,7 @@ let mu_to_core__memop__ memop1:memop*(((('b,'a)a),(((Symbol.sym),'a)a))Either.ei
 
 let mu_to_core__memop env1 memop1:memop*(('a,(Symbol.sym))Core.generic_pexpr)list= 
    (let mctype = make_ctype_pexpr in
-  let msym where asym2=  (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) where env1 asym2) in
+  let msym where asym2=  (get_pexpr where env1 asym2) in
   (match memop1 with
   | M_PtrEq (sym1,sym2) ->
      (PtrEq, 
@@ -540,9 +472,7 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
     | M_Eaction pa ->
        wrap (Core.Eaction (mu_to_core__paction env1 pa))
     | M_Ecase( pe, es) ->
-       wrap (Core.Ecase( (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Ecase" env1 pe), 
+       wrap (Core.Ecase( (get_pexpr "Ecase" env1 pe), 
                (map (fun (pat,e) -> 
                     (mu_to_core__pattern pat, 
                      mu_to_core__expr env1 e)) es)))
@@ -550,9 +480,7 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        (match pat with
        | M_Symbol sym1 ->
           let pe = (mu_to_core__pexpr env1 pe) in
-          let env' = (insert_symbol 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) sym1 pe env1) in
+          let env' = (insert_symbol sym1 pe env1) in
           mu_to_core__expr env' e
        | M_Pat pat ->
           wrap (Core.Elet( 
@@ -561,26 +489,18 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
                   (mu_to_core__expr env1 e)))
        )
     | M_Eif( pe, e1, e2) ->
-       wrap (Core.Eif( (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Eif" env1 pe),
+       wrap (Core.Eif( (get_pexpr "Eif" env1 pe),
                (mu_to_core__expr env1 e1),
                (mu_to_core__expr env1 e2)))
     | M_Eskip ->
        wrap Core.Eskip
-    | M_Eccall( (A( annots2, bty, ct1)), pe2, pes) ->
+    | M_Eccall( (act), pe2, pes) ->
        wrap (Core.Eccall( (),
-               (Core.Pexpr( annots2, bty, (Core.PEval (Core.Vctype ct1)))),
-               (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Eccall" env1 pe2), 
-               (map (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Eccall" env1) pes)))
+               (Core.Pexpr( act.annot, act.type_annot, (Core.PEval (Core.Vctype act.item)))),
+               (get_pexpr "Eccall" env1 pe2), 
+               (map (get_pexpr "Eccall" env1) pes)))
     | M_Eproc( name1, pes) ->
-       wrap (Core.Eproc( (), name1, (map (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Eproc" env1) pes)))
+       wrap (Core.Eproc( (), name1, (map (get_pexpr "Eproc" env1) pes)))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     | M_Ewseq( pat, e1, e2) ->
@@ -602,9 +522,7 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
     | M_End es ->
        wrap (Core.End (map (mu_to_core__expr env1) es))
     | M_Erun( sym1, pes) ->
-       wrap (Core.Erun( (), sym1, (map (get_pexpr 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) "Erun" env1) pes)))
+       wrap (Core.Erun( (), sym1, (map (get_pexpr "Erun" env1) pes)))
        (* wrap (Core.Erun () sym (map (get_pexpr "Ereturn" env) [pe])) *)
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)

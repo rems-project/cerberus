@@ -223,9 +223,9 @@ let used_resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size)
 type arg = {lname : Sym.t; bt : BT.t; loc : Loc.t}
 type args = arg list
 
-let arg_of_asym (loc : Loc.t) (local : L.t) (A (a, _, s) : 'bty asym) : arg m = 
-  let loc = Loc.update_a loc a in
-  let* (bt,lname) = get_a loc s local in
+let arg_of_asym (loc : Loc.t) (local : L.t) (asym : 'bty asym) : arg m = 
+  let loc = Loc.update_a loc asym.annot in
+  let* (bt,lname) = get_a loc asym.item local in
   return {lname; bt; loc}
 
 let args_of_asyms (loc : Loc.t) (local : L.t) (asyms : 'bty asyms) : args m= 
@@ -1073,7 +1073,8 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
          -> 
           fail loc (Unsupported !^"todo: ememop")
-       | M_PtrValidForDeref (A (_, _, (dbt, size, align)), asym) ->
+       | M_PtrValidForDeref (act, asym) ->
+          let (dbt, size, align) = act.item in
           let* arg = arg_of_asym loc local asym in
           let ret = Sym.fresh () in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1103,7 +1104,8 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        end
     | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
        begin match action_ with
-       | M_Create (asym, A (_, _, (bt, size, _align)), _prefix) -> 
+       | M_Create (asym, act, _prefix) -> 
+          let (bt, size, _align) = act.item in
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
@@ -1130,7 +1132,8 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
                          (S arg.lname) size Kill None in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
-       | M_Store (_is_locking, A(_ ,_ ,(s_vbt, size, align)), pasym, vasym, mo) -> 
+       | M_Store (_is_locking, act, pasym, vasym, mo) -> 
+          let (s_vbt, size, align) = act.item in
           let* parg = arg_of_asym loc local pasym in
           let* varg = arg_of_asym loc local vasym in
           let* () = ensure_base_type loc ~expect:s_vbt varg.bt in
@@ -1149,7 +1152,8 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
               size (Some (S varg.lname)) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt, local))
-       | M_Load (A (_,_,(bt, size, align)), pasym, _mo) -> 
+       | M_Load (act, pasym, _mo) -> 
+          let (bt, size, align) = act.item in
           let* parg = arg_of_asym loc local pasym in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
@@ -1181,11 +1185,11 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
     | M_Eskip -> 
        let rt = RT.Computational ((Sym.fresh (), Unit), I) in
        return (Normal (rt, local))
-    | M_Eccall (_ctype, A(af, _, fsym), asyms) ->
-       let* (bt, _) = get_a (Loc.update_a loc af) fsym local in
+    | M_Eccall (_ctype, afsym, asyms) ->
+       let* (bt, _) = get_a (Loc.update_a loc afsym.annot) afsym.item local in
        let* fun_sym = match bt with
          | FunctionPointer sym -> return sym
-         | _ -> fail (Loc.update_a loc af) (Generic !^"not a function pointer")
+         | _ -> fail (Loc.update_a loc afsym.annot) (Generic !^"not a function pointer")
        in
        let* (_loc, decl_typ) = G.get_fun_decl loc global fun_sym in
        let* args = args_of_asyms loc local asyms in
@@ -1496,7 +1500,7 @@ let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - alignment constraints
+  - have an InRange constraint
   - give types for standard library functions
   - better location information for refined_c annotations
   - go over files and look for `fresh ()`: give good names

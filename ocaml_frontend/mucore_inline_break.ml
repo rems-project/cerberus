@@ -75,8 +75,8 @@ let rec ib_expr
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))))) in
       let arguments = (Lem_list.list_combine label_arg_syms args) in
       let (M_Expr( annots2, e_)) = 
-        (List.fold_right (fun (spec_arg, A( annots2, bty, app_arg)) body ->
-            let pe = (M_Pexpr( annots2, bty, (M_PEsym app_arg))) in
+        (List.fold_right (fun (spec_arg, asym) body ->
+            let pe = (M_Pexpr( asym.annot, asym.type_annot, (M_PEsym asym.item))) in
             M_Expr( [], (M_Elet( (M_Symbol spec_arg), pe, body)))
           ) arguments label_body)
       in
@@ -86,7 +86,7 @@ let rec ib_expr
     
 
 
-let rec inline_label_labels_and_body dict_Map_MapKeyType_e to_inline to_keep body:('e,(('d,'b,'c,'a)mu_label_def))Pmap.map*('b,'c,'a)mu_expr=
+let rec inline_label_labels_and_body to_inline to_keep body:('e,(('d,'b,'c,'a)mu_label_def))Pmap.map*('b,'c,'a)mu_expr=
    ((match to_inline with
   | [] -> (to_keep, body)
   | l :: to_inline' ->
@@ -103,8 +103,7 @@ let rec inline_label_labels_and_body dict_Map_MapKeyType_e to_inline to_keep bod
          )) to_keep)
      in
      let body' = (ib_expr l body) in
-     inline_label_labels_and_body 
-  dict_Map_MapKeyType_e to_inline' to_keep' body'
+     inline_label_labels_and_body to_inline' to_keep' body'
   ))
 
 
@@ -124,13 +123,10 @@ let ib_fun_map_decl
                else (Pmap.add label def to_keep, to_inline)
             )) 
           in
-          Pmap.fold aux label_defs ((Pmap.empty (fun sym1 sym2->ordCompare 
-  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)), []))
+          Pmap.fold aux label_defs ((Pmap.empty Symbol.symbol_compare), []))
         in
         let (label_defs, body) = 
-          (inline_label_labels_and_body 
-  (instance_Map_MapKeyType_var_dict
-     Symbol.instance_Basic_classes_SetType_Symbol_sym_dict) to_inline to_keep body)
+          (inline_label_labels_and_body to_inline to_keep body)
         in
         M_Proc( loc, rbt, arg_bts, body, label_defs)
      | _ -> d
