@@ -266,7 +266,7 @@ and of_constr loc names constr : RT.l m =
      fail loc (Unsupported !^"Constr_exist")
   | Constr_own (ident,ptr_kind,type_expr) ->
      let* name = get_name loc names ident in
-     let* psize = Memory_aux.size_of_pointer loc in
+     let* psize = Memory.size_of_pointer loc in
      begin match ptr_kind, is_uninit_type_expr type_expr with
        | Own, Some integer_type_expr -> 
           let* size = bytes_of_integer_type_expr loc integer_type_expr in
@@ -304,8 +304,8 @@ and of_type_expr loc names te : tb m =
   let (mrefinement, te') = maybe_refinement te in
   match mrefinement, te' with
   | _, Ty_ptr (ptr_kind, type_expr) ->
-     let* psize = Memory_aux.size_of_pointer loc in
-     let* palign = Memory_aux.align_of_pointer loc in
+     let* psize = Memory.size_of_pointer loc in
+     let* palign = Memory.align_of_pointer loc in
      begin match mrefinement, ptr_kind, is_uninit_type_expr type_expr with
      | _, Own, Some integer_type_expr -> 
         let* name, bnewp = match mrefinement with
@@ -387,8 +387,8 @@ and of_type_expr loc names te : tb m =
   | None, Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      let name = Sym.fresh () in
      let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
-     let* size = Memory_aux.size_of_ctype loc ct in
-     let* align = Memory_aux.align_of_ctype loc ct in
+     let* size = Memory.size_of_ctype loc ct in
+     let* align = Memory.align_of_ctype loc ct in
      let* lc = integerType_constraint loc (S name) (CF.Ctype.Bool) in
      return (B ((New, name, BT.Integer, Some (size,align)), RT.Constraint (lc, I)))
   | None, Ty_params ("void", []) ->
@@ -420,7 +420,7 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
      return ()
   | _, (Ty_params ("uninit", [Ty_arg_expr integer_type_expr])) ->
      let* size = bytes_of_integer_type_expr loc integer_type_expr in
-     let* ct_size = Memory_aux.size_of_ctype loc ct in
+     let* ct_size = Memory.size_of_ctype loc ct in
      if Z.equal ct_size size 
      then return ()
      else incompatible loc ct type_expr
@@ -433,7 +433,7 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
        | Unsigned _ -> return false
        | _ -> incompatible loc ct type_expr
      in
-     let* ct_size = Memory_aux.size_of_ctype loc ct in
+     let* ct_size = Memory.size_of_ctype loc ct in
      if ct_signed = signed && Z.equal ct_size size 
      then return ()
      else incompatible loc ct type_expr

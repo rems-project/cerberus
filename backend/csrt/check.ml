@@ -175,6 +175,46 @@ let pattern_match_rt (loc : Loc.t) (pat : pattern) (rt : RT.t) : L.t m =
 
 
 
+
+(*** resource inference *******************************************************)
+
+let for_fp_filter (loc: Loc.t) {local;global} (pointer_it, size) =
+  fun name re ->
+  if Z.equal (RE.size re) size then 
+    let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer re) in
+    return holds
+  else 
+    return false
+
+let resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size) 
+    : ((Sym.t * RE.t) option) m = 
+  let* points = 
+    Local.filterM (fun name vb ->
+        match vb with 
+        | VariableBinding.Resource re -> 
+           let* holds = for_fp_filter loc {local; global} (pointer_it, size) name re in
+           return (if holds then Some (name, re) else None)
+        | _ -> 
+           return None
+      ) local
+  in
+  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+let used_resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size) 
+    : ((Loc.t list) option) m = 
+  let* points = 
+    Local.filterM (fun name vb ->
+        match vb with 
+        | VariableBinding.UsedResource (re, where) -> 
+           let* holds = for_fp_filter loc {local; global} (pointer_it, size) name re in
+           return (if holds then Some (where) else None)
+        | _ -> 
+           return None
+      ) local
+  in
+  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+
 (*** function call typing and subtyping ***************************************)
 
 (* Spine is parameterised by RT_Sig, so it can be used both for
@@ -256,11 +296,11 @@ module Spine (I : AT.I_Sig) = struct
              | Some s -> fail loc (Unconstrained_logical_variable s)
              | _ -> return ()
            in
-           let* matched = Memory.for_fp loc {local; global} (RE.fp re) in
+           let* matched = resource_for_fp loc {local; global} (RE.fp re) in
            begin match matched with
            | None -> 
               let* o_last_used = 
-                Memory.for_fp_used loc {local; global} (RE.fp re) in
+                used_resource_for_fp loc {local; global} (RE.fp re) in
               fail loc (Missing_resource (re, o_last_used))
            | Some (s, re') ->
               let re' = RE.set_pointer re' (RE.pointer re) in
@@ -392,7 +432,7 @@ let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
   let ret = Sym.fresh () in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
-      let* align = Memory_aux.align_of_ctype loc ct in
+      let* align = Memory.align_of_ctype loc ct in
       return (ret, Loc, LC (And [Null (S ret); Aligned (S ret, Num align)])) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
@@ -406,7 +446,7 @@ let rec infer_mem_value (loc : Loc.t) {local; global} (mem : mem_value) : vt m =
       fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
     ( fun it iv -> 
       let ret = Sym.fresh () in
-      let* v = Memory_aux.integer_value_to_num loc iv in
+      let* v = Memory.integer_value_to_num loc iv in
       return (ret, Integer, LC (EQ (S ret, Num v))) )
     ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
     ( fun _ ptrval -> infer_ptrval loc {local; global} ptrval  )
@@ -456,7 +496,7 @@ let infer_object_value (loc : Loc.t) {local; global}
   match ov with
   | M_OVinteger iv ->
      let ret = Sym.fresh () in
-     let* i = Memory_aux.integer_value_to_num loc iv in
+     let* i = Memory.integer_value_to_num loc iv in
      return (ret, Integer, LC (EQ (S ret, Num i)))
   | M_OVpointer p -> 
      infer_ptrval loc {local; global} p
@@ -886,6 +926,118 @@ and check_pexpr_pop (loc : Loc.t) delta {local; global} (pe : 'bty pexpr)
 
 
 
+
+(*** memory related logic *****************************************************)
+
+let rec remove_owned_subtree (loc: Loc.t) {local;global} (bt : BT.t) (pointer: IT.t) (size: RE.size) 
+          access_kind is_field = 
+  match bt with
+  | Struct tag ->
+     let* decl = Global.get_struct_decl loc global.struct_decls tag in
+     ListM.fold_leftM (fun local (member,bt) ->
+         remove_owned_subtree loc {local;global} bt
+           (IT.MemberOffset (tag,pointer,member)) size access_kind (Some member)
+       ) local decl.raw
+  | _ ->
+     let* o_member_resource = resource_for_fp loc {local;global} (pointer,size) in
+     match o_member_resource with
+     | Some (rname,_) -> Local.use_resource loc rname [loc] local
+     | None -> 
+        let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
+        fail loc (Missing_ownership (access_kind, is_field, olast_used))
+
+
+  
+let rec load (loc: Loc.t) 
+             {local;global}
+             (bt: BT.t)
+             (pointer: IT.t)
+             (size: RE.size)
+             (path: IT.t)
+             (is_field: BT.member option) 
+  =
+  let open RT in
+  match bt with
+  | Struct tag ->
+     let* decl = Global.get_struct_decl loc global.struct_decls tag in
+     let rec aux = function
+       | (member,member_bt)::members ->
+          let member_pointer = IT.MemberOffset (tag,pointer,member) in
+          let member_path = IT.Member (tag, path, member) in
+          let member_size = List.assoc member decl.sizes in
+          let* constraints = aux members in
+          let* constraints2 = load loc {local;global} member_bt member_pointer 
+                                member_size member_path (Some member)in
+          return (constraints2@@constraints)
+       | [] -> return I
+     in  
+     aux decl.raw
+  | _ ->
+     let* o_resource = resource_for_fp loc {local;global} (pointer,size) in
+     let* pointee = match o_resource with
+       | Some (_,Points p) -> return p.pointee
+       | Some (_,Uninit _) -> fail loc (Uninitialised is_field)
+       | None -> 
+          let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
+          fail loc (Missing_ownership (Load, is_field, olast_used))
+     in
+     let* vls = Local.get_l loc pointee local in
+     if LS.equal vls (Base bt) 
+     then return (Constraint (LC (IT.EQ (path, S pointee)),I))
+     else fail loc (Mismatch {has=vls; expect=Base bt})
+
+
+
+(* does not check for the right to write, this is done elsewhere *)
+let rec store (loc: Loc.t)
+              {local;global}
+              (bt: BT.t)
+              (pointer: IT.t)
+              (size: RE.size)
+              (o_value: IT.t option) 
+  =
+  let open RT in
+  match bt with
+  | Struct tag ->
+     let* decl = Global.get_struct_decl loc global.struct_decls tag in
+     let rec aux = function
+       | [] -> return I
+       | (member,member_bt)::members ->
+          let member_pointer = IT.MemberOffset (tag,pointer,member) in
+          let member_size = List.assoc member decl.sizes in
+          let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
+          let* rt = aux members in
+          let* rt2 = store loc {local;global} member_bt member_pointer 
+                              member_size o_member_value in
+          return (rt@@rt2)
+     in  
+     aux decl.raw
+  | _ -> 
+     let vsym = Sym.fresh () in 
+     match o_value with
+       | Some v -> 
+          let rt = 
+            Logical ((vsym, Base bt), 
+            Resource (Points {pointer; pointee = vsym; size}, 
+            Constraint (LC (EQ (S vsym, v)), I)))
+          in
+          return rt
+       | None -> 
+          return (Resource (Uninit {pointer; size}, I))
+
+
+let ensure_aligned loc {local; global} access pointer align = 
+  let* (aligned, _, _) = 
+    Solver.constraint_holds loc {local; global} false
+      (LC.LC (Aligned (pointer, align))) 
+  in
+  if aligned then return () else fail loc (Misaligned Store)
+
+
+
+
+
+
 (*** impure expression inference **********************************************)
 
 
@@ -896,13 +1048,6 @@ and check_pexpr_pop (loc : Loc.t) delta {local; global} (pe : 'bty pexpr)
    the raw type inference, and additionally return whatever is left in
    the local environment since that marker (except for computational
    variables) *)
-
-let ensure_aligned loc {local; global} access pointer align = 
-  let* (aligned, _, _) = 
-    Solver.constraint_holds loc {local; global} false
-      (LC.LC (Aligned (pointer, align))) 
-  in
-  if aligned then return () else fail loc (Misaligned Store)
 
 
 let rec infer_expr (loc : Loc.t) {local; labels; global} 
@@ -934,7 +1079,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           (* check more things? *)
           let* o_resource = 
-            Memory.for_fp loc {local; global} (S arg.lname, size) 
+            resource_for_fp loc {local; global} (S arg.lname, size) 
           in
           let* (aligned, _, s_) = 
             Solver.constraint_holds loc {local; global} false
@@ -962,7 +1107,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
-          let* lrt = Memory.store loc {local; global} bt (S ret) size None in
+          let* lrt = store loc {local; global} bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
             RT.Constraint (LC.LC (Aligned (S ret, S arg.lname)), 
@@ -981,7 +1126,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* () = 
             ensure_aligned loc {local; global} Kill (S arg.lname) (Num align) 
           in
-          let* local = Memory.remove_owned_subtree loc {local; global} bt 
+          let* local = remove_owned_subtree loc {local; global} bt 
                          (S arg.lname) size Kill None in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
@@ -997,10 +1142,10 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
             ensure_aligned loc {local; global} Store (S parg.lname) (Num align) 
           in
           let* local = 
-            Memory.remove_owned_subtree parg.loc {local; global} varg.bt 
+            remove_owned_subtree parg.loc {local; global} varg.bt 
               (S parg.lname) size Store None in
           let* bindings = 
-            Memory.store loc {local; global} varg.bt (S parg.lname) 
+            store loc {local; global} varg.bt (S parg.lname) 
               size (Some (S varg.lname)) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt, local))
@@ -1012,7 +1157,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           in
           let ret = Sym.fresh () in
           let* constraints = 
-            Memory.load loc {local; global} bt (S parg.lname) size (S ret) None 
+            load loc {local; global} bt (S parg.lname) size (S ret) None 
           in
           let rt = RT.Computational ((ret, bt), constraints) in
           return (Normal (rt, local))
@@ -1204,7 +1349,7 @@ module CBF (I : AT.I_Sig) = struct
     let rec check acc_substs local pure_local args (ftyp : T.t) =
       match args, ftyp with
       | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
-           when equal abt sbt ->
+           when BT.equal abt sbt ->
          (* let new_lname = Sym.fresh_relative aname (fun s -> s^"^") in *)
          let new_lname = Sym.fresh () in
          let subst = Subst.{before=lname;after=new_lname} in

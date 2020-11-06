@@ -20,8 +20,8 @@ open ListM
 (* for convenience *)
 let information_of_ctype (loc : Loc.t) ct = 
   let* bt = Conversions.bt_of_ctype loc ct in
-  let* size = Memory_aux.size_of_ctype loc ct in
-  let* align = Memory_aux.align_of_ctype loc ct in
+  let* size = Memory.size_of_ctype loc ct in
+  let* align = Memory.align_of_ctype loc ct in
   return (bt, size, align)
 
 

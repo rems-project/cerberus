@@ -200,7 +200,7 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | MemberOffset (tag, t, member) ->
      let* a = of_index_term loc {local;global} ctxt t in
-     let* offset = Memory_aux.offset loc {local; global} tag member in
+     let* offset = Memory.offset loc {local; global} tag member in
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      return (Z3.Arithmetic.mk_add ctxt [a;offset_n])
