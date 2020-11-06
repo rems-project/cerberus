@@ -42,6 +42,7 @@ let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
 type struct_decl = 
   { raw: (BT.member * BT.t) list;
     sizes: (BT.member * RE.size) list;
+    ranges: (BT.member * (IT.t -> LC.t)) list;
     closed: RT.t; 
     closed_stored: RT.t;
     closed_stored_aux: IT.t -> RT.l;

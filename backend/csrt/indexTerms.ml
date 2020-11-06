@@ -3,6 +3,7 @@ open List
 open Pp
 module Loc=Locations
 module BT=BaseTypes
+module CF=Cerb_frontend
 
 module SymSet = Set.Make(Sym)
 
@@ -10,6 +11,7 @@ module SymSet = Set.Make(Sym)
 type 'id term =
   | Num of Z.t
   | Bool of bool
+  | Unit
 
   | Add of 'id term * 'id term
   | Sub of 'id term * 'id term
@@ -52,6 +54,8 @@ type 'id term =
   | Head of 'id term
   | Tail of 'id term
 
+  | InRange of CF.Ctype.ctype * BT.t * 'id term
+
   | S of 'id
 
 
@@ -60,8 +64,6 @@ type t = Sym.t term
 
 let int x = Num (Z.of_int x)
 
-let in_range between min max = 
-  And [LE (min, between); LE (between, max)]
 
 
 
@@ -69,6 +71,7 @@ let rec equal it it' =
   match it, it' with
   | Num n, Num n' -> Z.equal n n'
   | Bool b, Bool b' -> b = b'
+  | Unit, Unit -> true
 
   | Add (t1,t2), Add (t1',t2')
   | Sub (t1,t2), Sub (t1',t2')
@@ -141,6 +144,7 @@ let pp ?(quote=true) it : PPrint.document =
     | Num i -> Z.pp i
     | Bool true -> !^"true"
     | Bool false -> !^"false"
+    | Unit -> !^"()"
 
     | Add (it1,it2) -> mparens (aux it1 ^^^ plus ^^^ aux it2)
     | Sub (it1,it2) -> mparens (aux it1 ^^^ minus ^^^ aux it2)
@@ -195,6 +199,9 @@ let pp ?(quote=true) it : PPrint.document =
        mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
     | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
 
+    | InRange (ct,bt,t) ->
+       mparens (!^"in range" ^^^ CF.Pp_mucore.pp_ctype ct ^^^ aux t)
+
     | S sym -> Sym.pp sym
   in
   (if quote then dquotes else (fun pp -> pp)) (aux false it)
@@ -204,7 +211,8 @@ let rec vars_in it : SymSet.t =
   match it with
   | Num _  
   | Bool _
-  | Nil _ ->
+  | Nil _ 
+  | Unit ->
      SymSet.empty
   | Add (it, it')
   | Sub (it, it') 
@@ -248,6 +256,8 @@ let rec vars_in it : SymSet.t =
      vars_in_list [it;it]
   | List (its,bt) ->
      vars_in_list its
+  | InRange (_ct,_bt,t) ->
+     vars_in t
   | S symbol -> 
      SymSet.singleton symbol
 
@@ -260,6 +270,7 @@ let rec subst_var subst it : t =
   match it with
   | Num _ -> it
   | Bool _ -> it
+  | Unit -> it
   | Add (it, it') -> Add (subst_var subst it, subst_var subst it')
   | Sub (it, it') -> Sub (subst_var subst it, subst_var subst it')
   | Mul (it, it') -> Mul (subst_var subst it, subst_var subst it')
@@ -304,6 +315,8 @@ let rec subst_var subst it : t =
   | Aligned (it, it') -> Aligned (subst_var subst it, subst_var subst it')
   | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
   | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
+  | InRange (ct,bt,t) ->
+     InRange (ct,bt,subst_var subst t)
   | S symbol -> 
      if symbol = subst.before then S subst.after else S symbol
 
@@ -316,6 +329,7 @@ let rec subst_it subst it : t =
   match it with
   | Num _ -> it
   | Bool _ -> it
+  | Unit -> it
   | Add (it, it') -> Add (subst_it subst it, subst_it subst it')
   | Sub (it, it') -> Sub (subst_it subst it, subst_it subst it')
   | Mul (it, it') -> Mul (subst_it subst it, subst_it subst it')
@@ -360,6 +374,8 @@ let rec subst_it subst it : t =
   | Aligned (it, it') -> Aligned (subst_it subst it, subst_it subst it')
   | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
   | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
+  | InRange (ct,bt,t) ->
+     InRange (ct,bt,subst_it subst t)
   | S symbol -> 
      if symbol = subst.before then subst.after else S symbol
 
@@ -470,6 +486,8 @@ let (%>=) t1 t2 = GE (t1, t2)
 
 
 open Z
+
+let in_range min max within = And [LE (min, within); LE (within, max)]
 
 let min_u32 = Num zero
 let max_u32 = Num (sub (pow_int (of_int 2) 32) (of_int 1))

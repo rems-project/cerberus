@@ -389,8 +389,8 @@ and of_type_expr loc names te : tb m =
      let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
      let* size = Memory.size_of_ctype loc ct in
      let* align = Memory.align_of_ctype loc ct in
-     let* lc = integerType_constraint loc (S name) (CF.Ctype.Bool) in
-     return (B ((New, name, BT.Integer, Some (size,align)), RT.Constraint (lc, I)))
+     let* lc = integerType_constraint loc (CF.Ctype.Bool) in
+     return (B ((New, name, BT.Integer, Some (size,align)), RT.Constraint (lc (S name), I)))
   | None, Ty_params ("void", []) ->
      let name = Sym.fresh () in
      return (B ((New, name, BT.Unit, None), RT.I))

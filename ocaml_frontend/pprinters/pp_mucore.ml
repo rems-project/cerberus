@@ -18,6 +18,11 @@ let do_compact = true
 
 
 
+let pp_ctype ty =
+  P.squotes (Pp_core_ctype.pp_ctype ty)
+
+
+
 
 
 module type PP_Typ = sig
@@ -1017,9 +1022,6 @@ module Pp_standard_typ = (struct
 
   type ft = CA.ft
   type lt = CA.lt
-
-  let pp_ctype ty =
-    P.squotes (Pp_core_ctype.pp_ctype ty)
 
   (* stealing from Pp_core *)
   let pp_ft (ret_ty, params) = 

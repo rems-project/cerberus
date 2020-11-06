@@ -32,6 +32,7 @@ module WIT = struct
     match it with
     | Num _ -> return (Base Integer)
     | Bool _ -> return (Base Bool)
+    | Unit -> return (Base Unit)
     | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
     | Exp (t,t') | Rem_t (t,t') | Rem_f (t,t') 
     | Min (t,t') | Max (t,t') ->
@@ -133,6 +134,9 @@ module WIT = struct
        | Base (List bt) -> return (Base (List bt))
        | _ -> fail loc (Illtyped_it it)
        end
+    | InRange (_ct, bt, t) ->
+       let* () = check_aux loc it {local; global} (Base bt) t in
+       return (Base BT.Bool)
     | S s ->
        Local.get_l loc s local
 

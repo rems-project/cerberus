@@ -62,12 +62,50 @@ let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   | Struct tag -> return (BT.Struct (BT.Tag tag))
   | Union _ -> fail loc (Unsupported !^"union types")
 
-let integerType_constraint loc about it =
+let integerType_constraint loc it =
   let* (min,max) = match it with
     | CF.Ctype.Bool -> return (Z.of_int 0, Z.of_int 1)
     | _ -> Memory.integer_range loc it 
   in
-  return (LC (And [IT.LE (Num min, about); IT.LE (about, Num max)]))
+  let lc about = LC (IT.in_range (Num min) (Num max) about) in
+  return lc
+
+let rec in_range_of_ctype loc struct_decls (CF.Ctype.Ctype (_,ct_)) =
+  let open CF.Ctype in
+  match ct_ with
+  | Void -> 
+     return (fun it -> LC (EQ (it , Unit)))
+  | Basic (Integer it) -> 
+     let* rangef = integerType_constraint loc it in
+     return rangef
+  | Basic (Floating _) -> 
+     fail loc (Unsupported !^"floats")
+  | Array _ -> 
+     fail loc (Unsupported !^"arrays")
+  | Function _ -> 
+     fail loc (Unsupported !^"todo: function pointers")
+  | Pointer _ ->
+     let* pointer_size = Memory.size_of_pointer loc in
+     let rangef about = LC (in_range (Num Z.zero) (Num pointer_size) about) in
+     return rangef
+  | Atomic ct -> 
+     (* check *)
+     in_range_of_ctype loc struct_decls ct
+  | Struct tag -> 
+     let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
+     let rangef about = 
+       let lcs = 
+         List.map (fun (member, rangef) ->
+             let (LC c) = rangef (IT.Member (Tag tag, about, member)) in
+             c
+           ) decl.Global.ranges
+       in
+       (LC (And lcs))
+     in
+     return rangef
+  | Union _ -> 
+     fail loc (Unsupported !^"union types")
+
 
 
 
@@ -99,6 +137,14 @@ let struct_decl_sizes loc fields =
       return (member,size)
     ) fields
 
+let struct_decl_ranges loc struct_decls fields = 
+  ListM.mapM (fun (id, (_, _, ct)) ->
+      let member = Member (Id.s id) in
+      let* rangef = in_range_of_ctype loc struct_decls ct in
+      return (member,rangef)
+    ) fields
+
+
 
 let struct_decl_closed loc tag fields struct_decls = 
   let open Sym in
@@ -110,8 +156,8 @@ let struct_decl_closed loc tag fields struct_decls =
     | Void -> 
        return acc
     | Basic (Integer it) -> 
-       let* lc1 = integerType_constraint loc this it in
-       return (RT.Constraint (lc1,acc))
+       let* lc1 = integerType_constraint loc it in
+       return (RT.Constraint (lc1 this,acc))
     | Array (ct, _maybe_integer) -> 
        return acc
     | Pointer (_qualifiers, ct) -> 
@@ -152,13 +198,13 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
     | Void -> 
        fail loc (Generic !^"void member of struct")
     | Basic (Integer it) -> 
-       let* lc = integerType_constraint loc (S this_v) it in
+       let* lc = integerType_constraint loc it in
        let make struct_p = 
          let this_p = IT.MemberOffset (tag,struct_p,member) in
          let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
          RT.Logical ((this_v, Base Integer), 
            RT.Resource (points struct_p, 
-             RT.Constraint (lc, I)))
+             RT.Constraint (lc (S this_v), I)))
        in
        return make
     | Array (ct, _maybe_integer) -> 
@@ -206,13 +252,14 @@ let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls)
 let struct_decl loc tag fields struct_decls = 
   let* raw = struct_decl_raw loc fields in
   let* sizes = struct_decl_sizes loc fields in
+  let* ranges = struct_decl_ranges loc struct_decls fields in
   let* closed = struct_decl_closed loc tag fields struct_decls in
   let* closed_stored_aux = struct_decl_closed_stored loc tag fields struct_decls in
   let closed_stored = 
     let s = Sym.fresh () in 
     RT.Computational ((s, BT.Loc), closed_stored_aux (S s))
   in
-  return Global.{ raw; sizes; closed; closed_stored; closed_stored_aux }
+  return Global.{ raw; sizes; ranges; closed; closed_stored; closed_stored_aux }
 
 
 (* return types *)
@@ -253,8 +300,8 @@ and rt_of_ctype loc struct_decls (s : Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
   match ct_ with
   | Void -> return (Computational ((s, BT.Unit), I))
   | Basic (Integer it) -> 
-     let* constr = integerType_constraint loc (S s) it in
-     return (Computational ((s, Integer), Constraint (constr,I)))
+     let* constr = integerType_constraint loc it in
+     return (Computational ((s, Integer), Constraint (constr (S s),I)))
   | Array (ct, _maybe_integer) ->
      return (Computational ((s, Array), I))
   | Pointer (_qualifiers, ct) ->

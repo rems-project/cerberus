@@ -12,6 +12,8 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
      return (Num n)
   | Bool b -> 
      return (Bool b)
+  | Unit ->
+     return Unit
   | Add (it, it') -> 
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in
@@ -140,6 +142,9 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in
      return (LocLT (it, it'))
+  | InRange (ct, bt, it) ->
+     let* it = parse_ast_to_t loc names it in
+     return (InRange (ct, bt, it))
   | S string -> 
      begin match StringMap.find_opt string names with
      | Some sym -> return (S sym)

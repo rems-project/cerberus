@@ -103,6 +103,9 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Boolean.mk_true ctxt)
   | Bool false -> 
      return (Z3.Boolean.mk_false ctxt)
+  | Unit ->
+     let* unitsort = ls_to_sort loc {local;global} ctxt (Base Unit) in
+     return (Z3.Expr.mk_const_s ctxt "unit" unitsort)
   | Add (it,it') -> 
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
@@ -234,6 +237,10 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt t in
      let* fundecl = nth_to_fundecl bt i in
      return (Z3.Expr.mk_app ctxt fundecl [a])
+  | InRange (ct, _bt, t) ->
+     let* rangef = Conversions.in_range_of_ctype loc global.struct_decls ct in
+     let (LC it) = rangef t in
+     of_index_term loc {local; global} ctxt it
   | Nil _ ->
      fail loc (Unsupported !^"todo: Z3: Nil")
   | Cons _ ->
