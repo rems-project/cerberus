@@ -29,13 +29,13 @@ open BT
 (*** meta types ***************************************************************)
 type pattern = BT.t mu_pattern
 type ctor = BT.t mu_ctor
-type 'bty pexpr = ((BT.t * RE.size), BT.t, 'bty) mu_pexpr
-type 'bty expr = ((BT.t * RE.size), BT.t, 'bty) mu_expr
-type 'bty value = ((BT.t * RE.size), BT.t, 'bty) mu_value
-type 'bty object_value = ((BT.t * RE.size), 'bty) mu_object_value
+type 'bty pexpr = ((BT.t * RE.size * Z.t), BT.t, 'bty) mu_pexpr
+type 'bty expr = ((BT.t * RE.size * Z.t), BT.t, 'bty) mu_expr
+type 'bty value = ((BT.t * RE.size * Z.t), BT.t, 'bty) mu_value
+type 'bty object_value = ((BT.t * RE.size * Z.t), 'bty) mu_object_value
 type mem_value = CF.Impl_mem.mem_value
 type pointer_value = CF.Impl_mem.pointer_value
-type 'bty label_defs = (LT.t, (BT.t * RE.size), BT.t, 'bty) mu_label_defs
+type 'bty label_defs = (LT.t, (BT.t * RE.size * Z.t), BT.t, 'bty) mu_label_defs
 
 
 (*** mucore pp setup **********************************************************)
@@ -300,7 +300,8 @@ module Spine (I : AT.I_Sig) = struct
     let* rt = 
       let rec check_constraints = function
         | Constraint (c, ftyp) ->
-           let* (holds, _, s_) = Solver.constraint_holds loc {local; global} c in
+           let* (holds, _, s_) = 
+             Solver.constraint_holds loc {local; global} false c in
            if holds 
            then check_constraints ftyp 
            else fail loc (Unsat_constraint c)
@@ -390,7 +391,9 @@ let infer_constructor (loc : Loc.t) {local; global} (constructor : ctor)
 let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
   let ret = Sym.fresh () in
   CF.Impl_mem.case_ptrval ptrval
-    ( fun _cbt -> return (ret, Loc, LC (Null (S ret))) )
+    ( fun ct -> 
+      let* align = Memory_aux.align_of_ctype loc ct in
+      return (ret, Loc, LC (And [Null (S ret); Aligned (S ret, Num align)])) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
     ( fun () -> fail loc (Internal !^"unspecified pointer value") )
@@ -894,6 +897,14 @@ and check_pexpr_pop (loc : Loc.t) delta {local; global} (pe : 'bty pexpr)
    the local environment since that marker (except for computational
    variables) *)
 
+let ensure_aligned loc {local; global} access pointer align = 
+  let* (aligned, _, _) = 
+    Solver.constraint_holds loc {local; global} false
+      (LC.LC (Aligned (pointer, align))) 
+  in
+  if aligned then return () else fail loc (Misaligned Store)
+
+
 let rec infer_expr (loc : Loc.t) {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible) m = 
   let (M_Expr (annots, e_)) = e in
@@ -917,7 +928,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
          -> 
           fail loc (Unsupported !^"todo: ememop")
-       | M_PtrValidForDeref (A (_, _, (dbt, size)), asym) ->
+       | M_PtrValidForDeref (A (_, _, (dbt, size, align)), asym) ->
           let* arg = arg_of_asym loc local asym in
           let ret = Sym.fresh () in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -925,7 +936,12 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* o_resource = 
             Memory.for_fp loc {local; global} (S arg.lname, size) 
           in
-          let constr = LC (EQ (S ret, Bool (Option.is_some o_resource))) in
+          let* (aligned, _, s_) = 
+            Solver.constraint_holds loc {local; global} false
+              (LC.LC (Aligned (S arg.lname, Num align))) 
+          in
+          let ok = Option.is_some o_resource && aligned in
+          let constr = LC (EQ (S ret, Bool ok)) in
           let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
           return (Normal (rt, local))
        | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
@@ -942,12 +958,16 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
        end
     | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
        begin match action_ with
-       | M_Create (asym, A (_, _, (bt, size)), _prefix) -> 
+       | M_Create (asym, A (_, _, (bt, size, _align)), _prefix) -> 
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
           let* lrt = Memory.store loc {local; global} bt (S ret) size None in
-          let rt = RT.Computational ((ret, Loc), lrt) in
+          let rt = 
+            RT.Computational ((ret, Loc), 
+            RT.Constraint (LC.LC (Aligned (S ret, S arg.lname)), 
+            lrt))
+          in
           return (Normal (rt, local))
        | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
           fail loc (Unsupported !^"todo: CreateReadOnly")
@@ -955,14 +975,17 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           fail loc (Unsupported !^"todo: Alloc")
        | M_Kill (M_Dynamic, asym) -> 
           fail loc (Unsupported !^"todo: free")
-       | M_Kill (M_Static (bt, size), asym) -> 
+       | M_Kill (M_Static (bt, size, align), asym) -> 
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+          let* () = 
+            ensure_aligned loc {local; global} Kill (S arg.lname) (Num align) 
+          in
           let* local = Memory.remove_owned_subtree loc {local; global} bt 
                          (S arg.lname) size Kill None in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
-       | M_Store (_is_locking, A(_ ,_ ,(s_vbt, size)), pasym, vasym, mo) -> 
+       | M_Store (_is_locking, A(_ ,_ ,(s_vbt, size, align)), pasym, vasym, mo) -> 
           let* parg = arg_of_asym loc local pasym in
           let* varg = arg_of_asym loc local vasym in
           let* () = ensure_base_type loc ~expect:s_vbt varg.bt in
@@ -970,6 +993,9 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
              the right thing. *)
+          let* () = 
+            ensure_aligned loc {local; global} Store (S parg.lname) (Num align) 
+          in
           let* local = 
             Memory.remove_owned_subtree parg.loc {local; global} varg.bt 
               (S parg.lname) size Store None in
@@ -978,9 +1004,12 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
               size (Some (S varg.lname)) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt, local))
-       | M_Load (A (_,_,(bt, size)), pasym, _mo) -> 
+       | M_Load (A (_,_,(bt, size, align)), pasym, _mo) -> 
           let* parg = arg_of_asym loc local pasym in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
+          let* () = 
+            ensure_aligned loc {local; global} Kill (S parg.lname) (Num align) 
+          in
           let ret = Sym.fresh () in
           let* constraints = 
             Memory.load loc {local; global} bt (S parg.lname) size (S ret) None 

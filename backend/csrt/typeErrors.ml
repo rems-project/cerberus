@@ -29,6 +29,8 @@ type type_error =
   | Missing_ownership of access * BT.member option * (Loc.t list) option
   | ResourceMismatch of { has: RE.t; expect: RE.t; }
   | Unused_resource of { resource: Resources.t }
+  | Misaligned of access
+
 
   | Number_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
@@ -116,6 +118,13 @@ let pp_type_error = function
         !^"but have resource" ^^^ RE.pp has, [])
   | Unused_resource {resource;_} ->
      (!^"Left-over unused resource" ^^^ Resources.pp resource, [])
+  | Misaligned access ->
+     let msg = match access with
+     | Kill -> !^"Misaligned de-allocation operation"
+     | Load -> !^"Misaligned read"
+     | Store ->  !^"Misaligned write"
+     in
+     (msg, [])
 
   | Number_arguments {has;expect} ->
      (!^"Wrong number of arguments:" ^^^

@@ -338,8 +338,13 @@ let rec disjoint_footprints = function
   
 
 
-let constraint_holds loc {local;global} c = 
-  let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
+let constraint_holds loc {local;global} do_model c = 
+  let ctxt = 
+    Z3.mk_context [
+        ("model", if do_model then "true" else "false");
+        ("well_sorted_check","true")
+      ] 
+  in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let disjointness_lc = 
     let footprints = 
@@ -370,21 +375,21 @@ let constraint_holds loc {local;global} c =
 
 let is_reachable loc {local;global} =
   let* (unreachable,_,_) = 
-    constraint_holds loc {local;global} (LC (Bool false)) in
+    constraint_holds loc {local;global} false (LC (Bool false)) in
   return (not unreachable)
 
 
 
 let equal loc {local;global} it1 it2 =
   let c = LC.LC (IndexTerms.EQ (it1, it2)) in
-  let* (holds,_,_) = constraint_holds loc {local;global} c in
+  let* (holds,_,_) = constraint_holds loc {local;global} false c in
   return holds
 
 
 
 let is_reachable_and_model loc {local;global} =
   let* (unreachable,_, solver) = 
-    constraint_holds loc {local;global} (LC (Bool false)) in
+    constraint_holds loc {local;global} true (LC (Bool false)) in
   let* model = 
     handle_z3_problems loc
       (fun () -> model loc {local;global} solver) 
