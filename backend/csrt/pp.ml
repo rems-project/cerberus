@@ -90,6 +90,11 @@ let uformat format string n =
   fancystring (format_string format string) n
 
 
+let pad pp width = 
+  let diff = width - requirement pp in
+  if diff < 0 then pp else pp ^^ repeat diff space
+
+
 let pp_list f l = 
   match l with
   | [] -> !^"(empty)"

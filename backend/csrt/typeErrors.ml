@@ -9,6 +9,70 @@ module VB=VariableBinding
 
 
 
+
+(* more to be added *)
+type memory_state = 
+  | Unowned
+  | Uninit of RE.size
+  | Integer of string * RE.size
+  | Location of string * RE.size
+
+type location_state = { location : string; state : memory_state; }
+type variable_location = { name : string; location : string}
+
+type model = 
+  { memory_state : location_state list;
+    variable_locations : variable_location list;
+  }
+
+
+let pp_location_state { location; state } =
+  let value, size = match state with
+    | Unowned -> 
+       parens (!^"unowned"), Pp.empty
+    | Uninit size -> 
+       !^"uninitialised", Z.pp size
+    | Integer (value, size) -> 
+       typ !^value !^"integer", Z.pp size
+    | Location (value, size) -> 
+       typ !^value !^"pointer", Z.pp size
+  in
+  ( !^location, size, value )
+
+let pp_memory_state memory_state = 
+  let location_lines = List.map pp_location_state memory_state in
+  let (th1, th2, th3) = 
+    (format [FG(Default,Bright)] "location", 
+     format [FG(Default,Bright)] "size", 
+     format [FG(Default,Bright)] "value")
+  in
+  let max1, max2, max3 = 
+    List.fold_left (fun (acc1,acc2,acc3) (pp1,pp2,pp3) -> 
+        (max acc1 (Pp.requirement pp1),
+         max acc2 (Pp.requirement pp2),
+         max acc3 (Pp.requirement pp3))
+      ) (requirement th1, requirement th2, requirement th3) location_lines 
+  in
+  let location_lines = 
+    List.map (fun (pp1, pp2, pp3) ->
+      pad pp1 max1 ^^ !^" | " ^^ pad pp2 max2 ^^ !^" | " ^^ pad pp3 (max3 + 2)
+    ) ((th1, th2, th3) :: location_lines)
+  in      
+  separate hardline location_lines
+
+let pp_variable_location { name; location } =
+  item name !^location
+
+let pp_variable_locations variable_locations = 
+  group (separate_map (comma ^^ break 1) pp_variable_location variable_locations)
+
+let pp_model model = 
+  item  "variable locations" (pp_variable_locations model.variable_locations) ^^
+  hardline ^^
+  pp_memory_state model.memory_state ^^ hardline 
+  
+
+
 type access = 
   | Load 
   | Store
@@ -31,7 +95,6 @@ type type_error =
   | Unused_resource of { resource: Resources.t }
   | Misaligned of access
 
-
   | Number_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it of IndexTerms.t
@@ -39,7 +102,7 @@ type type_error =
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * document option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * model option
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -146,8 +209,8 @@ let pp_type_error = function
   | Undefined_behaviour (undef, omodel) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
      let extras = match omodel with 
-       | Some model -> [item "UB"!^ub; (item "model" model)] 
-       | None -> [item "UB"!^ub] 
+       | Some model -> [!^ub; pp_model model] 
+       | None -> [!^ub] 
      in
      (!^"Undefined behaviour", extras)
   | Unspecified _ctype ->

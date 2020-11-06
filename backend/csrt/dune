@@ -15,6 +15,7 @@
         indexTermTyping 
         indexTerms 
         indexTermParser
+        sexplib
         listM 
         local 
         memory 

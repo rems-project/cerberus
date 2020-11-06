@@ -490,12 +490,12 @@ open Z
 let in_range min max within = And [LE (min, within); LE (within, max)]
 
 let min_u32 = Num zero
-let max_u32 = Num (sub (pow_int (of_int 2) 32) (of_int 1))
+let max_u32 = Num (sub (power_int_positive_int 2 32) (of_int 1))
 let min_u64 = Num zero
-let max_u64 = Num (sub (pow_int (of_int 2) 64) (of_int 1))
+let max_u64 = Num (sub (power_int_positive_int 2 64) (of_int 1))
 
-let min_i32 = Num (sub (of_int 0) (pow_int (of_int 2) (32 - 1)))
-let max_i32 = Num (sub (pow_int (of_int 2) (32 - 1)) (of_int 1))
-let min_i64 = Num (sub (of_int 0) (pow_int (of_int 2) (64 - 1)))
-let max_i64 = Num (sub (pow_int (of_int 2) (64 - 1)) (of_int 1))
+let min_i32 = Num (sub (of_int 0) (power_int_positive_int 2 (32 - 1)))
+let max_i32 = Num (sub (power_int_positive_int 2 (32 - 1)) (of_int 1))
+let min_i64 = Num (sub (of_int 0) (power_int_positive_int 2 (64 - 1)))
+let max_i64 = Num (sub (power_int_positive_int 2 (64 - 1)) (of_int 1))
 
