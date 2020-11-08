@@ -41,35 +41,20 @@ let pp_location_state { location; state } =
 
 let pp_memory_state memory_state = 
   let location_lines = List.map pp_location_state memory_state in
-  let (th1, th2, th3) = 
-    (format [FG(Default,Bright)] "location", 
-     format [FG(Default,Bright)] "size", 
-     format [FG(Default,Bright)] "value")
-  in
-  let max1, max2, max3 = 
-    List.fold_left (fun (acc1,acc2,acc3) (pp1,pp2,pp3) -> 
-        (max acc1 (Pp.requirement pp1),
-         max acc2 (Pp.requirement pp2),
-         max acc3 (Pp.requirement pp3))
-      ) (requirement th1, requirement th2, requirement th3) location_lines 
-  in
-  let location_lines = 
-    List.map (fun (pp1, pp2, pp3) ->
-      pad pp1 max1 ^^ !^" | " ^^ pad pp2 max2 ^^ !^" | " ^^ pad pp3 (max3 + 2)
-    ) ((th1, th2, th3) :: location_lines)
-  in      
-  separate hardline location_lines
+  Pp.table3 ("location", "size", "value") location_lines
 
 let pp_variable_location { name; location } =
-  item name !^location
+  ( !^name, !^location)
 
 let pp_variable_locations variable_locations = 
-  group (separate_map (comma ^^ break 1) pp_variable_location variable_locations)
+  let variable_lines = List.map pp_variable_location variable_locations in
+  Pp.table2 ("variable", "location") variable_lines
+  
 
 let pp_model model = 
-  item  "variable locations" (pp_variable_locations model.variable_locations) ^^
+  pp_variable_locations model.variable_locations ^^ hardline ^^ 
   hardline ^^
-  pp_memory_state model.memory_state ^^ hardline 
+  pp_memory_state model.memory_state
   
 
 
@@ -148,7 +133,7 @@ let pp_type_error = function
        | None -> []
        | Some locs -> 
           [!^"Maybe last used in the following places:" ^^^
-             pp_list (fun loc -> 
+             Pp.list (fun loc -> 
                  let (head, _pos) = Locations.head_pos_of_location loc in
                  !^head
                ) locs]
@@ -173,7 +158,7 @@ let pp_type_error = function
        | None -> []
        | Some locs -> 
           [!^"Maybe last used in the following places:" ^^^
-             pp_list Loc.pp locs]
+             Pp.list Loc.pp locs]
      in
      (msg, extra)
   | ResourceMismatch {has; expect} ->

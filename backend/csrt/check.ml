@@ -238,7 +238,7 @@ module Spine (I : AT.I_Sig) = struct
   module NFT = NormalisedArgumentTypes.Make(I)
 
   let pp_argslocs =
-    pp_list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
+    Pp.list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
 
   let pp_unis (unis : (Sym.t Uni.t) SymMap.t) : Pp.document = 
     let pp_entry (sym, Uni.{resolved}) =
@@ -246,7 +246,7 @@ module Spine (I : AT.I_Sig) = struct
       | Some res -> Sym.pp sym ^/^ !^"resolved as" ^/^ Sym.pp res
       | None -> Sym.pp sym ^/^ !^"unresolved"
     in
-    pp_list pp_entry (SymMap.bindings unis)
+    Pp.list pp_entry (SymMap.bindings unis)
 
 
   let spine (loc : Loc.t) {local; global} (arguments : arg list) 

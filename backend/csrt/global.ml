@@ -79,7 +79,7 @@ let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 
 let pp_struct_decl (sym,decl) = 
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
-       (pp_list (fun (BT.Member m, bt) -> typ !^m (BT.pp true bt)) decl.raw) 
+       (Pp.list (fun (BT.Member m, bt) -> typ !^m (BT.pp true bt)) decl.raw) 
   ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed)") 
        (RT.pp decl.closed)
@@ -87,7 +87,7 @@ let pp_struct_decl (sym,decl) =
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)
 
-let pp_struct_decls decls = pp_list pp_struct_decl (SymMap.bindings decls) 
+let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
 
 let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (FT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)

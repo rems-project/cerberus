@@ -95,13 +95,67 @@ let pad pp width =
   if diff < 0 then pp else pp ^^ repeat diff space
 
 
-let pp_list f l = 
+let list f l = 
   match l with
   | [] -> !^"(empty)"
   | l -> flow_map (comma ^^ break 1) f l
 
-let typ n typ = n ^^ colon ^^^ typ
-let item item content = format [FG(Default,Bright)] item ^^ colon ^^ space ^^ align content
+
+let table2 (th1, th2) (lines : (document * document) list) =
+  let th1pp = format [FG(Default,Bright)] th1 in
+  let th2pp = format [FG(Default,Bright)] th2 in
+  let max1, max2 = 
+    List.fold_left (fun (acc1,acc2) (pp1,pp2) -> 
+        (max acc1 (requirement pp1),
+         max acc2 (requirement pp2))
+      ) (String.length th1, 
+         String.length th2) 
+      lines
+  in
+  let location_lines = 
+    List.map (fun (pp1, pp2) ->
+      separate (space ^^ bar ^^ space) 
+        [pad pp1 max1; pad pp2 max2]
+    ) ((th1pp, th2pp) :: lines)
+  in
+  separate hardline location_lines
+
+let table3 (th1, th2, th3) (lines : (document * document * document) list) =
+  let th1pp = format [FG(Default,Bright)] th1 in
+  let th2pp = format [FG(Default,Bright)] th2 in
+  let th3pp = format [FG(Default,Bright)] th3 in
+  let max1, max2, max3 = 
+    List.fold_left (fun (acc1,acc2,acc3) (pp1,pp2,pp3) -> 
+        (max acc1 (requirement pp1),
+         max acc2 (requirement pp2),
+         max acc3 (requirement pp3))
+      ) (String.length th1, 
+         String.length th2,
+         String.length th3) 
+      lines
+  in
+  let location_lines = 
+    List.map (fun (pp1, pp2, pp3) ->
+      separate (space ^^ bar ^^ space) 
+        [pad pp1 max1; pad pp2 max2; pad pp3 max3]
+    ) ((th1pp, th2pp, th3pp) :: lines)
+  in      
+  separate hardline location_lines
+
+  
+
+let typ n typ = 
+  n ^^^ colon ^^^ typ
+
+let item item content = 
+  format [FG(Default,Bright)] item ^^ colon ^^ space ^^ align content
+
+let c_comment pp = 
+  !^"/*" ^^ pp ^^ !^"*/"
+
+
+
+
 
 let headline a = 
   (if !print_level >= 2 then hardline else empty) ^^
@@ -117,9 +171,3 @@ let warn pp =
   print stderr (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
 
 
-
-let c_comment pp = 
-  !^"/*" ^^ pp ^^ !^"*/"
-
-let ifpp b pp = 
-  if b then pp else empty
