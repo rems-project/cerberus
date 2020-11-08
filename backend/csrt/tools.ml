@@ -1,7 +1,5 @@
 module Loc = Locations
 
-module StringMap = Map.Make(String)
-module SymSet = Set.Make(Sym)
 
 
 let id = fun x -> x

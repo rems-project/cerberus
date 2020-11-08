@@ -90,10 +90,17 @@ let uformat format string n =
   fancystring (format_string format string) n
 
 
-let pad pp width = 
-  let diff = width - requirement pp in
-  if diff < 0 then pp else pp ^^ repeat diff space
+type alignment = L | R
 
+let pad_ alignment should_width has_width pp = 
+  let diff = should_width - has_width in
+  if diff < 0 then pp else 
+    match alignment with
+    | L -> pp ^^ repeat diff space
+    | R -> repeat diff space ^^ pp
+
+let pad alignment width pp = 
+  pad_ alignment width (requirement pp) pp
 
 let list f l = 
   match l with
@@ -101,78 +108,66 @@ let list f l =
   | l -> flow_map (comma ^^ break 1) f l
 
 
-let table2 (th1, th2) (lines : (document * document) list) =
-  let th1pp = format [FG(Default,Bright)] th1 in
-  let th2pp = format [FG(Default,Bright)] th2 in
-  let max1, max2 = 
-    List.fold_left (fun (acc1,acc2) (pp1,pp2) -> 
-        (max acc1 (requirement pp1),
-         max acc2 (requirement pp2))
-      ) (String.length th1, 
-         String.length th2) 
-      lines
-  in
-  let location_lines = 
-    List.map (fun (pp1, pp2) ->
-      separate (space ^^ bar ^^ space) 
-        [pad pp1 max1; 
-         pad pp2 max2]
-    ) ((th1pp, th2pp) :: lines)
-  in
-  separate hardline location_lines
 
-let table3 (th1, th2, th3) (lines : (document * document * document) list) =
-  let th1pp = format [FG(Default,Bright)] th1 in
-  let th2pp = format [FG(Default,Bright)] th2 in
-  let th3pp = format [FG(Default,Bright)] th3 in
-  let max1, max2, max3 = 
-    List.fold_left (fun (acc1,acc2,acc3) (pp1,pp2,pp3) -> 
-        (max acc1 (requirement pp1),
-         max acc2 (requirement pp2),
-         max acc3 (requirement pp3))
-      ) (String.length th1, 
-         String.length th2,
-         String.length th3) 
-      lines
-  in
-  let location_lines = 
-    List.map (fun (pp1, pp2, pp3) ->
-      separate (space ^^ bar ^^ space) 
-        [pad pp1 max1; 
-         pad pp2 max2; 
-         pad pp3 max3]
-    ) ((th1pp, th2pp, th3pp) :: lines)
-  in      
-  separate hardline location_lines
+let nats n =
+  let rec aux n = if n < 0 then [] else n :: aux (n - 1) in
+  List.rev (aux n)
 
-let table4 (th1, th2, th3, th4) 
-           (lines : (document * document * document * document) list) =
-  let th1pp = format [FG(Default,Bright)] th1 in
-  let th2pp = format [FG(Default,Bright)] th2 in
-  let th3pp = format [FG(Default,Bright)] th3 in
-  let th4pp = format [FG(Default,Bright)] th4 in
-  let max1, max2, max3, max4 = 
-    List.fold_left (fun (acc1,acc2,acc3,acc4) (pp1,pp2,pp3,pp4) -> 
-        (max acc1 (requirement pp1),
-         max acc2 (requirement pp2),
-         max acc3 (requirement pp3),
-         max acc4 (requirement pp4))
-      ) (String.length th1, 
-         String.length th2,
-         String.length th3,
-         String.length th4) 
-      lines
+module IntMap = Map.Make(Int)
+
+let (table2, table3, table4, table5) = 
+  let table (n_rows : int) (headers: string list) (lines : ((alignment * document) list) list) =
+    let maxes = 
+      List.fold_left (fun maxes line ->
+          let (_, maxes) = 
+            List.fold_left (fun (j, maxes) (_alignment, cell) ->
+                let j_max = match IntMap.find_opt j maxes with
+                  | Some j_max -> j_max
+                  | None -> 0
+                in
+                let maxes = IntMap.add j (max j_max (requirement cell)) maxes in
+                (j + 1, maxes)
+              ) (0, maxes) line
+          in
+          maxes
+        ) IntMap.empty (List.map (fun s -> (L, string s)) headers :: lines) 
+    in
+    let headers = 
+      List.mapi (fun j h ->
+          pad_ L (IntMap.find j maxes) (String.length h) (format [FG(Default,Bright)] h)
+        ) headers
+    in
+    let padded_lines = 
+      List.map (fun line ->
+          List.mapi (fun j (alignment,cell) -> pad alignment (IntMap.find j maxes) cell) line
+        ) lines
+    in
+    separate (space ^^ bar ^^ space) headers ^^ hardline ^^
+    separate_map hardline (fun line ->
+        separate (space ^^ bar ^^ space) line
+      ) padded_lines
   in
-  let location_lines = 
-    List.map (fun (pp1, pp2, pp3, pp4) ->
-      separate (space ^^ bar ^^ space) 
-        [pad pp1 max1; 
-         pad pp2 max2; 
-         pad pp3 max3; 
-         pad pp4 max4]
-    ) ((th1pp, th2pp, th3pp, th4pp) :: lines)
-  in      
-  separate hardline location_lines
+
+  let table2 (th1, th2) lines =
+    table 2 [th1; th2]
+      (List.map (fun (c1, c2) -> [c1; c2]) lines)
+  in
+
+  let table3 (th1, th2, th3) lines =
+    table 3 [th1; th2; th3]
+      (List.map (fun (c1, c2, c3) -> [c1; c2; c3]) lines)
+  in
+
+  let table4 (th1, th2, th3, th4) lines =
+    table 4 [th1; th2; th3; th4]
+      (List.map (fun (c1, c2, c3, c4) -> [c1; c2; c3; c4]) lines)
+  in
+
+  let table5 (th1, th2, th3, th4, th5) lines =
+    table 5 [th1; th2; th3; th4; th5]
+      (List.map (fun (c1, c2, c3, c4, c5) -> [c1; c2; c3; c4; c5]) lines)
+  in
+  (table2, table3, table4, table5)
 
   
 

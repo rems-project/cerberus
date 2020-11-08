@@ -41,7 +41,7 @@ let pp_variable_and_location_state ( ovar, { location; state }) =
     | Within {base_location; _} -> 
        parens (!^"within owned region at" ^^^ !^base_location), Pp.empty
   in
-  ( var, !^location, size, value )
+  ( (R, var), (R, !^location), (R, size), (L, value) )
 
 
 let pp_model model = 
@@ -57,7 +57,7 @@ let pp_model model =
       ) model.memory_state
   in
   Pp.table4 
-    ("var", "location", "size", "value")
+    (("var"), ("location"), ("size") , ("value"))
     (List.map pp_variable_and_location_state variable_and_location_state)
   
 
