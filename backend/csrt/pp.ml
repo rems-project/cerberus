@@ -115,7 +115,8 @@ let table2 (th1, th2) (lines : (document * document) list) =
   let location_lines = 
     List.map (fun (pp1, pp2) ->
       separate (space ^^ bar ^^ space) 
-        [pad pp1 max1; pad pp2 max2]
+        [pad pp1 max1; 
+         pad pp2 max2]
     ) ((th1pp, th2pp) :: lines)
   in
   separate hardline location_lines
@@ -137,8 +138,39 @@ let table3 (th1, th2, th3) (lines : (document * document * document) list) =
   let location_lines = 
     List.map (fun (pp1, pp2, pp3) ->
       separate (space ^^ bar ^^ space) 
-        [pad pp1 max1; pad pp2 max2; pad pp3 max3]
+        [pad pp1 max1; 
+         pad pp2 max2; 
+         pad pp3 max3]
     ) ((th1pp, th2pp, th3pp) :: lines)
+  in      
+  separate hardline location_lines
+
+let table4 (th1, th2, th3, th4) 
+           (lines : (document * document * document * document) list) =
+  let th1pp = format [FG(Default,Bright)] th1 in
+  let th2pp = format [FG(Default,Bright)] th2 in
+  let th3pp = format [FG(Default,Bright)] th3 in
+  let th4pp = format [FG(Default,Bright)] th4 in
+  let max1, max2, max3, max4 = 
+    List.fold_left (fun (acc1,acc2,acc3,acc4) (pp1,pp2,pp3,pp4) -> 
+        (max acc1 (requirement pp1),
+         max acc2 (requirement pp2),
+         max acc3 (requirement pp3),
+         max acc4 (requirement pp4))
+      ) (String.length th1, 
+         String.length th2,
+         String.length th3,
+         String.length th4) 
+      lines
+  in
+  let location_lines = 
+    List.map (fun (pp1, pp2, pp3, pp4) ->
+      separate (space ^^ bar ^^ space) 
+        [pad pp1 max1; 
+         pad pp2 max2; 
+         pad pp3 max3; 
+         pad pp4 max4]
+    ) ((th1pp, th2pp, th3pp, th4pp) :: lines)
   in      
   separate hardline location_lines
 

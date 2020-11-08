@@ -62,7 +62,6 @@ type 'id term =
 type parse_ast = string term
 type t = Sym.t term
 
-let int x = Num (Z.of_int x)
 
 
 
@@ -499,3 +498,4 @@ let max_i32 = Num (sub (power_int_positive_int 2 (32 - 1)) (of_int 1))
 let min_i64 = Num (sub (of_int 0) (power_int_positive_int 2 (64 - 1)))
 let max_i64 = Num (sub (power_int_positive_int 2 (64 - 1)) (of_int 1))
 
+let int x = Num (Z.of_int x)

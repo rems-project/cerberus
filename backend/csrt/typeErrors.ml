@@ -10,12 +10,14 @@ module VB=VariableBinding
 
 
 
+
 (* more to be added *)
 type memory_state = 
   | Unowned
   | Uninit of RE.size
   | Integer of string * RE.size
   | Location of string * RE.size
+  | Within of {base_location : string; resource : Sym.t}
 
 type location_state = { location : string; state : memory_state; }
 type variable_location = { name : string; location : string}
@@ -26,35 +28,37 @@ type model =
   }
 
 
-let pp_location_state { location; state } =
-  let value, size = match state with
-    | Unowned -> 
-       parens (!^"unowned"), Pp.empty
-    | Uninit size -> 
-       !^"uninitialised", Z.pp size
-    | Integer (value, size) -> 
-       typ !^value !^"integer", Z.pp size
-    | Location (value, size) -> 
-       typ !^value !^"pointer", Z.pp size
+let pp_variable_and_location_state ( ovar, { location; state }) =
+  let var = match ovar with
+    | None -> Pp.empty
+    | Some v -> !^v
   in
-  ( !^location, size, value )
+  let value, size = match state with
+    | Unowned -> Pp.empty, Pp.empty
+    | Uninit size -> !^"uninitialised", Z.pp size
+    | Integer (value, size) -> typ !^value !^"integer", Z.pp size
+    | Location (value, size) -> typ !^value !^"pointer", Z.pp size
+    | Within {base_location; _} -> 
+       parens (!^"within owned region at" ^^^ !^base_location), Pp.empty
+  in
+  ( var, !^location, size, value )
 
-let pp_memory_state memory_state = 
-  let location_lines = List.map pp_location_state memory_state in
-  Pp.table3 ("location", "size", "value") location_lines
-
-let pp_variable_location { name; location } =
-  ( !^name, !^location)
-
-let pp_variable_locations variable_locations = 
-  let variable_lines = List.map pp_variable_location variable_locations in
-  Pp.table2 ("variable", "location") variable_lines
-  
 
 let pp_model model = 
-  pp_variable_locations model.variable_locations ^^ hardline ^^ 
-  hardline ^^
-  pp_memory_state model.memory_state
+  let variable_and_location_state : (string option * location_state) list = 
+    List.concat_map (fun (ls : location_state) ->
+        let vars = 
+          List.filter (fun vl -> String.equal ls.location vl.location
+            ) model.variable_locations
+        in
+        match vars with
+        | [] -> [(None, ls)]
+        | _ -> List.map (fun v -> (Some v.name, ls)) vars
+      ) model.memory_state
+  in
+  Pp.table4 
+    ("var", "location", "size", "value")
+    (List.map pp_variable_and_location_state variable_and_location_state)
   
 
 

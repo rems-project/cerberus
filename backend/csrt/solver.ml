@@ -281,8 +281,8 @@ let debug_typecheck_lcs loc lcs {local;global} =
 
 
 let footprints_disjoint (location1, size1) (location2, size2) = 
-  let fp1_before_fp2 = IT.LocLT (Offset (location1, Num size1), location2) in
-  let fp2_before_fp1 = IT.LocLT (Offset (location2, Num size2), location1) in
+  let fp1_before_fp2 = IT.LocLT (Offset (Offset (location1, Num size1), IT.int (-1)), location2) in
+  let fp2_before_fp1 = IT.LocLT (Offset (Offset (location2, Num size2), IT.int (-1)), location1) in
   IT.Or [fp1_before_fp2; fp2_before_fp1]
 
 let rec disjoint_footprints = function
@@ -348,6 +348,25 @@ let equal loc {local;global} it1 it2 =
 
 
 
+let resource_for_pointer_strictly_within (loc: Loc.t) {local;global} pointer_it
+     : ((Sym.t * RE.t) option) m = 
+   let* points = 
+     Local.filterM (fun name vb ->
+         match vb with 
+         | VariableBinding.Resource re -> 
+            let lc = 
+              IT.And [IndexTerms.LocLT (RE.pointer re, pointer_it);
+                      IndexTerms.LocLT (pointer_it, Offset (RE.pointer re, Num (RE.size re)))]
+            in
+            let* (holds,_,_) = constraint_holds loc {local;global} false (LC.LC lc) in
+            return (if holds then Some (name, re) else None)
+         | _ -> 
+            return None
+       ) local
+   in
+   Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
+
 let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
      : ((Sym.t * RE.t) option) m = 
    let* points = 
@@ -361,6 +380,7 @@ let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
        ) local
    in
    Tools.at_most_one loc !^"multiple points-to for same pointer" points
+
 
 
 module StringMap = Map.Make(String)
@@ -404,7 +424,16 @@ let model loc {local;global} context solver : TypeErrors.model option m =
            let open TypeErrors in
            let* state = match o_resource with
              | None -> 
-                return Unowned
+                let* o_resource2 = 
+                  resource_for_pointer_strictly_within loc {local; global} location_it in
+                begin match o_resource2 with
+                | None -> return Unowned
+                | Some (rname,r) -> 
+                   let* within_expr = of_index_term loc {local; global} context (RE.pointer r) in
+                   let* within_expr_val = evaluate loc model within_expr in
+                   let within_expr_val = Z3.Expr.to_string within_expr_val in
+                   return (Within {base_location = within_expr_val; resource = rname} )
+                end
              | Some (_, RE.Uninit u) -> 
                 return (Uninit u.size)
              | Some (_, RE.Points p) -> 
