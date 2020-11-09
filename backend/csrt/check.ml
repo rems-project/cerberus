@@ -1083,7 +1083,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           in
           let* (aligned, _, s_) = 
             Solver.constraint_holds loc {local; global} false
-              (LC.LC (Aligned (ST_Pointer, S arg.lname))) 
+              (LC.LC (AlignedI (Num align, S arg.lname))) 
           in
           let ok = Option.is_some o_resource && aligned in
           let constr = LC (EQ (S ret, Bool ok)) in
