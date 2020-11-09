@@ -10,6 +10,8 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
   match it with
   | Num n -> 
      return (Num n)
+  | Pointer n -> 
+     return (Pointer n)
   | Bool b -> 
      return (Bool b)
   | Unit ->
@@ -134,17 +136,24 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in
      return (Offset (it, it'))
-  | Aligned (it, it') -> 
-     let* it = parse_ast_to_t loc names it in
-     let* it' = parse_ast_to_t loc names it' in
-     return (Aligned (it, it'))
   | LocLT (it, it') -> 
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in
      return (LocLT (it, it'))
-  | InRange (ct, bt, it) ->
+  | LocLE (it, it') -> 
      let* it = parse_ast_to_t loc names it in
-     return (InRange (ct, bt, it))
+     let* it' = parse_ast_to_t loc names it' in
+     return (LocLE (it, it'))
+  | AlignedI (it, it') -> 
+     let* it = parse_ast_to_t loc names it in
+     let* it' = parse_ast_to_t loc names it' in
+     return (AlignedI (it, it'))
+  | Aligned (st, it) -> 
+     let* it = parse_ast_to_t loc names it in
+     return (Aligned (st, it))
+  | InRange (rt, it) ->
+     let* it = parse_ast_to_t loc names it in
+     return (InRange (rt, it))
   | S string -> 
      begin match StringMap.find_opt string names with
      | Some sym -> return (S sym)

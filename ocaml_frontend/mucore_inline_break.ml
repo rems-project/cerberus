@@ -13,9 +13,9 @@ open Annot
 
 
 let rec ib_expr 
-          (label : symbol * symbol list * ('DCTY, 'DBTY, 'bty) mu_expr)
-          (e : ('DCTY, 'DBTY, 'bty) mu_expr) 
-           : ('DCTY, 'DBTY, 'bty) mu_expr=
+          (label : symbol * symbol list * ('ct, 'bt, 'bty) mu_expr)
+          (e : ('ct, 'bt, 'bty) mu_expr) 
+           : ('ct, 'bt, 'bty) mu_expr=
    (let (M_Expr( oannots, e_)) = e in
   let wrap e_=  (M_Expr( oannots, e_)) in
   let aux = (ib_expr label) in
@@ -86,7 +86,7 @@ let rec ib_expr
     
 
 
-let rec inline_label_labels_and_body to_inline to_keep body:('e,(('d,'b,'c,'a)mu_label_def))Pmap.map*('b,'c,'a)mu_expr=
+let rec inline_label_labels_and_body to_inline to_keep body = 
    ((match to_inline with
   | [] -> (to_keep, body)
   | l :: to_inline' ->
@@ -109,8 +109,8 @@ let rec inline_label_labels_and_body to_inline to_keep body:('e,(('d,'b,'c,'a)mu
 
 let ib_fun_map_decl 
       (name1: symbol)
-      (d : ('DLTY, 'DCTY, 'DBTY, 'bty) mu_fun_map_decl) 
-    : ('DLTY, 'DCTY, 'DBTY, 'bty) mu_fun_map_decl=
+      (d : ('lt, 'ct, 'bt, 'bty) mu_fun_map_decl) 
+    : ('lt, 'ct, 'bt, 'bty) mu_fun_map_decl=
    (try ((match d with
      | M_Proc( loc, rbt, arg_bts, body, label_defs) -> 
         let (to_keep, to_inline) =
@@ -133,24 +133,24 @@ let ib_fun_map_decl
      )) with | Failure error -> failwith ( (let Symbol.Symbol( d, n, str_opt) = name1 in
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))  ^ error) )
 
-let ib_fun_map (fmap1 : ('DLTY, 'DCTY, 'DBTY, 'bty) mu_fun_map) 
-    : ('DLTY, 'DCTY, 'DBTY, 'bty) mu_fun_map= 
+let ib_fun_map (fmap1 : ('lt, 'ct, 'bt, 'bty) mu_fun_map) 
+    : ('lt, 'ct, 'bt, 'bty) mu_fun_map= 
    (Pmap.mapi ib_fun_map_decl fmap1)
   
 
-let ib_globs (g : ('DCTY, 'DBTY, 'bty) mu_globs) 
-    : ('DCTY, 'DBTY, 'bty) mu_globs= 
+let ib_globs (g : ('ct, 'bt, 'bty) mu_globs) 
+    : ('ct, 'bt, 'bty) mu_globs= 
    ((match g with
   | M_GlobalDef( bt1, e) -> M_GlobalDef( bt1, e)
   | M_GlobalDecl bt1 -> M_GlobalDecl bt1 
   ))
 
-let ib_globs_list (gs : ('DCTY, 'DBTY, 'bty) mu_globs_list)
-    : ('DCTY, 'DBTY, 'bty) mu_globs_list= 
+let ib_globs_list (gs : ('ct, 'bt, 'bty) mu_globs_list)
+    : ('ct, 'bt, 'bty) mu_globs_list= 
    (map (fun (sym1,g) -> (sym1, ib_globs g)) gs)
 
 
-let ib_file file1:('g,'f,'e,'d,'c,'b,'a)mu_file=
+let ib_file file1 = 
    ({ file1 with mu_stdlib = (ib_fun_map file1.mu_stdlib)
              ; mu_globs = (ib_globs_list file1.mu_globs)
              ; mu_funs = (ib_fun_map file1.mu_funs)

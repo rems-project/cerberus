@@ -52,8 +52,9 @@ let integer_range loc it =
 
 
 
-open Environment
 
-let offset loc {local; global} (BT.Tag s) (BT.Member id) = 
-  let iv = CF.Impl_mem.offsetof_ival global.tagDefs s (Id.parse (Loc.unpack loc) id) in
+let offset loc (BT.Tag tag) (BT.Member id) = 
+  let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) 
+             tag (Id.parse (Loc.unpack loc) id) 
+  in
   integer_value_to_num loc iv

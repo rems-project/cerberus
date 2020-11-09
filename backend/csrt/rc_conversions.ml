@@ -335,9 +335,9 @@ and of_type_expr loc names te : tb m =
         let lrt = match bnew with
           | New -> Logical ((pointee, LS.Base bt), 
                    Resource (points, 
-                   Constraint (LC (Aligned (S name, Num align)), lrt)))
+                   Constraint (LC (AlignedI (Num align, S name)), lrt)))
           | Old -> Resource (points, 
-                   Constraint (LC (Aligned (S name, Num align)), lrt))
+                   Constraint (LC (AlignedI (Num align, S name)), lrt))
         in
         return (B ((bnewp, name, BT.Loc, Some (psize, palign)), lrt))
      | _, Shr, _ -> 
@@ -487,10 +487,10 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         let arg_lrt = match bnew with
           | New -> RT.Logical ((sa, LS.Base bt), 
                    RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (IT.Aligned (S s, Num align)), 
+                   RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
                    lrt)))
           | Old -> RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (IT.Aligned (S s, Num align)), 
+                   RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
                    lrt))
         in
         let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
@@ -597,10 +597,10 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let arg_lrt = match bnew with
              | New -> RT.Logical ((sa, LS.Base bt), 
                       RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
                       lrt)))
              | Old -> RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
                       lrt))
            in
            return (names, args_lrts @ [arg_lrt], unused_inv_vars)
@@ -630,10 +630,10 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let arg_lrt = match bnew with
              | New -> RT.Logical ((sa, LS.Base bt), 
                       RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
                       lrt)))
              | Old -> RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.Aligned (S s, Num align)),
+                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
                       lrt))
            in
            let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in

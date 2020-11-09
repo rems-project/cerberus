@@ -433,7 +433,7 @@ let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
       let* align = Memory.align_of_ctype loc ct in
-      return (ret, Loc, LC (And [Null (S ret); Aligned (S ret, Num align)])) )
+      return (ret, Loc, LC (And [Null (S ret); Aligned (ST_Pointer, S ret)])) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
     ( fun () -> fail loc (Internal !^"unspecified pointer value") )
@@ -1028,7 +1028,7 @@ let rec store (loc: Loc.t)
 let ensure_aligned loc {local; global} access pointer align = 
   let* (aligned, _, _) = 
     Solver.constraint_holds loc {local; global} false
-      (LC.LC (Aligned (pointer, align))) 
+      (LC.LC (AlignedI (align, pointer))) 
   in
   if aligned then return () else fail loc (Misaligned Store)
 
@@ -1083,7 +1083,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           in
           let* (aligned, _, s_) = 
             Solver.constraint_holds loc {local; global} false
-              (LC.LC (Aligned (S arg.lname, Num align))) 
+              (LC.LC (Aligned (ST_Pointer, S arg.lname))) 
           in
           let ok = Option.is_some o_resource && aligned in
           let constr = LC (EQ (S ret, Bool ok)) in
@@ -1111,7 +1111,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* lrt = store loc {local; global} bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
-            RT.Constraint (LC.LC (Aligned (S ret, S arg.lname)), 
+            RT.Constraint (LC.LC (Aligned (ST_Pointer, S ret)), 
             lrt))
           in
           return (Normal (rt, local))

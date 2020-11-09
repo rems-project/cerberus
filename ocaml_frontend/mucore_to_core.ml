@@ -578,10 +578,10 @@ let mu_to_core__globs (g : (Ctype.ctype, mu_base_type, 'bty) mu_globs)
  *     : mu_globs_map unit bty = 
  *   Map.map mu_to_core__globs g *)
 
-let mu_to_core__tag_definition:(((Symbol.identifier*(attributes*qualifiers*ctype))list*(flexible_array_member)option),((Symbol.identifier*(attributes*qualifiers*ctype))list))mu_tag_definition ->tag_definition=  ((function
+let mu_to_core__tag_definition = function
   | M_StructDef (l, mf) -> StructDef( l, mf)
   | M_UnionDef l -> UnionDef l
-))
+
 
 let mu_to_core__tag_definitions dict_Map_MapKeyType_a tagDefs1:('a,(tag_definition))Pmap.map= 
    (Pmap.map mu_to_core__tag_definition tagDefs1)

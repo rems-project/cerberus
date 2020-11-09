@@ -251,8 +251,8 @@ let retype_paction (loc : Loc.t) = function
     return (M_Paction (pol,action))
 
 
-let rec retype_expr (loc : Loc.t) struct_decls (M_Expr (annots,expr_)) = 
-  let retype_expr loc = retype_expr loc struct_decls in
+let rec retype_expr (loc : Loc.t) (M_Expr (annots,expr_)) = 
+  let retype_expr loc = retype_expr loc in
   let* expr_ = match expr_ with
     | M_Epure pexpr -> 
        let* pexpr = retype_pexpr loc pexpr in
@@ -369,7 +369,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
                 Rc_conversions.make_loop_label_spec_annot 
                   loc names structs farg_rts argtyps rc_attrs 
               in
-              let* e = retype_expr loc structs e in
+              let* e = retype_expr loc e in
               return (M_Label (lt,args,e,annots))
            end
         | None -> 
@@ -397,7 +397,7 @@ let retype_fun_map_decl (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~
      let loc' = Loc.update loc loc2 in
      let* bt = Conversions.bt_of_core_base_type loc' cbt in
      let* args = mapM (retype_arg loc) args in
-     let* expr = retype_expr loc structs expr in
+     let* expr = retype_expr loc expr in
      let* labels = 
        PmapM.mapM (
            retype_label loc ~funinfo ~funinfo_extra 
@@ -428,7 +428,7 @@ let retype_globs loc struct_decls (sym, glob) =
   match glob with
   | M_GlobalDef (cbt,expr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* expr = retype_expr loc struct_decls expr in
+     let* expr = retype_expr loc expr in
      return (sym, M_GlobalDef (bt,expr))
   | M_GlobalDecl cbt ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
@@ -442,10 +442,12 @@ let retype_globs_map loc struct_decls funinfo globs_map =
 
 
 
+
 let retype_tagDefs 
       (loc : Loc.t) 
-      (tagDefs : (CA.ct mu_struct_def, CA.ct mu_union_def) mu_tag_definitions) 
-    : ((Global.struct_decl, unit) mu_tag_definitions *
+      (tagDefs : (CA.st, CA.ut) mu_tag_definitions) 
+    : ((CA.ct mu_struct_def * Global.struct_decl, 
+        CA.ct mu_union_def) mu_tag_definitions *
          Global.struct_decl SymMap.t * 
            unit SymMap.t) m
   = 
@@ -455,9 +457,9 @@ let retype_tagDefs
       match def with
       | M_UnionDef _ -> 
          fail loc (Unsupported !^"todo: union types")
-      | M_StructDef (fields, _f) ->
-         let* decl = Conversions.struct_decl loc (Tag sym) fields acc_structs in
-         let acc = Pmap.add sym (M_StructDef decl) acc in
+      | M_StructDef (fields, f) ->
+         let* decl = Conversions.struct_decl loc (BT.Tag sym) in
+         let acc = Pmap.add sym (M_StructDef ((fields, f), decl)) acc in
          let acc_structs = SymMap.add sym decl acc_structs in
          return (acc,acc_structs,acc_unions)
     ) 
@@ -484,7 +486,9 @@ let retype_funinfo struct_decls funinfo =
 
 
 let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
-    : ((FT.t, LT.t, (BT.t * RE.size * Z.t), BT.t, Global.struct_decl, unit, 'bty) mu_file) m =
+    : ((FT.t, LT.t, (BT.t * RE.size * Z.t), BT.t, 
+        CA.ct mu_struct_def * Global.struct_decl, 
+        CA.ct mu_union_def, 'bty) mu_file) m =
   let loop_attributes = file.mu_loop_attributes in
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
   let* (funinfo,funinfo_extra) = retype_funinfo structs file.mu_funinfo in
@@ -500,7 +504,6 @@ let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA
   let* globs = mapM (retype_globs loc structs) file.mu_globs in
   let file = 
     { mu_main = file.mu_main;
-      mu_core_tagDefs = file.mu_core_tagDefs;
       mu_tagDefs = tagDefs;
       mu_stdlib = stdlib;
       mu_impl = impls;

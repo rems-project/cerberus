@@ -30,6 +30,8 @@ type ('a, 'bty) action1 = ('a, 'bty, Symbol.sym) generic_action
 type ('a, 'bty) paction = ('a, 'bty, Symbol.sym) generic_paction
 
 type ct = Ctype.ctype
+type ut = ct mu_union_def
+type st = ct mu_struct_def
 type ft = ct Mucore.mu_funinfo_type
 type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
 type bt = Mucore.mu_base_type
@@ -735,10 +737,9 @@ let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)
 
 
-let normalise_file file1 : (ft, lt, ct, bt, (ct mu_struct_def), (ct mu_union_def), unit) Mucore.mu_file= 
+let normalise_file file1 : (ft, lt, ct, bt, st, ut, unit) Mucore.mu_file= 
    ({ mu_main = (file1.main)
    ; mu_tagDefs = (normalise_tag_definitions file1.tagDefs)
-   ; mu_core_tagDefs = file1.tagDefs
    ; mu_stdlib = (normalise_fun_map file1.stdlib)
    ; mu_impl = (normalise_impl file1.impl)
    ; mu_globs = (normalise_globs_list file1.globs)

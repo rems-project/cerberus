@@ -42,25 +42,23 @@ let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
 type struct_decl = 
   { raw: (BT.member * BT.t) list;
     sizes: (BT.member * RE.size) list;
-    ranges: (BT.member * (IT.t -> LC.t)) list;
+    offsets: (BT.member * Z.t) list;
+    range: IT.t -> LC.t;
     closed: RT.t; 
     closed_stored: RT.t;
-    closed_stored_aux: IT.t -> RT.l;
   }
 
 type struct_decls = struct_decl SymMap.t
 
 type t = 
-  { tagDefs : CF.Core.core_tag_definitions;
-    struct_decls : struct_decls; 
+  { struct_decls : struct_decls; 
     fun_decls : (Loc.t * FT.t) SymMap.t;
     impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
   } 
 
-let empty tagDefs = 
-  { tagDefs = tagDefs;
-    struct_decls = SymMap.empty; 
+let empty = 
+  { struct_decls = SymMap.empty; 
     fun_decls = SymMap.empty;
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;

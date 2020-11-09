@@ -13,6 +13,10 @@ type t = Computational of (Sym.t * BaseTypes.t) * l
 let lrt (Computational (_, lrt)) = lrt
 
 
+let to_logical (Computational ((name, bt), lrt)) = 
+  Logical ((name, Base bt), lrt)
+
+
 let mComputational (name,bound) t = Computational ((name,bound),t)
 let mLogical (name,bound) t = Logical ((name,bound),t)
 let mConstraint bound t = Constraint (bound,t)

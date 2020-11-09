@@ -44,7 +44,7 @@ let rec pp atomic bt =
   | Unit -> !^"void"
   | Bool -> !^"bool"
   | Integer -> !^"integer"
-  | Loc -> !^"location"
+  | Loc -> !^"pointer"
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^/^ pp true bt)
   | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)

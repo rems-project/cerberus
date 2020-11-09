@@ -31,6 +31,8 @@ module type PP_Typ = sig
   type ct
   type ft
   type lt
+  type st 
+  type ut
   (* val pp_object_type: object_type -> PPrint.document *)
   val pp_bt: bt -> PPrint.document
   (* type object_type *)
@@ -38,6 +40,8 @@ module type PP_Typ = sig
   val pp_ct: ct -> PPrint.document
   val pp_ft: ft -> PPrint.document
   val pp_lt: (lt -> PPrint.document) option
+  val pp_st: st -> PPrint.document
+  val pp_ut: ut -> PPrint.document
   val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
 end
@@ -57,6 +61,8 @@ module type PP_CORE = sig
   type ct
   type ft
   type lt
+  type st 
+  type ut
 
   val pp_bt: 
     bt -> 
@@ -93,8 +99,8 @@ module type PP_CORE = sig
      lt,
      ct,
      bt,
-     ct mu_struct_def,
-     ct mu_union_def,
+     st,
+     ut,
      'ty) mu_file -> 
     PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
@@ -119,6 +125,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                   and type ct = Pp_typ.ct
                   and type lt = Pp_typ.lt
                   and type ft = Pp_typ.ft
+                  and type st = Pp_typ.st
+                  and type ut = Pp_typ.ut
   = struct
 
   open Config
@@ -814,24 +822,29 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
   let pp_tagDefinitions tagDefs =
     let tagDefs = Pmap.bindings_list tagDefs in
     let pp (sym, tagDef) =
-      let (ty, tags) = match tagDef with
-        | M_StructDef (membrs_, flexible_opt) ->
-            let membrs = match flexible_opt with
-              | None ->
-                  membrs_
-              | _ ->
-                failwith "have to implement that again"
-              (* | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
-               *     membrs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in *)
-            in
-            ("struct", membrs)
-        | M_UnionDef membrs -> ("union", membrs)
-      in
-      let pp_tag (Symbol.Identifier (_, name), (_, _, ty)) =
-        !^name ^^ P.colon ^^^ pp_ct ty
-      in
-      pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
-      ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
+      begin match tagDef with
+      | M_StructDef sd -> 
+         pp_keyword "def" ^^^ pp_keyword "struct" ^^^ 
+           pp_raw_symbol sym ^^^ P.colon ^^ P.equals ^^ (pp_st sd)
+      | M_UnionDef ut -> 
+         pp_keyword "def" ^^^ pp_keyword "union" ^^^ 
+           pp_raw_symbol sym ^^^ P.colon ^^ P.equals ^^ (pp_ut ut)
+      end
+      (* let (ty, tags) = match tagDef with
+       *   | M_StructDef (membrs_, flexible_opt) ->
+       *       let membrs = match flexible_opt with
+       *         | None ->
+       *             membrs_
+       *         | _ ->
+       *           failwith "have to implement that again"
+       *         (\* | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
+       *          *     membrs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in *\)
+       *       in
+       *       ("struct", membrs)
+       *   | M_UnionDef membrs -> ("union", membrs)
+       * in
+       * pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
+       * ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags) *)
     in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
 
   let pp_argument (sym, bTy) =
@@ -1017,8 +1030,37 @@ module Pp_standard_typ = (struct
   let pp_bt = pp_core_base_type
 
   type ct = CA.ct
-  let pp_ct ty =
-    P.squotes (Pp_core_ctype.pp_ctype ~compact:true ty)
+  type ut = ct Mucore.mu_union_def
+  type st = ct Mucore.mu_struct_def
+
+  let pp_ct ty = P.squotes (Pp_core_ctype.pp_ctype ~compact:true ty)
+
+
+  let pp_ut (membrs) = 
+    let (ty, tags) = ("union", membrs) in
+    let pp_tag (Symbol.Identifier (_, name), (_,_,ct)) =
+      !^name ^^ P.colon ^^^ pp_ct ct
+    in
+    P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
+
+
+
+  let pp_st (membrs_, flexible_opt) = 
+    let membrs = match flexible_opt with
+      | None ->
+         membrs_
+      | _ ->
+         failwith "have to implement that again"
+    (* | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
+     *     membrs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in *)
+    in
+    let (ty, tags) = ("struct", membrs) in
+    let pp_tag (Symbol.Identifier (_, name), (_,_,ct)) =
+      !^name ^^ P.colon ^^^ pp_ct ct
+    in
+    P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
+
+
 
   type ft = CA.ft
   type lt = CA.lt

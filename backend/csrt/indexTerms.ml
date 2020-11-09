@@ -8,8 +8,37 @@ module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
 
 
+type stored_type = 
+  | ST_Integer of CF.Ctype.integerType
+  | ST_Struct of BT.tag
+  | ST_Pointer
+
+let stored_type_to_bt = function
+  | ST_Integer _ -> BT.Integer
+  | ST_Struct tag -> BT.Struct tag
+  | ST_Pointer -> BT.Loc
+
+let stored_type_equal rt1 rt2 = 
+  match rt1, rt2 with
+  | ST_Integer it1, ST_Integer it2 -> CF.Ctype.integerTypeEqual it1 it2
+  | ST_Struct tag1, ST_Struct tag2 -> BT.tag_equal tag1 tag2
+  | ST_Pointer, ST_Pointer -> true
+
+  | ST_Integer _, _
+  | ST_Struct _, _
+  | ST_Pointer, _ -> 
+     false
+
+let pp_stored_type = function
+  | ST_Integer it -> squotes (CF.Pp_core_ctype.pp_integer_ctype it)
+  | ST_Struct (Tag tag) -> squotes (CF.Pp_core_ctype.pp_ctype (Ctype ([], Struct tag)))
+  | ST_Pointer -> squotes (BT.pp false BT.Loc)
+
+  
+
 type 'id term =
   | Num of Z.t
+  | Pointer of Z.t
   | Bool of bool
   | Unit
 
@@ -40,9 +69,9 @@ type 'id term =
   | Tuple of 'id term list
   | Nth of BT.t * int * 'id term
 
-  | Aligned of 'id term * 'id term
   | Offset of 'id term * 'id term
   | LocLT of 'id term * 'id term
+  | LocLE of 'id term * 'id term
 
   | Struct of BT.tag * (BT.member * 'id term) list
   | Member of BT.tag * 'id term * BT.member
@@ -54,7 +83,9 @@ type 'id term =
   | Head of 'id term
   | Tail of 'id term
 
-  | InRange of CF.Ctype.ctype * BT.t * 'id term
+  | AlignedI of 'id term * 'id term
+  | Aligned of stored_type * 'id term
+  | InRange of stored_type * 'id term
 
   | S of 'id
 
@@ -69,6 +100,7 @@ type t = Sym.t term
 let rec equal it it' = 
   match it, it' with
   | Num n, Num n' -> Z.equal n n'
+  | Pointer p, Pointer p' -> Z.equal p p'
   | Bool b, Bool b' -> b = b'
   | Unit, Unit -> true
 
@@ -103,9 +135,9 @@ let rec equal it it' =
   | Nth (bt, n,t), Nth (bt', n',t') -> BT.equal bt bt' && n = n' && equal t t' 
 
 
-  | Aligned (t1, t2), Aligned (t1', t2') -> equal t1 t1' && equal t2 t2'
   | Offset (t1, t2), Offset (t1', t2') -> equal t1 t1' && equal t2 t2'
   | LocLT (t1, t2), LocLT (t1', t2') -> equal t1 t1' && equal t2 t2'
+  | LocLE (t1, t2), LocLE (t1', t2') -> equal t1 t1' && equal t2 t2'
 
   | Struct (tag, members), Struct (tag2, members2) ->
      tag = tag2 && 
@@ -125,10 +157,69 @@ let rec equal it it' =
   | Tail t, Tail t'
     -> equal t t'
 
+  | AlignedI (t1, t2), AlignedI (t1', t2') ->
+     equal t1 t1' && equal t2 t2'
+
+  | Aligned (rt, t), Aligned (rt', t')
+  | InRange (rt, t), InRange (rt', t') ->
+     stored_type_equal rt rt' && equal t t'
+
   | S sym, S sym' 
     -> Sym.equal sym sym'
 
-  | _ -> 
+
+  | Num _, _
+  | Pointer _, _
+  | Bool _, _
+  | Unit, _
+
+  | Add _, _
+  | Sub _, _
+  | Mul _, _
+  | Div _, _
+  | Exp _, _
+  | Rem_t _, _
+  | Rem_f _, _
+  | Min _, _
+  | Max _, _
+
+  | EQ _, _
+  | NE _, _
+  | LT _, _
+  | GT _, _
+  | LE _, _
+  | GE _, _
+
+  | Null _, _
+  | And _, _
+  | Or _, _
+  | Impl _, _
+  | Not _, _
+  | ITE _, _
+
+  | Tuple _, _
+  | Nth _, _
+
+  | AlignedI _, _
+  | Aligned _, _
+  | Offset _, _
+  | LocLT _, _
+  | LocLE _, _
+
+  | Struct _, _
+  | Member _, _
+  | MemberOffset _, _
+
+  | Nil _, _
+  | Cons _, _
+  | List _, _
+  | Head _, _
+  | Tail _, _
+
+  | InRange _, _
+
+  | S _, _ ->
+
      false
 
 
@@ -141,6 +232,7 @@ let pp ?(quote=true) it : PPrint.document =
     let aux = aux true in
     match it with
     | Num i -> Z.pp i
+    | Pointer i -> Z.pp i
     | Bool true -> !^"true"
     | Bool false -> !^"false"
     | Unit -> !^"()"
@@ -192,14 +284,18 @@ let pp ?(quote=true) it : PPrint.document =
        aux t ^^ dot ^^ !^s
     | MemberOffset (_tag, t, Member s) ->
        mparens (ampersand ^^ aux t ^^ !^"->" ^^ !^s)
-    | Aligned (t1, t2) ->
-       mparens (!^"aligned" ^^^ aux t1 ^^^ aux t2)
     | Offset (t1, t2) ->
        mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
     | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
+    | LocLE (o1,o2) -> mparens (aux o1 ^^^ langle ^^ equals ^^^ aux o2)
 
-    | InRange (ct,bt,t) ->
-       mparens (!^"in range" ^^^ CF.Pp_mucore.pp_ctype ct ^^^ aux t)
+
+    | AlignedI (t, t') ->
+       mparens (!^"aligned" ^^^ aux t ^^^ aux t')
+    | Aligned (rt, t) ->
+       mparens (!^"aligned" ^^^ pp_stored_type rt ^^^ aux t)
+    | InRange (rt, t) ->
+       mparens (!^"representable" ^^^ pp_stored_type rt ^^^ aux t)
 
     | S sym -> Sym.pp sym
   in
@@ -209,6 +305,7 @@ let pp ?(quote=true) it : PPrint.document =
 let rec vars_in it : SymSet.t = 
   match it with
   | Num _  
+  | Pointer _
   | Bool _
   | Nil _ 
   | Unit ->
@@ -230,9 +327,9 @@ let rec vars_in it : SymSet.t =
   | GE (it, it')
   | Impl (it, it')
   | Cons (it, it')
-  | Aligned (it, it')
   | Offset (it, it')
-  | LocLT (it, it')  ->
+  | LocLT (it, it') 
+  | LocLE (it, it')  ->
      vars_in_list [it; it']
   | And its
   | Or its ->
@@ -255,7 +352,10 @@ let rec vars_in it : SymSet.t =
      vars_in_list [it;it]
   | List (its,bt) ->
      vars_in_list its
-  | InRange (_ct,_bt,t) ->
+  | AlignedI (it, it') ->
+     vars_in_list [it;it]
+  | Aligned (_rt, t)
+  | InRange (_rt,t) ->
      vars_in t
   | S symbol -> 
      SymSet.singleton symbol
@@ -268,6 +368,7 @@ and vars_in_list l =
 let rec subst_var subst it : t = 
   match it with
   | Num _ -> it
+  | Pointer _ -> it
   | Bool _ -> it
   | Unit -> it
   | Add (it, it') -> Add (subst_var subst it, subst_var subst it')
@@ -311,11 +412,12 @@ let rec subst_var subst it : t =
      Member (tag, subst_var subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_var subst t, f)
-  | Aligned (it, it') -> Aligned (subst_var subst it, subst_var subst it')
   | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
   | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
-  | InRange (ct,bt,t) ->
-     InRange (ct,bt,subst_var subst t)
+  | LocLE (it, it') -> LocLE (subst_var subst it, subst_var subst it')
+  | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
+  | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
+  | InRange (rt,t) -> InRange (rt,subst_var subst t)
   | S symbol -> 
      if symbol = subst.before then S subst.after else S symbol
 
@@ -327,6 +429,7 @@ let subst_vars = make_substs subst_var
 let rec subst_it subst it : t = 
   match it with
   | Num _ -> it
+  | Pointer _ -> it
   | Bool _ -> it
   | Unit -> it
   | Add (it, it') -> Add (subst_it subst it, subst_it subst it')
@@ -370,11 +473,12 @@ let rec subst_it subst it : t =
      Member (tag, subst_it subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_it subst t, f)
-  | Aligned (it, it') -> Aligned (subst_it subst it, subst_it subst it')
   | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
   | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
-  | InRange (ct,bt,t) ->
-     InRange (ct,bt,subst_it subst t)
+  | LocLE (it, it') -> LocLE (subst_it subst it, subst_it subst it')
+  | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
+  | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
+  | InRange (rt,t) -> InRange (rt,subst_it subst t)
   | S symbol -> 
      if symbol = subst.before then subst.after else S symbol
 

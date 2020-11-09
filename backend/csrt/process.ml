@@ -21,7 +21,7 @@ let record_tagDefs (global: Global.t) tagDefs =
       match def with
       | M_UnionDef _ -> 
          fail Loc.unknown (Unsupported !^"todo: union types")
-      | M_StructDef decl -> 
+      | M_StructDef (_ct, decl) -> 
          let struct_decls = SymMap.add sym decl global.struct_decls in
          return { global with struct_decls }
     ) tagDefs global
@@ -83,7 +83,7 @@ let process_functions genv fns =
 
 let process mu_file =
   let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
-  let global = Global.empty mu_file.mu_core_tagDefs in
+  let global = Global.empty in
   let* global = record_tagDefs global mu_file.mu_tagDefs in
   let global = record_impl global mu_file.mu_impl in
   let* global = record_funinfo global mu_file.mu_funinfo in

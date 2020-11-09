@@ -21,6 +21,9 @@ module SymSet = Set.Make(Sym)
 
 
 
+let annot_of_ct (CF.Ctype.Ctype (annot,_)) = annot
+
+
 (* base types *)
 
 let bt_of_core_object_type loc ot =
@@ -62,6 +65,28 @@ let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   | Struct tag -> return (BT.Struct (BT.Tag tag))
   | Union _ -> fail loc (Unsupported !^"union types")
 
+let rec st_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
+  let open CF.Ctype in
+  match ct_ with
+  | Void -> 
+     fail loc (Unsupported !^"todo: void*")
+  | Basic (Integer it) -> 
+     return (ST_Integer it)
+  | Basic (Floating _) -> 
+     fail loc (Unsupported !^"floats")
+  | Array _ -> 
+     fail loc (Unsupported !^"arrays")
+  | Function _ -> 
+     fail loc (Unsupported !^"todo: function pointers")
+  | Pointer _ -> 
+     return ST_Pointer
+  | Atomic ct -> 
+     st_of_ctype loc ct  (* check? *)
+  | Struct tag -> 
+     return (ST_Struct (BT.Tag tag))
+  | Union _ -> 
+fail loc (Unsupported !^"union types")
+
 let integerType_constraint loc it =
   let* (min,max) = match it with
     | CF.Ctype.Bool -> return (Z.of_int 0, Z.of_int 1)
@@ -70,194 +95,148 @@ let integerType_constraint loc it =
   let lc about = LC (IT.in_range (Num min) (Num max) about) in
   return lc
 
-let rec in_range_of_ctype loc struct_decls (CF.Ctype.Ctype (_,ct_)) =
+let lookup_struct_in_tagDefs loc (BT.Tag tag) =
+  match Pmap.lookup tag (CF.Tags.tagDefs ()) with
+  | Some (CF.Ctype.StructDef (fields,flexible_array_member)) -> 
+     return (fields,flexible_array_member)
+  | Some (UnionDef _) -> fail loc (Generic !^"expected struct")
+  | None -> 
+     fail loc (Generic (!^"struct" ^^^ (BT.pp_tag (BT.Tag tag)) ^^^ !^"not defined"))
+
+
+let pointer_range_constraint loc = 
+  let* pointer_byte_size = Memory.size_of_pointer loc in
+  let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
+  let max = Z.power_int_positive_big_int 2 (Z.sub_big_int pointer_size (Z.of_int 1)) in
+  let rangef about = 
+    LC (IT.And [IT.LocLE (Pointer Z.zero, about); 
+                IT.LocLE (about, Pointer max)])
+  in
+  return rangef
+
+
+let rec in_range_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   let open CF.Ctype in
   match ct_ with
-  | Void -> 
-     return (fun it -> LC (EQ (it , Unit)))
-  | Basic (Integer it) -> 
-     let* rangef = integerType_constraint loc it in
-     return rangef
-  | Basic (Floating _) -> 
-     fail loc (Unsupported !^"floats")
-  | Array _ -> 
-     fail loc (Unsupported !^"arrays")
-  | Function _ -> 
-     fail loc (Unsupported !^"todo: function pointers")
-  | Pointer _ ->
-     let* pointer_size = Memory.size_of_pointer loc in
-     let rangef about = LC (in_range (Num Z.zero) (Num pointer_size) about) in
-     return rangef
-  | Atomic ct -> 
-     (* check *)
-     in_range_of_ctype loc struct_decls ct
-  | Struct tag -> 
-     let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
-     let rangef about = 
-       let lcs = 
-         List.map (fun (member, rangef) ->
-             let (LC c) = rangef (IT.Member (Tag tag, about, member)) in
-             c
-           ) decl.Global.ranges
-       in
-       (LC (And lcs))
-     in
-     return rangef
-  | Union _ -> 
-     fail loc (Unsupported !^"union types")
+  | Void -> return (fun it -> LC (EQ (it , Unit)))
+  | Basic (Integer it) -> integerType_constraint loc it
+  | Basic (Floating _) -> fail loc (Unsupported !^"floats")
+  | Array _ -> fail loc (Unsupported !^"arrays")
+  | Function _ -> fail loc (Unsupported !^"todo: function pointers")
+  | Pointer _ -> pointer_range_constraint loc
+  | Atomic ct -> in_range_of_ctype loc ct
+  | Struct tag -> in_range_of_struct_type loc (Tag tag)
+  | Union _ -> fail loc (Unsupported !^"union types")
+
+and in_range_of_struct_type loc (Tag tag) = 
+  let* (fields,_) = lookup_struct_in_tagDefs loc (BT.Tag tag) in
+  let* member_rangefs =
+    ListM.mapM (fun (id, (_, _, ct)) ->
+        let loc = Loc.update_a loc (annot_of_ct ct) in
+        let* rangef = in_range_of_ctype loc ct in
+        return (Member (Id.s id),rangef)
+      ) fields
+  in
+  let rangef about = 
+    let lcs = 
+      List.map (fun (member, rangef) ->
+          let (LC c) = rangef (IT.Member (Tag tag, about, member)) in
+          c
+        ) member_rangefs
+    in
+    (LC (And lcs))
+  in
+  return rangef
+
 
 
 
 
 (* structs *)
-
-let struct_decl_raw loc fields = 
-  let rec aux id ct = 
-    let member = Member (Id.s id) in
-    let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Loc.update_a loc annots in
-    match ct_ with
-    | Void -> return (member,Unit)
-    | Basic (Integer it) -> return (member,Integer)
-    | Array (ct, _maybe_integer) -> return (member,Array)
-    | Pointer (_qualifiers, ct) -> return (member,Loc)
-    | Atomic ct -> aux id ct
-    | Struct tag -> return (member, Struct (Tag tag))
-    | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
-    | Union sym -> fail loc (Unsupported !^"todo: union types")
-    | Function _ -> fail loc (Unsupported !^"function pointers")
-  in
-  ListM.mapM (fun (id, (_,_,ct)) -> aux id ct) fields
+let struct_decl_raw loc tag = 
+  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
+  ListM.mapM (fun (id, (_,_, ct)) ->
+      let loc = Loc.update_a loc (annot_of_ct ct) in
+      let* bt = bt_of_ctype loc ct in
+      return (Member (Id.s id), bt)
+  ) fields
 
 
-let struct_decl_sizes loc fields = 
+let struct_decl_sizes loc tag = 
+  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (id, (_, _, ct)) ->
+      let loc = Loc.update_a loc (annot_of_ct ct) in
       let* size = Memory.size_of_ctype loc ct in
       return (Member (Id.s id),size)
     ) fields
 
-let struct_decl_ranges loc struct_decls fields = 
+let struct_decl_ranges loc tag = 
+  in_range_of_struct_type loc tag
+
+let struct_decl_offsets loc tag = 
+  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (id, (_, _, ct)) ->
-      let* rangef = in_range_of_ctype loc struct_decls ct in
-      return (Member (Id.s id),rangef)
+      let loc = Loc.update_a loc (annot_of_ct ct) in
+      let* offset = Memory.offset loc tag (BT.Member (Id.s id)) in
+      return (Member (Id.s id),offset)
     ) fields
 
 
-
-let struct_decl_closed loc tag fields struct_decls = 
-  let open Sym in
-  let rec aux loc acc the_struct member ct =
-    let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Loc.update_a loc annots in
-    let this = IT.Member (tag, S the_struct, member) in
-    match ct_ with
-    | Void -> 
-       return acc
-    | Basic (Integer it) -> 
-       let* lc1 = integerType_constraint loc it in
-       return (RT.Constraint (lc1 this,acc))
-    | Array (ct, _maybe_integer) -> 
-       return acc
-    | Pointer (_qualifiers, ct) -> 
-       return acc
-    (* fix *)
-    | Atomic ct -> 
-       aux loc acc the_struct member ct
-    | Struct tag2 -> 
-       let open RT in
-       let open Global in
-       let* decl = Global.get_struct_decl loc struct_decls (Tag tag2) in
-       let s' = Sym.fresh () in 
-       let Computational ((s,_struct),tag2_bindings) = decl.closed in
-       return (RT.subst_var_l (Subst.{before=s;after=s'}) tag2_bindings @@ 
-                 Constraint (LC (EQ (S s', this)), acc))
-    | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
-    | Union sym -> fail loc (Unsupported !^"todo: union types")
-    | Function _ -> fail loc (Unsupported !^"function pointers")
-  in
-  let thisstruct = fresh () in
-  let* bindings = 
-    ListM.fold_rightM (fun (id, (_attributes, _qualifier, ct)) acc ->
-        aux loc acc thisstruct (BT.Member (Id.s id)) ct
-      ) fields I
-  in
-  return (RT.Computational ((thisstruct, BT.Struct tag), bindings))
+let struct_decl_closed loc tag = 
+  let this = Sym.fresh () in
+  let* lc = in_range_of_struct_type loc tag in
+  return (RT.Computational ((this, BT.Struct tag), Constraint (lc (S this), I)))
 
 
-let struct_decl_closed_stored loc tag fields (struct_decls: Global.struct_decls) = 
-  let open Sym in
-  let rec aux loc member ct =
-    let open RT in
-    let* size = Memory.size_of_ctype loc ct in
-    let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = Loc.update_a loc annots in
-    let this_v = Sym.fresh () in
-    match ct_ with
-    | Void -> 
-       fail loc (Generic !^"void member of struct")
-    | Basic (Integer it) -> 
-       let* lc = integerType_constraint loc it in
-       let make struct_p = 
-         let this_p = IT.MemberOffset (tag,struct_p,member) in
-         let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
-         RT.Logical ((this_v, Base Integer), 
-           RT.Resource (points struct_p, 
-             RT.Constraint (lc (S this_v), I)))
-       in
-       return make
-    | Array (ct, _maybe_integer) -> 
-       let make struct_p = 
-         let this_p = IT.MemberOffset (tag,struct_p,member) in
-         let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
-         RT.Logical ((this_v, Base Array), 
-           RT.Resource (points struct_p, I))
-       in
-       return make
-    | Pointer (_qualifiers, ct) -> 
-       let make struct_p = 
-         let this_p = IT.MemberOffset (tag,struct_p,member) in
-         let points struct_p = RE.Points {pointer=this_p;pointee=this_v; size} in
-         RT.Logical ((this_v, Base Loc), 
-           RT.Resource (points struct_p, I))
-       in
-       return make
-    | Atomic ct -> 
-       (* fix *)
-       aux loc member ct
-    | Struct tag2 -> 
-       (* let open RT in
-        * let open Global in *)
-       let* decl = Global.get_struct_decl loc struct_decls (Tag tag2) in
-       let make struct_p = 
-         RT.freshify_l (decl.closed_stored_aux 
-                          (IT.MemberOffset (tag,struct_p,member)))
-       in
-       return make
-    | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
-    | Union sym -> fail loc (Unsupported !^"todo: union types")
-    | Function _ -> fail loc (Unsupported !^"function pointers")
+let struct_decl_closed_stored loc tag = 
+  let open RT in
+  let rec aux loc tag struct_p = 
+    let* (fields,_) = lookup_struct_in_tagDefs loc tag in
+    let* members = 
+      ListM.mapM (fun (id, (_, _, ct)) ->
+          let loc = Loc.update_a loc (annot_of_ct ct) in
+          let member = Member (Id.s id) in
+          let member_p = IT.MemberOffset (tag,struct_p,member) in
+          let (CF.Ctype.Ctype (_,ct_)) = ct in
+          match ct_ with
+          | Struct tag -> 
+             let* (components, s_value) = aux loc (BT.Tag tag) member_p in
+             return (components, (member, s_value))
+          | _ ->
+             let v = Sym.fresh () in
+             let* bt = bt_of_ctype loc ct in
+             let* size = Memory.size_of_ctype loc ct in
+             return ([(member_p, v, size, bt)], (member, S v))
+          ) fields
+    in
+    let (components, values) = List.split members in
+    return (List.flatten components, IT.Struct (tag, values))
   in
-  let* make = 
-    ListM.fold_rightM (fun (id, (_attributes, _qualifier, ct)) acc_make ->
-        let* make = aux loc (BT.Member (Id.s id)) ct in
-        return 
-          (fun struct_p -> RT.(@@) (make struct_p) (acc_make struct_p))
-      ) fields (fun struct_p -> RT.I)
+  let struct_pointer = Sym.fresh () in
+  let* components, struct_value = aux loc tag (S struct_pointer) in
+  let pointer_constr about = LC (InRange (ST_Pointer, about)) in
+  let lrt = 
+    List.fold_right (fun (member_p, member_v, size, bt) lrt ->
+        let points = RE.Points {pointer = member_p; pointee = member_v; size} in
+        RT.Logical ((member_v, Base bt), 
+        RT.Resource (points, 
+        RT.Constraint (pointer_constr member_p, lrt)))
+      ) components RT.I
   in
-  return make
+  let range_constraint = LC (IT.InRange (ST_Struct tag, struct_value)) in
+  let lrt = lrt @@ Constraint (range_constraint, RT.I) in
+  return (Computational ((struct_pointer, BT.Loc), lrt))
+  
+  
 
-
-let struct_decl loc tag fields struct_decls = 
-  let* raw = struct_decl_raw loc fields in
-  let* sizes = struct_decl_sizes loc fields in
-  let* ranges = struct_decl_ranges loc struct_decls fields in
-  let* closed = struct_decl_closed loc tag fields struct_decls in
-  let* closed_stored_aux = struct_decl_closed_stored loc tag fields struct_decls in
-  let closed_stored = 
-    let s = Sym.fresh () in 
-    RT.Computational ((s, BT.Loc), closed_stored_aux (S s))
-  in
-  return Global.{ raw; sizes; ranges; closed; closed_stored; closed_stored_aux }
+let struct_decl loc (tag : BT.tag) = 
+  let* raw = struct_decl_raw loc tag in
+  let* sizes = struct_decl_sizes loc tag in
+  let* range = struct_decl_ranges loc tag in
+  let* offsets = struct_decl_offsets loc tag in
+  let* closed = struct_decl_closed loc tag in
+  let* closed_stored = struct_decl_closed_stored loc tag in
+  return Global.{ raw; sizes; range; offsets; closed; closed_stored }
 
 
 (* return types *)
@@ -272,7 +251,7 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let Computational ((s',bt), lrt) = RT.freshify decl.closed_stored in
      let* align = Memory.align_of_ctype loc ct in
      let lrt' = RT.subst_var_l {before = s'; after = pointer} lrt in
-     let lrt' = Constraint (LC (IT.Aligned (S pointer, Num align)), lrt') in
+     let lrt' = Constraint (LC (IT.Aligned (ST_Struct (BT.Tag tag), S pointer)), lrt') in
      return (Computational ((pointer, bt), lrt'))
   | CF.Ctype.Void -> 
      fail loc (Unsupported !^"todo: void*")
@@ -284,10 +263,11 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let* size = Memory.size_of_ctype loc ct in
      let* align = Memory.align_of_ctype loc ct in
      let points = RE.Points {pointer = S pointer; pointee = s2; size} in
+     let* st = st_of_ctype loc ct in
      let lrt = 
        Logical ((s2, Base bt), 
        Resource ((points, 
-       Constraint (LC (IT.Aligned (S pointer, Num align)),
+       Constraint (LC (IT.Aligned (st, S pointer)),
        lrt))))
      in
      return (Computational ((pointer,Loc), lrt))
@@ -321,14 +301,6 @@ and rt_of_ctype loc struct_decls (s : Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
 
 
 (* function types *)
-
-(* fix *)
-(* let lift ct = 
- *   let q = CF.Ctype.{const = false; restrict = false; volatile = false} in
- *   CF.Ctype.Ctype ([], Pointer (q, ct)) *)
-
-(* let do_name (msym : Sym.t option) : Sym.t =  *)
-  
 
 
 let update_values_lrt lrt =

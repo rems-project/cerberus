@@ -99,6 +99,9 @@ let rec of_index_term loc {local;global} ctxt it =
   | Num n -> 
      let nstr = Nat_big_num.to_string n in
      return (Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr)
+  | Pointer n -> 
+     let nstr = Nat_big_num.to_string n in
+     return (Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr)
   | Bool true -> 
      return (Z3.Boolean.mk_true ctxt)
   | Bool false -> 
@@ -203,7 +206,7 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | MemberOffset (tag, t, member) ->
      let* a = of_index_term loc {local;global} ctxt t in
-     let* offset = Memory.offset loc {local; global} tag member in
+     let* offset = Memory.offset loc tag member in
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      return (Z3.Arithmetic.mk_add ctxt [a;offset_n])
@@ -211,19 +214,14 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.mk_add ctxt [a;a'])
-  | Aligned (it,it') -> 
-     let* a = of_index_term loc {local;global} ctxt it in
-     let* a' = of_index_term loc {local;global} ctxt it' in
-     let t = 
-       Z3.Boolean.mk_eq ctxt
-         (Z3.Arithmetic.Integer.mk_mod ctxt a a')
-         (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
-     in
-     return t
   | LocLT (it,it') -> 
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.mk_lt ctxt a a')
+  | LocLE (it,it') -> 
+     let* a = of_index_term loc {local;global} ctxt it in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     return (Z3.Arithmetic.mk_le ctxt a a')
   | Struct (tag,members) ->
      let* sort = bt_to_sort loc {local;global} ctxt (Struct tag) in
      let constructor = Z3.Tuple.get_mk_decl sort in
@@ -237,8 +235,36 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt t in
      let* fundecl = nth_to_fundecl bt i in
      return (Z3.Expr.mk_app ctxt fundecl [a])
-  | InRange (ct, _bt, t) ->
-     let* rangef = Conversions.in_range_of_ctype loc global.struct_decls ct in
+  | Aligned (st,it') -> 
+     let open CF.Ctype in
+     let* align = match st with
+       | ST_Integer it -> Memory.align_of_ctype loc (CF.Ctype.Ctype ([], Basic (Integer it)))
+       | ST_Pointer -> Memory.align_of_pointer loc
+       | ST_Struct (BT.Tag tag) -> Memory.align_of_ctype loc (CF.Ctype.Ctype ([], Struct tag))
+     in
+     let* a = of_index_term loc {local;global} ctxt (Num align) in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     let t = 
+       Z3.Boolean.mk_eq ctxt
+         (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
+         (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+     in
+     return t
+  | AlignedI (it,it') -> 
+     let* a = of_index_term loc {local;global} ctxt it in
+     let* a' = of_index_term loc {local;global} ctxt it' in
+     let t = 
+       Z3.Boolean.mk_eq ctxt
+         (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
+         (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+     in
+     return t
+  | InRange (rt, t) ->
+     let* rangef = match rt with
+       | ST_Integer it -> Conversions.integerType_constraint loc it
+       | ST_Pointer -> Conversions.pointer_range_constraint loc
+       | ST_Struct tag -> Conversions.in_range_of_struct_type loc tag
+     in
      let (LC it) = rangef t in
      of_index_term loc {local; global} ctxt it
   | Nil _ ->

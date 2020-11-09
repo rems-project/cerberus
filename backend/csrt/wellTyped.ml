@@ -31,6 +31,7 @@ module WIT = struct
   let rec infer (loc: Loc.t) {local;global} (it: t) : LogicalSorts.t m = 
     match it with
     | Num _ -> return (Base Integer)
+    | Pointer _ -> return (Base Loc)
     | Bool _ -> return (Base Bool)
     | Unit -> return (Base Unit)
     | Add (t,t') | Sub (t,t') | Mul (t,t') | Div (t,t') 
@@ -105,11 +106,8 @@ module WIT = struct
        let* () = check_aux loc it {local;global} (Base Loc) t in
        let* () = check_aux loc it {local;global} (Base Integer) t' in
        return (Base Loc)
-    | Aligned (t, t') ->
-       let* () = check_aux loc it {local;global} (Base Loc) t in
-       let* () = check_aux loc it {local;global} (Base Integer) t' in
-       return (Base Bool)
-    | LocLT (t, t') ->
+    | LocLT (t, t')
+    | LocLE (t, t') ->
        let* () = check_aux loc it {local;global} (Base Loc) t in
        let* () = check_aux loc it {local;global} (Base Loc) t' in
        return (Base Bool)
@@ -134,8 +132,15 @@ module WIT = struct
        | Base (List bt) -> return (Base (List bt))
        | _ -> fail loc (Illtyped_it it)
        end
-    | InRange (_ct, bt, t) ->
-       let* () = check_aux loc it {local; global} (Base bt) t in
+    | AlignedI (t, t') ->
+       let* () = check_aux loc it {local;global} (Base Integer) t in
+       let* () = check_aux loc it {local;global} (Base Loc) t' in
+       return (Base Bool)
+    | Aligned (st, t) ->
+       let* () = check_aux loc it {local;global} (Base Loc) t in
+       return (Base Bool)
+    | InRange (st, t) ->
+       let* () = check_aux loc it {local; global} (Base (stored_type_to_bt st)) t in
        return (Base BT.Bool)
     | S s ->
        Local.get_l loc s local
