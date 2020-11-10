@@ -24,6 +24,9 @@ open CF.Mucore
 open Pp
 open BT
 
+(* some of this is informed by impl_mem *)
+
+
 
 
 
@@ -437,6 +440,7 @@ let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : vt m =
       let lcs = 
         [IT.Null (S ret);
          IT.InRange (ST_Pointer, S ret);
+         (* check: aligned? *)
          IT.AlignedI (Num align, S ret);]
       in
       return (ret, Loc, LC (And lcs)) )
@@ -1146,6 +1150,14 @@ let rec infer_expr (loc : loc) {local; labels; global}
              the right thing. *)
           let* () = 
             ensure_aligned loc {local; global} Store (S parg.lname) (Num act.item.align) 
+          in
+          let* () = 
+            let* (in_range, _, _) = 
+              Solver.constraint_holds loc {local; global} false 
+                (act.item.range (S varg.lname))
+            in
+            if in_range then return () else
+              fail loc (Generic !^"write value unrepresentable")
           in
           let* local = 
             remove_owned_subtree parg.loc {local; global} varg.bt 
