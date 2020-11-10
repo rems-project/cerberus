@@ -2,6 +2,8 @@ type t
 
 val unknown : t
 
+val is_unknown : t -> bool
+
 val pp : t -> Pp.document
 
 val update : t -> Location_ocaml.t -> t

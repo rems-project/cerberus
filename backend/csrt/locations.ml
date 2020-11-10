@@ -4,6 +4,8 @@ type t = Location_ocaml.t
 
 let unknown = Location_ocaml.unknown
 
+let is_unknown loc = loc = unknown
+
 
 let pp loc = Location_ocaml.pp_location ~clever:false loc
 

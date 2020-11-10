@@ -433,7 +433,12 @@ let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
       let* align = Memory.align_of_ctype loc ct in
-      return (ret, Loc, LC (And [Null (S ret); Aligned (ST_Pointer, S ret)])) )
+      let lcs = 
+        [IT.Null (S ret); 
+         IT.AlignedI (Num align, S ret); 
+         IT.InRange (ST_Pointer, S ret)]
+      in
+      return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
     ( fun () -> fail loc (Internal !^"unspecified pointer value") )
@@ -1111,8 +1116,9 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* lrt = store loc {local; global} bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
-            RT.Constraint (LC.LC (Aligned (ST_Pointer, S ret)), 
-            lrt))
+            RT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
+            RT.Constraint (LC.LC (InRange (ST_Pointer, S ret)), 
+            lrt)))
           in
           return (Normal (rt, local))
        | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 

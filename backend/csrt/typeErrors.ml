@@ -229,6 +229,6 @@ let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) =
   debug 1 (lazy hardline);
   print stderr (format [FG (Red, Bright)] "error:" ^^^ 
                 format [FG (Default, Bright)] head ^^^ msg);
-  print stderr !^pos;
+  if Loc.is_unknown loc then () else  print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
 
