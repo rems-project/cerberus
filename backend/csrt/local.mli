@@ -23,10 +23,6 @@ val marked : t
 
 val concat : t -> t -> t
 
-val get : Loc.t -> Sym.t -> t -> VB.t m
-
-val add : binding -> t -> t
-
 val remove : Loc.t -> Sym.t -> t -> t m
 
 val use_resource : Loc.t -> Sym.t -> Loc.t list -> t -> t m

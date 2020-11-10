@@ -222,6 +222,11 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
      return (Z3.Arithmetic.mk_le ctxt a a')
+  | Disjoint ((it,s),(it',s')) ->
+     let fp1_before_fp2 = IT.LocLT (Offset (Offset (it, Num s), IT.int (-1)), it') in
+     let fp2_before_fp1 = IT.LocLT (Offset (Offset (it', Num s'), IT.int (-1)), it) in
+     let t = Or [fp1_before_fp2; fp2_before_fp1] in
+     of_index_term loc {local; global} ctxt t
   | Struct (tag,members) ->
      let* sort = bt_to_sort loc {local;global} ctxt (Struct tag) in
      let constructor = Z3.Tuple.get_mk_decl sort in
@@ -236,7 +241,6 @@ let rec of_index_term loc {local;global} ctxt it =
      let* fundecl = nth_to_fundecl bt i in
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | Aligned (st,it') -> 
-     let open CF.Ctype in
      let* align = Memory.align_of_stored_type loc st in
      let* a = of_index_term loc {local;global} ctxt (Num align) in
      let* a' = of_index_term loc {local;global} ctxt it' in
@@ -298,16 +302,7 @@ let debug_typecheck_lcs loc lcs {local;global} =
 
 
 
-let footprints_disjoint (location1, size1) (location2, size2) = 
-  let fp1_before_fp2 = IT.LocLT (Offset (Offset (location1, Num size1), IT.int (-1)), location2) in
-  let fp2_before_fp1 = IT.LocLT (Offset (Offset (location2, Num size2), IT.int (-1)), location1) in
-  IT.Or [fp1_before_fp2; fp2_before_fp1]
 
-let rec disjoint_footprints = function
-  | [] -> []
-  | fp :: after -> 
-     map (footprints_disjoint fp) after @ 
-       disjoint_footprints after
 
   
 
@@ -320,14 +315,7 @@ let constraint_holds loc {local;global} do_model c =
       ] 
   in
   let solver = Z3.Solver.mk_simple_solver ctxt in
-  let disjointness_lc = 
-    let footprints = 
-      map (fun (_, r) -> (RE.pointer r, RE.size r)) (L.all_resources local) in
-    map (fun lc -> LC.LC lc) (disjoint_footprints footprints)
-  in
-  let lcs = 
-    negate c :: (disjointness_lc @ Local.all_constraints local)
-  in
+  let lcs = negate c :: Local.all_constraints local in
   let* () = debug_typecheck_lcs loc lcs {local;global} in
   let* checked = 
     handle_z3_problems loc 

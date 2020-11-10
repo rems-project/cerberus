@@ -111,6 +111,10 @@ module WIT = struct
        let* () = check_aux loc it {local;global} (Base Loc) t in
        let* () = check_aux loc it {local;global} (Base Loc) t' in
        return (Base Bool)
+    | Disjoint ((t,_), (t',_)) ->
+       let* () = check_aux loc it {local;global} (Base Loc) t in
+       let* () = check_aux loc it {local;global} (Base Loc) t' in
+       return (Base Bool)       
     | Nil bt -> 
        return (Base bt)
     | Cons (it1,it2) ->

@@ -49,7 +49,7 @@ let pp ?(print_all_names = false) ?(print_used = false) (Local local) =
 
 
 
-
+(* internal *)
 let get (loc : Loc.t) (sym: Sym.t) (Local local) : VB.t m =
   let rec aux = function
   | Binding (sym',b) :: _ when Sym.equal sym' sym -> return b
@@ -59,6 +59,7 @@ let get (loc : Loc.t) (sym: Sym.t) (Local local) : VB.t m =
   aux local
 
 
+(* internal *)
 let add (name, b) (Local e) = Local (Binding (name, b) :: e)
 
 let remove (loc : Loc.t) (sym: Sym.t) (Local local) : t m = 
@@ -69,6 +70,48 @@ let remove (loc : Loc.t) (sym: Sym.t) (Local local) : t m =
   in
   let* local = aux local in
   return (Local local)
+
+let filter p (Local e) = 
+  filter_map (function Binding (sym,b) -> p sym b | _ -> None) e
+
+let filterM p (Local e) = 
+  ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
+
+let all_computational local = 
+  filter (fun name b ->
+      match b with
+      | Computational (lname, b) -> Some (name, (lname, b))
+      | _ -> None
+    ) local
+
+let all_logical local = 
+  filter (fun name b ->
+      match b with
+      | Logical ls -> Some (name, ls)
+      | _ -> None
+    ) local
+
+let all_resources local = 
+  filter (fun name b ->
+      match b with
+      | Resource re -> Some (name, re)
+      | _ -> None
+    ) local
+
+let all_constraints local = 
+  filter (fun _ b ->
+      match b with
+      | Constraint lc -> Some lc
+      | _ -> None
+    ) local
+
+
+
+
+
+
+
+
 
 let use_resource loc sym where (Local local) = 
   let rec aux = function
@@ -190,47 +233,32 @@ let get_computational_or_logical (loc : Loc.t) (name: Sym.t) (local:t) =
 let removeS loc syms (local: t) = 
   ListM.fold_leftM (fun local sym -> remove loc sym local) local syms
 
-let add_a aname (bt,lname) = add (aname, Computational (lname,bt))
-let add_l lname ls         = add (lname, Logical ls)
-let add_r rname re         = add (rname, Resource re)
-let add_c cname lc         = add (cname, Constraint lc)
-let add_ur re = add_r (Sym.fresh ()) re
-let add_uc lc = add_c (Sym.fresh ()) lc
+let add_a aname (bt,lname) = 
+  add (aname, Computational (lname,bt))
+
+let add_l lname ls local = 
+  add (lname, Logical ls) local
+
+let add_c cname lc local = 
+  add (cname, Constraint lc) local
+
+let add_uc lc local = 
+  add_c (Sym.fresh ()) lc local
 
 
-let filter p (Local e) = 
-  filter_map (function Binding (sym,b) -> p sym b | _ -> None) e
+let add_r rname resource local = 
+  let lcs = 
+    List.map (fun (_,r) -> 
+        IT.Disjoint (RE.fp resource, RE.fp r)) (all_resources local
+      ) 
+  in
+  add_uc (LC (And lcs)) (add (rname, Resource resource) local)
 
-let filterM p (Local e) = 
-  ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
+let add_ur re local = 
+  add_r (Sym.fresh ()) re local
 
-let all_computational local = 
-  filter (fun name b ->
-      match b with
-      | Computational (lname, b) -> Some (name, (lname, b))
-      | _ -> None
-    ) local
 
-let all_logical local = 
-  filter (fun name b ->
-      match b with
-      | Logical ls -> Some (name, ls)
-      | _ -> None
-    ) local
 
-let all_resources local = 
-  filter (fun name b ->
-      match b with
-      | Resource re -> Some (name, re)
-      | _ -> None
-    ) local
-
-let all_constraints local = 
-  filter (fun _ b ->
-      match b with
-      | Constraint lc -> Some lc
-      | _ -> None
-    ) local
 
 
 

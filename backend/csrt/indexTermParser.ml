@@ -144,6 +144,10 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in
      return (LocLE (it, it'))
+  | Disjoint ((it,s), (it',s')) -> 
+     let* it = parse_ast_to_t loc names it in
+     let* it' = parse_ast_to_t loc names it' in
+     return (Disjoint ((it,s), (it',s')))
   | AlignedI (it, it') -> 
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in

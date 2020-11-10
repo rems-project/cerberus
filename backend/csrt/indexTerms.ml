@@ -81,6 +81,7 @@ type 'id term =
   | Offset of 'id term * 'id term
   | LocLT of 'id term * 'id term
   | LocLE of 'id term * 'id term
+  | Disjoint of ('id term * Z.t) * ('id term * Z.t)
 
   | Struct of BT.tag * (BT.member * 'id term) list
   | Member of BT.tag * 'id term * BT.member
@@ -147,6 +148,8 @@ let rec equal it it' =
   | Offset (t1, t2), Offset (t1', t2') -> equal t1 t1' && equal t2 t2'
   | LocLT (t1, t2), LocLT (t1', t2') -> equal t1 t1' && equal t2 t2'
   | LocLE (t1, t2), LocLE (t1', t2') -> equal t1 t1' && equal t2 t2'
+  | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
+     equal t1 t1' && equal t2 t2' && Z.equal s1 s1' && Z.equal s2 s2'
 
   | Struct (tag, members), Struct (tag2, members2) ->
      tag = tag2 && 
@@ -214,6 +217,7 @@ let rec equal it it' =
   | Offset _, _
   | LocLT _, _
   | LocLE _, _
+  | Disjoint _, _
 
   | Struct _, _
   | Member _, _
@@ -297,7 +301,10 @@ let pp ?(quote=true) it : PPrint.document =
        mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
     | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
     | LocLE (o1,o2) -> mparens (aux o1 ^^^ langle ^^ equals ^^^ aux o2)
-
+    | Disjoint ((o1,s1),(o2,s2)) ->
+       mparens (!^"disjoint" ^^^ 
+                  parens (aux o1 ^^ comma ^^^ Z.pp s1) ^^^
+                    parens (aux o2 ^^ comma ^^^ Z.pp s2))
 
     | AlignedI (t, t') ->
        mparens (!^"aligned" ^^^ aux t ^^^ aux t')
@@ -338,7 +345,8 @@ let rec vars_in it : SymSet.t =
   | Cons (it, it')
   | Offset (it, it')
   | LocLT (it, it') 
-  | LocLE (it, it')  ->
+  | LocLE (it, it')
+  | Disjoint ((it,_), (it',_))  ->
      vars_in_list [it; it']
   | And its
   | Or its ->
@@ -424,6 +432,8 @@ let rec subst_var subst it : t =
   | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
   | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
   | LocLE (it, it') -> LocLE (subst_var subst it, subst_var subst it')
+  | Disjoint ((it,s), (it',s')) -> 
+     Disjoint ((subst_var subst it,s), (subst_var subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
   | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
   | InRange (rt,t) -> InRange (rt,subst_var subst t)
@@ -485,6 +495,8 @@ let rec subst_it subst it : t =
   | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
   | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
   | LocLE (it, it') -> LocLE (subst_it subst it, subst_it subst it')
+  | Disjoint ((it,s), (it',s')) -> 
+     Disjoint ((subst_it subst it,s), (subst_it subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
   | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
   | InRange (rt,t) -> InRange (rt,subst_it subst t)
