@@ -8,15 +8,22 @@ module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
 
 
+
+
+
 type stored_type = 
   | ST_Integer of CF.Ctype.integerType
   | ST_Struct of BT.tag
   | ST_Pointer
+(* others later *)
 
-let stored_type_to_bt = function
+
+
+let st_to_bt = function
   | ST_Integer _ -> BT.Integer
   | ST_Struct tag -> BT.Struct tag
   | ST_Pointer -> BT.Loc
+
 
 let stored_type_equal rt1 rt2 = 
   match rt1, rt2 with
@@ -29,12 +36,14 @@ let stored_type_equal rt1 rt2 =
   | ST_Pointer, _ -> 
      false
 
+
 let pp_stored_type = function
   | ST_Integer it -> squotes (CF.Pp_core_ctype.pp_integer_ctype it)
   | ST_Struct (Tag tag) -> squotes (CF.Pp_core_ctype.pp_ctype (Ctype ([], Struct tag)))
   | ST_Pointer -> squotes (BT.pp false BT.Loc)
 
-  
+
+
 
 type 'id term =
   | Num of Z.t
@@ -603,3 +612,5 @@ let min_i64 = Num (sub (of_int 0) (power_int_positive_int 2 (64 - 1)))
 let max_i64 = Num (sub (power_int_positive_int 2 (64 - 1)) (of_int 1))
 
 let int x = Num (Z.of_int x)
+
+

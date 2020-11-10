@@ -140,7 +140,7 @@ module WIT = struct
        let* () = check_aux loc it {local;global} (Base Loc) t in
        return (Base Bool)
     | InRange (st, t) ->
-       let* () = check_aux loc it {local; global} (Base (stored_type_to_bt st)) t in
+       let* () = check_aux loc it {local; global} (Base (st_to_bt st)) t in
        return (Base BT.Bool)
     | S s ->
        Local.get_l loc s local

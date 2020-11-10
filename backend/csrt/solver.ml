@@ -206,7 +206,7 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | MemberOffset (tag, t, member) ->
      let* a = of_index_term loc {local;global} ctxt t in
-     let* offset = Memory.offset loc tag member in
+     let* offset = Memory.member_offset loc tag member in
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      return (Z3.Arithmetic.mk_add ctxt [a;offset_n])
@@ -261,9 +261,9 @@ let rec of_index_term loc {local;global} ctxt it =
      return t
   | InRange (rt, t) ->
      let* rangef = match rt with
-       | ST_Integer it -> Conversions.integerType_constraint loc it
-       | ST_Pointer -> Conversions.pointer_range_constraint loc
-       | ST_Struct tag -> Conversions.in_range_of_struct_type loc tag
+       | ST_Integer it -> Memory.range_of_integer loc it
+       | ST_Pointer -> Memory.range_of_pointer loc
+       | ST_Struct tag -> Memory.range_of_struct loc tag
      in
      let (LC it) = rangef t in
      of_index_term loc {local; global} ctxt it
