@@ -1,6 +1,7 @@
 module StringSet = Set.Make(String)
 
 type t = Location_ocaml.t
+type loc = t
 
 let unknown = Location_ocaml.unknown
 

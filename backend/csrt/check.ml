@@ -14,6 +14,7 @@ module LT = ArgumentTypes.Make(False)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 
+open Loc
 open TypeErrors
 open Environment
 open Local
@@ -81,16 +82,16 @@ let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * L.t) m =
 
 (*** pattern matching *********************************************************)
 
-let ensure_logical_sort (loc : Loc.t) ~(expect : LS.t) (has : LS.t) : unit m =
+let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : unit m =
   if LS.equal has expect 
   then return () 
   else fail loc (Mismatch {has; expect})
 
-let ensure_base_type (loc : Loc.t) ~(expect : BT.t) (has : BT.t) : unit m =
+let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : unit m =
   ensure_logical_sort loc ~expect:(LS.Base expect) (LS.Base has)
 
 
-let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern) 
+let pattern_match (loc : loc) (this : IT.t) (pat : pattern) 
                   (expect : BT.t) : L.t m =
   let rec aux (local' : L.t) (this : IT.t) (pat : pattern) 
               (expect : BT.t) : L.t m = 
@@ -168,7 +169,7 @@ let pattern_match (loc : Loc.t) (this : IT.t) (pat : pattern)
    constraints carry over to those values, record (lname,bound) as a
    logical variable and record constraints about how the variables
    introduced in the pattern-matching relate to (name,bound). *)
-let pattern_match_rt (loc : Loc.t) (pat : pattern) (rt : RT.t) : L.t m =
+let pattern_match_rt (loc : loc) (pat : pattern) (rt : RT.t) : L.t m =
   let* ((bt, s'), delta) = bind_logically rt in
   let* delta' = pattern_match loc (S s') pat bt in
   return (delta' ++ delta)
@@ -178,7 +179,7 @@ let pattern_match_rt (loc : Loc.t) (pat : pattern) (rt : RT.t) : L.t m =
 
 (*** resource inference *******************************************************)
 
-let for_fp_filter (loc: Loc.t) {local;global} (pointer_it, size) =
+let for_fp_filter (loc: loc) {local;global} (pointer_it, size) =
   fun name re ->
   if Z.equal (RE.size re) size then 
     let* holds = Solver.equal loc {local;global} pointer_it (RE.pointer re) in
@@ -186,10 +187,10 @@ let for_fp_filter (loc: Loc.t) {local;global} (pointer_it, size) =
   else 
     return false
 
-let resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size) 
+let resource_for_fp (loc: loc) {local;global} (pointer_it, size) 
     : ((Sym.t * RE.t) option) m = 
   let* points = 
-    Local.filterM (fun name vb ->
+    L.filterM (fun name vb ->
         match vb with 
         | VariableBinding.Resource re -> 
            let* holds = for_fp_filter loc {local; global} (pointer_it, size) name re in
@@ -200,10 +201,10 @@ let resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size)
   in
   Tools.at_most_one loc !^"multiple points-to for same pointer" points
 
-let used_resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size) 
-    : ((Loc.t list) option) m = 
+let used_resource_for_fp (loc: loc) {local;global} (pointer_it, size) 
+    : ((loc list) option) m = 
   let* points = 
-    Local.filterM (fun name vb ->
+    L.filterM (fun name vb ->
         match vb with 
         | VariableBinding.UsedResource (re, where) -> 
            let* holds = for_fp_filter loc {local; global} (pointer_it, size) name re in
@@ -220,15 +221,15 @@ let used_resource_for_fp (loc: Loc.t) {local;global} (pointer_it, size)
 (* Spine is parameterised by RT_Sig, so it can be used both for
    function and label types (which don't have a return type) *)
 
-type arg = {lname : Sym.t; bt : BT.t; loc : Loc.t}
+type arg = {lname : Sym.t; bt : BT.t; loc : loc}
 type args = arg list
 
-let arg_of_asym (loc : Loc.t) (local : L.t) (asym : 'bty asym) : arg m = 
+let arg_of_asym (loc : loc) (local : L.t) (asym : 'bty asym) : arg m = 
   let loc = Loc.update_a loc asym.annot in
   let* (bt,lname) = get_a loc asym.item local in
   return {lname; bt; loc}
 
-let args_of_asyms (loc : Loc.t) (local : L.t) (asyms : 'bty asyms) : args m= 
+let args_of_asyms (loc : loc) (local : L.t) (asyms : 'bty asyms) : args m= 
   ListM.mapM (arg_of_asym loc local) asyms
 
 
@@ -249,7 +250,7 @@ module Spine (I : AT.I_Sig) = struct
     Pp.list pp_entry (SymMap.bindings unis)
 
 
-  let spine (loc : Loc.t) {local; global} (arguments : arg list) 
+  let spine (loc : loc) {local; global} (arguments : arg list) 
             (ftyp : FT.t) (descr : string) : (I.t * L.t) m =
 
     let ftyp = NFT.normalise ftyp in
@@ -368,7 +369,7 @@ let calltype_lt loc {local; global} args (ltyp : LT.t) : (False.t * L.t) m =
 (* The "subtyping" judgment needs the same resource/lvar/constraint
    inference as the spine judgment. So implement the subtyping
    judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
-let subtype (loc : Loc.t) {local; global} arg (rtyp : RT.t) : L.t m =
+let subtype (loc : loc) {local; global} arg (rtyp : RT.t) : L.t m =
   let* (False, local) = 
     Spine_LT.spine loc {local; global} [arg] 
       (LT.of_rt rtyp (LT.I False.False)) "subtype" 
@@ -386,7 +387,7 @@ let rt_of_vt (ret,bt,constr) =
   RT.Computational ((ret, bt), RT.Constraint (constr, I))
 
 
-let infer_tuple (loc : Loc.t) {local; global} (args : args) : vt m = 
+let infer_tuple (loc : loc) {local; global} (args : args) : vt m = 
   let ret = Sym.fresh () in
   let bts = List.map (fun arg -> arg.bt) args in
   let bt = Tuple bts in
@@ -395,7 +396,7 @@ let infer_tuple (loc : Loc.t) {local; global} (args : args) : vt m =
   in
   return (ret, bt, LC (And constrs))
 
-let infer_constructor (loc : Loc.t) {local; global} (constructor : ctor) 
+let infer_constructor (loc : loc) {local; global} (constructor : ctor) 
                       (args : args) : vt m = 
   let ret = Sym.fresh () in
   match constructor, args with
@@ -428,7 +429,7 @@ let infer_constructor (loc : Loc.t) {local; global} (constructor : ctor)
   | M_Civfromfloat, _ -> 
      fail loc (Unsupported !^"floats")
 
-let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
+let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : vt m =
   let ret = Sym.fresh () in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
@@ -440,10 +441,10 @@ let infer_ptrval (loc : Loc.t) {local; global} (ptrval : pointer_value) : vt m =
       in
       return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
-    ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Num loc))) )
+    ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Pointer loc))) )
     ( fun () -> fail loc (Internal !^"unspecified pointer value") )
 
-let rec infer_mem_value (loc : Loc.t) {local; global} (mem : mem_value) : vt m =
+let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : vt m =
   let open BT in
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> fail loc (Unspecified ct) )
@@ -461,7 +462,7 @@ let rec infer_mem_value (loc : Loc.t) {local; global} (mem : mem_value) : vt m =
       infer_struct loc {local; global} (Tag tag) mvals )
     ( fun tag id mv -> infer_union loc {local; global} (Tag tag) id mv )
 
-and infer_struct (loc : Loc.t) {local; global} (tag : tag) 
+and infer_struct (loc : loc) {local; global} (tag : tag) 
                  (member_values : (member * mem_value) list) : vt m =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
@@ -489,14 +490,14 @@ and infer_struct (loc : Loc.t) {local; global} (tag : tag)
   let* constraints = check member_values spec.raw in
   return (ret, Struct tag, LC (And constraints))
 
-and infer_union (loc : Loc.t) {local; global} (tag : tag) (id : Id.t) 
+and infer_union (loc : loc) {local; global} (tag : tag) (id : Id.t) 
                 (mv : mem_value) : vt m =
   fail loc (Unsupported !^"todo: union types")
 
-and infer_array (loc : Loc.t) {local; global} (mem_values : mem_value list) = 
+and infer_array (loc : loc) {local; global} (mem_values : mem_value list) = 
   fail loc (Unsupported !^"todo: array types")
 
-let infer_object_value (loc : Loc.t) {local; global} 
+let infer_object_value (loc : loc) {local; global} 
                        (ov : 'bty object_value) : vt m =
   match ov with
   | M_OVinteger iv ->
@@ -515,7 +516,7 @@ let infer_object_value (loc : Loc.t) {local; global}
   | M_OVfloating iv ->
      fail loc (Unsupported !^"floats")
 
-let infer_value (loc : Loc.t) {local; global} (v : 'bty value) : vt m = 
+let infer_value (loc : loc) {local; global} (v : 'bty value) : vt m = 
   match v with
   | M_Vobject ov
   | M_Vloaded (M_LVspecified ov) 
@@ -675,13 +676,13 @@ let merge_return_types loc (LC c, rt) (LC c2, rt2) =
   return (LC (Or [c; c2]), RT.Computational ((lname, bt), lrt))
 
 
-let big_merge_return_types (loc : Loc.t) (name, bt) 
+let big_merge_return_types (loc : loc) (name, bt) 
                            (crts : (LC.t * RT.t) list) : (LC.t * RT.t) m =
   ListM.fold_leftM (merge_return_types loc) 
     (LC.LC (IT.Bool true), RT.Computational ((name, bt), RT.I)) crts
 
 let merge_paths 
-      (loc : Loc.t) 
+      (loc : loc) 
       (local_or_falses : (L.t fallible) list) : (L.t fallible) m =
   let locals = non_false local_or_falses in
   match locals with
@@ -692,7 +693,7 @@ let merge_paths
      return (Normal local)
 
 let merge_return_paths
-      (loc : Loc.t)
+      (loc : loc)
       (rt_local_or_falses : (((LC.t * RT.t) * L.t) fallible) list) 
     : (RT.t * L.t) fallible m =
   let rts_locals = non_false rt_local_or_falses in
@@ -708,7 +709,7 @@ let merge_return_paths
 
 
 
-let false_if_unreachable (loc : Loc.t) {local; global} : (unit fallible) m =
+let false_if_unreachable (loc : loc) {local; global} : (unit fallible) m =
   let* is_reachable = Solver.is_reachable loc {local; global} in
   if is_reachable then return (Normal ()) else return False
 
@@ -722,7 +723,7 @@ let false_if_unreachable (loc : Loc.t) {local; global} : (unit fallible) m =
    inference returns, all logical (logical variables, resources,
    constraints) in the local environment *)
 
-let rec infer_pexpr (loc : Loc.t) {local; global} 
+let rec infer_pexpr (loc : loc) {local; global} 
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible) m = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Loc.update_a loc annots in
@@ -860,7 +861,7 @@ let rec infer_pexpr (loc : Loc.t) {local; global}
   debug 3 (lazy (item "type" (RT.pp rt)));
   return (Normal (rt, local))
 
-and infer_pexpr_pop (loc : Loc.t) delta {local; global} 
+and infer_pexpr_pop (loc : loc) delta {local; global} 
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible) m = 
   let local = delta ++ marked ++ local in 
   let*? (rt, local) = infer_pexpr loc {local; global} pe in
@@ -870,7 +871,7 @@ and infer_pexpr_pop (loc : Loc.t) delta {local; global}
 (* check_pexpr: type check the pure expression `e` against return type
    `typ`; returns a "reduced" local environment *)
 
-let rec check_pexpr (loc : Loc.t) {local; global} (e : 'bty pexpr) 
+let rec check_pexpr (loc : loc) {local; global} (e : 'bty pexpr) 
                     (typ : RT.t) : (L.t fallible) m = 
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Loc.update_a loc annots in
@@ -921,7 +922,7 @@ let rec check_pexpr (loc : Loc.t) {local; global} (e : 'bty pexpr)
      let* local = pop_empty loc local in
      return (Normal local)
 
-and check_pexpr_pop (loc : Loc.t) delta {local; global} (pe : 'bty pexpr) 
+and check_pexpr_pop (loc : loc) delta {local; global} (pe : 'bty pexpr) 
                     (typ : RT.t) : (L.t fallible) m =
   let local = delta ++ marked ++ local in 
   let*? local = check_pexpr loc {local; global} pe typ in
@@ -933,7 +934,7 @@ and check_pexpr_pop (loc : Loc.t) delta {local; global} (pe : 'bty pexpr)
 
 (*** memory related logic *****************************************************)
 
-let rec remove_owned_subtree (loc: Loc.t) {local;global} (bt : BT.t) (pointer: IT.t) (size: RE.size) 
+let rec remove_owned_subtree (loc: loc) {local;global} (bt : BT.t) (pointer: IT.t) (size: RE.size) 
           access_kind is_field = 
   match bt with
   | Struct tag ->
@@ -945,14 +946,14 @@ let rec remove_owned_subtree (loc: Loc.t) {local;global} (bt : BT.t) (pointer: I
   | _ ->
      let* o_member_resource = resource_for_fp loc {local;global} (pointer,size) in
      match o_member_resource with
-     | Some (rname,_) -> Local.use_resource loc rname [loc] local
+     | Some (rname,_) -> L.use_resource loc rname [loc] local
      | None -> 
         let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
         fail loc (Missing_ownership (access_kind, is_field, olast_used))
 
 
   
-let rec load (loc: Loc.t) 
+let rec load (loc: loc) 
              {local;global}
              (bt: BT.t)
              (pointer: IT.t)
@@ -985,7 +986,7 @@ let rec load (loc: Loc.t)
           let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
           fail loc (Missing_ownership (Load, is_field, olast_used))
      in
-     let* vls = Local.get_l loc pointee local in
+     let* vls = L.get_l loc pointee local in
      if LS.equal vls (Base bt) 
      then return (Constraint (LC (IT.EQ (path, S pointee)),I))
      else fail loc (Mismatch {has=vls; expect=Base bt})
@@ -993,7 +994,7 @@ let rec load (loc: Loc.t)
 
 
 (* does not check for the right to write, this is done elsewhere *)
-let rec store (loc: Loc.t)
+let rec store (loc: loc)
               {local;global}
               (bt: BT.t)
               (pointer: IT.t)
@@ -1054,7 +1055,7 @@ let ensure_aligned loc {local; global} access pointer align =
    variables) *)
 
 
-let rec infer_expr (loc : Loc.t) {local; labels; global} 
+let rec infer_expr (loc : loc) {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible) m = 
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update_a loc annots in
@@ -1162,7 +1163,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
           let* parg = arg_of_asym loc local pasym in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Kill (S parg.lname) (Num align) 
+            ensure_aligned loc {local; global} Load (S parg.lname) (Num align) 
           in
           let ret = Sym.fresh () in
           let* constraints = 
@@ -1257,7 +1258,7 @@ let rec infer_expr (loc : Loc.t) {local; labels; global}
                     | Normal (rt,_) -> item "type" (RT.pp rt)));
   return r
 
-and infer_expr_pop (loc : Loc.t) delta {local; labels; global} 
+and infer_expr_pop (loc : loc) delta {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible) m =
   let local = delta ++ marked ++ local in 
   let*? (rt, local) = infer_expr loc {local; labels; global} e in
@@ -1266,7 +1267,7 @@ and infer_expr_pop (loc : Loc.t) delta {local; labels; global}
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
    either an updated environment, or `False` in case of Goto *)
-let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr) 
+let rec check_expr (loc : loc) {local; labels; global} (e : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible) m = 
   let (M_Expr (annots, e_)) = e in
   let loc = Loc.update_a loc annots in
@@ -1330,7 +1331,7 @@ let rec check_expr (loc : Loc.t) {local; labels; global} (e : 'bty expr)
         in
         fail loc (Generic err)
 
-and check_expr_pop (loc : Loc.t) delta {labels; local; global} (pe : 'bty expr) 
+and check_expr_pop (loc : loc) delta {labels; local; global} (pe : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible) m =
   let local = delta ++ marked ++ local in 
   let*? local = check_expr loc {labels; local; global} pe typ in
@@ -1408,7 +1409,7 @@ let check_initial_environment_consistent loc info {local;global} =
 
 
 (* check_function: type check a (pure) function *)
-let check_function (loc : Loc.t) (global : Global.t) (fsym : Sym.t) 
+let check_function (loc : loc) (global : Global.t) (fsym : Sym.t) 
                    (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                    (body : 'bty pexpr) (function_typ : FT.t) : unit m =
   debug 2 (lazy (headline ("checking function " ^ Sym.pp_string fsym)));
@@ -1430,7 +1431,7 @@ let check_function (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
 
 
 (* check_procedure: type check an (impure) procedure *)
-let check_procedure (loc : Loc.t) (global : Global.t) (fsym : Sym.t)
+let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
                     (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                     (body : 'bty expr) (function_typ : FT.t) (
                     label_defs : 'bty label_defs) : unit m =

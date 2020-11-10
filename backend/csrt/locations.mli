@@ -1,4 +1,5 @@
 type t
+type loc = t
 
 val unknown : t
 
