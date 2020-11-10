@@ -131,7 +131,7 @@ let add_name loc names ident sym : (Sym.t StringMap.t) m =
 let get_name loc names ident : Sym.t m = 
   match StringMap.find_opt ident names with
   | Some sym -> return sym
-  | None -> fail loc (Generic !^("unknown name " ^ ident))
+  | None -> fail loc (Unbound_name (String ident))
 
 let is_named (s : Sym.t) (names : Sym.t StringMap.t) = 
   StringMap.exists (fun _ s' -> Sym.equal s s') names
