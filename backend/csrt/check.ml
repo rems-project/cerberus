@@ -435,9 +435,9 @@ let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : vt m =
     ( fun ct -> 
       let* align = Memory.align_of_ctype loc ct in
       let lcs = 
-        [IT.Null (S ret); 
-         IT.AlignedI (Num align, S ret); 
-         IT.InRange (ST_Pointer, S ret)]
+        [IT.Null (S ret);
+         IT.InRange (ST_Pointer, S ret);
+         IT.AlignedI (Num align, S ret);]
       in
       return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
@@ -1117,8 +1117,8 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* lrt = store loc {local; global} bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
-            RT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
             RT.Constraint (LC.LC (InRange (ST_Pointer, S ret)), 
+            RT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
             lrt)))
           in
           return (Normal (rt, local))

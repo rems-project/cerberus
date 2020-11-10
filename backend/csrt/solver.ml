@@ -237,11 +237,7 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | Aligned (st,it') -> 
      let open CF.Ctype in
-     let* align = match st with
-       | ST_Integer it -> Memory.align_of_ctype loc (CF.Ctype.Ctype ([], Basic (Integer it)))
-       | ST_Pointer -> Memory.align_of_pointer loc
-       | ST_Struct (BT.Tag tag) -> Memory.align_of_ctype loc (CF.Ctype.Ctype ([], Struct tag))
-     in
+     let* align = Memory.align_of_stored_type loc st in
      let* a = of_index_term loc {local;global} ctxt (Num align) in
      let* a' = of_index_term loc {local;global} ctxt it' in
      let t = 
@@ -259,12 +255,8 @@ let rec of_index_term loc {local;global} ctxt it =
          (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
      in
      return t
-  | InRange (rt, t) ->
-     let* rangef = match rt with
-       | ST_Integer it -> Memory.range_of_integer loc it
-       | ST_Pointer -> Memory.range_of_pointer loc
-       | ST_Struct tag -> Memory.range_of_struct loc tag
-     in
+  | InRange (st, t) ->
+     let* rangef = Memory.range_of_stored_type loc st in
      let (LC it) = rangef t in
      of_index_term loc {local; global} ctxt it
   | Nil _ ->
