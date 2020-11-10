@@ -228,7 +228,8 @@ let rec of_coq_expr_typ loc names coq_expr name =
         let c = LC.LC (IT.GE (S name, Num Z.zero)) in
         return (BT.Integer, None, RT.Constraint (c, I))
      | "loc" -> 
-        return (BT.Loc, None, RT.I)
+        let c = LC.LC (InRange (ST_Pointer, S name)) in
+        return (BT.Loc, None, RT.Constraint (c, RT.I))
      | _ -> 
         cannot_process loc pp_coq_expr coq_expr
      end
@@ -317,7 +318,12 @@ and of_type_expr loc names te : tb m =
         in
         let* size = bytes_of_integer_type_expr loc integer_type_expr in
         let r = RE.Uninit {pointer = S name; size} in
-        return (B ((bnewp, name, BT.Loc, Some (psize, palign)), Resource (r, I)))
+        let b = 
+          B ((bnewp, name, BT.Loc, Some (psize, palign)), 
+          Constraint (LC (InRange (ST_Pointer, S name)),
+          Resource (r, I)))
+         in
+        return b 
      | _, Own, None -> 
         let* name, bnewp = match mrefinement with
           | None -> return (Sym.fresh (), New)
@@ -333,11 +339,17 @@ and of_type_expr loc names te : tb m =
           | None -> fail loc (Generic !^"pointer to non-object")
         in
         let lrt = match bnew with
-          | New -> Logical ((pointee, LS.Base bt), 
-                   Resource (points, 
-                   Constraint (LC (AlignedI (Num align, S name)), lrt)))
-          | Old -> Resource (points, 
-                   Constraint (LC (AlignedI (Num align, S name)), lrt))
+          | New -> 
+             Logical ((pointee, LS.Base bt), 
+             Resource (points, 
+             Constraint (LC (InRange (ST_Pointer, S name)), 
+             Constraint (LC (AlignedI (Num align, S name)), 
+             lrt))))
+          | Old -> 
+             Resource (points, 
+             Constraint (LC (InRange (ST_Pointer, S name)), 
+             Constraint (LC (AlignedI (Num align, S name)), 
+             lrt)))
         in
         return (B ((bnewp, name, BT.Loc, Some (psize, palign)), lrt))
      | _, Shr, _ -> 
@@ -487,11 +499,13 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         let arg_lrt = match bnew with
           | New -> RT.Logical ((sa, LS.Base bt), 
                    RT.Resource (pointsa, 
+                   RT.Constraint (LC.LC (IT.InRange (ST_Pointer, S s)), 
+                   RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
+                   lrt))))
+          | Old -> RT.Resource (pointsa, 
+                   RT.Constraint (LC.LC (IT.InRange (ST_Pointer, S s)), 
                    RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
                    lrt)))
-          | Old -> RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
-                   lrt))
         in
         let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
         let ret_rt = RT.Logical ((sr, LS.Base bt), Resource (pointsr, I)) in
@@ -630,11 +644,13 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let arg_lrt = match bnew with
              | New -> RT.Logical ((sa, LS.Base bt), 
                       RT.Resource (pointsa, 
+                      RT.Constraint (LC (InRange (ST_Pointer, S s)),
+                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
+                      lrt))))
+             | Old -> RT.Resource (pointsa, 
+                      RT.Constraint (LC (InRange (ST_Pointer, S s)),
                       RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
                       lrt)))
-             | Old -> RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      lrt))
            in
            let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
            return (names, args_rts @ [arg_rt], unused_inv_vars)
@@ -642,7 +658,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
       (names, [], unused_inv_vars) args
   in    
   let* () = match unused_inv_vars with
-    | (ident, _) :: _ -> fail loc (Generic (!^"unknown variable" ^^^ !^ident))
+    | (ident, _) :: _ -> fail loc (Unbound_name (String ident))
     | _ -> return ()
   in
   let fargs_ltt = 

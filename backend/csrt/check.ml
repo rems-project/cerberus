@@ -1145,12 +1145,13 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* varg = arg_of_asym loc local vasym in
           let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
-          (* The generated Core program will before this already have
-             checked whether the store value is representable and done
-             the right thing. *)
           let* () = 
             ensure_aligned loc {local; global} Store (S parg.lname) (Num act.item.align) 
           in
+          (* The generated Core program will in most cases before this
+             already have checked whether the store value is
+             representable and done the right thing. Pointers, as I
+             understand, are an exception. *)
           let* () = 
             let* (in_range, _, _) = 
               Solver.constraint_holds loc {local; global} false 
@@ -1514,11 +1515,8 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-  - make struct Conversion logic use InRange, check InRange in store 
-    rules so that pointers are handled correctly
   - give types for standard library functions
   - better location information for refined_c annotations
-  - go over files and look for `fresh ()`: give good names
   - fix Ecase "LC (Bool true)"
   - constrain return type shape, maybe also function type shape
  *)
