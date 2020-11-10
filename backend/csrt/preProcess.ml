@@ -8,8 +8,9 @@ module Loc=Locations
 module RT=ReturnTypes
 module FT=ArgumentTypes.Make(ReturnTypes)
 module LT=ArgumentTypes.Make(False)
-open CF.Mucore
 module CA=CF.Core_anormalise
+module LC=LogicalConstraints
+open CF.Mucore
 open TypeErrors
 open Pp
 
@@ -20,12 +21,20 @@ let mapM_a f a =
   let* item = f a.item in
   return {a with item}
 
+type ctype_information = {
+    bt : BT.t;
+    size: RE.size;
+    align: Z.t;
+    range: IT.t -> LC.t
+  }
+
 (* for convenience *)
-let information_of_ctype (loc : Loc.t) ct = 
+let ctype_information (loc : Loc.t) ct = 
   let* bt = Conversions.bt_of_ctype loc ct in
   let* size = Memory.size_of_ctype loc ct in
   let* align = Memory.align_of_ctype loc ct in
-  return (bt, size, align)
+  let* range = Memory.range_of_ctype loc ct in
+  return {bt; size; align; range}
 
 
 let retype_ctor (loc : Loc.t) = function
@@ -71,8 +80,8 @@ let retype_object_value (loc : Loc.t) = function
   | M_OVstruct (s, members) ->
      let* members = 
        mapM (fun (id, ct, mv) ->
-           let* (bt, size, align) = information_of_ctype loc ct in
-           return (id, (bt, size, align), mv)
+           let* ict = ctype_information loc ct in
+           return (id, ict, mv)
          ) members
      in
      return (M_OVstruct (s, members))
@@ -129,8 +138,8 @@ let rec retype_pexpr (loc : Loc.t) (M_Pexpr (annots,bty,pexpr_)) =
        in
        return (M_PEcase (asym,pats_pes))
     | M_PEarray_shift (asym,ct,asym') ->
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_PEarray_shift (asym,(bt, size, align),asym'))
+       let* ict = ctype_information loc ct in
+       return (M_PEarray_shift (asym,ict,asym'))
     | M_PEmember_shift (asym,sym,id) ->
        return (M_PEmember_shift (asym,sym,id))
     | M_PEnot asym -> 
@@ -165,22 +174,22 @@ let retype_memop (loc : Loc.t) = function
   | M_PtrLe (asym1,asym2) -> return (M_PtrLe (asym1,asym2))
   | M_PtrGe (asym1,asym2) -> return (M_PtrGe (asym1,asym2))
   | M_Ptrdiff (act, asym1, asym2) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_Ptrdiff (act, asym1, asym2))
   | M_IntFromPtr (act, asym) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_IntFromPtr (act, asym))
   | M_PtrFromInt (act, asym) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_PtrFromInt (act, asym))
   | M_PtrValidForDeref (act, asym) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_PtrValidForDeref (act, asym))
   | M_PtrWellAligned (act, asym) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_PtrWellAligned (act, asym))
   | M_PtrArrayShift (asym1, act, asym2) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_PtrArrayShift (asym1, act, asym2))
   | M_Memcpy (asym1,asym2,asym3) -> 
      return (M_Memcpy (asym1,asym2,asym3))
@@ -192,7 +201,7 @@ let retype_memop (loc : Loc.t) = function
      return (M_Va_start (asym1,asym2))
   | M_Va_copy asym -> return (M_Va_copy asym)
   | M_Va_arg (asym, act) ->
-     let* act = mapM_a (information_of_ctype loc) act in
+     let* act = mapM_a (ctype_information loc) act in
      return (M_Va_arg (asym, act))
   | M_Va_end asym -> return (M_Va_end asym)
 
@@ -200,46 +209,46 @@ let retype_action (loc : Loc.t) (M_Action (loc2,action_)) =
   let loc = Loc.update loc loc2 in
   let* action_ = match action_ with
     | M_Create (asym, act, prefix) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_Create (asym, act, prefix))
     | M_CreateReadOnly (asym1, act, asym2, prefix) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_CreateReadOnly (asym1, act, asym2, prefix))
     | M_Alloc (act, asym, prefix) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_Alloc (act, asym, prefix))
     | M_Kill (M_Dynamic, asym) -> 
        return (M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 
-       let* (bt, size, align) = information_of_ctype loc ct in
-       return (M_Kill (M_Static (bt, size, align), asym))
+       let* ict = ctype_information loc ct in
+       return (M_Kill (M_Static ict, asym))
     | M_Store (m, act, asym1, asym2, mo) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_Store (m, act, asym1, asym2, mo))
     | M_Load (act, asym, mo) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_Load (act, asym, mo))
     | M_RMW (act, asym1, asym2, asym3, mo1, mo2) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_RMW (act, asym1, asym2, asym3, mo1, mo2))
     | M_Fence mo ->
        return (M_Fence mo)
     | M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2) -> 
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2))
     | M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2))
     | M_LinuxFence mo ->
        return (M_LinuxFence mo)
     | M_LinuxLoad (act, asym, mo) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_LinuxLoad (act, asym, mo))
     | M_LinuxStore (act, asym1, asym2, mo) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_LinuxStore (act, asym1, asym2, mo))
     | M_LinuxRMW (act, asym1, asym2, mo) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_LinuxRMW (act, asym1, asym2, mo))
   in
   return (M_Action (loc2,action_))
@@ -284,7 +293,7 @@ let rec retype_expr (loc : Loc.t) (M_Expr (annots,expr_)) =
     | M_Eskip ->
        return (M_Eskip)
     | M_Eccall (act,asym,asyms) ->
-       let* act = mapM_a (information_of_ctype loc) act in
+       let* act = mapM_a (ctype_information loc) act in
        return (M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (M_Eproc (name,asyms))
@@ -486,7 +495,7 @@ let retype_funinfo struct_decls funinfo =
 
 
 let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
-    : ((FT.t, LT.t, (BT.t * RE.size * Z.t), BT.t, 
+    : ((FT.t, LT.t, ctype_information, BT.t, 
         CA.ct mu_struct_def * Global.struct_decl, 
         CA.ct mu_union_def, 'bty) mu_file) m =
   let loop_attributes = file.mu_loop_attributes in

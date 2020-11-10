@@ -30,13 +30,13 @@ open BT
 (*** meta types ***************************************************************)
 type pattern = BT.t mu_pattern
 type ctor = BT.t mu_ctor
-type 'bty pexpr = ((BT.t * RE.size * Z.t), BT.t, 'bty) mu_pexpr
-type 'bty expr = ((BT.t * RE.size * Z.t), BT.t, 'bty) mu_expr
-type 'bty value = ((BT.t * RE.size * Z.t), BT.t, 'bty) mu_value
-type 'bty object_value = ((BT.t * RE.size * Z.t), 'bty) mu_object_value
+type 'bty pexpr = (PreProcess.ctype_information, BT.t, 'bty) mu_pexpr
+type 'bty expr = (PreProcess.ctype_information, BT.t, 'bty) mu_expr
+type 'bty value = (PreProcess.ctype_information, BT.t, 'bty) mu_value
+type 'bty object_value = (PreProcess.ctype_information, 'bty) mu_object_value
 type mem_value = CF.Impl_mem.mem_value
 type pointer_value = CF.Impl_mem.pointer_value
-type 'bty label_defs = (LT.t, (BT.t * RE.size * Z.t), BT.t, 'bty) mu_label_defs
+type 'bty label_defs = (LT.t, PreProcess.ctype_information, BT.t, 'bty) mu_label_defs
 
 
 (*** mucore pp setup **********************************************************)
@@ -1079,17 +1079,16 @@ let rec infer_expr (loc : loc) {local; labels; global}
          -> 
           fail loc (Unsupported !^"todo: ememop")
        | M_PtrValidForDeref (act, asym) ->
-          let (dbt, size, align) = act.item in
           let* arg = arg_of_asym loc local asym in
           let ret = Sym.fresh () in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           (* check more things? *)
           let* o_resource = 
-            resource_for_fp loc {local; global} (S arg.lname, size) 
+            resource_for_fp loc {local; global} (S arg.lname, act.item.size) 
           in
           let* (aligned, _, s_) = 
             Solver.constraint_holds loc {local; global} false
-              (LC.LC (AlignedI (Num align, S arg.lname))) 
+              (LC.LC (AlignedI (Num act.item.align, S arg.lname))) 
           in
           let ok = Option.is_some o_resource && aligned in
           let constr = LC (EQ (S ret, Bool ok)) in
@@ -1110,11 +1109,10 @@ let rec infer_expr (loc : loc) {local; labels; global}
     | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
        begin match action_ with
        | M_Create (asym, act, _prefix) -> 
-          let (bt, size, _align) = act.item in
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
-          let* lrt = store loc {local; global} bt (S ret) size None in
+          let* lrt = store loc {local; global} act.item.bt (S ret) act.item.size None in
           let rt = 
             RT.Computational ((ret, Loc), 
             RT.Constraint (LC.LC (InRange (ST_Pointer, S ret)), 
@@ -1128,48 +1126,46 @@ let rec infer_expr (loc : loc) {local; labels; global}
           fail loc (Unsupported !^"todo: Alloc")
        | M_Kill (M_Dynamic, asym) -> 
           fail loc (Unsupported !^"todo: free")
-       | M_Kill (M_Static (bt, size, align), asym) -> 
+       | M_Kill (M_Static cti, asym) -> 
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Kill (S arg.lname) (Num align) 
+            ensure_aligned loc {local; global} Kill (S arg.lname) (Num cti.align) 
           in
-          let* local = remove_owned_subtree loc {local; global} bt 
-                         (S arg.lname) size Kill None in
+          let* local = remove_owned_subtree loc {local; global} cti.bt 
+                         (S arg.lname) cti.size Kill None in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
        | M_Store (_is_locking, act, pasym, vasym, mo) -> 
-          let (s_vbt, size, align) = act.item in
           let* parg = arg_of_asym loc local pasym in
           let* varg = arg_of_asym loc local vasym in
-          let* () = ensure_base_type loc ~expect:s_vbt varg.bt in
+          let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           (* The generated Core program will before this already have
              checked whether the store value is representable and done
              the right thing. *)
           let* () = 
-            ensure_aligned loc {local; global} Store (S parg.lname) (Num align) 
+            ensure_aligned loc {local; global} Store (S parg.lname) (Num act.item.align) 
           in
           let* local = 
             remove_owned_subtree parg.loc {local; global} varg.bt 
-              (S parg.lname) size Store None in
+              (S parg.lname) act.item.size Store None in
           let* bindings = 
             store loc {local; global} varg.bt (S parg.lname) 
-              size (Some (S varg.lname)) in
+              act.item.size (Some (S varg.lname)) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt, local))
        | M_Load (act, pasym, _mo) -> 
-          let (bt, size, align) = act.item in
           let* parg = arg_of_asym loc local pasym in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Load (S parg.lname) (Num align) 
+            ensure_aligned loc {local; global} Load (S parg.lname) (Num act.item.align) 
           in
           let ret = Sym.fresh () in
           let* constraints = 
-            load loc {local; global} bt (S parg.lname) size (S ret) None 
+            load loc {local; global} act.item.bt (S parg.lname) act.item.size (S ret) None 
           in
-          let rt = RT.Computational ((ret, bt), constraints) in
+          let rt = RT.Computational ((ret, act.item.bt), constraints) in
           return (Normal (rt, local))
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
           fail loc (Unsupported !^"todo: RMW")
