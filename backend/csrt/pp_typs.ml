@@ -4,19 +4,22 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 module FT = AT.Make(RT)
 module LT = AT.Make(False)
-open Pp
+module IT = IndexTerms
+open PreProcess
 
 
 type bt = BT.t
-type ct = PreProcess.ctype_information
+type ct = ctype_information
+(* type ct = PreProcess.ctype_information *)
 type ft = FT.t
 type lt = LT.t
 type st = CF.Ctype.ctype CF.Mucore.mu_struct_def * Global.struct_decl
 type ut = CF.Ctype.ctype CF.Mucore.mu_union_def
 
 let pp_bt = BT.pp true
-let pp_ct (PreProcess.{bt;size;align;_}) = 
-  parens (BT.pp false bt ^^ comma ^^ Z.pp size ^^ comma ^^ Z.pp align)
+
+let pp_ct cti = CF.Pp_core_ctype.pp_ctype ~compact:false cti.ct
+
 let pp_ft = FT.pp
 let pp_lt = Some (LT.pp)
 let pp_funinfo _ = failwith "not implemented"

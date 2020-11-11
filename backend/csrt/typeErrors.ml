@@ -11,6 +11,7 @@ module VB=VariableBinding
 
 
 
+
 (* more to be added *)
 type memory_state = 
   | Unowned
@@ -66,6 +67,7 @@ type access =
   | Load 
   | Store
   | Kill
+  | Free
 
 
 type sym_or_string = 
@@ -157,6 +159,8 @@ let pp_type_error = function
         !^"Missing ownership for writing"
      | Store, Some m -> 
         !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
+     | Free, _ -> 
+        !^"Missing ownership for free-ing"
      in
      let extra = match owhere with
        | None -> []
@@ -175,6 +179,7 @@ let pp_type_error = function
      | Kill -> !^"Misaligned de-allocation operation"
      | Load -> !^"Misaligned read"
      | Store ->  !^"Misaligned write"
+     | Free ->  !^"Misaligned free"
      in
      (msg, [])
 
@@ -219,16 +224,9 @@ let pp_type_error = function
 
 (* stealing some logic from pp_errors *)
 let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) = 
-  let open Pp in
-  let (head, pos) = Locations.head_pos_of_location loc in
   let (msg, extras) = pp_type_error err in
   let extras = match ostacktrace with
     | Some stacktrace -> extras @ [item "stacktrace" !^stacktrace]
     | None -> extras
   in
-  debug 1 (lazy hardline);
-  print stderr (format [FG (Red, Bright)] "error:" ^^^ 
-                format [FG (Default, Bright)] head ^^^ msg);
-  if Loc.is_unknown loc then () else  print stderr !^pos;
-  List.iter (fun pp -> print stderr pp) extras
-
+  Pp.error loc msg extras

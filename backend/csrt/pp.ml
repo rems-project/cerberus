@@ -198,3 +198,14 @@ let warn pp =
   print stderr (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
 
 
+
+
+
+(* stealing some logic from pp_errors *)
+let error (loc : Locations.t) msg extras = 
+  let (head, pos) = Locations.head_pos_of_location loc in
+  debug 1 (lazy hardline);
+  print stderr (format [FG (Red, Bright)] "error:" ^^^ 
+                format [FG (Default, Bright)] head ^^^ msg);
+  if Locations.is_unknown loc then () else  print stderr !^pos;
+  List.iter (fun pp -> print stderr pp) extras

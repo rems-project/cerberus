@@ -228,7 +228,7 @@ let rec of_coq_expr_typ loc names coq_expr name =
         let c = LC.LC (IT.GE (S name, Num Z.zero)) in
         return (BT.Integer, None, RT.Constraint (c, I))
      | "loc" -> 
-        let c = LC.LC (InRange (ST_Pointer, S name)) in
+        let c = LC.LC (Representable (ST_Pointer, S name)) in
         return (BT.Loc, None, RT.Constraint (c, RT.I))
      | _ -> 
         cannot_process loc pp_coq_expr coq_expr
@@ -320,8 +320,9 @@ and of_type_expr loc names te : tb m =
         let r = RE.Uninit {pointer = S name; size} in
         let b = 
           B ((bnewp, name, BT.Loc, Some (psize, palign)), 
-          Constraint (LC (InRange (ST_Pointer, S name)),
-          Resource (r, I)))
+          Constraint (LC (Representable (ST_Pointer, S name)),
+          Constraint (LC (EQ (AllocationSize (S name), Num size)),
+          Resource (r, I))))
          in
         return b 
      | _, Own, None -> 
@@ -342,14 +343,16 @@ and of_type_expr loc names te : tb m =
           | New -> 
              Logical ((pointee, LS.Base bt), 
              Resource (points, 
-             Constraint (LC (InRange (ST_Pointer, S name)), 
+             Constraint (LC (Representable (ST_Pointer, S name)), 
              Constraint (LC (AlignedI (Num align, S name)), 
-             lrt))))
+             Constraint (LC (EQ (AllocationSize (S name), Num (RE.size points))),
+             lrt)))))
           | Old -> 
              Resource (points, 
-             Constraint (LC (InRange (ST_Pointer, S name)), 
+             Constraint (LC (Representable (ST_Pointer, S name)), 
              Constraint (LC (AlignedI (Num align, S name)), 
-             lrt)))
+             Constraint (LC (EQ (AllocationSize (S name), Num (RE.size points))),
+             lrt))))
         in
         return (B ((bnewp, name, BT.Loc, Some (psize, palign)), lrt))
      | _, Shr, _ -> 
@@ -401,7 +404,7 @@ and of_type_expr loc names te : tb m =
      let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
      let* size = Memory.size_of_ctype loc ct in
      let* align = Memory.align_of_ctype loc ct in
-     let* lc = Memory.range_of_integer loc (CF.Ctype.Bool) in
+     let* lc = Memory.representable_integer loc (CF.Ctype.Bool) in
      return (B ((New, name, BT.Integer, Some (size,align)), RT.Constraint (lc (S name), I)))
   | None, Ty_params ("void", []) ->
      let name = Sym.fresh () in
@@ -499,13 +502,15 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         let arg_lrt = match bnew with
           | New -> RT.Logical ((sa, LS.Base bt), 
                    RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (IT.InRange (ST_Pointer, S s)), 
+                   RT.Constraint (LC.LC (Representable (ST_Pointer, S s)), 
                    RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
-                   lrt))))
+                   RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+                   lrt)))))
           | Old -> RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (IT.InRange (ST_Pointer, S s)), 
+                   RT.Constraint (LC.LC (Representable (ST_Pointer, S s)), 
                    RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
-                   lrt)))
+                   RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+                   lrt))))
         in
         let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
         let ret_rt = RT.Logical ((sr, LS.Base bt), Resource (pointsr, I)) in
@@ -612,10 +617,12 @@ let make_loop_label_spec_annot (loc : Loc.t)
              | New -> RT.Logical ((sa, LS.Base bt), 
                       RT.Resource (pointsa, 
                       RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      lrt)))
+                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+                      lrt))))
              | Old -> RT.Resource (pointsa, 
                       RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      lrt))
+                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+                      lrt)))
            in
            return (names, args_lrts @ [arg_lrt], unused_inv_vars)
       )
@@ -644,13 +651,15 @@ let make_loop_label_spec_annot (loc : Loc.t)
            let arg_lrt = match bnew with
              | New -> RT.Logical ((sa, LS.Base bt), 
                       RT.Resource (pointsa, 
-                      RT.Constraint (LC (InRange (ST_Pointer, S s)),
+                      RT.Constraint (LC (Representable (ST_Pointer, S s)),
                       RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      lrt))))
+                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+                      lrt)))))
              | Old -> RT.Resource (pointsa, 
-                      RT.Constraint (LC (InRange (ST_Pointer, S s)),
+                      RT.Constraint (LC (Representable (ST_Pointer, S s)),
                       RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      lrt)))
+                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+                      lrt))))
            in
            let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
            return (names, args_rts @ [arg_rt], unused_inv_vars)

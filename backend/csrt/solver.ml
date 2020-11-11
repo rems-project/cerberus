@@ -93,7 +93,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in
     let member_funs = combine member_names member_fun_decls in
-    Tools.assoc_err loc member member_funs (Internal !^"member_to_fundecl")
+    assoc_err loc member member_funs (Internal !^"member_to_fundecl")
   in
   match it with
   | Num n -> 
@@ -210,6 +210,12 @@ let rec of_index_term loc {local;global} ctxt it =
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      return (Z3.Arithmetic.mk_add ctxt [a;offset_n])
+  | AllocationSize t ->
+     let* locsort = ls_to_sort loc {local;global} ctxt (Base Loc) in
+     let* intsort = ls_to_sort loc {local;global} ctxt (Base Integer) in
+     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "allocationSize" [locsort] intsort in
+     let* a = of_index_term loc {local;global} ctxt t in
+     return (Z3.Expr.mk_app ctxt fundecl [a])
   | Offset (it,it') -> 
      let* a = of_index_term loc {local;global} ctxt it in
      let* a' = of_index_term loc {local;global} ctxt it' in
@@ -259,8 +265,8 @@ let rec of_index_term loc {local;global} ctxt it =
          (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
      in
      return t
-  | InRange (st, t) ->
-     let* rangef = Memory.range_of_stored_type loc st in
+  | Representable (st, t) ->
+     let* rangef = Memory.representable_stored_type loc st in
      let (LC it) = rangef t in
      of_index_term loc {local; global} ctxt it
   | Nil _ ->
@@ -370,7 +376,7 @@ let resource_for_pointer_strictly_within (loc: Loc.t) {local;global} pointer_it
             return None
        ) local
    in
-   Tools.at_most_one loc !^"multiple points-to for same pointer" points
+   at_most_one loc !^"multiple points-to for same pointer" points
 
 
 let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
@@ -385,7 +391,7 @@ let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
             return None
        ) local
    in
-   Tools.at_most_one loc !^"multiple points-to for same pointer" points
+   at_most_one loc !^"multiple points-to for same pointer" points
 
 
 

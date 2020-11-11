@@ -87,7 +87,7 @@ module WIT = struct
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
        let* () = 
          ListM.iterM (fun (member,it') ->
-             let* mbt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
+             let* mbt = assoc_err loc member decl.raw (Illtyped_it it) in
              check_aux loc it {local;global} (Base mbt) it'
            ) members
        in
@@ -95,13 +95,16 @@ module WIT = struct
     | Member (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base (Struct tag)) it' in
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
-       let* bt = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
+       let* bt = assoc_err loc member decl.raw (Illtyped_it it) in
        return (Base bt)
     | MemberOffset (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base Loc) it' in
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
-       let* _ = Tools.assoc_err loc member decl.raw (Illtyped_it it) in
+       let* _ = assoc_err loc member decl.raw (Illtyped_it it) in
        return (Base Loc)
+    | AllocationSize t ->
+       let* () = check_aux loc it {local;global} (Base Loc) t in
+       return (Base Integer)
     | Offset (t, t') ->
        let* () = check_aux loc it {local;global} (Base Loc) t in
        let* () = check_aux loc it {local;global} (Base Integer) t' in
@@ -143,8 +146,9 @@ module WIT = struct
     | Aligned (st, t) ->
        let* () = check_aux loc it {local;global} (Base Loc) t in
        return (Base Bool)
-    | InRange (st, t) ->
-       let* () = check_aux loc it {local; global} (Base (st_to_bt st)) t in
+    | Representable (st, t) ->
+       let* bt = Conversions.bt_of_st loc st in
+       let* () = check_aux loc it {local; global} (Base bt) t in
        return (Base BT.Bool)
     | S s ->
        Local.get_l loc s local

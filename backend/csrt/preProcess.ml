@@ -17,24 +17,20 @@ open Pp
 open ListM
 
 
+
 let mapM_a f a =
   let* item = f a.item in
   return {a with item}
 
 type ctype_information = {
     bt : BT.t;
-    size: RE.size;
-    align: Z.t;
-    range: IT.t -> LC.t
+    ct : CF.Ctype.ctype
   }
 
 (* for convenience *)
 let ctype_information (loc : Loc.t) ct = 
-  let* bt = Conversions.bt_of_ctype loc ct in
-  let* size = Memory.size_of_ctype loc ct in
-  let* align = Memory.align_of_ctype loc ct in
-  let* range = Memory.range_of_ctype loc ct in
-  return {bt; size; align; range}
+  let* bt = Conversions.bt_of_ct loc ct in
+  return {bt; ct}
 
 
 let retype_ctor (loc : Loc.t) = function
@@ -387,7 +383,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
      | Some LAswitch -> 
         fail loc (Unsupported (!^"todo: switch labels"))
      | Some LAreturn -> 
-        fail loc (Internal (!^"return label has not been mapped to return"))
+        fail loc (Internal (!^"return label has not been inlined"))
      | None -> 
         fail loc (Unsupported (!^"todo: non-loop labels"))
      end
@@ -491,8 +487,27 @@ let retype_funinfo struct_decls funinfo =
         in
         return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
                 Pmap.add fsym (names,arg_rts) funinfo_extra)
-    ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare) 
+    ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
 
+
+(* (\* can be used to insert special types for standard library functions *\)
+ * let specially_typed loc stdlib_fun_names funinfo =
+ *   ListM.fold_rightM (fun sym map -> 
+ *       let* (M_funinfo (floc, attrs, _ft,b1,b2)) = match Pmap.lookup sym funinfo with
+ *         | Some entry -> return entry
+ *         | None -> fail loc (Internal (Sym.pp sym ^^^ !^"not found in funinfo"))
+ *       in
+ *       (\* if Sym.name sym = Some "free_proxy" then 
+ *        *   let ft = 
+ *        *     FT.Computational ((ppointer, BT.Loc),
+ *        *     FT.Logical ((pointer, BT.Loc), 
+ *        *   in
+ *        *   let entry = M_funinfo (floc, attrs, _ft,b1,b2) in
+ *        *   return (Pmap.add sym entry funinfo)
+ *        * else  *\)
+ *         return map
+ *     )
+ *     stdlib_fun_names funinfo *)
 
 let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
     : ((FT.t, LT.t, ctype_information, BT.t, 

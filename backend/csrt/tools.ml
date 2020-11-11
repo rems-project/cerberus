@@ -11,17 +11,18 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   | f :: fs -> f (comps fs a)
 
 
-open Resultat
 
-let at_most_one loc err_str = function
-  | [] -> return None
-  | [x] -> return (Some x)
-  | _ -> fail loc (TypeErrors.Generic err_str)
+let do_stack_trace () = 
+  let open Pp in
+  if !Debug_ocaml.debug_level > 0 then 
+    let backtrace = Printexc.get_callstack (!print_level * 10) in
+    Some (Printexc.raw_backtrace_to_string backtrace)
+  else 
+    None
 
-let assoc_err loc entry list err =
-  match List.assoc_opt entry list with
-  | Some result -> return result
-  | None -> fail loc err
 
+
+
+type stacktrace = string
 
 

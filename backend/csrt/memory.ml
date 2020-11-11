@@ -2,6 +2,7 @@ module CF = Cerb_frontend
 open TypeErrors
 open Resultat
 open Pp
+open IndexTerms
 
 open Resources
 module BT = BaseTypes
@@ -31,7 +32,7 @@ let align_of_integer loc it =
   | Some n -> return (Z.of_int n)
   | None -> fail loc (Internal !^"alignof_pointer returned None")
 
-let range_of_integer loc it =
+let representable_integer loc it =
   let* (min,max) = match it with
     | CF.Ctype.Bool -> 
        return (Z.of_int 0, Z.of_int 1)
@@ -61,7 +62,7 @@ let align_of_pointer loc =
   | None -> fail loc (Internal !^"alignof_pointer returned None")
 
 
-let range_of_pointer loc = 
+let representable_pointer loc = 
   let* pointer_byte_size = size_of_pointer loc in
   let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
   let max = Z.power_int_positive_big_int 2 (Z.sub_big_int pointer_size (Z.of_int 1)) in
@@ -93,26 +94,26 @@ let align_of_ctype loc ct =
   let s = CF.Impl_mem.alignof_ival ct in
   integer_value_to_num loc s
 
-let rec range_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
+let rec representable_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   let open CF.Ctype in
   match ct_ with
   | Void -> return (fun it -> LC.LC (EQ (it , Unit)))
-  | Basic (Integer it) -> range_of_integer loc it
+  | Basic (Integer it) -> representable_integer loc it
   | Basic (Floating _) -> fail loc (Unsupported !^"floats")
   | Array _ -> fail loc (Unsupported !^"arrays")
   | Function _ -> fail loc (Unsupported !^"todo: function pointers")
-  | Pointer _ -> range_of_pointer loc
-  | Atomic ct -> range_of_ctype loc ct
-  | Struct tag -> range_of_struct loc (BT.Tag tag)
+  | Pointer _ -> representable_pointer loc
+  | Atomic ct -> representable_ctype loc ct
+  | Struct tag -> representable_struct loc (BT.Tag tag)
   | Union _ -> fail loc (Unsupported !^"union types")
 
-and range_of_struct loc (Tag tag) = 
+and representable_struct loc (Tag tag) = 
   let* (fields,_) = lookup_struct_in_tagDefs loc (BT.Tag tag) in
   let* member_rangefs =
     ListM.mapM (fun (id, (_, _, ct)) ->
         let CF.Ctype.Ctype (annot,_) = ct in
         let loc = Loc.update_a loc annot in
-        let* rangef = range_of_ctype loc ct in
+        let* rangef = representable_ctype loc ct in
         return (BT.Member (Id.s id),rangef)
       ) fields
   in
@@ -145,18 +146,15 @@ let member_offset loc (BT.Tag tag) (BT.Member id) =
 
 let size_of_stored_type loc st = 
   match st with
-  | IT.ST_Integer it -> size_of_integer loc it
-  | IT.ST_Struct tag -> size_of_struct loc tag
-  | IT.ST_Pointer -> size_of_pointer loc
+  | St.ST_Ctype ct -> size_of_ctype loc ct
+  | St.ST_Pointer -> size_of_pointer loc
 
 let align_of_stored_type loc st = 
   match st with
-  | IT.ST_Integer it -> align_of_integer loc it
-  | IT.ST_Struct tag -> align_of_struct loc tag
-  | IT.ST_Pointer -> align_of_pointer loc
+  | St.ST_Ctype ct -> align_of_ctype loc ct
+  | St.ST_Pointer -> align_of_pointer loc
 
-let range_of_stored_type loc st = 
+let representable_stored_type loc st = 
   match st with
-  | IT.ST_Integer it -> range_of_integer loc it
-  | IT.ST_Struct tag -> range_of_struct loc tag
-  | IT.ST_Pointer -> range_of_pointer loc
+  | St.ST_Ctype ct -> representable_ctype loc ct
+  | St.ST_Pointer -> representable_pointer loc

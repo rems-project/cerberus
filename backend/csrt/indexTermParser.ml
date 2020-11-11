@@ -132,6 +132,9 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
   | MemberOffset (tag,t,f) ->
      let* it = parse_ast_to_t loc names it in
      return (MemberOffset (tag,it, f))
+  | AllocationSize it -> 
+     let* it = parse_ast_to_t loc names it in
+     return (AllocationSize it)
   | Offset (it, it') -> 
      let* it = parse_ast_to_t loc names it in
      let* it' = parse_ast_to_t loc names it' in
@@ -155,9 +158,9 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
   | Aligned (st, it) -> 
      let* it = parse_ast_to_t loc names it in
      return (Aligned (st, it))
-  | InRange (rt, it) ->
+  | Representable (rt, it) ->
      let* it = parse_ast_to_t loc names it in
-     return (InRange (rt, it))
+     return (Representable (rt, it))
   | S string -> 
      begin match StringMap.find_opt string names with
      | Some sym -> return (S sym)

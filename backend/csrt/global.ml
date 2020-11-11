@@ -43,7 +43,7 @@ type struct_decl =
   { raw: (BT.member * BT.t) list;
     sizes: (BT.member * RE.size) list;
     offsets: (BT.member * Z.t) list;
-    range: IT.t -> LC.t;
+    representable: IT.t -> LC.t;
     closed: RT.t; 
     closed_stored: RT.t;
   }
@@ -55,6 +55,7 @@ type t =
     fun_decls : (Loc.t * FT.t) SymMap.t;
     impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
+    stdlib_funs : SymSet.t
   } 
 
 let empty = 
@@ -62,6 +63,7 @@ let empty =
     fun_decls = SymMap.empty;
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
+    stdlib_funs = SymSet.empty;
   }
 
 let get_struct_decl loc struct_decls (BT.Tag s) = 

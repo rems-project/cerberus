@@ -26,6 +26,19 @@ let annot_of_ct (CF.Ctype.Ctype (annot,_)) = annot
 
 (* base types *)
 
+let rec bt_of_ct loc (CF.Ctype.Ctype (_,ct_)) =
+  let open CF.Ctype in
+  match ct_ with
+  | Void -> return BT.Unit
+  | Basic (Integer _) -> return BT.Integer
+  | Basic (Floating _) -> fail loc (Unsupported !^"floats")
+  | Array _ -> fail loc (Unsupported !^"arrys")
+  | Function _ -> fail loc (Unsupported !^"function pointers")
+  | Pointer _ -> return BT.Loc
+  | Atomic ct -> bt_of_ct loc ct  (* check? *)
+  | Struct tag -> return (BT.Struct (BT.Tag tag))
+  | Union _ -> fail loc (Unsupported !^"union types")
+
 let bt_of_core_object_type loc ot =
   let open CF.Core in
   match ot with
@@ -52,34 +65,10 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_storable -> fail loc (Unsupported !^"BTy_storable")
   | BTy_ctype -> fail loc (Unsupported !^"ctype")
 
-let rec bt_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
-  let open CF.Ctype in
-  match ct_ with
-  | Void -> return BT.Unit
-  | Basic (Integer _) -> return BT.Integer
-  | Basic (Floating _) -> fail loc (Unsupported !^"floats")
-  | Array _ -> fail loc (Unsupported !^"arrays")
-  | Function _ -> fail loc (Unsupported !^"todo: function pointers")
-  | Pointer _ -> return BT.Loc
-  | Atomic ct -> bt_of_ctype loc ct  (* check? *)
-  | Struct tag -> return (BT.Struct (BT.Tag tag))
-  | Union _ -> fail loc (Unsupported !^"union types")
-
-let rec st_of_ctype loc (CF.Ctype.Ctype (_,ct_)) =
-  let open CF.Ctype in
-  match ct_ with
-  | Void -> fail loc (Unsupported !^"todo: void*")
-  | Basic (Integer it) -> return (ST_Integer it)
-  | Basic (Floating _) -> fail loc (Unsupported !^"floats")
-  | Array _ -> fail loc (Unsupported !^"arrays")
-  | Function _ -> fail loc (Unsupported !^"todo: function pointers")
-  | Pointer _ -> return ST_Pointer
-  | Atomic ct -> st_of_ctype loc ct  (* check? *)
-  | Struct tag -> return (ST_Struct (BT.Tag tag))
-  | Union _ -> fail loc (Unsupported !^"union types")
-
-
-
+let bt_of_st loc st = 
+  match st with
+  | St.ST_Pointer -> return BT.Loc
+  | St.ST_Ctype ct -> bt_of_ct loc ct 
 
 
 
@@ -89,7 +78,7 @@ let struct_decl_raw loc tag =
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (id, (_,_, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
-      let* bt = bt_of_ctype loc ct in
+      let* bt = bt_of_ct loc ct in
       return (Member (Id.s id), bt)
   ) fields
 
@@ -102,8 +91,8 @@ let struct_decl_sizes loc tag =
       return (Member (Id.s id),size)
     ) fields
 
-let struct_decl_ranges loc tag = 
-  Memory.range_of_struct loc tag
+let struct_decl_representable loc tag = 
+  Memory.representable_struct loc tag
 
 let struct_decl_offsets loc tag = 
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
@@ -116,12 +105,13 @@ let struct_decl_offsets loc tag =
 
 let struct_decl_closed loc tag = 
   let this = Sym.fresh () in
-  let* lc = Memory.range_of_struct loc tag in
+  let* lc = Memory.representable_struct loc tag in
   return (RT.Computational ((this, BT.Struct tag), Constraint (lc (S this), I)))
 
 
 let struct_decl_closed_stored loc tag = 
   let open RT in
+  let* size = Memory.size_of_struct loc tag in
   let rec aux loc tag struct_p = 
     let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
     let* members = 
@@ -136,7 +126,7 @@ let struct_decl_closed_stored loc tag =
              return (components, (member, s_value))
           | _ ->
              let v = Sym.fresh () in
-             let* bt = bt_of_ctype loc ct in
+             let* bt = bt_of_ct loc ct in
              let* size = Memory.size_of_ctype loc ct in
              return ([(member_p, v, size, bt)], (member, S v))
           ) fields
@@ -150,15 +140,20 @@ let struct_decl_closed_stored loc tag =
     List.fold_right (fun (member_p, member_v, size, bt) lrt ->
         RT.Logical ((member_v, Base bt), 
         RT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, 
-        RT.Constraint (LC (InRange (ST_Pointer, member_p)), lrt)))
+        RT.Constraint (LC (IT.Representable (ST_Pointer, member_p)), lrt)))
       ) components RT.I
+  in
+  let st = 
+    let (Tag s) = tag in
+    St.ST_Ctype (CF.Ctype.Ctype ([], Struct s))
   in
   let rt = 
     Computational ((struct_pointer, BT.Loc), 
-    Constraint (LC (InRange (ST_Pointer, S struct_pointer)),
-    Constraint (LC (Aligned (ST_Struct tag, S struct_pointer)),
+    Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
+    Constraint (LC (Aligned (st, S struct_pointer)),
+    Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)),
     lrt @@ 
-    Constraint (LC (IT.InRange (ST_Struct tag, struct_value)), RT.I))))
+    Constraint (LC (IT.Representable (st, struct_value)), RT.I)))))
   in
   return rt
   
@@ -166,11 +161,11 @@ let struct_decl_closed_stored loc tag =
 let struct_decl loc (tag : BT.tag) = 
   let* raw = struct_decl_raw loc tag in
   let* sizes = struct_decl_sizes loc tag in
-  let* range = struct_decl_ranges loc tag in
+  let* representable = struct_decl_representable loc tag in
   let* offsets = struct_decl_offsets loc tag in
   let* closed = struct_decl_closed loc tag in
   let* closed_stored = struct_decl_closed_stored loc tag in
-  return Global.{ raw; sizes; range; offsets; closed; closed_stored }
+  return Global.{ raw; sizes; representable; offsets; closed; closed_stored }
 
 
 
@@ -184,9 +179,10 @@ let make_owned_pointer loc struct_decls pointer stored_type rt =
     Computational ((pointer,Loc),
     Logical ((pointee, Base bt), 
     Resource ((points, 
-    Constraint (LC (IT.InRange (ST_Pointer, S pointer)),
+    Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
     Constraint (LC (IT.Aligned (stored_type, S pointer)),
-    lrt))))))
+    Constraint (LC (EQ (AllocationSize (S pointer), Num size)),
+    lrt)))))))
   in
   return rt
 
@@ -205,19 +201,20 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
   | CF.Ctype.Void -> 
      fail loc (Unsupported !^"todo: void*")
   | _ ->
-     let* st = st_of_ctype loc ct in
+     let st = St.of_ctype ct in
      let* rt = rt_of_ctype loc struct_decls (Sym.fresh ()) ct in
      make_owned_pointer loc struct_decls pointer st rt
   end
 
-and rt_of_ctype loc struct_decls (s : Sym.t) (CF.Ctype.Ctype (annots, ct_)) =
+and rt_of_ctype loc struct_decls (s : Sym.t) ct =
+  let (CF.Ctype.Ctype (annots, ct_)) = ct in
   let open RT in
   match ct_ with
   | Void -> return (Computational ((s, BT.Unit), I))
   | Basic (Integer it) -> 
      let rt =
        Computational ((s, Integer), 
-       Constraint (LC (InRange (ST_Integer it, S s)),I))
+       Constraint (LC (IT.Representable (ST_Ctype ct, S s)),I))
      in
      return rt
   | Array (ct, _maybe_integer) ->

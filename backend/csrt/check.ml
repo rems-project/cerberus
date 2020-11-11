@@ -14,6 +14,7 @@ module LT = ArgumentTypes.Make(False)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 
+open IT
 open Loc
 open TypeErrors
 open Environment
@@ -33,13 +34,14 @@ open BT
 (*** meta types ***************************************************************)
 type pattern = BT.t mu_pattern
 type ctor = BT.t mu_ctor
-type 'bty pexpr = (PreProcess.ctype_information, BT.t, 'bty) mu_pexpr
-type 'bty expr = (PreProcess.ctype_information, BT.t, 'bty) mu_expr
-type 'bty value = (PreProcess.ctype_information, BT.t, 'bty) mu_value
-type 'bty object_value = (PreProcess.ctype_information, 'bty) mu_object_value
+type cti = PreProcess.ctype_information
+type 'bty pexpr = (cti, BT.t, 'bty) mu_pexpr
+type 'bty expr = (cti, BT.t, 'bty) mu_expr
+type 'bty value = (cti, BT.t, 'bty) mu_value
+type 'bty object_value = (cti, 'bty) mu_object_value
 type mem_value = CF.Impl_mem.mem_value
 type pointer_value = CF.Impl_mem.pointer_value
-type 'bty label_defs = (LT.t, PreProcess.ctype_information, BT.t, 'bty) mu_label_defs
+type 'bty label_defs = (LT.t, cti, BT.t, 'bty) mu_label_defs
 
 
 (*** mucore pp setup **********************************************************)
@@ -202,7 +204,7 @@ let resource_for_fp (loc: loc) {local;global} (pointer_it, size)
            return None
       ) local
   in
-  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+  at_most_one loc !^"multiple points-to for same pointer" points
 
 let used_resource_for_fp (loc: loc) {local;global} (pointer_it, size) 
     : ((loc list) option) m = 
@@ -216,7 +218,7 @@ let used_resource_for_fp (loc: loc) {local;global} (pointer_it, size)
            return None
       ) local
   in
-  Tools.at_most_one loc !^"multiple points-to for same pointer" points
+  at_most_one loc !^"multiple points-to for same pointer" points
 
 
 (*** function call typing and subtyping ***************************************)
@@ -436,12 +438,11 @@ let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : vt m =
   let ret = Sym.fresh () in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
-      let* align = Memory.align_of_ctype loc ct in
       let lcs = 
         [IT.Null (S ret);
-         IT.InRange (ST_Pointer, S ret);
+         IT.Representable (ST_Pointer, S ret);
          (* check: aligned? *)
-         IT.AlignedI (Num align, S ret);]
+         IT.Aligned (St.of_ctype ct, S ret);]
       in
       return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
@@ -1035,10 +1036,10 @@ let rec store (loc: loc)
           return (Resource (Uninit {pointer; size}, I))
 
 
-let ensure_aligned loc {local; global} access pointer align = 
+let ensure_aligned loc {local; global} access pointer ctype = 
   let* (aligned, _, _) = 
     Solver.constraint_holds loc {local; global} false
-      (LC.LC (AlignedI (align, pointer))) 
+      (LC.LC (Aligned (St.of_ctype ctype, pointer))) 
   in
   if aligned then return () else fail loc (Misaligned Store)
 
@@ -1085,14 +1086,15 @@ let rec infer_expr (loc : loc) {local; labels; global}
        | M_PtrValidForDeref (act, asym) ->
           let* arg = arg_of_asym loc local asym in
           let ret = Sym.fresh () in
+          let* size = Memory.size_of_ctype loc act.item.ct in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           (* check more things? *)
           let* o_resource = 
-            resource_for_fp loc {local; global} (S arg.lname, act.item.size) 
+            resource_for_fp loc {local; global} (S arg.lname, size) 
           in
           let* (aligned, _, s_) = 
             Solver.constraint_holds loc {local; global} false
-              (LC.LC (AlignedI (Num act.item.align, S arg.lname))) 
+              (LC.LC (Aligned (St.of_ctype act.item.ct, S arg.lname))) 
           in
           let ok = Option.is_some o_resource && aligned in
           let constr = LC (EQ (S ret, Bool ok)) in
@@ -1116,12 +1118,14 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
-          let* lrt = store loc {local; global} act.item.bt (S ret) act.item.size None in
+          let* size = Memory.size_of_ctype loc act.item.ct in
+          let* lrt = store loc {local; global} act.item.bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
-            RT.Constraint (LC.LC (InRange (ST_Pointer, S ret)), 
+            RT.Constraint (LC.LC (Representable (ST_Pointer, S ret)), 
             RT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
-            lrt)))
+            RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)),
+            lrt))))
           in
           return (Normal (rt, local))
        | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
@@ -1134,10 +1138,11 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Kill (S arg.lname) (Num cti.align) 
+            ensure_aligned loc {local; global} Kill (S arg.lname) cti.ct
           in
-          let* local = remove_owned_subtree loc {local; global} cti.bt 
-                         (S arg.lname) cti.size Kill None in
+          let* size = Memory.size_of_ctype loc cti.ct in
+          let* local = remove_owned_subtree loc {local; global} cti.bt
+                         (S arg.lname) size Kill None in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
        | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1146,7 +1151,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Store (S parg.lname) (Num act.item.align) 
+            ensure_aligned loc {local; global} Store (S parg.lname) act.item.ct
           in
           (* The generated Core program will in most cases before this
              already have checked whether the store value is
@@ -1155,28 +1160,30 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = 
             let* (in_range, _, _) = 
               Solver.constraint_holds loc {local; global} false 
-                (act.item.range (S varg.lname))
+                (LC (Representable (St.of_ctype act.item.ct, S varg.lname)))
             in
             if in_range then return () else
               fail loc (Generic !^"write value unrepresentable")
           in
+          let* size = Memory.size_of_ctype loc act.item.ct in
           let* local = 
             remove_owned_subtree parg.loc {local; global} varg.bt 
-              (S parg.lname) act.item.size Store None in
+              (S parg.lname) size Store None in
           let* bindings = 
             store loc {local; global} varg.bt (S parg.lname) 
-              act.item.size (Some (S varg.lname)) in
+              size (Some (S varg.lname)) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt, local))
        | M_Load (act, pasym, _mo) -> 
           let* parg = arg_of_asym loc local pasym in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Load (S parg.lname) (Num act.item.align) 
+            ensure_aligned loc {local; global} Load (S parg.lname) act.item.ct
           in
           let ret = Sym.fresh () in
+          let* size = Memory.size_of_ctype loc act.item.ct in
           let* constraints = 
-            load loc {local; global} act.item.bt (S parg.lname) act.item.size (S ret) None 
+            load loc {local; global} act.item.bt (S parg.lname) size (S ret) None 
           in
           let rt = RT.Computational ((ret, act.item.bt), constraints) in
           return (Normal (rt, local))
@@ -1202,14 +1209,33 @@ let rec infer_expr (loc : loc) {local; labels; global}
        return (Normal (rt, local))
     | M_Eccall (_ctype, afsym, asyms) ->
        let* (bt, _) = get_a (Loc.update_a loc afsym.annot) afsym.item local in
-       let* fun_sym = match bt with
-         | FunctionPointer sym -> return sym
-         | _ -> fail (Loc.update_a loc afsym.annot) (Generic !^"not a function pointer")
-       in
-       let* (_loc, decl_typ) = G.get_fun_decl loc global fun_sym in
        let* args = args_of_asyms loc local asyms in
-       let* (rt, local) = calltype_ft loc {local; global} args decl_typ in
-       return (Normal (rt, local))
+       begin match bt with
+         | FunctionPointer sym -> 
+            let* (_loc, ft) = G.get_fun_decl loc global sym in
+            (* let in_stdlib = SymSet.mem sym global.stdlib_funs in
+             * if in_stdlib && Sym.name sym = Some "free_proxy" then 
+             *   let* arg = match args with
+             *     | [arg] -> return arg
+             *     | _ -> fail loc (Number_arguments {has = List.length args; expect = 1})
+             *   in
+             *   let* () = ensure_base_type loc ~expect:Loc arg.bt in
+             *   let* psize = Memory.size_of_pointer loc in
+             *   let pointer = Sym.fresh () in
+             *   let* pointer_it = 
+             *     load loc {local; global} BT.Loc (S arg.lname) 
+             *       psize (S pointer) None 
+             *   in
+             *   (\* let* local = remove_owned_subtree loc {local; global} cti.bt 
+             *    *                (S arg.lname) cti.size Kill None in *\)
+             *   fail loc (Generic (!^"TODO: free"))
+             * else *)
+              let* (rt, local) = calltype_ft loc {local; global} args ft in
+              return (Normal (rt, local))
+         | _ -> 
+            fail (Loc.update_a loc afsym.annot) 
+              (Generic !^"expected function pointer")
+       end
     | M_Eproc (fname, asyms) ->
        let* decl_typ = match fname with
          | CF.Core.Impl impl -> 

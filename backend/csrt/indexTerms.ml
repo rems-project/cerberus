@@ -8,39 +8,32 @@ module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
 
 
+module St = struct
+
+  type t = 
+    | ST_Ctype of Cerb_frontend.Ctype.ctype
+    | ST_Pointer
+  (* others later *)
 
 
+  let equal rt1 rt2 = 
+    match rt1, rt2 with
+    | ST_Ctype ct1, ST_Ctype ct2 -> Cerb_frontend.Ctype.ctypeEqual ct1 ct2
+    | ST_Pointer, ST_Pointer -> true
 
-type stored_type = 
-  | ST_Integer of CF.Ctype.integerType
-  | ST_Struct of BT.tag
-  | ST_Pointer
-(* others later *)
-
-
-
-let st_to_bt = function
-  | ST_Integer _ -> BT.Integer
-  | ST_Struct tag -> BT.Struct tag
-  | ST_Pointer -> BT.Loc
+    | ST_Ctype _, _
+    | ST_Pointer, _ -> 
+       false
 
 
-let stored_type_equal rt1 rt2 = 
-  match rt1, rt2 with
-  | ST_Integer it1, ST_Integer it2 -> CF.Ctype.integerTypeEqual it1 it2
-  | ST_Struct tag1, ST_Struct tag2 -> BT.tag_equal tag1 tag2
-  | ST_Pointer, ST_Pointer -> true
-
-  | ST_Integer _, _
-  | ST_Struct _, _
-  | ST_Pointer, _ -> 
-     false
+  let pp = function
+    | ST_Ctype ct -> Pp.squotes (Cerb_frontend.Pp_core_ctype.pp_ctype ct)
+    | ST_Pointer -> Pp.squotes (Pp.string "pointer")
 
 
-let pp_stored_type = function
-  | ST_Integer it -> squotes (CF.Pp_core_ctype.pp_integer_ctype it)
-  | ST_Struct (Tag tag) -> squotes (CF.Pp_core_ctype.pp_ctype (Ctype ([], Struct tag)))
-  | ST_Pointer -> squotes (BT.pp false BT.Loc)
+  let of_ctype ct = ST_Ctype ct
+
+end
 
 
 
@@ -78,10 +71,15 @@ type 'id term =
   | Tuple of 'id term list
   | Nth of BT.t * int * 'id term
 
+  | AllocationSize of 'id term
   | Offset of 'id term * 'id term
   | LocLT of 'id term * 'id term
   | LocLE of 'id term * 'id term
   | Disjoint of ('id term * Z.t) * ('id term * Z.t)
+  | AlignedI of 'id term * 'id term
+  | Aligned of St.t * 'id term
+
+  | Representable of St.t * 'id term
 
   | Struct of BT.tag * (BT.member * 'id term) list
   | Member of BT.tag * 'id term * BT.member
@@ -92,10 +90,6 @@ type 'id term =
   | List of 'id term list * BT.t
   | Head of 'id term
   | Tail of 'id term
-
-  | AlignedI of 'id term * 'id term
-  | Aligned of stored_type * 'id term
-  | InRange of stored_type * 'id term
 
   | S of 'id
 
@@ -145,9 +139,10 @@ let rec equal it it' =
   | Nth (bt, n,t), Nth (bt', n',t') -> BT.equal bt bt' && n = n' && equal t t' 
 
 
+  | AllocationSize t1, AllocationSize t1' -> equal t1 t1'
   | Offset (t1, t2), Offset (t1', t2') -> equal t1 t1' && equal t2 t2'
   | LocLT (t1, t2), LocLT (t1', t2') -> equal t1 t1' && equal t2 t2'
-  | LocLE (t1, t2), LocLE (t1', t2') -> equal t1 t1' && equal t2 t2'
+  | LocLE (t1, t2), LocLE (t1', t2') ->equal t1 t1' && equal t2 t2'
   | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
      equal t1 t1' && equal t2 t2' && Z.equal s1 s1' && Z.equal s2 s2'
 
@@ -173,8 +168,8 @@ let rec equal it it' =
      equal t1 t1' && equal t2 t2'
 
   | Aligned (rt, t), Aligned (rt', t')
-  | InRange (rt, t), InRange (rt', t') ->
-     stored_type_equal rt rt' && equal t t'
+  | Representable (rt, t), Representable (rt', t') ->
+     St.equal rt rt' && equal t t'
 
   | S sym, S sym' 
     -> Sym.equal sym sym'
@@ -212,12 +207,15 @@ let rec equal it it' =
   | Tuple _, _
   | Nth _, _
 
-  | AlignedI _, _
-  | Aligned _, _
+  | AllocationSize _, _
   | Offset _, _
   | LocLT _, _
   | LocLE _, _
   | Disjoint _, _
+  | AlignedI _, _
+  | Aligned _, _
+
+  | Representable _, _
 
   | Struct _, _
   | Member _, _
@@ -228,8 +226,6 @@ let rec equal it it' =
   | List _, _
   | Head _, _
   | Tail _, _
-
-  | InRange _, _
 
   | S _, _ ->
 
@@ -274,8 +270,8 @@ let pp ?(quote=true) it : PPrint.document =
        else mparens (aux o1 ^^^ rangle ^^ equals ^^^ aux o2)
 
     | Null o1 -> mparens (!^"null" ^^^ aux o1)
-    | And o -> mparens (separate_map (space ^^ ampersand ^^ space) aux o)
-    | Or o -> mparens (separate_map (space ^^ bar ^^ bar ^^ space) aux o)
+    | And o -> mparens (!^"and" ^^^ brackets (separate_map (space ^^ space) aux o))
+    | Or o -> mparens (!^"or" ^^^ brackets (separate_map (space ^^ space) aux o))
     | Impl (o1,o2) -> mparens (aux o1 ^^^ equals ^^ rangle ^^^ aux o2)
     | Not (o1) -> mparens (!^"not" ^^^ aux o1)
     | ITE (o1,o2,o3) -> mparens (!^"ite" ^^^ aux o1 ^^^ aux o2 ^^^ aux o3)
@@ -297,6 +293,9 @@ let pp ?(quote=true) it : PPrint.document =
        aux t ^^ dot ^^ !^s
     | MemberOffset (_tag, t, Member s) ->
        mparens (ampersand ^^ aux t ^^ !^"->" ^^ !^s)
+
+    | AllocationSize t1 ->
+       mparens (!^"allocationSize" ^^^ aux t1)
     | Offset (t1, t2) ->
        mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
     | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
@@ -309,9 +308,9 @@ let pp ?(quote=true) it : PPrint.document =
     | AlignedI (t, t') ->
        mparens (!^"aligned" ^^^ aux t ^^^ aux t')
     | Aligned (rt, t) ->
-       mparens (!^"aligned" ^^^ pp_stored_type rt ^^^ aux t)
-    | InRange (rt, t) ->
-       mparens (!^"representable" ^^^ pp_stored_type rt ^^^ aux t)
+       mparens (!^"aligned" ^^^ St.pp rt ^^^ aux t)
+    | Representable (rt, t) ->
+       mparens (!^"representable" ^^^ St.pp rt ^^^ aux t)
 
     | S sym -> Sym.pp sym
   in
@@ -356,6 +355,7 @@ let rec vars_in it : SymSet.t =
   | Not it 
   | Head it
   | Tail it
+  | AllocationSize it
     -> 
      vars_in it
   | ITE (it,it',it'') ->
@@ -372,7 +372,7 @@ let rec vars_in it : SymSet.t =
   | AlignedI (it, it') ->
      vars_in_list [it;it]
   | Aligned (_rt, t)
-  | InRange (_rt,t) ->
+  | Representable (_rt,t) ->
      vars_in t
   | S symbol -> 
      SymSet.singleton symbol
@@ -429,6 +429,7 @@ let rec subst_var subst it : t =
      Member (tag, subst_var subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_var subst t, f)
+  | AllocationSize it -> AllocationSize (subst_var subst it)
   | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
   | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
   | LocLE (it, it') -> LocLE (subst_var subst it, subst_var subst it')
@@ -436,7 +437,7 @@ let rec subst_var subst it : t =
      Disjoint ((subst_var subst it,s), (subst_var subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
   | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
-  | InRange (rt,t) -> InRange (rt,subst_var subst t)
+  | Representable (rt,t) -> Representable (rt,subst_var subst t)
   | S symbol -> 
      if symbol = subst.before then S subst.after else S symbol
 
@@ -492,6 +493,7 @@ let rec subst_it subst it : t =
      Member (tag, subst_it subst t, f)
   | MemberOffset (tag,t,f) ->
      MemberOffset (tag,subst_it subst t, f)
+  | AllocationSize it -> AllocationSize (subst_it subst it)
   | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
   | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
   | LocLE (it, it') -> LocLE (subst_it subst it, subst_it subst it')
@@ -499,7 +501,7 @@ let rec subst_it subst it : t =
      Disjoint ((subst_it subst it,s), (subst_it subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
   | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
-  | InRange (rt,t) -> InRange (rt,subst_it subst t)
+  | Representable (rt,t) -> Representable (rt,subst_it subst t)
   | S symbol -> 
      if symbol = subst.before then subst.after else S symbol
 
@@ -624,5 +626,6 @@ let min_i64 = Num (sub (of_int 0) (power_int_positive_int 2 (64 - 1)))
 let max_i64 = Num (sub (power_int_positive_int 2 (64 - 1)) (of_int 1))
 
 let int x = Num (Z.of_int x)
+
 
 

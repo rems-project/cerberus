@@ -50,7 +50,3 @@ let rec pp atomic bt =
   | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)
   | Struct (Tag sym) -> mparens (!^"struct" ^/^ Sym.pp sym)
   | FunctionPointer p -> mparens (!^"function" ^/^ Sym.pp p)
-
-
-
-

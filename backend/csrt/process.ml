@@ -87,6 +87,8 @@ let process mu_file =
   let* global = record_tagDefs global mu_file.mu_tagDefs in
   let global = record_impl global mu_file.mu_impl in
   let* global = record_funinfo global mu_file.mu_funinfo in
+  let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
+  let global = { global with stdlib_funs } in
   let* () = print_initial_environment global in
   process_functions global mu_file.mu_funs
 
