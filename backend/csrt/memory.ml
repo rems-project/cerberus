@@ -77,13 +77,13 @@ let representable_pointer loc =
 
 
 
-let lookup_struct_in_tagDefs loc (BT.Tag tag) =
+let lookup_struct_in_tagDefs loc tag =
   match Pmap.lookup tag (CF.Tags.tagDefs ()) with
   | Some (CF.Ctype.StructDef (fields,flexible_array_member)) -> 
      return (fields,flexible_array_member)
   | Some (UnionDef _) -> fail loc (Generic !^"expected struct")
   | None -> 
-     fail loc (Generic (!^"struct" ^^^ (BT.pp_tag (BT.Tag tag)) ^^^ !^"not defined"))
+     fail loc (Generic (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined"))
 
 
 let size_of_ctype loc ct = 
@@ -104,24 +104,23 @@ let rec representable_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   | Function _ -> fail loc (Unsupported !^"todo: function pointers")
   | Pointer _ -> representable_pointer loc
   | Atomic ct -> representable_ctype loc ct
-  | Struct tag -> representable_struct loc (BT.Tag tag)
+  | Struct tag -> representable_struct loc tag
   | Union _ -> fail loc (Unsupported !^"union types")
 
-and representable_struct loc (Tag tag) = 
-  let* (fields,_) = lookup_struct_in_tagDefs loc (BT.Tag tag) in
+and representable_struct loc tag = 
+  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
   let* member_rangefs =
-    ListM.mapM (fun (id, (_, _, ct)) ->
+    ListM.mapM (fun (member, (_, _, ct)) ->
         let CF.Ctype.Ctype (annot,_) = ct in
         let loc = Loc.update_a loc annot in
         let* rangef = representable_ctype loc ct in
-        return (BT.Member (Id.s id),rangef)
+        return (member, rangef)
       ) fields
   in
   let rangef about = 
     let lcs = 
       List.map (fun (member, rangef) ->
-          let (LC.LC c) = rangef (IT.Member (Tag tag, about, member)) in
-          c
+          LC.index_term (rangef (IT.Member (tag, about, member)))
         ) member_rangefs
     in
     (LC.LC (And lcs))
@@ -129,17 +128,15 @@ and representable_struct loc (Tag tag) =
   return rangef
 
 
-let size_of_struct loc (BT.Tag s) =
-  size_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct s))
+let size_of_struct loc tag =
+  size_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct tag))
 
-let align_of_struct loc (BT.Tag s) =
-  align_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct s))
+let align_of_struct loc tag =
+  align_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct tag))
 
 
-let member_offset loc (BT.Tag tag) (BT.Member id) = 
-  let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) 
-             tag (Id.parse (Loc.unpack loc) id) 
-  in
+let member_offset loc tag member = 
+  let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
   integer_value_to_num loc iv
 
 

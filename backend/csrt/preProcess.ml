@@ -458,14 +458,14 @@ let retype_tagDefs
   = 
   let open Pp in
   PmapM.foldM 
-    (fun sym def (acc,acc_structs,acc_unions) -> 
+    (fun tag def (acc,acc_structs,acc_unions) -> 
       match def with
       | M_UnionDef _ -> 
          fail loc (Unsupported !^"todo: union types")
       | M_StructDef (fields, f) ->
-         let* decl = Conversions.struct_decl loc (BT.Tag sym) in
-         let acc = Pmap.add sym (M_StructDef ((fields, f), decl)) acc in
-         let acc_structs = SymMap.add sym decl acc_structs in
+         let* decl = Conversions.struct_decl loc tag in
+         let acc = Pmap.add tag (M_StructDef ((fields, f), decl)) acc in
+         let acc_structs = SymMap.add tag decl acc_structs in
          return (acc,acc_structs,acc_unions)
     ) 
     tagDefs (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)

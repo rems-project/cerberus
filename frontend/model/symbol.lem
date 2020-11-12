@@ -4,11 +4,14 @@ import Debug
 type identifier =
   | Identifier of Loc.t * string
 
+
+let idEqual ident1 ident2 =
+  let (Identifier _ str1) = ident1 in
+  let (Identifier _ str2) = ident2 in
+  str1 = str2
+
 instance (Eq identifier)
-  let (=) ident1 ident2 =
-    let (Identifier _ str1) = ident1 in
-    let (Identifier _ str2) = ident2 in
-    str1 = str2
+  let (=) = idEqual
   let (<>) ident1 ident2 =
     let (Identifier _ str1) = ident1 in
     let (Identifier _ str2) = ident2 in

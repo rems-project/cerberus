@@ -287,12 +287,12 @@ let pp ?(quote=true) it : PPrint.document =
        mparens (brackets (separate_map comma aux its) ^^^ colon ^^ BT.pp false bt)
 
     | Struct (_tag, members) ->
-       braces (separate_map comma (fun (BT.Member member,it) -> 
-                   !^member ^^^ equals ^^^ aux it ) members)
-    | Member (_tag, t, Member s) ->
-       aux t ^^ dot ^^ !^s
-    | MemberOffset (_tag, t, Member s) ->
-       mparens (ampersand ^^ aux t ^^ !^"->" ^^ !^s)
+       braces (separate_map comma (fun (member,it) -> 
+                   Id.pp member ^^^ equals ^^^ aux it ) members)
+    | Member (_tag, t, member) ->
+       aux t ^^ dot ^^ Id.pp member
+    | MemberOffset (_tag, t, member) ->
+       mparens (ampersand ^^ aux t ^^ !^"->" ^^ Id.pp member)
 
     | AllocationSize t1 ->
        mparens (!^"allocationSize" ^^^ aux t1)

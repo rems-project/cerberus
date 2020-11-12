@@ -78,6 +78,7 @@ type sym_or_string =
 type type_error = 
   | Unbound_name of sym_or_string
   | Name_bound_twice of sym_or_string
+  | Missing_member of BT.tag * BT.member
 
   | Uninitialised of BT.member option
   | Missing_resource of Resources.t * (Loc.t list) option
@@ -125,14 +126,16 @@ let pp_type_error = function
        | String str -> !^str
      in
      (!^"Name bound twice" ^^ colon ^^^ squotes name_pp, [])
-
+  | Missing_member (tag, member) ->
+     (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
+        Id.pp member, [])
 
   | Uninitialised omember ->
      begin match omember with
      | None -> 
         (!^"Trying to read uninitialised data", [])
      | Some m -> 
-        (!^"Trying to read uninitialised struct member" ^^^ BT.pp_member m, [])
+        (!^"Trying to read uninitialised struct member" ^^^ Id.pp m, [])
      end
   | Missing_resource (t, owhere) ->
      let extra = match owhere with
@@ -150,15 +153,15 @@ let pp_type_error = function
      | Kill, None ->  
         !^"Missing ownership for de-allocating"
      | Kill, Some m ->  
-        !^"Missing ownership for de-allocating struct member" ^^^ BT.pp_member m
+        !^"Missing ownership for de-allocating struct member" ^^^ Id.pp m
      | Load, None   ->  
         !^"Missing ownership for reading"
      | Load, Some m -> 
-        !^"Missing ownership for reading struct member" ^^^ BT.pp_member m
+        !^"Missing ownership for reading struct member" ^^^ Id.pp m
      | Store, None   -> 
         !^"Missing ownership for writing"
      | Store, Some m -> 
-        !^"Missing ownership for writing struct member" ^^^ BT.pp_member m
+        !^"Missing ownership for writing struct member" ^^^ Id.pp m
      | Free, _ -> 
         !^"Missing ownership for free-ing"
      in

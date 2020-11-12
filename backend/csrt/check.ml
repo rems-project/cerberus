@@ -463,9 +463,9 @@ let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : vt m =
     ( fun _ ptrval -> infer_ptrval loc {local; global} ptrval  )
     ( fun mem_values -> infer_array loc {local; global} mem_values )
     ( fun tag mvals -> 
-      let mvals = List.map (fun (id, _, mv) -> (Member (Id.s id), mv)) mvals in
-      infer_struct loc {local; global} (Tag tag) mvals )
-    ( fun tag id mv -> infer_union loc {local; global} (Tag tag) id mv )
+      let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
+      infer_struct loc {local; global} tag mvals )
+    ( fun tag id mv -> infer_union loc {local; global} tag id mv )
 
 and infer_struct (loc : loc) {local; global} (tag : tag) 
                  (member_values : (member * mem_value) list) : vt m =
@@ -487,10 +487,10 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
        return []
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
        fail loc (Internal !^"mismatch in fields in infer_struct")
-    | [], ((Member id, _) :: _) ->
-       fail loc (Generic (!^"field" ^/^ !^id ^/^ !^"missing"))
-    | ((Member id,_) :: _), [] ->
-       fail loc (Generic (!^"supplying unexpected field" ^/^ !^id))
+    | [], ((member, _) :: _) ->
+       fail loc (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing"))
+    | ((member,_) :: _), [] ->
+       fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
   in
   let* constraints = check member_values spec.raw in
   return (ret, Struct tag, LC (And constraints))
@@ -514,10 +514,10 @@ let infer_object_value (loc : loc) {local; global}
   | M_OVarray items ->
      fail loc (Unsupported !^"todo: array types")
   | M_OVstruct (tag, fields) -> 
-     let mvals = List.map (fun (id,_,mv) -> (Member (Id.s id), mv)) fields in
-     infer_struct loc {local; global} (Tag tag) mvals       
-  | M_OVunion (sym, id, mv) -> 
-     infer_union loc {local; global} (Tag sym) id mv
+     let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
+     infer_struct loc {local; global} tag mvals       
+  | M_OVunion (tag, id, mv) -> 
+     infer_union loc {local; global} tag id mv
   | M_OVfloating iv ->
      fail loc (Unsupported !^"floats")
 
@@ -767,22 +767,13 @@ let rec infer_pexpr (loc : loc) {local; global}
        return (Normal (rt_of_vt vt, local))
     | M_PEarray_shift _ ->
        fail loc (Unsupported !^"todo: PEarray_shift")
-    | M_PEmember_shift (asym, tag, id) ->
+    | M_PEmember_shift (asym, tag, member) ->
        let* arg = arg_of_asym loc local asym in
        let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
        let ret = Sym.fresh () in
-       let* decl = Global.get_struct_decl loc global.struct_decls (Tag tag) in
-       let member = Member (Id.s id) in
-       let* () = match List.assoc_opt member decl.raw with
-         | Some _ -> return ()
-         | None -> 
-            let err = 
-              !^"struct" ^/^ pp_tag (Tag tag) ^/^ !^"does not have field" ^/^
-                squotes !^(Id.s id)
-            in
-            fail arg.loc (Generic err)
-       in
-       let shifted_pointer = IT.MemberOffset (Tag tag, S arg.lname, member) in
+       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let* _member_bt = Global.get_member_raw loc global.struct_decls tag member in
+       let shifted_pointer = IT.MemberOffset (tag, S arg.lname, member) in
        let constr = LC (EQ (S ret, shifted_pointer)) in
        let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
        return (Normal (rt, local))
@@ -974,7 +965,7 @@ let rec load (loc: loc)
        | (member,member_bt)::members ->
           let member_pointer = IT.MemberOffset (tag,pointer,member) in
           let member_path = IT.Member (tag, path, member) in
-          let member_size = List.assoc member decl.sizes in
+          let* member_size = Global.get_member_size loc global.struct_decls tag member in
           let* constraints = aux members in
           let* constraints2 = load loc {local;global} member_bt member_pointer 
                                 member_size member_path (Some member)in
@@ -1014,7 +1005,7 @@ let rec store (loc: loc)
        | [] -> return I
        | (member,member_bt)::members ->
           let member_pointer = IT.MemberOffset (tag,pointer,member) in
-          let member_size = List.assoc member decl.sizes in
+          let* member_size = Global.get_member_size loc global.struct_decls tag member in
           let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
           let* rt = aux members in
           let* rt2 = store loc {local;global} member_bt member_pointer 

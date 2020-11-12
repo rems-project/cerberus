@@ -66,12 +66,32 @@ let empty =
     stdlib_funs = SymSet.empty;
   }
 
-let get_struct_decl loc struct_decls (BT.Tag s) = 
-  match SymMap.find_opt s struct_decls with
+let get_struct_decl loc struct_decls tag = 
+  match SymMap.find_opt tag struct_decls with
   | Some decl -> return decl 
   | None -> 
-     let err = !^"struct" ^^^ BT.pp_tag (BT.Tag s) ^^^ !^"not defined" in
+     let err = !^"struct" ^^^ Sym.pp tag ^^^ !^"not defined" in
      fail loc (Generic err)
+
+let get_member_raw loc struct_decls tag member = 
+  let* decl = get_struct_decl loc struct_decls tag in
+  match List.assoc_opt Id.equal member decl.raw with
+  | Some size -> return size
+  | None -> fail loc (Missing_member (tag, member))
+
+let get_member_size loc struct_decls tag member = 
+  let* decl = get_struct_decl loc struct_decls tag in
+  match List.assoc_opt Id.equal member decl.sizes with
+  | Some size -> return size
+  | None -> fail loc (Missing_member (tag, member))
+
+let get_member_offset loc struct_decls tag member = 
+  let* decl = get_struct_decl loc struct_decls tag in
+  match List.assoc_opt Id.equal member decl.offsets with
+  | Some size -> return size
+  | None -> fail loc (Missing_member (tag, member))
+
+
 
 let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
 let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i
@@ -79,7 +99,7 @@ let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 
 let pp_struct_decl (sym,decl) = 
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
-       (Pp.list (fun (BT.Member m, bt) -> typ !^m (BT.pp true bt)) decl.raw) 
+       (Pp.list (fun (m, bt) -> typ (Id.pp m) (BT.pp true bt)) decl.raw) 
   ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed)") 
        (RT.pp decl.closed)

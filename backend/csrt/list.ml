@@ -18,3 +18,11 @@ let rec equal (equality : 'a -> 'a -> bool) (xs : 'a list) (xs' : 'a list) : boo
   | [], [] -> true
   | x::xs, x'::xs' -> equality x x' && equal equality xs xs'
   | _, _ -> false
+
+
+let assoc_opt (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v option = 
+  match find_opt (fun (k',_) -> equality k k') l with
+  | Some (_, v) -> Some v
+  | None -> None
+
+let assoc = assoc_opt

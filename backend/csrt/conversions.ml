@@ -36,7 +36,7 @@ let rec bt_of_ct loc (CF.Ctype.Ctype (_,ct_)) =
   | Function _ -> fail loc (Unsupported !^"function pointers")
   | Pointer _ -> return BT.Loc
   | Atomic ct -> bt_of_ct loc ct  (* check? *)
-  | Struct tag -> return (BT.Struct (BT.Tag tag))
+  | Struct tag -> return (BT.Struct tag)
   | Union _ -> fail loc (Unsupported !^"union types")
 
 let bt_of_core_object_type loc ot =
@@ -45,8 +45,8 @@ let bt_of_core_object_type loc ot =
   | OTy_integer -> return BT.Integer
   | OTy_pointer -> return BT.Loc
   | OTy_array cbt -> return BT.Array
-  | OTy_struct sym -> return (BT.Struct (Tag sym))
-  | OTy_union _sym -> fail loc (Unsupported !^"todo: unions")
+  | OTy_struct tag -> return (BT.Struct tag)
+  | OTy_union _tag -> fail loc (Unsupported !^"todo: unions")
   | OTy_floating -> fail loc (Unsupported !^"todo: float")
 
 let rec bt_of_core_base_type loc cbt =
@@ -76,19 +76,19 @@ let bt_of_st loc st =
 (* structs *)
 let struct_decl_raw loc tag = 
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
-  ListM.mapM (fun (id, (_,_, ct)) ->
+  ListM.mapM (fun (member, (_,_, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
       let* bt = bt_of_ct loc ct in
-      return (Member (Id.s id), bt)
+      return (member, bt)
   ) fields
 
 
 let struct_decl_sizes loc tag = 
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
-  ListM.mapM (fun (id, (_, _, ct)) ->
+  ListM.mapM (fun (member, (_, _, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
       let* size = Memory.size_of_ctype loc ct in
-      return (Member (Id.s id),size)
+      return (member,size)
     ) fields
 
 let struct_decl_representable loc tag = 
@@ -96,10 +96,10 @@ let struct_decl_representable loc tag =
 
 let struct_decl_offsets loc tag = 
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
-  ListM.mapM (fun (id, (_, _, ct)) ->
+  ListM.mapM (fun (member, (_, _, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
-      let* offset = Memory.member_offset loc tag (BT.Member (Id.s id)) in
-      return (Member (Id.s id),offset)
+      let* offset = Memory.member_offset loc tag member in
+      return (member,offset)
     ) fields
 
 
@@ -115,14 +115,13 @@ let struct_decl_closed_stored loc tag =
   let rec aux loc tag struct_p = 
     let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
     let* members = 
-      ListM.mapM (fun (id, (_, _, ct)) ->
+      ListM.mapM (fun (member, (_, _, ct)) ->
           let loc = Loc.update_a loc (annot_of_ct ct) in
-          let member = Member (Id.s id) in
-          let member_p = IT.MemberOffset (tag,struct_p,member) in
+          let member_p = IT.MemberOffset (tag,struct_p, member) in
           let (CF.Ctype.Ctype (_,ct_)) = ct in
           match ct_ with
           | Struct tag -> 
-             let* (components, s_value) = aux loc (BT.Tag tag) member_p in
+             let* (components, s_value) = aux loc tag member_p in
              return (components, (member, s_value))
           | _ ->
              let v = Sym.fresh () in
@@ -143,10 +142,7 @@ let struct_decl_closed_stored loc tag =
         RT.Constraint (LC (IT.Representable (ST_Pointer, member_p)), lrt)))
       ) components RT.I
   in
-  let st = 
-    let (Tag s) = tag in
-    St.ST_Ctype (CF.Ctype.Ctype ([], Struct s))
-  in
+  let st = St.ST_Ctype (CF.Ctype.Ctype ([], Struct tag)) in
   let rt = 
     Computational ((struct_pointer, BT.Loc), 
     Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
@@ -193,7 +189,7 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
   begin match ct_ with
   | CF.Ctype.Struct tag ->
      let open Global in
-     let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
+     let* decl = Global.get_struct_decl loc struct_decls tag in
      let rt = RT.freshify decl.closed_stored in
      let Computational ((s',_), _) = rt in
      let rt = RT.subst_var {before = s'; after = pointer} rt in
@@ -225,7 +221,7 @@ and rt_of_ctype loc struct_decls (s : Sym.t) ct =
      (* fix *)
      rt_of_ctype loc struct_decls s ct
   | Struct tag -> 
-     let* decl = Global.get_struct_decl loc struct_decls (Tag tag) in
+     let* decl = Global.get_struct_decl loc struct_decls tag in
      let rt = RT.freshify decl.Global.closed in
      let Computational ((s',_),_) = rt in
      return (RT.subst_var {before=s; after=s} rt)

@@ -27,8 +27,8 @@ let at_most_one loc err_str = function
   | [x] -> return (Some x)
   | _ -> fail loc (TypeErrors.Generic err_str)
 
-let assoc_err loc entry list err =
-  match List.assoc_opt entry list with
+let assoc_err loc equality entry list err =
+  match List.assoc_opt equality entry list with
   | Some result -> return result
   | None -> fail loc err
 

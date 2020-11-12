@@ -31,8 +31,8 @@ let bt_name bt =
 let tuple_component_name bt i =
   bt_name bt ^ "__" ^ string_of_int i
 
-let struct_member_name bt (BT.Member id) =
-  bt_name bt ^ "__" ^ id
+let struct_member_name bt member =
+  bt_name bt ^ "__" ^ Pp.plain (Id.pp member)
 
 let member_sort ctxt = 
   Z3.Sort.mk_uninterpreted_s ctxt "member"
@@ -93,7 +93,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in
     let member_funs = combine member_names member_fun_decls in
-    assoc_err loc member member_funs (Internal !^"member_to_fundecl")
+    assoc_err loc Id.equal member member_funs (Internal !^"member_to_fundecl")
   in
   match it with
   | Num n -> 

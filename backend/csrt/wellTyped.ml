@@ -87,7 +87,7 @@ module WIT = struct
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
        let* () = 
          ListM.iterM (fun (member,it') ->
-             let* mbt = assoc_err loc member decl.raw (Illtyped_it it) in
+             let* mbt = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
              check_aux loc it {local;global} (Base mbt) it'
            ) members
        in
@@ -95,12 +95,12 @@ module WIT = struct
     | Member (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base (Struct tag)) it' in
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
-       let* bt = assoc_err loc member decl.raw (Illtyped_it it) in
+       let* bt = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
        return (Base bt)
     | MemberOffset (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base Loc) it' in
        let* decl = Global.get_struct_decl loc global.struct_decls tag in
-       let* _ = assoc_err loc member decl.raw (Illtyped_it it) in
+       let* _ = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
        return (Base Loc)
     | AllocationSize t ->
        let* () = check_aux loc it {local;global} (Base Loc) t in

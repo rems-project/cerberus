@@ -1,13 +1,8 @@
 open Pp
 
+type tag = Sym.t
+type member = Id.t
 
-type tag = Tag of Sym.t
-type member = Member of string  (* fix this to hav eID *)
-
-let pp_tag (Tag s) = Sym.pp s
-let tag_equal (Tag s) (Tag s') = Sym.equal s s'
-
-let pp_member (Member s) = !^s
 
 type t =
   | Unit 
@@ -34,7 +29,7 @@ let rec equal t1 t2 =
   | Array, Array -> true
   | List t1', List t2' -> equal t1' t2'
   | Tuple ts1', Tuple ts2' -> List.equal equal ts1' ts2'
-  | Struct t1, Struct t2 -> tag_equal t1 t2
+  | Struct t1, Struct t2 -> Sym.equal t1 t2
   | FunctionPointer s1, FunctionPointer s2 -> Sym.equal s1 s2
   | _, _ -> false
 
@@ -48,5 +43,5 @@ let rec pp atomic bt =
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^/^ pp true bt)
   | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)
-  | Struct (Tag sym) -> mparens (!^"struct" ^/^ Sym.pp sym)
+  | Struct sym -> mparens (!^"struct" ^/^ Sym.pp sym)
   | FunctionPointer p -> mparens (!^"function" ^/^ Sym.pp p)
