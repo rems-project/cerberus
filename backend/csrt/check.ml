@@ -1459,8 +1459,8 @@ let check_function (loc : loc) (global : Global.t) (fsym : Sym.t)
 (* check_procedure: type check an (impure) procedure *)
 let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
                     (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-                    (body : 'bty expr) (function_typ : FT.t) (
-                    label_defs : 'bty label_defs) : unit m =
+                    (body : 'bty expr) (function_typ : FT.t) 
+                    (label_defs : 'bty label_defs) : unit m =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
   let* (rt, delta, pure_delta, substs) = 
     CBF_FT.check_and_bind_arguments loc arguments function_typ 
