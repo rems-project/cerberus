@@ -466,6 +466,17 @@ let model loc {local;global} context solver : TypeErrors.model option m =
                 | _ -> 
                    fail loc (Internal !^"non-object stored in memory")
                 end
+             | Some (_, RE.Predicate p) -> 
+                let* args = 
+                  ListM.mapM (fun arg ->
+                      let* expr = of_index_term loc {local; global} context (S arg) in
+                      let* expr_val = evaluate loc model expr in
+                      return (Z3.Expr.to_string expr_val)
+                    ) p.args
+                in
+                return (TypeErrors.Predicate {name = p.name; args; size = p.size})
+             | Some (_, RE.Padding p) -> 
+                return (TypeErrors.Padding p.size)
            in
            return { location = location_s; state }
          ) (StringMap.bindings all_locations)

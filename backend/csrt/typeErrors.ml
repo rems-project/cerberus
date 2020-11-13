@@ -19,6 +19,8 @@ type memory_state =
   | Integer of string * RE.size
   | Location of string * RE.size
   | Within of {base_location : string; resource : Sym.t}
+  | Padding of RE.size
+  | Predicate of {name : Id.t; args : string list; size : RE.size}
 
 type location_state = { location : string; state : memory_state; }
 type variable_location = { name : string; location : string}
@@ -41,6 +43,10 @@ let pp_variable_and_location_state ( ovar, { location; state }) =
     | Location (value, size) -> typ !^value !^"pointer", Z.pp size
     | Within {base_location; _} -> 
        parens (!^"within owned region at" ^^^ !^base_location), Pp.empty
+    | Predicate {name; args; size} ->
+       Id.pp name ^^ parens (separate_map (space ^^ comma) string args), Z.pp size
+    | Padding size ->
+       !^"padding", Z.pp size
   in
   ( (R, var), (R, !^location), (R, size), (L, value) )
 
@@ -78,6 +84,8 @@ type sym_or_string =
 type type_error = 
   | Unbound_name of sym_or_string
   | Name_bound_twice of sym_or_string
+  | Missing_struct of BT.tag
+  | Missing_predicate of Id.t
   | Missing_member of BT.tag * BT.member
 
   | Uninitialised of BT.member option
@@ -126,6 +134,10 @@ let pp_type_error = function
        | String str -> !^str
      in
      (!^"Name bound twice" ^^ colon ^^^ squotes name_pp, [])
+  | Missing_struct tag ->
+     (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined", [])
+  | Missing_predicate id ->
+     (!^"predicate" ^^^ Id.pp id ^^^ !^"not defined", [])
   | Missing_member (tag, member) ->
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])

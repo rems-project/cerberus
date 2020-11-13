@@ -140,6 +140,29 @@ let member_offset loc tag member =
   integer_value_to_num loc iv
 
 
+let struct_layout loc tag = 
+  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
+  let rec aux members position =
+    match members with
+    | [] -> 
+       return []
+    | (member, (attrs, qualifiers, ct)) :: members ->
+       let* offset = member_offset loc tag member in
+       let* size = size_of_ctype loc ct in
+       let to_pad = Z.sub offset position in
+       let padding = 
+         if Z.gt_big_int to_pad Z.zero 
+         then [(position, to_pad, None)] 
+         else [] 
+       in
+       let* rest = aux members (Z.add_big_int to_pad size) in
+       let member = [(offset, size, Some (member, (attrs, qualifiers, ct)))] in
+       return (padding @ member @ rest)
+  in
+  aux fields Z.zero
+
+
+
 
 let size_of_stored_type loc st = 
   match st with

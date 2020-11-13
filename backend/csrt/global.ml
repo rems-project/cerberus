@@ -4,6 +4,7 @@ open TypeErrors
 
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
+module IdMap = Map.Make(Id)
 module CF = Cerb_frontend
 module Loc = Locations
 module LC = LogicalConstraints
@@ -50,12 +51,15 @@ type struct_decl =
 
 type struct_decls = struct_decl SymMap.t
 
+type resource_predicate = { sort : LS.t list  }
+
 type t = 
   { struct_decls : struct_decls; 
     fun_decls : (Loc.t * FT.t) SymMap.t;
     impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
-    stdlib_funs : SymSet.t
+    stdlib_funs : SymSet.t;
+    resource_predicates : resource_predicate IdMap.t;
   } 
 
 let empty = 
@@ -64,14 +68,13 @@ let empty =
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
     stdlib_funs = SymSet.empty;
+    resource_predicates = IdMap.empty;
   }
 
 let get_struct_decl loc struct_decls tag = 
   match SymMap.find_opt tag struct_decls with
   | Some decl -> return decl 
-  | None -> 
-     let err = !^"struct" ^^^ Sym.pp tag ^^^ !^"not defined" in
-     fail loc (Generic err)
+  | None -> fail loc (Missing_struct tag)
 
 let get_member_raw loc struct_decls tag member = 
   let* decl = get_struct_decl loc struct_decls tag in
@@ -91,6 +94,11 @@ let get_member_offset loc struct_decls tag member =
   | Some size -> return size
   | None -> fail loc (Missing_member (tag, member))
 
+let get_predicate_def loc global id = 
+  match IdMap.find_opt id global.resource_predicates with
+  | Some def -> return def
+  | None -> fail loc (Missing_predicate id)
+
 
 
 let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
@@ -100,6 +108,9 @@ let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 let pp_struct_decl (sym,decl) = 
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
        (Pp.list (fun (m, bt) -> typ (Id.pp m) (BT.pp true bt)) decl.raw) 
+  ^/^
+  item ("struct " ^ plain (Sym.pp sym) ^ " (representable)") 
+       (LC.pp (decl.representable (IT.S (Sym.fresh_named "struct_value"))))
   ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed)") 
        (RT.pp decl.closed)

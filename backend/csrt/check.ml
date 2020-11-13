@@ -930,62 +930,84 @@ and check_pexpr_pop (loc : loc) delta {local; global} (pe : 'bty pexpr)
 
 (*** memory related logic *****************************************************)
 
-let rec remove_owned_subtree (loc: loc) {local;global} (bt : BT.t) (pointer: IT.t) (size: RE.size) 
-          access_kind is_field = 
-  match bt with
-  | Struct tag ->
-     let* decl = Global.get_struct_decl loc global.struct_decls tag in
-     ListM.fold_leftM (fun local (member,bt) ->
-         remove_owned_subtree loc {local;global} bt
-           (IT.MemberOffset (tag,pointer,member)) size access_kind (Some member)
-       ) local decl.raw
-  | _ ->
-     let* o_member_resource = resource_for_fp loc {local;global} (pointer,size) in
-     match o_member_resource with
-     | Some (rname,_) -> L.use_resource loc rname [loc] local
-     | None -> 
-        let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
-        fail loc (Missing_ownership (access_kind, is_field, olast_used))
+
+type needed_resource = 
+  | Uninit
+  | Points
+  | Predicate of Id.t
+
+(* let resolve_resource_mismatch loc {local; global} have need =
+ *   match have, need with
+ *   | Uninit u, Uninit -> u *)
+
+
+
+let rec remove_ownership (loc: loc) {local;global} (pointer: IT.t) (need_size: RE.size) 
+          access_kind = 
+  if Z.equal need_size Z.zero then return local 
+  else
+    let* o_resource = Solver.resource_for_pointer loc {local; global} pointer in
+    match o_resource with
+    | Some (resource_name, resource) -> 
+       let have_size = RE.size resource in
+       if Z.ge_big_int need_size have_size then 
+         let* local = L.use_resource loc resource_name [loc] local in
+         remove_ownership loc {local; global} (Offset (pointer, Num have_size)) 
+           (Z.sub need_size have_size) access_kind
+       else
+         (* if the resource is bigger than needed, keep the remainder
+            as unitialised memory *)
+         let* local = L.use_resource loc resource_name [loc] local in
+         let local = 
+           add_ur (RE.Uninit {pointer = Offset (pointer, Num need_size); 
+                              size = Z.sub have_size need_size}) local
+         in
+         return local
+    | None -> 
+       let* olast_used = used_resource_for_fp loc {local;global} (pointer,need_size) in
+       fail loc (Missing_ownership (access_kind, None, olast_used))
+
+
 
 
   
-let rec load (loc: loc) 
-             {local;global}
-             (bt: BT.t)
-             (pointer: IT.t)
-             (size: RE.size)
-             (path: IT.t)
-             (is_field: BT.member option) 
-  =
-  let open RT in
-  match bt with
-  | Struct tag ->
-     let* decl = Global.get_struct_decl loc global.struct_decls tag in
-     let rec aux = function
-       | (member,member_bt)::members ->
-          let member_pointer = IT.MemberOffset (tag,pointer,member) in
-          let member_path = IT.Member (tag, path, member) in
-          let* member_size = Global.get_member_size loc global.struct_decls tag member in
-          let* constraints = aux members in
-          let* constraints2 = load loc {local;global} member_bt member_pointer 
-                                member_size member_path (Some member)in
-          return (constraints2@@constraints)
-       | [] -> return I
-     in  
-     aux decl.raw
-  | _ ->
-     let* o_resource = resource_for_fp loc {local;global} (pointer,size) in
-     let* pointee = match o_resource with
-       | Some (_,Points p) -> return p.pointee
-       | Some (_,Uninit _) -> fail loc (Uninitialised is_field)
-       | None -> 
-          let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
-          fail loc (Missing_ownership (Load, is_field, olast_used))
-     in
-     let* vls = L.get_l loc pointee local in
-     if LS.equal vls (Base bt) 
-     then return (Constraint (LC (IT.EQ (path, S pointee)),I))
-     else fail loc (Mismatch {has=vls; expect=Base bt})
+let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
+         (size: RE.size) (return_it: IT.t) (is_field: BT.member option) =
+
+  let rec aux {local;global} bt pointer size path is_field = 
+
+    match bt with
+    | Struct tag ->
+       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let rec aux_members = function
+         | (member,member_bt)::members ->
+            let member_pointer = IT.MemberOffset (tag,pointer,member) in
+            let member_path = IT.Member (tag, path, member) in
+            let* member_size = Global.get_member_size loc global.struct_decls tag member in
+            let* constraints = aux_members members in
+            let* constraints2 = aux {local;global} member_bt member_pointer 
+                                  member_size member_path (Some member) in
+            return (constraints2 @ constraints)
+         | [] -> return []
+       in  
+       aux_members decl.raw
+    | _ ->
+       let* o_resource = resource_for_fp loc {local;global} (pointer,size) in
+       let* pointee = match o_resource with
+         | Some (_,Points p) -> return p.pointee
+         | Some (_,Uninit _) -> fail loc (Uninitialised is_field)
+         | None -> 
+            let* olast_used = used_resource_for_fp loc {local;global} (pointer,size) in
+            fail loc (Missing_ownership (Load, is_field, olast_used))
+         | _ -> fail loc (Internal !^"todo")
+       in
+       let* vls = L.get_l loc pointee local in
+       if LS.equal vls (Base bt) 
+       then return [IT.EQ (path, S pointee)]
+       else fail loc (Mismatch {has=vls; expect=Base bt})
+  in
+  let* constraints = aux {local; global} bt pointer size return_it is_field in
+  return (LC (And constraints))
 
 
 
@@ -1027,12 +1049,30 @@ let rec store (loc: loc)
           return (Resource (Uninit {pointer; size}, I))
 
 
+
+(* todo: right access kind *)
+let pack_stored_struct loc {local; global} (pointer: IT.t) (tag: BT.tag) =
+  let* size = Memory.size_of_struct loc tag in
+  let v = Sym.fresh () in
+  let bt = Struct tag in
+  let* constraints = load loc {local; global} (Struct tag) pointer size (S v) None in
+  let* local = remove_ownership loc {local; global} pointer size Load in
+  let rt = 
+    RT.Logical ((v, Base bt), 
+    RT.Resource (Points {pointer; pointee = v; size},
+    RT.Constraint (constraints, RT.I)))
+  in
+  return rt
+
+
+
+
 let ensure_aligned loc {local; global} access pointer ctype = 
   let* (aligned, _, _) = 
     Solver.constraint_holds loc {local; global} false
       (LC.LC (Aligned (St.of_ctype ctype, pointer))) 
   in
-  if aligned then return () else fail loc (Misaligned Store)
+  if aligned then return () else fail loc (Misaligned access)
 
 
 
@@ -1132,8 +1172,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
             ensure_aligned loc {local; global} Kill (S arg.lname) cti.ct
           in
           let* size = Memory.size_of_ctype loc cti.ct in
-          let* local = remove_owned_subtree loc {local; global} cti.bt
-                         (S arg.lname) size Kill None in
+          let* local = remove_ownership loc {local; global} (S arg.lname) size Kill in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
        | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1158,8 +1197,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           in
           let* size = Memory.size_of_ctype loc act.item.ct in
           let* local = 
-            remove_owned_subtree parg.loc {local; global} varg.bt 
-              (S parg.lname) size Store None in
+            remove_ownership parg.loc {local; global}(S parg.lname) size Store in
           let* bindings = 
             store loc {local; global} varg.bt (S parg.lname) 
               size (Some (S varg.lname)) in
@@ -1176,7 +1214,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* constraints = 
             load loc {local; global} act.item.bt (S parg.lname) size (S ret) None 
           in
-          let rt = RT.Computational ((ret, act.item.bt), constraints) in
+          let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, RT.I)) in
           return (Normal (rt, local))
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
           fail loc (Unsupported !^"todo: RMW")
@@ -1204,25 +1242,8 @@ let rec infer_expr (loc : loc) {local; labels; global}
        begin match bt with
          | FunctionPointer sym -> 
             let* (_loc, ft) = G.get_fun_decl loc global sym in
-            (* let in_stdlib = SymSet.mem sym global.stdlib_funs in
-             * if in_stdlib && Sym.name sym = Some "free_proxy" then 
-             *   let* arg = match args with
-             *     | [arg] -> return arg
-             *     | _ -> fail loc (Number_arguments {has = List.length args; expect = 1})
-             *   in
-             *   let* () = ensure_base_type loc ~expect:Loc arg.bt in
-             *   let* psize = Memory.size_of_pointer loc in
-             *   let pointer = Sym.fresh () in
-             *   let* pointer_it = 
-             *     load loc {local; global} BT.Loc (S arg.lname) 
-             *       psize (S pointer) None 
-             *   in
-             *   (\* let* local = remove_owned_subtree loc {local; global} cti.bt 
-             *    *                (S arg.lname) cti.size Kill None in *\)
-             *   fail loc (Generic (!^"TODO: free"))
-             * else *)
-              let* (rt, local) = calltype_ft loc {local; global} args ft in
-              return (Normal (rt, local))
+            let* (rt, local) = calltype_ft loc {local; global} args ft in
+            return (Normal (rt, local))
          | _ -> 
             fail (Loc.update_a loc afsym.annot) 
               (Generic !^"expected function pointer")

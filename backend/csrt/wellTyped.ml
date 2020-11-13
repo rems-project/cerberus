@@ -170,9 +170,24 @@ end
 module WRE = struct
   open Resources
   type t = Resources.t
-  let welltyped loc env = function
-    | Uninit u -> WIT.check loc env (LS.Base BT.Loc) u.pointer
-    | Points p -> WIT.check loc env (LS.Base BT.Loc) p.pointer
+  let welltyped loc {local; global} = function
+    | Uninit u -> WIT.check loc {local; global} (LS.Base BT.Loc) u.pointer
+    | Padding p -> WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
+    | Points p -> WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
+    | Predicate p -> 
+       let* () = WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer in
+       let* def = Global.get_predicate_def loc global p.name in
+       let* () = 
+         let has = List.length def.sort in
+         let expect = List.length p.args in
+         if has = expect then return ()
+         else fail loc (Number_arguments {has; expect})
+       in
+       ListM.iterM (fun (arg,expected_sort) ->
+           let* has_sort = Local.get_l loc arg local in
+           if LS.equal has_sort expected_sort then return ()
+           else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
+         ) (List.combine p.args def.sort)
 end
 
 
