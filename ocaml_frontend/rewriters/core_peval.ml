@@ -2,6 +2,8 @@
 open Core_rewriter
 open Core
 
+open Debug_ocaml
+
 
 (* TODO: move this to Core_aux *)
 let rec match_pattern_pexpr (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
@@ -478,10 +480,9 @@ let core_peval file : 'bty RW.rewriter =
                             ( Identity.return (Pexpr (annots, bTy, PEval cval))
                             , Identity.return )
                       | Right (Undef (_, ubs)) ->
-                          failwith (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
+                          error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                       | Right (Error (_, str)) ->
-                          print_endline str;
-                          exit 1
+                          error str
                       | Left err ->
                           Traverse
 (*
@@ -520,12 +521,11 @@ let core_peval file : 'bty RW.rewriter =
                             ( Identity.return pe3
                             , Identity.return )
                       | Right (Defined _) ->
-                          failwith "PEif -> not Vtrue or Vfalse"
+                          error "PEif -> not Vtrue or Vfalse"
                       | Right (Undef (_, ubs)) ->
-                          failwith (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
+                          error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                       | Right (Error (_, str)) ->
-                          print_endline str;
-                          exit 1
+                          error str
                       | Left err ->
                           Traverse
                     end
@@ -537,7 +537,7 @@ let core_peval file : 'bty RW.rewriter =
                           print_endline "\n===========================================";
                           PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout (Pp_core.Basic.pp_pexpr pe1);
                           print_endline "\n===========================================";
-                          failwith "PEcase mismatched"
+                          error "PEcase mismatched"
                       | `MATCHED (None, pe') ->
                           ChangeDoChildrenPost
                             ( Identity.return pe'
@@ -600,7 +600,7 @@ let core_peval file : 'bty RW.rewriter =
           | Esseq (pat, e1, e2) -> (* TODO !!! *)
               begin match match_pattern_expr pat e1 with
                 | `MISMATCHED ->
-                    failwith (String_core.string_of_expr e1)
+                    error (String_core.string_of_expr e1)
                 | `MATCHED (None, xs) ->
                     ChangeDoChildrenPost
                       ( Identity.return (apply_substs_expr xs e2)
@@ -647,12 +647,11 @@ let core_peval file : 'bty RW.rewriter =
                       ( Identity.return e3
                       , Identity.return )
                 | Right (Defined _) ->
-                    failwith "PEif -> not Vtrue or Vfalse"
+                    error "PEif -> not Vtrue or Vfalse"
                 | Right (Undef (_, ubs)) ->
-                    failwith (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
+                    error (String.concat ", " (List.map Undefined.stringFromUndefined_behaviour ubs))
                 | Right (Error (_, str)) ->
-                    print_endline str;
-                    exit 1
+                    error str
                 | Left err ->
                     Traverse
               end
@@ -662,7 +661,7 @@ let core_peval file : 'bty RW.rewriter =
                 | `MULTIPLE ->
                     Traverse
                 | `MISMATCHED ->
-                    failwith "Ecase mismatched"
+                    error "Ecase mismatched"
                 | `MATCHED (None, e') ->
                     ChangeDoChildrenPost
                       ( Identity.return e'

@@ -8,6 +8,8 @@ open Core
 open Mucore
 open Annot
 
+open Debug_ocaml
+
 module Loc = Location_ocaml
 
 (* The a-normalisation should happen after some partial evaluation and
@@ -91,14 +93,14 @@ let ensure_ctype__pexpr = function
 let fensure_ctype__pexpr err pe : (ctype,'b) a = 
   match ensure_ctype__pexpr pe with
   | Some ctype1 -> ctype1
-  | None -> failwith err
+  | None -> error err
 
 
 
 
 
 let core_to_mu__ctor loc ctor : core_base_type mu_ctor = 
-  let loc = Loc.location_to_string loc in
+  (* let loc = Loc.location_to_string loc in *)
   match ctor with 
   | Core.Cnil bt1 -> M_Cnil bt1
   | Core.Ccons -> M_Ccons
@@ -111,11 +113,11 @@ let core_to_mu__ctor loc ctor : core_base_type mu_ctor =
   | Core.Cspecified -> M_Cspecified
   | Core.Cfvfromint-> M_Cfvfromint
   | Core.Civfromfloat -> M_Civfromfloat
-  | Core.Civmax -> failwith (loc ^ ". core_anormalisation: Civmax")
-  | Core.Civmin -> failwith (loc ^ ". core_anormalisation: Civmin")
-  | Core.Civsizeof -> failwith (loc ^ ". core_anormalisation: Civsizeof")
-  | Core.Civalignof -> failwith (loc ^ ". core_anormalisation: Civalignof")
-  | Core.Cunspecified -> failwith (loc ^ ". core_anormalisation: Cunspecified")
+  | Core.Civmax -> error ("core_anormalisation: Civmax")
+  | Core.Civmin -> error ("core_anormalisation: Civmin")
+  | Core.Civsizeof -> error ("core_anormalisation: Civsizeof")
+  | Core.Civalignof -> error ("core_anormalisation: Civalignof")
+  | Core.Cunspecified -> error ("core_anormalisation: Cunspecified")
 
 
 let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : core_base_type Mucore.mu_pattern = 
@@ -179,7 +181,7 @@ and n_lv loc domain v k :'a =
   | LVspecified ov ->
      n_ov loc domain ov (fun ov -> k (M_LVspecified ov))
   | LVunspecified ct1 ->
-     failwith "core_anormalisation: LVunspeified"
+     error "core_anormalisation: LVunspeified"
 
 
 and n_val loc domain v k :'a = 
@@ -189,7 +191,7 @@ and n_val loc domain v k :'a =
   | Vunit -> k M_Vunit
   | Vtrue -> k M_Vtrue
   | Vfalse -> k M_Vfalse
-  | Vctype ct1 -> failwith "core_anormalisation: Vctype"
+  | Vctype ct1 -> error "core_anormalisation: Vctype"
   | Vlist (cbt, vs) -> 
      n_val_names loc domain vs (fun vs -> k (M_Vlist (cbt, vs)))
   | Vtuple vs -> 
@@ -320,7 +322,7 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
      n_pexpr_name loc domain e' (fun e' ->
      k (annotate (M_PEunion(sym1, id1, e'))))
   | PEcfunction e' ->
-     failwith "core_anormalisation: PEcfunction"
+     error "core_anormalisation: PEcfunction"
   | PEmemberof(sym1, id1, e') ->
      n_pexpr_name loc domain e' (fun e' ->
      k (annotate (M_PEmemberof(sym1, id1, e'))))
@@ -337,17 +339,17 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
      let e''' = normalise_pexpr loc pexpr_n_pexpr_domain e''' in
      k (annotate (M_PEif(e', e'', e'''))))
   | PEis_scalar e' ->
-     failwith "core_anormalisation: PEis_scalar"
+     error "core_anormalisation: PEis_scalar"
   | PEis_integer e' ->
-     failwith "core_anormalisation: PEis_integer"
+     error "core_anormalisation: PEis_integer"
   | PEis_signed e' ->
-     failwith "core_anormalisation: PEis_signed"
+     error "core_anormalisation: PEis_signed"
   | PEis_unsigned e' ->
-     failwith "core_anormalisation: PEis_unsigned"
+     error "core_anormalisation: PEis_unsigned"
   | PEbmc_assume e' ->
-     failwith "core_anormalisation: PEbmc_assume"
+     error "core_anormalisation: PEbmc_assume"
   | PEare_compatible(e', e'') ->
-     failwith "core_anormalisation: PEare_compatible"
+     error "core_anormalisation: PEare_compatible"
 
 and normalise_pexpr (loc : Loc.t) (domain : 'a n_pexpr_domain) (e'' : unit pexpr) = 
   n_pexpr loc domain e'' (fun e -> e)
@@ -565,7 +567,7 @@ let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr =
            string_of_int (List.length pexprs1) ^ 
              " arguments"
      in
-     failwith err
+     error err
 
 
 let rec normalise_expr loc e : (ctype, core_base_type, unit) Mucore.mu_expr =
@@ -625,7 +627,7 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
      let ct1 = ((match ct1 with
        | Core.Pexpr(annots, bty, (Core.PEval (Core.Vctype ct1))) -> 
           (a_pack annots bty ct1)
-       | _ -> failwith "core_anormalisation: Eccall with non-ctype first argument"
+       | _ -> error "core_anormalisation: Eccall with non-ctype first argument"
     )) in
      (* n_pexpr_in_expr_name e1 (fun e1 -> *)
      n_pexpr_in_expr_name e2 (fun e2 ->
@@ -635,7 +637,7 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
      n_pexpr_in_expr_names es (fun es ->
      k (wrap (M_Eproc(name1, es))))
   | Eunseq es ->
-     failwith "todo Eunseq"
+     error "core_anormalisation: Eunseq"
   | Ewseq(pat, e1, e2) ->
      n_expr e1 (fun e1 ->
      wrap (M_Ewseq(core_to_mu__pattern loc pat, e1, n_expr e2 k)))
@@ -643,9 +645,9 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
      n_expr e1 (fun e1 ->
      wrap (M_Esseq(core_to_mu__pattern loc pat, e1, n_expr e2 k)))
   | Easeq(b, action3, paction2) ->
-     failwith "todo Easeq"
+     error "core_anormalisation: Easeq"
   | Eindet(n, e) ->
-     failwith "todo Eindet"
+     error "core_anormalisation: Eindet"
   | Ebound(n, e) ->
      wrap (M_Ebound(n, (n_expr e k)))
   | End es ->
@@ -660,9 +662,9 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
      n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Erun(sym1, pes))))
   | Epar es -> 
-     failwith "todo Epar"
+     error "core_anormalisation: Epar"
   | Ewait tid1 ->
-     failwith "todo Ewait"
+     error "core_anormalisation: Ewait"
 
 
 
@@ -692,7 +694,8 @@ let normalise_fun_map_decl
               (map (fun (sym1,(((_,mctb),_))) -> 
                    (match mctb with
                     | Some (ct1,b) -> (Some sym1, (ct1,b))
-                    | None -> failwith "label without c-type argument annotation"
+                    | None -> 
+                       error "core_anormalisation: label without c-type argument annotation"
                    )
                  ) params) 
             in
@@ -737,15 +740,66 @@ let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)
 
 
-let normalise_file file1 : (ft, lt, ct, bt, st, ut, unit) Mucore.mu_file= 
-   ({ mu_main = (file1.main)
-   ; mu_tagDefs = (normalise_tag_definitions file1.tagDefs)
-   ; mu_stdlib = (normalise_fun_map file1.stdlib)
-   ; mu_impl = (normalise_impl file1.impl)
-   ; mu_globs = (normalise_globs_list file1.globs)
-   ; mu_funs = (normalise_fun_map file1.funs)
-   ; mu_extern = (file1.extern)
-   ; mu_funinfo = (normalise_funinfos file1.funinfo)
-   ; mu_loop_attributes = file1.loop_attributes0
+let rec ctype_contains_function_pointer (Ctype.Ctype ([], ct_)) = 
+  match ct_ with
+  | Void -> false
+  | Basic _ -> false
+  | Array (ct, _) -> ctype_contains_function_pointer ct
+  | Function _ -> true
+  | Pointer (_, ct) -> ctype_contains_function_pointer ct
+  | Atomic ct -> ctype_contains_function_pointer ct
+  | Struct _ -> false
+  | Union _ -> false
+
+
+let check_supported file =
+  let _ = 
+    Pmap.iter (fun _sym def -> 
+        let (loc, _attrs, ret_ctype, args,  variadic, _) = def in
+        if ctype_contains_function_pointer ret_ctype ||
+             List.exists (fun (_,ct) -> ctype_contains_function_pointer ret_ctype) args
+        then 
+          let err = Errors.UNSUPPORTED "function pointers" in
+          Pp_errors.fatal (Pp_errors.to_string (loc, err)); 
+        else if variadic then
+          let err = Errors.UNSUPPORTED "variadic functions" in
+          Pp_errors.fatal (Pp_errors.to_string (loc, err)); 
+        else
+          ()
+      ) file.funinfo
+  in
+  let _ = 
+    Pmap.iter (fun _sym def -> 
+        match def with
+        | Ctype.StructDef (members, flexible_array_members) ->
+           if List.exists (fun (_,(_,_,ct)) -> ctype_contains_function_pointer ct) members 
+           then 
+             let err = Errors.UNSUPPORTED "function pointers" in
+             Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
+           else if flexible_array_members <> None then
+             let err = Errors.UNSUPPORTED "function pointers" in
+             Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
+           else ()
+        | Ctype.UnionDef members ->
+           if List.exists (fun (_,(_,_,ct)) -> ctype_contains_function_pointer ct) members 
+           then 
+             let err = Errors.UNSUPPORTED "function pointers" in
+             Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
+           else ()
+      ) file.tagDefs
+  in
+  ()
+
+let normalise_file file : (ft, lt, ct, bt, st, ut, unit) Mucore.mu_file = 
+  check_supported file;
+   ({ mu_main = (file.main)
+   ; mu_tagDefs = (normalise_tag_definitions file.tagDefs)
+   ; mu_stdlib = (normalise_fun_map file.stdlib)
+   ; mu_impl = (normalise_impl file.impl)
+   ; mu_globs = (normalise_globs_list file.globs)
+   ; mu_funs = (normalise_fun_map file.funs)
+   ; mu_extern = (file.extern)
+   ; mu_funinfo = (normalise_funinfos file.funinfo)
+   ; mu_loop_attributes = file.loop_attributes0
   })
 
