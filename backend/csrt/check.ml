@@ -361,7 +361,7 @@ let unpack_resources loc {local; global} =
              ) (def.clauses p.pointer)
          in
          begin match possible_unpackings with
-         | [] -> fail loc (Internal !^"inconsistent state with every possible resource unpacking")
+         | [] -> Debug_ocaml.error "inconsistent state with every possible resource unpacking"
          | [new_local] -> return new_local
          | _ -> return local
          end
@@ -562,7 +562,7 @@ let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : vt m =
       return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Pointer loc))) )
-    ( fun () -> fail loc (Internal !^"unspecified pointer value") )
+    ( fun () -> fail loc (Generic !^"unspecified pointer value") )
 
 let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : vt m =
   let open BT in
@@ -572,7 +572,7 @@ let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : vt m =
       fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
     ( fun it iv -> 
       let ret = Sym.fresh () in
-      let* v = Memory.integer_value_to_num loc iv in
+      let v = Memory.integer_value_to_num loc iv in
       return (ret, Integer, LC (EQ (S ret, Num v))) )
     ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
     ( fun _ ptrval -> infer_ptrval loc {local; global} ptrval  )
@@ -601,7 +601,7 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
     | [], [] -> 
        return []
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-       fail loc (Internal !^"mismatch in fields in infer_struct")
+       Debug_ocaml.error "mismatch in fields in infer_struct"
     | [], ((member, _) :: _) ->
        fail loc (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing"))
     | ((member,_) :: _), [] ->
@@ -622,7 +622,7 @@ let infer_object_value (loc : loc) {local; global}
   match ov with
   | M_OVinteger iv ->
      let ret = Sym.fresh () in
-     let* i = Memory.integer_value_to_num loc iv in
+     let i = Memory.integer_value_to_num loc iv in
      return (ret, Integer, LC (EQ (S ret, Num i)))
   | M_OVpointer p -> 
      infer_ptrval loc {local; global} p
@@ -858,7 +858,7 @@ let rec infer_pexpr (loc : loc) {local; global}
        let rt = RT.Computational ((ret, bt), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEimpl i ->
-       let* bt = G.get_impl_constant loc global i in
+       let bt = G.get_impl_constant loc global i in
        return (Normal (RT.Computational ((Sym.fresh (), bt), I), local))
     | M_PEval v ->
        let* vt = infer_value loc {local; global} v in
@@ -938,7 +938,8 @@ let rec infer_pexpr (loc : loc) {local; global}
        fail loc (Unsupported !^"todo: M_PEmemberof")
     | M_PEcall (called, asyms) ->
        let* decl_typ = match called with
-         | CF.Core.Impl impl -> G.get_impl_fun_decl loc global impl 
+         | CF.Core.Impl impl -> 
+            return (G.get_impl_fun_decl loc global impl )
          | CF.Core.Sym sym -> 
             let* (_, t) = G.get_fun_decl loc global sym in 
             return t
@@ -953,7 +954,7 @@ let rec infer_pexpr (loc : loc) {local; global}
          | M_Pat pat -> pattern_match_rt loc pat rt
        in
        infer_pexpr_pop loc delta {local; global} e2
-    | M_PEcase _ -> fail loc (Internal !^"PEcase in inferring position")
+    | M_PEcase _ -> Debug_ocaml.error "PEcase in inferring position"
     | M_PEif (casym, e1, e2) ->
        let* carg = arg_of_asym loc local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
@@ -1132,7 +1133,7 @@ let rec store (loc: loc)
 (* not used right now *)
 (* todo: right access kind *)
 let pack_stored_struct loc {local; global} (pointer: IT.t) (tag: BT.tag) =
-  let* size = Memory.size_of_struct loc tag in
+  let size = Memory.size_of_struct loc tag in
   let v = Sym.fresh () in
   let bt = Struct tag in
   let* constraints = load loc {local; global} (Struct tag) pointer size (S v) None in
@@ -1200,7 +1201,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* local = unpack_resources loc {local; global} in
           let* arg = arg_of_asym loc local asym in
           let ret = Sym.fresh () in
-          let* size = Memory.size_of_ctype loc act.item.ct in
+          let size = Memory.size_of_ctype loc act.item.ct in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let* o_resource = 
             Solver.resource_for_pointer loc {local; global} (S arg.lname)
@@ -1237,7 +1238,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
-          let* size = Memory.size_of_ctype loc act.item.ct in
+          let size = Memory.size_of_ctype loc act.item.ct in
           let* lrt = store loc {local; global} act.item.bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
@@ -1259,7 +1260,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = 
             ensure_aligned loc {local; global} Kill (S arg.lname) cti.ct
           in
-          let* size = Memory.size_of_ctype loc cti.ct in
+          let size = Memory.size_of_ctype loc cti.ct in
           let* local = remove_ownership loc {local; global} (S arg.lname) size (Access Kill) in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
@@ -1283,7 +1284,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
             if in_range then return () else
               fail loc (Generic !^"write value unrepresentable")
           in
-          let* size = Memory.size_of_ctype loc act.item.ct in
+          let size = Memory.size_of_ctype loc act.item.ct in
           let* local = 
             remove_ownership parg.loc {local; global}(S parg.lname) size (Access Store) in
           let* bindings = 
@@ -1298,7 +1299,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
             ensure_aligned loc {local; global} Load (S parg.lname) act.item.ct
           in
           let ret = Sym.fresh () in
-          let* size = Memory.size_of_ctype loc act.item.ct in
+          let size = Memory.size_of_ctype loc act.item.ct in
           let* constraints = 
             load loc {local; global} act.item.bt (S parg.lname) size (S ret) None 
           in
@@ -1341,7 +1342,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
        let* local = unpack_resources loc {local; global} in
        let* decl_typ = match fname with
          | CF.Core.Impl impl -> 
-            G.get_impl_fun_decl loc global impl
+            return (G.get_impl_fun_decl loc global impl)
          | CF.Core.Sym sym ->
             let* (_loc, decl_typ) = G.get_fun_decl loc global sym in
             return decl_typ
@@ -1363,7 +1364,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
        let* (False, local) = calltype_lt loc {local; global} args lt in
        let* () = all_empty loc local in
        return False
-    | M_Ecase _ -> fail loc (Internal !^"Ecase in inferring position")
+    | M_Ecase _ -> Debug_ocaml.error "Ecase in inferring position"
     | M_Eif (casym, e1, e2) ->
        let* carg = arg_of_asym loc local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in

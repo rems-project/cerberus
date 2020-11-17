@@ -118,7 +118,6 @@ type type_error =
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
-  | Internal of Pp.document
   | Unsupported of Pp.document
   | Generic of Pp.document
   | Generic_extra of Pp.document * document
@@ -263,8 +262,6 @@ let pp_type_error = function
   | StaticError err ->
      (!^("Static error: " ^ err), [])
 
-  | Internal err ->
-     (!^"Internal error" ^^ colon ^^^ err, [])
   | Unsupported unsupported ->
      (!^"Unsupported feature" ^^ colon ^^^ unsupported, [])
   | Generic err ->

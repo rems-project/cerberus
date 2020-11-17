@@ -31,13 +31,11 @@ module ImplMap =
 
 let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
   match ImplMap.find_opt i e with
-  | None -> 
-     let err = 
-       !^"Unbound implementation defined constant" ^^^
-         !^(CF.Implementation.string_of_implementation_constant i)
-     in
-     fail loc (Internal err)
-  | Some v -> return v
+  | None ->
+    Debug_ocaml.error
+      ("Unbound implementation defined constant " ^
+         (CF.Implementation.string_of_implementation_constant i))
+  | Some v -> v
 
 
 type closed_stored_predicate_definition =

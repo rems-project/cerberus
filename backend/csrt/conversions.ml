@@ -36,22 +36,22 @@ let rec bt_of_ct loc (CF.Ctype.Ctype (_,ct_)) =
   | Void -> return BT.Unit
   | Basic (Integer _) -> return BT.Integer
   | Basic (Floating _) -> fail loc (Unsupported !^"floats")
-  | Array _ -> fail loc (Unsupported !^"arrys")
+  | Array _ -> Debug_ocaml.error "arrays"
   | Function _ -> fail loc (Unsupported !^"function pointers")
   | Pointer _ -> return BT.Loc
   | Atomic ct -> bt_of_ct loc ct  (* check? *)
   | Struct tag -> return (BT.Struct tag)
-  | Union _ -> fail loc (Unsupported !^"union types")
+  | Union _ -> Debug_ocaml.error "union types"
 
 let bt_of_core_object_type loc ot =
   let open CF.Core in
   match ot with
   | OTy_integer -> return BT.Integer
   | OTy_pointer -> return BT.Loc
-  | OTy_array cbt -> return BT.Array
+  | OTy_array cbt -> Debug_ocaml.error "arrays"
   | OTy_struct tag -> return (BT.Struct tag)
-  | OTy_union _tag -> fail loc (Unsupported !^"todo: unions")
-  | OTy_floating -> fail loc (Unsupported !^"todo: float")
+  | OTy_union _tag -> Debug_ocaml.error "union types"
+  | OTy_floating -> fail loc (Unsupported !^"floats")
 
 let rec bt_of_core_base_type loc cbt =
   let open CF.Core in
@@ -66,8 +66,8 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_tuple bts -> 
      let* bts = ListM.mapM (bt_of_core_base_type loc) bts in
      return (BT.Tuple bts)
-  | BTy_storable -> fail loc (Unsupported !^"BTy_storable")
-  | BTy_ctype -> fail loc (Unsupported !^"ctype")
+  | BTy_storable -> Debug_ocaml.error "BTy_storageble"
+  | BTy_ctype -> Debug_ocaml.error "BTy_ctype"
 
 let bt_of_st loc st = 
   match st with
@@ -91,7 +91,7 @@ let struct_decl_sizes loc tag =
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (member, (_, _, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
-      let* size = Memory.size_of_ctype loc ct in
+      let size = Memory.size_of_ctype loc ct in
       return (member,size)
     ) fields
 
@@ -102,7 +102,7 @@ let struct_decl_offsets loc tag =
   let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (member, (_, _, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
-      let* offset = Memory.member_offset loc tag member in
+      let offset = Memory.member_offset loc tag member in
       return (member,offset)
     ) fields
 
@@ -116,7 +116,6 @@ let struct_decl_closed loc tag =
 
 let struct_decl_closed_stored loc tag = 
   let open RT in
-  let* size = Memory.size_of_struct loc tag in
   let rec aux loc tag struct_p = 
     let* layout = Memory.struct_layout loc tag in
     let* members = 
@@ -169,7 +168,7 @@ let struct_decl_closed_stored loc tag =
 let struct_decl_closed_stored_predicate loc tag = 
   let open RT in
   let struct_value = Sym.fresh () in
-  let* size = Memory.size_of_struct loc tag in
+  let size = Memory.size_of_struct loc tag in
   let* layout = Memory.struct_layout loc tag in
   let* members = 
     ListM.mapM (fun (offset, size, member_or_padding) ->
@@ -229,18 +228,15 @@ let struct_decl loc (tag : BT.tag) =
 let make_owned_pointer loc struct_decls pointer stored_type rt = 
   let open RT in
   let (Computational ((pointee,bt),lrt)) = rt in
-  let* size = Memory.size_of_stored_type loc stored_type in
+  let size = Memory.size_of_stored_type loc stored_type in
   let points = RE.Points {pointer = S pointer; pointee; size} in
-  let rt = 
-    Computational ((pointer,Loc),
-    Logical ((pointee, Base bt), 
-    Resource ((points, 
-    Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
-    Constraint (LC (IT.Aligned (stored_type, S pointer)),
-    Constraint (LC (EQ (AllocationSize (S pointer), Num size)),
-    lrt)))))))
-  in
-  return rt
+  Computational ((pointer,Loc),
+  Logical ((pointee, Base bt), 
+  Resource ((points, 
+  Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
+  Constraint (LC (IT.Aligned (stored_type, S pointer)),
+  Constraint (LC (EQ (AllocationSize (S pointer), Num size)),
+  lrt)))))))
 
 
 
@@ -266,11 +262,11 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let rt = RT.subst_var {before = s'; after = pointer} rt in
      return rt
   | CF.Ctype.Void -> 
-     fail loc (Unsupported !^"todo: void*")
+     Debug_ocaml.error "todo: void*"
   | _ ->
      let st = St.of_ctype ct in
      let* rt = rt_of_ctype loc struct_decls (Sym.fresh ()) ct in
-     make_owned_pointer loc struct_decls pointer st rt
+     return (make_owned_pointer loc struct_decls pointer st rt)
   end
 
 and rt_of_ctype loc struct_decls (s : Sym.t) ct =
@@ -299,7 +295,7 @@ and rt_of_ctype loc struct_decls (s : Sym.t) ct =
   | Basic (Floating _) -> 
      fail loc (Unsupported !^"floats")
   | Union sym -> 
-     fail loc (Unsupported !^"todo: union types")
+     Debug_ocaml.error "todo: union types"
   | Function _ -> 
      fail loc (Unsupported !^"function pointers")
 

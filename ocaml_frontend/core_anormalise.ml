@@ -740,7 +740,7 @@ let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)
 
 
-let rec ctype_contains_function_pointer (Ctype.Ctype ([], ct_)) = 
+let rec ctype_contains_function_pointer (Ctype.Ctype (_, ct_)) = 
   match ct_ with
   | Void -> false
   | Basic _ -> false

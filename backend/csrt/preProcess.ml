@@ -14,6 +14,8 @@ open CF.Mucore
 open TypeErrors
 open Pp
 
+open Debug_ocaml
+
 open ListM
 
 
@@ -337,13 +339,13 @@ let retype_impls (loc : Loc.t) impls =
 
 
 let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
-  let* ftyp = match Pmap.lookup fsym funinfo with
-    | Some (M_funinfo (_,_,ftyp,_,_)) -> return ftyp 
-    | None -> fail loc (Internal (Sym.pp fsym ^^^ !^"not found in funinfo"))
+  let ftyp = match Pmap.lookup fsym funinfo with
+    | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
+    | None -> error (Sym.pp_string fsym^" not found in funinfo")
   in
-  let* (names,farg_rts) = match Pmap.lookup fsym funinfo_extra with
-    | Some (names,arg_rts) -> return (names,arg_rts)
-    | None -> fail loc (Internal (Sym.pp fsym ^^^ !^"not found in funinfo"))
+  let (names,farg_rts) = match Pmap.lookup fsym funinfo_extra with
+    | Some (names,arg_rts) -> (names, arg_rts)
+    | None -> error (Sym.pp_string fsym^" not found in funinfo")
   in
   match def with
   | M_Return _ ->
@@ -352,11 +354,10 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
   | M_Label (argtyps,args,e,annots) -> 
      let loc = Loc.update_a loc annots in
      let* args = mapM (retype_arg loc) args in
-     let* argtyps = 
-       mapM (fun (msym, (ct,by_pointer)) ->
-           if by_pointer 
-           then return (msym,ct) 
-           else fail loc (Internal !^"label argument passed as value")
+     let argtyps = 
+       List.map (fun (msym, (ct,by_pointer)) ->
+           let () = if not by_pointer then error "label argument passed as value" in
+           (msym,ct) 
          ) argtyps
      in
      begin match CF.Annot.get_label_annot annots with
@@ -364,28 +365,23 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
      | Some (LAloop_continue loop_id)
      | Some (LAloop_break loop_id) 
        ->
-        begin match Pmap.lookup loop_id loop_attributes with
-        | Some attrs -> 
-           begin match Collect_rc_attrs.collect_rc_attrs attrs with
-           | [] -> 
-              fail loc (Generic (!^"need a type annotation here"))
-           | rc_attrs ->
-              let* (_,lt) = 
-                Rc_conversions.make_loop_label_spec_annot 
-                  loc names structs farg_rts argtyps rc_attrs 
-              in
-              let* e = retype_expr loc e in
-              return (M_Label (lt,args,e,annots))
-           end
-        | None -> 
+        let this_loop_attributes = Pmap.lookup loop_id loop_attributes in
+        begin match Option.map Collect_rc_attrs.collect_rc_attrs this_loop_attributes with
+        | None 
+        | Some []  ->
            fail loc (Generic (!^"need a type annotation for this loop"))
+        | Some rc_attrs -> 
+           let* (_,lt) = Rc_conversions.make_loop_label_spec_annot 
+                           loc names structs farg_rts argtyps rc_attrs  in
+           let* e = retype_expr loc e in
+           return (M_Label (lt,args,e,annots))
         end
-     | Some LAswitch -> 
-        fail loc (Unsupported (!^"todo: switch labels"))
      | Some LAreturn -> 
-        fail loc (Internal (!^"return label has not been inlined"))
+        error "return label has not been inlined"
+     | Some LAswitch -> 
+        error "switch labels"
      | None -> 
-        fail loc (Unsupported (!^"todo: non-loop labels"))
+        error "non-loop labels"
      end
 
 
@@ -456,12 +452,11 @@ let retype_tagDefs
          Global.struct_decl SymMap.t * 
            unit SymMap.t) m
   = 
-  let open Pp in
   PmapM.foldM 
     (fun tag def (acc,acc_structs,acc_unions) -> 
       match def with
       | M_UnionDef _ -> 
-         fail loc (Unsupported !^"todo: union types")
+         Debug_ocaml.error "todo: union types"
       | M_StructDef (fields, f) ->
          let* decl = Conversions.struct_decl loc tag in
          let acc = Pmap.add tag (M_StructDef ((fields, f), decl)) acc in

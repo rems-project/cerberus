@@ -85,7 +85,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     match List.nth_opt member_fun_decls i with
     | Some fundecl -> return fundecl
-    | None -> fail loc (Internal !^"nth_to_fundecl")
+    | None -> Debug_ocaml.error "nth_to_fundecl"
   in
   let member_to_fundecl tag member = 
     let* decl = Global.get_struct_decl loc global.struct_decls tag in
@@ -93,7 +93,9 @@ let rec of_index_term loc {local;global} ctxt it =
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = map fst decl.raw in
     let member_funs = combine member_names member_fun_decls in
-    assoc_err loc Id.equal member member_funs (Internal !^"member_to_fundecl")
+    match assoc_opt Id.equal member member_funs with
+    | Some member_fun -> return member_fun
+    | None -> Debug_ocaml.error "member_to_fundecl" 
   in
   match it with
   | Num n -> 
@@ -206,7 +208,7 @@ let rec of_index_term loc {local;global} ctxt it =
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | MemberOffset (tag, t, member) ->
      let* a = of_index_term loc {local;global} ctxt t in
-     let* offset = Memory.member_offset loc tag member in
+     let offset = Memory.member_offset loc tag member in
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      return (Z3.Arithmetic.mk_add ctxt [a;offset_n])
@@ -247,7 +249,7 @@ let rec of_index_term loc {local;global} ctxt it =
      let* fundecl = nth_to_fundecl bt i in
      return (Z3.Expr.mk_app ctxt fundecl [a])
   | Aligned (st,it') -> 
-     let* align = Memory.align_of_stored_type loc st in
+     let align = Memory.align_of_stored_type loc st in
      let* a = of_index_term loc {local;global} ctxt (Num align) in
      let* a' = of_index_term loc {local;global} ctxt it' in
      let t = 
@@ -270,17 +272,17 @@ let rec of_index_term loc {local;global} ctxt it =
      let (LC it) = rangef t in
      of_index_term loc {local; global} ctxt it
   | Nil _ ->
-     fail loc (Unsupported !^"todo: Z3: Nil")
+     Debug_ocaml.error "todo: Z3: Nil"
   | Cons _ ->
-     fail loc (Unsupported !^"todo: Z3: Cons")
+     Debug_ocaml.error "todo: Z3: Cons"
   | Tuple ts ->
-     fail loc (Unsupported !^"todo: Z3: Tuple")
+     Debug_ocaml.error "todo: Z3: Tuple"
   | Head t ->
-     fail loc (Unsupported !^"todo: Z3: Head")
+     Debug_ocaml.error "todo: Z3: Head"
   | Tail t ->
-     fail loc (Unsupported !^"todo: Z3: Tail")
+     Debug_ocaml.error "todo: Z3: Tail"
   | List (ts,bt) ->
-     fail loc (Unsupported !^"todo: Z3: List")
+     Debug_ocaml.error "todo: Z3: List"
 
 
 
@@ -294,12 +296,12 @@ let rec of_index_term loc {local;global} ctxt it =
 
 let handle_z3_problems loc todo =
   if not (Z3.Log.open_ logfile) then 
-    fail loc (Internal (!^("Z3 logfile: could not open " ^ logfile)))
+    Debug_ocaml.error ("Z3 logfile: could not open " ^ logfile)
   else 
     try let* result = todo () in Z3.Log.close (); return result with
     | Z3.Error (msg : string) -> 
        Z3.Log.close ();
-       fail loc (Internal (!^"Z3 error:" ^/^ !^msg))
+       Debug_ocaml.error ("Z3 error:" ^ msg)
 
 
 let debug_typecheck_lcs loc lcs {local;global} =
@@ -394,8 +396,8 @@ module StringMap = Map.Make(String)
 
 let evaluate loc model expr = 
   match Z3.Model.evaluate model expr true with
-  | None -> fail loc (Internal !^"failure constructing counter model")
-  | Some evaluated_expr -> return evaluated_expr
+  | None -> Debug_ocaml.error "failure constructing counter model"
+  | Some evaluated_expr -> evaluated_expr
 
 
 let all_it_names_good it = 
@@ -420,7 +422,7 @@ let model loc {local;global} context solver : TypeErrors.model option m =
        in
        ListM.fold_rightM (fun location_it acc ->
            let* expr = of_index_term loc {local; global} context location_it in
-           let* expr_val = evaluate loc model expr in
+           let expr_val = evaluate loc model expr in
            let expr_val = Z3.Expr.to_string expr_val in
            return (StringMap.add expr_val location_it acc)
          ) (from_context @ from_resources) StringMap.empty
@@ -437,7 +439,7 @@ let model loc {local;global} context solver : TypeErrors.model option m =
              | Some (_, RE.Points p) -> 
                 let* (Base ls) = L.get_l loc p.pointee local in
                 let* expr = of_index_term loc {local; global} context (S p.pointee) in
-                let* expr_val = evaluate loc model expr in
+                let expr_val = evaluate loc model expr in
                 begin match ls with
                 | Integer -> 
                    let expr_val = Z3.Expr.to_string expr_val in
@@ -446,17 +448,17 @@ let model loc {local;global} context solver : TypeErrors.model option m =
                    let expr_val = Z3.Expr.to_string expr_val in
                    return (Location (expr_val, p.size))
                 | Struct _ ->
-                   fail loc (Internal !^"todo: value of struct in counter model")
+                   Debug_ocaml.error "todo: value of struct in counter model"
                 | Array ->
-                   fail loc (Internal !^"todo: value of array in counter model")
+                   Debug_ocaml.error "todo: value of array in counter model"
                 | _ -> 
-                   fail loc (Internal !^"non-object stored in memory")
+                   Debug_ocaml.error "non-object stored in memory"
                 end
              | Some (_, RE.Predicate p) -> 
                 let* args = 
                   ListM.mapM (fun arg ->
                       let* expr = of_index_term loc {local; global} context (S arg) in
-                      let* expr_val = evaluate loc model expr in
+                      let expr_val = evaluate loc model expr in
                       return (Z3.Expr.to_string expr_val)
                     ) p.args
                 in
@@ -470,7 +472,7 @@ let model loc {local;global} context solver : TypeErrors.model option m =
      let* variable_locations =
        ListM.filter_mapM (fun (c, (l, bt)) ->
            let* expr = of_index_term loc {local; global} context (S l) in
-           let* expr_val = evaluate loc model expr in
+           let expr_val = evaluate loc model expr in
            let expr_val = Z3.Expr.to_string expr_val in
            let entry = match Sym.name c, bt with
              | Some name, BT.Loc -> Some { name; location = expr_val }

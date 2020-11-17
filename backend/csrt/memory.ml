@@ -13,8 +13,8 @@ module IT = IndexTerms
 
 let integer_value_to_num loc iv = 
   match CF.Impl_mem.eval_integer_value iv with
-  | Some v -> return v
-  | None -> fail loc (Internal !^"integer_value_to_num")
+  | Some v -> v
+  | None -> Debug_ocaml.error "integer_value_to_num returned None"
 
 
 
@@ -22,27 +22,26 @@ let integer_value_to_num loc iv =
 let size_of_integer loc it = 
   let impl = CF.Ocaml_implementation.get () in
   match impl.sizeof_ity it with
-  | Some n -> return (Z.of_int n)
-  | None -> fail loc (Internal !^"sizeof_pointer returned None")
+  | Some n -> Z.of_int n
+  | None -> Debug_ocaml.error "sizeof_pointer returned None"
 
 (* adapting from impl_mem *)
 let align_of_integer loc it =
   let impl = CF.Ocaml_implementation.get () in
   match impl.alignof_ity it with
-  | Some n -> return (Z.of_int n)
-  | None -> fail loc (Internal !^"alignof_pointer returned None")
+  | Some n -> Z.of_int n
+  | None -> Debug_ocaml.error "alignof_pointer returned None"
 
-let representable_integer loc it =
-  let* (min,max) = match it with
+let representable_integer loc it about =
+  let (min,max) = match it with
     | CF.Ctype.Bool -> 
-       return (Z.of_int 0, Z.of_int 1)
+       (Z.of_int 0, Z.of_int 1)
     | _ -> 
-       let* min = integer_value_to_num loc (CF.Impl_mem.min_ival it) in
-       let* max = integer_value_to_num loc (CF.Impl_mem.max_ival it) in
-       return (min, max)
+       let min = integer_value_to_num loc (CF.Impl_mem.min_ival it) in
+       let max = integer_value_to_num loc (CF.Impl_mem.max_ival it) in
+       (min, max)
   in
-  let lc about = LC.LC (IT.in_range (Num min) (Num max) about) in
-  return lc
+  LC.LC (IT.in_range (Num min) (Num max) about)
 
 
 
@@ -51,26 +50,23 @@ let representable_integer loc it =
 let size_of_pointer loc =
   let impl = CF.Ocaml_implementation.get () in
   match impl.sizeof_pointer with
-  | Some n -> return (Z.of_int n)
-  | None -> fail loc (Internal !^"sizeof_pointer returned None")
+  | Some n -> Z.of_int n
+  | None -> Debug_ocaml.error "sizeof_pointer returned None"
 
 (* from impl_mem *)
 let align_of_pointer loc =
   let impl = CF.Ocaml_implementation.get () in
   match impl.alignof_pointer  with
-  | Some n -> return (Z.of_int n)
-  | None -> fail loc (Internal !^"alignof_pointer returned None")
+  | Some n -> Z.of_int n
+  | None -> Debug_ocaml.error "alignof_pointer returned None"
 
 
-let representable_pointer loc = 
-  let* pointer_byte_size = size_of_pointer loc in
+let representable_pointer loc about = 
+  let pointer_byte_size = size_of_pointer loc in
   let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
   let max = Z.power_int_positive_big_int 2 (Z.sub_big_int pointer_size (Z.of_int 1)) in
-  let rangef about = 
-    LC.LC (IT.And [IT.LocLE (Pointer Z.zero, about); 
-                   IT.LocLE (about, Pointer max)])
-  in
-  return rangef
+  LC.LC (IT.And [IT.LocLE (Pointer Z.zero, about); 
+                 IT.LocLE (about, Pointer max)])
   
 
 
@@ -98,14 +94,14 @@ let rec representable_ctype loc (CF.Ctype.Ctype (_,ct_)) =
   let open CF.Ctype in
   match ct_ with
   | Void -> return (fun it -> LC.LC (EQ (it , Unit)))
-  | Basic (Integer it) -> representable_integer loc it
+  | Basic (Integer it) -> return (representable_integer loc it)
   | Basic (Floating _) -> fail loc (Unsupported !^"floats")
-  | Array _ -> fail loc (Unsupported !^"arrays")
-  | Function _ -> fail loc (Unsupported !^"todo: function pointers")
-  | Pointer _ -> representable_pointer loc
+  | Array _ -> Debug_ocaml.error "todo: arrays"
+  | Function _ -> fail loc (Unsupported !^"function pointers")
+  | Pointer _ -> return (representable_pointer loc)
   | Atomic ct -> representable_ctype loc ct
   | Struct tag -> representable_struct loc tag
-  | Union _ -> fail loc (Unsupported !^"union types")
+  | Union _ -> Debug_ocaml.error "todo: union types"
 
 and representable_struct loc tag = 
   let* (fields,_) = lookup_struct_in_tagDefs loc tag in
@@ -145,21 +141,20 @@ let struct_layout loc tag =
   let rec aux members position =
     match members with
     | [] -> 
-       return []
+       []
     | (member, (attrs, qualifiers, ct)) :: members ->
-       let* offset = member_offset loc tag member in
-       let* size = size_of_ctype loc ct in
+       let offset = member_offset loc tag member in
+       let size = size_of_ctype loc ct in
        let to_pad = Z.sub offset position in
        let padding = 
          if Z.gt_big_int to_pad Z.zero 
          then [(position, to_pad, None)] 
          else [] 
        in
-       let* rest = aux members (Z.add_big_int to_pad size) in
        let member = [(offset, size, Some (member, (attrs, qualifiers, ct)))] in
-       return (padding @ member @ rest)
+       padding @ member @ aux members (Z.add_big_int to_pad size)
   in
-  aux fields Z.zero
+  return (aux fields Z.zero)
 
 
 
@@ -180,4 +175,4 @@ let align_of_stored_type loc st =
 let representable_stored_type loc st = 
   match st with
   | St.ST_Ctype ct -> representable_ctype loc ct
-  | St.ST_Pointer -> representable_pointer loc
+  | St.ST_Pointer -> return (representable_pointer loc)
