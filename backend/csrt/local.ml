@@ -246,13 +246,15 @@ let add_uc lc local =
   add_c (Sym.fresh ()) lc local
 
 
-let add_r rname resource local = 
-  let lcs = 
-    List.map (fun (_,r) -> 
-        IT.Disjoint (RE.fp resource, RE.fp r)) (all_resources local
-      ) 
+let add_r rname r local = 
+  let lcs = match RE.fp r with
+    | None -> []
+    | Some fp ->
+       List.filter_map (fun (_,r') -> 
+           Option.bind (RE.fp r') (fun fp' -> Some (IT.Disjoint (fp, fp')))
+         ) (all_resources local) 
   in
-  add_uc (LC (And lcs)) (add (rname, Resource resource) local)
+  add_uc (LC (And lcs)) (add (rname, Resource r) local)
 
 let add_ur re local = 
   add_r (Sym.fresh ()) re local

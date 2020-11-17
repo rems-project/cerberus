@@ -69,6 +69,8 @@ let subst_var_l ?(re_subst_var=Resources.subst_var)
   in
   aux substitution lrt
 
+let subst_vars_l = Subst.make_substs subst_var_l
+
 let subst_var (substitution: (Sym.t, Sym.t) Subst.t) = function
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
@@ -145,11 +147,6 @@ let (pp,pp_l) =
   let pp rt = flow (break 1) (aux rt) in
 
   (pp,pp_l)
-
-
-
-
-
 
 
 

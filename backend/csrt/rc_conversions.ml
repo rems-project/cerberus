@@ -335,8 +335,8 @@ and of_type_expr loc names te : tb m =
         in
         let* B ((bnew, pointee, bt, o_size_and_alignment), lrt) = 
           of_type_expr loc names type_expr in
-        let* points, align = match o_size_and_alignment with
-          | Some (size,align) -> return (RE.Points {pointer = S name; pointee; size}, align)
+        let* points, size, align = match o_size_and_alignment with
+          | Some (size,align) -> return (RE.Points {pointer = S name; pointee; size}, size, align)
           | None -> fail loc (Generic !^"pointer to non-object")
         in
         let lrt = match bnew with
@@ -345,13 +345,13 @@ and of_type_expr loc names te : tb m =
              Resource (points, 
              Constraint (LC (Representable (ST_Pointer, S name)), 
              Constraint (LC (AlignedI (Num align, S name)), 
-             Constraint (LC (EQ (AllocationSize (S name), Num (RE.size points))),
+             Constraint (LC (EQ (AllocationSize (S name), Num size)),
              lrt)))))
           | Old -> 
              Resource (points, 
              Constraint (LC (Representable (ST_Pointer, S name)), 
              Constraint (LC (AlignedI (Num align, S name)), 
-             Constraint (LC (EQ (AllocationSize (S name), Num (RE.size points))),
+             Constraint (LC (EQ (AllocationSize (S name), Num size)),
              lrt))))
         in
         return (B ((bnewp, name, BT.Loc, Some (psize, palign)), lrt))

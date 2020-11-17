@@ -36,7 +36,7 @@ let record_funinfo global funinfo =
         fail loc' (Unsupported err)
       else
         let () = debug 2 (lazy (item "recording function type" (FT.pp ftyp))) in
-        (* let* () = WellTyped.WFT.welltyped loc {local = L.empty; global} ftyp in *)
+        let* () = WellTyped.WFT.welltyped loc' {local = L.empty; global} ftyp in
         let fun_decls = SymMap.add fsym (loc', ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global

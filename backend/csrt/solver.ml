@@ -341,7 +341,7 @@ let constraint_holds loc {local;global} do_model c =
   | UNKNOWN -> return (false,ctxt,solver)
 
 
-let is_reachable loc {local;global} =
+let is_consistent loc {local;global} =
   let* (unreachable,_,_) = 
     constraint_holds loc {local;global} false (LC (Bool false)) in
   return (not unreachable)
@@ -360,25 +360,6 @@ let equal loc {local;global} it1 it2 =
 
 
 
-let resource_for_pointer_strictly_within (loc: Loc.t) {local;global} pointer_it
-     : ((Sym.t * RE.t) option) m = 
-   let* points = 
-     Local.filterM (fun name vb ->
-         match vb with 
-         | VariableBinding.Resource re -> 
-            let lc = 
-              IT.And [IndexTerms.LocLT (RE.pointer re, pointer_it);
-                      IndexTerms.LocLT (pointer_it, Offset (RE.pointer re, Num (RE.size re)))]
-            in
-            let* (holds,_,_) = constraint_holds loc {local;global} false (LC.LC lc) in
-            return (if holds then Some (name, re) else None)
-         | _ -> 
-            return None
-       ) local
-   in
-   at_most_one loc !^"multiple points-to for same pointer" points
-
-
 let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
      : ((Sym.t * RE.t) option) m = 
    let* points = 
@@ -393,6 +374,20 @@ let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
    in
    at_most_one loc !^"multiple points-to for same pointer" points
 
+
+let used_resource_for_pointer (loc: Loc.t) {local;global} pointer_it
+    : ((Loc.t list) option) m = 
+  let* points = 
+    L.filterM (fun name vb ->
+        match vb with 
+        | VariableBinding.UsedResource (re, where) -> 
+           let* holds = equal loc {local; global} pointer_it (RE.pointer re) in
+           return (if holds then Some (where) else None)
+        | _ -> 
+           return None
+      ) local
+  in
+  at_most_one loc !^"multiple points-to for same pointer" points
 
 
 module StringMap = Map.Make(String)
@@ -436,16 +431,7 @@ let model loc {local;global} context solver : TypeErrors.model option m =
            let open TypeErrors in
            let* state = match o_resource with
              | None -> 
-                let* o_resource2 = 
-                  resource_for_pointer_strictly_within loc {local; global} location_it in
-                begin match o_resource2 with
-                | None -> return Unowned
-                | Some (rname,r) -> 
-                   let* within_expr = of_index_term loc {local; global} context (RE.pointer r) in
-                   let* within_expr_val = evaluate loc model within_expr in
-                   let within_expr_val = Z3.Expr.to_string within_expr_val in
-                   return (Within {base_location = within_expr_val; resource = rname} )
-                end
+                return Nothing
              | Some (_, RE.Uninit u) -> 
                 return (Uninit u.size)
              | Some (_, RE.Points p) -> 
@@ -474,7 +460,7 @@ let model loc {local;global} context solver : TypeErrors.model option m =
                       return (Z3.Expr.to_string expr_val)
                     ) p.args
                 in
-                return (TypeErrors.Predicate {name = p.name; args; size = p.size})
+                return (TypeErrors.Predicate {name = p.name; args})
              | Some (_, RE.Padding p) -> 
                 return (TypeErrors.Padding p.size)
            in

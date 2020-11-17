@@ -178,16 +178,16 @@ module WRE = struct
        let* () = WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer in
        let* def = Global.get_predicate_def loc global p.name in
        let* () = 
-         let has = List.length def.sort in
+         let has = List.length def.arguments in
          let expect = List.length p.args in
          if has = expect then return ()
          else fail loc (Number_arguments {has; expect})
        in
-       ListM.iterM (fun (arg,expected_sort) ->
+       ListM.iterM (fun (arg, (_, expected_sort)) ->
            let* has_sort = Local.get_l loc arg local in
            if LS.equal has_sort expected_sort then return ()
            else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
-         ) (List.combine p.args def.sort)
+         ) (List.combine p.args def.arguments)
 end
 
 

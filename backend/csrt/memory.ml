@@ -164,6 +164,9 @@ let struct_layout loc tag =
 
 
 
+
+
+
 let size_of_stored_type loc st = 
   match st with
   | St.ST_Ctype ct -> size_of_ctype loc ct

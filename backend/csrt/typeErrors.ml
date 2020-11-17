@@ -14,13 +14,13 @@ module VB=VariableBinding
 
 (* more to be added *)
 type memory_state = 
-  | Unowned
+  | Nothing
   | Uninit of RE.size
   | Integer of string * RE.size
   | Location of string * RE.size
   | Within of {base_location : string; resource : Sym.t}
   | Padding of RE.size
-  | Predicate of {name : Id.t; args : string list; size : RE.size}
+  | Predicate of {name : RE.predicate_name; args : string list}
 
 type location_state = { location : string; state : memory_state; }
 type variable_location = { name : string; location : string}
@@ -37,14 +37,19 @@ let pp_variable_and_location_state ( ovar, { location; state }) =
     | Some v -> !^v
   in
   let value, size = match state with
-    | Unowned -> Pp.empty, Pp.empty
+    | Nothing -> Pp.empty, Pp.empty
     | Uninit size -> !^"uninitialised", Z.pp size
     | Integer (value, size) -> typ !^value !^"integer", Z.pp size
     | Location (value, size) -> typ !^value !^"pointer", Z.pp size
     | Within {base_location; _} -> 
        parens (!^"within owned region at" ^^^ !^base_location), Pp.empty
-    | Predicate {name; args; size} ->
-       Id.pp name ^^ parens (separate_map (space ^^ comma) string args), Z.pp size
+    | Predicate {name; args} ->
+       begin match name with
+       | Id id ->
+          Id.pp id ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
+       | Tag tag ->
+          Sym.pp tag ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
+       end
     | Padding size ->
        !^"padding", Z.pp size
   in
@@ -69,11 +74,17 @@ let pp_model model =
   
 
 
-type access = 
+type access =
   | Load 
   | Store
   | Kill
   | Free
+
+type situation = 
+  | Access of access
+  | FunctionCall
+  | LabelCall
+  | Subtyping
 
 
 type sym_or_string = 
@@ -90,8 +101,9 @@ type type_error =
 
   | Uninitialised of BT.member option
   | Missing_resource of Resources.t * (Loc.t list) option
-  | Missing_ownership of access * BT.member option * (Loc.t list) option
+  | Missing_ownership of situation * BT.member option * (Loc.t list) option
   | ResourceMismatch of { has: RE.t; expect: RE.t; }
+  | PackedResource of RE.t * situation
   | Unused_resource of { resource: Resources.t }
   | Misaligned of access
 
@@ -160,22 +172,28 @@ let pp_type_error = function
                ) locs]
      in
      (!^"Missing resource of type" ^^^ Resources.pp t, extra)
-  | Missing_ownership (access, omember, owhere) ->
-     let msg = match access, omember with
-     | Kill, None ->  
+  | Missing_ownership (situation, omember, owhere) ->
+     let msg = match situation, omember with
+     | Access Kill, None ->  
         !^"Missing ownership for de-allocating"
-     | Kill, Some m ->  
+     | Access Kill, Some m ->  
         !^"Missing ownership for de-allocating struct member" ^^^ Id.pp m
-     | Load, None   ->  
+     | Access Load, None   ->  
         !^"Missing ownership for reading"
-     | Load, Some m -> 
+     | Access Load, Some m -> 
         !^"Missing ownership for reading struct member" ^^^ Id.pp m
-     | Store, None   -> 
+     | Access Store, None   -> 
         !^"Missing ownership for writing"
-     | Store, Some m -> 
+     | Access Store, Some m -> 
         !^"Missing ownership for writing struct member" ^^^ Id.pp m
-     | Free, _ -> 
+     | Access Free, _ -> 
         !^"Missing ownership for free-ing"
+     | FunctionCall, _ -> 
+        !^"Missing ownership for calling function"
+     | LabelCall, _ -> 
+        !^"Missing ownership for jumping to label"
+     | Subtyping, _ -> 
+        !^"Missing ownership for subtyping"
      in
      let extra = match owhere with
        | None -> []
@@ -187,6 +205,24 @@ let pp_type_error = function
   | ResourceMismatch {has; expect} ->
      (!^"Need a resource" ^^^ RE.pp expect ^^^
         !^"but have resource" ^^^ RE.pp has, [])
+  | PackedResource (re, situation) ->
+     let msg = match situation with
+     | Access Kill ->
+        !^"Cannot open resource needed for de-allocating"
+     | Access Load ->
+        !^"Cannot open resource needed for reading"
+     | Access Store ->
+        !^"Cannot open resource needed for writing"
+     | Access Free ->
+        !^"Cannot open resource needed for free-ing"
+     | FunctionCall ->
+        !^"Cannot open resource needed for calling function"
+     | LabelCall ->
+        !^"Cannot open resource needed for jumping to label"
+     | Subtyping ->
+        !^"Cannot open resource needed for subtyping"
+     in
+     (msg ^^^ parens (RE.pp re), [])
   | Unused_resource {resource;_} ->
      (!^"Left-over unused resource" ^^^ Resources.pp resource, [])
   | Misaligned access ->

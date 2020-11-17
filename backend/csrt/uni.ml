@@ -2,7 +2,11 @@ open Subst
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 
-type 'res t = { resolved : 'res option }
+type 'res uni = { resolved : 'res option }
+
+type 'res unis = ('res uni) SymMap.t
+
+type 'res t = 'res unis
 
 let find_resolved env unis = 
   SymMap.fold (fun usym {resolved} resolveds ->
@@ -22,7 +26,7 @@ let unresolved_var unis (vars : SymSet.t) =
 
 open Option
 
-let unify_sym sym sym' (res : (Sym.t t) SymMap.t) = 
+let unify_sym sym sym' (res : Sym.t t) = 
   if sym = sym' then Some res else
     let* uni = SymMap.find_opt sym res in
     begin match uni.resolved with

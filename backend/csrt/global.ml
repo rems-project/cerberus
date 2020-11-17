@@ -40,6 +40,11 @@ let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
   | Some v -> return v
 
 
+type closed_stored_predicate_definition =
+  { value_arg: Sym.t;
+    clause: IT.t -> RT.l; }
+
+
 type struct_decl = 
   { raw: (BT.member * BT.t) list;
     sizes: (BT.member * RE.size) list;
@@ -47,11 +52,16 @@ type struct_decl =
     representable: IT.t -> LC.t;
     closed: RT.t; 
     closed_stored: RT.t;
+    closed_stored_predicate_definition: 
+      closed_stored_predicate_definition
   }
 
 type struct_decls = struct_decl SymMap.t
 
-type resource_predicate = { sort : LS.t list  }
+type resource_predicate = 
+  { arguments : (Sym.t * LS.t) list;
+    clauses : IT.t -> (RT.l list);
+  }
 
 type t = 
   { struct_decls : struct_decls; 
@@ -94,11 +104,23 @@ let get_member_offset loc struct_decls tag member =
   | Some size -> return size
   | None -> fail loc (Missing_member (tag, member))
 
-let get_predicate_def loc global id = 
-  match IdMap.find_opt id global.resource_predicates with
-  | Some def -> return def
-  | None -> fail loc (Missing_predicate id)
-
+let get_predicate_def loc global predicate_name = 
+  let open Resources in
+  match predicate_name with
+  | Id id -> 
+     begin match IdMap.find_opt id global.resource_predicates with
+     | Some def -> return def
+     | None -> fail loc (Missing_predicate id)
+     end
+  | Tag tag ->
+     let* decl = get_struct_decl loc global.struct_decls tag  in
+     let {value_arg; clause} = 
+       decl.closed_stored_predicate_definition in
+     let def = 
+       { arguments = [(value_arg, LS.Base (BT.Struct tag))]; 
+         clauses = fun it -> [clause it] }
+     in
+     return def
 
 
 let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
@@ -117,6 +139,11 @@ let pp_struct_decl (sym,decl) =
   ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)
+  ^/^
+  item ("struct " ^ plain (Sym.pp sym) ^ " (predicate)") 
+    (RT.pp_l 
+       (decl.closed_stored_predicate_definition.clause
+          (IT.S (Sym.fresh_named "struct_pointer"))))
 
 let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
 

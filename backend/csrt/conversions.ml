@@ -20,6 +20,10 @@ module SymSet = Set.Make(Sym)
 
 
 
+let struct_predicates = false
+
+
+
 
 let annot_of_ct (CF.Ctype.Ctype (annot,_)) = annot
 
@@ -114,7 +118,7 @@ let struct_decl_closed_stored loc tag =
   let open RT in
   let* size = Memory.size_of_struct loc tag in
   let rec aux loc tag struct_p = 
-    let* members = Memory.struct_layout loc tag in
+    let* layout = Memory.struct_layout loc tag in
     let* members = 
       ListM.mapM (fun (offset, size, member_or_padding) ->
           let pointer = IT.Offset (struct_p, Num offset) in
@@ -132,7 +136,7 @@ let struct_decl_closed_stored loc tag =
                 let v = Sym.fresh () in
                 let* bt = bt_of_ct loc ct in
                 return ([(pointer, size, Some (v, bt))], [(member, S v)])
-          ) members
+          ) layout
     in
     let (components, values) = List.split members in
     return (List.flatten components, IT.Struct (tag, List.flatten values))
@@ -154,12 +158,59 @@ let struct_decl_closed_stored loc tag =
     Computational ((struct_pointer, BT.Loc), 
     Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
     Constraint (LC (Aligned (st, S struct_pointer)),
-    Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)),
+    (* Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)), *)
     lrt @@ 
-    Constraint (LC (IT.Representable (st, struct_value)), RT.I)))))
+    Constraint (LC (IT.Representable (st, struct_value)), RT.I))))
   in
   return rt
-  
+
+
+
+let struct_decl_closed_stored_predicate loc tag = 
+  let open RT in
+  let struct_value = Sym.fresh () in
+  let* size = Memory.size_of_struct loc tag in
+  let* layout = Memory.struct_layout loc tag in
+  let* members = 
+    ListM.mapM (fun (offset, size, member_or_padding) ->
+        match member_or_padding with
+        | None -> 
+           return (offset, size, None)
+        | Some (member, (attrs, qualifiers, ct)) ->
+           let* bt = bt_of_ct loc ct in
+           return (offset, size, (Some (member, bt)))
+      ) layout
+  in
+  let clause struct_pointer = 
+    let lrt = 
+      List.fold_right (fun (offset, size, member_or_padding) lrt ->
+          let member_p = Offset (struct_pointer, Num offset) in
+          match member_or_padding with
+          | Some (member, bt) ->
+             let member_v = Sym.fresh () in
+             RT.Logical ((member_v, Base bt), 
+             RT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, 
+             RT.Constraint (LC (EQ (S member_v, Member (tag, S struct_value, member))), lrt)))
+          | None ->
+             RT.Resource (RE.Padding {pointer = member_p; size}, lrt)           
+        ) members RT.I
+    in
+    let st = St.ST_Ctype (CF.Ctype.Ctype ([], Struct tag)) in
+    let rt = 
+      Constraint (LC (IT.Representable (ST_Pointer, struct_pointer)),
+      Constraint (LC (Aligned (st, struct_pointer)),
+      Constraint (LC (EQ (AllocationSize struct_pointer, Num size)),
+      lrt @@ 
+        Constraint (LC (IT.Representable (st, S struct_value)), RT.I))))
+    in
+    rt
+  in
+  return (Global.{value_arg = struct_value; clause})
+
+
+
+
+
 
 let struct_decl loc (tag : BT.tag) = 
   let* raw = struct_decl_raw loc tag in
@@ -168,7 +219,9 @@ let struct_decl loc (tag : BT.tag) =
   let* offsets = struct_decl_offsets loc tag in
   let* closed = struct_decl_closed loc tag in
   let* closed_stored = struct_decl_closed_stored loc tag in
-  return Global.{ raw; sizes; representable; offsets; closed; closed_stored }
+  let* closed_stored_predicate_definition = struct_decl_closed_stored_predicate loc tag in
+  return Global.{ raw; sizes; representable; offsets; closed; 
+                  closed_stored; closed_stored_predicate_definition }
 
 
 
@@ -190,10 +243,21 @@ let make_owned_pointer loc struct_decls pointer stored_type rt =
   return rt
 
 
+
 let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct = 
   let open RT in
   let CF.Ctype.Ctype (_, ct_) = ct in
   begin match ct_ with
+  | CF.Ctype.Struct tag when struct_predicates ->
+     let pointee = Sym.fresh () in
+     let predicate = 
+       Predicate {pointer = S pointer; name = Tag tag; args = [pointee]} in
+     let rt = 
+       Computational ((pointer, BT.Loc), 
+       Logical ((pointee, Base (BT.Struct tag)), 
+       Resource (predicate, I)))
+     in
+     return rt
   | CF.Ctype.Struct tag ->
      let open Global in
      let* decl = Global.get_struct_decl loc struct_decls tag in
