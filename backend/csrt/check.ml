@@ -7,8 +7,10 @@ module RE = Resources
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
+module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
+module LFT = ArgumentTypes.Make(LogicalReturnTypes)
 module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
 module TE = TypeErrors
@@ -55,11 +57,11 @@ let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
 
 (*** variable binding *********************************************************)
 
-let rec bind_logical (delta : L.t) (lrt : RT.l) : L.t = 
+let rec bind_logical (delta : L.t) (lrt : LRT.t) : L.t = 
   match lrt with
   | Logical ((s, ls), rt) ->
      let s' = Sym.fresh () in
-     let rt' = RT.subst_var_l {before=s; after=s'} rt in
+     let rt' = LRT.subst_var {before=s; after=s'} rt in
      bind_logical (add_l s' ls delta) rt'
   | Resource (re, rt) -> bind_logical (add_ur re delta) rt
   | Constraint (lc, rt) -> bind_logical (add_uc lc delta) rt
@@ -68,7 +70,7 @@ let rec bind_logical (delta : L.t) (lrt : RT.l) : L.t =
 let bind_computational (delta : L.t) (name : Sym.t) (rt : RT.t) : L.t =
   let Computational ((s, bt), rt) = rt in
   let s' = Sym.fresh () in
-  let rt' = RT.subst_var_l {before = s; after = s'} rt in
+  let rt' = LRT.subst_var {before = s; after = s'} rt in
   let delta' = add_a name (bt, s') (add_l s' (Base bt) delta) in
   bind_logical delta' rt'
     
@@ -79,7 +81,7 @@ let bind (name : Sym.t) (rt : RT.t) : L.t =
 let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * L.t) m =
   let Computational ((s, bt), rt) = rt in
   let s' = Sym.fresh () in
-  let rt' = RT.subst_var_l {before = s; after = s'} rt in
+  let rt' = LRT.subst_var {before = s; after = s'} rt in
   let delta = add_l s' (Base bt) L.empty in
   let delta' = bind_logical delta rt' in
   return ((bt, s'), delta')
@@ -212,20 +214,20 @@ let pattern_match_rt (loc : loc) (pat : pattern) (rt : RT.t) : L.t m =
    function and label types (which don't have a return type) *)
 
 
-let substs_for_predicate_instantiation loc local definition args = 
-  let open Global in
-  let* () = 
-    let has = List.length definition.arguments in
-    let expect = List.length args in
-    if has = expect then return ()
-    else fail loc (Number_arguments {has; expect})
-  in
-  let* substs = 
-    ListM.mapM (fun (arg, (spec_arg, expected_sort)) ->
-        return (Subst.{before = spec_arg; after = arg})
-      ) (List.combine args definition.arguments)
-  in
-  return substs
+(* let substs_for_predicate_instantiation loc local definition args = 
+ *   let open Global in
+ *   let* () = 
+ *     let has = List.length definition.arguments in
+ *     let expect = List.length args in
+ *     if has = expect then return ()
+ *     else fail loc (Number_arguments {has; expect})
+ *   in
+ *   let* substs = 
+ *     ListM.mapM (fun (arg, (spec_arg, expected_sort)) ->
+ *         return (Subst.{before = spec_arg; after = arg})
+ *       ) (List.combine args definition.arguments)
+ *   in
+ *   return substs *)
 
 
 
@@ -247,6 +249,14 @@ let args_of_asyms (loc : loc) (local : L.t) (asyms : 'bty asyms) : args m =
   ListM.mapM (arg_of_asym loc local) asyms
 
 
+let pp_unis (unis : Sym.t Uni.t) : Pp.document = 
+ let pp_entry (sym, Uni.{resolved}) =
+   match resolved with
+   | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ Sym.pp res
+   | None -> Sym.pp sym ^^^ !^"unresolved"
+ in
+ Pp.list pp_entry (SymMap.bindings unis)
+
 module Spine (I : AT.I_Sig) = struct
 
   module FT = AT.Make(I)
@@ -255,25 +265,25 @@ module Spine (I : AT.I_Sig) = struct
   let pp_argslocs =
     Pp.list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
 
-  let pp_unis (unis : Sym.t Uni.t) : Pp.document = 
-    let pp_entry (sym, Uni.{resolved}) =
-      match resolved with
-      | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ Sym.pp res
-      | None -> Sym.pp sym ^^^ !^"unresolved"
-    in
-    Pp.list pp_entry (SymMap.bindings unis)
+
+
 
   let make_spine 
         (resource_inference : 
-           Loc.t -> pexpr_environment -> Sym.t Uni.t -> RE.t -> (Local.t * Sym.t Uni.t) m
-        ) = 
+           Loc.t -> 
+           pexpr_environment -> 
+           RE.t -> 
+           Sym.t Uni.unis ->
+           (Sym.t Uni.unis * Local.t) m)
+    =
 
-    let spine (loc : loc) {local; global} (arguments : arg list) 
-              (ftyp : FT.t) (unis : Sym.t Uni.t) 
-        : (I.t * Sym.t Uni.t * L.t) m =
+    let spine (loc : loc) {local; global} (arguments : arg list) (ftyp : FT.t) 
+        : (I.t * L.t) m =
 
       let open NFT in
       let ftyp = NFT.normalise ftyp in
+
+      let unis = SymMap.empty in
 
       let* ftyp_l = 
         let rec check_computational args ftyp = 
@@ -311,7 +321,7 @@ module Spine (I : AT.I_Sig) = struct
       let* (local, unis, ftyp_c) = 
         let rec infer_resources local unis = function
           | Resource (re, ftyp) -> 
-             let* (local, unis) = resource_inference loc {local; global} unis re in
+             let* (unis, local) = resource_inference loc {local; global} re unis in
              let new_substs = Uni.find_resolved local unis in
              let ftyp' = NFT.subst_vars_r new_substs ftyp in
              infer_resources local unis ftyp'
@@ -321,23 +331,15 @@ module Spine (I : AT.I_Sig) = struct
         infer_resources local unis ftyp_r
       in
 
-      let* () = 
-        let rec check_logical unis = function
-          | (s, ls) :: lspec ->
-             let* Uni.{resolved} = SymMapM.lookup loc unis s in
-             begin match resolved with
-             | None -> 
-                fail loc (Unconstrained_logical_variable s)
-             | Some sym ->
-                let resolved_ls = get_l sym local in
-                if LS.equal resolved_ls ls 
-                then check_logical unis lspec
-                else fail loc (Mismatch {has = resolved_ls; expect = ls})
-             end
-          | [] -> 
-             return ()
-        in
-        check_logical unis lspec 
+      let () = 
+        List.iter (fun (s, ls) ->
+            let Uni.{resolved} = SymMap.find s unis in
+            match resolved with
+            | None -> Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+            | Some sym ->
+               if not (LS.equal (get_l sym local) ls) then
+                 Debug_ocaml.error "type-incorrectly instantiated logical variable"
+          ) lspec
       in
 
       let* rt = 
@@ -354,7 +356,7 @@ module Spine (I : AT.I_Sig) = struct
         check_constraints ftyp_c
       in
 
-      return (rt, unis, local)
+      return (rt, local)
 
     in
 
@@ -364,6 +366,7 @@ module Spine (I : AT.I_Sig) = struct
 end
 
 module Spine_FT = Spine(ReturnTypes)
+module Spine_LFT = Spine(LogicalReturnTypes)
 module Spine_LT = Spine(False)
 
 
@@ -373,28 +376,7 @@ module Spine_LT = Spine(False)
 
 
 
-let unpack_resources loc {local; global} = 
-  ListM.fold_leftM (fun local (resource_name, resource) ->
-      match resource with
-      | RE.Predicate p ->
-         let* def = Global.get_predicate_def loc global p.name in
-         let* substs = substs_for_predicate_instantiation loc local def p.args in
-         let* possible_unpackings = 
-           ListM.filter_mapM (fun clause ->
-               let test_local = L.use_resource resource_name [loc] local in
-               let test_local = bind_logical test_local (RT.subst_vars_l substs clause) in
-               let* is_reachable = Solver.is_consistent loc {local = test_local; global} in
-               return (if is_reachable then Some test_local else None)
-             ) (def.clauses p.pointer)
-         in
-         begin match possible_unpackings with
-         | [] -> Debug_ocaml.error "inconsistent state with every possible resource unpacking"
-         | [new_local] -> return new_local
-         | _ -> return local
-         end
-      | _ ->
-         return local
-    ) local (L.all_resources local)
+
 
 
 let rec remove_ownership (loc: loc) {local;global} (pointer: IT.t) (need_size: RE.size) 
@@ -406,7 +388,7 @@ let rec remove_ownership (loc: loc) {local;global} (pointer: IT.t) (need_size: R
     | Some (resource_name, resource) -> 
        let o_have_size = RE.size resource in
        let* have_size = match o_have_size with
-         | None -> fail loc (PackedResource (resource, situation))
+         | None -> fail loc (CannotUnpack (resource, situation))
          | Some have_size -> return have_size
        in
        if Z.ge_big_int need_size have_size then 
@@ -427,66 +409,104 @@ let rec remove_ownership (loc: loc) {local;global} (pointer: IT.t) (need_size: R
        fail loc (Missing_ownership (situation, None, olast_used))
 
 
-let rec resource_request access_kind loc {local; global} unis request = 
+(* For technical reasons this is mutually recursive with
+   resource_request. Fix this *)
+let rec unpack_resources loc {local; global} = 
+  let rec aux local = 
+    let* (local, changed) = 
+      ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
+          match resource with
+          | RE.Predicate p ->
+             let* def = Global.get_predicate_def loc global p.name in
+             let* possible_unpackings = 
+               ListM.filter_mapM (fun clause ->
+                   (* let test_local = L.use_resource resource_name [loc] local in *)
+                   let call_attempt = 
+                      Spine_LFT.make_spine 
+                        (resource_request Unpacking) loc
+                        {local = local; global} [] clause 
+                   in
+                   let (lrt, test_local) = match call_attempt with
+                     | Ok r -> r 
+                     | Error (loc,extra,error) -> 
+                        type_error loc extra error;
+                        Debug_ocaml.error "unexpected error during unpacking"
+                   in
+                   let test_local = bind_logical test_local lrt in
+                   let* is_reachable = Solver.is_consistent loc {local = test_local; global} in
+                   return (if is_reachable then Some test_local else None)
+                 ) (def.unpack_functions p.pointer)
+             in
+             begin match possible_unpackings with
+             | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
+             | [new_local] -> return (new_local, true)
+             | _ -> return (local, changed)
+             end
+          | _ ->
+             return (local, changed)
+        ) (local, false) (L.all_resources local)
+    in
+    if changed then aux local else return local
+  in
+  aux local
+
+
+and resource_request access_kind loc {local; global} request unis = 
   let pointer = RE.pointer request in
-  let* () = match Uni.unresolved_var unis (IT.vars_in pointer) with
-    | Some s -> fail loc (Unconstrained_logical_variable s)
-    | _ -> return ()
-  in
-  let* o_resource = 
-    Solver.resource_for_pointer loc {local; global} pointer 
-  in
   match request with
   | Uninit {pointer; size} ->
      let* local = remove_ownership loc {local; global} pointer size access_kind in
-     return (local, unis)
+     return (unis, local)
   | Padding {pointer; size} ->
      let* local = remove_ownership loc {local; global} pointer size access_kind in
-     return (local, unis)
+     return (unis, local)
   | Points {pointer; _} ->
+     let* o_resource = Solver.resource_for_pointer loc {local; global} pointer in
      begin match o_resource with
      | Some (resource_name, resource) -> 
         begin match RE.unify request (RE.set_pointer resource pointer) unis with
-        | Some unis ->
+        | Some unis -> 
            let local = use_resource resource_name [loc] local in
-           return (local, unis)
+           return (unis, local)
         | None -> 
-           fail loc (ResourceMismatch {expect = request; has = resource} )
+           fail loc (ResourceMismatch {expect = request; has = resource})
         end
      | None -> 
         let* olast_used = Solver.used_resource_for_pointer loc {local;global} pointer in
         fail loc (Missing_ownership (access_kind, None, olast_used))
      end
   | Predicate p ->
-     print stderr (item "needed" (RE.pp request));
+     let* o_resource = Solver.resource_for_pointer loc {local; global} pointer in
      begin match o_resource with
      | Some (resource_name, resource) -> 
-        print stderr (item "have" (RE.pp resource));
         begin match RE.unify request (RE.set_pointer resource pointer) unis with
         | Some unis -> 
            let local = use_resource resource_name [loc] local in
-           return (local, unis)
+           return (unis, local)
         | None ->         
            let* def = Global.get_predicate_def loc global p.name in
-           let* substs = substs_for_predicate_instantiation loc local def p.args in
-           print stderr (item "substs" (Pp.list (Subst.pp Sym.pp Sym.pp) substs));
            let rec try_clauses = function
              | [] -> 
                 fail loc (ResourceMismatch {expect = request; has = resource})
              | clause :: clauses ->
-                let clause = RT.subst_vars_l substs clause in
                 let tried = 
-                  print stderr (item "trying clause" (RT.pp_l clause));
-                  Spine_LT.make_spine 
+                  Spine_LFT.make_spine 
                     (resource_request access_kind)
-                    loc {local; global} [] 
-                    ((LT.of_lrt clause) (LT.I False.False)) unis
+                    loc {local; global} [] clause
                 in
                 match tried with
-                | Error _ -> try_clauses clauses
-                | Ok (False, unis, local) -> return (local, unis)
+                | Error (_, _, ResourceMismatch {expect; has}) ->
+                   Debug_ocaml.error "todo: recursive packing"
+                | Error (_, _, Missing_ownership _)
+                | Error (_, _, Unsat_constraint _) ->
+                   try_clauses clauses
+                | Error _ -> 
+                   Debug_ocaml.error "unexpected error during packing"
+                | Ok (lrt, local) -> 
+                   let local = bind_logical local lrt in
+                   resource_request access_kind loc {local; global} request unis
            in
-           try_clauses (def.clauses p.pointer)
+           try_clauses (def.pack_functions p.pointer)
         end
      | None -> 
         let* olast_used = Solver.used_resource_for_pointer loc {local;global} pointer in
@@ -495,18 +515,18 @@ let rec resource_request access_kind loc {local; global} unis request =
 
 
 let calltype_ft loc {local; global} args (ftyp : FT.t) : (RT.t * L.t) m =
-  let* (rt, _, local) = 
+  let* (rt, local) = 
     Spine_FT.make_spine 
       (resource_request FunctionCall)
-      loc {local; global} args ftyp SymMap.empty
+      loc {local; global} args ftyp
   in
   return (rt, local)
 
 let calltype_lt loc {local; global} args (ltyp : LT.t) : (False.t * L.t) m =
-  let* (rt, _, local) = 
+  let* (rt, local) = 
     Spine_LT.make_spine 
       (resource_request LabelCall)
-      loc {local; global} args ltyp SymMap.empty
+      loc {local; global} args ltyp
   in
   return (rt, local)
 
@@ -514,11 +534,11 @@ let calltype_lt loc {local; global} args (ltyp : LT.t) : (False.t * L.t) m =
    inference as the spine judgment. So implement the subtyping
    judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
 let subtype (loc : loc) {local; global} arg (rtyp : RT.t) : L.t m =
-  let* (False.False, _, local) = 
+  let* (False.False, local) = 
     Spine_LT.make_spine 
       (resource_request Subtyping)
       loc {local; global} [arg] 
-      (LT.of_rt rtyp (LT.I False.False)) SymMap.empty
+      (LT.of_rt rtyp (LT.I False.False))
   in
   return local
 
@@ -531,7 +551,7 @@ let subtype (loc : loc) {local; global} arg (rtyp : RT.t) : L.t m =
 type vt = Sym.t * BT.t * LC.t 
 
 let rt_of_vt (ret,bt,constr) = 
-  RT.Computational ((ret, bt), RT.Constraint (constr, I))
+  RT.Computational ((ret, bt), LRT.Constraint (constr, I))
 
 
 let infer_tuple (loc : loc) {local; global} (args : args) : vt m = 
@@ -717,14 +737,14 @@ let pop_return (rt : RT.t) (local : L.t) : RT.t * L.t =
        aux vbs acc
     | (s, VB.Logical ls) :: vbs ->
        let s' = Sym.fresh () in
-       let acc = RT.subst_var_l {before = s;after = s'} acc in
-       aux vbs (RT.Logical ((s', ls), acc))
+       let acc = LRT.subst_var {before = s;after = s'} acc in
+       aux vbs (LRT.Logical ((s', ls), acc))
     | (_, VB.Resource re) :: vbs ->
-       aux vbs (RT.Resource (re,acc))
+       aux vbs (LRT.Resource (re,acc))
     | (_, VB.UsedResource _) :: vbs ->
        aux vbs acc
     | (_, VB.Constraint lc) :: vbs ->
-       aux vbs (RT.Constraint (lc,acc))
+       aux vbs (LRT.Constraint (lc,acc))
   in
   let (new_local, old_local) = since local in
   (RT.Computational (abinding, aux new_local lrt), old_local)
@@ -806,26 +826,26 @@ let merge_return_types loc (LC c, rt) (LC c2, rt2) =
   let* () = ensure_base_type loc ~expect:bt bt2 in
   let rec aux lrt lrt2 = 
     match lrt, lrt2 with
-    | RT.I, RT.I -> 
-       return RT.I
-    | RT.Logical ((s, ls), lrt1), _ ->
+    | LRT.I, LRT.I -> 
+       return LRT.I
+    | LRT.Logical ((s, ls), lrt1), _ ->
        let* lrt = aux lrt1 lrt2 in
-       return (RT.Logical ((s, ls), lrt))
-    | RT.Constraint (LC lc, lrt1), _ ->
+       return (LRT.Logical ((s, ls), lrt))
+    | LRT.Constraint (LC lc, lrt1), _ ->
        let* lrt = aux lrt1 lrt2 in
-       return (RT.Constraint (LC lc, lrt))
-    | _, RT.Logical ((s, ls), lrt2) ->
+       return (LRT.Constraint (LC lc, lrt))
+    | _, LRT.Logical ((s, ls), lrt2) ->
        let s' = Sym.fresh () in
-       let* lrt = aux lrt (RT.subst_var_l {before = s; after = s'} lrt2) in
-       return (RT.Logical ((s', ls), lrt))
+       let* lrt = aux lrt (LRT.subst_var {before = s; after = s'} lrt2) in
+       return (LRT.Logical ((s', ls), lrt))
     | _, Constraint (LC lc, lrt2) ->
        let* lrt = aux lrt lrt2 in
-       return (RT.Constraint (LC (Impl (c2, lc)), lrt))
+       return (LRT.Constraint (LC (Impl (c2, lc)), lrt))
     | Resource _, _
     | _, Resource _ -> 
        fail loc (Generic !^"Cannot infer type of this (cannot merge)")
   in
-  let lrt2' = RT.subst_var_l {before = lname2; after = lname} lrt2 in
+  let lrt2' = LRT.subst_var {before = lname2; after = lname} lrt2 in
   let* lrt = aux lrt lrt2' in
   return (LC (Or [c; c2]), RT.Computational ((lname, bt), lrt))
 
@@ -833,7 +853,7 @@ let merge_return_types loc (LC c, rt) (LC c2, rt2) =
 let big_merge_return_types (loc : loc) (name, bt) 
                            (crts : (LC.t * RT.t) list) : (LC.t * RT.t) m =
   ListM.fold_leftM (merge_return_types loc) 
-    (LC.LC (IT.Bool true), RT.Computational ((name, bt), RT.I)) crts
+    (LC.LC (IT.Bool true), RT.Computational ((name, bt), LRT.I)) crts
 
 let merge_paths 
       (loc : loc) 
@@ -1110,7 +1130,7 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
             | Points p -> fail loc (Generic !^"resouce of wrong size for load")
             | Uninit _ -> fail loc (Uninitialised is_field)
             | Padding _ -> fail loc (Generic !^"cannot read padding bytes")
-            | Predicate _ -> fail loc (PackedResource (resource, Access Load))
+            | Predicate _ -> fail loc (CannotUnpack (resource, Access Load))
             end
          | None -> 
             let* olast_used = Solver.used_resource_for_pointer loc {local;global} pointer in
@@ -1134,7 +1154,7 @@ let rec store (loc: loc)
               (size: RE.size)
               (o_value: IT.t option) 
   =
-  let open RT in
+  let open LRT in
   match bt with
   | Struct tag ->
      let* decl = get_struct_decl loc global tag in
@@ -1174,9 +1194,9 @@ let pack_stored_struct loc {local; global} (pointer: IT.t) (tag: BT.tag) =
   let* constraints = load loc {local; global} (Struct tag) pointer size (S v) None in
   let* local = remove_ownership loc {local; global} pointer size (Access Load) in
   let rt = 
-    RT.Logical ((v, Base bt), 
-    RT.Resource (Points {pointer; pointee = v; size},
-    RT.Constraint (constraints, RT.I)))
+    LRT.Logical ((v, Base bt), 
+    LRT.Resource (Points {pointer; pointee = v; size},
+    LRT.Constraint (constraints, LRT.I)))
   in
   return rt
 
@@ -1277,8 +1297,8 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* lrt = store loc {local; global} act.item.bt (S ret) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
-            RT.Constraint (LC.LC (Representable (ST_Pointer, S ret)), 
-            RT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
+            LRT.Constraint (LC.LC (Representable (ST_Pointer, S ret)), 
+            LRT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
             (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
             lrt)))
           in
@@ -1338,7 +1358,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* constraints = 
             load loc {local; global} act.item.bt (S parg.lname) size (S ret) None 
           in
-          let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, RT.I)) in
+          let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, LRT.I)) in
           return (Normal (rt, local))
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
           Debug_ocaml.error "todo: RMW"

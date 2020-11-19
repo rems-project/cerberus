@@ -216,30 +216,30 @@ let maybe_refinement = function
 type bnew = New | Old
 
 type tb =
-  | B of (bnew * Sym.t * BT.t * (RE.size * Z.t) option) * RT.l
+  | B of (bnew * Sym.t * BT.t * (RE.size * Z.t) option) * LRT.t
 
 let rec of_coq_expr_typ loc names coq_expr name =
   match coq_expr with
   | Coq_ident ident ->
      begin match ident with
      | "Z" -> 
-        return (BT.Integer, None, RT.I)
+        return (BT.Integer, None, LRT.I)
      | "nat" -> 
         let c = LC.LC (IT.GE (S name, Num Z.zero)) in
-        return (BT.Integer, None, RT.Constraint (c, I))
+        return (BT.Integer, None, LRT.Constraint (c, I))
      | "loc" -> 
         let c = LC.LC (Representable (ST_Pointer, S name)) in
-        return (BT.Loc, None, RT.Constraint (c, RT.I))
+        return (BT.Loc, None, LRT.Constraint (c, LRT.I))
      | _ -> 
         cannot_process loc pp_coq_expr coq_expr
      end
   | Coq_all coq_term -> 
      begin match coq_term with
      | [Quot_plain "Z"] -> 
-        return (BT.Integer, None, RT.I)
+        return (BT.Integer, None, LRT.I)
      | [Quot_plain "nat"] -> 
         let c = LC.LC (IT.GE (S name, Num Z.zero)) in
-        return (BT.Integer, None, RT.Constraint (c, I))
+        return (BT.Integer, None, LRT.Constraint (c, I))
      | _ -> 
         cannot_process loc pp_coq_expr coq_expr
      end
@@ -258,8 +258,8 @@ and of_coq_expr loc names coq_expr =
      of_coq_term loc names coq_term
 
 
-and of_constr loc names constr : RT.l m =
-  let open RT in
+and of_constr loc names constr : LRT.t m =
+  let open LRT in
   match constr with
   | Constr_Iris _ ->
      fail loc (Unsupported !^"Constr_Iris")
@@ -294,14 +294,14 @@ and of_constr loc names constr : RT.l m =
   | Constr_Coq coq_expr ->
      let* it = of_coq_expr loc names coq_expr in
      let c = LC.LC it in
-     return (RT.Constraint (c, I))
+     return (LRT.Constraint (c, I))
 
 and is_uninit_type_expr = function
   | Ty_params ("uninit", [Ty_arg_expr arg]) -> Some arg
   | _ -> None
 
 and of_type_expr loc names te : tb m =
-  let open RT in
+  let open LRT in
   let (mrefinement, te') = maybe_refinement te in
   match mrefinement, te' with
   | _, Ty_ptr (ptr_kind, type_expr) ->
@@ -405,10 +405,10 @@ and of_type_expr loc names te : tb m =
      let size = Memory.size_of_ctype loc sct in
      let align = Memory.align_of_ctype loc sct in
      return (B ((New, name, BT.Integer, Some (size,align)), 
-              RT.Constraint (LC (IT.Representable (ST_Ctype sct, S name)), I)))
+              LRT.Constraint (LC (IT.Representable (ST_Ctype sct, S name)), I)))
   | None, Ty_params ("void", []) ->
      let name = Sym.fresh () in
-     return (B ((New, name, BT.Unit, None), RT.I))
+     return (B ((New, name, BT.Unit, None), LRT.I))
   | None, Ty_Coq coq_expr ->
      let name = Sym.fresh () in
      let* (bt, osize, lrt) = 
@@ -419,7 +419,7 @@ and of_type_expr loc names te : tb m =
 
 
 
-let (@@) = RT.(@@)
+let (@@) = LRT.(@@)
 
 let rec rc_type_compatible_with_ctype loc oname ct type_expr = 
   let open Sctypes in
@@ -471,13 +471,13 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let names = StringMap.empty in
   let* (names, params_lrt) = 
-    ListM.fold_leftM (fun (names, acc_lrt) (ident, coq_expr) : (Sym.t StringMap.t * RT.l) m ->
+    ListM.fold_leftM (fun (names, acc_lrt) (ident, coq_expr) : (Sym.t StringMap.t * LRT.t) m ->
         let s = Sym.fresh_named ident in
         let* names = add_name loc names ident s in
         log_name_add s;
         let* (bt,_,lrt) = of_coq_expr_typ loc names coq_expr s in
-        return (names, acc_lrt @@ (RT.Logical ((s, LS.Base bt), lrt)))
-      ) (names, RT.I) annot.fa_parameters
+        return (names, acc_lrt @@ (LRT.Logical ((s, LS.Base bt), lrt)))
+      ) (names, LRT.I) annot.fa_parameters
   in
   let* (names, args_rts, ret_lrt) =
     ListM.fold_leftM (fun (names, args_rts, rets_lrt) ((osym,ct), type_expr) ->
@@ -499,22 +499,22 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
         let pointsr = RE.Points {pointer = S s; pointee = sr; size} in
         let arg_lrt = match bnew with
-          | New -> RT.Logical ((sa, LS.Base bt), 
-                   RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (Representable (ST_Pointer, S s)), 
-                   RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
-                   RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+          | New -> LRT.Logical ((sa, LS.Base bt), 
+                   LRT.Resource (pointsa, 
+                   LRT.Constraint (LC.LC (Representable (ST_Pointer, S s)), 
+                   LRT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
+                   LRT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
                    lrt)))))
-          | Old -> RT.Resource (pointsa, 
-                   RT.Constraint (LC.LC (Representable (ST_Pointer, S s)), 
-                   RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
-                   RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+          | Old -> LRT.Resource (pointsa, 
+                   LRT.Constraint (LC.LC (Representable (ST_Pointer, S s)), 
+                   LRT.Constraint (LC.LC (IT.AlignedI (Num align, S s)), 
+                   LRT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
                    lrt))))
         in
         let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
-        let ret_rt = RT.Logical ((sr, LS.Base bt), Resource (pointsr, I)) in
+        let ret_rt = LRT.Logical ((sr, LS.Base bt), Resource (pointsr, I)) in
         return (names, args_rts @ [(oname, arg_rt)], rets_lrt @@ ret_rt)
-      ) (names, [], RT.I) (List.combine args annot.fa_args)
+      ) (names, [], LRT.I) (List.combine args annot.fa_args)
   in
   let args_ftt = 
     List.fold_left (fun acc (_,arg_rt) -> 
@@ -530,7 +530,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
       if bnew = Old then 
         let s = Sym.fresh () in
         let lc = LC.LC (IT.EQ (S s, S name)) in
-        RT.Computational ((s, bt), lrt @@ Constraint (lc, RT.I))
+        RT.Computational ((s, bt), lrt @@ Constraint (lc, LRT.I))
       else 
         RT.Computational ((name, bt), lrt)
     in
@@ -542,20 +542,20 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
         let* names = add_name loc names ident s in
         log_name_add s;
         let* (bt, _, lrt') = of_coq_expr_typ loc names coq_expr s in
-        return (names, lrt @@ RT.Logical ((s, LS.Base bt), lrt))
-      ) (names, RT.I) annot.fa_exists
+        return (names, lrt @@ LRT.Logical ((s, LS.Base bt), lrt))
+      ) (names, LRT.I) annot.fa_exists
   in
   let* requires_lrt = 
     ListM.fold_leftM (fun lrt constr ->
         let* lrt' = of_constr loc names constr in
         return (lrt @@ lrt')
-      ) RT.I annot.fa_requires
+      ) LRT.I annot.fa_requires
   in
   let* ensure_lrt = 
     ListM.fold_leftM (fun lrt constr ->
         let* lrt' = of_constr loc names constr in
         return (lrt @@ lrt')
-      ) RT.I annot.fa_ensures
+      ) LRT.I annot.fa_ensures
   in
   let ft = 
     Tools.comps
@@ -580,8 +580,8 @@ let make_loop_label_spec_annot (loc : Loc.t)
         let* names = add_name loc names ident s in
         log_name_add s;
         let* (bt, _, lrt') = of_coq_expr_typ loc names coq_expr s in
-        return (names, lrt @@ RT.Logical ((s, LS.Base bt), lrt))
-      ) (names, RT.I) annot.la_exists
+        return (names, lrt @@ LRT.Logical ((s, LS.Base bt), lrt))
+      ) (names, LRT.I) annot.la_exists
   in
   let lookup_and_use_oname_inv loc inv_vars oname =
     match oname with
@@ -613,14 +613,14 @@ let make_loop_label_spec_annot (loc : Loc.t)
            in
            let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
            let arg_lrt = match bnew with
-             | New -> RT.Logical ((sa, LS.Base bt), 
-                      RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+             | New -> LRT.Logical ((sa, LS.Base bt), 
+                      LRT.Resource (pointsa, 
+                      LRT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
+                      LRT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
                       lrt))))
-             | Old -> RT.Resource (pointsa, 
-                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+             | Old -> LRT.Resource (pointsa, 
+                      LRT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
+                      LRT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
                       lrt)))
            in
            return (names, args_lrts @ [arg_lrt], unused_inv_vars)
@@ -648,16 +648,16 @@ let make_loop_label_spec_annot (loc : Loc.t)
            in
            let pointsa = RE.Points {pointer = S s; pointee = sa; size} in
            let arg_lrt = match bnew with
-             | New -> RT.Logical ((sa, LS.Base bt), 
-                      RT.Resource (pointsa, 
-                      RT.Constraint (LC (Representable (ST_Pointer, S s)),
-                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+             | New -> LRT.Logical ((sa, LS.Base bt), 
+                      LRT.Resource (pointsa, 
+                      LRT.Constraint (LC (Representable (ST_Pointer, S s)),
+                      LRT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
+                      LRT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
                       lrt)))))
-             | Old -> RT.Resource (pointsa, 
-                      RT.Constraint (LC (Representable (ST_Pointer, S s)),
-                      RT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
-                      RT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
+             | Old -> LRT.Resource (pointsa, 
+                      LRT.Constraint (LC (Representable (ST_Pointer, S s)),
+                      LRT.Constraint (LC.LC (IT.AlignedI (Num align, S s)),
+                      LRT.Constraint (LC (EQ (AllocationSize (S s), Num size)),
                       lrt))))
            in
            let arg_rt = RT.Computational ((s, BT.Loc), arg_lrt) in
@@ -683,7 +683,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
     ListM.fold_leftM (fun lrt constr ->
         let* lrt' = of_constr loc names constr in
         return (lrt @@ lrt')
-      ) RT.I annot.la_constrs
+      ) LRT.I annot.la_constrs
   in
   let lt = 
     Tools.comps 

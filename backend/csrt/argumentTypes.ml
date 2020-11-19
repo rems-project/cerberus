@@ -120,14 +120,15 @@ module Make (I: I_Sig) = struct
     | I _ -> 0
 
 
+  module LRT = LogicalReturnTypes
   module RT = ReturnTypes
 
-  let rec of_lrt (lrt : RT.l) (rest : t) : t = 
+  let rec of_lrt (lrt : LRT.t) (rest : t) : t = 
     match lrt with
-    | RT.I -> rest
-    | RT.Logical ((name, t), args) -> Logical ((name, t), of_lrt args rest)
-    | RT.Resource (t, args) -> Resource (t, of_lrt args rest)
-    | RT.Constraint (t, args) -> Constraint (t, of_lrt args rest)
+    | LRT.I -> rest
+    | LRT.Logical ((name, t), args) -> Logical ((name, t), of_lrt args rest)
+    | LRT.Resource (t, args) -> Resource (t, of_lrt args rest)
+    | LRT.Constraint (t, args) -> Constraint (t, of_lrt args rest)
 
 
   let of_rt (rt : RT.t) (rest : t) : t = 

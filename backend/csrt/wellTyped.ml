@@ -211,7 +211,7 @@ module WRE = struct
          if has = expect then return ()
          else fail loc (Number_arguments {has; expect})
        in
-       ListM.iterM (fun (arg, (_, expected_sort)) ->
+       ListM.iterM (fun (arg, expected_sort) ->
            let* () = check_bound loc local KLogical arg in
            let has_sort = Local.get_l arg local in
            if LS.equal has_sort expected_sort then return ()
@@ -227,29 +227,36 @@ module WLC = struct
     | LC it -> WIT.check loc env (LS.Base BT.Bool) it
 end
 
+module WLRT = struct
+
+  open LogicalReturnTypes
+  type t = LogicalReturnTypes.t
+
+  let rec welltyped loc {local; global} lrt = 
+    match lrt with
+    | Logical ((s,ls), lrt) -> 
+       let lname = Sym.fresh_same s in
+       let local = Local.add_l lname ls local in
+       let lrt = subst_var Subst.{before = s; after = lname} lrt in
+       welltyped loc {local; global} lrt
+    | Resource (re, lrt) -> 
+       let* () = WRE.welltyped loc {local; global} re in
+       let local = Local.add_ur re local in
+       welltyped loc {local; global} lrt
+    | Constraint (lc, lrt) ->
+       let* () = WLC.welltyped loc {local; global} lc in
+       let local = Local.add_uc lc local in
+       welltyped loc {local; global} lrt
+    | I -> 
+       return ()
+
+end
+
 
 module WRT = struct
 
   open ReturnTypes
   type t = ReturnTypes.t
-
-  let rec welltyped_l loc {local; global} lrt = 
-    match lrt with
-    | Logical ((s,ls), lrt) -> 
-       let lname = Sym.fresh_same s in
-       let local = Local.add_l lname ls local in
-       let lrt = subst_var_l Subst.{before = s; after = lname} lrt in
-       welltyped_l loc {local; global} lrt
-    | Resource (re, lrt) -> 
-       let* () = WRE.welltyped loc {local; global} re in
-       let local = Local.add_ur re local in
-       welltyped_l loc {local; global} lrt
-    | Constraint (lc, lrt) ->
-       let* () = WLC.welltyped loc {local; global} lc in
-       let local = Local.add_uc lc local in
-       welltyped_l loc {local; global} lrt
-    | I -> 
-       return ()
 
   let welltyped loc {local; global} rt = 
     match rt with 
@@ -258,10 +265,12 @@ module WRT = struct
        let lname = Sym.fresh_relative name' (fun s -> s ^ "_l") in
        let local = Local.add_l lname (LS.Base bt) local in
        let local = Local.add_a name' (bt, lname) local in
-       let lrt = subst_var_l Subst.{before = name; after = lname} lrt in
-       welltyped_l loc {local; global} lrt
+       let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
+       WLRT.welltyped loc {local; global} lrt
 
 end
+
+
 
 module WFalse = struct
   type t = False.t

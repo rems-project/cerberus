@@ -12,7 +12,9 @@ module RE = Resources
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
+module LRT = LogicalReturnTypes
 module RT = ReturnTypes
+module LFT = ArgumentTypes.Make(LRT)
 module FT = ArgumentTypes.Make(RT)
 
 
@@ -32,15 +34,16 @@ module ImplMap =
 let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
   match ImplMap.find_opt i e with
   | None ->
-    Debug_ocaml.error
-      ("Unbound implementation defined constant " ^
-         (CF.Implementation.string_of_implementation_constant i))
+     Debug_ocaml.error
+       ("Unbound implementation defined constant " ^
+          (CF.Implementation.string_of_implementation_constant i))
   | Some v -> v
 
 
 type closed_stored_predicate_definition =
-  { value_arg: Sym.t;
-    clause: IT.t -> RT.l; }
+  { pack_function: IT.t -> LFT.t; 
+    unpack_function: IT.t -> LFT.t; 
+  }
 
 
 type struct_decl = 
@@ -57,8 +60,9 @@ type struct_decl =
 type struct_decls = struct_decl SymMap.t
 
 type resource_predicate = 
-  { arguments : (Sym.t * LS.t) list;
-    clauses : IT.t -> (RT.l list);
+  { arguments : LS.t list;
+    pack_functions : IT.t -> (LFT.t list);
+    unpack_functions : IT.t -> (LFT.t list);
   }
 
 type t = 
@@ -94,11 +98,16 @@ let get_predicate_def loc global predicate_name =
        | Some decl -> return decl
        | None -> fail loc (Missing_struct tag)
      in
-     let {value_arg; clause} = 
-       decl.closed_stored_predicate_definition in
-     let def = 
-       { arguments = [(value_arg, LS.Base (BT.Struct tag))]; 
-         clauses = fun it -> [clause it] }
+     let pack_functions = 
+       fun it -> [decl.closed_stored_predicate_definition.pack_function it]
+     in
+     let unpack_functions = 
+       fun it -> [decl.closed_stored_predicate_definition.unpack_function it]
+     in
+     let def =
+       {arguments = [LS.Base (Struct tag)];
+        pack_functions; 
+        unpack_functions}
      in
      return def
 
@@ -117,9 +126,14 @@ let pp_struct_decl (sym,decl) =
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (predicate)") 
-    (RT.pp_l 
-       (decl.closed_stored_predicate_definition.clause
+  item ("struct " ^ plain (Sym.pp sym) ^ " (packing function)") 
+    (LFT.pp
+       (decl.closed_stored_predicate_definition.pack_function
+          (IT.S (Sym.fresh_named "struct_pointer"))))
+  ^/^
+  item ("struct " ^ plain (Sym.pp sym) ^ " (unpacking function)") 
+    (LFT.pp
+       (decl.closed_stored_predicate_definition.unpack_function
           (IT.S (Sym.fresh_named "struct_pointer"))))
 
 let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 

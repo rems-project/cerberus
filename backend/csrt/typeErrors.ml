@@ -85,6 +85,7 @@ type situation =
   | FunctionCall
   | LabelCall
   | Subtyping
+  | Unpacking
 
 
 type sym_or_string = 
@@ -103,7 +104,8 @@ type type_error =
   | Missing_resource of Resources.t * (Loc.t list) option
   | Missing_ownership of situation * BT.member option * (Loc.t list) option
   | ResourceMismatch of { has: RE.t; expect: RE.t; }
-  | PackedResource of RE.t * situation
+  | CannotUnpack of RE.t * situation
+  | CannotPack of RE.t * situation
   | Unused_resource of { resource: Resources.t }
   | Misaligned of access
 
@@ -194,6 +196,8 @@ let pp_type_error = function
         !^"Missing ownership for jumping to label"
      | Subtyping, _ -> 
         !^"Missing ownership for subtyping"
+     | Unpacking, _ -> 
+        !^"Missing ownership for unpacking"
      in
      let extra = match owhere with
        | None -> []
@@ -205,22 +209,44 @@ let pp_type_error = function
   | ResourceMismatch {has; expect} ->
      (!^"Need a resource" ^^^ RE.pp expect ^^^
         !^"but have resource" ^^^ RE.pp has, [])
-  | PackedResource (re, situation) ->
+  | CannotUnpack (re, situation) ->
      let msg = match situation with
      | Access Kill ->
-        !^"Cannot open resource needed for de-allocating"
+        !^"Cannot unpack resource needed for de-allocating"
      | Access Load ->
-        !^"Cannot open resource needed for reading"
+        !^"Cannot unpack resource needed for reading"
      | Access Store ->
-        !^"Cannot open resource needed for writing"
+        !^"Cannot unpack resource needed for writing"
      | Access Free ->
-        !^"Cannot open resource needed for free-ing"
+        !^"Cannot unpack resource needed for free-ing"
      | FunctionCall ->
-        !^"Cannot open resource needed for calling function"
+        !^"Cannot unpack resource needed for calling function"
      | LabelCall ->
-        !^"Cannot open resource needed for jumping to label"
+        !^"Cannot unpack resource needed for jumping to label"
      | Subtyping ->
-        !^"Cannot open resource needed for subtyping"
+        !^"Cannot unpack resource needed for subtyping"
+     | Unpacking ->
+        !^"Cannot unpack resource needed for unpacking"
+     in
+     (msg ^^^ parens (RE.pp re), [])
+  | CannotPack (re, situation) ->
+     let msg = match situation with
+     | Access Kill ->
+        !^"Cannot pack resource needed for de-allocating"
+     | Access Load ->
+        !^"Cannot pack resource needed for reading"
+     | Access Store ->
+        !^"Cannot pack resource needed for writing"
+     | Access Free ->
+        !^"Cannot pack resource needed for free-ing"
+     | FunctionCall ->
+        !^"Cannot pack resource needed for calling function"
+     | LabelCall ->
+        !^"Cannot pack resource needed for jumping to label"
+     | Subtyping ->
+        !^"Cannot pack resource needed for subtyping"
+     | Unpacking ->
+        !^"Cannot pack resource needed for unpacking"
      in
      (msg ^^^ parens (RE.pp re), [])
   | Unused_resource {resource;_} ->
