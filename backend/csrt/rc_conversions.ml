@@ -153,11 +153,11 @@ let parse_it loc names s context_pp : IT.t m =
 let cannot_process loc pp_f to_pp = 
   fail loc (Unsupported (!^"cannot process term:" ^/^ pp_f to_pp))
 
-let incompatible loc ct te = 
+let incompatible loc sct te = 
   let err = 
     !^"annotation incompatible with C type:" ^^^
     !^"annotation:" ^^^ pp_type_expr te ^^ comma ^^^
-    !^"C type:" ^^^ CF.Pp_core_ctype.pp_ctype ct
+    !^"C type:" ^^^ Sctypes.pp sct
   in
   fail loc (Unsupported err)
 
@@ -401,11 +401,11 @@ and of_type_expr loc names te : tb m =
      end
   | None, Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      let name = Sym.fresh () in
-     let ct = CF.Ctype.Ctype ([], CF.Ctype.Basic (CF.Ctype.Integer CF.Ctype.Bool)) in
-     let size = Memory.size_of_ctype loc ct in
-     let align = Memory.align_of_ctype loc ct in
-     let lc = Memory.representable_integer loc (CF.Ctype.Bool) in
-     return (B ((New, name, BT.Integer, Some (size,align)), RT.Constraint (lc (S name), I)))
+     let sct = Sctypes.Integer CF.Ctype.Bool in
+     let size = Memory.size_of_ctype loc sct in
+     let align = Memory.align_of_ctype loc sct in
+     return (B ((New, name, BT.Integer, Some (size,align)), 
+              RT.Constraint (LC (IT.Representable (ST_Ctype sct, S name)), I)))
   | None, Ty_params ("void", []) ->
      let name = Sym.fresh () in
      return (B ((New, name, BT.Unit, None), RT.I))
@@ -422,16 +422,15 @@ and of_type_expr loc names te : tb m =
 let (@@) = RT.(@@)
 
 let rec rc_type_compatible_with_ctype loc oname ct type_expr = 
-  let open CF.Ctype in
-  let (CF.Ctype.Ctype (_, ct_)) = ct in
-  match ct_, type_expr with
+  let open Sctypes in
+  match ct, type_expr with
   | _, (Ty_refine (_,type_expr))
   | _, (Ty_exists (_,_,type_expr))
   | _, (Ty_constr (type_expr, _)) ->
      rc_type_compatible_with_ctype loc oname ct type_expr
   | (Pointer (_,ct)), (Ty_ptr (_, type_expr)) ->
      rc_type_compatible_with_ctype loc oname ct type_expr
-  | (Basic (Integer Bool)), Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
+  | (Integer Bool), Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      return ()
   | _, (Ty_params ("uninit", [Ty_arg_expr integer_type_expr])) ->
      let* size = bytes_of_integer_type_expr loc integer_type_expr in
@@ -439,7 +438,7 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
      if Z.equal ct_size size 
      then return ()
      else incompatible loc ct type_expr
-  | (Basic (Integer it)), (Ty_params ("int", [Ty_arg_expr arg])) ->
+  | (Integer it), (Ty_params ("int", [Ty_arg_expr arg])) ->
      let* size = bytes_of_integer_type_expr loc arg in
      let* signed = signed_integer_type_expr loc arg in
      let* bits = bits_of_integer_type_expr loc arg in
@@ -573,7 +572,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
                                names
                                structs 
                                (fargs : (string option * RT.t) list) 
-                               (args : (Sym.t option * CF.Ctype.ctype) list) attrs = 
+                               (args : (Sym.t option * Sctypes.t) list) attrs = 
   let (annot: loop_annot) = loop_annot attrs in
   let* (names, exists_lrt) = 
     ListM.fold_leftM (fun (names, lrt) (ident,coq_expr) ->
@@ -635,7 +634,7 @@ let make_loop_label_spec_annot (loc : Loc.t)
         let* looked_up = lookup_and_use_oname_inv loc unused_inv_vars mname in
         match looked_up with
         | None ->
-           let* arg_rt = rt_of_pointer_ctype loc structs s ct in
+           let* arg_rt = rt_of_pointer_sct loc structs s ct in
            return (names,args_rts @ [arg_rt], unused_inv_vars)
         | Some (ident, type_expr, unused_inv_vars) ->
            let* names = add_name loc names ident s in

@@ -733,7 +733,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
           | M_Eproc (nm, pes) ->
               pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_asym pes)
           | M_Eccall (pe_ty, pe, pes) ->
-              pp_keyword "ccall" ^^ P.parens (comma_list pp_actype_or_asym (Left pe_ty :: Right pe :: (map (fun pe -> Right pe)) pes))
+              pp_keyword "ccall" ^^ P.parens (pp_ctype pe_ty.item) ^^
+                P.parens (comma_list pp_actype_or_asym ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
           (* | M_Eunseq [] ->
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] ->

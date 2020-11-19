@@ -26,12 +26,20 @@ let mapM_a f a =
 
 type ctype_information = {
     bt : BT.t;
-    ct : CF.Ctype.ctype
+    ct : Sctypes.t
   }
+
+
+let ct_of_ct loc ct = 
+  match Sctypes.of_ctype ct with
+  | Some ct -> return ct
+  | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+
 
 (* for convenience *)
 let ctype_information (loc : Loc.t) ct = 
-  let* bt = Conversions.bt_of_ct loc ct in
+  let* ct = ct_of_ct loc ct in
+  let bt = BT.of_sct ct in
   return {bt; ct}
 
 
@@ -291,7 +299,7 @@ let rec retype_expr (loc : Loc.t) (M_Expr (annots,expr_)) =
     | M_Eskip ->
        return (M_Eskip)
     | M_Eccall (act,asym,asyms) ->
-       let* act = mapM_a (ctype_information loc) act in
+       (* let* act = mapM_a (ctype_information loc) act in *)
        return (M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (M_Eproc (name,asyms))
@@ -354,10 +362,11 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
   | M_Label (argtyps,args,e,annots) -> 
      let loc = Loc.update_a loc annots in
      let* args = mapM (retype_arg loc) args in
-     let argtyps = 
-       List.map (fun (msym, (ct,by_pointer)) ->
+     let* argtyps = 
+       ListM.mapM (fun (msym, (ct,by_pointer)) ->
            let () = if not by_pointer then error "label argument passed as value" in
-           (msym,ct) 
+           let* ct = ct_of_ct loc ct in
+           return (msym,ct) 
          ) argtyps
      in
      begin match CF.Annot.get_label_annot annots with
@@ -458,7 +467,7 @@ let retype_tagDefs
       | M_UnionDef _ -> 
          Debug_ocaml.error "todo: union types"
       | M_StructDef (fields, f) ->
-         let* decl = Conversions.struct_decl loc tag in
+         let* decl = Conversions.struct_decl loc tagDefs fields tag in
          let acc = Pmap.add tag (M_StructDef ((fields, f), decl)) acc in
          let acc_structs = SymMap.add tag decl acc_structs in
          return (acc,acc_structs,acc_unions)
@@ -474,6 +483,13 @@ let retype_funinfo struct_decls funinfo =
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc' (Unsupported err) 
       else
+        let* ret_ctype = ct_of_ct loc' ret_ctype in
+        let* args = 
+          ListM.mapM (fun (msym, ct) ->
+              let* ct = ct_of_ct loc' ct in
+              return (msym, ct)
+            ) args
+        in
         let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
         | [] ->  
            Conversions.make_fun_spec loc' struct_decls args ret_ctype

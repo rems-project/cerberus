@@ -30,18 +30,10 @@ let annot_of_ct (CF.Ctype.Ctype (annot,_)) = annot
 
 (* base types *)
 
-let rec bt_of_ct loc (CF.Ctype.Ctype (_,ct_)) =
-  let open CF.Ctype in
-  match ct_ with
-  | Void -> return BT.Unit
-  | Basic (Integer _) -> return BT.Integer
-  | Basic (Floating _) -> fail loc (Unsupported !^"floats")
-  | Array _ -> Debug_ocaml.error "arrays"
-  | Function _ -> fail loc (Unsupported !^"function pointers")
-  | Pointer _ -> return BT.Loc
-  | Atomic ct -> bt_of_ct loc ct  (* check? *)
-  | Struct tag -> return (BT.Struct tag)
-  | Union _ -> Debug_ocaml.error "union types"
+let sct_of_ct loc ct = 
+  match Sctypes.of_ctype ct with
+  | Some ct -> return ct
+  | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
 
 let bt_of_core_object_type loc ot =
   let open CF.Core in
@@ -69,158 +61,156 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_storable -> Debug_ocaml.error "BTy_storageble"
   | BTy_ctype -> Debug_ocaml.error "BTy_ctype"
 
-let bt_of_st loc st = 
-  match st with
-  | St.ST_Pointer -> return BT.Loc
-  | St.ST_Ctype ct -> bt_of_ct loc ct 
 
 
 
 
-(* structs *)
-let struct_decl_raw loc tag = 
-  let (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
-  ListM.mapM (fun (member, (_,_, ct)) ->
-      let loc = Loc.update_a loc (annot_of_ct ct) in
-      let* bt = bt_of_ct loc ct in
-      return (member, bt)
-  ) fields
-
-
-let struct_decl_sizes loc tag = 
-  let (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
-  ListM.mapM (fun (member, (_, _, ct)) ->
-      let loc = Loc.update_a loc (annot_of_ct ct) in
-      let size = Memory.size_of_ctype loc ct in
-      return (member,size)
-    ) fields
-
-let struct_decl_representable loc tag = 
-  Memory.representable_struct loc tag
-
-let struct_decl_offsets loc tag = 
-  let (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
-  ListM.mapM (fun (member, (_, _, ct)) ->
-      let loc = Loc.update_a loc (annot_of_ct ct) in
-      let offset = Memory.member_offset loc tag member in
-      return (member,offset)
-    ) fields
-
-
-let struct_decl_closed loc tag = 
-  let this = Sym.fresh () in
-  let lc = LC (Representable (ST_Ctype (Ctype ([], Struct tag)), S this)) in
-  return (RT.Computational ((this, BT.Struct tag), Constraint (lc, I)))
 
 
 
-let struct_decl_closed_stored loc tag = 
-  let open RT in
-  let rec aux loc tag struct_p = 
-    let layout = Memory.struct_layout loc tag in
-    let* members = 
-      ListM.mapM (fun (offset, size, member_or_padding) ->
-          let pointer = IT.Offset (struct_p, Num offset) in
-          match member_or_padding with
-          | None -> 
-             return ([(pointer, size, None)], [])
-          | Some (member, (_, _, ct)) -> 
-             let loc = Loc.update_a loc (annot_of_ct ct) in
-             let (CF.Ctype.Ctype (_,ct_)) = ct in
-             match ct_ with
-             | Struct tag -> 
-                let* (components, s_value) = aux loc tag pointer in
-                return (components, [(member, s_value)])
-             | _ ->
-                let v = Sym.fresh () in
-                let* bt = bt_of_ct loc ct in
-                return ([(pointer, size, Some (v, bt))], [(member, S v)])
-          ) layout
-    in
-    let (components, values) = List.split members in
-    return (List.flatten components, IT.Struct (tag, List.flatten values))
+
+
+let struct_layout loc members tag = 
+  let rec aux members position =
+    match members with
+    | [] -> 
+       return []
+    | (member, (attrs, qualifiers, ct)) :: members ->
+       let* sct = sct_of_ct loc ct in
+       let offset = Memory.member_offset loc tag member in
+       let size = Memory.size_of_ctype loc sct in
+       let to_pad = Z.sub offset position in
+       let padding = 
+         if Z.gt_big_int to_pad Z.zero 
+         then [(position, to_pad, None)] 
+         else [] 
+       in
+       let member = [(offset, size, Some (member, sct))] in
+       let* rest = aux members (Z.add_big_int to_pad size) in
+       return (padding @ member @ rest)
   in
-  let struct_pointer = Sym.fresh () in
-  let* components, struct_value = aux loc tag (S struct_pointer) in
-  let lrt = 
-    List.fold_right (fun (member_p, size, member_or_padding) lrt ->
-        match member_or_padding with
-        | Some (member_v, bt) ->
-           RT.Logical ((member_v, Base bt), 
-           RT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, lrt))
-        | None ->
-           RT.Resource (RE.Padding {pointer = member_p; size}, lrt)           
-      ) components RT.I
+  (aux members Z.zero)
+
+
+
+module CA = CF.Core_anormalise
+
+let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fields (tag : BT.tag) = 
+
+  let get_struct_members tag = 
+    match Pmap.lookup tag tagDefs with
+    | None -> fail loc (Missing_struct tag)
+    | Some (M_UnionDef _) -> fail loc (Generic !^"expected struct")
+    | Some (M_StructDef (fields, _)) -> return fields
   in
-  let st = St.ST_Ctype (CF.Ctype.Ctype ([], Struct tag)) in
-  let rt = 
-    Computational ((struct_pointer, BT.Loc), 
-    Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
-    Constraint (LC (Aligned (st, S struct_pointer)),
-    (* Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)), *)
-    lrt @@ 
-    Constraint (LC (IT.Representable (st, struct_value)), RT.I))))
-  in
-  return rt
 
-
-
-let struct_decl_closed_stored_predicate loc tag = 
-  let open RT in
-  let struct_value = Sym.fresh () in
-  let size = Memory.size_of_struct loc tag in
-  let layout = Memory.struct_layout loc tag in
   let* members = 
-    ListM.mapM (fun (offset, size, member_or_padding) ->
-        match member_or_padding with
-        | None -> 
-           return (offset, size, None)
-        | Some (member, (attrs, qualifiers, ct)) ->
-           let* bt = bt_of_ct loc ct in
-           return (offset, size, (Some (member, bt)))
-      ) layout
+    ListM.mapM (fun (member, (_,_, ct)) ->
+        let loc = Loc.update_a loc (annot_of_ct ct) in
+        let* sct = sct_of_ct loc ct in
+        let bt = BT.of_sct sct in
+        return (member, (sct, bt))
+    ) fields
   in
-  let clause struct_pointer = 
+
+  let* closed_stored =
+    let open RT in
+    let rec aux loc tag struct_p = 
+      let* def_members = get_struct_members tag in
+      let* layout = struct_layout loc def_members tag in
+      let* members = 
+        ListM.mapM (fun (offset, size, member_or_padding) ->
+            let pointer = IT.Offset (struct_p, Num offset) in
+            match member_or_padding with
+            | None -> return ([(pointer, size, None)], [])
+            | Some (member, sct) -> 
+               match sct with
+               | Sctypes.Struct tag -> 
+                  let* (components, s_value) = aux loc tag pointer in
+                  return (components, [(member, s_value)])
+               | _ ->
+                  let v = Sym.fresh () in
+                  let bt = BT.of_sct sct in
+                  return ([(pointer, size, Some (v, bt))], [(member, S v)])
+            ) layout
+      in
+      let (components, values) = List.split members in
+      return (List.flatten components, IT.Struct (tag, List.flatten values))
+    in
+    let struct_pointer = Sym.fresh () in
+    let* components, struct_value = aux loc tag (S struct_pointer) in
     let lrt = 
-      List.fold_right (fun (offset, size, member_or_padding) lrt ->
-          let member_p = Offset (struct_pointer, Num offset) in
+      List.fold_right (fun (member_p, size, member_or_padding) lrt ->
           match member_or_padding with
-          | Some (member, bt) ->
-             let member_v = Sym.fresh () in
+          | Some (member_v, bt) ->
              RT.Logical ((member_v, Base bt), 
-             RT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, 
-             RT.Constraint (LC (EQ (S member_v, Member (tag, S struct_value, member))), lrt)))
+             RT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, lrt))
           | None ->
              RT.Resource (RE.Padding {pointer = member_p; size}, lrt)           
-        ) members RT.I
+        ) components RT.I
     in
-    let st = St.ST_Ctype (CF.Ctype.Ctype ([], Struct tag)) in
+    let st = ST.ST_Ctype (Sctypes.Struct tag) in
     let rt = 
-      Constraint (LC (IT.Representable (ST_Pointer, struct_pointer)),
-      Constraint (LC (Aligned (st, struct_pointer)),
-      Constraint (LC (EQ (AllocationSize struct_pointer, Num size)),
+      Computational ((struct_pointer, BT.Loc), 
+      Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
+      Constraint (LC (Aligned (st, S struct_pointer)),
+      (* Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)), *)
       lrt @@ 
-        Constraint (LC (IT.Representable (st, S struct_value)), RT.I))))
+      Constraint (LC (IT.Representable (st, struct_value)), RT.I))))
     in
-    rt
+    return rt
   in
-  return (Global.{value_arg = struct_value; clause})
+
+
+  let* closed_stored_predicate_definition = 
+    let open RT in
+    let struct_value = Sym.fresh () in
+    (* let size = Memory.size_of_struct loc tag in *)
+    let* def_members = get_struct_members tag in
+    let* layout = struct_layout loc def_members tag in
+    let clause struct_pointer = 
+      let lrt = 
+        List.fold_right (fun (offset, size, member_or_padding) lrt ->
+            let member_p = Offset (struct_pointer, Num offset) in
+            match member_or_padding with
+            | Some (member, Sctypes.Struct tag) ->
+               let member_v = Sym.fresh () in
+               RT.Logical ((member_v, Base (Struct tag)), 
+               RT.Resource (RE.Predicate {pointer = member_p; name = Tag tag; args = [member_v]}, lrt))
+            | Some (member, sct) ->
+               let bt = BT.of_sct sct in
+               let member_v = Sym.fresh () in
+               RT.Logical ((member_v, Base bt), 
+               RT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, 
+               RT.Constraint (LC (EQ (S member_v, Member (tag, S struct_value, member))), lrt)))
+            | None ->
+               RT.Resource (RE.Padding {pointer = member_p; size}, lrt)           
+          ) layout RT.I
+      in
+    let st = ST.ST_Ctype (Sctypes.Struct tag) in
+      let rt = 
+        Constraint (LC (IT.Representable (ST_Pointer, struct_pointer)),
+        Constraint (LC (Aligned (st, struct_pointer)),
+        (* Constraint (LC (EQ (AllocationSize struct_pointer, Num size)), *)
+        lrt @@ 
+          Constraint (LC (IT.Representable (st, S struct_value)), RT.I)))
+      in
+      rt
+    in
+    return (Global.{value_arg = struct_value; clause})
+  in
+
+
+  let open Global in
+  let decl = { members; closed_stored; closed_stored_predicate_definition } in
+  return decl
 
 
 
 
 
 
-let struct_decl loc (tag : BT.tag) = 
-  let* raw = struct_decl_raw loc tag in
-  let* sizes = struct_decl_sizes loc tag in
-  let representable = struct_decl_representable loc tag in
-  let* offsets = struct_decl_offsets loc tag in
-  let* closed = struct_decl_closed loc tag in
-  let* closed_stored = struct_decl_closed_stored loc tag in
-  let* closed_stored_predicate_definition = struct_decl_closed_stored_predicate loc tag in
-  return Global.{ raw; sizes; representable; offsets; closed; 
-                  closed_stored; closed_stored_predicate_definition }
+
 
 
 
@@ -235,16 +225,15 @@ let make_owned_pointer loc struct_decls pointer stored_type rt =
   Resource ((points, 
   Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
   Constraint (LC (IT.Aligned (stored_type, S pointer)),
-  Constraint (LC (EQ (AllocationSize (S pointer), Num size)),
-  lrt)))))))
+  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
+  lrt))))))
 
 
 
-let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct = 
+let rec rt_of_pointer_sct loc struct_decls (pointer : Sym.t) sct = 
   let open RT in
-  let CF.Ctype.Ctype (_, ct_) = ct in
-  begin match ct_ with
-  | CF.Ctype.Struct tag when struct_predicates ->
+  begin match sct with
+  | Sctypes.Struct tag when struct_predicates ->
      let pointee = Sym.fresh () in
      let predicate = 
        Predicate {pointer = S pointer; name = Tag tag; args = [pointee]} in
@@ -254,7 +243,7 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
        Resource (predicate, I)))
      in
      return rt
-  | CF.Ctype.Struct tag ->
+  | Sctypes.Struct tag ->
      let open Global in
      let* decl = match SymMap.find_opt tag struct_decls with
        | Some decl -> return decl
@@ -264,46 +253,27 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      let Computational ((s',_), _) = rt in
      let rt = RT.subst_var {before = s'; after = pointer} rt in
      return rt
-  | CF.Ctype.Void -> 
+  | Sctypes.Void -> 
      Debug_ocaml.error "todo: void*"
   | _ ->
-     let st = St.of_ctype ct in
-     let* rt = rt_of_ctype loc struct_decls (Sym.fresh ()) ct in
+     let st = ST.of_ctype sct in
+     let* rt = rt_of_sct loc struct_decls (Sym.fresh ()) sct in
      return (make_owned_pointer loc struct_decls pointer st rt)
   end
 
-and rt_of_ctype loc struct_decls (s : Sym.t) ct =
-  let (CF.Ctype.Ctype (annots, ct_)) = ct in
+and rt_of_sct loc struct_decls (s : Sym.t) sct =
   let open RT in
-  match ct_ with
-  | Void -> return (Computational ((s, BT.Unit), I))
-  | Basic (Integer it) -> 
-     let rt =
-       Computational ((s, Integer), 
-       Constraint (LC (IT.Representable (ST_Ctype ct, S s)),I))
+  let open Sctypes in
+  match sct with
+  | Pointer (_qualifiers, ct) ->
+     rt_of_pointer_sct loc struct_decls s ct
+  | _ ->
+     let bt = BT.of_sct sct in
+     let rt = 
+       Computational ((s, bt), 
+       Constraint (LC (IT.Representable (ST_Ctype sct, S s)),I))
      in
      return rt
-  | Array (ct, _maybe_integer) ->
-     return (Computational ((s, Array), I))
-  | Pointer (_qualifiers, ct) ->
-     rt_of_pointer_ctype loc struct_decls s ct
-  | Atomic ct -> 
-     (* fix *)
-     rt_of_ctype loc struct_decls s ct
-  | Struct tag -> 
-     let* decl = match SymMap.find_opt tag struct_decls with
-       | Some decl -> return decl
-       | None -> fail loc (Missing_struct tag)
-     in
-     let rt = RT.freshify decl.Global.closed in
-     let Computational ((s',_),_) = rt in
-     return (RT.subst_var {before=s; after=s} rt)
-  | Basic (Floating _) -> 
-     fail loc (Unsupported !^"floats")
-  | Union sym -> 
-     Debug_ocaml.error "todo: union types"
-  | Function _ -> 
-     fail loc (Unsupported !^"function pointers")
 
 
 
@@ -323,18 +293,18 @@ let update_values_lrt lrt =
   in
   aux lrt
 
-let make_fun_spec loc struct_decls args ret_ctype = 
+let make_fun_spec loc struct_decls args ret_sct = 
   let open FT in
   let open RT in
   let* (names, arg_rts, args, rets) = 
-    ListM.fold_rightM (fun (msym, ct) (names, arg_rts, args, rets) ->
+    ListM.fold_rightM (fun (msym, sct) (names, arg_rts, args, rets) ->
         let oname = Option.bind msym Sym.name in
         let sl = Sym.fresh_onamed oname in
         let names = match oname with
           | Some ident -> StringMap.add ident sl names
           | None -> names
         in
-        let* arg_rt = rt_of_pointer_ctype loc struct_decls sl ct in
+        let* arg_rt = rt_of_pointer_sct loc struct_decls sl sct in
         let arg_rts = (oname, arg_rt) :: arg_rts in
         let arg = FT.of_rt arg_rt in
         let args = Tools.comp arg args in
@@ -344,7 +314,7 @@ let make_fun_spec loc struct_decls args ret_ctype =
       args (StringMap.empty, [], (fun ft -> ft), I)
   in
   let* (Computational ((ret_name,bound),ret)) = 
-    rt_of_ctype loc struct_decls (Sym.fresh ()) ret_ctype in
+    rt_of_sct loc struct_decls (Sym.fresh ()) ret_sct in
   let ftyp = args (I (RT.Computational ((ret_name,bound), RT.(@@) ret rets))) in
   return (names, ftyp, arg_rts)
 
@@ -355,7 +325,7 @@ let make_fun_spec loc struct_decls args ret_ctype =
 (* unused currently: picking some default types for labels *)
 let make_label_spec (loc : Loc.t) (ftyp : FT.t) 
                     (struct_decls : Global.struct_decls) 
-                    (args : (Sym.t option * CF.Ctype.ctype) list) : LT.t m =
+                    (args : (Sym.t option * Sctypes.t) list) : LT.t m =
   let subst_non_pointer = FT.subst_var ~re_subst_var:RE.subst_non_pointer in
   let rec aux = function
     | FT.Computational (_,lt) -> aux lt
@@ -372,9 +342,9 @@ let make_label_spec (loc : Loc.t) (ftyp : FT.t)
        return (LT.Constraint (lc,lrt))
     | FT.I _ -> 
        let* arguments = 
-         ListM.fold_leftM (fun args (msym, ct) ->
+         ListM.fold_leftM (fun args (msym, sct) ->
              let s = Sym.fresh_onamed (Option.bind msym Sym.name) in
-             let* arg_rt = rt_of_pointer_ctype loc struct_decls s ct in
+             let* arg_rt = rt_of_pointer_sct loc struct_decls s sct in
              let arg = LT.of_rt arg_rt in
              let args = Tools.comp args arg in
              return args

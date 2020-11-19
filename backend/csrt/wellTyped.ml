@@ -98,13 +98,13 @@ module WIT = struct
        in
        let* () = 
          let has = List.length members in
-         let expect = List.length decl.raw in
+         let expect = List.length decl.members in
          if has = expect then return ()
          else fail loc (Number_members {has; expect})
        in
        let* () = 
          ListM.iterM (fun (member,it') ->
-             let* mbt = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
+             let* (_, mbt) = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
              check_aux loc it {local;global} (Base mbt) it'
            ) members
        in
@@ -115,7 +115,7 @@ module WIT = struct
          | Some decl -> return decl
          | None -> fail loc (Missing_struct tag)
        in
-       let* bt = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
+       let* (_, bt) = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
        return (Base bt)
     | MemberOffset (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base Loc) it' in
@@ -123,7 +123,7 @@ module WIT = struct
          | Some decl -> return decl
          | None -> fail loc (Missing_struct tag)
        in
-       let* _ = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
+       let* _ = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
        return (Base Loc)
     | AllocationSize t ->
        let* () = check_aux loc it {local;global} (Base Loc) t in
@@ -170,8 +170,7 @@ module WIT = struct
        let* () = check_aux loc it {local;global} (Base Loc) t in
        return (Base Bool)
     | Representable (st, t) ->
-       let* bt = Conversions.bt_of_st loc st in
-       let* () = check_aux loc it {local; global} (Base bt) t in
+       let* () = check_aux loc it {local; global} (Base (ST.to_bt st)) t in
        return (Base BT.Bool)
     | S s ->
        let* () = check_bound loc local KLogical s in

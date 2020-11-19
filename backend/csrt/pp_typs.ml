@@ -18,7 +18,7 @@ type ut = CF.Ctype.ctype CF.Mucore.mu_union_def
 
 let pp_bt = BT.pp true
 
-let pp_ct cti = CF.Pp_core_ctype.pp_ctype ~compact:false cti.ct
+let pp_ct cti = Sctypes.pp cti.ct
 
 let pp_ft = FT.pp
 let pp_lt = Some (LT.pp)

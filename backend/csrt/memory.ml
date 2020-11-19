@@ -16,20 +16,20 @@ let integer_value_to_num loc iv =
 
 
 (* adapting from impl_mem *)
-let size_of_integer loc it = 
+let size_of_integer_type loc it = 
   let impl = CF.Ocaml_implementation.get () in
   match impl.sizeof_ity it with
   | Some n -> Z.of_int n
   | None -> Debug_ocaml.error "sizeof_pointer returned None"
 
 (* adapting from impl_mem *)
-let align_of_integer loc it =
+let align_of_integer_type loc it =
   let impl = CF.Ocaml_implementation.get () in
   match impl.alignof_ity it with
   | Some n -> Z.of_int n
   | None -> Debug_ocaml.error "alignof_pointer returned None"
 
-let representable_integer loc it about =
+let representable_integer_type loc it about =
   let (min,max) = match it with
     | CF.Ctype.Bool -> 
        (Z.of_int 0, Z.of_int 1)
@@ -70,85 +70,54 @@ let representable_pointer loc about =
 
 
 
-let lookup_struct_in_tagDefs loc tag =
-  match Pmap.lookup tag (CF.Tags.tagDefs ()) with
-  | Some (CF.Ctype.StructDef (fields,flexible_array_member)) -> 
-     (fields,flexible_array_member)
-  | Some (UnionDef _) -> Debug_ocaml.error "lookup_struct_in_tagDefs: union"
-  | None -> 
-     Debug_ocaml.error "lookup_struct_in_tagDefs: struct not found"
+(* let lookup_struct_in_tagDefs loc tag =
+ *   match Pmap.lookup tag (CF.Tags.tagDefs ()) with
+ *   | Some (CF.Ctype.StructDef (fields,flexible_array_member)) -> 
+ *      (fields,flexible_array_member)
+ *   | Some (UnionDef _) -> Debug_ocaml.error "lookup_struct_in_tagDefs: union"
+ *   | None -> 
+ *      Debug_ocaml.error "lookup_struct_in_tagDefs: struct not found" *)
 
 
-let size_of_ctype loc ct = 
-  let s = CF.Impl_mem.sizeof_ival ct in
+let size_of_ctype loc (ct : Sctypes.t) = 
+  let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
   integer_value_to_num loc s
 
-let align_of_ctype loc ct = 
-  let s = CF.Impl_mem.alignof_ival ct in
+let align_of_ctype loc (ct : Sctypes.t) = 
+  let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in
   integer_value_to_num loc s
 
-let rec representable_ctype loc (CF.Ctype.Ctype (_,ct_)) about =
-  let open CF.Ctype in
-  match ct_ with
-  | Void -> LC.LC (EQ (about , Unit))
-  | Basic (Integer it) -> representable_integer loc it about
-  | Basic (Floating _) -> Debug_ocaml.error "representable_ctype: function pointers"
-  | Array _ -> Debug_ocaml.error "todo: arrays"
-  | Function _ -> Debug_ocaml.error "representable_ctype: function pointers"
+(* this assumes that we've earlier checked that these only refer to
+   already-defined other types (structs, in particular) *)
+let rec representable_ctype loc struct_decls (ct : Sctypes.t) about =
+  let open Sctypes in
+  match ct with
+  | Void -> LC.LC (Bool true)
+  | Integer it -> representable_integer_type loc it about
   | Pointer _ -> representable_pointer loc about
-  | Atomic ct -> representable_ctype loc ct about
-  | Struct tag -> representable_struct loc tag about
-  | Union _ -> Debug_ocaml.error "todo: union types"
+  | Struct tag -> representable_struct loc struct_decls tag about
 
-and representable_struct loc tag about = 
-  let (fields,_) = lookup_struct_in_tagDefs loc tag in
-  let member_rangefs =
-    List.map (fun (member, (_, _, ct)) ->
-        let CF.Ctype.Ctype (annot,_) = ct in
-        let loc = Loc.update_a loc annot in
-        let rangef = representable_ctype loc ct in
-        (member, rangef)
-      ) fields
-  in
-  let lcs = 
-    List.map (fun (member, rangef) ->
-        LC.index_term (rangef (IT.Member (tag, about, member)))
-      ) member_rangefs
+and representable_struct loc struct_decls tag about =
+  let decl = SymMap.find tag struct_decls in
+  let lcs =
+    List.map (fun (member, (ct, _)) ->
+        let rangef = representable_ctype loc struct_decls ct in
+        LC.unpack (rangef (IT.Member (tag, about, member)))
+      ) decl.Global.members
   in
   (LC.LC (And lcs))
 
 
 let size_of_struct loc tag =
-  size_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct tag))
+  size_of_ctype loc (Struct tag)
 
 let align_of_struct loc tag =
-  align_of_ctype loc (CF.Ctype.Ctype ([], CF.Ctype.Struct tag))
+  align_of_ctype loc (Struct tag)
 
 
 let member_offset loc tag member = 
   let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
   integer_value_to_num loc iv
-
-
-let struct_layout loc tag = 
-  let (fields,_) = lookup_struct_in_tagDefs loc tag in
-  let rec aux members position =
-    match members with
-    | [] -> 
-       []
-    | (member, (attrs, qualifiers, ct)) :: members ->
-       let offset = member_offset loc tag member in
-       let size = size_of_ctype loc ct in
-       let to_pad = Z.sub offset position in
-       let padding = 
-         if Z.gt_big_int to_pad Z.zero 
-         then [(position, to_pad, None)] 
-         else [] 
-       in
-       let member = [(offset, size, Some (member, (attrs, qualifiers, ct)))] in
-       padding @ member @ aux members (Z.add_big_int to_pad size)
-  in
-  (aux fields Z.zero)
 
 
 
@@ -158,15 +127,15 @@ let struct_layout loc tag =
 
 let size_of_stored_type loc st = 
   match st with
-  | St.ST_Ctype ct -> size_of_ctype loc ct
-  | St.ST_Pointer -> size_of_pointer loc
+  | ST.ST_Ctype ct -> size_of_ctype loc ct
+  | ST.ST_Pointer -> size_of_pointer loc
 
 let align_of_stored_type loc st = 
   match st with
-  | St.ST_Ctype ct -> align_of_ctype loc ct
-  | St.ST_Pointer -> align_of_pointer loc
+  | ST.ST_Ctype ct -> align_of_ctype loc ct
+  | ST.ST_Pointer -> align_of_pointer loc
 
-let representable_stored_type loc st = 
+let representable_stored_type loc struct_decls st = 
   match st with
-  | St.ST_Ctype ct -> representable_ctype loc ct
-  | St.ST_Pointer -> representable_pointer loc
+  | ST.ST_Ctype ct -> representable_ctype loc struct_decls ct
+  | ST.ST_Pointer -> representable_pointer loc

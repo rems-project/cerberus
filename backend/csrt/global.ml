@@ -44,11 +44,11 @@ type closed_stored_predicate_definition =
 
 
 type struct_decl = 
-  { raw: (BT.member * BT.t) list;
-    sizes: (BT.member * RE.size) list;
-    offsets: (BT.member * Z.t) list;
-    representable: IT.t -> LC.t;
-    closed: RT.t; 
+  { members: (BT.member * (Sctypes.t * BT.t)) list;
+    (* sizes: (BT.member * RE.size) list;
+     * offsets: (BT.member * Z.t) list;
+     * representable: IT.t -> LC.t; *)
+    (* closed: RT.t;  *)
     closed_stored: RT.t;
     closed_stored_predicate_definition: 
       closed_stored_predicate_definition
@@ -111,13 +111,8 @@ let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
 
 let pp_struct_decl (sym,decl) = 
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
-       (Pp.list (fun (m, bt) -> typ (Id.pp m) (BT.pp true bt)) decl.raw) 
-  ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (representable)") 
-       (LC.pp (decl.representable (IT.S (Sym.fresh_named "struct_value"))))
-  ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (closed)") 
-       (RT.pp decl.closed)
+       (Pp.list (fun (m, (ct, bt)) -> 
+            typ (Id.pp m) (BT.pp true bt)) decl.members) 
   ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)

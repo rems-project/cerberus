@@ -8,17 +8,17 @@ module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
 
 
-module St = struct
+module ST = struct
 
   type t = 
-    | ST_Ctype of Cerb_frontend.Ctype.ctype
+    | ST_Ctype of Sctypes.t
     | ST_Pointer
   (* others later *)
 
 
   let equal rt1 rt2 = 
     match rt1, rt2 with
-    | ST_Ctype ct1, ST_Ctype ct2 -> Cerb_frontend.Ctype.ctypeEqual ct1 ct2
+    | ST_Ctype ct1, ST_Ctype ct2 -> Sctypes.equal ct1 ct2
     | ST_Pointer, ST_Pointer -> true
 
     | ST_Ctype _, _
@@ -27,11 +27,15 @@ module St = struct
 
 
   let pp = function
-    | ST_Ctype ct -> Pp.squotes (Cerb_frontend.Pp_core_ctype.pp_ctype ct)
+    | ST_Ctype ct -> Sctypes.pp ct
     | ST_Pointer -> Pp.squotes (Pp.string "pointer")
 
 
   let of_ctype ct = ST_Ctype ct
+
+  let to_bt = function
+    | ST_Pointer -> BT.Loc
+    | ST_Ctype sct -> BT.of_sct sct
 
 end
 
@@ -77,9 +81,9 @@ type 'id term =
   | LocLE of 'id term * 'id term
   | Disjoint of ('id term * Z.t) * ('id term * Z.t)
   | AlignedI of 'id term * 'id term
-  | Aligned of St.t * 'id term
+  | Aligned of ST.t * 'id term
 
-  | Representable of St.t * 'id term
+  | Representable of ST.t * 'id term
 
   | Struct of BT.tag * (BT.member * 'id term) list
   | Member of BT.tag * 'id term * BT.member
@@ -169,7 +173,7 @@ let rec equal it it' =
 
   | Aligned (rt, t), Aligned (rt', t')
   | Representable (rt, t), Representable (rt', t') ->
-     St.equal rt rt' && equal t t'
+     ST.equal rt rt' && equal t t'
 
   | S sym, S sym' 
     -> Sym.equal sym sym'
@@ -308,9 +312,9 @@ let pp ?(quote=true) it : PPrint.document =
     | AlignedI (t, t') ->
        mparens (!^"aligned" ^^^ aux t ^^^ aux t')
     | Aligned (rt, t) ->
-       mparens (!^"aligned" ^^^ St.pp rt ^^^ aux t)
+       mparens (!^"aligned" ^^^ ST.pp rt ^^^ aux t)
     | Representable (rt, t) ->
-       mparens (!^"representable" ^^^ St.pp rt ^^^ aux t)
+       mparens (!^"representable" ^^^ ST.pp rt ^^^ aux t)
 
     | S sym -> Sym.pp sym
   in

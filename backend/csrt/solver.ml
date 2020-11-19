@@ -54,7 +54,7 @@ let rec bt_to_sort loc {local;global} ctxt bt =
   | Struct tag ->
      let decl = SymMap.find tag global.struct_decls in
      let rec aux = function
-       | (member,bt) :: members ->
+       | (member, ( _, bt)) :: members ->
           let (names,sorts) = aux members in
           let sort = bt_to_sort loc {local;global} ctxt bt in
           let names = Z3.Symbol.mk_string ctxt (struct_member_name bt member) :: names in
@@ -62,7 +62,7 @@ let rec bt_to_sort loc {local;global} ctxt bt =
           (names,sorts)
        | [] -> ([],[])
      in
-     let (names,sorts) = aux decl.raw in
+     let (names,sorts) = aux decl.members in
      let name = Z3.Symbol.mk_string ctxt btname in
      let sort = Z3.Tuple.mk_sort ctxt name names sorts in
      sort
@@ -89,7 +89,7 @@ let rec of_index_term loc {local;global} ctxt it =
     let decl = SymMap.find tag global.struct_decls in
     let sort = ls_to_sort loc {local;global} ctxt (Base (Struct tag)) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
-    let member_names = map fst decl.raw in
+    let member_names = map fst decl.members in
     let member_funs = combine member_names member_fun_decls in
     assoc Id.equal member member_funs
   in
@@ -258,7 +258,7 @@ let rec of_index_term loc {local;global} ctxt it =
        (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
        (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
   | Representable (st, t) ->
-     let rangef = Memory.representable_stored_type loc st in
+     let rangef = Memory.representable_stored_type loc global.struct_decls st in
      of_index_term loc {local; global} ctxt (LC.unpack (rangef t))
   | Nil _ ->
      Debug_ocaml.error "todo: Z3: Nil"

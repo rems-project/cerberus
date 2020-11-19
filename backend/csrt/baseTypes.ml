@@ -45,3 +45,16 @@ let rec pp atomic bt =
   | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)
   | Struct sym -> mparens (!^"struct" ^^^ Sym.pp sym)
   | FunctionPointer p -> mparens (!^"function" ^^^ Sym.pp p)
+
+
+
+
+open Sctypes
+
+let of_sct = function
+  | Void -> Unit
+  | Integer _ -> Integer
+  | Pointer _ -> Loc
+  | Struct tag -> Struct tag
+
+

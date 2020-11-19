@@ -174,7 +174,7 @@ type ('ct, 'bt, 'TY) mu_expr_ =  (* (effectful) expression *)
  | M_Elet of (('bt, 'TY) mu_sym_or_pattern) * (('ct, 'bt, 'TY) mu_pexpr) * (('ct, 'bt, 'TY) mu_expr)
  | M_Eif of 'TY asym * (('ct, 'bt, 'TY) mu_expr) * (('ct, 'bt, 'TY) mu_expr)
  | M_Eskip
- | M_Eccall of ((('ct, 'TY) a)) * 'TY asym * ('TY asym) list (* C function call *)
+ | M_Eccall of (((ctype, 'TY) a)) * 'TY asym * ('TY asym) list (* C function call *)
  | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
  | M_Ewseq of 'bt mu_pattern * (('ct, 'bt, 'TY) mu_expr) * (('ct, 'bt, 'TY) mu_expr) (* weak sequencing *)
  | M_Esseq of 'bt mu_pattern * (('ct, 'bt, 'TY) mu_expr) * (('ct, 'bt, 'TY) mu_expr) (* strong sequencing *)

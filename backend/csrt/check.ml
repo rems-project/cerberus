@@ -109,15 +109,9 @@ let get_struct_decl loc global tag =
     | Some decl -> return decl
     | None -> fail loc (Missing_struct tag)
 
-let get_member_bt loc tag member decl = 
+let get_member_type loc tag member decl = 
   let open Global in
-  match List.assoc_opt Id.equal member decl.raw with
-  | Some asd -> return asd
-  | None -> fail loc (Missing_member (tag, member))
-
-let get_member_size loc tag member decl = 
-  let open Global in
-  match List.assoc_opt Id.equal member decl.sizes with
+  match List.assoc_opt Id.equal member decl.members with
   | Some asd -> return asd
   | None -> fail loc (Missing_member (tag, member))
 
@@ -556,13 +550,13 @@ let infer_constructor (loc : loc) {local; global} (constructor : ctor)
   | M_Ctuple, _ -> 
      infer_tuple loc {local; global} args
   | M_Carray, _ -> 
-     fail loc (Unsupported !^"todo: array types")
+     Debug_ocaml.error "todo: array types"
   | M_CivCOMPL, _
   | M_CivAND, _
   | M_CivOR, _
   | M_CivXOR, _ 
     -> 
-     fail loc (Unsupported !^"todo: Civ..")
+     Debug_ocaml.error "todo: Civ..."
   | M_Cspecified, [arg] ->
      return (ret, arg.bt, LC (EQ (S ret, S arg.lname)))
   | M_Cspecified, _ ->
@@ -582,20 +576,27 @@ let infer_constructor (loc : loc) {local; global} (constructor : ctor)
   | M_Civfromfloat, _ -> 
      fail loc (Unsupported !^"floats")
 
+
+let ct_of_ct loc ct = 
+  match Sctypes.of_ctype ct with
+  | Some ct -> return ct
+  | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+
 let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : vt m =
   let ret = Sym.fresh () in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
+      let* ct = ct_of_ct loc ct in
       let lcs = 
         [IT.Null (S ret);
          IT.Representable (ST_Pointer, S ret);
          (* check: aligned? *)
-         IT.Aligned (St.of_ctype ct, S ret);]
+         IT.Aligned (ST.of_ctype ct, S ret);]
       in
       return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
     ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Pointer loc))) )
-    ( fun () -> fail loc (Generic !^"unspecified pointer value") )
+    ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
 let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : vt m =
   let open BT in
@@ -607,7 +608,7 @@ let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : vt m =
       let ret = Sym.fresh () in
       let v = Memory.integer_value_to_num loc iv in
       return (ret, Integer, LC (EQ (S ret, Num v))) )
-    ( fun ft fv -> fail loc (Unsupported !^"Floating point") )
+    ( fun ft fv -> fail loc (Unsupported !^"floats") )
     ( fun _ ptrval -> infer_ptrval loc {local; global} ptrval  )
     ( fun mem_values -> infer_array loc {local; global} mem_values )
     ( fun tag mvals -> 
@@ -623,7 +624,7 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
   let* spec = get_struct_decl loc global tag in
   let rec check fields spec =
     match fields, spec with
-    | ((member, mv) :: fields), ((smember, sbt) :: spec) 
+    | ((member, mv) :: fields), ((smember, (_, sbt)) :: spec) 
          when member = smember ->
        let* constrs = check fields spec in
        let* (s, bt, LC lc) = infer_mem_value loc {local; global} mv in
@@ -640,15 +641,15 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
     | ((member,_) :: _), [] ->
        fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
   in
-  let* constraints = check member_values spec.raw in
+  let* constraints = check member_values spec.members in
   return (ret, Struct tag, LC (And constraints))
 
 and infer_union (loc : loc) {local; global} (tag : tag) (id : Id.t) 
                 (mv : mem_value) : vt m =
-  fail loc (Unsupported !^"todo: union types")
+  Debug_ocaml.error "todo: union types"
 
 and infer_array (loc : loc) {local; global} (mem_values : mem_value list) = 
-  fail loc (Unsupported !^"todo: array types")
+  Debug_ocaml.error "todo: arrays"
 
 let infer_object_value (loc : loc) {local; global} 
                        (ov : 'bty object_value) : vt m =
@@ -660,7 +661,7 @@ let infer_object_value (loc : loc) {local; global}
   | M_OVpointer p -> 
      infer_ptrval loc {local; global} p
   | M_OVarray items ->
-     fail loc (Unsupported !^"todo: array types")
+     Debug_ocaml.error "todo: arrays"
   | M_OVstruct (tag, fields) -> 
      let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
      infer_struct loc {local; global} tag mvals       
@@ -897,7 +898,7 @@ let rec infer_pexpr (loc : loc) {local; global}
        let* vt = infer_value loc {local; global} v in
        return (Normal (rt_of_vt vt, local))
     | M_PEconstrained _ ->
-       fail loc (Unsupported !^"todo: PEconstrained")
+       Debug_ocaml.error "todo: PEconstrained"
     | M_PEundef (loc2, undef) ->
        let loc = Loc.update loc loc2 in
        let* (reachable, model) = 
@@ -914,13 +915,13 @@ let rec infer_pexpr (loc : loc) {local; global}
        let* vt = infer_constructor loc {local; global} ctor args in
        return (Normal (rt_of_vt vt, local))
     | M_PEarray_shift _ ->
-       fail loc (Unsupported !^"todo: PEarray_shift")
+       Debug_ocaml.error "todo: PEarray_shift"
     | M_PEmember_shift (asym, tag, member) ->
        let* arg = arg_of_asym loc local asym in
        let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
        let ret = Sym.fresh () in
        let* decl = get_struct_decl loc global tag in
-       let* _member_bt = get_member_bt loc tag member decl in
+       let* _member_bt = get_member_type loc tag member decl in
        let shifted_pointer = IT.MemberOffset (tag, S arg.lname, member) in
        let constr = LC (EQ (S ret, shifted_pointer)) in
        let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
@@ -964,11 +965,11 @@ let rec infer_pexpr (loc : loc) {local; global}
        let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEstruct _ ->
-       fail loc (Unsupported !^"todo: PEstruct")
+       Debug_ocaml.error "todo: PEstruct"
     | M_PEunion _ ->
-       fail loc (Unsupported !^"todo: PEunion")
+       Debug_ocaml.error "todo: PEunion"
     | M_PEmemberof _ ->
-       fail loc (Unsupported !^"todo: M_PEmemberof")
+       Debug_ocaml.error "todo: M_PEmemberof"
     | M_PEcall (called, asyms) ->
        let* decl_typ = match called with
          | CF.Core.Impl impl -> 
@@ -1088,17 +1089,18 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
     | Struct tag ->
        let* decl = get_struct_decl loc global tag in
        let rec aux_members = function
-         | (member,member_bt)::members ->
+         | (member,(member_ct,member_bt))::members ->
             let member_pointer = IT.MemberOffset (tag,pointer,member) in
             let member_path = IT.Member (tag, path, member) in
-            let* member_size = get_member_size loc tag member decl in
             let* constraints = aux_members members in
-            let* constraints2 = aux {local;global} member_bt member_pointer 
-                                  member_size member_path (Some member) in
+            let* constraints2 = 
+              aux {local;global} member_bt member_pointer 
+                (Memory.size_of_ctype loc member_ct) member_path (Some member) 
+            in
             return (constraints2 @ constraints)
          | [] -> return []
        in  
-       aux_members decl.raw
+       aux_members decl.members
     | _ ->
        let* o_resource = Solver.resource_for_pointer loc {local;global} pointer in
        let* pointee = match o_resource with
@@ -1138,16 +1140,16 @@ let rec store (loc: loc)
      let* decl = get_struct_decl loc global tag in
      let rec aux = function
        | [] -> return I
-       | (member,member_bt)::members ->
+       | (member,(member_ct,member_bt))::members ->
           let member_pointer = IT.MemberOffset (tag,pointer,member) in
-          let* member_size = get_member_size loc tag member decl in
+          let member_size = Memory.size_of_ctype loc member_ct in
           let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
           let* rt = aux members in
           let* rt2 = store loc {local;global} member_bt member_pointer 
                               member_size o_member_value in
           return (rt@@rt2)
      in  
-     aux decl.raw
+     aux decl.members
   | _ -> 
      let vsym = Sym.fresh () in 
      match o_value with
@@ -1184,7 +1186,7 @@ let pack_stored_struct loc {local; global} (pointer: IT.t) (tag: BT.tag) =
 let ensure_aligned loc {local; global} access pointer ctype = 
   let* (aligned, _, _) = 
     Solver.constraint_holds loc {local; global} false
-      (LC.LC (Aligned (St.of_ctype ctype, pointer))) 
+      (LC.LC (Aligned (ST.of_ctype ctype, pointer))) 
   in
   if aligned then return () else fail loc (Misaligned access)
 
@@ -1228,7 +1230,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
        | M_IntFromPtr _ (* (actype 'bty * asym 'bty) *)
        | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
          -> 
-          fail loc (Unsupported !^"todo: ememop")
+          Debug_ocaml.error "todo: ememop"
        | M_PtrValidForDeref (act, asym) ->
           (* check *)
           let* local = unpack_resources loc {local; global} in
@@ -1246,7 +1248,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           in
           let* (aligned, _, s_) = 
             Solver.constraint_holds loc {local; global} false
-              (LC.LC (Aligned (St.of_ctype act.item.ct, S arg.lname))) 
+              (LC.LC (Aligned (ST.of_ctype act.item.ct, S arg.lname))) 
           in
           let ok = resource_ok && aligned in
           let constr = LC (EQ (S ret, Bool ok)) in
@@ -1262,7 +1264,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
        | M_Va_arg _ (* (asym 'bty * actype 'bty) *)
        | M_Va_end _ (* (asym 'bty) *) 
          -> 
-          fail loc (Unsupported !^"todo: ememop")
+          Debug_ocaml.error "todo: ememop"
        end
     | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
        let* local = unpack_resources loc {local; global} in
@@ -1282,11 +1284,11 @@ let rec infer_expr (loc : loc) {local; labels; global}
           in
           return (Normal (rt, local))
        | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
-          fail loc (Unsupported !^"todo: CreateReadOnly")
+          Debug_ocaml.error "todo: CreateReadOnly"
        | M_Alloc (ct, sym, _prefix) -> 
-          fail loc (Unsupported !^"todo: Alloc")
+          Debug_ocaml.error "todo: Alloc"
        | M_Kill (M_Dynamic, asym) -> 
-          fail loc (Unsupported !^"todo: free")
+          Debug_ocaml.error "todo: free"
        | M_Kill (M_Static cti, asym) -> 
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1312,7 +1314,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = 
             let* (in_range, _, _) = 
               Solver.constraint_holds loc {local; global} false 
-                (LC (Representable (St.of_ctype act.item.ct, S varg.lname)))
+                (LC (Representable (ST.of_ctype act.item.ct, S varg.lname)))
             in
             if in_range then return () else
               fail loc (Generic !^"write value unrepresentable")
@@ -1339,21 +1341,21 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, RT.I)) in
           return (Normal (rt, local))
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
-          fail loc (Unsupported !^"todo: RMW")
+          Debug_ocaml.error "todo: RMW"
        | M_Fence mo -> 
-          fail loc (Unsupported !^"todo: Fence")
+          Debug_ocaml.error "todo: Fence"
        | M_CompareExchangeStrong (ct, sym1, sym2, sym3, mo1, mo2) -> 
-          fail loc (Unsupported !^"todo: CompareExchangeStrong")
+          Debug_ocaml.error "todo: CompareExchangeStrong"
        | M_CompareExchangeWeak (ct, sym1, sym2, sym3, mo1, mo2) -> 
-          fail loc (Unsupported !^"todo: CompareExchangeWeak")
+          Debug_ocaml.error "todo: CompareExchangeWeak"
        | M_LinuxFence mo -> 
-          fail loc (Unsupported !^"todo: LinuxFemce")
+          Debug_ocaml.error "todo: LinuxFemce"
        | M_LinuxLoad (ct, sym1, mo) -> 
-          fail loc (Unsupported !^"todo: LinuxLoad")
+          Debug_ocaml.error "todo: LinuxLoad"
        | M_LinuxStore (ct, sym1, sym2, mo) -> 
-          fail loc (Unsupported !^"todo: LinuxStore")
+          Debug_ocaml.error "todo: LinuxStore"
        | M_LinuxRMW (ct, sym1, sym2, mo) -> 
-          fail loc (Unsupported !^"todo: LinuxRMW")
+          Debug_ocaml.error "todo: LinuxRMW"
        end
     | M_Eskip -> 
        let rt = RT.Computational ((Sym.fresh (), Unit), I) in
@@ -1386,7 +1388,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
     | M_Ebound (n, e) ->
        infer_expr loc {local; labels; global} e
     | M_End _ ->
-       fail loc (Unsupported !^"todo: End")
+       Debug_ocaml.error "todo: End"
     | M_Erun (label_sym, asyms) ->
        let* local = unpack_resources loc {local; global} in
        let* lt = match SymMap.find_opt label_sym labels with
@@ -1397,7 +1399,8 @@ let rec infer_expr (loc : loc) {local; labels; global}
        let* (False, local) = calltype_lt loc {local; global} args lt in
        let* () = all_empty loc local in
        return False
-    | M_Ecase _ -> Debug_ocaml.error "Ecase in inferring position"
+    | M_Ecase _ -> 
+       Debug_ocaml.error "Ecase in inferring position"
     | M_Eif (casym, e1, e2) ->
        let* carg = arg_of_asym loc local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
