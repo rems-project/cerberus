@@ -85,7 +85,7 @@ let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * L.t) m =
   return ((bt, s'), delta')
 
 
-(*** pattern matching *********************************************************)
+(*** auxiliaries **************************************************************)
 
 let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : unit m =
   if LS.equal has expect 
@@ -103,14 +103,27 @@ let check_computational_bound loc s local =
   | Some b -> 
      fail loc (Kind_mismatch {expect = KComputational; has = VB.kind b})
 
-let check_logical_bound loc s local = 
-  match Local.bound_to s local with
-  | None -> fail loc (Unbound_name (Sym s))
-  | Some (Logical _) -> return ()
-  | Some b -> 
-     fail loc (Kind_mismatch {expect = KLogical; has = VB.kind b})
+let get_struct_decl loc global tag = 
+  let open Global in
+  match SymMap.find_opt tag global.struct_decls with
+    | Some decl -> return decl
+    | None -> fail loc (Missing_struct tag)
+
+let get_member_bt loc tag member decl = 
+  let open Global in
+  match List.assoc_opt Id.equal member decl.raw with
+  | Some asd -> return asd
+  | None -> fail loc (Missing_member (tag, member))
+
+let get_member_size loc tag member decl = 
+  let open Global in
+  match List.assoc_opt Id.equal member decl.sizes with
+  | Some asd -> return asd
+  | None -> fail loc (Missing_member (tag, member))
 
 
+
+(*** pattern matching *********************************************************)
 
 let pattern_match (loc : loc) (this : IT.t) (pat : pattern) 
                   (expect : BT.t) : L.t m =
@@ -122,7 +135,8 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
        let s' = Sym.fresh () in 
        let local' = add_l s' (Base has_bt) local' in
        let* local' = match o_s with
-         | Some s when Option.is_some (bound_to s local') -> fail loc (Name_bound_twice (Sym s))
+         | Some s when Option.is_some (bound_to s local') -> 
+            fail loc (Name_bound_twice (Sym s))
          | Some s -> return (add_a s (has_bt, s') local')
          | None -> return local'
        in
@@ -606,7 +620,7 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
   let ret = Sym.fresh () in
-  let* spec = Global.get_struct_decl loc global.struct_decls tag in
+  let* spec = get_struct_decl loc global tag in
   let rec check fields spec =
     match fields, spec with
     | ((member, mv) :: fields), ((smember, sbt) :: spec) 
@@ -905,8 +919,8 @@ let rec infer_pexpr (loc : loc) {local; global}
        let* arg = arg_of_asym loc local asym in
        let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
        let ret = Sym.fresh () in
-       let* decl = Global.get_struct_decl loc global.struct_decls tag in
-       let* _member_bt = Global.get_member_raw loc global.struct_decls tag member in
+       let* decl = get_struct_decl loc global tag in
+       let* _member_bt = get_member_bt loc tag member decl in
        let shifted_pointer = IT.MemberOffset (tag, S arg.lname, member) in
        let constr = LC (EQ (S ret, shifted_pointer)) in
        let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
@@ -1072,12 +1086,12 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
   let rec aux {local;global} bt pointer size path is_field = 
     match bt with
     | Struct tag ->
-       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let* decl = get_struct_decl loc global tag in
        let rec aux_members = function
          | (member,member_bt)::members ->
             let member_pointer = IT.MemberOffset (tag,pointer,member) in
             let member_path = IT.Member (tag, path, member) in
-            let* member_size = Global.get_member_size loc global.struct_decls tag member in
+            let* member_size = get_member_size loc tag member decl in
             let* constraints = aux_members members in
             let* constraints2 = aux {local;global} member_bt member_pointer 
                                   member_size member_path (Some member) in
@@ -1121,12 +1135,12 @@ let rec store (loc: loc)
   let open RT in
   match bt with
   | Struct tag ->
-     let* decl = Global.get_struct_decl loc global.struct_decls tag in
+     let* decl = get_struct_decl loc global tag in
      let rec aux = function
        | [] -> return I
        | (member,member_bt)::members ->
           let member_pointer = IT.MemberOffset (tag,pointer,member) in
-          let* member_size = Global.get_member_size loc global.struct_decls tag member in
+          let* member_size = get_member_size loc tag member decl in
           let o_member_value = Option.map (fun v -> IT.Member (tag, v, member)) o_value in
           let* rt = aux members in
           let* rt2 = store loc {local;global} member_bt member_pointer 

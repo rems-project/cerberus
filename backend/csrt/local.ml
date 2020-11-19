@@ -74,19 +74,9 @@ let get (sym: Sym.t) (Local local) : VB.t =
 (* internal *)
 let add (name, b) (Local e) = Local (Binding (name, b) :: e)
 
-(* let remove (sym: Sym.t) (Local local) : t = 
- *   let rec aux = function
- *   | Binding (sym',_) :: rest when Sym.equal sym sym' -> rest
- *   | i :: rest -> i :: aux rest
- *   | [] -> unbound_internal_error sym
- *   in
- *   Local (aux local) *)
-
 let filter p (Local e) = 
   filter_map (function Binding (sym,b) -> p sym b | _ -> None) e
 
-(* let filterM p (Local e) = 
- *   ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> None) e *)
 
 let all_computational local = 
   filter (fun name b ->

@@ -15,3 +15,6 @@ let negate (LC c) = LC (Not c)
 
 
 let index_term (LC c) = c
+
+
+let unpack (LC c) = c

@@ -107,6 +107,7 @@ type type_error =
   | Unused_resource of { resource: Resources.t }
   | Misaligned of access
 
+  | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it of IndexTerms.t
@@ -233,6 +234,10 @@ let pp_type_error = function
      in
      (msg, [])
 
+  | Number_members {has;expect} ->
+     (!^"Wrong number of struct members:" ^^^
+        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+          !^"has" ^^^ !^(string_of_int has), [])
   | Number_arguments {has;expect} ->
      (!^"Wrong number of arguments:" ^^^
         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^

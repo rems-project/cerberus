@@ -25,4 +25,5 @@ let assoc_opt (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v o
   | Some (_, v) -> Some v
   | None -> None
 
-let assoc = assoc_opt
+let assoc (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v = 
+  snd (find (fun (k',_) -> equality k k') l )

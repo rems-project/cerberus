@@ -92,7 +92,16 @@ module WIT = struct
        | _ -> fail loc (Illtyped_it it)
        end
     | Struct (tag, members) ->
-       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let* decl = match SymMap.find_opt tag global.struct_decls with
+         | Some decl -> return decl
+         | None -> fail loc (Missing_struct tag)
+       in
+       let* () = 
+         let has = List.length members in
+         let expect = List.length decl.raw in
+         if has = expect then return ()
+         else fail loc (Number_members {has; expect})
+       in
        let* () = 
          ListM.iterM (fun (member,it') ->
              let* mbt = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
@@ -102,12 +111,18 @@ module WIT = struct
        return (Base (Struct tag))
     | Member (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base (Struct tag)) it' in
-       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let* decl = match SymMap.find_opt tag global.struct_decls with
+         | Some decl -> return decl
+         | None -> fail loc (Missing_struct tag)
+       in
        let* bt = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
        return (Base bt)
     | MemberOffset (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base Loc) it' in
-       let* decl = Global.get_struct_decl loc global.struct_decls tag in
+       let* decl = match SymMap.find_opt tag global.struct_decls with
+         | Some decl -> return decl
+         | None -> fail loc (Missing_struct tag)
+       in
        let* _ = assoc_err loc Id.equal member decl.raw (Illtyped_it it) in
        return (Base Loc)
     | AllocationSize t ->

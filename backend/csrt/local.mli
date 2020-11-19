@@ -16,8 +16,6 @@ val marked : t
 
 val concat : t -> t -> t
 
-(* val remove : Loc.t -> Sym.t -> t -> t *)
-
 val use_resource : Sym.t -> Loc.t list -> t -> t
 
 val since : t -> binding list * t
@@ -58,8 +56,6 @@ val all_logical : t -> (Sym.t * LS.t) list
 val all_resources : t -> (Sym.t * RE.t) list
 val all_used_resources : t -> (Sym.t * RE.t * Loc.t list) list
 
-(* val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
- * val filterM : (Sym.t -> VB.t -> ('a option) m) -> t -> ('a list) m *)
 
 val (++) : t -> t -> t
 

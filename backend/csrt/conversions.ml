@@ -79,7 +79,7 @@ let bt_of_st loc st =
 
 (* structs *)
 let struct_decl_raw loc tag = 
-  let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
+  let (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (member, (_,_, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
       let* bt = bt_of_ct loc ct in
@@ -88,7 +88,7 @@ let struct_decl_raw loc tag =
 
 
 let struct_decl_sizes loc tag = 
-  let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
+  let (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (member, (_, _, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
       let size = Memory.size_of_ctype loc ct in
@@ -99,7 +99,7 @@ let struct_decl_representable loc tag =
   Memory.representable_struct loc tag
 
 let struct_decl_offsets loc tag = 
-  let* (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
+  let (fields,_) = Memory.lookup_struct_in_tagDefs loc tag in
   ListM.mapM (fun (member, (_, _, ct)) ->
       let loc = Loc.update_a loc (annot_of_ct ct) in
       let offset = Memory.member_offset loc tag member in
@@ -117,7 +117,7 @@ let struct_decl_closed loc tag =
 let struct_decl_closed_stored loc tag = 
   let open RT in
   let rec aux loc tag struct_p = 
-    let* layout = Memory.struct_layout loc tag in
+    let layout = Memory.struct_layout loc tag in
     let* members = 
       ListM.mapM (fun (offset, size, member_or_padding) ->
           let pointer = IT.Offset (struct_p, Num offset) in
@@ -169,7 +169,7 @@ let struct_decl_closed_stored_predicate loc tag =
   let open RT in
   let struct_value = Sym.fresh () in
   let size = Memory.size_of_struct loc tag in
-  let* layout = Memory.struct_layout loc tag in
+  let layout = Memory.struct_layout loc tag in
   let* members = 
     ListM.mapM (fun (offset, size, member_or_padding) ->
         match member_or_padding with
@@ -214,7 +214,7 @@ let struct_decl_closed_stored_predicate loc tag =
 let struct_decl loc (tag : BT.tag) = 
   let* raw = struct_decl_raw loc tag in
   let* sizes = struct_decl_sizes loc tag in
-  let* representable = struct_decl_representable loc tag in
+  let representable = struct_decl_representable loc tag in
   let* offsets = struct_decl_offsets loc tag in
   let* closed = struct_decl_closed loc tag in
   let* closed_stored = struct_decl_closed_stored loc tag in
@@ -256,7 +256,10 @@ let rec rt_of_pointer_ctype loc struct_decls (pointer : Sym.t) ct =
      return rt
   | CF.Ctype.Struct tag ->
      let open Global in
-     let* decl = Global.get_struct_decl loc struct_decls tag in
+     let* decl = match SymMap.find_opt tag struct_decls with
+       | Some decl -> return decl
+       | None -> fail loc (Missing_struct tag)
+     in
      let rt = RT.freshify decl.closed_stored in
      let Computational ((s',_), _) = rt in
      let rt = RT.subst_var {before = s'; after = pointer} rt in
@@ -288,7 +291,10 @@ and rt_of_ctype loc struct_decls (s : Sym.t) ct =
      (* fix *)
      rt_of_ctype loc struct_decls s ct
   | Struct tag -> 
-     let* decl = Global.get_struct_decl loc struct_decls tag in
+     let* decl = match SymMap.find_opt tag struct_decls with
+       | Some decl -> return decl
+       | None -> fail loc (Missing_struct tag)
+     in
      let rt = RT.freshify decl.Global.closed in
      let Computational ((s',_),_) = rt in
      return (RT.subst_var {before=s; after=s} rt)

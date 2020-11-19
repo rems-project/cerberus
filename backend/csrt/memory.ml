@@ -1,7 +1,4 @@
 module CF = Cerb_frontend
-open TypeErrors
-open Resultat
-open Pp
 open IndexTerms
 
 open Resources
@@ -56,7 +53,7 @@ let size_of_pointer loc =
 (* from impl_mem *)
 let align_of_pointer loc =
   let impl = CF.Ocaml_implementation.get () in
-  match impl.alignof_pointer  with
+  match impl.alignof_pointer with
   | Some n -> Z.of_int n
   | None -> Debug_ocaml.error "alignof_pointer returned None"
 
@@ -76,10 +73,10 @@ let representable_pointer loc about =
 let lookup_struct_in_tagDefs loc tag =
   match Pmap.lookup tag (CF.Tags.tagDefs ()) with
   | Some (CF.Ctype.StructDef (fields,flexible_array_member)) -> 
-     return (fields,flexible_array_member)
-  | Some (UnionDef _) -> fail loc (Generic !^"expected struct")
+     (fields,flexible_array_member)
+  | Some (UnionDef _) -> Debug_ocaml.error "lookup_struct_in_tagDefs: union"
   | None -> 
-     fail loc (Generic (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined"))
+     Debug_ocaml.error "lookup_struct_in_tagDefs: struct not found"
 
 
 let size_of_ctype loc ct = 
@@ -90,38 +87,35 @@ let align_of_ctype loc ct =
   let s = CF.Impl_mem.alignof_ival ct in
   integer_value_to_num loc s
 
-let rec representable_ctype loc (CF.Ctype.Ctype (_,ct_)) =
+let rec representable_ctype loc (CF.Ctype.Ctype (_,ct_)) about =
   let open CF.Ctype in
   match ct_ with
-  | Void -> return (fun it -> LC.LC (EQ (it , Unit)))
-  | Basic (Integer it) -> return (representable_integer loc it)
-  | Basic (Floating _) -> fail loc (Unsupported !^"floats")
+  | Void -> LC.LC (EQ (about , Unit))
+  | Basic (Integer it) -> representable_integer loc it about
+  | Basic (Floating _) -> Debug_ocaml.error "representable_ctype: function pointers"
   | Array _ -> Debug_ocaml.error "todo: arrays"
-  | Function _ -> fail loc (Unsupported !^"function pointers")
-  | Pointer _ -> return (representable_pointer loc)
-  | Atomic ct -> representable_ctype loc ct
-  | Struct tag -> representable_struct loc tag
+  | Function _ -> Debug_ocaml.error "representable_ctype: function pointers"
+  | Pointer _ -> representable_pointer loc about
+  | Atomic ct -> representable_ctype loc ct about
+  | Struct tag -> representable_struct loc tag about
   | Union _ -> Debug_ocaml.error "todo: union types"
 
-and representable_struct loc tag = 
-  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
-  let* member_rangefs =
-    ListM.mapM (fun (member, (_, _, ct)) ->
+and representable_struct loc tag about = 
+  let (fields,_) = lookup_struct_in_tagDefs loc tag in
+  let member_rangefs =
+    List.map (fun (member, (_, _, ct)) ->
         let CF.Ctype.Ctype (annot,_) = ct in
         let loc = Loc.update_a loc annot in
-        let* rangef = representable_ctype loc ct in
-        return (member, rangef)
+        let rangef = representable_ctype loc ct in
+        (member, rangef)
       ) fields
   in
-  let rangef about = 
-    let lcs = 
-      List.map (fun (member, rangef) ->
-          LC.index_term (rangef (IT.Member (tag, about, member)))
-        ) member_rangefs
-    in
-    (LC.LC (And lcs))
+  let lcs = 
+    List.map (fun (member, rangef) ->
+        LC.index_term (rangef (IT.Member (tag, about, member)))
+      ) member_rangefs
   in
-  return rangef
+  (LC.LC (And lcs))
 
 
 let size_of_struct loc tag =
@@ -137,7 +131,7 @@ let member_offset loc tag member =
 
 
 let struct_layout loc tag = 
-  let* (fields,_) = lookup_struct_in_tagDefs loc tag in
+  let (fields,_) = lookup_struct_in_tagDefs loc tag in
   let rec aux members position =
     match members with
     | [] -> 
@@ -154,7 +148,7 @@ let struct_layout loc tag =
        let member = [(offset, size, Some (member, (attrs, qualifiers, ct)))] in
        padding @ member @ aux members (Z.add_big_int to_pad size)
   in
-  return (aux fields Z.zero)
+  (aux fields Z.zero)
 
 
 
@@ -175,4 +169,4 @@ let align_of_stored_type loc st =
 let representable_stored_type loc st = 
   match st with
   | St.ST_Ctype ct -> representable_ctype loc ct
-  | St.ST_Pointer -> return (representable_pointer loc)
+  | St.ST_Pointer -> representable_pointer loc

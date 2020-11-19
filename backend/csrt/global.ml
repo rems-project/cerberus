@@ -1,6 +1,6 @@
 open Pp
-open Resultat
-open TypeErrors
+(* open Resultat
+ * open TypeErrors *)
 
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -79,31 +79,10 @@ let empty =
     resource_predicates = IdMap.empty;
   }
 
-let get_struct_decl loc struct_decls tag = 
-  match SymMap.find_opt tag struct_decls with
-  | Some decl -> return decl 
-  | None -> fail loc (Missing_struct tag)
-
-let get_member_raw loc struct_decls tag member = 
-  let* decl = get_struct_decl loc struct_decls tag in
-  match List.assoc_opt Id.equal member decl.raw with
-  | Some size -> return size
-  | None -> fail loc (Missing_member (tag, member))
-
-let get_member_size loc struct_decls tag member = 
-  let* decl = get_struct_decl loc struct_decls tag in
-  match List.assoc_opt Id.equal member decl.sizes with
-  | Some size -> return size
-  | None -> fail loc (Missing_member (tag, member))
-
-let get_member_offset loc struct_decls tag member = 
-  let* decl = get_struct_decl loc struct_decls tag in
-  match List.assoc_opt Id.equal member decl.offsets with
-  | Some size -> return size
-  | None -> fail loc (Missing_member (tag, member))
-
 let get_predicate_def loc global predicate_name = 
   let open Resources in
+  let open TypeErrors in
+  let open Resultat in
   match predicate_name with
   | Id id -> 
      begin match IdMap.find_opt id global.resource_predicates with
@@ -111,7 +90,10 @@ let get_predicate_def loc global predicate_name =
      | None -> fail loc (Missing_predicate id)
      end
   | Tag tag ->
-     let* decl = get_struct_decl loc global.struct_decls tag  in
+     let* decl = match SymMap.find_opt tag global.struct_decls with
+       | Some decl -> return decl
+       | None -> fail loc (Missing_struct tag)
+     in
      let {value_arg; clause} = 
        decl.closed_stored_predicate_definition in
      let def = 
@@ -124,6 +106,8 @@ let get_predicate_def loc global predicate_name =
 let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
 let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i
 let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
+
+
 
 let pp_struct_decl (sym,decl) = 
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
