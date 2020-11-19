@@ -96,6 +96,22 @@ let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : unit m =
   ensure_logical_sort loc ~expect:(LS.Base expect) (LS.Base has)
 
 
+let check_computational_bound loc s local = 
+  match Local.bound_to s local with
+  | None -> fail loc (Unbound_name (Sym s))
+  | Some (Computational _) -> return ()
+  | Some b -> 
+     fail loc (Kind_mismatch {expect = KComputational; has = VB.kind b})
+
+let check_logical_bound loc s local = 
+  match Local.bound_to s local with
+  | None -> fail loc (Unbound_name (Sym s))
+  | Some (Logical _) -> return ()
+  | Some b -> 
+     fail loc (Kind_mismatch {expect = KLogical; has = VB.kind b})
+
+
+
 let pattern_match (loc : loc) (this : IT.t) (pat : pattern) 
                   (expect : BT.t) : L.t m =
   let rec aux (local' : L.t) (this : IT.t) (pat : pattern) 
@@ -105,9 +121,8 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
        let* () = ensure_base_type loc ~expect has_bt in
        let s' = Sym.fresh () in 
        let local' = add_l s' (Base has_bt) local' in
-       let* local' = 
-         match o_s with
-         | Some s when is_bound s local' -> fail loc (Name_bound_twice (Sym s))
+       let* local' = match o_s with
+         | Some s when Option.is_some (bound_to s local') -> fail loc (Name_bound_twice (Sym s))
          | Some s -> return (add_a s (has_bt, s') local')
          | None -> return local'
        in
@@ -157,7 +172,7 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
        | _, M_Cspecified, _ ->
           fail loc (Number_arguments {expect = 1; has = List.length pats})
        | _, M_Carray, _ ->
-          fail loc (Unsupported !^"todo: array types")
+          Debug_ocaml.error "todo: array types"
        | _, M_CivCOMPL, _
        | _, M_CivAND, _
        | _, M_CivOR, _
@@ -165,7 +180,7 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
        | _, M_Cfvfromint, _
        | _, M_Civfromfloat, _
          ->
-          fail loc (Unsupported !^"todo: Civ..")
+          Debug_ocaml.error "todo: Civ.."
   in
   aux L.empty this pat expect
 
@@ -211,10 +226,14 @@ let substs_for_predicate_instantiation loc local definition args =
 type arg = {lname : Sym.t; bt : BT.t; loc : loc}
 type args = arg list
 
+let arg_of_sym (loc : loc) (local : L.t) (sym : Sym.t) : arg m = 
+  let* () = check_computational_bound loc sym local in
+  let (bt,lname) = get_a sym local in
+  return {lname; bt; loc}
+
 let arg_of_asym (loc : loc) (local : L.t) (asym : 'bty asym) : arg m = 
   let loc = Loc.update_a loc asym.annot in
-  let* (bt,lname) = get_a loc asym.item local in
-  return {lname; bt; loc}
+  arg_of_sym loc local asym.item
 
 let args_of_asyms (loc : loc) (local : L.t) (asyms : 'bty asyms) : args m = 
   ListM.mapM (arg_of_asym loc local) asyms
@@ -302,7 +321,7 @@ module Spine (I : AT.I_Sig) = struct
              | None -> 
                 fail loc (Unconstrained_logical_variable s)
              | Some sym ->
-                let* resolved_ls = get_l loc sym local in
+                let resolved_ls = get_l sym local in
                 if LS.equal resolved_ls ls 
                 then check_logical unis lspec
                 else fail loc (Mismatch {has = resolved_ls; expect = ls})
@@ -354,7 +373,7 @@ let unpack_resources loc {local; global} =
          let* substs = substs_for_predicate_instantiation loc local def p.args in
          let* possible_unpackings = 
            ListM.filter_mapM (fun clause ->
-               let* test_local = L.use_resource loc resource_name [loc] local in
+               let test_local = L.use_resource resource_name [loc] local in
                let test_local = bind_logical test_local (RT.subst_vars_l substs clause) in
                let* is_reachable = Solver.is_consistent loc {local = test_local; global} in
                return (if is_reachable then Some test_local else None)
@@ -383,13 +402,13 @@ let rec remove_ownership (loc: loc) {local;global} (pointer: IT.t) (need_size: R
          | Some have_size -> return have_size
        in
        if Z.ge_big_int need_size have_size then 
-         let* local = L.use_resource loc resource_name [loc] local in
+         let local = L.use_resource resource_name [loc] local in
          remove_ownership loc {local; global} (Offset (pointer, Num have_size)) 
            (Z.sub need_size have_size) situation
        else
          (* if the resource is bigger than needed, keep the remainder
             as unitialised memory *)
-         let* local = L.use_resource loc resource_name [loc] local in
+         let local = L.use_resource resource_name [loc] local in
          let local = 
            add_ur (RE.Uninit {pointer = Offset (pointer, Num need_size); 
                               size = Z.sub have_size need_size}) local
@@ -421,7 +440,7 @@ let rec resource_request access_kind loc {local; global} unis request =
      | Some (resource_name, resource) -> 
         begin match RE.unify request (RE.set_pointer resource pointer) unis with
         | Some unis ->
-           let* local = use_resource loc resource_name [loc] local in
+           let local = use_resource resource_name [loc] local in
            return (local, unis)
         | None -> 
            fail loc (ResourceMismatch {expect = request; has = resource} )
@@ -437,7 +456,7 @@ let rec resource_request access_kind loc {local; global} unis request =
         print stderr (item "have" (RE.pp resource));
         begin match RE.unify request (RE.set_pointer resource pointer) unis with
         | Some unis -> 
-           let* local = use_resource loc resource_name [loc] local in
+           let local = use_resource resource_name [loc] local in
            return (local, unis)
         | None ->         
            let* def = Global.get_predicate_def loc global p.name in
@@ -803,14 +822,14 @@ let big_merge_return_types (loc : loc) (name, bt)
 
 let merge_paths 
       (loc : loc) 
-      (local_or_falses : (L.t fallible) list) : (L.t fallible) m =
+      (local_or_falses : (L.t fallible) list) : L.t fallible =
   let locals = non_false local_or_falses in
   match locals with
-  | [] -> return False
+  | [] -> False
   | first :: _ -> 
      (* for every local environment L: merge L L = L *)
-     let* local = L.big_merge loc first locals in 
-     return (Normal local)
+     let local = L.big_merge first locals in 
+     Normal local
 
 let merge_return_paths
       (loc : loc)
@@ -822,7 +841,7 @@ let merge_return_paths
   | [] -> return False
   | ((_,RT.Computational (b,_)), first_local) :: _ -> 
      let* (_, rt) = big_merge_return_types loc b rts in 
-     let* local = L.big_merge loc first_local locals in 
+     let local = L.big_merge first_local locals in 
      let result = (Normal (rt, local)) in
      return result
 
@@ -853,9 +872,9 @@ let rec infer_pexpr (loc : loc) {local; global}
   let*? (rt, local) = match pe_ with
     | M_PEsym sym ->
        let ret = Sym.fresh () in
-       let* (bt, lname) = get_a loc sym local in
-       let constr = LC (EQ (S ret, S lname)) in
-       let rt = RT.Computational ((ret, bt), Constraint (constr, I)) in
+       let* arg = arg_of_sym loc local sym in
+       let constr = LC (EQ (S ret, S arg.lname)) in
+       let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEimpl i ->
        let bt = G.get_impl_constant loc global i in
@@ -1004,7 +1023,7 @@ let rec check_pexpr (loc : loc) {local; global} (e : 'bty pexpr)
            check_pexpr_pop loc delta {local; global} e typ
          ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
      in
-     merge_paths loc paths
+     return (merge_paths loc paths)
   | M_PEcase (asym, pats_es) ->
      let* arg = arg_of_asym loc local asym in
      let* paths = 
@@ -1018,7 +1037,7 @@ let rec check_pexpr (loc : loc) {local; global} (e : 'bty pexpr)
            check_pexpr_pop loc delta {local; global} e typ
          ) pats_es
      in
-     merge_paths loc paths
+     return (merge_paths loc paths)
   | M_PElet (p, e1, e2) ->
      let*? (rt, local) = infer_pexpr loc {local; global} e1 in
      let* delta = match p with
@@ -1081,7 +1100,7 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
             let* olast_used = Solver.used_resource_for_pointer loc {local;global} pointer in
             fail loc (Missing_ownership (Access Load, is_field, olast_used))
        in
-       let* vls = L.get_l loc pointee local in
+       let vls = L.get_l pointee local in
        if LS.equal vls (Base bt) 
        then return [IT.EQ (path, S pointee)]
        else fail loc (Mismatch {has = vls; expect = Base bt})
@@ -1327,9 +1346,9 @@ let rec infer_expr (loc : loc) {local; labels; global}
        return (Normal (rt, local))
     | M_Eccall (_ctype, afsym, asyms) ->
        let* local = unpack_resources loc {local; global} in
-       let* (bt, _) = get_a (Loc.update_a loc afsym.annot) afsym.item local in
+       let* f_arg = arg_of_asym loc local afsym in
        let* args = args_of_asyms loc local asyms in
-       begin match bt with
+       begin match f_arg.bt with
          | FunctionPointer sym -> 
             let* (_loc, ft) = G.get_fun_decl loc global sym in
             let* (rt, local) = calltype_ft loc {local; global} args ft in
@@ -1427,7 +1446,7 @@ let rec check_expr (loc : loc) {local; labels; global} (e : 'bty expr)
            check_expr_pop loc delta {local; labels; global} e typ 
          ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
      in
-     merge_paths loc paths
+     return (merge_paths loc paths)
   | M_Ecase (asym, pats_es) ->
      let* arg = arg_of_asym loc local asym in
      let* paths = 
@@ -1441,7 +1460,7 @@ let rec check_expr (loc : loc) {local; labels; global} (e : 'bty expr)
            check_expr_pop loc delta {local; labels; global} e typ
          ) pats_es
      in
-     merge_paths loc paths
+     return (merge_paths loc paths)
   | M_Elet (p, e1, e2) ->
      let*? (rt, local) = infer_pexpr loc {local; global} e1 in
      let* delta = match p with 
@@ -1645,8 +1664,9 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
+   - make wellformedness checks check for things being of the right kind
    - separate everywhere separate internal from user errors
-   - especially for when *trying* different clauses of predicates
+   - especially for when *trying* different clauses of predicates: only accept failures of particular kind
    - in counter models, do not use 0 for non-null pointers
    - give types for standard library functions
    - better location information for refined_c annotations

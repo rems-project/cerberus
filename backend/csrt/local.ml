@@ -1,7 +1,5 @@
 open Pp
 open List
-open Resultat
-open TypeErrors
 
 module BT = BaseTypes
 module LS = LogicalSorts
@@ -32,6 +30,21 @@ let concat (Local local') (Local local) = Local (local' @ local)
 
 
 
+let unbound_internal_error sym = 
+  Debug_ocaml.error ("unbound symbol " ^ Sym.pp_string sym)
+
+
+let kind_mismatch_internal_error ~expect ~has =
+  let err = 
+    "Expected" ^ (plain (VariableBinding.kind_pp expect)) ^
+      "but found" ^ (plain (VariableBinding.kind_pp has))
+  in
+  Debug_ocaml.error err
+
+
+
+
+
 let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
   | Binding (sym,binding) -> VB.pp ~print_all_names ~print_used (sym,binding)
   | Marker -> uformat [FG (Blue,Dark)] "\u{25CF}" 1 
@@ -48,13 +61,12 @@ let pp ?(print_all_names = false) ?(print_used = false) (Local local) =
 
 
 
-
 (* internal *)
-let get (loc : Loc.t) (sym: Sym.t) (Local local) : VB.t m =
+let get (sym: Sym.t) (Local local) : VB.t =
   let rec aux = function
-  | Binding (sym',b) :: _ when Sym.equal sym' sym -> return b
+  | Binding (sym',b) :: _ when Sym.equal sym' sym -> b
   | _ :: local -> aux local
-  | [] -> fail loc (Unbound_name (Sym sym))
+  | [] -> unbound_internal_error sym
   in
   aux local
 
@@ -62,20 +74,19 @@ let get (loc : Loc.t) (sym: Sym.t) (Local local) : VB.t m =
 (* internal *)
 let add (name, b) (Local e) = Local (Binding (name, b) :: e)
 
-let remove (loc : Loc.t) (sym: Sym.t) (Local local) : t m = 
-  let rec aux = function
-  | Binding (sym',_) :: rest when Sym.equal sym sym' -> return rest
-  | i::rest -> let* rest' = aux rest in return (i::rest')
-  | [] -> fail loc (Unbound_name (Sym sym))
-  in
-  let* local = aux local in
-  return (Local local)
+(* let remove (sym: Sym.t) (Local local) : t = 
+ *   let rec aux = function
+ *   | Binding (sym',_) :: rest when Sym.equal sym sym' -> rest
+ *   | i :: rest -> i :: aux rest
+ *   | [] -> unbound_internal_error sym
+ *   in
+ *   Local (aux local) *)
 
 let filter p (Local e) = 
   filter_map (function Binding (sym,b) -> p sym b | _ -> None) e
 
-let filterM p (Local e) = 
-  ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> return None) e
+(* let filterM p (Local e) = 
+ *   ListM.filter_mapM (function Binding (sym,b) -> p sym b | _ -> None) e *)
 
 let all_computational local = 
   filter (fun name b ->
@@ -98,6 +109,13 @@ let all_resources local =
       | _ -> None
     ) local
 
+let all_used_resources local = 
+  filter (fun name b ->
+      match b with
+      | UsedResource (re,where) -> Some (name, re, where)
+      | _ -> None
+    ) local
+
 let all_constraints local = 
   filter (fun _ b ->
       match b with
@@ -111,22 +129,17 @@ let all_constraints local =
 
 
 
-
-
-let use_resource loc sym where (Local local) = 
+let use_resource sym where (Local local) = 
   let rec aux = function
   | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
      begin match b with
-     | Resource re -> 
-        return (Binding (sym', UsedResource (re,where)) :: rest)
-     | _ ->
-        fail loc (Kind_mismatch {expect = KResource; has = VB.kind b})
+     | Resource re -> Binding (sym', UsedResource (re,where)) :: rest
+     | _ -> kind_mismatch_internal_error ~expect:KResource ~has:(VB.kind b)
      end
-  | i::rest -> let* rest' = aux rest in return (i::rest')
-  | [] -> fail loc (Unbound_name (Sym sym))
+  | i :: rest -> i :: aux rest
+  | [] -> unbound_internal_error sym
   in
-  let* local = aux local in
-  return (Local local)
+  Local (aux local)
 
 
 
@@ -149,16 +162,19 @@ let since (Local local) =
 
 
 
-let is_bound sym (Local local) =
-  List.exists 
-    (function 
-     | Binding (sym',_) -> Sym.equal sym' sym 
-     | _ -> false
-    ) local
+let bound_to sym (Local local) = 
+  let rec aux = function
+    | [] -> None
+    | Binding (sym',binding) :: rest ->
+       if Sym.equal sym' sym then Some binding
+       else aux rest
+    | Marker :: rest -> aux rest
+  in
+  aux local
 
 
 
-let incompatible_environments loc l1 l2=
+let incompatible_environments l1 l2 =
   let msg = 
     !^"Merging incompatible contexts." ^/^ 
       item "ctxt1" (pp ~print_used:true ~print_all_names:true l1) ^/^
@@ -166,8 +182,8 @@ let incompatible_environments loc l1 l2=
   in
   Debug_ocaml.error (plain msg)
 
-let merge loc (Local l1) (Local l2) =
-  let incompatible () = incompatible_environments loc (Local l1) (Local l2) in
+let merge (Local l1) (Local l2) =
+  let incompatible () = incompatible_environments (Local l1) (Local l2) in
   let merge_ci = function
     | (Marker, Marker) -> Marker
     | (Binding (s1,vb1), Binding(s2,vb2)) ->
@@ -179,11 +195,11 @@ let merge loc (Local l1) (Local l2) =
     | (Binding (_,_), Marker) -> incompatible ()
   in
   if List.length l1 <> List.length l2 then incompatible () else 
-    let l = List.map merge_ci (List.combine l1 l2) in
-    return (Local l)
+    Local (List.map merge_ci (List.combine l1 l2))
 
-let big_merge (loc: Loc.t) (local: t) (locals: t list) : t m = 
-  ListM.fold_leftM (merge loc) local locals
+
+let big_merge (local: t) (locals: t list) : t = 
+  List.fold_left merge local locals
 
 
 let mA sym (bt,lname) = (sym, VB.Computational (lname,bt))
@@ -197,41 +213,26 @@ let mUC lc = mC (Sym.fresh ()) lc
 
 
 
-let get_a (loc : Loc.t) (name: Sym.t) (local:t)  = 
-  let* b = get loc name local in
-  match b with 
-  | Computational (lname,bt) -> return (bt,lname)
-  | _ -> fail loc (Kind_mismatch {expect = KComputational; has = VB.kind b})
+let get_a (name: Sym.t) (local:t)  = 
+  match get name local with 
+  | Computational (lname,bt) -> (bt,lname)
+  | b -> kind_mismatch_internal_error ~expect:KComputational ~has:(VB.kind b)
 
-let get_l (loc : Loc.t) (name: Sym.t) (local:t) = 
-  let* b = get loc name local in
-  match b with 
-  | Logical ls -> return ls
-  | _ -> fail loc (Kind_mismatch {expect = KLogical; has = VB.kind b})
+let get_l (name: Sym.t) (local:t) = 
+  match get name local with 
+  | Logical ls -> ls
+  | b -> kind_mismatch_internal_error ~expect:KLogical ~has:(VB.kind b)
 
-let get_r (loc : Loc.t) (name: Sym.t) (local:t) = 
-  let* b = get loc name local in
-  match b with 
-  | Resource re -> return re
-  | _ -> fail loc (Kind_mismatch {expect = KResource; has = VB.kind b})
+let get_r (name: Sym.t) (local:t) = 
+  match get name local with 
+  | Resource re -> re
+  | b -> kind_mismatch_internal_error ~expect:KResource ~has:(VB.kind b)
 
-let get_c (loc : Loc.t) (name: Sym.t) (local:t) = 
-  let* b = get loc name local in
-  match b with 
-  | Constraint lc -> return lc
-  | _ -> fail loc (Kind_mismatch {expect = KConstraint; has = VB.kind b})
+let get_c (name: Sym.t) (local:t) = 
+  match get name local with 
+  | Constraint lc -> lc
+  | b -> kind_mismatch_internal_error ~expect:KConstraint ~has:(VB.kind b)
 
-(* only used for user interface things *)
-let get_computational_or_logical (loc : Loc.t) (name: Sym.t) (local:t) = 
-  let* b = get loc name local in
-  match b with 
-  | Computational (_,bt) -> return (LS.Base bt)
-  | Logical ls -> return ls
-  | _ -> fail loc (Kind_mismatch {expect = KLogical; has = VB.kind b})
-
-
-let removeS loc syms (local: t) = 
-  ListM.fold_leftM (fun local sym -> remove loc sym local) local syms
 
 let add_a aname (bt,lname) = 
   add (aname, Computational (lname,bt))
@@ -251,7 +252,7 @@ let add_r rname r local =
     | None -> []
     | Some fp ->
        List.filter_map (fun (_,r') -> 
-           Option.bind (RE.fp r') (fun fp' -> Some (IT.Disjoint (fp, fp')))
+           Option.bind (RE.fp r') (fun fp' -> Some (IndexTerms.Disjoint (fp, fp')))
          ) (all_resources local) 
   in
   add_uc (LC (And lcs)) (add (rname, Resource r) local)
@@ -271,18 +272,7 @@ let all_names = filter (fun sym _ -> Some sym)
 
 
 
-let cvar_for_lvar (Local local) (lvar : Sym.t) :
-      ((Sym.t, Sym.t) Subst.t) option = 
-  let rec aux = function
-    | Marker :: rest -> aux rest
-    | Binding (aname, VB.Computational (lvar', _)) :: _ 
-         when Sym.equal lvar lvar' ->
-       Some (Subst.{before = lvar; after = aname})
-    | _ :: rest ->
-       aux rest
-    | [] -> None
-  in
-  aux local
+
 
 
 

@@ -20,6 +20,14 @@ module SymSet = Set.Make(Sym)
 
 
 
+let check_bound loc local kind s = 
+  match Local.bound_to s local with
+  | Some binding when VB.kind binding = kind -> return ()
+  | Some binding ->
+     fail loc (Kind_mismatch {expect = KResource; has = VB.kind binding})
+  | None -> fail loc (Unbound_name (Sym s))
+
+
 module WIT = struct
 
   open BaseTypes
@@ -151,7 +159,8 @@ module WIT = struct
        let* () = check_aux loc it {local; global} (Base bt) t in
        return (Base BT.Bool)
     | S s ->
-       Local.get_l loc s local
+       let* () = check_bound loc local KLogical s in
+       return (Local.get_l s local)
 
   and check_aux loc (context: t) env (ls: LS.t) (it: t) : unit m = 
     let* ls' = infer loc env it in
@@ -171,9 +180,14 @@ module WRE = struct
   open Resources
   type t = Resources.t
   let welltyped loc {local; global} = function
-    | Uninit u -> WIT.check loc {local; global} (LS.Base BT.Loc) u.pointer
-    | Padding p -> WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
-    | Points p -> WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
+    | Uninit u -> 
+       WIT.check loc {local; global} (LS.Base BT.Loc) u.pointer
+    | Padding p -> 
+       WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
+    | Points p -> 
+       (* points is "polymorphic" in the pointee *)
+       let* () = check_bound loc local KLogical p.pointee in
+       WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
     | Predicate p -> 
        let* () = WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer in
        let* def = Global.get_predicate_def loc global p.name in
@@ -184,7 +198,8 @@ module WRE = struct
          else fail loc (Number_arguments {has; expect})
        in
        ListM.iterM (fun (arg, (_, expected_sort)) ->
-           let* has_sort = Local.get_l loc arg local in
+           let* () = check_bound loc local KLogical arg in
+           let has_sort = Local.get_l arg local in
            if LS.equal has_sort expected_sort then return ()
            else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
          ) (List.combine p.args def.arguments)
@@ -207,13 +222,17 @@ module WRT = struct
   let rec welltyped_l loc {local; global} lrt = 
     match lrt with
     | Logical ((s,ls), lrt) -> 
-       let local = Local.add_l s ls local in
+       let lname = Sym.fresh_same s in
+       let local = Local.add_l lname ls local in
+       let lrt = subst_var_l Subst.{before = s; after = lname} lrt in
        welltyped_l loc {local; global} lrt
     | Resource (re, lrt) -> 
        let* () = WRE.welltyped loc {local; global} re in
+       let local = Local.add_ur re local in
        welltyped_l loc {local; global} lrt
     | Constraint (lc, lrt) ->
        let* () = WLC.welltyped loc {local; global} lc in
+       let local = Local.add_uc lc local in
        welltyped_l loc {local; global} lrt
     | I -> 
        return ()
@@ -221,9 +240,10 @@ module WRT = struct
   let welltyped loc {local; global} rt = 
     match rt with 
     | Computational ((name,bt), lrt) ->
-       let lname = Sym.fresh_relative name (fun s -> s ^ "_l") in
+       let name' = Sym.fresh_same name in
+       let lname = Sym.fresh_relative name' (fun s -> s ^ "_l") in
        let local = Local.add_l lname (LS.Base bt) local in
-       let local = Local.add_a name (bt, lname) local in
+       let local = Local.add_a name' (bt, lname) local in
        let lrt = subst_var_l Subst.{before = name; after = lname} lrt in
        welltyped_l loc {local; global} lrt
 
@@ -251,19 +271,24 @@ module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
     let open Resultat in
     match at with
     | T.Computational ((name,bt), at) ->
-       let lname = Sym.fresh_relative name (fun s -> s ^ "_l") in
+       let name' = Sym.fresh_same name in
+       let lname = Sym.fresh_relative name' (fun s -> s ^ "_l") in
        let local = Local.add_l lname (LS.Base bt) local in
-       let local = Local.add_a name (bt, lname) local in
+       let local = Local.add_a name' (bt, lname) local in
        let at = T.subst_var Subst.{before = name; after = lname} at in
        check loc {local; global} at
     | T.Logical ((s,ls), at) -> 
-       let local = Local.add_l s ls local in
+       let lname = Sym.fresh_same s in
+       let local = Local.add_l lname ls local in
+       let at = T.subst_var Subst.{before = s; after = lname} at in
        check loc {local; global} at
     | T.Resource (re, at) -> 
        let* () = WRE.welltyped loc {local; global} re in
+       let local = Local.add_ur re local in
        check loc {local; global} at
     | T.Constraint (lc, at) ->
        let* () = WLC.welltyped loc {local; global} lc in
+       let local = Local.add_uc lc local in
        check loc {local; global} at
     | T.I i -> 
        WI.welltyped loc {local; global} i

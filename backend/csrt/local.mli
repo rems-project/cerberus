@@ -1,5 +1,3 @@
-open Resultat
-
 module BT = BaseTypes
 module LS = LogicalSorts
 module RE = Resources
@@ -10,12 +8,7 @@ module VB = VariableBinding
 
 type binding = Sym.t * VB.t
 
-(* type context_item = 
- *   | Binding of bindingr
- *   | Marker of Sym.t *)
-
-
-type t (* = Local of context_item list *)
+type t
 
 val empty : t
 
@@ -23,18 +16,18 @@ val marked : t
 
 val concat : t -> t -> t
 
-val remove : Loc.t -> Sym.t -> t -> t m
+(* val remove : Loc.t -> Sym.t -> t -> t *)
 
-val use_resource : Loc.t -> Sym.t -> Loc.t list -> t -> t m
+val use_resource : Sym.t -> Loc.t list -> t -> t
 
 val since : t -> binding list * t
 val all : t -> binding list
 
-val is_bound : Sym.t -> t -> bool
+val bound_to : Sym.t -> t -> VB.t option
 
-val merge : Loc.t -> t -> t -> t m
+val merge : t -> t -> t
 
-val big_merge : Loc.t -> t -> t list -> t m
+val big_merge : t -> t list -> t
 
 val mA : Sym.t -> (BT.t * Sym.t) -> binding
 val mL : Sym.t -> LS.t -> binding
@@ -45,13 +38,10 @@ val mUC : LC.t -> binding
 
 val pp : ?print_all_names:bool -> ?print_used:bool -> t -> Pp.document
 
-val get_a : Loc.t -> Sym.t -> t -> (BT.t * Sym.t) m
-val get_l : Loc.t -> Sym.t -> t -> LS.t m
-val get_r : Loc.t -> Sym.t -> t -> RE.t m
-val get_c : Loc.t -> Sym.t -> t -> LC.t m
-val get_computational_or_logical : Loc.t -> Sym.t -> t -> LS.t m
-
-val removeS : Loc.t -> Sym.t list -> t -> t m
+val get_a : Sym.t -> t -> (BT.t * Sym.t)
+val get_l : Sym.t -> t -> LS.t
+val get_r : Sym.t -> t -> RE.t
+val get_c : Sym.t -> t -> LC.t
 
 val add_a : Sym.t -> (BT.t * Sym.t) -> t -> t
 val add_l : Sym.t -> LS.t -> t -> t
@@ -60,17 +50,18 @@ val add_c : Sym.t -> LC.t -> t -> t
 val add_ur : RE.t -> t -> t
 val add_uc : LC.t -> t -> t
 
+val all_names : t -> Sym.t list
+
 val all_computational : t -> (Sym.t * (Sym.t * BT.t)) list
 val all_constraints : t -> LC.t list
 val all_logical : t -> (Sym.t * LS.t) list
 val all_resources : t -> (Sym.t * RE.t) list
+val all_used_resources : t -> (Sym.t * RE.t * Loc.t list) list
 
-val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
-val filterM : (Sym.t -> VB.t -> ('a option) m) -> t -> ('a list) m
+(* val filter : (Sym.t -> VB.t -> 'a option) -> t -> 'a list
+ * val filterM : (Sym.t -> VB.t -> ('a option) m) -> t -> ('a list) m *)
 
 val (++) : t -> t -> t
 
-val all_names : t -> Sym.t list
 
 
-val cvar_for_lvar : t -> Sym.t -> ((Sym.t, Sym.t) Subst.t) option

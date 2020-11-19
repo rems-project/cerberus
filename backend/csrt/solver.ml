@@ -198,7 +198,7 @@ let rec of_index_term loc {local;global} ctxt it =
      let* a'' = of_index_term loc {local;global} ctxt it'' in
      return (Z3.Boolean.mk_ite ctxt a a' a'')
   | S s -> 
-     let* ls = Local.get_l loc s local in
+     let ls = Local.get_l s local in
      let sym = sym_to_symbol ctxt s in
      let* sort = ls_to_sort loc {local;global} ctxt ls in
      return (Z3.Expr.mk_const ctxt sym sort)
@@ -364,30 +364,22 @@ let equal loc {local;global} it1 it2 =
 
 let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
      : ((Sym.t * RE.t) option) m = 
-   let* points = 
-     Local.filterM (fun name vb ->
-         match vb with 
-         | VariableBinding.Resource re -> 
-            let* holds = equal loc {local;global} pointer_it (RE.pointer re) in
-            return (if holds then Some (name, re) else None)
-         | _ -> 
-            return None
-       ) local
-   in
-   at_most_one loc !^"multiple points-to for same pointer" points
+  let* points = 
+    ListM.filter_mapM (fun (name, re) ->
+        let* holds = equal loc {local;global} pointer_it (RE.pointer re) in
+        return (if holds then Some (name, re) else None)
+      ) (Local.all_resources local)
+  in
+  at_most_one loc !^"multiple points-to for same pointer" points
 
 
 let used_resource_for_pointer (loc: Loc.t) {local;global} pointer_it
     : ((Loc.t list) option) m = 
   let* points = 
-    L.filterM (fun name vb ->
-        match vb with 
-        | VariableBinding.UsedResource (re, where) -> 
-           let* holds = equal loc {local; global} pointer_it (RE.pointer re) in
-           return (if holds then Some (where) else None)
-        | _ -> 
-           return None
-      ) local
+    ListM.filter_mapM (fun (name, re, where) ->
+        let* holds = equal loc {local; global} pointer_it (RE.pointer re) in
+        return (if holds then Some (where) else None)
+      ) (Local.all_used_resources local)
   in
   at_most_one loc !^"multiple points-to for same pointer" points
 
@@ -437,7 +429,7 @@ let model loc {local;global} context solver : TypeErrors.model option m =
              | Some (_, RE.Uninit u) -> 
                 return (Uninit u.size)
              | Some (_, RE.Points p) -> 
-                let* (Base ls) = L.get_l loc p.pointee local in
+                let (Base ls) = L.get_l p.pointee local in
                 let* expr = of_index_term loc {local; global} context (S p.pointee) in
                 let expr_val = evaluate loc model expr in
                 begin match ls with
