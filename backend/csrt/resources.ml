@@ -40,9 +40,14 @@ let pp = function
        parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp pointee ^^ 
                  comma ^^ Z.pp size)
   | Predicate {pointer; name; args} ->
-     pp_predicate_name name ^^
-       parens (IndexTerms.pp pointer) ^^ 
-         parens (separate_map (space ^^ comma) Sym.pp args)
+     match name with
+     | Id id ->
+        Id.pp id ^^ 
+          parens (separate comma ((IndexTerms.pp pointer) :: List.map Sym.pp args))
+     | Tag tag ->
+        !^"StoredStruct" ^^ parens (Sym.pp tag) ^^ 
+          parens (separate comma ((IndexTerms.pp pointer) :: List.map Sym.pp args))
+        
 
 
 

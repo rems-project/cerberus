@@ -126,12 +126,12 @@ let pp_struct_decl (sym,decl) =
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (packing function)") 
+  item ("struct " ^ plain (Sym.pp sym) ^ " (packing function) at P") 
     (LFT.pp
        (decl.closed_stored_predicate_definition.pack_function
-          (IT.S (Sym.fresh_named "struct_pointer"))))
+          (IT.S (Sym.fresh_named "P"))))
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (unpacking function)") 
+  item ("struct " ^ plain (Sym.pp sym) ^ " (unpacking function) at P") 
     (LFT.pp
        (decl.closed_stored_predicate_definition.unpack_function
           (IT.S (Sym.fresh_named "struct_pointer"))))

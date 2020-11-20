@@ -28,7 +28,7 @@ module ST = struct
 
   let pp = function
     | ST_Ctype ct -> Sctypes.pp ct
-    | ST_Pointer -> Pp.squotes (Pp.string "pointer")
+    | ST_Pointer -> Pp.string "pointer"
 
 
   let of_ctype ct = ST_Ctype ct
@@ -242,81 +242,114 @@ let pp ?(quote=true) it : PPrint.document =
 
   let rec aux atomic it = 
     let mparens pped = if atomic then parens pped else pped in
-    let aux = aux true in
     match it with
-    | Num i -> Z.pp i
-    | Pointer i -> Z.pp i
-    | Bool true -> !^"true"
-    | Bool false -> !^"false"
-    | Unit -> !^"()"
+    | Num i -> 
+       Z.pp i
+    | Pointer i -> 
+       Z.pp i
+    | Bool true -> 
+       !^"true"
+    | Bool false -> 
+       !^"false"
+    | Unit -> 
+       !^"()"
 
-    | Add (it1,it2) -> mparens (aux it1 ^^^ plus ^^^ aux it2)
-    | Sub (it1,it2) -> mparens (aux it1 ^^^ minus ^^^ aux it2)
-    | Mul (it1,it2) -> mparens (aux it1 ^^^ star ^^^ aux it2)
-    | Div (it1,it2) -> mparens (aux it1 ^^^ slash ^^^ aux it2)
-    | Exp (it1,it2) -> mparens (aux it1 ^^^ caret ^^^ aux it2)
-    | Rem_t (it1,it2) -> mparens (!^ "rem_t" ^^^ aux it1 ^^^ aux it2)
-    | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ aux it1 ^^^ aux it2)
-    | Min (it1,it2) -> mparens (!^ "min" ^^^ aux it1 ^^^ aux it2)
-    | Max (it1,it2) -> mparens (!^ "max" ^^^ aux it1 ^^^ aux it2)
+    | Add (it1,it2) -> 
+       mparens (aux true it1 ^^^ plus ^^^ aux true it2)
+    | Sub (it1,it2) -> 
+       mparens (aux true it1 ^^^ minus ^^^ aux true it2)
+    | Mul (it1,it2) -> 
+       mparens (aux true it1 ^^^ star ^^^ aux true it2)
+    | Div (it1,it2) -> 
+       mparens (aux true it1 ^^^ slash ^^^ aux true it2)
+    | Exp (it1,it2) -> 
+       mparens (aux true it1 ^^^ caret ^^^ aux true it2)
+    | Rem_t (it1,it2) -> 
+       mparens (!^ "rem_t" ^^^ aux true it1 ^^^ aux true it2)
+    | Rem_f (it1,it2) -> 
+       mparens (!^ "rem_f" ^^^ aux true it1 ^^^ aux true it2)
+    | Min (it1,it2) -> 
+       mparens (!^ "min" ^^^ aux true it1 ^^^ aux true it2)
+    | Max (it1,it2) -> 
+       mparens (!^ "max" ^^^ aux true it1 ^^^ aux true it2)
 
-    | EQ (o1,o2) -> mparens (aux o1 ^^^ equals ^^^ aux o2)
+    | EQ (o1,o2) -> 
+       mparens (aux true o1 ^^^ equals ^^^ aux true o2)
     | NE (o1,o2) -> 
-       if !unicode then mparens (aux o1 ^^^ utf8string "\u{2260}" ^^^ aux o2)
-       else mparens (aux o1 ^^^ langle ^^ rangle ^^^ aux o2)
-    | LT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
-    | GT (o1,o2) -> mparens (aux o1 ^^^ rangle ^^^ aux o2)
+       if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2260}" ^^^ aux true o2)
+       else mparens (aux true o1 ^^^ langle ^^ rangle ^^^ aux true o2)
+    | LT (o1,o2) -> 
+       mparens (aux true o1 ^^^ langle ^^^ aux true o2)
+    | GT (o1,o2) -> 
+       mparens (aux true o1 ^^^ rangle ^^^ aux true o2)
     | LE (o1,o2) -> 
-       if !unicode then mparens (aux o1 ^^^ utf8string "\u{2264}"  ^^^ aux o2)
-       else mparens (aux o1 ^^^ langle ^^ equals ^^^ aux o2)
+       if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2264}"  ^^^ aux true o2)
+       else mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | GE (o1,o2) -> 
-       if !unicode then mparens (aux o1 ^^^ utf8string "\u{2265}"  ^^^ aux o2)
-       else mparens (aux o1 ^^^ rangle ^^ equals ^^^ aux o2)
+       if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2265}"  ^^^ aux true o2)
+       else mparens (aux true o1 ^^^ rangle ^^ equals ^^^ aux true o2)
 
-    | Null o1 -> mparens (!^"null" ^^^ aux o1)
-    | And o -> mparens (!^"and" ^^^ brackets (separate_map (space ^^ space) aux o))
-    | Or o -> mparens (!^"or" ^^^ brackets (separate_map (space ^^ space) aux o))
-    | Impl (o1,o2) -> mparens (aux o1 ^^^ equals ^^ rangle ^^^ aux o2)
-    | Not (o1) -> mparens (!^"not" ^^^ aux o1)
-    | ITE (o1,o2,o3) -> mparens (!^"ite" ^^^ aux o1 ^^^ aux o2 ^^^ aux o3)
+    | Null o1 -> 
+       mparens (!^"null" ^^ parens (aux false o1))
+    | And o -> 
+       mparens (!^"and" ^^^ brackets (separate_map comma (aux false) o))
+    | Or o -> 
+       mparens (!^"or" ^^^ brackets (separate_map comma (aux false) o))
+    | Impl (o1,o2) -> 
+       mparens (aux true o1 ^^^ equals ^^ rangle ^^^ aux true o2)
+    | Not (o1) -> 
+       mparens (!^"not" ^^^ aux true o1)
+    | ITE (o1,o2,o3) -> 
+       mparens (!^"?" ^^^ parens (separate_map comma (aux false) [o1; o2; o3]))
 
-    | Nth (bt,n,it2) -> mparens (!^"nth" ^^^ !^(string_of_int n) ^^^ aux it2)
-    | Head (o1) -> mparens (!^"hd" ^^^ aux o1)
-    | Tail (o1) -> mparens (!^"tl" ^^^ aux o1)
+    | Nth (bt,n,it2) -> 
+       mparens (aux true it2 ^^ dot ^^ !^(string_of_int n))
+    | Head (o1) -> 
+       mparens (!^"hd" ^^ parens (aux false o1))
+    | Tail (o1) -> 
+       mparens (!^"tl" ^^^ parens (aux false o1))
 
-    | Tuple its -> mparens (!^"tuple" ^^^ separate_map space aux its)
-    | Nil _ -> brackets empty
-    | Cons (t1,t2) -> mparens (aux t1 ^^ colon ^^ colon ^^ aux t2)
+    | Tuple its -> 
+       braces (separate_map (semi ^^ space) (aux false) its)
+    | Nil _ -> 
+       brackets empty
+    | Cons (t1,t2) -> 
+       mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
     | List (its, bt) -> 
-       mparens (brackets (separate_map comma aux its) ^^^ colon ^^ BT.pp false bt)
+       mparens (brackets (separate_map comma (aux false) its) ^^^ colon ^^ BT.pp false bt)
 
     | Struct (_tag, members) ->
        braces (separate_map comma (fun (member,it) -> 
-                   Id.pp member ^^^ equals ^^^ aux it ) members)
+                   Id.pp member ^^^ equals ^^^ aux false it 
+                 ) members)
     | Member (_tag, t, member) ->
-       aux t ^^ dot ^^ Id.pp member
+       aux true t ^^ dot ^^ Id.pp member
     | MemberOffset (_tag, t, member) ->
-       mparens (ampersand ^^ aux t ^^ !^"->" ^^ Id.pp member)
+       mparens (ampersand ^^ aux true t ^^ !^"->" ^^ Id.pp member)
 
     | AllocationSize t1 ->
-       mparens (!^"allocationSize" ^^^ aux t1)
+       mparens (!^"allocationSize" ^^ parens (aux false t1))
     | Offset (t1, t2) ->
-       mparens (!^"offset" ^^^ aux t1 ^^^ aux t2)
-    | LocLT (o1,o2) -> mparens (aux o1 ^^^ langle ^^^ aux o2)
-    | LocLE (o1,o2) -> mparens (aux o1 ^^^ langle ^^ equals ^^^ aux o2)
+       mparens (!^"offset" ^^ parens (aux false t1 ^^ comma ^^ aux false t2))
+    | LocLT (o1,o2) -> 
+       mparens (aux true o1 ^^^ langle ^^^ aux true o2)
+    | LocLE (o1,o2) -> 
+       mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | Disjoint ((o1,s1),(o2,s2)) ->
-       mparens (!^"disjoint" ^^^ 
-                  parens (aux o1 ^^ comma ^^^ Z.pp s1) ^^^
-                    parens (aux o2 ^^ comma ^^^ Z.pp s2))
+       mparens (!^"disjoint" ^^ 
+                  parens (
+                    parens (aux false o1 ^^ comma ^^ Z.pp s1) ^^ comma ^^
+                      parens (aux false o2 ^^ comma ^^ Z.pp s2)))
 
     | AlignedI (t, t') ->
-       mparens (!^"aligned" ^^^ aux t ^^^ aux t')
+       mparens (!^"aligned" ^^ parens (aux false t ^^ comma ^^ aux false t'))
     | Aligned (rt, t) ->
-       mparens (!^"aligned" ^^^ ST.pp rt ^^^ aux t)
+       mparens (!^"aligned" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
     | Representable (rt, t) ->
-       mparens (!^"representable" ^^^ ST.pp rt ^^^ aux t)
+       mparens (!^"representable" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
 
-    | S sym -> Sym.pp sym
+    | S sym -> 
+       Sym.pp sym
   in
   (if quote then dquotes else (fun pp -> pp)) (aux false it)
 
