@@ -1,31 +1,18 @@
 open Resultat
-open TypeErrors
 open Environment
 module SymSet = Set.Make(Sym)
+module VB = VariableBinding
+module TE = TypeErrors
 
-(* module E = Environment
- * module L = Local
- * module Loc = Locations
- * module BT = BaseTypes
- * module LS = LogicalSorts
- * module RE = Resources
- * module RT = ReturnTypes
- * module AT = ArgumentTypes
- * open BT
- * open LS
- * open TypeErrors
- * open Local
- * open Environment
- * open ReturnTypes *)
-
-
+open TE
 
 let check_bound loc local kind s = 
   match Local.bound_to s local with
   | Some binding when VB.kind binding = kind -> return ()
   | Some binding ->
-     fail loc (Kind_mismatch {expect = KResource; has = VB.kind binding})
-  | None -> fail loc (Unbound_name (Sym s))
+     fail loc (TE.Kind_mismatch {expect = KResource; has = VB.kind binding})
+  | None -> 
+     fail loc (TE.Unbound_name (Sym s))
 
 
 module WIT = struct
@@ -36,7 +23,7 @@ module WIT = struct
 
   type t = IndexTerms.t
 
-  let rec infer (loc: Loc.t) {local;global} (it: t) : LogicalSorts.t m = 
+  let rec infer (loc: Loc.t) {local;global} (it: t) : (LogicalSorts.t, type_error) m = 
     match it with
     | Num _ -> return (Base Integer)
     | Pointer _ -> return (Base Loc)
@@ -176,7 +163,7 @@ module WIT = struct
        let* () = check_bound loc local KLogical s in
        return (Local.get_l s local)
 
-  and check_aux loc (context: t) env (ls: LS.t) (it: t) : unit m = 
+  and check_aux loc (context: t) env (ls: LS.t) (it: t) : (unit, type_error) m = 
     let* ls' = infer loc env it in
     if LS.equal ls ls' then return ()
     else fail loc (Illtyped_it context)
@@ -204,7 +191,11 @@ module WRE = struct
        WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
     | Predicate p -> 
        let* () = WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer in
-       let* def = Global.get_predicate_def loc global p.name in
+       let* def = match Global.get_predicate_def loc global p.name, p.name with
+         | Some def, _ -> return def
+         | None, Tag tag -> fail loc (Missing_struct tag)
+         | None, Id id -> fail loc (Missing_predicate id)
+       in
        let* () = 
          let has = List.length def.arguments in
          let expect = List.length p.args in
@@ -280,7 +271,7 @@ end
 
 module type WI_Sig = sig
   type t
-  val welltyped : Loc.t -> pexpr_environment -> t -> unit m
+  val welltyped : Loc.t -> pexpr_environment -> t -> (unit,type_error) m
 end
 
 
@@ -290,7 +281,7 @@ module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
 
   type t = T.t
 
-  let rec check loc {local; global} (at : T.t) : unit m = 
+  let rec check loc {local; global} (at : T.t) : (unit, type_error) m = 
     let open Resultat in
     match at with
     | T.Computational ((name,bt), at) ->

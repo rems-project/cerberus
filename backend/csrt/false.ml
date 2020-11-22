@@ -18,5 +18,5 @@ let free_vars = function
 let pp = function
   | False -> if !unicode then !^"\u{22A5}" else !^"false"
 
-let closed (_bound : SymSet.t) = function
-  | False -> Resultat.return ()
+(* let closed (_bound : SymSet.t) = function
+ *   | False -> Resultat.return () *)

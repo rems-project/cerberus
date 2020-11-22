@@ -123,12 +123,12 @@ and pp_type_expr_arg type_expr_arg =
 let log_name_add sym = ()
 
 
-let add_name loc names ident sym : (Sym.t StringMap.t) m = 
+let add_name loc names ident sym : (Sym.t StringMap.t, type_error) m = 
   match StringMap.find_opt ident names with
   | Some sym -> fail loc (Name_bound_twice (String ident))
   | None -> return (StringMap.add ident sym names)
 
-let get_name loc names ident : Sym.t m = 
+let get_name loc names ident : (Sym.t, type_error) m = 
   match StringMap.find_opt ident names with
   | Some sym -> return sym
   | None -> fail loc (Unbound_name (String ident))
@@ -139,7 +139,7 @@ let is_named (s : Sym.t) (names : Sym.t StringMap.t) =
 
 
 
-let parse_it loc names s context_pp : IT.t m = 
+let parse_it loc names s context_pp : (IT.t, type_error) m = 
   match IndexTermParser.parse loc names s with
   | Ok r -> return r
   | Error (loc,_stacktrace, msg) ->
@@ -258,7 +258,7 @@ and of_coq_expr loc names coq_expr =
      of_coq_term loc names coq_term
 
 
-and of_constr loc names constr : LRT.t m =
+and of_constr loc names constr : (LRT.t, type_error) m =
   let open LRT in
   match constr with
   | Constr_Iris _ ->
@@ -300,7 +300,7 @@ and is_uninit_type_expr = function
   | Ty_params ("uninit", [Ty_arg_expr arg]) -> Some arg
   | _ -> None
 
-and of_type_expr loc names te : tb m =
+and of_type_expr loc names te : (tb, type_error) m =
   let open LRT in
   let (mrefinement, te') = maybe_refinement te in
   match mrefinement, te' with
@@ -471,7 +471,7 @@ let make_fun_spec_annot loc struct_decls attrs args ret_ctype =
   in
   let names = StringMap.empty in
   let* (names, params_lrt) = 
-    ListM.fold_leftM (fun (names, acc_lrt) (ident, coq_expr) : (Sym.t StringMap.t * LRT.t) m ->
+    ListM.fold_leftM (fun (names, acc_lrt) (ident, coq_expr) : (Sym.t StringMap.t * LRT.t, type_error) m ->
         let s = Sym.fresh_named ident in
         let* names = add_name loc names ident s in
         log_name_add s;

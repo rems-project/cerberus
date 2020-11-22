@@ -353,7 +353,7 @@ let make_fun_spec loc struct_decls args ret_sct =
 (* unused currently: picking some default types for labels *)
 let make_label_spec (loc : Loc.t) (ftyp : FT.t) 
                     (struct_decls : Global.struct_decls) 
-                    (args : (Sym.t option * Sctypes.t) list) : LT.t m =
+                    (args : (Sym.t option * Sctypes.t) list) : (LT.t, type_error) m =
   let subst_non_pointer = FT.subst_var ~re_subst_var:RE.subst_non_pointer in
   let rec aux = function
     | FT.Computational (_,lt) -> aux lt

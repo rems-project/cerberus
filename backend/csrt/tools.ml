@@ -26,3 +26,7 @@ let do_stack_trace () =
 type stacktrace = string
 
 
+let at_most_one err_str = function
+  | [] -> None
+  | [x] -> (Some x)
+  | _ -> Debug_ocaml.error err_str

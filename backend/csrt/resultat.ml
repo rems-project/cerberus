@@ -5,8 +5,11 @@ include Result
 let return (a: 'a) : ('a,'e) t = 
   Ok a
 
- let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * Tools.stacktrace option * 'e) t = 
-  Error (loc, Tools.do_stack_trace (),  e)
+let error (e: 'e) : ('a,'e) t = 
+  Error e
+
+let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * Tools.stacktrace option * 'e) t = 
+  error (loc, Tools.do_stack_trace (),  e)
 
 let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
   match m with
@@ -16,16 +19,25 @@ let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t =
 let (let*) = bind
 
 
-type 'a m = ('a, Locations.t * Tools.stacktrace option * TypeErrors.t) t
+
+type ('a,'e) m = ('a, Locations.t * Tools.stacktrace option * 'e) Result.t
+
+
+let lift_error (f : 'e1 -> 'e2) (m : ('a,'e1) m) : ('a,'e2) m =
+  match m with
+  | Ok a -> Ok a
+  | Error (loc, stacktrace, e1) -> 
+     Error (loc, stacktrace, f e1)
+
+
+let msum (m1 : ('a,'e) t) (m2 : ('a,'e) t) : ('a,'e) t = 
+  match m1 with
+  | Ok a -> Ok a
+  | Error _ -> m2
 
 
 
 
-
-let at_most_one loc err_str = function
-  | [] -> return None
-  | [x] -> return (Some x)
-  | _ -> fail loc (TypeErrors.Generic err_str)
 
 let assoc_err loc equality entry list err =
   match List.assoc_opt equality entry list with

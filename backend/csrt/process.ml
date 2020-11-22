@@ -68,12 +68,18 @@ let process_functions genv fns =
   PmapM.iterM (fun fsym fn -> 
       match fn with
       | M_Fun (rbt, args, body) ->
-         let* (loc,ftyp) = Global.get_fun_decl Loc.unknown genv fsym in
+         let* (loc, ftyp) = match G.get_fun_decl genv fsym with
+           | Some t -> return t
+           | None -> fail Loc.unknown (Missing_function fsym)
+         in
          check_function loc genv fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels) ->
-         let loc' = Loc.update Loc.unknown loc in
-         let* (loc,ftyp) = Global.get_fun_decl loc' genv fsym in
-         check_procedure loc genv fsym args rbt body ftyp labels
+         let loc = Loc.update Loc.unknown loc in
+         let* (loc', ftyp) = match G.get_fun_decl genv fsym with
+           | Some t -> return t
+           | None -> fail loc (Missing_function fsym)
+         in
+         check_procedure loc' genv fsym args rbt body ftyp labels
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()

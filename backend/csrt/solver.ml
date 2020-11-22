@@ -1,8 +1,6 @@
 open Global
-open Resultat
 open List
 open Pp
-open TypeErrors
 open LogicalConstraints
 open Environment
 module L = Local
@@ -287,15 +285,19 @@ let handle_z3_problems loc todo =
   if not (Z3.Log.open_ logfile) then 
     Debug_ocaml.error ("Z3 logfile: could not open " ^ logfile)
   else 
-    try let* result = todo () in Z3.Log.close (); return result with
+    try let result = todo () in Z3.Log.close (); result with
     | Z3.Error (msg : string) -> 
        Z3.Log.close ();
        Debug_ocaml.error ("Z3 error:" ^ msg)
 
 
-let debug_typecheck_lcs loc lcs {local;global} =
-  if !Debug_ocaml.debug_level > 0 then return () else
-    ListM.iterM (WellTyped.WLC.welltyped (loc: Loc.t) {local;global}) lcs
+(* let debug_typecheck_lcs loc lcs {local;global} =
+ *   if !Debug_ocaml.debug_level > 0 then () else
+ *     List.iter (fun lc -> 
+ *         match WellTyped.WLC.welltyped (loc: Loc.t) {local;global} lc with
+ *         | Ok () -> ()
+ *         | Error _ -> Debug_ocaml.error "illtyped logical constraint"
+ *       ) lcs *)
 
 
 
@@ -313,8 +315,8 @@ let constraint_holds loc {local;global} do_model c =
   in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = negate c :: Local.all_constraints local in
-  let* () = debug_typecheck_lcs loc lcs {local;global} in
-  let* checked = 
+  (* let () = debug_typecheck_lcs loc lcs {local;global} in *)
+  let checked = 
     handle_z3_problems loc 
       (fun () ->
         let constrs = 
@@ -323,26 +325,26 @@ let constraint_holds loc {local;global} do_model c =
             ) lcs 
         in
         Z3.Solver.add solver constrs;
-        return (Z3.Solver.check solver [])
+        Z3.Solver.check solver []
       )
   in
   match checked with
-  | UNSATISFIABLE -> return (true,ctxt,solver)
-  | SATISFIABLE -> return (false,ctxt,solver)
-  | UNKNOWN -> return (false,ctxt,solver)
+  | UNSATISFIABLE -> (true,ctxt,solver)
+  | SATISFIABLE -> (false,ctxt,solver)
+  | UNKNOWN -> (false,ctxt,solver)
 
 
 let is_consistent loc {local;global} =
-  let* (unreachable,_,_) = 
+  let (unreachable,_,_) = 
     constraint_holds loc {local;global} false (LC (Bool false)) in
-  return (not unreachable)
+  (not unreachable)
 
 
 
 let equal loc {local;global} it1 it2 =
   let c = LC.LC (IndexTerms.EQ (it1, it2)) in
-  let* (holds,_,_) = constraint_holds loc {local;global} false c in
-  return holds
+  let (holds,_,_) = constraint_holds loc {local;global} false c in
+  holds
 
 
 
@@ -352,25 +354,25 @@ let equal loc {local;global} it1 it2 =
 
 
 let resource_for_pointer (loc: Loc.t) {local;global} pointer_it
-     : ((Sym.t * RE.t) option) m = 
-  let* points = 
-    ListM.filter_mapM (fun (name, re) ->
-        let* holds = equal loc {local;global} pointer_it (RE.pointer re) in
-        return (if holds then Some (name, re) else None)
+     : (Sym.t * RE.t) option = 
+  let points = 
+    List.filter_map (fun (name, re) ->
+        let holds = equal loc {local;global} pointer_it (RE.pointer re) in
+        (if holds then Some (name, re) else None)
       ) (Local.all_resources local)
   in
-  at_most_one loc !^"multiple points-to for same pointer" points
+  Tools.at_most_one "multiple points-to for same pointer" points
 
 
 let used_resource_for_pointer (loc: Loc.t) {local;global} pointer_it
-    : ((Loc.t list) option) m = 
-  let* points = 
-    ListM.filter_mapM (fun (name, re, where) ->
-        let* holds = equal loc {local; global} pointer_it (RE.pointer re) in
-        return (if holds then Some (where) else None)
+    : (Loc.t list) option = 
+  let points = 
+    List.filter_map (fun (name, re, where) ->
+        let holds = equal loc {local; global} pointer_it (RE.pointer re) in
+        (if holds then Some (where) else None)
       ) (Local.all_used_resources local)
   in
-  at_most_one loc !^"multiple points-to for same pointer" points
+  Tools.at_most_one "multiple points-to for same pointer" points
 
 
 module StringMap = Map.Make(String)
@@ -387,10 +389,29 @@ let all_it_names_good it =
 
 
 
-let model loc {local;global} context solver : TypeErrors.model option m =
+
+(* more to be added *)
+type memory_state = 
+  | Nothing
+  | Uninit of RE.size
+  | Integer of string * RE.size
+  | Location of string * RE.size
+  | Within of {base_location : string; resource : Sym.t}
+  | Padding of RE.size
+  | Predicate of {name : RE.predicate_name; args : string list}
+
+type location_state = { location : string; state : memory_state; }
+type variable_location = { name : string; location : string}
+
+type model = 
+  { memory_state : location_state list;
+    variable_locations : variable_location list;
+  }
+
+
+let model loc {local;global} context solver : model option =
   match Z3.Solver.get_model solver with
-  | None -> 
-     return None
+  | None -> None
   | Some model ->
      let all_locations = 
        let from_context = 
@@ -408,26 +429,21 @@ let model loc {local;global} context solver : TypeErrors.model option m =
            (StringMap.add expr_val location_it acc)
          ) (from_context @ from_resources) StringMap.empty
      in
-     let* memory_state = 
-       ListM.mapM (fun (location_s, location_it) ->
-           let* o_resource = resource_for_pointer loc {local; global} location_it in
-           let open TypeErrors in
-           let* state = match o_resource with
-             | None -> 
-                return Nothing
-             | Some (_, RE.Uninit u) -> 
-                return (Uninit u.size)
+     let memory_state = 
+       List.map (fun (location_s, location_it) ->
+           let o_resource = resource_for_pointer loc {local; global} location_it in
+           let state = match o_resource with
+             | None -> Nothing
+             | Some (_, RE.Uninit u) -> (Uninit u.size)
              | Some (_, RE.Points p) -> 
                 let (Base ls) = L.get_l p.pointee local in
                 let expr = of_index_term loc {local; global} context (S p.pointee) in
                 let expr_val = evaluate loc model expr in
                 begin match ls with
                 | Integer -> 
-                   let expr_val = Z3.Expr.to_string expr_val in
-                   return (Integer (expr_val, p.size))
+                   Integer (Z3.Expr.to_string expr_val, p.size)
                 | Loc -> 
-                   let expr_val = Z3.Expr.to_string expr_val in
-                   return (Location (expr_val, p.size))
+                   Location (Z3.Expr.to_string expr_val, p.size)
                 | Struct _ ->
                    Debug_ocaml.error "todo: value of struct in counter model"
                 | Array ->
@@ -436,18 +452,18 @@ let model loc {local;global} context solver : TypeErrors.model option m =
                    Debug_ocaml.error "non-object stored in memory"
                 end
              | Some (_, RE.Predicate p) -> 
-                let* args = 
-                  ListM.mapM (fun arg ->
+                let args = 
+                  List.map (fun arg ->
                       let expr = of_index_term loc {local; global} context (S arg) in
                       let expr_val = evaluate loc model expr in
-                      return (Z3.Expr.to_string expr_val)
+                      Z3.Expr.to_string expr_val
                     ) p.args
                 in
-                return (TypeErrors.Predicate {name = p.name; args})
+                Predicate {name = p.name; args}
              | Some (_, RE.Padding p) -> 
-                return (TypeErrors.Padding p.size)
+                Padding p.size
            in
-           return { location = location_s; state }
+           { location = location_s; state }
          ) (StringMap.bindings all_locations)
      in
      let variable_locations =
@@ -462,16 +478,63 @@ let model loc {local;global} context solver : TypeErrors.model option m =
            entry
          ) (L.all_computational local)
      in
-     return (Some { memory_state; variable_locations })
+     Some { memory_state; variable_locations }
 
 
 
 
 let is_reachable_and_model loc {local;global} =
-  let* (unreachable, context, solver) = 
+  let (unreachable, context, solver) = 
     constraint_holds loc {local;global} true (LC (Bool false)) 
   in
-  let* model = 
+  let model = 
     handle_z3_problems loc (fun () -> model loc {local;global} context solver) 
   in
-  return (not unreachable, model)
+  (not unreachable, model)
+
+
+
+
+
+
+
+let pp_variable_and_location_state ( ovar, { location; state }) =
+  let var = match ovar with
+    | None -> Pp.empty
+    | Some v -> !^v
+  in
+  let value, size = match state with
+    | Nothing -> Pp.empty, Pp.empty
+    | Uninit size -> !^"uninitialised", Z.pp size
+    | Integer (value, size) -> typ !^value !^"integer", Z.pp size
+    | Location (value, size) -> typ !^value !^"pointer", Z.pp size
+    | Within {base_location; _} -> 
+       parens (!^"within owned region at" ^^^ !^base_location), Pp.empty
+    | Predicate {name; args} ->
+       begin match name with
+       | Id id ->
+          Id.pp id ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
+       | Tag tag ->
+          Sym.pp tag ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
+       end
+    | Padding size ->
+       !^"padding", Z.pp size
+  in
+  ( (R, var), (R, !^location), (R, size), (L, value) )
+
+
+let pp_model model = 
+  let variable_and_location_state : (string option * location_state) list = 
+    List.concat_map (fun (ls : location_state) ->
+        let vars = 
+          List.filter (fun vl -> String.equal ls.location vl.location
+            ) model.variable_locations
+        in
+        match vars with
+        | [] -> [(None, ls)]
+        | _ -> List.map (fun v -> (Some v.name, ls)) vars
+      ) model.memory_state
+  in
+  Pp.table4 
+    (("var"), ("location"), ("size") , ("value"))
+    (List.map pp_variable_and_location_state variable_and_location_state)

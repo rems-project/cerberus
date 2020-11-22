@@ -12,67 +12,6 @@ module VB=VariableBinding
 
 
 
-(* more to be added *)
-type memory_state = 
-  | Nothing
-  | Uninit of RE.size
-  | Integer of string * RE.size
-  | Location of string * RE.size
-  | Within of {base_location : string; resource : Sym.t}
-  | Padding of RE.size
-  | Predicate of {name : RE.predicate_name; args : string list}
-
-type location_state = { location : string; state : memory_state; }
-type variable_location = { name : string; location : string}
-
-type model = 
-  { memory_state : location_state list;
-    variable_locations : variable_location list;
-  }
-
-
-let pp_variable_and_location_state ( ovar, { location; state }) =
-  let var = match ovar with
-    | None -> Pp.empty
-    | Some v -> !^v
-  in
-  let value, size = match state with
-    | Nothing -> Pp.empty, Pp.empty
-    | Uninit size -> !^"uninitialised", Z.pp size
-    | Integer (value, size) -> typ !^value !^"integer", Z.pp size
-    | Location (value, size) -> typ !^value !^"pointer", Z.pp size
-    | Within {base_location; _} -> 
-       parens (!^"within owned region at" ^^^ !^base_location), Pp.empty
-    | Predicate {name; args} ->
-       begin match name with
-       | Id id ->
-          Id.pp id ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
-       | Tag tag ->
-          Sym.pp tag ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
-       end
-    | Padding size ->
-       !^"padding", Z.pp size
-  in
-  ( (R, var), (R, !^location), (R, size), (L, value) )
-
-
-let pp_model model = 
-  let variable_and_location_state : (string option * location_state) list = 
-    List.concat_map (fun (ls : location_state) ->
-        let vars = 
-          List.filter (fun vl -> String.equal ls.location vl.location
-            ) model.variable_locations
-        in
-        match vars with
-        | [] -> [(None, ls)]
-        | _ -> List.map (fun v -> (Some v.name, ls)) vars
-      ) model.memory_state
-  in
-  Pp.table4 
-    (("var"), ("location"), ("size") , ("value"))
-    (List.map pp_variable_and_location_state variable_and_location_state)
-  
-
 
 type access =
   | Load 
@@ -96,16 +35,17 @@ type sym_or_string =
 type type_error = 
   | Unbound_name of sym_or_string
   | Name_bound_twice of sym_or_string
+  | Missing_function of Sym.t
   | Missing_struct of BT.tag
   | Missing_predicate of Id.t
   | Missing_member of BT.tag * BT.member
 
+  | Missing_ownership of BT.member option * (Loc.t list) option * situation
+  | Resource_mismatch of { has: RE.t; expect: RE.t; situation : situation}
+  | Cannot_unpack of Resources.predicate * situation
+  | Cannot_pack of Resources.t * situation
+
   | Uninitialised of BT.member option
-  | Missing_resource of Resources.t * (Loc.t list) option
-  | Missing_ownership of situation * BT.member option * (Loc.t list) option
-  | ResourceMismatch of { has: RE.t; expect: RE.t; }
-  | CannotUnpack of RE.t * situation
-  | CannotPack of RE.t * situation
   | Unused_resource of { resource: Resources.t }
   | Misaligned of access
 
@@ -117,7 +57,7 @@ type type_error =
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * model option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Solver.model option
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -126,7 +66,9 @@ type type_error =
   | Generic_extra of Pp.document * document
 
 
-type t = type_error
+
+
+
 
 
 
@@ -148,6 +90,8 @@ let pp_type_error = function
        | String str -> !^str
      in
      (!^"Name bound twice" ^^ colon ^^^ squotes name_pp, [])
+  | Missing_function sym ->
+     (!^"function" ^^^ Sym.pp sym ^^^ !^"not defined", [])
   | Missing_struct tag ->
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined", [])
   | Missing_predicate id ->
@@ -156,25 +100,7 @@ let pp_type_error = function
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])
 
-  | Uninitialised omember ->
-     begin match omember with
-     | None -> 
-        (!^"Trying to read uninitialised data", [])
-     | Some m -> 
-        (!^"Trying to read uninitialised struct member" ^^^ Id.pp m, [])
-     end
-  | Missing_resource (t, owhere) ->
-     let extra = match owhere with
-       | None -> []
-       | Some locs -> 
-          [!^"Maybe last used in the following places:" ^^^
-             Pp.list (fun loc -> 
-                 let (head, _pos) = Locations.head_pos_of_location loc in
-                 !^head
-               ) locs]
-     in
-     (!^"Missing resource of type" ^^^ Resources.pp t, extra)
-  | Missing_ownership (situation, omember, owhere) ->
+    | Missing_ownership (omember, owhere, situation) ->
      let msg = match situation, omember with
      | Access Kill, None ->  
         !^"Missing ownership for de-allocating"
@@ -206,10 +132,11 @@ let pp_type_error = function
              Pp.list Loc.pp locs]
      in
      (msg, extra)
-  | ResourceMismatch {has; expect} ->
+  | Resource_mismatch {has; expect; situation} ->
      (!^"Need a resource" ^^^ RE.pp expect ^^^
         !^"but have resource" ^^^ RE.pp has, [])
-  | CannotUnpack (re, situation) ->
+  | Cannot_unpack (predicate, situation) ->
+     let re = RE.Predicate predicate in
      let msg = match situation with
      | Access Kill ->
         !^"Cannot unpack resource needed for de-allocating"
@@ -229,7 +156,7 @@ let pp_type_error = function
         !^"Cannot unpack resource needed for unpacking"
      in
      (msg ^^^ parens (RE.pp re), [])
-  | CannotPack (re, situation) ->
+  | Cannot_pack (re, situation) ->
      let msg = match situation with
      | Access Kill ->
         !^"Cannot pack resource needed for de-allocating"
@@ -249,6 +176,14 @@ let pp_type_error = function
         !^"Cannot pack resource needed for unpacking"
      in
      (msg ^^^ parens (RE.pp re), [])
+
+  | Uninitialised omember ->
+     begin match omember with
+     | None -> 
+        (!^"Trying to read uninitialised data", [])
+     | Some m -> 
+        (!^"Trying to read uninitialised struct member" ^^^ Id.pp m, [])
+     end
   | Unused_resource {resource;_} ->
      (!^"Left-over unused resource" ^^^ Resources.pp resource, [])
   | Misaligned access ->
@@ -284,7 +219,7 @@ let pp_type_error = function
   | Undefined_behaviour (undef, omodel) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
      let extras = match omodel with 
-       | Some model -> [!^ub; pp_model model] 
+       | Some model -> [!^ub; Solver.pp_model model] 
        | None -> [!^ub] 
      in
      (!^"Undefined behaviour", extras)
@@ -302,7 +237,7 @@ let pp_type_error = function
 
 
 (* stealing some logic from pp_errors *)
-let type_error (loc : Loc.t) (ostacktrace : string option) (err : t) = 
+let type_error (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
   let (msg, extras) = pp_type_error err in
   let extras = match ostacktrace with
     | Some stacktrace -> extras @ [item "stacktrace" !^stacktrace]

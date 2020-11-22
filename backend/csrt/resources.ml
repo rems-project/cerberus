@@ -22,11 +22,13 @@ let equal_predicate_name pn1 pn2 =
   | Id _, _ -> false
 
 
+type predicate = {pointer: IndexTerms.t; name : predicate_name; args: Sym.t list}
+
 type t = 
   | Uninit of {pointer: IndexTerms.t; size: size}
   | Padding of {pointer: IndexTerms.t; size: size}
   | Points of {pointer: IndexTerms.t; pointee: Sym.t; size: size}
-  | Predicate of {pointer: IndexTerms.t; name : predicate_name; args: Sym.t list}
+  | Predicate of predicate
 
 type resource = t
 

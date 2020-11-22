@@ -459,7 +459,8 @@ let retype_tagDefs
     : ((CA.ct mu_struct_def * Global.struct_decl, 
         CA.ct mu_union_def) mu_tag_definitions *
          Global.struct_decl SymMap.t * 
-           unit SymMap.t) m
+           unit SymMap.t,
+      type_error) m
   = 
   PmapM.foldM 
     (fun tag def (acc,acc_structs,acc_unions) -> 
@@ -523,7 +524,8 @@ let retype_funinfo struct_decls funinfo =
 let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
     : ((FT.t, LT.t, ctype_information, BT.t, 
         CA.ct mu_struct_def * Global.struct_decl, 
-        CA.ct mu_union_def, 'bty) mu_file) m =
+        CA.ct mu_union_def, 'bty) mu_file,
+      type_error) m =
   let loop_attributes = file.mu_loop_attributes in
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
   let* (funinfo,funinfo_extra) = retype_funinfo structs file.mu_funinfo in

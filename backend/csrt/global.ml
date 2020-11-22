@@ -31,7 +31,7 @@ module ImplMap =
 
 
 
-let impl_lookup (loc : Loc.t) (e: 'v ImplMap.t) i =
+let impl_lookup (e: 'v ImplMap.t) i =
   match ImplMap.find_opt i e with
   | None ->
      Debug_ocaml.error
@@ -85,36 +85,25 @@ let empty =
 
 let get_predicate_def loc global predicate_name = 
   let open Resources in
-  let open TypeErrors in
-  let open Resultat in
   match predicate_name with
-  | Id id -> 
-     begin match IdMap.find_opt id global.resource_predicates with
-     | Some def -> return def
-     | None -> fail loc (Missing_predicate id)
-     end
+  | Id id -> IdMap.find_opt id global.resource_predicates
   | Tag tag ->
-     let* decl = match SymMap.find_opt tag global.struct_decls with
-       | Some decl -> return decl
-       | None -> fail loc (Missing_struct tag)
-     in
-     let pack_functions = 
-       fun it -> [decl.closed_stored_predicate_definition.pack_function it]
-     in
-     let unpack_functions = 
-       fun it -> [decl.closed_stored_predicate_definition.unpack_function it]
-     in
-     let def =
-       {arguments = [LS.Base (Struct tag)];
-        pack_functions; 
-        unpack_functions}
-     in
-     return def
+     match SymMap.find_opt tag global.struct_decls with
+     | None -> None
+     | Some decl ->
+       let pack_functions = 
+         fun it -> [decl.closed_stored_predicate_definition.pack_function it]
+       in
+       let unpack_functions = 
+         fun it -> [decl.closed_stored_predicate_definition.unpack_function it]
+       in
+       Some {arguments = [LS.Base (Struct tag)];
+             pack_functions; 
+             unpack_functions}
 
-
-let get_fun_decl loc global sym = SymMapM.lookup loc global.fun_decls sym
-let get_impl_fun_decl loc global i = impl_lookup loc global.impl_fun_decls i
-let get_impl_constant loc global i = impl_lookup loc global.impl_constants i
+let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
+let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i
+let get_impl_constant global i = impl_lookup global.impl_constants i
 
 
 
