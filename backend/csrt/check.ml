@@ -264,8 +264,6 @@ let pp_unis (unis : Sym.t Uni.t) : Pp.document =
 
 module Prompt = struct
   
-  open OneList
-
   type resource_request = 
     { local : Local.t;
       unis : Sym.t Uni.unis;
@@ -281,15 +279,17 @@ module Prompt = struct
       lft : LFT.t;
     }
 
+  type err = Locations.t * Tools.stacktrace option * type_error
+
   type 'r request = 
     | R_Resource : resource_request -> (Sym.t Uni.unis * Local.t) request
     | R_Packing : packing_request -> (LRT.t * Local.t) request
+    | R_Try : 'r m OneList.t -> 'r request
+    | R_Error : err -> 'r request
 
-  type 'a m = 
+  and 'a m = 
     | Done : 'a -> 'a m
     | Request : 'r request * ('r -> 'a m) -> 'a m
-    | Nondet of ('a m) onelist
-    | Error of Locations.t * Tools.stacktrace option * type_error
 
 
   module Operators = struct
@@ -298,7 +298,8 @@ module Prompt = struct
       Done a
 
     let fail loc err = 
-      Error (loc, Tools.do_stack_trace (),  err)
+      let r = R_Error (loc, Tools.do_stack_trace (),  err) in
+      Request (r, fun r -> Done r)
 
     let request_resource loc situation local unis resource =
       let r = R_Resource {loc; local; unis; situation; resource} in
@@ -308,8 +309,10 @@ module Prompt = struct
       let r = R_Packing {loc; local; situation; lft} in
       Request (r, fun reply -> Done reply)
 
-    let try_choices choices else_choice = 
-      Nondet choices
+    let try_choices choices = 
+      let r = R_Try choices in
+      Request (r, fun reply -> Done reply)
+
 
     let rec bind m f = 
       match m with
@@ -317,10 +320,10 @@ module Prompt = struct
          f a
       | Request (request, c) -> 
          Request (request, fun r -> bind (c r) f)
-      | Nondet choices ->
-         Nondet (OneList.map (fun choice -> bind choice f) choices)
-      | Error (loc, stacktrace, err) -> 
-         Error (loc, stacktrace, err)
+      (* | Nondet choices ->
+       *    Nondet (OneList.map (fun choice -> bind choice f) choices) *)
+      (* | Error (loc, stacktrace, err) -> 
+       *    Error (loc, stacktrace, err) *)
 
     let (let*) = bind
 
@@ -507,17 +510,18 @@ let rec resource_request_prompt loc situation {local; global} request unis =
              | Some def -> def
              | None -> Debug_ocaml.error "missing predicate definition"
            in
-           let packing_attempts = 
-             OneList.map (fun clause ->
-                 let* (lrt, local) = request_packing loc situation local clause in
-                 let local = bind_logical local lrt in
-                 resource_request_prompt loc situation {local; global} request unis
-               ) (def.pack_functions p.pointer)
-           in
-           let else_choice = 
+           let else_prompt = 
              fail loc (Resource_mismatch {expect = request; has = resource; situation}) 
            in
-           try_choices packing_attempts else_choice
+           let attempt_prompts = 
+             OneList.map (fun clause ->
+                 request_packing loc situation local clause
+               ) (def.pack_functions p.pointer)
+           in
+           let choices = OneList.concat attempt_prompts (Last else_prompt) in
+           let* (lrt, local) = try_choices choices  in
+           let local = bind_logical local lrt in
+           resource_request_prompt loc situation {local; global} request unis
         end
      | None -> 
         let olast_used = Solver.used_resource_for_pointer {local;global} pointer in
@@ -532,10 +536,10 @@ let rec handle_prompt : 'a. Global.t -> 'a Prompt.m -> ('a, type_error) m =
   match prompt with
   | Prompt.Done a -> 
      return a
-  | Prompt.Error (loc,tr,error) -> 
-     Error (loc,tr,error)
   | Prompt.Request (r, c) ->
      begin match r with
+     | Prompt.R_Error (loc,tr,error) -> 
+        Error (loc,tr,error)
      | R_Resource {loc; local; unis; situation; resource} ->
         let* (unis, local) = 
           handle_prompt global 
@@ -546,12 +550,16 @@ let rec handle_prompt : 'a. Global.t -> 'a Prompt.m -> ('a, type_error) m =
           handle_prompt global 
             (Spine_LFT.spine loc situation {local; global} [] lft) in
         handle_prompt global (c (lrt, local))
+     | R_Try choices ->
+        let rec first_success = function
+          | Last choice -> 
+             handle_prompt global choice
+          | choice :: r -> 
+             msum (handle_prompt global choice) (first_success r)
+        in
+        let* reply = first_success choices in
+        handle_prompt global (c reply)
      end
-  | Nondet (Last choice) ->
-     handle_prompt global choice
-  | Nondet (choice :: choices) ->
-     msum (handle_prompt global choice)
-       (handle_prompt global (Nondet (choices)))
 
 
 
