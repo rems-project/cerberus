@@ -281,12 +281,16 @@ module Prompt = struct
       lft : LFT.t;
     }
 
+  type 'r request = 
+    | R_Resource : resource_request -> (Sym.t Uni.unis * Local.t) request
+    | R_Packing : packing_request -> (LRT.t * Local.t) request
+
   type 'a m = 
-    | Done of 'a
-    | RequestResource of resource_request * ((Sym.t Uni.unis * Local.t) -> 'a m)
-    | RequestPacking of packing_request * ((LRT.t * Local.t) -> 'a m)
+    | Done : 'a -> 'a m
+    | Request : 'r request * ('r -> 'a m) -> 'a m
     | Nondet of ('a m) onelist
     | Error of Locations.t * Tools.stacktrace option * type_error
+
 
   module Operators = struct
 
@@ -297,16 +301,12 @@ module Prompt = struct
       Error (loc, Tools.do_stack_trace (),  err)
 
     let request_resource loc situation local unis resource =
-      RequestResource (
-          {loc; local; unis; situation; resource}, 
-          fun reply -> Done reply
-        )
+      let r = R_Resource {loc; local; unis; situation; resource} in
+      Request (r, fun reply -> Done reply)
 
     let request_packing loc situation local lft =
-      RequestPacking (
-          {loc; local; situation; lft}, 
-          fun reply -> Done reply
-        )
+      let r = R_Packing {loc; local; situation; lft} in
+      Request (r, fun reply -> Done reply)
 
     let try_choices choices else_choice = 
       Nondet choices
@@ -315,10 +315,8 @@ module Prompt = struct
       match m with
       | Done a -> 
          f a
-      | RequestResource (request, c) -> 
-         RequestResource (request, fun r -> bind (c r) f)
-      | RequestPacking (request, c) -> 
-         RequestPacking (request, fun r -> bind (c r) f)
+      | Request (request, c) -> 
+         Request (request, fun r -> bind (c r) f)
       | Nondet choices ->
          Nondet (OneList.map (fun choice -> bind choice f) choices)
       | Error (loc, stacktrace, err) -> 
@@ -536,16 +534,19 @@ let rec handle_prompt : 'a. Global.t -> 'a Prompt.m -> ('a, type_error) m =
      return a
   | Prompt.Error (loc,tr,error) -> 
      Error (loc,tr,error)
-  | Prompt.RequestResource ({loc; local; unis; situation; resource}, c) ->
-     let* (unis, local) = 
-       handle_prompt global 
-         (resource_request_prompt loc situation {local; global} resource unis) in
-     handle_prompt global (c (unis, local))
-  | RequestPacking ({loc; local; situation; lft}, c) ->
-     let* (lrt, local) = 
-       handle_prompt global 
-         (Spine_LFT.spine loc situation {local; global} [] lft) in
-     handle_prompt global (c (lrt, local))
+  | Prompt.Request (r, c) ->
+     begin match r with
+     | R_Resource {loc; local; unis; situation; resource} ->
+        let* (unis, local) = 
+          handle_prompt global 
+            (resource_request_prompt loc situation {local; global} resource unis) in
+        handle_prompt global (c (unis, local))
+     | R_Packing {loc; local; situation; lft} ->
+        let* (lrt, local) = 
+          handle_prompt global 
+            (Spine_LFT.spine loc situation {local; global} [] lft) in
+        handle_prompt global (c (lrt, local))
+     end
   | Nondet (Last choice) ->
      handle_prompt global choice
   | Nondet (choice :: choices) ->
