@@ -264,7 +264,7 @@ module Prompt = struct
 
   type 'a m = 
     | Done : 'a -> 'a m
-    | Request : 'r prompt * ('r -> 'a m) -> 'a m
+    | Prompt : 'r prompt * ('r -> 'a m) -> 'a m
 
   and 'r prompt = 
     | R_Resource : resource_request -> (Sym.t Uni.unis * Local.t) prompt
@@ -280,22 +280,20 @@ module Prompt = struct
 
     let fail loc err = 
       let r = R_Error (loc, Tools.do_stack_trace (),  err) in
-      Request (r, fun r -> Done r)
+      Prompt (r, fun r -> Done r)
 
     let prompt r = 
-      Request (r, fun reply -> Done reply)
+      Prompt (r, fun reply -> Done reply)
 
     let try_choices choices = 
       let r = R_Try choices in
-      Request (r, fun reply -> Done reply)
+      Prompt (r, fun reply -> Done reply)
 
 
     let rec bind m f = 
       match m with
-      | Done a -> 
-         f a
-      | Request (request, c) -> 
-         Request (request, fun r -> bind (c r) f)
+      | Done a -> f a
+      | Prompt (r, c) -> Prompt (r, fun r -> bind (c r) f)
 
     let (let*) = bind
 
@@ -510,19 +508,18 @@ let rec handle_prompt : 'a. Global.t -> 'a Prompt.m -> ('a, type_error) m =
   match prompt with
   | Prompt.Done a -> 
      return a
-  | Prompt.Request (r, c) ->
+  | Prompt.Prompt (r, c) ->
      begin match r with
      | Prompt.R_Error (loc,tr,error) -> 
         Error (loc,tr,error)
      | R_Resource {loc; local; unis; situation; resource} ->
-        let* (unis, local) = 
-          handle_prompt global 
-            (resource_request_prompt loc situation {local; global} resource unis) in
+        let prompt = 
+          resource_request_prompt loc situation {local; global} resource unis in
+        let* (unis, local) = handle_prompt global prompt in
         handle_prompt global (c (unis, local))
      | R_Packing {loc; local; situation; lft} ->
-        let* (lrt, local) = 
-          handle_prompt global 
-            (Spine_LFT.spine loc situation {local; global} [] lft) in
+        let prompt = Spine_LFT.spine loc situation {local; global} [] lft in
+        let* (lrt, local) = handle_prompt global prompt in
         handle_prompt global (c (lrt, local))
      | R_Try choices ->
         let rec first_success = function
