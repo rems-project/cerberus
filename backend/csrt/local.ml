@@ -9,6 +9,7 @@ module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend
 module Loc = Locations
 module VB = VariableBinding
+module IT = IndexTerms
 
 
 type binding = Sym.t * VB.t
@@ -240,9 +241,12 @@ let add_uc lc local =
 let add_r rname r local = 
   let lcs = match RE.fp r with
     | None -> []
-    | Some fp ->
+    | Some ((addr,_) as fp) ->
+       IT.Not (IT.Null addr) ::
        List.filter_map (fun (_,r') -> 
-           Option.bind (RE.fp r') (fun fp' -> Some (IndexTerms.Disjoint (fp, fp')))
+           Option.bind (RE.fp r') (fun fp' -> 
+               Some (IT.Disjoint (fp, fp'))
+             )
          ) (all_resources local) 
   in
   add_uc (LC (And lcs)) (add (rname, Resource r) local)

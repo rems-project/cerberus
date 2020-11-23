@@ -1780,10 +1780,6 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
 
                              
 (* TODO: 
-   - make wellformedness checks check for things being of the right kind
-   - separate everywhere separate internal from user errors
-   - especially for when *trying* different clauses of predicates: only accept failures of particular kind
-   - in counter models, do not use 0 for non-null pointers
    - give types for standard library functions
    - better location information for refined_c annotations
    - fix Ecase "LC (Bool true)"

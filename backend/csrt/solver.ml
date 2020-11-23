@@ -172,7 +172,11 @@ let rec of_index_term {local;global} ctxt it =
      let boolsort = ls_to_sort {local;global} ctxt (Base Bool) in
      let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
      let a = of_index_term {local;global} ctxt t in
-     Z3.Expr.mk_app ctxt fundecl [a]
+     let is_null = Z3.Expr.mk_app ctxt fundecl [a] in
+     let zero_str = Nat_big_num.to_string Z.zero in
+     let zero_expr = Z3.Arithmetic.Integer.mk_numeral_s ctxt zero_str in
+     let is_zero = Z3.Boolean.mk_eq ctxt a zero_expr in
+     Z3.Boolean.mk_and ctxt [is_null; is_zero]
   | And its -> 
      let ts = List.map (of_index_term {local;global} ctxt) its in
      Z3.Boolean.mk_and ctxt ts
