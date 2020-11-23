@@ -20,6 +20,9 @@ open ListM
 
 
 
+let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
+
+
 let mapM_a f a =
   let* item = f a.item in
   return {a with item}
@@ -116,7 +119,7 @@ let retype_value (loc : Loc.t) = function
  | M_Vtuple asyms -> return (M_Vtuple asyms)
 
 let rec retype_pexpr (loc : Loc.t) (M_Pexpr (annots,bty,pexpr_)) = 
-  let loc = Loc.update_a loc annots in
+  let loc = Loc.update loc (get_loc_ annots) in
   let* pexpr_ = match pexpr_ with
     | M_PEsym sym -> 
        return (M_PEsym sym)
@@ -360,7 +363,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
      let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
      return (M_Return lt)
   | M_Label (argtyps,args,e,annots) -> 
-     let loc = Loc.update_a loc annots in
+     let loc = Loc.update loc (get_loc_ annots) in
      let* args = mapM (retype_arg loc) args in
      let* argtyps = 
        ListM.mapM (fun (msym, (ct,by_pointer)) ->

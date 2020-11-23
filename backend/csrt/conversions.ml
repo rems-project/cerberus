@@ -22,6 +22,10 @@ module SymSet = Set.Make(Sym)
 
 
 
+
+let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
+
+
 let struct_predicates = true
 
 
@@ -79,8 +83,8 @@ let struct_layout loc members tag =
        return []
     | (member, (attrs, qualifiers, ct)) :: members ->
        let* sct = sct_of_ct loc ct in
-       let offset = Memory.member_offset loc tag member in
-       let size = Memory.size_of_ctype loc sct in
+       let offset = Memory.member_offset tag member in
+       let size = Memory.size_of_ctype sct in
        let to_pad = Z.sub offset position in
        let padding = 
          if Z.gt_big_int to_pad Z.zero 
@@ -108,7 +112,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
   let* members = 
     ListM.mapM (fun (member, (_,_, ct)) ->
-        let loc = Loc.update_a loc (annot_of_ct ct) in
+        let loc = Loc.update loc (get_loc_ (annot_of_ct ct)) in
         let* sct = sct_of_ct loc ct in
         let bt = BT.of_sct sct in
         return (member, (sct, bt))
@@ -243,10 +247,10 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
 
-let make_owned_pointer loc struct_decls pointer stored_type rt = 
+let make_owned_pointer struct_decls pointer stored_type rt = 
   let open RT in
   let (Computational ((pointee,bt),lrt)) = rt in
-  let size = Memory.size_of_stored_type loc stored_type in
+  let size = Memory.size_of_stored_type stored_type in
   let points = RE.Points {pointer = S pointer; pointee; size} in
   Computational ((pointer,Loc),
   Logical ((pointee, Base bt), 
@@ -286,7 +290,7 @@ let rec rt_of_pointer_sct loc struct_decls (pointer : Sym.t) sct =
   | _ ->
      let st = ST.of_ctype sct in
      let* rt = rt_of_sct loc struct_decls (Sym.fresh ()) sct in
-     return (make_owned_pointer loc struct_decls pointer st rt)
+     return (make_owned_pointer struct_decls pointer st rt)
   end
 
 and rt_of_sct loc struct_decls (s : Sym.t) sct =

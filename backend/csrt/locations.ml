@@ -34,9 +34,6 @@ let good_location (loc : Location_ocaml.t) =
 let update (loc : t) (loc2 : Location_ocaml.t) = 
   if good_location loc2 then loc2 else loc
 
-let update_a loc annots =
-  update loc (Cerb_frontend.Annot.get_loc_ annots)
-
 
 let log (locs : locs) (loc' : Location_ocaml.t) : locs =
   let open OneList in
@@ -48,3 +45,6 @@ let head_pos_of_location =
 
 
 let unpack l = l
+
+
+let one locs = OneList.head locs
