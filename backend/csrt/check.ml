@@ -956,7 +956,7 @@ let merge_return_paths
 
 
 
-let false_if_unreachable (locs : locs) {local; global} : (unit fallible, type_error) m =
+let false_if_unreachable (locs : path) {local; global} : (unit fallible, type_error) m =
   let is_reachable = Solver.is_consistent {local; global} in
   return (if is_reachable then Normal () else False)
 
@@ -970,7 +970,7 @@ let false_if_unreachable (locs : locs) {local; global} : (unit fallible, type_er
    inference returns, all logical (logical variables, resources,
    constraints) in the local environment *)
 
-let rec infer_pexpr (locs : locs) {local; global} 
+let rec infer_pexpr (locs : path) {local; global} 
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let locs = Loc.log locs (get_loc_ annots) in
@@ -997,7 +997,7 @@ let rec infer_pexpr (locs : locs) {local; global}
        let (reachable, model) = Solver.is_reachable_and_model {local; global} in
        if not reachable 
        then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-       else fail (one locs) (Undefined_behaviour (undef, model))
+       else fail (one locs) (Undefined_behaviour (undef, model, locs))
     | M_PEerror (err, asym) ->
        let* arg = arg_of_asym (one locs) local asym in
        fail arg.loc (StaticError err)
@@ -1099,7 +1099,7 @@ let rec infer_pexpr (locs : locs) {local; global}
   debug 3 (lazy (item "type" (RT.pp rt)));
   return (Normal (rt, local))
 
-and infer_pexpr_pop (locs : locs) delta {local; global} 
+and infer_pexpr_pop (locs : path) delta {local; global} 
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
   let local = delta ++ marked ++ local in 
   let*? (rt, local) = infer_pexpr locs {local; global} pe in
@@ -1109,7 +1109,7 @@ and infer_pexpr_pop (locs : locs) delta {local; global}
 (* check_pexpr: type check the pure expression `e` against return type
    `typ`; returns a "reduced" local environment *)
 
-let rec check_pexpr (locs : locs) {local; global} (e : 'bty pexpr) 
+let rec check_pexpr (locs : path) {local; global} (e : 'bty pexpr) 
                     (typ : RT.t) : (L.t fallible, type_error) m = 
   let (M_Pexpr (annots, _, e_)) = e in
   let locs = Loc.log locs (get_loc_ annots) in
@@ -1160,7 +1160,7 @@ let rec check_pexpr (locs : locs) {local; global} (e : 'bty pexpr)
      let* local = pop_empty (one locs) local in
      return (Normal local)
 
-and check_pexpr_pop (locs : locs) delta {local; global} (pe : 'bty pexpr) 
+and check_pexpr_pop (locs : path) delta {local; global} (pe : 'bty pexpr) 
                     (typ : RT.t) : (L.t fallible, type_error) m =
   let local = delta ++ marked ++ local in 
   let*? local = check_pexpr locs {local; global} pe typ in
@@ -1299,7 +1299,7 @@ let ensure_aligned loc {local; global} access pointer ctype =
    variables) *)
 
 
-let rec infer_expr (locs : locs) {local; labels; global} 
+let rec infer_expr (locs : path) {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m = 
   let (M_Expr (annots, e_)) = e in
   let locs = Loc.log locs (get_loc_ annots) in
@@ -1531,7 +1531,7 @@ let rec infer_expr (locs : locs) {local; labels; global}
                     | Normal (rt,_) -> item "type" (RT.pp rt)));
   return r
 
-and infer_expr_pop (locs : locs) delta {local; labels; global} 
+and infer_expr_pop (locs : path) delta {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m =
   let local = delta ++ marked ++ local in 
   let*? (rt, local) = infer_expr locs {local; labels; global} e in
@@ -1540,7 +1540,7 @@ and infer_expr_pop (locs : locs) delta {local; labels; global}
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
    either an updated environment, or `False` in case of Goto *)
-let rec check_expr (locs : locs) {local; labels; global} (e : 'bty expr) 
+let rec check_expr (locs : path) {local; labels; global} (e : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible, type_error) m = 
   let (M_Expr (annots, e_)) = e in
   let locs = Loc.log locs (CF.Annot.get_loc_ annots) in
@@ -1604,7 +1604,7 @@ let rec check_expr (locs : locs) {local; labels; global} (e : 'bty expr)
         in
         fail (one locs) (Generic err)
 
-and check_expr_pop (locs : locs) delta {labels; local; global} (pe : 'bty expr) 
+and check_expr_pop (locs : path) delta {labels; local; global} (pe : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible, type_error) m =
   let local = delta ++ marked ++ local in 
   let*? local = check_expr locs {labels; local; global} pe typ in

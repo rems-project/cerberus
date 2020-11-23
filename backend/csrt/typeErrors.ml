@@ -57,7 +57,7 @@ type type_error =
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Solver.model option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Solver.model option * Locations.path
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -216,8 +216,15 @@ let pp_type_error = function
      (!^"Expected" ^^^ VariableBinding.kind_pp expect ^^^ 
         !^"but found" ^^^ VariableBinding.kind_pp has, [])
 
-  | Undefined_behaviour (undef, omodel) -> 
+  | Undefined_behaviour (undef, omodel, path) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
+     let _path_pp = 
+       Pp.item "path"
+         (Pp.list (fun loc ->
+              Loc.pp loc
+            ) (List.rev (OneList.to_list path))
+         )
+     in
      let extras = match omodel with 
        | Some model -> [!^ub; Solver.pp_model model] 
        | None -> [!^ub] 

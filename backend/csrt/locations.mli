@@ -1,7 +1,7 @@
 type t
 
 type loc = t
-type locs = t OneList.t
+type path = t OneList.t
 
 val unknown : t
 
@@ -11,11 +11,11 @@ val pp : t -> PPrint.document
 
 val update : t -> Location_ocaml.t -> t
 
-val log : locs -> Location_ocaml.t -> locs
+val log : path -> Location_ocaml.t -> path
 
 val head_pos_of_location : t -> string * string
 
 val unpack : t -> Location_ocaml.t
 
 
-val one : locs -> loc
+val one : path -> loc

@@ -4,7 +4,7 @@ type t = Location_ocaml.t
 
 type loc = t
 
-type locs = t OneList.t
+type path = t OneList.t
 
 let unknown = Location_ocaml.unknown
 
@@ -35,7 +35,7 @@ let update (loc : t) (loc2 : Location_ocaml.t) =
   if good_location loc2 then loc2 else loc
 
 
-let log (locs : locs) (loc' : Location_ocaml.t) : locs =
+let log (locs : path) (loc' : Location_ocaml.t) : path =
   let open OneList in
   if good_location loc' then (loc' :: locs) else locs
 
