@@ -263,6 +263,8 @@ let pp_unis (unis : Sym.t Uni.t) : Pp.document =
 
 
 module Prompt = struct
+  
+  open OneList
 
   type resource_request = 
     { local : Local.t;
@@ -283,7 +285,7 @@ module Prompt = struct
     | Done of 'a
     | RequestResource of resource_request * ((Sym.t Uni.unis * Local.t) -> 'a m)
     | RequestPacking of packing_request * ((LRT.t * Local.t) -> 'a m)
-    | Nondet of ('a m) list * 'a m
+    | Nondet of ('a m) onelist
     | Error of Locations.t * Tools.stacktrace option * type_error
 
   module Operators = struct
@@ -307,7 +309,7 @@ module Prompt = struct
         )
 
     let try_choices choices else_choice = 
-      Nondet (choices, else_choice)
+      Nondet choices
 
     let rec bind m f = 
       match m with
@@ -317,8 +319,8 @@ module Prompt = struct
          RequestResource (request, fun r -> bind (c r) f)
       | RequestPacking (request, c) -> 
          RequestPacking (request, fun r -> bind (c r) f)
-      | Nondet (choices,else_choice) -> 
-         Nondet (List.map (fun choice -> bind choice f) choices, bind else_choice f)
+      | Nondet choices ->
+         Nondet (OneList.map (fun choice -> bind choice f) choices)
       | Error (loc, stacktrace, err) -> 
          Error (loc, stacktrace, err)
 
@@ -508,7 +510,7 @@ let rec resource_request_prompt loc situation {local; global} request unis =
              | None -> Debug_ocaml.error "missing predicate definition"
            in
            let packing_attempts = 
-             List.map (fun clause ->
+             OneList.map (fun clause ->
                  let* (lrt, local) = request_packing loc situation local clause in
                  let local = bind_logical local lrt in
                  resource_request_prompt loc situation {local; global} request unis
@@ -527,6 +529,7 @@ let rec resource_request_prompt loc situation {local; global} request unis =
 
 
 let rec handle_prompt : 'a. Global.t -> 'a Prompt.m -> ('a, type_error) m =
+  let open OneList in
   fun global prompt ->
   match prompt with
   | Prompt.Done a -> 
@@ -543,11 +546,11 @@ let rec handle_prompt : 'a. Global.t -> 'a Prompt.m -> ('a, type_error) m =
        handle_prompt global 
          (Spine_LFT.spine loc situation {local; global} [] lft) in
      handle_prompt global (c (lrt, local))
-  | Nondet ([],else_choice) ->
-     handle_prompt global else_choice
-  | Nondet (choice :: choices, else_choice) ->
+  | Nondet (Last choice) ->
+     handle_prompt global choice
+  | Nondet (choice :: choices) ->
      msum (handle_prompt global choice)
-       (handle_prompt global (Nondet (choices, else_choice)))
+       (handle_prompt global (Nondet (choices)))
 
 
 
@@ -597,7 +600,7 @@ let unpack_resources loc {local; global} =
                    let test_local = bind_logical test_local lrt in
                    let is_reachable = Solver.is_consistent loc {local = test_local; global} in
                    return (if is_reachable then Some test_local else None)
-                 ) (def.unpack_functions p.pointer)
+                 ) (OneList.to_list (def.unpack_functions p.pointer))
              in
              begin match possible_unpackings with
              | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"

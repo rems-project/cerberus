@@ -1,7 +1,10 @@
 module StringSet = Set.Make(String)
 
 type t = Location_ocaml.t
+
 type loc = t
+
+type locs = t OneList.t
 
 let unknown = Location_ocaml.unknown
 
@@ -21,18 +24,23 @@ let dirs_to_ignore =
        ]
     )
 
-let update (loc : t) (loc2 : Location_ocaml.t) = 
-  if !Debug_ocaml.debug_level > 0 then loc2 else
-  match Location_ocaml.get_filename loc2 with
-  | None -> loc
-  | Some filename ->
-     let dir = Filename.dirname filename in
-     if StringSet.mem dir dirs_to_ignore
-     then loc else loc2
+let good_location (loc : Location_ocaml.t) = 
+  if !Debug_ocaml.debug_level > 0 then true else
+    match Location_ocaml.get_filename loc with
+    | None -> false
+    | Some file -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
 
+
+let update (loc : t) (loc2 : Location_ocaml.t) = 
+  if good_location loc2 then loc2 else loc
 
 let update_a loc annots =
   update loc (Cerb_frontend.Annot.get_loc_ annots)
+
+
+let log (locs : locs) (loc' : Location_ocaml.t) : locs =
+  let open OneList in
+  if good_location loc' then (loc' :: locs) else locs
 
 
 let head_pos_of_location = 

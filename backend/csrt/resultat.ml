@@ -8,7 +8,9 @@ let return (a: 'a) : ('a,'e) t =
 let error (e: 'e) : ('a,'e) t = 
   Error e
 
-let fail (loc: Locations.t) (e: 'e) : ('a, Locations.t * Tools.stacktrace option * 'e) t = 
+type 'e error = Locations.loc * Tools.stacktrace option * 'e
+
+let fail (loc: Locations.loc) (e: 'e) : ('a, 'e error) t = 
   error (loc, Tools.do_stack_trace (),  e)
 
 let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
@@ -20,7 +22,7 @@ let (let*) = bind
 
 
 
-type ('a,'e) m = ('a, Locations.t * Tools.stacktrace option * 'e) Result.t
+type ('a,'e) m = ('a, 'e error) Result.t
 
 
 let lift_error (f : 'e1 -> 'e2) (m : ('a,'e1) m) : ('a,'e2) m =
