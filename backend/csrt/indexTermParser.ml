@@ -126,12 +126,12 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
          ) members 
      in
      return (Struct (tag, members))
-  | Member (tag, it, f) ->
+  | StructMember (tag, it, f) ->
      let* it = parse_ast_to_t loc names it in
-     return (Member (tag, it, f))
-  | MemberOffset (tag,t,f) ->
+     return (StructMember (tag, it, f))
+  | StructMemberOffset (tag,t,f) ->
      let* it = parse_ast_to_t loc names it in
-     return (MemberOffset (tag,it, f))
+     return (StructMemberOffset (tag,it, f))
   | AllocationSize it -> 
      let* it = parse_ast_to_t loc names it in
      return (AllocationSize it)
@@ -161,6 +161,32 @@ let rec parse_ast_to_t loc names (it: IT.parse_ast) =
   | Representable (rt, it) ->
      let* it = parse_ast_to_t loc names it in
      return (Representable (rt, it))
+  | SetMember (t1,t2) ->
+     let* t1 = parse_ast_to_t loc names t1 in
+     let* t2 = parse_ast_to_t loc names t2 in
+     return (SetMember (t1,t2))
+  | SetAdd (t1,t2) ->
+     let* t1 = parse_ast_to_t loc names t1 in
+     let* t2 = parse_ast_to_t loc names t2 in
+     return (SetAdd (t1,t2))
+  | SetRemove (t1, t2) ->
+     let* t1 = parse_ast_to_t loc names t1 in
+     let* t2 = parse_ast_to_t loc names t2 in
+     return (SetRemove (t1,t2))
+  | SetUnion ts ->
+     let* ts = List1M.mapM (parse_ast_to_t loc names) ts in
+     return (SetUnion ts)
+  | SetIntersection ts ->
+     let* ts = List1M.mapM (parse_ast_to_t loc names) ts in
+     return (SetIntersection ts)
+  | SetDifference (t1, t2) ->
+     let* t1 = parse_ast_to_t loc names t1 in
+     let* t2 = parse_ast_to_t loc names t2 in
+     return (SetDifference (t1,t2))  
+  | Subset (t1, t2) ->
+     let* t1 = parse_ast_to_t loc names t1 in
+     let* t2 = parse_ast_to_t loc names t2 in
+     return (Subset (t1,t2))
   | S string -> 
      begin match StringMap.find_opt string names with
      | Some sym -> return (S sym)

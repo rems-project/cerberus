@@ -102,7 +102,7 @@ and representable_struct struct_decls tag about =
   let lcs =
     List.map (fun (member, (ct, _)) ->
         let rangef = representable_ctype struct_decls ct in
-        LC.unpack (rangef (IT.Member (tag, about, member)))
+        LC.unpack (rangef (IT.StructMember (tag, about, member)))
       ) decl.Global.members
   in
   (LC.LC (And lcs))

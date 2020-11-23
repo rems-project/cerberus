@@ -14,6 +14,7 @@ type t =
   | Tuple of t list
   | Struct of tag
   | FunctionPointer of Sym.t
+  | Set of t
 
 let is_struct = function
   | Struct tag -> Some tag
@@ -31,7 +32,19 @@ let rec equal t1 t2 =
   | Tuple ts1', Tuple ts2' -> List.equal equal ts1' ts2'
   | Struct t1, Struct t2 -> Sym.equal t1 t2
   | FunctionPointer s1, FunctionPointer s2 -> Sym.equal s1 s2
-  | _, _ -> false
+  | Set t1, Set t2 -> equal t1 t2
+
+  | Unit, _
+  | Bool, _
+  | Integer, _
+  | Loc, _
+  | Array, _
+  | List _, _
+  | Tuple _, _
+  | Struct _, _
+  | FunctionPointer _, _
+  | Set _, _ ->
+     false
 
 let rec pp atomic bt = 
   let mparens pped = if atomic then parens pped else pped in
@@ -45,6 +58,7 @@ let rec pp atomic bt =
   | Tuple nbts -> parens (flow_map (comma) (pp false) nbts)
   | Struct sym -> mparens (!^"struct" ^^^ Sym.pp sym)
   | FunctionPointer p -> mparens (!^"function" ^^^ Sym.pp p)
+  | Set t -> mparens (!^"set" ^^^ parens (pp false t))
 
 
 

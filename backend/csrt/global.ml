@@ -61,8 +61,8 @@ type struct_decls = struct_decl SymMap.t
 
 type resource_predicate = 
   { arguments : LS.t list;
-    pack_functions : IT.t -> (LFT.t OneList.t);
-    unpack_functions : IT.t -> (LFT.t OneList.t);
+    pack_functions : IT.t -> (LFT.t List1.t);
+    unpack_functions : IT.t -> (LFT.t List1.t);
   }
 
 type t = 
@@ -93,11 +93,11 @@ let get_predicate_def loc global predicate_name =
      | Some decl ->
        let pack_functions = 
          fun it -> 
-         OneList.Last (decl.closed_stored_predicate_definition.pack_function it)
+         List1.one (decl.closed_stored_predicate_definition.pack_function it)
        in
        let unpack_functions = 
          fun it -> 
-         OneList.Last (decl.closed_stored_predicate_definition.unpack_function it)
+         List1.one (decl.closed_stored_predicate_definition.unpack_function it)
        in
        Some {arguments = [LS.Base (Struct tag)];
              pack_functions; 

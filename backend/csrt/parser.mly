@@ -25,14 +25,14 @@ prog:
 expr:
   | TRUE                    { IndexTerms.Bool true }
   | FALSE                   { IndexTerms.Bool false }
-  | MIN_U32                 { IndexTerms.min_u32 }
-  | MIN_U64                 { IndexTerms.min_u64 }
-  | MAX_U32                 { IndexTerms.max_u32 }
-  | MAX_U64                 { IndexTerms.max_u64 }
-  | MIN_I32                 { IndexTerms.min_i32 }
-  | MIN_I64                 { IndexTerms.min_i64 }
-  | MAX_I32                 { IndexTerms.max_i32 }
-  | MAX_I64                 { IndexTerms.max_i64 }
+  | MIN_U32                 { IndexTerms.min_u32 () }
+  | MIN_U64                 { IndexTerms.min_u64 () }
+  | MAX_U32                 { IndexTerms.max_u32 () }
+  | MAX_U64                 { IndexTerms.max_u64 () }
+  | MIN_I32                 { IndexTerms.min_i32 () }
+  | MIN_I64                 { IndexTerms.min_i64 () }
+  | MAX_I32                 { IndexTerms.max_i32 () }
+  | MAX_I64                 { IndexTerms.max_i64 () }
   | i = INT                 { IndexTerms.Num (Z.of_int i) }
   | id = ID                 { IndexTerms.S id }
   | LPAREN expr RPAREN      { $2 }

@@ -222,7 +222,7 @@ let pp_type_error = function
        Pp.item "path"
          (Pp.list (fun loc ->
               Loc.pp loc
-            ) (List.rev (OneList.to_list path))
+            ) (List.rev (List1.to_list path))
          )
      in
      let extras = match omodel with 

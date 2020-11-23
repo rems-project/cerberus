@@ -25,11 +25,9 @@ module ST = struct
     | ST_Pointer, _ -> 
        false
 
-
   let pp = function
     | ST_Ctype ct -> Sctypes.pp ct
     | ST_Pointer -> Pp.string "pointer"
-
 
   let of_ctype ct = ST_Ctype ct
 
@@ -43,6 +41,7 @@ end
 
 
 type 'id term =
+  | S of 'id
   | Num of Z.t
   | Pointer of Z.t
   | Bool of bool
@@ -86,8 +85,8 @@ type 'id term =
   | Representable of ST.t * 'id term
 
   | Struct of BT.tag * (BT.member * 'id term) list
-  | Member of BT.tag * 'id term * BT.member
-  | MemberOffset of BT.tag * 'id term * BT.member
+  | StructMember of BT.tag * 'id term * BT.member
+  | StructMemberOffset of BT.tag * 'id term * BT.member
 
   | Nil of BT.t
   | Cons of 'id term * 'id term
@@ -95,7 +94,13 @@ type 'id term =
   | Head of 'id term
   | Tail of 'id term
 
-  | S of 'id
+  | SetMember of 'id term * 'id term
+  | SetAdd of 'id term * 'id term
+  | SetRemove of 'id term * 'id term
+  | SetUnion of ('id term) List1.t
+  | SetIntersection of ('id term) List1.t
+  | SetDifference of 'id term * 'id term
+  | Subset of 'id term * 'id term
 
 
 type parse_ast = string term
@@ -107,6 +112,7 @@ type t = Sym.t term
 
 let rec equal it it' = 
   match it, it' with
+  | S sym, S sym' -> Sym.equal sym sym'
   | Num n, Num n' -> Z.equal n n'
   | Pointer p, Pointer p' -> Z.equal p p'
   | Bool b, Bool b' -> b = b'
@@ -154,8 +160,8 @@ let rec equal it it' =
      tag = tag2 && 
        List.equal (fun (m,t) (m',t') -> m = m' && equal t t') 
          members members2
-  | Member (tag,t,member), Member (tag',t',member')
-  | MemberOffset (tag,t,member), MemberOffset (tag',t',member') 
+  | StructMember (tag,t,member), StructMember (tag',t',member')
+  | StructMemberOffset (tag,t,member), StructMemberOffset (tag',t',member') 
     -> tag = tag' && equal t t' && member = member'
 
   | Nil bt, Nil bt' 
@@ -175,8 +181,20 @@ let rec equal it it' =
   | Representable (rt, t), Representable (rt', t') ->
      ST.equal rt rt' && equal t t'
 
-  | S sym, S sym' 
-    -> Sym.equal sym sym'
+  | SetMember (t1,t2), SetMember (t1',t2') ->
+     equal t1 t1' && equal t1' t2'
+  | SetAdd (t1,t2), SetAdd (t1',t2') ->
+     equal t1 t1' && equal t1' t2'
+  | SetRemove (t1, t2), SetRemove (t1', t2') ->
+     equal t1 t1' && equal t1' t2'
+  | SetUnion ts, SetUnion ts' ->
+     List1.equal equal ts ts'
+  | SetIntersection ts, SetIntersection ts' ->
+     List1.equal equal ts ts'
+  | SetDifference (t1, t2), SetDifference (t1', t2') ->
+     equal t1 t1' && equal t1' t2'
+  | Subset (t1, t2), Subset (t1', t2') ->
+     equal t1 t1' && equal t1' t2'
 
 
   | Num _, _
@@ -222,14 +240,22 @@ let rec equal it it' =
   | Representable _, _
 
   | Struct _, _
-  | Member _, _
-  | MemberOffset _, _
+  | StructMember _, _
+  | StructMemberOffset _, _
 
   | Nil _, _
   | Cons _, _
   | List _, _
   | Head _, _
   | Tail _, _
+
+  | SetMember _, _
+  | SetAdd _, _
+  | SetRemove _, _
+  | SetUnion _, _
+  | SetIntersection _, _
+  | SetDifference _, _
+  | Subset _, _
 
   | S _, _ ->
 
@@ -322,9 +348,9 @@ let pp ?(quote=true) it : PPrint.document =
        braces (separate_map comma (fun (member,it) -> 
                    Id.pp member ^^^ equals ^^^ aux false it 
                  ) members)
-    | Member (_tag, t, member) ->
+    | StructMember (_tag, t, member) ->
        aux true t ^^ dot ^^ Id.pp member
-    | MemberOffset (_tag, t, member) ->
+    | StructMemberOffset (_tag, t, member) ->
        mparens (ampersand ^^ aux true t ^^ !^"->" ^^ Id.pp member)
 
     | AllocationSize t1 ->
@@ -347,6 +373,22 @@ let pp ?(quote=true) it : PPrint.document =
        mparens (!^"aligned" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
     | Representable (rt, t) ->
        mparens (!^"representable" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
+
+    | SetMember (t1,t2) ->
+       mparens (aux false t1 ^^^ !^"IN" ^^^ aux false t2)
+    | SetAdd (t1,t2) ->
+       mparens (braces (aux false t1) ^^^ !^"union" ^^^ aux false t2)
+    | SetRemove (t1, t2) ->
+       mparens (aux false t1 ^^^ !^"/" ^^^ braces (aux false t2))
+    | SetUnion ts ->
+       mparens (!^"union" ^^^ Pp.list (aux false) (List1.to_list ts))
+    | SetIntersection ts ->
+       mparens (!^"intersection" ^^^ Pp.list (aux false) (List1.to_list ts))
+    | SetDifference (t1, t2) ->
+       mparens (aux false t1 ^^^ !^"/" ^^^ aux false t2)
+    | Subset (t1, t2) ->
+       mparens (aux false t1 ^^^ !^"<=" ^^^ aux false t2)
+
 
     | S sym -> 
        Sym.pp sym
@@ -401,8 +443,8 @@ let rec vars_in it : SymSet.t =
      vars_in_list (it :: its)
   | Struct (_tag, members) ->
      vars_in_list (map snd members)
-  | Member (_tag, it, s)
-  | MemberOffset (_tag, it, s) -> 
+  | StructMember (_tag, it, s)
+  | StructMemberOffset (_tag, it, s) -> 
      vars_in_list [it;it]
   | List (its,bt) ->
      vars_in_list its
@@ -411,6 +453,22 @@ let rec vars_in it : SymSet.t =
   | Aligned (_rt, t)
   | Representable (_rt,t) ->
      vars_in t
+
+  | SetMember (t1,t2) ->
+     vars_in_list [t1;t2]
+  | SetAdd (t1,t2) ->
+     vars_in_list [t1;t2]
+  | SetRemove (t1, t2) ->
+     vars_in_list [t1;t2]
+  | SetUnion ts ->
+     vars_in_list (List1.to_list ts)
+  | SetIntersection ts ->
+     vars_in_list (List1.to_list ts)
+  | SetDifference (t1, t2) ->
+     vars_in_list [t1;t2]
+  | Subset (t1, t2) ->
+     vars_in_list [t1;t2]
+
   | S symbol -> 
      SymSet.singleton symbol
 
@@ -462,10 +520,10 @@ let rec subst_var subst it : t =
   | Struct (tag, members) ->
      let members = map (fun (member,it) -> (member,subst_var subst it)) members in
      Struct (tag, members)
-  | Member (tag, t, f) ->
-     Member (tag, subst_var subst t, f)
-  | MemberOffset (tag,t,f) ->
-     MemberOffset (tag,subst_var subst t, f)
+  | StructMember (tag, t, f) ->
+     StructMember (tag, subst_var subst t, f)
+  | StructMemberOffset (tag,t,f) ->
+     StructMemberOffset (tag,subst_var subst t, f)
   | AllocationSize it -> AllocationSize (subst_var subst it)
   | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
   | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
@@ -475,6 +533,22 @@ let rec subst_var subst it : t =
   | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
   | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
   | Representable (rt,t) -> Representable (rt,subst_var subst t)
+
+  | SetMember (t1,t2) ->
+     SetMember (subst_var subst t1, subst_var subst t2)
+  | SetAdd (t1,t2) ->
+     SetAdd (subst_var subst t1, subst_var subst t2)
+  | SetRemove (t1, t2) ->
+     SetRemove (subst_var subst t1, subst_var subst t2)
+  | SetUnion ts ->
+     SetUnion (List1.map (subst_var subst) ts)
+  | SetIntersection ts ->
+     SetIntersection (List1.map (subst_var subst) ts)
+  | SetDifference (t1, t2) ->
+     SetDifference (subst_var subst t1, subst_var subst t2)
+  | Subset (t1, t2) ->
+     Subset (subst_var subst t1, subst_var subst t2)
+
   | S symbol -> 
      if symbol = subst.before then S subst.after else S symbol
 
@@ -526,10 +600,10 @@ let rec subst_it subst it : t =
   | Struct (tag, members) ->
      let members = map (fun (member,it) -> (member,subst_it subst it)) members in
      Struct (tag, members)
-  | Member (tag, t, f) ->
-     Member (tag, subst_it subst t, f)
-  | MemberOffset (tag,t,f) ->
-     MemberOffset (tag,subst_it subst t, f)
+  | StructMember (tag, t, f) ->
+     StructMember (tag, subst_it subst t, f)
+  | StructMemberOffset (tag,t,f) ->
+     StructMemberOffset (tag,subst_it subst t, f)
   | AllocationSize it -> AllocationSize (subst_it subst it)
   | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
   | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
@@ -539,6 +613,20 @@ let rec subst_it subst it : t =
   | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
   | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
   | Representable (rt,t) -> Representable (rt,subst_it subst t)
+  | SetMember (t1,t2) ->
+     SetMember (subst_it subst t1, subst_it subst t2)
+  | SetAdd (t1,t2) ->
+     SetAdd (subst_it subst t1, subst_it subst t2)
+  | SetRemove (t1, t2) ->
+     SetRemove (subst_it subst t1, subst_it subst t2)
+  | SetUnion ts ->
+     SetUnion (List1.map (subst_it subst) ts)
+  | SetIntersection ts ->
+     SetIntersection (List1.map (subst_it subst) ts)
+  | SetDifference (t1, t2) ->
+     SetDifference (subst_it subst t1, subst_it subst t2)
+  | Subset (t1, t2) ->
+     Subset (subst_it subst t1, subst_it subst t2)  
   | S symbol -> 
      if symbol = subst.before then subst.after else S symbol
 
@@ -648,19 +736,19 @@ let (%<=) t1 t2 = LE (t1, t2)
 let (%>=) t1 t2 = GE (t1, t2)
 
 
-open Z
 
 let in_range min max within = And [LE (min, within); LE (within, max)]
 
-let min_u32 = Num zero
-let max_u32 = Num (sub (power_int_positive_int 2 32) (of_int 1))
-let min_u64 = Num zero
-let max_u64 = Num (sub (power_int_positive_int 2 64) (of_int 1))
+(* for some reason ocaml wants the 'type id' and the 'unit' *)
+let min_u32 (type id) () : id term = Num Z.zero
+let max_u32 (type id) () : id term = Num (Z.sub (Z.power_int_positive_int 2 32) (Z.of_int 1))
+let min_u64 (type id) () : id term = Num Z.zero
+let max_u64 (type id) () : id term = Num (Z.sub (Z.power_int_positive_int 2 64) (Z.of_int 1))
 
-let min_i32 = Num (sub (of_int 0) (power_int_positive_int 2 (32 - 1)))
-let max_i32 = Num (sub (power_int_positive_int 2 (32 - 1)) (of_int 1))
-let min_i64 = Num (sub (of_int 0) (power_int_positive_int 2 (64 - 1)))
-let max_i64 = Num (sub (power_int_positive_int 2 (64 - 1)) (of_int 1))
+let min_i32 (type id) () : id term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (32 - 1)))
+let max_i32 (type id) () : id term = Num (Z.sub (Z.power_int_positive_int 2 (32 - 1)) (Z.of_int 1))
+let min_i64 (type id) () : id term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (64 - 1)))
+let max_i64 (type id) () : id term = Num (Z.sub (Z.power_int_positive_int 2 (64 - 1)) (Z.of_int 1))
 
 let int x = Num (Z.of_int x)
 

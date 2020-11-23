@@ -70,6 +70,8 @@ let rec bt_to_sort {local;global} ctxt bt =
      Z3.Sort.mk_uninterpreted_s ctxt btname
   | FunctionPointer _ -> 
      Z3.Sort.mk_uninterpreted_s ctxt btname
+  | Set bt ->
+     Z3.Set.mk_sort ctxt (bt_to_sort {local;global} ctxt bt)
 
 let ls_to_sort {local;global} ctxt (LS.Base bt) =
   bt_to_sort {local;global} ctxt bt
@@ -200,11 +202,11 @@ let rec of_index_term {local;global} ctxt it =
      let sym = sym_to_symbol ctxt s in
      let sort = ls_to_sort {local;global} ctxt ls in
      Z3.Expr.mk_const ctxt sym sort
-  | Member (tag, t, member) ->
+  | StructMember (tag, t, member) ->
      let a = of_index_term {local;global} ctxt t in
      let fundecl = member_to_fundecl tag member in
      Z3.Expr.mk_app ctxt fundecl [a]
-  | MemberOffset (tag, t, member) ->
+  | StructMemberOffset (tag, t, member) ->
      let a = of_index_term {local;global} ctxt t in
      let offset = Memory.member_offset tag member in
      let offset_s = Nat_big_num.to_string offset in
@@ -262,6 +264,34 @@ let rec of_index_term {local;global} ctxt it =
   | Representable (st, t) ->
      let rangef = Memory.representable_stored_type global.struct_decls st in
      of_index_term {local; global} ctxt (LC.unpack (rangef t))
+  | SetMember (it,it') ->
+     let a = of_index_term {local;global} ctxt it in
+     let a' = of_index_term {local;global} ctxt it' in
+     Z3.Set.mk_membership ctxt a a'
+  | SetAdd (it,it') ->
+     let a = of_index_term {local;global} ctxt it in
+     let a' = of_index_term {local;global} ctxt it' in
+     Z3.Set.mk_set_add ctxt a a'
+  | SetRemove (it, it') ->
+     let a = of_index_term {local;global} ctxt it in
+     let a' = of_index_term {local;global} ctxt it' in
+     Z3.Set.mk_del ctxt a a'
+  | SetUnion its ->
+     let ts = List.map (of_index_term {local;global} ctxt) 
+                (List1.to_list its) in
+     Z3.Set.mk_union ctxt ts
+  | SetIntersection its ->
+     let ts = List.map (of_index_term {local;global} ctxt) 
+                (List1.to_list its) in
+     Z3.Set.mk_intersection ctxt ts
+  | SetDifference (it, it') ->
+     let a = of_index_term {local;global} ctxt it in
+     let a' = of_index_term {local;global} ctxt it' in
+     Z3.Set.mk_difference ctxt a a'
+  | Subset (it, it') ->
+     let a = of_index_term {local;global} ctxt it in
+     let a' = of_index_term {local;global} ctxt it' in
+     Z3.Set.mk_subset ctxt a a'
   | Nil _ ->
      Debug_ocaml.error "todo: Z3: Nil"
   | Cons _ ->

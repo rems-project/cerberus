@@ -96,7 +96,7 @@ module WIT = struct
            ) members
        in
        return (Base (Struct tag))
-    | Member (tag, it', member) ->
+    | StructMember (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base (Struct tag)) it' in
        let* decl = match SymMap.find_opt tag global.struct_decls with
          | Some decl -> return decl
@@ -104,7 +104,7 @@ module WIT = struct
        in
        let* (_, bt) = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
        return (Base bt)
-    | MemberOffset (tag, it', member) ->
+    | StructMemberOffset (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base Loc) it' in
        let* decl = match SymMap.find_opt tag global.struct_decls with
          | Some decl -> return decl
@@ -159,6 +159,29 @@ module WIT = struct
     | Representable (st, t) ->
        let* () = check_aux loc it {local; global} (Base (ST.to_bt st)) t in
        return (Base BT.Bool)
+    | SetMember (t,t') ->
+       let* (Base bt) = infer loc {local;global} t in
+       let* () = check_aux loc it {local; global} (Base (Set bt)) t' in
+       return (Base BT.Bool)
+    | SetAdd (t,t')
+    | SetRemove (t,t') ->
+       let* (Base bt) = infer loc {local;global} t in
+       let* () = check_aux loc it {local; global} (Base (Set bt)) t' in
+       return (Base (Set bt))
+    | SetUnion its
+    | SetIntersection its ->
+       let (hd, tl) = List1.dest its in
+       let* bt = check_set_type loc it {local; global} hd in
+       let* () = ListM.iterM (check_aux loc it {local; global} (Base (Set bt))) tl in
+       return (Base (Set bt))
+    | SetDifference (it, it') ->
+       let* bt = check_set_type loc it {local; global} it in
+       let* () = check_aux loc it {local;global} (Base (Set bt)) it' in
+       return (Base (Set bt))
+    | Subset (it, it') ->
+       let* bt = check_set_type loc it {local; global} it in
+       let* () = check_aux loc it {local;global} (Base (Set bt)) it' in
+       return (Base Bool)
     | S s ->
        let* () = check_bound loc local KLogical s in
        return (Local.get_l s local)
@@ -167,6 +190,13 @@ module WIT = struct
     let* ls' = infer loc env it in
     if LS.equal ls ls' then return ()
     else fail loc (Illtyped_it context)
+
+  and check_set_type loc (context: t) env (it: t) : (BT.t, type_error) m =
+    let* ls = infer loc env it in
+    begin match ls with
+    | Base (Set bt) -> return bt
+    | _ -> fail loc (Illtyped_it context)
+    end
 
   let check loc env ls it = check_aux loc it env ls it
 

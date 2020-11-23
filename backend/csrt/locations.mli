@@ -1,7 +1,7 @@
 type t
 
 type loc = t
-type path = t OneList.t
+type path = t List1.t
 
 val unknown : t
 
@@ -18,4 +18,4 @@ val head_pos_of_location : t -> string * string
 val unpack : t -> Location_ocaml.t
 
 
-val one : path -> loc
+

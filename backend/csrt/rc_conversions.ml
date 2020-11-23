@@ -377,10 +377,10 @@ and of_type_expr loc names te : (tb, type_error) m =
      let* constr = 
        let open IT in
        match bits, signed with
-       | 32, true -> return (fun s -> (in_range (S s) min_i32 max_i32))
-       | 32, false -> return (fun s -> (in_range (S s) min_u32 max_u32))
-       | 64, true -> return (fun s -> (in_range (S s) min_i64 max_i64))
-       | 64, false -> return (fun s -> (in_range (S s) min_u64 max_u64))
+       | 32, true -> return (fun s -> (in_range (S s) (min_i32 ()) (max_i32 ())))
+       | 32, false -> return (fun s -> (in_range (S s) (min_u32 ()) (max_u32 ())))
+       | 64, true -> return (fun s -> (in_range (S s) (min_i64 ()) (max_i64 ())))
+       | 64, false -> return (fun s -> (in_range (S s) (min_u64 ()) (max_u64 ())))
        | _ -> cannot_process loc pp_type_expr te
      in
      begin match mrefinement with

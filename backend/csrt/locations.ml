@@ -4,7 +4,7 @@ type t = Location_ocaml.t
 
 type loc = t
 
-type path = t OneList.t
+type path = t List1.t
 
 let unknown = Location_ocaml.unknown
 
@@ -36,8 +36,7 @@ let update (loc : t) (loc2 : Location_ocaml.t) =
 
 
 let log (locs : path) (loc' : Location_ocaml.t) : path =
-  let open OneList in
-  if good_location loc' then (loc' :: locs) else locs
+  if good_location loc' then List1.cons loc' locs else locs
 
 
 let head_pos_of_location = 
@@ -47,4 +46,3 @@ let head_pos_of_location =
 let unpack l = l
 
 
-let one locs = OneList.head locs
