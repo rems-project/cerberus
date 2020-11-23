@@ -214,25 +214,6 @@ let pattern_match_rt (loc : loc) (pat : pattern) (rt : RT.t) : (L.t, type_error)
    function and label types (which don't have a return type) *)
 
 
-(* let substs_for_predicate_instantiation loc local definition args = 
- *   let open Global in
- *   let* () = 
- *     let has = List.length definition.arguments in
- *     let expect = List.length args in
- *     if has = expect then return ()
- *     else fail loc (Number_arguments {has; expect})
- *   in
- *   let* substs = 
- *     ListM.mapM (fun (arg, (spec_arg, expected_sort)) ->
- *         return (Subst.{before = spec_arg; after = arg})
- *       ) (List.combine args definition.arguments)
- *   in
- *   return substs *)
-
-
-
-
-
 type arg = {lname : Sym.t; bt : BT.t; loc : loc}
 type args = arg list
 
@@ -281,15 +262,15 @@ module Prompt = struct
 
   type err = Locations.t * Tools.stacktrace option * type_error
 
-  type 'r request = 
-    | R_Resource : resource_request -> (Sym.t Uni.unis * Local.t) request
-    | R_Packing : packing_request -> (LRT.t * Local.t) request
-    | R_Try : 'r m OneList.t -> 'r request
-    | R_Error : err -> 'r request
-
-  and 'a m = 
+  type 'a m = 
     | Done : 'a -> 'a m
-    | Request : 'r request * ('r -> 'a m) -> 'a m
+    | Request : 'r prompt * ('r -> 'a m) -> 'a m
+
+  and 'r prompt = 
+    | R_Resource : resource_request -> (Sym.t Uni.unis * Local.t) prompt
+    | R_Packing : packing_request -> (LRT.t * Local.t) prompt
+    | R_Try : 'r m OneList.t -> 'r prompt
+    | R_Error : err -> 'r prompt
 
 
   module Operators = struct
@@ -301,12 +282,7 @@ module Prompt = struct
       let r = R_Error (loc, Tools.do_stack_trace (),  err) in
       Request (r, fun r -> Done r)
 
-    let request_resource loc situation local unis resource =
-      let r = R_Resource {loc; local; unis; situation; resource} in
-      Request (r, fun reply -> Done reply)
-
-    let request_packing loc situation local lft =
-      let r = R_Packing {loc; local; situation; lft} in
+    let prompt r = 
       Request (r, fun reply -> Done reply)
 
     let try_choices choices = 
@@ -320,10 +296,6 @@ module Prompt = struct
          f a
       | Request (request, c) -> 
          Request (request, fun r -> bind (c r) f)
-      (* | Nondet choices ->
-       *    Nondet (OneList.map (fun choice -> bind choice f) choices) *)
-      (* | Error (loc, stacktrace, err) -> 
-       *    Error (loc, stacktrace, err) *)
 
     let (let*) = bind
 
@@ -388,8 +360,9 @@ module Spine (I : AT.I_Sig) = struct
 
     let* (local, unis, ftyp_c) = 
       let rec infer_resources local unis = function
-        | Resource (re, ftyp) -> 
-           let* (unis, local) = request_resource loc situation local unis re in
+        | Resource (resource, ftyp) -> 
+           let* (unis, local) = 
+             prompt (R_Resource {loc; situation; local; unis; resource}) in
            let new_substs = Uni.find_resolved local unis in
            let ftyp' = NFT.subst_vars_r new_substs ftyp in
            infer_resources local unis ftyp'
@@ -403,7 +376,8 @@ module Spine (I : AT.I_Sig) = struct
       List.iter (fun (s, ls) ->
           let Uni.{resolved} = SymMap.find s unis in
           match resolved with
-          | None -> Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+          | None -> 
+             Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
           | Some sym ->
              if not (LS.equal (get_l sym local) ls) then
                Debug_ocaml.error "type-incorrectly instantiated logical variable"
@@ -515,7 +489,7 @@ let rec resource_request_prompt loc situation {local; global} request unis =
            in
            let attempt_prompts = 
              OneList.map (fun clause ->
-                 request_packing loc situation local clause
+                 prompt (R_Packing {loc; situation; local; lft = clause})
                ) (def.pack_functions p.pointer)
            in
            let choices = OneList.concat attempt_prompts (Last else_prompt) in
@@ -925,6 +899,7 @@ let merge_return_types loc (LC c, rt) (LC c2, rt2) =
        return (LRT.Constraint (LC (Impl (c2, lc)), lrt))
     | Resource _, _
     | _, Resource _ -> 
+       (* maybe make this an internal error? *)
        fail loc (Generic !^"Cannot infer type of this (cannot merge)")
   in
   let lrt2' = LRT.subst_var {before = lname2; after = lname} lrt2 in
