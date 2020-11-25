@@ -237,7 +237,7 @@ let mu_to_core__action_ env1 (action_ : (Ctype.ctype, 'bty) mu_action_)
        prefix1)
   | M_Alloc( p11, p21, prefix1) ->
      Core.Alloc0( 
-       (make_ctype_pexpr p11),
+       (get_pexpr "Alloc" env1 p11),
        (get_pexpr "Alloc" env1 p21),
        prefix1)
   | M_Kill( kind, p) ->

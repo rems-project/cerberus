@@ -235,9 +235,8 @@ let retype_action (loc : Loc.t) (M_Action (loc2,action_)) =
     | M_CreateReadOnly (asym1, act, asym2, prefix) ->
        let* act = mapM_a (ctype_information loc) act in
        return (M_CreateReadOnly (asym1, act, asym2, prefix))
-    | M_Alloc (act, asym, prefix) ->
-       let* act = mapM_a (ctype_information loc) act in
-       return (M_Alloc (act, asym, prefix))
+    | M_Alloc (asym1, asym2, prefix) ->
+       return (M_Alloc (asym1, asym2, prefix))
     | M_Kill (M_Dynamic, asym) -> 
        return (M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 

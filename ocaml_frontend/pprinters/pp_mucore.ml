@@ -598,7 +598,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
       | M_CreateReadOnly (al, ty, init, _) ->
           pp_keyword "create_readonly" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty ^^ P.comma ^^^ pp_asym init)
       | M_Alloc (al, n, _) ->
-          pp_keyword "alloc" ^^ P.parens (pp_actype al ^^ P.comma ^^^ pp_asym n)
+          pp_keyword "alloc" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_asym n)
       | M_Kill (M_Dynamic, e) ->
           pp_keyword "free" ^^ P.parens (pp_asym e)
       | M_Kill (M_Static ct, e) ->

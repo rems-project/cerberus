@@ -123,7 +123,7 @@ type 'ct m_kill_kind =
 type ('ct, 'TY) mu_action_ =  (* memory actions *)
  | M_Create of 'TY asym * (('ct, 'TY) a) * Symbol.prefix
  | M_CreateReadOnly of 'TY asym * (('ct, 'TY) a) * 'TY asym * Symbol.prefix
- | M_Alloc of (('ct, 'TY) a) * 'TY asym * Symbol.prefix
+ | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
  | M_Kill of 'ct m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
  | M_Store of bool * (('ct, 'TY) a) * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
  | M_Load of (('ct, 'TY) a) * 'TY asym * Cmm_csem.memory_order
