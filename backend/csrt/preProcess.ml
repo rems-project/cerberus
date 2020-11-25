@@ -6,6 +6,7 @@ module CF=Cerb_frontend
 module Symbol=CF.Symbol
 module Loc=Locations
 module RT=ReturnTypes
+module LRT=LogicalReturnTypes
 module FT=ArgumentTypes.Make(ReturnTypes)
 module LT=ArgumentTypes.Make(False)
 module CA=CF.Core_anormalise
@@ -22,13 +23,11 @@ open ListM
 
 module StringSet = Set.Make(String)
 
-(* let ignored_stdlib = 
- *   StringSet.of_list [
- *       "free_proxy";
- *       "malloc_proxy";
- *       "realloc_proxy";
- *       "aligned_alloc_proxy";
- *     ] *)
+let specially_typed = 
+  StringSet.of_list []
+    (*   "free_proxy";
+     *   "malloc_proxy";
+     * ] *)
 
 
 
@@ -493,61 +492,37 @@ let retype_tagDefs
 let retype_funinfo struct_decls funinfo stdlib_fsyms =
   PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
-
-      (* let is_ignored_stdlib_fun =
-       *   (\* Pset.mem fsym stdlib_fsyms &&  *\)
-       *     match Sym.name fsym with
-       *     | None -> false
-       *     | Some name -> StringSet.mem name ignored_stdlib 
-       * in
-       * 
-       * if is_ignored_stdlib_fun then
-       * 
-       *   return (funinfo,funinfo_extra)
-       * 
-       * else *)
-
-      let loc' = Loc.update Loc.unknown loc in
-      if is_variadic then 
-        let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
-        fail loc' (Unsupported err) 
+      let special_type = match Sym.name fsym with
+        | Some name -> StringSet.mem name specially_typed
+        | None -> false
+      in
+      if special_type then 
+        return (funinfo, funinfo_extra)
       else
-        let* ret_ctype = ct_of_ct loc' ret_ctype in
-        let* args = 
-          ListM.mapM (fun (msym, ct) ->
-              let* ct = ct_of_ct loc' ct in
-              return (msym, ct)
-            ) args
-        in
-        let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
-        | [] ->  
-           Conversions.make_fun_spec loc' struct_decls args ret_ctype
-        | rc_attrs ->
-           Rc_conversions.make_fun_spec_annot loc' struct_decls rc_attrs args ret_ctype
-        in
-        return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
-                Pmap.add fsym (names,arg_rts) funinfo_extra)
+        let loc' = Loc.update Loc.unknown loc in
+        if is_variadic then 
+          let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
+          fail loc' (Unsupported err) 
+        else
+          let* ret_ctype = ct_of_ct loc' ret_ctype in
+          let* args = 
+            ListM.mapM (fun (msym, ct) ->
+                let* ct = ct_of_ct loc' ct in
+                return (msym, ct)
+              ) args
+          in
+          let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
+            | [] ->  
+               Conversions.make_fun_spec loc' struct_decls args ret_ctype
+            | rc_attrs ->
+               Rc_conversions.make_fun_spec_annot loc' struct_decls rc_attrs args ret_ctype
+          in
+          return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
+                  Pmap.add fsym (names,arg_rts) funinfo_extra)
     ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
 
 
-(* (\* can be used to insert special types for standard library functions *\)
- * let specially_typed loc stdlib_fun_names funinfo =
- *   ListM.fold_rightM (fun sym map -> 
- *       let* (M_funinfo (floc, attrs, _ft,b1,b2)) = match Pmap.lookup sym funinfo with
- *         | Some entry -> return entry
- *         | None -> fail loc (Internal (Sym.pp sym ^^^ !^"not found in funinfo"))
- *       in
- *       (\* if Sym.name sym = Some "free_proxy" then 
- *        *   let ft = 
- *        *     FT.Computational ((ppointer, BT.Loc),
- *        *     FT.Logical ((pointer, BT.Loc), 
- *        *   in
- *        *   let entry = M_funinfo (floc, attrs, _ft,b1,b2) in
- *        *   return (Pmap.add sym entry funinfo)
- *        * else  *\)
- *         return map
- *     )
- *     stdlib_fun_names funinfo *)
+
 
 let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
     : ((FT.t, LT.t, ctype_information, BT.t, 
