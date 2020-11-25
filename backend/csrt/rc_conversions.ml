@@ -454,6 +454,22 @@ let rec rc_type_compatible_with_ctype loc oname sct type_expr =
      else incompatible loc sct type_expr
   | Void, Ty_params ("void", []) ->
      return ()
+  | Struct tag1, (Ty_params (str_typ, []) ) ->
+     let has_typedef = 
+       List.fold_left (fun found annot -> 
+           match annot with
+           | CF.Annot.Atypedef sym -> 
+              print stderr (!^"found");
+              Some sym
+           | _ -> None
+         ) None annots
+     in
+     begin match Option.bind has_typedef Sym.name with
+     | Some str_typedef when String.equal str_typedef str_typ ->
+        return ()
+     | _ -> 
+        incompatible loc sct type_expr
+     end
   | _, _ ->
      incompatible loc sct type_expr
 
