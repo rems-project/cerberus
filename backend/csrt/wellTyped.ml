@@ -83,16 +83,17 @@ module WIT = struct
          | Some decl -> return decl
          | None -> fail loc (Missing_struct tag)
        in
+       let decl_members = Global.member_types decl.layout in
        let* () = 
          let has = List.length members in
-         let expect = List.length decl.members in
+         let expect = List.length decl_members in
          if has = expect then return ()
          else fail loc (Number_members {has; expect})
        in
        let* () = 
          ListM.iterM (fun (member,it') ->
-             let* (_, mbt) = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
-             check_aux loc it {local;global} (Base mbt) it'
+             let* sct = assoc_err loc Id.equal member decl_members (Illtyped_it it) in
+             check_aux loc it {local;global} (Base (BT.of_sct sct)) it'
            ) members
        in
        return (Base (Struct tag))
@@ -102,15 +103,17 @@ module WIT = struct
          | Some decl -> return decl
          | None -> fail loc (Missing_struct tag)
        in
-       let* (_, bt) = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
-       return (Base bt)
+       let decl_members = Global.member_types decl.layout in
+       let* sct = assoc_err loc Id.equal member decl_members (Illtyped_it it) in
+       return (Base (BT.of_sct sct))
     | StructMemberOffset (tag, it', member) ->
        let* () = check_aux loc it {local;global} (Base Loc) it' in
        let* decl = match SymMap.find_opt tag global.struct_decls with
          | Some decl -> return decl
          | None -> fail loc (Missing_struct tag)
        in
-       let* _ = assoc_err loc Id.equal member decl.members (Illtyped_it it) in
+       let decl_members = Global.member_types decl.layout in
+       let* _ = assoc_err loc Id.equal member decl_members (Illtyped_it it) in
        return (Base Loc)
     | AllocationSize t ->
        let* () = check_aux loc it {local;global} (Base Loc) t in
@@ -211,10 +214,8 @@ module WRE = struct
   open Resources
   type t = Resources.t
   let welltyped loc {local; global} = function
-    | Uninit u -> 
-       WIT.check loc {local; global} (LS.Base BT.Loc) u.pointer
-    | Padding p -> 
-       WIT.check loc {local; global} (LS.Base BT.Loc) p.pointer
+    | Block b -> 
+       WIT.check loc {local; global} (LS.Base BT.Loc) b.pointer
     | Points p -> 
        (* points is "polymorphic" in the pointee *)
        let* () = check_bound loc local KLogical p.pointee in

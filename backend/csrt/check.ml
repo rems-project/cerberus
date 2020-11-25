@@ -115,7 +115,7 @@ let get_struct_decl loc global tag =
 
 let get_member_type loc tag member decl = 
   let open Global in
-  match List.assoc_opt Id.equal member decl.members with
+  match List.assoc_opt Id.equal member (Global.member_types decl.layout) with
   | Some asd -> return asd
   | None -> fail loc (Missing_member (tag, member))
 
@@ -421,8 +421,7 @@ let rec remove_ownership_prompt (loc: loc) situation {local;global} (pointer: IT
     match o_resource with
     | Some (resource_name, Predicate pred) -> 
        fail loc (Cannot_unpack (pred, situation))
-    | Some (resource_name, Uninit {size = have_size; _})
-    | Some (resource_name, Padding {size = have_size; _})
+    | Some (resource_name, Block {size = have_size; _})
     | Some (resource_name, Points {size = have_size; _})
       ->
        if Z.ge_big_int need_size have_size then 
@@ -434,8 +433,11 @@ let rec remove_ownership_prompt (loc: loc) situation {local;global} (pointer: IT
             as unitialised memory *)
          let local = L.use_resource resource_name [loc] local in
          let local = 
-           add_ur (RE.Uninit {pointer = Offset (pointer, Num need_size); 
-                              size = Z.sub have_size need_size}) local
+           add_ur (
+               RE.Block {pointer = Offset (pointer, Num need_size); 
+                         size = Z.sub have_size need_size; 
+                         block_type = Nothing}
+             ) local
          in
          return local
     | None -> 
@@ -450,10 +452,7 @@ let rec resource_request_prompt loc situation {local; global} request unis =
   let open Prompt.Operators in
   let pointer = RE.pointer request in
   match request with
-  | Uninit {pointer; size} ->
-     let* local = remove_ownership_prompt loc situation {local; global} pointer size in
-     return (unis, local)
-  | Padding {pointer; size} ->
+  | Block {pointer; size; _} ->
      let* local = remove_ownership_prompt loc situation {local; global} pointer size in
      return (unis, local)
   | Points {pointer; _} ->
@@ -699,11 +698,11 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
   let* spec = get_struct_decl loc global tag in
   let rec check fields spec =
     match fields, spec with
-    | ((member, mv) :: fields), ((smember, (_, sbt)) :: spec) 
+    | ((member, mv) :: fields), ((smember, sct) :: spec) 
          when member = smember ->
        let* constrs = check fields spec in
        let* (s, bt, LC lc) = infer_mem_value loc {local; global} mv in
-       let* () = ensure_base_type loc ~expect:sbt bt in
+       let* () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
        let this = IT.StructMember (tag, S ret, member) in
        let constr = IT.subst_it {before = s; after = this} lc in
        return (constrs @ [constr])
@@ -716,7 +715,7 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
     | ((member,_) :: _), [] ->
        fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
   in
-  let* constraints = check member_values spec.members in
+  let* constraints = check member_values (Global.member_types spec.layout) in
   return (ret, Struct tag, LC (And constraints))
 
 and infer_union (loc : loc) {local; global} (tag : tag) (id : Id.t) 
@@ -1164,18 +1163,18 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
     | Struct tag ->
        let* decl = get_struct_decl loc global tag in
        let rec aux_members = function
-         | (member,(member_ct,member_bt))::members ->
+         | Global.{size; member = (member, member_sct); _} :: members ->
             let member_pointer = IT.StructMemberOffset (tag,pointer,member) in
             let member_path = IT.StructMember (tag, path, member) in
             let* constraints = aux_members members in
             let* constraints2 = 
-              aux {local;global} member_bt member_pointer 
-                (Memory.size_of_ctype member_ct) member_path (Some member) 
+              aux {local;global} (BT.of_sct member_sct) member_pointer 
+                size member_path (Some member) 
             in
             return (constraints2 @ constraints)
          | [] -> return []
        in  
-       aux_members decl.members
+       aux_members (Global.members decl.layout)
     | _ ->
        let o_resource = Solver.resource_for_pointer {local;global} pointer in
        let* pointee = match o_resource with
@@ -1183,8 +1182,9 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
             begin match resource with
             | Points p when Z.equal size p.size -> return p.pointee
             | Points p -> fail loc (Generic !^"resouce of wrong size for load")
-            | Uninit _ -> fail loc (Uninitialised is_field)
-            | Padding _ -> fail loc (Generic !^"cannot read padding bytes")
+            | Block {block_type = Uninit; _} -> fail loc (Uninitialised is_field)
+            | Block {block_type = Padding; _} -> fail loc (Generic !^"cannot read padding bytes")
+            | Block {block_type = Nothing; _} -> fail loc (Generic !^"cannot empty bytes")
             | Predicate pred -> fail loc (Cannot_unpack (pred, Access Load))
             end
          | None -> 
@@ -1215,16 +1215,20 @@ let rec store (loc: loc)
      let* decl = get_struct_decl loc global tag in
      let rec aux = function
        | [] -> return I
-       | (member,(member_ct,member_bt))::members ->
-          let member_pointer = IT.StructMemberOffset (tag,pointer,member) in
-          let member_size = Memory.size_of_ctype member_ct in
-          let o_member_value = Option.map (fun v -> IT.StructMember (tag, v, member)) o_value in
-          let* rt = aux members in
-          let* rt2 = store loc {local;global} member_bt member_pointer 
-                              member_size o_member_value in
-          return (rt@@rt2)
+       | Global.{offset; size; member_or_padding} :: members ->
+          match member_or_padding with
+          | Some (member,member_sct) -> 
+             let o_member_value = Option.map (fun v -> IT.StructMember (tag, v, member)) o_value in
+             let* rt = store loc {local;global} (BT.of_sct member_sct) (IT.Offset (pointer, Num offset))
+                          size o_member_value in
+             let* rt2 = aux members in
+             return (rt@@rt2)
+          | None ->
+             let rt = LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); size; block_type = Padding}, I) in
+             let* rt2 = aux members in
+             return (rt@@rt2)
      in  
-     aux decl.members
+     aux decl.layout
   | _ -> 
      let vsym = Sym.fresh () in 
      match o_value with
@@ -1236,7 +1240,7 @@ let rec store (loc: loc)
           in
           return rt
        | None -> 
-          return (Resource (Uninit {pointer; size}, I))
+          return (Resource (Block {pointer; size; block_type = Uninit}, I))
 
 
 

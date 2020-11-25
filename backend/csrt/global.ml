@@ -46,8 +46,18 @@ type closed_stored_predicate_definition =
   }
 
 
+type struct_piece = 
+  { offset: Z.t;
+    size: RE.size;
+    member_or_padding: (BT.member * Sctypes.t) option }
+
+type struct_member = 
+  { offset: Z.t;
+    size: RE.size;
+    member: BT.member * Sctypes.t }
+
 type struct_decl = 
-  { members: (BT.member * (Sctypes.t * BT.t)) list;
+  { layout: struct_piece list;
     (* sizes: (BT.member * RE.size) list;
      * offsets: (BT.member * Z.t) list;
      * representable: IT.t -> LC.t; *)
@@ -56,6 +66,20 @@ type struct_decl =
     closed_stored_predicate_definition: 
       closed_stored_predicate_definition
   }
+
+let members = 
+  List.filter_map (fun {member_or_padding; offset; size} ->
+      Option.bind member_or_padding (fun (member, sctype) ->
+          Some {offset; size; member = (member, sctype)}
+        )
+    )
+
+let member_types =
+  List.filter_map (fun {member_or_padding; _} ->
+      Option.bind member_or_padding (fun (member, sctype) ->
+          Some (member, sctype)
+        )
+    )
 
 type struct_decls = struct_decl SymMap.t
 
@@ -111,8 +135,14 @@ let get_impl_constant global i = impl_lookup global.impl_constants i
 
 let pp_struct_decl (sym,decl) = 
   item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
-       (Pp.list (fun (m, (ct, bt)) -> 
-            typ (Id.pp m) (BT.pp true bt)) decl.members) 
+       (Pp.list (fun {offset; size; member_or_padding} -> 
+            match member_or_padding with 
+            | Some (member, sct) -> 
+               typ (Id.pp member) (Sctypes.pp sct)
+            | None ->
+               parens (!^"padding" ^^^ Z.pp size)
+          ) decl.layout
+       )
   ^/^
   item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)

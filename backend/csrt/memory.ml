@@ -100,10 +100,10 @@ let rec representable_ctype struct_decls (Sctype (_, ct) : Sctypes.t) about =
 and representable_struct struct_decls tag about =
   let decl = SymMap.find tag struct_decls in
   let lcs =
-    List.map (fun (member, (ct, _)) ->
-        let rangef = representable_ctype struct_decls ct in
-        LC.unpack (rangef (IT.StructMember (tag, about, member)))
-      ) decl.Global.members
+    List.filter_map (fun Global.{member = (member, sct); _} ->
+            let rangef = representable_ctype struct_decls sct in
+            Some (LC.unpack (rangef (IT.StructMember (tag, about, member))))
+      ) (Global.members decl.Global.layout)
   in
   (LC.LC (And lcs))
 

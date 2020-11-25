@@ -88,10 +88,10 @@ let struct_layout loc members tag =
        let to_pad = Z.sub offset position in
        let padding = 
          if Z.gt_big_int to_pad Z.zero 
-         then [(position, to_pad, None)] 
+         then [Global.{offset = position; size = to_pad; member_or_padding = None}] 
          else [] 
        in
-       let member = [(offset, size, Some (member, sct))] in
+       let member = [Global.{offset; size; member_or_padding = Some (member, sct)}] in
        let* rest = aux members (Z.add_big_int to_pad size) in
        return (padding @ member @ rest)
   in
@@ -119,6 +119,10 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     ) fields
   in
 
+  let* layout = 
+    struct_layout loc fields tag
+  in
+
   let* closed_stored =
     let open RT in
     let open LRT in
@@ -126,7 +130,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
       let* def_members = get_struct_members tag in
       let* layout = struct_layout loc def_members tag in
       let* members = 
-        ListM.mapM (fun (offset, size, member_or_padding) ->
+        ListM.mapM (fun Global.{offset; size; member_or_padding} ->
             let pointer = IT.Offset (struct_p, Num offset) in
             match member_or_padding with
             | None -> return ([(pointer, size, None)], [])
@@ -154,7 +158,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
              LRT.Logical ((member_v, Base bt), 
              LRT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, lrt))
           | None ->
-             LRT.Resource (RE.Padding {pointer = member_p; size}, lrt)           
+             LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt)           
         ) components LRT.I
     in
     let st = ST.ST_Ctype (Sctypes.Sctype ([], Struct tag)) in
@@ -179,7 +183,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     let* layout = struct_layout loc def_members tag in
     let clause struct_pointer = 
       let (lrt, values) = 
-        List.fold_right (fun (offset, size, member_or_padding) (lrt, values) ->
+        List.fold_right (fun Global.{offset; size; member_or_padding} (lrt, values) ->
             let member_p = Offset (struct_pointer, Num offset) in
             match member_or_padding with
             | Some (member, sct) ->
@@ -198,7 +202,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let value = (member, S member_v) :: values in
                (lrt, value)
             | None ->
-               let lrt = LRT.Resource (RE.Padding {pointer = member_p; size}, lrt) in
+               let lrt = LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt) in
                (lrt, values)
           ) layout (LRT.I, [])
       in
@@ -236,7 +240,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
   let open Global in
-  let decl = { members; closed_stored; closed_stored_predicate_definition } in
+  let decl = { layout; closed_stored; closed_stored_predicate_definition } in
   return decl
 
 

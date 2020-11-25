@@ -24,19 +24,30 @@ let equal_predicate_name pn1 pn2 =
 
 type predicate = {pointer: IndexTerms.t; name : predicate_name; args: Sym.t list}
 
+(* for error reporting only *)
+type block_type = 
+  | Nothing
+  | Uninit
+  | Padding
+
+
 type t = 
-  | Uninit of {pointer: IndexTerms.t; size: size}
-  | Padding of {pointer: IndexTerms.t; size: size}
+  | Block of {pointer: IndexTerms.t; size: size; block_type: block_type}
   | Points of {pointer: IndexTerms.t; pointee: Sym.t; size: size}
   | Predicate of predicate
 
 type resource = t
 
 let pp = function
-  | Uninit {pointer; size} ->
-     !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
-  | Padding {pointer; size} ->
-     !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+  | Block {pointer; size; block_type} ->
+     begin match block_type with
+     | Nothing -> 
+        !^"Block" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+     | Uninit -> 
+        !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+     | Padding -> 
+        !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+     end
   | Points {pointer; pointee; size} ->
      !^"Points" ^^ 
        parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp pointee ^^ 
@@ -54,12 +65,9 @@ let pp = function
 
 
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
-  | Uninit {pointer; size} ->
+  | Block {pointer; size; block_type} ->
      let pointer = IndexTerms.subst_var subst pointer in
-     Uninit {pointer; size}
-  | Padding {pointer; size} ->
-     let pointer = IndexTerms.subst_var subst pointer in
-     Padding {pointer; size}
+     Block {pointer; size; block_type}
   | Points {pointer; pointee; size} -> 
      let pointer = IndexTerms.subst_var subst pointer in
      let pointee = Sym.subst subst pointee in
@@ -73,12 +81,21 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
 let subst_vars = Subst.make_substs subst_var
 
 
+let block_type_equal b1 b2 = 
+  match b1, b2 with
+  | Nothing, Nothing -> true
+  | Uninit, Uninit -> true
+  | Padding, Padding -> true
+
+  | Nothing, _
+  | Uninit, _ 
+  | Padding, _ -> 
+     false
+
 let equal t1 t2 = 
   match t1, t2 with
-  | Uninit u1, Uninit u2 ->
-     IndexTerms.equal u1.pointer u2.pointer &&
-     Z.equal u1.size u2.size
-  | Padding u1, Padding u2 ->
+  | Block u1, Block u2 ->
+     
      IndexTerms.equal u1.pointer u2.pointer &&
      Z.equal u1.size u2.size
   | Points p1, Points p2 ->
@@ -93,14 +110,12 @@ let equal t1 t2 =
 
 
 let pointer = function
-  | Uninit u -> u.pointer
-  | Padding p -> p.pointer
+  | Block b -> b.pointer
   | Points p -> p.pointer
   | Predicate p -> p.pointer
 
 let size = function
-  | Uninit u -> Some u.size
-  | Padding p -> Some p.size
+  | Block b -> Some b.size
   | Points p -> Some p.size
   | Predicate _p -> None
 
@@ -110,8 +125,7 @@ let fp resource =
   | Some size -> Some (pointer resource, size)
 
 let vars_in = function
-  | Uninit p -> IndexTerms.vars_in p.pointer
-  | Padding p -> IndexTerms.vars_in p.pointer
+  | Block b -> IndexTerms.vars_in b.pointer
   | Points p -> SymSet.add p.pointee (IndexTerms.vars_in p.pointer)
   | Predicate p -> SymSet.union (IndexTerms.vars_in p.pointer)
                      (SymSet.of_list p.args)
@@ -119,8 +133,7 @@ let vars_in = function
 
 let set_pointer re pointer = 
   match re with
-  | Uninit u -> Uninit { u with pointer }
-  | Padding p -> Padding { p with pointer }
+  | Block b -> Block { b with pointer }
   | Points p -> Points { p with pointer }
   | Predicate p -> Predicate { p with pointer }
 
@@ -129,11 +142,8 @@ let set_pointer re pointer =
 let unify r1 r2 res = 
   let open Option in
   match r1, r2 with
-  | Uninit u, Uninit u' 
-       when Z.equal u.size u'.size && IndexTerms.equal u.pointer u'.pointer ->
-     return res
-  | Padding p, Padding p' 
-       when Z.equal p.size p'.size && IndexTerms.equal p.pointer p'.pointer ->
+  | Block b, Block b' (* Block unifies with Blocks of other block type *)
+       when Z.equal b.size b'.size && IndexTerms.equal b.pointer b'.pointer ->
      return res
   | Points p, Points p' 
        when Z.equal p.size p'.size && IndexTerms.equal p.pointer p'.pointer ->
@@ -150,8 +160,7 @@ let unify r1 r2 res =
 
 
 let subst_non_pointer subst = function
-  | Uninit u -> Uninit u
-  | Padding p -> Padding p
+  | Block p -> Block p
   | Points p -> Points {p with pointee = Sym.subst subst p.pointee}
   | Predicate p -> Predicate {p with args = List.map (Sym.subst subst) p.args}
 
@@ -160,14 +169,12 @@ let subst_non_pointer subst = function
 
 
 let input = function
-  | Uninit u -> IndexTerms.vars_in u.pointer
-  | Padding p -> IndexTerms.vars_in p.pointer
+  | Block b -> IndexTerms.vars_in b.pointer
   | Points p -> IndexTerms.vars_in p.pointer
   | Predicate p -> IndexTerms.vars_in p.pointer
 
 let output = function
-  | Uninit _ -> SymSet.empty
-  | Padding _ -> SymSet.empty
+  | Block _ -> SymSet.empty
   | Points p -> SymSet.singleton p.pointee
   | Predicate p -> SymSet.of_list p.args
 

@@ -271,7 +271,7 @@ and of_constr loc names constr : (LRT.t, type_error) m =
      begin match ptr_kind, is_uninit_type_expr type_expr with
        | Own, Some integer_type_expr -> 
           let* size = bytes_of_integer_type_expr loc integer_type_expr in
-          let r = RE.Uninit {pointer = S name; size} in
+          let r = RE.Block {pointer = S name; size; block_type = Uninit} in
           return (Resource (r, I))
        | Own, None -> 
           let* B ((bnew, pointee, bt, o_size_and_alignment), lrt) = 
@@ -317,7 +317,7 @@ and of_type_expr loc names te : (tb, type_error) m =
           | _ -> cannot_process loc pp_type_expr te
         in
         let* size = bytes_of_integer_type_expr loc integer_type_expr in
-        let r = RE.Uninit {pointer = S name; size} in
+        let r = RE.Block {pointer = S name; size; block_type = Uninit} in
         let b = 
           B ((bnewp, name, BT.Loc, Some (psize, palign)), 
           Constraint (LC (Representable (ST_Pointer, S name)),

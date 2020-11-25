@@ -52,15 +52,15 @@ let rec bt_to_sort {local;global} ctxt bt =
   | Struct tag ->
      let decl = SymMap.find tag global.struct_decls in
      let rec aux = function
-       | (member, ( _, bt)) :: members ->
+       | [] -> ([],[])
+       | (member, sct) :: members ->
           let (names,sorts) = aux members in
-          let sort = bt_to_sort {local;global} ctxt bt in
+          let sort = bt_to_sort {local;global} ctxt (BT.of_sct sct) in
           let names = Z3.Symbol.mk_string ctxt (struct_member_name bt member) :: names in
           let sorts = sort :: sorts in
           (names,sorts)
-       | [] -> ([],[])
      in
-     let (names,sorts) = aux decl.members in
+     let (names,sorts) = aux (Global.member_types decl.layout) in
      let name = Z3.Symbol.mk_string ctxt btname in
      let sort = Z3.Tuple.mk_sort ctxt name names sorts in
      sort
@@ -89,7 +89,10 @@ let rec of_index_term {local;global} ctxt it =
     let decl = SymMap.find tag global.struct_decls in
     let sort = ls_to_sort {local;global} ctxt (Base (Struct tag)) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
-    let member_names = map fst decl.members in
+    let member_names = 
+      map (fun (member, _) -> member)
+        (Global.member_types decl.layout)
+    in
     let member_funs = combine member_names member_fun_decls in
     assoc Id.equal member member_funs
   in
@@ -427,11 +430,10 @@ let all_it_names_good it =
 (* more to be added *)
 type memory_state = 
   | Nothing
-  | Uninit of RE.size
+  | Block of RE.block_type * RE.size
   | Integer of string * RE.size
   | Location of string * RE.size
   | Within of {base_location : string; resource : Sym.t}
-  | Padding of RE.size
   | Predicate of {name : RE.predicate_name; args : string list}
 
 type location_state = { location : string; state : memory_state; }
@@ -468,7 +470,7 @@ let model {local;global} context solver : model option =
            let o_resource = resource_for_pointer {local; global} location_it in
            let state = match o_resource with
              | None -> Nothing
-             | Some (_, RE.Uninit u) -> (Uninit u.size)
+             | Some (_, RE.Block b) -> (Block (b.block_type, b.size))
              | Some (_, RE.Points p) -> 
                 let (Base ls) = L.get_l p.pointee local in
                 let expr = of_index_term {local; global} context (S p.pointee) in
@@ -494,8 +496,6 @@ let model {local;global} context solver : model option =
                     ) p.args
                 in
                 Predicate {name = p.name; args}
-             | Some (_, RE.Padding p) -> 
-                Padding p.size
            in
            { location = location_s; state }
          ) (StringMap.bindings all_locations)
@@ -539,7 +539,12 @@ let pp_variable_and_location_state ( ovar, { location; state } ) =
   in
   let value, size = match state with
     | Nothing -> Pp.empty, Pp.empty
-    | Uninit size -> !^"uninitialised", Z.pp size
+    | Block (block_type,size) -> 
+       begin match block_type with
+       | Nothing -> !^"block", Z.pp size
+       | Uninit -> !^"uninitialised", Z.pp size
+       | Padding -> !^"padding", Z.pp size
+       end
     | Integer (value, size) -> typ !^value !^"integer", Z.pp size
     | Location (value, size) -> typ !^value !^"pointer", Z.pp size
     | Within {base_location; _} -> 
@@ -551,8 +556,6 @@ let pp_variable_and_location_state ( ovar, { location; state } ) =
        | Tag tag ->
           Sym.pp tag ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
        end
-    | Padding size ->
-       !^"padding", Z.pp size
   in
   ( (R, var), (R, !^location), (R, size), (L, value) )
 
