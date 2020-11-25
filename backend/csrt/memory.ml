@@ -89,7 +89,7 @@ let align_of_ctype (ct : Sctypes.t) =
 
 (* this assumes that we've earlier checked that these only refer to
    already-defined other types (structs, in particular) *)
-let rec representable_ctype struct_decls (ct : Sctypes.t) about =
+let rec representable_ctype struct_decls (Sctype (_, ct) : Sctypes.t) about =
   let open Sctypes in
   match ct with
   | Void -> LC.LC (Bool true)
@@ -109,10 +109,10 @@ and representable_struct struct_decls tag about =
 
 
 let size_of_struct tag =
-  size_of_ctype (Struct tag)
+  size_of_ctype (Sctype ([], Struct tag))
 
 let align_of_struct tag =
-  align_of_ctype (Struct tag)
+  align_of_ctype (Sctype ([], Struct tag))
 
 
 let member_offset tag member = 

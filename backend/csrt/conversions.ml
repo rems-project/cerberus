@@ -131,7 +131,8 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
             match member_or_padding with
             | None -> return ([(pointer, size, None)], [])
             | Some (member, sct) -> 
-               match sct with
+               let (Sctypes.Sctype (annots, sct_)) = sct in
+               match sct_ with
                | Sctypes.Struct tag -> 
                   let* (components, s_value) = aux loc tag pointer in
                   return (components, [(member, s_value)])
@@ -156,7 +157,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
              LRT.Resource (RE.Padding {pointer = member_p; size}, lrt)           
         ) components LRT.I
     in
-    let st = ST.ST_Ctype (Sctypes.Struct tag) in
+    let st = ST.ST_Ctype (Sctypes.Sctype ([], Struct tag)) in
     let rt = 
       Computational ((struct_pointer, BT.Loc), 
       Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
@@ -183,7 +184,8 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
             match member_or_padding with
             | Some (member, sct) ->
                let member_v = Sym.fresh () in
-               let resource = match sct with
+               let (Sctypes.Sctype (annots, sct_)) = sct in
+               let resource = match sct_ with
                  | Sctypes.Struct tag ->
                     RE.Predicate {pointer = member_p; name = Tag tag; args = [member_v]}
                  | _ -> 
@@ -201,7 +203,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
           ) layout (LRT.I, [])
       in
       let value = IT.Struct (tag, values) in
-      let st = ST.ST_Ctype (Sctypes.Struct tag) in
+      let st = ST.ST_Ctype (Sctypes.Sctype ([], Sctypes.Struct tag)) in
       let lrt = 
         Constraint (LC (IT.Representable (ST_Pointer, struct_pointer)),
         Constraint (LC (Aligned (st, struct_pointer)),
@@ -263,8 +265,10 @@ let make_owned_pointer struct_decls pointer stored_type rt =
 
 
 let rec rt_of_pointer_sct loc struct_decls (pointer : Sym.t) sct = 
+  let (Sctypes.Sctype (annots, sct_)) = sct in
   let open RT in
-  begin match sct with
+  let loc = Loc.update loc (get_loc_ annots) in
+  begin match sct_ with
   | Sctypes.Struct tag when struct_predicates ->
      let pointee = Sym.fresh () in
      let predicate = 
@@ -286,7 +290,7 @@ let rec rt_of_pointer_sct loc struct_decls (pointer : Sym.t) sct =
      let rt = RT.subst_var {before = s'; after = pointer} rt in
      return rt
   | Sctypes.Void -> 
-     Debug_ocaml.error "todo: void*"
+     fail loc (Generic !^"this use of void* needs a type annotation")
   | _ ->
      let st = ST.of_ctype sct in
      let* rt = rt_of_sct loc struct_decls (Sym.fresh ()) sct in
@@ -294,9 +298,11 @@ let rec rt_of_pointer_sct loc struct_decls (pointer : Sym.t) sct =
   end
 
 and rt_of_sct loc struct_decls (s : Sym.t) sct =
+  let (Sctypes.Sctype (annots, sct_)) = sct in
+  let loc = Loc.update loc (get_loc_ annots) in
   let open RT in
   let open Sctypes in
-  match sct with
+  match sct_ with
   | Pointer (_qualifiers, ct) ->
      rt_of_pointer_sct loc struct_decls s ct
   | _ ->

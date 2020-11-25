@@ -3,44 +3,53 @@ module CF = Cerb_frontend
 (* copying subset of Ctype.ctype *)
 
 
-type t =
+type t_ =
   | Void
   | Integer of CF.Ctype.integerType
   | Pointer of CF.Ctype.qualifiers * t
   | Struct of Sym.t
 
+and t = 
+  Sctype of CF.Annot.annot list * t_
 
 
 
-let rec to_ctype = function
-  | Void -> CF.Ctype.Ctype ([], Void)
-  | Integer it -> CF.Ctype.Ctype ([], Basic (Integer it))
-  | Pointer (q,t) -> CF.Ctype.Ctype ([], Pointer (q, to_ctype t))
-  | Struct t -> CF.Ctype.Ctype ([], Struct t)
+
+let rec to_ctype (Sctype (annots, sct_)) =
+  let ct_ = match sct_ with
+    | Void -> CF.Ctype.Void
+    | Integer it -> Basic (Integer it)
+    | Pointer (q,t) -> Pointer (q, to_ctype t)
+    | Struct t -> Struct t
+  in
+  Ctype (annots, ct_)
 
 
-let rec of_ctype (CF.Ctype.Ctype (_,ct_)) =
+let rec of_ctype (CF.Ctype.Ctype (annots,ct_)) =
   let open Option in
-  match ct_ with
-  | CF.Ctype.Void -> 
-     Some Void
-  | CF.Ctype.Basic (Integer it) -> 
-     Some (Integer it)
-  | CF.Ctype.Basic (Floating it) -> 
-     None
-  | CF.Ctype.Array _ -> 
-     None
-  | CF.Ctype.Function _ -> 
-     None
-  | CF.Ctype.Pointer (qualifiers,ctype) -> 
-     let* t = of_ctype ctype in
-     Some (Pointer (qualifiers, t))
-  | CF.Ctype.Atomic _ ->
-     None
-  | CF.Ctype.Struct s ->
-     Some (Struct s)
-  | Union _ ->
-     None
+  let osct_ = match ct_ with
+    | CF.Ctype.Void -> 
+       Some Void
+    | CF.Ctype.Basic (Integer it) -> 
+       Some (Integer it)
+    | CF.Ctype.Basic (Floating it) -> 
+       None
+    | CF.Ctype.Array _ -> 
+       None
+    | CF.Ctype.Function _ -> 
+       None
+    | CF.Ctype.Pointer (qualifiers,ctype) -> 
+       let* t = of_ctype ctype in
+       Some (Pointer (qualifiers, t))
+    | CF.Ctype.Atomic _ ->
+       None
+    | CF.Ctype.Struct s ->
+       Some (Struct s)
+    | Union _ ->
+       None
+  in
+  Option.map (fun sct_ -> Sctype (annots, sct_)) osct_
+
 
 
 

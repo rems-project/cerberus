@@ -401,7 +401,7 @@ and of_type_expr loc names te : (tb, type_error) m =
      end
   | None, Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      let name = Sym.fresh () in
-     let sct = Sctypes.Integer CF.Ctype.Bool in
+     let sct = Sctypes.Sctype ([], Sctypes.Integer CF.Ctype.Bool) in
      let size = Memory.size_of_ctype sct in
      let align = Memory.align_of_ctype sct in
      return (B ((New, name, BT.Integer, Some (size,align)), 
@@ -421,23 +421,24 @@ and of_type_expr loc names te : (tb, type_error) m =
 
 let (@@) = LRT.(@@)
 
-let rec rc_type_compatible_with_ctype loc oname ct type_expr = 
+let rec rc_type_compatible_with_ctype loc oname sct type_expr = 
+  let (Sctypes.Sctype (annots, sct_)) = sct in
   let open Sctypes in
-  match ct, type_expr with
+  match sct_, type_expr with
   | _, (Ty_refine (_,type_expr))
   | _, (Ty_exists (_,_,type_expr))
   | _, (Ty_constr (type_expr, _)) ->
-     rc_type_compatible_with_ctype loc oname ct type_expr
+     rc_type_compatible_with_ctype loc oname sct type_expr
   | (Pointer (_,ct)), (Ty_ptr (_, type_expr)) ->
      rc_type_compatible_with_ctype loc oname ct type_expr
   | (Integer Bool), Ty_params ("boolean", [Ty_arg_expr (Ty_params ("bool_it", []))]) ->
      return ()
   | _, (Ty_params ("uninit", [Ty_arg_expr integer_type_expr])) ->
      let* size = bytes_of_integer_type_expr loc integer_type_expr in
-     let ct_size = Memory.size_of_ctype ct in
+     let ct_size = Memory.size_of_ctype sct in
      if Z.equal ct_size size 
      then return ()
-     else incompatible loc ct type_expr
+     else incompatible loc sct type_expr
   | (Integer it), (Ty_params ("int", [Ty_arg_expr arg])) ->
      let* size = bytes_of_integer_type_expr loc arg in
      let* signed = signed_integer_type_expr loc arg in
@@ -445,16 +446,16 @@ let rec rc_type_compatible_with_ctype loc oname ct type_expr =
      let* ct_signed = match it with
        | Signed _ -> return true
        | Unsigned _ -> return false
-       | _ -> incompatible loc ct type_expr
+       | _ -> incompatible loc sct type_expr
      in
-     let ct_size = Memory.size_of_ctype ct in
+     let ct_size = Memory.size_of_ctype sct in
      if ct_signed = signed && Z.equal ct_size size 
      then return ()
-     else incompatible loc ct type_expr
+     else incompatible loc sct type_expr
   | Void, Ty_params ("void", []) ->
      return ()
   | _, _ ->
-     incompatible loc ct type_expr
+     incompatible loc sct type_expr
 
 
 

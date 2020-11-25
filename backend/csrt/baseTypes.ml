@@ -65,7 +65,8 @@ let rec pp atomic bt =
 
 open Sctypes
 
-let of_sct = function
+let of_sct (Sctype (_, sct_)) = 
+  match sct_ with
   | Void -> Unit
   | Integer _ -> Integer
   | Pointer _ -> Loc
