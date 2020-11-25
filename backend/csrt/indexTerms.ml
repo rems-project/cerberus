@@ -13,7 +13,6 @@ module ST = struct
   type t = 
     | ST_Ctype of Sctypes.t
     | ST_Pointer
-  (* others later *)
 
 
   let equal rt1 rt2 = 

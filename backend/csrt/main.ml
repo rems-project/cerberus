@@ -62,7 +62,7 @@ let print_file ?(remove_path = false) filename file =
   match file with
   | CORE file ->
      CB.Pipeline.run_pp ~remove_path (Some (filename,"core")) 
-       (CF.Pp_core.WithLocations.pp_file file);
+       (CF.Pp_core.Basic.pp_file file);
   | MUCORE file ->
      CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
        (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
@@ -98,7 +98,7 @@ let partial_evaluation : named_rewrite =
 let remove_unused : named_rewrite = 
   ("unused_functions_removal",
    fun core_file -> 
-   return (CF.Core_remove_unused_functions.remove_unused_functions core_file))
+   return (CF.Core_remove_unused_functions.remove_unused_functions true core_file))
 
 let hackish_order : named_rewrite = 
   ("hackish_order",

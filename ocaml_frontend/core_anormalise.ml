@@ -90,10 +90,10 @@ let ensure_ctype__pexpr = function
   | _ -> None
 
 
-let fensure_ctype__pexpr err pe : (ctype,'b) a = 
+let fensure_ctype__pexpr loc err pe : (ctype,'b) a = 
   match ensure_ctype__pexpr pe with
   | Some ctype1 -> ctype1
-  | None -> error err
+  | None -> error (err ^ " (" ^ Location_ocaml.location_to_string loc ^ ")")
 
 
 
@@ -394,32 +394,32 @@ let n_action loc (action : ('a, unit) action1)
   let wrap a1 = M_Action(loc', a1) in
   match a1 with
   | Create(e1, e2, sym1) ->
-     let ctype1 = (fensure_ctype__pexpr "Create: not a ctype" e2) in
+     let ctype1 = (fensure_ctype__pexpr loc "Create: not a ctype" e2) in
      n_pexpr_in_expr_name e1 (fun e1 ->
      k (wrap (M_Create(e1, ctype1, sym1))))
   | CreateReadOnly(e1, e2, e3, sym1) ->
-     let ctype1 = (fensure_ctype__pexpr "CreateReadOnly: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "CreateReadOnly: not a ctype" e1) in
      n_pexpr_in_expr_name e1 (fun e1 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_CreateReadOnly(e1, ctype1, e3, sym1)))))
   | Alloc0(e1, e2, sym1) ->
-     let ctype1 = (fensure_ctype__pexpr "Alloc: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "Alloc: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Alloc(ctype1, e2, sym1))))
   | Kill(kind, e1) ->
      n_pexpr_in_expr_name e1 (fun e1 ->
      k (wrap (M_Kill((n_kill_kind kind), e1))))
   | Store0(b, e1, e2, e3, mo1) ->
-     let ctype1 = (fensure_ctype__pexpr "Store: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "Store: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_Store(b, ctype1, e2, e3, mo1)))))
   | Load0(e1, e2, mo1) ->
-     let ctype1 = (fensure_ctype__pexpr "Load: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "Load: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Load(ctype1, e2, mo1))))
   | RMW0(e1, e2, e3, e4, mo1, mo2) ->
-     let ctype1 = (fensure_ctype__pexpr "RMW: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "RMW: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      n_pexpr_in_expr_name e4 (fun e4 ->
@@ -427,13 +427,13 @@ let n_action loc (action : ('a, unit) action1)
   | Fence0 mo1 -> 
      k (wrap (M_Fence mo1))
   | CompareExchangeStrong(e1, e2, e3, e4, mo1, mo2) ->
-     let ctype1 = (fensure_ctype__pexpr "CompareExchangeStrong: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "CompareExchangeStrong: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      n_pexpr_in_expr_name e4 (fun e4 ->
      k (wrap (M_CompareExchangeStrong(ctype1, e2, e3, e4, mo1, mo2))))))
   | CompareExchangeWeak(e1, e2, e3, e4, mo1, mo2) ->
-     let ctype1 = (fensure_ctype__pexpr "CompareExchangeWeak: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "CompareExchangeWeak: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      n_pexpr_in_expr_name e4 (fun e4 ->
@@ -441,16 +441,16 @@ let n_action loc (action : ('a, unit) action1)
   | LinuxFence lmo ->
      k (wrap (M_LinuxFence lmo))
   | LinuxLoad(e1, e2, lmo) ->
-     let ctype1 = (fensure_ctype__pexpr "LinuxLoad: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "LinuxLoad: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_LinuxLoad(ctype1, e2, lmo))))
   | LinuxStore(e1, e2, e3, lmo) ->
-     let ctype1 = (fensure_ctype__pexpr "LinuxStore: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "LinuxStore: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_LinuxStore(ctype1, e2, e3, lmo)))))
   | LinuxRMW(e1, e2, e3, lmo) ->
-     let ctype1 = (fensure_ctype__pexpr "LinuxRMW: not a ctype" e1) in
+     let ctype1 = (fensure_ctype__pexpr loc "LinuxRMW: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_LinuxRMW(ctype1, e2, e3, lmo)))))
@@ -515,27 +515,27 @@ let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr =
      n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
      k (M_PtrGe (sym1, sym2)))
   | (Mem_common.Ptrdiff, [ct1;pe1;pe2]) ->
-     let ct1 = (fensure_ctype__pexpr "Ptrdiff: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "Ptrdiff: not a ctype" ct1) in
      n_pexpr_in_expr_name_2 (pe1, pe2) (fun (sym1,sym2) ->
      k (M_Ptrdiff (ct1, sym1, sym2)))
   | (Mem_common.IntFromPtr, [ct1;pe]) ->
-     let ct1 = (fensure_ctype__pexpr "IntFromPtr: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "IntFromPtr: not a ctype" ct1) in
      n_pexpr_in_expr_name pe (fun sym1 ->
      k (M_IntFromPtr (ct1, sym1)))
   | (Mem_common.PtrFromInt, [ct1;pe]) ->
-     let ct1 = (fensure_ctype__pexpr "PtrFromInt: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "PtrFromInt: not a ctype" ct1) in
      n_pexpr_in_expr_name pe (fun sym1 ->
      k (M_PtrFromInt (ct1, sym1)))
   | (Mem_common.PtrValidForDeref, [ct1;pe]) ->
-     let ct1 = (fensure_ctype__pexpr "PtrValidForDeref: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "PtrValidForDeref: not a ctype" ct1) in
      n_pexpr_in_expr_name pe (fun sym1 ->
      k (M_PtrValidForDeref (ct1, sym1)))
   | (Mem_common.PtrWellAligned, [ct1;pe]) ->
-     let ct1 = (fensure_ctype__pexpr "PtrWellAligned: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "PtrWellAligned: not a ctype" ct1) in
      n_pexpr_in_expr_name pe (fun sym1 ->
      k (M_PtrWellAligned (ct1, sym1)))
   | (Mem_common.PtrArrayShift, [pe1;ct1;pe2]) ->
-     let ct1 = (fensure_ctype__pexpr "PtrArrayShift: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "PtrArrayShift: not a ctype" ct1) in
      n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
      k (M_PtrArrayShift (sym1 ,ct1, sym2)))
   | (Mem_common.Memcpy, [pe1;pe2;pe3]) ->
@@ -554,7 +554,7 @@ let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr =
      n_pexpr_in_expr_name pe (fun sym1 ->
      k (M_Va_copy sym1))
   | (Mem_common.Va_arg, [pe;ct1]) ->
-     let ct1 = (fensure_ctype__pexpr "Va_arg: not a ctype" ct1) in
+     let ct1 = (fensure_ctype__pexpr loc "Va_arg: not a ctype" ct1) in
      n_pexpr_in_expr_name pe (fun sym1 ->
      k (M_Va_arg (sym1 ,ct1)))
   | (Mem_common.Va_end, [pe]) ->

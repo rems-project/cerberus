@@ -20,6 +20,18 @@ open ListM
 
 
 
+module StringSet = Set.Make(String)
+
+(* let ignored_stdlib = 
+ *   StringSet.of_list [
+ *       "free_proxy";
+ *       "malloc_proxy";
+ *       "realloc_proxy";
+ *       "aligned_alloc_proxy";
+ *     ] *)
+
+
+
 let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
 
 
@@ -479,9 +491,23 @@ let retype_tagDefs
     tagDefs (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)
 
 
-let retype_funinfo struct_decls funinfo =
+let retype_funinfo struct_decls funinfo stdlib_fsyms =
   PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
+
+      (* let is_ignored_stdlib_fun =
+       *   (\* Pset.mem fsym stdlib_fsyms &&  *\)
+       *     match Sym.name fsym with
+       *     | None -> false
+       *     | Some name -> StringSet.mem name ignored_stdlib 
+       * in
+       * 
+       * if is_ignored_stdlib_fun then
+       * 
+       *   return (funinfo,funinfo_extra)
+       * 
+       * else *)
+
       let loc' = Loc.update Loc.unknown loc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
@@ -529,9 +555,12 @@ let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA
         CA.ct mu_struct_def * Global.struct_decl, 
         CA.ct mu_union_def, 'bty) mu_file,
       type_error) m =
+
+  let stdlib_fsyms = Pmap.domain file.mu_stdlib in
+
   let loop_attributes = file.mu_loop_attributes in
   let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
-  let* (funinfo,funinfo_extra) = retype_funinfo structs file.mu_funinfo in
+  let* (funinfo,funinfo_extra) = retype_funinfo structs file.mu_funinfo stdlib_fsyms in
   let* stdlib = 
     retype_fun_map loc ~loop_attributes ~structs 
       ~funinfo ~funinfo_extra file.mu_stdlib 

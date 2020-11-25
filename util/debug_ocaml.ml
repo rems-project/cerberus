@@ -10,6 +10,7 @@ type domain =
   | DB_concurrency
   | DB_driver_step
   | DB_memory
+  | DB_core_rewriting
 
 (*
 type debug_state = {

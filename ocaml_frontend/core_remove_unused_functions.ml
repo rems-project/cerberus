@@ -2,6 +2,14 @@ open Core_rewriter
 open Core
 
 
+
+let debug_print pp =
+  Debug_ocaml.print_debug 3
+    [Debug_ocaml.DB_core_rewriting] 
+    pp
+
+
+
 module type S = sig 
   type t 
 end
@@ -45,10 +53,23 @@ end
 
 
 module Def = struct
+
   type t = 
     | Impl of Implementation.implementation_constant
     | Sym of Symbol.sym 
     | Id of string
+
+  let rec equal a b = 
+    match a, b with
+    | Impl i1, Impl i2 -> Implementation.implementation_constant_equal i1 i2
+    | Sym s1, Sym s2 -> Symbol.symbolEquality s1 s2
+    | Id i1, Id i2 -> String.equal i1 i2
+    | Impl _, _
+    | Sym _, _
+    | Id _, _
+      ->
+       false
+
   let rec compare a b = 
     match a, b with
     | Impl i1, Impl i2 -> Implementation.implementation_constant_compare i1 i2
@@ -60,6 +81,15 @@ module Def = struct
     | Sym _, Impl _ -> 1
     | Id _, Sym _ -> 1
     | Id _, Impl _ -> 1
+
+  let pp = function
+    | Impl i -> 
+       "Impl " ^ Implementation.string_of_implementation_constant i
+    | Sym s -> 
+       "Sym " ^ Pp_symbol.to_string s
+    | Id s -> 
+       "S " ^ s
+
 end
 
 module DefPair = struct 
@@ -68,9 +98,18 @@ module DefPair = struct
 end
 
 
-module Symset = Set.Make(Sym)
-module DefSet = Set.Make(Def)
-module DefRel = Set.Make(DefPair)
+module DefSet = struct
+  include Pset
+  type t = Def.t Pset.set
+  let empty = Pset.empty Def.compare
+end 
+
+module DefRel = struct
+  include Pset
+  type t = DefPair.t Pset.set
+  let empty = Pset.empty DefPair.compare
+  let transitiveClosure = Pset.tc DefPair.compare
+end 
 
 (* module IdSet = Set.Make(String) *)
 
@@ -345,7 +384,6 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
 
 let do_impls is = 
   pmap_iterM (fun i decl ->
-      (* record_keep (Impl i) >> *)
       let name_collector = deps_of (Impl i) in
       match decl with
       | Def (cbt, pe) -> 
@@ -362,10 +400,12 @@ let do_impls is =
 
 let do_fun_map definitely_keep (fmap : ('bty,'a) generic_fun_map) =
   pmap_iterM (fun fn decl ->
-    (if definitely_keep then record_keep (Sym fn) else return ()) >>
+    (if definitely_keep 
+     then record_keep (Sym fn) 
+     else return ()) >>
     let name_collector = deps_of (Sym fn) in
     begin match decl with
-    | Fun (cbt, args, pe) -> 
+    | Fun (cbt, args, pe) ->
        name_collector.names_in_core_base_type cbt >>
        iterate args (fun (sym,cbt) ->
            record_dep (Sym fn) (Sym sym) >>
@@ -381,6 +421,7 @@ let do_fun_map definitely_keep (fmap : ('bty,'a) generic_fun_map) =
        name_collector.names_in_expr e
     | ProcDecl (_loc, cbt, bts)
     | BuiltinDecl (_loc, cbt, bts) -> 
+       (* record_keep (Sym fn) >>  *)
        name_collector.names_in_core_base_type cbt >>
        iterate bts name_collector.names_in_core_base_type
     end) fmap >>
@@ -423,7 +464,6 @@ let do_tagDefs tagDefs =
 
 let do_extern_map em = 
   pmap_iterM (fun (Symbol.Identifier (_,id)) (ls,_) ->
-    record_keep (Id id) >>
       iterate ls (fun s -> record_dep (Id id) (Sym s))
     ) em >>
   return ()
@@ -432,13 +472,19 @@ let do_main = function
   | None -> return ()
   | Some main -> record_keep (Sym main)
 
+
+let do_funinfo funinfo = 
+  pmap_iterM (fun sym _ -> record_keep (Sym sym)) funinfo >>
+  return ()
+
 let deps_file file = 
   do_main file.main >>
+  do_funinfo file.funinfo >>
   do_tagDefs file.tagDefs >>
-  do_fun_map false file.stdlib >>= fun stdlib_names ->
+  do_fun_map false file.stdlib >>
   do_impls file.impl >>
   do_globs_list file.globs >>
-  do_fun_map true file.funs >>= fun fun_names ->
+  do_fun_map false file.funs >>
   do_extern_map file.extern >>
   return ()
 
@@ -447,42 +493,85 @@ let deps_file file =
 (* the above part is more general than needed here *)
 
 
-let remove_unused_functions file = 
+let remove_unused_functions remove_funinfo_entries file = 
 
 
   let ((),s) = deps_file file State.S.empty in
 
-  (* transitively close deps first? *)
 
-  let nothing_else_depends deps this = 
-    not ((DefRel.exists (fun (a,b) -> a <> this && b = this)) deps) in
+  (* let _ = 
+   *   debug_print (fun () ->
+   *       "keep: " ^
+   *       DefSet.fold (fun i pp ->
+   *           pp ^ Def.pp i ^ ", "
+   *         ) s.keep "" ^ "\n"
+   *     )
+   * in
+   * 
+   * let _ = 
+   *   debug_print (fun () ->
+   *       "deps: " ^
+   *       DefRel.fold (fun (i1,i2) pp ->
+   *           pp ^ Def.pp i1 ^ " -> " ^ Def.pp i2 ^ ", "
+   *         ) s.deps "" ^ "\n"
+   *     )
+   * in *)
 
-  let can_remove deps d = not (DefSet.mem d s.keep) && 
-                            nothing_else_depends deps d in
-
-  let rec only_used maybe_remove deps = 
-    match List.filter (can_remove deps) maybe_remove with
-    | [] -> 
-       (maybe_remove,deps)
-    | x :: xs ->
-       let deps' = DefRel.filter (fun (sym1,sym2) -> sym1 <> x) deps in
-       let maybe_remove' = List.filter ((<>) x) maybe_remove in
-       only_used maybe_remove' deps'
+  let keep = 
+    DefRel.fold (fun (l,r) keep ->
+        if DefSet.mem l s.keep then DefSet.add r keep else keep
+      ) (DefRel.transitiveClosure s.deps) s.keep
   in
 
+
+  (* let _ = 
+   *   debug_print (fun () ->
+   *       "final keep: " ^
+   *       DefSet.fold (fun i pp ->
+   *           pp ^ Def.pp i ^ ", "
+   *         ) keep "" ^ "\n"
+   *     )
+   * in *)
+
+
   let used_stdlib : ('bty, 'a) generic_fun_map = 
-    let stdlib_names = Pmap.fold (fun sym _ acc -> Def.Sym sym :: acc) file.stdlib [] in  
-    let (used_stdlib,_) = only_used stdlib_names s.deps in
-    Pmap.filter (fun name _ -> List.mem (Def.Sym name) used_stdlib) file.stdlib 
+    Pmap.filter (fun name _ -> 
+          Pset.mem (Def.Sym name) keep ||
+            match Symbol.symbol_name name with
+            | Some sname ->
+               Pset.mem (Def.Impl (BuiltinFunction sname)) keep
+            | _ -> false
+      ) file.stdlib 
   in
 
   let used_impls = 
-    let stdlib_names = Pmap.fold (fun sym _ acc -> Def.Impl sym :: acc) file.impl [] in  
-    let (used_stdlib,_) = only_used stdlib_names s.deps in
-    Pmap.filter (fun name _ -> List.mem (Def.Impl name) used_stdlib) file.impl
+    Pmap.filter (fun name _ -> 
+        DefSet.mem (Def.Impl name) keep
+      ) file.impl
   in
 
-  { file with stdlib = used_stdlib;
-              impl = used_impls}
+  let used_extern = 
+    Pmap.filter (fun (Symbol.Identifier (_,name)) _ -> 
+        DefSet.mem (Def.Id name) keep) file.extern
+  in
+
+  (* let used_funinfo = 
+   *   if false then
+   *     Pmap.filter (fun name _ -> 
+   *         Pset.mem (Def.Sym name) keep ||
+   *           match Symbol.symbol_name name with
+   *           | Some sname ->
+   *              Pset.mem (Def.Impl (BuiltinFunction sname)) keep
+   *           | _ -> false
+   *       ) file.funinfo
+   *   else 
+   *     file.funinfo 
+   * in *)
+
+  { file with 
+    stdlib = used_stdlib;
+    impl = used_impls;
+    extern = used_extern;
+  }
 
 
