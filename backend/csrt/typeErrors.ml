@@ -52,7 +52,8 @@ type type_error =
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
-  | Illtyped_it of IndexTerms.t
+  | Illtyped_it : (Sym.t,'bt) IndexTerms.term -> type_error
+  | Polymorphic_it : (Sym.t,'bt) IndexTerms.term -> type_error
   | Unsat_constraint of LogicalConstraints.t
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
@@ -208,6 +209,8 @@ let pp_type_error = function
         !^"but found value of type" ^^^ LS.pp false has, [])
   | Illtyped_it it ->
      (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
+  | Polymorphic_it it ->
+     (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Unsat_constraint c ->
      (!^"Unsatisfied constraint" ^^^ LogicalConstraints.pp c, [])
   | Unconstrained_logical_variable name ->

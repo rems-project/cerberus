@@ -38,7 +38,7 @@ let representable_integer_type it about =
        let max = integer_value_to_num (CF.Impl_mem.max_ival it) in
        (min, max)
   in
-  LC.LC (IT.in_range (Num min) (Num max) about)
+  LC.LC (IT.in_range about (Num min, Num max))
 
 
 

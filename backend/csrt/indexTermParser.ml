@@ -5,7 +5,7 @@ module StringMap = Map.Make(String)
 module IT = IndexTerms
 
 
-let rec parse_ast_to_t loc names (it: IT.parse_ast) = 
+let rec parse_ast_to_t loc names (it: IT.parse_ast) : ((Sym.t, unit) IT.term, string) m =
   let open IT in
   match it with
   | Num n -> 
@@ -212,7 +212,7 @@ let parse_with_error loc names lexbuf =
                    (print_position lexbuf) tok)
   
 
-let parse loc names (* filename *) s =
+let parse loc names (* filename *) s : ((Sym.t, unit) IT.term, string) m =
   let lexbuf = Lexing.from_string s in
   (* lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename }; *)
   parse_with_error loc names lexbuf

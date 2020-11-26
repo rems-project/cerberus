@@ -342,15 +342,17 @@ let make_fun_spec loc struct_decls args ret_sct =
     ListM.fold_rightM (fun (msym, sct) (names, arg_rts, args, rets) ->
         let oname = Option.bind msym Sym.name in
         let sl = Sym.fresh_onamed oname in
-        let names = match oname with
-          | Some ident -> StringMap.add ident sl names
-          | None -> names
-        in
         let* arg_rt = rt_of_pointer_sct loc struct_decls sl sct in
         let arg_rts = (oname, arg_rt) :: arg_rts in
         let arg = FT.of_rt arg_rt in
         let args = Tools.comp arg args in
         let ret = update_values_lrt (RT.lrt arg_rt) in
+        let names = match oname with
+          | Some ident -> 
+             let (Computational ((_, bt), _)) = arg_rt in
+             StringMap.add ident (sl, LS.Base bt) names
+          | None -> names
+        in
         return (names, arg_rts, args, LRT.concat ret rets)
       ) 
       args (StringMap.empty, [], (fun ft -> ft), I)
