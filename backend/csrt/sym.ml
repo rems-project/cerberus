@@ -43,3 +43,6 @@ let subst (subst: (symbol, symbol) Subst.t) symbol =
 
 
 let substs = make_substs subst
+
+
+let json sym = `String (pp_string sym)

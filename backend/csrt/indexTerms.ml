@@ -263,7 +263,7 @@ let rec equal it it' =
 
 
 
-let pp (type bt) ?(quote=true) (it : (Sym.t, bt) term) : PPrint.document = 
+let pp (type bt) (it : (Sym.t, bt) term) : PPrint.document = 
 
   let rec aux atomic it = 
     let mparens pped = if atomic then parens pped else pped in
@@ -392,7 +392,7 @@ let pp (type bt) ?(quote=true) (it : (Sym.t, bt) term) : PPrint.document =
     | S sym -> 
        Sym.pp sym
   in
-  (if quote then dquotes else (fun pp -> pp)) (aux false it)
+  aux false it
 
 
 let rec vars_in it : SymSet.t = 
@@ -474,6 +474,11 @@ let rec vars_in it : SymSet.t =
 and vars_in_list l = 
   List.fold_left (fun acc sym -> SymSet.union acc (vars_in sym))
     SymSet.empty l
+
+
+let json it : Yojson.Safe.t =
+  `String (Pp.plain (pp it))
+
 
 
 let rec subst_var subst it : t = 

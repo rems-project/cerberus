@@ -27,3 +27,7 @@ let assoc_opt (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v o
 
 let assoc (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v = 
   snd (find (fun (k',_) -> equality k k') l )
+
+
+let json jsonf list = 
+  `List (map jsonf list)

@@ -247,7 +247,7 @@ let pp_type_error = function
 
 
 (* stealing some logic from pp_errors *)
-let type_error (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
+let report (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
   let (msg, extras) = pp_type_error err in
   let extras = match ostacktrace with
     | Some stacktrace -> extras @ [item "stacktrace" !^stacktrace]

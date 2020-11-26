@@ -35,6 +35,9 @@ let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
 let head1 = List1.head
 
 
+
+
+
 (*** meta types ***************************************************************)
 type pattern = BT.t mu_pattern
 type ctor = BT.t mu_ctor
@@ -590,7 +593,7 @@ let unpack_resources loc {local; global} =
              end
           | _ ->
              return (local, changed)
-        ) (local, false) (L.all_resources local)
+        ) (local, false) (L.all_named_resources local)
     in
     if changed then aux local else return local
   in
@@ -782,7 +785,7 @@ let infer_value (loc : loc) {local; global} (v : 'bty value) : (vt, type_error) 
 
 (* pop_return: "pop" the local environment back until last mark and
    add to `rt` *)
-let pop_return (rt : RT.t) (local : L.t) : RT.t * L.t = 
+let pop_return ((rt : RT.t), (local : L.t)) : RT.t * L.t = 
   let (RT.Computational (abinding, lrt)) = rt in
   let rec aux vbs acc = 
     match vbs with
@@ -866,6 +869,11 @@ module Fallible = struct
         | Normal a -> Some a
         | False -> None
       ) ms
+
+  let map f m = 
+    match m with
+    | Normal a -> Normal (f a)
+    | False -> False
 
 end
 
@@ -1084,8 +1092,9 @@ let rec infer_pexpr (locs : path) {local; global}
 and infer_pexpr_pop (locs : path) delta {local; global} 
                     (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
   let local = delta ++ marked ++ local in 
-  let*? (rt, local) = infer_pexpr locs {local; global} pe in
-  return (Normal (pop_return rt local))
+  let* result = infer_pexpr locs {local; global} pe in
+  let result' = Fallible.map pop_return result in
+  return result'
 
 
 (* check_pexpr: type check the pure expression `e` against return type
@@ -1273,6 +1282,29 @@ let ensure_aligned loc {local; global} access pointer ctype =
 
 
 
+
+(*** auxiliary ****************************************************************)
+
+
+let json_return_local_with_path locs (_, local) : Yojson.Safe.t = 
+  `Assoc [("path", Loc.json_path locs);
+          ("context_or_unreachable", `Variant ("context", Some (Local.json local)))]
+
+let json_local_with_path locs (local) : Yojson.Safe.t = 
+  `Assoc [("path", Loc.json_path locs);
+          ("context_or_unreachable", `Variant ("context", Some (Local.json local)))]
+
+let json_false_with_path locs  : Yojson.Safe.t = 
+  `Assoc [("path", Loc.json_path locs);
+          ("context_or_unreachable", `Variant ("unreachable", None))]
+
+let json_return_local_or_false_with_path locs = function
+  | Normal local -> json_return_local_with_path locs local
+  | False -> json_false_with_path locs
+
+let json_local_or_false_with_path locs = function
+  | Normal local -> json_local_with_path locs local
+  | False -> json_false_with_path locs
 
 (*** impure expression inference **********************************************)
 
@@ -1514,15 +1546,21 @@ let rec infer_expr (locs : path) {local; labels; global}
        infer_expr_pop locs delta {local; labels; global} e2
   in
   debug 3 (lazy (match r with
-                    | False -> item "type" (parens !^"no return")
-                    | Normal (rt,_) -> item "type" (RT.pp rt)));
+                 | False -> item "type" (parens !^"no return")
+                 | Normal (rt,_) -> item "type" (RT.pp rt)));
   return r
 
 and infer_expr_pop (locs : path) delta {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m =
   let local = delta ++ marked ++ local in 
-  let*? (rt, local) = infer_expr locs {local; labels; global} e in
-  return (Normal (pop_return rt local))
+  let* result = infer_expr locs {local; labels; global} e in
+  let locs = 
+    let (M_Expr (annots, _)) = e in
+    Loc.log locs (get_loc_ annots) 
+  in
+  let result = Fallible.map pop_return result in
+  let () = maybe_print_json (lazy (json_return_local_or_false_with_path locs result)) in
+  return result
 
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
@@ -1591,12 +1629,22 @@ let rec check_expr (locs : path) {local; labels; global} (e : 'bty expr)
         in
         fail (head1 locs) (Generic err)
 
-and check_expr_pop (locs : path) delta {labels; local; global} (pe : 'bty expr) 
+and check_expr_pop (locs : path) delta {labels; local; global} (e : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible, type_error) m =
   let local = delta ++ marked ++ local in 
-  let*? local = check_expr locs {labels; local; global} pe typ in
-  let* local = pop_empty (head1 locs) local in
-  return (Normal local)
+  let* result = check_expr locs {labels; local; global} e typ in
+  let locs = 
+    let (M_Expr (annots, _)) = e in
+    Loc.log locs (get_loc_ annots) 
+  in
+  match result with
+  | False -> 
+     let () = maybe_print_json (lazy (json_local_or_false_with_path locs False)) in
+     return False
+  | Normal local -> 
+     let* local = pop_empty (head1 locs) local in
+     let () = maybe_print_json (lazy (json_local_or_false_with_path locs (Normal local))) in
+     return (Normal local)
 
 
 (* check_and_bind_arguments: typecheck the function/procedure/label

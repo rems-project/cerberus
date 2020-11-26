@@ -99,9 +99,4 @@ let process mu_file =
   process_functions global mu_file.mu_funs
 
 
-let process_and_report mu_file = 
-  if !print_level > 0 then Printexc.record_backtrace true else ();
-  match process mu_file with
-  | Ok () -> ()
-  | Error (loc,ostacktrace,err) -> 
-     TypeErrors.type_error loc ostacktrace err
+

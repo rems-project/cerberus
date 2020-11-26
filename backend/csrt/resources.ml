@@ -64,6 +64,9 @@ let pp = function
 
 
 
+let json re : Yojson.Safe.t = 
+  `String (Pp.plain (pp re))
+
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
   | Block {pointer; size; block_type} ->
      let pointer = IndexTerms.subst_var subst pointer in

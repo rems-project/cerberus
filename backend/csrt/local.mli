@@ -51,13 +51,18 @@ val add_uc : LC.t -> t -> t
 val all_names : t -> Sym.t list
 
 val all_computational : t -> (Sym.t * (Sym.t * BT.t)) list
+val all_named_constraints : t -> (Sym.t * LC.t) list
 val all_constraints : t -> LC.t list
 val all_logical : t -> (Sym.t * LS.t) list
-val all_resources : t -> (Sym.t * RE.t) list
-val all_used_resources : t -> (Sym.t * RE.t * Loc.t list) list
+val all_resources : t -> RE.t list
+val all_named_resources : t -> (Sym.t * RE.t) list
+val all_used_resources : t -> (RE.t * Loc.t list) list
+val all_named_used_resources : t -> (Sym.t * (RE.t * Loc.t list)) list
 
 
 val (++) : t -> t -> t
 
 
 
+
+val json :  t -> Yojson.Safe.t

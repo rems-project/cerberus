@@ -396,7 +396,7 @@ let resource_for_pointer {local;global} pointer_it
     List.filter_map (fun (name, re) ->
         let holds = equal {local;global} pointer_it (RE.pointer re) in
         (if holds then Some (name, re) else None)
-      ) (Local.all_resources local)
+      ) (Local.all_named_resources local)
   in
   Tools.at_most_one "multiple points-to for same pointer" points
 
@@ -404,10 +404,10 @@ let resource_for_pointer {local;global} pointer_it
 let used_resource_for_pointer {local;global} pointer_it
     : (Loc.t list) option = 
   let points = 
-    List.filter_map (fun (name, re, where) ->
+    List.filter_map (fun (name, (re, where)) ->
         let holds = equal {local; global} pointer_it (RE.pointer re) in
         (if holds then Some (where) else None)
-      ) (Local.all_used_resources local)
+      ) (Local.all_named_used_resources local)
   in
   Tools.at_most_one "multiple points-to for same pointer" points
 
@@ -456,7 +456,7 @@ let model {local;global} context solver : model option =
            ) (L.all_logical local)
        in
        let from_resources = 
-         map (fun (_, r) -> RE.pointer r) (L.all_resources local)
+         map RE.pointer (L.all_resources local)
        in
        List.fold_right (fun location_it acc ->
            let expr = of_index_term {local; global} context location_it in

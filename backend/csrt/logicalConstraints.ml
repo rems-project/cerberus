@@ -1,6 +1,10 @@
 type t = LC of IndexTerms.t
 
-let pp (LC c) = IndexTerms.pp c
+let pp (LC c) = Pp.dquotes (IndexTerms.pp c)
+
+let json (LC c) : Yojson.Safe.t = 
+  IndexTerms.json c
+
 
 let subst_var substitution (LC c) = 
   LC (IndexTerms.subst_var substitution c)

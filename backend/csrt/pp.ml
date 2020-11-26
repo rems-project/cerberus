@@ -209,3 +209,16 @@ let error (loc : Locations.t) msg extras =
                 format [FG (Default, Bright)] head ^^^ msg);
   if Locations.is_unknown loc then () else  print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
+
+
+
+
+
+let json_output_channel = ref None
+
+let maybe_print_json json = 
+  match !json_output_channel with
+  | None -> ()
+  | Some channel -> 
+     Yojson.Safe.pretty_to_channel ~std:true channel 
+       (Lazy.force json)

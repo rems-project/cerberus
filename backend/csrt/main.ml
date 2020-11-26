@@ -150,7 +150,22 @@ let frontend filename =
 
 
 
-let main filename debug_level print_level =
+let maybe_open_channel ofile = 
+  match ofile with
+  | Some file -> 
+     let oc = open_out file in
+     let () = Pp.json_output_channel := Some oc in
+     Some oc
+  | None -> 
+     None
+
+let maybe_close_channel ochannel =
+  match ochannel with
+  | Some channel -> close_out channel
+  | None -> ()
+
+
+let main filename jsonfile debug_level print_level =
   if debug_level > 0 then Printexc.record_backtrace true else ();
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
@@ -159,30 +174,51 @@ let main filename debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    match frontend filename with
-    | CF.Exception.Exception err ->
-       prerr_endline (CF.Pp_errors.to_string err);
-    | CF.Exception.Result file ->
-       Process.process_and_report file
+    let json_channel = maybe_open_channel jsonfile in
+    try
+      begin match frontend filename with
+      | CF.Exception.Exception err ->
+         prerr_endline (CF.Pp_errors.to_string err);
+         maybe_close_channel json_channel;
+         exit 1
+      | CF.Exception.Result file ->
+         if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
+         match Process.process file with
+         | Ok () -> 
+            maybe_close_channel json_channel;
+            exit 0
+         | Error (loc,ostacktrace,err) ->
+            TypeErrors.report loc ostacktrace err;
+            maybe_close_channel json_channel;
+            exit 1
+      end
+    with
+    | exc -> 
+       maybe_close_channel json_channel; 
+       raise exc
 
 
 open Cmdliner
 
+
+(* some of these stolen from backend/driver *)
 let file =
   let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
 let debug_level =
-  (* stolen from backend/driver *)
   let doc = "Set the debug message level for cerberus to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 let print_level =
-  (* stolen from backend/driver *)
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
+let json_file =
+  let doc = "Output typing context information to JSON file" in
+  Arg.(value & opt (some string) None & info ["json"] ~doc)
+
 
 let () =
-  let check_t = Term.(pure main $ file $ debug_level $ print_level) in
+  let check_t = Term.(pure main $ file $ json_file $ debug_level $ print_level) in
   Term.exit @@ Term.eval (check_t, Term.info "csrt")

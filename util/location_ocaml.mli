@@ -1,4 +1,16 @@
+type raw =
+  | Loc_unknown
+  | Loc_other of string
+  | Loc_point of Lexing.position
+    (* start, end, cursor *)
+  | Loc_region of Lexing.position * Lexing.position * Lexing.position option
+  | Loc_regions of (Lexing.position * Lexing.position) list * Lexing.position option
+
 type t
+
+(* doing this so other modules can inspect all the data but not forge
+   location information *)
+val to_raw : t -> raw
 
 val unknown: t
 val other: string -> t

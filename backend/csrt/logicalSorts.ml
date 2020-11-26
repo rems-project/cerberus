@@ -7,5 +7,8 @@ type sort = t
 
 let pp atomic (Base bt) = BaseTypes.pp atomic bt
 
+let json (Base bt) : Yojson.Safe.t = 
+  BaseTypes.json bt
+
 let equal (Base t1) (Base t2) = BaseTypes.equal t1 t2
 

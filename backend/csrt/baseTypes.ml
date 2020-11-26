@@ -62,6 +62,8 @@ let rec pp atomic bt =
 
 
 
+let json bt : Yojson.Safe.t =
+  `String (Pp.plain (pp false bt))
 
 open Sctypes
 
@@ -71,5 +73,7 @@ let of_sct (Sctype (_, sct_)) =
   | Integer _ -> Integer
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
+
+
 
 

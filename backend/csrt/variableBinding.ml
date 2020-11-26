@@ -61,6 +61,45 @@ let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
      then btyp sym (LC.pp lc)
      else LC.pp lc
 
+let json_computational (sym, (lname, bt)) = 
+  let args = `Assoc [("basetype", BT.json bt); ("logical", Sym.json lname)] in
+  let bound = `Variant ("Computational", args) in
+  (Sym.json sym, bound)
+
+let json_logical (sym, ls) = 
+  let args = LS.json ls in
+  (Sym.json sym, `Variant ("Logical", args))
+
+let json_resource (_sym, re) = 
+  let args = RE.json re in
+  (`Null, `Variant ("Resource", args))
+
+let json_used_resource (_sym, (re, where)) = 
+  let args = 
+    `Assoc [("used", List.json Loc.json_loc where); 
+            ("resource", RE.json re)] in
+  (`Null, `Variant ("UsedResource", args))
+
+let json_constraint (_sym, lc) = 
+  let args = LC.json lc in
+  (`Null, `Variant ("Constraint", args))
+            
+
+let json (sym, binding) = 
+  let (name,bound) = 
+    match binding with
+    | Computational (lname,bt) -> json_computational (sym, (lname, bt))
+    | Logical ls -> json_logical (sym, ls)
+    | Resource re -> json_resource (sym, re)
+    | UsedResource (re,locs) -> json_used_resource (sym, (re, locs))
+    | Constraint lc -> json_constraint (sym, lc)
+  in
+  `Assoc [
+      ("name", `String (Sym.pp_string sym));
+      ("bound", bound);
+      ]
+  
+
 
 let agree vb1 vb2 = 
   match vb1, vb2 with

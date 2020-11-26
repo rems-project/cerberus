@@ -17,5 +17,6 @@ val head_pos_of_location : t -> string * string
 
 val unpack : t -> Location_ocaml.t
 
-
-
+(* todo *)
+val json_loc : t -> Yojson.Safe.t
+val json_path : path -> Yojson.Safe.t

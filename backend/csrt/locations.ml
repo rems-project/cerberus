@@ -46,3 +46,67 @@ let head_pos_of_location =
 let unpack l = l
 
 
+(* type position = {
+ *   	pos_fname : string;
+ *   	pos_lnum : int;
+ *   	pos_bol : int;
+ *   	pos_cnum : int;
+ * } *)
+
+
+let json_lexing_position p = 
+  let open Lexing in
+  `Assoc [("file", `String p.pos_fname);
+          ("line", `Int p.pos_lnum);
+          ("char", `Int (p.pos_cnum - p.pos_bol))]
+
+let json_raw_loc loc : Yojson.Safe.t = 
+  let open Location_ocaml in
+  let json = match loc with
+    | Loc_unknown -> 
+       `Variant ("Unknown", None)
+    | Loc_other str -> 
+       `Variant ("Other", Some (`String str))
+    | Loc_point point -> 
+       `Variant ("Point", Some (json_lexing_position point))
+      (* start, end, cursor *)
+    | Loc_region (startp, endp, ocursorp) ->
+       let startp' = json_lexing_position startp in
+       let endp' = json_lexing_position endp in
+       let cursorp' = match ocursorp with
+         | Some cursorp -> json_lexing_position cursorp
+         | None -> `Null
+       in
+       let args = 
+         [("region_start", startp');
+          ("region_end", endp');
+          ("region_cursor", cursorp')]
+       in
+       `Variant ("Region", Some (`Assoc args))
+    | Loc_regions (starts_ends,ocursorp) ->
+       let starts_ends' = 
+         List.map (fun (startp, endp) ->
+             let startp' = json_lexing_position startp in
+             let endp' = json_lexing_position endp in
+             `Assoc [("regions_start", startp'); ("regions_end", endp')]
+           ) starts_ends
+       in
+       let cursorp' = match ocursorp with
+         | Some cursorp -> json_lexing_position cursorp
+         | None -> `Null
+       in
+       let args = 
+         [("regions", `List starts_ends');
+          ("cursor", cursorp')]
+       in
+       `Variant ("Region", Some (`Assoc args))
+  in
+  `Variant ("Loc", Some json)
+
+let json_loc loc : Yojson.Safe.t =
+  json_raw_loc (Location_ocaml.to_raw loc)
+
+
+let json_path locs : Yojson.Safe.t = 
+  let locs_json = List.map json_loc (List.rev (List1.to_list locs)) in
+  `Variant ("path", Some (`List locs_json))

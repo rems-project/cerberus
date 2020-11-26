@@ -1,12 +1,17 @@
 open Lexing
 
-type t =
+type raw =
   | Loc_unknown
   | Loc_other of string
   | Loc_point of Lexing.position
     (* start, end, cursor *)
   | Loc_region of Lexing.position * Lexing.position * Lexing.position option
   | Loc_regions of (Lexing.position * Lexing.position) list * Lexing.position option
+
+type t = raw
+
+let to_raw t = t
+
 
 let unknown =
   Loc_unknown

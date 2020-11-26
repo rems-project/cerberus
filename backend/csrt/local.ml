@@ -96,21 +96,45 @@ let all_logical local =
 let all_resources local = 
   filter (fun name b ->
       match b with
+      | Resource re -> Some re
+      | _ -> None
+    ) local
+
+let all_named_resources local = 
+  filter (fun name b ->
+      match b with
       | Resource re -> Some (name, re)
       | _ -> None
     ) local
 
+
 let all_used_resources local = 
   filter (fun name b ->
       match b with
-      | UsedResource (re,where) -> Some (name, re, where)
+      | UsedResource (re,where) -> Some (re, where)
       | _ -> None
     ) local
 
-let all_constraints local = 
-  filter (fun _ b ->
+let all_named_used_resources local = 
+  filter (fun name b ->
       match b with
-      | Constraint lc -> Some lc
+      | UsedResource (re,where) -> Some (name, (re, where))
+      | _ -> None
+    ) local
+
+
+let all_constraints local = 
+  filter (fun name b ->
+      match b with
+      | Constraint lc -> Some (lc)
+      | _ -> None
+    ) local
+
+
+let all_named_constraints local = 
+  filter (fun name b ->
+      match b with
+      | Constraint lc -> Some (name, lc)
       | _ -> None
     ) local
 
@@ -243,7 +267,7 @@ let add_r rname r local =
     | None -> []
     | Some ((addr,_) as fp) ->
        IT.Not (IT.Null addr) ::
-       List.filter_map (fun (_,r') -> 
+       List.filter_map (fun r' -> 
            Option.bind (RE.fp r') (fun fp' -> 
                Some (IT.Disjoint (fp, fp'))
              )
@@ -267,8 +291,45 @@ let all_names = filter (fun sym _ -> Some sym)
 
 
 
+let json local : Yojson.Safe.t = 
 
+  let computational  = 
+    List.map (fun (sym, (lname, bt)) ->
+        `Assoc [("name", Sym.json sym);
+                ("basetype", BT.json bt); 
+                ("logical", Sym.json lname)]        
+      ) (all_computational local )
+  in
+  let logical = 
+    List.map (fun (sym, ls) ->
+        `Assoc [("name", Sym.json sym);
+                ("sort", LS.json ls)]
+      ) (all_logical local)
+  in
+  let resources = 
+    List.map (fun re ->
+        RE.json re
+      ) (all_resources local)
+  in
+  let used_resources = 
+    List.map (fun (re, used) ->
+        `Assoc [("location_used", List.json Loc.json_loc used);
+                ("resource", RE.json re)]
+      ) (all_used_resources local)
+  in
+  let constraints = 
+    List.map (fun lc ->
+        LC.json lc
+      ) (all_constraints local)
+  in
 
+  let json_record = 
+    `Assoc [("computational", `List computational);
+            ("logical", `List logical);
+            ("resources", `List resources);
+            ("used resources", `List used_resources);
+            ("constraints", `List constraints)
+      ]
+  in
+  `Variant ("Context", Some json_record)
 
-
-  
