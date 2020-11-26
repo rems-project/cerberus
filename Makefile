@@ -245,10 +245,10 @@ install_csrt: csrt
 
 .PHONY: uninstall
 uninstall: cerberus
-	@echo "[DUNE] install cerberus"
+	@echo "[DUNE] uninstall cerberus"
 	$(Q)dune uninstall cerberus
 
 .PHONY: uninstall_csrt
 uninstall_csrt: csrt
-	@echo "[DUNE] install csrt"
+	@echo "[DUNE] uninstall csrt"
 	$(Q)dune uninstall csrt
