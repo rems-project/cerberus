@@ -238,7 +238,17 @@ install: cerberus
 	@echo "[DUNE] install cerberus"
 	$(Q)dune install cerberus
 
+.PHONY: install_csrt
+install_csrt: csrt
+	@echo "[DUNE] install csrt"
+	$(Q)dune install csrt
+
 .PHONY: uninstall
 uninstall: cerberus
 	@echo "[DUNE] install cerberus"
 	$(Q)dune uninstall cerberus
+
+.PHONY: uninstall_csrt
+uninstall_csrt: csrt
+	@echo "[DUNE] install csrt"
+	$(Q)dune uninstall csrt
