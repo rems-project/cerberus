@@ -150,19 +150,7 @@ let frontend filename =
 
 
 
-let maybe_open_channel ofile = 
-  match ofile with
-  | Some file -> 
-     let oc = open_out file in
-     let () = Pp.json_output_channel := Some oc in
-     Some oc
-  | None -> 
-     None
 
-let maybe_close_channel ochannel =
-  match ochannel with
-  | Some channel -> close_out channel
-  | None -> ()
 
 
 let main filename jsonfile debug_level print_level =
@@ -174,27 +162,27 @@ let main filename jsonfile debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    let json_channel = maybe_open_channel jsonfile in
+    let json_channel = Pp.maybe_open_channel jsonfile in
     try
       begin match frontend filename with
       | CF.Exception.Exception err ->
          prerr_endline (CF.Pp_errors.to_string err);
-         maybe_close_channel json_channel;
+         Pp.maybe_close_channel json_channel;
          exit 1
       | CF.Exception.Result file ->
          if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
          match Process.process file with
          | Ok () -> 
-            maybe_close_channel json_channel;
+            Pp.maybe_close_channel json_channel;
             exit 0
          | Error (loc,ostacktrace,err) ->
             TypeErrors.report loc ostacktrace err;
-            maybe_close_channel json_channel;
+            Pp.maybe_close_channel json_channel;
             exit 1
       end
     with
     | exc -> 
-       maybe_close_channel json_channel; 
+       Pp.maybe_close_channel json_channel; 
        raise exc
 
 
