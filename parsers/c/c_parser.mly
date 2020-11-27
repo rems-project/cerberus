@@ -96,7 +96,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 
 (* NON-STD: *)
-  ASSERT OFFSETOF
+  ASSERT OFFSETOF TYPEOF
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
@@ -868,6 +868,13 @@ attribute_type_specifier_nonunique:
     { ty }
 ;
 
+typeof_arg:
+| expr= expression
+    { TO_arg (Location_ocaml.region ($startpos, $endpos) None, TO_expression expr) }
+| ty= type_name
+    { TO_arg (Location_ocaml.region ($startpos, $endpos) None, TO_type ty) }
+;
+
 type_specifier_unique:
 | VOID
     { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_void) }
@@ -881,6 +888,10 @@ type_specifier_unique:
     { spec }
 | spec= typedef_name_spec
     { spec }
+| TYPEOF expr= unary_expression
+    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_typeof_expr expr) }
+| TYPEOF LPAREN ty= type_name RPAREN
+    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_typeof_type ty) }
 ;
 
 attribute_type_specifier_unique:
