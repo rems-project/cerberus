@@ -7,7 +7,7 @@ open Debug_ocaml
 
 (* TODO: move this to Core_aux *)
 let rec match_pattern_pexpr (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
-  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_pexpr z = Pexpr (annots_pe, bTy, z) in
   match pat_, pexpr_ with
@@ -18,10 +18,10 @@ let rec match_pattern_pexpr (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_p
           | None ->
               `MISMATCHED
           | Some xs ->
-              `MATCHED (None, List.map (fun (sym, cval) -> (sym, `VAL cval)) xs)
+              `MATCHED (None, List.map (fun (sym, cval) -> (sym, Annot.get_loc annots_pe, `VAL cval)) xs)
         end
     | CaseBase (Some sym, _), PEsym sym' ->
-        `MATCHED (None, [(sym, `SYM sym')])
+        `MATCHED (None, [(sym, Annot.get_loc annots_pe, `SYM sym')])
 
 
     | CaseBase _, _
@@ -80,7 +80,7 @@ Vloaded (LVspecified oval)) ->
 
 
 let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
-   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_expr z = Expr (annots_e, z) in
   match pat_, expr_ with
@@ -177,8 +177,8 @@ let rec select_case_pexpr subst_sym pexpr = function
               | `MISMATCHED ->
                   `MATCHED
                     ( z
-                    ,  List.fold_left (fun acc (sym, cval) ->
-                         subst_sym sym cval acc
+                    ,  List.fold_left (fun acc (sym, loc_opt, cval) ->
+                         subst_sym sym (loc_opt, cval) acc
                        ) e (List.rev xs) )
               | `MULTIPLE ->
                   `MULTIPLE
@@ -223,69 +223,77 @@ let subst_expr pat cval e =
 
 
 let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
-  Pexpr ( annot
-        , bTy
-        , match pexpr_ with
-            | PEsym sym' ->
-                if sym = sym' then
-                  match z with
-                    | `VAL cval ->
-                        PEval cval
-                    | `SYM sym ->
-                        PEsym sym
-                else
-                  pexpr_
-            | PEimpl _
-            | PEval _
-            | PEundef _ ->
-                pexpr_
-            | PEconstrained xs ->
-                PEconstrained begin
-                  List.map (fun (constrs, pe) -> (constrs, subst_sym_pexpr2 sym z pe)) xs
-                end
-            | PEerror (str, pe) ->
-                PEerror (str, subst_sym_pexpr2 sym z pe)
-            | PEctor (ctor, pes) ->
-                PEctor (ctor, List.map (subst_sym_pexpr2 sym z) pes)
-            | PEcase (pe, xs) ->
-                PEcase ( subst_sym_pexpr2 sym z pe
-                       , List.map (fun (pat, pe) ->
-                           (pat, if Core_aux.in_pattern sym pat then pe else subst_sym_pexpr2 sym z pe)
-                         ) xs )
-            | PEarray_shift (pe1, ty, pe2) ->
-                PEarray_shift (subst_sym_pexpr2 sym z pe1, ty, subst_sym_pexpr2 sym z pe2)
-            | PEmember_shift (pe, tag_sym, memb_ident) ->
-                PEmember_shift (subst_sym_pexpr2 sym z pe, tag_sym, memb_ident)
-            | PEnot pe ->
-                PEnot (subst_sym_pexpr2 sym z pe)
-            | PEop (bop, pe1, pe2) ->
-                PEop (bop, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2)
-            | PEstruct (tag_sym, xs) ->
-                PEstruct (tag_sym, List.map (fun (ident, pe) -> (ident, subst_sym_pexpr2 sym z pe)) xs)
-            | PEunion (tag_sym, ident, pe) ->
-                PEunion (tag_sym, ident, subst_sym_pexpr2 sym z pe)
-            | PEcfunction pe ->
-                PEcfunction (subst_sym_pexpr2 sym z pe)
-            | PEmemberof (tag_sym, memb_ident, pe) ->
-                PEmemberof (tag_sym, memb_ident, subst_sym_pexpr2 sym z pe)
-            | PEcall (nm, pes) ->
-                PEcall (nm, List.map (subst_sym_pexpr2 sym z) pes)
-            | PElet (pat, pe1, pe2) ->
-                PElet (pat, subst_sym_pexpr2 sym z pe1, if Core_aux.in_pattern sym pat then pe2 else subst_sym_pexpr2 sym z pe2)
-            | PEif (pe1, pe2, pe3) ->
-                PEif (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3)
-            | PEis_scalar pe ->
-                PEis_scalar (subst_sym_pexpr2 sym z pe)
-            | PEis_integer pe ->
-                PEis_integer (subst_sym_pexpr2 sym z pe)
-            | PEis_signed pe ->
-                PEis_signed (subst_sym_pexpr2 sym z pe)
-            | PEis_unsigned pe ->
-                PEis_unsigned (subst_sym_pexpr2 sym z pe)
-            | PEbmc_assume pe ->
-                PEbmc_assume (subst_sym_pexpr2 sym z pe)
-            | PEare_compatible (pe1, pe2) ->
-                PEare_compatible (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2) )
+  let wrap z = Pexpr (annot, bTy, z) in
+  match pexpr_ with
+    | PEsym sym' ->
+      if sym = sym' then
+        let annot' = match fst z with
+          | Some loc ->
+              Annot.Aloc loc :: annot
+          | None ->
+              annot in
+        match snd z with
+          | `VAL cval ->
+               Pexpr (annot', bTy, PEval cval)
+          | `SYM sym ->
+            Pexpr (annot', bTy, PEsym sym)
+      else
+        wrap pexpr_
+    | PEimpl _
+    | PEval _
+    | PEundef _ ->
+        wrap pexpr_
+    | PEconstrained xs ->
+        wrap begin
+          PEconstrained begin
+            List.map (fun (constrs, pe) -> (constrs, subst_sym_pexpr2 sym z pe)) xs
+          end
+        end
+    | PEerror (str, pe) ->
+        wrap (PEerror (str, subst_sym_pexpr2 sym z pe))
+    | PEctor (ctor, pes) ->
+        wrap (PEctor (ctor, List.map (subst_sym_pexpr2 sym z) pes))
+    | PEcase (pe, xs) ->
+        wrap begin
+          PEcase ( subst_sym_pexpr2 sym z pe
+                 , List.map (fun (pat, pe) ->
+                     (pat, if Core_aux.in_pattern sym pat then pe else subst_sym_pexpr2 sym z pe)
+                 ) xs )
+        end
+    | PEarray_shift (pe1, ty, pe2) ->
+        wrap (PEarray_shift (subst_sym_pexpr2 sym z pe1, ty, subst_sym_pexpr2 sym z pe2))
+    | PEmember_shift (pe, tag_sym, memb_ident) ->
+        wrap (PEmember_shift (subst_sym_pexpr2 sym z pe, tag_sym, memb_ident))
+    | PEnot pe ->
+        wrap (PEnot (subst_sym_pexpr2 sym z pe))
+    | PEop (bop, pe1, pe2) ->
+        wrap (PEop (bop, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2))
+    | PEstruct (tag_sym, xs) ->
+        wrap (PEstruct (tag_sym, List.map (fun (ident, pe) -> (ident, subst_sym_pexpr2 sym z pe)) xs))
+    | PEunion (tag_sym, ident, pe) ->
+        wrap (PEunion (tag_sym, ident, subst_sym_pexpr2 sym z pe))
+    | PEcfunction pe ->
+        wrap (PEcfunction (subst_sym_pexpr2 sym z pe))
+    | PEmemberof (tag_sym, memb_ident, pe) ->
+        wrap (PEmemberof (tag_sym, memb_ident, subst_sym_pexpr2 sym z pe))
+    | PEcall (nm, pes) ->
+        wrap (PEcall (nm, List.map (subst_sym_pexpr2 sym z) pes))
+    | PElet (pat, pe1, pe2) ->
+        wrap (PElet (pat, subst_sym_pexpr2 sym z pe1, if Core_aux.in_pattern sym pat then pe2 else subst_sym_pexpr2 sym z pe2))
+    | PEif (pe1, pe2, pe3) ->
+        wrap (PEif (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3))
+    | PEis_scalar pe ->
+        wrap (PEis_scalar (subst_sym_pexpr2 sym z pe))
+    | PEis_integer pe ->
+        wrap (PEis_integer (subst_sym_pexpr2 sym z pe))
+    | PEis_signed pe ->
+        wrap (PEis_signed (subst_sym_pexpr2 sym z pe))
+    | PEis_unsigned pe ->
+        wrap (PEis_unsigned (subst_sym_pexpr2 sym z pe))
+    | PEbmc_assume pe ->
+        wrap (PEbmc_assume (subst_sym_pexpr2 sym z pe))
+    | PEare_compatible (pe1, pe2) ->
+        wrap (PEare_compatible (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2))
 
 let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
   Expr ( annot
@@ -401,14 +409,14 @@ and subst_sym_paction2 sym z (Paction (p, act)) =
 
 
 let apply_substs_pexpr xs pe =
-  List.fold_left (fun acc (sym, cval) ->
-    subst_sym_pexpr2 sym cval acc
+  List.fold_left (fun acc (sym, loc_opt, cval) ->
+    subst_sym_pexpr2 sym (loc_opt, cval) acc
   ) pe xs
 
 
 let apply_substs_expr xs e =
-  List.fold_left (fun acc (sym, cval) ->
-    subst_sym_expr2 sym cval acc
+  List.fold_left (fun acc (sym, loc_opt, cval) ->
+    subst_sym_expr2 sym (loc_opt, cval) acc
   ) e xs
 
 
