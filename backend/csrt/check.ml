@@ -1548,19 +1548,14 @@ let rec infer_expr (locs : path) {local; labels; global}
   debug 3 (lazy (match r with
                  | False -> item "type" (parens !^"no return")
                  | Normal (rt,_) -> item "type" (RT.pp rt)));
+  let () = maybe_print_json (lazy (json_return_local_or_false_with_path locs r)) in
   return r
 
 and infer_expr_pop (locs : path) delta {local; labels; global} 
                    (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m =
   let local = delta ++ marked ++ local in 
   let* result = infer_expr locs {local; labels; global} e in
-  let locs = 
-    let (M_Expr (annots, _)) = e in
-    Loc.log locs (get_loc_ annots) 
-  in
-  let result = Fallible.map pop_return result in
-  let () = maybe_print_json (lazy (json_return_local_or_false_with_path locs result)) in
-  return result
+  return (Fallible.map pop_return result)
 
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
@@ -1573,77 +1568,74 @@ let rec check_expr (locs : path) {local; labels; global} (e : 'bty expr)
   debug 3 (lazy (item "expr" (group (pp_expr e))));
   debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
   debug 3 (lazy (item "ctxt" (L.pp local)));
-  match e_ with
-  | M_Eif (casym, e1, e2) ->
-     let* carg = arg_of_asym (head1 locs) local casym in
-     let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-     let* paths =
-       ListM.mapM (fun (lc, e) ->
-           let delta = add_uc lc L.empty in
-           let*? () = 
-             false_if_unreachable locs {local = delta ++ local; global} 
-           in
-           check_expr_pop locs delta {local; labels; global} e typ 
-         ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
-     in
-     return (merge_paths (head1 locs) paths)
-  | M_Ecase (asym, pats_es) ->
-     let* arg = arg_of_asym (head1 locs) local asym in
-     let* paths = 
-       ListM.mapM (fun (pat, pe) ->
-           (* TODO: make pattern matching return (in delta)
-              constraints corresponding to the pattern *)
-           let* delta = pattern_match arg.loc (S arg.lname) pat arg.bt in
-           let*? () = 
-             false_if_unreachable locs {local = delta ++ local; global} 
-           in
-           check_expr_pop locs delta {local; labels; global} e typ
-         ) pats_es
-     in
-     return (merge_paths (head1 locs) paths)
-  | M_Elet (p, e1, e2) ->
-     let*? (rt, local) = infer_pexpr locs {local; global} e1 in
-     let* delta = match p with 
-       | M_Symbol sym -> return (bind sym rt)
-       | M_Pat pat -> pattern_match_rt (head1 locs) pat rt
-     in
-     check_expr_pop locs delta {local; labels; global} e2 typ
-  | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
-  | M_Esseq (pat, e1, e2) ->
-     let*? (rt, local) = infer_expr locs {local; labels; global} e1 in
-     let* delta = pattern_match_rt (head1 locs) pat rt in
-     check_expr_pop locs delta {local; labels; global} e2 typ
-  | _ ->
-     let*? (rt, local) = infer_expr locs {local; labels; global} e in
-     let* ((bt, lname), delta) = bind_logically rt in
-     let local = delta ++ marked ++ local in
-     match typ with
-     | Normal typ ->
-        let* local = subtype (head1 locs) {local; global} {bt; lname; loc = (head1 locs)} typ in
-        let* local = pop_empty (head1 locs) local in
-        return (Normal local)
-     | False ->
-        let err = 
-          !^"This expression returns but is expected" ^/^
-            !^"to have noreturn-type." 
-        in
-        fail (head1 locs) (Generic err)
+  let* result = match e_ with
+    | M_Eif (casym, e1, e2) ->
+       let* carg = arg_of_asym (head1 locs) local casym in
+       let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+       let* paths =
+         ListM.mapM (fun (lc, e) ->
+             let delta = add_uc lc L.empty in
+             let*? () = 
+               false_if_unreachable locs {local = delta ++ local; global} 
+             in
+             check_expr_pop locs delta {local; labels; global} e typ 
+           ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
+       in
+       return (merge_paths (head1 locs) paths)
+    | M_Ecase (asym, pats_es) ->
+       let* arg = arg_of_asym (head1 locs) local asym in
+       let* paths = 
+         ListM.mapM (fun (pat, pe) ->
+             (* TODO: make pattern matching return (in delta)
+                constraints corresponding to the pattern *)
+             let* delta = pattern_match arg.loc (S arg.lname) pat arg.bt in
+             let*? () = 
+               false_if_unreachable locs {local = delta ++ local; global} 
+             in
+             check_expr_pop locs delta {local; labels; global} e typ
+           ) pats_es
+       in
+       return (merge_paths (head1 locs) paths)
+    | M_Elet (p, e1, e2) ->
+       let*? (rt, local) = infer_pexpr locs {local; global} e1 in
+       let* delta = match p with 
+         | M_Symbol sym -> return (bind sym rt)
+         | M_Pat pat -> pattern_match_rt (head1 locs) pat rt
+       in
+       check_expr_pop locs delta {local; labels; global} e2 typ
+    | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
+    | M_Esseq (pat, e1, e2) ->
+       let*? (rt, local) = infer_expr locs {local; labels; global} e1 in
+       let* delta = pattern_match_rt (head1 locs) pat rt in
+       check_expr_pop locs delta {local; labels; global} e2 typ
+    | _ ->
+       let*? (rt, local) = infer_expr locs {local; labels; global} e in
+       let* ((bt, lname), delta) = bind_logically rt in
+       let local = delta ++ marked ++ local in
+       match typ with
+       | Normal typ ->
+          let* local = subtype (head1 locs) {local; global} {bt; lname; loc = (head1 locs)} typ in
+          let* local = pop_empty (head1 locs) local in
+          return (Normal local)
+       | False ->
+          let err = 
+            !^"This expression returns but is expected" ^/^
+              !^"to have noreturn-type." 
+          in
+          fail (head1 locs) (Generic err)
+  in
+  let () = maybe_print_json (lazy (json_local_or_false_with_path locs (Normal local))) in
+  return result
+  
 
 and check_expr_pop (locs : path) delta {labels; local; global} (e : 'bty expr) 
                    (typ : RT.t fallible) : (L.t fallible, type_error) m =
   let local = delta ++ marked ++ local in 
   let* result = check_expr locs {labels; local; global} e typ in
-  let locs = 
-    let (M_Expr (annots, _)) = e in
-    Loc.log locs (get_loc_ annots) 
-  in
   match result with
-  | False -> 
-     let () = maybe_print_json (lazy (json_local_or_false_with_path locs False)) in
-     return False
+  | False -> return False
   | Normal local -> 
      let* local = pop_empty (head1 locs) local in
-     let () = maybe_print_json (lazy (json_local_or_false_with_path locs (Normal local))) in
      return (Normal local)
 
 
@@ -1820,3 +1812,4 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
    - fix Ecase "LC (Bool true)"
    - constrain return type shape, maybe also function type shape
  *)
+
