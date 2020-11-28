@@ -67,7 +67,7 @@ module Make (L : LocationCheck) = struct
 
 (* include other things to ignore *)
 let update_loc loc1 loc2 = 
-  if Loc.is_unknown loc2 then loc1 else loc2
+  if L.good_location loc2 then loc1 else loc2
   
 
 
