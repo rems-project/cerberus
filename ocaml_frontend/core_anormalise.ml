@@ -56,6 +56,15 @@ type asyms = asym list
 let always_explode_eif:bool=  false
 
 
+module type LocationCheck = sig
+
+  val good_location : Location_ocaml.t -> bool
+
+end
+
+
+module Make (L : LocationCheck) = struct
+
 (* include other things to ignore *)
 let update_loc loc1 loc2 = 
   if Loc.is_unknown loc2 then loc1 else loc2
@@ -803,3 +812,5 @@ let normalise_file file : (ft, lt, ct, bt, st, ut, unit) Mucore.mu_file =
    ; mu_loop_attributes = file.loop_attributes0
   })
 
+
+end

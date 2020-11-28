@@ -122,6 +122,10 @@ let rec do_rewrites_and_log named_rewrites core_file =
      do_rewrites_and_log named_rewrites core_file
   
 
+
+
+module CA_ = CA.Make(Locations)
+
 let process core_file =
   Colour.do_colour := false;
   print_log_file "original" (CORE core_file);
@@ -131,8 +135,8 @@ let process core_file =
     ; remove_unused
     ; hackish_order
     ; sequentialise ]
-    core_file >>= fun core_file ->
-  let mu_file = CF.Core_anormalise.normalise_file core_file in
+    core_file >>= fun core_file -> 
+  let mu_file = CA_.normalise_file core_file in
   print_log_file "after_anf" (MUCORE mu_file);
   let mu_file = CF.Mucore_inline_break.ib_file mu_file in
   print_log_file "after_inlining_break" (MUCORE mu_file);
