@@ -11,6 +11,8 @@ val pp : t -> PPrint.document
 
 val update : t -> Location_ocaml.t -> t
 
+val updateB : t -> Location_ocaml.t -> t * bool
+
 val log : path -> Location_ocaml.t -> path
 
 val head_pos_of_location : t -> string * string

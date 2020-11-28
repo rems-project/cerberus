@@ -31,8 +31,12 @@ let good_location (loc : Location_ocaml.t) =
     | Some file -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
 
 
+let updateB (loc : t) (loc2 : Location_ocaml.t) = 
+  if good_location loc2 then (loc2, true) else (loc, false)
+
 let update (loc : t) (loc2 : Location_ocaml.t) = 
-  if good_location loc2 then loc2 else loc
+  if good_location loc2 then loc2 
+  else loc
 
 
 let log (locs : path) (loc' : Location_ocaml.t) : path =

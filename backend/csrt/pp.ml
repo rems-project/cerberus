@@ -240,12 +240,15 @@ let maybe_close_channel ochannel =
 
 let maybe_print_json = 
   let first = ref true in
-  fun json ->
-  match !json_output_channel with
-  | None -> ()
-  | Some channel -> 
-     if !first then first := false else output_string channel ",\n";
-     Yojson.Safe.pretty_to_channel ~std:true channel (Lazy.force json);
-     output_char channel '\n'
+  fun guard json ->
+  if guard then 
+    begin 
+      match !json_output_channel with
+      | None -> ()
+      | Some channel -> 
+         if !first then first := false else output_string channel ",\n";
+         Yojson.Safe.pretty_to_channel ~std:true channel (Lazy.force json);
+         output_char channel '\n'
+    end
 
 
