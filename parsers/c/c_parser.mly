@@ -868,13 +868,6 @@ attribute_type_specifier_nonunique:
     { ty }
 ;
 
-typeof_arg:
-| expr= expression
-    { TO_arg (Location_ocaml.region ($startpos, $endpos) None, TO_expression expr) }
-| ty= type_name
-    { TO_arg (Location_ocaml.region ($startpos, $endpos) None, TO_type ty) }
-;
-
 type_specifier_unique:
 | VOID
     { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_void) }
