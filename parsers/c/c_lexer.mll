@@ -45,6 +45,7 @@ let keywords: (string * Tokens.token) list = [
     "struct"         , STRUCT;
     "switch"         , SWITCH;
     "typedef"        , TYPEDEF;
+    "typeof"         , TYPEOF;
     "union"          , UNION;
     "unsigned"       , UNSIGNED;
     "void"           , VOID;

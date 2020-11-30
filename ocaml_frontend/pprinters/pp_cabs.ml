@@ -406,6 +406,10 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
                node_of_list_option dtree_of_enumerator enums_opt)
     | TSpec_name id ->
         Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_identifier id))
+    | TSpec_typeof_expr e ->
+        Dnode (pp_ctor "TSpec_typeof_expr", [dtree_of_cabs_expression e])
+    | TSpec_typeof_type ty ->
+        Dnode (pp_ctor "TSpec_typeof_type", [dtree_of_type_name ty])
 
 and dtree_of_struct_declaration = function
   | Struct_declaration (attrs, specs, qs, align_specs, s_decls) ->

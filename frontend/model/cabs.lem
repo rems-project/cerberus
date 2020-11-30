@@ -168,7 +168,6 @@ and storage_class_specifier =
   | SC_auto
   | SC_register
 
-
 (* §6.7.2 Type specifiers, Syntax *)
 and cabs_type_specifier_ =
   | TSpec_void
@@ -188,6 +187,9 @@ and cabs_type_specifier_ =
   | TSpec_enum   of maybe Symbol.identifier * maybe (list (Symbol.identifier * maybe
                                                            cabs_expression))
   | TSpec_name   of Symbol.identifier
+  (* GCC typeof extension *)
+  | TSpec_typeof_expr of cabs_expression
+  | TSpec_typeof_type of type_name
 and cabs_type_specifier =
   | TSpec of Loc.t * cabs_type_specifier_
 
