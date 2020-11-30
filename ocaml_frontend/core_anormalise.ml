@@ -68,6 +68,11 @@ module Make (L : LocationCheck) = struct
 (* include other things to ignore *)
 let update_loc loc1 loc2 = 
   if L.good_location loc2 then loc1 else loc2
+
+let maybe_set_loc loc annots = 
+  if L.good_location loc 
+  then Annot.set_loc loc annots 
+  else annots
   
 
 
@@ -166,7 +171,7 @@ let expr_n_pexpr_domain = { letbinder = letbinder_pexpr_in_expr }
 let letbind_pexpr loc domain pexpr ctxt : 'a = 
   let (M_Pexpr (annots, bty, pe_)) = pexpr in
   let loc' = update_loc loc (get_loc_ annots) in
-  let pexpr = M_Pexpr (Annot.set_loc loc' annots, bty, pe_) in
+  let pexpr = M_Pexpr (maybe_set_loc loc' annots, bty, pe_) in
   let sym = Symbol.fresh () in
   let asym = a_pack (only_loc annots) bty sym in
   let body = ctxt asym in
