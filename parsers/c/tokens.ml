@@ -34,6 +34,7 @@ type token =
   | STRUCT
   | SWITCH
   | TYPEDEF
+  | TYPEOF
   | UNION
   | UNSIGNED
   | VOID
@@ -157,6 +158,7 @@ let string_of_token = function
   | STRUCT -> "STRUCT"
   | SWITCH -> "SWITCH"
   | TYPEDEF -> "TYPEDEF"
+  | TYPEOF -> "TYPEOF"
   | UNION -> "UNION"
   | UNSIGNED -> "UNSIGNED"
   | VOID -> "VOID"
