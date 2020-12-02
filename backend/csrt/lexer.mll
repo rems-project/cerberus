@@ -42,8 +42,8 @@ rule read = parse
   | "."            { DOT }
   | ".."           { DOTDOT }
   | "&"            { AMPERSAND }
-  | "block"        { BLOCK }
-  | "unowned"      { UNOWNED }
+  | "~block"       { BLOCK }
+  | "~unowned"     { UNOWNED }
   | "it_max u32"   { MAX_U32 }
   | "it_max u64"   { MAX_U64 }
   | "it_min u32"   { MIN_U32 }
