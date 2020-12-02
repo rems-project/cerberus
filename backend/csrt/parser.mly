@@ -21,7 +21,7 @@ let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
 %token LT GT LE GE EQ NE EQEQ
 %token MINIMUM MAXIMUM
 %token MIN_U32 MIN_U64 MAX_U32 MAX_U64 MIN_I32 MIN_I64 MAX_I32 MAX_I64
-%token UNINIT UNOWNED
+%token BLOCK UNOWNED
 %token EOF
 %left LT GT LE GE EQEQ NE
 %left PLUS MINUS
@@ -92,7 +92,7 @@ expr:
 
 condition: 
   | UNOWNED o = obj_        { Ownership (o, Unowned) }
-  | UNINIT o = obj_         { Ownership (o, Uninit) }
+  | BLOCK o = obj_          { Ownership (o, Block) }
   | e = expr                { Constraint e }
 
 definition: 

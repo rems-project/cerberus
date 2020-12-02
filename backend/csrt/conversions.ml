@@ -314,7 +314,7 @@ let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
         Debug_ocaml.error "todo: void*"
      | _, Some (AST.Unowned) ->
         (make_unowned_pointer sym (ST.of_ctype sct2), [])
-     | _, Some (AST.Uninit) ->
+     | _, Some (AST.Block) ->
         (make_uninit_pointer sym (ST.of_ctype sct2), [])
      | Sctypes.Struct tag, None ->
         let predicate = 

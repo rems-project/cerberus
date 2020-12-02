@@ -84,7 +84,7 @@ and 'var index_term =
 
 type ownership = 
   | Unowned
-  | Uninit
+  | Block
 
 type 'var condition = 
   | Constraint of 'var index_term

@@ -42,7 +42,7 @@ rule read = parse
   | "."            { DOT }
   | ".."           { DOTDOT }
   | "&"            { AMPERSAND }
-  | "uninit"       { UNINIT }
+  | "block"        { BLOCK }
   | "unowned"      { UNOWNED }
   | "it_max u32"   { MAX_U32 }
   | "it_max u64"   { MAX_U64 }
