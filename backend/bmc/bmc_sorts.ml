@@ -398,7 +398,7 @@ module AddressSortPNVI = struct
     match Expr.get_args expr with
     | [a] ->
         if Arithmetic.is_int a then
-          sprintf "0x%x" (Big_int.int_of_big_int (Integer.get_big_int a))
+          sprintf "0x%x" (Z.to_int (Integer.get_big_int a))
         else Expr.to_string expr
     | _ -> Expr.to_string expr
 
@@ -677,7 +677,7 @@ module PointerSortPNVI : PointerSortAPI = struct
     | [prov;addr] ->
         let pp_prov =
           if Arithmetic.is_int prov
-          then (Big_int.string_of_big_int (Integer.get_big_int prov))
+          then (Z.to_string (Integer.get_big_int prov))
           else Expr.to_string prov in
         let pp_addr = AddressSortPNVI.pp addr in
         sprintf (*"ptr(@%s, %s)"*) "(@%s, %s)" pp_prov pp_addr

@@ -1358,6 +1358,8 @@ asm_qualifier:
     { `VOLATILE }
 | INLINE
     { `INLINE }
+| GOTO
+    { `GOTO }
 ;
 
 asm_output_input:

@@ -50,7 +50,7 @@ let z3num_to_int (expr: Expr.expr) =
   else
     (assert (Arithmetic.is_int_numeral expr);
       (* TODO: switch types to big int *)
-     Big_int.int_of_big_int (Integer.get_big_int expr))
+     Z.to_int (Integer.get_big_int expr))
 
 (* =========== Z3 HELPER FUNCTIONS =========== *)
 let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
@@ -119,7 +119,7 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
     | OpExp   ->
         if (Expr.is_numeral arg1 &&
-            (Big_int.int_of_big_int (Integer.get_big_int arg1) = 2))
+            (Z.to_int (Integer.get_big_int arg1) = 2))
         then
           Expr.mk_app g_ctx BinaryExponFunctions.bin_exp_decl [arg2]
         else
