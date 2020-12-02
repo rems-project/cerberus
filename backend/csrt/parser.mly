@@ -91,8 +91,8 @@ expr:
 
 
 condition: 
-  | UNOWNED o = obj         { Ownership (o, Unowned) }
-  | UNINIT o = obj          { Ownership (o, Uninit) }
+  | UNOWNED o = obj_        { Ownership (o, Unowned) }
+  | UNINIT o = obj_         { Ownership (o, Uninit) }
   | e = expr                { Constraint e }
 
 definition: 

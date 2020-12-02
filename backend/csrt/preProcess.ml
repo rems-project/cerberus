@@ -524,7 +524,7 @@ let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra
                 return (msym, ct)
               ) args
           in
-          let* (ftyp, args, objs) = 
+          let* (ftyp, objs) = 
             Conversions.make_fun_spec loc' struct_decls args ret_ctype attrs in
           return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
                   Pmap.add fsym (objs, args) funinfo_extra)

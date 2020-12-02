@@ -18,9 +18,12 @@ type obj_map = (string obj * Sym.t) list
 
 
 
-let pointee = function
-  | VariableLocation v -> Obj_ (Id v)
-  | Obj_ o -> Obj_ (Pointee o)
+let pointee_obj_ = function
+  | VariableLocation v -> Id v
+  | Obj_ o -> Pointee o
+
+let pointee pointer =
+  Obj_ (pointee_obj_ pointer)
 
 
 let rec pp_obj_ = function
@@ -32,6 +35,18 @@ let rec pp_obj_ = function
 let pp_obj = function
   | VariableLocation s -> ampersand ^^ !^s
   | Obj_ obj_ -> pp_obj_ obj_
+
+
+let prefix = function
+  | Id v -> None
+  | PredicateArg (o, _) -> Some o
+  | StructMember (o, _) -> Some o
+  | Pointee o -> Some o
+
+let rec prefixes obj =
+  match prefix obj with
+  | Some obj' -> obj' :: prefixes obj'
+  | None -> []
 
 
 
@@ -73,7 +88,7 @@ type ownership =
 
 type 'var condition = 
   | Constraint of 'var index_term
-  | Ownership of 'var obj * ownership
+  | Ownership of 'var obj_ * ownership
   (* | Define of string * 'var index_term *)
 
 
@@ -120,5 +135,14 @@ let compare_obj varcompare o1 o2 =
 
 
 
-  
 
+
+let equal_or_in_prefix varcompare obj obj' = 
+  let rec aux obj =
+    if compare_obj_ varcompare obj' obj = 0 then true 
+    else 
+      match prefix obj with
+      | None -> false
+      | Some prefix -> aux prefix
+  in 
+  aux obj'

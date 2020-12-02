@@ -148,24 +148,39 @@ let get_attribute_args kind (CF.Annot.Attrs attrs) =
   List.concat argses
 
 
-let pre_or_post loc kind attrs known_objs = 
+let pre_or_post loc kind attrs = 
   let* requirements = 
     ListM.mapM 
       (fun (loc',str) -> 
         parse (Locations.update loc loc') Parser.condition_entry str
       ) (get_attribute_args kind attrs)
   in
-  let* (_ownership,constraints) = 
-    ListM.fold_leftM (fun (states,constrs) p ->
+  let* (ownership,constraints) = 
+    ListM.fold_leftM (fun (ownership, constrs) p ->
         match p with
         | Ownership (obj,o) -> 
-           return (states @ [(obj,o)], constrs)
+           let in_prefix = 
+             List.find_opt (fun (obj',_) -> AST.equal_or_in_prefix String.compare obj obj') ownership 
+           in
+           begin match constrs, in_prefix with
+           | _ :: _, _ -> 
+              fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
+           | _, Some (obj',_) ->
+              fail loc (Generic (!^"already specified ownership for" ^^^ AST.pp_obj_ obj'))
+           | _, None -> 
+              return (ownership @ [(obj,o)], constrs)
+           end
         | Constraint p_it -> 
-           let* it = resolve_index_term loc known_objs p_it in
-           return (states, constrs @ [LC.LC it])
+           return (ownership, constrs @ [p_it])
       ) ([], []) requirements
   in
-  return constraints
+  return (ownership,constraints)
+  
+let resolve_constraints loc known_objs its =
+  ListM.mapM (fun p_it ->
+      let* it = resolve_index_term loc known_objs p_it in
+      return (LC.LC it)
+    ) its
   
 
 let definitions loc attrs known_objs = 

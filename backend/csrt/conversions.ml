@@ -252,8 +252,26 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
 
+let make_unowned_pointer pointer stored_type = 
+  let open RT in
+  Computational ((pointer,Loc),
+  Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
+  Constraint (LC (IT.Aligned (stored_type, S pointer)),
+  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
+  LRT.I)))
 
-let make_owned_pointer struct_decls pointer stored_type rt = 
+let make_uninit_pointer pointer stored_type = 
+  let open RT in
+  let size = Memory.size_of_stored_type stored_type in
+  let uninit = RE.Block {pointer = S pointer; size; block_type = Uninit} in
+  Computational ((pointer,Loc),
+  Resource ((uninit, 
+  Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
+  Constraint (LC (IT.Aligned (stored_type, S pointer)),
+  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
+  LRT.I)))))
+
+let make_owned_pointer pointer stored_type rt = 
   let open RT in
   let (Computational ((pointee,bt),lrt)) = rt in
   let size = Memory.size_of_stored_type stored_type in
@@ -268,21 +286,37 @@ let make_owned_pointer struct_decls pointer stored_type rt =
 
 
 
-let rec rt_of_sct loc obj struct_decls (sym : Sym.t) sct =
+
+module AST = Parse_ast
+
+let ownership_of_obj ownership obj = 
+  let found = 
+    List.find_opt (fun (obj',o) -> 
+        AST.compare_obj_ String.compare obj obj' = 0
+      ) ownership 
+  in
+  Option.map snd found
+
+
+let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
   let (Sctypes.Sctype (annots, sct_)) = sct in
   let loc = Loc.update loc (get_loc_ annots) in
   let open RT in
   let open Sctypes in
   match sct_ with
-  | Pointer (_qualifiers, sct) ->
-     let (Sctypes.Sctype (annots, sct_)) = sct in
+  | Pointer (_qualifiers, sct2) ->
+     let (Sctypes.Sctype (annots, sct2_)) = sct2 in
      let open RT in
      let loc = Loc.update loc (get_loc_ annots) in
      let pointee = Sym.fresh () in
-     begin match sct_ with
-     | Sctypes.Void -> 
+     begin match sct2_, ownership_of_obj ownership (AST.pointee_obj_ obj) with
+     | Sctypes.Void, _ -> 
         Debug_ocaml.error "todo: void*"
-     | Sctypes.Struct tag ->
+     | _, Some (AST.Unowned) ->
+        (make_unowned_pointer sym (ST.of_ctype sct2), [])
+     | _, Some (AST.Uninit) ->
+        (make_uninit_pointer sym (ST.of_ctype sct2), [])
+     | Sctypes.Struct tag, None ->
         let predicate = 
           Predicate {pointer = S sym; name = Tag tag; args = [pointee]} in
         let rt = 
@@ -290,13 +324,12 @@ let rec rt_of_sct loc obj struct_decls (sym : Sym.t) sct =
           Logical ((pointee, Base (BT.Struct tag)), 
           Resource (predicate, I)))
         in
-        (rt, [(Parse_ast.pointee obj, pointee)])
-     | _ ->
-        let st = ST.of_ctype sct in
+        (rt, [(AST.pointee obj, pointee)])
+     | _, None ->
         let (rt, objs) = 
-          rt_of_sct loc (Parse_ast.pointee obj) struct_decls pointee sct in
-        let objs = (Parse_ast.pointee obj, pointee) :: objs in
-        let rt = make_owned_pointer struct_decls sym st rt in
+          rt_of_sct loc ownership (AST.pointee obj) struct_decls pointee sct2 in
+        let objs = (AST.pointee obj, pointee) :: objs in
+        let rt = make_owned_pointer sym (ST.of_ctype sct2) rt in
         (rt,objs)
      end
   | _ ->
@@ -335,40 +368,44 @@ let plain_pointer_sct sct =
 
 
 
-module AST = Parse_ast
 
 let make_fun_spec loc struct_decls args ret_sct attrs 
-    : (FT.t * (Sym.t * Sctypes.t) list * (AST.obj_map * (AST.obj_map * AST.obj_map)), type_error) m = 
+    : (FT.t * (AST.obj_map * (AST.obj_map * AST.obj_map)), type_error) m = 
   let open FT in
   let open RT in
-  let aux (sym, sct) (acc_global_objs, (acc_pre_objs, acc_post_objs), arg_scts, args, rets) =
+  let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
+  let* (post_ownership, post_constraints) = Assertions.ensures loc attrs in
+  let aux (sym, sct) (acc_global_objs, (acc_pre_objs, acc_post_objs), args, rets) =
     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
     let obj = AST.VariableLocation name in
-    let sl = Sym.fresh_named name in
+    (* let sl = Sym.fresh_named name in *)
     let sct_lifted = plain_pointer_sct sct in
-    let (arg_rt, pre_objs) = rt_of_sct loc obj struct_decls sl sct_lifted in
-    let (ret_rt, post_objs) = rt_of_sct loc obj struct_decls sl sct_lifted in
-    ((obj, sl) :: acc_global_objs,
+    let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
+    let (ret_rt, post_objs) = rt_of_sct loc post_ownership obj struct_decls sym sct_lifted in
+    ((obj, sym) :: acc_global_objs,
      (pre_objs @ acc_pre_objs, post_objs @ acc_post_objs), 
-     (sl, sct) :: arg_scts, 
      Tools.comp (FT.of_rt arg_rt) args, 
      LRT.concat (RT.lrt ret_rt) rets)
   in
-  let (everywhere_objs, (pre_objs, post_objs), arg_scts, args, rets) = 
-    List.fold_right aux args ([], ([], []), [], (fun ft -> ft), I)
+  let (everywhere_objs, (pre_objs, post_objs), args, rets) = 
+    List.fold_right aux args ([], ([], []), (fun ft -> ft), I)
   in
   let ret_name = "ret" in
   let ret_sym = Sym.fresh_named ret_name in
   let (ret_rt, post_objs') = 
-    rt_of_sct loc (AST.Obj_ (Id ret_name)) struct_decls ret_sym ret_sct
+    rt_of_sct loc post_ownership (AST.Obj_ (Id ret_name)) struct_decls ret_sym ret_sct
   in
   let post_objs = (AST.Obj_ (AST.Id ret_name), ret_sym) :: post_objs @ post_objs' in
   let* definition_objs = Assertions.definitions loc attrs pre_objs in
-  let* requires = Assertions.requires loc attrs (definition_objs @ pre_objs) in
-  let* ensures = Assertions.ensures loc attrs (definition_objs @ post_objs) in
+  let* requires = Assertions.resolve_constraints loc pre_objs pre_constraints in
+  print stderr (item "pre_ownership" (Pp.list (fun (obj_,_) -> AST.pp_obj_ obj_) pre_ownership ));
+  print stderr (item "pre_objs" (Pp.list (fun (obj_,_) -> AST.pp_obj obj_) pre_objs ));
+  print stderr (item "post_ownership" (Pp.list (fun (obj_,_) -> AST.pp_obj_ obj_) post_ownership ));
+  print stderr (item "post_objs" (Pp.list (fun (obj_,_) -> AST.pp_obj obj_) post_objs ));
+  let* ensures = Assertions.resolve_constraints loc (definition_objs @ post_objs) post_constraints in
   let rt = RT.concat ret_rt (LRT.concat rets (LRT.mConstraints ensures LRT.I)) in
   let ftyp = args (FT.mConstraints requires (I rt)) in
-  return (ftyp, arg_scts, (everywhere_objs @ definition_objs, (pre_objs,post_objs)))
+  return (ftyp, (everywhere_objs @ definition_objs, (pre_objs,post_objs)))
 
 
 
@@ -379,12 +416,12 @@ let make_label_spec
       (fargs : (Sym.t * Sctypes.t) list) 
       (args : (Sym.t option * Sctypes.t) list) 
       attrs = 
-  let module AST = Parse_ast in 
+  let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
   let aux1 (sym, sct) (acc_pre_objs, args) =
     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
     let obj = AST.VariableLocation name in
     let sct_lifted = plain_pointer_sct sct in
-    let (arg_rt, pre_objs) = rt_of_sct loc obj struct_decls sym sct_lifted in
+    let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
     (pre_objs @ acc_pre_objs, Tools.comp (LT.of_lrt (RT.lrt arg_rt)) args)
   in
   let (pre_objs, fargs_ftt) = List.fold_right aux1 fargs ([], (fun ft -> ft)) in
@@ -392,10 +429,10 @@ let make_label_spec
     let sym = Option.value (Sym.fresh ()) msym in
     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
     let obj = AST.Obj_ (AST.Id name) in
-    let (arg_rt, pre_objs) = rt_of_sct loc obj struct_decls sym sct in
+    let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct in
     (pre_objs @ acc_pre_objs, Tools.comp (LT.of_rt arg_rt) args)
   in
   let (pre_objs, args_ftt) = List.fold_right aux2 args (pre_objs, fargs_ftt) in
-  let* requires = Assertions.requires loc attrs (fglobal_objs @ pre_objs) in
+  let* requires = Assertions.resolve_constraints loc (fglobal_objs @ pre_objs) pre_constraints in
   let ltyp = args_ftt (LT.mConstraints requires (I False.False)) in
   return ltyp
