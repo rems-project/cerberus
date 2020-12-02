@@ -242,7 +242,7 @@ type ('st_def, 'ut_def) mu_tag_definition =
 type ('st,'ut) mu_tag_definitions = (Symbol.sym, ('st,'ut) mu_tag_definition)
   Pmap.map
 
-type 'ct mu_funinfo_type = 'ct * (symbol option * 'ct) list
+type 'ct mu_funinfo_type = 'ct * (symbol * 'ct) list
 
 type 'ft mu_funinfo = 
   M_funinfo of (Location_ocaml.t * Annot.attributes * 'ft * bool * bool)

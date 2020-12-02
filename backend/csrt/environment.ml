@@ -2,7 +2,14 @@ module SymMap = Map.Make(Sym)
 module LT = ArgumentTypes.Make(False)
 
 
-type labels = LT.t SymMap.t
+
+type label_kind = 
+  | Return
+  | Loop
+  | Other
+
+
+type labels = (LT.t * label_kind) SymMap.t
 
 type t_impure = 
   { global : Global.t; 

@@ -540,8 +540,8 @@ let calltype_ft loc {local; global} args (ftyp : FT.t) : (RT.t * L.t, type_error
   let* (rt, local) = handle_prompt global prompt in
   return (rt, local)
 
-let calltype_lt loc {local; global} args (ltyp : LT.t) : (False.t * L.t, type_error) m =
-  let prompt = Spine_LT.spine loc LabelCall{local; global} args ltyp in
+let calltype_lt loc {local; global} args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
+  let prompt = Spine_LT.spine loc (LabelCall label_kind) {local; global} args ltyp in
   let* (rt, local) = handle_prompt global prompt in
   return (rt, local)
 
@@ -1774,12 +1774,21 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
   let* labels = 
     PmapM.foldM (fun sym def acc ->
         match def with
-        | M_Return lt
-        | M_Label (lt, _, _, _) -> 
+        | M_Return lt ->
            let* () = 
              WellTyped.WLT.welltyped loc {local = pure_delta; global} lt
            in
-           return (SymMap.add sym lt acc)
+           return (SymMap.add sym (lt, Return) acc)
+        | M_Label (lt, _, _, annots) -> 
+           let label_kind = match CF.Annot.get_label_annot annots with
+             | Some (LAloop_body loop_id) -> Loop
+             | Some (LAloop_continue loop_id) -> Loop
+             | _ -> Other
+           in
+           let* () = 
+             WellTyped.WLT.welltyped loc {local = pure_delta; global} lt
+           in
+           return (SymMap.add sym (lt, label_kind) acc)
       ) label_defs SymMap.empty 
   in
   let check_label lsym def () = 

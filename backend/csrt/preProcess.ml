@@ -19,6 +19,8 @@ open Debug_ocaml
 
 open ListM
 
+open Assertions
+
 
 
 module StringSet = Set.Make(String)
@@ -359,13 +361,22 @@ let retype_impls (loc : Loc.t) impls =
     impls CF.Implementation.implementation_constant_compare
 
 
-let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs ~fsym lsym def = 
+
+module AST = Parse_ast
+type funinfos = FT.t mu_funinfos
+type funinfo_extra = (Sym.t, (AST.obj_map * (AST.obj_map * AST.obj_map)) * (Sym.t * Sctypes.t) list) Pmap.map
+
+
+
+
+
+let retype_label (loc : Loc.t) ~funinfo ~(funinfo_extra:funinfo_extra) ~loop_attributes ~structs ~fsym lsym def = 
   let ftyp = match Pmap.lookup fsym funinfo with
     | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
     | None -> error (Sym.pp_string fsym^" not found in funinfo")
   in
-  let (names,farg_rts) = match Pmap.lookup fsym funinfo_extra with
-    | Some (names,arg_rts) -> (names, arg_rts)
+  let (farg_objs,farg_rts) = match Pmap.lookup fsym funinfo_extra with
+    | Some ((objs,_),args) -> (objs, args)
     | None -> error (Sym.pp_string fsym^" not found in funinfo")
   in
   match def with
@@ -385,19 +396,19 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
      begin match CF.Annot.get_label_annot annots with
      | Some (LAloop_body loop_id)
      | Some (LAloop_continue loop_id)
-     | Some (LAloop_break loop_id) 
        ->
-        let this_loop_attributes = Pmap.lookup loop_id loop_attributes in
-        begin match Option.map Collect_rc_attrs.collect_rc_attrs this_loop_attributes with
-        | None 
-        | Some []  ->
-           fail loc (Generic (!^"need a type annotation for this loop"))
-        | Some rc_attrs -> 
-           let* (_,lt) = Rc_conversions.make_loop_label_spec_annot 
-                           loc names structs farg_rts argtyps rc_attrs  in
-           let* e = retype_expr loc e in
-           return (M_Label (lt,args,e,annots))
-        end
+        let this_attrs = match Pmap.lookup loop_id loop_attributes with
+          | Some attrs -> attrs 
+          | None -> CF.Annot.no_attributes
+        in
+        let* lt = 
+          Conversions.make_label_spec loc farg_objs
+            structs farg_rts argtyps this_attrs
+        in
+        let* e = retype_expr loc e in
+        return (M_Label (lt,args,e,annots))
+     | Some (LAloop_break loop_id) ->
+        error "break label has not been inlined"
      | Some LAreturn -> 
         error "return label has not been inlined"
      | Some LAswitch -> 
@@ -408,7 +419,7 @@ let retype_label (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
 
 
 
-let retype_fun_map_decl (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
+let retype_fun_map_decl (loc : Loc.t) ~funinfo ~(funinfo_extra:funinfo_extra) ~loop_attributes ~structs
                         fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
   match decl with
   | M_Fun (cbt,args,pexpr) ->
@@ -489,7 +500,9 @@ let retype_tagDefs
     tagDefs (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)
 
 
-let retype_funinfo struct_decls funinfo stdlib_fsyms =
+
+
+let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra, type_error) m =
   PmapM.foldM
     (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
       let special_type = match Sym.name fsym with
@@ -511,14 +524,10 @@ let retype_funinfo struct_decls funinfo stdlib_fsyms =
                 return (msym, ct)
               ) args
           in
-          let* (names,ftyp,arg_rts) = match Collect_rc_attrs.collect_rc_attrs attrs with
-            | [] ->  
-               Conversions.make_fun_spec loc' struct_decls args ret_ctype
-            | rc_attrs ->
-               Rc_conversions.make_fun_spec_annot loc' struct_decls rc_attrs args ret_ctype
-          in
+          let* (ftyp, args, objs) = 
+            Conversions.make_fun_spec loc' struct_decls args ret_ctype attrs in
           return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
-                  Pmap.add fsym (names,arg_rts) funinfo_extra)
+                  Pmap.add fsym (objs, args) funinfo_extra)
     ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
 
 

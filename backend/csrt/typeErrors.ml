@@ -11,8 +11,6 @@ module VB=VariableBinding
 
 
 
-
-
 type access =
   | Load 
   | Store
@@ -22,7 +20,7 @@ type access =
 type situation = 
   | Access of access
   | FunctionCall
-  | LabelCall
+  | LabelCall of Environment.label_kind
   | Subtyping
   | Unpacking
 
@@ -52,8 +50,8 @@ type type_error =
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
-  | Illtyped_it : (Sym.t,'bt) IndexTerms.term -> type_error
-  | Polymorphic_it : (Sym.t,'bt) IndexTerms.term -> type_error
+  | Illtyped_it : 'bt IndexTerms.term -> type_error
+  | Polymorphic_it : 'bt IndexTerms.term -> type_error
   | Unsat_constraint of LogicalConstraints.t
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
@@ -119,8 +117,12 @@ let pp_type_error = function
         !^"Missing ownership for free-ing"
      | FunctionCall, _ -> 
         !^"Missing ownership for calling function"
-     | LabelCall, _ -> 
-        !^"Missing ownership for jumping to label"
+     | LabelCall Return, _ -> 
+        !^"Missing ownership for returning"
+     | LabelCall Loop, _ -> 
+        !^"Missing ownership for loop"
+     | LabelCall Other, _ -> 
+        !^"Missing ownership for calling label"
      | Subtyping, _ -> 
         !^"Missing ownership for subtyping"
      | Unpacking, _ -> 
@@ -149,7 +151,11 @@ let pp_type_error = function
         !^"Cannot unpack resource needed for free-ing"
      | FunctionCall ->
         !^"Cannot unpack resource needed for calling function"
-     | LabelCall ->
+     | LabelCall Return ->
+        !^"Cannot unpack resource needed for returning"
+     | LabelCall Loop ->
+        !^"Cannot unpack resource needed for loop"
+     | LabelCall Other ->
         !^"Cannot unpack resource needed for jumping to label"
      | Subtyping ->
         !^"Cannot unpack resource needed for subtyping"
@@ -169,7 +175,11 @@ let pp_type_error = function
         !^"Cannot pack resource needed for free-ing"
      | FunctionCall ->
         !^"Cannot pack resource needed for calling function"
-     | LabelCall ->
+     | LabelCall Return ->
+        !^"Cannot pack resource needed for returning"
+     | LabelCall Loop ->
+        !^"Cannot pack resource needed for loop"
+     | LabelCall Other ->
         !^"Cannot pack resource needed for jumping to label"
      | Subtyping ->
         !^"Cannot pack resource needed for subtyping"

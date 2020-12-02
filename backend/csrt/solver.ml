@@ -409,7 +409,10 @@ let used_resource_for_pointer {local;global} pointer_it
         (if holds then Some (where) else None)
       ) (Local.all_named_used_resources local)
   in
-  Tools.at_most_one "multiple points-to for same pointer" points
+  match points with
+  | [] -> None
+  | r :: _ -> Some r
+
 
 
 module StringMap = Map.Make(String)

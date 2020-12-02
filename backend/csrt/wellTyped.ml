@@ -30,7 +30,7 @@ module WIT = struct
 
     let context = it in
 
-    let rec infer : 'bt. Loc.t -> (Sym.t, 'bt) IT.term -> (LogicalSorts.t * IT.t, type_error) m =
+    let rec infer : 'bt. Loc.t -> 'bt IT.term -> (LogicalSorts.t * IT.t, type_error) m =
       fun loc it ->
       (* let () = Pp.print stderr (Local.pp local) in *)
       match it with
@@ -266,7 +266,7 @@ module WIT = struct
          let* () = check_bound loc local KLogical s in
          return (Local.get_l s local, S s)
 
-    and check_aux : 'bt. Loc.t -> LS.t -> (Sym.t, 'bt) IT.term -> (IT.t, type_error) m =
+    and check_aux : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ls it ->
       match it, ls with
       | Nil _, Base (List bt) ->
@@ -279,7 +279,7 @@ module WIT = struct
            let (Base bt) = ls in
            return it
 
-    and infer_set_type : 'bt. Loc.t -> (Sym.t, 'bt) IT.term -> (BT.t * IT.t, type_error) m =
+    and infer_set_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
       fun loc it ->
       let* (ls, t) = infer loc it in
       let* bt = match ls with

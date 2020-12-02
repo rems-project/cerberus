@@ -36,4 +36,8 @@
   cerb_frontend cerb_backend mem_concrete util earley.core))
 
 (ocamllex lexer)
-(menhir (modules parser))
+
+(menhir
+  (modules parser)
+  (flags --explain --dump) 
+)

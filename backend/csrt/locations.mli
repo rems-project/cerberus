@@ -1,3 +1,6 @@
+(* taking things from ocaml_locations *)
+
+
 type t
 
 type loc = t
@@ -24,3 +27,8 @@ val unpack : t -> Location_ocaml.t
 (* todo *)
 val json_loc : t -> Yojson.Safe.t
 val json_path : path -> Yojson.Safe.t
+
+
+val point: Lexing.position -> t
+val region: Lexing.position * Lexing.position -> Lexing.position option -> t
+val regions: (Lexing.position * Lexing.position) list -> Lexing.position option -> t

@@ -39,72 +39,73 @@ end
 
 
 
-type ('id,'bt) term =
-  | S of 'id
+type 'bt term =
+  | S of Sym.t
   | Num of Z.t
   | Pointer of Z.t
   | Bool of bool
   | Unit
 
-  | Add of ('id,'bt) term * ('id,'bt) term
-  | Sub of ('id,'bt) term * ('id,'bt) term
-  | Mul of ('id,'bt) term * ('id,'bt) term
-  | Div of ('id,'bt) term * ('id,'bt) term
-  | Exp of ('id,'bt) term * ('id,'bt) term
-  | Rem_t of ('id,'bt) term * ('id,'bt) term
-  | Rem_f of ('id,'bt) term * ('id,'bt) term
-  | Min of ('id,'bt) term * ('id,'bt) term
-  | Max of ('id,'bt) term * ('id,'bt) term
+  | Add of 'bt term * 'bt term
+  | Sub of 'bt term * 'bt term
+  | Mul of 'bt term * 'bt term
+  | Div of 'bt term * 'bt term
+  | Exp of 'bt term * 'bt term
+  | Rem_t of 'bt term * 'bt term
+  | Rem_f of 'bt term * 'bt term
+  | Min of 'bt term * 'bt term
+  | Max of 'bt term * 'bt term
 
-  | EQ of ('id,'bt) term * ('id,'bt) term
-  | NE of ('id,'bt) term * ('id,'bt) term
-  | LT of ('id,'bt) term * ('id,'bt) term
-  | GT of ('id,'bt) term * ('id,'bt) term
-  | LE of ('id,'bt) term * ('id,'bt) term
-  | GE of ('id,'bt) term * ('id,'bt) term
+  | EQ of 'bt term * 'bt term
+  | NE of 'bt term * 'bt term
+  | LT of 'bt term * 'bt term
+  | GT of 'bt term * 'bt term
+  | LE of 'bt term * 'bt term
+  | GE of 'bt term * 'bt term
 
-  | Null of ('id,'bt) term
-  | And of ('id,'bt) term list
-  | Or of ('id,'bt) term list
-  | Impl of ('id,'bt) term * ('id,'bt) term
-  | Not of ('id,'bt) term
-  | ITE of ('id,'bt) term * ('id,'bt) term * ('id,'bt) term  (* bool -> int -> int *)
+  | Null of 'bt term
+  | And of 'bt term list
+  | Or of 'bt term list
+  | Impl of 'bt term * 'bt term
+  | Not of 'bt term
+  | ITE of 'bt term * 'bt term * 'bt term  (* bool -> int -> int *)
 
-  | Tuple of ('id,'bt) term list
-  | Nth of 'bt * int * ('id,'bt) term (* bt is tuple bt *)
+  | Tuple of 'bt term list
+  | Nth of 'bt * int * 'bt term (* bt is tuple bt *)
 
-  | AllocationSize of ('id,'bt) term
-  | Offset of ('id,'bt) term * ('id,'bt) term
-  | LocLT of ('id,'bt) term * ('id,'bt) term
-  | LocLE of ('id,'bt) term * ('id,'bt) term
-  | Disjoint of (('id,'bt) term * Z.t) * (('id,'bt) term * Z.t)
-  | AlignedI of ('id,'bt) term * ('id,'bt) term
-  | Aligned of ST.t * ('id,'bt) term
+  | AllocationSize of 'bt term
+  | Offset of 'bt term * 'bt term
+  | LocLT of 'bt term * 'bt term
+  | LocLE of 'bt term * 'bt term
+  | Disjoint of ('bt term * Z.t) * ('bt term * Z.t)
+  | AlignedI of 'bt term * 'bt term
+  | Aligned of ST.t * 'bt term
 
-  | Representable of ST.t * ('id,'bt) term
+  | Representable of ST.t * 'bt term
 
-  | Struct of BT.tag * (BT.member * ('id,'bt) term) list
-  | StructMember of BT.tag * ('id,'bt) term * BT.member
-  | StructMemberOffset of BT.tag * ('id,'bt) term * BT.member
+  | Struct of BT.tag * (BT.member * 'bt term) list
+  | StructMember of BT.tag * 'bt term * BT.member
+  | StructMemberOffset of BT.tag * 'bt term * BT.member
 
   | Nil of 'bt
-  | Cons of ('id,'bt) term * ('id,'bt) term
-  | List of ('id,'bt) term list * 'bt
-  | Head of ('id,'bt) term
-  | Tail of ('id,'bt) term
+  | Cons of 'bt term * 'bt term
+  | List of 'bt term list * 'bt
+  | Head of 'bt term
+  | Tail of 'bt term
 
-  | SetMember of ('id,'bt) term * ('id,'bt) term
-  | SetAdd of ('id,'bt) term * ('id,'bt) term
-  | SetRemove of ('id,'bt) term * ('id,'bt) term
-  | SetUnion of (('id,'bt) term) List1.t
-  | SetIntersection of (('id,'bt) term) List1.t
-  | SetDifference of ('id,'bt) term * ('id,'bt) term
-  | Subset of ('id,'bt) term * ('id,'bt) term
+  | SetMember of 'bt term * 'bt term
+  | SetAdd of 'bt term * 'bt term
+  | SetRemove of 'bt term * 'bt term
+  | SetUnion of ('bt term) List1.t
+  | SetIntersection of ('bt term) List1.t
+  | SetDifference of 'bt term * 'bt term
+  | Subset of 'bt term * 'bt term
 
 
-type parse_ast = (string, unit) term
-type t = (Sym.t, BT.t) term
+type typed = BT.t term
+type untyped = unit term
 
+type t = typed
 
 
 
@@ -263,7 +264,7 @@ let rec equal it it' =
 
 
 
-let pp (type bt) (it : (Sym.t, bt) term) : PPrint.document = 
+let pp (type bt) (it : bt term) : PPrint.document = 
 
   let rec aux atomic it = 
     let mparens pped = if atomic then parens pped else pped in
@@ -299,7 +300,7 @@ let pp (type bt) (it : (Sym.t, bt) term) : PPrint.document =
        mparens (!^ "max" ^^^ aux true it1 ^^^ aux true it2)
 
     | EQ (o1,o2) -> 
-       mparens (aux true o1 ^^^ equals ^^^ aux true o2)
+       mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
     | NE (o1,o2) -> 
        if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2260}" ^^^ aux true o2)
        else mparens (aux true o1 ^^^ langle ^^ rangle ^^^ aux true o2)
@@ -744,15 +745,15 @@ let (%>=) t1 t2 = GE (t1, t2)
 let in_range within (min, max) = And [LE (min, within); LE (within, max)]
 
 (* for some reason ocaml wants the 'type id' and the 'unit' *)
-let min_u32 (type id bt) () : (id,bt) term = Num Z.zero
-let max_u32 (type id bt) () : (id,bt) term = Num (Z.sub (Z.power_int_positive_int 2 32) (Z.of_int 1))
-let min_u64 (type id bt) () : (id,bt) term = Num Z.zero
-let max_u64 (type id bt) () : (id,bt) term = Num (Z.sub (Z.power_int_positive_int 2 64) (Z.of_int 1))
+let min_u32 (type bt) () : bt term = Num Z.zero
+let max_u32 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 32) (Z.of_int 1))
+let min_u64 (type bt) () : bt term = Num Z.zero
+let max_u64 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 64) (Z.of_int 1))
 
-let min_i32 (type id bt) () : (id,bt) term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (32 - 1)))
-let max_i32 (type id bt) () : (id,bt) term = Num (Z.sub (Z.power_int_positive_int 2 (32 - 1)) (Z.of_int 1))
-let min_i64 (type id bt) () : (id,bt) term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (64 - 1)))
-let max_i64 (type id bt) () : (id,bt) term = Num (Z.sub (Z.power_int_positive_int 2 (64 - 1)) (Z.of_int 1))
+let min_i32 (type bt) () : bt term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (32 - 1)))
+let max_i32 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 (32 - 1)) (Z.of_int 1))
+let min_i64 (type bt) () : bt term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (64 - 1)))
+let max_i64 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 (64 - 1)) (Z.of_int 1))
 
 let int x = Num (Z.of_int x)
 

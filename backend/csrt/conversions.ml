@@ -268,59 +268,49 @@ let make_owned_pointer struct_decls pointer stored_type rt =
 
 
 
-let rec rt_of_pointer_sct loc struct_decls (pointer : Sym.t) sct = 
-  let (Sctypes.Sctype (annots, sct_)) = sct in
-  let open RT in
-  let loc = Loc.update loc (get_loc_ annots) in
-  begin match sct_ with
-  | Sctypes.Struct tag when struct_predicates ->
-     let pointee = Sym.fresh () in
-     let predicate = 
-       Predicate {pointer = S pointer; name = Tag tag; args = [pointee]} in
-     let rt = 
-       Computational ((pointer, BT.Loc), 
-       Logical ((pointee, Base (BT.Struct tag)), 
-       Resource (predicate, I)))
-     in
-     return rt
-  | Sctypes.Struct tag ->
-     let open Global in
-     let* decl = match SymMap.find_opt tag struct_decls with
-       | Some decl -> return decl
-       | None -> fail loc (Missing_struct tag)
-     in
-     let rt = RT.freshify decl.closed_stored in
-     let Computational ((s',_), _) = rt in
-     let rt = RT.subst_var {before = s'; after = pointer} rt in
-     return rt
-  | Sctypes.Void -> 
-     fail loc (Generic !^"this use of void* needs a type annotation")
-  | _ ->
-     let st = ST.of_ctype sct in
-     let* rt = rt_of_sct loc struct_decls (Sym.fresh ()) sct in
-     return (make_owned_pointer struct_decls pointer st rt)
-  end
-
-and rt_of_sct loc struct_decls (s : Sym.t) sct =
+let rec rt_of_sct loc obj struct_decls (sym : Sym.t) sct =
   let (Sctypes.Sctype (annots, sct_)) = sct in
   let loc = Loc.update loc (get_loc_ annots) in
   let open RT in
   let open Sctypes in
   match sct_ with
-  | Pointer (_qualifiers, ct) ->
-     rt_of_pointer_sct loc struct_decls s ct
+  | Pointer (_qualifiers, sct) ->
+     let (Sctypes.Sctype (annots, sct_)) = sct in
+     let open RT in
+     let loc = Loc.update loc (get_loc_ annots) in
+     let pointee = Sym.fresh () in
+     begin match sct_ with
+     | Sctypes.Void -> 
+        Debug_ocaml.error "todo: void*"
+     | Sctypes.Struct tag ->
+        let predicate = 
+          Predicate {pointer = S sym; name = Tag tag; args = [pointee]} in
+        let rt = 
+          Computational ((sym, BT.Loc), 
+          Logical ((pointee, Base (BT.Struct tag)), 
+          Resource (predicate, I)))
+        in
+        (rt, [(Parse_ast.pointee obj, pointee)])
+     | _ ->
+        let st = ST.of_ctype sct in
+        let (rt, objs) = 
+          rt_of_sct loc (Parse_ast.pointee obj) struct_decls pointee sct in
+        let objs = (Parse_ast.pointee obj, pointee) :: objs in
+        let rt = make_owned_pointer struct_decls sym st rt in
+        (rt,objs)
+     end
   | _ ->
      let bt = BT.of_sct sct in
      let rt = 
-       Computational ((s, bt), 
-       Constraint (LC (IT.Representable (ST_Ctype sct, S s)),I))
+       Computational ((sym, bt), 
+       Constraint (LC (IT.Representable (ST_Ctype sct, S sym)),I))
      in
-     return rt
+     let objs = [] in
+     (rt, objs)
 
 
 
 (* function types *)
-
 
 let update_values_lrt lrt =
   let subst_non_pointer = LRT.subst_var_fancy ~re_subst_var:RE.subst_non_pointer in
@@ -335,71 +325,77 @@ let update_values_lrt lrt =
   in
   aux lrt
 
-let make_fun_spec loc struct_decls args ret_sct = 
+
+
+let plain_pointer_sct sct = 
+  let qualifiers = 
+    CF.Ctype.{const = false; restrict = false; volatile = false} 
+  in
+  Sctypes.Sctype ([], (Pointer (qualifiers, sct)))
+
+
+
+module AST = Parse_ast
+
+let make_fun_spec loc struct_decls args ret_sct attrs 
+    : (FT.t * (Sym.t * Sctypes.t) list * (AST.obj_map * (AST.obj_map * AST.obj_map)), type_error) m = 
   let open FT in
   let open RT in
-  let* (names, arg_rts, args, rets) = 
-    ListM.fold_rightM (fun (msym, sct) (names, arg_rts, args, rets) ->
-        let oname = Option.bind msym Sym.name in
-        let sl = Sym.fresh_onamed oname in
-        let* arg_rt = rt_of_pointer_sct loc struct_decls sl sct in
-        let arg_rts = (oname, arg_rt) :: arg_rts in
-        let arg = FT.of_rt arg_rt in
-        let args = Tools.comp arg args in
-        let ret = update_values_lrt (RT.lrt arg_rt) in
-        let names = match oname with
-          | Some ident -> 
-             let (Computational ((_, bt), _)) = arg_rt in
-             StringMap.add ident (sl, LS.Base bt) names
-          | None -> names
-        in
-        return (names, arg_rts, args, LRT.concat ret rets)
-      ) 
-      args (StringMap.empty, [], (fun ft -> ft), I)
+  let aux (sym, sct) (acc_global_objs, (acc_pre_objs, acc_post_objs), arg_scts, args, rets) =
+    let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
+    let obj = AST.VariableLocation name in
+    let sl = Sym.fresh_named name in
+    let sct_lifted = plain_pointer_sct sct in
+    let (arg_rt, pre_objs) = rt_of_sct loc obj struct_decls sl sct_lifted in
+    let (ret_rt, post_objs) = rt_of_sct loc obj struct_decls sl sct_lifted in
+    ((obj, sl) :: acc_global_objs,
+     (pre_objs @ acc_pre_objs, post_objs @ acc_post_objs), 
+     (sl, sct) :: arg_scts, 
+     Tools.comp (FT.of_rt arg_rt) args, 
+     LRT.concat (RT.lrt ret_rt) rets)
   in
-  let* (Computational ((ret_name,bound),ret)) = 
-    rt_of_sct loc struct_decls (Sym.fresh ()) ret_sct in
-  let ftyp = args (I (RT.Computational ((ret_name,bound), LRT.concat ret rets))) in
-  return (names, ftyp, arg_rts)
-
-
-
-
-
-(* unused currently: picking some default types for labels *)
-let make_label_spec (loc : Loc.t) (ftyp : FT.t) 
-                    (struct_decls : Global.struct_decls) 
-                    (args : (Sym.t option * Sctypes.t) list) : (LT.t, type_error) m =
-  let subst_non_pointer = FT.subst_var ~re_subst_var:RE.subst_non_pointer in
-  let rec aux = function
-    | FT.Computational (_,lt) -> aux lt
-    | FT.Logical ((s,ls),lt) ->
-       let s' = Sym.fresh () in
-       let lt' = subst_non_pointer {before=s;after=s'} lt in
-       let* lt' = aux lt' in
-       return (LT.Logical ((s',ls), lt'))
-    | FT.Resource (re,lrt) -> 
-       let* lrt = aux lrt in
-       return (LT.Resource (re,lrt))
-    | FT.Constraint (lc,lrt) -> 
-       let* lrt = aux lrt in
-       return (LT.Constraint (lc,lrt))
-    | FT.I _ -> 
-       let* arguments = 
-         ListM.fold_leftM (fun args (msym, sct) ->
-             let s = Sym.fresh_onamed (Option.bind msym Sym.name) in
-             let* arg_rt = rt_of_pointer_sct loc struct_decls s sct in
-             let arg = LT.of_rt arg_rt in
-             let args = Tools.comp args arg in
-             return args
-           ) 
-           (fun ft -> ft) args
-       in
-       let ftyp = arguments (LT.I False.False) in
-       return ftyp
+  let (everywhere_objs, (pre_objs, post_objs), arg_scts, args, rets) = 
+    List.fold_right aux args ([], ([], []), [], (fun ft -> ft), I)
   in
-  aux ftyp
+  let ret_name = "ret" in
+  let ret_sym = Sym.fresh_named ret_name in
+  let (ret_rt, post_objs') = 
+    rt_of_sct loc (AST.Obj_ (Id ret_name)) struct_decls ret_sym ret_sct
+  in
+  let post_objs = (AST.Obj_ (AST.Id ret_name), ret_sym) :: post_objs @ post_objs' in
+  let* definition_objs = Assertions.definitions loc attrs pre_objs in
+  let* requires = Assertions.requires loc attrs (definition_objs @ pre_objs) in
+  let* ensures = Assertions.ensures loc attrs (definition_objs @ post_objs) in
+  let rt = RT.concat ret_rt (LRT.concat rets (LRT.mConstraints ensures LRT.I)) in
+  let ftyp = args (FT.mConstraints requires (I rt)) in
+  return (ftyp, arg_scts, (everywhere_objs @ definition_objs, (pre_objs,post_objs)))
 
 
 
-
+let make_label_spec 
+      (loc : Loc.t)
+      fglobal_objs
+      struct_decls
+      (fargs : (Sym.t * Sctypes.t) list) 
+      (args : (Sym.t option * Sctypes.t) list) 
+      attrs = 
+  let module AST = Parse_ast in 
+  let aux1 (sym, sct) (acc_pre_objs, args) =
+    let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
+    let obj = AST.VariableLocation name in
+    let sct_lifted = plain_pointer_sct sct in
+    let (arg_rt, pre_objs) = rt_of_sct loc obj struct_decls sym sct_lifted in
+    (pre_objs @ acc_pre_objs, Tools.comp (LT.of_lrt (RT.lrt arg_rt)) args)
+  in
+  let (pre_objs, fargs_ftt) = List.fold_right aux1 fargs ([], (fun ft -> ft)) in
+  let aux2 (msym, sct) (acc_pre_objs, args) =
+    let sym = Option.value (Sym.fresh ()) msym in
+    let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
+    let obj = AST.Obj_ (AST.Id name) in
+    let (arg_rt, pre_objs) = rt_of_sct loc obj struct_decls sym sct in
+    (pre_objs @ acc_pre_objs, Tools.comp (LT.of_rt arg_rt) args)
+  in
+  let (pre_objs, args_ftt) = List.fold_right aux2 args (pre_objs, fargs_ftt) in
+  let* requires = Assertions.requires loc attrs (fglobal_objs @ pre_objs) in
+  let ltyp = args_ftt (LT.mConstraints requires (I False.False)) in
+  return ltyp

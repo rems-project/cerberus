@@ -1,5 +1,6 @@
 (* from https://ocaml.org/releases/4.07/htmlman/lexyacc.html *)
 (* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)
+(* and from the core_parser *)
 
 
 {
@@ -24,7 +25,7 @@ let newline = '\r' | '\n' | "\r\n"
 rule read = parse
   | "+"            { PLUS }
   | "-"            { MINUS }
-  | "*"            { TIMES }
+  | "*"            { STAR }
   | "/"            { DIV }
   | "`div`"        { DIV }
   | "`min`"        { MINIMUM }
@@ -37,6 +38,10 @@ rule read = parse
   | ">="           { GE }
   | "<>"           { NE }
   | "="            { EQ }
+  | "=="           { EQEQ }
+  | "."            { DOT }
+  | ".."           { DOTDOT }
+  | "&"            { AMPERSAND }
   | "it_max u32"   { MAX_U32 }
   | "it_max u64"   { MAX_U64 }
   | "it_min u32"   { MIN_U32 }

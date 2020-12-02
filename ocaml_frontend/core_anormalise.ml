@@ -748,6 +748,13 @@ let normalise_tag_definitions tagDefs =
    (Pmap.map normalise_tag_definition tagDefs)
 
 let normalise_funinfo (loc,annots2,ret,args,b1,b2) = 
+  let args = 
+    map (fun (osym, ct) -> 
+        match osym with 
+        | Some sym -> (sym, ct)
+        | None -> (Symbol.fresh (), ct)
+      ) args 
+  in
    (M_funinfo (loc,annots2,(ret,args),b1,b2))
 
 let normalise_funinfos funinfos =

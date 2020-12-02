@@ -1,3 +1,5 @@
+(* taking things from ocaml_locations *)
+
 module StringSet = Set.Make(String)
 
 type t = Location_ocaml.t
@@ -114,3 +116,12 @@ let json_loc loc : Yojson.Safe.t =
 let json_path locs : Yojson.Safe.t = 
   let locs_json = List.map json_loc (List.rev (List1.to_list locs)) in
   `Variant ("path", Some (`List locs_json))
+
+
+
+
+
+
+let point = Location_ocaml.point
+let region = Location_ocaml.region
+let regions = Location_ocaml.regions
