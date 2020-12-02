@@ -1,84 +1,141 @@
 open Pp
 
-type 'var obj_ = 
-  | Id of 'var
-  | PredicateArg of 'var obj_ * string
-  | StructMember of 'var obj_ * string
-  | Pointee of 'var obj_
+module O = struct 
 
-type 'var obj = 
-  | VariableLocation of 'var
-  | Obj_ of 'var obj_
+  type 'var t = 
+    | Id of 'var
+    | PredicateArg of 'var t * string
+    | StructMember of 'var t * string
+    | Pointee of 'var t
 
-
-
-type obj_map = (string obj * Sym.t) list
+  type 'var obj = 'var t
 
 
+  let rec pp = function
+    | Id s -> !^s
+    | PredicateArg (o, s) -> pp o ^^ dot ^^ dot ^^ !^s
+    | StructMember (o, s) -> pp o ^^ dot ^^ !^s
+    | Pointee o -> star ^^ pp o
+
+  let prefix = function
+    | Id v -> None
+    | PredicateArg (o, _) -> Some o
+    | StructMember (o, _) -> Some o
+    | Pointee o -> Some o
+
+
+  let compare varcompare o1 o2 =
+    let rec aux o1 o2 = 
+    match o1, o2 with
+    | Id v1, Id v2 ->
+       varcompare v1 v2
+    | Id _, _ -> -1
+    | _, Id _ -> 1
+
+    | PredicateArg (o1,a1), PredicateArg (o2,a2) ->
+       let compared = aux o1 o2 in
+       if compared = 0 then String.compare a1 a2 else compared
+    | PredicateArg _, _ -> -1
+    | _, PredicateArg _ -> 1
+
+    | StructMember (o1,a1), StructMember (o2,a2) ->
+       let compared = aux o1 o2 in
+       if compared = 0 then String.compare a1 a2 else compared
+    | StructMember _, _ -> -1
+    | _, StructMember _ -> 1
+
+    | Pointee o1, Pointee o2 -> aux o1 o2
+    in
+    aux o1 o2
+
+  let equal_or_in_prefix varcompare obj obj' = 
+    let rec aux obj =
+      if compare varcompare obj' obj = 0 then true 
+      else 
+        match prefix obj with
+        | None -> false
+        | Some prefix -> aux prefix
+    in 
+    aux obj'
 
 
 
-let pointee_obj_ = function
-  | VariableLocation v -> Id v
-  | Obj_ o -> Pointee o
-
-let pointee pointer =
-  Obj_ (pointee_obj_ pointer)
+end
 
 
-let rec pp_obj_ = function
-  | Id s -> !^s
-  | PredicateArg (o, s) -> pp_obj_ o ^^ dot ^^ dot ^^ !^s
-  | StructMember (o, s) -> pp_obj_ o ^^ dot ^^ !^s
-  | Pointee o -> star ^^ pp_obj_ o
+module OOA = struct
 
-let pp_obj = function
-  | VariableLocation s -> ampersand ^^ !^s
-  | Obj_ obj_ -> pp_obj_ obj_
+  type 'var t = 
+    | Addr of 'var
+    | Obj of 'var O.t
 
 
-let prefix = function
-  | Id v -> None
-  | PredicateArg (o, _) -> Some o
-  | StructMember (o, _) -> Some o
-  | Pointee o -> Some o
+  type 'var obj_or_addr = 'var t
 
-let rec prefixes obj =
-  match prefix obj with
-  | Some obj' -> obj' :: prefixes obj'
-  | None -> []
+  type obj_map = (string t * Sym.t) list
 
 
+  let compare varcompare o1 o2 =
+    match o1, o2 with
+    | Addr v1, Addr v2 ->
+       varcompare v1 v2
+    | Addr _, _ -> -1
+    | _, Addr _ -> 1
 
-type 'var index_term_ = 
-  | Object of 'var obj
-  | Bool of bool
-  | Num of Z.t
-  | EQ of 'var index_term * 'var index_term
-  | NE of 'var index_term * 'var index_term
-  | LT of 'var index_term * 'var index_term
-  | GT of 'var index_term * 'var index_term
-  | LE of 'var index_term * 'var index_term
-  | GE of 'var index_term * 'var index_term
-  | Add of 'var index_term * 'var index_term
-  | Sub of 'var index_term * 'var index_term
-  | Mul of 'var index_term * 'var index_term
-  | Div of 'var index_term * 'var index_term
-  | Min of 'var index_term * 'var index_term
-  | Max of 'var index_term * 'var index_term
+    | Obj o1, Obj o2 -> O.compare varcompare o1 o2
 
-  (* maybe remove *)
-  | MIN_U32
-  | MIN_U64
-  | MAX_U32
-  | MAX_U64
-  | MIN_I32
-  | MIN_I64
-  | MAX_I32
-  | MAX_I64
 
-and 'var index_term = 
-  | IndexTerm of Locations.t * 'var index_term_
+  let pointee_obj_ = function
+    | Addr v -> O.Id v
+    | Obj o -> O.Pointee o
+
+  let pointee pointer =
+    Obj (pointee_obj_ pointer)
+  
+
+  let pp = function
+    | Addr s -> ampersand ^^ !^s
+    | Obj obj -> O.pp obj
+
+end
+
+
+
+module IndexTerms = struct
+
+  type 'var t_ = 
+    | Object of 'var OOA.t
+    | Bool of bool
+    | Num of Z.t
+    | EQ of 'var t * 'var t
+    | NE of 'var t * 'var t
+    | LT of 'var t * 'var t
+    | GT of 'var t * 'var t
+    | LE of 'var t * 'var t
+    | GE of 'var t * 'var t
+    | Add of 'var t * 'var t
+    | Sub of 'var t * 'var t
+    | Mul of 'var t * 'var t
+    | Div of 'var t * 'var t
+    | Min of 'var t * 'var t
+    | Max of 'var t * 'var t
+
+    (* maybe remove *)
+    | MIN_U32
+    | MIN_U64
+    | MAX_U32
+    | MAX_U64
+    | MIN_I32
+    | MIN_I64
+    | MAX_I32
+    | MAX_I64
+
+  and 'var t = 
+    | IndexTerm of Locations.t * 'var t_
+
+  type 'var index_term = 'var t
+
+end
 
 
 
@@ -87,62 +144,13 @@ type ownership =
   | Block
 
 type 'var condition = 
-  | Constraint of 'var index_term
-  | Ownership of 'var obj_ * ownership
+  | Constraint of 'var IndexTerms.t
+  | Ownership of 'var O.t * ownership
   (* | Define of string * 'var index_term *)
 
 
 type 'var definition = 
-  | Definition of string * 'var obj
+  | Definition of string * 'var OOA.t
 
 
 
-let compare_obj_ varcompare o1 o2 =
-  let rec aux o1 o2 = 
-  match o1, o2 with
-  | Id v1, Id v2 ->
-     varcompare v1 v2
-  | Id _, _ -> -1
-  | _, Id _ -> 1
-
-  | PredicateArg (o1,a1), PredicateArg (o2,a2) ->
-     let compared = aux o1 o2 in
-     if compared = 0 then String.compare a1 a2 else compared
-  | PredicateArg _, _ -> -1
-  | _, PredicateArg _ -> 1
-
-  | StructMember (o1,a1), StructMember (o2,a2) ->
-     let compared = aux o1 o2 in
-     if compared = 0 then String.compare a1 a2 else compared
-  | StructMember _, _ -> -1
-  | _, StructMember _ -> 1
-
-  | Pointee o1, Pointee o2 -> aux o1 o2
-  in
-  aux o1 o2
-
-
-let compare_obj varcompare o1 o2 =
-  match o1, o2 with
-  | VariableLocation v1, VariableLocation v2 ->
-     varcompare v1 v2
-  | VariableLocation _, _ -> -1
-  | _, VariableLocation _ -> 1
-
-  | Obj_ o1, Obj_ o2 -> compare_obj_ varcompare o1 o2
-
-
-
-
-
-
-
-let equal_or_in_prefix varcompare obj obj' = 
-  let rec aux obj =
-    if compare_obj_ varcompare obj' obj = 0 then true 
-    else 
-      match prefix obj with
-      | None -> false
-      | Some prefix -> aux prefix
-  in 
-  aux obj'

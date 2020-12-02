@@ -6,6 +6,9 @@
 %{
 open Parse_ast
 open Locations
+open IndexTerms
+open O
+open OOA
 
 let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
 %}
@@ -50,20 +53,20 @@ name:
   /* | label = ID AT id = ID   { (Some label,id) } */
   | id = ID                 { id } 
 
-obj_: 
-  | STAR o = obj_              { Pointee o }
-  | o = obj_ DOTDOT id = name  { PredicateArg (o,id) }
-  | o = obj_ DOT id = name     { StructMember (o,id) }
-  | id = name                  { Id id }
+obj: 
+  | STAR o = obj              { Pointee o }
+  | o = obj DOTDOT id = name  { PredicateArg (o,id) }
+  | o = obj DOT id = name     { StructMember (o,id) }
+  | id = name                 { Id id }
 
-obj:
-  | AMPERSAND id = name       { VariableLocation id }
-  | o = obj_                  { Obj_ o }
+obj_or_addr:
+  | AMPERSAND id = name       { Addr id }
+  | o = obj                   { Obj o }
 
 expr:
   | TRUE                    { pit ($startpos, $endpos) (Bool true) }
   | FALSE                   { pit ($startpos, $endpos) (Bool false) }
-  | o = obj                 { pit ($startpos, $endpos) (Object o) }
+  | o = obj_or_addr         { pit ($startpos, $endpos) (Object o) }
   | MIN_U32                 { pit ($startpos, $endpos) MIN_U32 }
   | MIN_U64                 { pit ($startpos, $endpos) MIN_U64 }
   | MAX_U32                 { pit ($startpos, $endpos) MAX_U32 }
@@ -91,10 +94,10 @@ expr:
 
 
 condition: 
-  | UNOWNED o = obj_        { Ownership (o, Unowned) }
-  | BLOCK o = obj_          { Ownership (o, Block) }
+  | UNOWNED o = obj         { Ownership (o, Unowned) }
+  | BLOCK o = obj           { Ownership (o, Block) }
   | e = expr                { Constraint e }
 
 definition: 
-  | id = name EQ o = obj    { Definition (id,o) }
+  | id = name EQ o = obj_or_addr    { Definition (id,o) }
 

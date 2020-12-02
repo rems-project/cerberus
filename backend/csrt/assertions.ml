@@ -14,6 +14,9 @@ open AST
 (* stealing some things from core_parser *)
 
 
+open O
+open OOA
+open IndexTerms
 
 let find_name loc names str = 
   begin match StringMap.find_opt str names with
@@ -21,15 +24,15 @@ let find_name loc names str =
   | None -> fail loc (Generic !^(str ^ " unbound"))
   end
 
-let resolve_obj loc (objs : (string obj * Sym.t) list) (obj : string obj) : (Sym.t, type_error) m = 
+let resolve_obj loc (objs : (string OOA.t * Sym.t) list) (obj : string OOA.t) : (Sym.t, type_error) m = 
   let found = 
     List.find_opt (fun (obj',sym) -> 
-        compare_obj String.compare obj obj' = 0
+        OOA.compare String.compare obj obj' = 0
       ) objs
   in
   match found with
   | None -> 
-     fail loc (Generic (!^"term" ^^^ pp_obj obj ^^^ !^"does not apply"))
+     fail loc (Generic (!^"term" ^^^ OOA.pp obj ^^^ !^"does not apply"))
   | Some (_, sym) -> 
      return sym
 
@@ -112,7 +115,7 @@ let rec resolve_index_term loc objs (it: string index_term)
 
 let resolve_definition loc objs (Definition (name, obj)) = 
   let* s = resolve_obj loc objs obj in
-  return (Obj_ (Id name), s)
+  return (Obj (Id name), s)
 
 (* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)
 (* stealing from core_parser_driver *)
@@ -160,13 +163,13 @@ let pre_or_post loc kind attrs =
         match p with
         | Ownership (obj,o) -> 
            let in_prefix = 
-             List.find_opt (fun (obj',_) -> AST.equal_or_in_prefix String.compare obj obj') ownership 
+             List.find_opt (fun (obj',_) -> AST.O.equal_or_in_prefix String.compare obj obj') ownership 
            in
            begin match constrs, in_prefix with
            | _ :: _, _ -> 
               fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
            | _, Some (obj',_) ->
-              fail loc (Generic (!^"already specified ownership for" ^^^ AST.pp_obj_ obj'))
+              fail loc (Generic (!^"already specified ownership for" ^^^ AST.O.pp obj'))
            | _, None -> 
               return (ownership @ [(obj,o)], constrs)
            end

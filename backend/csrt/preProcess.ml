@@ -364,7 +364,7 @@ let retype_impls (loc : Loc.t) impls =
 
 module AST = Parse_ast
 type funinfos = FT.t mu_funinfos
-type funinfo_extra = (Sym.t, (AST.obj_map * (AST.obj_map * AST.obj_map)) * (Sym.t * Sctypes.t) list) Pmap.map
+type funinfo_extra = (Sym.t, (AST.OOA.obj_map * (AST.OOA.obj_map * AST.OOA.obj_map)) * (Sym.t * Sctypes.t) list) Pmap.map
 
 
 

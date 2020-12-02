@@ -292,7 +292,7 @@ module AST = Parse_ast
 let ownership_of_obj ownership obj = 
   let found = 
     List.find_opt (fun (obj',o) -> 
-        AST.compare_obj_ String.compare obj obj' = 0
+        AST.O.compare String.compare obj obj' = 0
       ) ownership 
   in
   Option.map snd found
@@ -309,7 +309,7 @@ let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
      let open RT in
      let loc = Loc.update loc (get_loc_ annots) in
      let pointee = Sym.fresh () in
-     begin match sct2_, ownership_of_obj ownership (AST.pointee_obj_ obj) with
+     begin match sct2_, ownership_of_obj ownership (AST.OOA.pointee_obj_ obj) with
      | Sctypes.Void, _ -> 
         Debug_ocaml.error "todo: void*"
      | _, Some (AST.Unowned) ->
@@ -324,11 +324,11 @@ let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
           Logical ((pointee, Base (BT.Struct tag)), 
           Resource (predicate, I)))
         in
-        (rt, [(AST.pointee obj, pointee)])
+        (rt, [(AST.OOA.pointee obj, pointee)])
      | _, None ->
         let (rt, objs) = 
-          rt_of_sct loc ownership (AST.pointee obj) struct_decls pointee sct2 in
-        let objs = (AST.pointee obj, pointee) :: objs in
+          rt_of_sct loc ownership (AST.OOA.pointee obj) struct_decls pointee sct2 in
+        let objs = (AST.OOA.pointee obj, pointee) :: objs in
         let rt = make_owned_pointer sym (ST.of_ctype sct2) rt in
         (rt,objs)
      end
@@ -370,14 +370,15 @@ let plain_pointer_sct sct =
 
 
 let make_fun_spec loc struct_decls args ret_sct attrs 
-    : (FT.t * (AST.obj_map * (AST.obj_map * AST.obj_map)), type_error) m = 
+    : (FT.t * (AST.OOA.obj_map * (AST.OOA.obj_map * AST.OOA.obj_map)), type_error) m = 
   let open FT in
   let open RT in
+  let open Parse_ast.OOA in
   let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
   let* (post_ownership, post_constraints) = Assertions.ensures loc attrs in
   let aux (sym, sct) (acc_global_objs, (acc_pre_objs, acc_post_objs), args, rets) =
     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
-    let obj = AST.VariableLocation name in
+    let obj = Addr name in
     (* let sl = Sym.fresh_named name in *)
     let sct_lifted = plain_pointer_sct sct in
     let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
@@ -393,15 +394,11 @@ let make_fun_spec loc struct_decls args ret_sct attrs
   let ret_name = "ret" in
   let ret_sym = Sym.fresh_named ret_name in
   let (ret_rt, post_objs') = 
-    rt_of_sct loc post_ownership (AST.Obj_ (Id ret_name)) struct_decls ret_sym ret_sct
+    rt_of_sct loc post_ownership (Obj (Id ret_name)) struct_decls ret_sym ret_sct
   in
-  let post_objs = (AST.Obj_ (AST.Id ret_name), ret_sym) :: post_objs @ post_objs' in
+  let post_objs = (Obj (Id ret_name), ret_sym) :: post_objs @ post_objs' in
   let* definition_objs = Assertions.definitions loc attrs pre_objs in
   let* requires = Assertions.resolve_constraints loc pre_objs pre_constraints in
-  print stderr (item "pre_ownership" (Pp.list (fun (obj_,_) -> AST.pp_obj_ obj_) pre_ownership ));
-  print stderr (item "pre_objs" (Pp.list (fun (obj_,_) -> AST.pp_obj obj_) pre_objs ));
-  print stderr (item "post_ownership" (Pp.list (fun (obj_,_) -> AST.pp_obj_ obj_) post_ownership ));
-  print stderr (item "post_objs" (Pp.list (fun (obj_,_) -> AST.pp_obj obj_) post_objs ));
   let* ensures = Assertions.resolve_constraints loc (definition_objs @ post_objs) post_constraints in
   let rt = RT.concat ret_rt (LRT.concat rets (LRT.mConstraints ensures LRT.I)) in
   let ftyp = args (FT.mConstraints requires (I rt)) in
@@ -416,10 +413,11 @@ let make_label_spec
       (fargs : (Sym.t * Sctypes.t) list) 
       (args : (Sym.t option * Sctypes.t) list) 
       attrs = 
+  let open AST.OOA in
   let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
   let aux1 (sym, sct) (acc_pre_objs, args) =
     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
-    let obj = AST.VariableLocation name in
+    let obj = Addr name in
     let sct_lifted = plain_pointer_sct sct in
     let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
     (pre_objs @ acc_pre_objs, Tools.comp (LT.of_lrt (RT.lrt arg_rt)) args)
@@ -428,7 +426,7 @@ let make_label_spec
   let aux2 (msym, sct) (acc_pre_objs, args) =
     let sym = Option.value (Sym.fresh ()) msym in
     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
-    let obj = AST.Obj_ (AST.Id name) in
+    let obj = Obj (Id name) in
     let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct in
     (pre_objs @ acc_pre_objs, Tools.comp (LT.of_rt arg_rt) args)
   in
