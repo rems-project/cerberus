@@ -125,6 +125,7 @@ let pp_core core =
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
+      let show_explode_annot = false
       let handle_uid _ _ = ()
     end) in
   let core' = string_of_doc @@ PP.pp_file core in
@@ -531,6 +532,7 @@ let create_expr_range_list core =
   let module PP = Pp_core.Make (struct
       let show_std = true
       let show_include = false
+      let show_explode_annot = false
       let show_locations = false
       let handle_location _ _ = ()
       let handle_uid = Hashtbl.add table

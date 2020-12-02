@@ -1214,7 +1214,7 @@ module MemoryModelCommon = struct
       match (interp addr_min, interp addr_max) with
       | Some min , Some max ->
           if (Arithmetic.is_int min && Arithmetic.is_int max) then
-            (alloc,Some (Big_int.int_of_big_int (Integer.get_big_int min), Big_int.int_of_big_int(Integer.get_big_int max)),prefix)
+            (alloc,Some (Z.to_int (Integer.get_big_int min), Z.to_int (Integer.get_big_int max)),prefix)
           else
             (alloc,None, prefix)
       | _ -> (alloc,None, prefix)
@@ -1226,7 +1226,7 @@ module MemoryModelCommon = struct
     match Expr.get_args loc with
     | [a1] ->
         if (Arithmetic.is_int a1) then
-          let addr = Big_int.int_of_big_int (Integer.get_big_int a1) in
+          let addr = Z.to_int (Integer.get_big_int a1) in
           match (List.find_opt (fun (alloc, range_opt, prefix) ->
             if range_opt = None then false
             else
