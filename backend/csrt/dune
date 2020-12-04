@@ -6,34 +6,8 @@
  (public_name csrt)
  (package csrt)
  (flags (:standard -w -27))
- (preprocess 
-   (per_module 
-     ((action (run pa_ocaml %{input-file})) rc_annot)
-     (future_syntax 
-        check 
-        conversions 
-        indexTermTyping 
-        indexTerms 
-        indexTermParser
-        sexplib
-        listM 
-        local 
-        memory 
-        option 
-        pmapM 
-        preProcess 
-        process 
-        resourceInference 
-        resources 
-        resultat 
-        solver 
-        symMapM
-        uni
-     )
-   )
- )
- (libraries cmdliner str unix stdlib-shims result
-  cerb_frontend cerb_backend mem_concrete util earley.core))
+ (libraries cmdliner str unix
+  cerb_frontend cerb_backend mem_concrete util))
 
 (ocamllex lexer)
 

@@ -1643,7 +1643,8 @@ and check_expr_pop (loc : loc) delta {labels; local; global} (e : 'bty expr)
   let local = delta ++ marked ++ local in 
   let* result = check_expr loc {labels; local; global} e typ in
   match result with
-  | False -> return False
+  | False -> 
+     return False
   | Normal local -> 
      let* local = pop_empty loc local in
      return (Normal local)

@@ -37,41 +37,45 @@ let member_sort ctxt =
 
 (* maybe fix Loc *)
 let rec bt_to_sort {local;global} ctxt bt = 
+  Debug_ocaml.begin_csv_timing "bt_to_sort";
   let open BaseTypes in
   let btname = bt_name bt in
-  match bt with
-  | Unit -> Z3.Sort.mk_uninterpreted_s ctxt btname
-  | Bool -> Z3.Boolean.mk_sort ctxt
-  | Integer -> Z3.Arithmetic.Integer.mk_sort ctxt
-  | Loc -> Z3.Arithmetic.Integer.mk_sort ctxt
-  (* | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname) *)
-  | Tuple bts ->
-     let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
-     let sorts = List.map (bt_to_sort {local;global} ctxt) bts in
-     Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts
-  | Struct tag ->
-     let decl = SymMap.find tag global.struct_decls in
-     let rec aux = function
-       | [] -> ([],[])
-       | (member, sct) :: members ->
-          let (names,sorts) = aux members in
-          let sort = bt_to_sort {local;global} ctxt (BT.of_sct sct) in
-          let names = Z3.Symbol.mk_string ctxt (struct_member_name bt member) :: names in
-          let sorts = sort :: sorts in
-          (names,sorts)
-     in
-     let (names,sorts) = aux (Global.member_types decl.layout) in
-     let name = Z3.Symbol.mk_string ctxt btname in
-     let sort = Z3.Tuple.mk_sort ctxt name names sorts in
-     sort
-  | Array ->
-     Z3.Sort.mk_uninterpreted_s ctxt btname
-  | List _ ->
-     Z3.Sort.mk_uninterpreted_s ctxt btname
-  | FunctionPointer _ -> 
-     Z3.Sort.mk_uninterpreted_s ctxt btname
-  | Set bt ->
-     Z3.Set.mk_sort ctxt (bt_to_sort {local;global} ctxt bt)
+  let sort = match bt with
+    | Unit -> Z3.Sort.mk_uninterpreted_s ctxt btname
+    | Bool -> Z3.Boolean.mk_sort ctxt
+    | Integer -> Z3.Arithmetic.Integer.mk_sort ctxt
+    | Loc -> Z3.Arithmetic.Integer.mk_sort ctxt
+    (* | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname) *)
+    | Tuple bts ->
+       let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
+       let sorts = List.map (bt_to_sort {local;global} ctxt) bts in
+       Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts
+    | Struct tag ->
+       let decl = SymMap.find tag global.struct_decls in
+       let rec aux = function
+         | [] -> ([],[])
+         | (member, sct) :: members ->
+            let (names,sorts) = aux members in
+            let sort = bt_to_sort {local;global} ctxt (BT.of_sct sct) in
+            let names = Z3.Symbol.mk_string ctxt (struct_member_name bt member) :: names in
+            let sorts = sort :: sorts in
+            (names,sorts)
+       in
+       let (names,sorts) = aux (Global.member_types decl.layout) in
+       let name = Z3.Symbol.mk_string ctxt btname in
+       let sort = Z3.Tuple.mk_sort ctxt name names sorts in
+       sort
+    | Array ->
+       Z3.Sort.mk_uninterpreted_s ctxt btname
+    | List _ ->
+       Z3.Sort.mk_uninterpreted_s ctxt btname
+    | FunctionPointer _ -> 
+       Z3.Sort.mk_uninterpreted_s ctxt btname
+    | Set bt ->
+       Z3.Set.mk_sort ctxt (bt_to_sort {local;global} ctxt bt)
+  in
+  Debug_ocaml.end_csv_timing ();
+  sort
 
 let ls_to_sort {local;global} ctxt (LS.Base bt) =
   bt_to_sort {local;global} ctxt bt
@@ -350,27 +354,40 @@ let handle_z3_problems todo =
 
 
 let constraint_holds {local;global} do_model c = 
+  Debug_ocaml.begin_csv_timing "constraint_holds";
   let ctxt = 
     Z3.mk_context [
         ("model", if do_model then "true" else "false");
         ("well_sorted_check","true")
       ] 
   in
+  Debug_ocaml.begin_csv_timing "mk_simple_solver";
   let solver = Z3.Solver.mk_simple_solver ctxt in
+  Debug_ocaml.end_csv_timing ();
+  Debug_ocaml.begin_csv_timing "all_constraints";
   let lcs = negate c :: Local.all_constraints local in
+  Debug_ocaml.end_csv_timing ();
   (* let () = debug_typecheck_lcs lcs {local;global} in *)
   let checked = 
     handle_z3_problems
       (fun () ->
+        Debug_ocaml.begin_csv_timing "of_index_term";
         let constrs = 
           List.map (fun lc -> 
               of_index_term {local;global} ctxt (unpack lc)
             ) lcs 
         in
+        Debug_ocaml.end_csv_timing ();
+        Debug_ocaml.begin_csv_timing "Z3.Solver.add";
         Z3.Solver.add solver constrs;
-        Z3.Solver.check solver []
+        Debug_ocaml.end_csv_timing ();
+        Debug_ocaml.begin_csv_timing "Z3.Solver.check";
+        let result = Z3.Solver.check solver [] in
+        Debug_ocaml.end_csv_timing ();
+        result
       )
   in
+  Debug_ocaml.end_csv_timing ();
   match checked with
   | UNSATISFIABLE -> (true,ctxt,solver)
   | SATISFIABLE -> (false,ctxt,solver)
