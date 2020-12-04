@@ -37,7 +37,20 @@
 
 (ocamllex lexer)
 
+
+; Compile tokens.mly into a definition of the type [token].
+; https://gitlab.inria.fr/fpottier/menhir/-/blob/master/demos/calc-param/dune
 (menhir
-  (modules parser)
-  (flags --explain --dump) 
+  (modules tokens)
+  (flags --only-tokens)
+)
+
+; Compile parser.mly into a (parameterized) parser.
+; We need tokens.mly too, because it contains the token definitions.
+; The resulting OCaml files should be named parser.{ml,mli}
+; and should *not* contain a definition of the [token] type.
+(menhir
+  (modules tokens parser)
+  (merge_into parser)
+  (flags --external-tokens Tokens)
 )

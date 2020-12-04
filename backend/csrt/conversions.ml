@@ -260,10 +260,10 @@ let make_unowned_pointer pointer stored_type =
   (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
   LRT.I)))
 
-let make_uninit_pointer pointer stored_type = 
+let make_block_pointer pointer block_type stored_type = 
   let open RT in
   let size = Memory.size_of_stored_type stored_type in
-  let uninit = RE.Block {pointer = S pointer; size; block_type = Uninit} in
+  let uninit = RE.Block {pointer = S pointer; size; block_type} in
   Computational ((pointer,Loc),
   Resource ((uninit, 
   Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
@@ -292,54 +292,54 @@ module AST = Parse_ast
 let ownership_of_obj ownership obj = 
   let found = 
     List.find_opt (fun (obj',o) -> 
-        AST.O.compare String.compare obj obj' = 0
+        AST.Object.compare obj obj' = 0
       ) ownership 
   in
   Option.map snd found
 
 
-let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
-  let (Sctypes.Sctype (annots, sct_)) = sct in
-  let loc = Loc.update loc (get_loc_ annots) in
-  let open RT in
-  let open Sctypes in
-  match sct_ with
-  | Pointer (_qualifiers, sct2) ->
-     let (Sctypes.Sctype (annots, sct2_)) = sct2 in
-     let open RT in
-     let loc = Loc.update loc (get_loc_ annots) in
-     let pointee = Sym.fresh () in
-     begin match sct2_, ownership_of_obj ownership (AST.OOA.pointee_obj_ obj) with
-     | Sctypes.Void, _ -> 
-        Debug_ocaml.error "todo: void*"
-     | _, Some (AST.Unowned) ->
-        (make_unowned_pointer sym (ST.of_ctype sct2), [])
-     | _, Some (AST.Block) ->
-        (make_uninit_pointer sym (ST.of_ctype sct2), [])
-     | Sctypes.Struct tag, None ->
-        let predicate = 
-          Predicate {pointer = S sym; name = Tag tag; args = [pointee]} in
-        let rt = 
-          Computational ((sym, BT.Loc), 
-          Logical ((pointee, Base (BT.Struct tag)), 
-          Resource (predicate, I)))
-        in
-        (rt, [(AST.OOA.pointee obj, pointee)])
-     | _, None ->
-        let (rt, objs) = 
-          rt_of_sct loc ownership (AST.OOA.pointee obj) struct_decls pointee sct2 in
-        let objs = (AST.OOA.pointee obj, pointee) :: objs in
-        let rt = make_owned_pointer sym (ST.of_ctype sct2) rt in
-        (rt,objs)
-     end
-  | _ ->
-     let bt = BT.of_sct sct in
-     let rt = 
-       Computational ((sym, bt), 
-       Constraint (LC (IT.Representable (ST_Ctype sct, S sym)),I))
-     in
-     let objs = [] in
-     (rt, objs)
+(* let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
+ *   let (Sctypes.Sctype (annots, sct_)) = sct in
+ *   let loc = Loc.update loc (get_loc_ annots) in
+ *   let open RT in
+ *   let open Sctypes in
+ *   match sct_ with
+ *   | Pointer (_qualifiers, sct2) ->
+ *      let (Sctypes.Sctype (annots, sct2_)) = sct2 in
+ *      let open RT in
+ *      let loc = Loc.update loc (get_loc_ annots) in
+ *      let pointee = Sym.fresh () in
+ *      begin match sct2_, ownership_of_obj ownership (AST.OOA.pointee_obj_ obj) with
+ *      | Sctypes.Void, _ -> 
+ *         Debug_ocaml.error "todo: void*"
+ *      | _, Some (AST.Unowned) ->
+ *         (make_unowned_pointer sym (ST.of_ctype sct2), [])
+ *      | _, Some (AST.Block) ->
+ *         (make_uninit_pointer sym (ST.of_ctype sct2), [])
+ *      | Sctypes.Struct tag, None ->
+ *         let predicate = 
+ *           Predicate {pointer = S sym; name = Tag tag; args = [pointee]} in
+ *         let rt = 
+ *           Computational ((sym, BT.Loc), 
+ *           Logical ((pointee, Base (BT.Struct tag)), 
+ *           Resource (predicate, I)))
+ *         in
+ *         (rt, [(AST.OOA.pointee obj, pointee)])
+ *      | _, None ->
+ *         let (rt, objs) = 
+ *           rt_of_sct loc ownership (AST.OOA.pointee obj) struct_decls pointee sct2 in
+ *         let objs = (AST.OOA.pointee obj, pointee) :: objs in
+ *         let rt = make_owned_pointer sym (ST.of_ctype sct2) rt in
+ *         (rt,objs)
+ *      end
+ *   | _ ->
+ *      let bt = BT.of_sct sct in
+ *      let rt = 
+ *        Computational ((sym, bt), 
+ *        Constraint (LC (IT.Representable (ST_Ctype sct, S sym)),I))
+ *      in
+ *      let objs = [] in
+ *      (rt, objs) *)
 
 
 
@@ -369,68 +369,188 @@ let plain_pointer_sct sct =
 
 
 
-let make_fun_spec loc struct_decls args ret_sct attrs 
-    : (FT.t * (AST.OOA.obj_map * (AST.OOA.obj_map * AST.OOA.obj_map)), type_error) m = 
+(* let make_fun_spec loc struct_decls args ret_sct attrs 
+ *     : (FT.t * (AST.OOA.obj_map * (AST.OOA.obj_map * AST.OOA.obj_map)), type_error) m = 
+ *   let open FT in
+ *   let open RT in
+ *   let open Parse_ast.OOA in
+ *   let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
+ *   let* (post_ownership, post_constraints) = Assertions.ensures loc attrs in
+ *   let aux (sym, sct) (acc_global_objs, (acc_pre_objs, acc_post_objs), args, rets) =
+ *     let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
+ *     let obj = Addr name in
+ *     (\* let sl = Sym.fresh_named name in *\)
+ *     let sct_lifted = plain_pointer_sct sct in
+ *     let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
+ *     let (ret_rt, post_objs) = rt_of_sct loc post_ownership obj struct_decls sym sct_lifted in
+ *     ((obj, sym) :: acc_global_objs,
+ *      (pre_objs @ acc_pre_objs, post_objs @ acc_post_objs), 
+ *      Tools.comp (FT.of_rt arg_rt) args, 
+ *      LRT.concat (RT.lrt ret_rt) rets)
+ *   in
+ *   let (everywhere_objs, (pre_objs, post_objs), args, rets) = 
+ *     List.fold_right aux args ([], ([], []), (fun ft -> ft), I)
+ *   in
+ *   let ret_name = "ret" in
+ *   let ret_sym = Sym.fresh_named ret_name in
+ *   let (ret_rt, post_objs') = 
+ *     rt_of_sct loc post_ownership (Obj (Id ret_name)) struct_decls ret_sym ret_sct
+ *   in
+ *   let post_objs = (Obj (Id ret_name), ret_sym) :: post_objs @ post_objs' in
+ *   let* definition_objs = Assertions.definitions loc attrs pre_objs in
+ *   let* requires = Assertions.resolve_constraints loc pre_objs pre_constraints in
+ *   let* ensures = Assertions.resolve_constraints loc (definition_objs @ post_objs) post_constraints in
+ *   let rt = RT.concat ret_rt (LRT.concat rets (LRT.mConstraints ensures LRT.I)) in
+ *   let ftyp = args (FT.mConstraints requires (I rt)) in
+ *   return (ftyp, (everywhere_objs @ definition_objs, (pre_objs,post_objs))) *)
+
+
+
+let rec rt_of_ect v path typ : RT.t * AST.Path.mapping =
+  let open AST in
+  let open ECT in
+  let open Path in
+  let (Typ (loc, typ_)) = typ in
+  match typ_ with
+  | Pointer (_qualifiers, Unowned (_, typ2)) ->
+     let rt = make_unowned_pointer v (ST_Ctype (to_sct typ2)) in
+     (rt, [{path; res = v}])
+  | Pointer (_qualifiers, Block (_, typ2)) ->
+     let rt = make_block_pointer v Nothing (ST_Ctype (to_sct typ2)) in
+     (rt, [{path; res = v}])
+  | Pointer (_qualifiers, Owned (Typ (loc2, Struct tag))) ->
+     let v2 = Sym.fresh () in
+     let predicate = Predicate {pointer = S v; name = Tag tag; args = [v2]} in
+     let rt = 
+       RT.Computational ((v, BT.Loc), 
+       Logical ((v2, Base (BT.Struct tag)), 
+       Resource (predicate, I)))
+     in
+     (rt, [{path = Path.pointee path; res = v2}])
+  | Pointer (_qualifiers, Owned typ2) ->
+     let v2 = Sym.fresh () in
+     let (rt',objs') = rt_of_ect v2 (Path.pointee path) typ2 in
+     let rt = make_owned_pointer v (ST_Ctype (to_sct typ2)) rt' in
+     let objs = {path; res = v} :: objs' in
+     (rt, objs)
+  | Void
+  | Integer _
+  | Struct _ ->
+     let sct = to_sct typ in
+     let bt = BT.of_sct sct in
+     let rt = 
+       RT.Computational ((v, bt), 
+       Constraint (LC (IT.Representable (ST_Ctype sct, S v)),I))
+     in
+     (rt, [{path; res= v}])
+     
+
+
+let make_fun_spec loc struct_decls arguments ret_sct attrs 
+    : (FT.t * AST.Path.mapping * AST.aarg list, type_error) m = 
   let open FT in
   let open RT in
-  let open Parse_ast.OOA in
-  let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
-  let* (post_ownership, post_constraints) = Assertions.ensures loc attrs in
-  let aux (sym, sct) (acc_global_objs, (acc_pre_objs, acc_post_objs), args, rets) =
-    let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
-    let obj = Addr name in
-    (* let sl = Sym.fresh_named name in *)
-    let sct_lifted = plain_pointer_sct sct in
-    let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
-    let (ret_rt, post_objs) = rt_of_sct loc post_ownership obj struct_decls sym sct_lifted in
-    ((obj, sym) :: acc_global_objs,
-     (pre_objs @ acc_pre_objs, post_objs @ acc_post_objs), 
-     Tools.comp (FT.of_rt arg_rt) args, 
-     LRT.concat (RT.lrt ret_rt) rets)
+  let open AST in
+  let* typ = Assertions.parse_function_type loc attrs (ret_sct, arguments) in
+
+  let mapping = [] in
+
+  let (FunctionType args) = typ in
+
+  let (Args (args, pres)) = args in
+  let (arg_ftt, mapping) = 
+    List.fold_right (fun {name; asym; typ} (arg_ftt, mapping) ->
+        let path = Path.{label = Assertions.label_name Pre; name; path = []} in
+        let (pre_arg_rt, mapping') = rt_of_ect (Sym.fresh ()) path typ in
+        let arg_rt = make_owned_pointer asym (ST_Ctype (ECT.to_sct typ)) pre_arg_rt in
+        (Tools.comp (FT.of_rt arg_rt) arg_ftt, mapping' @ mapping)
+      ) args ((fun rt -> rt), mapping)
   in
-  let (everywhere_objs, (pre_objs, post_objs), args, rets) = 
-    List.fold_right aux args ([], ([], []), (fun ft -> ft), I)
+
+  let init_mapping = mapping in
+
+  let (Pre (preconditions, ret)) = pres in
+  let* arg_ftt = 
+    let* requires = Assertions.resolve_constraints mapping preconditions in
+    return (Tools.comp arg_ftt (FT.mConstraints requires))
   in
-  let ret_name = "ret" in
-  let ret_sym = Sym.fresh_named ret_name in
-  let (ret_rt, post_objs') = 
-    rt_of_sct loc post_ownership (Obj (Id ret_name)) struct_decls ret_sym ret_sct
+
+  let (Ret (ret, ret_args, post)) = ret in
+  let (ret_rt, mapping) = 
+    let { name; vsym; typ } = ret in
+    let path = Path.{label = Assertions.label_name Post; name; path = []} in
+    let (rt, mapping') = rt_of_ect vsym path typ in
+    (rt, mapping' @ mapping)
   in
-  let post_objs = (Obj (Id ret_name), ret_sym) :: post_objs @ post_objs' in
-  let* definition_objs = Assertions.definitions loc attrs pre_objs in
-  let* requires = Assertions.resolve_constraints loc pre_objs pre_constraints in
-  let* ensures = Assertions.resolve_constraints loc (definition_objs @ post_objs) post_constraints in
-  let rt = RT.concat ret_rt (LRT.concat rets (LRT.mConstraints ensures LRT.I)) in
-  let ftyp = args (FT.mConstraints requires (I rt)) in
-  return (ftyp, (everywhere_objs @ definition_objs, (pre_objs,post_objs)))
+
+  let (arg_ret_lrt, mapping) = 
+    List.fold_right (fun {name; asym; typ} (arg_ret_lrts, mapping) ->
+        let path = Path.{label = Assertions.label_name Post; name; path = []} in
+        let (pre_arg_ret_lrt, mapping') = rt_of_ect (Sym.fresh ()) path typ in
+        let arg_ret_rt = make_owned_pointer asym (ST_Ctype (ECT.to_sct typ)) pre_arg_ret_lrt in
+        (LRT.concat (RT.lrt arg_ret_rt) arg_ret_lrts, mapping' @ mapping)
+      ) ret_args (LRT.I, mapping)
+  in
+  let ret_rt = RT.concat ret_rt arg_ret_lrt in
+
+  let (Post postconditions) = post in
+  let* ret_rt = 
+    let* ensures = Assertions.resolve_constraints mapping postconditions in
+    return (RT.concat ret_rt (LRT.mConstraints ensures LRT.I))
+  in
+
+  let ft = arg_ftt (FT.I ret_rt) in
+
+  return (ft, init_mapping, args)
 
 
-
-let make_label_spec 
-      (loc : Loc.t)
-      fglobal_objs
+  
+let make_label_spec
+      (loc : Loc.t) 
+      (lsym: Sym.t)
+      mapping
       struct_decls
-      (fargs : (Sym.t * Sctypes.t) list) 
-      (args : (Sym.t option * Sctypes.t) list) 
+      (fargs : Parse_ast.aarg list) 
+      (largs : (Sym.t option * Sctypes.t) list) 
       attrs = 
-  let open AST.OOA in
-  let* (pre_ownership, pre_constraints) = Assertions.requires loc attrs in
-  let aux1 (sym, sct) (acc_pre_objs, args) =
-    let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
-    let obj = Addr name in
-    let sct_lifted = plain_pointer_sct sct in
-    let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct_lifted in
-    (pre_objs @ acc_pre_objs, Tools.comp (LT.of_lrt (RT.lrt arg_rt)) args)
+  let open AST in
+
+  let lname = match Sym.name lsym with
+    | Some lname -> lname
+    | None -> Sym.pp_string lsym (* check *)
   in
-  let (pre_objs, fargs_ftt) = List.fold_right aux1 fargs ([], (fun ft -> ft)) in
-  let aux2 (msym, sct) (acc_pre_objs, args) =
-    let sym = Option.value (Sym.fresh ()) msym in
-    let name = Option.value (Sym.pp_string sym) (Sym.name sym) in
-    let obj = Obj (Id name) in
-    let (arg_rt, pre_objs) = rt_of_sct loc pre_ownership obj struct_decls sym sct in
-    (pre_objs @ acc_pre_objs, Tools.comp (LT.of_rt arg_rt) args)
+
+  let largs = List.map (fun (os, t) -> (Option.value (Sym.fresh ()) os, t)) largs in
+
+  let* ltyp = Assertions.parse_label_type loc lname attrs fargs largs in
+
+  let (LabelType (LArgs {function_arguments; label_arguments; inv})) = ltyp in
+
+  let (ltt, mapping) = 
+    List.fold_right (fun {name; asym; typ} (ltt, mapping) ->
+        let path = Path.{label = Assertions.label_name (Inv lname); name; path = []} in
+        let (pre_arg_rt, mapping') = rt_of_ect (Sym.fresh ()) path typ in
+        let arg_rt = make_owned_pointer asym (ST_Ctype (ECT.to_sct typ)) pre_arg_rt in
+        (Tools.comp (LT.of_lrt (RT.lrt arg_rt)) ltt, mapping' @ mapping)
+      ) function_arguments ((fun rt -> rt), mapping)
   in
-  let (pre_objs, args_ftt) = List.fold_right aux2 args (pre_objs, fargs_ftt) in
-  let* requires = Assertions.resolve_constraints loc (fglobal_objs @ pre_objs) pre_constraints in
-  let ltyp = args_ftt (LT.mConstraints requires (I False.False)) in
-  return ltyp
+  let (ltt, mapping) = 
+    List.fold_right (fun {name; vsym; typ} (ltt, mapping) ->
+        let path = Path.{label = Assertions.label_name (Inv lname); name; path = []} in
+        let (larg_rt, mapping') = rt_of_ect vsym path typ in
+        (Tools.comp (LT.of_rt larg_rt) ltt, mapping' @ mapping)
+      ) label_arguments (ltt, mapping)
+  in
+
+  let (LInv lcs) = inv in
+  let* ltt = 
+    let* lcs = Assertions.resolve_constraints mapping lcs in
+    return (Tools.comp ltt (LT.mConstraints lcs))
+  in
+
+  let lt = ltt (LT.I False.False) in
+  return (lt, mapping)
+
+
+
+

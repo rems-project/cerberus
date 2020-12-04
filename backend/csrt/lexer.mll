@@ -1,11 +1,13 @@
 (* from https://ocaml.org/releases/4.07/htmlman/lexyacc.html *)
 (* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)
+(* https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param *)
 (* and from the core_parser *)
 
 
 {
 open Lexing
-open Parser
+open Tokens
+
 
 exception SyntaxError of string
 
@@ -28,6 +30,7 @@ rule read = parse
   | "*"            { STAR }
   | "/"            { DIV }
   | "`div`"        { DIV }
+  | "@"            { AT }
   | "`min`"        { MINIMUM }
   | "`max`"        { MAXIMUM }
   | "("            { LPAREN }
@@ -37,13 +40,10 @@ rule read = parse
   | "<="           { LE }
   | ">="           { GE }
   | "<>"           { NE }
-  | "="            { EQ }
   | "=="           { EQEQ }
-  | "."            { DOT }
   | ".."           { DOTDOT }
-  | "&"            { AMPERSAND }
-  | "~block"       { BLOCK }
-  | "~unowned"     { UNOWNED }
+  | "block"        { BLOCK }
+  | "unowned"      { UNOWNED }
   | "it_max u32"   { MAX_U32 }
   | "it_max u64"   { MAX_U64 }
   | "it_min u32"   { MIN_U32 }

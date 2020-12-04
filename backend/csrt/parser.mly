@@ -1,72 +1,53 @@
 /* https://ocaml.org/releases/4.07/htmlman/lexyacc.html */
 /* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html */
-
+/* https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param */
 /* stealing some things from the core parser */
 
-%{
-open Parse_ast
-open Locations
-open IndexTerms
-open O
-open OOA
 
-let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
+%parameter <Arg:Parse_ast.ParserArg>
+
+
+%type <Parse_ast.parsed_condition> condition_entry
+%start condition_entry
+
+
+
+%{
+
+  open Parse_ast
+  open Locations
+  open IndexTerms
+  open Tokens
+
+  let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
+
 %}
 
-%token <int> INT
-%token <string> ID
-/* %token AT */
-%token DOT DOTDOT /* COLON */
-%token AMPERSAND STAR
-%token TRUE FALSE
-%token LPAREN RPAREN
-%token PLUS MINUS DIV
-%token LT GT LE GE EQ NE EQEQ
-%token MINIMUM MAXIMUM
-%token MIN_U32 MIN_U64 MAX_U32 MAX_U64 MIN_I32 MIN_I64 MAX_I32 MAX_I64
-%token BLOCK UNOWNED
-%token EOF
-%left LT GT LE GE EQEQ NE
-%left PLUS MINUS
-%left DIV
-%left MAXIMUM MINIMUM
-%left STAR
-%left DOT DOTDOT
-%type <string Parse_ast.condition> condition_entry
-%type <string Parse_ast.definition> definition_entry
-%start condition_entry definition_entry
+
 %%
 
- 
+
+
+
+
 condition_entry:
   | v = condition EOF { v }
 ;
 
-definition_entry:
-  | v = definition EOF { v }
-;
-
-
-
 
 name: 
-  /* | label = ID AT id = ID   { (Some label,id) } */
   | id = ID                 { id } 
 
 obj: 
-  | STAR o = obj              { Pointee o }
-  | o = obj DOTDOT id = name  { PredicateArg (o,id) }
-  | o = obj DOT id = name     { StructMember (o,id) }
-  | id = name                 { Id id }
-
-obj_or_addr:
-  | AMPERSAND id = name       { Addr id }
-  | o = obj                   { Obj o }
+  | STAR o = obj                    { Pointee o }
+  | o = obj DOTDOT id = name        { PredicateArg (o,id) }
+  | id = name AT label = name       { Id (label,id) }
+  | id = name                       { Id (Arg.default_label,id) }
 
 expr:
   | TRUE                    { pit ($startpos, $endpos) (Bool true) }
   | FALSE                   { pit ($startpos, $endpos) (Bool false) }
-  | o = obj_or_addr         { pit ($startpos, $endpos) (Object o) }
+  | o = obj                 { pit ($startpos, $endpos) (Object o) }
   | MIN_U32                 { pit ($startpos, $endpos) MIN_U32 }
   | MIN_U64                 { pit ($startpos, $endpos) MIN_U64 }
   | MAX_U32                 { pit ($startpos, $endpos) MAX_U32 }
@@ -94,10 +75,9 @@ expr:
 
 
 condition: 
-  | UNOWNED o = obj         { Ownership (o, Unowned) }
-  | BLOCK o = obj           { Ownership (o, Block) }
-  | e = expr                { Constraint e }
+  | UNOWNED LPAREN o = obj RPAREN         { Ownership (o, OUnowned) }
+  | BLOCK LPAREN o = obj RPAREN           { Ownership (o, OBlock) }
+  | e = expr                              { Constraint e }
 
-definition: 
-  | id = name EQ o = obj_or_addr    { Definition (id,o) }
+
 

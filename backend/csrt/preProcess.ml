@@ -362,9 +362,9 @@ let retype_impls (loc : Loc.t) impls =
 
 
 
-module AST = Parse_ast
+open Parse_ast
 type funinfos = FT.t mu_funinfos
-type funinfo_extra = (Sym.t, (AST.OOA.obj_map * (AST.OOA.obj_map * AST.OOA.obj_map)) * (Sym.t * Sctypes.t) list) Pmap.map
+type funinfo_extra = (Sym.t, Path.mapping * Parse_ast.aarg list) Pmap.map
 
 
 
@@ -375,8 +375,8 @@ let retype_label (loc : Loc.t) ~funinfo ~(funinfo_extra:funinfo_extra) ~loop_att
     | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
     | None -> error (Sym.pp_string fsym^" not found in funinfo")
   in
-  let (farg_objs,farg_rts) = match Pmap.lookup fsym funinfo_extra with
-    | Some ((objs,_),args) -> (objs, args)
+  let (mapping, fargs) = match Pmap.lookup fsym funinfo_extra with
+    | Some (mapping, fargs) -> (mapping, fargs)
     | None -> error (Sym.pp_string fsym^" not found in funinfo")
   in
   match def with
@@ -401,9 +401,9 @@ let retype_label (loc : Loc.t) ~funinfo ~(funinfo_extra:funinfo_extra) ~loop_att
           | Some attrs -> attrs 
           | None -> CF.Annot.no_attributes
         in
-        let* lt = 
-          Conversions.make_label_spec loc farg_objs
-            structs farg_rts argtyps this_attrs
+        let* (lt,_) = 
+          Conversions.make_label_spec loc lsym mapping
+            structs fargs argtyps this_attrs
         in
         let* e = retype_expr loc e in
         return (M_Label (lt,args,e,annots))
@@ -524,10 +524,10 @@ let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra
                 return (msym, ct)
               ) args
           in
-          let* (ftyp, objs) = 
+          let* (ftyp, mapping, args) = 
             Conversions.make_fun_spec loc' struct_decls args ret_ctype attrs in
           return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
-                  Pmap.add fsym (objs, args) funinfo_extra)
+                  Pmap.add fsym (mapping, args) funinfo_extra)
     ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
 
 

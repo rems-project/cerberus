@@ -1185,7 +1185,7 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
          | Some (_,resource) -> 
             begin match resource with
             | Points p when Z.equal size p.size -> return p.pointee
-            | Points p -> fail loc (Generic !^"resouce of wrong size for load")
+            | Points p -> fail loc (Generic !^"resource of wrong size for load")
             | Block {block_type = Uninit; _} -> fail loc (Uninitialised is_field)
             | Block {block_type = Padding; _} -> fail loc (Generic !^"cannot read padding bytes")
             | Block {block_type = Nothing; _} -> fail loc (Generic !^"cannot empty bytes")
@@ -1361,6 +1361,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let resource_ok = 
             match Option.bind o_resource (Tools.comp RE.size snd) with
             | Some size' when Z.equal size' size -> true
+            | Some _ -> false
             | _ -> false
           in
           let (aligned, _, s_) = 
@@ -1797,7 +1798,7 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
        return ()
     | M_Label (lt, args, body, annots) ->
        debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
-       debug 3 (lazy (item "type" (LT.pp lt)));
+       debug 2 (lazy (item "type" (LT.pp lt)));
        let* (rt, delta_label, _, _) = 
          CBF_LT.check_and_bind_arguments loc args lt 
        in
