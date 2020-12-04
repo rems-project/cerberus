@@ -1,7 +1,7 @@
 /* https://ocaml.org/releases/4.07/htmlman/lexyacc.html */
 /* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html */
 /* https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param */
-/* stealing some things from the core parser */
+/* and from the c and core parsers */
 
 
 %parameter <Arg:Parse_ast.ParserArg>
@@ -18,6 +18,7 @@
   open Locations
   open IndexTerms
   open Tokens
+  open Cerb_frontend.Ctype
 
   let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
 
@@ -44,19 +45,28 @@ obj:
   | id = name AT label = name       { Id (label,id) }
   | id = name                       { Id (Arg.default_label,id) }
 
+/* fix these to do the right thing */
+integer_base_type:
+  | SHORT INT?              { Short }
+  | INT                     { Int_ }
+  | LONG INT?               { Long }
+  | LONG LONG INT?          { LongLong }
+
+integer_type:
+  | SIGNED CHAR             { Signed Ichar }
+  | CHAR                    { Char }
+  | SIGNED ibt = integer_base_type { Signed ibt }
+  | UNSIGNED ibt = integer_base_type { Unsigned ibt }
+  | ibt = integer_base_type { Signed ibt }
+
+
 expr:
   | TRUE                    { pit ($startpos, $endpos) (Bool true) }
   | FALSE                   { pit ($startpos, $endpos) (Bool false) }
   | o = obj                 { pit ($startpos, $endpos) (Object o) }
-  | MIN_U32                 { pit ($startpos, $endpos) MIN_U32 }
-  | MIN_U64                 { pit ($startpos, $endpos) MIN_U64 }
-  | MAX_U32                 { pit ($startpos, $endpos) MAX_U32 }
-  | MAX_U64                 { pit ($startpos, $endpos) MAX_U64 }
-  | MIN_I32                 { pit ($startpos, $endpos) MIN_I32 }
-  | MIN_I64                 { pit ($startpos, $endpos) MIN_I64 }
-  | MAX_I32                 { pit ($startpos, $endpos) MAX_I32 }
-  | MAX_I64                 { pit ($startpos, $endpos) MAX_I64 }
-  | i = INT                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
+  | MIN LPAREN it = integer_type RPAREN  { pit ($startpos, $endpos) (MinInteger it) }
+  | MAX LPAREN it = integer_type RPAREN  { pit ($startpos, $endpos) (MaxInteger it) }
+  | i = NUM                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
   | LPAREN expr RPAREN      { $2 }
   | expr LT expr            { pit ($startpos, $endpos) (LT ($1,$3)) }
   | expr GT expr            { pit ($startpos, $endpos) (GT ($1,$3)) }
@@ -68,8 +78,8 @@ expr:
   | expr MINUS expr         { pit ($startpos, $endpos) (Sub ($1,$3)) }
   | expr STAR expr          { pit ($startpos, $endpos) (Mul ($1,$3)) }
   | expr DIV expr           { pit ($startpos, $endpos) (Div ($1,$3)) }
-  | expr MINIMUM expr       { pit ($startpos, $endpos) (Min ($1,$3)) }
-  | expr MAXIMUM expr       { pit ($startpos, $endpos) (Max ($1,$3)) }
+  | MIN LPAREN i1 = expr COMMA i2 = expr RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
+  | MAX LPAREN i1 = expr COMMA i2 = expr RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
 ;
 
 

@@ -1,7 +1,7 @@
 (* from https://ocaml.org/releases/4.07/htmlman/lexyacc.html *)
 (* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)
 (* https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param *)
-(* and from the core_parser *)
+(* and from the c and core parsers *)
 
 
 {
@@ -29,32 +29,32 @@ rule read = parse
   | "-"            { MINUS }
   | "*"            { STAR }
   | "/"            { DIV }
-  | "`div`"        { DIV }
   | "@"            { AT }
-  | "`min`"        { MINIMUM }
-  | "`max`"        { MAXIMUM }
   | "("            { LPAREN }
   | ")"            { RPAREN }
+  | ","            { COMMA }
   | "<"            { LT }
   | ">"            { GT }
   | "<="           { LE }
   | ">="           { GE }
   | "<>"           { NE }
   | "=="           { EQEQ }
+  | "min"          { MIN }
+  | "max"          { MAX }
   | ".."           { DOTDOT }
   | "block"        { BLOCK }
   | "unowned"      { UNOWNED }
-  | "it_max u32"   { MAX_U32 }
-  | "it_max u64"   { MAX_U64 }
-  | "it_min u32"   { MIN_U32 }
-  | "it_min u64"   { MIN_U64 }
-  | "it_max i32"   { MAX_I32 }
-  | "it_max i64"   { MAX_I64 }
-  | "it_min i32"   { MIN_I32 }
-  | "it_min i64"   { MIN_I64 }
+  | "min"          { MIN }
+  | "max"          { MAX }
+  | "char"         { CHAR }
+  | "short"        { SHORT }
+  | "int"          { INT }
+  | "long"         { LONG }
+  | "signed"       { SIGNED }
+  | "unsigned"     { UNSIGNED }
   | white          { read lexbuf }
   | newline        { next_line lexbuf; read lexbuf }
-  | int            { INT (int_of_string (Lexing.lexeme lexbuf)) }
+  | int            { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   | id             { ID (Lexing.lexeme lexbuf) }
   | _              { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof            { EOF }

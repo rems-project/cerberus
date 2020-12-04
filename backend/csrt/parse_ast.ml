@@ -1,5 +1,7 @@
 (* some from https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param *)
 
+module CF = Cerb_frontend
+
 open Pp
 
 module type ParserArg = sig
@@ -122,16 +124,9 @@ module IndexTerms = struct
     | Div of t * t
     | Min of t * t
     | Max of t * t
+    | MinInteger of CF.Ctype.integerType
+    | MaxInteger of CF.Ctype.integerType
 
-    (* maybe remove *)
-    | MIN_U32
-    | MIN_U64
-    | MAX_U32
-    | MAX_U64
-    | MIN_I32
-    | MIN_I64
-    | MAX_I32
-    | MAX_I64
 
   and t = 
     | IndexTerm of Locations.t * t_

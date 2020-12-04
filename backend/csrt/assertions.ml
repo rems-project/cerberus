@@ -98,15 +98,11 @@ let rec resolve_index_term loc objs (it: index_term)
   | Object obj -> 
      let* s = resolve_path loc objs (Path.of_object obj) in
      return (IT.S s)
+  | MinInteger it ->
+     return (IT.MinInteger it)
+  | MaxInteger it ->
+     return (IT.MaxInteger it)
 
-  | MIN_U32 -> return (IT.min_u32 ())
-  | MIN_U64 -> return (IT.min_u64 ())
-  | MAX_U32 -> return (IT.max_u32 ())
-  | MAX_U64 -> return (IT.max_u64 ())
-  | MIN_I32 -> return (IT.min_i32 ())
-  | MIN_I64 -> return (IT.min_i64 ())
-  | MAX_I32 -> return (IT.max_i32 ())
-  | MAX_I64 -> return (IT.max_i64 ())
 
 
 (* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)

@@ -264,6 +264,12 @@ let rec of_index_term {local;global} ctxt it =
      Z3.Boolean.mk_eq ctxt
        (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
        (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+  | MinInteger it ->
+     of_index_term {local; global} ctxt 
+       (Num (Memory.min_integer_type it))
+  | MaxInteger it ->
+     of_index_term {local; global} ctxt 
+       (Num (Memory.max_integer_type it))
   | Representable (st, t) ->
      let rangef = Memory.representable_stored_type global.struct_decls st in
      of_index_term {local; global} ctxt (LC.unpack (rangef t))

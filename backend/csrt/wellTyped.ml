@@ -236,6 +236,10 @@ module WIT = struct
       | Representable (st, t) ->
          let* t = check_aux loc (Base (ST.to_bt st)) t in
          return (Base BT.Bool, Representable (st, t))
+      | MinInteger it ->
+         return (Base BT.Integer, MinInteger it)
+      | MaxInteger it ->
+         return (Base BT.Integer, MaxInteger it)
       | SetMember (t,t') ->
          let* (Base bt, t) = infer loc t in
          let* t' = check_aux loc (Base (Set bt)) t' in

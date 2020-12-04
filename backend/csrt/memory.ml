@@ -29,14 +29,16 @@ let align_of_integer_type it =
   | Some n -> Z.of_int n
   | None -> Debug_ocaml.error "alignof_pointer returned None"
 
+let max_integer_type it = 
+  integer_value_to_num (CF.Impl_mem.max_ival it) 
+
+let min_integer_type it = 
+  integer_value_to_num (CF.Impl_mem.min_ival it)
+
 let representable_integer_type it about =
   let (min,max) = match it with
-    | CF.Ctype.Bool -> 
-       (Z.of_int 0, Z.of_int 1)
-    | _ -> 
-       let min = integer_value_to_num (CF.Impl_mem.min_ival it) in
-       let max = integer_value_to_num (CF.Impl_mem.max_ival it) in
-       (min, max)
+    | CF.Ctype.Bool -> (Z.of_int 0, Z.of_int 1)
+    | _ -> (min_integer_type it, max_integer_type it)
   in
   LC.LC (IT.in_range about (Num min, Num max))
 

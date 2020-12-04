@@ -1,20 +1,18 @@
-%token <int> INT
+%token <int> NUM
 %token <string> ID
-%token AT
-%token /* DOT */ DOTDOT /* COLON */
-%token /* AMPERSAND */ STAR
 %token TRUE FALSE
+%token AT DOTDOT STAR
 %token LPAREN RPAREN
+%token COMMA
 %token PLUS MINUS DIV
-%token LT GT LE GE /* EQ */ NE EQEQ
-%token MINIMUM MAXIMUM
-%token MIN_U32 MIN_U64 MAX_U32 MAX_U64 MIN_I32 MIN_I64 MAX_I32 MAX_I64
+%token LT GT LE GE NE EQEQ
+%token MIN MAX
+%token CHAR SHORT INT LONG SIGNED UNSIGNED
 %token BLOCK UNOWNED
 %token EOF
 %left LT GT LE GE EQEQ NE
 %left PLUS MINUS
 %left DIV
-%left MAXIMUM MINIMUM
 %left STAR
 %left DOTDOT
 

@@ -81,6 +81,8 @@ type 'bt term =
   | AlignedI of 'bt term * 'bt term
   | Aligned of ST.t * 'bt term
 
+  | MinInteger of CF.Ctype.integerType
+  | MaxInteger of CF.Ctype.integerType
   | Representable of ST.t * 'bt term
 
   | Struct of BT.tag * (BT.member * 'bt term) list
@@ -178,8 +180,13 @@ let rec equal it it' =
      equal t1 t1' && equal t2 t2'
 
   | Aligned (rt, t), Aligned (rt', t')
+
   | Representable (rt, t), Representable (rt', t') ->
      ST.equal rt rt' && equal t t'
+  | MinInteger it, MinInteger it' ->
+     CF.Ctype.integerTypeEqual it it'
+  | MaxInteger it, MaxInteger it' ->
+     CF.Ctype.integerTypeEqual it it'
 
   | SetMember (t1,t2), SetMember (t1',t2') ->
      equal t1 t1' && equal t1' t2'
@@ -238,6 +245,8 @@ let rec equal it it' =
   | Aligned _, _
 
   | Representable _, _
+  | MinInteger _, _
+  | MaxInteger _, _
 
   | Struct _, _
   | StructMember _, _
@@ -371,6 +380,11 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (!^"aligned" ^^ parens (aux false t ^^ comma ^^ aux false t'))
     | Aligned (rt, t) ->
        mparens (!^"aligned" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
+
+    | MinInteger it ->
+       mparens (!^"min" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
+    | MaxInteger it ->
+       mparens (!^"max" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
     | Representable (rt, t) ->
        mparens (!^"representable" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
 
@@ -453,6 +467,8 @@ let rec vars_in it : SymSet.t =
   | Aligned (_rt, t)
   | Representable (_rt,t) ->
      vars_in t
+  | MinInteger _ -> SymSet.empty
+  | MaxInteger _ -> SymSet.empty
 
   | SetMember (t1,t2) ->
      vars_in_list [t1;t2]
@@ -537,6 +553,8 @@ let rec subst_var subst it : t =
      Disjoint ((subst_var subst it,s), (subst_var subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
   | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
+  | MinInteger it -> MinInteger it
+  | MaxInteger it -> MaxInteger it
   | Representable (rt,t) -> Representable (rt,subst_var subst t)
 
   | SetMember (t1,t2) ->
@@ -618,6 +636,8 @@ let rec subst_it subst it : t =
   | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
   | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
   | Representable (rt,t) -> Representable (rt,subst_it subst t)
+  | MinInteger it -> MinInteger it
+  | MaxInteger it -> MaxInteger it
   | SetMember (t1,t2) ->
      SetMember (subst_it subst t1, subst_it subst t2)
   | SetAdd (t1,t2) ->
@@ -744,16 +764,6 @@ let (%>=) t1 t2 = GE (t1, t2)
 
 let in_range within (min, max) = And [LE (min, within); LE (within, max)]
 
-(* for some reason ocaml wants the 'type id' and the 'unit' *)
-let min_u32 (type bt) () : bt term = Num Z.zero
-let max_u32 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 32) (Z.of_int 1))
-let min_u64 (type bt) () : bt term = Num Z.zero
-let max_u64 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 64) (Z.of_int 1))
-
-let min_i32 (type bt) () : bt term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (32 - 1)))
-let max_i32 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 (32 - 1)) (Z.of_int 1))
-let min_i64 (type bt) () : bt term = Num (Z.sub (Z.of_int 0) (Z.power_int_positive_int 2 (64 - 1)))
-let max_i64 (type bt) () : bt term = Num (Z.sub (Z.power_int_positive_int 2 (64 - 1)) (Z.of_int 1))
 
 let int x = Num (Z.of_int x)
 
