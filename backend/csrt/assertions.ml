@@ -38,9 +38,9 @@ let resolve_path loc (mapping : mapping) (p : Path.t) : (Sym.t, type_error) m =
 
 (* change this to return unit IT.term, then apply index term type
    checker *)
-let rec resolve_index_term loc objs (it: index_term) 
+let rec resolve_index_term loc mapping (it: index_term) 
         : (BT.t IT.term, type_error) m =
-  let aux = resolve_index_term loc objs in
+  let aux = resolve_index_term loc mapping in
   let (IndexTerm (l, it_)) = it in
   match it_ with
   | Num n -> 
@@ -95,8 +95,8 @@ let rec resolve_index_term loc objs (it: index_term)
      let* it = aux it in
      let* it' = aux it' in
      return (IT.GE (it, it'))
-  | Object obj -> 
-     let* s = resolve_path loc objs (Path.of_object obj) in
+  | Path path -> 
+     let* s = resolve_path loc mapping path in
      return (IT.S s)
   | MinInteger it ->
      return (IT.MinInteger it)
@@ -166,12 +166,12 @@ let pre_or_post loc kind attrs =
   let* (ownership,constraints) = 
     ListM.fold_leftM (fun (ownership, constrs) (loc, p) ->
         match p with
-        | Ownership (obj,o) -> 
+        | Ownership (path,o) -> 
            begin match constrs with
            | _ :: _ -> 
               fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
            | _ -> 
-              let constr = [{loc; path = Path.of_object obj; ownership = o}] in
+              let constr = [{loc; path; ownership = o}] in
               return (ownership @ constr, constrs)
            end
         | Constraint p_it -> 

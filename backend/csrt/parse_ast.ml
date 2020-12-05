@@ -9,52 +9,7 @@ module type ParserArg = sig
 end
 
 
-type 'label parse_object =
-  | Id of 'label * string
-  | PredicateArg of 'label parse_object * string
-  | Pointee of 'label parse_object
 
-
-module Object = struct 
-
-  type t = string parse_object
-
-  type obj = t
-
-
-  let rec pp = function
-    | Id (label,s) -> !^s ^^ Pp.at ^^ !^label
-    | PredicateArg (o, s) -> pp o ^^ dot ^^ dot ^^ !^s
-    (* | StructMember (o, s) -> pp o ^^ dot ^^ !^s *)
-    | Pointee o -> star ^^ pp o
-
-
-  let compare o1 o2 =
-    let rec aux o1 o2 = 
-    match o1, o2 with
-    | Id (l1,v1), Id (l2,v2) ->
-       let compared = String.compare v1 v2 in
-       if compared = 0 then String.compare v1 v2 else compared
-    | Id _, _ -> -1
-    | _, Id _ -> 1
-
-    | PredicateArg (o1,a1), PredicateArg (o2,a2) ->
-       let compared = aux o1 o2 in
-       if compared = 0 then String.compare a1 a2 else compared
-    | PredicateArg _, _ -> -1
-    | _, PredicateArg _ -> 1
-
-    (* | StructMember (o1,a1), StructMember (o2,a2) ->
-     *    let compared = aux o1 o2 in
-     *    if compared = 0 then String.compare a1 a2 else compared
-     * | StructMember _, _ -> -1
-     * | _, StructMember _ -> 1 *)
-
-    | Pointee o1, Pointee o2 -> aux o1 o2
-    in
-    aux o1 o2
-
-end
 
 module Path = struct
 
@@ -81,15 +36,11 @@ module Path = struct
   let pp {label; name; path} = 
     !^name ^^ Pp.at ^^ !^label ^^ Pp.separate_map empty pp_access path
 
-  let rec of_object = function
-    | Id (label,name) -> {label; name; path = []}
-    | PredicateArg (o, s) -> access (of_object o) (PredicateArg s)
-    | Pointee o -> access (of_object o) Pointee
-
   type map = {path : t; res : Sym.t}
   type mapping = map list
 
   let pointee p = access p Pointee
+  let predicateArg p s = access p (PredicateArg s)
 
   let equal p1 p2 =
     String.equal p1.label p2.label &&
@@ -109,7 +60,7 @@ end
 module IndexTerms = struct
 
   type t_ = 
-    | Object of Object.t
+    | Path of Path.t
     | Bool of bool
     | Num of Z.t
     | EQ of t * t
@@ -149,7 +100,7 @@ type ownership =
 
 type parsed_condition = 
   | Constraint of IndexTerms.t
-  | Ownership of Object.t * ownership
+  | Ownership of Path.t * ownership
 
 type logical_constraint = 
   {loc : Loc.t; lc : IndexTerms.t }

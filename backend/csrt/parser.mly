@@ -39,11 +39,11 @@ condition_entry:
 name: 
   | id = ID                 { id } 
 
-obj: 
-  | STAR o = obj                    { Pointee o }
-  | o = obj DOTDOT id = name        { PredicateArg (o,id) }
-  | id = name AT label = name       { Id (label,id) }
-  | id = name                       { Id (Arg.default_label,id) }
+path: 
+  | STAR p = path                    { Path.pointee p }
+  | p = path DOTDOT id = name        { Path.predicateArg p id }
+  | id = name AT label = name        { {label; name = id; path = []} }
+  | id = name                        { {label = Arg.default_label; name = id; path = []} }
 
 /* fix these to do the right thing */
 integer_base_type:
@@ -63,7 +63,7 @@ integer_type:
 expr:
   | TRUE                    { pit ($startpos, $endpos) (Bool true) }
   | FALSE                   { pit ($startpos, $endpos) (Bool false) }
-  | o = obj                 { pit ($startpos, $endpos) (Object o) }
+  | p = path                { pit ($startpos, $endpos) (Path p) }
   | MIN LPAREN it = integer_type RPAREN  { pit ($startpos, $endpos) (MinInteger it) }
   | MAX LPAREN it = integer_type RPAREN  { pit ($startpos, $endpos) (MaxInteger it) }
   | i = NUM                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
@@ -85,8 +85,8 @@ expr:
 
 
 condition: 
-  | UNOWNED LPAREN o = obj RPAREN         { Ownership (o, OUnowned) }
-  | BLOCK LPAREN o = obj RPAREN           { Ownership (o, OBlock) }
+  | UNOWNED LPAREN p = path RPAREN        { Ownership (p, OUnowned) }
+  | BLOCK LPAREN p = path RPAREN          { Ownership (p, OBlock) }
   | e = expr                              { Constraint e }
 
 

@@ -289,60 +289,6 @@ let make_owned_pointer pointer stored_type rt =
 
 module AST = Parse_ast
 
-let ownership_of_obj ownership obj = 
-  let found = 
-    List.find_opt (fun (obj',o) -> 
-        AST.Object.compare obj obj' = 0
-      ) ownership 
-  in
-  Option.map snd found
-
-
-(* let rec rt_of_sct loc ownership obj struct_decls (sym : Sym.t) sct =
- *   let (Sctypes.Sctype (annots, sct_)) = sct in
- *   let loc = Loc.update loc (get_loc_ annots) in
- *   let open RT in
- *   let open Sctypes in
- *   match sct_ with
- *   | Pointer (_qualifiers, sct2) ->
- *      let (Sctypes.Sctype (annots, sct2_)) = sct2 in
- *      let open RT in
- *      let loc = Loc.update loc (get_loc_ annots) in
- *      let pointee = Sym.fresh () in
- *      begin match sct2_, ownership_of_obj ownership (AST.OOA.pointee_obj_ obj) with
- *      | Sctypes.Void, _ -> 
- *         Debug_ocaml.error "todo: void*"
- *      | _, Some (AST.Unowned) ->
- *         (make_unowned_pointer sym (ST.of_ctype sct2), [])
- *      | _, Some (AST.Block) ->
- *         (make_uninit_pointer sym (ST.of_ctype sct2), [])
- *      | Sctypes.Struct tag, None ->
- *         let predicate = 
- *           Predicate {pointer = S sym; name = Tag tag; args = [pointee]} in
- *         let rt = 
- *           Computational ((sym, BT.Loc), 
- *           Logical ((pointee, Base (BT.Struct tag)), 
- *           Resource (predicate, I)))
- *         in
- *         (rt, [(AST.OOA.pointee obj, pointee)])
- *      | _, None ->
- *         let (rt, objs) = 
- *           rt_of_sct loc ownership (AST.OOA.pointee obj) struct_decls pointee sct2 in
- *         let objs = (AST.OOA.pointee obj, pointee) :: objs in
- *         let rt = make_owned_pointer sym (ST.of_ctype sct2) rt in
- *         (rt,objs)
- *      end
- *   | _ ->
- *      let bt = BT.of_sct sct in
- *      let rt = 
- *        Computational ((sym, bt), 
- *        Constraint (LC (IT.Representable (ST_Ctype sct, S sym)),I))
- *      in
- *      let objs = [] in
- *      (rt, objs) *)
-
-
-
 (* function types *)
 
 let update_values_lrt lrt =
