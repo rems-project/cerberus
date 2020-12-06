@@ -5,7 +5,6 @@ module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
 module RE=Resources
-module VB=VariableBinding
 
 
 
@@ -54,7 +53,7 @@ type type_error =
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
   | Unsat_constraint of LogicalConstraints.t
   | Unconstrained_logical_variable of Sym.t
-  | Kind_mismatch of {has: VariableBinding.kind; expect: VariableBinding.kind}
+  | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
   | Undefined_behaviour of CF.Undefined.undefined_behaviour * Solver.model option
   | Unspecified of CF.Ctype.ctype
@@ -226,8 +225,8 @@ let pp_type_error = function
   | Unconstrained_logical_variable name ->
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
   | Kind_mismatch {has; expect} ->
-     (!^"Expected" ^^^ VariableBinding.kind_pp expect ^^^ 
-        !^"but found" ^^^ VariableBinding.kind_pp has, [])
+     (!^"Expected" ^^^ Kind.pp expect ^^^ 
+        !^"but found" ^^^ Kind.pp has, [])
 
   | Undefined_behaviour (undef, omodel) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in

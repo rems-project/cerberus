@@ -3,10 +3,21 @@ module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
 module Loc = Locations
-module VB = VariableBinding
 
 
-type binding = Sym.t * VB.t
+module VariableBinding : sig
+
+  type t =
+    | Computational of Sym.t * BT.t
+    | Logical of LS.t
+    | Resource of RE.t
+    | UsedResource of RE.t * Loc.t list
+    | Constraint of LC.t
+
+end
+
+
+type binding = Sym.t * VariableBinding.t
 
 type t
 
@@ -21,18 +32,13 @@ val use_resource : Sym.t -> Loc.t list -> t -> t
 val since : t -> binding list * t
 val all : t -> binding list
 
-val bound_to : Sym.t -> t -> VB.t option
+val kind : Sym.t -> t -> Kind.t option
+val bound : Sym.t -> t -> bool
 
 val merge : t -> t -> t
 
 val big_merge : t -> t list -> t
 
-val mA : Sym.t -> (BT.t * Sym.t) -> binding
-val mL : Sym.t -> LS.t -> binding
-val mR : Sym.t -> RE.t -> binding
-val mC : Sym.t -> LC.t -> binding
-val mUR : RE.t -> binding
-val mUC : LC.t -> binding
 
 val pp : ?print_all_names:bool -> ?print_used:bool -> t -> Pp.document
 

@@ -4,17 +4,17 @@ module E = Environment
 module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make(Sym)
-module VB = VariableBinding
 module TE = TypeErrors
 
 open TE
 
 let check_bound loc local kind s = 
-  match Local.bound_to s local with
-  | Some binding when VB.kind binding = kind -> return ()
-  | Some binding ->
-     fail loc (TE.Kind_mismatch {expect = KResource; has = VB.kind binding})
-  | None -> 
+  match Local.kind s local with
+  | Some kind' when kind' = kind -> 
+     return ()
+  | Some kind' -> 
+     fail loc (TE.Kind_mismatch {expect = KResource; has = kind'})
+  | None ->  
      fail loc (TE.Unbound_name (Sym s))
 
 

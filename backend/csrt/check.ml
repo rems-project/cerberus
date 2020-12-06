@@ -27,6 +27,8 @@ open CF.Mucore
 open Pp
 open BT
 
+module VB = Local.VariableBinding
+
 
 (* some of this is informed by impl_mem *)
 
@@ -100,11 +102,13 @@ let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_err
 
 
 let check_computational_bound loc s local = 
-  match Local.bound_to s local with
-  | None -> fail loc (Unbound_name (Sym s))
-  | Some (Computational _) -> return ()
-  | Some b -> 
-     fail loc (Kind_mismatch {expect = KComputational; has = VB.kind b})
+  match Local.kind s local with
+  | None -> 
+     fail loc (Unbound_name (Sym s))
+  | Some KComputational -> 
+     return ()
+  | Some kind -> 
+     fail loc (Kind_mismatch {expect = KComputational; has = kind})
 
 let get_struct_decl loc global tag = 
   let open Global in
@@ -132,7 +136,7 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
        let s' = Sym.fresh () in 
        let local' = add_l s' (Base has_bt) local' in
        let* local' = match o_s with
-         | Some s when Option.is_some (bound_to s local') -> 
+         | Some s when Local.bound s local' -> 
             fail loc (Name_bound_twice (Sym s))
          | Some s -> return (add_a s (has_bt, s') local')
          | None -> return local'

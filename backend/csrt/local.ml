@@ -8,11 +8,123 @@ module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend
 module Loc = Locations
-module VB = VariableBinding
 module IT = IndexTerms
 
 
-type binding = Sym.t * VB.t
+
+
+
+module VariableBinding = struct
+
+  open Kind
+
+  type t =
+    | Computational of Sym.t * BT.t
+    | Logical of LS.t
+    | Resource of RE.t
+    | UsedResource of RE.t * Loc.t list
+    | Constraint of LC.t
+
+
+  let kind = function
+    | Computational _ -> KComputational
+    | Logical _ -> KLogical
+    | Resource _ -> KResource
+    | Constraint _ -> KConstraint
+    | UsedResource _ -> KUsedResource 
+
+
+
+
+  let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
+    let btyp sym pped = 
+      format [Pp.FG(Default,Bright)] (Sym.pp_string sym) ^^ colon ^^ pped in
+    match binding with
+    | Computational (lname,bt) -> 
+       btyp sym (BT.pp true bt ^^ tilde ^^ Sym.pp lname)
+    | Logical ls -> 
+       btyp sym (LS.pp false ls)
+    | Resource re -> 
+       if print_all_names 
+       then btyp sym (squotes (RE.pp re))
+       else squotes (RE.pp re)
+    | UsedResource (re,_locs) -> 
+       if not print_used then underscore 
+       else if print_all_names 
+       then btyp sym (!^"used" ^^^ (squotes (RE.pp re)))
+       else !^"used" ^^^ squotes (RE.pp re)
+    | Constraint lc -> 
+       if print_all_names 
+       then btyp sym (LC.pp lc)
+       else LC.pp lc
+
+  (* let json_computational (sym, (lname, bt)) = 
+   *   let args = `Assoc [("basetype", BT.json bt); ("logical", Sym.json lname)] in
+   *   let bound = `Variant ("Computational", args) in
+   *   (Sym.json sym, bound)
+   * 
+   * let json_logical (sym, ls) = 
+   *   let args = LS.json ls in
+   *   (Sym.json sym, `Variant ("Logical", args))
+   * 
+   * let json_resource (_sym, re) = 
+   *   let args = RE.json re in
+   *   (`Null, `Variant ("Resource", args))
+   * 
+   * let json_used_resource (_sym, (re, where)) = 
+   *   let args = 
+   *     `Assoc [("used", List.json Loc.json_loc where); 
+   *             ("resource", RE.json re)] in
+   *   (`Null, `Variant ("UsedResource", args))
+   * 
+   * let json_constraint (_sym, lc) = 
+   *   let args = LC.json lc in
+   *   (`Null, `Variant ("Constraint", args))
+   * 
+   * 
+   * let json (sym, binding) = 
+   *   let (name,bound) = 
+   *     match binding with
+   *     | Computational (lname,bt) -> json_computational (sym, (lname, bt))
+   *     | Logical ls -> json_logical (sym, ls)
+   *     | Resource re -> json_resource (sym, re)
+   *     | UsedResource (re,locs) -> json_used_resource (sym, (re, locs))
+   *     | Constraint lc -> json_constraint (sym, lc)
+   *   in
+   *   `Assoc [
+   *       ("name", `String (Sym.pp_string sym));
+   *       ("bound", bound);
+   *       ] *)
+
+
+
+  let agree vb1 vb2 = 
+    match vb1, vb2 with
+    | Computational (l1,bt1), Computational (l2,bt2)
+         when Sym.equal l1 l2 && BT.equal bt1 bt2 -> 
+       Some (Computational (l1,bt1))
+    | Logical ls1, Logical ls2 
+         when LS.equal ls1 ls2 -> 
+       Some (Logical ls1)
+    | Constraint lc1, Constraint lc2
+           when LC.equal lc1 lc2 ->
+       Some (Constraint lc1)
+    | Resource re1, Resource re2 
+         when RE.equal re1 re2 ->
+       Some (Resource re1)
+    | UsedResource (re1,locs1), UsedResource (re2,locs2)
+           when RE.equal re1 re2 ->
+       Some (UsedResource (re1, locs1 @ locs2))
+    | _, _ ->
+       None
+
+end
+
+
+
+
+
+type binding = Sym.t * VariableBinding.t
 
 type context_item = 
   | Binding of binding
@@ -37,8 +149,8 @@ let unbound_internal_error sym =
 
 let kind_mismatch_internal_error ~expect ~has =
   let err = 
-    "Expected" ^ (plain (VariableBinding.kind_pp expect)) ^
-      "but found" ^ (plain (VariableBinding.kind_pp has))
+    "Expected" ^ (plain (Kind.pp expect)) ^
+      "but found" ^ (plain (Kind.pp has))
   in
   Debug_ocaml.error err
 
@@ -47,7 +159,7 @@ let kind_mismatch_internal_error ~expect ~has =
 
 
 let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
-  | Binding (sym,binding) -> VB.pp ~print_all_names ~print_used (sym,binding)
+  | Binding (sym,binding) -> VariableBinding.pp ~print_all_names ~print_used (sym,binding)
   | Marker -> uformat [FG (Blue,Dark)] "\u{25CF}" 1 
 
 (* reverses the list order for matching standard mathematical
@@ -63,7 +175,7 @@ let pp ?(print_all_names = false) ?(print_used = false) (Local local) =
 
 
 (* internal *)
-let get (sym: Sym.t) (Local local) : VB.t =
+let get (sym: Sym.t) (Local local) : VariableBinding.t =
   let rec aux = function
   | Binding (sym',b) :: _ when Sym.equal sym' sym -> b
   | _ :: local -> aux local
@@ -149,7 +261,8 @@ let use_resource sym where (Local local) =
   | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
      begin match b with
      | Resource re -> Binding (sym', UsedResource (re,where)) :: rest
-     | _ -> kind_mismatch_internal_error ~expect:KResource ~has:(VB.kind b)
+     | _ -> kind_mismatch_internal_error 
+              ~expect:KResource ~has:(VariableBinding.kind b)
      end
   | i :: rest -> i :: aux rest
   | [] -> unbound_internal_error sym
@@ -177,15 +290,19 @@ let since (Local local) =
 
 
 
-let bound_to sym (Local local) = 
+let kind sym (Local local) = 
   let rec aux = function
     | [] -> None
     | Binding (sym',binding) :: rest ->
-       if Sym.equal sym' sym then Some binding
+       if Sym.equal sym' sym 
+       then Some (VariableBinding.kind binding)
        else aux rest
     | Marker :: rest -> aux rest
   in
   aux local
+
+let bound sym local = 
+  Option.is_some (kind sym local)
 
 
 
@@ -202,7 +319,7 @@ let merge (Local l1) (Local l2) =
   let merge_ci = function
     | (Marker, Marker) -> Marker
     | (Binding (s1,vb1), Binding(s2,vb2)) ->
-       begin match Sym.equal s1 s2, VB.agree vb1 vb2 with
+       begin match Sym.equal s1 s2, VariableBinding.agree vb1 vb2 with
        | true, Some vb -> Binding (s1,vb)
        | _ -> incompatible ()
        end
@@ -217,36 +334,31 @@ let big_merge (local: t) (locals: t list) : t =
   List.fold_left merge local locals
 
 
-let mA sym (bt,lname) = (sym, VB.Computational (lname,bt))
-let mL sym ls = (sym, VB.Logical ls)
-let mR sym re = (sym, VB.Resource re)
-let mC sym lc = (sym, VB.Constraint lc)
-let mUR re = mR (Sym.fresh ()) re
-let mUC lc = mC (Sym.fresh ()) lc
-
-
-
 
 
 let get_a (name: Sym.t) (local:t)  = 
   match get name local with 
   | Computational (lname,bt) -> (bt,lname)
-  | b -> kind_mismatch_internal_error ~expect:KComputational ~has:(VB.kind b)
+  | b -> kind_mismatch_internal_error 
+           ~expect:KComputational ~has:(VariableBinding.kind b)
 
 let get_l (name: Sym.t) (local:t) = 
   match get name local with 
   | Logical ls -> ls
-  | b -> kind_mismatch_internal_error ~expect:KLogical ~has:(VB.kind b)
+  | b -> kind_mismatch_internal_error 
+           ~expect:KLogical ~has:(VariableBinding.kind b)
 
 let get_r (name: Sym.t) (local:t) = 
   match get name local with 
   | Resource re -> re
-  | b -> kind_mismatch_internal_error ~expect:KResource ~has:(VB.kind b)
+  | b -> kind_mismatch_internal_error 
+           ~expect:KResource ~has:(VariableBinding.kind b)
 
 let get_c (name: Sym.t) (local:t) = 
   match get name local with 
   | Constraint lc -> lc
-  | b -> kind_mismatch_internal_error ~expect:KConstraint ~has:(VB.kind b)
+  | b -> kind_mismatch_internal_error 
+           ~expect:KConstraint ~has:(VariableBinding.kind b)
 
 
 let add_a aname (bt,lname) = 
