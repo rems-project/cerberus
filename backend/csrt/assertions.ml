@@ -24,7 +24,7 @@ let find_name loc names str =
   end
 
 let resolve_path loc (mapping : mapping) (p : Path.t) : (Sym.t, type_error) m = 
-  let open Path in
+  let open Path.Mapping in
   let found = List.find_opt (fun {path;res} -> Path.equal path p) mapping in
   match found with
   | None -> 

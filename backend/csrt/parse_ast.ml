@@ -35,10 +35,7 @@ module Path = struct
 
   let pp {label; name; path} = 
     !^name ^^ Pp.at ^^ !^label ^^ Pp.separate_map empty pp_access path
-
-  type map = {path : t; res : Sym.t}
-  type mapping = map list
-
+  
   let pointee p = access p Pointee
   let predicateArg p s = access p (PredicateArg s)
 
@@ -46,13 +43,48 @@ module Path = struct
     String.equal p1.label p2.label &&
     String.equal p1.name p2.name &&
     List.equal accessor_equal p1.path p2.path
+  
+  module Mapping = struct
 
-  let pp_map {path; res} = 
-    Pp.parens (pp path ^^ comma ^^^ Sym.pp res)
+    type item = {path : t; res : Sym.t}
+    type t = item list
+    
+    let pp_item {path; res} = 
+      Pp.parens (pp path ^^ comma ^^^ Sym.pp res)
+    
+    let pp = Pp.list pp_item
 
-  let pp_mapping = 
-    Pp.list pp_map 
+    let empty = []
 
+  end
+
+  type mapping = Mapping.t
+
+end
+
+
+
+
+
+module APath = struct
+
+  type t = 
+    | Addr of {label : string; name : string}
+    | Path of Path.t
+
+  let pointee = function
+    | Addr {label; name} -> Path {label; name; path = []}
+    | Path p -> Path (Path.pointee p)
+
+  (* type map = {apath : t; res : Sym.t}
+   * type mapping = map list
+   * 
+   * let path_mapping = 
+   *   List.filter_map (fun {apath; res} ->
+   *       match apath with
+   *       | Path path -> Some Path.{path; res}
+   *       | Addr _ -> None
+   *     ) *)
 
 end
 
