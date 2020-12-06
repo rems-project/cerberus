@@ -157,7 +157,7 @@ let frontend filename =
 
 
 
-let main filename jsonfile debug_level print_level =
+let main filename mjsonfile debug_level print_level =
   if debug_level > 0 then Printexc.record_backtrace true else ();
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
@@ -166,28 +166,23 @@ let main filename jsonfile debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    let json_channel = Pp.maybe_open_channel jsonfile in
-    try
-      begin match frontend filename with
-      | CF.Exception.Exception err ->
-         prerr_endline (CF.Pp_errors.to_string err);
-         Pp.maybe_close_channel json_channel;
-         exit 1
-      | CF.Exception.Result file ->
-         if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
-         match Process.process file with
-         | Ok () -> 
-            Pp.maybe_close_channel json_channel;
-            exit 0
-         | Error (loc,ostacktrace,err) ->
-            TypeErrors.report loc ostacktrace err;
-            Pp.maybe_close_channel json_channel;
-            exit 1
-      end
-    with
-    | exc -> 
-       Pp.maybe_close_channel json_channel; 
-       raise exc
+    begin match mjsonfile with
+    | Some jsonfile -> Pp.json_output_file := Some jsonfile
+    | None -> ()
+    end;
+    begin match frontend filename with
+    | CF.Exception.Exception err ->
+       prerr_endline (CF.Pp_errors.to_string err);
+       exit 1
+    | CF.Exception.Result file ->
+       if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
+       match Process.process file with
+       | Ok () -> 
+          exit 0
+       | Error (loc,ostacktrace,err) ->
+          TypeErrors.report loc ostacktrace err;
+          exit 1
+    end
 
 
 open Cmdliner

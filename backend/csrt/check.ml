@@ -27,6 +27,7 @@ open CF.Mucore
 open Pp
 open BT
 
+
 (* some of this is informed by impl_mem *)
 
 
@@ -1748,6 +1749,7 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
                     (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                     (body : 'bty expr) (function_typ : FT.t) 
                     (label_defs : 'bty label_defs) : (unit, type_error) m =
+  Debug_ocaml.begin_csv_timing "check_procedure";
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
   let* (rt, delta, pure_delta, substs) = 
     CBF_FT.check_and_bind_arguments loc arguments function_typ 
@@ -1818,6 +1820,7 @@ let check_procedure (loc : loc) (global : Global.t) (fsym : Sym.t)
     check_expr_pop loc delta 
       {local = L.empty; labels; global} body (Normal rt)
   in
+  let () = Debug_ocaml.end_csv_timing () in
   return ()
 
 

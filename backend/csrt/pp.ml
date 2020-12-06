@@ -217,38 +217,21 @@ let error (loc : Locations.t) msg extras =
 
 
 
-let json_output_channel = ref None
-
-let maybe_open_channel ofile = 
-  match ofile with
-  | Some file -> 
-     let oc = open_out file in
-     let () = 
-       output_string oc "[\n";
-       json_output_channel := Some oc;
-     in
-     Some oc
-  | None -> 
-     None
-
-let maybe_close_channel ochannel =
-  match ochannel with
-  | Some channel -> 
-       output_string channel "\n]";
-     close_out channel
-  | None -> ()
+let json_output_file = ref None
 
 let maybe_print_json = 
   let first = ref true in
   fun guard json ->
   if guard then 
     begin 
-      match !json_output_channel with
+      match !json_output_file with
       | None -> ()
-      | Some channel -> 
-         if !first then first := false else output_string channel ",\n";
-         Yojson.Safe.pretty_to_channel ~std:true channel (Lazy.force json);
-         output_char channel '\n'
+      | Some file -> 
+         let oc = open_out file in
+         if !first then first := false else output_string oc ",\n";
+         Yojson.Safe.pretty_to_channel ~std:true oc (Lazy.force json);
+         output_char oc '\n';
+         close_out oc
     end
 
 

@@ -71,7 +71,7 @@ let end_timing () =
     let t' = Unix.gettimeofday () in
     match !timing_stack with
       | [] ->
-          () (* this implies an improper use of end_timing, but we silently ignore *)
+         failwith "asd"
       | (str, t) :: xs ->
           let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb.prof" in
           Printf.fprintf oc "[%s] %f\n" str (t' -. t);
@@ -83,28 +83,21 @@ let end_timing () =
 let csv_timing_stack =
   ref []
 
-let csv_timing_first = 
-  ref true
 
 let begin_csv_timing (fun_name: string) =
-  if !debug_level > 8 then
-    begin
-      if !csv_timing_first then
-        let oc = open_out "cerb_times.csv" in
-        Printf.fprintf oc "%s,%s\n" "name" "time";
-        csv_timing_first := false
-      else ()
-    end;
-    csv_timing_stack := (fun_name, Unix.gettimeofday ()) :: !timing_stack
+  if !debug_level >= 1 then
+    csv_timing_stack := (fun_name, Unix.gettimeofday ()) :: !csv_timing_stack
 
 let end_csv_timing () =
-  if !debug_level > 8 then
-    let t' = Unix.gettimeofday () in
-    match !csv_timing_stack with
+  if !debug_level >= 1 then
+    begin 
+      let t' = Unix.gettimeofday () in
+      match !csv_timing_stack with
       | [] ->
-          () (* this implies an improper use of end_timing, but we silently ignore *)
+         error "incorrect use of timing stack"
       | (str, t) :: xs ->
-          let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb_times.csv" in
-          Printf.fprintf oc "%s,%f\n" str (t' -. t);
-          close_out oc;
-          timing_stack := xs
+         let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb_times.csv" in
+         Printf.fprintf oc "%s,%f\n" str (t' -. t);
+         close_out oc;
+         csv_timing_stack := xs
+    end

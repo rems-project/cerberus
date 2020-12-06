@@ -37,7 +37,7 @@ let member_sort ctxt =
 
 (* maybe fix Loc *)
 let rec bt_to_sort {local;global} ctxt bt = 
-  Debug_ocaml.begin_csv_timing "bt_to_sort";
+  (* Debug_ocaml.begin_csv_timing "bt_to_sort"; *)
   let open BaseTypes in
   let btname = bt_name bt in
   let sort = match bt with
@@ -74,7 +74,7 @@ let rec bt_to_sort {local;global} ctxt bt =
     | Set bt ->
        Z3.Set.mk_sort ctxt (bt_to_sort {local;global} ctxt bt)
   in
-  Debug_ocaml.end_csv_timing ();
+  (* Debug_ocaml.end_csv_timing (); *)
   sort
 
 let ls_to_sort {local;global} ctxt (LS.Base bt) =
@@ -361,12 +361,8 @@ let constraint_holds {local;global} do_model c =
         ("well_sorted_check","true")
       ] 
   in
-  Debug_ocaml.begin_csv_timing "mk_simple_solver";
   let solver = Z3.Solver.mk_simple_solver ctxt in
-  Debug_ocaml.end_csv_timing ();
-  Debug_ocaml.begin_csv_timing "all_constraints";
   let lcs = negate c :: Local.all_constraints local in
-  Debug_ocaml.end_csv_timing ();
   (* let () = debug_typecheck_lcs lcs {local;global} in *)
   let checked = 
     handle_z3_problems
@@ -387,7 +383,7 @@ let constraint_holds {local;global} do_model c =
         result
       )
   in
-  Debug_ocaml.end_csv_timing ();
+  (* Debug_ocaml.end_csv_timing (); *)
   match checked with
   | UNSATISFIABLE -> (true,ctxt,solver)
   | SATISFIABLE -> (false,ctxt,solver)
