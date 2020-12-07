@@ -166,22 +166,26 @@ let main filename mjsonfile debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    begin match mjsonfile with
-    | Some jsonfile -> Pp.json_output_file := Some jsonfile
-    | None -> ()
-    end;
+    Pp.maybe_open_json_output mjsonfile;
     begin match frontend filename with
     | CF.Exception.Exception err ->
        prerr_endline (CF.Pp_errors.to_string err);
        exit 1
     | CF.Exception.Result file ->
        if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
-       match Process.process file with
-       | Ok () -> 
-          exit 0
-       | Error (loc,ostacktrace,err) ->
-          TypeErrors.report loc ostacktrace err;
-          exit 1
+       try 
+         begin 
+           let result = Process.process file in
+           Pp.maybe_close_json_output ();
+           match result with
+           | Ok () -> 
+              exit 0
+           | Error (loc,ostacktrace,err) ->
+              TypeErrors.report loc ostacktrace err;
+              exit 1
+         end
+       with
+       | exc -> Pp.maybe_close_json_output (); raise exc
     end
 
 

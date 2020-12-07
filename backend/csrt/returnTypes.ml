@@ -67,3 +67,12 @@ let pp rt =
 
 
 
+let json = function
+  | Computational ((s, bt), t) ->
+     let args = [
+         ("symbol", Sym.json s);
+         ("basetype", BaseTypes.json bt);
+         ("return_type", LRT.json t);
+       ]
+     in
+     `Variant ("Computational", Some (`Assoc args))

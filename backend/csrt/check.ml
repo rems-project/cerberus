@@ -1299,16 +1299,19 @@ module Make (G : sig val global : Global.t end) = struct
   (*** auxiliary ****************************************************************)
 
 
-  let json_return_local_with_path loc (_, local) : Yojson.Safe.t = 
+  let json_return_local_with_path loc (rt, local) : Yojson.Safe.t = 
     `Assoc [("loc", Loc.json_loc loc);
+            ("return_type", RT.json rt);
             ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
 
   let json_local_with_path loc (local) : Yojson.Safe.t = 
     `Assoc [("loc", Loc.json_loc loc);
+            ("return_type", `Null);
             ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
 
   let json_false_with_path loc  : Yojson.Safe.t = 
     `Assoc [("loc", Loc.json_loc loc);
+            ("return_type", `Null);
             ("context_or_unreachable", `Variant ("unreachable", None))]
 
   let json_return_local_or_false_with_path loc = function

@@ -98,3 +98,32 @@ let rec pp_aux lrt =
 
 let pp rt = 
   Pp.flow (Pp.break 1) (pp_aux rt) 
+
+
+
+let rec json = function
+  | Logical ((s, ls), t) ->
+     let args = [
+         ("symbol", Sym.json s);
+         ("sort", LogicalSorts.json ls);
+         ("return_type", json t);
+       ]
+     in
+     `Variant ("Logical", Some (`Assoc args))
+  | Resource (r,t) ->     
+     let args = [
+         ("resource", Resources.json r);
+         ("return_type", json t);
+       ]
+     in
+     `Variant ("Resource", Some (`Assoc args))
+  | Constraint (lc,t) ->
+     let args = [
+         ("constraint", LogicalConstraints.json lc);
+         ("return_type", json t);
+       ]
+     in
+     `Variant ("Constraint", Some (`Assoc args))
+  | I ->
+     `Variant ("I", None)
+     
