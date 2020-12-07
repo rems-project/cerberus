@@ -235,8 +235,8 @@ let rec of_index_term global it =
      let a' = of_index_term global it' in
      Z3.Arithmetic.mk_le ctxt a a'
   | Disjoint ((it,s),(it',s')) ->
-     let fp1_before_fp2 = IT.LocLT (Offset (Offset (it, Num s), IT.int (-1)), it') in
-     let fp2_before_fp1 = IT.LocLT (Offset (Offset (it', Num s'), IT.int (-1)), it) in
+     let fp1_before_fp2 = IT.LocLT (Offset (Offset (it, s), IT.int (-1)), it') in
+     let fp2_before_fp1 = IT.LocLT (Offset (Offset (it', s'), IT.int (-1)), it) in
      let t = Or [fp1_before_fp2; fp2_before_fp1] in
      of_index_term global t
   | Struct (tag,members) ->

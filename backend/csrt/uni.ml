@@ -35,3 +35,10 @@ let unify_sym sym sym' (res : Sym.t t) =
     | None -> return (SymMap.add sym {resolved = Some sym'} res)
     end
 
+
+let unify_syms syms syms' res = 
+  List.fold_left (fun ores (sym,sym') ->
+      let* res = ores in
+      unify_sym sym sym' res
+    ) (Some res) (List.combine syms syms')
+

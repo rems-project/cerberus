@@ -2,7 +2,6 @@ open Pp
 open Resultat
 module CF=Cerb_frontend
 open CF.Mucore
-open Check
 open TypeErrors
 open ReturnTypes
 

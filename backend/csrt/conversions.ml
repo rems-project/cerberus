@@ -158,7 +158,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
              LRT.Logical ((member_v, Base bt), 
              LRT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, lrt))
           | None ->
-             LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt)           
+             LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt)           
         ) components LRT.I
     in
     let st = ST.ST_Ctype (Sctypes.Sctype ([], Struct tag)) in
@@ -203,7 +203,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let value = (member, S (bt, member_v)) :: values in
                (lrt, value)
             | None ->
-               let lrt = LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt) in
+               let lrt = LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt) in
                (lrt, values)
           ) layout (LRT.I, [])
       in
@@ -266,7 +266,7 @@ let make_block_pointer pointer block_type stored_type =
   let open RT in
   let pointer_it = S (BT.Loc, pointer) in
   let size = Memory.size_of_stored_type stored_type in
-  let uninit = RE.Block {pointer = pointer_it; size; block_type} in
+  let uninit = RE.Block {pointer = pointer_it; size = Num size; block_type} in
   Computational ((pointer,Loc),
   Resource ((uninit, 
   Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),

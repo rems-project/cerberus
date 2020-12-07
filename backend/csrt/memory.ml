@@ -82,8 +82,12 @@ let representable_pointer about =
 
 
 let size_of_ctype (ct : Sctypes.t) = 
-  let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
-  integer_value_to_num s
+  match ct with
+  | Sctypes.Sctype (_, Void) -> 
+     Debug_ocaml.error "size_of_ctype applied to void"
+  | _ -> 
+    let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
+    integer_value_to_num s
 
 let align_of_ctype (ct : Sctypes.t) = 
   let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in

@@ -32,7 +32,7 @@ type block_type =
 
 
 type t = 
-  | Block of {pointer: IndexTerms.t; size: size; block_type: block_type}
+  | Block of {pointer: IndexTerms.t; size: IndexTerms.t; block_type: block_type}
   | Points of {pointer: IndexTerms.t; pointee: Sym.t; size: size}
   | Predicate of predicate
 
@@ -42,11 +42,11 @@ let pp = function
   | Block {pointer; size; block_type} ->
      begin match block_type with
      | Nothing -> 
-        !^"Block" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+        !^"Block" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
      | Uninit -> 
-        !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+        !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
      | Padding -> 
-        !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+        !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
      end
   | Points {pointer; pointee; size} ->
      !^"Points" ^^ 
@@ -98,9 +98,8 @@ let block_type_equal b1 b2 =
 let equal t1 t2 = 
   match t1, t2 with
   | Block u1, Block u2 ->
-     
      IndexTerms.equal u1.pointer u2.pointer &&
-     Z.equal u1.size u2.size
+     IndexTerms .equal u1.size u2.size
   | Points p1, Points p2 ->
      IndexTerms.equal p1.pointer p2.pointer &&
      Sym.equal p1.pointee p2.pointee &&
@@ -119,7 +118,7 @@ let pointer = function
 
 let size = function
   | Block b -> Some b.size
-  | Points p -> Some p.size
+  | Points p -> Some (IndexTerms.Num p.size)
   | Predicate _p -> None
 
 let fp resource = 
@@ -142,24 +141,24 @@ let set_pointer re pointer =
 
 
 (* requires equality on index terms (does not try to unify them) *)
-let unify r1 r2 res = 
-  let open Option in
-  match r1, r2 with
-  | Block b, Block b' (* Block unifies with Blocks of other block type *)
-       when Z.equal b.size b'.size && IndexTerms.equal b.pointer b'.pointer ->
-     return res
-  | Points p, Points p' 
-       when Z.equal p.size p'.size && IndexTerms.equal p.pointer p'.pointer ->
-     Uni.unify_sym p.pointee p'.pointee res
-  | Predicate p, Predicate p' 
-       when equal_predicate_name p.name p'.name &&
-              List.length p.args = List.length p'.args ->
-     List.fold_left (fun ores (sym1,sym2) ->
-         let* res = ores in
-         Uni.unify_sym sym1 sym2 res
-       ) (Some res) (List.combine p.args p'.args)
-  | _ -> 
-     fail
+(* let unify r1 r2 res = 
+ *   let open Option in
+ *   match r1, r2 with
+ *   | Block b, Block b' (\* Block unifies with Blocks of other block type *\)
+ *        when IndexTerms.equal b.pointer b'.pointer ->
+ *      return res
+ *   | Points p, Points p' 
+ *        when Z.equal p.size p'.size && IndexTerms.equal p.pointer p'.pointer ->
+ *      Uni.unify_sym p.pointee p'.pointee res
+ *   | Predicate p, Predicate p' 
+ *        when equal_predicate_name p.name p'.name &&
+ *               List.length p.args = List.length p'.args ->
+ *      List.fold_left (fun ores (sym1,sym2) ->
+ *          let* res = ores in
+ *          Uni.unify_sym sym1 sym2 res
+ *        ) (Some res) (List.combine p.args p'.args)
+ *   | _ -> 
+ *      fail *)
 
 
 let subst_non_pointer subst = function

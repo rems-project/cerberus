@@ -77,7 +77,7 @@ type 'bt term =
   | Offset of 'bt term * 'bt term
   | LocLT of 'bt term * 'bt term
   | LocLE of 'bt term * 'bt term
-  | Disjoint of ('bt term * Z.t) * ('bt term * Z.t)
+  | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term)
   | AlignedI of 'bt term * 'bt term
   | Aligned of ST.t * 'bt term
 
@@ -158,9 +158,10 @@ let rec equal it it' =
   | AllocationSize t1, AllocationSize t1' -> equal t1 t1'
   | Offset (t1, t2), Offset (t1', t2') -> equal t1 t1' && equal t2 t2'
   | LocLT (t1, t2), LocLT (t1', t2') -> equal t1 t1' && equal t2 t2'
-  | LocLE (t1, t2), LocLE (t1', t2') ->equal t1 t1' && equal t2 t2'
+  | LocLE (t1, t2), LocLE (t1', t2') -> equal t1 t1' && equal t2 t2'
   | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
-     equal t1 t1' && equal t2 t2' && Z.equal s1 s1' && Z.equal s2 s2'
+     equal t1 t1' && equal t2 t2' && 
+       equal s1 s1' && equal s2 s2'
 
   | Struct (tag, members), Struct (tag2, members2) ->
      tag = tag2 && 
@@ -377,8 +378,8 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | Disjoint ((o1,s1),(o2,s2)) ->
        mparens (!^"disjoint" ^^ 
                   parens (
-                    parens (aux false o1 ^^ comma ^^ Z.pp s1) ^^ comma ^^
-                      parens (aux false o2 ^^ comma ^^ Z.pp s2)))
+                    parens (aux false o1 ^^ comma ^^ aux false s1) ^^ comma ^^
+                      parens (aux false o2 ^^ comma ^^ aux false s2)))
 
     | AlignedI (t, t') ->
        mparens (!^"aligned" ^^ parens (aux false t ^^ comma ^^ aux false t'))

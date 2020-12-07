@@ -422,37 +422,41 @@ module Make (G : sig val global : Global.t end) = struct
   (*** resource inference *******************************************************)
 
 
-  let rec remove_ownership_prompt (loc: loc) situation local (pointer: IT.t) (need_size: RE.size) = 
+  let rec remove_ownership_prompt (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
     let open Prompt.Operators in
-    if Z.equal need_size Z.zero then 
+    if S.equal local need_size (Num Z.zero) then 
       return local
     else
       let o_resource = S.resource_for_pointer local pointer in
-      match o_resource with
-      | Some (resource_name, Predicate pred) -> 
-         fail loc (Cannot_unpack (pred, situation))
-      | Some (resource_name, Block {size = have_size; _})
-      | Some (resource_name, Points {size = have_size; _})
-        ->
-         if Z.ge_big_int need_size have_size then 
-           let local = L.use_resource resource_name [loc] local in
-           remove_ownership_prompt loc situation local (Offset (pointer, Num have_size)) 
-             (Z.sub need_size have_size)
-         else
-           (* if the resource is bigger than needed, keep the remainder
-              as unitialised memory *)
-           let local = L.use_resource resource_name [loc] local in
-           let local = 
-             add_ur (
-                 RE.Block {pointer = Offset (pointer, Num need_size); 
-                           size = Z.sub have_size need_size; 
-                           block_type = Nothing}
-               ) local
-           in
-           return local
-      | None -> 
-         let olast_used = S.used_resource_for_pointer local pointer in
-         fail loc (Missing_ownership (None, olast_used, situation))
+      let* resource_name, have_size = match o_resource with
+        | Some (resource_name, Predicate pred) -> 
+           fail loc (Cannot_unpack (pred, situation))
+        | Some (resource_name, Block {size; _}) ->
+           return (resource_name, size)
+        | Some (resource_name, Points {size; _}) ->
+           return (resource_name, Num size)
+        | None -> 
+           let olast_used = S.used_resource_for_pointer local pointer in
+           fail loc (Missing_ownership (None, olast_used, situation))
+      in
+      if S.ge local need_size have_size then 
+        let local = L.use_resource resource_name [loc] local in
+        remove_ownership_prompt loc situation local (Offset (pointer, have_size)) 
+          (IT.Sub (need_size, have_size))
+      else if S.lt local need_size have_size then 
+        (* if the resource is bigger than needed, keep the remainder
+           as unitialised memory *)
+        let local = L.use_resource resource_name [loc] local in
+        let local = 
+          add_ur (
+              RE.Block {pointer = Offset (pointer, need_size); 
+                        size = IT.Sub (have_size, need_size); 
+                        block_type = Nothing}
+            ) local
+        in
+        return local
+      else
+        return local
 
 
 
@@ -462,50 +466,54 @@ module Make (G : sig val global : Global.t end) = struct
     let open Prompt.Operators in
     let pointer = RE.pointer request in
     match request with
-    | Block {pointer; size; _} ->
-       let* local = remove_ownership_prompt loc situation local pointer size in
+    | Block b ->
+       let* local = remove_ownership_prompt loc situation local b.pointer b.size in
        return (unis, local)
-    | Points {pointer; _} ->
-       let o_resource = S.resource_for_pointer local pointer in
+    | Points p ->
+       let o_resource = S.resource_for_pointer local p.pointer in
        begin match o_resource with
-       | Some (resource_name, resource) -> 
-          begin match RE.unify request (RE.set_pointer resource pointer) unis with
+       | Some (resource_name, Points p') when Z.equal p.size p'.size ->
+          begin match Uni.unify_sym p.pointee p'.pointee unis with
           | Some unis -> 
              let local = use_resource resource_name [loc] local in
              return (unis, local)
           | None -> 
-             fail loc (Resource_mismatch {expect = request; has = resource; situation})
+             fail loc (Resource_mismatch {expect = request; has = Points p'; situation})
           end
+       | Some (resource_name, resource)  ->
+          fail loc (Resource_mismatch {expect = request; has = resource; situation})             
        | None -> 
-          let olast_used = S.used_resource_for_pointer local pointer in
+          let olast_used = S.used_resource_for_pointer local p.pointer in
           fail loc (Missing_ownership (None, olast_used, situation))
        end
     | Predicate p ->
        let o_resource = S.resource_for_pointer local pointer in
        begin match o_resource with
-       | Some (resource_name, resource) -> 
-          begin match RE.unify request (RE.set_pointer resource pointer) unis with
+       | Some (resource_name, Predicate p') -> 
+          begin match Uni.unify_syms p.args p'.args unis with
           | Some unis -> 
              let local = use_resource resource_name [loc] local in
              return (unis, local)
-          | None ->         
-             let def = match Global.get_predicate_def loc G.global p.name with
-               | Some def -> def
-               | None -> Debug_ocaml.error "missing predicate definition"
-             in
-             let else_prompt = 
-               fail loc (Resource_mismatch {expect = request; has = resource; situation}) 
-             in
-             let attempt_prompts = 
-               List1.map (fun clause ->
-                   prompt (R_Packing {loc; situation; local; lft = clause})
-                 ) (def.pack_functions p.pointer)
-             in
-             let choices = List1.concat attempt_prompts (List1.one else_prompt) in
-             let* (lrt, local) = try_choices choices  in
-             let local = bind_logical local lrt in
-             resource_request_prompt loc situation local request unis
+          | None ->
+             fail loc (Resource_mismatch {expect = request; has = Predicate p'; situation}) 
           end
+       | Some (resource_name, resource) ->         
+          let def = match Global.get_predicate_def loc G.global p.name with
+            | Some def -> def
+            | None -> Debug_ocaml.error "missing predicate definition"
+          in
+          let else_prompt = 
+            fail loc (Resource_mismatch {expect = request; has = resource; situation}) 
+          in
+          let attempt_prompts = 
+            List1.map (fun clause ->
+                prompt (R_Packing {loc; situation; local; lft = clause})
+              ) (def.pack_functions p.pointer)
+          in
+          let choices = List1.concat attempt_prompts (List1.one else_prompt) in
+          let* (lrt, local) = try_choices choices  in
+          let local = bind_logical local lrt in
+          resource_request_prompt loc situation local request unis
        | None -> 
           let olast_used = S.used_resource_for_pointer local pointer in
           fail loc (Missing_ownership (None, olast_used, situation))
@@ -566,7 +574,7 @@ module Make (G : sig val global : Global.t end) = struct
     let* (False.False, local) = handle_prompt prompt in
     return local
 
-  let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: RE.size) = 
+  let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
     let prompt = remove_ownership_prompt loc situation local pointer need_size in
     handle_prompt prompt
 
@@ -1245,7 +1253,9 @@ module Make (G : sig val global : Global.t end) = struct
                let* rt2 = aux members in
                return (rt@@rt2)
             | None ->
-               let rt = LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); size; block_type = Padding}, I) in
+               let rt = 
+                 LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); 
+                                      size = Num size; block_type = Padding}, I) in
                let* rt2 = aux members in
                return (rt@@rt2)
        in  
@@ -1261,7 +1271,8 @@ module Make (G : sig val global : Global.t end) = struct
             in
             return rt
          | None -> 
-            return (Resource (Block {pointer; size; block_type = Uninit}, I))
+            return (Resource (Block {pointer; size = Num size; 
+                                     block_type = Uninit}, I))
 
 
 
@@ -1272,7 +1283,7 @@ module Make (G : sig val global : Global.t end) = struct
     let v = Sym.fresh () in
     let bt = Struct tag in
     let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
-    let* local = remove_ownership loc (Access Load) local pointer size in
+    let* local = remove_ownership loc (Access Load) local pointer (Num size) in
     let rt = 
       LRT.Logical ((v, Base bt), 
       LRT.Resource (Points {pointer; pointee = v; size},
@@ -1383,7 +1394,7 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let resource_ok = 
               match Option.bind o_resource (Tools.comp RE.size snd) with
-              | Some size' when Z.equal size' size -> true
+              | Some size' when S.equal local size' (Num size) -> true
               | Some _ -> false
               | _ -> false
             in
@@ -1437,7 +1448,8 @@ module Make (G : sig val global : Global.t end) = struct
               ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
             in
             let size = Memory.size_of_ctype cti.ct in
-            let* local = remove_ownership loc (Access Kill) local (S (arg.bt, arg.lname)) size in
+            let* local = remove_ownership loc (Access Kill) local (S (arg.bt, arg.lname)) 
+                           (Num size) in
             let rt = RT.Computational ((Sym.fresh (), Unit), I) in
             return (Normal (rt, local))
          | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1462,7 +1474,8 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let size = Memory.size_of_ctype act.item.ct in
             let* local = 
-              remove_ownership parg.loc (Access Store) local (S (parg.bt, parg.lname)) size in
+              remove_ownership parg.loc (Access Store) local (S (parg.bt, parg.lname)) 
+                (Num size) in
             let* bindings = 
               store loc local varg.bt (S (parg.bt, parg.lname))
                 size (Some (S (varg.bt, varg.lname))) in

@@ -62,6 +62,16 @@ module Make (G : sig val global : Global.t end) = struct
     let (holds,_,_) = constraint_holds local c in
     holds
 
+  let ge local it1 it2 =
+    let c = LC.LC (IndexTerms.GE (it1, it2)) in
+    let (holds,_,_) = constraint_holds local c in
+    holds
+
+  let lt local it1 it2 =
+    let c = LC.LC (IndexTerms.LT (it1, it2)) in
+    let (holds,_,_) = constraint_holds local c in
+    holds
+
 
   let resource_for_pointer local pointer_it
        : (Sym.t * RE.t) option = 

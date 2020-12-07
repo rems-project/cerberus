@@ -204,6 +204,8 @@ module Make (G : sig val global : Global.t end) = struct
         | Disjoint ((t,s), (t',s')) ->
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Loc) t' in
+           let* s = check_aux loc (Base Integer) s in
+           let* s' = check_aux loc (Base Integer) s' in
            return (Base Bool, Disjoint ((t,s), (t',s')))
         | Nil _ -> 
            fail loc (Polymorphic_it context)
