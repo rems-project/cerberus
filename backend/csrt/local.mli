@@ -7,12 +7,14 @@ module Loc = Locations
 
 module VariableBinding : sig
 
+  type solver_constraint
+
   type t =
     | Computational of Sym.t * BT.t
     | Logical of LS.t
     | Resource of RE.t
     | UsedResource of RE.t * Loc.t list
-    | Constraint of LC.t
+    | Constraint of LC.t * solver_constraint
 
 end
 
@@ -49,16 +51,17 @@ val get_c : Sym.t -> t -> LC.t
 
 val add_a : Sym.t -> (BT.t * Sym.t) -> t -> t
 val add_l : Sym.t -> LS.t -> t -> t
-val add_r : Sym.t -> RE.t -> t -> t
-val add_c : Sym.t -> LC.t -> t -> t
-val add_ur : RE.t -> t -> t
-val add_uc : LC.t -> t -> t
+val add_r : Global.t -> Sym.t -> RE.t -> t -> t
+val add_c : Global.t -> Sym.t -> LC.t -> t -> t
+val add_ur : Global.t -> RE.t -> t -> t
+val add_uc : Global.t -> LC.t -> t -> t
 
 val all_names : t -> Sym.t list
 
 val all_computational : t -> (Sym.t * (Sym.t * BT.t)) list
-val all_named_constraints : t -> (Sym.t * LC.t) list
+val all_named_constraints : t -> (Sym.t * (LC.t * Z3.Expr.expr)) list
 val all_constraints : t -> LC.t list
+val all_solver_constraints : t -> Z3.Expr.expr list
 val all_logical : t -> (Sym.t * LS.t) list
 val all_resources : t -> RE.t list
 val all_named_resources : t -> (Sym.t * RE.t) list

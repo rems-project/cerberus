@@ -60,7 +60,7 @@ type type_error =
   | Unconstrained_logical_variable of Sym.t
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Solver.model option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Model.t option
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -236,7 +236,7 @@ let pp_type_error = function
   | Undefined_behaviour (undef, omodel) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
      let extras = match omodel with 
-       | Some model -> [!^ub; !^"Consider the case:" ^/^ Solver.pp_model model] 
+       | Some model -> [!^ub; !^"Consider the case:" ^/^ Model.pp model] 
        | None -> [!^ub] 
      in
      (!^"Undefined behaviour", extras)

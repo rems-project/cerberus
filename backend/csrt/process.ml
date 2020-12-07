@@ -65,6 +65,7 @@ let print_initial_environment genv =
 
 
 let process_functions genv fns =
+  let module C = Check.Make(struct let global = genv end) in
   PmapM.iterM (fun fsym fn -> 
       match fn with
       | M_Fun (rbt, args, body) ->
@@ -72,14 +73,14 @@ let process_functions genv fns =
            | Some t -> return t
            | None -> fail Loc.unknown (Missing_function fsym)
          in
-         check_function loc genv fsym args rbt body ftyp
+         C.check_function loc fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels) ->
          let loc = Loc.update Loc.unknown loc in
          let* (loc', ftyp) = match G.get_fun_decl genv fsym with
            | Some t -> return t
            | None -> fail loc (Missing_function fsym)
          in
-         check_procedure loc' genv fsym args rbt body ftyp labels
+         C.check_procedure loc' fsym args rbt body ftyp labels
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()
@@ -89,13 +90,23 @@ let process_functions genv fns =
 
 let process mu_file =
   let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
-  let global = Global.empty in
+
+  let solver_context = Solver.initial_context in
+
+  let global = Global.empty solver_context in
+
   let* global = record_tagDefs global mu_file.mu_tagDefs in
+
   let global = record_impl global mu_file.mu_impl in
+
   let* global = record_funinfo global mu_file.mu_funinfo in
+
   let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
+
   let global = { global with stdlib_funs } in
+
   let* () = print_initial_environment global in
+
   process_functions global mu_file.mu_funs
 
 

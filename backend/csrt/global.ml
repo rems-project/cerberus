@@ -89,6 +89,11 @@ type resource_predicate =
     unpack_functions : IT.t -> (LFT.t List1.t);
   }
 
+
+
+module BTMap = Map.Make(BT)
+
+
 type t = 
   { struct_decls : struct_decls; 
     fun_decls : (Loc.t * FT.t) SymMap.t;
@@ -96,15 +101,19 @@ type t =
     impl_constants : BT.t ImplMap.t;
     stdlib_funs : SymSet.t;
     resource_predicates : resource_predicate IdMap.t;
+    solver_context : Z3.context;
+    (* solver_bt_mapping : Z3.Sort.sort BTMap.t; *)
   } 
 
-let empty = 
+let empty solver_context = 
   { struct_decls = SymMap.empty; 
     fun_decls = SymMap.empty;
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
     stdlib_funs = SymSet.empty;
     resource_predicates = IdMap.empty;
+    solver_context;
+    (* solver_bt_mapping = BTMap.empty; *)
   }
 
 let get_predicate_def loc global predicate_name = 

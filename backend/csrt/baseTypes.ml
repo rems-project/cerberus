@@ -46,6 +46,42 @@ let rec equal t1 t2 =
   | Set _, _ ->
      false
 
+
+let compare bt1 bt2 =
+  match bt1, bt2 with
+  | Unit, Unit -> 0
+  | Unit, _ -> -1
+
+  | Bool, Bool -> 0
+  | Bool, _ -> -1
+
+  | Integer, Integer -> 0
+  | Integer, _ -> -1
+
+  | Loc, Loc -> 0
+  | Loc, _ -> -1
+
+  | Array, Array -> 0
+  | Array, _ -> -1
+
+  | List bt1', List bt2' -> compare bt1' bt2'
+  | List _, _ -> -1
+
+  | Tuple bts1, Tuple bts2 ->
+     List.compare compare bts1 bts2
+  | Tuple _, _ -> -1
+
+  | Struct tag1, Struct tag2 -> Sym.compare tag1 tag2
+  | Struct _, _ -> -1
+
+  | FunctionPointer s1, FunctionPointer s2 -> Sym.compare s1 s2
+  | FunctionPointer _, _ -> -1
+
+  | Set bt1, Set bt2 -> compare bt1 bt2
+  | Set _, _ -> 1
+
+
+
 let rec pp atomic bt = 
   let mparens pped = if atomic then parens pped else pped in
   match bt with

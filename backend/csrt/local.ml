@@ -18,12 +18,14 @@ module VariableBinding = struct
 
   open Kind
 
+  type solver_constraint = Z3.Expr.expr
+
   type t =
     | Computational of Sym.t * BT.t
     | Logical of LS.t
     | Resource of RE.t
     | UsedResource of RE.t * Loc.t list
-    | Constraint of LC.t
+    | Constraint of LC.t * solver_constraint
 
 
   let kind = function
@@ -53,7 +55,7 @@ module VariableBinding = struct
        else if print_all_names 
        then btyp sym (!^"used" ^^^ (squotes (RE.pp re)))
        else !^"used" ^^^ squotes (RE.pp re)
-    | Constraint lc -> 
+    | Constraint (lc, _) -> 
        if print_all_names 
        then btyp sym (LC.pp lc)
        else LC.pp lc
@@ -106,9 +108,9 @@ module VariableBinding = struct
     | Logical ls1, Logical ls2 
          when LS.equal ls1 ls2 -> 
        Some (Logical ls1)
-    | Constraint lc1, Constraint lc2
+    | Constraint (lc1,sc), Constraint (lc2, _)
            when LC.equal lc1 lc2 ->
-       Some (Constraint lc1)
+       Some (Constraint (lc1, sc))
     | Resource re1, Resource re2 
          when RE.equal re1 re2 ->
        Some (Resource re1)
@@ -120,7 +122,7 @@ module VariableBinding = struct
 
 end
 
-
+open VariableBinding
 
 
 
@@ -238,7 +240,14 @@ let all_named_used_resources local =
 let all_constraints local = 
   filter (fun name b ->
       match b with
-      | Constraint lc -> Some (lc)
+      | Constraint (lc, _) -> Some lc
+      | _ -> None
+    ) local
+
+let all_solver_constraints local = 
+  filter (fun name b ->
+      match b with
+      | Constraint (_, sc) -> Some sc
       | _ -> None
     ) local
 
@@ -246,7 +255,7 @@ let all_constraints local =
 let all_named_constraints local = 
   filter (fun name b ->
       match b with
-      | Constraint lc -> Some (name, lc)
+      | Constraint (lc, sc) -> Some (name, (lc, sc))
       | _ -> None
     ) local
 
@@ -356,7 +365,7 @@ let get_r (name: Sym.t) (local:t) =
 
 let get_c (name: Sym.t) (local:t) = 
   match get name local with 
-  | Constraint lc -> lc
+  | Constraint (lc, _) -> lc
   | b -> kind_mismatch_internal_error 
            ~expect:KConstraint ~has:(VariableBinding.kind b)
 
@@ -367,14 +376,15 @@ let add_a aname (bt,lname) =
 let add_l lname ls local = 
   add (lname, Logical ls) local
 
-let add_c cname lc local = 
-  add (cname, Constraint lc) local
+let add_c global cname (LC.LC lc) local = 
+  let sc = SolverConstraints.of_index_term global lc in
+  add (cname, Constraint (LC lc, sc)) local
 
-let add_uc lc local = 
-  add_c (Sym.fresh ()) lc local
+let add_uc global lc local = 
+  add_c global (Sym.fresh ()) lc local
 
 
-let add_r rname r local = 
+let add_r global rname r local = 
   let lcs = match RE.fp r with
     | None -> []
     | Some ((addr,_) as fp) ->
@@ -385,10 +395,11 @@ let add_r rname r local =
              )
          ) (all_resources local) 
   in
-  add_uc (LC (And lcs)) (add (rname, Resource r) local)
+  add_uc global (LC (And lcs)) 
+    (add (rname, Resource r) local)
 
-let add_ur re local = 
-  add_r (Sym.fresh ()) re local
+let add_ur global re local = 
+  add_r global (Sym.fresh ()) re local
 
 
 

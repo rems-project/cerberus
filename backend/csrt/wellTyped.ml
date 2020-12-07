@@ -356,11 +356,11 @@ module WLRT = struct
        welltyped loc (local, global) lrt
     | Resource (re, lrt) -> 
        let* () = WRE.welltyped loc (local, global) re in
-       let local = Local.add_ur re local in
+       let local = Local.add_ur global re local in
        welltyped loc (local, global) lrt
     | Constraint (lc, lrt) ->
        let* () = WLC.welltyped loc (local, global) lc in
-       let local = Local.add_uc lc local in
+       let local = Local.add_uc global lc local in
        welltyped loc (local, global) lrt
     | I -> 
        return ()
@@ -422,11 +422,11 @@ module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
        check loc (local, global) at
     | T.Resource (re, at) -> 
        let* () = WRE.welltyped loc (local, global) re in
-       let local = Local.add_ur re local in
+       let local = Local.add_ur global re local in
        check loc (local, global) at
     | T.Constraint (lc, at) ->
        let* () = WLC.welltyped loc (local, global) lc in
-       let local = Local.add_uc lc local in
+       let local = Local.add_uc global lc local in
        check loc (local, global) at
     | T.I i -> 
        WI.welltyped loc (local, global) i
