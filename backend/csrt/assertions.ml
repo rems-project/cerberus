@@ -235,36 +235,30 @@ let named_ctype_to_varg loc (sym, ct) =
 
 let apply_ownership {label;name;path} ownership loc typ = 
   let rec aux so_far_accesses todo_accesses (Typ (annots, typ_)) =
-    let path_pp () = Path.pp {name; label; path = so_far_accesses} in
-    match todo_accesses with
-    | [] ->
-       begin match ownership with 
-       | AST.OBlock -> 
-          fail loc (Generic (!^"cannot make" ^^^ path_pp () ^^^ !^"owned block"))
-       | AST.OUnowned -> 
-          fail loc (Generic (!^"cannot make" ^^^ path_pp () ^^^ !^"unowned"))
-       end
-    | Pointee :: todo ->
-       begin match todo, typ_, ownership with
-       |  _ :: _ , Pointer (qualifiers, Owned typ2), _ ->
-           let* typ2 = aux (so_far_accesses @ [Pointee]) todo typ2 in
-           let typ_ = Pointer (qualifiers, Owned typ2) in
-           return (Typ (annots, typ_))
-       |  [], Pointer (qualifiers, Owned t), AST.OUnowned ->
-           let typ_ = Pointer (qualifiers, Unowned (loc, t)) in
-           return (Typ (annots, typ_))
-       |  [], Pointer (qualifiers, Owned t), AST.OBlock ->
-           let typ_ = Pointer (qualifiers, Block (loc, t)) in
-           return (Typ (annots, typ_))
-       |  _, Pointer (qualifiers, Unowned (loc,_)), _ ->
-           fail loc (Generic (path_pp () ^^^ !^"was specified as unowned"))
-       |  _, Pointer (qualifiers, Block (loc, _)), _ ->
-           fail loc (Generic (path_pp () ^^^ !^"was specified as uninitialised"))
-       | _ -> 
-          fail loc (Generic (path_pp () ^^^ !^"is not a pointer"))
-       end
-    | Path.PredicateArg _ :: _ ->
-       fail loc (Generic (!^"cannot change ownership of" ^^^ path_pp ()))
+    begin match todo_accesses, typ_, ownership with
+    | Pointee :: todo, Pointer (qualifiers, Owned typ2), _ ->
+        let* typ2 = aux (so_far_accesses @ [Pointee]) todo typ2 in
+        let typ_ = Pointer (qualifiers, Owned typ2) in
+        return (Typ (annots, typ_))
+    | PredicateArg _ :: todo , Pointer (qualifiers, Owned typ2), _ ->
+        fail loc (Generic (!^"cannot change ownership of" ^^^ 
+                             Path.pp {name; label; path = so_far_accesses}))
+    | [], Pointer (qualifiers, Owned t), AST.OUnowned ->
+        let typ_ = Pointer (qualifiers, Unowned (loc, t)) in
+        return (Typ (annots, typ_))
+    | [], Pointer (qualifiers, Owned t), AST.OBlock ->
+        let typ_ = Pointer (qualifiers, Block (loc, t)) in
+        return (Typ (annots, typ_))
+    | _, Pointer (qualifiers, Unowned (loc,_)), _ ->
+        fail loc (Generic (Path.pp {name; label; path = so_far_accesses} ^^^ 
+                             !^"was specified as unowned"))
+    | _, Pointer (qualifiers, Block (loc, _)), _ ->
+        fail loc (Generic (Path.pp {name; label; path = so_far_accesses} ^^^ 
+                             !^"was specified as uninitialised"))
+    | _ -> 
+       fail loc (Generic (Path.pp {name; label; path = so_far_accesses} ^^^ 
+                            !^"is not a pointer"))
+    end
   in
   aux [] path typ
      

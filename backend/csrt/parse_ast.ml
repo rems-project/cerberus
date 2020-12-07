@@ -29,12 +29,15 @@ module Path = struct
   let access {label; name; path} a = 
     {label; name; path = path @ [a]}
 
-  let pp_access = function
-    | Pointee -> Pp.dot
-    | PredicateArg s -> Pp.dot ^^ Pp.dot ^^ !^s
-
   let pp {label; name; path} = 
-    !^name ^^ Pp.at ^^ !^label ^^ Pp.separate_map empty pp_access path
+    let rec aux = function
+      | [] -> !^name ^^ Pp.at ^^ !^label
+      | Pointee :: rest ->
+         star ^^ aux rest
+      | PredicateArg s :: rest ->
+         aux rest ^^ dot ^^ dot ^^ !^s
+    in
+    aux path
   
   let pointee p = access p Pointee
   let predicateArg p s = access p (PredicateArg s)
