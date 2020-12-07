@@ -1,5 +1,4 @@
 module CF=Cerb_frontend
-module G = Global
 module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
