@@ -23,7 +23,7 @@ let find_name loc names str =
   | None -> fail loc (Generic !^(str ^ " unbound"))
   end
 
-let resolve_path loc (mapping : mapping) (p : Path.t) : (Sym.t, type_error) m = 
+let resolve_path loc (mapping : mapping) (p : Path.t) : (BT.t* Sym.t, type_error) m = 
   let open Path.Mapping in
   let found = List.find_opt (fun {path;res} -> Path.equal path p) mapping in
   match found with
@@ -96,8 +96,8 @@ let rec resolve_index_term loc mapping (it: index_term)
      let* it' = aux it' in
      return (IT.GE (it, it'))
   | Path path -> 
-     let* s = resolve_path loc mapping path in
-     return (IT.S s)
+     let* (bt,s) = resolve_path loc mapping path in
+     return (IT.S (bt, s))
   | MinInteger it ->
      return (IT.MinInteger it)
   | MaxInteger it ->

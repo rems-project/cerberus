@@ -266,9 +266,10 @@ module WIT = struct
          let* (bt, t) = infer_set_type loc t in
          let* t' = check_aux loc (Base (Set bt)) t' in
          return (Base Bool, Subset (t,t'))
-      | S s ->
+      | S (_, s) ->
          let* () = check_bound loc local KLogical s in
-         return (Local.get_l s local, S s)
+         let (Base bt) = Local.get_l s local in
+         return (Base bt, S (bt, s))
 
     and check_aux : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ls it ->

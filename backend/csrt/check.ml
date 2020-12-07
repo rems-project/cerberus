@@ -141,7 +141,7 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
          | Some s -> return (add_a s (has_bt, s') local')
          | None -> return local'
        in
-       let local' = add_uc (LC (EQ (this, S s'))) local' in
+       let local' = add_uc (LC (EQ (this, S (has_bt, s')))) local' in
        return local'
     | M_Pattern (annots, M_CaseCtor (constructor, pats)) ->
        match expect, constructor, pats with
@@ -206,7 +206,7 @@ let pattern_match (loc : loc) (this : IT.t) (pat : pattern)
    introduced in the pattern-matching relate to (name,bound). *)
 let pattern_match_rt (loc : loc) (pat : pattern) (rt : RT.t) : (L.t, type_error) m =
   let* ((bt, s'), delta) = bind_logically rt in
-  let* delta' = pattern_match loc (S s') pat bt in
+  let* delta' = pattern_match loc (S (bt, s')) pat bt in
   return (delta' ++ delta)
 
 
@@ -616,7 +616,9 @@ let infer_tuple (loc : loc) {local; global} (args : args) : (vt, type_error) m =
   let bts = List.map (fun arg -> arg.bt) args in
   let bt = Tuple bts in
   let constrs = 
-    List.mapi (fun i arg -> IT.EQ (Nth (bt, i, S ret), S arg.lname)) args 
+    List.mapi (fun i arg -> 
+        IT.EQ (Nth (bt, i, S (bt, ret)), S (arg.bt, arg.lname))
+      ) args 
   in
   return (ret, bt, LC (And constrs))
 
@@ -635,16 +637,18 @@ let infer_constructor (loc : loc) {local; global} (constructor : ctor)
     -> 
      Debug_ocaml.error "todo: Civ..."
   | M_Cspecified, [arg] ->
-     return (ret, arg.bt, LC (EQ (S ret, S arg.lname)))
+     return (ret, arg.bt, LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname))))
   | M_Cspecified, _ ->
      fail loc (Number_arguments {has = List.length args; expect = 1})
   | M_Cnil item_bt, [] -> 
-     return (ret, List item_bt, LC (EQ (S ret, Nil item_bt)))
+     let bt = List item_bt in
+     return (ret, bt, LC (EQ (S (bt, ret), Nil item_bt)))
   | M_Cnil item_bt, _ -> 
      fail loc (Number_arguments {has = List.length args; expect=0})
   | M_Ccons, [arg1; arg2] -> 
-     let* () = ensure_base_type arg2.loc ~expect:(List arg1.bt) arg2.bt in
-     let constr = LC (EQ (S ret, Cons (S arg1.lname, S arg2.lname))) in
+     let bt = List arg1.bt in
+     let* () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
+     let constr = LC (EQ (S (bt, ret), Cons (S (arg1.bt, arg1.lname), S (arg2.bt, arg2.lname)))) in
      return (ret, arg2.bt, constr)
   | M_Ccons, _ ->
      fail loc (Number_arguments {has = List.length args; expect = 2})
@@ -664,15 +668,16 @@ let infer_ptrval (loc : loc) {local; global} (ptrval : pointer_value) : (vt, typ
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
       let* ct = ct_of_ct loc ct in
+      let it = S (BT.Loc, ret) in
       let lcs = 
-        [IT.Null (S ret);
-         IT.Representable (ST_Pointer, S ret);
+        [IT.Null it;
+         IT.Representable (ST_Pointer, it);
          (* check: aligned? *)
-         IT.Aligned (ST.of_ctype ct, S ret);]
+         IT.Aligned (ST.of_ctype ct, it);]
       in
       return (ret, Loc, LC (And lcs)) )
     ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
-    ( fun _prov loc -> return (ret, Loc, LC (EQ (S ret, Pointer loc))) )
+    ( fun _prov loc -> return (ret, Loc, LC (EQ (S (BT.Loc, ret), Pointer loc))) )
     ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
 let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : (vt, type_error) m =
@@ -684,7 +689,7 @@ let rec infer_mem_value (loc : loc) {local; global} (mem : mem_value) : (vt, typ
     ( fun it iv -> 
       let ret = Sym.fresh () in
       let v = Memory.integer_value_to_num iv in
-      return (ret, Integer, LC (EQ (S ret, Num v))) )
+      return (ret, Integer, LC (EQ (S (Integer, ret), Num v))) )
     ( fun ft fv -> fail loc (Unsupported !^"floats") )
     ( fun _ ptrval -> infer_ptrval loc {local; global} ptrval  )
     ( fun mem_values -> infer_array loc {local; global} mem_values )
@@ -706,7 +711,7 @@ and infer_struct (loc : loc) {local; global} (tag : tag)
        let* constrs = check fields spec in
        let* (s, bt, LC lc) = infer_mem_value loc {local; global} mv in
        let* () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
-       let this = IT.StructMember (tag, S ret, member) in
+       let this = IT.StructMember (tag, S (Struct tag, ret), member) in
        let constr = IT.subst_it {before = s; after = this} lc in
        return (constrs @ [constr])
     | [], [] -> 
@@ -734,7 +739,7 @@ let infer_object_value (loc : loc) {local; global}
   | M_OVinteger iv ->
      let ret = Sym.fresh () in
      let i = Memory.integer_value_to_num iv in
-     return (ret, Integer, LC (EQ (S ret, Num i)))
+     return (ret, Integer, LC (EQ (S (Integer, ret), Num i)))
   | M_OVpointer p -> 
      infer_ptrval loc {local; global} p
   | M_OVarray items ->
@@ -757,18 +762,18 @@ let infer_value (loc : loc) {local; global} (v : 'bty value) : (vt, type_error) 
      return (Sym.fresh (), Unit, LC (Bool true))
   | M_Vtrue ->
      let ret = Sym.fresh () in
-     return (ret, Bool, LC (S ret))
+     return (ret, Bool, LC (S (Bool, ret)))
   | M_Vfalse -> 
      let ret = Sym.fresh () in
-     return (ret, Bool, LC (Not (S ret)))
+     return (ret, Bool, LC (Not (S (Bool, ret))))
   | M_Vlist (ibt, asyms) ->
      let ret = Sym.fresh () in
      let* args = args_of_asyms loc local asyms in
      let* () = 
        ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
      in
-     let its = List.map (fun arg -> IT.S arg.lname) args in
-     return (ret, List ibt, LC (EQ (S ret, List (its, ibt))))
+     let its = List.map (fun arg -> IT.S (arg.bt, arg.lname)) args in
+     return (ret, List ibt, LC (EQ (S (List ibt, ret), List (its, ibt))))
   | M_Vtuple asyms ->
      let* args = args_of_asyms loc local asyms in
      infer_tuple loc {local; global} args
@@ -971,7 +976,7 @@ let rec infer_pexpr (loc : loc) {local; global}
     | M_PEsym sym ->
        let ret = Sym.fresh () in
        let* arg = arg_of_sym loc local sym in
-       let constr = LC (EQ (S ret, S arg.lname)) in
+       let constr = LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname))) in
        let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEimpl i ->
@@ -1003,15 +1008,15 @@ let rec infer_pexpr (loc : loc) {local; global}
        let ret = Sym.fresh () in
        let* decl = get_struct_decl loc global tag in
        let* _member_bt = get_member_type loc tag member decl in
-       let shifted_pointer = IT.StructMemberOffset (tag, S arg.lname, member) in
-       let constr = LC (EQ (S ret, shifted_pointer)) in
+       let shifted_pointer = IT.StructMemberOffset (tag, S (arg.bt, arg.lname), member) in
+       let constr = LC (EQ (S (BT.Loc, ret), shifted_pointer)) in
        let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEnot asym ->
        let* arg = arg_of_asym loc local asym in
        let* () = ensure_base_type arg.loc ~expect:Bool arg.bt in
        let ret = Sym.fresh () in 
-       let constr = (LC (EQ (S ret, Not (S arg.lname)))) in
+       let constr = (LC (EQ (S (Bool, ret), Not (S (arg.bt, arg.lname))))) in
        let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEop (op, asym1, asym2) ->
@@ -1037,12 +1042,12 @@ let rec infer_pexpr (loc : loc) {local; global}
          | OpOr -> (((Bool, Bool), Bool), IT.Or [v1; v2])
        in
        let (((ebt1, ebt2), rbt), result_it) = 
-         binop_typ op (S arg1.lname) (S arg2.lname) 
+         binop_typ op (S (arg1.bt, arg1.lname)) (S (arg2.bt,arg2.lname))
        in
        let* () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
        let* () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
        let ret = Sym.fresh () in
-       let constr = LC (EQ (S ret, result_it)) in
+       let constr = LC (EQ (S (rbt, ret), result_it)) in
        let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
        return (Normal (rt, local))
     | M_PEstruct _ ->
@@ -1082,7 +1087,7 @@ let rec infer_pexpr (loc : loc) {local; global}
              let*? () = false_if_unreachable loc {local = delta ++ local; global} in
              let*? (rt, local) = infer_pexpr_pop loc delta {local; global} e in
              return (Normal ((lc, rt), local))
-           ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
+           ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
        in
        merge_return_paths loc paths
   in  
@@ -1119,7 +1124,7 @@ let rec check_pexpr (loc : loc) {local; global} (e : 'bty pexpr)
              false_if_unreachable loc {local = delta ++ local; global} 
            in
            check_pexpr_pop loc delta {local; global} e typ
-         ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
+         ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
      in
      return (merge_paths loc paths)
   | M_PEcase (asym, pats_es) ->
@@ -1128,7 +1133,7 @@ let rec check_pexpr (loc : loc) {local; global} (e : 'bty pexpr)
        ListM.mapM (fun (pat, pe) ->
            (* TODO: make pattern matching return (in delta)
               constraints corresponding to the pattern *)
-           let* delta = pattern_match arg.loc (S arg.lname) pat arg.bt in
+           let* delta = pattern_match arg.loc (S (arg.bt, arg.lname)) pat arg.bt in
            let*? () = 
              false_if_unreachable loc {local = delta ++ local;global} 
            in
@@ -1200,10 +1205,10 @@ let load (loc: loc) {local;global} (bt: BT.t) (pointer: IT.t)
             let olast_used = Solver.used_resource_for_pointer {local;global} pointer in
             fail loc (Missing_ownership (is_field, olast_used, Access Load))
        in
-       let vls = L.get_l pointee local in
-       if LS.equal vls (Base bt) 
-       then return [IT.EQ (path, S pointee)]
-       else fail loc (Mismatch {has = vls; expect = Base bt})
+       let (Base vbt) = L.get_l pointee local in
+       if BT.equal vbt bt 
+       then return [IT.EQ (path, S (vbt,pointee))]
+       else fail loc (Mismatch {has = Base vbt; expect = Base bt})
   in
   let* constraints = aux {local; global} bt pointer size return_it is_field in
   return (LC (And constraints))
@@ -1245,7 +1250,7 @@ let rec store (loc: loc)
           let rt = 
             Logical ((vsym, Base bt), 
             Resource (Points {pointer; pointee = vsym; size}, 
-            Constraint (LC (EQ (S vsym, v)), I)))
+            Constraint (LC (EQ (S (bt,vsym), v)), I)))
           in
           return rt
        | None -> 
@@ -1259,7 +1264,7 @@ let pack_stored_struct loc {local; global} (pointer: IT.t) (tag: BT.tag) =
   let size = Memory.size_of_struct tag in
   let v = Sym.fresh () in
   let bt = Struct tag in
-  let* constraints = load loc {local; global} (Struct tag) pointer size (S v) None in
+  let* constraints = load loc {local; global} (Struct tag) pointer size (S (Struct tag, v)) None in
   let* local = remove_ownership loc (Access Load) {local; global} pointer size in
   let rt = 
     LRT.Logical ((v, Base bt), 
@@ -1361,7 +1366,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let size = Memory.size_of_ctype act.item.ct in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let o_resource = 
-            Solver.resource_for_pointer {local; global} (S arg.lname)
+            Solver.resource_for_pointer {local; global} (S (arg.bt, arg.lname))
           in
           let resource_ok = 
             match Option.bind o_resource (Tools.comp RE.size snd) with
@@ -1371,10 +1376,10 @@ let rec infer_expr (loc : loc) {local; labels; global}
           in
           let (aligned, _, s_) = 
             Solver.constraint_holds {local; global} false
-              (LC.LC (Aligned (ST.of_ctype act.item.ct, S arg.lname))) 
+              (LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))))
           in
           let ok = resource_ok && aligned in
-          let constr = LC (EQ (S ret, Bool ok)) in
+          let constr = LC (EQ (S (Bool, ret), Bool ok)) in
           let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
           return (Normal (rt, local))
        | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
@@ -1397,11 +1402,11 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
           let size = Memory.size_of_ctype act.item.ct in
-          let* lrt = store loc {local; global} act.item.bt (S ret) size None in
+          let* lrt = store loc {local; global} act.item.bt (S (Loc, ret)) size None in
           let rt = 
             RT.Computational ((ret, Loc), 
-            LRT.Constraint (LC.LC (Representable (ST_Pointer, S ret)), 
-            LRT.Constraint (LC.LC (AlignedI (S arg.lname, S ret)), 
+            LRT.Constraint (LC.LC (Representable (ST_Pointer, S (Loc, ret))), 
+            LRT.Constraint (LC.LC (AlignedI (S (arg.bt, arg.lname), S (Loc, ret))), 
             (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
             lrt)))
           in
@@ -1416,10 +1421,10 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* arg = arg_of_asym loc local asym in
           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Kill (S arg.lname) cti.ct
+            ensure_aligned loc {local; global} Kill (S (arg.bt, arg.lname)) cti.ct
           in
           let size = Memory.size_of_ctype cti.ct in
-          let* local = remove_ownership loc (Access Kill) {local; global} (S arg.lname) size in
+          let* local = remove_ownership loc (Access Kill) {local; global} (S (arg.bt, arg.lname)) size in
           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
           return (Normal (rt, local))
        | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1428,7 +1433,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Store (S parg.lname) act.item.ct
+            ensure_aligned loc {local; global} Store (S (parg.bt, parg.lname)) act.item.ct
           in
           (* The generated Core program will in most cases before this
              already have checked whether the store value is
@@ -1437,29 +1442,30 @@ let rec infer_expr (loc : loc) {local; labels; global}
           let* () = 
             let (in_range, _, _) = 
               Solver.constraint_holds {local; global} false 
-                (LC (Representable (ST.of_ctype act.item.ct, S varg.lname)))
+                (LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))))
             in
             if in_range then return () else
               fail loc (Generic !^"write value unrepresentable")
           in
           let size = Memory.size_of_ctype act.item.ct in
           let* local = 
-            remove_ownership parg.loc (Access Store) {local; global} (S parg.lname) size in
+            remove_ownership parg.loc (Access Store) {local; global} (S (parg.bt, parg.lname)) size in
           let* bindings = 
-            store loc {local; global} varg.bt (S parg.lname) 
-              size (Some (S varg.lname)) in
+            store loc {local; global} varg.bt (S (parg.bt, parg.lname))
+              size (Some (S (varg.bt, varg.lname))) in
           let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
           return (Normal (rt, local))
        | M_Load (act, pasym, _mo) -> 
           let* parg = arg_of_asym loc local pasym in
           let* () = ensure_base_type loc ~expect:Loc parg.bt in
           let* () = 
-            ensure_aligned loc {local; global} Load (S parg.lname) act.item.ct
+            ensure_aligned loc {local; global} Load (S (parg.bt, parg.lname)) act.item.ct
           in
           let ret = Sym.fresh () in
           let size = Memory.size_of_ctype act.item.ct in
           let* constraints = 
-            load loc {local; global} act.item.bt (S parg.lname) size (S ret) None 
+            load loc {local; global} act.item.bt (S (parg.bt, parg.lname)) 
+              size (S (act.item.bt, ret)) None 
           in
           let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, LRT.I)) in
           return (Normal (rt, local))
@@ -1541,7 +1547,7 @@ let rec infer_expr (loc : loc) {local; labels; global}
              in
              let*? (rt, local) = infer_expr_pop loc delta {local; labels; global} e in
              return (Normal ((lc, rt), local))
-           ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
+           ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
        in
        merge_return_paths loc paths
     | M_Elet (p, e1, e2) ->
@@ -1594,7 +1600,7 @@ let rec check_expr (loc : loc) {local; labels; global} (e : 'bty expr)
                false_if_unreachable loc {local = delta ++ local; global} 
              in
              check_expr_pop loc delta {local; labels; global} e typ 
-           ) [(LC (S carg.lname), e1); (LC (Not (S carg.lname)), e2)]
+           ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
        in
        return (merge_paths loc paths)
     | M_Ecase (asym, pats_es) ->
@@ -1603,7 +1609,7 @@ let rec check_expr (loc : loc) {local; labels; global} (e : 'bty expr)
          ListM.mapM (fun (pat, pe) ->
              (* TODO: make pattern matching return (in delta)
                 constraints corresponding to the pattern *)
-             let* delta = pattern_match arg.loc (S arg.lname) pat arg.bt in
+             let* delta = pattern_match arg.loc (S (arg.bt, arg.lname)) pat arg.bt in
              let*? () = 
                false_if_unreachable loc {local = delta ++ local; global} 
              in

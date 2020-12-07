@@ -40,7 +40,7 @@ end
 
 
 type 'bt term =
-  | S of Sym.t
+  | S of 'bt * Sym.t
   | Num of Z.t
   | Pointer of Z.t
   | Bool of bool
@@ -114,7 +114,11 @@ type t = typed
 
 let rec equal it it' = 
   match it, it' with
-  | S sym, S sym' -> Sym.equal sym sym'
+  | S (bt,sym), S (bt',sym') -> 
+     let eq = Sym.equal sym sym' in
+     if eq && !Debug_ocaml.debug_level >= 1 && not (BT.equal bt bt')
+     then Debug_ocaml.error "equal symbols with different base type"
+     else eq
   | Num n, Num n' -> Z.equal n n'
   | Pointer p, Pointer p' -> Z.equal p p'
   | Bool b, Bool b' -> b = b'
@@ -404,7 +408,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux false t1 ^^^ !^"<=" ^^^ aux false t2)
 
 
-    | S sym -> 
+    | S (_,sym) -> 
        Sym.pp sym
   in
   aux false it
@@ -485,7 +489,7 @@ let rec vars_in it : SymSet.t =
   | Subset (t1, t2) ->
      vars_in_list [t1;t2]
 
-  | S symbol -> 
+  | S (_, symbol) -> 
      SymSet.singleton symbol
 
 and vars_in_list l = 
@@ -572,8 +576,8 @@ let rec subst_var subst it : t =
   | Subset (t1, t2) ->
      Subset (subst_var subst t1, subst_var subst t2)
 
-  | S symbol -> 
-     if symbol = subst.before then S subst.after else S symbol
+  | S (bt, symbol) -> 
+     if symbol = subst.before then S (bt, subst.after) else S (bt, symbol)
 
 
 let subst_vars = make_substs subst_var
@@ -652,8 +656,8 @@ let rec subst_it subst it : t =
      SetDifference (subst_it subst t1, subst_it subst t2)
   | Subset (t1, t2) ->
      Subset (subst_it subst t1, subst_it subst t2)  
-  | S symbol -> 
-     if symbol = subst.before then subst.after else S symbol
+  | S (bt, symbol) -> 
+     if symbol = subst.before then subst.after else S (bt, symbol)
 
 
 (* let rec unify it it' (res : (t Uni.t) SymMap.t) = 

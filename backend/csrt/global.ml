@@ -133,8 +133,8 @@ let get_impl_constant global i = impl_lookup global.impl_constants i
 
 
 
-let pp_struct_decl (sym,decl) = 
-  item ("struct " ^ plain (Sym.pp sym) ^ " (raw)") 
+let pp_struct_decl (tag,decl) = 
+  item ("struct " ^ plain (Sym.pp tag) ^ " (raw)") 
        (Pp.list (fun {offset; size; member_or_padding} -> 
             match member_or_padding with 
             | Some (member, sct) -> 
@@ -144,18 +144,18 @@ let pp_struct_decl (sym,decl) =
           ) decl.layout
        )
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (closed stored)") 
+  item ("struct " ^ plain (Sym.pp tag) ^ " (closed stored)") 
        (RT.pp decl.closed_stored)
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (packing function) at P") 
+  item ("struct " ^ plain (Sym.pp tag) ^ " (packing function) at P") 
     (LFT.pp
        (decl.closed_stored_predicate_definition.pack_function
-          (IT.S (Sym.fresh_named "P"))))
+          (IT.S (Struct tag, Sym.fresh_named "P"))))
   ^/^
-  item ("struct " ^ plain (Sym.pp sym) ^ " (unpacking function) at P") 
+  item ("struct " ^ plain (Sym.pp tag) ^ " (unpacking function) at P") 
     (LFT.pp
        (decl.closed_stored_predicate_definition.unpack_function
-          (IT.S (Sym.fresh_named "struct_pointer"))))
+          (IT.S (Struct tag, Sym.fresh_named "struct_pointer"))))
 
 let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
 

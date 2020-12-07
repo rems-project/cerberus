@@ -143,14 +143,14 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                | _ ->
                   let v = Sym.fresh () in
                   let bt = BT.of_sct sct in
-                  return ([(pointer, size, Some (v, bt))], [(member, S v)])
+                  return ([(pointer, size, Some (v, bt))], [(member, S (bt, v))])
             ) layout
       in
       let (components, values) = List.split members in
       return (List.flatten components, IT.Struct (tag, List.flatten values))
     in
     let struct_pointer = Sym.fresh () in
-    let* components, struct_value = aux loc tag (S struct_pointer) in
+    let* components, struct_value = aux loc tag (S (BT.Loc, struct_pointer)) in
     let lrt = 
       List.fold_right (fun (member_p, size, member_or_padding) lrt ->
           match member_or_padding with
@@ -164,8 +164,8 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     let st = ST.ST_Ctype (Sctypes.Sctype ([], Struct tag)) in
     let rt = 
       Computational ((struct_pointer, BT.Loc), 
-      Constraint (LC (IT.Representable (ST_Pointer, S struct_pointer)),
-      Constraint (LC (Aligned (st, S struct_pointer)),
+      Constraint (LC (IT.Representable (ST_Pointer, S (BT.Loc, struct_pointer))),
+      Constraint (LC (Aligned (st, S (BT.Loc, struct_pointer))),
       (* Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)), *)
       lrt @@ 
       Constraint (LC (IT.Representable (st, struct_value)), LRT.I))))
@@ -195,11 +195,12 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                  | _ -> 
                     RE.Points {pointer = member_p; pointee = member_v; size}
                in
+               let bt = BT.of_sct sct in
                let lrt = 
-                 LRT.Logical ((member_v, LS.Base (BT.of_sct sct)), 
+                 LRT.Logical ((member_v, LS.Base bt), 
                  LRT.Resource (resource, lrt))
                in
-               let value = (member, S member_v) :: values in
+               let value = (member, S (bt, member_v)) :: values in
                (lrt, value)
             | None ->
                let lrt = LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt) in
@@ -213,7 +214,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
         Constraint (LC (Aligned (st, struct_pointer)),
         lrt @@ Constraint (LC (IT.Representable (st, value)), LRT.I)))
       in
-      let constr = LC (IT.EQ (S struct_value_s, value)) in
+      let constr = LC (IT.EQ (S (BT.Struct tag, struct_value_s), value)) in
       (lrt, constr)
     in
     let predicate struct_pointer = 
@@ -254,33 +255,36 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 let make_unowned_pointer pointer stored_type = 
   let open RT in
+  let pointer_it = S (BT.Loc, pointer) in
   Computational ((pointer,Loc),
-  Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
-  Constraint (LC (IT.Aligned (stored_type, S pointer)),
+  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
+  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
   (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
   LRT.I)))
 
 let make_block_pointer pointer block_type stored_type = 
   let open RT in
+  let pointer_it = S (BT.Loc, pointer) in
   let size = Memory.size_of_stored_type stored_type in
-  let uninit = RE.Block {pointer = S pointer; size; block_type} in
+  let uninit = RE.Block {pointer = pointer_it; size; block_type} in
   Computational ((pointer,Loc),
   Resource ((uninit, 
-  Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
-  Constraint (LC (IT.Aligned (stored_type, S pointer)),
+  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
+  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
   (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
   LRT.I)))))
 
 let make_owned_pointer pointer stored_type rt = 
   let open RT in
+  let pointer_it = S (BT.Loc, pointer) in
   let (Computational ((pointee,bt),lrt)) = rt in
   let size = Memory.size_of_stored_type stored_type in
-  let points = RE.Points {pointer = S pointer; pointee; size} in
+  let points = RE.Points {pointer = pointer_it; pointee; size} in
   Computational ((pointer,Loc),
   Logical ((pointee, Base bt), 
   Resource ((points, 
-  Constraint (LC (IT.Representable (ST_Pointer, S pointer)),
-  Constraint (LC (IT.Aligned (stored_type, S pointer)),
+  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
+  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
   (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
   lrt))))))
 
@@ -324,24 +328,28 @@ let rec rt_of_ect v (apath : AST.APath.t) typ : RT.t * AST.Path.mapping =
   match typ_ with
   | Pointer (_qualifiers, Unowned (_, typ2)) ->
      let rt = make_unowned_pointer v (ST_Ctype (to_sct typ2)) in
-     (rt, madd (apath, v) Mapping.empty)
+     (rt, madd (apath, (BT.Loc, v)) Mapping.empty)
   | Pointer (_qualifiers, Block (_, typ2)) ->
      let rt = make_block_pointer v Nothing (ST_Ctype (to_sct typ2)) in
-     (rt, madd (apath, v) Mapping.empty)
+     (rt, madd (apath, (BT.Loc, v)) Mapping.empty)
   | Pointer (_qualifiers, Owned (Typ (loc2, Struct tag))) ->
      let v2 = Sym.fresh () in
-     let predicate = Predicate {pointer = S v; name = Tag tag; args = [v2]} in
+     let predicate = Predicate {pointer = S (BT.Loc, v); name = Tag tag; args = [v2]} in
      let rt = 
        RT.Computational ((v, BT.Loc), 
        Logical ((v2, Base (BT.Struct tag)), 
        Resource (predicate, I)))
      in
-     (rt, madd (APath.pointee apath, v2) (madd (apath, v) Mapping.empty))
+     let mapping = 
+       madd (APath.pointee apath, (BT.Struct tag, v2)) 
+         (madd (apath, (BT.Loc, v)) Mapping.empty)
+     in
+     (rt, mapping)
   | Pointer (_qualifiers, Owned typ2) ->
      let v2 = Sym.fresh () in
      let (rt',mapping') = rt_of_ect v2 (APath.pointee apath) typ2 in
      let rt = make_owned_pointer v (ST_Ctype (to_sct typ2)) rt' in
-     let objs = madd (apath, v) mapping' in
+     let objs = madd (apath, (BT.Loc, v)) mapping' in
      (rt, objs)
   | Void
   | Integer _
@@ -350,9 +358,9 @@ let rec rt_of_ect v (apath : AST.APath.t) typ : RT.t * AST.Path.mapping =
      let bt = BT.of_sct sct in
      let rt = 
        RT.Computational ((v, bt), 
-       Constraint (LC (IT.Representable (ST_Ctype sct, S v)),I))
+       Constraint (LC (IT.Representable (ST_Ctype sct, S (bt, v))),I))
      in
-     (rt, madd (apath, v) Mapping.empty)
+     (rt, madd (apath, (bt, v)) Mapping.empty)
      
 
 

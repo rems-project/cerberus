@@ -46,11 +46,11 @@ module Path = struct
   
   module Mapping = struct
 
-    type item = {path : t; res : Sym.t}
+    type item = {path : t; res : BaseTypes.t * Sym.t}
     type t = item list
     
     let pp_item {path; res} = 
-      Pp.parens (pp path ^^ comma ^^^ Sym.pp res)
+      Pp.parens (pp path ^^ comma ^^^ Sym.pp (snd res))
     
     let pp = Pp.list pp_item
 

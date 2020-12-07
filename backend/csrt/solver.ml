@@ -5,7 +5,8 @@ open LogicalConstraints
 open Environment
 module L = Local
 
-(* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
+(* copying bits and pieces from https://github.com/alastairreid/asl-interpreter/blob/master/libASL/tcheck.ml and 
+https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
 
 
@@ -36,7 +37,7 @@ let member_sort ctxt =
   Z3.Sort.mk_uninterpreted_s ctxt "member"
 
 (* maybe fix Loc *)
-let rec bt_to_sort {local;global} ctxt bt = (*  *)
+let rec bt_to_sort global ctxt bt = (*  *)
   Debug_ocaml.begin_csv_timing "bt_to_sort";
   let open BaseTypes in
   let btname = bt_name bt in
@@ -48,7 +49,7 @@ let rec bt_to_sort {local;global} ctxt bt = (*  *)
     (* | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname) *)
     | Tuple bts ->
        let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
-       let sorts = List.map (bt_to_sort {local;global} ctxt) bts in
+       let sorts = List.map (bt_to_sort global ctxt) bts in
        Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts
     | Struct tag ->
        let decl = SymMap.find tag global.struct_decls in
@@ -56,7 +57,7 @@ let rec bt_to_sort {local;global} ctxt bt = (*  *)
          | [] -> ([],[])
          | (member, sct) :: members ->
             let (names,sorts) = aux members in
-            let sort = bt_to_sort {local;global} ctxt (BT.of_sct sct) in
+            let sort = bt_to_sort global ctxt (BT.of_sct sct) in
             let names = Z3.Symbol.mk_string ctxt (struct_member_name bt member) :: names in
             let sorts = sort :: sorts in
             (names,sorts)
@@ -72,26 +73,26 @@ let rec bt_to_sort {local;global} ctxt bt = (*  *)
     | FunctionPointer _ -> 
        Z3.Sort.mk_uninterpreted_s ctxt btname
     | Set bt ->
-       Z3.Set.mk_sort ctxt (bt_to_sort {local;global} ctxt bt)
+       Z3.Set.mk_sort ctxt (bt_to_sort global ctxt bt)
   in
   Debug_ocaml.end_csv_timing ();
   sort
 
-let ls_to_sort {local;global} ctxt (LS.Base bt) =
-  bt_to_sort {local;global} ctxt bt
+let ls_to_sort global ctxt (LS.Base bt) =
+  bt_to_sort global ctxt bt
 
 
-let rec of_index_term {local;global} ctxt it = 
+let rec of_index_term global ctxt it = 
   let open Pp in
   let open IndexTerms in
   let nth_to_fundecl bt i = 
-    let sort = ls_to_sort {local;global} ctxt (Base bt) in
+    let sort = ls_to_sort global ctxt (Base bt) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     List.nth member_fun_decls i
   in
   let member_to_fundecl tag member = 
     let decl = SymMap.find tag global.struct_decls in
-    let sort = ls_to_sort {local;global} ctxt (Base (Struct tag)) in
+    let sort = ls_to_sort global ctxt (Base (Struct tag)) in
     let member_fun_decls = Z3.Tuple.get_field_decls sort in
     let member_names = 
       map (fun (member, _) -> member)
@@ -112,198 +113,197 @@ let rec of_index_term {local;global} ctxt it =
   | Bool false -> 
      Z3.Boolean.mk_false ctxt
   | Unit ->
-     let unitsort = ls_to_sort {local;global} ctxt (Base Unit) in
+     let unitsort = ls_to_sort global ctxt (Base Unit) in
      Z3.Expr.mk_const_s ctxt "unit" unitsort
   | Add (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_add ctxt [a;a']
   | Sub (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_sub ctxt [a;a']
   | Mul (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_mul ctxt [a; a']
   | Div (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_div ctxt a a'
   | Exp (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_power ctxt a a'
   | Rem_t (it,it') -> 
      if not !rem_t_warned then
        (rem_t_warned := true; Pp.warn !^"Rem_t constraint");
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.Integer.mk_rem ctxt a a'
   | Rem_f (it,it') -> 
      if not !rem_f_warned then
        (rem_f_warned := true; Pp.warn !^"Rem_f constraint");
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.Integer.mk_rem ctxt a a'
   | Min (it,it') -> 
      let it_elab = ITE (it %< it', it, it') in
-     of_index_term {local;global} ctxt it_elab 
+     of_index_term global ctxt it_elab 
   | Max (it,it') -> 
      let it_elab = ITE (it %> it', it, it') in
-     of_index_term {local;global} ctxt it_elab 
+     of_index_term global ctxt it_elab 
   | EQ (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Boolean.mk_eq ctxt a a'
   | NE (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Boolean.mk_distinct ctxt [a; a']
   | LT (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_lt ctxt a a'
   | GT (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_gt ctxt a a'
   | LE (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_le ctxt a a'
   | GE (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_ge ctxt a a'
   | Null t -> 
-     let locsort = ls_to_sort {local;global} ctxt (Base Loc) in
-     let boolsort = ls_to_sort {local;global} ctxt (Base Bool) in
+     let locsort = ls_to_sort global ctxt (Base Loc) in
+     let boolsort = ls_to_sort global ctxt (Base Bool) in
      let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
-     let a = of_index_term {local;global} ctxt t in
+     let a = of_index_term global ctxt t in
      let is_null = Z3.Expr.mk_app ctxt fundecl [a] in
      let zero_str = Nat_big_num.to_string Z.zero in
      let zero_expr = Z3.Arithmetic.Integer.mk_numeral_s ctxt zero_str in
      let is_zero = Z3.Boolean.mk_eq ctxt a zero_expr in
      Z3.Boolean.mk_and ctxt [is_null; is_zero]
   | And its -> 
-     let ts = List.map (of_index_term {local;global} ctxt) its in
+     let ts = List.map (of_index_term global ctxt) its in
      Z3.Boolean.mk_and ctxt ts
   | Or its -> 
-     let ts = List.map (of_index_term {local;global} ctxt) its in
+     let ts = List.map (of_index_term global ctxt) its in
      Z3.Boolean.mk_or ctxt ts
   | Impl (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Boolean.mk_implies ctxt a a'
   | Not it -> 
-     let a = of_index_term {local;global} ctxt it in
+     let a = of_index_term global ctxt it in
      Z3.Boolean.mk_not ctxt a
   | ITE (it,it',it'') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
-     let a'' = of_index_term {local;global} ctxt it'' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
+     let a'' = of_index_term global ctxt it'' in
      Z3.Boolean.mk_ite ctxt a a' a''
-  | S s -> 
-     let ls = Local.get_l s local in
+  | S (bt, s) -> 
      let sym = sym_to_symbol ctxt s in
-     let sort = ls_to_sort {local;global} ctxt ls in
+     let sort = bt_to_sort global ctxt bt in
      Z3.Expr.mk_const ctxt sym sort
   | StructMember (tag, t, member) ->
-     let a = of_index_term {local;global} ctxt t in
+     let a = of_index_term global ctxt t in
      let fundecl = member_to_fundecl tag member in
      Z3.Expr.mk_app ctxt fundecl [a]
   | StructMemberOffset (tag, t, member) ->
-     let a = of_index_term {local;global} ctxt t in
+     let a = of_index_term global ctxt t in
      let offset = Memory.member_offset tag member in
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      Z3.Arithmetic.mk_add ctxt [a;offset_n]
   | AllocationSize t ->
-     let locsort = ls_to_sort {local;global} ctxt (Base Loc) in
-     let intsort = ls_to_sort {local;global} ctxt (Base Integer) in
+     let locsort = ls_to_sort global ctxt (Base Loc) in
+     let intsort = ls_to_sort global ctxt (Base Integer) in
      let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "allocationSize" [locsort] intsort in
-     let a = of_index_term {local;global} ctxt t in
+     let a = of_index_term global ctxt t in
      Z3.Expr.mk_app ctxt fundecl [a]
   | Offset (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_add ctxt [a;a']
   | LocLT (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_lt ctxt a a'
   | LocLE (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Arithmetic.mk_le ctxt a a'
   | Disjoint ((it,s),(it',s')) ->
      let fp1_before_fp2 = IT.LocLT (Offset (Offset (it, Num s), IT.int (-1)), it') in
      let fp2_before_fp1 = IT.LocLT (Offset (Offset (it', Num s'), IT.int (-1)), it) in
      let t = Or [fp1_before_fp2; fp2_before_fp1] in
-     of_index_term {local; global} ctxt t
+     of_index_term global ctxt t
   | Struct (tag,members) ->
-     let sort = bt_to_sort {local;global} ctxt (Struct tag) in
+     let sort = bt_to_sort global ctxt (Struct tag) in
      let constructor = Z3.Tuple.get_mk_decl sort in
      let member_vals = 
        List.map (fun (_member,it) ->
-           of_index_term {local;global} ctxt it
+           of_index_term global ctxt it
          ) members
      in
      Z3.Expr.mk_app ctxt constructor member_vals
   | Nth (bt,i,t) ->
-     let a = of_index_term {local;global} ctxt t in
+     let a = of_index_term global ctxt t in
      let fundecl = nth_to_fundecl bt i in
      Z3.Expr.mk_app ctxt fundecl [a]
   | Aligned (st,it') -> 
      let align = Memory.align_of_stored_type st in
-     let a = of_index_term {local;global} ctxt (Num align) in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt (Num align) in
+     let a' = of_index_term global ctxt it' in
      Z3.Boolean.mk_eq ctxt
        (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
        (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
   | AlignedI (it,it') -> 
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Boolean.mk_eq ctxt
        (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
        (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
   | MinInteger it ->
-     of_index_term {local; global} ctxt 
+     of_index_term global ctxt 
        (Num (Memory.min_integer_type it))
   | MaxInteger it ->
-     of_index_term {local; global} ctxt 
+     of_index_term global ctxt 
        (Num (Memory.max_integer_type it))
   | Representable (st, t) ->
      let rangef = Memory.representable_stored_type global.struct_decls st in
-     of_index_term {local; global} ctxt (LC.unpack (rangef t))
+     of_index_term global ctxt (LC.unpack (rangef t))
   | SetMember (it,it') ->
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Set.mk_membership ctxt a a'
   | SetAdd (it,it') ->
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Set.mk_set_add ctxt a a'
   | SetRemove (it, it') ->
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Set.mk_del ctxt a a'
   | SetUnion its ->
-     let ts = List.map (of_index_term {local;global} ctxt) 
+     let ts = List.map (of_index_term global ctxt) 
                 (List1.to_list its) in
      Z3.Set.mk_union ctxt ts
   | SetIntersection its ->
-     let ts = List.map (of_index_term {local;global} ctxt) 
+     let ts = List.map (of_index_term global ctxt) 
                 (List1.to_list its) in
      Z3.Set.mk_intersection ctxt ts
   | SetDifference (it, it') ->
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Set.mk_difference ctxt a a'
   | Subset (it, it') ->
-     let a = of_index_term {local;global} ctxt it in
-     let a' = of_index_term {local;global} ctxt it' in
+     let a = of_index_term global ctxt it in
+     let a' = of_index_term global ctxt it' in
      Z3.Set.mk_subset ctxt a a'
   | Nil _ ->
      Debug_ocaml.error "todo: Z3: Nil"
@@ -370,7 +370,7 @@ let constraint_holds {local;global} do_model c =
         Debug_ocaml.begin_csv_timing "of_index_term";
         let constrs = 
           List.map (fun lc -> 
-              of_index_term {local;global} ctxt (unpack lc)
+              of_index_term global ctxt (unpack lc)
             ) lcs 
         in
         Debug_ocaml.end_csv_timing ();
@@ -474,14 +474,15 @@ let model {local;global} context solver : model option =
      let all_locations = 
        let from_context = 
          filter_map (fun (s, ls) -> 
-             if LS.equal ls (LS.Base Loc) then Some (IT.S s) else None
+             if LS.equal ls (LS.Base Loc) 
+             then Some (IT.S (BT.Loc, s)) else None
            ) (L.all_logical local)
        in
        let from_resources = 
          map RE.pointer (L.all_resources local)
        in
        List.fold_right (fun location_it acc ->
-           let expr = of_index_term {local; global} context location_it in
+           let expr = of_index_term global context location_it in
            let expr_val = evaluate model expr in
            let expr_val = Z3.Expr.to_string expr_val in
            (StringMap.add expr_val location_it acc)
@@ -494,10 +495,10 @@ let model {local;global} context solver : model option =
              | None -> Nothing
              | Some (_, RE.Block b) -> (Block (b.block_type, b.size))
              | Some (_, RE.Points p) -> 
-                let (Base ls) = L.get_l p.pointee local in
-                let expr = of_index_term {local; global} context (S p.pointee) in
+                let (Base bt) = L.get_l p.pointee local in
+                let expr = of_index_term global context (S (bt, p.pointee)) in
                 let expr_val = evaluate model expr in
-                begin match ls with
+                begin match bt with
                 | Integer -> 
                    Integer (Z3.Expr.to_string expr_val, p.size)
                 | Loc -> 
@@ -512,7 +513,8 @@ let model {local;global} context solver : model option =
              | Some (_, RE.Predicate p) -> 
                 let args = 
                   List.map (fun arg ->
-                      let expr = of_index_term {local; global} context (S arg) in
+                      let (Base bt) = L.get_l arg local in
+                      let expr = of_index_term global context (S (bt, arg)) in
                       let expr_val = evaluate model expr in
                       Z3.Expr.to_string expr_val
                     ) p.args
@@ -524,7 +526,7 @@ let model {local;global} context solver : model option =
      in
      let variable_locations =
        List.filter_map (fun (c, (l, bt)) ->
-           let expr = of_index_term {local; global} context (S l) in
+           let expr = of_index_term global context (S (bt, l)) in
            let expr_val = evaluate model expr in
            let expr_val = Z3.Expr.to_string expr_val in
            let entry = match Sym.name c, bt with
