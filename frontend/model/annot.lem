@@ -84,6 +84,18 @@ let rec get_loc annots =
         get_loc annots'
   end
 
+(* This is assuming there is only one Atypedef annot *)
+val     get_typedef: list annot -> maybe Symbol.sym
+let rec get_typedef annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (Atypedef sym :: _) ->
+        Just sym
+    | _ :: annots' ->
+        get_typedef annots'
+  end
+
 val get_loc_: list annot -> Loc.t
 let get_loc_ annots =
   match get_loc annots with

@@ -263,9 +263,9 @@ let pp_location ?(clever = true) =
         "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
     if clever then last_pos := p;
     ret in
-  let aux_region start_p _end_p cursor_p_opt =
+  let aux_region start_p end_p cursor_p_opt =
     let start_p_str = string_of_pos start_p in
-    let end_p_str   = string_of_pos start_p in
+    let end_p_str   = string_of_pos end_p in
     let cursor_p_str =
       match cursor_p_opt with
         | None -> ""
