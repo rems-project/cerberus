@@ -87,7 +87,7 @@ Vloaded (LVspecified oval)) ->
         `MISMATCHED
 
 
-let rec match_pattern_expr loc_opt (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
+let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
    : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_expr z = Expr (annots_e, z) in
@@ -95,7 +95,7 @@ let rec match_pattern_expr loc_opt (Pattern (annots_pat, pat_) as pat) (Expr (an
     |  CaseBase (None, _), _ ->
         `MATCHED (Some (pat, expr), [])
     | _, Epure pe ->
-        begin match match_pattern_pexpr loc_opt pat pe with
+        begin match match_pattern_pexpr (Annot.get_loc annots_e) pat pe with
           | `MISMATCHED ->
               `MISMATCHED
           | `MATCHED (None, xs) ->
@@ -109,7 +109,7 @@ let rec match_pattern_expr loc_opt (Pattern (annots_pat, pat_) as pat) (Expr (an
     | CaseCtor (Ctuple, pats), Eunseq es ->
         let xs =
           List.fold_left2 (fun acc pat e ->
-            match match_pattern_expr loc_opt pat e, acc with
+            match match_pattern_expr pat e, acc with
               | `MISMATCHED, _
               | _, `MISMATCHED ->
                   `MISMATCHED
@@ -507,13 +507,20 @@ let core_peval file : 'bty RW.rewriter =
 *)
                     end
                 | PElet (pat, pe1, pe2) ->
-                    begin match match_pattern_pexpr (Annot.get_loc annots) pat pe1 with
+                    begin match match_pattern_pexpr None pat pe1 with
                     | `MISMATCHED ->
                         assert false
                     | `MATCHED (None, xs) ->
                         (* COMPLETE_MATCH *)
+                        let add_loc =
+                          match Annot.get_loc annots with
+                            | Some loc ->
+                                fun (Pexpr (annots, ty, pexpr_)) ->
+                                  Pexpr (Annot.Aloc loc :: annots, ty, pexpr_)
+                            | None ->
+                                fun z -> z in    
                         ChangeDoChildrenPost
-                          ( Identity.return (apply_substs_pexpr xs pe2)
+                          ( Identity.return (add_loc (apply_substs_pexpr xs pe2))
                           , Identity.return )
 (*
                     | `MATCHED (Some (_, _), []) ->
@@ -614,12 +621,18 @@ let core_peval file : 'bty RW.rewriter =
           
           | Ewseq (pat, e1, e2)
           | Esseq (pat, e1, e2) -> (* TODO !!! *)
-              begin match match_pattern_expr (Annot.get_loc annots) pat e1 with
+              begin match match_pattern_expr pat e1 with
                 | `MISMATCHED ->
                     error ("mismatched Ewseq/Esseq ==> " ^ String_core.string_of_expr (Core_aux.(mk_wseq_e pat e1 (mk_pure_e (mk_value_pe Vunit)))))
                 | `MATCHED (None, xs) ->
+                    let add_loc =
+                      match Annot.get_loc annots with
+                        | Some loc ->
+                            fun z -> Core_aux.add_loc loc z
+                        | None ->
+                            fun z -> z in
                     ChangeDoChildrenPost
-                      ( Identity.return (apply_substs_expr xs e2)
+                      ( Identity.return (add_loc (apply_substs_expr xs e2))
                       , Identity.return )
 (*
                 | `MATCHED (Some (_, _), []) ->
@@ -633,13 +646,19 @@ let core_peval file : 'bty RW.rewriter =
               end
           
           | Elet (pat, pe, e) ->
-              begin match match_pattern_pexpr (Annot.get_loc annots) pat pe with
+              begin match match_pattern_pexpr None pat pe with
                 | `MISMATCHED ->
                     assert false
                 | `MATCHED (None, xs) ->
                     (* COMPLETE_MATCH *)
+                    let add_loc =
+                      match Annot.get_loc annots with
+                        | Some loc ->
+                            fun z -> Core_aux.add_loc loc z
+                        | None ->
+                            fun z -> z in
                     ChangeDoChildrenPost
-                      ( Identity.return (apply_substs_expr xs e)
+                      ( Identity.return (add_loc (apply_substs_expr xs e))
                           , Identity.return )
 (*
                 | `MATCHED (Some (_, _), []) ->
