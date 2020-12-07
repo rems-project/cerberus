@@ -6,7 +6,7 @@ open Debug_ocaml
 
 
 (* TODO: move this to Core_aux *)
-let rec match_pattern_pexpr (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
+let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
   : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_pexpr z = Pexpr (annots_pe, bTy, z) in
@@ -18,10 +18,18 @@ let rec match_pattern_pexpr (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_p
           | None ->
               `MISMATCHED
           | Some xs ->
-              `MATCHED (None, List.map (fun (sym, cval) -> (sym, Annot.get_loc annots_pe, `VAL cval)) xs)
+              let loc_opt =
+                match loc_opt with
+                  | Some z -> Some z
+                  | None -> Annot.get_loc annots_pe in
+              `MATCHED (None, List.map (fun (sym, cval) -> (sym, loc_opt, `VAL cval)) xs)
         end
     | CaseBase (Some sym, _), PEsym sym' ->
-        `MATCHED (None, [(sym, Annot.get_loc annots_pe, `SYM sym')])
+        let loc_opt =
+          match loc_opt with
+            | Some z -> Some z
+            | None -> Annot.get_loc annots_pe in
+        `MATCHED (None, [(sym, loc_opt, `SYM sym')])
 
 
     | CaseBase _, _
@@ -30,7 +38,7 @@ let rec match_pattern_pexpr (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_p
         `MATCHED (Some (pat, pexpr), [])
     
     | CaseCtor (Cspecified, [pat']), PEctor (Cspecified, [pe']) ->
-        begin match match_pattern_pexpr pat' pe' with
+        begin match match_pattern_pexpr loc_opt pat' pe' with
           | `MISMATCHED ->
               `MISMATCHED
           | `MATCHED (None, xs) ->
@@ -49,7 +57,7 @@ Vloaded (LVspecified oval)) ->
     | CaseCtor (Ctuple, pats), PEctor (Ctuple, pes) ->
         let xs =
           List.fold_left2 (fun acc pat pe ->
-            match match_pattern_pexpr pat pe, acc with
+            match match_pattern_pexpr loc_opt pat pe, acc with
               | `MISMATCHED, _
               | _, `MISMATCHED ->
                   `MISMATCHED
@@ -79,7 +87,7 @@ Vloaded (LVspecified oval)) ->
         `MISMATCHED
 
 
-let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
+let rec match_pattern_expr loc_opt (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
    : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_expr z = Expr (annots_e, z) in
@@ -87,7 +95,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     |  CaseBase (None, _), _ ->
         `MATCHED (Some (pat, expr), [])
     | _, Epure pe ->
-        begin match match_pattern_pexpr pat pe with
+        begin match match_pattern_pexpr loc_opt pat pe with
           | `MISMATCHED ->
               `MISMATCHED
           | `MATCHED (None, xs) ->
@@ -101,7 +109,7 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
     | CaseCtor (Ctuple, pats), Eunseq es ->
         let xs =
           List.fold_left2 (fun acc pat e ->
-            match match_pattern_expr pat e, acc with
+            match match_pattern_expr loc_opt pat e, acc with
               | `MISMATCHED, _
               | _, `MISMATCHED ->
                   `MISMATCHED
@@ -159,17 +167,17 @@ let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, 
 
 
 (* val     select_case_pexpr: forall 'a. (Symbol.sym -> value -> 'a -> 'a) -> value -> list (pattern * 'a) -> maybe 'a *)
-let rec select_case_pexpr subst_sym pexpr = function
+let rec select_case_pexpr loc_opt subst_sym pexpr = function
   | [] ->
       `MISMATCHED
   | (pat, e) :: pat_es' ->
-      begin match match_pattern_pexpr pat pexpr with
+      begin match match_pattern_pexpr loc_opt pat pexpr with
         | `MISMATCHED ->
             (* trying the next branch *)
-            select_case_pexpr subst_sym pexpr pat_es'
+            select_case_pexpr loc_opt subst_sym pexpr pat_es'
         | `MATCHED (z, xs) ->
 (*            print_endline "TODO: this is wrong ==> multiple patterns might match"; *)
-            begin match select_case_pexpr subst_sym pexpr pat_es' with
+            begin match select_case_pexpr loc_opt subst_sym pexpr pat_es' with
               | `MATCHED _ ->
                   (* Because the selecting expressions is not fully evaluated it might
                      look like it is (structuraly) matching more than one pattern *)
@@ -499,7 +507,7 @@ let core_peval file : 'bty RW.rewriter =
 *)
                     end
                 | PElet (pat, pe1, pe2) ->
-                    begin match match_pattern_pexpr pat pe1 with
+                    begin match match_pattern_pexpr (Annot.get_loc annots) pat pe1 with
                     | `MISMATCHED ->
                         assert false
                     | `MATCHED (None, xs) ->
@@ -538,7 +546,7 @@ let core_peval file : 'bty RW.rewriter =
                           Traverse
                     end
                 | PEcase (pe1, pat_pes) ->
-                    begin match select_case_pexpr subst_sym_pexpr2 pe1 pat_pes with
+                    begin match select_case_pexpr (Annot.get_loc annots) subst_sym_pexpr2 pe1 pat_pes with
                       | `MULTIPLE ->
                           Traverse
                       | `MISMATCHED ->
@@ -606,9 +614,9 @@ let core_peval file : 'bty RW.rewriter =
           
           | Ewseq (pat, e1, e2)
           | Esseq (pat, e1, e2) -> (* TODO !!! *)
-              begin match match_pattern_expr pat e1 with
+              begin match match_pattern_expr (Annot.get_loc annots) pat e1 with
                 | `MISMATCHED ->
-                    error (String_core.string_of_expr e1)
+                    error ("mismatched Ewseq/Esseq ==> " ^ String_core.string_of_expr (Core_aux.(mk_wseq_e pat e1 (mk_pure_e (mk_value_pe Vunit)))))
                 | `MATCHED (None, xs) ->
                     ChangeDoChildrenPost
                       ( Identity.return (apply_substs_expr xs e2)
@@ -625,7 +633,7 @@ let core_peval file : 'bty RW.rewriter =
               end
           
           | Elet (pat, pe, e) ->
-              begin match match_pattern_pexpr pat pe with
+              begin match match_pattern_pexpr (Annot.get_loc annots) pat pe with
                 | `MISMATCHED ->
                     assert false
                 | `MATCHED (None, xs) ->
@@ -665,7 +673,7 @@ let core_peval file : 'bty RW.rewriter =
               end
           
           | Ecase (pe, pat_es) ->
-              begin match select_case_pexpr subst_sym_expr2 pe pat_es with
+              begin match select_case_pexpr (Annot.get_loc annots) subst_sym_expr2 pe pat_es with
                 | `MULTIPLE ->
                     Traverse
                 | `MISMATCHED ->
