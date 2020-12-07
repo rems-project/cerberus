@@ -9,6 +9,11 @@ module RE=Resources
 
 
 
+type label_kind = 
+  | Return
+  | Loop
+  | Other
+
 
 type access =
   | Load 
@@ -19,7 +24,7 @@ type access =
 type situation = 
   | Access of access
   | FunctionCall
-  | LabelCall of Environment.label_kind
+  | LabelCall of label_kind
   | Subtyping
   | Unpacking
 

@@ -1,11 +1,10 @@
 open Resultat
-open Environment
-module E = Environment
 module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make(Sym)
 module TE = TypeErrors
 
+open Global
 open TE
 
 let check_bound loc local kind s = 
@@ -26,7 +25,7 @@ module WIT = struct
 
   type t = IndexTerms.t
 
-  let check_and_type_annot loc {local;global} ls it = 
+  let check_and_type_annot loc (local, global) ls it = 
 
     let context = it in
 
@@ -307,15 +306,15 @@ end
 module WRE = struct
   open Resources
   type t = Resources.t
-  let welltyped loc {local; global} = function
+  let welltyped loc (local, global) = function
     | Block b -> 
-       WIT.welltyped loc {local; global} (LS.Base BT.Loc) b.pointer
+       WIT.welltyped loc (local, global) (LS.Base BT.Loc) b.pointer
     | Points p -> 
        (* points is "polymorphic" in the pointee *)
        let* () = check_bound loc local KLogical p.pointee in
-       WIT.welltyped loc {local; global} (LS.Base BT.Loc) p.pointer
+       WIT.welltyped loc (local, global) (LS.Base BT.Loc) p.pointer
     | Predicate p -> 
-       let* () = WIT.welltyped loc {local; global} (LS.Base BT.Loc) p.pointer in
+       let* () = WIT.welltyped loc (local, global) (LS.Base BT.Loc) p.pointer in
        let* def = match Global.get_predicate_def loc global p.name, p.name with
          | Some def, _ -> return def
          | None, Tag tag -> fail loc (Missing_struct tag)
@@ -348,21 +347,21 @@ module WLRT = struct
   open LogicalReturnTypes
   type t = LogicalReturnTypes.t
 
-  let rec welltyped loc {local; global} lrt = 
+  let rec welltyped loc (local, global) lrt = 
     match lrt with
     | Logical ((s,ls), lrt) -> 
        let lname = Sym.fresh_same s in
        let local = Local.add_l lname ls local in
        let lrt = subst_var Subst.{before = s; after = lname} lrt in
-       welltyped loc {local; global} lrt
+       welltyped loc (local, global) lrt
     | Resource (re, lrt) -> 
-       let* () = WRE.welltyped loc {local; global} re in
+       let* () = WRE.welltyped loc (local, global) re in
        let local = Local.add_ur re local in
-       welltyped loc {local; global} lrt
+       welltyped loc (local, global) lrt
     | Constraint (lc, lrt) ->
-       let* () = WLC.welltyped loc {local; global} lc in
+       let* () = WLC.welltyped loc (local, global) lc in
        let local = Local.add_uc lc local in
-       welltyped loc {local; global} lrt
+       welltyped loc (local, global) lrt
     | I -> 
        return ()
 
@@ -374,7 +373,7 @@ module WRT = struct
   open ReturnTypes
   type t = ReturnTypes.t
 
-  let welltyped loc {local; global} rt = 
+  let welltyped loc (local, global) rt = 
     match rt with 
     | Computational ((name,bt), lrt) ->
        let name' = Sym.fresh_same name in
@@ -382,7 +381,7 @@ module WRT = struct
        let local = Local.add_l lname (LS.Base bt) local in
        let local = Local.add_a name' (bt, lname) local in
        let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
-       WLRT.welltyped loc {local; global} lrt
+       WLRT.welltyped loc (local, global) lrt
 
 end
 
@@ -396,7 +395,7 @@ end
 
 module type WI_Sig = sig
   type t
-  val welltyped : Loc.t -> E.t_pure -> t -> (unit,type_error) m
+  val welltyped : Loc.t -> (Local.t * Global.t) -> t -> (unit,type_error) m
 end
 
 
@@ -406,7 +405,7 @@ module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
 
   type t = T.t
 
-  let rec check loc {local; global} (at : T.t) : (unit, type_error) m = 
+  let rec check loc (local, global) (at : T.t) : (unit, type_error) m = 
     let open Resultat in
     match at with
     | T.Computational ((name,bt), at) ->
@@ -415,22 +414,22 @@ module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
        let local = Local.add_l lname (LS.Base bt) local in
        let local = Local.add_a name' (bt, lname) local in
        let at = T.subst_var Subst.{before = name; after = lname} at in
-       check loc {local; global} at
+       check loc (local, global) at
     | T.Logical ((s,ls), at) -> 
        let lname = Sym.fresh_same s in
        let local = Local.add_l lname ls local in
        let at = T.subst_var Subst.{before = s; after = lname} at in
-       check loc {local; global} at
+       check loc (local, global) at
     | T.Resource (re, at) -> 
-       let* () = WRE.welltyped loc {local; global} re in
+       let* () = WRE.welltyped loc (local, global) re in
        let local = Local.add_ur re local in
-       check loc {local; global} at
+       check loc (local, global) at
     | T.Constraint (lc, at) ->
-       let* () = WLC.welltyped loc {local; global} lc in
+       let* () = WLC.welltyped loc (local, global) lc in
        let local = Local.add_uc lc local in
-       check loc {local; global} at
+       check loc (local, global) at
     | T.I i -> 
-       WI.welltyped loc {local; global} i
+       WI.welltyped loc (local, global) i
 
 
   let wellpolarised loc determined ft = 
@@ -460,8 +459,8 @@ module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
     in
     aux determined SymSet.empty ft
 
-  let welltyped loc {local; global} at = 
-    let* () = check loc {local; global} at in
+  let welltyped loc (local, global) at = 
+    let* () = check loc (local, global) at in
     wellpolarised loc (SymSet.of_list (Local.all_names local)) at
 
 end

@@ -2,7 +2,7 @@ open Global
 open List
 open Pp
 open LogicalConstraints
-open Environment
+
 module L = Local
 
 (* copying bits and pieces from https://github.com/alastairreid/asl-interpreter/blob/master/libASL/tcheck.ml and 
@@ -338,10 +338,10 @@ let handle_z3_problems todo =
        Debug_ocaml.error ("Z3 error:" ^ msg)
 
 
-(* let debug_typecheck_lcs lcs {local;global} =
+(* let debug_typecheck_lcs lcs (local, global) =
  *   if !Debug_ocaml.debug_level > 0 then () else
  *     List.iter (fun lc -> 
- *         match WellTyped.WLC.welltyped (loc: Loc.t) {local;global} lc with
+ *         match WellTyped.WLC.welltyped (loc: Loc.t) (local, global) lc with
  *         | Ok () -> ()
  *         | Error _ -> Debug_ocaml.error "illtyped logical constraint"
  *       ) lcs *)
@@ -353,7 +353,7 @@ let handle_z3_problems todo =
   
 
 
-let constraint_holds {local;global} do_model c = 
+let constraint_holds (local, global) do_model c = 
   Debug_ocaml.begin_csv_timing "constraint_holds";
   let ctxt = 
     Z3.mk_context [
@@ -363,7 +363,7 @@ let constraint_holds {local;global} do_model c =
   in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = negate c :: Local.all_constraints local in
-  (* let () = debug_typecheck_lcs lcs {local;global} in *)
+  (* let () = debug_typecheck_lcs lcs (local, global) in *)
   let checked = 
     handle_z3_problems
       (fun () ->
@@ -390,16 +390,16 @@ let constraint_holds {local;global} do_model c =
   | UNKNOWN -> (false,ctxt,solver)
 
 
-let is_consistent {local;global} =
+let is_consistent (local, global) =
   let (unreachable,_,_) = 
-    constraint_holds {local;global} false (LC (Bool false)) in
+    constraint_holds (local, global) false (LC (Bool false)) in
   (not unreachable)
 
 
 
-let equal {local;global} it1 it2 =
+let equal (local, global) it1 it2 =
   let c = LC.LC (IndexTerms.EQ (it1, it2)) in
-  let (holds,_,_) = constraint_holds {local;global} false c in
+  let (holds,_,_) = constraint_holds (local, global) false c in
   holds
 
 
@@ -409,22 +409,22 @@ let equal {local;global} it1 it2 =
 
 
 
-let resource_for_pointer {local;global} pointer_it
+let resource_for_pointer (local, global) pointer_it
      : (Sym.t * RE.t) option = 
   let points = 
     List.filter_map (fun (name, re) ->
-        let holds = equal {local;global} pointer_it (RE.pointer re) in
+        let holds = equal (local, global) pointer_it (RE.pointer re) in
         (if holds then Some (name, re) else None)
       ) (Local.all_named_resources local)
   in
   Tools.at_most_one "multiple points-to for same pointer" points
 
 
-let used_resource_for_pointer {local;global} pointer_it
+let used_resource_for_pointer (local, global) pointer_it
     : (Loc.t list) option = 
   let points = 
     List.filter_map (fun (name, (re, where)) ->
-        let holds = equal {local; global} pointer_it (RE.pointer re) in
+        let holds = equal (local, global) pointer_it (RE.pointer re) in
         (if holds then Some (where) else None)
       ) (Local.all_named_used_resources local)
   in
@@ -467,7 +467,7 @@ type model =
   }
 
 
-let model {local;global} context solver : model option =
+let model (local, global) context solver : model option =
   match Z3.Solver.get_model solver with
   | None -> None
   | Some model ->
@@ -490,7 +490,7 @@ let model {local;global} context solver : model option =
      in
      let memory_state = 
        List.map (fun (location_s, location_it) ->
-           let o_resource = resource_for_pointer {local; global} location_it in
+           let o_resource = resource_for_pointer (local, global) location_it in
            let state = match o_resource with
              | None -> Nothing
              | Some (_, RE.Block b) -> (Block (b.block_type, b.size))
@@ -541,12 +541,12 @@ let model {local;global} context solver : model option =
 
 
 
-let is_reachable_and_model {local;global} =
+let is_reachable_and_model (local, global) =
   let (unreachable, context, solver) = 
-    constraint_holds {local;global} true (LC (Bool false)) 
+    constraint_holds (local, global) true (LC (Bool false)) 
   in
   let model = 
-    handle_z3_problems (fun () -> model {local;global} context solver) 
+    handle_z3_problems (fun () -> model (local, global) context solver) 
   in
   (not unreachable, model)
 
