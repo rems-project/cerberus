@@ -2,27 +2,12 @@ module RE = Resources
 module LS = LogicalSorts
 module IT = IndexTerms
 module BT = BaseTypes
-module L = Local
 
 module SymSet = Set.Make(Sym)
 
 open Pp
 
-
-
-
-
 module StringMap = Map.Make(String)
-
-let evaluate model expr = 
-  match Z3.Model.evaluate model expr true with
-  | None -> Debug_ocaml.error "failure constructing counter model"
-  | Some evaluated_expr -> evaluated_expr
-
-
-let all_it_names_good it = 
-  SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it)
-
 
 
 
@@ -45,7 +30,23 @@ type t =
   }
 
 
-let model (local, global) context solver : t option =
+
+module Make (G : sig val global : Global.t end) = struct
+
+module L = Local.Make(G)
+module Solver = Solver.Make(G)
+
+let evaluate model expr = 
+  match Z3.Model.evaluate model expr true with
+  | None -> Debug_ocaml.error "failure constructing counter model"
+  | Some evaluated_expr -> evaluated_expr
+
+let all_it_names_good it = 
+  SymSet.for_all (fun s -> Sym.named s) (IT.vars_in it)
+
+
+
+let model local context solver : t option =
   match Z3.Solver.get_model solver with
   | None -> None
   | Some model ->
@@ -60,7 +61,7 @@ let model (local, global) context solver : t option =
          List.map RE.pointer (L.all_resources local)
        in
        List.fold_right (fun location_it acc ->
-           let expr = SolverConstraints.of_index_term global location_it in
+           let expr = SolverConstraints.of_index_term G.global location_it in
            let expr_val = evaluate model expr in
            let expr_val = Z3.Expr.to_string expr_val in
            (StringMap.add expr_val location_it acc)
@@ -69,13 +70,13 @@ let model (local, global) context solver : t option =
      let memory_state = 
        List.map (fun (location_s, location_it) ->
            let o_resource = 
-             Solver.resource_for_pointer (local, global) location_it in
+             Solver.resource_for_pointer local location_it in
            let state = match o_resource with
              | None -> Nothing
              | Some (_, RE.Block b) -> (Block (b.block_type, b.size))
              | Some (_, RE.Points p) -> 
                 let (Base bt) = L.get_l p.pointee local in
-                let expr = SolverConstraints.of_index_term global 
+                let expr = SolverConstraints.of_index_term G.global 
                              (IT.S (bt, p.pointee)) in
                 let expr_val = evaluate model expr in
                 begin match bt with
@@ -95,7 +96,7 @@ let model (local, global) context solver : t option =
                   List.map (fun arg ->
                       let (Base bt) = L.get_l arg local in
                       let expr = 
-                        SolverConstraints.of_index_term global (S (bt, arg)) in
+                        SolverConstraints.of_index_term G.global (S (bt, arg)) in
                       let expr_val = evaluate model expr in
                       Z3.Expr.to_string expr_val
                     ) p.args
@@ -107,7 +108,7 @@ let model (local, global) context solver : t option =
      in
      let variable_locations =
        List.filter_map (fun (c, (l, bt)) ->
-           let expr = SolverConstraints.of_index_term global (S (bt, l)) in
+           let expr = SolverConstraints.of_index_term G.global (S (bt, l)) in
            let expr_val = evaluate model expr in
            let expr_val = Z3.Expr.to_string expr_val in
            let entry = match Sym.name c, bt with
@@ -122,17 +123,21 @@ let model (local, global) context solver : t option =
 
 
 
-let is_reachable_and_model (local, global) =
+let is_reachable_and_model local =
   let (unreachable, context, solver) = 
-    Solver.constraint_holds (local, global) (LC (Bool false)) 
+    Solver.constraint_holds local (LC (Bool false)) 
   in
   let model = 
-    Solver.handle_z3_problems (fun () -> model (local, global) context solver) 
+    Solver.handle_z3_problems (fun () -> model local context solver) 
   in
   (not unreachable, model)
 
 
 
+
+
+
+end
 
 
 
@@ -165,6 +170,7 @@ let pp_variable_and_location_state ( ovar, { location; state } ) =
   ( (R, var), (R, !^location), (R, size), (L, value) )
 
 
+
 let pp model = 
   let variable_and_location_state : (string option * location_state) list = 
     List.concat_map (fun (ls : location_state) ->
@@ -180,3 +186,5 @@ let pp model =
   Pp.table4 
     (("var"), ("location"), ("size") , ("value"))
     (List.map pp_variable_and_location_state variable_and_location_state)
+
+
