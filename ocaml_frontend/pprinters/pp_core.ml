@@ -851,8 +851,9 @@ let pp_funinfo_with_attributes finfos =
 let pp_globs globs =
   List.fold_left (fun acc (sym, decl) ->
       match decl with
-      | GlobalDef ((bTy, _), e) ->
+      | GlobalDef ((bTy, ct), e) ->
         acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          P.brackets (!^"ail_ctype" ^^^ P.equals ^^^ pp_ctype ct) ^^^
               P.colon ^^ P.equals ^^
               P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
       | GlobalDecl _ ->

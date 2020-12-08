@@ -170,6 +170,8 @@ let keywords =
       (* for source attributes *)
       ("ailname", T.AILNAME);
 
+      ("ail_ctype", T.AILCTYPE);
+
       (* for core builtins *)
       ("builtin", T.BUILTIN);
     ]

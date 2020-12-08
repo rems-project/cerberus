@@ -1105,6 +1105,10 @@ let mk_file decls =
 (* Attributes *)
 %token AILNAME
 
+
+(* used for globs *)
+%token AILCTYPE
+
 (* Builtin *)
 %token BUILTIN
 
@@ -1686,8 +1690,12 @@ ifun_declaration:
     { IFun_decl (fname, (bTy, params, fbody)) }
 ;
 
+glob_ctype_attribute:
+| LBRACKET AILCTYPE EQ ct = core_ctype RBRACKET
+  { ct }
+
 glob_declaration:
-| GLOB gname= SYM COLON cTy= core_type COLON ct = core_ctype COLON_EQ e= expr
+| GLOB gname= SYM COLON cTy= core_type ct = glob_ctype_attribute COLON_EQ e= expr
   { Glob_decl (gname, (cTy, ct), e) }
 ;
 
