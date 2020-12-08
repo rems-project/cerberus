@@ -3907,12 +3907,14 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                      | _ -> Map.insert sym finfo finfoacc
                   end)
             
-            | Just (loc, def_attrs, param_syms, stmt) ->
+            | Just (loc, _, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
                 (* TODO: variadic!! *)
                 let finfo =
-                  ( loc, Annot.combine_attributes decl_attrs def_attrs, return_ty
+                  (* NOTE: the attributes in the Ail function declarations includes the ones only present on both
+                     the Cabs function declaration and definition *)
+                  ( loc, decl_attrs, return_ty
                   (* TODO: check if we need qualifiers too *)
                   , List.map (fun (sym, (_, ty, _)) -> (Just sym, ty)) (List.zip param_syms params)
                   , is_variadic, has_proto) in
