@@ -339,7 +339,7 @@ module Make (G : sig val global : Global.t end) = struct
              let has_sort = L.get_l arg local in
              if LS.equal has_sort expected_sort then return ()
              else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
-           ) (List.combine p.args def.arguments)
+           ) (List.combine p.args (List.map snd def.arguments))
   end
 
 

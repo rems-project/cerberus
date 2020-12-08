@@ -28,6 +28,7 @@ rule read = parse
   | "+"            { PLUS }
   | "-"            { MINUS }
   | "*"            { STAR }
+  | "&"            { AMPERSAND }
   | "/"            { DIV }
   | "@"            { AT }
   | "("            { LPAREN }
@@ -41,9 +42,11 @@ rule read = parse
   | "=="           { EQEQ }
   | "min"          { MIN }
   | "max"          { MAX }
-  | ".."           { DOTDOT }
+  | "."            { DOT }
+  | "`"            { BACKTICK }
   | "block"        { BLOCK }
   | "unowned"      { UNOWNED }
+(*  | "uninit"       { UNINIT } *)
   | "min"          { MIN }
   | "max"          { MAX }
   | "char"         { CHAR }

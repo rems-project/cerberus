@@ -364,7 +364,8 @@ let retype_impls (loc : Loc.t) impls =
 
 open Parse_ast
 type funinfos = FT.t mu_funinfos
-type funinfo_extra = (Sym.t, Path.mapping * Parse_ast.aarg list) Pmap.map
+type mapping = Object.mapping
+type funinfo_extra = (Sym.t, mapping * Parse_ast.aarg list) Pmap.map
 
 
 
@@ -503,32 +504,37 @@ let retype_tagDefs
 
 
 let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra, type_error) m =
-  PmapM.foldM
-    (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
-      let special_type = match Sym.name fsym with
-        | Some name -> StringSet.mem name specially_typed
-        | None -> false
-      in
-      if special_type then 
-        return (funinfo, funinfo_extra)
-      else
-        let loc' = Loc.update Loc.unknown loc in
-        if is_variadic then 
-          let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
-          fail loc' (Unsupported err) 
+  Debug_ocaml.begin_csv_timing "preprocess";
+  let* result = 
+    PmapM.foldM
+      (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
+        let special_type = match Sym.name fsym with
+          | Some name -> StringSet.mem name specially_typed
+          | None -> false
+        in
+        if special_type then 
+          return (funinfo, funinfo_extra)
         else
-          let* ret_ctype = ct_of_ct loc' ret_ctype in
-          let* args = 
-            ListM.mapM (fun (msym, ct) ->
-                let* ct = ct_of_ct loc' ct in
-                return (msym, ct)
-              ) args
-          in
-          let* (ftyp, mapping, args) = 
-            Conversions.make_fun_spec loc' struct_decls args ret_ctype attrs in
-          return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
-                  Pmap.add fsym (mapping, args) funinfo_extra)
-    ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
+          let loc' = Loc.update Loc.unknown loc in
+          if is_variadic then 
+            let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
+            fail loc' (Unsupported err) 
+          else
+            let* ret_ctype = ct_of_ct loc' ret_ctype in
+            let* args = 
+              ListM.mapM (fun (msym, ct) ->
+                  let* ct = ct_of_ct loc' ct in
+                  return (msym, ct)
+                ) args
+            in
+            let* (ftyp, mapping, args) = 
+              Conversions.make_fun_spec loc' struct_decls args ret_ctype attrs in
+            return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
+                    Pmap.add fsym (mapping, args) funinfo_extra)
+      ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
+  in
+  Debug_ocaml.end_csv_timing ();
+  return result
 
 
 

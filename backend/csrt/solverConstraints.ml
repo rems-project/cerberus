@@ -34,7 +34,6 @@ let member_sort ctxt =
 (* maybe fix Loc *)
 let rec bt_to_sort global bt = 
   let ctxt = global.solver_context in
-  Debug_ocaml.begin_csv_timing "bt_to_sort";
   let open BaseTypes in
   let btname = bt_name bt in
   let sort = match bt with
@@ -71,7 +70,6 @@ let rec bt_to_sort global bt =
     | Set bt ->
        Z3.Set.mk_sort ctxt (bt_to_sort global bt)
   in
-  Debug_ocaml.end_csv_timing ();
   sort
 
 let ls_to_sort global (LS.Base bt) =

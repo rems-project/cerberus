@@ -89,6 +89,9 @@ let process_functions genv fns =
 
 
 let process mu_file =
+
+  Debug_ocaml.begin_csv_timing "overall";
+
   let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
 
   let solver_context = Solver.initial_context in
@@ -107,7 +110,11 @@ let process mu_file =
 
   let* () = print_initial_environment global in
 
-  process_functions global mu_file.mu_funs
+  let* result = process_functions global mu_file.mu_funs in
+
+  Debug_ocaml.end_csv_timing ();
+
+  return result
 
 
 

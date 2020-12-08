@@ -46,7 +46,7 @@ let all_it_names_good it =
 
 
 
-let model local context solver : t option =
+let model local solver : t option =
   match Z3.Solver.get_model solver with
   | None -> None
   | Some model ->
@@ -124,11 +124,11 @@ let model local context solver : t option =
 
 
 let is_reachable_and_model local =
-  let (unreachable, context, solver) = 
+  let (unreachable, solver) = 
     Solver.constraint_holds local (LC (Bool false)) 
   in
   let model = 
-    Solver.handle_z3_problems (fun () -> model local context solver) 
+    Solver.handle_z3_problems (fun () -> model local solver) 
   in
   (not unreachable, model)
 

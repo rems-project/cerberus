@@ -19,6 +19,20 @@ module FT = ArgumentTypes.Make(RT)
 
 
 
+
+
+type resource_predicate = 
+  { arguments : (string * LS.t) list;
+    pack_functions : IT.t -> (LFT.t List1.t);
+    unpack_functions : IT.t -> (LFT.t List1.t);
+  }
+
+
+let builtin_predicates = IdMap.empty
+
+
+
+
 (* Auxiliaries *)
 
 module ImplMap = 
@@ -83,12 +97,6 @@ let member_types =
 
 type struct_decls = struct_decl SymMap.t
 
-type resource_predicate = 
-  { arguments : LS.t list;
-    pack_functions : IT.t -> (LFT.t List1.t);
-    unpack_functions : IT.t -> (LFT.t List1.t);
-  }
-
 
 
 module BTMap = Map.Make(BT)
@@ -111,7 +119,7 @@ let empty solver_context =
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
     stdlib_funs = SymSet.empty;
-    resource_predicates = IdMap.empty;
+    resource_predicates = builtin_predicates;
     solver_context;
     (* solver_bt_mapping = BTMap.empty; *)
   }
@@ -132,7 +140,7 @@ let get_predicate_def loc global predicate_name =
          fun it -> 
          List1.one (decl.closed_stored_predicate_definition.unpack_function it)
        in
-       Some {arguments = [LS.Base (Struct tag)];
+       Some {arguments = [("value", LS.Base (Struct tag))];
              pack_functions; 
              unpack_functions}
 

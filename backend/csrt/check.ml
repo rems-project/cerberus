@@ -398,7 +398,7 @@ module Make (G : sig val global : Global.t end) = struct
       let* rt = 
         let rec check_constraints = function
           | Constraint (c, ftyp) ->
-             let (holds, _, s_) = S.constraint_holds local c in
+             let (holds, _) = S.constraint_holds local c in
              if holds 
              then check_constraints ftyp 
              else fail loc (Unsat_constraint c)
@@ -1295,7 +1295,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let ensure_aligned loc local access pointer ctype = 
-    let (aligned, _, _) = 
+    let (aligned, _) = 
       S.constraint_holds local
         (LC.LC (Aligned (ST.of_ctype ctype, pointer))) 
     in
@@ -1398,7 +1398,7 @@ module Make (G : sig val global : Global.t end) = struct
               | Some _ -> false
               | _ -> false
             in
-            let (aligned, _, s_) = 
+            let (aligned, _) = 
               S.constraint_holds local
                 (LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))))
             in
@@ -1465,7 +1465,7 @@ module Make (G : sig val global : Global.t end) = struct
                representable and done the right thing. Pointers, as I
                understand, are an exception. *)
             let* () = 
-              let (in_range, _, _) = 
+              let (in_range, _) = 
                 S.constraint_holds local
                   (LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))))
               in

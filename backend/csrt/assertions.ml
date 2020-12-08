@@ -10,7 +10,8 @@ module LC = LogicalConstraints
 open AST
 open IndexTerms
 open ECT
-open Path
+open Object
+
 
 
 (* probably should record source location information *)
@@ -23,12 +24,12 @@ let find_name loc names str =
   | None -> fail loc (Generic !^(str ^ " unbound"))
   end
 
-let resolve_path loc (mapping : mapping) (p : Path.t) : (BT.t* Sym.t, type_error) m = 
-  let open Path.Mapping in
-  let found = List.find_opt (fun {path;res} -> Path.equal path p) mapping in
+let resolve_object loc (mapping : mapping) (o : Object.t) : (BT.t * Sym.t, type_error) m = 
+  let open Object.Mapping in
+  let found = List.find_opt (fun {obj;res} -> Object.equal obj o) mapping in
   match found with
   | None -> 
-     fail loc (Generic (!^"term" ^^^ Path.pp p ^^^ !^"does not apply"))
+     fail loc (Generic (!^"term" ^^^ Object.pp o ^^^ !^"does not apply"))
   | Some {res; _} -> 
      return res
 
@@ -95,8 +96,8 @@ let rec resolve_index_term loc mapping (it: index_term)
      let* it = aux it in
      let* it' = aux it' in
      return (IT.GE (it, it'))
-  | Path path -> 
-     let* (bt,s) = resolve_path loc mapping path in
+  | Object o -> 
+     let* (bt,s) = resolve_object loc mapping o in
      return (IT.S (bt, s))
   | MinInteger it ->
      return (IT.MinInteger it)
@@ -111,7 +112,7 @@ let rec resolve_index_term loc mapping (it: index_term)
 let parse_condition loc default_label s =
   let module P = Parser.Make(struct let default_label = default_label end) in
   let lexbuf = Lexing.from_string s in
-  try return (P.condition_entry Lexer.read lexbuf) with
+  try return (P.spec_entry Lexer.read lexbuf) with
   | Lexer.SyntaxError c ->
      (* let loc = Locations.point @@ Lexing.lexeme_start_p lexbuf in *)
      fail loc (Generic !^("invalid symbol: " ^ c))
@@ -154,7 +155,6 @@ let pre_or_post loc kind attrs =
     | Post -> "ensures"
     | Inv _ -> "inv"
   in 
-  let open AST in
   let* requirements = 
     ListM.mapM 
       (fun (loc',str) -> 
@@ -166,16 +166,16 @@ let pre_or_post loc kind attrs =
   let* (ownership,constraints) = 
     ListM.fold_leftM (fun (ownership, constrs) (loc, p) ->
         match p with
-        | Ownership (path,o) -> 
+        | Ownership {pred;access} -> 
            begin match constrs with
            | _ :: _ -> 
               fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
            | _ -> 
-              let constr = [{loc; path; ownership = o}] in
-              return (ownership @ constr, constrs)
+              let r = [(loc, Ownership.{pred; access})] in
+              return (ownership @ r, constrs)
            end
         | Constraint p_it -> 
-           return (ownership, constrs @ [{loc; lc = p_it}])
+           return (ownership, constrs @ [(loc, p_it)])
       ) ([], []) requirements
   in
   return (ownership,constraints)
@@ -183,7 +183,7 @@ let pre_or_post loc kind attrs =
 
   
 let resolve_constraints mapping its =
-  ListM.mapM (fun {loc;lc} ->
+  ListM.mapM (fun (loc,lc) ->
       let* it = resolve_index_term loc mapping lc in
       return (LC.LC it)
     ) its
@@ -232,46 +232,45 @@ let named_ctype_to_varg loc (sym, ct) =
 
 
 
+open BaseName
+open Ownership
 
-let apply_ownership {label;name;path} ownership loc typ = 
-  let rec aux so_far_accesses todo_accesses (Typ (annots, typ_)) =
-    begin match todo_accesses, typ_, ownership with
+let apply_ownership {name = {label;v}; derefs} ownership loc typ = 
+  let rec aux so_far_derefs todo_derefs (Typ (annots, typ_)) =
+    let pp_so_far () = pp_access {name = {v; label}; derefs =so_far_derefs} in
+    begin match todo_derefs, typ_, ownership with
     | Pointee :: todo, Pointer (qualifiers, Owned typ2), _ ->
-        let* typ2 = aux (so_far_accesses @ [Pointee]) todo typ2 in
-        let typ_ = Pointer (qualifiers, Owned typ2) in
-        return (Typ (annots, typ_))
-    | PredicateArg _ :: todo , Pointer (qualifiers, Owned typ2), _ ->
-        fail loc (Generic (!^"cannot change ownership of" ^^^ 
-                             Path.pp {name; label; path = so_far_accesses}))
-    | [], Pointer (qualifiers, Owned t), AST.OUnowned ->
-        let typ_ = Pointer (qualifiers, Unowned (loc, t)) in
-        return (Typ (annots, typ_))
-    | [], Pointer (qualifiers, Owned t), AST.OBlock ->
-        let typ_ = Pointer (qualifiers, Block (loc, t)) in
-        return (Typ (annots, typ_))
+       let* typ2 = aux (so_far_derefs @ [Pointee]) todo typ2 in
+       let typ_ = Pointer (qualifiers, Owned typ2) in
+       return (Typ (annots, typ_))
+    | [], Pointer (qualifiers, Owned t), AST.Pred.OUnowned ->
+       let typ_ = Pointer (qualifiers, Unowned (loc, t)) in
+       return (Typ (annots, typ_))
+    | [], Pointer (qualifiers, Owned t), AST.Pred.OBlock ->
+       let typ_ = Pointer (qualifiers, Block (loc, t)) in
+       return (Typ (annots, typ_))
+    | [], Pointer (qualifiers, Owned t), AST.Pred.OPred s ->
+       let typ_ = Pointer (qualifiers, Pred (loc, s, t)) in
+       return (Typ (annots, typ_))
     | _, Pointer (qualifiers, Unowned (loc,_)), _ ->
-        fail loc (Generic (Path.pp {name; label; path = so_far_accesses} ^^^ 
-                             !^"was specified as unowned"))
+       fail loc (Generic (pp_so_far () ^^^ !^"was specified as unowned"))
     | _, Pointer (qualifiers, Block (loc, _)), _ ->
-        fail loc (Generic (Path.pp {name; label; path = so_far_accesses} ^^^ 
-                             !^"was specified as uninitialised"))
-    | _ -> 
-       fail loc (Generic (Path.pp {name; label; path = so_far_accesses} ^^^ 
-                            !^"is not a pointer"))
+       fail loc (Generic (pp_so_far () ^^^ !^"was specified as uninitialised"))
+    | _, _, (OUnowned | OBlock | OPred _) -> 
+       fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
     end
   in
-  aux [] path typ
+  aux [] derefs typ
      
      
 
 (* returns the requirements that weren't applied *)
 let apply_ownerships name typ requirements =
-  let open AST in
   let rec aux typ = function
     | [] -> 
        return (typ, [])
-    | {loc; path; ownership} :: rest when String.equal name path.name ->
-       let* typ = apply_ownership path ownership loc typ in
+    | (loc, {pred; access}) :: rest when String.equal name access.name.v ->
+       let* typ = apply_ownership access pred loc typ in
        return (typ, rest)
     | tn :: rest ->
        let* (typ, left) = aux typ rest in
@@ -317,7 +316,7 @@ let parse_function_type loc attrs (raw_function_type : (Sctypes.t * (Sym.t * Sct
     let* (args, left) = apply_ownerships_aargs args pre_ownership in
     match left with
     | [] -> return args
-    | {loc; path; ownership} :: _ -> fail loc (Unbound_name (String path.name))
+    | (loc, {pred; access}) :: _ -> fail loc (Unbound_name (String access.name.v))
   in
   let* (arg_rets, ret) = 
     let arg_rets = List.map (named_ctype_to_aarg loc) arg_cts in
@@ -326,7 +325,7 @@ let parse_function_type loc attrs (raw_function_type : (Sctypes.t * (Sym.t * Sct
     let* (ret, left) = apply_ownerships_varg ret left in
     match left with
     | [] -> return (arg_rets, ret)
-    | {loc; path; _} :: _ -> fail loc (Unbound_name (String path.name))
+    | (loc, {access; _}) :: _ -> fail loc (Unbound_name (String access.name.v))
   in
 
   let ft = FunctionType (Args (args, Pre (pre_constraints, Ret (ret, arg_rets, Post post_constraints)))) in
@@ -342,7 +341,7 @@ let parse_label_type loc lname attrs (fargs : aarg list) (larg_cts : (Sym.t * Sc
   let* (largs, left) = apply_ownerships_vargs largs left in
   let* () = match left with
     | [] -> return ()
-    | {loc; path; _} :: _ -> fail loc (Unbound_name (String path.name))
+    | (loc, {access; _}) :: _ -> fail loc (Unbound_name (String access.name.v))
   in
   let open AST in
   let lt = 

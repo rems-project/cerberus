@@ -28,48 +28,40 @@ module Make (G : sig val global : Global.t end) = struct
 
   let constraint_holds local lc = 
     let ctxt = G.global.solver_context in
-    Debug_ocaml.begin_csv_timing "constraint_holds";
     let solver = Z3.Solver.mk_simple_solver ctxt in
     let sc = SolverConstraints.of_index_term G.global (LC.unpack (LC.negate lc)) in
     let lcs = sc :: L.all_solver_constraints local in
     (* let () = debug_typecheck_lcs lcs (local, global) in *)
     let checked = 
-      handle_z3_problems
-        (fun () ->
-          Z3.Solver.add solver lcs;
-          (* Debug_ocaml.end_csv_timing (); *)
-          Debug_ocaml.begin_csv_timing "Z3.Solver.check";
-          let result = Z3.Solver.check solver [] in
-          Debug_ocaml.end_csv_timing ();
-          result
+      handle_z3_problems (fun () -> 
+          Z3.Solver.add solver lcs; Z3.Solver.check solver []
         )
     in
-    Debug_ocaml.end_csv_timing ();
     match checked with
-    | UNSATISFIABLE -> (true,ctxt,solver)
-    | SATISFIABLE -> (false,ctxt,solver)
-    | UNKNOWN -> (false,ctxt,solver)
+    | UNSATISFIABLE -> (true,solver)
+    | SATISFIABLE -> (false,solver)
+    | UNKNOWN -> (false,solver)
 
 
 
   let is_consistent local =
-    let (unreachable,_,_) = constraint_holds local (LC (Bool false)) in
+    let (unreachable,_) = constraint_holds local (LC (Bool false)) in
     (not unreachable)
 
 
   let equal local it1 it2 =
     let c = LC.LC (IndexTerms.EQ (it1, it2)) in
-    let (holds,_,_) = constraint_holds local c in
+    let (holds,_) = constraint_holds local c in
     holds
 
   let ge local it1 it2 =
     let c = LC.LC (IndexTerms.GE (it1, it2)) in
-    let (holds,_,_) = constraint_holds local c in
+    let (holds,_) = constraint_holds local c in
     holds
 
   let lt local it1 it2 =
     let c = LC.LC (IndexTerms.LT (it1, it2)) in
-    let (holds,_,_) = constraint_holds local c in
+    let (holds,_) = constraint_holds local c in
     holds
 
 

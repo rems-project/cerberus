@@ -4,11 +4,13 @@
 /* and from the c and core parsers */
 
 
+/* todo: fix locations */
+
 %parameter <Arg:Parse_ast.ParserArg>
 
 
-%type <Parse_ast.parsed_condition> condition_entry
-%start condition_entry
+%type <Parse_ast.parsed_spec> spec_entry
+%start spec_entry
 
 
 
@@ -19,8 +21,10 @@
   open IndexTerms
   open Tokens
   open Cerb_frontend.Ctype
+  open Pred
 
   let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
+
 
 %}
 
@@ -31,19 +35,43 @@
 
 
 
-condition_entry:
-  | v = condition EOF { v }
+spec_entry:
+  | o = ownership EOF                   { Ownership o }
+  | e = expr EOF                        { Constraint e }
+
+
 ;
 
 
-name: 
-  | id = ID                 { id } 
+
+pred: 
+  | BACKTICK UNOWNED                 { OUnowned } 
+  | BACKTICK BLOCK                   { OBlock } 
+  | BACKTICK id = ID                 { OPred (Id.parse Location_ocaml.unknown id) } 
+
+basename:
+  | id = ID AT label = ID            { {label; v = id} }
+  | id = ID                          { {label = Arg.default_label; v = id} }
+
+access:
+  | STAR a = access                 { Ownership.pointee_access a }
+  | bn = basename                   { Ownership.{ name = bn; derefs = [] } }
+
+ownership:
+  | p = pred LPAREN a = access RPAREN   { Ownership.{ access = a; pred = p } }
+
 
 path: 
-  | STAR p = path                    { Path.pointee p }
-  | p = path DOTDOT id = name        { Path.predicateArg p id }
-  | id = name AT label = name        { {label; name = id; path = []} }
-  | id = name                        { {label = Arg.default_label; name = id; path = []} }
+  | STAR p = path                      { Object.Path.Pointee p }
+  | bn = basename                      { Object.Path.Var bn }
+
+
+obj: 
+  | pr = pred LPAREN p = path RPAREN DOT id = ID   { Object.PredArg {pred = pr; path = p; arg = id} }
+  | AMPERSAND bn = basename            { Object.AddrOrPath (Addr bn) }
+  | p = path                           { Object.AddrOrPath (Path p) }
+  
+
 
 /* fix these to do the right thing */
 integer_base_type:
@@ -59,35 +87,29 @@ integer_type:
   | UNSIGNED ibt = integer_base_type { Unsigned ibt }
   | ibt = integer_base_type { Signed ibt }
 
+expr_or_obj:
+  | o = obj                 { pit ($startpos, $endpos) (Object o) }
+  | e = expr                { e }
 
 expr:
-  | TRUE                    { pit ($startpos, $endpos) (Bool true) }
-  | FALSE                   { pit ($startpos, $endpos) (Bool false) }
-  | p = path                { pit ($startpos, $endpos) (Path p) }
-  | MIN LPAREN it = integer_type RPAREN  { pit ($startpos, $endpos) (MinInteger it) }
-  | MAX LPAREN it = integer_type RPAREN  { pit ($startpos, $endpos) (MaxInteger it) }
-  | i = NUM                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
-  | LPAREN expr RPAREN      { $2 }
-  | expr LT expr            { pit ($startpos, $endpos) (LT ($1,$3)) }
-  | expr GT expr            { pit ($startpos, $endpos) (GT ($1,$3)) }
-  | expr LE expr            { pit ($startpos, $endpos) (LE ($1,$3)) }
-  | expr GE expr            { pit ($startpos, $endpos) (GE ($1,$3)) }
-  | expr EQEQ expr          { pit ($startpos, $endpos) (EQ ($1,$3)) }
-  | expr NE expr            { pit ($startpos, $endpos) (NE ($1,$3)) }
-  | expr PLUS expr          { pit ($startpos, $endpos) (Add ($1,$3)) }
-  | expr MINUS expr         { pit ($startpos, $endpos) (Sub ($1,$3)) }
-  | expr STAR expr          { pit ($startpos, $endpos) (Mul ($1,$3)) }
-  | expr DIV expr           { pit ($startpos, $endpos) (Div ($1,$3)) }
-  | MIN LPAREN i1 = expr COMMA i2 = expr RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
-  | MAX LPAREN i1 = expr COMMA i2 = expr RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
+  | TRUE                                    { pit ($startpos, $endpos) (Bool true) }
+  | FALSE                                   { pit ($startpos, $endpos) (Bool false) }
+  | MIN LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MinInteger it) }
+  | MAX LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MaxInteger it) }
+  | i = NUM                                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
+  | LPAREN expr RPAREN                      { $2 }
+  | expr_or_obj LT expr_or_obj            { pit ($startpos, $endpos) (LT ($1,$3)) }
+  | expr_or_obj GT expr_or_obj            { pit ($startpos, $endpos) (GT ($1,$3)) }
+  | expr_or_obj LE expr_or_obj            { pit ($startpos, $endpos) (LE ($1,$3)) }
+  | expr_or_obj GE expr_or_obj            { pit ($startpos, $endpos) (GE ($1,$3)) }
+  | expr_or_obj EQEQ expr_or_obj          { pit ($startpos, $endpos) (EQ ($1,$3)) }
+  | expr_or_obj NE expr_or_obj            { pit ($startpos, $endpos) (NE ($1,$3)) }
+  | expr_or_obj PLUS expr_or_obj          { pit ($startpos, $endpos) (Add ($1,$3)) }
+  | expr_or_obj MINUS expr_or_obj         { pit ($startpos, $endpos) (Sub ($1,$3)) }
+  | expr_or_obj STAR expr_or_obj          { pit ($startpos, $endpos) (Mul ($1,$3)) }
+  | expr_or_obj DIV expr_or_obj           { pit ($startpos, $endpos) (Div ($1,$3)) }
+  | MIN LPAREN i1 = expr_or_obj COMMA i2 = expr_or_obj RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
+  | MAX LPAREN i1 = expr_or_obj COMMA i2 = expr_or_obj RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
 ;
-
-
-
-condition: 
-  | UNOWNED LPAREN p = path RPAREN        { Ownership (p, OUnowned) }
-  | BLOCK LPAREN p = path RPAREN          { Ownership (p, OBlock) }
-  | e = expr                              { Constraint e }
-
 
 
