@@ -66,10 +66,13 @@ path:
   | bn = basename                      { Object.Path.Var bn }
 
 
+addr_or_path:
+  | AMPERSAND bn = basename            { Object.AddrOrPath.Addr bn }
+  | p = path                           { Object.AddrOrPath.Path p }
+
 obj: 
-  | AMPERSAND bn = basename            { Object.AddrOrPath (Addr bn) }
-  | pr = pred LPAREN p = path RPAREN DOT id = ID   { Object.PredArg {pred = pr; path = p; arg = id} }
-  | p = path                           { Object.AddrOrPath (Path p) }
+  | pr = pred LPAREN aop = addr_or_path RPAREN DOT id = ID   { Object.Obj (aop, Some {pred = pr; arg = id}) }
+  | aop = addr_or_path                                       { Object.Obj (aop, None) }
   
 
 

@@ -5,6 +5,7 @@ open LogicalSorts
 
 (* copying bits and pieces from https://github.com/alastairreid/asl-interpreter/blob/master/libASL/tcheck.ml and 
 https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
+(* and the bmc backend *)
 
 
 let rem_t_warned = ref false

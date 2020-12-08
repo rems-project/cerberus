@@ -98,40 +98,51 @@ module Object = struct
 
   end
     
-  type addr_or_path =
-    | Addr of BaseName.t
-    | Path of Path.t
+  module AddrOrPath = struct
 
-  let pointee = function
-    | Addr bn -> Path (Var bn)
-    | Path p -> Path (Pointee p)
+    type t =
+      | Addr of BaseName.t
+      | Path of Path.t
+
+    let equal aop1 aop2 =
+      match aop1, aop2 with
+      | Addr bn1, Addr bn2 -> BaseName.equal bn1 bn2
+      | Path p1, Path p2 -> Path.equal p1 p2
+      | Addr _, _ -> false
+      | Path _, _ -> false
+
+    let pointee = function
+      | Addr bn -> Path (Var bn)
+      | Path p -> Path (Pointee p)
+
+    let pp = function
+      | Addr bn -> ampersand ^^ BaseName.pp bn
+      | Path p -> Path.pp p
+
+  end
+
+  type pred_arg = {pred : Pred.t; arg : string}
+
+  let equal_pred_arg pa1 pa2 =
+    Pred.equal pa1.pred pa2.pred && 
+      String.equal pa1.arg pa2.arg
 
   type t =
-    | AddrOrPath of addr_or_path
-    | PredArg of {pred: Pred.t; path : Path.t; arg: string}
+    | Obj of AddrOrPath.t * pred_arg option
 
-  let equal o1 o2 =
-    match o1, o2 with
-    | AddrOrPath (Addr b1), AddrOrPath (Addr b2) ->
-       BaseName.equal b1 b2
-    | AddrOrPath (Path p1), AddrOrPath (Path p2) ->
-       Path.equal p1 p2
-    | PredArg pa1, PredArg pa2 ->
-       Pred.equal pa1.pred pa2.pred &&
-         Path.equal pa1.path pa2.path &&
-           String.equal pa1.arg pa2.arg
-    | AddrOrPath _, _ ->
-       false
-    | PredArg _, _ ->
-       false
+
+  let equal (Obj (aop1,pa1)) (Obj (aop2,pa2)) =
+    AddrOrPath.equal aop1 aop2 &&
+      Option.equal equal_pred_arg pa1 pa2
 
   let pp = function
-    | AddrOrPath (Addr b) ->
-       ampersand ^^ BaseName.pp b
-    | AddrOrPath (Path p) ->
-       Path.pp p
-    | PredArg pa ->
-       Pred.pp pa.pred ^^ parens (Path.pp pa.path) ^^ dot ^^ !^(pa.arg)
+    | Obj (aop, None) -> 
+       AddrOrPath.pp aop       
+    | Obj (aop, Some pa) -> 
+       Pred.pp pa.pred ^^ parens (AddrOrPath.pp aop) ^^ !^(pa.arg)
+
+  let predarg pred aop arg = 
+    Obj (aop, Some {pred; arg})
        
 
 

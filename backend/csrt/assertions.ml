@@ -157,7 +157,6 @@ let pre_or_post loc kind attrs =
     | Inv _ -> "inv"
   in 
   let relevant = get_attribute_args attrs attribute_name in
-  print stderr (item "number" (!^(string_of_int (List.length relevant))));
   let* requirements = 
     ListM.mapM 
       (fun (loc',str) -> 

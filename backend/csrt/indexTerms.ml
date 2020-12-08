@@ -292,7 +292,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | Bool false -> 
        !^"false"
     | Unit -> 
-       !^"()"
+       !^"void"
 
     | Add (it1,it2) -> 
        mparens (aux true it1 ^^^ plus ^^^ aux true it2)
@@ -316,8 +316,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | EQ (o1,o2) -> 
        mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
     | NE (o1,o2) -> 
-       if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2260}" ^^^ aux true o2)
-       else mparens (aux true o1 ^^^ langle ^^ rangle ^^^ aux true o2)
+       mparens (aux true o1 ^^^ !^"!=" ^^^ aux true o2)
     | LT (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^^ aux true o2)
     | GT (o1,o2) -> 

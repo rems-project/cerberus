@@ -38,7 +38,7 @@ rule read = parse
   | ">"            { GT }
   | "<="           { LE }
   | ">="           { GE }
-  | "<>"           { NE }
+  | "!="           { NE }
   | "=="           { EQEQ }
   | "min"          { MIN }
   | "max"          { MAX }
