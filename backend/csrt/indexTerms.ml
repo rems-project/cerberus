@@ -322,11 +322,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | GT (o1,o2) -> 
        mparens (aux true o1 ^^^ rangle ^^^ aux true o2)
     | LE (o1,o2) -> 
-       if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2264}"  ^^^ aux true o2)
-       else mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
+       mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | GE (o1,o2) -> 
-       if !unicode then mparens (aux true o1 ^^^ utf8string "\u{2265}"  ^^^ aux true o2)
-       else mparens (aux true o1 ^^^ rangle ^^ equals ^^^ aux true o2)
+       mparens (aux true o1 ^^^ rangle ^^ equals ^^^ aux true o2)
 
     | Null o1 -> 
        mparens (!^"null" ^^ parens (aux false o1))
