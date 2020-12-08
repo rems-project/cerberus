@@ -150,18 +150,21 @@ let label_name = function
 
 
 let pre_or_post loc kind attrs = 
+
   let attribute_name = match kind with
     | Pre -> "requires"
     | Post -> "ensures"
     | Inv _ -> "inv"
   in 
+  let relevant = get_attribute_args attrs attribute_name in
+  print stderr (item "number" (!^(string_of_int (List.length relevant))));
   let* requirements = 
     ListM.mapM 
       (fun (loc',str) -> 
         let loc' = Locations.update loc loc' in
         let* c = parse_condition loc' (label_name kind) str in
         return (loc', c)
-      ) (get_attribute_args attrs attribute_name)
+      ) relevant
   in
   let* (ownership,constraints) = 
     ListM.fold_leftM (fun (ownership, constrs) (loc, p) ->
@@ -271,7 +274,7 @@ let apply_ownerships name typ requirements =
        return (typ, [])
     | (loc, {pred; access}) :: rest when String.equal name access.name.v ->
        let* typ = apply_ownership access pred loc typ in
-       return (typ, rest)
+       aux typ rest
     | tn :: rest ->
        let* (typ, left) = aux typ rest in
        return (typ, tn :: rest)
@@ -311,6 +314,8 @@ let parse_function_type loc attrs (raw_function_type : (Sctypes.t * (Sym.t * Sct
   let (ret_ct, arg_cts) = raw_function_type in
   let* (pre_ownership, pre_constraints) = requires loc attrs in
   let* (post_ownership, post_constraints) = ensures loc attrs in
+  (* print stderr (item "pre_ownership" (Pp.list Ownership.pp (List.map snd pre_ownership)));
+   * print stderr (item "post_ownership" (Pp.list Ownership.pp (List.map snd post_ownership))); *)
   let* args = 
     let args = List.map (named_ctype_to_aarg loc) arg_cts in
     let* (args, left) = apply_ownerships_aargs args pre_ownership in

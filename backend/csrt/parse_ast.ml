@@ -66,6 +66,10 @@ module Ownership = struct
   let pointee_access {name; derefs} = 
     {name; derefs = Pointee :: derefs }
 
+
+  let pp {access; pred} = 
+    Pred.pp pred ^^ parens (pp_access access)
+
 end
 
 

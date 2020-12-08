@@ -176,7 +176,7 @@ let input = function
   | Predicate p -> IndexTerms.vars_in p.pointer
 
 let output = function
-  | Block _ -> SymSet.empty
+  | Block b -> IndexTerms.vars_in b.size (* think about this *)
   | Points p -> SymSet.singleton p.pointee
   | Predicate p -> SymSet.of_list p.args
 

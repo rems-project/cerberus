@@ -508,7 +508,7 @@ let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra
   Debug_ocaml.begin_csv_timing "preprocess";
   let* result = 
     PmapM.foldM
-      (fun fsym (M_funinfo (loc,attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
+      (fun fsym (M_funinfo (loc,Attrs attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
         let special_type = match Sym.name fsym with
           | Some name -> StringSet.mem name specially_typed
           | None -> false
@@ -529,8 +529,8 @@ let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra
                 ) args
             in
             let* (ftyp, mapping, args) = 
-              Conversions.make_fun_spec loc' struct_decls args ret_ctype attrs in
-            return (Pmap.add fsym (M_funinfo (loc,attrs,ftyp,is_variadic,has_proto)) funinfo,
+              Conversions.make_fun_spec loc' struct_decls args ret_ctype (Attrs attrs) in
+            return (Pmap.add fsym (M_funinfo (loc,Attrs attrs,ftyp,is_variadic,has_proto)) funinfo,
                     Pmap.add fsym (mapping, args) funinfo_extra)
       ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
   in

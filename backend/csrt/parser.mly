@@ -67,8 +67,8 @@ path:
 
 
 obj: 
-  | pr = pred LPAREN p = path RPAREN DOT id = ID   { Object.PredArg {pred = pr; path = p; arg = id} }
   | AMPERSAND bn = basename            { Object.AddrOrPath (Addr bn) }
+  | pr = pred LPAREN p = path RPAREN DOT id = ID   { Object.PredArg {pred = pr; path = p; arg = id} }
   | p = path                           { Object.AddrOrPath (Path p) }
   
 
@@ -97,7 +97,6 @@ expr:
   | MIN LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MinInteger it) }
   | MAX LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MaxInteger it) }
   | i = NUM                                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
-  | LPAREN expr RPAREN                      { $2 }
   | expr_or_obj LT expr_or_obj            { pit ($startpos, $endpos) (LT ($1,$3)) }
   | expr_or_obj GT expr_or_obj            { pit ($startpos, $endpos) (GT ($1,$3)) }
   | expr_or_obj LE expr_or_obj            { pit ($startpos, $endpos) (LE ($1,$3)) }
@@ -110,6 +109,7 @@ expr:
   | expr_or_obj DIV expr_or_obj           { pit ($startpos, $endpos) (Div ($1,$3)) }
   | MIN LPAREN i1 = expr_or_obj COMMA i2 = expr_or_obj RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
   | MAX LPAREN i1 = expr_or_obj COMMA i2 = expr_or_obj RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
+  | LPAREN expr RPAREN { $2 }
 ;
 
 

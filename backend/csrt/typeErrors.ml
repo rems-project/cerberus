@@ -86,7 +86,7 @@ let pp_type_error = function
        | Sym s -> Sym.pp s
        | String str -> !^str
      in
-     (!^"Unbound symbol" ^^ colon ^^^ name_pp, [])
+     (!^"Unbound name" ^^ colon ^^^ name_pp, [])
   | Name_bound_twice name ->
      let name_pp = match name with
        | Sym s -> Sym.pp s

@@ -334,9 +334,11 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
   let open Object.Mapping in
   let (Typ (loc, typ_)) = typ in
   match typ_ with
+  (* unowned pointer *)
   | Pointer (_qualifiers, Unowned (_, typ2)) ->
      let rt = make_unowned_pointer v (ST_Ctype (to_sct typ2)) in
      return (rt, [{obj = AddrOrPath aop; res = (BT.Loc, v)}])
+  (* pointer with predcate *)
   | Pointer (_qualifiers, Pred (loc, pid, typ2)) ->
      let* def = match Global.IdMap.find_opt pid Global.builtin_predicates with
        | Some def -> return def
@@ -350,10 +352,11 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
       *     ) def.Global.arguments ([], [], LRT.I)
       * in *)
      failwith "asd"
-
+  (* block pointer *)
   | Pointer (_qualifiers, Block (_, typ2)) -> (*  *)
      let rt = make_block_pointer v Nothing (ST_Ctype (to_sct typ2)) in
      return (rt, [{obj = AddrOrPath aop; res = (BT.Loc, v)}])
+  (* void* *)
   | Pointer (_qualifiers, Owned (Typ (loc2, Void))) ->
      let size = Sym.fresh () in
      let predicate = RE.Block {pointer = S (BT.Loc, v); size = S (Integer, size); block_type = Nothing} in

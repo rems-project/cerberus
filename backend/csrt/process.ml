@@ -29,13 +29,12 @@ let record_tagDefs (global: Global.t) tagDefs =
 let record_funinfo global funinfo =
   let module WT = WellTyped.Make(struct let global = global end) in
   PmapM.foldM
-    (fun fsym (M_funinfo (loc, attrs, ftyp, is_variadic, has_proto)) global ->
+    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, is_variadic, has_proto)) global ->
       let loc' = Loc.update Loc.unknown loc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc' (Unsupported err)
       else
-        let () = debug 2 (lazy (item "recording function type" (FT.pp ftyp))) in
         let* () = WT.WFT.welltyped loc' WT.L.empty ftyp in
         let fun_decls = SymMap.add fsym (loc', ftyp) global.Global.fun_decls in
         return {global with fun_decls}
