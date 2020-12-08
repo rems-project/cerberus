@@ -201,9 +201,10 @@ let retype_memop (loc : Loc.t) = function
   | M_IntFromPtr (act, asym) ->
      let* act = mapM_a (ctype_information loc) act in
      return (M_IntFromPtr (act, asym))
-  | M_PtrFromInt (act, asym) ->
-     let* act = mapM_a (ctype_information loc) act in
-     return (M_PtrFromInt (act, asym))
+  | M_PtrFromInt (act1, act2, asym) ->
+     let* act1 = mapM_a (ctype_information loc) act1 in
+     let* act2 = mapM_a (ctype_information loc) act2 in
+     return (M_PtrFromInt (act1, act2, asym))
   | M_PtrValidForDeref (act, asym) ->
      let* act = mapM_a (ctype_information loc) act in
      return (M_PtrValidForDeref (act, asym))

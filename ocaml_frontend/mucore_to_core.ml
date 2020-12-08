@@ -339,9 +339,9 @@ let mu_to_core__memop__ memop1:memop*(((('b,'a)a),(((Symbol.sym),'a)a))Either.ei
   | M_IntFromPtr (ct1,sym1) ->
      (IntFromPtr, 
       [mctype ct1; msym sym1])
-  | M_PtrFromInt (ct1,sym1) ->
+  | M_PtrFromInt (ct1,ct2,sym1) ->
      (PtrFromInt, 
-      [mctype ct1; msym sym1])
+      [mctype ct1; mctype ct2; msym sym1])
   | M_PtrValidForDeref (ct1,sym1) ->
      (PtrValidForDeref, 
       [mctype ct1; msym sym1])
@@ -412,9 +412,10 @@ let mu_to_core__memop env1 memop1:memop*(('a,(Symbol.sym))Core.generic_pexpr)lis
      (IntFromPtr, 
       [mctype ct1; 
        msym "IntFromPtr" sym1])
-  | M_PtrFromInt (ct1,sym1) ->
+  | M_PtrFromInt (ct1,ct2,sym1) ->
      (PtrFromInt, 
       [mctype ct1; 
+       mctype ct2; 
        msym "PtrFromInt" sym1])
   | M_PtrValidForDeref (ct1,sym1) ->
      (PtrValidForDeref, 
