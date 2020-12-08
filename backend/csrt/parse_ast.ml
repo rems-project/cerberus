@@ -139,10 +139,7 @@ module Object = struct
     | Obj (aop, None) -> 
        AddrOrPath.pp aop       
     | Obj (aop, Some pa) -> 
-       Pred.pp pa.pred ^^ parens (AddrOrPath.pp aop) ^^ !^(pa.arg)
-
-  let predarg pred aop arg = 
-    Obj (aop, Some {pred; arg})
+       parens (Pred.pp pa.pred ^^ parens (AddrOrPath.pp aop)) ^^ dot ^^ !^(pa.arg)
        
 
 

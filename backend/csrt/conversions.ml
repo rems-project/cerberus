@@ -364,6 +364,7 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
   (* void* *)
   | Pointer (_qualifiers, Owned (Typ (loc2, Void))) ->
      let size = Sym.fresh () in
+     print stderr (item "size symbol" (Sym.pp size));
      let predicate = RE.Block {pointer = S (BT.Loc, v); size = S (Integer, size); block_type = Nothing} in
      let rt = 
        RT.Computational ((v, BT.Loc), 

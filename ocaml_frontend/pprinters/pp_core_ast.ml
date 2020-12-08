@@ -404,10 +404,10 @@ Pmap.map
 let dtree_of_globs xs =
   let aux (sym, glob) =
     match glob with
-    | GlobalDef (bTy, e) ->
+    | GlobalDef ((bTy,_), e) ->
         Dnode ( pp_field "GlobalDef" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy
               , [dtree_of_expr e] )
-    | GlobalDecl bTy ->
+    | GlobalDecl (bTy,_) ->
         Dleaf (pp_field "GlobalDecl" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy)
   in
   Dnode (pp_field ".globs", List.map aux xs)

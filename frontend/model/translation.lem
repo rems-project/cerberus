@@ -3820,7 +3820,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           let () = Debug.print_debug 2 [Debug.DB_elaboration] (fun () -> "(translate_program) CREATE for " ^ show sym_global) in
           match List.lookup sym sigm.A.object_definitions with
             | Nothing ->
-                E.return ( (sym, C.GlobalDecl (C.BTy_object C.OTy_pointer)) :: gacc, facc, finfoacc )
+                E.return ( (sym, C.GlobalDecl (C.BTy_object C.OTy_pointer, ty)) :: gacc, facc, finfoacc )
               (*
                 (* if the global has no initialisation expression, we set it to (sort of) zero *)
                 (* TODO: find the std quote *)
@@ -3873,7 +3873,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                          (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
                       )) in
                 E.return
-                  ( (sym, C.GlobalDef (C.BTy_object C.OTy_pointer) core_e) :: gacc
+                  ( (sym, C.GlobalDef (C.BTy_object C.OTy_pointer, ty) core_e) :: gacc
                   , facc, finfoacc )
           end
       
@@ -4038,7 +4038,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           (Caux.mk_pure_e (Caux.mk_sym_pe sym_lit))) 
 *)
 in
-      E.return $ (sym, C.GlobalDef (C.BTy_object C.OTy_pointer) expr) :: acc
+      E.return $ (sym, C.GlobalDef (C.BTy_object C.OTy_pointer, ty) expr) :: acc
   ) globs (List.reverse xs) >>= fun globs' ->
   E.return (core_tagDefs, globs', cfuns, funinfo)
 (*

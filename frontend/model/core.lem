@@ -356,8 +356,8 @@ type extern_map =
   map Symbol.identifier (list Symbol.sym * linking_kind)
 
 type generic_globs 'a 'bty=
-  | GlobalDef of core_base_type * generic_expr 'a 'bty Symbol.sym
-  | GlobalDecl of core_base_type
+  | GlobalDef of (core_base_type * Ctype.ctype) * generic_expr 'a 'bty Symbol.sym
+  | GlobalDecl of (core_base_type * Ctype.ctype)
 
 type generic_globs_map 'a 'bty =
   map Symbol.sym (generic_globs 'a 'bty)

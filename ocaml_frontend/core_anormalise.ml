@@ -730,7 +730,8 @@ let normalise_fun_map (fmap1 : (unit, 'a) generic_fun_map) : (lt, ct, bt, unit) 
 
 let normalise_globs (g : ('a, unit) generic_globs) : (ct, bt, unit) mu_globs= 
   match g with
-  | GlobalDef(bt1, e) -> M_GlobalDef(bt1, normalise_expr Loc.unknown e)
+  | GlobalDef((bt1, ct), e) -> 
+     M_GlobalDef((bt1, ct), normalise_expr Loc.unknown e)
   | GlobalDecl bt1 -> M_GlobalDecl bt1 
 
 

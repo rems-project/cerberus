@@ -1742,12 +1742,12 @@ let typecheck_program file =
     (* Typechecking and registering of the globals *)
     E.foldlM (fun (env_acc, acc) (sym, decl) ->
       match decl with
-        | GlobalDef bTy e ->
+        | GlobalDef (bTy, ct) e ->
             collect_labels env_acc e >>= fun env_acc' ->
             typecheck_expr file.tagDefs env_acc' bTy e >>= fun te ->
-            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, GlobalDef bTy te) :: acc)
-        | GlobalDecl bTy ->
-            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, (sym, GlobalDecl bTy) :: acc)
+            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, GlobalDef (bTy, ct) te) :: acc)
+        | GlobalDecl (bTy, ct) ->
+            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, (sym, GlobalDecl (bTy, ct)) :: acc)
       end) (env, []) file.globs >>= fun (env, rev_globs') ->
     
     (* Registering the program functions *)

@@ -25,6 +25,8 @@ let find_name loc names str =
   end
 
 let resolve_object loc (mapping : mapping) (o : Object.t) : (BT.t * Sym.t, type_error) m = 
+  print stderr (item "mapping" (Mapping.pp mapping));
+  print stderr (item "o" (Object.pp o));
   let open Object.Mapping in
   let found = List.find_opt (fun {obj;res} -> Object.equal obj o) mapping in
   match found with

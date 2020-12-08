@@ -1390,7 +1390,7 @@ let driver_globals with_concurrency file =
   ) >>= fun globs ->
   let glob_defs = List.reverse $ List.foldl (fun acc (sym, glb) ->
     match glb with
-    | Core.GlobalDef bTy e -> (sym, bTy, e) :: acc
+    | Core.GlobalDef (bTy, _) e -> (sym, bTy, e) :: acc
     | Core.GlobalDecl _ -> acc
     end) [] globs
   in

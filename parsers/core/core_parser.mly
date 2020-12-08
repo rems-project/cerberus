@@ -30,7 +30,7 @@ type attribute =
 type declaration =
   | Def_decl  of Implementation.implementation_constant * Core.core_base_type * parsed_pexpr
   | IFun_decl of Implementation.implementation_constant * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
-  | Glob_decl of _sym * Core.core_base_type * parsed_expr
+  | Glob_decl of _sym * (Core.core_base_type * Ctype.ctype) * parsed_expr
   | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Proc_decl of _sym * attribute list * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
   | Builtin_decl of _sym * (Core.core_base_type * (Core.core_base_type) list)
@@ -848,11 +848,12 @@ let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t 
             symbolify_pexpr _pe >>= fun pe ->
             Eff.return (Pmap.add iCst (IFun (bTy, sym_bTys, pe)) impl_acc, globs_acc, fun_map_acc, tagDefs_acc)
           )
-      | Glob_decl (_sym, bTy, _e) ->
+      | Glob_decl (_sym, (bTy, _ct), _e) ->
           lookup_sym _sym >>= (function
             | Some (decl_sym, _) ->
                 symbolify_expr _e >>= fun e ->
-                Eff.return (impl_acc, (decl_sym, bTy, e) :: globs_acc, fun_map_acc, tagDefs_acc)
+                symbolify_ctype _ct >>= fun ct ->
+                Eff.return (impl_acc, (decl_sym, (bTy, ct), e) :: globs_acc, fun_map_acc, tagDefs_acc)
             | None ->
                 assert false
           )
@@ -1686,8 +1687,8 @@ ifun_declaration:
 ;
 
 glob_declaration:
-| GLOB gname= SYM COLON cTy= core_type COLON_EQ e= expr
-  { Glob_decl (gname, cTy, e) }
+| GLOB gname= SYM COLON cTy= core_type COLON ct = core_ctype COLON_EQ e= expr
+  { Glob_decl (gname, (cTy, ct), e) }
 ;
 
 fun_declaration:

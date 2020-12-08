@@ -462,13 +462,15 @@ let retype_fun_map (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~struc
 
 let retype_globs loc struct_decls (sym, glob) =
   match glob with
-  | M_GlobalDef (cbt,expr) ->
+  | M_GlobalDef ((cbt,ct),expr) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
+     let* ct = ctype_information loc ct in
      let* expr = retype_expr loc expr in
-     return (sym, M_GlobalDef (bt,expr))
-  | M_GlobalDecl cbt ->
+     return (sym, M_GlobalDef ((bt,ct),expr))
+  | M_GlobalDecl (cbt,ct) ->
      let* bt = Conversions.bt_of_core_base_type loc cbt in
-     return (sym, M_GlobalDecl bt)
+     let* ct = ctype_information loc ct in
+     return (sym, M_GlobalDecl (bt,ct))
 
 
 let retype_globs_map loc struct_decls funinfo globs_map = 

@@ -433,11 +433,13 @@ let do_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list) =
       record_keep (Sym glob) >>
       let name_collector = deps_of (Sym glob) in
       match g with
-      | GlobalDef (cbt, e) -> 
+      | GlobalDef ((cbt,ct), e) -> 
          name_collector.names_in_core_base_type cbt >>
+           name_collector.names_in_ctype ct >>
            name_collector.names_in_expr e
-      | GlobalDecl cbt -> 
-         name_collector.names_in_core_base_type cbt
+      | GlobalDecl (cbt, ct) -> 
+         name_collector.names_in_core_base_type cbt >>
+           name_collector.names_in_ctype ct
     ) gs
 
 
