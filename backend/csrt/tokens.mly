@@ -1,5 +1,6 @@
 %token <int> NUM
 %token <string> ID
+%token <string> PID
 %token TRUE FALSE
 %token AT DOT STAR AMPERSAND
 %token LPAREN RPAREN
@@ -10,11 +11,11 @@
 %token CHAR SHORT INT LONG SIGNED UNSIGNED
 %token BLOCK UNOWNED /* UNINIT */
 %token EOF
-%token BACKTICK
 %left LT GT LE GE EQEQ NE
 %left PLUS MINUS
 %left DIV
 %right STAR
+
 
 
 

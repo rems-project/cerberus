@@ -25,7 +25,6 @@
 
   let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
 
-
 %}
 
 
@@ -45,9 +44,9 @@ spec_entry:
 
 
 pred: 
-  | BACKTICK UNOWNED                 { OUnowned } 
-  | BACKTICK BLOCK                   { OBlock } 
-  | BACKTICK id = ID                 { OPred (Id.parse Location_ocaml.unknown id) } 
+  | UNOWNED                          { OUnowned } 
+  | BLOCK                            { OBlock } 
+  | id = PID                         { OPred (Id.parse Location_ocaml.unknown id) } 
 
 basename:
   | id = ID AT label = ID            { {label; v = id} }
@@ -57,7 +56,7 @@ access:
   | STAR a = access                 { Ownership.pointee_access a }
   | bn = basename                   { Ownership.{ name = bn; derefs = [] } }
 
-ownership:
+%inline ownership:
   | p = pred LPAREN a = access RPAREN   { Ownership.{ access = a; pred = p } }
 
 
@@ -71,8 +70,8 @@ addr_or_path:
   | p = path                           { Object.AddrOrPath.Path p }
 
 obj: 
-  | pr = pred LPAREN aop = addr_or_path RPAREN DOT id = ID   { Object.Obj (aop, Some {pred = pr; arg = id}) }
-  | aop = addr_or_path                                       { Object.Obj (aop, None) }
+  | LPAREN pr = pred LPAREN aop = addr_or_path RPAREN RPAREN DOT id = ID   { Object.Obj (aop, Some {pred = pr; arg = id}) }
+  | aop = addr_or_path                                        { Object.Obj (aop, None) }
   
 
 

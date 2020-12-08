@@ -21,6 +21,7 @@ let next_line lexbuf =
 
 let int = '-'? ['0'-'9'] ['0'-'9']*
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let pid = ['A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 
@@ -43,10 +44,8 @@ rule read = parse
   | "min"          { MIN }
   | "max"          { MAX }
   | "."            { DOT }
-  | "`"            { BACKTICK }
-  | "block"        { BLOCK }
-  | "unowned"      { UNOWNED }
-(*  | "uninit"       { UNINIT } *)
+  | "Block"        { BLOCK }
+  | "Unowned"      { UNOWNED }
   | "min"          { MIN }
   | "max"          { MAX }
   | "char"         { CHAR }
@@ -58,6 +57,7 @@ rule read = parse
   | white          { read lexbuf }
   | newline        { next_line lexbuf; read lexbuf }
   | int            { NUM (int_of_string (Lexing.lexeme lexbuf)) }
+  | pid            { PID (Lexing.lexeme lexbuf) }
   | id             { ID (Lexing.lexeme lexbuf) }
   | _              { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof            { EOF }
