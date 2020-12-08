@@ -1031,16 +1031,16 @@ module BmcSSA = struct
 
     let ssa_globs (gname, glb) =
       match glb with
-      | GlobalDef (bty, e) ->
+      | GlobalDef ((bty, ty), e) ->
         (* Globals are not given fresh names for no arbitrary reason... *)
         add_to_sym_table gname gname >>
         put_sym_expr gname bty >>
         ssa_e e >>= fun ssad_e ->
-        return (gname, GlobalDef (bty, ssad_e))
-      | GlobalDecl bty ->
+        return (gname, GlobalDef ((bty, ty), ssad_e))
+      | GlobalDecl (bty, ty) ->
         add_to_sym_table gname gname >>
         put_sym_expr gname bty >>
-        return (gname, GlobalDecl bty)
+        return (gname, GlobalDecl (bty, ty))
 
     let ssa_param ((sym, cbt): (sym_ty * core_base_type)) =
       rename_sym sym >>= fun new_sym ->
