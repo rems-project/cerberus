@@ -335,11 +335,11 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
   let (Typ (loc, typ_)) = typ in
   match typ_ with
   (* unowned pointer *)
-  | Pointer (_qualifiers, Unowned (_, typ2)) ->
+  | Pointer (_qualifiers, _, Unowned, typ2) ->
      let rt = make_unowned_pointer v (ST_Ctype (to_sct typ2)) in
      return (rt, [{obj = Obj (aop, None); res = (BT.Loc, v)}])
   (* pointer with predcate *)
-  | Pointer (_qualifiers, Pred (loc, pid, typ2)) ->
+  | Pointer (_qualifiers, loc, Pred pid, typ2) ->
      let* def = match Global.IdMap.find_opt pid Global.builtin_predicates with
        | Some def -> return def
        | None -> fail loc (Missing_predicate pid)
@@ -350,7 +350,7 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
            let lrt = LRT.Logical ((s, Base bt), lrt) in
            let args = s :: args in
            let mapping = 
-             {obj = Obj (aop, Some {pred = OPred pid; arg = name}); 
+             {obj = Obj (aop, Some {pred = Pred pid; arg = name}); 
               res = (bt, s)} :: mapping 
            in
            return (args, mapping, lrt)
@@ -358,11 +358,11 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
      in
      failwith "asd"
   (* block pointer *)
-  | Pointer (_qualifiers, Block (_, typ2)) -> (*  *)
+  | Pointer (_qualifiers, _, Block, typ2) -> (*  *)
      let rt = make_block_pointer v Nothing (ST_Ctype (to_sct typ2)) in
      return (rt, [{obj = Obj (aop, None); res = (BT.Loc, v)}])
   (* void* *)
-  | Pointer (_qualifiers, Owned (Typ (loc2, Void))) ->
+  | Pointer (_qualifiers, _, Owned, (Typ (_, Void))) ->
      let size = Sym.fresh () in
      print stderr (item "size symbol" (Sym.pp size));
      let predicate = RE.Block {pointer = S (BT.Loc, v); size = S (Integer, size); block_type = Nothing} in
@@ -372,12 +372,12 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
        Resource (predicate, I)))
      in
      let mapping = 
-       [{obj = Obj (aop, Some {pred = OBlock; arg = "size"}); res = (Integer, size)};
+       [{obj = Obj (aop, Some {pred = Block; arg = "size"}); res = (Integer, size)};
         {obj = Obj (aop, None); res = (BT.Loc, v)}]
      in
      return (rt, mapping)
   (* owned struct pointer *)
-  | Pointer (_qualifiers, Owned (Typ (loc2, Struct tag))) ->
+  | Pointer (_qualifiers, _, Owned, (Typ (_, Struct tag))) ->
      let v2 = Sym.fresh () in
      let predicate = Predicate {pointer = S (BT.Loc, v); name = Tag tag; args = [v2]} in
      let rt = 
@@ -391,7 +391,7 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
      in
      return (rt, mapping)
   (* other owned pointer *)
-  | Pointer (_qualifiers, Owned typ2) ->
+  | Pointer (_qualifiers, _, Owned, typ2) ->
      let v2 = Sym.fresh () in
      let* (rt',mapping') = rt_of_ect v2 (Object.AddrOrPath.pointee aop) typ2 in
      let rt = make_owned_pointer v (ST_Ctype (to_sct typ2)) rt' in
@@ -416,7 +416,7 @@ let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
 let owned_pointer_ect typ = 
   let ECT.Typ (loc, _) = typ in
   let qs = CF.Ctype.{const = false; restrict = false; volatile = false} in
-  ECT.Typ (loc, (Pointer (qs, Owned typ)))
+  ECT.Typ (loc, (Pointer (qs, loc, Owned, typ)))
 
 
 type funinfo_extra = 

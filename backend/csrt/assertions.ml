@@ -214,32 +214,23 @@ let inv label loc attrs =
 
      
 
-let rec ct_to_ct loc ((Sctypes.Sctype (annots,raw_ctype)) : Sctypes.t) =
-  let loc = Loc.update loc (CF.Annot.get_loc_ annots) in
-  match raw_ctype with
-  | Sctypes.Void -> 
-     Typ (loc, Void)
-  | Sctypes.Integer it -> 
-     Typ (loc, Integer it)
-  | Pointer (qualifiers, ct) ->
-     let t = ct_to_ct loc ct in
-     Typ (loc, Pointer (qualifiers, Owned t))
-  | Struct tag ->
-     Typ (loc, Struct tag)
+
+
+
 
 let named_ctype_to_aarg loc (sym, ct) =
   let name = match Sym.name sym with
     | Some name -> name
     | None -> Sym.pp_string sym
   in
-  { name; asym = sym; typ = ct_to_ct loc ct }
+  { name; asym = sym; typ = ECT.of_ct loc ct }
 
 let named_ctype_to_varg loc (sym, ct) =
   let name = match Sym.name sym with
     | Some name -> name
     | None -> Sym.pp_string sym
   in
-  { name; vsym = sym; typ = ct_to_ct loc ct }
+  { name; vsym = sym; typ = ECT.of_ct loc ct }
 
 
 
@@ -249,27 +240,28 @@ open Ownership
 let apply_ownership {name = {label;v}; derefs} ownership loc typ = 
   let rec aux so_far_derefs todo_derefs (Typ (annots, typ_)) =
     let pp_so_far () = pp_access {name = {v; label}; derefs =so_far_derefs} in
-    begin match todo_derefs, typ_, ownership with
-    | Pointee :: todo, Pointer (qualifiers, Owned typ2), _ ->
-       let* typ2 = aux (so_far_derefs @ [Pointee]) todo typ2 in
-       let typ_ = Pointer (qualifiers, Owned typ2) in
-       return (Typ (annots, typ_))
-    | [], Pointer (qualifiers, Owned t), AST.Pred.OUnowned ->
-       let typ_ = Pointer (qualifiers, Unowned (loc, t)) in
-       return (Typ (annots, typ_))
-    | [], Pointer (qualifiers, Owned t), AST.Pred.OBlock ->
-       let typ_ = Pointer (qualifiers, Block (loc, t)) in
-       return (Typ (annots, typ_))
-    | [], Pointer (qualifiers, Owned t), AST.Pred.OPred s ->
-       let typ_ = Pointer (qualifiers, Pred (loc, s, t)) in
-       return (Typ (annots, typ_))
-    | _, Pointer (qualifiers, Unowned (loc,_)), _ ->
-       fail loc (Generic (pp_so_far () ^^^ !^"was specified as unowned"))
-    | _, Pointer (qualifiers, Block (loc, _)), _ ->
-       fail loc (Generic (pp_so_far () ^^^ !^"was specified as uninitialised"))
-    | _, _, (OUnowned | OBlock | OPred _) -> 
-       fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
-    end
+    match todo_derefs with
+    | Pointee :: todo ->
+       begin match typ_ with
+       | Pointer (qualifiers, _, Owned, typ2) ->
+          let* typ2 = aux (so_far_derefs @ [Pointee]) todo typ2 in
+          let typ_ = Pointer (qualifiers, loc, Owned, typ2) in
+          return (Typ (annots, typ_))
+       | Pointer (_, _, _, _) ->
+          fail loc (Generic (pp_so_far () ^^^ !^"is not an owned pointer"))
+       | _ ->
+          fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
+       end
+    | [] ->
+       begin match typ_ with
+       | Pointer (qualifiers, _, existing_ownership, typ2) 
+            when not (Pred.equal existing_ownership default_pointer_ownership) ->
+          fail loc (Generic (!^"ownership of" ^^^ pp_so_far () ^^^ !^"already specified"))
+       | Pointer (qualifiers, _, _, typ2) ->
+          return (Typ (annots, Pointer (qualifiers, loc, ownership, typ2)))
+       | _ -> 
+          fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
+       end
   in
   aux [] derefs typ
      
@@ -330,7 +322,7 @@ let parse_function_type loc attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sy
   let* (post_ownership, post_constraints) = ensures loc attrs in
   let globs = List.map (named_ctype_to_aarg loc) glob_cts in
   let args_original = List.map (named_ctype_to_aarg loc) arg_cts in
-  let ret = { name = "ret"; vsym = Sym.fresh (); typ = ct_to_ct loc ret_ct } in
+  let ret = { name = "ret"; vsym = Sym.fresh (); typ = ECT.of_ct loc ret_ct } in
   (* apply ownership *)
   let* (globs, pre_left) = apply_ownerships_aargs globs pre_ownership in
   let* (args, pre_left) = apply_ownerships_aargs args_original pre_left in

@@ -1,5 +1,9 @@
 (* some from https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param *)
 
+
+
+
+
 module CF = Cerb_frontend
 
 open Pp
@@ -27,23 +31,27 @@ end
 module Pred = struct
 
   type t = 
-    | OUnowned 
-    | OBlock
-    | OPred of Id.t
+    | Owned
+    | Unowned 
+    | Block
+    | Pred of Id.t
 
   let equal p1 p2 =
     match p1, p2 with
-    | OUnowned, OUnowned -> true
-    | OBlock, OBlock -> true
-    | OPred s1, OPred s2 -> Id.equal s1 s2
-    | OUnowned, _ -> false
-    | OBlock, _ -> false
-    | OPred _, _ -> false
+    | Owned, Owned -> true
+    | Unowned, Unowned -> true
+    | Block, Block -> true
+    | Pred s1, Pred s2 -> Id.equal s1 s2
+    | Owned, _ -> false
+    | Unowned, _ -> false
+    | Block, _ -> false
+    | Pred _, _ -> false
 
   let pp = function
-    | OUnowned -> !^"Unowned"
-    | OBlock -> !^"Block"
-    | OPred s -> Id.pp s
+    | Owned -> !^"Owned"
+    | Unowned -> !^"Unowned"
+    | Block -> !^"Block"
+    | Pred s -> Id.pp s
 
 end
 
@@ -219,6 +227,8 @@ type resource_spec =
 
 
 
+let default_pointer_ownership = Pred.Owned
+
 
 
 
@@ -232,30 +242,33 @@ module ECT = struct
   and typ_ =
     | Void
     | Integer of CF.Ctype.integerType
-    | Pointer of CF.Ctype.qualifiers * pointer
+    | Pointer of CF.Ctype.qualifiers * Loc.t * Pred.t * typ
     | Struct of Sym.t
-
-  and pointer =
-    | Owned of typ
-    | Unowned of Loc.t * typ
-    (* | Uninit of Loc.t * typ *)
-    | Block of Loc.t * typ
-    | Pred of Loc.t * Id.t * typ
 
   let rec to_sct (Typ (loc, typ_)) =
     let annots = [CF.Annot.Aloc (Loc.unpack loc)] in
     match typ_ with
-    | Void -> Sctypes.Sctype (annots, Sctypes.Void)
-    | Integer it -> Sctypes.Sctype (annots, Sctypes.Integer it)
-    | Pointer (qualifiers, Owned t)
-    | Pointer (qualifiers, Unowned (_, t))
-    | Pointer (qualifiers, Block (_, t))
-    | Pointer (qualifiers, Pred (_, _, t))
-    (* | Pointer (qualifiers, Uninit (_, t))  *)
-      ->
+    | Void -> 
+       Sctypes.Sctype (annots, Sctypes.Void)
+    | Integer it -> 
+       Sctypes.Sctype (annots, Sctypes.Integer it)
+    | Pointer (qualifiers, _, _, t) ->
        Sctypes.Sctype (annots, Sctypes.Pointer (qualifiers, (to_sct t)))
     | Struct tag ->
        Sctypes.Sctype (annots, Sctypes.Struct tag)
+
+  let rec of_ct loc ((Sctypes.Sctype (annots,raw_ctype)) : Sctypes.t) =
+    let loc = Loc.update loc (CF.Annot.get_loc_ annots) in
+    match raw_ctype with
+    | Sctypes.Void -> 
+       Typ (loc, Void)
+    | Sctypes.Integer it -> 
+       Typ (loc, Integer it)
+    | Pointer (qualifiers, ct) ->
+       let t = of_ct loc ct in
+       Typ (loc, Pointer (qualifiers, loc, default_pointer_ownership, t))
+    | Struct tag ->
+       Typ (loc, Struct tag)
 
 
 end
