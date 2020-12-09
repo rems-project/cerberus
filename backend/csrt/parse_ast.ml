@@ -227,7 +227,7 @@ type resource_spec =
 
 
 
-let default_pointer_ownership = Pred.Owned
+let default_pointer_ownership = Pred.Unowned
 
 
 

@@ -44,8 +44,9 @@ spec_entry:
 
 
 pred: 
-  | UNOWNED                          { Unowned } 
+  | OWNED                            { Owned } 
   | BLOCK                            { Block } 
+  | UNOWNED                          { Unowned } 
   | id = PID                         { Pred (Id.parse Location_ocaml.unknown id) } 
 
 basename:
