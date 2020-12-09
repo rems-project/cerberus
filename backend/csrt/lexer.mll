@@ -44,6 +44,8 @@ rule read = parse
   | "min"          { MIN }
   | "max"          { MAX }
   | "."            { DOT }
+  | "(integer)"    { POINTER_TO_INTEGER }
+  | "(pointer)"    { INTEGER_TO_POINTER }
   | "Block"        { BLOCK }
   | "Unowned"      { UNOWNED }
   | "min"          { MIN }

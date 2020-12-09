@@ -96,9 +96,11 @@ expr_or_obj:
 expr:
   | TRUE                                    { pit ($startpos, $endpos) (Bool true) }
   | FALSE                                   { pit ($startpos, $endpos) (Bool false) }
+  | i = NUM                                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
   | MIN LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MinInteger it) }
   | MAX LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MaxInteger it) }
-  | i = NUM                                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
+  | POINTER_TO_INTEGER expr_or_obj        { pit ($startpos, $endpos) (PointerToIntegerCast ($2)) }
+  | INTEGER_TO_POINTER expr_or_obj        { pit ($startpos, $endpos) (IntegerToPointerCast ($2)) }
   | expr_or_obj LT expr_or_obj            { pit ($startpos, $endpos) (LT ($1,$3)) }
   | expr_or_obj GT expr_or_obj            { pit ($startpos, $endpos) (GT ($1,$3)) }
   | expr_or_obj LE expr_or_obj            { pit ($startpos, $endpos) (LE ($1,$3)) }

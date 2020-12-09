@@ -98,6 +98,11 @@ let rec of_index_term global it =
     assoc Id.equal member member_funs
   in
   match it with
+  (* literals *)
+  | S (bt, s) -> 
+     let sym = sym_to_symbol ctxt s in
+     let sort = bt_to_sort global bt in
+     Z3.Expr.mk_const ctxt sym sort
   | Num n -> 
      let nstr = Nat_big_num.to_string n in
      Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr
@@ -111,6 +116,7 @@ let rec of_index_term global it =
   | Unit ->
      let unitsort = ls_to_sort global (Base Unit) in
      Z3.Expr.mk_const_s ctxt "unit" unitsort
+  (* arithmetic *)
   | Add (it,it') -> 
      let a = of_index_term global it in
      let a' = of_index_term global it' in
@@ -149,6 +155,7 @@ let rec of_index_term global it =
   | Max (it,it') -> 
      let it_elab = ITE (it %> it', it, it') in
      of_index_term global it_elab 
+  (* comparisons *)
   | EQ (it,it') -> 
      let a = of_index_term global it in
      let a' = of_index_term global it' in
@@ -173,16 +180,7 @@ let rec of_index_term global it =
      let a = of_index_term global it in
      let a' = of_index_term global it' in
      Z3.Arithmetic.mk_ge ctxt a a'
-  | Null t -> 
-     let locsort = ls_to_sort global (Base Loc) in
-     let boolsort = ls_to_sort global (Base Bool) in
-     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
-     let a = of_index_term global t in
-     let is_null = Z3.Expr.mk_app ctxt fundecl [a] in
-     let zero_str = Nat_big_num.to_string Z.zero in
-     let zero_expr = Z3.Arithmetic.Integer.mk_numeral_s ctxt zero_str in
-     let is_zero = Z3.Boolean.mk_eq ctxt a zero_expr in
-     Z3.Boolean.mk_and ctxt [is_null; is_zero]
+  (* booleans *)
   | And its -> 
      let ts = List.map (of_index_term global) its in
      Z3.Boolean.mk_and ctxt ts
@@ -201,10 +199,22 @@ let rec of_index_term global it =
      let a' = of_index_term global it' in
      let a'' = of_index_term global it'' in
      Z3.Boolean.mk_ite ctxt a a' a''
-  | S (bt, s) -> 
-     let sym = sym_to_symbol ctxt s in
-     let sort = bt_to_sort global bt in
-     Z3.Expr.mk_const ctxt sym sort
+  (* tuples *)
+  | Tuple ts ->
+     Debug_ocaml.error "todo: Z3: Tuple"
+  | Nth (bt,i,t) ->
+     let a = of_index_term global t in
+     let fundecl = nth_to_fundecl bt i in
+     Z3.Expr.mk_app ctxt fundecl [a]
+  | Struct (tag,members) ->
+     let sort = bt_to_sort global (Struct tag) in
+     let constructor = Z3.Tuple.get_mk_decl sort in
+     let member_vals = 
+       List.map (fun (_member,it) ->
+           of_index_term global it
+         ) members
+     in
+     Z3.Expr.mk_app ctxt constructor member_vals
   | StructMember (tag, t, member) ->
      let a = of_index_term global t in
      let fundecl = member_to_fundecl tag member in
@@ -215,6 +225,17 @@ let rec of_index_term global it =
      let offset_s = Nat_big_num.to_string offset in
      let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
      Z3.Arithmetic.mk_add ctxt [a;offset_n]
+  (* pointers *)
+  | Null t -> 
+     let locsort = ls_to_sort global (Base Loc) in
+     let boolsort = ls_to_sort global (Base Bool) in
+     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
+     let a = of_index_term global t in
+     let is_null = Z3.Expr.mk_app ctxt fundecl [a] in
+     let zero_str = Nat_big_num.to_string Z.zero in
+     let zero_expr = Z3.Arithmetic.Integer.mk_numeral_s ctxt zero_str in
+     let is_zero = Z3.Boolean.mk_eq ctxt a zero_expr in
+     Z3.Boolean.mk_and ctxt [is_null; is_zero]
   | AllocationSize t ->
      let locsort = ls_to_sort global (Base Loc) in
      let intsort = ls_to_sort global (Base Integer) in
@@ -238,19 +259,6 @@ let rec of_index_term global it =
      let fp2_before_fp1 = IT.LocLT (Offset (Offset (it', s'), IT.int (-1)), it) in
      let t = Or [fp1_before_fp2; fp2_before_fp1] in
      of_index_term global t
-  | Struct (tag,members) ->
-     let sort = bt_to_sort global (Struct tag) in
-     let constructor = Z3.Tuple.get_mk_decl sort in
-     let member_vals = 
-       List.map (fun (_member,it) ->
-           of_index_term global it
-         ) members
-     in
-     Z3.Expr.mk_app ctxt constructor member_vals
-  | Nth (bt,i,t) ->
-     let a = of_index_term global t in
-     let fundecl = nth_to_fundecl bt i in
-     Z3.Expr.mk_app ctxt fundecl [a]
   | Aligned (st,it') -> 
      let align = Memory.align_of_stored_type st in
      let a = of_index_term global (Num align) in
@@ -264,6 +272,14 @@ let rec of_index_term global it =
      Z3.Boolean.mk_eq ctxt
        (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
        (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+
+  | IntegerToPointerCast it ->
+     (* identity, at the moment *)
+     of_index_term global it
+  | PointerToIntegerCast it ->
+     (* identity, at the moment *)
+     of_index_term global it
+  (* representability *)
   | MinInteger it ->
      of_index_term global 
        (Num (Memory.min_integer_type it))
@@ -273,6 +289,18 @@ let rec of_index_term global it =
   | Representable (st, t) ->
      let rangef = Memory.representable_stored_type global.struct_decls st in
      of_index_term global (LC.unpack (rangef t))
+  (* lists *)
+  | Nil _ ->
+     Debug_ocaml.error "todo: Z3: Nil"
+  | Cons _ ->
+     Debug_ocaml.error "todo: Z3: Cons"
+  | Head t ->
+     Debug_ocaml.error "todo: Z3: Head"
+  | Tail t ->
+     Debug_ocaml.error "todo: Z3: Tail"
+  | List (ts,bt) ->
+     Debug_ocaml.error "todo: Z3: List"
+  (* sets *)
   | SetMember (it,it') ->
      let a = of_index_term global it in
      let a' = of_index_term global it' in
@@ -301,18 +329,6 @@ let rec of_index_term global it =
      let a = of_index_term global it in
      let a' = of_index_term global it' in
      Z3.Set.mk_subset ctxt a a'
-  | Nil _ ->
-     Debug_ocaml.error "todo: Z3: Nil"
-  | Cons _ ->
-     Debug_ocaml.error "todo: Z3: Cons"
-  | Tuple ts ->
-     Debug_ocaml.error "todo: Z3: Tuple"
-  | Head t ->
-     Debug_ocaml.error "todo: Z3: Head"
-  | Tail t ->
-     Debug_ocaml.error "todo: Z3: Tail"
-  | List (ts,bt) ->
-     Debug_ocaml.error "todo: Z3: List"
 
 
 

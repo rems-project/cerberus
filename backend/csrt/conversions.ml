@@ -419,53 +419,72 @@ let owned_pointer_ect typ =
   ECT.Typ (loc, (Pointer (qs, Owned typ)))
 
 
-let make_fun_spec loc struct_decls arguments ret_sct attrs 
-    : (FT.t * mapping * aarg list, type_error) m = 
+type funinfo_extra = 
+  {mapping : mapping;
+   globs : Parse_ast.aarg list;
+   fargs : Parse_ast.aarg list}
+
+let make_fun_spec loc struct_decls globals arguments ret_sct attrs 
+    : (FT.t * funinfo_extra, type_error) m = 
   let open FT in
   let open RT in
   let open Object.AddrOrPath in
-  let* typ = Assertions.parse_function_type loc attrs (ret_sct, arguments) in
+  let* typ = Assertions.parse_function_type loc attrs globals (ret_sct, arguments) in
 
   let mapping = [] in
+  let arg_ftt = fun rt -> rt in
 
-
-  let (FunctionType args) = typ in
-
-  let (Args (args, pres)) = args in
+  let (FT (FA {globs;args}, pre)) = typ in
+  (* glob arguments *)
+  let* (arg_ftt, mapping) = 
+    ListM.fold_rightM (fun {name; asym; typ} (arg_ftt, mapping) ->
+        let aop = Addr {label = Assertions.label_name Pre; v = name} in
+        let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
+        return (Tools.comp (FT.of_lrt (RT.lrt arg_rt)) arg_ftt, mapping' @ mapping)
+      ) globs (arg_ftt, mapping)
+  in
+  (* function arguments *)
   let* (arg_ftt, mapping) = 
     ListM.fold_rightM (fun {name; asym; typ} (arg_ftt, mapping) ->
         let aop = Addr {label = Assertions.label_name Pre; v = name} in
         let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
         return (Tools.comp (FT.of_rt arg_rt) arg_ftt, mapping' @ mapping)
-      ) args ((fun rt -> rt), mapping)
+      ) args (arg_ftt, mapping)
   in
-
-  let init_mapping = mapping in
-
-  let (Pre (preconditions, ret)) = pres in
+  let (FPre (preconditions, ret)) = pre in
   let* arg_ftt = 
     let* requires = Assertions.resolve_constraints mapping preconditions in
     return (Tools.comp arg_ftt (FT.mConstraints requires))
   in
+  let init_mapping = mapping in
 
-  let (Ret (ret, ret_args, post)) = ret in
+  let (FRet (FRT {ret; glob_rets; arg_rets}, post)) = ret in
+  (* ret *)
   let* (ret_rt, mapping) = 
     let { name; vsym; typ } = ret in
     let aop = Path (Var {label = Assertions.label_name Post; v = name}) in
     let* (rt, mapping') = rt_of_ect vsym aop typ in
     return (rt, mapping' @ mapping)
   in
-
+  let arg_ret_lrt = LRT.I in
+  (* glob return resources *)
   let* (arg_ret_lrt, mapping) = 
     ListM.fold_rightM (fun {name; asym; typ} (arg_ret_lrts, mapping) ->
         let aop = Addr {label = Assertions.label_name Post; v = name} in
         let* (arg_ret_lrt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
         return (LRT.concat (RT.lrt arg_ret_lrt) arg_ret_lrts, mapping' @ mapping)
-      ) ret_args (LRT.I, mapping)
+      ) glob_rets (arg_ret_lrt, mapping)
+  in
+  (* argument return resources *)
+  let* (arg_ret_lrt, mapping) = 
+    ListM.fold_rightM (fun {name; asym; typ} (arg_ret_lrts, mapping) ->
+        let aop = Addr {label = Assertions.label_name Post; v = name} in
+        let* (arg_ret_lrt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
+        return (LRT.concat (RT.lrt arg_ret_lrt) arg_ret_lrts, mapping' @ mapping)
+      ) arg_rets (arg_ret_lrt, mapping)
   in
   let ret_rt = RT.concat ret_rt arg_ret_lrt in
-
-  let (Post postconditions) = post in
+  let (FPost postconditions) = post in
   let* ret_rt = 
     let* ensures = Assertions.resolve_constraints mapping postconditions in
     return (RT.concat ret_rt (LRT.mConstraints ensures LRT.I))
@@ -473,16 +492,14 @@ let make_fun_spec loc struct_decls arguments ret_sct attrs
 
   let ft = arg_ftt (FT.I ret_rt) in
 
-  return (ft, init_mapping, args)
+  return (ft, {mapping = init_mapping; globs; fargs = args})
 
 
   
 let make_label_spec
       (loc : Loc.t) 
       (lsym: Sym.t)
-      mapping
-      struct_decls
-      (fargs : Parse_ast.aarg list) 
+      (extra: funinfo_extra)
       (largs : (Sym.t option * Sctypes.t) list) 
       attrs = 
 
@@ -491,26 +508,35 @@ let make_label_spec
     | Some lname -> lname
     | None -> Sym.pp_string lsym (* check *)
   in
-
   let largs = List.map (fun (os, t) -> (Option.value (Sym.fresh ()) os, t)) largs in
-
-  let* ltyp = Assertions.parse_label_type loc lname attrs fargs largs in
-
-  let (LabelType (LArgs {function_arguments; label_arguments; inv})) = ltyp in
-
+  let* ltyp = Assertions.parse_label_type loc lname attrs extra.globs extra.fargs largs in
+  
+  let mapping = extra.mapping in
+  let ltt = fun rt -> rt in
+  let (LT (LA {globs; fargs; largs}, inv)) = ltyp in
+  (* globs *)
   let* (ltt, mapping) = 
     ListM.fold_rightM (fun {name; asym; typ} (ltt, mapping) ->
         let aop = Addr {label = Assertions.label_name (Inv lname); v = name} in
         let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
         return (Tools.comp (LT.of_lrt (RT.lrt arg_rt)) ltt, mapping' @ mapping)
-      ) function_arguments ((fun rt -> rt), mapping)
+      ) globs (ltt, mapping)
   in
+  (* function arguments *)
+  let* (ltt, mapping) = 
+    ListM.fold_rightM (fun {name; asym; typ} (ltt, mapping) ->
+        let aop = Addr {label = Assertions.label_name (Inv lname); v = name} in
+        let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
+        return (Tools.comp (LT.of_lrt (RT.lrt arg_rt)) ltt, mapping' @ mapping)
+      ) fargs (ltt, mapping)
+  in
+  (* label arguments *)
   let* (ltt, mapping) = 
     ListM.fold_rightM (fun {name; vsym; typ} (ltt, mapping) ->
         let aop = Path (Var {label = Assertions.label_name (Inv lname); v = name}) in
         let* (larg_rt, mapping') = rt_of_ect vsym aop typ in
         return (Tools.comp (LT.of_rt larg_rt) ltt, mapping' @ mapping)
-      ) label_arguments (ltt, mapping)
+      ) largs (ltt, mapping)
   in
 
   let (LInv lcs) = inv in

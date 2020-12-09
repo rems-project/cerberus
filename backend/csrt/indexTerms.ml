@@ -40,12 +40,13 @@ end
 
 
 type 'bt term =
+  (* literals *)
   | S of 'bt * Sym.t
   | Num of Z.t
   | Pointer of Z.t
   | Bool of bool
   | Unit
-
+  (* arithmetic *)
   | Add of 'bt term * 'bt term
   | Sub of 'bt term * 'bt term
   | Mul of 'bt term * 'bt term
@@ -55,24 +56,27 @@ type 'bt term =
   | Rem_f of 'bt term * 'bt term
   | Min of 'bt term * 'bt term
   | Max of 'bt term * 'bt term
-
+  (* comparisons *)
   | EQ of 'bt term * 'bt term
   | NE of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | GT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
   | GE of 'bt term * 'bt term
-
-  | Null of 'bt term
+  (* booleans *)
   | And of 'bt term list
   | Or of 'bt term list
   | Impl of 'bt term * 'bt term
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term  (* bool -> int -> int *)
-
+  (* tuples *)
   | Tuple of 'bt term list
   | Nth of 'bt * int * 'bt term (* bt is tuple bt *)
-
+  | Struct of BT.tag * (BT.member * 'bt term) list
+  | StructMember of BT.tag * 'bt term * BT.member
+  | StructMemberOffset of BT.tag * 'bt term * BT.member
+  (* pointers *)
+  | Null of 'bt term
   | AllocationSize of 'bt term
   | Offset of 'bt term * 'bt term
   | LocLT of 'bt term * 'bt term
@@ -80,21 +84,19 @@ type 'bt term =
   | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term)
   | AlignedI of 'bt term * 'bt term
   | Aligned of ST.t * 'bt term
-
+  | IntegerToPointerCast of 'bt term
+  | PointerToIntegerCast of 'bt term
+  (* representability *)
   | MinInteger of CF.Ctype.integerType
   | MaxInteger of CF.Ctype.integerType
   | Representable of ST.t * 'bt term
-
-  | Struct of BT.tag * (BT.member * 'bt term) list
-  | StructMember of BT.tag * 'bt term * BT.member
-  | StructMemberOffset of BT.tag * 'bt term * BT.member
-
+  (* lists *)
   | Nil of 'bt
   | Cons of 'bt term * 'bt term
   | List of 'bt term list * 'bt
   | Head of 'bt term
   | Tail of 'bt term
-
+  (* sets *)
   | SetMember of 'bt term * 'bt term
   | SetAdd of 'bt term * 'bt term
   | SetRemove of 'bt term * 'bt term
@@ -110,89 +112,119 @@ type untyped = unit term
 type t = typed
 
 
-
-
 let rec equal it it' = 
   match it, it' with
+  (* literals *)
   | S (bt,sym), S (bt',sym') -> 
      let eq = Sym.equal sym sym' in
      if eq && !Debug_ocaml.debug_level >= 1 && not (BT.equal bt bt')
      then Debug_ocaml.error "equal symbols with different base type"
      else eq
-  | Num n, Num n' -> Z.equal n n'
-  | Pointer p, Pointer p' -> Z.equal p p'
-  | Bool b, Bool b' -> b = b'
-  | Unit, Unit -> true
-
-  | Add (t1,t2), Add (t1',t2')
-  | Sub (t1,t2), Sub (t1',t2')
-  | Mul (t1,t2), Mul (t1',t2')
-  | Div (t1,t2), Div (t1',t2')
-  | Exp (t1,t2), Exp (t1',t2')
-  | Rem_t (t1,t2), Rem_t (t1',t2')
-  | Rem_f (t1,t2), Rem_f (t1',t2') 
-  | Min (t1,t2), Min (t1',t2')
-  | Max (t1,t2), Max (t1',t2') 
-    -> equal t1 t1' && equal t2 t2' 
-
-  | EQ (t1,t2), EQ (t1',t2')
-  | NE (t1,t2), NE (t1',t2')
-  | LT (t1,t2), LT (t1',t2')
-  | GT (t1,t2), GT (t1',t2')
-  | LE (t1,t2), LE (t1',t2')
-  | GE (t1,t2), GE (t1',t2') 
-    -> equal t1 t1' && equal t2 t2' 
-
-  | Null t, Null t' -> equal t t' 
-  | And ts, And ts' -> List.equal equal ts ts'
-  | Or ts, Or ts' -> List.equal equal ts ts'
-  | Impl (t1,t2), Impl (t1',t2') -> equal t1 t1' && equal t2 t2' 
-  | Not t, Not t' -> equal t t' 
+  | Num n, Num n' -> 
+     Z.equal n n'
+  | Pointer p, Pointer p' -> 
+     Z.equal p p'
+  | Bool b, Bool b' -> 
+     b = b'
+  | Unit, Unit -> 
+     true
+  (* arithmetic *)
+  | Add (t1,t2), Add (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Sub (t1,t2), Sub (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Mul (t1,t2), Mul (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Div (t1,t2), Div (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Exp (t1,t2), Exp (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Rem_t (t1,t2), Rem_t (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Rem_f (t1,t2), Rem_f (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Min (t1,t2), Min (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Max (t1,t2), Max (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  (* comparisons *)
+  | EQ (t1,t2), EQ (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | NE (t1,t2), NE (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | LT (t1,t2), LT (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | GT (t1,t2), GT (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | LE (t1,t2), LE (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | GE (t1,t2), GE (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  (* booleans *)
+  | And ts, And ts' -> 
+     List.equal equal ts ts'
+  | Or ts, Or ts' -> 
+     List.equal equal ts ts'
+  | Impl (t1,t2), Impl (t1',t2') -> 
+     equal t1 t1' && equal t2 t2' 
+  | Not t, Not t' -> 
+     equal t t' 
   | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
      equal t1 t1' && equal t2 t2' && equal t3 t3'
-
-  | Tuple its, Tuple its' -> List.equal equal its its'
-  | Nth (bt, n,t), Nth (bt', n',t') -> BT.equal bt bt' && n = n' && equal t t' 
-
-
-  | AllocationSize t1, AllocationSize t1' -> equal t1 t1'
-  | Offset (t1, t2), Offset (t1', t2') -> equal t1 t1' && equal t2 t2'
-  | LocLT (t1, t2), LocLT (t1', t2') -> equal t1 t1' && equal t2 t2'
-  | LocLE (t1, t2), LocLE (t1', t2') -> equal t1 t1' && equal t2 t2'
-  | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
-     equal t1 t1' && equal t2 t2' && 
-       equal s1 s1' && equal s2 s2'
-
+  (* tuples *)
+  | Tuple its, Tuple its' -> 
+     List.equal equal its its'
+  | Nth (bt, n,t), Nth (bt', n',t') -> 
+     BT.equal bt bt' && n = n' && equal t t' 
   | Struct (tag, members), Struct (tag2, members2) ->
      tag = tag2 && 
        List.equal (fun (m,t) (m',t') -> m = m' && equal t t') 
          members members2
-  | StructMember (tag,t,member), StructMember (tag',t',member')
-  | StructMemberOffset (tag,t,member), StructMemberOffset (tag',t',member') 
-    -> tag = tag' && equal t t' && member = member'
-
-  | Nil bt, Nil bt' 
-    -> BT.equal bt bt'
-  | Cons (t1,t2), Cons (t1',t2') 
-    -> equal t1 t1' && equal t2 t2'
-  | List (its,bt), List (its',bt') 
-    -> List.equal equal its its' && BT.equal bt bt'
-  | Head t, Head t'
-  | Tail t, Tail t'
-    -> equal t t'
-
+  | StructMember (tag,t,member), StructMember (tag',t',member') ->
+     tag = tag' && equal t t' && member = member'
+  | StructMemberOffset (tag,t,member), StructMemberOffset (tag',t',member') ->
+     tag = tag' && equal t t' && member = member'
+  (* pointers *)
+  | Null t, Null t' -> 
+     equal t t' 
+  | AllocationSize t1, AllocationSize t1' -> 
+     equal t1 t1'
+  | Offset (t1, t2), Offset (t1', t2') -> 
+     equal t1 t1' && equal t2 t2'
+  | LocLT (t1, t2), LocLT (t1', t2') -> 
+     equal t1 t1' && equal t2 t2'
+  | LocLE (t1, t2), LocLE (t1', t2') -> 
+     equal t1 t1' && equal t2 t2'
+  | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
+     equal t1 t1' && equal t2 t2' && 
+       equal s1 s1' && equal s2 s2'
+  | IntegerToPointerCast t1, IntegerToPointerCast t2 -> 
+     equal t1 t2
+  | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
+     equal t1 t2
   | AlignedI (t1, t2), AlignedI (t1', t2') ->
      equal t1 t1' && equal t2 t2'
-
-  | Aligned (rt, t), Aligned (rt', t')
-
+  | Aligned (rt, t), Aligned (rt', t') ->
+     ST.equal rt rt' && equal t t'
+  (* representability *)
   | Representable (rt, t), Representable (rt', t') ->
      ST.equal rt rt' && equal t t'
   | MinInteger it, MinInteger it' ->
      CF.Ctype.integerTypeEqual it it'
   | MaxInteger it, MaxInteger it' ->
      CF.Ctype.integerTypeEqual it it'
-
+  (* lists *)
+  | Nil bt, Nil bt' -> 
+     BT.equal bt bt'
+  | Cons (t1,t2), Cons (t1',t2') -> 
+     equal t1 t1' && equal t2 t2'
+  | List (its,bt), List (its',bt') ->
+     List.equal equal its its' && BT.equal bt bt'
+  | Head t, Head t' ->
+     equal t t'
+  | Tail t, Tail t' ->
+     equal t t'
+  (* sets *)
   | SetMember (t1,t2), SetMember (t1',t2') ->
      equal t1 t1' && equal t1' t2'
   | SetAdd (t1,t2), SetAdd (t1',t2') ->
@@ -208,12 +240,13 @@ let rec equal it it' =
   | Subset (t1, t2), Subset (t1', t2') ->
      equal t1 t1' && equal t1' t2'
 
-
+  (* literals *)
+  | S _, _
   | Num _, _
   | Pointer _, _
   | Bool _, _
   | Unit, _
-
+  (* arithmetic *)
   | Add _, _
   | Sub _, _
   | Mul _, _
@@ -223,24 +256,27 @@ let rec equal it it' =
   | Rem_f _, _
   | Min _, _
   | Max _, _
-
+  (* comparisons *)
   | EQ _, _
   | NE _, _
   | LT _, _
   | GT _, _
   | LE _, _
   | GE _, _
-
-  | Null _, _
+  (* booleans *)
   | And _, _
   | Or _, _
   | Impl _, _
   | Not _, _
   | ITE _, _
-
+  (* tuples *)
   | Tuple _, _
   | Nth _, _
-
+  | Struct _, _
+  | StructMember _, _
+  | StructMemberOffset _, _
+  (* pointers *)
+  | Null _, _
   | AllocationSize _, _
   | Offset _, _
   | LocLT _, _
@@ -248,21 +284,19 @@ let rec equal it it' =
   | Disjoint _, _
   | AlignedI _, _
   | Aligned _, _
-
+  | IntegerToPointerCast _, _
+  | PointerToIntegerCast _, _
+  (* representability *)
   | Representable _, _
   | MinInteger _, _
   | MaxInteger _, _
-
-  | Struct _, _
-  | StructMember _, _
-  | StructMemberOffset _, _
-
+  (* lists *)
   | Nil _, _
   | Cons _, _
   | List _, _
   | Head _, _
   | Tail _, _
-
+  (* sets *)
   | SetMember _, _
   | SetAdd _, _
   | SetRemove _, _
@@ -271,9 +305,7 @@ let rec equal it it' =
   | SetDifference _, _
   | Subset _, _
 
-  | S _, _ ->
-
-     false
+    -> false
 
 
 
@@ -283,6 +315,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
   let rec aux atomic it = 
     let mparens pped = if atomic then parens pped else pped in
     match it with
+    (* literals *)
+    | S (_,sym) -> 
+       Sym.pp sym
     | Num i -> 
        Z.pp i
     | Pointer i -> 
@@ -293,7 +328,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
        !^"false"
     | Unit -> 
        !^"void"
-
+    (* arithmetic *)
     | Add (it1,it2) -> 
        mparens (aux true it1 ^^^ plus ^^^ aux true it2)
     | Sub (it1,it2) -> 
@@ -312,7 +347,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (!^ "min" ^^^ aux true it1 ^^^ aux true it2)
     | Max (it1,it2) -> 
        mparens (!^ "max" ^^^ aux true it1 ^^^ aux true it2)
-
+    (* comparisons *)
     | EQ (o1,o2) -> 
        mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
     | NE (o1,o2) -> 
@@ -325,9 +360,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | GE (o1,o2) -> 
        mparens (aux true o1 ^^^ rangle ^^ equals ^^^ aux true o2)
-
-    | Null o1 -> 
-       mparens (!^"null" ^^ parens (aux false o1))
+    (* booleans *)
     | And o -> 
        mparens (!^"and" ^^^ brackets (separate_map comma (aux false) o))
     | Or o -> 
@@ -338,23 +371,11 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (!^"not" ^^^ aux true o1)
     | ITE (o1,o2,o3) -> 
        mparens (!^"?" ^^^ parens (separate_map comma (aux false) [o1; o2; o3]))
-
+    (* tuples *)
     | Nth (bt,n,it2) -> 
        mparens (aux true it2 ^^ dot ^^ !^(string_of_int n))
-    | Head (o1) -> 
-       mparens (!^"hd" ^^ parens (aux false o1))
-    | Tail (o1) -> 
-       mparens (!^"tl" ^^^ parens (aux false o1))
-
     | Tuple its -> 
        braces (separate_map (semi ^^ space) (aux false) its)
-    | Nil _ -> 
-       brackets empty
-    | Cons (t1,t2) -> 
-       mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-    | List (its, _bt) -> 
-       mparens (brackets (separate_map comma (aux false) its))
-
     | Struct (_tag, members) ->
        braces (separate_map comma (fun (member,it) -> 
                    Id.pp member ^^^ equals ^^^ aux false it 
@@ -363,7 +384,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
        aux true t ^^ dot ^^ Id.pp member
     | StructMemberOffset (_tag, t, member) ->
        mparens (ampersand ^^ aux true t ^^ !^"->" ^^ Id.pp member)
-
+    (* pointers *)
+    | Null o1 -> 
+       mparens (!^"null" ^^ parens (aux false o1))
     | AllocationSize t1 ->
        mparens (!^"allocationSize" ^^ parens (aux false t1))
     | Offset (t1, t2) ->
@@ -382,14 +405,29 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (!^"aligned" ^^ parens (aux false t ^^ comma ^^ aux false t'))
     | Aligned (rt, t) ->
        mparens (!^"aligned" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
-
+    | IntegerToPointerCast t ->
+       mparens (parens(!^"pointer") ^^ aux true t)
+    | PointerToIntegerCast t ->
+       mparens (parens(!^"integer") ^^ aux true t)
+    (* representability *)
     | MinInteger it ->
        mparens (!^"min" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
     | MaxInteger it ->
        mparens (!^"max" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
     | Representable (rt, t) ->
        mparens (!^"representable" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
-
+    (* lists *)
+    | Head (o1) -> 
+       mparens (!^"hd" ^^ parens (aux false o1))
+    | Tail (o1) -> 
+       mparens (!^"tl" ^^^ parens (aux false o1))
+    | Nil _ -> 
+       brackets empty
+    | Cons (t1,t2) -> 
+       mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
+    | List (its, _bt) -> 
+       mparens (brackets (separate_map comma (aux false) its))
+    (* sets *)
     | SetMember (t1,t2) ->
        mparens (aux false t1 ^^^ !^"IN" ^^^ aux false t2)
     | SetAdd (t1,t2) ->
@@ -404,91 +442,75 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux false t1 ^^^ !^"/" ^^^ aux false t2)
     | Subset (t1, t2) ->
        mparens (aux false t1 ^^^ !^"<=" ^^^ aux false t2)
-
-
-    | S (_,sym) -> 
-       Sym.pp sym
   in
   aux false it
 
 
 let rec vars_in it : SymSet.t = 
   match it with
-  | Num _  
-  | Pointer _
-  | Bool _
-  | Nil _ 
-  | Unit ->
-     SymSet.empty
-  | Add (it, it')
-  | Sub (it, it') 
-  | Mul (it, it') 
-  | Div (it, it') 
-  | Exp (it, it') 
-  | Rem_t (it, it') 
-  | Rem_f (it, it')
-  | Min (it, it') 
-  | Max (it, it')
-  | EQ (it, it') 
-  | NE (it, it') 
-  | LT (it, it') 
-  | GT (it, it') 
-  | LE (it, it') 
-  | GE (it, it')
-  | Impl (it, it')
-  | Cons (it, it')
-  | Offset (it, it')
-  | LocLT (it, it') 
-  | LocLE (it, it')
-  | Disjoint ((it,_), (it',_))  ->
-     vars_in_list [it; it']
-  | And its
-  | Or its ->
-     vars_in_list its
-  | Nth (_, _, it)
-  | Null it
-  | Not it 
-  | Head it
-  | Tail it
-  | AllocationSize it
-    -> 
-     vars_in it
-  | ITE (it,it',it'') ->
-     vars_in_list [it;it';it'']
-  | Tuple its -> 
-     vars_in_list (it :: its)
-  | Struct (_tag, members) ->
-     vars_in_list (map snd members)
-  | StructMember (_tag, it, s)
-  | StructMemberOffset (_tag, it, s) -> 
-     vars_in_list [it;it]
-  | List (its,bt) ->
-     vars_in_list its
-  | AlignedI (it, it') ->
-     vars_in_list [it;it]
-  | Aligned (_rt, t)
-  | Representable (_rt,t) ->
-     vars_in t
+  | S (_, symbol) -> SymSet.singleton symbol
+  | Num _ -> SymSet.empty
+  | Pointer _ -> SymSet.empty
+  | Bool _ -> SymSet.empty
+  | Unit -> SymSet.empty
+  (* arithmetic *)
+  | Add (it, it') -> vars_in_list [it; it']
+  | Sub (it, it') -> vars_in_list [it; it']
+  | Mul (it, it') -> vars_in_list [it; it']
+  | Div (it, it') -> vars_in_list [it; it']
+  | Exp (it, it') -> vars_in_list [it; it']
+  | Rem_t (it, it') -> vars_in_list [it; it']
+  | Rem_f (it, it') -> vars_in_list [it; it']
+  | Min (it, it') -> vars_in_list [it; it']
+  | Max (it, it') -> vars_in_list [it; it']
+  (* comparisons *)
+  | EQ (it, it') -> vars_in_list [it; it']
+  | NE (it, it') -> vars_in_list [it; it']
+  | LT (it, it') -> vars_in_list [it; it']
+  | GT (it, it') -> vars_in_list [it; it']
+  | LE (it, it') -> vars_in_list [it; it']
+  | GE (it, it') -> vars_in_list [it; it']
+  (* booleans *)
+  | And its -> vars_in_list its
+  | Or its -> vars_in_list its
+  | Impl (it, it') -> vars_in_list [it; it']
+  | Not it -> vars_in it
+  | ITE (it,it',it'') -> vars_in_list [it;it';it'']
+  (* tuples *)
+  | Tuple its -> vars_in_list (it :: its)
+  | Nth (_, _, it) -> vars_in it
+  | Struct (_tag, members) -> vars_in_list (map snd members)
+  | StructMember (_tag, it, s) -> vars_in_list [it;it]
+  | StructMemberOffset (_tag, it, s) -> vars_in_list [it;it]
+  (* pointers *)
+  | Null it -> vars_in it
+  | Offset (it, it') -> vars_in_list [it; it']
+  | LocLT (it, it')  -> vars_in_list [it; it']
+  | LocLE (it, it') -> vars_in_list [it; it']
+  | Disjoint ((it,_), (it',_)) -> vars_in_list [it; it']
+  | AllocationSize it -> vars_in it
+  | AlignedI (it, it') -> vars_in_list [it;it]
+  | Aligned (_rt, t) -> vars_in t
+  | IntegerToPointerCast t -> vars_in t
+  | PointerToIntegerCast t -> vars_in t
+  (* representability *)
   | MinInteger _ -> SymSet.empty
   | MaxInteger _ -> SymSet.empty
-
-  | SetMember (t1,t2) ->
-     vars_in_list [t1;t2]
-  | SetAdd (t1,t2) ->
-     vars_in_list [t1;t2]
-  | SetRemove (t1, t2) ->
-     vars_in_list [t1;t2]
-  | SetUnion ts ->
-     vars_in_list (List1.to_list ts)
-  | SetIntersection ts ->
-     vars_in_list (List1.to_list ts)
-  | SetDifference (t1, t2) ->
-     vars_in_list [t1;t2]
-  | Subset (t1, t2) ->
-     vars_in_list [t1;t2]
-
-  | S (_, symbol) -> 
-     SymSet.singleton symbol
+  | Representable (_rt,t) -> vars_in t
+  (* lists *)
+  | Nil _  -> SymSet.empty
+  | Cons (it, it') -> vars_in_list [it; it']
+  | List (its,bt) -> vars_in_list its
+  | Head it -> vars_in it
+  | Tail it -> vars_in it
+  (* sets *)
+  | SetMember (t1,t2) -> vars_in_list [t1;t2]
+  | SetAdd (t1,t2) -> vars_in_list [t1;t2]
+  | SetRemove (t1, t2) -> vars_in_list [t1;t2]
+  | SetUnion ts -> vars_in_list (List1.to_list ts)
+  | SetIntersection ts -> vars_in_list (List1.to_list ts)
+  | SetDifference (t1, t2) -> vars_in_list [t1;t2]
+  | Subset (t1, t2) -> vars_in_list [t1;t2]
 
 and vars_in_list l = 
   List.fold_left (fun acc sym -> SymSet.union acc (vars_in sym))
@@ -502,10 +524,14 @@ let json it : Yojson.Safe.t =
 
 let rec subst_var subst it : t = 
   match it with
+  (* literals *)
+  | S (bt, symbol) -> 
+     if symbol = subst.before then S (bt, subst.after) else S (bt, symbol)
   | Num _ -> it
   | Pointer _ -> it
   | Bool _ -> it
   | Unit -> it
+  (* arithmetic *)
   | Add (it, it') -> Add (subst_var subst it, subst_var subst it')
   | Sub (it, it') -> Sub (subst_var subst it, subst_var subst it')
   | Mul (it, it') -> Mul (subst_var subst it, subst_var subst it')
@@ -515,31 +541,25 @@ let rec subst_var subst it : t =
   | Rem_f (it, it') -> Rem_f (subst_var subst it, subst_var subst it')
   | Min (it, it') -> Min (subst_var subst it, subst_var subst it')
   | Max (it, it') -> Max (subst_var subst it, subst_var subst it')
+  (* comparisons *)
   | EQ (it, it') -> EQ (subst_var subst it, subst_var subst it')
   | NE (it, it') -> NE (subst_var subst it, subst_var subst it')
   | LT (it, it') -> LT (subst_var subst it, subst_var subst it')
   | GT (it, it') -> GT (subst_var subst it, subst_var subst it')
   | LE (it, it') -> LE (subst_var subst it, subst_var subst it')
   | GE (it, it') -> GE (subst_var subst it, subst_var subst it')
-  | Null it -> Null (subst_var subst it)
+  (* booleans *)
   | And its -> And (map (subst_var subst) its)
   | Or its -> Or (map (subst_var subst) its)
   | Impl (it, it') -> Impl (subst_var subst it, subst_var subst it')
   | Not it -> Not (subst_var subst it)
   | ITE (it,it',it'') -> 
      ITE (subst_var subst it, subst_var subst it', subst_var subst it'')
+  (* tuples *)
   | Tuple its ->
      Tuple (map (fun it -> subst_var subst it) its)
   | Nth (bt, n, it') ->
      Nth (bt, n, subst_var subst it')
-  | Nil _ -> it
-  | Cons (it1,it2) -> Cons (subst_var subst it1, subst_var subst it2)
-  | List (its,bt) -> 
-     List (map (fun it -> subst_var subst it) its, bt)
-  | Head it ->
-     Head (subst_var subst it)
-  | Tail it ->
-     Tail (subst_var subst it)
   | Struct (tag, members) ->
      let members = map (fun (member,it) -> (member,subst_var subst it)) members in
      Struct (tag, members)
@@ -547,6 +567,8 @@ let rec subst_var subst it : t =
      StructMember (tag, subst_var subst t, f)
   | StructMemberOffset (tag,t,f) ->
      StructMemberOffset (tag,subst_var subst t, f)
+  (* pointers *)
+  | Null it -> Null (subst_var subst it)
   | AllocationSize it -> AllocationSize (subst_var subst it)
   | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
   | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
@@ -555,10 +577,22 @@ let rec subst_var subst it : t =
      Disjoint ((subst_var subst it,s), (subst_var subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
   | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
+  | IntegerToPointerCast t -> IntegerToPointerCast (subst_var subst t)
+  | PointerToIntegerCast t -> PointerToIntegerCast (subst_var subst t)
+  (* representability *)
   | MinInteger it -> MinInteger it
   | MaxInteger it -> MaxInteger it
   | Representable (rt,t) -> Representable (rt,subst_var subst t)
-
+  (* list *)
+  | Nil _ -> it
+  | Cons (it1,it2) -> Cons (subst_var subst it1, subst_var subst it2)
+  | List (its,bt) -> 
+     List (map (fun it -> subst_var subst it) its, bt)
+  | Head it ->
+     Head (subst_var subst it)
+  | Tail it ->
+     Tail (subst_var subst it)
+  (* sets *)
   | SetMember (t1,t2) ->
      SetMember (subst_var subst t1, subst_var subst t2)
   | SetAdd (t1,t2) ->
@@ -574,9 +608,6 @@ let rec subst_var subst it : t =
   | Subset (t1, t2) ->
      Subset (subst_var subst t1, subst_var subst t2)
 
-  | S (bt, symbol) -> 
-     if symbol = subst.before then S (bt, subst.after) else S (bt, symbol)
-
 
 let subst_vars = make_substs subst_var
 
@@ -584,10 +615,14 @@ let subst_vars = make_substs subst_var
 
 let rec subst_it subst it : t = 
   match it with
+  (* literals *)
+  | S (bt, symbol) -> 
+     if symbol = subst.before then subst.after else S (bt, symbol)
   | Num _ -> it
   | Pointer _ -> it
   | Bool _ -> it
   | Unit -> it
+  (* arithmetic *)
   | Add (it, it') -> Add (subst_it subst it, subst_it subst it')
   | Sub (it, it') -> Sub (subst_it subst it, subst_it subst it')
   | Mul (it, it') -> Mul (subst_it subst it, subst_it subst it')
@@ -597,31 +632,25 @@ let rec subst_it subst it : t =
   | Rem_f (it, it') -> Rem_f (subst_it subst it, subst_it subst it')
   | Min (it, it') -> Min (subst_it subst it, subst_it subst it')
   | Max (it, it') -> Max (subst_it subst it, subst_it subst it')
+  (* comparisons *)
   | EQ (it, it') -> EQ (subst_it subst it, subst_it subst it')
   | NE (it, it') -> NE (subst_it subst it, subst_it subst it')
   | LT (it, it') -> LT (subst_it subst it, subst_it subst it')
   | GT (it, it') -> GT (subst_it subst it, subst_it subst it')
   | LE (it, it') -> LE (subst_it subst it, subst_it subst it')
   | GE (it, it') -> GE (subst_it subst it, subst_it subst it')
-  | Null it -> Null (subst_it subst it)
+  (* booleans *)
   | And its -> And (map (subst_it subst) its)
   | Or its -> Or (map (subst_it subst) its)
   | Impl (it, it') -> Impl (subst_it subst it, subst_it subst it')
   | Not it -> Not (subst_it subst it)
   | ITE (it,it',it'') -> 
      ITE (subst_it subst it, subst_it subst it', subst_it subst it'')
+  (* tuples *)
   | Tuple its ->
      Tuple (map (fun it -> subst_it subst it) its)
   | Nth (bt, n, it') ->
      Nth (bt, n, subst_it subst it')
-  | Nil _ -> it
-  | Cons (it1,it2) -> Cons (subst_it subst it1, subst_it subst it2)
-  | List (its,bt) -> 
-     List (map (fun it -> subst_it subst it) its, bt)
-  | Head it ->
-     Head (subst_it subst it)
-  | Tail it ->
-     Tail (subst_it subst it)
   | Struct (tag, members) ->
      let members = map (fun (member,it) -> (member,subst_it subst it)) members in
      Struct (tag, members)
@@ -629,6 +658,8 @@ let rec subst_it subst it : t =
      StructMember (tag, subst_it subst t, f)
   | StructMemberOffset (tag,t,f) ->
      StructMemberOffset (tag,subst_it subst t, f)
+  (* null *)
+  | Null it -> Null (subst_it subst it)
   | AllocationSize it -> AllocationSize (subst_it subst it)
   | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
   | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
@@ -637,9 +668,22 @@ let rec subst_it subst it : t =
      Disjoint ((subst_it subst it,s), (subst_it subst it',s'))
   | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
   | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
+  | IntegerToPointerCast t -> IntegerToPointerCast (subst_it subst t)
+  | PointerToIntegerCast t -> PointerToIntegerCast (subst_it subst t)
+  (* representability *)
   | Representable (rt,t) -> Representable (rt,subst_it subst t)
   | MinInteger it -> MinInteger it
   | MaxInteger it -> MaxInteger it
+  (* lists *)
+  | Nil _ -> it
+  | Cons (it1,it2) -> Cons (subst_it subst it1, subst_it subst it2)
+  | List (its,bt) -> 
+     List (map (fun it -> subst_it subst it) its, bt)
+  | Head it ->
+     Head (subst_it subst it)
+  | Tail it ->
+     Tail (subst_it subst it)
+  (* set *)
   | SetMember (t1,t2) ->
      SetMember (subst_it subst t1, subst_it subst t2)
   | SetAdd (t1,t2) ->
@@ -654,8 +698,6 @@ let rec subst_it subst it : t =
      SetDifference (subst_it subst t1, subst_it subst t2)
   | Subset (t1, t2) ->
      Subset (subst_it subst t1, subst_it subst t2)  
-  | S (bt, symbol) -> 
-     if symbol = subst.before then subst.after else S (bt, symbol)
 
 
 (* let rec unify it it' (res : (t Uni.t) SymMap.t) = 

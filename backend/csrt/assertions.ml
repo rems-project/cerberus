@@ -4,11 +4,11 @@ open Resultat
 
 module CF = Cerb_frontend
 module StringMap = Map.Make(String)
-(* module IT = IndexTerms *)
+module IT = IndexTerms
 module AST = Parse_ast
 module LC = LogicalConstraints
-open AST
-open IndexTerms
+module PIT = Parse_ast.IndexTerms
+open Parse_ast
 open ECT
 open Object
 
@@ -41,7 +41,7 @@ let resolve_object loc (mapping : mapping) (o : Object.t) : (BT.t * Sym.t, type_
 
 (* change this to return unit IT.term, then apply index term type
    checker *)
-let rec resolve_index_term loc mapping (it: index_term) 
+let rec resolve_index_term loc mapping (it: PIT.index_term) 
         : (BT.t IT.term, type_error) m =
   let aux = resolve_index_term loc mapping in
   let (IndexTerm (l, it_)) = it in
@@ -105,6 +105,12 @@ let rec resolve_index_term loc mapping (it: index_term)
      return (IT.MinInteger it)
   | MaxInteger it ->
      return (IT.MaxInteger it)
+  | IntegerToPointerCast it ->
+     let* it = aux it in
+     return (IT.IntegerToPointerCast it)
+  | PointerToIntegerCast it -> 
+     let* it = aux it in
+     return (IT.PointerToIntegerCast it)
 
 
 
@@ -172,13 +178,13 @@ let pre_or_post loc kind attrs =
     ListM.fold_leftM (fun (ownership, constrs) (loc, p) ->
         match p with
         | Ownership {pred;access} -> 
-           begin match constrs with
-           | _ :: _ -> 
-              fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
-           | _ -> 
+           (* begin match constrs with
+            * | _ :: _ -> 
+            *    fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
+            * | _ ->  *)
               let r = [(loc, Ownership.{pred; access})] in
               return (ownership @ r, constrs)
-           end
+           (* end *)
         | Constraint p_it -> 
            return (ownership, constrs @ [(loc, p_it)])
       ) ([], []) requirements
@@ -312,48 +318,50 @@ let rec apply_ownerships_aargs (aargs: aargs) requirements =
      let* (aargs, left) = apply_ownerships_aargs aargs left in
      return (aarg :: aargs, left)
 
-let parse_function_type loc attrs (raw_function_type : (Sctypes.t * (Sym.t * Sctypes.t) list)) =
-  let (ret_ct, arg_cts) = raw_function_type in
+let ensure_none_left = function
+  | [] -> return ()
+  | (loc, {pred; access}) :: _ -> 
+     fail loc (Unbound_name (String access.name.v))
+
+
+let parse_function_type loc attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sym.t * Sctypes.t) list)) =
+  (* collect information *)
   let* (pre_ownership, pre_constraints) = requires loc attrs in
   let* (post_ownership, post_constraints) = ensures loc attrs in
-  (* print stderr (item "pre_ownership" (Pp.list Ownership.pp (List.map snd pre_ownership)));
-   * print stderr (item "post_ownership" (Pp.list Ownership.pp (List.map snd post_ownership))); *)
-  let* args = 
-    let args = List.map (named_ctype_to_aarg loc) arg_cts in
-    let* (args, left) = apply_ownerships_aargs args pre_ownership in
-    match left with
-    | [] -> return args
-    | (loc, {pred; access}) :: _ -> fail loc (Unbound_name (String access.name.v))
-  in
-  let* (arg_rets, ret) = 
-    let arg_rets = List.map (named_ctype_to_aarg loc) arg_cts in
-    let* (arg_rets, left) = apply_ownerships_aargs arg_rets post_ownership in
-    let ret = { name = "ret"; vsym = Sym.fresh (); typ = ct_to_ct loc ret_ct } in
-    let* (ret, left) = apply_ownerships_varg ret left in
-    match left with
-    | [] -> return (arg_rets, ret)
-    | (loc, {access; _}) :: _ -> fail loc (Unbound_name (String access.name.v))
-  in
-
-  let ft = FunctionType (Args (args, Pre (pre_constraints, Ret (ret, arg_rets, Post post_constraints)))) in
-
+  let globs = List.map (named_ctype_to_aarg loc) glob_cts in
+  let args_original = List.map (named_ctype_to_aarg loc) arg_cts in
+  let ret = { name = "ret"; vsym = Sym.fresh (); typ = ct_to_ct loc ret_ct } in
+  (* apply ownership *)
+  let* (globs, pre_left) = apply_ownerships_aargs globs pre_ownership in
+  let* (args, pre_left) = apply_ownerships_aargs args_original pre_left in
+  let* () = ensure_none_left pre_left in
+  let* (glob_rets, post_left) = apply_ownerships_aargs globs post_ownership in
+  let* (arg_rets, post_left) = apply_ownerships_aargs args_original post_ownership in
+  let* (ret, post_left) = apply_ownerships_varg ret post_left in
+  let* () = ensure_none_left post_left in
+  (* plug together *)
+  let fpost = FPost post_constraints in
+  let frt = FRT {ret; glob_rets = glob_rets; arg_rets} in
+  let fret = FRet (frt, fpost) in
+  let fpre = FPre (pre_constraints, fret) in
+  let fa = FA {globs; args} in
+  let ft = FT (fa, fpre) in
   return ft
 
 
 
-let parse_label_type loc lname attrs (fargs : aarg list) (larg_cts : (Sym.t * Sctypes.t) list) =
+let parse_label_type loc lname attrs globs (fargs : aarg list) (larg_cts : (Sym.t * Sctypes.t) list) =
+  (* collect information *)
   let* (pre_ownership, pre_constraints) = inv lname loc attrs in
   let largs = List.map (named_ctype_to_varg loc) larg_cts in
-  let* (fargs, left) = apply_ownerships_aargs fargs pre_ownership in
-  let* (largs, left) = apply_ownerships_vargs largs left in
-  let* () = match left with
-    | [] -> return ()
-    | (loc, {access; _}) :: _ -> fail loc (Unbound_name (String access.name.v))
-  in
+  (* apply ownership *)
+  let* (globs, pre_left) = apply_ownerships_aargs fargs pre_ownership in
+  let* (fargs, pre_left) = apply_ownerships_aargs fargs pre_left in
+  let* (largs, pre_left) = apply_ownerships_vargs largs pre_left in
+  let* () = ensure_none_left pre_left in
+  (* plug together *)
   let open AST in
-  let lt = 
-    LabelType (LArgs {function_arguments = fargs;
-                      label_arguments = largs;
-                      inv = LInv pre_constraints}) in
-
+  let label_args = LA {globs; fargs; largs} in
+  let linv = LInv pre_constraints in
+  let lt = LT (label_args, linv) in
   return lt

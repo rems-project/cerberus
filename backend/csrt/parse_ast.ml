@@ -186,6 +186,8 @@ module IndexTerms = struct
     | Max of t * t
     | MinInteger of CF.Ctype.integerType
     | MaxInteger of CF.Ctype.integerType
+    | IntegerToPointerCast of t
+    | PointerToIntegerCast of t
 
 
   and t = 
@@ -268,19 +270,23 @@ type vargs = varg list
 type aargs = aarg list
 
 type function_post = 
-  | Post of logical_spec list
+  | FPost of logical_spec list
 
-type function_return = 
-  | Ret of varg * aargs * function_post
+type function_return_type = 
+  | FRT of {ret : varg; glob_rets: aargs; arg_rets: aargs}
+
+type function_return =
+  | FRet of function_return_type * function_post
 
 type function_pre =
-  | Pre of logical_spec list * function_return
+  | FPre of logical_spec list * function_return
 
-type function_arguments = 
-  | Args of aargs * function_pre
+type function_args = 
+  | FA of {globs : aargs; args : aargs} 
 
 type function_type = 
-  | FunctionType of function_arguments
+  | FT of function_args * function_pre
+
 
 
 
@@ -288,11 +294,8 @@ type function_type =
 type label_inv =
   | LInv of logical_spec list
 
-type label_arguments = 
-  | LArgs of {function_arguments : aargs; 
-              label_arguments : vargs; inv : label_inv}
+type label_args = 
+  | LA of {globs : aargs; fargs : aargs; largs : vargs} 
 
 type label_type = 
-  | LabelType of label_arguments
-
-
+  | LT of label_args * label_inv

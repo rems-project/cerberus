@@ -39,6 +39,11 @@ module Make (G : sig val global : Global.t end) = struct
         fun loc it ->
         (* let () = Pp.print stderr (L.pp local) in *)
         match it with
+        (* literals *)
+        | S (_, s) ->
+           let* () = check_bound loc local KLogical s in
+           let (Base bt) = L.get_l s local in
+           return (Base bt, S (bt, s))
         | Num n -> 
            return (Base Integer, Num n)
         | Pointer p -> 
@@ -47,6 +52,7 @@ module Make (G : sig val global : Global.t end) = struct
            return (Base Bool, Bool b)
         | Unit -> 
            return (Base Unit, Unit)
+        (* arithmetic *)
         | Add (t,t') ->
            let* t = check_aux loc (Base Integer) t in
            let* t' = check_aux loc (Base Integer) t' in
@@ -75,6 +81,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* t = check_aux loc (Base Integer) t in
            let* t' = check_aux loc (Base Integer) t' in
            return (Base Integer, Rem_f (t, t'))
+        (* comparisons *)
         | Min (t,t') ->
            let* t = check_aux loc (Base Integer) t in
            let* t' = check_aux loc (Base Integer) t' in
@@ -107,9 +114,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* (ls,t) = infer loc t in
            let* t' = check_aux loc ls t' in
            return (Base Bool, NE (t,t'))
-        | Null t ->
-           let* t = check_aux loc (Base Loc) t in
-           return (Base Bool, Null t)
+        (* booleans *)
         | And ts ->
            let* ts = ListM.mapM (check_aux loc (Base Bool)) ts in
            return (Base Bool, And ts)
@@ -128,6 +133,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* t' = check_aux loc (Base Integer) t' in
            let* t'' = check_aux loc (Base Integer) t'' in
            return (ls, ITE (t, t', t''))
+        (* tuples *)
         | Tuple ts ->
            let* bts_ts = 
              ListM.mapM (fun it -> 
@@ -146,8 +152,8 @@ module Make (G : sig val global : Global.t end) = struct
                 | None -> fail loc (Illtyped_it context)
                 end
              | _ -> fail loc (Illtyped_it context)
-         in
-         return (Base item_bt, Nth (tuple_bt, n, t'))
+           in
+           return (Base item_bt, Nth (tuple_bt, n, t'))
         | Struct (tag, members) ->
            let* decl = match SymMap.find_opt tag G.global.struct_decls with
              | Some decl -> return decl
@@ -186,6 +192,10 @@ module Make (G : sig val global : Global.t end) = struct
            let decl_members = Global.member_types decl.layout in
            let* _ = assoc_err loc Id.equal member decl_members (Illtyped_it context) in
            return (Base Loc, StructMemberOffset (tag, t, member))
+        (* pointers *)
+        | Null t ->
+           let* t = check_aux loc (Base Loc) t in
+           return (Base Bool, Null t)
         | AllocationSize t ->
            let* t = check_aux loc (Base Loc) t in
            return (Base Integer, AllocationSize t)
@@ -207,6 +217,28 @@ module Make (G : sig val global : Global.t end) = struct
            let* s = check_aux loc (Base Integer) s in
            let* s' = check_aux loc (Base Integer) s' in
            return (Base Bool, Disjoint ((t,s), (t',s')))
+        | AlignedI (t, t') ->
+           let* t = check_aux loc (Base Integer) t in
+           let* t' = check_aux loc (Base Loc) t' in
+           return (Base Bool, AlignedI (t, t'))
+        | Aligned (st, t) ->
+           let* t = check_aux loc (Base Loc) t in
+           return (Base Bool, Aligned (st, t))
+        | IntegerToPointerCast t ->
+           let* t = check_aux loc (Base Integer) t in
+           return (Base Loc, IntegerToPointerCast t)
+        | PointerToIntegerCast t ->
+           let* t = check_aux loc (Base Loc) t in
+           return (Base Integer, PointerToIntegerCast t)
+        (* representability *)
+        | MinInteger it ->
+           return (Base BT.Integer, MinInteger it)
+        | MaxInteger it ->
+           return (Base BT.Integer, MaxInteger it)
+        | Representable (st, t) ->
+           let* t = check_aux loc (Base (ST.to_bt st)) t in
+           return (Base BT.Bool, Representable (st, t))
+        (* lists *)
         | Nil _ -> 
            fail loc (Polymorphic_it context)
         | Cons (t1,t2) ->
@@ -233,20 +265,7 @@ module Make (G : sig val global : Global.t end) = struct
              | _ -> fail loc (Illtyped_it context)
            in
            return (ls, Tail t)
-        | AlignedI (t, t') ->
-           let* t = check_aux loc (Base Integer) t in
-           let* t' = check_aux loc (Base Loc) t' in
-           return (Base Bool, AlignedI (t, t'))
-        | Aligned (st, t) ->
-           let* t = check_aux loc (Base Loc) t in
-           return (Base Bool, Aligned (st, t))
-        | Representable (st, t) ->
-           let* t = check_aux loc (Base (ST.to_bt st)) t in
-           return (Base BT.Bool, Representable (st, t))
-        | MinInteger it ->
-           return (Base BT.Integer, MinInteger it)
-        | MaxInteger it ->
-           return (Base BT.Integer, MaxInteger it)
+        (* sets *)
         | SetMember (t,t') ->
            let* (Base bt, t) = infer loc t in
            let* t' = check_aux loc (Base (Set bt)) t' in
@@ -273,10 +292,6 @@ module Make (G : sig val global : Global.t end) = struct
            let* (bt, t) = infer_set_type loc t in
            let* t' = check_aux loc (Base (Set bt)) t' in
            return (Base Bool, Subset (t,t'))
-        | S (_, s) ->
-           let* () = check_bound loc local KLogical s in
-           let (Base bt) = L.get_l s local in
-           return (Base bt, S (bt, s))
 
       and check_aux : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
         fun loc ls it ->

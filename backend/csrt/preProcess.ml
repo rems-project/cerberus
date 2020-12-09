@@ -23,7 +23,7 @@ open Parse_ast
 
 type funinfos = FT.t mu_funinfos
 type mapping = Object.mapping
-type funinfo_extra = (Sym.t, mapping * Parse_ast.aarg list) Pmap.map
+type funinfo_extras = (Sym.t, Conversions.funinfo_extra) Pmap.map
 
 
 
@@ -381,21 +381,25 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
   in
 
 
-  let* globs = 
-    let retype_globs (sym, glob) =
+  let* (globs, glob_typs) = 
+    let retype_globs (sym, glob) (globs, glob_typs) =
       let loc = Loc.unknown in
       match glob with
       | M_GlobalDef ((cbt,ct),expr) ->
          let* bt = Conversions.bt_of_core_base_type loc cbt in
-         let* ct = ctype_information loc ct in
+         let* cti = ctype_information loc ct in
          let* expr = retype_expr loc expr in
-         return (sym, M_GlobalDef ((bt,ct),expr))
+         let globs = (sym, M_GlobalDef ((bt,cti),expr)) :: globs in
+         let glob_typs = (sym, cti.ct) :: glob_typs in
+         return (globs, glob_typs)
       | M_GlobalDecl (cbt,ct) ->
          let* bt = Conversions.bt_of_core_base_type loc cbt in
-         let* ct = ctype_information loc ct in
-         return (sym, M_GlobalDecl (bt,ct))
+         let* cti = ctype_information loc ct in
+         let globs = (sym, M_GlobalDecl (bt,cti)) :: globs in
+         let glob_typs = (sym, cti.ct) :: glob_typs in
+         return (globs, glob_typs)
     in
-    mapM retype_globs file.mu_globs
+    ListM.fold_rightM retype_globs file.mu_globs ([], [])
   in
 
 
@@ -418,9 +422,9 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
 
 
   let* ((funinfo : funinfos), 
-        (funinfo_extra : funinfo_extra)) =
+        (funinfo_extra : funinfo_extras)) =
     let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
-      let (M_funinfo (floc,Attrs attrs,(ret_ctype,args),is_variadic,has_proto)) = funinfo_entry in
+      let (M_funinfo (floc,attrs,(ret_ctype,args),is_variadic,has_proto)) = funinfo_entry in
       let loc = Loc.update Loc.unknown floc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
@@ -433,11 +437,11 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
               return (msym, ct)
             ) args
         in
-        let* (ftyp, mapping, args) = 
-          Conversions.make_fun_spec loc structs args ret_ctype (Attrs attrs) in
-        let funinfo_entry = M_funinfo (floc,Attrs attrs,ftyp,is_variadic,has_proto) in
+        let* (ftyp, extra) = 
+          Conversions.make_fun_spec loc structs glob_typs args ret_ctype attrs in
+        let funinfo_entry = M_funinfo (floc,attrs,ftyp,is_variadic,has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
-        let funinfo_extra = Pmap.add fsym (mapping, args) funinfo_extra in
+        let funinfo_extra = Pmap.add fsym extra funinfo_extra in
         return (funinfo, funinfo_extra)
     in
     PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
@@ -449,8 +453,8 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
       | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
-    let (mapping, fargs) = match Pmap.lookup fsym funinfo_extra with
-      | Some (mapping, fargs) -> (mapping, fargs)
+    let extra = match Pmap.lookup fsym funinfo_extra with
+      | Some extra -> extra
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
     match def with
@@ -476,8 +480,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
             | None -> CF.Annot.no_attributes
           in
           let* (lt,_) = 
-            Conversions.make_label_spec loc lsym mapping
-              structs fargs argtyps this_attrs
+            Conversions.make_label_spec loc lsym extra argtyps this_attrs
           in
           let* e = retype_expr loc e in
           return (M_Label (lt,args,e,annots))
