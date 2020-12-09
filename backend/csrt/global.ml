@@ -19,8 +19,6 @@ module FT = ArgumentTypes.Make(RT)
 
 
 
-
-
 type resource_predicate = 
   { arguments : (string * LS.t) list;
     pack_functions : IT.t -> (LFT.t List1.t);

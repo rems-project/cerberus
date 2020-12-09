@@ -91,7 +91,7 @@ let process mu_file =
 
   Debug_ocaml.begin_csv_timing "overall";
 
-  let* mu_file = PreProcess.retype_file Loc.unknown mu_file in
+  let* mu_file = PreProcess.retype_file mu_file in
 
   let solver_context = Solver.initial_context in
 

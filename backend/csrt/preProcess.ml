@@ -11,25 +11,19 @@ module FT=ArgumentTypes.Make(ReturnTypes)
 module LT=ArgumentTypes.Make(False)
 module CA=CF.Core_anormalise
 module LC=LogicalConstraints
+module StringSet = Set.Make(String)
 open CF.Mucore
 open TypeErrors
 open Pp
-
 open Debug_ocaml
-
 open ListM
-
-open Assertions
-
+open Parse_ast
 
 
-module StringSet = Set.Make(String)
 
-let specially_typed = 
-  StringSet.of_list []
-    (*   "free_proxy";
-     *   "malloc_proxy";
-     * ] *)
+type funinfos = FT.t mu_funinfos
+type mapping = Object.mapping
+type funinfo_extra = (Sym.t, mapping * Parse_ast.aarg list) Pmap.map
 
 
 
@@ -59,6 +53,13 @@ let ctype_information (loc : Loc.t) ct =
   return {bt; ct}
 
 
+
+
+  
+
+
+
+
 let retype_ctor (loc : Loc.t) = function
   | M_Cnil cbt -> 
      let* bt = Conversions.bt_of_core_base_type loc cbt in
@@ -85,13 +86,13 @@ let rec retype_pattern (loc : Loc.t) (M_Pattern (annots,pattern_)) =
      let* pats = mapM (retype_pattern loc) pats in
      return (M_Pattern (annots,M_CaseCtor (ctor,pats)))
 
+
 let retype_sym_or_pattern (loc : Loc.t) = function
   | M_Symbol s -> 
      return (M_Symbol s)
   | M_Pat pat -> 
      let* pat = retype_pattern loc pat in
      return (M_Pat pat)
-
 
 
 let retype_object_value (loc : Loc.t) = function
@@ -116,6 +117,7 @@ let retype_loaded_value (loc : Loc.t) = function
      let* ov = retype_object_value loc ov in
      return (M_LVspecified ov)
 
+
 let retype_value (loc : Loc.t) = function 
  | M_Vobject ov -> 
     let* ov = retype_object_value loc ov in
@@ -130,6 +132,7 @@ let retype_value (loc : Loc.t) = function
     let* bt = Conversions.bt_of_core_base_type loc cbt in
     return (M_Vlist (bt,asyms))
  | M_Vtuple asyms -> return (M_Vtuple asyms)
+
 
 let rec retype_pexpr (loc : Loc.t) (M_Pexpr (annots,bty,pexpr_)) = 
   let loc = Loc.update loc (get_loc_ annots) in
@@ -188,6 +191,7 @@ let rec retype_pexpr (loc : Loc.t) (M_Pexpr (annots,bty,pexpr_)) =
   in
   return (M_Pexpr (annots,bty,pexpr_))
 
+
 let retype_memop (loc : Loc.t) = function
   | M_PtrEq (asym1,asym2) -> return (M_PtrEq (asym1,asym2))
   | M_PtrNe (asym1,asym2) -> return (M_PtrNe (asym1,asym2))
@@ -227,6 +231,7 @@ let retype_memop (loc : Loc.t) = function
      let* act = mapM_a (ctype_information loc) act in
      return (M_Va_arg (asym, act))
   | M_Va_end asym -> return (M_Va_end asym)
+
 
 let retype_action (loc : Loc.t) (M_Action (loc2,action_)) =
   let loc = Loc.update loc loc2 in
@@ -345,224 +350,184 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
   let* abt = Conversions.bt_of_core_base_type loc acbt in
   return (sym,abt)
 
-let retype_impl_decl (loc : Loc.t) = function
-  | M_Def (cbt,pexpr) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* pexpr = retype_pexpr loc pexpr in
-     return (M_Def (bt,pexpr))
-  | M_IFun (cbt,args,pexpr) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = mapM (retype_arg loc) args in
-     let* pexpr = retype_pexpr loc pexpr in
-     return (M_IFun (bt,args,pexpr))
-
-
-let retype_impls (loc : Loc.t) impls = 
-  PmapM.mapM (fun _ decl -> retype_impl_decl loc decl) 
-    impls CF.Implementation.implementation_constant_compare
-
-
-
-open Parse_ast
-type funinfos = FT.t mu_funinfos
-type mapping = Object.mapping
-type funinfo_extra = (Sym.t, mapping * Parse_ast.aarg list) Pmap.map
 
 
 
 
 
-let retype_label (loc : Loc.t) ~funinfo ~(funinfo_extra:funinfo_extra) ~loop_attributes ~structs ~fsym lsym def = 
-  let ftyp = match Pmap.lookup fsym funinfo with
-    | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
-    | None -> error (Sym.pp_string fsym^" not found in funinfo")
-  in
-  let (mapping, fargs) = match Pmap.lookup fsym funinfo_extra with
-    | Some (mapping, fargs) -> (mapping, fargs)
-    | None -> error (Sym.pp_string fsym^" not found in funinfo")
-  in
-  match def with
-  | M_Return _ ->
-     let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
-     return (M_Return lt)
-  | M_Label (argtyps,args,e,annots) -> 
-     let loc = Loc.update loc (get_loc_ annots) in
-     let* args = mapM (retype_arg loc) args in
-     let* argtyps = 
-       ListM.mapM (fun (msym, (ct,by_pointer)) ->
-           let () = if not by_pointer then error "label argument passed as value" in
-           let* ct = ct_of_ct loc ct in
-           return (msym,ct) 
-         ) argtyps
-     in
-     begin match CF.Annot.get_label_annot annots with
-     | Some (LAloop_body loop_id)
-     | Some (LAloop_continue loop_id)
-       ->
-        let this_attrs = match Pmap.lookup loop_id loop_attributes with
-          | Some attrs -> attrs 
-          | None -> CF.Annot.no_attributes
-        in
-        let* (lt,_) = 
-          Conversions.make_label_spec loc lsym mapping
-            structs fargs argtyps this_attrs
-        in
-        let* e = retype_expr loc e in
-        return (M_Label (lt,args,e,annots))
-     | Some (LAloop_break loop_id) ->
-        error "break label has not been inlined"
-     | Some LAreturn -> 
-        error "return label has not been inlined"
-     | Some LAswitch -> 
-        error "switch labels"
-     | None -> 
-        error "non-loop labels"
-     end
-
-
-
-let retype_fun_map_decl (loc : Loc.t) ~funinfo ~(funinfo_extra:funinfo_extra) ~loop_attributes ~structs
-                        fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
-  match decl with
-  | M_Fun (cbt,args,pexpr) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* args = mapM (retype_arg loc) args in
-     let* pexpr = retype_pexpr loc pexpr in
-     return (M_Fun (bt,args,pexpr))
-  | M_Proc (loc2,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
-     let loc' = Loc.update loc loc2 in
-     let* bt = Conversions.bt_of_core_base_type loc' cbt in
-     let* args = mapM (retype_arg loc) args in
-     let* expr = retype_expr loc expr in
-     let* labels = 
-       PmapM.mapM (
-           retype_label loc ~funinfo ~funinfo_extra 
-             ~loop_attributes ~structs ~fsym
-         ) labels Sym.compare
-     in
-     return (M_Proc (loc2,bt,args,expr,labels))
-  | M_ProcDecl (loc2,cbt,args) ->
-     let loc' = Loc.update loc loc2 in
-     let* bt = Conversions.bt_of_core_base_type loc' cbt in
-     let* args = mapM (Conversions.bt_of_core_base_type loc') args in
-     return (M_ProcDecl (loc2,bt,args))
-  | M_BuiltinDecl (loc2,cbt,args) ->
-     let loc' = Loc.update loc loc2 in
-     let* bt = Conversions.bt_of_core_base_type loc' cbt in
-     let* args = mapM (Conversions.bt_of_core_base_type loc') args in
-     return (M_BuiltinDecl (loc2,bt,args))
-
-let retype_fun_map (loc : Loc.t) ~funinfo ~funinfo_extra ~loop_attributes ~structs
-                   (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
-  PmapM.mapM (fun fsym decl ->
-      retype_fun_map_decl loc ~funinfo ~funinfo_extra 
-        ~loop_attributes ~structs fsym decl
-    ) fun_map Sym.compare
-
-
-let retype_globs loc struct_decls (sym, glob) =
-  match glob with
-  | M_GlobalDef ((cbt,ct),expr) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* ct = ctype_information loc ct in
-     let* expr = retype_expr loc expr in
-     return (sym, M_GlobalDef ((bt,ct),expr))
-  | M_GlobalDecl (cbt,ct) ->
-     let* bt = Conversions.bt_of_core_base_type loc cbt in
-     let* ct = ctype_information loc ct in
-     return (sym, M_GlobalDecl (bt,ct))
-
-
-let retype_globs_map loc struct_decls funinfo globs_map = 
-  PmapM.mapM (fun _ globs -> retype_globs loc struct_decls globs) 
-            globs_map Sym.compare
-
-
-
-
-
-let retype_tagDefs 
-      (loc : Loc.t) 
-      (tagDefs : (CA.st, CA.ut) mu_tag_definitions) 
-    : ((CA.ct mu_struct_def * Global.struct_decl, 
-        CA.ct mu_union_def) mu_tag_definitions *
-         Global.struct_decl SymMap.t * 
-           unit SymMap.t,
-      type_error) m
-  = 
-  PmapM.foldM 
-    (fun tag def (acc,acc_structs,acc_unions) -> 
-      match def with
-      | M_UnionDef _ -> 
-         Debug_ocaml.error "todo: union types"
-      | M_StructDef (fields, f) ->
-         let* decl = Conversions.struct_decl loc tagDefs fields tag in
-         let acc = Pmap.add tag (M_StructDef ((fields, f), decl)) acc in
-         let acc_structs = SymMap.add tag decl acc_structs in
-         return (acc,acc_structs,acc_unions)
-    ) 
-    tagDefs (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)
-
-
-
-
-let retype_funinfo struct_decls funinfo stdlib_fsyms : (funinfos * funinfo_extra, type_error) m =
-  Debug_ocaml.begin_csv_timing "preprocess";
-  let* result = 
-    PmapM.foldM
-      (fun fsym (M_funinfo (loc,Attrs attrs,(ret_ctype,args),is_variadic,has_proto)) (funinfo, funinfo_extra) ->
-        let special_type = match Sym.name fsym with
-          | Some name -> StringSet.mem name specially_typed
-          | None -> false
-        in
-        if special_type then 
-          return (funinfo, funinfo_extra)
-        else
-          let loc' = Loc.update Loc.unknown loc in
-          if is_variadic then 
-            let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
-            fail loc' (Unsupported err) 
-          else
-            let* ret_ctype = ct_of_ct loc' ret_ctype in
-            let* args = 
-              ListM.mapM (fun (msym, ct) ->
-                  let* ct = ct_of_ct loc' ct in
-                  return (msym, ct)
-                ) args
-            in
-            let* (ftyp, mapping, args) = 
-              Conversions.make_fun_spec loc' struct_decls args ret_ctype (Attrs attrs) in
-            return (Pmap.add fsym (M_funinfo (loc,Attrs attrs,ftyp,is_variadic,has_proto)) funinfo,
-                    Pmap.add fsym (mapping, args) funinfo_extra)
-      ) funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
-  in
-  Debug_ocaml.end_csv_timing ();
-  return result
-
-
-
-
-let retype_file loc (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
+let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
     : ((FT.t, LT.t, ctype_information, BT.t, 
         CA.ct mu_struct_def * Global.struct_decl, 
         CA.ct mu_union_def, 'bty) mu_file,
       type_error) m =
 
-  let stdlib_fsyms = Pmap.domain file.mu_stdlib in
 
-  let loop_attributes = file.mu_loop_attributes in
-  let* (tagDefs,structs,unions) = retype_tagDefs loc file.mu_tagDefs in
-  let* (funinfo,funinfo_extra) = retype_funinfo structs file.mu_funinfo stdlib_fsyms in
-  let* stdlib = 
-    retype_fun_map loc ~loop_attributes ~structs 
-      ~funinfo ~funinfo_extra file.mu_stdlib 
+  let* ((tagDefs : (CA.ct mu_struct_def * Global.struct_decl, CA.ct mu_union_def) mu_tag_definitions),
+        (structs : Global.struct_decl SymMap.t),
+        (unions : unit SymMap.t))
+    =
+    let retype_tagDef tag def (acc, acc_structs, acc_unions) =
+      match def with
+      | M_UnionDef _ -> 
+         Debug_ocaml.error "todo: union types"
+      | M_StructDef (fields, f) ->
+         let* decl = Conversions.struct_decl Loc.unknown file.mu_tagDefs fields tag in
+         let acc = Pmap.add tag (M_StructDef ((fields, f), decl)) acc in
+         let acc_structs = SymMap.add tag decl acc_structs in
+         return (acc,acc_structs,acc_unions)
+    in
+    PmapM.foldM retype_tagDef file.mu_tagDefs 
+      (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)
   in
-  let* funs = 
-    retype_fun_map loc ~loop_attributes ~structs 
-      ~funinfo ~funinfo_extra file.mu_funs 
+
+
+  let* globs = 
+    let retype_globs (sym, glob) =
+      let loc = Loc.unknown in
+      match glob with
+      | M_GlobalDef ((cbt,ct),expr) ->
+         let* bt = Conversions.bt_of_core_base_type loc cbt in
+         let* ct = ctype_information loc ct in
+         let* expr = retype_expr loc expr in
+         return (sym, M_GlobalDef ((bt,ct),expr))
+      | M_GlobalDecl (cbt,ct) ->
+         let* bt = Conversions.bt_of_core_base_type loc cbt in
+         let* ct = ctype_information loc ct in
+         return (sym, M_GlobalDecl (bt,ct))
+    in
+    mapM retype_globs file.mu_globs
   in
-  let* impls = retype_impls loc file.mu_impl in
-  let* globs = mapM (retype_globs loc structs) file.mu_globs in
+
+
+  let* impls = 
+    let retype_impl_decl impl def = 
+      match def with
+      | M_Def (cbt,pexpr) ->
+         let* bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
+         let* pexpr = retype_pexpr Loc.unknown pexpr in
+         return (M_Def (bt,pexpr))
+      | M_IFun (cbt,args,pexpr) ->
+         let* bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
+         let* args = mapM (retype_arg Loc.unknown) args in
+         let* pexpr = retype_pexpr Loc.unknown pexpr in
+         return (M_IFun (bt,args,pexpr))
+    in
+    PmapM.mapM retype_impl_decl file.mu_impl 
+      CF.Implementation.implementation_constant_compare
+  in
+
+
+  let* ((funinfo : funinfos), 
+        (funinfo_extra : funinfo_extra)) =
+    let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
+      let (M_funinfo (floc,Attrs attrs,(ret_ctype,args),is_variadic,has_proto)) = funinfo_entry in
+      let loc = Loc.update Loc.unknown floc in
+      if is_variadic then 
+        let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
+        fail loc (Unsupported err) 
+      else
+        let* ret_ctype = ct_of_ct loc ret_ctype in
+        let* args = 
+          ListM.mapM (fun (msym, ct) ->
+              let* ct = ct_of_ct loc ct in
+              return (msym, ct)
+            ) args
+        in
+        let* (ftyp, mapping, args) = 
+          Conversions.make_fun_spec loc structs args ret_ctype (Attrs attrs) in
+        let funinfo_entry = M_funinfo (floc,Attrs attrs,ftyp,is_variadic,has_proto) in
+        let funinfo = Pmap.add fsym funinfo_entry funinfo in
+        let funinfo_extra = Pmap.add fsym (mapping, args) funinfo_extra in
+        return (funinfo, funinfo_extra)
+    in
+    PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
+  in
+
+
+  let retype_label (loc : Loc.t) ~fsym lsym def = 
+    let ftyp = match Pmap.lookup fsym funinfo with
+      | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
+      | None -> error (Sym.pp_string fsym^" not found in funinfo")
+    in
+    let (mapping, fargs) = match Pmap.lookup fsym funinfo_extra with
+      | Some (mapping, fargs) -> (mapping, fargs)
+      | None -> error (Sym.pp_string fsym^" not found in funinfo")
+    in
+    match def with
+    | M_Return _ ->
+       let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
+       return (M_Return lt)
+    | M_Label (argtyps,args,e,annots) -> 
+       let loc = Loc.update loc (get_loc_ annots) in
+       let* args = mapM (retype_arg loc) args in
+       let* argtyps = 
+         ListM.mapM (fun (msym, (ct,by_pointer)) ->
+             let () = if not by_pointer then error "label argument passed as value" in
+             let* ct = ct_of_ct loc ct in
+             return (msym,ct) 
+           ) argtyps
+       in
+       begin match CF.Annot.get_label_annot annots with
+       | Some (LAloop_body loop_id)
+       | Some (LAloop_continue loop_id)
+         ->
+          let this_attrs = match Pmap.lookup loop_id file.mu_loop_attributes with
+            | Some attrs -> attrs 
+            | None -> CF.Annot.no_attributes
+          in
+          let* (lt,_) = 
+            Conversions.make_label_spec loc lsym mapping
+              structs fargs argtyps this_attrs
+          in
+          let* e = retype_expr loc e in
+          return (M_Label (lt,args,e,annots))
+       | Some (LAloop_break loop_id) ->
+          error "break label has not been inlined"
+       | Some LAreturn -> 
+          error "return label has not been inlined"
+       | Some LAswitch -> 
+          error "switch labels"
+       | None -> 
+          error "non-loop labels"
+       end
+  in
+
+
+ let retype_fun_map_decl fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
+   let loc = Loc.unknown in
+   match decl with
+   | M_Fun (cbt,args,pexpr) ->
+      let* bt = Conversions.bt_of_core_base_type loc cbt in
+      let* args = mapM (retype_arg loc) args in
+      let* pexpr = retype_pexpr loc pexpr in
+      return (M_Fun (bt,args,pexpr))
+   | M_Proc (loc2,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
+      let loc' = Loc.update loc loc2 in
+      let* bt = Conversions.bt_of_core_base_type loc' cbt in
+      let* args = mapM (retype_arg loc) args in
+      let* expr = retype_expr loc expr in
+      let* labels = PmapM.mapM (retype_label loc ~fsym) labels Sym.compare in
+      return (M_Proc (loc2,bt,args,expr,labels))
+   | M_ProcDecl (loc2,cbt,args) ->
+      let loc' = Loc.update loc loc2 in
+      let* bt = Conversions.bt_of_core_base_type loc' cbt in
+      let* args = mapM (Conversions.bt_of_core_base_type loc') args in
+      return (M_ProcDecl (loc2,bt,args))
+   | M_BuiltinDecl (loc2,cbt,args) ->
+      let loc' = Loc.update loc loc2 in
+      let* bt = Conversions.bt_of_core_base_type loc' cbt in
+      let* args = mapM (Conversions.bt_of_core_base_type loc') args in
+      return (M_BuiltinDecl (loc2,bt,args))
+ in
+
+  let retype_fun_map (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
+    PmapM.mapM (fun fsym decl -> retype_fun_map_decl fsym decl) fun_map Sym.compare
+  in
+  
+  let* stdlib = retype_fun_map file.mu_stdlib in
+  let* funs = retype_fun_map file.mu_funs in
+
+
   let file = 
     { mu_main = file.mu_main;
       mu_tagDefs = tagDefs;
