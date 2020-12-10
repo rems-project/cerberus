@@ -1785,6 +1785,7 @@ module Make (G : sig val global : Global.t end) = struct
                       (label_defs : 'bty label_defs) : (unit, type_error) m =
     Debug_ocaml.begin_csv_timing "check_procedure";
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
+    debug 2 (lazy (item "type" (FT.pp function_typ)));
     let* (rt, delta, pure_delta, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in

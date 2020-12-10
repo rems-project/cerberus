@@ -9,8 +9,7 @@ module AST = Parse_ast
 module LC = LogicalConstraints
 module PIT = Parse_ast.IndexTerms
 open Parse_ast
-open ECT
-open Object
+
 
 
 
@@ -24,16 +23,16 @@ let find_name loc names str =
   | None -> fail loc (Generic !^(str ^ " unbound"))
   end
 
-let resolve_object loc (mapping : mapping) (o : Object.t) : (BT.t * Sym.t, type_error) m = 
+let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, type_error) m = 
   (* print stderr (item "mapping" (Mapping.pp mapping));
    * print stderr (item "o" (Object.pp o)); *)
-  let open Object.Mapping in
-  let found = List.find_opt (fun {obj;res} -> Object.equal obj o) mapping in
+  let open Mapping in
+  let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
   match found with
   | None -> 
-     fail loc (Generic (!^"term" ^^^ Object.pp o ^^^ !^"does not apply"))
-  | Some {res; _} -> 
-     return res
+     fail loc (Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
+  | Some {sym; bt; _} -> 
+     return (bt, sym)
 
 
 
@@ -98,8 +97,8 @@ let rec resolve_index_term loc mapping (it: PIT.index_term)
      let* it = aux it in
      let* it' = aux it' in
      return (IT.GE (it, it'))
-  | Object o -> 
-     let* (bt,s) = resolve_object loc mapping o in
+  | Path o -> 
+     let* (bt,s) = resolve_path loc mapping o in
      return (IT.S (bt, s))
   | MinInteger it ->
      return (IT.MinInteger it)
@@ -177,15 +176,15 @@ let pre_or_post loc kind attrs =
   let* (ownership,constraints) = 
     ListM.fold_leftM (fun (ownership, constrs) (loc, p) ->
         match p with
-        | Ownership {pred;access} -> 
+        | R (path,pred) -> 
            (* begin match constrs with
             * | _ :: _ -> 
             *    fail loc (Generic !^"please specify all ownership constraints first, other constraints second")
             * | _ ->  *)
-              let r = [(loc, Ownership.{pred; access})] in
+              let r = [(loc, (path,pred))] in
               return (ownership @ r, constrs)
            (* end *)
-        | Constraint p_it -> 
+        | C p_it -> 
            return (ownership, constrs @ [(loc, p_it)])
       ) ([], []) requirements
   in
@@ -223,137 +222,150 @@ let named_ctype_to_aarg loc (sym, ct) =
     | Some name -> name
     | None -> Sym.pp_string sym
   in
-  { name; asym = sym; typ = ECT.of_ct loc ct }
+  { name; asym = sym; typ = ct }
 
 let named_ctype_to_varg loc (sym, ct) =
   let name = match Sym.name sym with
     | Some name -> name
     | None -> Sym.pp_string sym
   in
-  { name; vsym = sym; typ = ECT.of_ct loc ct }
+  { name; vsym = sym; typ = ct }
 
 
 
-open BaseName
-open Ownership
+(* open Ownership *)
 
-let apply_ownership {name = {label;v}; derefs} ownership loc typ = 
-  let rec aux so_far_derefs todo_derefs (Typ (annots, typ_)) =
-    let pp_so_far () = pp_access {name = {v; label}; derefs =so_far_derefs} in
-    match todo_derefs with
-    | Pointee :: todo ->
-       begin match typ_ with
-       | Pointer (qualifiers, _, Owned, typ2) ->
-          let* typ2 = aux (so_far_derefs @ [Pointee]) todo typ2 in
-          let typ_ = Pointer (qualifiers, loc, Owned, typ2) in
-          return (Typ (annots, typ_))
-       | Pointer (_, _, _, _) ->
-          fail loc (Generic (pp_so_far () ^^^ !^"is not an owned pointer"))
-       | _ ->
-          fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
-       end
-    | [] ->
-       begin match typ_ with
-       | Pointer (qualifiers, _, existing_ownership, typ2) 
-            when not (Pred.equal existing_ownership default_pointer_ownership) ->
-          fail loc (Generic (!^"ownership of" ^^^ pp_so_far () ^^^ !^"already specified"))
-       | Pointer (qualifiers, _, _, typ2) ->
-          return (Typ (annots, Pointer (qualifiers, loc, ownership, typ2)))
-       | _ -> 
-          fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
-       end
-  in
-  aux [] derefs typ
+(* let apply_ownership {name = {label;v}; derefs} ownership loc typ = 
+ *   let rec aux so_far_derefs todo_derefs (Typ (annots, typ_)) =
+ *     let pp_so_far () = pp_access {name = {v; label}; derefs =so_far_derefs} in
+ *     match todo_derefs with
+ *     | Pointee :: todo ->
+ *        begin match typ_ with
+ *        | Pointer (qualifiers, _, Owned, typ2) ->
+ *           let* typ2 = aux (so_far_derefs @ [Pointee]) todo typ2 in
+ *           let typ_ = Pointer (qualifiers, loc, Owned, typ2) in
+ *           return (Typ (annots, typ_))
+ *        | Pointer (_, _, _, _) ->
+ *           fail loc (Generic (pp_so_far () ^^^ !^"is not an owned pointer"))
+ *        | _ ->
+ *           fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
+ *        end
+ *     | [] ->
+ *        begin match typ_ with
+ *        | Pointer (qualifiers, _, existing_ownership, typ2) 
+ *             when not (Pred.equal existing_ownership default_pointer_ownership) ->
+ *           fail loc (Generic (!^"ownership of" ^^^ pp_so_far () ^^^ !^"already specified"))
+ *        | Pointer (qualifiers, _, _, typ2) ->
+ *           return (Typ (annots, Pointer (qualifiers, loc, ownership, typ2)))
+ *        | _ -> 
+ *           fail loc (Generic (pp_so_far () ^^^ !^"is not a pointer"))
+ *        end
+ *   in
+ *   aux [] derefs typ *)
      
      
 
-(* returns the requirements that weren't applied *)
-let apply_ownerships name typ requirements =
-  let rec aux typ = function
-    | [] -> 
-       return (typ, [])
-    | (loc, {pred; access}) :: rest when String.equal name access.name.v ->
-       let* typ = apply_ownership access pred loc typ in
-       aux typ rest
-    | tn :: rest ->
-       let* (typ, left) = aux typ rest in
-       return (typ, tn :: rest)
-    in
-    aux typ requirements
+(* (\* returns the requirements that weren't applied *\)
+ * let apply_ownerships name typ requirements =
+ *   let rec aux typ = function
+ *     | [] -> 
+ *        return (typ, [])
+ *     | (loc, {pred; access}) :: rest when String.equal name access.name.v ->
+ *        let* typ = apply_ownership access pred loc typ in
+ *        aux typ rest
+ *     | tn :: rest ->
+ *        let* (typ, left) = aux typ rest in
+ *        return (typ, tn :: rest)
+ *     in
+ *     aux typ requirements *)
 
 
 
-let apply_ownerships_varg (varg: varg) requirements =
-  let* (typ,left) = apply_ownerships varg.name varg.typ requirements in
-  return ({varg with typ}, left)
+(* let apply_ownerships_varg (varg: varg) requirements =
+ *   let* (typ,left) = apply_ownerships varg.name varg.typ requirements in
+ *   return ({varg with typ}, left) *)
 
-let apply_ownerships_aarg (aarg: aarg) requirements =
-  let* (typ,left) = apply_ownerships aarg.name aarg.typ requirements in
-  return ({aarg with typ}, left)
+(* let apply_ownerships_aarg (aarg: aarg) requirements =
+ *   let* (typ,left) = apply_ownerships aarg.name aarg.typ requirements in
+ *   return ({aarg with typ}, left) *)
 
 
-let rec apply_ownerships_vargs (vargs: vargs) requirements =
-  match vargs with
-  | [] -> 
-     return ([], requirements)
-  | varg :: vargs -> 
-     let* (varg, left) = apply_ownerships_varg varg requirements in
-     let* (vargs, left) = apply_ownerships_vargs vargs left in
-     return (varg :: vargs, left)
+(* let rec apply_ownerships_vargs (vargs: vargs) requirements =
+ *   match vargs with
+ *   | [] -> 
+ *      return ([], requirements)
+ *   | varg :: vargs -> 
+ *      let* (varg, left) = apply_ownerships_varg varg requirements in
+ *      let* (vargs, left) = apply_ownerships_vargs vargs left in
+ *      return (varg :: vargs, left) *)
 
-let rec apply_ownerships_aargs (aargs: aargs) requirements =
-  match aargs with
-  | [] -> 
-     return ([], requirements)
-  | aarg :: aargs -> 
-     let* (aarg, left) = apply_ownerships_aarg aarg requirements in
-     let* (aargs, left) = apply_ownerships_aargs aargs left in
-     return (aarg :: aargs, left)
+(* let rec apply_ownerships_aargs (aargs: aargs) requirements =
+ *   match aargs with
+ *   | [] -> 
+ *      return ([], requirements)
+ *   | aarg :: aargs -> 
+ *      let* (aarg, left) = apply_ownerships_aarg aarg requirements in
+ *      let* (aargs, left) = apply_ownerships_aargs aargs left in
+ *      return (aarg :: aargs, left) *)
 
-let ensure_none_left = function
-  | [] -> return ()
-  | (loc, {pred; access}) :: _ -> 
-     fail loc (Unbound_name (String access.name.v))
+(* let ensure_none_left = function
+ *   | [] -> return ()
+ *   | (loc, {pred; access}) :: _ -> 
+ *      fail loc (Unbound_name (String access.name.v)) *)
 
 
 let parse_function_type loc attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sym.t * Sctypes.t) list)) =
   (* collect information *)
-  let* (pre_ownership, pre_constraints) = requires loc attrs in
-  let* (post_ownership, post_constraints) = ensures loc attrs in
+  let* (pre_resources, pre_constraints) = requires loc attrs in
+  let* (post_resources, post_constraints) = ensures loc attrs in
+  let fargs = List.map (named_ctype_to_aarg loc) arg_cts in
   let globs = List.map (named_ctype_to_aarg loc) glob_cts in
-  let args_original = List.map (named_ctype_to_aarg loc) arg_cts in
-  let ret = { name = "ret"; vsym = Sym.fresh (); typ = ECT.of_ct loc ret_ct } in
-  (* apply ownership *)
-  let* (globs, pre_left) = apply_ownerships_aargs globs pre_ownership in
-  let* (args, pre_left) = apply_ownerships_aargs args_original pre_left in
-  let* () = ensure_none_left pre_left in
-  let* (glob_rets, post_left) = apply_ownerships_aargs globs post_ownership in
-  let* (arg_rets, post_left) = apply_ownerships_aargs args_original post_ownership in
-  let* (ret, post_left) = apply_ownerships_varg ret post_left in
-  let* () = ensure_none_left post_left in
-  (* plug together *)
-  let fpost = FPost post_constraints in
-  let frt = FRT {ret; glob_rets = glob_rets; arg_rets} in
-  let fret = FRet (frt, fpost) in
-  let fpre = FPre (pre_constraints, fret) in
-  let fa = FA {globs; args} in
-  let ft = FT (fa, fpre) in
+  let ret = { name = "ret"; vsym = Sym.fresh (); typ = ret_ct } in
+  let ft =
+    FT (FA {globs; fargs}, 
+        FPre (pre_resources, pre_constraints),
+        FRet ret,
+        FPost (post_resources, post_constraints))
+  in
   return ft
+
+  (* (\* apply ownership *\)
+   * let* (globs, pre_left) = apply_ownerships_aargs globs pre_ownership in
+   * let* (args, pre_left) = apply_ownerships_aargs args_original pre_left in
+   * let* () = ensure_none_left pre_left in
+   * let* (glob_rets, post_left) = apply_ownerships_aargs globs post_ownership in
+   * let* (arg_rets, post_left) = apply_ownerships_aargs args_original post_ownership in
+   * let* (ret, post_left) = apply_ownerships_varg ret post_left in
+   * let* () = ensure_none_left post_left in
+   * (\* plug together *\)
+   * let fpost = FPost post_constraints in
+   * let frt = FRT {ret; glob_rets = glob_rets; arg_rets} in
+   * let fret = FRet (frt, fpost) in
+   * let fpre = FPre (pre_constraints, fret) in
+   * let fa = FA {globs; args} in
+   * let ft = FT (fa, fpre) in
+   * return ft *)
 
 
 
 let parse_label_type loc lname attrs globs (fargs : aarg list) (larg_cts : (Sym.t * Sctypes.t) list) =
   (* collect information *)
-  let* (pre_ownership, pre_constraints) = inv lname loc attrs in
+  let* (pre_resources, pre_constraints) = inv lname loc attrs in
   let largs = List.map (named_ctype_to_varg loc) larg_cts in
-  (* apply ownership *)
-  let* (globs, pre_left) = apply_ownerships_aargs fargs pre_ownership in
-  let* (fargs, pre_left) = apply_ownerships_aargs fargs pre_left in
-  let* (largs, pre_left) = apply_ownerships_vargs largs pre_left in
-  let* () = ensure_none_left pre_left in
-  (* plug together *)
-  let open AST in
-  let label_args = LA {globs; fargs; largs} in
-  let linv = LInv pre_constraints in
-  let lt = LT (label_args, linv) in
+  let lt =
+    LT (LA {globs; fargs; largs}, LInv (pre_resources, pre_constraints))
+  in
   return lt
+
+
+  (* (\* apply ownership *\)
+   * let* (globs, pre_left) = apply_ownerships_aargs fargs pre_ownership in
+   * let* (fargs, pre_left) = apply_ownerships_aargs fargs pre_left in
+   * let* (largs, pre_left) = apply_ownerships_vargs largs pre_left in
+   * let* () = ensure_none_left pre_left in
+   * (\* plug together *\)
+   * let open AST in
+   * let label_args = LA {globs; fargs; largs} in
+   * let linv = LInv pre_constraints in
+   * let lt = LT (label_args, linv) in
+   * return lt *)

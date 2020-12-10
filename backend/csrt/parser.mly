@@ -20,7 +20,7 @@
   open Locations
   open IndexTerms
   open Tokens
-  open Cerb_frontend.Ctype
+  open Cerb_frontend
   open Pred
 
   let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
@@ -35,63 +35,130 @@
 
 
 spec_entry:
-  | o = ownership EOF                   { Ownership o }
-  | e = expr EOF                        { Constraint e }
+  | o = resource EOF                   { o }
+  | e = expr EOF                       { C e }
 
 
 ;
 
 
 
-pred: 
-  | OWNED                            { Owned } 
-  | BLOCK                            { Block } 
-  | UNOWNED                          { Unowned } 
-  | id = PID                         { Pred (Id.parse Location_ocaml.unknown id) } 
-
 basename:
   | id = ID AT label = ID            { {label; v = id} }
   | id = ID                          { {label = Arg.default_label; v = id} }
 
-access:
-  | STAR a = access                 { Ownership.pointee_access a }
-  | bn = basename                   { Ownership.{ name = bn; derefs = [] } }
 
-%inline ownership:
-  | p = pred LPAREN a = access RPAREN   { Ownership.{ access = a; pred = p } }
+/* stealing from Core parser */
+/* todo */
+integer_base_type:
+| ICHAR
+    { Ctype.Ichar }
+| SHORT
+    { Ctype.Short }
+| INT
+    { Ctype.Int_ }
+| LONG
+    { Ctype.Long }
+| LONG_LONG
+    { Ctype.LongLong }
+;
+
+integer_type:
+| CHAR
+    { Ctype.Char }
+| BOOL
+    { Ctype.Bool }
+| INT8_T
+    { Ctype.Signed (Ctype.IntN_t 8) }
+| INT16_T
+    { Ctype.Signed (Ctype.IntN_t 16) }
+| INT32_T
+    { Ctype.Signed (Ctype.IntN_t 32) }
+| INT64_T
+    { Ctype.Signed (Ctype.IntN_t 64) }
+| UINT8_T
+    { Ctype.Unsigned (Ctype.IntN_t 8) }
+| UINT16_T
+    { Ctype.Unsigned (Ctype.IntN_t 16) }
+| UINT32_T
+    { Ctype.Unsigned (Ctype.IntN_t 32) }
+| UINT64_T
+    { Ctype.Unsigned (Ctype.IntN_t 64) }
+| INTMAX_T
+    { Ctype.(Signed Intmax_t) }
+| INTPTR_T
+    { Ctype.(Signed Intptr_t) }
+| UINTMAX_T
+    { Ctype.(Unsigned Intmax_t) }
+| UINTPTR_T
+    { Ctype.(Unsigned Intptr_t) }
+| SIGNED ibty= integer_base_type
+    { Ctype.Signed ibty }
+| UNSIGNED ibty= integer_base_type
+    { Ctype.Unsigned ibty }
+| SIZE_T
+    { Ctype.Size_t }
+| PTRDIFF_T
+    { Ctype.Ptrdiff_t }
+;
+
+/* floating_type: */
+/* | FLOAT */
+/*     { Ctype.(RealFloating Float) } */
+/* | DOUBLE */
+/*     { Ctype.(RealFloating Double) } */
+/* | LONG_DOUBLE */
+/*     { Ctype.(RealFloating LongDouble) } */
+/* ; */
+
+/* basic_type: */
+/* | ity= integer_type */
+/*     { Ctype.Integer ity } */
+/* | fty= floating_type */
+/*     { Ctype.Floating fty } */
+/* ; */
+
+/* ctype: */
+/* | VOID */
+/*     { Ctype.void } */
+/* | bty= basic_type */
+/*   { Ctype.Ctype ([], Ctype.Basic bty) } */
+/* | ty= ctype LBRACKET n_opt= NUM? RBRACKET */
+/*     { Ctype.Ctype ([], Ctype.Array (ty, n_opt)) } */
+/* | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN) */
+/*     { Ctype.Ctype ([], Function (false, (Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) } */
+/* | ty= ctype STAR */
+/*     { Ctype.Ctype ([], Ctype.Pointer (Ctype.no_qualifiers, ty)) } */
+/* | ATOMIC ty= delimited(LPAREN, ctype, RPAREN) */
+/*     { Ctype.Ctype ([], Ctype.Atomic ty) } */
+/* | STRUCT tag= ID */
+/*     { Ctype.Ctype ([], Ctype.Struct (Sym.fresh_named tag)) } */
+/* ; */
+
+/* end */
+
+pred: 
+  | OWNED                            { Owned } 
+  | BLOCK                            { Block } 
+  /* | UNOWNED                          { Unowned }  */
+  | id = PID                         { Pred (Id.parse Location_ocaml.unknown id) } 
 
 
 path: 
-  | STAR p = path                      { Object.Path.Pointee p }
-  | bn = basename                      { Object.Path.Var bn }
+  | LPAREN pr = pred LPAREN p = path RPAREN RPAREN DOT id = ID   { Path.PredArg (pr, p, id) }
+  | AMPERSAND bn = basename          { Path.Addr bn }
+  | STAR p = path                    { Path.Pointee p }
+  | bn = basename                    { Path.Var bn }
+
+%inline resource:
+  | pr = pred LPAREN p = path RPAREN   { R (pr,p) }
 
 
-addr_or_path:
-  | AMPERSAND bn = basename            { Object.AddrOrPath.Addr bn }
-  | p = path                           { Object.AddrOrPath.Path p }
-
-obj: 
-  | LPAREN pr = pred LPAREN aop = addr_or_path RPAREN RPAREN DOT id = ID   { Object.Obj (aop, Some {pred = pr; arg = id}) }
-  | aop = addr_or_path                                        { Object.Obj (aop, None) }
-  
 
 
-/* fix these to do the right thing */
-integer_base_type:
-  | SHORT INT?              { Short }
-  | INT                     { Int_ }
-  | LONG INT?               { Long }
-  | LONG LONG INT?          { LongLong }
 
-integer_type:
-  | SIGNED CHAR             { Signed Ichar }
-  | CHAR                    { Char }
-  | SIGNED ibt = integer_base_type { Signed ibt }
-  | UNSIGNED ibt = integer_base_type { Unsigned ibt }
-  | ibt = integer_base_type { Signed ibt }
-
-expr_or_obj:
-  | o = obj                 { pit ($startpos, $endpos) (Object o) }
+expr_or_path:
+  | p = path                { pit ($startpos, $endpos) (Path p) }
   | e = expr                { e }
 
 expr:
@@ -100,20 +167,20 @@ expr:
   | i = NUM                                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
   | MIN LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MinInteger it) }
   | MAX LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MaxInteger it) }
-  | POINTER_TO_INTEGER expr_or_obj        { pit ($startpos, $endpos) (PointerToIntegerCast ($2)) }
-  | INTEGER_TO_POINTER expr_or_obj        { pit ($startpos, $endpos) (IntegerToPointerCast ($2)) }
-  | expr_or_obj LT expr_or_obj            { pit ($startpos, $endpos) (LT ($1,$3)) }
-  | expr_or_obj GT expr_or_obj            { pit ($startpos, $endpos) (GT ($1,$3)) }
-  | expr_or_obj LE expr_or_obj            { pit ($startpos, $endpos) (LE ($1,$3)) }
-  | expr_or_obj GE expr_or_obj            { pit ($startpos, $endpos) (GE ($1,$3)) }
-  | expr_or_obj EQEQ expr_or_obj          { pit ($startpos, $endpos) (EQ ($1,$3)) }
-  | expr_or_obj NE expr_or_obj            { pit ($startpos, $endpos) (NE ($1,$3)) }
-  | expr_or_obj PLUS expr_or_obj          { pit ($startpos, $endpos) (Add ($1,$3)) }
-  | expr_or_obj MINUS expr_or_obj         { pit ($startpos, $endpos) (Sub ($1,$3)) }
-  | expr_or_obj STAR expr_or_obj          { pit ($startpos, $endpos) (Mul ($1,$3)) }
-  | expr_or_obj DIV expr_or_obj           { pit ($startpos, $endpos) (Div ($1,$3)) }
-  | MIN LPAREN i1 = expr_or_obj COMMA i2 = expr_or_obj RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
-  | MAX LPAREN i1 = expr_or_obj COMMA i2 = expr_or_obj RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
+  | POINTER_TO_INTEGER expr_or_path        { pit ($startpos, $endpos) (PointerToIntegerCast ($2)) }
+  | INTEGER_TO_POINTER expr_or_path        { pit ($startpos, $endpos) (IntegerToPointerCast ($2)) }
+  | expr_or_path LT expr_or_path            { pit ($startpos, $endpos) (LT ($1,$3)) }
+  | expr_or_path GT expr_or_path            { pit ($startpos, $endpos) (GT ($1,$3)) }
+  | expr_or_path LE expr_or_path            { pit ($startpos, $endpos) (LE ($1,$3)) }
+  | expr_or_path GE expr_or_path            { pit ($startpos, $endpos) (GE ($1,$3)) }
+  | expr_or_path EQEQ expr_or_path          { pit ($startpos, $endpos) (EQ ($1,$3)) }
+  | expr_or_path NE expr_or_path            { pit ($startpos, $endpos) (NE ($1,$3)) }
+  | expr_or_path PLUS expr_or_path          { pit ($startpos, $endpos) (Add ($1,$3)) }
+  | expr_or_path MINUS expr_or_path         { pit ($startpos, $endpos) (Sub ($1,$3)) }
+  | expr_or_path STAR expr_or_path          { pit ($startpos, $endpos) (Mul ($1,$3)) }
+  | expr_or_path DIV expr_or_path           { pit ($startpos, $endpos) (Div ($1,$3)) }
+  | MIN LPAREN i1 = expr_or_path COMMA i2 = expr_or_path RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
+  | MAX LPAREN i1 = expr_or_path COMMA i2 = expr_or_path RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
   | LPAREN expr RPAREN { $2 }
 ;
 

@@ -48,7 +48,7 @@ rule read = parse
   | "(pointer)"    { INTEGER_TO_POINTER }
   | "Block"        { BLOCK }
   | "Owned"        { OWNED }
-  | "Unowned"      { UNOWNED }
+  (* | "Unowned"      { UNOWNED } *)
   | "min"          { MIN }
   | "max"          { MAX }
   | "char"         { CHAR }
@@ -64,5 +64,37 @@ rule read = parse
   | id             { ID (Lexing.lexeme lexbuf) }
   | _              { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof            { EOF }
-
-
+(* stealing from Core parser *)
+  (* | "_Atomic"      { ATOMIC       } *)
+  | "_Bool"        { BOOL         }
+  | "char"         { CHAR         }
+  (* | "double"       { DOUBLE       } *)
+  (* | "enum"         { ENUM         } *)
+  (* | "float"        { FLOAT        } *)
+  | "int"          { INT          }
+  | "ichar"        { ICHAR        }
+  | "long"         { LONG         }
+  (* | "long_double"  { LONG_DOUBLE  } *)
+  | "long_long"    { LONG_LONG    }
+  | "short"        { SHORT        }
+  | "signed"       { SIGNED       }
+  (* | "struct"       { STRUCT       }
+   * | "union"        { UNION        } *)
+  | "unsigned"     { UNSIGNED     }
+  (* | "void"         { VOID         } *)
+  | "int8_t"       { INT8_T       }
+  | "int16_t"      { INT16_T      }
+  | "int32_t"      { INT32_T      }
+  | "int64_t"      { INT64_T      }
+  | "uint8_t"      { UINT8_T      }
+  | "uint16_t"     { UINT16_T     }
+  | "uint32_t"     { UINT32_T     }
+  | "uint64_t"     { UINT64_T     }
+  | "intptr_t"     { INTPTR_T     }
+  | "intmax_t"     { INTMAX_T     }
+  | "uintptr_t"    { UINTPTR_T    }
+  | "uintmax_t"    { UINTMAX_T    }
+  | "size_t"       { SIZE_T       }
+  | "ptrdiff_t"    { PTRDIFF_T    }
+  (* | "["            { LBRACKET     }
+   * | "]"            { RBRACKET     } *)

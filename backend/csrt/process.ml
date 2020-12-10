@@ -35,6 +35,8 @@ let record_funinfo global funinfo =
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc' (Unsupported err)
       else
+        let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
+        let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
         let* () = WT.WFT.welltyped loc' WT.L.empty ftyp in
         let fun_decls = SymMap.add fsym (loc', ftyp) global.Global.fun_decls in
         return {global with fun_decls}

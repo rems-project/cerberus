@@ -16,6 +16,9 @@ open BaseTypes
 open LogicalConstraints
 open Resources
 open Parse_ast
+open Sctypes
+open Mapping
+open BaseName
 
 
 module StringMap = Map.Make(String)
@@ -124,55 +127,55 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     struct_layout loc fields tag
   in
 
-  let* closed_stored =
-    let open RT in
-    let open LRT in
-    let rec aux loc tag struct_p = 
-      let* def_members = get_struct_members tag in
-      let* layout = struct_layout loc def_members tag in
-      let* members = 
-        ListM.mapM (fun Global.{offset; size; member_or_padding} ->
-            let pointer = IT.Offset (struct_p, Num offset) in
-            match member_or_padding with
-            | None -> return ([(pointer, size, None)], [])
-            | Some (member, sct) -> 
-               let (Sctypes.Sctype (annots, sct_)) = sct in
-               match sct_ with
-               | Sctypes.Struct tag -> 
-                  let* (components, s_value) = aux loc tag pointer in
-                  return (components, [(member, s_value)])
-               | _ ->
-                  let v = Sym.fresh () in
-                  let bt = BT.of_sct sct in
-                  return ([(pointer, size, Some (v, bt))], [(member, S (bt, v))])
-            ) layout
-      in
-      let (components, values) = List.split members in
-      return (List.flatten components, IT.Struct (tag, List.flatten values))
-    in
-    let struct_pointer = Sym.fresh () in
-    let* components, struct_value = aux loc tag (S (BT.Loc, struct_pointer)) in
-    let lrt = 
-      List.fold_right (fun (member_p, size, member_or_padding) lrt ->
-          match member_or_padding with
-          | Some (member_v, bt) ->
-             LRT.Logical ((member_v, Base bt), 
-             LRT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, lrt))
-          | None ->
-             LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt)           
-        ) components LRT.I
-    in
-    let st = ST.ST_Ctype (Sctypes.Sctype ([], Struct tag)) in
-    let rt = 
-      Computational ((struct_pointer, BT.Loc), 
-      Constraint (LC (IT.Representable (ST_Pointer, S (BT.Loc, struct_pointer))),
-      Constraint (LC (Aligned (st, S (BT.Loc, struct_pointer))),
-      (* Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)), *)
-      lrt @@ 
-      Constraint (LC (IT.Representable (st, struct_value)), LRT.I))))
-    in
-    return rt
-  in
+  (* let* closed_stored =
+   *   let open RT in
+   *   let open LRT in
+   *   let rec aux loc tag struct_p = 
+   *     let* def_members = get_struct_members tag in
+   *     let* layout = struct_layout loc def_members tag in
+   *     let* members = 
+   *       ListM.mapM (fun Global.{offset; size; member_or_padding} ->
+   *           let pointer = IT.Offset (struct_p, Num offset) in
+   *           match member_or_padding with
+   *           | None -> return ([(pointer, size, None)], [])
+   *           | Some (member, sct) -> 
+   *              let (Sctypes.Sctype (annots, sct_)) = sct in
+   *              match sct_ with
+   *              | Sctypes.Struct tag -> 
+   *                 let* (components, s_value) = aux loc tag pointer in
+   *                 return (components, [(member, s_value)])
+   *              | _ ->
+   *                 let v = Sym.fresh () in
+   *                 let bt = BT.of_sct sct in
+   *                 return ([(pointer, size, Some (v, bt))], [(member, S (bt, v))])
+   *           ) layout
+   *     in
+   *     let (components, values) = List.split members in
+   *     return (List.flatten components, IT.Struct (tag, List.flatten values))
+   *   in
+   *   let struct_pointer = Sym.fresh () in
+   *   let* components, struct_value = aux loc tag (S (BT.Loc, struct_pointer)) in
+   *   let lrt = 
+   *     List.fold_right (fun (member_p, size, member_or_padding) lrt ->
+   *         match member_or_padding with
+   *         | Some (member_v, bt) ->
+   *            LRT.Logical ((member_v, Base bt), 
+   *            LRT.Resource (RE.Points {pointer = member_p; pointee = member_v; size}, lrt))
+   *         | None ->
+   *            LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt)           
+   *       ) components LRT.I
+   *   in
+   *   let st = ST.ST_Ctype (Sctypes.Sctype ([], Struct tag)) in
+   *   let rt = 
+   *     Computational ((struct_pointer, BT.Loc), 
+   *     Constraint (LC (IT.Representable (ST_Pointer, S (BT.Loc, struct_pointer))),
+   *     Constraint (LC (Aligned (st, S (BT.Loc, struct_pointer))),
+   *     (\* Constraint (LC (EQ (AllocationSize (S struct_pointer), Num size)), *\)
+   *     lrt @@ 
+   *     Constraint (LC (IT.Representable (st, struct_value)), LRT.I))))
+   *   in
+   *   return rt
+   * in *)
 
 
   let* closed_stored_predicate_definition = 
@@ -210,11 +213,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
       in
       let value = IT.Struct (tag, values) in
       let st = ST.ST_Ctype (Sctypes.Sctype ([], Sctypes.Struct tag)) in
-      let lrt = 
-        Constraint (LC (IT.Representable (ST_Pointer, struct_pointer)),
-        Constraint (LC (Aligned (st, struct_pointer)),
-        lrt @@ Constraint (LC (IT.Representable (st, value)), LRT.I)))
-      in
+      let lrt = lrt @@ Constraint (LC (IT.Representable (st, value)), LRT.I) in
       let constr = LC (IT.EQ (S (BT.Struct tag, struct_value_s), value)) in
       (lrt, constr)
     in
@@ -242,7 +241,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
   let open Global in
-  let decl = { layout; closed_stored; closed_stored_predicate_definition } in
+  let decl = { layout; closed_stored_predicate_definition } in
   return decl
 
 
@@ -251,172 +250,122 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
 
-
-
-
-let make_unowned_pointer pointer stored_type = 
-  let open RT in
+let make_owned pointer path sct =
+  let open Pred in
+  let open Sctypes in
   let pointer_it = S (BT.Loc, pointer) in
-  Computational ((pointer,Loc),
-  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
-  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
-  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
-  LRT.I)))
-
-let make_block_pointer pointer block_type stored_type = 
-  let open RT in
-  let pointer_it = S (BT.Loc, pointer) in
-  let size = Memory.size_of_stored_type stored_type in
-  let uninit = RE.Block {pointer = pointer_it; size = Num size; block_type} in
-  Computational ((pointer,Loc),
-  Resource ((uninit, 
-  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
-  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
-  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
-  LRT.I)))))
-
-let make_owned_pointer pointer stored_type rt = 
-  let open RT in
-  let pointer_it = S (BT.Loc, pointer) in
-  let (Computational ((pointee,bt),lrt)) = rt in
-  let size = Memory.size_of_stored_type stored_type in
-  let points = RE.Points {pointer = pointer_it; pointee; size} in
-  Computational ((pointer,Loc),
-  Logical ((pointee, Base bt), 
-  Resource ((points, 
-  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
-  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
-  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
-  lrt))))))
-
-let make_pred_pointer pointer stored_type rt = 
-  let open RT in
-  let pointer_it = S (BT.Loc, pointer) in
-  let (Computational ((pointee,bt),lrt)) = rt in
-  let size = Memory.size_of_stored_type stored_type in
-  let points = RE.Points {pointer = pointer_it; pointee; size} in
-  Computational ((pointer,Loc),
-  Logical ((pointee, Base bt), 
-  Resource ((points, 
-  Constraint (LC (IT.Representable (ST_Pointer, pointer_it)),
-  Constraint (LC (IT.Aligned (stored_type, pointer_it)),
-  (* Constraint (LC (EQ (AllocationSize (S pointer), Num size)), *)
-  lrt))))))
-
-
-
-
-(* function types *)
-
-let update_values_lrt lrt =
-  let subst_non_pointer = LRT.subst_var_fancy ~re_subst_var:RE.subst_non_pointer in
-  let rec aux = function
-    | LRT.Logical ((s,ls),lrt) ->
-       let s' = Sym.fresh () in
-       let lrt' = subst_non_pointer {before=s;after=s'} lrt in
-       LRT.Logical ((s',ls), aux lrt')
-    | LRT.Resource (re,lrt) -> LRT.Resource (re,aux lrt)
-    | LRT.Constraint (lc,lrt) -> LRT.Constraint (lc,aux lrt)
-    | LRT.I -> LRT.I
-  in
-  aux lrt
-
-
-
-
-type addr_or_path = Object.AddrOrPath.t
-type mapping = Object.mapping
-
-
-let rec rt_of_ect v (aop : addr_or_path) typ : (RT.t * mapping, type_error) m =
-  let open ECT in
-  let open Object in
-  let open Object.Mapping in
-  let (Typ (loc, typ_)) = typ in
-  match typ_ with
-  (* unowned pointer *)
-  | Pointer (_qualifiers, _, Unowned, typ2) ->
-     let rt = make_unowned_pointer v (ST_Ctype (to_sct typ2)) in
-     return (rt, [{obj = Obj (aop, None); res = (BT.Loc, v)}])
-  (* pointer with predcate *)
-  | Pointer (_qualifiers, loc, Pred pid, typ2) ->
-     let* def = match Global.IdMap.find_opt pid Global.builtin_predicates with
-       | Some def -> return def
-       | None -> fail loc (Missing_predicate pid)
-     in
-     let* (args, mapping, lrt) = 
-       ListM.fold_rightM (fun (name, LS.Base bt) (args, mapping, lrt) ->
-           let s = Sym.fresh_named name in
-           let lrt = LRT.Logical ((s, Base bt), lrt) in
-           let args = s :: args in
-           let mapping = 
-             {obj = Obj (aop, Some {pred = Pred pid; arg = name}); 
-              res = (bt, s)} :: mapping 
-           in
-           return (args, mapping, lrt)
-         ) def.Global.arguments ([], [], LRT.I)
-     in
-     failwith "asd"
-  (* block pointer *)
-  | Pointer (_qualifiers, _, Block, typ2) -> (*  *)
-     let rt = make_block_pointer v Nothing (ST_Ctype (to_sct typ2)) in
-     return (rt, [{obj = Obj (aop, None); res = (BT.Loc, v)}])
-  (* void* *)
-  | Pointer (_qualifiers, _, Owned, (Typ (_, Void))) ->
+  match sct with
+  | Sctype (_, Void) ->
      let size = Sym.fresh () in
-     print stderr (item "size symbol" (Sym.pp size));
-     let predicate = RE.Block {pointer = S (BT.Loc, v); size = S (Integer, size); block_type = Nothing} in
-     let rt = 
-       RT.Computational ((v, BT.Loc), 
-       Logical ((size, Base BT.Integer), 
-       Resource (predicate, I)))
+     let r = 
+       [RE.Block {pointer = pointer_it; 
+                  size = S (Integer, size); 
+                  block_type = Nothing}]
+     in
+     let l = [(size, LS.Base Integer)] in
+     let mapping = 
+       [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
+     let c = [
+         LC (IT.Representable (ST_Pointer, pointer_it));
+         LC (IT.Aligned (ST_Ctype sct, pointer_it));
+       ]
+     in
+     (l, r, c, mapping)
+  | Sctype (_, Struct tag) ->
+     let pointee = Sym.fresh () in
+     let r = 
+       [RE.Predicate {pointer = S (BT.Loc, pointer); 
+                      name = Tag tag; 
+                      args = [pointee]}]
+     in
+     let l = [(pointee, LS.Base (Struct tag))] in
+     let c = [
+         LC (IT.Representable (ST_Pointer, pointer_it));
+         LC (IT.Aligned (ST_Ctype sct, pointer_it));
+       ]
      in
      let mapping = 
-       [{obj = Obj (aop, Some {pred = Block; arg = "size"}); res = (Integer, size)};
-        {obj = Obj (aop, None); res = (BT.Loc, v)}]
+       [{path = Path.pointee path; sym = pointee; bt = Struct tag}] in
+     (l, r, c, mapping)
+  | _ -> 
+     let pointee = Sym.fresh () in
+     let r = 
+       [RE.Points {pointer = S (BT.Loc, pointer); 
+                   pointee; 
+                   size = Memory.size_of_ctype sct}]
      in
-     return (rt, mapping)
-  (* owned struct pointer *)
-  | Pointer (_qualifiers, _, Owned, (Typ (_, Struct tag))) ->
-     let v2 = Sym.fresh () in
-     let predicate = Predicate {pointer = S (BT.Loc, v); name = Tag tag; args = [v2]} in
-     let rt = 
-       RT.Computational ((v, BT.Loc), 
-       Logical ((v2, Base (BT.Struct tag)), 
-       Resource (predicate, I)))
-     in
-     let mapping = 
-       [{obj = Obj (Object.AddrOrPath.pointee aop, None); res = (BT.Struct tag, v2)};
-        {obj = Obj (aop, None); res = (BT.Loc, v)}]
-     in
-     return (rt, mapping)
-  (* other owned pointer *)
-  | Pointer (_qualifiers, _, Owned, typ2) ->
-     let v2 = Sym.fresh () in
-     let* (rt',mapping') = rt_of_ect v2 (Object.AddrOrPath.pointee aop) typ2 in
-     let rt = make_owned_pointer v (ST_Ctype (to_sct typ2)) rt' in
-     let mapping = 
-       {obj = Obj (aop, None); res= (BT.Loc, v)} :: mapping' 
-     in
-     return (rt, mapping)
-  | Void
-  | Integer _
-  | Struct _ ->
-     let sct = to_sct typ in
      let bt = BT.of_sct sct in
-     let rt = 
-       RT.Computational ((v, bt), 
-       Constraint (LC (IT.Representable (ST_Ctype sct, S (bt, v))),I))
+     let l = [(pointee, LS.Base bt)] in
+     let c = [
+         LC (IT.Representable (ST_Pointer, pointer_it));
+         LC (IT.Aligned (ST_Ctype sct, pointer_it));
+         LC (IT.Representable (ST_Ctype sct, S (bt, pointee)));
+       ]
      in
-     let mapping = [{obj = Obj (aop, None); res = (bt, v)}] in
-     return (rt, mapping)
-     
+     let mapping = 
+       [{path = Path.pointee path; sym = pointee; bt}] in
+     (l, r, c, mapping)
 
 
-let owned_pointer_ect typ = 
-  let ECT.Typ (loc, _) = typ in
-  let qs = CF.Ctype.{const = false; restrict = false; volatile = false} in
-  ECT.Typ (loc, (Pointer (qs, loc, Owned, typ)))
+let make_block pointer path sct =
+  let open Pred in
+  let open Sctypes in
+  let pointer_it = S (BT.Loc, pointer) in
+  match sct with
+  | Sctype (_, Void) ->
+     let size = Sym.fresh () in
+     let r = 
+       [RE.Block {pointer = pointer_it; 
+                  size = S (Integer, size); 
+                  block_type = Nothing}]
+     in
+     let l = [(size, LS.Base Integer)] in
+     let mapping = 
+       [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
+     let c = [
+         LC (IT.Representable (ST_Pointer, pointer_it));
+         LC (IT.Aligned (ST_Ctype sct, pointer_it));
+       ]
+     in
+     (l, r, c, mapping)
+  | _ -> 
+     let pointee = Sym.fresh () in
+     let r = 
+       [RE.Block {pointer = pointer_it; 
+                  size = Num (Memory.size_of_ctype sct); 
+                  block_type = Nothing}]
+     in
+     let bt = BT.of_sct sct in
+     let l = [(pointee, LS.Base bt)] in
+     let c = [
+         LC (IT.Representable (ST_Pointer, pointer_it));
+         LC (IT.Aligned (ST_Ctype sct, pointer_it));
+       ]
+     in
+     let mapping = 
+       [{path = Path.pointee path; sym = pointee; bt}] in
+     (l, r, c, mapping)
+
+let make_pred loc pointer pred path stored_type = 
+  let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
+    | Some def -> return def
+    | None -> fail loc (Missing_predicate pred)
+  in
+  let pointer_it = S (BT.Loc, pointer) in
+  let* (mapping, l) = 
+    ListM.fold_rightM (fun (name, LS.Base bt) (mapping, l) ->
+        let s = Sym.fresh_named name in
+        let l = (s, LS.Base bt) :: l in
+        let mapping = {path = Path.predarg (Pred pred) path name; sym = s; bt = bt} :: mapping in
+        return (mapping, l)
+      ) def.Global.arguments ([], [])
+  in
+  let args = List.map fst l in
+  let r = [RE.Predicate {pointer = pointer_it; name = Id pred; args}] in
+  return (l, r, [], mapping)
+
+
+
 
 
 type funinfo_extra = 
@@ -424,75 +373,149 @@ type funinfo_extra =
    globs : Parse_ast.aarg list;
    fargs : Parse_ast.aarg list}
 
+
+let rec deref_path_pp name deref = 
+  match deref with
+  | 0 -> !^name
+  | n -> star ^^ deref_path_pp name (n - 1)
+
+let rec type_of__var loc typ name derefs = 
+  match derefs with
+  | 0 -> return typ
+  | n ->
+     let* (Sctype (_, typ2_)) = type_of__var loc typ name (n - 1) in
+     match typ2_ with
+     | Pointer (_qualifiers, typ3) -> return typ3
+     | _ -> fail loc (Generic (deref_path_pp name n ^^^ !^"is not a pointer"))
+
+let type_of__vars loc var_typs name derefs = 
+  match List.assoc_opt String.equal name var_typs with
+  | None -> fail loc (Unbound_name (String name))
+  | Some typ -> type_of__var loc typ name derefs
+  
+
+
+let apply_ownership_spec var_typs mapping (loc, (pred,path)) =
+  print stderr (item "path" (Path.pp path));
+  match Path.deref_path path with
+  | None ->
+     fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+  | Some (bn, derefs) -> 
+     let* sct = type_of__vars loc var_typs bn.v derefs in
+     let* (_, sym) = Assertions.resolve_path loc mapping path in
+     match sct with
+     | Sctype (_, Pointer (_, sct2)) ->
+        begin match pred with
+        | Pred.Owned -> return (make_owned sym (Path.var bn) sct2)
+        | Pred.Block -> return (make_owned sym (Path.var bn) sct2)
+        | Pred.Pred id -> make_pred loc sym id (Path.var bn) sct2 
+        end
+     | _ -> 
+        fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
+
+
+let aarg_item l (aarg : aarg) =
+  let bn = {v = aarg.name; label = Assertions.label_name l} in
+  let path = Path.addr bn in
+  {path; sym = aarg.asym; bt = BT.Loc}
+
+
+let varg_item l (varg : varg) =
+  let bn = {v = varg.name; label = Assertions.label_name l} in
+  let path = Path.var bn in
+  {path; sym = varg.vsym; bt = BT.of_sct varg.typ}
+
+let arg_item l arg =
+  match arg with
+  | Aarg aarg -> aarg_item l aarg
+  | Varg varg -> varg_item l varg
+
+
 let make_fun_spec loc struct_decls globals arguments ret_sct attrs 
     : (FT.t * funinfo_extra, type_error) m = 
   let open FT in
   let open RT in
-  let open Object.AddrOrPath in
   let* typ = Assertions.parse_function_type loc attrs globals (ret_sct, arguments) in
 
-  let mapping = [] in
-  let arg_ftt = fun rt -> rt in
+  let (FT (FA {globs; fargs}, pre, FRet ret, post)) = typ in
 
-  let (FT (FA {globs;args}, pre)) = typ in
-  (* glob arguments *)
-  let* (arg_ftt, mapping) = 
-    ListM.fold_rightM (fun {name; asym; typ} (arg_ftt, mapping) ->
-        let aop = Addr {label = Assertions.label_name Pre; v = name} in
-        let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
-        return (Tools.comp (FT.of_lrt (RT.lrt arg_rt)) arg_ftt, mapping' @ mapping)
-      ) globs (arg_ftt, mapping)
+  let var_typs = 
+    List.map (fun aarg -> (aarg.name, aarg.typ)) globs @
+    List.map (fun aarg -> (aarg.name, aarg.typ)) fargs @
+    [(ret.name, ret.typ)]
   in
-  (* function arguments *)
-  let* (arg_ftt, mapping) = 
-    ListM.fold_rightM (fun {name; asym; typ} (arg_ftt, mapping) ->
-        let aop = Addr {label = Assertions.label_name Pre; v = name} in
-        let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
-        return (Tools.comp (FT.of_rt arg_rt) arg_ftt, mapping' @ mapping)
-      ) args (arg_ftt, mapping)
+
+  let iL, iR, iC = [], [], [] in
+  let oL, oR, oC = [], [], [] in
+  let mapping = [] in
+
+  let iA = List.map (fun aarg -> (aarg.asym, BT.Loc)) fargs in
+  (* globs and fargs *)
+  let (iL, iR, iC, mapping) = 
+    List.fold_left (fun (iL, iR, iC, mapping) aarg ->
+        let item = aarg_item Pre aarg in
+        let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
+        (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
+      )
+      (iL, iR, iC, mapping) (globs @ fargs)
   in
-  let (FPre (preconditions, ret)) = pre in
-  let* arg_ftt = 
-    let* requires = Assertions.resolve_constraints mapping preconditions in
-    return (Tools.comp arg_ftt (FT.mConstraints requires))
+
+  let (FPre (pre_resources, pre_constraints)) = pre in
+
+  let* (iL, iR, iC, mapping) = 
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) spec ->
+        let* (l, r, c, mapping') = apply_ownership_spec var_typs mapping spec in
+        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+      )
+      (iL, iR, iC, mapping) pre_resources
   in
+  let* iC = 
+    let* lcs = Assertions.resolve_constraints mapping pre_constraints in
+    return (lcs @ iC)
+  in
+
   let init_mapping = mapping in
 
-  let (FRet (FRT {ret; glob_rets; arg_rets}, post)) = ret in
   (* ret *)
-  let* (ret_rt, mapping) = 
-    let { name; vsym; typ } = ret in
-    let aop = Path (Var {label = Assertions.label_name Post; v = name}) in
-    let* (rt, mapping') = rt_of_ect vsym aop typ in
-    return (rt, mapping' @ mapping)
-  in
-  let arg_ret_lrt = LRT.I in
-  (* glob return resources *)
-  let* (arg_ret_lrt, mapping) = 
-    ListM.fold_rightM (fun {name; asym; typ} (arg_ret_lrts, mapping) ->
-        let aop = Addr {label = Assertions.label_name Post; v = name} in
-        let* (arg_ret_lrt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
-        return (LRT.concat (RT.lrt arg_ret_lrt) arg_ret_lrts, mapping' @ mapping)
-      ) glob_rets (arg_ret_lrt, mapping)
-  in
-  (* argument return resources *)
-  let* (arg_ret_lrt, mapping) = 
-    ListM.fold_rightM (fun {name; asym; typ} (arg_ret_lrts, mapping) ->
-        let aop = Addr {label = Assertions.label_name Post; v = name} in
-        let* (arg_ret_lrt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
-        return (LRT.concat (RT.lrt arg_ret_lrt) arg_ret_lrts, mapping' @ mapping)
-      ) arg_rets (arg_ret_lrt, mapping)
-  in
-  let ret_rt = RT.concat ret_rt arg_ret_lrt in
-  let (FPost postconditions) = post in
-  let* ret_rt = 
-    let* ensures = Assertions.resolve_constraints mapping postconditions in
-    return (RT.concat ret_rt (LRT.mConstraints ensures LRT.I))
+  let (oA, mapping) = 
+    let item = varg_item Post ret in
+    ((ret.vsym, item.bt), item :: mapping)
   in
 
-  let ft = arg_ftt (FT.I ret_rt) in
+  (* defaults *)
+  let (oL, oR, oC, mapping) = 
+    List.fold_left (fun (oL, oR, oC, mapping) aarg ->
+        let item = aarg_item Post aarg in
+        let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
+        (oL @ l, oR @ r, oC @ c, mapping @ mapping')
+      )
+      (oL, oR, oC, mapping) (globs @ fargs)
+  in
 
-  return (ft, {mapping = init_mapping; globs; fargs = args})
+  let (FPost (post_resources, post_constraints)) = post in
+
+  let* (oL, oR, oC, mapping) = 
+    ListM.fold_leftM (fun (oL, oR, oC, mapping) spec ->
+        let* (l, r, c, mapping') = apply_ownership_spec var_typs mapping spec in
+        return (oL @ l, oR @ r, oC @ c, mapping @ mapping')
+      )
+      (oL, oR, oC, mapping) post_resources
+  in
+
+
+  print stderr (item "mapping" (Mapping.pp mapping));
+
+  let* oC = 
+    let* lcs = Assertions.resolve_constraints mapping post_constraints in
+    return (lcs @ oC)
+  in
+
+
+  let lrt = LRT.mLogicals oL (LRT.mResources oR (LRT.mConstraints oC LRT.I)) in
+  let rt = RT.mComputational oA lrt in
+  let lft = FT.mLogicals iL (FT.mResources iR (FT.mConstraints iC (FT.I rt))) in
+  let ft = FT.mComputationals iA lft in
+  return (ft, {mapping = init_mapping; globs; fargs})
 
 
   
@@ -503,49 +526,59 @@ let make_label_spec
       (largs : (Sym.t option * Sctypes.t) list) 
       attrs = 
 
-  let open Object.AddrOrPath in
   let lname = match Sym.name lsym with
     | Some lname -> lname
     | None -> Sym.pp_string lsym (* check *)
   in
   let largs = List.map (fun (os, t) -> (Option.value (Sym.fresh ()) os, t)) largs in
   let* ltyp = Assertions.parse_label_type loc lname attrs extra.globs extra.fargs largs in
-  
-  let mapping = extra.mapping in
-  let ltt = fun rt -> rt in
+
   let (LT (LA {globs; fargs; largs}, inv)) = ltyp in
-  (* globs *)
-  let* (ltt, mapping) = 
-    ListM.fold_rightM (fun {name; asym; typ} (ltt, mapping) ->
-        let aop = Addr {label = Assertions.label_name (Inv lname); v = name} in
-        let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
-        return (Tools.comp (LT.of_lrt (RT.lrt arg_rt)) ltt, mapping' @ mapping)
-      ) globs (ltt, mapping)
-  in
-  (* function arguments *)
-  let* (ltt, mapping) = 
-    ListM.fold_rightM (fun {name; asym; typ} (ltt, mapping) ->
-        let aop = Addr {label = Assertions.label_name (Inv lname); v = name} in
-        let* (arg_rt, mapping') = rt_of_ect asym aop (owned_pointer_ect typ) in
-        return (Tools.comp (LT.of_lrt (RT.lrt arg_rt)) ltt, mapping' @ mapping)
-      ) fargs (ltt, mapping)
-  in
-  (* label arguments *)
-  let* (ltt, mapping) = 
-    ListM.fold_rightM (fun {name; vsym; typ} (ltt, mapping) ->
-        let aop = Path (Var {label = Assertions.label_name (Inv lname); v = name}) in
-        let* (larg_rt, mapping') = rt_of_ect vsym aop typ in
-        return (Tools.comp (LT.of_rt larg_rt) ltt, mapping' @ mapping)
-      ) largs (ltt, mapping)
+
+  let var_typs = 
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) globs @
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fargs @
+    List.map (fun (varg : varg) -> (varg.name, varg.typ)) largs
   in
 
-  let (LInv lcs) = inv in
-  let* ltt = 
-    let* lcs = Assertions.resolve_constraints mapping lcs in
-    return (Tools.comp ltt (LT.mConstraints lcs))
+  let iA, iL, iR, iC = [], [], [], [] in
+  let mapping = extra.mapping in
+
+
+  (* globs and fargs *)
+  let (iL, iR, iC, mapping) = 
+    List.fold_left (fun (iL, iR, iC, mapping) aarg ->
+        let item = aarg_item (Inv lname) aarg in
+        let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
+        (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+      )
+      (iL, iR, iC, mapping) (globs @ fargs)
+  in
+  (* largs *)
+  let (iA, mapping) = 
+    List.fold_left (fun (iA, mapping) varg ->
+        let item = varg_item (Inv lname) varg in
+        let a = (varg.vsym, item.bt) in
+        (iA @ [a], mapping @ [item])
+      )
+      (iA, mapping) largs
   in
 
-  let lt = ltt (LT.I False.False) in
+  let (LInv (pre_resources, pre_constraints)) = inv in
+  let* (iL, iR, iC, mapping) = 
+    ListM.fold_rightM (fun spec (iL, iR, iC, mapping) ->
+        let* (l, r, c, mapping') = apply_ownership_spec var_typs mapping spec in
+        return (l @ iL, r @ iR, c @ iC, mapping' @ mapping)
+      )
+      pre_resources (iL, iR, iC, mapping)
+  in
+  let* iC = 
+    let* lcs = Assertions.resolve_constraints mapping pre_constraints in
+    return (lcs @ iC)
+  in
+
+  let llt = LT.mLogicals iL (LT.mResources iR (LT.mConstraints iC (LT.I False.False))) in
+  let lt = LT.mComputationals iA llt in
   return (lt, mapping)
 
 

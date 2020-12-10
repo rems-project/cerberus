@@ -22,7 +22,6 @@ open Parse_ast
 
 
 type funinfos = FT.t mu_funinfos
-type mapping = Object.mapping
 type funinfo_extras = (Sym.t, Conversions.funinfo_extra) Pmap.map
 
 

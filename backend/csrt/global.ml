@@ -74,7 +74,7 @@ type struct_decl =
      * offsets: (BT.member * Z.t) list;
      * representable: IT.t -> LC.t; *)
     (* closed: RT.t;  *)
-    closed_stored: RT.t;
+    (* closed_stored: RT.t; *)
     closed_stored_predicate_definition: 
       closed_stored_predicate_definition
   }
@@ -159,9 +159,9 @@ let pp_struct_decl (tag,decl) =
           ) decl.layout
        )
   ^/^
-  item ("struct " ^ plain (Sym.pp tag) ^ " (closed stored)") 
-       (RT.pp decl.closed_stored)
-  ^/^
+  (* item ("struct " ^ plain (Sym.pp tag) ^ " (closed stored)") 
+   *      (RT.pp decl.closed_stored)
+   * ^/^ *)
   item ("struct " ^ plain (Sym.pp tag) ^ " (packing function) at P") 
     (LFT.pp
        (decl.closed_stored_predicate_definition.pack_function
