@@ -686,7 +686,7 @@ module Make (G : sig val global : Global.t end) = struct
         let it = S (BT.Loc, ret) in
         let lcs = 
           [IT.Null it;
-           IT.Representable (ST_Pointer, it);
+           IT.Representable (ST_Ctype ct, it);
            (* check: aligned? *)
            IT.Aligned (ST.of_ctype ct, it);]
         in
@@ -1429,7 +1429,7 @@ module Make (G : sig val global : Global.t end) = struct
             let* lrt = store loc local act.item.bt (S (Loc, ret)) size None in
             let rt = 
               RT.Computational ((ret, Loc), 
-              LRT.Constraint (LC.LC (Representable (ST_Pointer, S (Loc, ret))), 
+              LRT.Constraint (LC.LC (Representable (ST_Ctype (Sctypes.pointer_sct act.item.ct), S (Loc, ret))), 
               LRT.Constraint (LC.LC (AlignedI (S (arg.bt, arg.lname), S (Loc, ret))), 
               (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
               lrt)))

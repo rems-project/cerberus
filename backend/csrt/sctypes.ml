@@ -12,7 +12,8 @@ type t_ =
 and t = 
   Sctype of CF.Annot.annot list * t_
 
-
+let pointer_sct sct = 
+  Sctype ([], Pointer (CF.Ctype.no_qualifiers, sct))
 
 
 let rec to_ctype : t -> CF.Ctype.ctype = 
