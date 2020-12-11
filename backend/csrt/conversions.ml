@@ -285,12 +285,12 @@ let make_block pointer path sct =
      in
      ([], r, [], [])
 
-let make_pred loc pointer pred path stored_type = 
+let make_pred loc v pred path sct = 
   let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
-  let pointer_it = S (BT.Loc, pointer) in
+  let it = S (BT.of_sct sct, v) in
   let* (mapping, l) = 
     ListM.fold_rightM (fun (name, LS.Base bt) (mapping, l) ->
         let s = Sym.fresh_named name in
@@ -300,7 +300,7 @@ let make_pred loc pointer pred path stored_type =
       ) def.Global.arguments ([], [])
   in
   let args = List.map fst l in
-  let r = [RE.Predicate {pointer = pointer_it; name = Id pred; args}] in
+  let r = [RE.Predicate {pointer = it; name = Id pred; args}] in
   return (l, r, [], mapping)
 
 
@@ -335,20 +335,19 @@ let type_of__vars loc var_typs name derefs =
 
 
 let apply_ownership_spec var_typs mapping (loc, (pred,path)) =
-  print stderr (item "path" (Path.pp path));
   match Path.deref_path path with
   | None ->
      fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
   | Some (bn, derefs) -> 
      let* sct = type_of__vars loc var_typs bn.v derefs in
      let* (_, sym) = Assertions.resolve_path loc mapping path in
-     match sct with
-     | Sctype (_, Pointer (_, sct2)) ->
-        begin match pred with
-        | Pred.Owned -> return (make_owned sym (Path.var bn) sct2)
-        | Pred.Block -> return (make_block sym (Path.var bn) sct2)
-        | Pred.Pred id -> make_pred loc sym id (Path.var bn) sct2 
-        end
+     match sct, pred with
+     | Sctype (_, Pointer (_, sct2)), Pred.Owned ->
+        return (make_owned sym (Path.var bn) sct2)
+     | Sctype (_, Pointer (_, sct2)), Pred.Block ->
+        return (make_block sym (Path.var bn) sct2)
+     | _, Pred.Pred id ->
+        make_pred loc sym id (Path.var bn) sct
      | _ -> 
         fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
 
@@ -444,8 +443,6 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
       (oL, oR, oC, mapping) post_resources
   in
 
-
-  print stderr (item "mapping" (Mapping.pp mapping));
 
   let* oC = 
     let* lcs = Assertions.resolve_constraints mapping post_constraints in

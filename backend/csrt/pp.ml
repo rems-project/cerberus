@@ -207,7 +207,7 @@ let error (loc : Locations.t) msg extras =
   debug 1 (lazy hardline);
   print stderr (format [FG (Red, Bright)] "error:" ^^^ 
                 format [FG (Default, Bright)] head ^^^ msg);
-  if Locations.is_unknown loc then () else  print stderr !^pos;
+  if Locations.is_unknown loc then () else print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
 
 
