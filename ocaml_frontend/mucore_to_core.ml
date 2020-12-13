@@ -570,9 +570,9 @@ let mu_to_core__fun_map (fmap1 : ('DLTY, Ctype.ctype, mu_base_type, 'bty)mu_fun_
 let mu_to_core__globs (g : (Ctype.ctype, mu_base_type, 'bty) mu_globs) 
     : (unit, 'bty) Core.generic_globs= 
    ((match g with
-  | M_GlobalDef( bt1, e) -> Core.GlobalDef( bt1, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
+  | M_GlobalDef(_, bt1, e) -> Core.GlobalDef( bt1, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) e))
-  | M_GlobalDecl bt1 -> Core.GlobalDecl bt1 
+  | M_GlobalDecl (_, bt1) -> Core.GlobalDecl bt1 
   ))
 
 (* let mu_to_core__globs_map (g : Core.generic_globs_map bty) 

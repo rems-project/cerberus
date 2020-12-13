@@ -224,8 +224,8 @@ type mu_linking_kind = Core.linking_kind
 type mu_extern_map = Core.extern_map
 
 type ('ct, 'bt, 'TY) mu_globs =
-  | M_GlobalDef of ('bt * 'ct) * ('ct, 'bt, 'TY) mu_expr
-  | M_GlobalDecl of ('bt * 'ct)
+  | M_GlobalDef of symbol * ('bt * 'ct) * ('ct, 'bt, 'TY) mu_expr
+  | M_GlobalDecl of symbol * ('bt * 'ct)
 
 type ('ct, 'bt, 'TY) mu_globs_map = (symbol, (('ct, 'bt, 'TY) mu_globs))
   Pmap.map

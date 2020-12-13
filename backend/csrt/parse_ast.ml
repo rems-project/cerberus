@@ -207,13 +207,16 @@ type resource_spec = Loc.t * (Pred.t * Path.t)
 
 type varg = { name: string; vsym: Sym.t; typ : Sctypes.t }
 type aarg = { name: string; asym: Sym.t; typ : Sctypes.t }
+type garg = { name: string; lsym: Sym.t; typ : Sctypes.t }
 
 type arg = 
   | Aarg of aarg
   | Varg of varg
+  | Garg of garg
 
 type vargs = varg list
 type aargs = aarg list
+type gargs = garg list
 
 type function_post = 
   | FPost of resource_spec list * logical_spec list
@@ -225,7 +228,7 @@ type function_pre =
   | FPre of resource_spec list * logical_spec list
 
 type function_args = 
-  | FA of {globs : aargs; fargs : aargs} 
+  | FA of {globs : gargs; fargs : aargs} 
 
 type function_type = 
   | FT of function_args * function_pre * function_return * function_post
@@ -238,7 +241,7 @@ type label_inv =
   | LInv of resource_spec list * logical_spec list
 
 type label_args = 
-  | LA of {globs : aargs; fargs : aargs; largs : vargs} 
+  | LA of {globs : gargs; fargs : aargs; largs : vargs} 
 
 type label_type = 
   | LT of label_args * label_inv

@@ -309,8 +309,8 @@ let make_pred loc v pred path sct =
 
 type funinfo_extra = 
   {mapping : mapping;
-   globs : Parse_ast.aarg list;
-   fargs : Parse_ast.aarg list}
+   globs : Parse_ast.gargs;
+   fargs : Parse_ast.aargs}
 
 
 let rec deref_path_pp name deref = 
@@ -357,16 +357,15 @@ let aarg_item l (aarg : aarg) =
   let path = Path.addr bn in
   {path; sym = aarg.asym; bt = BT.Loc}
 
-
 let varg_item l (varg : varg) =
   let bn = {v = varg.name; label = Assertions.label_name l} in
   let path = Path.var bn in
-  {path; sym = varg.vsym; bt = BT.of_sct varg.typ}
+  {path; sym = varg.vsym; bt = BT.of_sct varg.typ} 
 
-let arg_item l arg =
-  match arg with
-  | Aarg aarg -> aarg_item l aarg
-  | Varg varg -> varg_item l varg
+let garg_item l (garg : garg) =
+  let bn = {v = garg.name; label = Assertions.label_name l} in
+  let path = Path.var bn in
+  {path; sym = garg.lsym; bt = BT.of_sct garg.typ} 
 
 
 let make_fun_spec loc struct_decls globals arguments ret_sct attrs 
@@ -378,25 +377,34 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   let (FT (FA {globs; fargs}, pre, FRet ret, post)) = typ in
 
   let var_typs = 
-    List.map (fun aarg -> (aarg.name, aarg.typ)) globs @
-    List.map (fun aarg -> (aarg.name, aarg.typ)) fargs @
+    List.map (fun (garg : garg) -> (garg.name, garg.typ)) globs @
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fargs @
     [(ret.name, ret.typ)]
   in
 
-  let iL, iR, iC = [], [], [] in
+  let iA, iL, iR, iC = [], [], [], [] in
   let oL, oR, oC = [], [], [] in
   let mapping = [] in
 
-  let iA = List.map (fun aarg -> (aarg.asym, BT.Loc)) fargs in
-  (* globs and fargs *)
-  let (iL, iR, iC, mapping) = 
-    List.fold_left (fun (iL, iR, iC, mapping) aarg ->
+  (* globs *)
+  let mapping = 
+    List.fold_left (fun mapping garg ->
+        let item = garg_item Pre garg in 
+        mapping @ [item]
+      )
+      mapping globs
+  in
+
+  (* fargs *)
+  let (iA, iL, iR, iC, mapping) = 
+    List.fold_left (fun (iA, iL, iR, iC, mapping) aarg ->
+        let a = [(aarg.asym, BT.Loc)] in
         let item = aarg_item Pre aarg in
         let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
         let c = good_value aarg.asym (pointer_sct aarg.typ) @ c in
-        (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
+        (iA @ a, iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
       )
-      (iL, iR, iC, mapping) (globs @ fargs)
+      (iA, iL, iR, iC, mapping) fargs
   in
 
   let (FPre (pre_resources, pre_constraints)) = pre in
@@ -422,15 +430,24 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
     ((ret.vsym, item.bt), c, item :: mapping)
   in
 
-  (* defaults *)
+  (* globs *)
+  let mapping = 
+    List.fold_left (fun mapping garg ->
+        let item = garg_item Post garg in 
+        mapping @ [item]
+      )
+      mapping globs
+  in
+
+  (* fargs *)
   let (oL, oR, oC, mapping) = 
     List.fold_left (fun (oL, oR, oC, mapping) aarg ->
         let item = aarg_item Post aarg in
         let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
         let c = good_value aarg.asym (pointer_sct aarg.typ) @ c in
-        (oL @ l, oR @ r, oC @ c, mapping @ mapping')
+        (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
       )
-      (oL, oR, oC, mapping) (globs @ fargs)
+      (oL, oR, oC, mapping) fargs
   in
 
   let (FPost (post_resources, post_constraints)) = post in
@@ -443,12 +460,10 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
       (oL, oR, oC, mapping) post_resources
   in
 
-
   let* oC = 
     let* lcs = Assertions.resolve_constraints mapping post_constraints in
     return (lcs @ oC)
   in
-
 
   let lrt = LRT.mLogicals oL (LRT.mResources oR (LRT.mConstraints oC LRT.I)) in
   let rt = RT.mComputational oA lrt in
@@ -475,7 +490,7 @@ let make_label_spec
   let (LT (LA {globs; fargs; largs}, inv)) = ltyp in
 
   let var_typs = 
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) globs @
+    List.map (fun (garg : garg) -> (garg.name, garg.typ)) globs @
     List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fargs @
     List.map (fun (varg : varg) -> (varg.name, varg.typ)) largs
   in
@@ -483,8 +498,16 @@ let make_label_spec
   let iA, iL, iR, iC = [], [], [], [] in
   let mapping = extra.mapping in
 
+  (* globs *)
+  let mapping = 
+    List.fold_left (fun mapping garg ->
+        let item = garg_item (Inv lname) garg in 
+        mapping @ [item]
+      )
+      mapping globs
+  in
 
-  (* globs and fargs *)
+  (* fargs *)
   let (iL, iR, iC, mapping) = 
     List.fold_left (fun (iL, iR, iC, mapping) aarg ->
         let item = aarg_item (Inv lname) aarg in
@@ -492,8 +515,9 @@ let make_label_spec
         let c = good_value aarg.asym (pointer_sct aarg.typ) @ c in
         (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
-      (iL, iR, iC, mapping) (globs @ fargs)
+      (iL, iR, iC, mapping) fargs
   in
+
   (* largs *)
   let (iA, iC, mapping) = 
     List.fold_left (fun (iA, iC, mapping) varg ->

@@ -384,18 +384,18 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
     let retype_globs (sym, glob) (globs, glob_typs) =
       let loc = Loc.unknown in
       match glob with
-      | M_GlobalDef ((cbt,ct),expr) ->
+      | M_GlobalDef (lsym, (cbt,ct),expr) ->
          let* bt = Conversions.bt_of_core_base_type loc cbt in
          let* cti = ctype_information loc ct in
          let* expr = retype_expr loc expr in
-         let globs = (sym, M_GlobalDef ((bt,cti),expr)) :: globs in
-         let glob_typs = (sym, cti.ct) :: glob_typs in
+         let globs = (sym, M_GlobalDef (lsym, (bt,cti),expr)) :: globs in
+         let glob_typs = (sym, lsym, cti.ct) :: glob_typs in
          return (globs, glob_typs)
-      | M_GlobalDecl (cbt,ct) ->
+      | M_GlobalDecl (lsym, (cbt,ct)) ->
          let* bt = Conversions.bt_of_core_base_type loc cbt in
          let* cti = ctype_information loc ct in
-         let globs = (sym, M_GlobalDecl (bt,cti)) :: globs in
-         let glob_typs = (sym, cti.ct) :: glob_typs in
+         let globs = (sym, M_GlobalDecl (lsym, (bt,cti))) :: globs in
+         let glob_typs = (sym, lsym, cti.ct) :: glob_typs in
          return (globs, glob_typs)
     in
     ListM.fold_rightM retype_globs file.mu_globs ([], [])

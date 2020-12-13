@@ -141,8 +141,8 @@ let ib_fun_map (fmap1 : ('lt, 'ct, 'bt, 'bty) mu_fun_map)
 let ib_globs (g : ('ct, 'bt, 'bty) mu_globs) 
     : ('ct, 'bt, 'bty) mu_globs= 
    ((match g with
-  | M_GlobalDef( bt1, e) -> M_GlobalDef( bt1, e)
-  | M_GlobalDecl bt1 -> M_GlobalDecl bt1 
+  | M_GlobalDef(s, bt1, e) -> M_GlobalDef(s, bt1, e)
+  | M_GlobalDecl (s, bt1) -> M_GlobalDecl (s, bt1)
   ))
 
 let ib_globs_list (gs : ('ct, 'bt, 'bty) mu_globs_list)
