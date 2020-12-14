@@ -21,10 +21,10 @@ let do_stack_trace () =
 
 
 
-let at_most_one err_str = function
-  | [] -> None
-  | [x] -> (Some x)
-  | _ -> Debug_ocaml.error err_str
+(* let at_most_one err_str = function
+ *   | [] -> None
+ *   | [x] -> (Some x)
+ *   | _ -> Debug_ocaml.error err_str *)
 
 
 type stacktrace = string

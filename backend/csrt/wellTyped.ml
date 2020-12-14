@@ -337,14 +337,15 @@ module Make (G : sig val global : Global.t end) = struct
          let* () = check_bound loc local KLogical p.pointee in
          WIT.welltyped loc local (LS.Base BT.Loc) p.pointer
       | Predicate p -> 
-         let* () = WIT.welltyped loc local (LS.Base BT.Loc) p.pointer in
          let* def = match Global.get_predicate_def loc G.global p.name, p.name with
            | Some def, _ -> return def
            | None, Tag tag -> fail loc (Missing_struct tag)
            | None, Id id -> fail loc (Missing_predicate id)
          in
+         let (key_ls, args) = def.arguments in
+         let* () = WIT.welltyped loc local key_ls p.key in
          let* () = 
-           let has = List.length def.arguments in
+           let has = List.length args in
            let expect = List.length p.args in
            if has = expect then return ()
            else fail loc (Number_arguments {has; expect})
@@ -354,7 +355,7 @@ module Make (G : sig val global : Global.t end) = struct
              let has_sort = L.get_l arg local in
              if LS.equal has_sort expected_sort then return ()
              else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
-           ) (List.combine p.args (List.map snd def.arguments))
+           ) (List.combine p.args (List.map snd args))
   end
 
 

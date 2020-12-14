@@ -30,8 +30,6 @@ module SymSet = Set.Make(Sym)
 let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
 
 
-let struct_predicates = true
-
 
 
 
@@ -150,7 +148,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
                  | Sctypes.Struct tag ->
-                    RE.Predicate {pointer = member_p; name = Tag tag; args = [member_v]}
+                    RE.Predicate {key = member_p; name = Tag tag; args = [member_v]}
                  | _ -> 
                     RE.Points {pointer = member_p; pointee = member_v; size}
                in
@@ -162,7 +160,11 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let value = (member, S (bt, member_v)) :: values in
                (lrt, value)
             | None ->
-               let lrt = LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt) in
+               let size = Sym.fresh () in
+               let lrt = 
+                 LRT.Logical ((size, Base Integer),
+                 LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt)) 
+               in
                (lrt, values)
           ) layout (LRT.I, [])
       in
@@ -173,7 +175,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
       (lrt, constr)
     in
     let predicate struct_pointer = 
-      Predicate {pointer = struct_pointer; 
+      Predicate {key = struct_pointer; 
                  name = Tag tag; 
                  args = [struct_value_s]} 
     in
@@ -203,20 +205,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
 
-let good_pointer pointer pointee_sct = 
-  let pointer_it = S (BT.Loc, pointer) in
-  [
-    LC (IT.Representable (ST_Ctype (pointer_sct pointee_sct), pointer_it));
-    LC (IT.Aligned (ST_Ctype pointee_sct, pointer_it));
-  ]
 
-let good_value v sct =
-  let v_it = S (BT.of_sct sct, v) in
-  match sct with
-  | Sctype (_, Pointer (qualifiers, pointee_sct)) ->
-     good_pointer v pointee_sct
-  | _ ->
-     [LC (IT.Representable (ST_Ctype sct, v_it))]
 
 
 let make_owned pointer path sct =
@@ -228,7 +217,7 @@ let make_owned pointer path sct =
      let size = Sym.fresh () in
      let r = 
        [RE.Block {pointer = pointer_it; 
-                  size = S (Integer, size); 
+                  size;
                   block_type = Nothing}]
      in
      let l = [(size, LS.Base Integer)] in
@@ -238,7 +227,7 @@ let make_owned pointer path sct =
   | Sctype (_, Struct tag) ->
      let pointee = Sym.fresh () in
      let r = 
-       [RE.Predicate {pointer = S (BT.Loc, pointer); 
+       [RE.Predicate {key = S (BT.Loc, pointer); 
                       name = Tag tag; 
                       args = [pointee]}]
      in
@@ -255,7 +244,7 @@ let make_owned pointer path sct =
      in
      let bt = BT.of_sct sct in
      let l = [(pointee, LS.Base bt)] in
-     let c = good_value pointee sct in
+     let c = [LC (good_value pointee sct)] in
      let mapping = 
        [{path = Path.pointee path; sym = pointee; bt}] in
      (l, r, c, mapping)
@@ -265,42 +254,40 @@ let make_block pointer path sct =
   let open Pred in
   let open Sctypes in
   let pointer_it = S (BT.Loc, pointer) in
-  match sct with
-  | Sctype (_, Void) ->
-     let size = Sym.fresh () in
-     let r = 
-       [RE.Block {pointer = pointer_it; 
-                  size = S (Integer, size); 
-                  block_type = Nothing}]
-     in
-     let l = [(size, LS.Base Integer)] in
-     let mapping = 
-       [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
-     (l, r, [], mapping)
-  | _ -> 
-     let r = 
-       [RE.Block {pointer = pointer_it; 
-                  size = Num (Memory.size_of_ctype sct); 
-                  block_type = Nothing}]
-     in
-     ([], r, [], [])
+  let size = Sym.fresh () in
+  let l = [(size, LS.Base Integer)] in
+  let r = 
+    [RE.Block {pointer = pointer_it; 
+               size;
+               block_type = Nothing}]
+  in
+  let (c, mapping) = match sct with
+    | Sctype (_, Void) ->
+       let mapping = 
+         [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
+       ([], mapping)
+    | _ -> 
+       let c = [LC (EQ (S (BT.Integer, size), Num (Memory.size_of_ctype sct)))] in
+       (c, [])
+  in
+  (l, r, c, mapping)
 
-let make_pred loc v pred path sct = 
+let make_pred loc v pred path = 
   let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
-  let it = S (BT.of_sct sct, v) in
+  let (Base key_bt, args) = def.Global.arguments in
   let* (mapping, l) = 
     ListM.fold_rightM (fun (name, LS.Base bt) (mapping, l) ->
-        let s = Sym.fresh_named name in
+        let s = Sym.fresh () in
         let l = (s, LS.Base bt) :: l in
         let mapping = {path = Path.predarg (Pred pred) path name; sym = s; bt = bt} :: mapping in
         return (mapping, l)
-      ) def.Global.arguments ([], [])
+      ) args ([], [])
   in
   let args = List.map fst l in
-  let r = [RE.Predicate {pointer = it; name = Id pred; args}] in
+  let r = [RE.Predicate {key = S (key_bt, v); name = Id pred; args}] in
   return (l, r, [], mapping)
 
 
@@ -347,7 +334,7 @@ let apply_ownership_spec var_typs mapping (loc, (pred,path)) =
      | Sctype (_, Pointer (_, sct2)), Pred.Block ->
         return (make_block sym (Path.var bn) sct2)
      | _, Pred.Pred id ->
-        make_pred loc sym id (Path.var bn) sct
+        make_pred loc sym id (Path.var bn)
      | _ -> 
         fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
 
@@ -364,7 +351,7 @@ let varg_item l (varg : varg) =
 
 let garg_item l (garg : garg) =
   let bn = {v = garg.name; label = Assertions.label_name l} in
-  let path = Path.var bn in
+  let path = Path.addr bn in
   {path; sym = garg.lsym; bt = BT.of_sct garg.typ} 
 
 
@@ -387,12 +374,17 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   let mapping = [] in
 
   (* globs *)
-  let mapping = 
-    List.fold_left (fun mapping garg ->
-        let item = garg_item Pre garg in 
-        mapping @ [item]
+  let (iL, iR, iC, mapping) = 
+    List.fold_left (fun (iL, iR, iC, mapping) garg ->
+        let item = garg_item Pre garg in
+        let (l, r, c, mapping') = 
+          if garg.accessed 
+          then make_owned garg.lsym item.path garg.typ 
+          else ([], [], [], [])
+        in
+        (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
       )
-      mapping globs
+      (iL, iR, iC, mapping) globs
   in
 
   (* fargs *)
@@ -401,7 +393,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
         let a = [(aarg.asym, BT.Loc)] in
         let item = aarg_item Pre aarg in
         let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
-        let c = good_value aarg.asym (pointer_sct aarg.typ) @ c in
+        let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
         (iA @ a, iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
       )
       (iA, iL, iR, iC, mapping) fargs
@@ -426,17 +418,22 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   (* ret *)
   let (oA, oC, mapping) = 
     let item = varg_item Post ret in
-    let c = good_value ret.vsym ret.typ in
+    let c = [LC (good_value ret.vsym ret.typ)] in
     ((ret.vsym, item.bt), c, item :: mapping)
   in
 
   (* globs *)
-  let mapping = 
-    List.fold_left (fun mapping garg ->
-        let item = garg_item Post garg in 
-        mapping @ [item]
+  let (oL, oR, oC, mapping) = 
+    List.fold_left (fun (oL, oR, oC, mapping) garg ->
+        let item = garg_item Post garg in
+        let (l, r, c, mapping') = 
+          if garg.accessed 
+          then make_owned garg.lsym item.path garg.typ 
+          else ([], [], [], [])
+        in
+        (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
       )
-      mapping globs
+      (oL, oR, oC, mapping) globs
   in
 
   (* fargs *)
@@ -444,7 +441,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
     List.fold_left (fun (oL, oR, oC, mapping) aarg ->
         let item = aarg_item Post aarg in
         let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
-        let c = good_value aarg.asym (pointer_sct aarg.typ) @ c in
+        let c = LC (good_value aarg.asym (pointer_sct aarg.typ) ):: c in
         (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
       )
       (oL, oR, oC, mapping) fargs
@@ -499,12 +496,17 @@ let make_label_spec
   let mapping = extra.mapping in
 
   (* globs *)
-  let mapping = 
-    List.fold_left (fun mapping garg ->
-        let item = garg_item (Inv lname) garg in 
-        mapping @ [item]
+  let (iL, iR, iC, mapping) = 
+    List.fold_left (fun (iL, iR, iC, mapping) garg ->
+        let item = garg_item (Inv lname) garg in
+        let (l, r, c, mapping') = 
+          if garg.accessed 
+          then make_owned garg.lsym item.path garg.typ 
+          else ([], [], [], [])
+        in
+        (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
-      mapping globs
+      (iL, iR, iC, mapping) globs
   in
 
   (* fargs *)
@@ -512,7 +514,6 @@ let make_label_spec
     List.fold_left (fun (iL, iR, iC, mapping) aarg ->
         let item = aarg_item (Inv lname) aarg in
         let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
-        let c = good_value aarg.asym (pointer_sct aarg.typ) @ c in
         (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
       (iL, iR, iC, mapping) fargs
@@ -523,7 +524,7 @@ let make_label_spec
     List.fold_left (fun (iA, iC, mapping) varg ->
         let item = varg_item (Inv lname) varg in
         let a = (varg.vsym, item.bt) in
-        let c = good_value varg.vsym varg.typ in
+        let c = [LC (good_value varg.vsym varg.typ)] in
         (iA @ [a], iC @ c, mapping @ [item])
       )
       (iA, iC, mapping) largs

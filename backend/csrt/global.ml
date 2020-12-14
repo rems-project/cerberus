@@ -20,13 +20,58 @@ module FT = ArgumentTypes.Make(RT)
 
 
 type resource_predicate = 
-  { arguments : (string * LS.t) list;
+  { arguments : LS.t * (string * LS.t) list;
     pack_functions : IT.t -> (LFT.t List1.t);
     unpack_functions : IT.t -> (LFT.t List1.t);
   }
 
 
-let builtin_predicates = IdMap.empty
+
+let early = 
+  let open BT in
+  let open IT in
+  let id = Id.parse Location_ocaml.unknown "Early" in
+  let arguments = (LS.Base Integer, [("end", LS.Base Integer)]) in
+  let s_end = Sym.fresh () in 
+  let size = Sym.fresh () in 
+  let pred start = Resources.Predicate {key = start; name = Id id; args = [s_end]} in
+  let lc start = 
+    EQ (S (Integer, size), 
+        Add (Sub (S (Integer, s_end), start), 
+             Num (Z.of_int 1)))
+  in
+  let pack_function start = 
+    LFT.Logical ((size, LS.Base Integer), 
+    LFT.Resource (Block {pointer = IntegerToPointerCast start; size; block_type = Nothing}, 
+    LFT.I (
+    LRT.Logical ((s_end, LS.Base Integer), 
+    LRT.Resource (pred start, 
+    LRT.Constraint (LC (lc start), 
+    LRT.I))))))
+  in
+  let unpack_function start = 
+    LFT.Logical ((s_end, LS.Base Integer), 
+    LFT.Resource (pred start, 
+    LFT.I (
+    LRT.Logical ((size, LS.Base Integer), 
+    LRT.Resource (Block {pointer = IntegerToPointerCast start; size; block_type = Nothing}, 
+    LRT.Constraint (LC (lc start), 
+    LRT.I))))))
+  in
+  let pack_functions start = List1.make (pack_function start, []) in
+  let unpack_functions start = List1.make (unpack_function start,[]) in
+  let predicate = {arguments; pack_functions; unpack_functions} in
+  (id, predicate)
+
+
+let builtin_predicates_list = [
+    early
+  ]
+
+let builtin_predicates =
+  List.fold_left (fun acc (name,def) -> IdMap.add name def acc) 
+    IdMap.empty builtin_predicates_list
+  
 
 
 
@@ -109,6 +154,9 @@ type t =
     resource_predicates : resource_predicate IdMap.t;
     solver_context : Z3.context;
     (* solver_bt_mapping : Z3.Sort.sort BTMap.t; *)
+    logical : (Sym.t * LS.t) list;
+    computational : (Sym.t * (Sym.t * BT.t)) list;
+    constraints : (LC.t * Z3.Expr.expr) list;
   } 
 
 let empty solver_context = 
@@ -120,6 +168,9 @@ let empty solver_context =
     resource_predicates = builtin_predicates;
     solver_context;
     (* solver_bt_mapping = BTMap.empty; *)
+    logical = [];
+    computational = [];
+    constraints = [];
   }
 
 let get_predicate_def loc global predicate_name = 
@@ -138,7 +189,7 @@ let get_predicate_def loc global predicate_name =
          fun it -> 
          List1.one (decl.closed_stored_predicate_definition.unpack_function it)
        in
-       Some {arguments = [("value", LS.Base (Struct tag))];
+       Some {arguments = (LS.Base Loc, [("value", LS.Base (Struct tag))]);
              pack_functions; 
              unpack_functions}
 

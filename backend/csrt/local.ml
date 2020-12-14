@@ -57,44 +57,6 @@ module VariableBinding = struct
        then btyp sym (LC.pp lc)
        else LC.pp lc
 
-  (* let json_computational (sym, (lname, bt)) = 
-   *   let args = `Assoc [("basetype", BT.json bt); ("logical", Sym.json lname)] in
-   *   let bound = `Variant ("Computational", args) in
-   *   (Sym.json sym, bound)
-   * 
-   * let json_logical (sym, ls) = 
-   *   let args = LS.json ls in
-   *   (Sym.json sym, `Variant ("Logical", args))
-   * 
-   * let json_resource (_sym, re) = 
-   *   let args = RE.json re in
-   *   (`Null, `Variant ("Resource", args))
-   * 
-   * let json_used_resource (_sym, (re, where)) = 
-   *   let args = 
-   *     `Assoc [("used", List.json Loc.json_loc where); 
-   *             ("resource", RE.json re)] in
-   *   (`Null, `Variant ("UsedResource", args))
-   * 
-   * let json_constraint (_sym, lc) = 
-   *   let args = LC.json lc in
-   *   (`Null, `Variant ("Constraint", args))
-   * 
-   * 
-   * let json (sym, binding) = 
-   *   let (name,bound) = 
-   *     match binding with
-   *     | Computational (lname,bt) -> json_computational (sym, (lname, bt))
-   *     | Logical ls -> json_logical (sym, ls)
-   *     | Resource re -> json_resource (sym, re)
-   *     | UsedResource (re,locs) -> json_used_resource (sym, (re, locs))
-   *     | Constraint lc -> json_constraint (sym, lc)
-   *   in
-   *   `Assoc [
-   *       ("name", `String (Sym.pp_string sym));
-   *       ("bound", bound);
-   *       ] *)
-
 
 
   let agree vb1 vb2 = 
@@ -175,11 +137,17 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* internal *)
-  let get (sym: Sym.t) (Local local) : VariableBinding.t =
+  let get_safe (sym: Sym.t) (Local local) : VariableBinding.t option =
     let rec aux = function
-    | Binding (sym',b) :: _ when Sym.equal sym' sym -> b
+    | Binding (sym',b) :: _ when Sym.equal sym' sym -> Some b
     | _ :: local -> aux local
-    | [] -> unbound_internal_error sym
+    | [] -> 
+       match List.assoc_opt Sym.equal sym G.global.logical with
+       | Some ls -> Some (Logical ls)
+       | None ->
+          match List.assoc_opt Sym.equal sym G.global.computational with
+          | Some (lsym, bt) -> Some (Computational (lsym, bt))
+          | None -> None
     in
     aux local
 
@@ -197,6 +165,8 @@ module Make (G : sig val global : Global.t end) = struct
         | Computational (lname, b) -> Some (name, (lname, b))
         | _ -> None
       ) local
+    @
+    G.global.computational
 
   let all_logical local = 
     filter (fun name b ->
@@ -204,6 +174,8 @@ module Make (G : sig val global : Global.t end) = struct
         | Logical ls -> Some (name, ls)
         | _ -> None
       ) local
+    @
+    G.global.logical
 
   let all_resources local = 
     filter (fun name b ->
@@ -236,26 +208,29 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let all_constraints local = 
-    filter (fun name b ->
-        match b with
-        | Constraint (lc, _) -> Some lc
-        | _ -> None
-      ) local
+    let from_local = 
+      filter (fun name b ->
+          match b with
+          | Constraint (lc, _) -> Some lc
+          | _ -> None
+        ) local
+    in
+    let from_global = List.map fst G.global.constraints in
+    from_local @ from_global
+  
 
   let all_solver_constraints local = 
-    filter (fun name b ->
-        match b with
-        | Constraint (_, sc) -> Some sc
-        | _ -> None
-      ) local
+    let from_local = 
+      filter (fun name b ->
+          match b with
+          | Constraint (_, sc) -> Some sc
+          | _ -> None
+        ) local
+    in
+    let from_global = List.map snd G.global.constraints in
+    from_local @ from_global
 
 
-  let all_named_constraints local = 
-    filter (fun name b ->
-        match b with
-        | Constraint (lc, sc) -> Some (name, (lc, sc))
-        | _ -> None
-      ) local
 
 
 
@@ -298,15 +273,11 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let kind sym (Local local) = 
-    let rec aux = function
-      | [] -> None
-      | Binding (sym',binding) :: rest ->
-         if Sym.equal sym' sym 
-         then Some (VariableBinding.kind binding)
-         else aux rest
-      | Marker :: rest -> aux rest
-    in
-    aux local
+    Option.bind 
+      (get_safe sym (Local local))
+      (fun b -> Some (kind b))
+
+
 
   let bound sym local = 
     Option.is_some (kind sym local)
@@ -344,28 +315,25 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let get_a (name: Sym.t) (local:t)  = 
-    match get name local with 
-    | Computational (lname,bt) -> (bt,lname)
-    | b -> kind_mismatch_internal_error 
-             ~expect:KComputational ~has:(VariableBinding.kind b)
+    match get_safe name local with 
+    | None -> unbound_internal_error name
+    | Some (Computational (lname,bt)) -> (bt,lname)
+    | Some b -> kind_mismatch_internal_error 
+                  ~expect:KComputational ~has:(VariableBinding.kind b)
 
   let get_l (name: Sym.t) (local:t) = 
-    match get name local with 
-    | Logical ls -> ls
-    | b -> kind_mismatch_internal_error 
-             ~expect:KLogical ~has:(VariableBinding.kind b)
+    match get_safe name local with 
+    | None -> unbound_internal_error name
+    | Some (Logical ls) -> ls
+    | Some b -> kind_mismatch_internal_error 
+                  ~expect:KLogical ~has:(VariableBinding.kind b)
 
   let get_r (name: Sym.t) (local:t) = 
-    match get name local with 
-    | Resource re -> re
-    | b -> kind_mismatch_internal_error 
-             ~expect:KResource ~has:(VariableBinding.kind b)
-
-  let get_c (name: Sym.t) (local:t) = 
-    match get name local with 
-    | Constraint (lc, _) -> lc
-    | b -> kind_mismatch_internal_error 
-             ~expect:KConstraint ~has:(VariableBinding.kind b)
+    match get_safe name local with 
+    | None -> unbound_internal_error name
+    | Some (Resource re) -> re
+    | Some b -> kind_mismatch_internal_error 
+                  ~expect:KResource ~has:(VariableBinding.kind b)
 
 
   let add_a aname (bt,lname) = 
@@ -374,12 +342,9 @@ module Make (G : sig val global : Global.t end) = struct
   let add_l lname ls local = 
     add (lname, Logical ls) local
 
-  let add_c cname (LC.LC lc) local = 
+  let add_uc (LC.LC lc) local = 
     let sc = SolverConstraints.of_index_term G.global lc in
-    add (cname, Constraint (LC lc, sc)) local
-
-  let add_uc lc local = 
-    add_c (Sym.fresh ()) lc local
+    add (Sym.fresh (), Constraint (LC lc, sc)) local
 
 
   let add_r rname r local = 
@@ -393,7 +358,7 @@ module Make (G : sig val global : Global.t end) = struct
                )
            ) (all_resources local) 
     in
-    add_uc (LC (And lcs)) 
+    add_uc (LC.LC (And lcs))
       (add (rname, Resource r) local)
 
   let add_ur re local = 
@@ -406,7 +371,10 @@ module Make (G : sig val global : Global.t end) = struct
 
   let (++) = concat
 
-  let all_names = filter (fun sym _ -> Some sym)
+  let all_names local = 
+    filter (fun sym _ -> Some sym) local @
+    List.map fst G.global.computational @
+    List.map fst G.global.logical
 
 
 

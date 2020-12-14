@@ -15,7 +15,7 @@ module StringMap = Map.Make(String)
 (* more to be added *)
 type memory_state = 
   | Nothing
-  | Block of RE.block_type * IT.t
+  | Block of RE.block_type * Sym.t
   | Integer of string * RE.size
   | Location of string * RE.size
   | Within of {base_location : string; resource : Sym.t}
@@ -58,7 +58,7 @@ let model local solver : t option =
            ) (L.all_logical local)
        in
        let from_resources = 
-         List.map RE.pointer (L.all_resources local)
+         List.filter_map RE.pointer (L.all_resources local)
        in
        List.fold_right (fun location_it acc ->
            let expr = SolverConstraints.of_index_term G.global location_it in
@@ -70,7 +70,7 @@ let model local solver : t option =
      let memory_state = 
        List.map (fun (location_s, location_it) ->
            let o_resource = 
-             Solver.resource_for_pointer local location_it in
+             Solver.resource_for local location_it in
            let state = match o_resource with
              | None -> Nothing
              | Some (_, RE.Block b) -> (Block (b.block_type, b.size))
@@ -151,9 +151,9 @@ let pp_variable_and_location_state ( ovar, { location; state } ) =
     | Nothing -> Pp.empty, Pp.empty
     | Block (block_type,size) -> 
        begin match block_type with
-       | Nothing -> !^"block", IT.pp size
-       | Uninit -> !^"uninitialised", IT.pp size
-       | Padding -> !^"padding", IT.pp size
+       | Nothing -> !^"block", Sym.pp size
+       | Uninit -> !^"uninitialised", Sym.pp size
+       | Padding -> !^"padding", Sym.pp size
        end
     | Integer (value, size) -> typ !^value !^"integer", Z.pp size
     | Location (value, size) -> typ !^value !^"pointer", Z.pp size

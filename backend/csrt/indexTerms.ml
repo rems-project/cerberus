@@ -813,3 +813,26 @@ let int x = Num (Z.of_int x)
 
 
 
+
+
+
+
+let good_pointer pointer pointee_sct = 
+  let pointer_it = S (BT.Loc, pointer) in
+  match pointee_sct with
+  | Sctypes.Sctype (_, Void) ->
+     Representable (ST_Ctype (Sctypes.pointer_sct pointee_sct), pointer_it);
+  | _ -> 
+     And [
+         Representable (ST_Ctype (Sctypes.pointer_sct pointee_sct), pointer_it);
+         Aligned (ST_Ctype pointee_sct, pointer_it);
+       ]
+
+
+let good_value v sct =
+  let v_it = S (BT.of_sct sct, v) in
+  match sct with
+  | Sctype (_, Pointer (qualifiers, pointee_sct)) ->
+     good_pointer v pointee_sct
+  | _ ->
+     Representable (ST_Ctype sct, v_it)

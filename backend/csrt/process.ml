@@ -89,6 +89,9 @@ let process_functions genv fns =
 
 
 
+
+
+
 let process mu_file =
 
   Debug_ocaml.begin_csv_timing "overall";
@@ -102,6 +105,28 @@ let process mu_file =
   let* global = record_tagDefs global mu_file.mu_tagDefs in
 
   let global = record_impl global mu_file.mu_impl in
+
+  let* global = 
+    let open Global in
+    let open PreProcess in
+    ListM.fold_leftM (fun global (sym, def) ->
+        match def with
+        | M_GlobalDef (lsym, (_, cti), e) ->
+           let logical = (lsym, LS.Base Loc) :: global.logical in
+           let computational = (sym, (lsym, BT.Loc)) :: global.computational in
+           let it = IT.good_pointer lsym cti.ct in
+           let sc = SolverConstraints.of_index_term global it in
+           let constraints = (LC.LC it,sc) :: global.constraints in
+           return {global with logical; computational; constraints}
+        | M_GlobalDecl (lsym, (_, cti)) ->
+           let logical = (lsym, LS.Base Loc) :: global.logical in
+           let computational = (sym, (lsym, BT.Loc)) :: global.computational in
+           let it = IT.good_pointer lsym cti.ct in
+           let sc = SolverConstraints.of_index_term global it in
+           let constraints = (LC.LC it,sc) :: global.constraints in
+           return {global with logical; computational; constraints}
+      ) global mu_file.mu_globs
+  in
 
   let* global = record_funinfo global mu_file.mu_funinfo in
 

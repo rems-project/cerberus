@@ -207,7 +207,7 @@ type resource_spec = Loc.t * (Pred.t * Path.t)
 
 type varg = { name: string; vsym: Sym.t; typ : Sctypes.t }
 type aarg = { name: string; asym: Sym.t; typ : Sctypes.t }
-type garg = { name: string; lsym: Sym.t; typ : Sctypes.t }
+type garg = { name: string; lsym: Sym.t; typ : Sctypes.t; accessed : bool }
 
 type arg = 
   | Aarg of aarg

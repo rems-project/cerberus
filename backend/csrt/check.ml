@@ -336,6 +336,9 @@ module Make (G : sig val global : Global.t end) = struct
 
       let unis = SymMap.empty in
 
+      (* print stderr (item "local" (L.pp local));
+       * print stderr (item "spec" (NFT.pp ftyp)); *)
+
       let* ftyp_l = 
         let rec check_computational args ftyp = 
           match args, ftyp with
@@ -357,6 +360,8 @@ module Make (G : sig val global : Global.t end) = struct
 
       let* ((unis, lspec), ftyp_r) = 
         let rec delay_logical (unis, lspec) ftyp =
+          (* print stderr (item "local" (L.pp local));
+           * print stderr (item "spec" (NFT.pp_l ftyp)); *)
           match ftyp with
           | Logical ((s, ls), ftyp) ->
              let s' = Sym.fresh () in
@@ -370,7 +375,10 @@ module Make (G : sig val global : Global.t end) = struct
       in
 
       let* (local, unis, ftyp_c) = 
-        let rec infer_resources local unis = function
+        let rec infer_resources local unis ftyp = 
+          (* print stderr (item "local" (L.pp local));
+           * print stderr (item "spec" (NFT.pp_r ftyp)); *)
+          match ftyp with
           | Resource (resource, ftyp) -> 
              let* (unis, local) = 
                prompt (R_Resource {loc; situation; local; unis; resource}) in
@@ -423,21 +431,27 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let rec remove_ownership_prompt (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
+    print stderr (item "pointer" (IT.pp pointer));
+    print stderr (item "need_size" (IT.pp need_size));
     let open Prompt.Operators in
     if S.equal local need_size (Num Z.zero) then 
       return local
     else
-      let o_resource = S.resource_for_pointer local pointer in
-      let* resource_name, have_size = match o_resource with
-        | Some (resource_name, Predicate pred) -> 
-           fail loc (Cannot_unpack (pred, situation))
-        | Some (resource_name, Block {size; _}) ->
-           return (resource_name, size)
-        | Some (resource_name, Points {size; _}) ->
-           return (resource_name, Num size)
+      let o_resource = S.resource_for local pointer in
+      let* resource_name, resource = match o_resource with
         | None -> 
-           let olast_used = S.used_resource_for_pointer local pointer in
+           let olast_used = S.used_resource_for local pointer in
            fail loc (Missing_ownership (None, olast_used, situation))
+        | Some (resource_name, resource) -> 
+           return (resource_name, resource)
+      in
+      let* have_size = match resource with
+        | Predicate pred -> 
+           fail loc (Cannot_unpack (pred, situation))
+        | Block {size; _} ->
+           return (S (Integer, size))
+        | Points {size; _} ->
+           return (Num size)
       in
       if S.ge local need_size have_size then 
         let local = L.use_resource resource_name [loc] local in
@@ -446,17 +460,20 @@ module Make (G : sig val global : Global.t end) = struct
       else if S.lt local need_size have_size then 
         (* if the resource is bigger than needed, keep the remainder
            as unitialised memory *)
+        let newsize = Sym.fresh () in
         let local = L.use_resource resource_name [loc] local in
+        let local = L.add_l newsize (LS.Base Integer) local in
         let local = 
           add_ur (
               RE.Block {pointer = Offset (pointer, need_size); 
-                        size = IT.Sub (have_size, need_size); 
+                        size = newsize; 
                         block_type = Nothing}
             ) local
         in
+        let local = L.add_uc (LC (EQ (S (Integer, newsize), IT.Sub (have_size, need_size)))) local in
         return local
       else
-        return local
+        fail loc (Generic (!^"cannot tell size of available resource" ^^^ RE.pp resource))
 
 
 
@@ -464,13 +481,13 @@ module Make (G : sig val global : Global.t end) = struct
 
   let rec resource_request_prompt loc situation local request unis = 
     let open Prompt.Operators in
-    let pointer = RE.pointer request in
+    let key = RE.key request in
     match request with
     | Block b ->
-       let* local = remove_ownership_prompt loc situation local b.pointer b.size in
+       let* local = remove_ownership_prompt loc situation local b.pointer (S (Integer, b.size)) in
        return (unis, local)
     | Points p ->
-       let o_resource = S.resource_for_pointer local p.pointer in
+       let o_resource = S.resource_for local p.pointer in
        begin match o_resource with
        | Some (resource_name, Points p') when Z.equal p.size p'.size ->
           begin match Uni.unify_sym p.pointee p'.pointee unis with
@@ -483,11 +500,11 @@ module Make (G : sig val global : Global.t end) = struct
        | Some (resource_name, resource)  ->
           fail loc (Resource_mismatch {expect = request; has = resource; situation})             
        | None -> 
-          let olast_used = S.used_resource_for_pointer local p.pointer in
+          let olast_used = S.used_resource_for local p.pointer in
           fail loc (Missing_ownership (None, olast_used, situation))
        end
     | Predicate p ->
-       let o_resource = S.resource_for_pointer local pointer in
+       let o_resource = S.resource_for local key in
        begin match o_resource with
        | Some (resource_name, Predicate p') -> 
           begin match Uni.unify_syms p.args p'.args unis with
@@ -508,14 +525,14 @@ module Make (G : sig val global : Global.t end) = struct
           let attempt_prompts = 
             List1.map (fun clause ->
                 prompt (R_Packing {loc; situation; local; lft = clause})
-              ) (def.pack_functions p.pointer)
+              ) (def.pack_functions p.key)
           in
           let choices = List1.concat attempt_prompts (List1.one else_prompt) in
           let* (lrt, local) = try_choices choices  in
           let local = bind_logical local lrt in
           resource_request_prompt loc situation local request unis
        | None -> 
-          let olast_used = S.used_resource_for_pointer local pointer in
+          let olast_used = S.used_resource_for local key in
           fail loc (Missing_ownership (None, olast_used, situation))
        end
 
@@ -599,7 +616,7 @@ module Make (G : sig val global : Global.t end) = struct
                      let test_local = bind_logical test_local lrt in
                      let is_reachable = S.is_consistent test_local in
                      return (if is_reachable then Some test_local else None)
-                   ) (List1.to_list (def.unpack_functions p.pointer))
+                   ) (List1.to_list (def.unpack_functions p.key))
                in
                begin match possible_unpackings with
                | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
@@ -1205,7 +1222,7 @@ module Make (G : sig val global : Global.t end) = struct
          in  
          aux_members (Global.members decl.layout)
       | _ ->
-         let o_resource = S.resource_for_pointer local pointer in
+         let o_resource = S.resource_for local pointer in
          let* pointee = match o_resource with
            | Some (_,resource) -> 
               begin match resource with
@@ -1217,7 +1234,7 @@ module Make (G : sig val global : Global.t end) = struct
               | Predicate pred -> fail loc (Cannot_unpack (pred, Access Load))
               end
            | None -> 
-              let olast_used = S.used_resource_for_pointer local pointer in
+              let olast_used = S.used_resource_for local pointer in
               fail loc (Missing_ownership (is_field, olast_used, Access Load))
          in
          let (Base vbt) = L.get_l pointee local in
@@ -1253,9 +1270,12 @@ module Make (G : sig val global : Global.t end) = struct
                let* rt2 = aux members in
                return (rt@@rt2)
             | None ->
+               let size_sym = Sym.fresh () in
                let rt = 
-                 LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); 
-                                      size = Num size; block_type = Padding}, I) in
+                 LRT.Logical ((size_sym, LS.Base Integer),
+                 LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); size = size_sym; block_type = Padding}, 
+                 LRT.Constraint (LC (EQ (S (Integer, size_sym), Num size)), 
+                 LRT.I))) in
                let* rt2 = aux members in
                return (rt@@rt2)
        in  
@@ -1271,8 +1291,14 @@ module Make (G : sig val global : Global.t end) = struct
             in
             return rt
          | None -> 
-            return (Resource (Block {pointer; size = Num size; 
-                                     block_type = Uninit}, I))
+            let size_sym = Sym.fresh () in
+            let rt = 
+              LRT.Logical ((size_sym, LS.Base Integer),
+              (Resource (Block {pointer; size = size_sym; block_type = Uninit}, 
+                LRT.Constraint (LC (EQ (S (Integer, size_sym), Num size)), 
+                 LRT.I))))
+            in
+            return rt
 
 
 
@@ -1389,9 +1415,7 @@ module Make (G : sig val global : Global.t end) = struct
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
             let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let o_resource = 
-              S.resource_for_pointer local (S (arg.bt, arg.lname))
-            in
+            let o_resource = S.resource_for local (S (arg.bt, arg.lname)) in
             let resource_ok = 
               match Option.bind o_resource (Tools.comp RE.size snd) with
               | Some size' when S.equal local size' (Num size) -> true
@@ -1473,9 +1497,12 @@ module Make (G : sig val global : Global.t end) = struct
                 fail loc (Generic !^"write value unrepresentable")
             in
             let size = Memory.size_of_ctype act.item.ct in
+            print stderr !^"HERHERHERHERHE";
+            print stderr (item "local before" (L.pp local));
             let* local = 
               remove_ownership parg.loc (Access Store) local (S (parg.bt, parg.lname)) 
                 (Num size) in
+            print stderr (item "local after" (L.pp local));
             let* bindings = 
               store loc local varg.bt (S (parg.bt, parg.lname))
                 size (Some (S (varg.bt, varg.lname))) in
@@ -1734,9 +1761,8 @@ module Make (G : sig val global : Global.t end) = struct
         | args, (T.Resource (re, ftyp)) ->
            check acc_substs (add_ur re local) pure_local args ftyp
         | args, (T.Constraint (lc, ftyp)) ->
-           let cname = Sym.fresh () in
-           let local = add_c cname lc local in
-           let pure_local = add_c cname lc pure_local in
+           let local = add_uc lc local in
+           let pure_local = add_uc lc pure_local in
            check acc_substs local pure_local args ftyp
         | [], (T.I rt) ->
            return (rt, local, pure_local, acc_substs)
@@ -1786,6 +1812,7 @@ module Make (G : sig val global : Global.t end) = struct
     Debug_ocaml.begin_csv_timing "check_procedure";
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
     debug 2 (lazy (item "type" (FT.pp function_typ)));
+
     let* (rt, delta, pure_delta, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in
@@ -1856,6 +1883,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
+     - check globals with expressions
+     - fix problems with order of multiple "requires" clauses
      - give types for standard library functions
      - better location information for refined_c annotations
      - fix Ecase "LC (Bool true)"

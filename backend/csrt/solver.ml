@@ -70,22 +70,25 @@ module Make (G : sig val global : Global.t end) = struct
     holds
 
 
-  let resource_for_pointer local pointer_it
+  let resource_for local it
        : (Sym.t * RE.t) option = 
     let points = 
       List.filter_map (fun (name, re) ->
-          let holds = equal local pointer_it (RE.pointer re) in
+          let holds = equal local it (RE.key re) in
           (if holds then Some (name, re) else None)
         ) (L.all_named_resources local)
     in
-    Tools.at_most_one "multiple points-to for same pointer" points
+    match points with
+    | [] -> None
+    | [r] -> Some r
+    | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points))))
 
 
-  let used_resource_for_pointer local pointer_it
+  let used_resource_for local it
       : (Loc.t list) option = 
     let points = 
       List.filter_map (fun (name, (re, where)) ->
-          let holds = equal local pointer_it (RE.pointer re) in
+          let holds = equal local it (RE.key re) in
           (if holds then Some (where) else None)
         ) (L.all_named_used_resources local)
     in

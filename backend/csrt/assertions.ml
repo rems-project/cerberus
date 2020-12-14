@@ -25,7 +25,7 @@ let find_name loc names str =
 
 let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, type_error) m = 
   (* print stderr (item "mapping" (Mapping.pp mapping));
-   * print stderr (item "o" (Object.pp o)); *)
+   * print stderr (item "o" (Path.pp o)); *)
   let open Mapping in
   let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
   match found with
@@ -138,11 +138,6 @@ let parse_condition loc default_label s =
 
 
 
-let get_attribute_args (CF.Annot.Attrs attrs) attribute_name =
-  List.concat_map (fun a -> 
-      if String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
-      then a.attr_args else []
-    ) attrs 
 
 
 type pre_or_post = 
@@ -156,14 +151,31 @@ let label_name = function
   | Inv label -> label
 
 
-let pre_or_post loc kind attrs = 
+let accesses loc (CF.Annot.Attrs attrs) = 
+  let attribute_name = "accesses" in
+  let relevant = 
+    List.concat_map (fun a -> 
+        if String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
+        then a.attr_args else []
+      ) attrs 
+  in
+  List.map (fun (loc',str) -> 
+      let loc = Locations.update loc loc' in
+      (loc, str)
+    ) relevant
 
+let pre_or_post loc kind (CF.Annot.Attrs attrs) = 
   let attribute_name = match kind with
     | Pre -> "requires"
     | Post -> "ensures"
     | Inv _ -> "inv"
   in 
-  let relevant = get_attribute_args attrs attribute_name in
+  let relevant = 
+    List.concat_map (fun a -> 
+        if String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
+        then a.attr_args else []
+      ) attrs 
+  in
   (* print stderr (item "number" (!^(string_of_int (List.length relevant)))); *)
   let* requirements = 
     ListM.mapM 
@@ -231,12 +243,13 @@ let named_ctype_to_varg loc (sym, ct) =
   in
   { name; vsym = sym; typ = ct }
 
-let named_ctype_to_garg loc (sym, lsym, ct) =
+let named_ctype_to_garg loc accesses (sym, lsym, ct) =
   let name = match Sym.name sym with
     | Some name -> name
     | None -> Sym.pp_string sym
   in
-  { name; lsym = lsym; typ = ct }
+  let accessed = List.mem name accesses in
+  { name; lsym = lsym; typ = ct; accessed }
 
 
 
@@ -246,10 +259,24 @@ let named_ctype_to_garg loc (sym, lsym, ct) =
 
 let parse_function_type loc attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sym.t * Sctypes.t) list)) =
   (* collect information *)
+  let accessed = accesses loc attrs in
   let* (pre_resources, pre_constraints) = requires loc attrs in
   let* (post_resources, post_constraints) = ensures loc attrs in
+  let* () = 
+    let accessed_not_glob = 
+      List.find_opt (fun (loc, name) ->
+          not (List.exists (fun (gsym, _, _) ->
+                   Option.equal String.equal (Some name) (Sym.name gsym)
+                 ) glob_cts
+            )
+        ) accessed
+    in
+    match accessed_not_glob with
+    | None -> return ()
+    | Some (loc, name) -> fail loc (Generic !^(name ^ " not a global"))
+  in
   let fargs = List.map (named_ctype_to_aarg loc) arg_cts in
-  let globs = List.map (named_ctype_to_garg loc) glob_cts in
+  let globs = List.map (named_ctype_to_garg loc (List.map snd accessed)) glob_cts in
   let ret = { name = "ret"; vsym = Sym.fresh (); typ = ret_ct } in
   let ft =
     FT (FA {globs; fargs}, 
