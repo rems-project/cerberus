@@ -384,7 +384,7 @@ let head_pos_of_location = function
               l ^ "\n" ^
               ansi_format [Bold; Green] (
                 String.init ((max cursor cpos2) + 1)
-                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
+                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else if n < String.length l && l.[n] = '\t' then '\t' else ' ')
               )
           | None ->
               "" )
