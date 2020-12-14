@@ -32,7 +32,7 @@ type block_type =
 
 
 type t = 
-  | Block of {pointer: IndexTerms.t; size: Sym.t; block_type: block_type}
+  | Block of {pointer: IndexTerms.t; size: IndexTerms.t; block_type: block_type}
   | Points of {pointer: IndexTerms.t; pointee: Sym.t; size: size}
   | Predicate of predicate
 
@@ -42,11 +42,11 @@ let pp = function
   | Block {pointer; size; block_type} ->
      begin match block_type with
      | Nothing -> 
-        !^"Block" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp size)
+        !^"Block" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
      | Uninit -> 
-        !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp size)
+        !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
      | Padding -> 
-        !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp size)
+        !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
      end
   | Points {pointer; pointee; size} ->
      !^"Points" ^^ 
@@ -70,7 +70,7 @@ let json re : Yojson.Safe.t =
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
   | Block {pointer; size; block_type} ->
      let pointer = IndexTerms.subst_var subst pointer in
-     let size = Sym.subst subst size in
+     let size = IndexTerms.subst_var subst size in
      Block {pointer; size; block_type}
   | Points {pointer; pointee; size} -> 
      let pointer = IndexTerms.subst_var subst pointer in
@@ -100,7 +100,7 @@ let equal t1 t2 =
   match t1, t2 with
   | Block u1, Block u2 ->
      IndexTerms.equal u1.pointer u2.pointer &&
-     Sym.equal u1.size u2.size
+     IndexTerms.equal u1.size u2.size
   | Points p1, Points p2 ->
      IndexTerms.equal p1.pointer p2.pointer &&
      Sym.equal p1.pointee p2.pointee &&
@@ -118,7 +118,7 @@ let pointer = function
   | Predicate p -> None
 
 let size = function
-  | Block b -> Some (IndexTerms.S (BaseTypes.Integer, b.size))
+  | Block b -> Some b.size
   | Points p -> Some (IndexTerms.Num p.size)
   | Predicate _p -> None
 
@@ -134,7 +134,7 @@ let fp resource =
   | _ -> None
 
 let vars_in = function
-  | Block b -> IndexTerms.vars_in b.pointer
+  | Block b -> SymSet.union (IndexTerms.vars_in b.size) (IndexTerms.vars_in b.pointer)
   | Points p -> SymSet.add p.pointee (IndexTerms.vars_in p.pointer)
   | Predicate p -> SymSet.union (IndexTerms.vars_in p.key)
                      (SymSet.of_list p.args)
@@ -178,12 +178,12 @@ let vars_in = function
 
 
 let input = function
-  | Block b -> IndexTerms.vars_in b.pointer
+  | Block b -> SymSet.union (IndexTerms.vars_in b.size) (IndexTerms.vars_in b.pointer)
   | Points p -> IndexTerms.vars_in p.pointer
   | Predicate p -> IndexTerms.vars_in p.key
 
 let output = function
-  | Block b -> SymSet.singleton b.size (* think about this *)
+  | Block b -> SymSet.empty
   | Points p -> SymSet.singleton p.pointee
   | Predicate p -> SymSet.of_list p.args
 

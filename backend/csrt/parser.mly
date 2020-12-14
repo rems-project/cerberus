@@ -138,10 +138,10 @@ integer_type:
 /* end */
 
 pred: 
-  | OWNED                            { Owned } 
-  | BLOCK                            { Block } 
-  /* | UNOWNED                          { Unowned }  */
-  | id = ID                          { Pred (Id.parse Location_ocaml.unknown id) } 
+  | OWNED                               { Owned } 
+  | REGION LBRACKET i = NUM RBRACKET    { Region (Z.of_int i) } 
+  | BLOCK                               { Block } 
+  | id = ID                             { Pred (Id.parse Location_ocaml.unknown id) } 
 
 
 path: 

@@ -160,10 +160,8 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let value = (member, S (bt, member_v)) :: values in
                (lrt, value)
             | None ->
-               let size = Sym.fresh () in
                let lrt = 
-                 LRT.Logical ((size, Base Integer),
-                 LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt)) 
+                 LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt)
                in
                (lrt, values)
           ) layout (LRT.I, [])
@@ -208,22 +206,21 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 
 
-let make_owned pointer path sct =
-  let open Pred in
+let make_owned loc pointer path sct =
   let open Sctypes in
-  let pointer_it = S (BT.Loc, pointer) in
   match sct with
   | Sctype (_, Void) ->
-     let size = Sym.fresh () in
-     let r = 
-       [RE.Block {pointer = pointer_it; 
-                  size;
-                  block_type = Nothing}]
-     in
-     let l = [(size, LS.Base Integer)] in
-     let mapping = 
-       [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
-     (l, r, [], mapping)
+     fail loc (Generic !^"cannot make owned void* pointer")
+     (* let size = Sym.fresh () in
+      * let r = 
+      *   [RE.Block {pointer = pointer_it; 
+      *              size;
+      *              block_type = Nothing}]
+      * in
+      * let l = [(size, LS.Base Integer)] in
+      * let mapping = 
+      *   [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
+      * return (l, r, [], mapping) *)
   | Sctype (_, Struct tag) ->
      let pointee = Sym.fresh () in
      let r = 
@@ -234,7 +231,7 @@ let make_owned pointer path sct =
      let l = [(pointee, LS.Base (Struct tag))] in
      let mapping = 
        [{path = Path.pointee path; sym = pointee; bt = Struct tag}] in
-     (l, r, [], mapping)
+     return (l, r, [], mapping)
   | sct -> 
      let pointee = Sym.fresh () in
      let r = 
@@ -247,30 +244,35 @@ let make_owned pointer path sct =
      let c = [LC (good_value pointee sct)] in
      let mapping = 
        [{path = Path.pointee path; sym = pointee; bt}] in
-     (l, r, c, mapping)
+     return(l, r, c, mapping)
 
 
-let make_block pointer path sct =
-  let open Pred in
+let make_region loc pointer size path sct =
   let open Sctypes in
-  let pointer_it = S (BT.Loc, pointer) in
-  let size = Sym.fresh () in
-  let l = [(size, LS.Base Integer)] in
-  let r = 
-    [RE.Block {pointer = pointer_it; 
-               size;
-               block_type = Nothing}]
-  in
-  let (c, mapping) = match sct with
-    | Sctype (_, Void) ->
-       let mapping = 
-         [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
-       ([], mapping)
-    | _ -> 
-       let c = [LC (EQ (S (BT.Integer, size), Num (Memory.size_of_ctype sct)))] in
-       (c, [])
-  in
-  (l, r, c, mapping)
+  match sct with
+  | Sctype (_, Void) ->
+     let r = 
+       [RE.Block {pointer = S (BT.Loc, pointer); 
+                  size;
+                  block_type = Nothing}]
+     in
+     return ([], r, [], [])
+  | _ -> 
+     fail loc (Generic !^"can only make void* pointers a region")
+
+
+let make_block loc pointer path sct =
+  let open Sctypes in
+  match sct with
+  | Sctype (_, Void) ->
+     fail loc (Generic !^"cannot make void* pointer a block")
+  | _ -> 
+     let r = 
+       [RE.Block {pointer = S (BT.Loc, pointer); 
+                  size = Num (Memory.size_of_ctype sct);
+                  block_type = Nothing}]
+     in
+     return ([], r, [], [])
 
 let make_pred loc v pred path = 
   let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
@@ -330,9 +332,11 @@ let apply_ownership_spec var_typs mapping (loc, (pred,path)) =
      let* (_, sym) = Assertions.resolve_path loc mapping path in
      match sct, pred with
      | Sctype (_, Pointer (_, sct2)), Pred.Owned ->
-        return (make_owned sym (Path.var bn) sct2)
+        make_owned loc sym (Path.var bn) sct2
      | Sctype (_, Pointer (_, sct2)), Pred.Block ->
-        return (make_block sym (Path.var bn) sct2)
+        make_block loc sym (Path.var bn) sct2
+     | Sctype (_, Pointer (_, sct2)), Pred.Region z ->
+        make_region loc sym (Num z) (Path.var bn) sct2
      | _, Pred.Pred id ->
         make_pred loc sym id (Path.var bn)
      | _ -> 
@@ -374,27 +378,27 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   let mapping = [] in
 
   (* globs *)
-  let (iL, iR, iC, mapping) = 
-    List.fold_left (fun (iL, iR, iC, mapping) garg ->
+  let* (iL, iR, iC, mapping) = 
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) garg ->
         let item = garg_item Pre garg in
-        let (l, r, c, mapping') = 
+        let* (l, r, c, mapping') = 
           if garg.accessed 
-          then make_owned garg.lsym item.path garg.typ 
-          else ([], [], [], [])
+          then make_owned loc garg.lsym item.path garg.typ 
+          else return ([], [], [], [])
         in
-        (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
+        return (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
       )
       (iL, iR, iC, mapping) globs
   in
 
   (* fargs *)
-  let (iA, iL, iR, iC, mapping) = 
-    List.fold_left (fun (iA, iL, iR, iC, mapping) aarg ->
+  let* (iA, iL, iR, iC, mapping) = 
+    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) aarg ->
         let a = [(aarg.asym, BT.Loc)] in
         let item = aarg_item Pre aarg in
-        let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
+        let* (l, r, c, mapping') = make_owned loc aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
-        (iA @ a, iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
+        return (iA @ a, iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
       )
       (iA, iL, iR, iC, mapping) fargs
   in
@@ -423,26 +427,26 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   in
 
   (* globs *)
-  let (oL, oR, oC, mapping) = 
-    List.fold_left (fun (oL, oR, oC, mapping) garg ->
+  let* (oL, oR, oC, mapping) = 
+    ListM.fold_leftM (fun (oL, oR, oC, mapping) garg ->
         let item = garg_item Post garg in
-        let (l, r, c, mapping') = 
+        let* (l, r, c, mapping') = 
           if garg.accessed 
-          then make_owned garg.lsym item.path garg.typ 
-          else ([], [], [], [])
+          then make_owned loc garg.lsym item.path garg.typ 
+          else return ([], [], [], [])
         in
-        (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
+        return (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
       )
       (oL, oR, oC, mapping) globs
   in
 
   (* fargs *)
-  let (oL, oR, oC, mapping) = 
-    List.fold_left (fun (oL, oR, oC, mapping) aarg ->
+  let* (oL, oR, oC, mapping) = 
+    ListM.fold_leftM (fun (oL, oR, oC, mapping) aarg ->
         let item = aarg_item Post aarg in
-        let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
+        let* (l, r, c, mapping') = make_owned loc aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ) ):: c in
-        (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
+        return (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
       )
       (oL, oR, oC, mapping) fargs
   in
@@ -496,25 +500,25 @@ let make_label_spec
   let mapping = extra.mapping in
 
   (* globs *)
-  let (iL, iR, iC, mapping) = 
-    List.fold_left (fun (iL, iR, iC, mapping) garg ->
+  let* (iL, iR, iC, mapping) = 
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) garg ->
         let item = garg_item (Inv lname) garg in
-        let (l, r, c, mapping') = 
+        let* (l, r, c, mapping') = 
           if garg.accessed 
-          then make_owned garg.lsym item.path garg.typ 
-          else ([], [], [], [])
+          then make_owned loc garg.lsym item.path garg.typ 
+          else return ([], [], [], [])
         in
-        (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
       (iL, iR, iC, mapping) globs
   in
 
   (* fargs *)
-  let (iL, iR, iC, mapping) = 
-    List.fold_left (fun (iL, iR, iC, mapping) aarg ->
+  let* (iL, iR, iC, mapping) = 
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) aarg ->
         let item = aarg_item (Inv lname) aarg in
-        let (l, r, c, mapping') = make_owned aarg.asym item.path aarg.typ in
-        (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+        let* (l, r, c, mapping') = make_owned loc aarg.asym item.path aarg.typ in
+        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
       (iL, iR, iC, mapping) fargs
   in

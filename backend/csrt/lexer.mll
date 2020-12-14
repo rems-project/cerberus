@@ -47,8 +47,8 @@ rule read = parse
   | "(integer)"    { POINTER_TO_INTEGER }
   | "(pointer)"    { INTEGER_TO_POINTER }
   | "Block"        { BLOCK }
+  | "Region"       { REGION }
   | "Owned"        { OWNED }
-  (* | "Unowned"      { UNOWNED } *)
   | "min"          { MIN }
   | "max"          { MAX }
   | "char"         { CHAR }
@@ -62,8 +62,8 @@ rule read = parse
   | int            { NUM (int_of_string (Lexing.lexeme lexbuf)) }
   (* | pid            { PID (Lexing.lexeme lexbuf) } *)
   | id             { ID (Lexing.lexeme lexbuf) }
-  | _              { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
-  | eof            { EOF }
+  | "["            { LBRACKET     }
+  | "]"            { RBRACKET     }
 (* stealing from Core parser *)
   (* | "_Atomic"      { ATOMIC       } *)
   | "_Bool"        { BOOL         }
@@ -96,5 +96,5 @@ rule read = parse
   | "uintmax_t"    { UINTMAX_T    }
   | "size_t"       { SIZE_T       }
   | "ptrdiff_t"    { PTRDIFF_T    }
-  (* | "["            { LBRACKET     }
-   * | "]"            { RBRACKET     } *)
+  | _              { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
+  | eof            { EOF }

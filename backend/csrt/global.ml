@@ -34,6 +34,7 @@ let early =
   let arguments = (LS.Base Integer, [("end", LS.Base Integer)]) in
   let s_end = Sym.fresh () in 
   let size = Sym.fresh () in 
+  let size_it = S (Integer, size) in
   let pred start = Resources.Predicate {key = start; name = Id id; args = [s_end]} in
   let lc start = 
     EQ (S (Integer, size), 
@@ -42,7 +43,7 @@ let early =
   in
   let pack_function start = 
     LFT.Logical ((size, LS.Base Integer), 
-    LFT.Resource (Block {pointer = IntegerToPointerCast start; size; block_type = Nothing}, 
+    LFT.Resource (Block {pointer = IntegerToPointerCast start; size = size_it; block_type = Nothing}, 
     LFT.I (
     LRT.Logical ((s_end, LS.Base Integer), 
     LRT.Resource (pred start, 
@@ -54,7 +55,7 @@ let early =
     LFT.Resource (pred start, 
     LFT.I (
     LRT.Logical ((size, LS.Base Integer), 
-    LRT.Resource (Block {pointer = IntegerToPointerCast start; size; block_type = Nothing}, 
+    LRT.Resource (Block {pointer = IntegerToPointerCast start; size = size_it; block_type = Nothing}, 
     LRT.Constraint (LC (lc start), 
     LRT.I))))))
   in

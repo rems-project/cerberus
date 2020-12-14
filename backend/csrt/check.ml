@@ -431,8 +431,6 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let rec remove_ownership_prompt (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
-    print stderr (item "pointer" (IT.pp pointer));
-    print stderr (item "need_size" (IT.pp need_size));
     let open Prompt.Operators in
     if S.equal local need_size (Num Z.zero) then 
       return local
@@ -449,7 +447,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Predicate pred -> 
            fail loc (Cannot_unpack (pred, situation))
         | Block {size; _} ->
-           return (S (Integer, size))
+           return size
         | Points {size; _} ->
            return (Num size)
       in
@@ -460,17 +458,14 @@ module Make (G : sig val global : Global.t end) = struct
       else if S.lt local need_size have_size then 
         (* if the resource is bigger than needed, keep the remainder
            as unitialised memory *)
-        let newsize = Sym.fresh () in
         let local = L.use_resource resource_name [loc] local in
-        let local = L.add_l newsize (LS.Base Integer) local in
         let local = 
           add_ur (
               RE.Block {pointer = Offset (pointer, need_size); 
-                        size = newsize; 
+                        size = IT.Sub (have_size, need_size); 
                         block_type = Nothing}
             ) local
         in
-        let local = L.add_uc (LC (EQ (S (Integer, newsize), IT.Sub (have_size, need_size)))) local in
         return local
       else
         fail loc (Generic (!^"cannot tell size of available resource" ^^^ RE.pp resource))
@@ -484,7 +479,7 @@ module Make (G : sig val global : Global.t end) = struct
     let key = RE.key request in
     match request with
     | Block b ->
-       let* local = remove_ownership_prompt loc situation local b.pointer (S (Integer, b.size)) in
+       let* local = remove_ownership_prompt loc situation local b.pointer b.size in
        return (unis, local)
     | Points p ->
        let o_resource = S.resource_for local p.pointer in
@@ -1270,12 +1265,9 @@ module Make (G : sig val global : Global.t end) = struct
                let* rt2 = aux members in
                return (rt@@rt2)
             | None ->
-               let size_sym = Sym.fresh () in
                let rt = 
-                 LRT.Logical ((size_sym, LS.Base Integer),
-                 LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); size = size_sym; block_type = Padding}, 
-                 LRT.Constraint (LC (EQ (S (Integer, size_sym), Num size)), 
-                 LRT.I))) in
+                 LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); size = Num size; block_type = Padding}, 
+                 LRT.I) in
                let* rt2 = aux members in
                return (rt@@rt2)
        in  
@@ -1291,13 +1283,7 @@ module Make (G : sig val global : Global.t end) = struct
             in
             return rt
          | None -> 
-            let size_sym = Sym.fresh () in
-            let rt = 
-              LRT.Logical ((size_sym, LS.Base Integer),
-              (Resource (Block {pointer; size = size_sym; block_type = Uninit}, 
-                LRT.Constraint (LC (EQ (S (Integer, size_sym), Num size)), 
-                 LRT.I))))
-            in
+            let rt = Resource (Block {pointer; size = Num size; block_type = Uninit}, LRT.I) in
             return rt
 
 
@@ -1497,12 +1483,9 @@ module Make (G : sig val global : Global.t end) = struct
                 fail loc (Generic !^"write value unrepresentable")
             in
             let size = Memory.size_of_ctype act.item.ct in
-            print stderr !^"HERHERHERHERHE";
-            print stderr (item "local before" (L.pp local));
             let* local = 
               remove_ownership parg.loc (Access Store) local (S (parg.bt, parg.lname)) 
                 (Num size) in
-            print stderr (item "local after" (L.pp local));
             let* bindings = 
               store loc local varg.bt (S (parg.bt, parg.lname))
                 size (Some (S (varg.bt, varg.lname))) in

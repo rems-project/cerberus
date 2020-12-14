@@ -36,24 +36,24 @@ module Pred = struct
 
   type t = 
     | Owned
-    (* | Unowned  *)
+    | Region of Z.t
     | Block
     | Pred of Id.t
 
   let equal p1 p2 =
     match p1, p2 with
     | Owned, Owned -> true
-    (* | Unowned, Unowned -> true *)
+    | Region z1, Region z2 -> Z.equal z2 z2
     | Block, Block -> true
     | Pred s1, Pred s2 -> Id.equal s1 s2
     | Owned, _ -> false
-    (* | Unowned, _ -> false *)
+    | Region _, _ -> false
     | Block, _ -> false
     | Pred _, _ -> false
 
   let pp = function
     | Owned -> !^"Owned"
-    (* | Unowned -> !^"Unowned" *)
+    | Region z -> !^"Region" ^^^ Z.pp z
     | Block -> !^"Block"
     | Pred s -> Id.pp s
 

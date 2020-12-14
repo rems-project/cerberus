@@ -15,7 +15,7 @@ module StringMap = Map.Make(String)
 (* more to be added *)
 type memory_state = 
   | Nothing
-  | Block of RE.block_type * Sym.t
+  | Block of RE.block_type * IT.t
   | Integer of string * RE.size
   | Location of string * RE.size
   | Within of {base_location : string; resource : Sym.t}
@@ -151,9 +151,9 @@ let pp_variable_and_location_state ( ovar, { location; state } ) =
     | Nothing -> Pp.empty, Pp.empty
     | Block (block_type,size) -> 
        begin match block_type with
-       | Nothing -> !^"block", Sym.pp size
-       | Uninit -> !^"uninitialised", Sym.pp size
-       | Padding -> !^"padding", Sym.pp size
+       | Nothing -> !^"block", IT.pp size
+       | Uninit -> !^"uninitialised", IT.pp size
+       | Padding -> !^"padding", IT.pp size
        end
     | Integer (value, size) -> typ !^value !^"integer", Z.pp size
     | Location (value, size) -> typ !^value !^"pointer", Z.pp size

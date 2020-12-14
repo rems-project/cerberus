@@ -1,16 +1,16 @@
 %token <int> NUM
 %token <string> ID
-%token <string> PID
+/* %token <string> PID */
 %token TRUE FALSE
 %token AT DOT STAR AMPERSAND
 %token POINTER_TO_INTEGER INTEGER_TO_POINTER
-%token LPAREN RPAREN
+%token LPAREN RPAREN LBRACKET RBRACKET
 %token COMMA
 %token PLUS MINUS DIV
 %token LT GT LE GE NE EQEQ
 %token MIN MAX
 /* %token CHAR SHORT INT LONG SIGNED UNSIGNED */
-%token OWNED BLOCK /* UNOWNED */
+%token OWNED REGION BLOCK /* UNOWNED */
 %token EOF
 
 /* stealing from Core parser */
