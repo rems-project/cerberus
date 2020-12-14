@@ -900,6 +900,11 @@ struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
     { ctor (to_attrs attr_opt) (Some i) None }
+| ctor= struct_or_union attr_opt= attribute_specifier_sequence?
+    iopt= general_identifier? LBRACE  RBRACE
+    (* GCC extension *)
+    (* TODO: forbid union *)
+    { ctor (to_attrs attr_opt) iopt (Some []) }
 ;
 
 struct_or_union:
