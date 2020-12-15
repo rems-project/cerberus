@@ -148,7 +148,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
                  | Sctypes.Struct tag ->
-                    RE.Predicate {key = member_p; name = Tag tag; args = [member_v]}
+                    RE.Predicate {key_arg = member_p; name = Tag tag; iargs = []; oargs = [member_v]}
                  | _ -> 
                     RE.Points {pointer = member_p; pointee = member_v; size}
                in
@@ -173,9 +173,10 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
       (lrt, constr)
     in
     let predicate struct_pointer = 
-      Predicate {key = struct_pointer; 
+      Predicate {key_arg = struct_pointer; 
                  name = Tag tag; 
-                 args = [struct_value_s]} 
+                 iargs = [];
+                 oargs = [struct_value_s]} 
     in
     let unpack_function struct_pointer = 
       let (lrt, constr) = clause struct_pointer in
@@ -224,9 +225,10 @@ let make_owned loc pointer path sct =
   | Sctype (_, Struct tag) ->
      let pointee = Sym.fresh () in
      let r = 
-       [RE.Predicate {key = S (BT.Loc, pointer); 
+       [RE.Predicate {key_arg = S (BT.Loc, pointer); 
                       name = Tag tag; 
-                      args = [pointee]}]
+                      iargs = [];
+                      oargs = [pointee]}]
      in
      let l = [(pointee, LS.Base (Struct tag))] in
      let mapping = 
@@ -274,22 +276,22 @@ let make_block loc pointer path sct =
      in
      return ([], r, [], [])
 
-let make_pred loc v pred path = 
+let make_pred loc v pred path path_args iargs = 
   let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
-  let (Base key_bt, args) = def.Global.arguments in
+  let (Base key_bt) = def.Global.key_arg in
   let* (mapping, l) = 
     ListM.fold_rightM (fun (name, LS.Base bt) (mapping, l) ->
         let s = Sym.fresh () in
         let l = (s, LS.Base bt) :: l in
-        let mapping = {path = Path.predarg (Pred pred) path name; sym = s; bt = bt} :: mapping in
+        let mapping = {path = Path.predarg (Pred pred) (path :: path_args) name; sym = s; bt = bt} :: mapping in
         return (mapping, l)
-      ) args ([], [])
+      ) def.oargs ([], [])
   in
-  let args = List.map fst l in
-  let r = [RE.Predicate {key = S (key_bt, v); name = Id pred; args}] in
+  let oargs = List.map fst l in
+  let r = [RE.Predicate {name = Id pred; key_arg = S (key_bt, v); iargs; oargs}] in
   return (l, r, [], mapping)
 
 
@@ -323,24 +325,39 @@ let type_of__vars loc var_typs name derefs =
   
 
 
-let apply_ownership_spec var_typs mapping (loc, (pred,path)) =
-  match Path.deref_path path with
-  | None ->
-     fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
-  | Some (bn, derefs) -> 
-     let* sct = type_of__vars loc var_typs bn.v derefs in
-     let* (_, sym) = Assertions.resolve_path loc mapping path in
-     match sct, pred with
-     | Sctype (_, Pointer (_, sct2)), Pred.Owned ->
-        make_owned loc sym (Path.var bn) sct2
-     | Sctype (_, Pointer (_, sct2)), Pred.Block ->
-        make_block loc sym (Path.var bn) sct2
-     | Sctype (_, Pointer (_, sct2)), Pred.Region z ->
-        make_region loc sym (Num z) (Path.var bn) sct2
-     | _, Pred.Pred id ->
-        make_pred loc sym id (Path.var bn)
-     | _ -> 
-        fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
+let apply_ownership_spec var_typs mapping (loc, (pred,path_args)) =
+  match path_args with
+  | [] -> fail loc (Generic !^"predicate with empty parameter list")
+  | path :: iargs ->
+    match Path.deref_path path with
+    | None ->
+       fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+    | Some (bn, derefs) -> 
+       let* sct = type_of__vars loc var_typs bn.v derefs in
+       let* (_, sym) = Assertions.resolve_path loc mapping path in
+       match sct, pred, iargs with
+       | Sctype (_, Pointer (_, sct2)), Pred.Owned, [] ->
+          make_owned loc sym (Path.var bn) sct2
+       | Sctype (_, Pointer (_, sct2)), Pred.Owned, _ ->
+          fail loc (Generic !^"Owned applied to multiple arguments")
+       | Sctype (_, Pointer (_, sct2)), Pred.Block, [] ->
+          make_block loc sym (Path.var bn) sct2
+       | Sctype (_, Pointer (_, sct2)), Pred.Block, _ ->
+          fail loc (Generic !^"Block applied to multiple arguments")
+       | Sctype (_, Pointer (_, sct2)), Pred.Region z, [] ->
+          make_region loc sym (Num z) (Path.var bn) sct2
+       | Sctype (_, Pointer (_, sct2)), Pred.Region z, _ ->
+          fail loc (Generic !^"Region applied to multiple arguments")
+       | _, Pred.Pred id, _ ->
+          let* iargs_resolved = 
+            ListM.mapM (fun p ->
+                let* (ls, s) = Assertions.resolve_path loc mapping p in
+                return (S (ls, s))
+              ) iargs
+          in
+          make_pred loc sym id (Path.var bn) iargs iargs_resolved
+       | _ -> 
+          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
 
 
 let aarg_item l (aarg : aarg) =

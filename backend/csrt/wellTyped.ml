@@ -342,20 +342,33 @@ module Make (G : sig val global : Global.t end) = struct
            | None, Tag tag -> fail loc (Missing_struct tag)
            | None, Id id -> fail loc (Missing_predicate id)
          in
-         let (key_ls, args) = def.arguments in
-         let* () = WIT.welltyped loc local key_ls p.key in
+         let* () = WIT.welltyped loc local def.key_arg p.key_arg in
          let* () = 
-           let has = List.length args in
-           let expect = List.length p.args in
+           let has = List.length def.iargs in
+           let expect = List.length p.iargs in
            if has = expect then return ()
            else fail loc (Number_arguments {has; expect})
          in
-         ListM.iterM (fun (arg, expected_sort) ->
-             let* () = check_bound loc local KLogical arg in
-             let has_sort = L.get_l arg local in
-             if LS.equal has_sort expected_sort then return ()
-             else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
-           ) (List.combine p.args (List.map snd args))
+         let* () = 
+           ListM.iterM (fun (arg, expected_sort) ->
+               WIT.welltyped loc local expected_sort arg
+             ) (List.combine p.iargs def.iargs)
+         in
+         let* () = 
+           let has = List.length def.oargs in
+           let expect = List.length p.oargs in
+           if has = expect then return ()
+           else fail loc (Number_arguments {has; expect})
+         in
+         let* () = 
+           ListM.iterM (fun (arg, expected_sort) ->
+               let* () = check_bound loc local KLogical arg in
+               let has_sort = L.get_l arg local in
+               if LS.equal has_sort expected_sort then return ()
+               else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
+             ) (List.combine p.oargs (List.map snd def.oargs))
+         in
+         return ()
   end
 
 

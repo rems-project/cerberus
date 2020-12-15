@@ -143,15 +143,18 @@ pred:
   | BLOCK                               { Block } 
   | id = ID                             { Pred (Id.parse Location_ocaml.unknown id) } 
 
+/* looking at core parser */
+pred_with_args:
+  pr = pred ps = delimited(LPAREN, separated_list(COMMA, path), RPAREN)   { (pr,ps) }
 
 path: 
-  | LPAREN pr = pred LPAREN p = path RPAREN RPAREN DOT id = ID   { Path.PredArg (pr, p, id) }
+  | LPAREN pr_ps = pred_with_args RPAREN DOT id = ID   { Path.PredArg (fst pr_ps, snd pr_ps, id) }
   | AMPERSAND bn = basename          { Path.Addr bn }
   | STAR p = path                    { Path.Pointee p }
   | bn = basename                    { Path.Var bn }
 
 %inline resource:
-  | pr = pred LPAREN p = path RPAREN   { R (pr,p) }
+  | pr_ps = pred_with_args         { R (fst pr_ps, snd pr_ps) }
 
 
 

@@ -20,9 +20,11 @@ module FT = ArgumentTypes.Make(RT)
 
 
 type resource_predicate = 
-  { arguments : LS.t * (string * LS.t) list;
-    pack_functions : IT.t -> (LFT.t List1.t);
-    unpack_functions : IT.t -> (LFT.t List1.t);
+  { key_arg : LS.t;
+    iargs : LS.t list;
+    oargs : (string * LS.t) list;
+    pack_functions : (IT.t * IT.t list) -> (LFT.t List.t);
+    unpack_functions : (IT.t * IT.t list) -> (LFT.t List.t);
   }
 
 
@@ -31,37 +33,54 @@ let early =
   let open BT in
   let open IT in
   let id = Id.parse Location_ocaml.unknown "Early" in
-  let arguments = (LS.Base Integer, [("end", LS.Base Integer)]) in
-  let s_end = Sym.fresh () in 
-  let size = Sym.fresh () in 
-  let size_it = S (Integer, size) in
-  let pred start = Resources.Predicate {key = start; name = Id id; args = [s_end]} in
-  let lc start = 
-    EQ (S (Integer, size), 
-        Add (Sub (S (Integer, s_end), start), 
-             Num (Z.of_int 1)))
+  let key_arg = LS.Base Integer in
+  let iargs = [LS.Base Integer] in
+  let oargs = [] in
+  let pred s e = 
+    Resources.Predicate {
+        key_arg = s; 
+        name = Id id; 
+        iargs = [e];
+        oargs = [];
+      } 
   in
-  let pack_function start = 
-    LFT.Logical ((size, LS.Base Integer), 
-    LFT.Resource (Block {pointer = IntegerToPointerCast start; size = size_it; block_type = Nothing}, 
-    LFT.I (
-    LRT.Logical ((s_end, LS.Base Integer), 
-    LRT.Resource (pred start, 
-    LRT.Constraint (LC (lc start), 
-    LRT.I))))))
+  let block s e = 
+    RE.Block {
+        pointer = IntegerToPointerCast s;
+        size = Add (Sub (e, s), Num (Z.of_int 1));
+        block_type = Nothing
+      }
   in
-  let unpack_function start = 
-    LFT.Logical ((s_end, LS.Base Integer), 
-    LFT.Resource (pred start, 
-    LFT.I (
-    LRT.Logical ((size, LS.Base Integer), 
-    LRT.Resource (Block {pointer = IntegerToPointerCast start; size = size_it; block_type = Nothing}, 
-    LRT.Constraint (LC (lc start), 
-    LRT.I))))))
+  let pack_functions (start_arg, iargs) =
+    match iargs with
+    | [end_arg] ->
+       [LFT.Resource (block start_arg end_arg, 
+        LFT.Constraint (LC (IT.good_pointer_it start_arg (Sctypes.Sctype ([], Void))),
+        LFT.I (
+        LRT.Resource (pred start_arg end_arg, 
+        LRT.I))))] 
+    | _ -> 
+       Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
   in
-  let pack_functions start = List1.make (pack_function start, []) in
-  let unpack_functions start = List1.make (unpack_function start,[]) in
-  let predicate = {arguments; pack_functions; unpack_functions} in
+  let unpack_functions (start_arg, iargs) =
+    match iargs with
+    | [end_arg] ->
+       [LFT.Resource (pred start_arg end_arg, 
+        LFT.I (
+        LRT.Resource (block start_arg end_arg, 
+        LRT.Constraint (LC (IT.good_pointer_it start_arg (Sctypes.Sctype ([], Void))),
+        LRT.I))))]
+    | _ -> 
+       Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
+  in
+  let predicate = {
+      key_arg; 
+      iargs; 
+      oargs; 
+      pack_functions; 
+      unpack_functions
+    } 
+  in
   (id, predicate)
 
 
@@ -177,22 +196,30 @@ let empty solver_context =
 let get_predicate_def loc global predicate_name = 
   let open Resources in
   match predicate_name with
-  | Id id -> IdMap.find_opt id global.resource_predicates
+  | Id id -> 
+     IdMap.find_opt id global.resource_predicates
   | Tag tag ->
      match SymMap.find_opt tag global.struct_decls with
      | None -> None
      | Some decl ->
-       let pack_functions = 
-         fun it -> 
-         List1.one (decl.closed_stored_predicate_definition.pack_function it)
-       in
-       let unpack_functions = 
-         fun it -> 
-         List1.one (decl.closed_stored_predicate_definition.unpack_function it)
-       in
-       Some {arguments = (LS.Base Loc, [("value", LS.Base (Struct tag))]);
-             pack_functions; 
-             unpack_functions}
+        let key_arg = LS.Base Loc in
+        let iargs = [] in
+        let oargs = [("value", LS.Base (Struct tag))] in
+        let pack_functions (key_arg, iargs) =
+          match iargs with
+          | [] -> 
+             [(decl.closed_stored_predicate_definition.pack_function key_arg)]
+          | _ -> 
+             Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
+        in
+        let unpack_functions (key_arg, iargs) = 
+          match iargs with
+          | [] -> 
+             [(decl.closed_stored_predicate_definition.unpack_function key_arg)]
+          | _ ->
+             Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
+        in
+        Some {key_arg; iargs; oargs; pack_functions; unpack_functions}
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i
@@ -215,14 +242,16 @@ let pp_struct_decl (tag,decl) =
    *      (RT.pp decl.closed_stored)
    * ^/^ *)
   item ("struct " ^ plain (Sym.pp tag) ^ " (packing function) at P") 
-    (LFT.pp
+    (LFT.pp 
        (decl.closed_stored_predicate_definition.pack_function
-          (IT.S (Struct tag, Sym.fresh_named "P"))))
+          (S (Struct tag, Sym.fresh_named "P"))
+    ))
   ^/^
   item ("struct " ^ plain (Sym.pp tag) ^ " (unpacking function) at P") 
-    (LFT.pp
-       (decl.closed_stored_predicate_definition.unpack_function
-          (IT.S (Struct tag, Sym.fresh_named "struct_pointer"))))
+    (LFT.pp 
+       (decl.closed_stored_predicate_definition.unpack_function 
+          (S (Struct tag, Sym.fresh_named "P"))
+    ))
 
 let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
 

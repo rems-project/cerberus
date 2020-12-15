@@ -502,11 +502,15 @@ module Make (G : sig val global : Global.t end) = struct
        let o_resource = S.resource_for local key in
        begin match o_resource with
        | Some (resource_name, Predicate p') -> 
-          begin match Uni.unify_syms p.args p'.args unis with
-          | Some unis -> 
+          let iargs_match = List.equal (S.equal local) p.iargs p'.iargs in
+          (* this just asks the other input arguments to be
+             prover-equal, and if it fails gives up. Do we need
+             something better? *)
+          begin match iargs_match, Uni.unify_syms p.oargs p'.oargs unis with
+          | true, Some unis -> 
              let local = use_resource resource_name [loc] local in
              return (unis, local)
-          | None ->
+          | _ ->
              fail loc (Resource_mismatch {expect = request; has = Predicate p'; situation}) 
           end
        | Some (resource_name, resource) ->         
@@ -518,12 +522,13 @@ module Make (G : sig val global : Global.t end) = struct
             fail loc (Resource_mismatch {expect = request; has = resource; situation}) 
           in
           let attempt_prompts = 
-            List1.map (fun clause ->
+            List.map (fun clause ->
                 prompt (R_Packing {loc; situation; local; lft = clause})
-              ) (def.pack_functions p.key)
+              ) (def.pack_functions (p.key_arg, p.iargs))
           in
-          let choices = List1.concat attempt_prompts (List1.one else_prompt) in
-          let* (lrt, local) = try_choices choices  in
+          let choices = attempt_prompts @ [else_prompt] in
+          let choices1 = List1.make (List.hd choices, List.tl choices) in
+          let* (lrt, local) = try_choices choices1 in
           let local = bind_logical local lrt in
           resource_request_prompt loc situation local request unis
        | None -> 
@@ -611,7 +616,7 @@ module Make (G : sig val global : Global.t end) = struct
                      let test_local = bind_logical test_local lrt in
                      let is_reachable = S.is_consistent test_local in
                      return (if is_reachable then Some test_local else None)
-                   ) (List1.to_list (def.unpack_functions p.key))
+                   ) (def.unpack_functions (p.key_arg, p.iargs))
                in
                begin match possible_unpackings with
                | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
@@ -1383,17 +1388,29 @@ module Make (G : sig val global : Global.t end) = struct
       | M_Ememop memop ->
          let* local = unpack_resources loc local in
          begin match memop with
-         | M_PtrEq _ (* (asym 'bty * asym 'bty) *)
-         | M_PtrNe _ (* (asym 'bty * asym 'bty) *)
-         | M_PtrLt _ (* (asym 'bty * asym 'bty) *)
-         | M_PtrGt _ (* (asym 'bty * asym 'bty) *)
-         | M_PtrLe _ (* (asym 'bty * asym 'bty) *)
-         | M_PtrGe _ (* (asym 'bty * asym 'bty) *)
-         | M_Ptrdiff _ (* (actype 'bty * asym 'bty * asym 'bty) *)
-         | M_IntFromPtr _ (* (actype 'bty * asym 'bty) *)
-         | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
-           -> 
-            Debug_ocaml.error "todo: ememop"
+         | M_PtrEq _ ->
+            Debug_ocaml.error "todo: M_PtrEq"
+         | M_PtrNe _ ->
+            Debug_ocaml.error "todo: M_PtrNe"
+         | M_PtrLt _ ->
+            Debug_ocaml.error "todo: M_PtrLt"
+         | M_PtrGt _ ->
+            Debug_ocaml.error "todo: M_PtrGt"
+         | M_PtrLe _ ->
+            Debug_ocaml.error "todo: M_PtrLe"
+         | M_PtrGe _ ->
+            Debug_ocaml.error "todo: M_PtrGe"
+         | M_Ptrdiff _ ->
+            Debug_ocaml.error "todo: M_Ptrdiff"
+         | M_IntFromPtr _ ->
+            Debug_ocaml.error "todo: M_IntFromPtr"
+         | M_PtrFromInt (act_from, act2_to, asym) ->
+            let ret = Sym.fresh () in 
+            let* arg = arg_of_asym loc local asym in
+            let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
+            let constr = LC (EQ (S (Loc, ret), IntegerToPointerCast (S (Integer, arg.lname)))) in
+            let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
+            return (Normal (rt, local))            
          | M_PtrValidForDeref (act, asym) ->
             (* check *)
             let* local = unpack_resources loc local in

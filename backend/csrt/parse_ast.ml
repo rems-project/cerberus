@@ -71,7 +71,7 @@ module Path = struct
     | Addr of BaseName.t
     | Var of BaseName.t
     | Pointee of t
-    | PredArg of Pred.t * t * string
+    | PredArg of Pred.t * t list * string
 
   let rec equal p1 p2 =
     match p1, p2 with
@@ -82,7 +82,7 @@ module Path = struct
     | Pointee p1, Pointee p2 ->
        equal p1 p2
     | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
-       Pred.equal p1 p2 && equal t1 t2 && String.equal a1 a2
+       Pred.equal p1 p2 && List.equal equal t1 t2 && String.equal a1 a2
     | Addr _, _ -> 
        false
     | Var _, _ ->
@@ -97,7 +97,7 @@ module Path = struct
     | Addr b -> ampersand ^^ BaseName.pp b
     | Var b -> BaseName.pp b
     | Pointee p -> star ^^ (pp p)
-    | PredArg (p,t,a) -> Pred.pp p ^^ parens (pp t) ^^ dot ^^ !^a
+    | PredArg (p,t,a) -> Pred.pp p ^^ parens (separate_map comma pp t) ^^ dot ^^ !^a
 
   let addr bn = 
     Addr bn
@@ -189,11 +189,12 @@ module IndexTerms = struct
 
 
 type parsed_spec = 
-  | R of (Pred.t * Path.t)
+  | R of (Pred.t * Path.t list)
   | C of IndexTerms.t
 
 type logical_spec = Loc.t * IndexTerms.t
-type resource_spec = Loc.t * (Pred.t * Path.t)
+type resource_spec = 
+  Loc.t * (Pred.t * Path.t list)
 
 
 

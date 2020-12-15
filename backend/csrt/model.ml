@@ -92,14 +92,19 @@ let model local solver : t option =
                    Debug_ocaml.error "non-object stored in memory"
                 end
              | Some (_, RE.Predicate p) -> 
-                let args = 
+                let oargs_it = 
                   List.map (fun arg ->
                       let (Base bt) = L.get_l arg local in
+                      (IT.S (bt, arg))
+                    ) p.oargs
+                in
+                let args = 
+                  List.map (fun it ->
                       let expr = 
-                        SolverConstraints.of_index_term G.global (S (bt, arg)) in
+                        SolverConstraints.of_index_term G.global it in
                       let expr_val = evaluate model expr in
                       Z3.Expr.to_string expr_val
-                    ) p.args
+                    ) (p.key_arg :: p.iargs @ oargs_it)
                 in
                 Predicate {name = p.name; args}
            in
