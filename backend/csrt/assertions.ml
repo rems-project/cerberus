@@ -277,7 +277,7 @@ let parse_function_type loc attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sy
   in
   let fargs = List.map (named_ctype_to_aarg loc) arg_cts in
   let globs = List.map (named_ctype_to_garg loc (List.map snd accessed)) glob_cts in
-  let ret = { name = "ret"; vsym = Sym.fresh (); typ = ret_ct } in
+  let ret = { name = "ret"; vsym = Sym.fresh_named "ret"; typ = ret_ct } in
   let ft =
     FT (FA {globs; fargs}, 
         FPre (pre_resources, pre_constraints),

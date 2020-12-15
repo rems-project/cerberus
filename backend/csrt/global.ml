@@ -32,7 +32,7 @@ type resource_predicate =
 let early = 
   let open BT in
   let open IT in
-  let id = Id.parse Location_ocaml.unknown "Early" in
+  let id = Id.parse Location_ocaml.unknown "EarlyAlloc" in
   let key_arg = LS.Base Integer in
   let iargs = [LS.Base Integer] in
   let oargs = [] in

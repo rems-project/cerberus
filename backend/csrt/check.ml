@@ -1743,7 +1743,7 @@ module Make (G : sig val global : Global.t end) = struct
         | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
              when BT.equal abt sbt ->
            (* let new_lname = Sym.fresh_relative aname (fun s -> s^"^") in *)
-           let new_lname = Sym.fresh () in
+           let new_lname = Sym.fresh_relative aname (fun s -> s^"_l") in
            let subst = Subst.{before=lname;after=new_lname} in
            let ftyp' = T.subst_var subst ftyp in
            let local = add_l new_lname (Base abt) local in

@@ -728,16 +728,22 @@ let normalise_fun_map (fmap1 : (unit, 'a) generic_fun_map) : (lt, ct, bt, unit) 
    (Pmap.mapi normalise_fun_map_decl fmap1)
   
 
-let normalise_globs (g : ('a, unit) generic_globs) : (ct, bt, unit) mu_globs= 
+let fresh_relative (s : symbol) (f : string -> string) : symbol =
+  match Symbol.symbol_name s with
+  | Some name -> Symbol.fresh_pretty (f name)
+  | None -> Symbol.fresh ()
+
+let normalise_globs sym (g : ('a, unit) generic_globs) : (ct, bt, unit) mu_globs = 
   match g with
   | GlobalDef((bt1, ct), e) -> 
-     M_GlobalDef(Symbol.fresh (), (bt1, ct), normalise_expr Loc.unknown e)
-  | GlobalDecl bt1 -> M_GlobalDecl (Symbol.fresh (), bt1)
+     M_GlobalDef (fresh_relative sym (fun s -> s^"_l"), (bt1, ct), normalise_expr Loc.unknown e)
+  | GlobalDecl bt1 -> 
+     M_GlobalDecl (fresh_relative sym (fun s -> s^"_l"), bt1)
 
 
 let normalise_globs_list (gs : (Symbol.sym * ('a, unit) generic_globs) list)
     : (Symbol.sym * (ct, bt, unit) mu_globs) list= 
-   (map (fun (sym1,g) -> (sym1, normalise_globs g)) gs)
+   (map (fun (sym1,g) -> (sym1, normalise_globs sym1 g)) gs)
 
 
 
