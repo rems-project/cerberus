@@ -336,8 +336,9 @@ module Make (G : sig val global : Global.t end) = struct
 
       let unis = SymMap.empty in
 
-      (* print stderr (item "local" (L.pp local));
-       * print stderr (item "spec" (NFT.pp ftyp)); *)
+      debug 6 (lazy (!^"function call"));
+      debug 6 (lazy (item "local" (L.pp local)));
+      debug 6 (lazy (item "spec" (NFT.pp ftyp)));
 
       let* ftyp_l = 
         let rec check_computational args ftyp = 
@@ -360,8 +361,8 @@ module Make (G : sig val global : Global.t end) = struct
 
       let* ((unis, lspec), ftyp_r) = 
         let rec delay_logical (unis, lspec) ftyp =
-          (* print stderr (item "local" (L.pp local));
-           * print stderr (item "spec" (NFT.pp_l ftyp)); *)
+          debug 6 (lazy (item "local" (L.pp local)));
+          debug 6 (lazy (item "spec" (NFT.pp_l ftyp)));
           match ftyp with
           | Logical ((s, ls), ftyp) ->
              let s' = Sym.fresh () in
@@ -376,8 +377,8 @@ module Make (G : sig val global : Global.t end) = struct
 
       let* (local, unis, ftyp_c) = 
         let rec infer_resources local unis ftyp = 
-          (* print stderr (item "local" (L.pp local));
-           * print stderr (item "spec" (NFT.pp_r ftyp)); *)
+          debug 6 (lazy (item "local" (L.pp local)));
+          debug 6 (lazy (item "spec" (NFT.pp_r ftyp)));
           match ftyp with
           | Resource (resource, ftyp) -> 
              let* (unis, local) = 
@@ -406,6 +407,9 @@ module Make (G : sig val global : Global.t end) = struct
       let* rt = 
         let rec check_constraints = function
           | Constraint (c, ftyp) ->
+             debug 6 (lazy (item "local" (L.pp local)));
+             debug 6 (lazy (item "lc" (LC.pp c)));
+             debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
              let (holds, _) = S.constraint_holds local c in
              if holds 
              then check_constraints ftyp 
@@ -521,13 +525,16 @@ module Make (G : sig val global : Global.t end) = struct
           let else_prompt = 
             fail loc (Resource_mismatch {expect = request; has = resource; situation}) 
           in
+          debug 6 (lazy (!^"trying to pack" ^^^ RE.pp request));
           let attempt_prompts = 
             List.map (fun clause ->
+                debug 6 (lazy (item "clause" (LFT.pp clause)));
                 prompt (R_Packing {loc; situation; local; lft = clause})
               ) (def.pack_functions (p.key_arg, p.iargs))
           in
           let choices = attempt_prompts @ [else_prompt] in
           let choices1 = List1.make (List.hd choices, List.tl choices) in
+          debug 6 (lazy !^"success");
           let* (lrt, local) = try_choices choices1 in
           let local = bind_logical local lrt in
           resource_request_prompt loc situation local request unis

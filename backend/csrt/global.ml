@@ -55,10 +55,11 @@ let early =
     match iargs with
     | [end_arg] ->
        [LFT.Resource (block start_arg end_arg, 
-        LFT.Constraint (LC (IT.good_pointer_it start_arg (Sctypes.Sctype ([], Void))),
+        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_arg) (Sctypes.Sctype ([], Void))),
+        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_arg) (Sctypes.Sctype ([], Void))),
         LFT.I (
         LRT.Resource (pred start_arg end_arg, 
-        LRT.I))))] 
+        LRT.I)))))] 
     | _ -> 
        Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
   in
@@ -68,8 +69,9 @@ let early =
        [LFT.Resource (pred start_arg end_arg, 
         LFT.I (
         LRT.Resource (block start_arg end_arg, 
-        LRT.Constraint (LC (IT.good_pointer_it start_arg (Sctypes.Sctype ([], Void))),
-        LRT.I))))]
+        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_arg) (Sctypes.Sctype ([], Void))),
+        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_arg) (Sctypes.Sctype ([], Void))),
+        LRT.I)))))]
     | _ -> 
        Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
   in
