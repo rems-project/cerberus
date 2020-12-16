@@ -1385,7 +1385,7 @@ module Make (G : sig val global : Global.t end) = struct
   let rec infer_expr (loc : loc) (local, labels)
                      (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m = 
     let (M_Expr (annots, e_)) = e in
-    let (loc, was_updated) = Loc.updateB loc (get_loc_ annots) in
+    let loc = Loc.update loc (get_loc_ annots) in
     debug 3 (lazy (action "inferring expression"));
     debug 3 (lazy (item "expr" (group (pp_expr e))));
     debug 3 (lazy (item "ctxt" (L.pp local)));
@@ -1629,7 +1629,6 @@ module Make (G : sig val global : Global.t end) = struct
     debug 3 (lazy (match r with
                    | False -> item "type" (parens !^"no return")
                    | Normal (rt,_) -> item "type" (RT.pp rt)));
-    let () = maybe_print_json was_updated (lazy (json_return_local_or_false_with_path loc r)) in
     return r
 
   and infer_expr_pop (loc : loc) delta (local, labels) 
@@ -1700,8 +1699,8 @@ module Make (G : sig val global : Global.t end) = struct
             return (Normal local)
          | False ->
             let err = 
-              !^"This expression returns but is expected" ^/^
-                !^"to have noreturn-type." 
+              !^("This expression returns but is expected "^
+                   "to have non-return type.") 
             in
             fail loc (Generic err)
     in

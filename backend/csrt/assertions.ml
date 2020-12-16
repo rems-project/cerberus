@@ -151,11 +151,16 @@ let label_name = function
   | Inv label -> label
 
 
+let cn_attribute a = 
+  match a.CF.Annot.attr_ns with
+  | Some ns -> String.equal (Id.s ns) "cn"
+  | None -> false
+
 let accesses loc (CF.Annot.Attrs attrs) = 
   let attribute_name = "accesses" in
   let relevant = 
     List.concat_map (fun a -> 
-        if String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
+        if cn_attribute a && String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
         then a.attr_args else []
       ) attrs 
   in
@@ -172,7 +177,7 @@ let pre_or_post loc kind (CF.Annot.Attrs attrs) =
   in 
   let relevant = 
     List.concat_map (fun a -> 
-        if String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
+        if cn_attribute a && String.equal attribute_name (Id.s a.CF.Annot.attr_id) 
         then a.attr_args else []
       ) attrs 
   in
