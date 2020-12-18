@@ -143,7 +143,7 @@ module Make (G : sig val global : Global.t end) = struct
            in
            let (bts,ts) = List.split bts_ts in
            return (Base (BT.Tuple bts), Tuple ts)
-        | Nth (_, n, t') ->
+        | NthTuple (_, n, t') ->
            let* (ls,t') = infer loc t' in
            let* tuple_bt, item_bt = match ls with
              | Base (Tuple bts) ->
@@ -153,7 +153,7 @@ module Make (G : sig val global : Global.t end) = struct
                 end
              | _ -> fail loc (Illtyped_it context)
            in
-           return (Base item_bt, Nth (tuple_bt, n, t'))
+           return (Base item_bt, NthTuple (tuple_bt, n, t'))
         | Struct (tag, members) ->
            let* decl = match SymMap.find_opt tag G.global.struct_decls with
              | Some decl -> return decl
@@ -265,6 +265,13 @@ module Make (G : sig val global : Global.t end) = struct
              | _ -> fail loc (Illtyped_it context)
            in
            return (ls, Tail t)
+        | NthList (i, t) ->
+           let* (ls, t) = infer loc t in
+           let* bt = match ls with
+             | Base (List bt) -> return bt
+             | _ -> fail loc (Illtyped_it context)
+           in
+           return (Base bt, NthList (i, t))
         (* sets *)
         | SetMember (t,t') ->
            let* (Base bt, t) = infer loc t in

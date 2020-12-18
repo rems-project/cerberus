@@ -9,7 +9,12 @@ let json (LC c) : Yojson.Safe.t =
 let subst_var substitution (LC c) = 
   LC (IndexTerms.subst_var substitution c)
 
+let subst_it substitution (LC c) = 
+  LC (IndexTerms.subst_it substitution c)
+
+
 let subst_vars = Subst.make_substs subst_var
+let subst_its = Subst.make_substs subst_it
 
 let vars_in (LC c) = IndexTerms.vars_in c
 

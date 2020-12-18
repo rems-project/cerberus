@@ -71,7 +71,7 @@ type 'bt term =
   | ITE of 'bt term * 'bt term * 'bt term  (* bool -> int -> int *)
   (* tuples *)
   | Tuple of 'bt term list
-  | Nth of 'bt * int * 'bt term (* bt is tuple bt *)
+  | NthTuple of 'bt * int * 'bt term (* bt is tuple bt *)
   | Struct of BT.tag * (BT.member * 'bt term) list
   | StructMember of BT.tag * 'bt term * BT.member
   | StructMemberOffset of BT.tag * 'bt term * BT.member
@@ -96,6 +96,7 @@ type 'bt term =
   | List of 'bt term list * 'bt
   | Head of 'bt term
   | Tail of 'bt term
+  | NthList of int * 'bt term
   (* sets *)
   | SetMember of 'bt term * 'bt term
   | SetAdd of 'bt term * 'bt term
@@ -174,7 +175,7 @@ let rec equal it it' =
   (* tuples *)
   | Tuple its, Tuple its' -> 
      List.equal equal its its'
-  | Nth (bt, n,t), Nth (bt', n',t') -> 
+  | NthTuple (bt, n,t), NthTuple (bt', n',t') -> 
      BT.equal bt bt' && n = n' && equal t t' 
   | Struct (tag, members), Struct (tag2, members2) ->
      tag = tag2 && 
@@ -224,6 +225,8 @@ let rec equal it it' =
      equal t t'
   | Tail t, Tail t' ->
      equal t t'
+  | NthList (n,t), NthList (n',t') ->
+     n = n' && equal t t'
   (* sets *)
   | SetMember (t1,t2), SetMember (t1',t2') ->
      equal t1 t1' && equal t1' t2'
@@ -271,7 +274,7 @@ let rec equal it it' =
   | ITE _, _
   (* tuples *)
   | Tuple _, _
-  | Nth _, _
+  | NthTuple _, _
   | Struct _, _
   | StructMember _, _
   | StructMemberOffset _, _
@@ -296,6 +299,7 @@ let rec equal it it' =
   | List _, _
   | Head _, _
   | Tail _, _
+  | NthList _, _
   (* sets *)
   | SetMember _, _
   | SetAdd _, _
@@ -372,7 +376,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | ITE (o1,o2,o3) -> 
        mparens (!^"?" ^^^ parens (separate_map comma (aux false) [o1; o2; o3]))
     (* tuples *)
-    | Nth (bt,n,it2) -> 
+    | NthTuple (bt,n,it2) -> 
        mparens (aux true it2 ^^ dot ^^ !^(string_of_int n))
     | Tuple its -> 
        braces (separate_map (semi ^^ space) (aux false) its)
@@ -427,6 +431,8 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
     | List (its, _bt) -> 
        mparens (brackets (separate_map comma (aux false) its))
+    | NthList (n, t) ->
+       mparens (aux true t ^^ brackets !^(string_of_int n))
     (* sets *)
     | SetMember (t1,t2) ->
        mparens (aux false t1 ^^^ !^"IN" ^^^ aux false t2)
@@ -478,7 +484,7 @@ let rec vars_in it : SymSet.t =
   | ITE (it,it',it'') -> vars_in_list [it;it';it'']
   (* tuples *)
   | Tuple its -> vars_in_list (it :: its)
-  | Nth (_, _, it) -> vars_in it
+  | NthTuple (_, _, it) -> vars_in it
   | Struct (_tag, members) -> vars_in_list (map snd members)
   | StructMember (_tag, it, s) -> vars_in_list [it;it]
   | StructMemberOffset (_tag, it, s) -> vars_in_list [it;it]
@@ -503,6 +509,7 @@ let rec vars_in it : SymSet.t =
   | List (its,bt) -> vars_in_list its
   | Head it -> vars_in it
   | Tail it -> vars_in it
+  | NthList (_,it) -> vars_in it
   (* sets *)
   | SetMember (t1,t2) -> vars_in_list [t1;t2]
   | SetAdd (t1,t2) -> vars_in_list [t1;t2]
@@ -558,8 +565,8 @@ let rec subst_var subst it : t =
   (* tuples *)
   | Tuple its ->
      Tuple (map (fun it -> subst_var subst it) its)
-  | Nth (bt, n, it') ->
-     Nth (bt, n, subst_var subst it')
+  | NthTuple (bt, n, it') ->
+     NthTuple (bt, n, subst_var subst it')
   | Struct (tag, members) ->
      let members = map (fun (member,it) -> (member,subst_var subst it)) members in
      Struct (tag, members)
@@ -583,7 +590,7 @@ let rec subst_var subst it : t =
   | MinInteger it -> MinInteger it
   | MaxInteger it -> MaxInteger it
   | Representable (rt,t) -> Representable (rt,subst_var subst t)
-  (* list *)
+  (* lists *)
   | Nil _ -> it
   | Cons (it1,it2) -> Cons (subst_var subst it1, subst_var subst it2)
   | List (its,bt) -> 
@@ -592,6 +599,8 @@ let rec subst_var subst it : t =
      Head (subst_var subst it)
   | Tail it ->
      Tail (subst_var subst it)
+  | NthList (i, it) ->
+     NthList (i, subst_var subst it)
   (* sets *)
   | SetMember (t1,t2) ->
      SetMember (subst_var subst t1, subst_var subst t2)
@@ -649,8 +658,8 @@ let rec subst_it subst it : t =
   (* tuples *)
   | Tuple its ->
      Tuple (map (fun it -> subst_it subst it) its)
-  | Nth (bt, n, it') ->
-     Nth (bt, n, subst_it subst it')
+  | NthTuple (bt, n, it') ->
+     NthTuple (bt, n, subst_it subst it')
   | Struct (tag, members) ->
      let members = map (fun (member,it) -> (member,subst_it subst it)) members in
      Struct (tag, members)
@@ -683,6 +692,8 @@ let rec subst_it subst it : t =
      Head (subst_it subst it)
   | Tail it ->
      Tail (subst_it subst it)
+  | NthList (i,it) ->
+     NthList (i, subst_it subst it)
   (* set *)
   | SetMember (t1,t2) ->
      SetMember (subst_it subst t1, subst_it subst t2)

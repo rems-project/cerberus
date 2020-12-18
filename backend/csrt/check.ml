@@ -174,7 +174,7 @@ module Make (G : sig val global : Global.t end) = struct
             let rec components local' i pats bts =
               match pats, bts with
               | pat :: pats', bt :: bts' ->
-                 let* local' = aux local' (Nth (expect, i, this)) pat bt in
+                 let* local' = aux local' (NthTuple (expect, i, this)) pat bt in
                  components local' (i+1) pats' bts'
               | [], [] -> 
                  return local'
@@ -656,7 +656,7 @@ module Make (G : sig val global : Global.t end) = struct
     let bt = Tuple bts in
     let constrs = 
       List.mapi (fun i arg -> 
-          IT.EQ (Nth (bt, i, S (bt, ret)), S (arg.bt, arg.lname))
+          IT.EQ (NthTuple (bt, i, S (bt, ret)), S (arg.bt, arg.lname))
         ) args 
     in
     return (ret, bt, LC (And constrs))

@@ -202,7 +202,7 @@ let rec of_index_term global it =
   (* tuples *)
   | Tuple ts ->
      Debug_ocaml.error "todo: Z3: Tuple"
-  | Nth (bt,i,t) ->
+  | NthTuple (bt,i,t) ->
      let a = of_index_term global t in
      let fundecl = nth_to_fundecl bt i in
      Z3.Expr.mk_app ctxt fundecl [a]
@@ -300,6 +300,8 @@ let rec of_index_term global it =
      Debug_ocaml.error "todo: Z3: Tail"
   | List (ts,bt) ->
      Debug_ocaml.error "todo: Z3: List"
+  | NthList (i,it) ->
+     Debug_ocaml.error "todo: Z3: NthList"
   (* sets *)
   | SetMember (it,it') ->
      let a = of_index_term global it in

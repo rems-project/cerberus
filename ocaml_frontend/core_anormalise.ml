@@ -417,7 +417,7 @@ let n_action loc (action : ('a, unit) action1)
      n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_CreateReadOnly(e1, ctype1, e3, sym1)))))
   | Alloc0(e1, e2, sym1) ->
-     n_pexpr_in_expr_name e2 (fun e1 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
      n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Alloc(e1, e2, sym1)))))
   | Kill(kind, e1) ->
