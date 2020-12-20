@@ -515,11 +515,19 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
     D.drive core_file ("cmdname" :: args) fs_state driver_conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           (* TODO: yuck *)
-          return (Either.Right begin try
-            int_of_string (String_mem.string_pretty_of_integer_value ival)
-          with | _ ->
-            Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
-            0
+          return (Either.Right begin
+            match Impl_mem.eval_integer_value ival with
+              | Some n ->
+                  begin try
+                    Z.to_int n
+                  with
+                    | Z.Overflow ->
+                        Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                        Z .(to_int (n mod (of_int 256)))
+                  end 
+              | None ->
+                  Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+                  0
           end)
       | (cval :: _) ->
           io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) >>= fun () ->
