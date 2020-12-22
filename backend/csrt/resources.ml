@@ -91,6 +91,25 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
      Predicate {name; key_arg; iargs; oargs}
 
 
+let subst_it (subst: (Sym.t,IndexTerms.t) Subst.t) resource =
+  let open Option in
+  let subst_sym s = if Sym.equal s subst.before then None else Some s in
+  match resource with
+  | Block {pointer; size; block_type} ->
+     let pointer = IndexTerms.subst_it subst pointer in
+     let size = IndexTerms.subst_it subst size in
+     return (Block {pointer; size; block_type})
+  | Points {pointer; pointee; size} -> 
+     let pointer = IndexTerms.subst_it subst pointer in
+     let* pointee = subst_sym pointee in
+     return (Points {pointer; pointee; size})
+  | Predicate {name; key_arg; iargs; oargs} -> 
+     let key_arg = IndexTerms.subst_it subst key_arg in
+     let iargs = List.map (IndexTerms.subst_it subst) iargs in
+     let* oargs = Option.mapM subst_sym oargs in
+     return (Predicate {name; key_arg; iargs; oargs})
+
+
 let subst_vars = Subst.make_substs subst_var
 
 

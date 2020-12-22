@@ -9,6 +9,9 @@ type t = False
 let subst_var substitution = function
   | False -> False
 
+let subst_it substitution = function
+  | False -> Some False
+
 let instantiate_struct_member substitution = function
   | False -> False
 

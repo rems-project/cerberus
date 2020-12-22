@@ -26,8 +26,7 @@ let mConstraints = List.fold_right mConstraint
 let mResources = List.fold_right mResource
 
 
-let subst_var_fancy ?(re_subst_var=Resources.subst_var) 
-               (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
+let subst_var (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
   let rec aux substitution = function
     | I -> I
     | Logical ((name,ls),t) -> 
@@ -42,7 +41,7 @@ let subst_var_fancy ?(re_subst_var=Resources.subst_var)
          let t' = aux substitution t in
          Logical ((name,ls),t')
     | Resource (re,t) -> 
-       let re = re_subst_var substitution re in
+       let re = Resources.subst_var substitution re in
        let t = aux substitution t in
        Resource (re,t)
     | Constraint (lc,t) -> 
@@ -52,11 +51,37 @@ let subst_var_fancy ?(re_subst_var=Resources.subst_var)
   in
   aux substitution lrt
 
-
-let subst_vars_fancy = Subst.make_substs subst_var_fancy
-
-let subst_var subst = subst_var_fancy subst
 let subst_vars = Subst.make_substs subst_var
+
+
+let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt = 
+  let open Option in
+  let rec aux substitution = function
+    | I -> 
+       return I
+    | Logical ((name,ls),t) -> 
+       if Sym.equal name substitution.before then 
+         return (Logical ((name,ls),t))
+       else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
+         let newname = Sym.fresh () in
+         let t' = subst_var {before=name;after=newname} t in
+         let* t'' = aux substitution t' in
+         return (Logical ((newname,ls),t''))
+       else
+         let* t' = aux substitution t in
+         return (Logical ((name,ls),t'))
+    | Resource (re,t) -> 
+       let* re = Resources.subst_it substitution re in
+       let* t = aux substitution t in
+       return (Resource (re,t))
+    | Constraint (lc,t) -> 
+       let lc = LogicalConstraints.subst_it substitution lc in
+       let* t = aux substitution t in
+       return (Constraint (lc,t))
+  in
+  aux substitution lrt
+
+let subst_its = Subst.make_substs subst_var
 
 
 

@@ -529,275 +529,113 @@ let json it : Yojson.Safe.t =
 
 
 
-let rec subst_var subst it : t = 
-  match it with
-  (* literals *)
-  | S (bt, symbol) -> 
-     if symbol = subst.before then S (bt, subst.after) else S (bt, symbol)
-  | Num _ -> it
-  | Pointer _ -> it
-  | Bool _ -> it
-  | Unit -> it
-  (* arithmetic *)
-  | Add (it, it') -> Add (subst_var subst it, subst_var subst it')
-  | Sub (it, it') -> Sub (subst_var subst it, subst_var subst it')
-  | Mul (it, it') -> Mul (subst_var subst it, subst_var subst it')
-  | Div (it, it') -> Div (subst_var subst it, subst_var subst it')
-  | Exp (it, it') -> Exp (subst_var subst it, subst_var subst it')
-  | Rem_t (it, it') -> Rem_t (subst_var subst it, subst_var subst it')
-  | Rem_f (it, it') -> Rem_f (subst_var subst it, subst_var subst it')
-  | Min (it, it') -> Min (subst_var subst it, subst_var subst it')
-  | Max (it, it') -> Max (subst_var subst it, subst_var subst it')
-  (* comparisons *)
-  | EQ (it, it') -> EQ (subst_var subst it, subst_var subst it')
-  | NE (it, it') -> NE (subst_var subst it, subst_var subst it')
-  | LT (it, it') -> LT (subst_var subst it, subst_var subst it')
-  | GT (it, it') -> GT (subst_var subst it, subst_var subst it')
-  | LE (it, it') -> LE (subst_var subst it, subst_var subst it')
-  | GE (it, it') -> GE (subst_var subst it, subst_var subst it')
-  (* booleans *)
-  | And its -> And (map (subst_var subst) its)
-  | Or its -> Or (map (subst_var subst) its)
-  | Impl (it, it') -> Impl (subst_var subst it, subst_var subst it')
-  | Not it -> Not (subst_var subst it)
-  | ITE (it,it',it'') -> 
-     ITE (subst_var subst it, subst_var subst it', subst_var subst it'')
-  (* tuples *)
-  | Tuple its ->
-     Tuple (map (fun it -> subst_var subst it) its)
-  | NthTuple (bt, n, it') ->
-     NthTuple (bt, n, subst_var subst it')
-  | Struct (tag, members) ->
-     let members = map (fun (member,it) -> (member,subst_var subst it)) members in
-     Struct (tag, members)
-  | StructMember (tag, t, f) ->
-     StructMember (tag, subst_var subst t, f)
-  | StructMemberOffset (tag,t,f) ->
-     StructMemberOffset (tag,subst_var subst t, f)
-  (* pointers *)
-  | Null it -> Null (subst_var subst it)
-  | AllocationSize it -> AllocationSize (subst_var subst it)
-  | Offset (it, it') -> Offset (subst_var subst it, subst_var subst it')
-  | LocLT (it, it') -> LocLT (subst_var subst it, subst_var subst it')
-  | LocLE (it, it') -> LocLE (subst_var subst it, subst_var subst it')
-  | Disjoint ((it,s), (it',s')) -> 
-     Disjoint ((subst_var subst it,s), (subst_var subst it',s'))
-  | AlignedI (it,it') -> AlignedI (subst_var subst it, subst_var subst it')
-  | Aligned (rt,t) -> Aligned (rt, subst_var subst t)
-  | IntegerToPointerCast t -> IntegerToPointerCast (subst_var subst t)
-  | PointerToIntegerCast t -> PointerToIntegerCast (subst_var subst t)
-  (* representability *)
-  | MinInteger it -> MinInteger it
-  | MaxInteger it -> MaxInteger it
-  | Representable (rt,t) -> Representable (rt,subst_var subst t)
-  (* lists *)
-  | Nil _ -> it
-  | Cons (it1,it2) -> Cons (subst_var subst it1, subst_var subst it2)
-  | List (its,bt) -> 
-     List (map (fun it -> subst_var subst it) its, bt)
-  | Head it ->
-     Head (subst_var subst it)
-  | Tail it ->
-     Tail (subst_var subst it)
-  | NthList (i, it) ->
-     NthList (i, subst_var subst it)
-  (* sets *)
-  | SetMember (t1,t2) ->
-     SetMember (subst_var subst t1, subst_var subst t2)
-  | SetAdd (t1,t2) ->
-     SetAdd (subst_var subst t1, subst_var subst t2)
-  | SetRemove (t1, t2) ->
-     SetRemove (subst_var subst t1, subst_var subst t2)
-  | SetUnion ts ->
-     SetUnion (List1.map (subst_var subst) ts)
-  | SetIntersection ts ->
-     SetIntersection (List1.map (subst_var subst) ts)
-  | SetDifference (t1, t2) ->
-     SetDifference (subst_var subst t1, subst_var subst t2)
-  | Subset (t1, t2) ->
-     Subset (subst_var subst t1, subst_var subst t2)
+let map_sym f it : t = 
+  let rec aux it = 
+    match it with
+    (* literals *)
+    | S (bt, symbol) -> f (bt, symbol)
+    | Num _ -> it
+    | Pointer _ -> it
+    | Bool _ -> it
+    | Unit -> it
+    (* arithmetic *)
+    | Add (it, it') -> Add (aux it, aux it')
+    | Sub (it, it') -> Sub (aux it, aux it')
+    | Mul (it, it') -> Mul (aux it, aux it')
+    | Div (it, it') -> Div (aux it, aux it')
+    | Exp (it, it') -> Exp (aux it, aux it')
+    | Rem_t (it, it') -> Rem_t (aux it, aux it')
+    | Rem_f (it, it') -> Rem_f (aux it, aux it')
+    | Min (it, it') -> Min (aux it, aux it')
+    | Max (it, it') -> Max (aux it, aux it')
+    (* comparisons *)
+    | EQ (it, it') -> EQ (aux it, aux it')
+    | NE (it, it') -> NE (aux it, aux it')
+    | LT (it, it') -> LT (aux it, aux it')
+    | GT (it, it') -> GT (aux it, aux it')
+    | LE (it, it') -> LE (aux it, aux it')
+    | GE (it, it') -> GE (aux it, aux it')
+    (* booleans *)
+    | And its -> And (map (aux) its)
+    | Or its -> Or (map (aux) its)
+    | Impl (it, it') -> Impl (aux it, aux it')
+    | Not it -> Not (aux it)
+    | ITE (it,it',it'') -> 
+       ITE (aux it, aux it', aux it'')
+    (* tuples *)
+    | Tuple its ->
+       Tuple (map (fun it -> aux it) its)
+    | NthTuple (bt, n, it') ->
+       NthTuple (bt, n, aux it')
+    | Struct (tag, members) ->
+       let members = map (fun (member,it) -> (member,aux it)) members in
+       Struct (tag, members)
+    | StructMember (tag, t, f) ->
+       StructMember (tag, aux t, f)
+    | StructMemberOffset (tag,t,f) ->
+       StructMemberOffset (tag,aux t, f)
+    (* pointers *)
+    | Null it -> Null (aux it)
+    | AllocationSize it -> AllocationSize (aux it)
+    | Offset (it, it') -> Offset (aux it, aux it')
+    | LocLT (it, it') -> LocLT (aux it, aux it')
+    | LocLE (it, it') -> LocLE (aux it, aux it')
+    | Disjoint ((it,s), (it',s')) -> 
+       Disjoint ((aux it,s), (aux it',s'))
+    | AlignedI (it,it') -> AlignedI (aux it, aux it')
+    | Aligned (rt,t) -> Aligned (rt, aux t)
+    | IntegerToPointerCast t -> IntegerToPointerCast (aux t)
+    | PointerToIntegerCast t -> PointerToIntegerCast (aux t)
+    (* representability *)
+    | MinInteger it -> MinInteger it
+    | MaxInteger it -> MaxInteger it
+    | Representable (rt,t) -> Representable (rt,aux t)
+    (* lists *)
+    | Nil _ -> it
+    | Cons (it1,it2) -> Cons (aux it1, aux it2)
+    | List (its,bt) -> 
+       List (map (fun it -> aux it) its, bt)
+    | Head it ->
+       Head (aux it)
+    | Tail it ->
+       Tail (aux it)
+    | NthList (i, it) ->
+       NthList (i, aux it)
+    (* sets *)
+    | SetMember (t1,t2) ->
+       SetMember (aux t1, aux t2)
+    | SetAdd (t1,t2) ->
+       SetAdd (aux t1, aux t2)
+    | SetRemove (t1, t2) ->
+       SetRemove (aux t1, aux t2)
+    | SetUnion ts ->
+       SetUnion (List1.map (aux) ts)
+    | SetIntersection ts ->
+       SetIntersection (List1.map (aux) ts)
+    | SetDifference (t1, t2) ->
+       SetDifference (aux t1, aux t2)
+    | Subset (t1, t2) ->
+       Subset (aux t1, aux t2)
+  in
+  aux it
 
+
+let subst_var (subst : (Sym.t, Sym.t) Subst.t) it =
+  map_sym (fun (bt, s) ->
+      S (bt, Sym.subst subst s)
+    ) it
 
 let subst_vars = make_substs subst_var
 
 
+let subst_it (subst : (Sym.t, 'bt term) Subst.t) it =
+  map_sym (fun (bt, s) ->
+      if Sym.equal s subst.before 
+      then subst.after
+      else S (bt, s)
+    ) it
 
-let rec subst_it subst it : t = 
-  match it with
-  (* literals *)
-  | S (bt, symbol) -> 
-     if symbol = subst.before then subst.after else S (bt, symbol)
-  | Num _ -> it
-  | Pointer _ -> it
-  | Bool _ -> it
-  | Unit -> it
-  (* arithmetic *)
-  | Add (it, it') -> Add (subst_it subst it, subst_it subst it')
-  | Sub (it, it') -> Sub (subst_it subst it, subst_it subst it')
-  | Mul (it, it') -> Mul (subst_it subst it, subst_it subst it')
-  | Div (it, it') -> Div (subst_it subst it, subst_it subst it')
-  | Exp (it, it') -> Exp (subst_it subst it, subst_it subst it')
-  | Rem_t (it, it') -> Rem_t (subst_it subst it, subst_it subst it')
-  | Rem_f (it, it') -> Rem_f (subst_it subst it, subst_it subst it')
-  | Min (it, it') -> Min (subst_it subst it, subst_it subst it')
-  | Max (it, it') -> Max (subst_it subst it, subst_it subst it')
-  (* comparisons *)
-  | EQ (it, it') -> EQ (subst_it subst it, subst_it subst it')
-  | NE (it, it') -> NE (subst_it subst it, subst_it subst it')
-  | LT (it, it') -> LT (subst_it subst it, subst_it subst it')
-  | GT (it, it') -> GT (subst_it subst it, subst_it subst it')
-  | LE (it, it') -> LE (subst_it subst it, subst_it subst it')
-  | GE (it, it') -> GE (subst_it subst it, subst_it subst it')
-  (* booleans *)
-  | And its -> And (map (subst_it subst) its)
-  | Or its -> Or (map (subst_it subst) its)
-  | Impl (it, it') -> Impl (subst_it subst it, subst_it subst it')
-  | Not it -> Not (subst_it subst it)
-  | ITE (it,it',it'') -> 
-     ITE (subst_it subst it, subst_it subst it', subst_it subst it'')
-  (* tuples *)
-  | Tuple its ->
-     Tuple (map (fun it -> subst_it subst it) its)
-  | NthTuple (bt, n, it') ->
-     NthTuple (bt, n, subst_it subst it')
-  | Struct (tag, members) ->
-     let members = map (fun (member,it) -> (member,subst_it subst it)) members in
-     Struct (tag, members)
-  | StructMember (tag, t, f) ->
-     StructMember (tag, subst_it subst t, f)
-  | StructMemberOffset (tag,t,f) ->
-     StructMemberOffset (tag,subst_it subst t, f)
-  (* null *)
-  | Null it -> Null (subst_it subst it)
-  | AllocationSize it -> AllocationSize (subst_it subst it)
-  | Offset (it, it') -> Offset (subst_it subst it, subst_it subst it')
-  | LocLT (it, it') -> LocLT (subst_it subst it, subst_it subst it')
-  | LocLE (it, it') -> LocLE (subst_it subst it, subst_it subst it')
-  | Disjoint ((it,s), (it',s')) -> 
-     Disjoint ((subst_it subst it,s), (subst_it subst it',s'))
-  | AlignedI (it,it') -> AlignedI (subst_it subst it, subst_it subst it')
-  | Aligned (rt,t) -> Aligned (rt,subst_it subst t)
-  | IntegerToPointerCast t -> IntegerToPointerCast (subst_it subst t)
-  | PointerToIntegerCast t -> PointerToIntegerCast (subst_it subst t)
-  (* representability *)
-  | Representable (rt,t) -> Representable (rt,subst_it subst t)
-  | MinInteger it -> MinInteger it
-  | MaxInteger it -> MaxInteger it
-  (* lists *)
-  | Nil _ -> it
-  | Cons (it1,it2) -> Cons (subst_it subst it1, subst_it subst it2)
-  | List (its,bt) -> 
-     List (map (fun it -> subst_it subst it) its, bt)
-  | Head it ->
-     Head (subst_it subst it)
-  | Tail it ->
-     Tail (subst_it subst it)
-  | NthList (i,it) ->
-     NthList (i, subst_it subst it)
-  (* set *)
-  | SetMember (t1,t2) ->
-     SetMember (subst_it subst t1, subst_it subst t2)
-  | SetAdd (t1,t2) ->
-     SetAdd (subst_it subst t1, subst_it subst t2)
-  | SetRemove (t1, t2) ->
-     SetRemove (subst_it subst t1, subst_it subst t2)
-  | SetUnion ts ->
-     SetUnion (List1.map (subst_it subst) ts)
-  | SetIntersection ts ->
-     SetIntersection (List1.map (subst_it subst) ts)
-  | SetDifference (t1, t2) ->
-     SetDifference (subst_it subst t1, subst_it subst t2)
-  | Subset (t1, t2) ->
-     Subset (subst_it subst t1, subst_it subst t2)  
-
-
-(* let rec unify it it' (res : (t Uni.t) SymMap.t) = 
- *   match it, it' with
- *   | Num n, Num n' when n = n' -> return res
- *   | Bool b, Bool b' when b = b' -> return res
- * 
- *   | Add (it1, it2), Add (it1', it2')
- *   | Sub (it1, it2), Sub (it1', it2')
- *   | Mul (it1, it2), Mul (it1', it2')
- *   | Div (it1, it2), Div (it1', it2')
- *   | Exp (it1, it2), Exp (it1', it2')
- *   | Rem_t (it1, it2), Rem_t (it1', it2')
- *   | Rem_f (it1, it2), Rem_f (it1', it2')
- *   | Min (it1, it2), Min (it1', it2')
- *   | Max (it1, it2), Max (it1', it2')
- * 
- *   | EQ (it1, it2), EQ (it1', it2')
- *   | NE (it1, it2), NE (it1', it2')
- *   | LT (it1, it2), LT (it1', it2')
- *   | GT (it1, it2), GT (it1', it2')
- *   | LE (it1, it2), LE (it1', it2')
- *   | GE (it1, it2), GE (it1', it2')
- *     ->
- *      let* res = unify it1 it1' res in
- *      unify it2 it2' res
- * 
- * 
- *   | And its, And its'
- *   | Or its, Or its' 
- *     ->
- *      unify_list its its' res
- * 
- *   | Null it, Null it'
- *   | Not it, Not it' 
- *   | Head it, Head it' 
- *   | Tail it, Tail it' 
- *     -> 
- *      unify it it' res
- *   | ITE (it1,it2,it3), ITE (it1',it2',it3') ->
- *      unify_list [it1;it2;it3] [it1';it2';it3'] res
- * 
- *   | Tuple its, Tuple its' ->
- *      unify_list (it::its) (it'::its') res
- *   | Nth (bt, n, it2), Nth (bt', n', it2') when BT.equal bt bt' && n = n'
- *     -> 
- *      unify it it' res
- * 
- *   | List (its,bt), List (its',bt') when BT.equal bt bt' ->
- *      unify_list its its' res
- * 
- *   | Struct (tag, members), Struct (tag', members') 
- *        when tag = tag' ->
- *      let rec aux members members' res = 
- *        match members, members' with
- *        | [], [] -> return res
- *        | (BT.Member m, it)::members, (BT.Member m', it')::members' 
- *             when m = m' ->
- *           let* res = unify it it' res in
- *           aux members members' res
- *        | _ -> fail
- *      in
- *      aux members members' res
- * 
- *   | Member (tag, t, m), Member (tag', t', m') 
- *   | MemberOffset (tag, t, m), MemberOffset (tag', t', m') 
- *        when tag = tag' && m = m' ->
- *      unify t t' res
- * 
- *   | S sym, it' ->
- *      if S sym = it' then Some res else
- *        let* uni = SymMap.find_opt sym res in
- *        begin match uni.resolved with
- *        | Some s when s = it' -> return res 
- *        | Some s -> fail
- *        | None -> return (SymMap.add sym (Uni.{resolved = Some it'}) res)
- *        end
- * 
- *   | _, _ ->
- *      fail
- * 
- * and unify_list its its' res =
- *   match its, its' with
- *   | [], [] -> return res
- *   | (it :: its), (it' :: its') ->
- *      let* res = unify it it' res in
- *      unify_list its its' res
- *   | _, _ ->
- *      fail *)
+let subst_its = make_substs subst_var
 
 
 

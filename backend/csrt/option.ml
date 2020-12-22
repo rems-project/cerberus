@@ -48,3 +48,12 @@ let pp ppf oa =
 let to_list = function
   | Some a -> [a]
   | None -> []
+
+
+let rec mapM f xs = 
+  match xs with
+  | [] -> return []
+  | x :: xs ->
+     let* y = f x in
+     let* ys = mapM f xs in
+     return (y :: ys)
