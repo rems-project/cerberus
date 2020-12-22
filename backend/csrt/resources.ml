@@ -106,7 +106,7 @@ let subst_it (subst: (Sym.t,IndexTerms.t) Subst.t) resource =
   | Predicate {name; key_arg; iargs; oargs} -> 
      let key_arg = IndexTerms.subst_it subst key_arg in
      let iargs = List.map (IndexTerms.subst_it subst) iargs in
-     let* oargs = Option.mapM subst_sym oargs in
+     let* oargs = Option.ListM.mapM subst_sym oargs in
      return (Predicate {name; key_arg; iargs; oargs})
 
 

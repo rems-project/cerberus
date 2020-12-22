@@ -36,6 +36,11 @@ let value (default : 'a) (oa : 'a option) =
   | Some a -> a
   | None -> default
 
+let value_err (err : string) (oa : 'a option) =
+  match oa with
+  | Some a -> a
+  | None -> Debug_ocaml.error err
+
 let (let*) = bind
 
 let pp ppf oa =
@@ -50,10 +55,14 @@ let to_list = function
   | None -> []
 
 
-let rec mapM f xs = 
-  match xs with
-  | [] -> return []
-  | x :: xs ->
-     let* y = f x in
-     let* ys = mapM f xs in
-     return (y :: ys)
+module ListM = struct
+
+  let rec mapM f xs = 
+    match xs with
+    | [] -> return []
+    | x :: xs ->
+       let* y = f x in
+       let* ys = mapM f xs in
+       return (y :: ys)
+
+end

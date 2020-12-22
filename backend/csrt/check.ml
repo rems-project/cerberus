@@ -434,6 +434,38 @@ module Make (G : sig val global : Global.t end) = struct
   (*** resource inference *******************************************************)
 
 
+  let predicate_substs pred (def : Global.predicate_definition) = 
+    let open Subst in
+    let open Global in
+    let open Resources in
+    {before = fst def.key_arg; after = pred.key_arg} ::
+      List.map (fun ((before, _), after) -> {before; after}
+        ) (List.combine def.iargs pred.iargs)
+
+  let predicate_pack_functions pred def =
+    let substs = predicate_substs pred def in
+    List.map (fun clause ->
+      List.fold_left (fun lft subst ->
+          Option.value_err
+            "predicate arguments not well-sorted"
+            (LFT.subst_it subst lft)
+        ) clause substs
+      ) def.pack_functions
+
+  let predicate_unpack_functions pred def =
+    let substs = predicate_substs pred def in
+    List.map (fun clause ->
+      List.fold_left (fun lft subst ->
+          Option.value_err
+            "predicate arguments not well-sorted"
+            (LFT.subst_it subst lft)
+        ) clause substs
+      ) def.unpack_functions
+    
+
+
+
+
   let rec remove_ownership_prompt (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
     let open Prompt.Operators in
     if S.equal local need_size (Num Z.zero) then 
@@ -527,10 +559,10 @@ module Make (G : sig val global : Global.t end) = struct
           in
           debug 6 (lazy (!^"trying to pack" ^^^ RE.pp request));
           let attempt_prompts = 
-            List.map (fun clause ->
-                debug 6 (lazy (item "clause" (LFT.pp clause)));
-                prompt (R_Packing {loc; situation; local; lft = clause})
-              ) (def.pack_functions (p.key_arg, p.iargs))
+            List.map (fun lft ->
+                debug 6 (lazy (item "clause" (LFT.pp lft)));
+                prompt (R_Packing {loc; situation; local; lft})
+              ) (predicate_pack_functions p def)
           in
           let choices = attempt_prompts @ [else_prompt] in
           let choices1 = List1.make (List.hd choices, List.tl choices) in
@@ -617,13 +649,12 @@ module Make (G : sig val global : Global.t end) = struct
                in
                let* possible_unpackings = 
                  ListM.filter_mapM (fun clause ->
-                     (* let test_local = L.use_resource resource_name [loc] local in *)
                      let prompt = Spine_LFT.spine loc Unpacking local [] clause in
                      let* (lrt, test_local) = handle_prompt prompt in
                      let test_local = bind_logical test_local lrt in
                      let is_reachable = S.is_consistent test_local in
                      return (if is_reachable then Some test_local else None)
-                   ) (def.unpack_functions (p.key_arg, p.iargs))
+                   ) (predicate_unpack_functions p def)
                in
                begin match possible_unpackings with
                | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
@@ -1889,6 +1920,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
+     - check resource definition well-formedness
      - check globals with expressions
      - fix problems with order of multiple "requires" clauses
      - give types for standard library functions

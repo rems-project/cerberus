@@ -19,58 +19,63 @@ module FT = ArgumentTypes.Make(RT)
 
 
 
-type resource_predicate = 
-  { key_arg : LS.t;
-    iargs : LS.t list;
-    oargs : (string * LS.t) list;
-    pack_functions : (IT.t * IT.t list) -> (LFT.t List.t);
-    unpack_functions : (IT.t * IT.t list) -> (LFT.t List.t);
+type predicate_definition = 
+  { key_arg : Sym.t * LS.t;
+    iargs : (Sym.t * LS.t) list;
+    oargs : (Sym.t * LS.t) list;
+    pack_functions : LFT.t list;
+    unpack_functions : LFT.t list;
   }
 
 
 
 let early = 
+  let open Resources in
   let open BT in
   let open IT in
   let id = Id.parse Location_ocaml.unknown "EarlyAlloc" in
-  let key_arg = LS.Base Integer in
-  let iargs = [LS.Base Integer] in
+  let start_s = Sym.fresh () in
+  let start_t = S (Integer, start_s) in
+  let end_s = Sym.fresh () in
+  let end_t = S (Integer, end_s) in
+  let key_arg = (start_s, LS.Base Integer) in
+  let iargs = [(end_s, LS.Base Integer)] in
   let oargs = [] in
-  let pred s e = 
-    Resources.Predicate {
-        key_arg = s; 
+  let pred = 
+    Predicate {
+        key_arg = start_t; 
         name = Id id; 
-        iargs = [e];
+        iargs = [end_t];
         oargs = [];
       } 
   in
-  let block s e = 
+  let block = 
     RE.Block {
-        pointer = IntegerToPointerCast s;
-        size = Add (Sub (e, s), Num (Z.of_int 1));
+        pointer = IntegerToPointerCast start_t;
+        size = Add (Sub (end_t, start_t), Num (Z.of_int 1));
         block_type = Nothing
       }
   in
-  let pack_functions (start_arg, iargs) =
+  let pack_functions =
     match iargs with
     | [end_arg] ->
-       [LFT.Resource (block start_arg end_arg, 
-        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_arg) (Sctypes.Sctype ([], Void))),
-        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_arg) (Sctypes.Sctype ([], Void))),
+       [LFT.Resource (block, 
+        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
+        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
         LFT.I (
-        LRT.Resource (pred start_arg end_arg, 
+        LRT.Resource (pred,
         LRT.I)))))] 
     | _ -> 
        Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
   in
-  let unpack_functions (start_arg, iargs) =
+  let unpack_functions =
     match iargs with
     | [end_arg] ->
-       [LFT.Resource (pred start_arg end_arg, 
+       [LFT.Resource (pred,
         LFT.I (
-        LRT.Resource (block start_arg end_arg, 
-        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_arg) (Sctypes.Sctype ([], Void))),
-        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_arg) (Sctypes.Sctype ([], Void))),
+        LRT.Resource (block,
+        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
+        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
         LRT.I)))))]
     | _ -> 
        Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
@@ -119,9 +124,11 @@ let impl_lookup (e: 'v ImplMap.t) i =
   | Some v -> v
 
 
-type closed_stored_predicate_definition =
-  { pack_function: IT.t -> LFT.t; 
-    unpack_function: IT.t -> LFT.t; 
+type stored_struct_predicate =
+  { pointer : Sym.t;
+    value : Sym.t;
+    pack_function: LFT.t; 
+    unpack_function: LFT.t; 
   }
 
 
@@ -137,13 +144,7 @@ type struct_member =
 
 type struct_decl = 
   { layout: struct_piece list;
-    (* sizes: (BT.member * RE.size) list;
-     * offsets: (BT.member * Z.t) list;
-     * representable: IT.t -> LC.t; *)
-    (* closed: RT.t;  *)
-    (* closed_stored: RT.t; *)
-    closed_stored_predicate_definition: 
-      closed_stored_predicate_definition
+    stored_struct_predicate: stored_struct_predicate
   }
 
 let members = 
@@ -173,7 +174,7 @@ type t =
     impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
     stdlib_funs : SymSet.t;
-    resource_predicates : resource_predicate IdMap.t;
+    resource_predicates : predicate_definition IdMap.t;
     solver_context : Z3.context;
     (* solver_bt_mapping : Z3.Sort.sort BTMap.t; *)
     logical : (Sym.t * LS.t) list;
@@ -204,20 +205,19 @@ let get_predicate_def loc global predicate_name =
      match SymMap.find_opt tag global.struct_decls with
      | None -> None
      | Some decl ->
-        let key_arg = LS.Base Loc in
+        let pred = decl.stored_struct_predicate in
+        let key_arg = (pred.value, LS.Base Loc) in
         let iargs = [] in
-        let oargs = [("value", LS.Base (Struct tag))] in
-        let pack_functions (key_arg, iargs) =
+        let oargs = [(pred.value, LS.Base (Struct tag))] in
+        let pack_functions =
           match iargs with
-          | [] -> 
-             [(decl.closed_stored_predicate_definition.pack_function key_arg)]
+          | [] -> [(pred.pack_function)]
           | _ -> 
              Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
         in
-        let unpack_functions (key_arg, iargs) = 
+        let unpack_functions = 
           match iargs with
-          | [] -> 
-             [(decl.closed_stored_predicate_definition.unpack_function key_arg)]
+          | [] -> [(pred.unpack_function)]
           | _ ->
              Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
         in
@@ -244,16 +244,10 @@ let pp_struct_decl (tag,decl) =
    *      (RT.pp decl.closed_stored)
    * ^/^ *)
   item ("struct " ^ plain (Sym.pp tag) ^ " (packing function) at P") 
-    (LFT.pp 
-       (decl.closed_stored_predicate_definition.pack_function
-          (S (Struct tag, Sym.fresh_named "P"))
-    ))
+    (LFT.pp (decl.stored_struct_predicate.pack_function))
   ^/^
   item ("struct " ^ plain (Sym.pp tag) ^ " (unpacking function) at P") 
-    (LFT.pp 
-       (decl.closed_stored_predicate_definition.unpack_function 
-          (S (Struct tag, Sym.fresh_named "P"))
-    ))
+    (LFT.pp (decl.stored_struct_predicate.unpack_function))
 
 let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
 

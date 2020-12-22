@@ -349,7 +349,7 @@ module Make (G : sig val global : Global.t end) = struct
            | None, Tag tag -> fail loc (Missing_struct tag)
            | None, Id id -> fail loc (Missing_predicate id)
          in
-         let* () = WIT.welltyped loc local def.key_arg p.key_arg in
+         let* () = WIT.welltyped loc local (snd def.key_arg) p.key_arg in
          let* () = 
            let has = List.length def.iargs in
            let expect = List.length p.iargs in
@@ -359,7 +359,7 @@ module Make (G : sig val global : Global.t end) = struct
          let* () = 
            ListM.iterM (fun (arg, expected_sort) ->
                WIT.welltyped loc local expected_sort arg
-             ) (List.combine p.iargs def.iargs)
+             ) (List.combine p.iargs (List.map snd def.iargs))
          in
          let* () = 
            let has = List.length def.oargs in

@@ -109,6 +109,7 @@ let struct_layout loc members tag =
 module CA = CF.Core_anormalise
 
 let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fields (tag : BT.tag) = 
+  let open Global in
 
   let get_struct_members tag = 
     match Pmap.lookup tag tagDefs with
@@ -131,17 +132,19 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
   in
 
 
-  let* closed_stored_predicate_definition = 
+  let* stored_struct_predicate = 
     let open RT in
     let open LRT in
     let struct_value_s = Sym.fresh () in
+    let struct_pointer_s = Sym.fresh () in
+    let struct_pointer_t = S (Loc, struct_pointer_s) in
     (* let size = Memory.size_of_struct loc tag in *)
     let* def_members = get_struct_members tag in
     let* layout = struct_layout loc def_members tag in
-    let clause struct_pointer = 
+    let clause = 
       let (lrt, values) = 
-        List.fold_right (fun Global.{offset; size; member_or_padding} (lrt, values) ->
-            let member_p = Offset (struct_pointer, Num offset) in
+        List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
+            let member_p = Offset (struct_pointer_t, Num offset) in
             match member_or_padding with
             | Some (member, sct) ->
                let member_v = Sym.fresh () in
@@ -172,32 +175,37 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
       let constr = LC (IT.EQ (S (BT.Struct tag, struct_value_s), value)) in
       (lrt, constr)
     in
-    let predicate struct_pointer = 
-      Predicate {key_arg = struct_pointer; 
+    let predicate = 
+      Predicate {key_arg = struct_pointer_t; 
                  name = Tag tag; 
                  iargs = [];
                  oargs = [struct_value_s]} 
     in
-    let unpack_function struct_pointer = 
-      let (lrt, constr) = clause struct_pointer in
+    let unpack_function = 
+      let (lrt, constr) = clause in
       LFT.Logical ((struct_value_s, LS.Base (Struct tag)), 
-      LFT.Resource (predicate struct_pointer,
+      LFT.Resource (predicate,
       LFT.I (LRT.concat lrt (LRT.Constraint (constr, LRT.I)))))
     in
-    let pack_function struct_pointer = 
-      let (arg_lrt, constr) = clause struct_pointer in
+    let pack_function = 
+      let (arg_lrt, constr) = clause in
       LFT.of_lrt arg_lrt
       (LFT.I
         (LRT.Logical ((struct_value_s, LS.Base (Struct tag)), 
-         LRT.Resource (predicate struct_pointer,
+         LRT.Resource (predicate,
          LRT.Constraint (constr, LRT.I)))))
     in
-    return (Global.{pack_function; unpack_function})
+    let def = 
+      {pack_function; 
+       unpack_function;
+       pointer = struct_pointer_s;
+       value = struct_value_s
+      }
+    in
+    return def
   in
 
-
-  let open Global in
-  let decl = { layout; closed_stored_predicate_definition } in
+  let decl = { layout; stored_struct_predicate } in
   return decl
 
 
@@ -281,12 +289,20 @@ let make_pred loc v pred path path_args iargs =
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
-  let (Base key_bt) = def.Global.key_arg in
+  let (_, LS.Base key_bt) = def.Global.key_arg in
   let* (mapping, l) = 
-    ListM.fold_rightM (fun (name, LS.Base bt) (mapping, l) ->
+    ListM.fold_rightM (fun (oarg, LS.Base bt) (mapping, l) ->
         let s = Sym.fresh () in
         let l = (s, LS.Base bt) :: l in
-        let mapping = {path = Path.predarg (Pred pred) (path :: path_args) name; sym = s; bt = bt} :: mapping in
+        let mapping = match Sym.name oarg with
+          | Some name -> 
+             let item = 
+               {path = Path.predarg (Pred pred) (path :: path_args) name; 
+                sym = s; bt = bt} 
+             in
+             item :: mapping 
+          | None -> []
+        in
         return (mapping, l)
       ) def.oargs ([], [])
   in
