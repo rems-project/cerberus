@@ -70,7 +70,7 @@ let model local solver : t option =
      let memory_state = 
        List.map (fun (location_s, location_it) ->
            let o_resource = 
-             Solver.resource_for local location_it in
+             Solver.resource_for_pointer local location_it in
            let state = match o_resource with
              | None -> Nothing
              | Some (_, RE.Block b) -> (Block (b.block_type, b.size))
@@ -104,7 +104,7 @@ let model local solver : t option =
                         SolverConstraints.of_index_term G.global it in
                       let expr_val = evaluate model expr in
                       Z3.Expr.to_string expr_val
-                    ) (p.key_arg :: p.iargs @ oargs_it)
+                    ) (p.iargs @ oargs_it)
                 in
                 Predicate {name = p.name; args}
            in

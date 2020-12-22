@@ -70,12 +70,18 @@ module Make (G : sig val global : Global.t end) = struct
     holds
 
 
-  let resource_for local it
+  let resource_for_pointer local it
        : (Sym.t * RE.t) option = 
     let points = 
       List.filter_map (fun (name, re) ->
-          let holds = equal local it (RE.key re) in
-          (if holds then Some (name, re) else None)
+          match RE.pointer re with
+          | Some pointer ->
+             let holds = equal local it pointer in
+             if holds 
+             then Some (name, re) 
+             else None
+          | None ->
+             None
         ) (L.all_named_resources local)
     in
     match points with
@@ -84,12 +90,48 @@ module Make (G : sig val global : Global.t end) = struct
     | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points))))
 
 
-  let used_resource_for local it
+  let predicate_for local id iargs
+       : (Sym.t * RE.predicate) option = 
+    let open Resources in
+    let preds = 
+      List.filter_map (fun (name, re) ->
+          match re with
+          | Predicate pred when predicate_name_equal pred.name id ->
+             let its = 
+               List.map (fun (iarg, iarg') ->
+                     (IndexTerms.EQ (iarg, iarg'))
+                 ) (List.combine iargs pred.iargs)
+             in
+             let lc = LC.LC (IndexTerms.And its) in
+             let (holds,_) = constraint_holds local lc in
+             if holds 
+             then Some (name, pred) 
+             else None
+          | _ ->
+             None
+        ) (L.all_named_resources local)
+    in
+    match preds with
+    | [] -> None
+    | [r] -> Some r
+    | _ -> 
+       let resources = List.map (fun (_, pred) -> Predicate pred) preds in
+       Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp resources)))
+
+
+
+  let used_resource_for_pointer local it
       : (Loc.t list) option = 
     let points = 
       List.filter_map (fun (name, (re, where)) ->
-          let holds = equal local it (RE.key re) in
-          (if holds then Some (where) else None)
+          match RE.pointer re with
+          | Some pointer -> 
+             let holds = equal local it pointer in
+             if holds 
+             then Some (where) 
+             else None
+          | None ->
+             None
         ) (L.all_named_used_resources local)
     in
     match points with

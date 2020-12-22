@@ -349,7 +349,6 @@ module Make (G : sig val global : Global.t end) = struct
            | None, Tag tag -> fail loc (Missing_struct tag)
            | None, Id id -> fail loc (Missing_predicate id)
          in
-         let* () = WIT.welltyped loc local (snd def.key_arg) p.key_arg in
          let* () = 
            let has = List.length def.iargs in
            let expect = List.length p.iargs in

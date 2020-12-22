@@ -151,7 +151,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
                  | Sctypes.Struct tag ->
-                    RE.Predicate {key_arg = member_p; name = Tag tag; iargs = []; oargs = [member_v]}
+                    RE.Predicate {name = Tag tag; iargs = [member_p]; oargs = [member_v]}
                  | _ -> 
                     RE.Points {pointer = member_p; pointee = member_v; size}
                in
@@ -176,9 +176,8 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
       (lrt, constr)
     in
     let predicate = 
-      Predicate {key_arg = struct_pointer_t; 
-                 name = Tag tag; 
-                 iargs = [];
+      Predicate {name = Tag tag; 
+                 iargs = [struct_pointer_t];
                  oargs = [struct_value_s]} 
     in
     let unpack_function = 
@@ -233,9 +232,8 @@ let make_owned loc pointer path sct =
   | Sctype (_, Struct tag) ->
      let pointee = Sym.fresh () in
      let r = 
-       [RE.Predicate {key_arg = S (BT.Loc, pointer); 
-                      name = Tag tag; 
-                      iargs = [];
+       [RE.Predicate {name = Tag tag; 
+                      iargs = [S (BT.Loc, pointer)];
                       oargs = [pointee]}]
      in
      let l = [(pointee, LS.Base (Struct tag))] in
@@ -284,12 +282,11 @@ let make_block loc pointer path sct =
      in
      return ([], r, [], [])
 
-let make_pred loc v pred path path_args iargs = 
+let make_pred loc v pred path_args iargs = 
   let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
-  let (_, LS.Base key_bt) = def.Global.key_arg in
   let* (mapping, l) = 
     ListM.fold_rightM (fun (oarg, LS.Base bt) (mapping, l) ->
         let s = Sym.fresh () in
@@ -297,7 +294,7 @@ let make_pred loc v pred path path_args iargs =
         let mapping = match Sym.name oarg with
           | Some name -> 
              let item = 
-               {path = Path.predarg (Pred pred) (path :: path_args) name; 
+               {path = Path.predarg (Pred pred) path_args name; 
                 sym = s; bt = bt} 
              in
              item :: mapping 
@@ -307,7 +304,7 @@ let make_pred loc v pred path path_args iargs =
       ) def.oargs ([], [])
   in
   let oargs = List.map fst l in
-  let r = [RE.Predicate {name = Id pred; key_arg = S (key_bt, v); iargs; oargs}] in
+  let r = [RE.Predicate {name = Id pred; iargs; oargs}] in
   return (l, r, [], mapping)
 
 
@@ -344,14 +341,14 @@ let type_of__vars loc var_typs name derefs =
 let apply_ownership_spec var_typs mapping (loc, (pred,path_args)) =
   match path_args with
   | [] -> fail loc (Generic !^"predicate with empty parameter list")
-  | path :: iargs ->
+  | path :: paths ->
     match Path.deref_path path with
     | None ->
        fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
     | Some (bn, derefs) -> 
        let* sct = type_of__vars loc var_typs bn.v derefs in
        let* (_, sym) = Assertions.resolve_path loc mapping path in
-       match sct, pred, iargs with
+       match sct, pred, paths with
        | Sctype (_, Pointer (_, sct2)), Pred.Owned, [] ->
           make_owned loc sym (Path.var bn) sct2
        | Sctype (_, Pointer (_, sct2)), Pred.Owned, _ ->
@@ -369,9 +366,9 @@ let apply_ownership_spec var_typs mapping (loc, (pred,path_args)) =
             ListM.mapM (fun p ->
                 let* (ls, s) = Assertions.resolve_path loc mapping p in
                 return (S (ls, s))
-              ) iargs
+              ) (path :: paths)
           in
-          make_pred loc sym id (Path.var bn) iargs iargs_resolved
+          make_pred loc sym id paths iargs_resolved
        | _ -> 
           fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
 

@@ -10,11 +10,11 @@ type predicate_name =
   | Tag of BaseTypes.tag
   | Id of Id.t
 
-let pp_predicate_name = function
+let predicate_name_pp = function
   | Tag tag -> Sym.pp tag
   | Id id -> Id.pp id
 
-let equal_predicate_name pn1 pn2 =
+let predicate_name_equal pn1 pn2 =
   match pn1, pn2 with
   | Tag t1, Tag t2 -> Sym.equal t1 t2
   | Id id1, Id id2 -> Id.equal id1 id2
@@ -24,7 +24,6 @@ let equal_predicate_name pn1 pn2 =
 
 type predicate = {
     name : predicate_name; 
-    key_arg: IndexTerms.t; 
     iargs: IndexTerms.t list;
     oargs: Sym.t list
   }
@@ -57,9 +56,8 @@ let pp = function
      !^"Points" ^^ 
        parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp pointee ^^ 
                  comma ^^ Z.pp size)
-  | Predicate {name; key_arg; iargs; oargs} ->
+  | Predicate {name; iargs; oargs} ->
      let args = 
-       IndexTerms.pp key_arg :: 
        List.map IndexTerms.pp iargs @ 
        List.map Sym.pp oargs
      in
@@ -84,11 +82,10 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
      let pointer = IndexTerms.subst_var subst pointer in
      let pointee = Sym.subst subst pointee in
      Points {pointer; pointee; size}
-  | Predicate {name; key_arg; iargs; oargs} -> 
-     let key_arg = IndexTerms.subst_var subst key_arg in
+  | Predicate {name; iargs; oargs} -> 
      let iargs = List.map (IndexTerms.subst_var subst) iargs in
      let oargs = List.map (Sym.subst subst) oargs in
-     Predicate {name; key_arg; iargs; oargs}
+     Predicate {name; iargs; oargs}
 
 
 let subst_it (subst: (Sym.t,IndexTerms.t) Subst.t) resource =
@@ -103,11 +100,10 @@ let subst_it (subst: (Sym.t,IndexTerms.t) Subst.t) resource =
      let pointer = IndexTerms.subst_it subst pointer in
      let* pointee = subst_sym pointee in
      return (Points {pointer; pointee; size})
-  | Predicate {name; key_arg; iargs; oargs} -> 
-     let key_arg = IndexTerms.subst_it subst key_arg in
+  | Predicate {name; iargs; oargs} -> 
      let iargs = List.map (IndexTerms.subst_it subst) iargs in
      let* oargs = Option.ListM.mapM subst_sym oargs in
-     return (Predicate {name; key_arg; iargs; oargs})
+     return (Predicate {name; iargs; oargs})
 
 
 let subst_vars = Subst.make_substs subst_var
@@ -134,8 +130,7 @@ let equal t1 t2 =
      Sym.equal p1.pointee p2.pointee &&
      Z.equal p1.size p2.size
   | Predicate p1, Predicate p2 ->
-     equal_predicate_name p1.name p2.name && 
-     IndexTerms.equal p1.key_arg p2.key_arg && 
+     predicate_name_equal p1.name p2.name && 
      List.equal IndexTerms.equal p1.iargs p2.iargs && 
      List.equal Sym.equal p1.oargs p2.oargs
   | _, _ -> false
@@ -151,11 +146,6 @@ let size = function
   | Points p -> Some (IndexTerms.Num p.size)
   | Predicate _p -> None
 
-let key = function
-  | Block b -> b.pointer
-  | Points p -> p.pointer
-  | Predicate p -> p.key_arg
-
 
 let fp resource = 
   match pointer resource, size resource with
@@ -168,7 +158,7 @@ let vars_in = function
   | Points p -> 
      SymSet.add p.pointee (IndexTerms.vars_in p.pointer)
   | Predicate p -> 
-     SymSet.union (IndexTerms.vars_in_list (p.key_arg :: p.iargs))
+     SymSet.union (IndexTerms.vars_in_list p.iargs)
        (SymSet.of_list p.oargs)
 
 
@@ -212,7 +202,7 @@ let vars_in = function
 let input = function
   | Block b -> IndexTerms.vars_in_list [b.size; b.pointer]
   | Points p -> IndexTerms.vars_in p.pointer
-  | Predicate p -> IndexTerms.vars_in_list (p.key_arg :: p.iargs)
+  | Predicate p -> IndexTerms.vars_in_list p.iargs
 
 let output = function
   | Block b -> SymSet.empty

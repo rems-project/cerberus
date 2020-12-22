@@ -438,9 +438,8 @@ module Make (G : sig val global : Global.t end) = struct
     let open Subst in
     let open Global in
     let open Resources in
-    {before = fst def.key_arg; after = pred.key_arg} ::
-      List.map (fun ((before, _), after) -> {before; after}
-        ) (List.combine def.iargs pred.iargs)
+    List.map (fun ((before, _), after) -> {before; after}
+      ) (List.combine def.iargs pred.iargs)
 
   let predicate_pack_functions pred def =
     let substs = predicate_substs pred def in
@@ -471,10 +470,10 @@ module Make (G : sig val global : Global.t end) = struct
     if S.equal local need_size (Num Z.zero) then 
       return local
     else
-      let o_resource = S.resource_for local pointer in
+      let o_resource = S.resource_for_pointer local pointer in
       let* resource_name, resource = match o_resource with
         | None -> 
-           let olast_used = S.used_resource_for local pointer in
+           let olast_used = S.used_resource_for_pointer local pointer in
            fail loc (Missing_ownership (None, olast_used, situation))
         | Some (resource_name, resource) -> 
            return (resource_name, resource)
@@ -512,13 +511,13 @@ module Make (G : sig val global : Global.t end) = struct
 
   let rec resource_request_prompt loc situation local request unis = 
     let open Prompt.Operators in
-    let key = RE.key request in
+    let open Resources in
     match request with
     | Block b ->
        let* local = remove_ownership_prompt loc situation local b.pointer b.size in
        return (unis, local)
     | Points p ->
-       let o_resource = S.resource_for local p.pointer in
+       let o_resource = S.resource_for_pointer local p.pointer in
        begin match o_resource with
        | Some (resource_name, Points p') when Z.equal p.size p'.size ->
           begin match Uni.unify_sym p.pointee p'.pointee unis with
@@ -531,31 +530,27 @@ module Make (G : sig val global : Global.t end) = struct
        | Some (resource_name, resource)  ->
           fail loc (Resource_mismatch {expect = request; has = resource; situation})             
        | None -> 
-          let olast_used = S.used_resource_for local p.pointer in
+          let olast_used = S.used_resource_for_pointer local p.pointer in
           fail loc (Missing_ownership (None, olast_used, situation))
        end
     | Predicate p ->
-       let o_resource = S.resource_for local key in
+       let o_resource = S.predicate_for local p.name p.iargs in
        begin match o_resource with
-       | Some (resource_name, Predicate p') -> 
-          let iargs_match = List.equal (S.equal local) p.iargs p'.iargs in
-          (* this just asks the other input arguments to be
-             prover-equal, and if it fails gives up. Do we need
-             something better? *)
-          begin match iargs_match, Uni.unify_syms p.oargs p'.oargs unis with
-          | true, Some unis -> 
+       | Some (resource_name, p') -> 
+          begin match Uni.unify_syms p.oargs p'.oargs unis with
+          | Some unis -> 
              let local = use_resource resource_name [loc] local in
              return (unis, local)
           | _ ->
              fail loc (Resource_mismatch {expect = request; has = Predicate p'; situation}) 
           end
-       | Some (resource_name, resource) ->         
+       | _ ->         
           let def = match Global.get_predicate_def loc G.global p.name with
             | Some def -> def
             | None -> Debug_ocaml.error "missing predicate definition"
           in
           let else_prompt = 
-            fail loc (Resource_mismatch {expect = request; has = resource; situation}) 
+            fail loc (Missing_ownership (None, None, situation))
           in
           debug 6 (lazy (!^"trying to pack" ^^^ RE.pp request));
           let attempt_prompts = 
@@ -570,9 +565,6 @@ module Make (G : sig val global : Global.t end) = struct
           let* (lrt, local) = try_choices choices1 in
           let local = bind_logical local lrt in
           resource_request_prompt loc situation local request unis
-       | None -> 
-          let olast_used = S.used_resource_for local key in
-          fail loc (Missing_ownership (None, olast_used, situation))
        end
 
 
@@ -1260,7 +1252,7 @@ module Make (G : sig val global : Global.t end) = struct
          in  
          aux_members (Global.members decl.layout)
       | _ ->
-         let o_resource = S.resource_for local pointer in
+         let o_resource = S.resource_for_pointer local pointer in
          let* pointee = match o_resource with
            | Some (_,resource) -> 
               begin match resource with
@@ -1272,7 +1264,7 @@ module Make (G : sig val global : Global.t end) = struct
               | Predicate pred -> fail loc (Cannot_unpack (pred, Access Load))
               end
            | None -> 
-              let olast_used = S.used_resource_for local pointer in
+              let olast_used = S.used_resource_for_pointer local pointer in
               fail loc (Missing_ownership (is_field, olast_used, Access Load))
          in
          let (Base vbt) = L.get_l pointee local in
@@ -1456,7 +1448,7 @@ module Make (G : sig val global : Global.t end) = struct
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
             let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let o_resource = S.resource_for local (S (arg.bt, arg.lname)) in
+            let o_resource = S.resource_for_pointer local (S (arg.bt, arg.lname)) in
             let resource_ok = 
               match Option.bind o_resource (Tools.comp RE.size snd) with
               | Some size' when S.equal local size' (Num size) -> true

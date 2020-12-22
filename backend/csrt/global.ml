@@ -20,8 +20,7 @@ module FT = ArgumentTypes.Make(RT)
 
 
 type predicate_definition = 
-  { key_arg : Sym.t * LS.t;
-    iargs : (Sym.t * LS.t) list;
+  { iargs : (Sym.t * LS.t) list;
     oargs : (Sym.t * LS.t) list;
     pack_functions : LFT.t list;
     unpack_functions : LFT.t list;
@@ -38,14 +37,12 @@ let early =
   let start_t = S (Integer, start_s) in
   let end_s = Sym.fresh () in
   let end_t = S (Integer, end_s) in
-  let key_arg = (start_s, LS.Base Integer) in
-  let iargs = [(end_s, LS.Base Integer)] in
+  let iargs = [(start_s, LS.Base Integer); (end_s, LS.Base Integer)] in
   let oargs = [] in
   let pred = 
     Predicate {
-        key_arg = start_t; 
         name = Id id; 
-        iargs = [end_t];
+        iargs = [start_t; end_t];
         oargs = [];
       } 
   in
@@ -57,31 +54,22 @@ let early =
       }
   in
   let pack_functions =
-    match iargs with
-    | [end_arg] ->
-       [LFT.Resource (block, 
-        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
-        LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
-        LFT.I (
-        LRT.Resource (pred,
-        LRT.I)))))] 
-    | _ -> 
-       Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
+    [LFT.Resource (block, 
+     LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
+     LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
+     LFT.I (
+     LRT.Resource (pred,
+     LRT.I)))))] 
   in
   let unpack_functions =
-    match iargs with
-    | [end_arg] ->
-       [LFT.Resource (pred,
-        LFT.I (
-        LRT.Resource (block,
-        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
-        LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
-        LRT.I)))))]
-    | _ -> 
-       Debug_ocaml.error "predicate unexpectedly applied to wrong number of arguments"
+    [LFT.Resource (pred,
+     LFT.I (
+     LRT.Resource (block,
+     LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
+     LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
+     LRT.I)))))]
   in
   let predicate = {
-      key_arg; 
       iargs; 
       oargs; 
       pack_functions; 
@@ -206,8 +194,7 @@ let get_predicate_def loc global predicate_name =
      | None -> None
      | Some decl ->
         let pred = decl.stored_struct_predicate in
-        let key_arg = (pred.value, LS.Base Loc) in
-        let iargs = [] in
+        let iargs = [(pred.value, LS.Base Loc)] in
         let oargs = [(pred.value, LS.Base (Struct tag))] in
         let pack_functions =
           match iargs with
@@ -221,7 +208,7 @@ let get_predicate_def loc global predicate_name =
           | _ ->
              Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
         in
-        Some {key_arg; iargs; oargs; pack_functions; unpack_functions}
+        Some {iargs; oargs; pack_functions; unpack_functions}
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i
