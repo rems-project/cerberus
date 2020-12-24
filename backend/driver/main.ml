@@ -415,4 +415,4 @@ let () =
                          files $ args) in
   let version = Version.version in
   let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
-  Term.exit @@ Term.eval (cerberus_t, info)
+  Term.exit_status @@ Term.eval (cerberus_t, info)
