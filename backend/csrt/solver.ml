@@ -19,29 +19,23 @@ module Make (G : sig val global : Global.t end) = struct
 
   module L = Local.Make(G)
 
-  let logfile = "/tmp/z3.log"
-
-  let handle_z3_problems todo =
-    if not (Z3.Log.open_ logfile) then 
-      Debug_ocaml.error ("Z3 logfile: could not open " ^ logfile)
-    else 
-      try let result = todo () in Z3.Log.close (); result with
-      | Z3.Error (msg : string) -> 
-         Z3.Log.close ();
-         Debug_ocaml.error ("Z3 error:" ^ msg)
+  let z3_wrapper z3_work = 
+    try Lazy.force z3_work with
+    | Z3.Error (msg : string) -> 
+       Debug_ocaml.error ("Z3 error:" ^ msg)
 
 
   let constraint_holds local lc = 
+    Debug_ocaml.begin_csv_timing "constraint_holds";
     let ctxt = G.global.solver_context in
     let solver = Z3.Solver.mk_simple_solver ctxt in
     let sc = SolverConstraints.of_index_term G.global (LC.unpack (LC.negate lc)) in
     let lcs = sc :: L.all_solver_constraints local in
     (* let () = debug_typecheck_lcs lcs (local, global) in *)
     let checked = 
-      handle_z3_problems (fun () -> 
-          Z3.Solver.add solver lcs; Z3.Solver.check solver []
-        )
+      z3_wrapper (lazy (Z3.Solver.add solver lcs; Z3.Solver.check solver []))
     in
+    Debug_ocaml.end_csv_timing ();
     match checked with
     | UNSATISFIABLE -> (true,solver)
     | SATISFIABLE -> (false,solver)

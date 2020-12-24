@@ -129,17 +129,9 @@ let model local solver : t option =
 
 
 let is_reachable_and_model local =
-  let (unreachable, solver) = 
-    Solver.constraint_holds local (LC (Bool false)) 
-  in
-  let model = 
-    Solver.handle_z3_problems (fun () -> model local solver) 
-  in
+  let (unreachable, solver) = Solver.constraint_holds local (LC (Bool false)) in
+  let model = Solver.z3_wrapper (lazy (model local solver)) in
   (not unreachable, model)
-
-
-
-
 
 
 end
