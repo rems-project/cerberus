@@ -26,18 +26,12 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let constraint_holds local lc = 
-    Debug_ocaml.begin_csv_timing "constraint_holds";
     let ctxt = G.global.solver_context in
-    Debug_ocaml.begin_csv_timing "mk_simple_solver";
     let solver = Z3.Solver.mk_simple_solver ctxt in
-    Debug_ocaml.end_csv_timing ();
     let sc = SolverConstraints.of_index_term G.global (LC.unpack (LC.negate lc)) in
     let lcs = sc :: L.all_solver_constraints local in
     (* let () = debug_typecheck_lcs lcs (local, global) in *)
-    let checked = 
-      z3_wrapper (lazy (Z3.Solver.check solver lcs))
-    in
-    Debug_ocaml.end_csv_timing ();
+    let checked = z3_wrapper (lazy (Z3.Solver.check solver lcs)) in
     match checked with
     | UNSATISFIABLE -> (true,solver)
     | SATISFIABLE -> (false,solver)

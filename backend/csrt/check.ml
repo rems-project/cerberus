@@ -1838,7 +1838,6 @@ module Make (G : sig val global : Global.t end) = struct
                       (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                       (body : 'bty expr) (function_typ : FT.t) 
                       (label_defs : 'bty label_defs) : (unit, type_error) m =
-    Debug_ocaml.begin_csv_timing "check_procedure";
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
     debug 2 (lazy (item "type" (FT.pp function_typ)));
 
@@ -1902,7 +1901,6 @@ module Make (G : sig val global : Global.t end) = struct
     let* local_or_false = 
       check_expr_pop loc delta (L.empty, labels) body (Normal rt)
     in
-    let () = Debug_ocaml.end_csv_timing () in
     return ()
 
 

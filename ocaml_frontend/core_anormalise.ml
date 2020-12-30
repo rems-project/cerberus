@@ -622,9 +622,10 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
          wrap (M_Ecase(pexpr2, pats_es))
     )
   | Elet(pat, e1, e2) ->
-     n_pexpr_in_expr e1 (fun e1 ->
-     wrap (M_Elet((M_Pat (core_to_mu__pattern loc pat)),
-             e1, (n_expr e2 k))))
+     let pat = core_to_mu__pattern loc pat in
+     let e1 = normalise_pexpr loc pexpr_n_pexpr_domain e1 in
+     let e2 = normalise_expr e2 in
+     k (wrap (M_Elet(M_Pat pat, e1, e2)))
   | Eif(e1, e2, e3) ->
      if always_explode_eif || Annot.explode annots then
        n_pexpr_in_expr_name e1 (fun e1 ->
@@ -654,11 +655,15 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
   | Eunseq es ->
      error "core_anormalisation: Eunseq"
   | Ewseq(pat, e1, e2) ->
-     n_expr e1 (fun e1 ->
-     wrap (M_Ewseq(core_to_mu__pattern loc pat, e1, n_expr e2 k)))
+     let pat = core_to_mu__pattern loc pat in
+     let e1 = normalise_expr e1 in
+     let e2 = normalise_expr e2 in
+     k (wrap (M_Ewseq (pat, e1, e2)))
   | Esseq(pat, e1, e2) ->
-     n_expr e1 (fun e1 ->
-     wrap (M_Esseq(core_to_mu__pattern loc pat, e1, n_expr e2 k)))
+     let pat = core_to_mu__pattern loc pat in
+     let e1 = normalise_expr e1 in
+     let e2 = normalise_expr e2 in
+     k (wrap (M_Esseq(pat, e1, e2)))
   | Easeq(b, action3, paction2) ->
      error "core_anormalisation: Easeq"
   | Eindet(n, e) ->

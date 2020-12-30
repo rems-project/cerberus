@@ -27,10 +27,9 @@ let dirs_to_ignore =
     )
 
 let good_location (loc : Location_ocaml.t) = 
-  if !Debug_ocaml.debug_level > 0 then true else
-    match Location_ocaml.get_filename loc with
-    | None -> false
-    | Some file -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
+  match Location_ocaml.get_filename loc with
+  | None -> false
+  | Some file -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
 
 
 let updateB (loc : t) (loc2 : Location_ocaml.t) = 

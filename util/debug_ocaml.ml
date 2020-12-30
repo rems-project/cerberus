@@ -101,7 +101,7 @@ let maybe_close_csv_timing_file () =
        close_out oc;
        csv_timing_stack_file := None
     | _, _ :: _ ->
-       error "incorrect use of timing stack"
+       error "non-empty timing stack when closing file"
 
 
 let begin_csv_timing (fun_name: string) =
@@ -116,7 +116,7 @@ let end_csv_timing () =
      let t' = Unix.gettimeofday () in
      match !csv_timing_stack with
      | [] ->
-        error "incorrect use of timing stack"
+        error "empty timing stack when ending timing"
      | (str, t) :: xs ->
         Printf.fprintf oc "%s,%f\n" str (t' -. t);
         csv_timing_stack := xs
