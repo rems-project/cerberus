@@ -80,8 +80,28 @@ let end_timing () =
 
 
 
+let csv_timing_stack_file = ref None
+
 let csv_timing_stack =
   ref []
+
+let maybe_open_csv_timing_file () = 
+  if !debug_level >= 1 then 
+    begin
+      let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb_times.csv" in
+      csv_timing_stack_file := Some oc
+    end
+
+
+let maybe_close_csv_timing_file () = 
+  if !debug_level >= 1 then 
+    match !csv_timing_stack_file, !csv_timing_stack with
+    | None, [] -> ()
+    | Some oc, [] ->
+       close_out oc;
+       csv_timing_stack_file := None
+    | _, _ :: _ ->
+       error "incorrect use of timing stack"
 
 
 let begin_csv_timing (fun_name: string) =
@@ -89,15 +109,16 @@ let begin_csv_timing (fun_name: string) =
     csv_timing_stack := (fun_name, Unix.gettimeofday ()) :: !csv_timing_stack
 
 let end_csv_timing () =
-  if !debug_level >= 1 then
-    begin 
-      let t' = Unix.gettimeofday () in
-      match !csv_timing_stack with
-      | [] ->
-         error "incorrect use of timing stack"
-      | (str, t) :: xs ->
-         let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb_times.csv" in
-         Printf.fprintf oc "%s,%f\n" str (t' -. t);
-         close_out oc;
-         csv_timing_stack := xs
-    end
+  match !csv_timing_stack_file with
+  | None ->
+     ()
+  | Some oc ->
+     let t' = Unix.gettimeofday () in
+     match !csv_timing_stack with
+     | [] ->
+        error "incorrect use of timing stack"
+     | (str, t) :: xs ->
+        Printf.fprintf oc "%s,%f\n" str (t' -. t);
+        csv_timing_stack := xs
+
+

@@ -73,9 +73,12 @@ module Log : sig
 end = struct
   let print_count = ref 0
   let print_log_file filename file =
-    let count = !print_count in
-    print_file ("/tmp/" ^ string_of_int count ^ "__" ^ filename) file;
-    print_count := 1 + !print_count;
+    if !Debug_ocaml.debug_level > 0 then 
+      begin
+        let count = !print_count in
+        print_file ("/tmp/" ^ string_of_int count ^ "__" ^ filename) file;
+        print_count := 1 + !print_count;
+      end
 end
 
 open Log
@@ -112,6 +115,7 @@ let sequentialise : named_rewrite =
    let core_file = CF.Core_sequentialise.sequentialise_file core_file in
    return (CB.Pipeline.untype_file core_file)
 )
+
 
 let rec do_rewrites_and_log named_rewrites core_file =
   match named_rewrites with
@@ -166,7 +170,6 @@ let main filename mjsonfile debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    Pp.maybe_open_json_output mjsonfile;
     begin match frontend filename with
     | CF.Exception.Exception err ->
        prerr_endline (CF.Pp_errors.to_string err);
@@ -174,18 +177,22 @@ let main filename mjsonfile debug_level print_level =
     | CF.Exception.Result file ->
        if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
        try 
-         begin 
-           let result = Process.process file in
-           Pp.maybe_close_json_output ();
-           match result with
-           | Ok () -> 
-              exit 0
-           | Error (loc,ostacktrace,err) ->
-              TypeErrors.report loc ostacktrace err;
-              exit 1
-         end
+         Pp.maybe_open_json_output mjsonfile;
+         Debug_ocaml.maybe_open_csv_timing_file ();
+         let result = Process.process file in
+         Pp.maybe_close_json_output ();
+         Debug_ocaml.maybe_close_csv_timing_file ();
+         match result with
+         | Ok () -> 
+            exit 0
+         | Error (loc,ostacktrace,err) ->
+            TypeErrors.report loc ostacktrace err;
+            exit 1
        with
-       | exc -> Pp.maybe_close_json_output (); raise exc
+       | exc -> 
+          Pp.maybe_close_json_output (); 
+          Debug_ocaml.maybe_close_csv_timing_file ();
+          raise exc
     end
 
 

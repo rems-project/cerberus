@@ -28,18 +28,20 @@ module Make (G : sig val global : Global.t end) = struct
   let constraint_holds local lc = 
     Debug_ocaml.begin_csv_timing "constraint_holds";
     let ctxt = G.global.solver_context in
+    Debug_ocaml.begin_csv_timing "mk_simple_solver";
     let solver = Z3.Solver.mk_simple_solver ctxt in
+    Debug_ocaml.end_csv_timing ();
     let sc = SolverConstraints.of_index_term G.global (LC.unpack (LC.negate lc)) in
     let lcs = sc :: L.all_solver_constraints local in
     (* let () = debug_typecheck_lcs lcs (local, global) in *)
     let checked = 
-      z3_wrapper (lazy (Z3.Solver.add solver lcs; Z3.Solver.check solver []))
+      z3_wrapper (lazy (Z3.Solver.check solver lcs))
     in
     Debug_ocaml.end_csv_timing ();
     match checked with
     | UNSATISFIABLE -> (true,solver)
     | SATISFIABLE -> (false,solver)
-    | UNKNOWN -> (false,solver)
+    | UNKNOWN -> Debug_ocaml.error "constraint solver returned Unknown"
 
 
 
@@ -69,12 +71,9 @@ module Make (G : sig val global : Global.t end) = struct
     let points = 
       List.filter_map (fun (name, re) ->
           match RE.pointer re with
-          | Some pointer ->
-             let holds = equal local it pointer in
-             if holds 
-             then Some (name, re) 
-             else None
-          | None ->
+          | Some pointer when equal local it pointer ->
+             Some (name, re) 
+          | _ ->
              None
         ) (L.all_named_resources local)
     in
@@ -119,13 +118,8 @@ module Make (G : sig val global : Global.t end) = struct
     let points = 
       List.filter_map (fun (name, (re, where)) ->
           match RE.pointer re with
-          | Some pointer -> 
-             let holds = equal local it pointer in
-             if holds 
-             then Some (where) 
-             else None
-          | None ->
-             None
+          | Some pointer when equal local it pointer -> Some (where) 
+          | _ -> None
         ) (L.all_named_used_resources local)
     in
     match points with
