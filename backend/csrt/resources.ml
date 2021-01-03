@@ -8,16 +8,16 @@ type size = Z.t
 
 type predicate_name = 
   | Tag of BaseTypes.tag
-  | Id of Id.t
+  | Id of String.t
 
 let predicate_name_pp = function
   | Tag tag -> Sym.pp tag
-  | Id id -> Id.pp id
+  | Id id -> !^id
 
 let predicate_name_equal pn1 pn2 =
   match pn1, pn2 with
   | Tag t1, Tag t2 -> Sym.equal t1 t2
-  | Id id1, Id id2 -> Id.equal id1 id2
+  | Id id1, Id id2 -> String.equal id1 id2
   | Tag _, _ -> false
   | Id _, _ -> false
 
@@ -63,7 +63,7 @@ let pp = function
      in
      match name with
      | Id id -> 
-        Id.pp id ^^ parens (separate comma args)
+        !^id ^^ parens (separate comma args)
      | Tag tag ->
         !^"StoredStruct" ^^ parens (Sym.pp tag) ^^ parens (separate comma args)
         

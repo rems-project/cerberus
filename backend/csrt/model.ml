@@ -159,7 +159,7 @@ let pp_variable_and_location_state ( ovar, { location; state } ) =
     | Predicate {name; args} ->
        begin match name with
        | Id id ->
-          Id.pp id ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
+          !^id ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
        | Tag tag ->
           Sym.pp tag ^^ parens (separate_map (space ^^ comma) string args), Pp.empty
        end

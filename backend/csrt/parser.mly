@@ -21,7 +21,6 @@
   open IndexTerms
   open Tokens
   open Cerb_frontend
-  open Pred
 
   let pit (start_p, end_p) pit_ = IndexTerm (region (start_p, end_p) None, pit_)
 
@@ -137,15 +136,19 @@ integer_type:
 
 /* end */
 
-pred: 
-  | OWNED                               { Owned } 
-  | REGION LBRACKET i = NUM RBRACKET    { Region (Z.of_int i) } 
-  | BLOCK                               { Block } 
-  | id = ID                             { Pred (Id.parse Location_ocaml.unknown id) } 
+/* pred:  */
+/*   | OWNED                               { Owned }  */
+/*   | REGION LBRACKET i = NUM RBRACKET    { Region (Z.of_int i) }  */
+/*   | BLOCK                               { Block }  */
+/*   | id = ID                             { Pred (Id.parse Location_ocaml.unknown id) }  */
 
 /* looking at core parser */
 pred_with_args:
-  pr = pred ps = delimited(LPAREN, separated_list(COMMA, path), RPAREN)   { (pr,ps) }
+  | pr = ID ps = delimited(LPAREN, separated_list(COMMA, predarg), RPAREN)   { (pr,ps) }
+
+predarg:
+  | p = path { Path.PathArg p }
+  | z = NUM  { Path.NumArg (Z.of_int z) }
 
 path: 
   | LPAREN pr_ps = pred_with_args RPAREN DOT id = ID   { Path.PredArg (fst pr_ps, snd pr_ps, id) }

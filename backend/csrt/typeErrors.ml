@@ -39,7 +39,7 @@ type type_error =
   | Name_bound_twice of sym_or_string
   | Missing_function of Sym.t
   | Missing_struct of BT.tag
-  | Missing_predicate of Id.t
+  | Missing_predicate of String.t
   | Missing_member of BT.tag * BT.member
 
   | Missing_ownership of BT.member option * (Loc.t list) option * situation
@@ -98,7 +98,7 @@ let pp_type_error = function
   | Missing_struct tag ->
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined", [])
   | Missing_predicate id ->
-     (!^"predicate" ^^^ Id.pp id ^^^ !^"not defined", [])
+     (!^"predicate" ^^^ !^id ^^^ !^"not defined", [])
   | Missing_member (tag, member) ->
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])

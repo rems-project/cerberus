@@ -3,9 +3,6 @@ module Loc = Locations
 (* some from https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param *)
 
 
-
-
-
 module CF = Cerb_frontend
 
 open Pp
@@ -30,48 +27,18 @@ end
 
 
 
-(* copying subset of Ctype.ctype *)
-
-module Pred = struct
-
-  type t = 
-    | Owned
-    | Region of Z.t
-    | Block
-    | Pred of Id.t
-
-  let equal p1 p2 =
-    match p1, p2 with
-    | Owned, Owned -> true
-    | Region z1, Region z2 -> Z.equal z2 z2
-    | Block, Block -> true
-    | Pred s1, Pred s2 -> Id.equal s1 s2
-    | Owned, _ -> false
-    | Region _, _ -> false
-    | Block, _ -> false
-    | Pred _, _ -> false
-
-  let pp = function
-    | Owned -> !^"Owned"
-    | Region z -> !^"Region" ^^^ Z.pp z
-    | Block -> !^"Block"
-    | Pred s -> Id.pp s
-
-end
-
-
-
-
-
-
-
 module Path = struct
 
   type t = 
     | Addr of BaseName.t
     | Var of BaseName.t
     | Pointee of t
-    | PredArg of Pred.t * t list * string
+    | PredArg of string * predarg list * string
+
+  and predarg = 
+    | PathArg of t
+    | NumArg of Z.t
+
 
   let rec equal p1 p2 =
     match p1, p2 with
@@ -82,7 +49,7 @@ module Path = struct
     | Pointee p1, Pointee p2 ->
        equal p1 p2
     | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
-       Pred.equal p1 p2 && List.equal equal t1 t2 && String.equal a1 a2
+       String.equal p1 p2 && List.equal predarg_equal t1 t2 && String.equal a1 a2
     | Addr _, _ -> 
        false
     | Var _, _ ->
@@ -92,12 +59,23 @@ module Path = struct
     | PredArg _, _ ->
        false
 
+  and predarg_equal pa1 pa2 = 
+    match pa1, pa2 with
+    | PathArg p1, PathArg p2 -> equal p1 p2
+    | NumArg z1, NumArg z2 -> Z.equal z1 z2
+    | PathArg _, _ -> false
+    | NumArg _, _ -> false
+
 
   let rec pp = function
     | Addr b -> ampersand ^^ BaseName.pp b
     | Var b -> BaseName.pp b
     | Pointee p -> star ^^ (pp p)
-    | PredArg (p,t,a) -> Pred.pp p ^^ parens (separate_map comma pp t) ^^ dot ^^ !^a
+    | PredArg (p,t,a) -> !^p ^^ parens (separate_map comma pp_predarg t) ^^ dot ^^ !^a
+  
+  and pp_predarg = function
+    | PathArg t -> pp t
+    | NumArg z -> Z.pp z
 
   let addr bn = 
     Addr bn
@@ -189,12 +167,11 @@ module IndexTerms = struct
 
 
 type parsed_spec = 
-  | R of (Pred.t * Path.t list)
+  | R of (string * Path.predarg list)
   | C of IndexTerms.t
 
 type logical_spec = Loc.t * IndexTerms.t
-type resource_spec = 
-  Loc.t * (Pred.t * Path.t list)
+type resource_spec = Loc.t * (string * Path.predarg list)
 
 
 

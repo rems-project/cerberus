@@ -5,6 +5,7 @@ open Pp
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IdMap = Map.Make(Id)
+module StringMap = Map.Make(String)
 module CF = Cerb_frontend
 module Loc = Locations
 module LC = LogicalConstraints
@@ -32,7 +33,7 @@ let early =
   let open Resources in
   let open BT in
   let open IT in
-  let id = Id.parse Location_ocaml.unknown "EarlyAlloc" in
+  let id = "EarlyAlloc" in
   let start_s = Sym.fresh () in
   let start_t = S (Integer, start_s) in
   let end_s = Sym.fresh () in
@@ -84,8 +85,8 @@ let builtin_predicates_list = [
   ]
 
 let builtin_predicates =
-  List.fold_left (fun acc (name,def) -> IdMap.add name def acc) 
-    IdMap.empty builtin_predicates_list
+  List.fold_left (fun acc (name,def) -> StringMap.add name def acc) 
+    StringMap.empty builtin_predicates_list
   
 
 
@@ -162,7 +163,7 @@ type t =
     impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
     stdlib_funs : SymSet.t;
-    resource_predicates : predicate_definition IdMap.t;
+    resource_predicates : predicate_definition StringMap.t;
     solver_context : Z3.context;
     (* solver_bt_mapping : Z3.Sort.sort BTMap.t; *)
     logical : (Sym.t * LS.t) list;
@@ -188,7 +189,7 @@ let get_predicate_def loc global predicate_name =
   let open Resources in
   match predicate_name with
   | Id id -> 
-     IdMap.find_opt id global.resource_predicates
+     StringMap.find_opt id global.resource_predicates
   | Tag tag ->
      match SymMap.find_opt tag global.struct_decls with
      | None -> None

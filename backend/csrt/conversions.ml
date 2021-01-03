@@ -282,8 +282,8 @@ let make_block loc pointer path sct =
      in
      return ([], r, [], [])
 
-let make_pred loc v pred path_args iargs = 
-  let* def = match Global.IdMap.find_opt pred Global.builtin_predicates with
+let make_pred loc pred (predargs : Path.predarg list) iargs = 
+  let* def = match Global.StringMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
@@ -294,7 +294,7 @@ let make_pred loc v pred path_args iargs =
         let mapping = match Sym.name oarg with
           | Some name -> 
              let item = 
-               {path = Path.predarg (Pred pred) path_args name; 
+               {path = Path.predarg pred predargs name; 
                 sym = s; bt = bt} 
              in
              item :: mapping 
@@ -338,39 +338,66 @@ let type_of__vars loc var_typs name derefs =
   
 
 
-let apply_ownership_spec var_typs mapping (loc, (pred,path_args)) =
-  match path_args with
-  | [] -> fail loc (Generic !^"predicate with empty parameter list")
-  | path :: paths ->
-    match Path.deref_path path with
-    | None ->
-       fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
-    | Some (bn, derefs) -> 
-       let* sct = type_of__vars loc var_typs bn.v derefs in
-       let* (_, sym) = Assertions.resolve_path loc mapping path in
-       match sct, pred, paths with
-       | Sctype (_, Pointer (_, sct2)), Pred.Owned, [] ->
-          make_owned loc sym (Path.var bn) sct2
-       | Sctype (_, Pointer (_, sct2)), Pred.Owned, _ ->
-          fail loc (Generic !^"Owned applied to multiple arguments")
-       | Sctype (_, Pointer (_, sct2)), Pred.Block, [] ->
-          make_block loc sym (Path.var bn) sct2
-       | Sctype (_, Pointer (_, sct2)), Pred.Block, _ ->
-          fail loc (Generic !^"Block applied to multiple arguments")
-       | Sctype (_, Pointer (_, sct2)), Pred.Region z, [] ->
+let apply_ownership_spec var_typs mapping (loc, (pred,predargs)) =
+  let open Path in
+  match pred, predargs with
+  | "Owned", [PathArg path] ->
+     begin match Path.deref_path path with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+     | Some (bn, derefs) -> 
+        let* sct = type_of__vars loc var_typs bn.v derefs in
+        let* (_, sym) = Assertions.resolve_path loc mapping path in
+        match sct with
+        | Sctype (_, Pointer (_, sct2)) ->
+           make_owned loc sym (Path.var bn) sct2
+        | _ ->
+          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
+     end
+  | "Owned", _ ->
+     fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
+
+  | "Block", [PathArg path] ->
+     begin match Path.deref_path path with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+     | Some (bn, derefs) -> 
+        let* sct = type_of__vars loc var_typs bn.v derefs in
+        let* (_, sym) = Assertions.resolve_path loc mapping path in
+        match sct with
+        | Sctype (_, Pointer (_, sct2)) ->
+           make_block loc sym (Path.var bn) sct2
+        | _ ->
+          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
+     end
+  | "Block", _ ->
+     fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
+
+  | "Region", [PathArg path; NumArg z] ->
+     begin match Path.deref_path path with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+     | Some (bn, derefs) -> 
+        let* sct = type_of__vars loc var_typs bn.v derefs in
+        let* (_, sym) = Assertions.resolve_path loc mapping path in
+        match sct with
+        | Sctype (_, Pointer (_, sct2)) ->
           make_region loc sym (Num z) (Path.var bn) sct2
-       | Sctype (_, Pointer (_, sct2)), Pred.Region z, _ ->
-          fail loc (Generic !^"Region applied to multiple arguments")
-       | _, Pred.Pred id, _ ->
-          let* iargs_resolved = 
-            ListM.mapM (fun p ->
-                let* (ls, s) = Assertions.resolve_path loc mapping p in
-                return (S (ls, s))
-              ) (path :: paths)
-          in
-          make_pred loc sym id paths iargs_resolved
-       | _ -> 
-          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))
+        | _ ->
+          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
+     end
+  | "Region", _ ->
+     fail loc (Generic !^"Region predicate takes 2 arguments, a path and a size")
+
+  | _, _ ->
+
+     let* iargs_resolved = 
+       ListM.mapM (function
+           | NumArg z -> 
+              return (IT.Num z)
+           | PathArg p ->
+              let* (ls, s) = Assertions.resolve_path loc mapping p in
+              return (S (ls, s))
+         ) predargs
+     in
+     make_pred loc pred predargs iargs_resolved
 
 
 let aarg_item l (aarg : aarg) =
