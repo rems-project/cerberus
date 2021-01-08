@@ -1910,6 +1910,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
+     - fix core a-normalisation location information for Elet, Ewseq, and Esseq
+     - check that no "cn::__" other than the right ones are used
      - check resource definition well-formedness
      - check globals with expressions
      - fix problems with order of multiple "requires" clauses
@@ -1921,3 +1923,4 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 end
+ 
