@@ -1289,15 +1289,21 @@ module Make (G : sig val global : Global.t end) = struct
          | Global.{offset; size; member_or_padding} :: members ->
             match member_or_padding with
             | Some (member,member_sct) -> 
-               let o_member_value = Option.map (fun v -> IT.StructMember (tag, v, member)) o_value in
-               let* rt = store loc local (BT.of_sct member_sct) (IT.Offset (pointer, Num offset))
-                            size o_member_value in
+               let o_member_value = 
+                 Option.map (fun v -> IT.StructMember (tag, v, member)) o_value 
+               in
+               let member_offset = IT.Offset (pointer, Num offset) in
+               let* rt = store loc local (BT.of_sct member_sct) member_offset
+                           size o_member_value in
                let* rt2 = aux members in
                return (rt@@rt2)
             | None ->
-               let rt = 
-                 LRT.Resource (Block {pointer = IT.Offset (pointer, Num offset); size = Num size; block_type = Padding}, 
-                 LRT.I) in
+               let block = 
+                 RE.Block {pointer = IT.Offset (pointer, Num offset); 
+                           size = Num size; 
+                           block_type = Padding} 
+               in
+               let rt = LRT.Resource (block, LRT.I) in
                let* rt2 = aux members in
                return (rt@@rt2)
        in  
@@ -1305,16 +1311,21 @@ module Make (G : sig val global : Global.t end) = struct
     | _ -> 
        let vsym = Sym.fresh () in 
        match o_value with
-         | Some v -> 
-            let rt = 
-              Logical ((vsym, Base bt), 
-              Resource (Points {pointer; pointee = vsym; size}, 
-              Constraint (LC (EQ (S (bt,vsym), v)), I)))
-            in
-            return rt
-         | None -> 
-            let rt = Resource (Block {pointer; size = Num size; block_type = Uninit}, LRT.I) in
-            return rt
+       | Some v -> 
+          let rt = 
+            Logical ((vsym, Base bt), 
+            Resource (Points {pointer; pointee = vsym; size}, 
+            Constraint (LC (EQ (S (bt,vsym), v)), I)))
+          in
+          return rt
+       | None -> 
+          let block = 
+            RE.Block {pointer; 
+                      size = Num size; 
+                      block_type = Uninit}
+          in
+          let rt = Resource (block, LRT.I) in
+          return rt
 
 
 
@@ -1334,8 +1345,6 @@ module Make (G : sig val global : Global.t end) = struct
     return rt
 
 
-
-
   let ensure_aligned loc local access pointer ctype = 
     let (aligned, _) = 
       S.constraint_holds local
@@ -1345,34 +1354,20 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-
-
   (*** auxiliary ****************************************************************)
 
 
-  let json_return_local_with_path loc (rt, local) : Yojson.Safe.t = 
+  let json_local loc local : Yojson.Safe.t = 
     `Assoc [("loc", json_loc loc);
-            ("return_type", RT.json rt);
             ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
 
-  let json_local_with_path loc (local) : Yojson.Safe.t = 
+  let json_false loc  : Yojson.Safe.t = 
     `Assoc [("loc", json_loc loc);
-            ("return_type", `Null);
-            ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
-
-  let json_false_with_path loc  : Yojson.Safe.t = 
-    `Assoc [("loc", json_loc loc);
-            ("return_type", `Null);
             ("context_or_unreachable", `Variant ("unreachable", None))]
 
-  let json_return_local_or_false_with_path loc = function
-    | Normal local -> json_return_local_with_path loc local
-    | False -> json_false_with_path loc
-
-  let json_local_or_false_with_path loc = function
-    | Normal local -> json_local_with_path loc local
-    | False -> json_false_with_path loc
+  let json_local_or_false loc = function
+    | Normal local -> json_local loc local
+    | False -> json_false loc
 
 
 
@@ -1391,8 +1386,8 @@ module Make (G : sig val global : Global.t end) = struct
   type labels = (LT.t * label_kind) SymMap.t
 
 
-  let rec infer_expr (local, labels)
-                     (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m = 
+  let rec infer_expr (local, labels) (e : 'bty expr) 
+          : ((RT.t * L.t) fallible, type_error) m = 
     let (M_Expr (loc, _annots, e_)) = e in
     debug 3 (lazy (action "inferring expression"));
     debug 3 (lazy (item "expr" (group (pp_expr e))));
@@ -1609,9 +1604,7 @@ module Make (G : sig val global : Global.t end) = struct
          let* paths =
            ListM.mapM (fun (lc, e) ->
                let delta = add_uc lc L.empty in
-               let*? () = 
-                 false_if_unreachable loc (delta ++ local)
-               in
+               let*? () = false_if_unreachable loc (delta ++ local) in
                let*? (rt, local) = infer_expr_pop delta (local, labels) e in
                return (Normal ((lc, rt), local))
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
@@ -1638,8 +1631,8 @@ module Make (G : sig val global : Global.t end) = struct
                    | Normal (rt,_) -> item "type" (RT.pp rt)));
     return r
 
-  and infer_expr_pop delta (local, labels) 
-                     (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m =
+  and infer_expr_pop delta (local, labels) (e : 'bty expr) 
+      : ((RT.t * L.t) fallible, type_error) m =
     let local = delta ++ marked ++ local in 
     let* result = infer_expr (local, labels) e in
     return (Fallible.map pop_return result)
@@ -1647,8 +1640,8 @@ module Make (G : sig val global : Global.t end) = struct
   (* check_expr: type checking for impure epressions; type checks `e`
      against `typ`, which is either a return type or `False`; returns
      either an updated environment, or `False` in case of Goto *)
-  let rec check_expr (local, labels) (e : 'bty expr) 
-                     (typ : RT.t fallible) : (L.t fallible, type_error) m = 
+  let rec check_expr (local, labels) (e : 'bty expr) (typ : RT.t fallible) 
+          : (L.t fallible, type_error) m = 
     let (M_Expr (loc, _annots, e_)) = e in
     debug 3 (lazy (action "checking expression"));
     debug 3 (lazy (item "expr" (group (pp_expr e))));
@@ -1689,11 +1682,15 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Pat pat -> pattern_match_rt pat rt
          in
          check_expr_pop delta (local, labels) e2 typ
-      | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
-      | M_Esseq (pat, e1, e2) ->
+      | M_Ewseq (pat, e1, e2) ->         
          let*? (rt, local) = infer_expr (local, labels) e1 in
          let* delta = pattern_match_rt pat rt in
          check_expr_pop delta (local, labels) e2 typ
+      | M_Esseq (pat, e1, e2) ->
+         (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
+         let*? (rt, local) = infer_expr (local, labels) e1 in
+         let* delta = pattern_match_rt pat rt in
+         check_expr_pop ~print:true delta (local, labels) e2 typ
       | _ ->
          let*? (rt, local) = infer_expr (local, labels) e in
          let* ((bt, lname), delta) = bind_logically rt in
@@ -1710,14 +1707,14 @@ module Make (G : sig val global : Global.t end) = struct
             in
             fail loc (Generic err)
     in
-    (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
     return result
 
 
-  and check_expr_pop delta (local, labels) (e : 'bty expr) 
-                     (typ : RT.t fallible) : (L.t fallible, type_error) m =
-    let (M_Expr (loc, _, _)) = e in
+  and check_expr_pop ?(print=false) delta (local, labels) (e : 'bty expr) (typ : RT.t fallible)
+      : (L.t fallible, type_error) m =
+    let (M_Expr (loc, _, _)) = e in    
     let local = delta ++ marked ++ local in 
+    let () = print_json (lazy (json_local loc local)) in
     let* result = check_expr (local, labels) e typ in
     match result with
     | False -> 
@@ -1875,7 +1872,7 @@ module Make (G : sig val global : Global.t end) = struct
          in
          let* () = check_initial_environment_consistent loc `Label delta in
          let* local_or_false = 
-           check_expr_pop (delta_label ++ pure_delta) 
+           check_expr_pop ~print:true (delta_label ++ pure_delta) 
              (L.empty, labels) body False
          in
          return ()
@@ -1883,7 +1880,7 @@ module Make (G : sig val global : Global.t end) = struct
     let* () = PmapM.foldM check_label label_defs () in
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let* local_or_false = 
-      check_expr_pop delta (L.empty, labels) body (Normal rt)
+      check_expr_pop ~print:true delta (L.empty, labels) body (Normal rt)
     in
     return ()
 

@@ -239,15 +239,15 @@ let maybe_close_json_output () =
      close_out oc
 
 
-let maybe_print_json =
+let print_json =
   let first = ref true in
-  fun guard json ->
-  match !json_output_channel, guard with
-  | Some oc, true ->
+  fun json ->
+  match !json_output_channel with
+  | Some oc ->
      if !first then first := false else output_string oc ",\n";
      Yojson.Safe.pretty_to_channel ~std:true oc (Lazy.force json);
      output_char oc '\n'
-  | _, _ -> ()
+  | _ -> ()
 
 
 
