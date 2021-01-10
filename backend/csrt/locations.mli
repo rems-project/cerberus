@@ -1,7 +1,7 @@
 (* taking things from ocaml_locations *)
 
 
-type t
+type t = Location_ocaml.t
 
 type loc = t
 type path = t List1.t

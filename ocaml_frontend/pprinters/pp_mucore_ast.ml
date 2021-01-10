@@ -38,11 +38,7 @@ let pp_eff_ctor w =
 
 let pp_asym asym = 
   let open Mucore in
-  match Annot.get_loc asym.annot with
-  | Some loc ->
-      pp_symbol asym.item ^^^ Location_ocaml.pp_location ~clever:true loc
-  | None ->
-      pp_symbol asym.item
+  pp_symbol asym.item ^^^ Location_ocaml.pp_location ~clever:false asym.loc
 
 let dtree_of_asym asym = 
   Pp_ast.Dleaf (pp_asym asym)
@@ -50,11 +46,7 @@ let dtree_of_asym asym =
 
 let pp_act act = 
   let open Mucore in
-  match Annot.get_loc act.annot with
-  | Some loc ->
-      Pp_ail.pp_ctype Ctype.no_qualifiers act.item ^^^ Location_ocaml.pp_location ~clever:true loc
-  | None ->
-      Pp_ail.pp_ctype Ctype.no_qualifiers act.item
+  Pp_ail.pp_ctype Ctype.no_qualifiers act.item ^^^ Location_ocaml.pp_location ~clever:false act.loc
 
 let dtree_of_act act = 
   Pp_ast.Dleaf (pp_act act)
@@ -112,14 +104,12 @@ let rec dtree_of_value = function
 let string_of_bop = Pp_core_ast.string_of_bop
 
 let dtree_of_pexpr pexpr =
-  let rec self (M_Pexpr (annot, _, pexpr_)) =
+  let rec self (M_Pexpr (loc, annot, _, pexpr_)) =
     
     let pp_ctor str =
-      match Annot.get_loc annot with
-        | Some loc ->
-            pp_pure_ctor str ^^^ Location_ocaml.pp_location ~clever:false loc
-        | None ->
-            pp_pure_ctor str in
+      pp_pure_ctor str ^^^ 
+        Location_ocaml.pp_location ~clever:false loc
+    in
     
     match pexpr_ with
       | M_PEsym sym ->
@@ -250,15 +240,12 @@ let dtree_of_action act =
 
 
 let dtree_of_expr expr =
-  let rec self (M_Expr (annot, expr_) as expr) =
+  let rec self (M_Expr (loc, annot, expr_) as expr) =
 
     let pp_ctor str =
-      match Annot.get_loc annot with
-        | Some loc ->
-            pp_eff_ctor str ^^^ Location_ocaml.pp_location ~clever:false loc
-        | None ->
-            pp_eff_ctor str in
-
+      pp_eff_ctor str ^^^ 
+        Location_ocaml.pp_location ~clever:false loc
+    in
 
     match expr_ with
       | M_Epure pe ->
@@ -275,7 +262,7 @@ let dtree_of_expr expr =
 *)
 
     | M_Elet (pat, e1, e2) ->
-        Dnode ( pp_ctor "Ewseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
+        Dnode ( pp_ctor "Elet" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
               , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                   ; *) dtree_of_pexpr e1
                                   ; self e2 ] )
@@ -400,9 +387,17 @@ let dtree_of_globs xs =
   Dnode (pp_field ".globs", List.map aux xs)
 
 
-let dtree_of_labels = function
-  | M_Return _ -> (Dleaf !^"return")
-  | M_Label (_, _, body, _) -> dtree_of_expr body
+let dtree_of_label l def =
+  match def with
+  | M_Return (loc,_) -> 
+     (Dleaf (!^"return" ^^^ Location_ocaml.pp_location ~clever:false loc))
+  | M_Label (loc, _, _, body, _) -> 
+     Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_expr body])
+
+let dtrees_of_labels labels = 
+  Pmap.fold (fun l def acc ->
+      acc @ [dtree_of_label l def]
+    ) labels []
 
 let dtree_of_funs xs =
   let aux (sym, decl) =
@@ -416,7 +411,8 @@ let dtree_of_funs xs =
       | M_Proc (loc, bTy, params, e, labels) ->
           Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy
                 , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                  ; Dnode (pp_field ".body", [dtree_of_expr e]) ] )
+                  ; Dnode (pp_field ".body", [dtree_of_expr e])
+                  ; Dnode (pp_field ".labels", dtrees_of_labels labels) ] )
       | M_ProcDecl (loc, ret_bTy, params_bTys) ->
           (* TODO: loc*)
           Dleaf ( pp_field "ProcDecl" ^^^ pp_symbol sym ^^ P.colon ^^^

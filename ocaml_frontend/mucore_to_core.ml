@@ -59,12 +59,12 @@ let get_value env1 asym:'a Core.generic_value=
 
 
 let make_symbol_pexpr asym : ('bty, symbol) Core.generic_pexpr=
-  let (annots2, bty, sym1) = a_unpack asym in
-   (Core.Pexpr( annots2, bty, (Core.PEsym sym1)))
+  let (_loc, annots, bty, sym) = a_unpack asym in
+   (Core.Pexpr( annots, bty, (Core.PEsym sym)))
 
 let make_ctype_pexpr asym : ('bty, symbol) Core.generic_pexpr=
-  let (annots2, bty, ctype1) = a_unpack asym in
-   (Core.Pexpr( annots2, bty, (Core.PEval (Core.Vctype ctype1))))
+  let (_, annots, bty, ctype) = a_unpack asym in
+   (Core.Pexpr (annots, bty, (Core.PEval (Core.Vctype ctype))))
 
 
 let rec mu_to_core__object_value (env1 : 'bty env) ov:(Symbol.sym)Core.generic_object_value= 
@@ -119,20 +119,20 @@ let mu_to_core__ctor:(Core.core_base_type)mu_ctor ->Core.generic_ctor=  ((functi
 ))
 
 
-let rec mu_to_core__pattern (M_Pattern( annots2, pat_)):(Symbol.sym)Core.generic_pattern= 
-   (let wrap pat_=  (Core.Pattern( annots2, pat_)) in
-  (match pat_ with
+let rec mu_to_core__pattern (M_Pattern(_, annots, pat_)):(Symbol.sym)Core.generic_pattern= 
+  let wrap pat_=  (Core.Pattern(annots, pat_)) in
+  match pat_ with
   | M_CaseBase (msym, bt1) -> 
      wrap (Core.CaseBase (msym, bt1))
   | M_CaseCtor( ctor1, pats) -> 
      wrap (Core.CaseCtor( 
              (mu_to_core__ctor ctor1),
              (map mu_to_core__pattern pats)))
-  ))
+
 
 let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : (Ctype.ctype, mu_base_type, 'bty) mu_pexpr)
         : ('bty, symbol) Core.generic_pexpr=
-   (let (M_Pexpr( annots2, bty, pexpr_)) = pexpr2 in
+   (let (M_Pexpr(_, annots2, bty, pexpr_)) = pexpr2 in
   let wrap pexpr_=  (Core.Pexpr( annots2, bty, pexpr_)) in
   (match pexpr_ with
   | M_PEsym s ->
@@ -462,8 +462,8 @@ let mu_to_core__memop env1 memop1:memop*(('a,(Symbol.sym))Core.generic_pexpr)lis
   ))
 
 let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
-   (let (M_Expr( annots2, expr_)) = expr2 in
-  let wrap expr_=  (Core.Expr( annots2, expr_)) in
+   (let (M_Expr(_, annots, expr_)) = expr2 in
+  let wrap expr_=  (Core.Expr(annots, expr_)) in
   (match expr_ with
     | M_Epure p -> 
        wrap (Core.Epure (mu_to_core__pexpr env1 p))

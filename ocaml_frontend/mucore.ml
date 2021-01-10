@@ -9,7 +9,9 @@ open Core_aux
 
 open Lem_assert_extra
 
+module Loc = Location_ocaml
 
+type loc = Loc.t
 
 type symbol = Symbol.sym
 type mu_object_type = Core.core_object_type
@@ -17,14 +19,15 @@ type mu_base_type = Core.core_base_type
 type mu_name = symbol Core.generic_name
 
 type ('o, 'TY) a = 
-  { annot: Annot.annot list;
+  { loc: loc;
+    annot: Annot.annot list;
     type_annot : 'TY;
     item: 'o }
 
 let a_unpack a = 
-  (a.annot, a.type_annot, a.item)
-let a_pack annot type_annot item = 
-  {annot; type_annot; item}
+  (a.loc, a.annot, a.type_annot, a.item)
+let a_pack loc annot type_annot item = 
+  {loc; annot; type_annot; item}
 
 type 'TY asym = (Symbol.sym, 'TY) a
 type 'TY asyms = ('TY asym) list
@@ -84,7 +87,7 @@ type 'bt mu_pattern_ =
  | M_CaseCtor of 'bt mu_ctor * ('bt mu_pattern) list
 
 and 'bt mu_pattern = 
- | M_Pattern of annot list * ('bt mu_pattern_)
+ | M_Pattern of loc * annot list * ('bt mu_pattern_)
 
 type ('bt, 'TY) mu_sym_or_pattern = 
   | M_Symbol of symbol
@@ -112,7 +115,7 @@ type ('ct, 'bt, 'TY) mu_pexpr_ =  (* Core pure expressions *)
 
 
 and ('ct, 'bt, 'TY) mu_pexpr = 
- | M_Pexpr of annot list * 'TY * (('ct, 'bt, 'TY) mu_pexpr_)
+ | M_Pexpr of loc * annot list * 'TY * (('ct, 'bt, 'TY) mu_pexpr_)
 
 
 
@@ -183,14 +186,14 @@ type ('ct, 'bt, 'TY) mu_expr_ =  (* (effectful) expression *)
  | M_Erun of symbol * ('TY asym) list (* run from label *)
 
 and ('ct, 'bt, 'TY) mu_expr = 
- | M_Expr of annot list * (('ct, 'bt, 'TY) mu_expr_)
+ | M_Expr of loc * annot list * (('ct, 'bt, 'TY) mu_expr_)
 
 
 
 
 let embed_pexpr_expr pe : ('c,'b,'a) mu_expr= 
-  let (M_Pexpr (annots2, _bty, _)) = pe in
-  M_Expr (annots2, (M_Epure pe))
+  let (M_Pexpr (loc, _, _, _)) = pe in
+  M_Expr (loc, [], (M_Epure pe))
 
 
 type ('ct, 'bt, 'TY) mu_impl_decl =
@@ -201,8 +204,8 @@ type ('ct, 'bt, 'TY) mu_impl = (Implementation.implementation_constant, (('ct, '
   Pmap.map
 
 type ('lt, 'ct, 'bt, 'TY) mu_label_def = 
-  | M_Return of 'lt
-  | M_Label of 'lt * ((symbol * 'bt) list) * ('ct, 'bt, 'TY) mu_expr * annot list
+  | M_Return of loc * 'lt
+  | M_Label of loc * 'lt * ((symbol * 'bt) list) * ('ct, 'bt, 'TY) mu_expr * annot list
 
 type ('lt, 'ct, 'bt, 'TY) mu_label_defs = (symbol, (('lt, 'ct, 'bt, 'TY) mu_label_def))
   Pmap.map

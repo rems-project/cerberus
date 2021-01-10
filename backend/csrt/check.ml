@@ -1,5 +1,4 @@
 module CF=Cerb_frontend
-module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
 module IT = IndexTerms
@@ -17,13 +16,16 @@ module SymMap = Map.Make(Sym)
 module VB = Local.VariableBinding
 
 open IT
-open Loc
+open Locations
 open TypeErrors
 open Resultat
 open LogicalConstraints
 open CF.Mucore
 open Pp
 open BT
+
+
+
 
 
 (* some of this is informed by impl_mem *)
@@ -134,12 +136,12 @@ module Make (G : sig val global : Global.t end) = struct
 
   (*** pattern matching *********************************************************)
 
-  let pattern_match (loc : loc) (this : IT.t) (pat : pattern) 
+  let pattern_match (this : IT.t) (pat : pattern) 
                     (expect : BT.t) : (L.t, type_error) m =
     let rec aux (local' : L.t) (this : IT.t) (pat : pattern) 
                 (expect : BT.t) : (L.t, type_error) m = 
       match pat with
-      | M_Pattern (annots, M_CaseBase (o_s, has_bt)) ->
+      | M_Pattern (loc, annots, M_CaseBase (o_s, has_bt)) ->
          let* () = ensure_base_type loc ~expect has_bt in
          let s' = Sym.fresh () in 
          let local' = add_l s' (Base has_bt) local' in
@@ -151,7 +153,7 @@ module Make (G : sig val global : Global.t end) = struct
          in
          let local' = add_uc (LC (EQ (this, S (has_bt, s')))) local' in
          return local'
-      | M_Pattern (annots, M_CaseCtor (constructor, pats)) ->
+      | M_Pattern (loc, annots, M_CaseCtor (constructor, pats)) ->
          match expect, constructor, pats with
          | expect, (M_Cnil item_bt), [] ->
             let* () = ensure_base_type loc ~expect (List item_bt) in
@@ -212,9 +214,9 @@ module Make (G : sig val global : Global.t end) = struct
      constraints carry over to those values, record (lname,bound) as a
      logical variable and record constraints about how the variables
      introduced in the pattern-matching relate to (name,bound). *)
-  let pattern_match_rt (loc : loc) (pat : pattern) (rt : RT.t) : (L.t, type_error) m =
+  let pattern_match_rt (pat : pattern) (rt : RT.t) : (L.t, type_error) m =
     let* ((bt, s'), delta) = bind_logically rt in
-    let* delta' = pattern_match loc (S (bt, s')) pat bt in
+    let* delta' = pattern_match (S (bt, s')) pat bt in
     return (delta' ++ delta)
 
 
@@ -235,12 +237,11 @@ module Make (G : sig val global : Global.t end) = struct
     let (bt,lname) = get_a sym local in
     return {lname; bt; loc}
 
-  let arg_of_asym (loc : loc) (local : L.t) (asym : 'bty asym) : (arg, type_error) m = 
-    let loc = Loc.update loc (get_loc_ asym.annot) in
-    arg_of_sym loc local asym.item
+  let arg_of_asym (local : L.t) (asym : 'bty asym) : (arg, type_error) m = 
+    arg_of_sym asym.loc local asym.item
 
-  let args_of_asyms (loc : loc) (local : L.t) (asyms : 'bty asyms) : (args, type_error) m = 
-    ListM.mapM (arg_of_asym loc local) asyms
+  let args_of_asyms (local : L.t) (asyms : 'bty asyms) : (args, type_error) m = 
+    ListM.mapM (arg_of_asym local) asyms
 
 
   let pp_unis (unis : Sym.t Uni.t) : Pp.document = 
@@ -830,14 +831,14 @@ module Make (G : sig val global : Global.t end) = struct
        return (ret, Bool, LC (Not (S (Bool, ret))))
     | M_Vlist (ibt, asyms) ->
        let ret = Sym.fresh () in
-       let* args = args_of_asyms loc local asyms in
+       let* args = args_of_asyms local asyms in
        let* () = 
          ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
        in
        let its = List.map (fun arg -> IT.S (arg.bt, arg.lname)) args in
        return (ret, List ibt, LC (EQ (S (List ibt, ret), List (its, ibt))))
     | M_Vtuple asyms ->
-       let* args = args_of_asyms loc local asyms in
+       let* args = args_of_asyms local asyms in
        infer_tuple loc local args
 
 
@@ -1027,10 +1028,8 @@ module Make (G : sig val global : Global.t end) = struct
      inference returns, all logical (logical variables, resources,
      constraints) in the local environment *)
 
-  let rec infer_pexpr (loc : loc) local 
-                      (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
-    let (M_Pexpr (annots, _bty, pe_)) = pe in
-    let loc = Loc.update loc (get_loc_ annots) in
+  let rec infer_pexpr local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+    let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
     debug 3 (lazy (action "inferring pure expression"));
     debug 3 (lazy (item "expr" (pp_pexpr pe)));
     debug 3 (lazy (item "ctxt" (L.pp local)));
@@ -1049,23 +1048,22 @@ module Make (G : sig val global : Global.t end) = struct
          return (Normal (rt_of_vt vt, local))
       | M_PEconstrained _ ->
          Debug_ocaml.error "todo: PEconstrained"
-      | M_PEundef (loc2, undef) ->
-         let loc = Loc.update loc loc2 in
+      | M_PEundef (loc, undef) ->
          let (reachable, model) = Model.is_reachable_and_model local in
          if not reachable 
          then (Pp.warn !^"unexpected unreachable Undefined"; return False)
          else fail loc (Undefined_behaviour (undef, model))
       | M_PEerror (err, asym) ->
-         let* arg = arg_of_asym loc local asym in
+         let* arg = arg_of_asym local asym in
          fail arg.loc (StaticError err)
       | M_PEctor (ctor, asyms) ->
-         let* args = args_of_asyms loc local asyms in
+         let* args = args_of_asyms local asyms in
          let* vt = infer_constructor loc (local, G.global) ctor args in
          return (Normal (rt_of_vt vt, local))
       | M_PEarray_shift _ ->
          Debug_ocaml.error "todo: PEarray_shift"
       | M_PEmember_shift (asym, tag, member) ->
-         let* arg = arg_of_asym loc local asym in
+         let* arg = arg_of_asym local asym in
          let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
          let ret = Sym.fresh () in
          let* decl = get_struct_decl loc tag in
@@ -1075,15 +1073,15 @@ module Make (G : sig val global : Global.t end) = struct
          let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
          return (Normal (rt, local))
       | M_PEnot asym ->
-         let* arg = arg_of_asym loc local asym in
+         let* arg = arg_of_asym local asym in
          let* () = ensure_base_type arg.loc ~expect:Bool arg.bt in
          let ret = Sym.fresh () in 
          let constr = (LC (EQ (S (Bool, ret), Not (S (arg.bt, arg.lname))))) in
          let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
          return (Normal (rt, local))
       | M_PEop (op, asym1, asym2) ->
-         let* arg1 = arg_of_asym loc local asym1 in
-         let* arg2 = arg_of_asym loc local asym2 in
+         let* arg1 = arg_of_asym local asym1 in
+         let* arg2 = arg_of_asym local asym2 in
          let open CF.Core in
          let binop_typ (op : CF.Core.binop) (v1 : IT.t) (v2 : IT.t) =
            let open BT in
@@ -1129,25 +1127,25 @@ module Make (G : sig val global : Global.t end) = struct
               in
               return t
          in
-         let* args = args_of_asyms loc local asyms in
+         let* args = args_of_asyms local asyms in
          let* (rt, local) = calltype_ft loc local args decl_typ in
          return (Normal (rt, local))
       | M_PElet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr loc local e1 in
+         let*? (rt, local) = infer_pexpr local e1 in
          let* delta = match p with
            | M_Symbol sym -> return (bind sym rt)
-           | M_Pat pat -> pattern_match_rt loc pat rt
+           | M_Pat pat -> pattern_match_rt pat rt
          in
-         infer_pexpr_pop loc delta local e2
+         infer_pexpr_pop delta local e2
       | M_PEcase _ -> Debug_ocaml.error "PEcase in inferring position"
       | M_PEif (casym, e1, e2) ->
-         let* carg = arg_of_asym loc local casym in
+         let* carg = arg_of_asym local casym in
          let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          let* paths =
            ListM.mapM (fun (lc, e) ->
                let delta = add_uc lc L.empty in
                let*? () = false_if_unreachable loc (delta ++ local) in
-               let*? (rt, local) = infer_pexpr_pop loc delta local e in
+               let*? (rt, local) = infer_pexpr_pop delta local e in
                return (Normal ((lc, rt), local))
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
@@ -1156,10 +1154,9 @@ module Make (G : sig val global : Global.t end) = struct
     debug 3 (lazy (item "type" (RT.pp rt)));
     return (Normal (rt, local))
 
-  and infer_pexpr_pop (loc : loc) delta local
-                      (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+  and infer_pexpr_pop delta local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
     let local = delta ++ marked ++ local in 
-    let* result = infer_pexpr loc local pe in
+    let* result = infer_pexpr local pe in
     let result' = Fallible.map pop_return result in
     return result'
 
@@ -1167,17 +1164,15 @@ module Make (G : sig val global : Global.t end) = struct
   (* check_pexpr: type check the pure expression `e` against return type
      `typ`; returns a "reduced" local environment *)
 
-  let rec check_pexpr (loc : loc) local (e : 'bty pexpr) 
-                      (typ : RT.t) : (L.t fallible, type_error) m = 
-    let (M_Pexpr (annots, _, e_)) = e in
-    let loc = Loc.update loc (get_loc_ annots) in
+  let rec check_pexpr local (e : 'bty pexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
+    let (M_Pexpr (loc, _annots, _, e_)) = e in
     debug 3 (lazy (action "checking pure expression"));
     debug 3 (lazy (item "expr" (group (pp_pexpr e))));
     debug 3 (lazy (item "type" (RT.pp typ)));
     debug 3 (lazy (item "ctxt" (L.pp local)));
     match e_ with
     | M_PEif (casym, e1, e2) ->
-       let* carg = arg_of_asym loc local casym in
+       let* carg = arg_of_asym local casym in
        let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
        let* paths =
          ListM.mapM (fun (lc, e) ->
@@ -1190,12 +1185,12 @@ module Make (G : sig val global : Global.t end) = struct
        in
        return (merge_paths loc paths)
     | M_PEcase (asym, pats_es) ->
-       let* arg = arg_of_asym loc local asym in
+       let* arg = arg_of_asym local asym in
        let* paths = 
          ListM.mapM (fun (pat, pe) ->
              (* TODO: make pattern matching return (in delta)
                 constraints corresponding to the pattern *)
-             let* delta = pattern_match arg.loc (S (arg.bt, arg.lname)) pat arg.bt in
+             let* delta = pattern_match (S (arg.bt, arg.lname)) pat arg.bt in
              let*? () = 
                false_if_unreachable loc (delta ++ local)
              in
@@ -1204,14 +1199,14 @@ module Make (G : sig val global : Global.t end) = struct
        in
        return (merge_paths loc paths)
     | M_PElet (p, e1, e2) ->
-       let*? (rt, local) = infer_pexpr loc local e1 in
+       let*? (rt, local) = infer_pexpr local e1 in
        let* delta = match p with
          | M_Symbol sym -> return (bind sym rt)
-         | M_Pat pat -> pattern_match_rt loc pat rt
+         | M_Pat pat -> pattern_match_rt pat rt
        in
        check_pexpr_pop loc delta local e2 typ
     | _ ->
-       let*? (rt, local) = infer_pexpr loc local e in
+       let*? (rt, local) = infer_pexpr local e in
        let* ((bt, lname), delta) = bind_logically rt in
        let local = delta ++ marked ++ local in
        let* local = subtype loc local {bt; lname; loc} typ in
@@ -1221,7 +1216,7 @@ module Make (G : sig val global : Global.t end) = struct
   and check_pexpr_pop (loc : loc) delta local (pe : 'bty pexpr) 
                       (typ : RT.t) : (L.t fallible, type_error) m =
     let local = delta ++ marked ++ local in 
-    let*? local = check_pexpr loc local pe typ in
+    let*? local = check_pexpr local pe typ in
     let* local = pop_empty loc local in
     return (Normal local)
 
@@ -1357,17 +1352,17 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let json_return_local_with_path loc (rt, local) : Yojson.Safe.t = 
-    `Assoc [("loc", Loc.json_loc loc);
+    `Assoc [("loc", json_loc loc);
             ("return_type", RT.json rt);
             ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
 
   let json_local_with_path loc (local) : Yojson.Safe.t = 
-    `Assoc [("loc", Loc.json_loc loc);
+    `Assoc [("loc", json_loc loc);
             ("return_type", `Null);
             ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
 
   let json_false_with_path loc  : Yojson.Safe.t = 
-    `Assoc [("loc", Loc.json_loc loc);
+    `Assoc [("loc", json_loc loc);
             ("return_type", `Null);
             ("context_or_unreachable", `Variant ("unreachable", None))]
 
@@ -1379,15 +1374,6 @@ module Make (G : sig val global : Global.t end) = struct
     | Normal local -> json_local_with_path loc local
     | False -> json_false_with_path loc
 
-  let expr_ (M_Expr (_, e_)) = e_
-
-  let expr_loc loc e =
-    let (M_Expr (annots, e_)) = e in
-    Loc.updateB loc (get_loc_ annots)
-
-  let pexpr_loc loc e =
-    let (M_Pexpr (annots, _, e_)) = e in
-    Loc.updateB loc (get_loc_ annots)
 
 
   (*** impure expression inference **********************************************)
@@ -1405,16 +1391,15 @@ module Make (G : sig val global : Global.t end) = struct
   type labels = (LT.t * label_kind) SymMap.t
 
 
-  let rec infer_expr (loc : loc) (local, labels)
+  let rec infer_expr (local, labels)
                      (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m = 
-    let (M_Expr (annots, e_)) = e in
-    let loc = Loc.update loc (get_loc_ annots) in
+    let (M_Expr (loc, _annots, e_)) = e in
     debug 3 (lazy (action "inferring expression"));
     debug 3 (lazy (item "expr" (group (pp_expr e))));
     debug 3 (lazy (item "ctxt" (L.pp local)));
     let* r = match e_ with
       | M_Epure pe -> 
-         infer_pexpr loc local pe
+         infer_pexpr local pe
       | M_Ememop memop ->
          let* local = unpack_resources loc local in
          begin match memop with
@@ -1436,7 +1421,7 @@ module Make (G : sig val global : Global.t end) = struct
             Debug_ocaml.error "todo: M_IntFromPtr"
          | M_PtrFromInt (act_from, act2_to, asym) ->
             let ret = Sym.fresh () in 
-            let* arg = arg_of_asym loc local asym in
+            let* arg = arg_of_asym local asym in
             let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
             let constr = LC (EQ (S (Loc, ret), IntegerToPointerCast (S (Integer, arg.lname)))) in
             let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
@@ -1444,7 +1429,7 @@ module Make (G : sig val global : Global.t end) = struct
          | M_PtrValidForDeref (act, asym) ->
             (* check *)
             let* local = unpack_resources loc local in
-            let* arg = arg_of_asym loc local asym in
+            let* arg = arg_of_asym local asym in
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
             let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1479,7 +1464,7 @@ module Make (G : sig val global : Global.t end) = struct
          let* local = unpack_resources loc local in
          begin match action_ with
          | M_Create (asym, act, _prefix) -> 
-            let* arg = arg_of_asym loc local asym in
+            let* arg = arg_of_asym local asym in
             let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
@@ -1499,7 +1484,7 @@ module Make (G : sig val global : Global.t end) = struct
          | M_Kill (M_Dynamic, asym) -> 
             Debug_ocaml.error "todo: free"
          | M_Kill (M_Static cti, asym) -> 
-            let* arg = arg_of_asym loc local asym in
+            let* arg = arg_of_asym local asym in
             let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
             let* () = 
               ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
@@ -1510,8 +1495,8 @@ module Make (G : sig val global : Global.t end) = struct
             let rt = RT.Computational ((Sym.fresh (), Unit), I) in
             return (Normal (rt, local))
          | M_Store (_is_locking, act, pasym, vasym, mo) -> 
-            let* parg = arg_of_asym loc local pasym in
-            let* varg = arg_of_asym loc local vasym in
+            let* parg = arg_of_asym local pasym in
+            let* varg = arg_of_asym local vasym in
             let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
             let* () = ensure_base_type loc ~expect:Loc parg.bt in
             let* () = 
@@ -1539,7 +1524,7 @@ module Make (G : sig val global : Global.t end) = struct
             let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
             return (Normal (rt, local))
          | M_Load (act, pasym, _mo) -> 
-            let* parg = arg_of_asym loc local pasym in
+            let* parg = arg_of_asym local pasym in
             let* () = ensure_base_type loc ~expect:Loc parg.bt in
             let* () = 
               ensure_aligned loc local Load (S (parg.bt, parg.lname)) act.item.ct
@@ -1574,8 +1559,8 @@ module Make (G : sig val global : Global.t end) = struct
          return (Normal (rt, local))
       | M_Eccall (_ctype, afsym, asyms) ->
          let* local = unpack_resources loc local in
-         let* f_arg = arg_of_asym loc local afsym in
-         let* args = args_of_asyms loc local asyms in
+         let* f_arg = arg_of_asym local afsym in
+         let* args = args_of_asyms local asyms in
          begin match f_arg.bt with
            | FunctionPointer sym -> 
               let* (_loc, ft) = match Global.get_fun_decl G.global sym with
@@ -1585,8 +1570,7 @@ module Make (G : sig val global : Global.t end) = struct
               let* (rt, local) = calltype_ft loc local args ft in
               return (Normal (rt, local))
            | _ -> 
-              fail (Loc.update loc (get_loc_ afsym.annot)) 
-                (Generic !^"expected function pointer")
+              fail afsym.loc (Generic !^"expected function pointer")
          end
       | M_Eproc (fname, asyms) ->
          let* local = unpack_resources loc local in
@@ -1600,11 +1584,11 @@ module Make (G : sig val global : Global.t end) = struct
               in
               return decl_typ
          in
-         let* args = args_of_asyms loc local asyms in
+         let* args = args_of_asyms local asyms in
          let* (rt, local) = calltype_ft loc local args decl_typ in
          return (Normal (rt, local))
       | M_Ebound (n, e) ->
-         infer_expr loc (local, labels) e
+         infer_expr (local, labels) e
       | M_End _ ->
          Debug_ocaml.error "todo: End"
       | M_Erun (label_sym, asyms) ->
@@ -1613,14 +1597,14 @@ module Make (G : sig val global : Global.t end) = struct
          | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
          | Some lt -> return lt
          in
-         let* args = args_of_asyms loc local asyms in
+         let* args = args_of_asyms local asyms in
          let* (False, local) = calltype_lt loc local args lt in
          let* () = all_empty loc local in
          return False
       | M_Ecase _ -> 
          Debug_ocaml.error "Ecase in inferring position"
       | M_Eif (casym, e1, e2) ->
-         let* carg = arg_of_asym loc local casym in
+         let* carg = arg_of_asym local casym in
          let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          let* paths =
            ListM.mapM (fun (lc, e) ->
@@ -1628,52 +1612,51 @@ module Make (G : sig val global : Global.t end) = struct
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               let*? (rt, local) = infer_expr_pop loc delta (local, labels) e in
+               let*? (rt, local) = infer_expr_pop delta (local, labels) e in
                return (Normal ((lc, rt), local))
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
          merge_return_paths loc paths
       | M_Elet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr loc local e1 in
+         let*? (rt, local) = infer_pexpr local e1 in
          let* delta = match p with
            | M_Symbol sym -> return (bind sym rt)
-           | M_Pat pat -> pattern_match_rt loc pat rt
+           | M_Pat pat -> pattern_match_rt pat rt
          in
-         infer_expr_pop loc delta (local, labels) e2
+         infer_expr_pop delta (local, labels) e2
       | M_Ewseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr loc (local, labels) e1 in
-         let* delta = pattern_match_rt loc pat rt in
-         infer_expr_pop loc delta (local, labels) e2
+         let*? (rt, local) = infer_expr (local, labels) e1 in
+         let* delta = pattern_match_rt pat rt in
+         infer_expr_pop delta (local, labels) e2
       | M_Esseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr loc (local, labels) e1 in
-         let* delta = pattern_match_rt loc pat rt in
-         infer_expr_pop loc delta (local, labels) e2
+         let*? (rt, local) = infer_expr (local, labels) e1 in
+         let* delta = pattern_match_rt pat rt in
+         infer_expr_pop delta (local, labels) e2
     in
     debug 3 (lazy (match r with
                    | False -> item "type" (parens !^"no return")
                    | Normal (rt,_) -> item "type" (RT.pp rt)));
     return r
 
-  and infer_expr_pop (loc : loc) delta (local, labels) 
+  and infer_expr_pop delta (local, labels) 
                      (e : 'bty expr) : ((RT.t * L.t) fallible, type_error) m =
     let local = delta ++ marked ++ local in 
-    let* result = infer_expr loc (local, labels) e in
+    let* result = infer_expr (local, labels) e in
     return (Fallible.map pop_return result)
 
   (* check_expr: type checking for impure epressions; type checks `e`
      against `typ`, which is either a return type or `False`; returns
      either an updated environment, or `False` in case of Goto *)
-  let rec check_expr (loc : loc) (local, labels) (e : 'bty expr) 
+  let rec check_expr (local, labels) (e : 'bty expr) 
                      (typ : RT.t fallible) : (L.t fallible, type_error) m = 
-    let (M_Expr (annots, e_)) = e in
-    let (loc,was_updated) = Loc.updateB loc (CF.Annot.get_loc_ annots) in
+    let (M_Expr (loc, _annots, e_)) = e in
     debug 3 (lazy (action "checking expression"));
     debug 3 (lazy (item "expr" (group (pp_expr e))));
     debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
     debug 3 (lazy (item "ctxt" (L.pp local)));
     let* result = match e_ with
       | M_Eif (casym, e1, e2) ->
-         let* carg = arg_of_asym loc local casym in
+         let* carg = arg_of_asym local casym in
          let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          let* paths =
            ListM.mapM (fun (lc, e) ->
@@ -1681,38 +1664,38 @@ module Make (G : sig val global : Global.t end) = struct
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_expr_pop loc delta (local, labels) e typ 
+               check_expr_pop delta (local, labels) e typ 
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
          return (merge_paths loc paths)
       | M_Ecase (asym, pats_es) ->
-         let* arg = arg_of_asym loc local asym in
+         let* arg = arg_of_asym local asym in
          let* paths = 
            ListM.mapM (fun (pat, pe) ->
                (* TODO: make pattern matching return (in delta)
                   constraints corresponding to the pattern *)
-               let* delta = pattern_match arg.loc (S (arg.bt, arg.lname)) pat arg.bt in
+               let* delta = pattern_match (S (arg.bt, arg.lname)) pat arg.bt in
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_expr_pop loc delta (local, labels) e typ
+               check_expr_pop delta (local, labels) e typ
              ) pats_es
          in
          return (merge_paths loc paths)
       | M_Elet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr loc local e1 in
+         let*? (rt, local) = infer_pexpr local e1 in
          let* delta = match p with 
            | M_Symbol sym -> return (bind sym rt)
-           | M_Pat pat -> pattern_match_rt loc pat rt
+           | M_Pat pat -> pattern_match_rt pat rt
          in
-         check_expr_pop loc delta (local, labels) e2 typ
+         check_expr_pop delta (local, labels) e2 typ
       | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
       | M_Esseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr loc (local, labels) e1 in
-         let* delta = pattern_match_rt loc pat rt in
-         check_expr_pop loc delta (local, labels) e2 typ
+         let*? (rt, local) = infer_expr (local, labels) e1 in
+         let* delta = pattern_match_rt pat rt in
+         check_expr_pop delta (local, labels) e2 typ
       | _ ->
-         let*? (rt, local) = infer_expr loc (local, labels) e in
+         let*? (rt, local) = infer_expr (local, labels) e in
          let* ((bt, lname), delta) = bind_logically rt in
          let local = delta ++ marked ++ local in
          match typ with
@@ -1727,14 +1710,15 @@ module Make (G : sig val global : Global.t end) = struct
             in
             fail loc (Generic err)
     in
-    let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in
+    (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
     return result
 
 
-  and check_expr_pop (loc : loc) delta (local, labels) (e : 'bty expr) 
+  and check_expr_pop delta (local, labels) (e : 'bty expr) 
                      (typ : RT.t fallible) : (L.t fallible, type_error) m =
+    let (M_Expr (loc, _, _)) = e in
     let local = delta ++ marked ++ local in 
-    let* result = check_expr loc (local, labels) e typ in
+    let* result = check_expr (local, labels) e typ in
     match result with
     | False -> 
        return False
@@ -1853,23 +1837,23 @@ module Make (G : sig val global : Global.t end) = struct
     let label_defs = 
       Pmap.mapi (fun lsym def ->
           match def with
-          | M_Return lt -> 
+          | M_Return (loc, lt) -> 
              let lt = LT.subst_vars substs lt in
              let () = debug 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
-             M_Return lt
-          | M_Label (lt, args, body, annots) -> 
+             M_Return (loc, lt)
+          | M_Label (loc, lt, args, body, annots) -> 
              let lt = LT.subst_vars substs lt in
              let () = debug 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
-             M_Label (lt, args, body, annots)
+             M_Label (loc, lt, args, body, annots)
         ) label_defs 
     in
     let* labels = 
       PmapM.foldM (fun sym def acc ->
           match def with
-          | M_Return lt ->
+          | M_Return (loc, lt) ->
              let* () = WT.WLT.welltyped loc pure_delta lt in
              return (SymMap.add sym (lt, Return) acc)
-          | M_Label (lt, _, _, annots) -> 
+          | M_Label (loc, lt, _, _, annots) -> 
              let label_kind = match CF.Annot.get_label_annot annots with
                | Some (LAloop_body loop_id) -> Loop
                | Some (LAloop_continue loop_id) -> Loop
@@ -1881,9 +1865,9 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let check_label lsym def () = 
       match def with
-      | M_Return lt ->
+      | M_Return (loc, lt) ->
          return ()
-      | M_Label (lt, args, body, annots) ->
+      | M_Label (loc, lt, args, body, annots) ->
          debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
          debug 2 (lazy (item "type" (LT.pp lt)));
          let* (rt, delta_label, _, _) = 
@@ -1891,7 +1875,7 @@ module Make (G : sig val global : Global.t end) = struct
          in
          let* () = check_initial_environment_consistent loc `Label delta in
          let* local_or_false = 
-           check_expr_pop loc (delta_label ++ pure_delta) 
+           check_expr_pop (delta_label ++ pure_delta) 
              (L.empty, labels) body False
          in
          return ()
@@ -1899,7 +1883,7 @@ module Make (G : sig val global : Global.t end) = struct
     let* () = PmapM.foldM check_label label_defs () in
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let* local_or_false = 
-      check_expr_pop loc delta (L.empty, labels) body (Normal rt)
+      check_expr_pop delta (L.empty, labels) body (Normal rt)
     in
     return ()
 

@@ -1,7 +1,6 @@
 open Subst
 open List
 open Pp
-module Loc=Locations
 module BT=BaseTypes
 module CF=Cerb_frontend
 

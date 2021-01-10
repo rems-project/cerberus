@@ -16,10 +16,10 @@ let rec ib_expr
           (label : symbol * symbol list * ('ct, 'bt, 'bty) mu_expr)
           (e : ('ct, 'bt, 'bty) mu_expr) 
            : ('ct, 'bt, 'bty) mu_expr=
-   (let (M_Expr( oannots, e_)) = e in
-  let wrap e_=  (M_Expr( oannots, e_)) in
+  let (M_Expr(loc, oannots, e_)) = e in
+  let wrap e_= M_Expr(loc, oannots, e_) in
   let aux = (ib_expr label) in
-  (match e_ with
+  match e_ with
   | M_Epure _ -> wrap e_
   | M_Ememop _ -> wrap e_
   | M_Eaction _ -> wrap e_
@@ -53,36 +53,24 @@ let rec ib_expr
  | M_End es ->
     let es = (map aux es) in
     wrap (M_End es)
- | M_Erun( l, args) -> 
+ | M_Erun(l, args) -> 
     let (label_sym, label_arg_syms, label_body) = label in
-    if not ( (match (label_sym, l) with
-    | (Symbol.Symbol( d1, n1, str_opt1), Symbol.Symbol( d2, n2, str_opt2)) ->
-        if (Digest.compare d1 d2 = 0) && (n1 = n2) then
-          if (Debug_ocaml.get_debug_level () >= 5) && not ((Lem.option_equal (=) str_opt1 str_opt2)) then
-            let () = (Debug_ocaml.print_debug 5 [] (fun () ->
-              "[Symbol.symbolEqual] suspicious equality ==> " ^ (stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) str_opt1
-              ^ (" <-> " ^ stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) str_opt2)))) in
-            true
-          else
-            true
-        else
-          false
-  )) then e
+    if not (Symbol.symbolEquality l label_sym) then e
     else if not ((List.length label_arg_syms) = (List.length args)) then
       failwith "M_Erun supplied wrong number of arguments"
     else
       let () = (Debug_ocaml.print_debug 1 [] (fun () -> ("REPLACING LABEL " ^ (let Symbol.Symbol( d, n, str_opt) = l in
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))))) in
       let arguments = (Lem_list.list_combine label_arg_syms args) in
-      let (M_Expr( annots2, e_)) = 
+      let (M_Expr(_, annots2, e_)) = 
         (List.fold_right (fun (spec_arg, asym) body ->
-            let pe = (M_Pexpr( asym.annot, asym.type_annot, (M_PEsym asym.item))) in
-            M_Expr( [], (M_Elet( (M_Symbol spec_arg), pe, body)))
+            let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.item) in
+            M_Expr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
           ) arguments label_body)
       in
       (* this combines annotations *)
-      M_Expr( ( List.rev_append (List.rev annots2) oannots), e_)
-  ))
+      M_Expr(loc, annots2 @ oannots, e_)
+
     
 
 
@@ -98,8 +86,8 @@ let rec inline_label_labels_and_body to_inline to_keep body =
      let to_keep' = 
        (Pmap.map (fun def -> (match def with
          | M_Return _ -> def
-         | M_Label( lt1, args, lbody2, annot2) -> 
-            M_Label( lt1, args, (ib_expr l lbody2), annot2)
+         | M_Label(loc, lt, args, lbody, annot) -> 
+            M_Label(loc, lt, args, (ib_expr l lbody), annot)
          )) to_keep)
      in
      let body' = (ib_expr l body) in
@@ -117,7 +105,7 @@ let ib_fun_map_decl
           (let aux label def (to_keep, to_inline)=
              ((match def with
             | M_Return _ -> (Pmap.add label def to_keep, to_inline)
-            | M_Label( lt1, args, lbody, annot2) ->
+            | M_Label(_loc, lt1, args, lbody, annot2) ->
                if is_loop_break annot2
                then (to_keep, ((label, map fst args, lbody) :: to_inline))
                else (Pmap.add label def to_keep, to_inline)

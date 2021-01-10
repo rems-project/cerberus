@@ -21,6 +21,7 @@ let do_compact = true
 let pp_ctype ty =
   P.squotes (Pp_core_ctype.pp_ctype ty)
 
+module Loc = Location_ocaml
 
 
 
@@ -143,14 +144,12 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
     P.angles (P.angles (!^ (ansi_format [Magenta] (Undefined.stringFromUndefined_behaviour ub))))
 
 
-  let maybe_print_location : Annot.annot list -> P.document =
+  let maybe_print_location : Loc.t -> P.document =
     if not show_locations then 
-      fun annot -> P.empty
-    else
-      fun annot -> 
-      match show_locations, Annot.get_loc annot with
-      | true, Some loc -> P.parens (Location_ocaml.pp_location ~clever:true loc) ^^ P.space
-      | _ -> P.empty
+      fun loc -> P.empty
+    else 
+      fun loc -> 
+      P.parens (Location_ocaml.pp_location ~clever:true loc) ^^ P.space
 
 
 
@@ -432,7 +431,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
         !^ "Civfromfloat"
 
 
-  let rec pp_pattern (M_Pattern (_, pat)) =
+  let rec pp_pattern (M_Pattern (_, _, pat)) =
     match pat with
     | M_CaseBase (None, bTy) ->
         P.underscore ^^ P.colon ^^^ pp_bt bTy
@@ -454,7 +453,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
   let pp_pexpr budget pe =
 
 
-    let rec pp budget prec (M_Pexpr (annot, _, pe)) =
+    let rec pp budget prec (M_Pexpr (loc, annot, _, pe)) =
 
       match budget with
       | Some 0 -> abbreviated
@@ -467,7 +466,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
 
       let prec' = precedence pe in
       let pp z = P.group (pp budget' prec' z) in
-      (maybe_print_location annot) ^^
+      (maybe_print_location loc) ^^
       (if compare_precedence prec' prec then fun z -> z else P.parens)
       begin
         match pe with
@@ -642,7 +641,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
 
   let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
 
-    let rec pp budget is_semi prec (M_Expr (annot, e) : (ct,bt,'ty) mu_expr) =
+    let rec pp budget is_semi prec (M_Expr (loc, annot, e) : (ct,bt,'ty) mu_expr) =
 
       match budget with
       | Some 0 -> abbreviated
@@ -687,7 +686,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
           ) doc annot
       end
       begin
-        (maybe_print_location annot) ^^
+        (maybe_print_location loc) ^^
         begin
           (* Here we check whether parentheses are needed *)
           (* if compare_precedence prec' prec then
@@ -881,13 +880,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
               (Pmap.fold (fun sym def acc ->
                    acc ^^
                    match def with
-                   | M_Return lt -> 
+                   | M_Return (_, lt) -> 
                       P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ 
                         begin match pp_lt with
                         | Some pp_lt -> P.colon ^^^ pp_lt lt
                         | None -> P.empty
                         end
-                   | M_Label (lt, args, lbody, annots) ->
+                   | M_Label (_, lt, args, lbody, annots) ->
                         begin
                           begin match pp_lt with
                           | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
