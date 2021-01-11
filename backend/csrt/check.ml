@@ -1048,7 +1048,7 @@ module Make (G : sig val global : Global.t end) = struct
          return (Normal (rt_of_vt vt, local))
       | M_PEconstrained _ ->
          Debug_ocaml.error "todo: PEconstrained"
-      | M_PEundef (loc, undef) ->
+      | M_PEundef (_loc, undef) ->
          let (reachable, model) = Model.is_reachable_and_model local in
          if not reachable 
          then (Pp.warn !^"unexpected unreachable Undefined"; return False)
@@ -1891,15 +1891,12 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
-     - fix core a-normalisation location information for Elet, Ewseq, and Esseq
      - check that no "cn::__" other than the right ones are used
      - check resource definition well-formedness
      - check globals with expressions
      - fix problems with order of multiple "requires" clauses
      - give types for standard library functions
-     - better location information for refined_c annotations
      - fix Ecase "LC (Bool true)"
-     - constrain return type shape, maybe also function type shape
    *)
 
 
