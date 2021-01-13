@@ -39,6 +39,7 @@ module Make (G : sig val global : Global.t end) = struct
   module S = Solver.Make(G)
   module Model = Model.Make(G)
   module WT = WellTyped.Make(G)
+  module Explain = Explain.Make(G)
   open L
 
 
@@ -233,7 +234,6 @@ module Make (G : sig val global : Global.t end) = struct
   type args = arg list
 
   let arg_of_sym (loc : loc) (local : L.t) (sym : Sym.t) : (arg, type_error) m = 
-    let* () = check_computational_bound loc sym local in
     let (bt,lname) = get_a sym local in
     return {lname; bt; loc}
 
@@ -333,8 +333,19 @@ module Make (G : sig val global : Global.t end) = struct
           (arguments : arg list) (ftyp : FT.t) : (I.t * L.t) m =
 
       let open NFT in
-      let ftyp = NFT.normalise ftyp in
 
+      let local_before = local in
+
+      let preferred_names = match situation with
+        | FunctionCall ->
+           List.mapi (fun i arg ->
+               (arg.lname, Explain.Path.Addr ("ARG" ^ string_of_int i))
+             ) arguments
+        | _ -> []
+      in
+
+
+      let ftyp = NFT.normalise ftyp in
       let unis = SymMap.empty in
 
       debug 6 (lazy (!^"function call"));
@@ -412,9 +423,9 @@ module Make (G : sig val global : Global.t end) = struct
              debug 6 (lazy (item "lc" (LC.pp c)));
              debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
              let (holds, _) = S.constraint_holds local c in
-             if holds 
-             then check_constraints ftyp 
-             else fail loc (Unsat_constraint c)
+             if holds then check_constraints ftyp else 
+               let explanation = Explain.state preferred_names local_before in
+               fail loc (Unsat_constraint (c, explanation))
           | I rt -> 
              return rt
         in
