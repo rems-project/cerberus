@@ -54,7 +54,7 @@ type type_error =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it : 'bt IndexTerms.term -> type_error
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Unsat_constraint of LogicalConstraints.t * Pp.document
+  | Unsat_constraint of LogicalConstraints.t * Pp.document option
   | Unconstrained_logical_variable of Sym.t
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
@@ -223,8 +223,9 @@ let pp_type_error = function
      (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
-  | Unsat_constraint (c,extra) ->
-     (!^"Unsatisfied constraint" ^^^ LogicalConstraints.pp c, [extra])
+  | Unsat_constraint (c,o_extra) ->
+     let extra = Option.to_list o_extra in
+     (!^"Unsatisfied constraint" ^^^ LogicalConstraints.pp c, extra)
   | Unconstrained_logical_variable name ->
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
   | Kind_mismatch {has; expect} ->

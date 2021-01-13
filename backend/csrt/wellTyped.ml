@@ -420,7 +420,7 @@ module Make (G : sig val global : Global.t end) = struct
       match rt with 
       | Computational ((name,bt), lrt) ->
          let name' = Sym.fresh_same name in
-         let lname = Sym.fresh_relative name' (fun s -> s ^ "_l") in
+         let lname = Sym.fresh () in
          let local = L.add_l lname (LS.Base bt) local in
          let local = L.add_a name' (bt, lname) local in
          let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
@@ -453,7 +453,7 @@ module Make (G : sig val global : Global.t end) = struct
       match at with
       | T.Computational ((name,bt), at) ->
          let name' = Sym.fresh_same name in
-         let lname = Sym.fresh_relative name' (fun s -> s ^ "_l") in
+         let lname = Sym.fresh () in
          let local = L.add_l lname (LS.Base bt) local in
          let local = L.add_a name' (bt, lname) local in
          let at = T.subst_var Subst.{before = name; after = lname} at in

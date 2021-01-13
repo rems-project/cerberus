@@ -351,14 +351,14 @@ module Make (G : sig val global : Global.t end) = struct
     let lcs = match RE.fp r with
       | None -> []
       | Some ((addr,_) as fp) ->
-         IT.Not (IT.Null addr) ::
+         LC.LC (IT.Not (IT.Null addr)) ::
          List.filter_map (fun r' -> 
              Option.bind (RE.fp r') (fun fp' -> 
-                 Some (IT.Disjoint (fp, fp'))
+                 Some (LC.LC (IT.Disjoint (fp, fp')))
                )
            ) (all_resources local) 
     in
-    add_uc (LC.LC (And lcs))
+    (List.fold_right add_uc lcs)
       (add (rname, Resource r) local)
 
   let add_ur re local = 

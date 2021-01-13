@@ -111,6 +111,9 @@ module Make (G : sig val global : Global.t end) = struct
     let compare veclass1 veclass2 = 
       Sym.compare veclass1.repr veclass2.repr
 
+    let equal veclass1 veclass2 = 
+      compare veclass1 veclass2 = 0
+
   end
 
   module VEClassSet = Set.Make(VEClass)
@@ -120,7 +123,14 @@ module Make (G : sig val global : Global.t end) = struct
     let compare a b = Lem_basic_classes.pairCompare VEClass.compare VEClass.compare a b
   end
   
-  module VEClassRel = Set.Make(VEClassPair)
+  module VEClassRel = struct
+    include Pset
+    type t = VEClassPair.t Pset.set
+    let empty = Pset.empty VEClassPair.compare
+    let transitiveClosure = Pset.tc VEClassPair.compare
+  end 
+
+
   module VEClassRelMap = Map.Make(VEClassPair)
 
 
@@ -139,7 +149,7 @@ module Make (G : sig val global : Global.t end) = struct
     | Pointee
 
   let veclasses_partial_order local veclasses =
-    List.fold_right (fun resource (domain, graph, rels) ->
+    List.fold_right (fun resource (graph, rels) ->
         match resource with
         | RE.Points p ->
            let found1 = 
@@ -153,39 +163,39 @@ module Make (G : sig val global : Global.t end) = struct
                ) veclasses
            in
            begin match found1, found2 with
-           | Some veclass1, Some veclass2 ->
-              (VEClassSet.add veclass1 (VEClassSet.add veclass2 domain),
-                VEClassRel.add (veclass1, veclass2) graph,
+           | Some veclass1, Some veclass2 
+                when not (VEClassRel.mem (veclass2, veclass1) graph) ->
+              (VEClassRel.add (veclass1, veclass2) graph,
                VEClassRelMap.add (veclass1, veclass2) Pointee rels)
            | _ -> 
-              (domain, graph, rels)
+              (graph, rels)
            end
         | _ -> 
-           (domain, graph, rels)
+           (graph, rels)
       ) (L.all_resources local) 
-      (VEClassSet.empty, VEClassRel.empty, VEClassRelMap.empty)
+      (VEClassRel.empty, VEClassRelMap.empty)
 
 
   let veclasses_total_order local veclasses = 
-    let (domain, graph, rels) = veclasses_partial_order local veclasses in
-    let unordered = 
-      List.filter (fun veclass -> not (VEClassSet.mem veclass domain)) veclasses 
+    let (graph, rels) = veclasses_partial_order local veclasses in
+    let graph = 
+      List.fold_left (fun graph veclass1 ->
+          List.fold_left (fun graph veclass2 ->
+              if 
+                VEClass.equal veclass1 veclass2 ||
+                  VEClassRel.mem (veclass1, veclass2) graph ||
+                    VEClassRel.mem (veclass2, veclass1) graph
+              then
+                graph
+              else
+                VEClassRel.transitiveClosure (VEClassRel.add (veclass1, veclass2) graph)
+            ) graph veclasses
+        ) graph veclasses
     in
-    let rec ordered_prefix domain =
-      let minimal = 
-        VEClassSet.find_first_opt (fun veclass ->
-            not (VEClassRel.exists (fun (before, veclass') -> 
-                     VEClassSet.mem before domain && 
-                     VEClass.compare veclass veclass' = 0
-                   ) graph)
-          ) domain
-      in
-      match minimal with
-      | Some veclass -> 
-         veclass :: ordered_prefix (VEClassSet.remove veclass domain)
-      | None -> []
+    let graph_compare veclass1 veclass2 =
+      if VEClassRel.mem (veclass1,veclass2) graph then -1 else 1
     in
-    (ordered_prefix domain @ unordered, rels)
+    (List.sort graph_compare veclasses, rels)
 
   let preferred_name preferred_names veclass =
     List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
@@ -193,9 +203,9 @@ module Make (G : sig val global : Global.t end) = struct
 
   let related_name (named_veclasses, rels) veclass =
     let rec aux = function
-      | (named_veclass, name) :: named_veclasses ->
+      | (named_veclass, name, good) :: named_veclasses ->
          begin match VEClassRelMap.find_opt (named_veclass, veclass) rels with
-         | Some Pointee -> Some (pointee name)
+         | Some Pointee -> Some (pointee name, good)
          | None -> aux named_veclasses
          end
       | [] -> None         
@@ -204,19 +214,22 @@ module Make (G : sig val global : Global.t end) = struct
 
   let pick_name (named_veclasses, rels) preferred_names veclass =
     match preferred_name preferred_names veclass with
-    | Some (_, name) -> name
+    | Some (_, name) -> (name, true)
     | None -> 
        match related_name (named_veclasses, rels) veclass with
        | Some name -> name
        | None -> 
           match good_name veclass with
           | Some name -> 
-             Addr name
+             (Addr name, true)
           | None -> 
-             Var (make_name veclass)
+             (Var (make_name veclass), false)
     
     
-  type explanation = (Sym.t, Sym.t) Subst.t list
+  type explanation = {
+      substitutions : (Sym.t, Sym.t) Subst.t list;
+      introduce : (Path.t * LS.t) list
+    }
 
 
   let explanation preferred_names local =
@@ -235,32 +248,55 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let (veclasses_sorted, rels) = 
       veclasses_total_order local veclasses in
-    let named_veclasses = 
-      List.fold_left (fun named_veclasses veclass ->
-          let name = pick_name (named_veclasses, rels) preferred_names veclass in
-          named_veclasses @ [(veclass, name)]
-        ) [] veclasses_sorted
+    let named_veclasses, introduce = 
+      List.fold_left (fun (named_veclasses, need_explaining) veclass ->
+          let (name,good) = pick_name (named_veclasses, rels) preferred_names veclass in
+          let named_veclasses = named_veclasses @ [(veclass, name, good)] in
+          let need_explaining = 
+            if good 
+            then need_explaining 
+            else need_explaining @ [(name, veclass.sort)]
+          in
+          (named_veclasses, need_explaining)
+        ) ([],[]) veclasses_sorted
     in
-    List.fold_right (fun (veclass,name) substs ->
-        let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
-        SymSet.fold (fun sym substs ->
-            let named_symbol = Sym.fresh_named (Pp.plain (Path.pp name)) in
-            Subst.{ before = sym; after = named_symbol } :: substs
-          ) to_substitute substs 
-      ) named_veclasses []
+    let substitutions = 
+      List.fold_right (fun (veclass,name,good) substs ->
+          let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
+          SymSet.fold (fun sym substs ->
+              let named_symbol = Sym.fresh_named (Pp.plain (Path.pp name)) in
+              Subst.{ before = sym; after = named_symbol } :: substs
+            ) to_substitute substs 
+        ) named_veclasses []
+    in
+    {substitutions; introduce}
 
 
   let state preferred_names local =    
-    let explanation = explanation preferred_names local in
-    let resources = L.all_resources local in
-    let constraints = L.all_constraints local in
-    let resources = List.map (RE.subst_vars explanation) resources in
-    let constraints = List.map (LC.subst_vars explanation) constraints in
+    let {substitutions; introduce} = explanation preferred_names local in
+    let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
+    let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
     let open Pp in
     Pp.item "resources" (Pp.list RE.pp resources) ^/^
     Pp.item "constaints" (Pp.list LC.pp constraints)
 
-
+  let logical_constraint preferred_names local lc = 
+    let {substitutions; introduce} = explanation preferred_names local in
+    let lc = LC.subst_vars substitutions lc in
+    if introduce = [] then
+      (lc, None)
+    else
+      let resources = List.map (RE.subst_vars substitutions) 
+                        (L.all_resources local) in
+      let constraints = List.map (LC.subst_vars substitutions) 
+                          (L.all_constraints local) in
+      let open Pp in
+      let state_pp = 
+        Pp.item "resources" (Pp.list RE.pp resources) ^/^
+          Pp.item "constaints" (Pp.list LC.pp constraints)
+      in
+    (lc, Some state_pp)
+    
 
 
 

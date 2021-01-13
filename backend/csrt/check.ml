@@ -329,19 +329,23 @@ module Make (G : sig val global : Global.t end) = struct
     open Prompt.Operators
 
 
-    let spine (loc : loc) situation local
-          (arguments : arg list) (ftyp : FT.t) : (I.t * L.t) m =
+    let spine (loc : loc) situation 
+          local
+          (earguments : (arg * Explain.Path.t option) list) 
+          (ftyp : FT.t) : (I.t * L.t) m =
 
       let open NFT in
 
       let local_before = local in
 
-      let preferred_names = match situation with
-        | FunctionCall ->
-           List.mapi (fun i arg ->
-               (arg.lname, Explain.Path.Addr ("ARG" ^ string_of_int i))
-             ) arguments
-        | _ -> []
+      let arguments = List.map fst earguments in
+
+      let preferred_names = 
+        List.filter_map (fun (arg,o_path) -> 
+            match o_path with
+            | Some path -> Some (arg.lname, path)
+            | None -> None
+          ) earguments
       in
 
 
@@ -424,8 +428,11 @@ module Make (G : sig val global : Global.t end) = struct
              debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
              let (holds, _) = S.constraint_holds local c in
              if holds then check_constraints ftyp else 
-               let explanation = Explain.state preferred_names local_before in
-               fail loc (Unsat_constraint (c, explanation))
+               let (lc,state_pp) = 
+                 Explain.logical_constraint
+                   preferred_names local_before c 
+               in
+               fail loc (Unsat_constraint (lc, state_pp))
           | I rt -> 
              return rt
         in
@@ -616,12 +623,18 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let calltype_ft loc local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
-    let prompt = Spine_FT.spine loc FunctionCall local args ftyp in
+    let eargs = 
+      List.mapi (fun i arg ->
+          (arg, Some (Explain.Path.Addr ("ARG" ^ string_of_int i)))
+        ) args
+    in
+    let prompt = Spine_FT.spine loc FunctionCall local eargs ftyp in
     let* (rt, local) = handle_prompt prompt in
     return (rt, local)
 
   let calltype_lt loc local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
-    let prompt = Spine_LT.spine loc (LabelCall label_kind) local args ltyp in
+    let eargs = List.mapi (fun i arg -> (arg, None)) args in
+    let prompt = Spine_LT.spine loc (LabelCall label_kind) local eargs ltyp in
     let* (rt, local) = handle_prompt prompt in
     return (rt, local)
 
@@ -629,8 +642,9 @@ module Make (G : sig val global : Global.t end) = struct
      inference as the spine judgment. So implement the subtyping
      judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
   let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
+    let earg = (arg, Some (Explain.Path.Addr ("return"))) in
     let lt = LT.of_rt rtyp (LT.I False.False) in
-    let prompt = Spine_LT.spine loc Subtyping local [arg] lt in
+    let prompt = Spine_LT.spine loc Subtyping local [earg] lt in
     let* (False.False, local) = handle_prompt prompt in
     return local
 
@@ -678,23 +692,23 @@ module Make (G : sig val global : Global.t end) = struct
 
   (*** pure value inference *****************************************************)
 
-  (* these functions return types `{x : bt | phi(x)}` *)
-  type vt = Sym.t * BT.t * LC.t 
+  (* these functions return types `{x : bt | phi(x), ..}` *)
+  type vt = Sym.t * BT.t * LC.t list
 
-  let rt_of_vt (ret,bt,constr) = 
-    RT.Computational ((ret, bt), LRT.Constraint (constr, I))
+  let rt_of_vt (ret,bt,lcs) = 
+    RT.Computational ((ret, bt), LRT.mConstraints lcs LRT.I)
 
 
   let infer_tuple (loc : loc) local (args : args) : (vt, type_error) m = 
     let ret = Sym.fresh () in
     let bts = List.map (fun arg -> arg.bt) args in
     let bt = Tuple bts in
-    let constrs = 
+    let lcs = 
       List.mapi (fun i arg -> 
-          IT.EQ (NthTuple (bt, i, S (bt, ret)), S (arg.bt, arg.lname))
+          LC.LC (IT.EQ (NthTuple (bt, i, S (bt, ret)), S (arg.bt, arg.lname)))
         ) args 
     in
-    return (ret, bt, LC (And constrs))
+    return (ret, bt, lcs)
 
   let infer_constructor (loc : loc) local (constructor : ctor) 
                         (args : args) : (vt, type_error) m = 
@@ -711,19 +725,19 @@ module Make (G : sig val global : Global.t end) = struct
       -> 
        Debug_ocaml.error "todo: Civ..."
     | M_Cspecified, [arg] ->
-       return (ret, arg.bt, LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname))))
+       return (ret, arg.bt, [LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname)))])
     | M_Cspecified, _ ->
        fail loc (Number_arguments {has = List.length args; expect = 1})
     | M_Cnil item_bt, [] -> 
        let bt = List item_bt in
-       return (ret, bt, LC (EQ (S (bt, ret), Nil item_bt)))
+       return (ret, bt, [LC (EQ (S (bt, ret), Nil item_bt))])
     | M_Cnil item_bt, _ -> 
        fail loc (Number_arguments {has = List.length args; expect=0})
     | M_Ccons, [arg1; arg2] -> 
        let bt = List arg1.bt in
        let* () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
        let constr = LC (EQ (S (bt, ret), Cons (S (arg1.bt, arg1.lname), S (arg2.bt, arg2.lname)))) in
-       return (ret, arg2.bt, constr)
+       return (ret, arg2.bt, [constr])
     | M_Ccons, _ ->
        fail loc (Number_arguments {has = List.length args; expect = 2})
     | M_Cfvfromint, _ -> 
@@ -744,14 +758,14 @@ module Make (G : sig val global : Global.t end) = struct
         let* ct = ct_of_ct loc ct in
         let it = S (BT.Loc, ret) in
         let lcs = 
-          [IT.Null it;
-           IT.Representable (ST_Ctype ct, it);
+          [LC.LC (IT.Null it);
+           LC.LC (IT.Representable (ST_Ctype ct, it));
            (* check: aligned? *)
-           IT.Aligned (ST.of_ctype ct, it);]
+           LC.LC (IT.Aligned (ST.of_ctype ct, it))]
         in
-        return (ret, Loc, LC (And lcs)) )
-      ( fun sym -> return (ret, FunctionPointer sym, LC (Bool true)) )
-      ( fun _prov loc -> return (ret, Loc, LC (EQ (S (BT.Loc, ret), Pointer loc))) )
+        return (ret, Loc, lcs) )
+      ( fun sym -> return (ret, FunctionPointer sym, []) )
+      ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
       ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
   let rec infer_mem_value (loc : loc) local (mem : mem_value) : (vt, type_error) m =
@@ -763,7 +777,7 @@ module Make (G : sig val global : Global.t end) = struct
       ( fun it iv -> 
         let ret = Sym.fresh () in
         let v = Memory.integer_value_to_num iv in
-        return (ret, Integer, LC (EQ (S (Integer, ret), Num v))) )
+        return (ret, Integer, [LC (EQ (S (Integer, ret), Num v))]) )
       ( fun ft fv -> fail loc (Unsupported !^"floats") )
       ( fun _ ptrval -> infer_ptrval loc local ptrval  )
       ( fun mem_values -> infer_array loc local mem_values )
@@ -783,11 +797,11 @@ module Make (G : sig val global : Global.t end) = struct
       | ((member, mv) :: fields), ((smember, sct) :: spec) 
            when member = smember ->
          let* constrs = check fields spec in
-         let* (s, bt, LC lc) = infer_mem_value loc local mv in
+         let* (s, bt, lcs) = infer_mem_value loc local mv in
          let* () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
          let this = IT.StructMember (tag, S (Struct tag, ret), member) in
-         let constr = IT.subst_it {before = s; after = this} lc in
-         return (constrs @ [constr])
+         let constrs2 = List.map (LC.subst_it {before = s; after = this}) lcs in
+         return (constrs @ constrs2)
       | [], [] -> 
          return []
       | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
@@ -797,8 +811,8 @@ module Make (G : sig val global : Global.t end) = struct
       | ((member,_) :: _), [] ->
          fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
     in
-    let* constraints = check member_values (Global.member_types spec.layout) in
-    return (ret, Struct tag, LC (And constraints))
+    let* lcs = check member_values (Global.member_types spec.layout) in
+    return (ret, Struct tag, lcs)
 
   and infer_union (loc : loc) local (tag : tag) (id : Id.t) 
                   (mv : mem_value) : (vt, type_error) m =
@@ -813,7 +827,7 @@ module Make (G : sig val global : Global.t end) = struct
     | M_OVinteger iv ->
        let ret = Sym.fresh () in
        let i = Memory.integer_value_to_num iv in
-       return (ret, Integer, LC (EQ (S (Integer, ret), Num i)))
+       return (ret, Integer, [LC (EQ (S (Integer, ret), Num i))])
     | M_OVpointer p -> 
        infer_ptrval loc local p
     | M_OVarray items ->
@@ -833,13 +847,13 @@ module Make (G : sig val global : Global.t end) = struct
       ->
        infer_object_value loc local ov
     | M_Vunit ->
-       return (Sym.fresh (), Unit, LC (Bool true))
+       return (Sym.fresh (), Unit, [])
     | M_Vtrue ->
        let ret = Sym.fresh () in
-       return (ret, Bool, LC (S (Bool, ret)))
+       return (ret, Bool, [LC (S (Bool, ret))])
     | M_Vfalse -> 
        let ret = Sym.fresh () in
-       return (ret, Bool, LC (Not (S (Bool, ret))))
+       return (ret, Bool, [LC (Not (S (Bool, ret)))])
     | M_Vlist (ibt, asyms) ->
        let ret = Sym.fresh () in
        let* args = args_of_asyms local asyms in
@@ -847,7 +861,7 @@ module Make (G : sig val global : Global.t end) = struct
          ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
        in
        let its = List.map (fun arg -> IT.S (arg.bt, arg.lname)) args in
-       return (ret, List ibt, LC (EQ (S (List ibt, ret), List (its, ibt))))
+       return (ret, List ibt, [LC (EQ (S (List ibt, ret), List (its, ibt)))])
     | M_Vtuple asyms ->
        let* args = args_of_asyms local asyms in
        infer_tuple loc local args
@@ -1756,8 +1770,7 @@ module Make (G : sig val global : Global.t end) = struct
         match args, ftyp with
         | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
              when BT.equal abt sbt ->
-           (* let new_lname = Sym.fresh_relative aname (fun s -> s^"^") in *)
-           let new_lname = Sym.fresh_relative aname (fun s -> s^"_l") in
+           let new_lname = Sym.fresh () in
            let subst = Subst.{before=lname;after=new_lname} in
            let ftyp' = T.subst_var subst ftyp in
            let local = add_l new_lname (Base abt) local in

@@ -365,9 +365,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux true o1 ^^^ rangle ^^ equals ^^^ aux true o2)
     (* booleans *)
     | And o -> 
-       Pp.group (mparens (!^"and" ^^^ brackets (flow_map (break 1) (aux false) o)))
+       Pp.group (mparens (!^"and" ^^^ brackets (flow_map (space ^^ !^"&&" ^^ space) (aux false) o)))
     | Or o -> 
-       Pp.group (mparens (!^"or" ^^^ brackets (flow_map (break 1) (aux false) o)))
+       Pp.group (mparens (!^"or" ^^^ brackets (flow_map (space ^^ !^"||" ^^ space) (aux false) o)))
     | Impl (o1,o2) -> 
        mparens (aux true o1 ^^^ equals ^^ rangle ^^^ aux true o2)
     | Not (o1) -> 
