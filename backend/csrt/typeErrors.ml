@@ -37,7 +37,7 @@ type type_error =
   | Name_bound_twice of sym_or_string
   | Missing_function of Sym.t
   | Missing_struct of BT.tag
-  | Missing_predicate of String.t
+  | Missing_predicate of string
   | Missing_member of BT.tag * BT.member
 
   | Missing_ownership of BT.member option * (Loc.t list) option * situation

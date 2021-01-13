@@ -1266,7 +1266,7 @@ module Make (G : sig val global : Global.t end) = struct
               | Points p -> fail loc (Generic !^"resource of wrong size for load")
               | Block {block_type = Uninit; _} -> fail loc (Uninitialised is_field)
               | Block {block_type = Padding; _} -> fail loc (Generic !^"cannot read padding bytes")
-              | Block {block_type = Nothing; _} -> fail loc (Generic !^"cannot empty bytes")
+              | Block {block_type = Nothing; _} -> fail loc (Generic !^"cannot read empty bytes")
               | Predicate pred -> fail loc (Cannot_unpack (pred, Access Load))
               end
            | None -> 
