@@ -32,10 +32,10 @@ let lift_error (f : 'e1 -> 'e2) (m : ('a,'e1) m) : ('a,'e2) m =
      Error (loc, stacktrace, f e1)
 
 
-let msum (m1 : ('a,'e) t) (m2 : ('a,'e) t) : ('a,'e) t = 
+let msum (m1 : ('a,'e) t) (m2 : (('a,'e) t) Lazy.t) : ('a,'e) t = 
   match m1 with
   | Ok a -> Ok a
-  | Error _ -> m2
+  | Error _ -> Lazy.force m2
 
 
 

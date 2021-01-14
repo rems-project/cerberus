@@ -286,7 +286,7 @@ module Make (G : sig val global : Global.t end) = struct
     and 'r prompt = 
       | R_Resource : resource_request -> (Sym.t Uni.unis * L.t) prompt
       | R_Packing : packing_request -> (LRT.t * L.t) prompt
-      | R_Try : 'r m List1.t -> 'r prompt
+      | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
       | R_Error : err -> 'r prompt
 
 
@@ -594,13 +594,15 @@ module Make (G : sig val global : Global.t end) = struct
             | None -> Debug_ocaml.error "missing predicate definition"
           in
           let else_prompt = 
-            let (resource, state) = 
-              Explain.resource preferred_names original_local request in
-            fail loc (Missing_resource {resource; used = None; state; situation})
+            lazy (
+                let (resource, state) = 
+                  Explain.resource preferred_names original_local request in
+                fail loc (Missing_resource {resource; used = None; state; situation})
+              )
           in
           let attempt_prompts = 
             List.map (fun lft ->
-                prompt (R_Packing {loc; situation; local; lft})
+                lazy (prompt (R_Packing {loc; situation; local; lft}))
               ) (predicate_pack_functions p def)
           in
           let choices = attempt_prompts @ [else_prompt] in
@@ -635,10 +637,10 @@ module Make (G : sig val global : Global.t end) = struct
        | R_Try choices ->
           let rec first_success list1 =
              let (hd, tl) = List1.dest list1 in
-             let mhd = handle_prompt hd in
+             let hd_run = handle_prompt (Lazy.force hd) in
              match tl with
-             | [] -> mhd
-             | hd' :: tl' -> msum mhd (first_success (List1.make (hd', tl')))
+             | [] -> hd_run
+             | hd' :: tl' -> msum hd_run (lazy (first_success (List1.make (hd', tl'))))
           in
           let* reply = first_success choices in
           handle_prompt (c reply)
