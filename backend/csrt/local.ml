@@ -336,30 +336,77 @@ module Make (G : sig val global : Global.t end) = struct
                   ~expect:KResource ~has:(VB.kind b)
 
 
+  let normalise_resource re = 
+    let open Resources in
+    let open IndexTerms in
+    let open LogicalConstraints in
+    match re with
+    | RE.Block b -> 
+       let pointer_s = Sym.fresh () in
+       let size_s = Sym.fresh () in
+       let r = 
+         RE.Block {b with pointer = S (Loc, pointer_s);
+                          size = S (Integer, size_s) }
+       in
+       let lvars = [(pointer_s, LS.Base Loc); (size_s, LS.Base Integer)] in
+       let lcs = [LC (EQ (S (Loc, pointer_s), b.pointer)); 
+                  LC (EQ (S (Integer, size_s), b.size))] in
+       (lvars, lcs, r)
+    | RE.Points p -> 
+       let pointer_s = Sym.fresh () in
+       let r = RE.Points {p with pointer = S (BT.Loc, pointer_s)} in
+       let lvars = [(pointer_s, LS.Base BT.Loc)] in
+       let lcs = [LC (EQ (S (BT.Loc, pointer_s), p.pointer))] in
+       (lvars, lcs, r)
+    | Predicate p -> 
+       let def = match Global.get_predicate_def G.global p.name with
+         | Some def -> def
+         | None -> Debug_ocaml.error "missing predicate definition"
+       in
+       let typed_iargs = List.combine p.iargs (List.map snd def.iargs) in
+       let lvars, lcs, iargs = 
+         List.fold_left (fun (lvars, lcs, iargs) (it, LogicalSorts.Base bt) ->
+             let s = Sym.fresh () in
+             (lvars @ [(s, LS.Base bt)], lcs @ [LC (EQ (IT.S (bt, s), it))], iargs @ [IT.S (bt, s)])
+           ) ([], [], []) typed_iargs
+       in
+       (lvars, lcs, Predicate {p with iargs})
+
+
   let add_a aname (bt,lname) = 
     add (aname, Computational (lname,bt))
 
   let add_l lname ls local = 
     add (lname, Logical ls) local
 
+  let add_ls ls local = 
+    List.fold_left (fun local (lname,ls) ->
+        add_l lname ls local
+      ) local ls
+
   let add_uc (LC.LC lc) local = 
     let sc = SolverConstraints.of_index_term G.global lc in
     add (Sym.fresh (), Constraint (LC lc, sc)) local
 
+  let add_ucs lcs local = 
+    List.fold_left (fun local lc ->
+        add_uc lc local
+      ) local lcs
+
 
   let add_r rname r local = 
-    let lcs = match RE.fp r with
+    let (lvars, lcs1, r) = normalise_resource r in
+    let lcs2 = match RE.fp r with
       | None -> []
       | Some ((addr,_) as fp) ->
-         LC.LC (IT.Not (IT.Null addr)) ::
-         List.filter_map (fun r' -> 
-             Option.bind (RE.fp r') (fun fp' -> 
-                 Some (LC.LC (IT.Disjoint (fp, fp')))
-               )
-           ) (all_resources local) 
+         let fps = List.filter_map RE.fp (all_resources local) in
+         [LC.LC (IT.Not (IT.Null addr));
+          LC.LC (IT.disjoint_from fp fps)]
     in
-    (List.fold_right add_uc lcs)
-      (add (rname, Resource r) local)
+    let local = add_ls lvars local in
+    let local = add (rname, Resource r) local in
+    let local = add_ucs (lcs1 @ lcs2) local in
+    local
 
   let add_ur re local = 
     add_r (Sym.fresh ()) re local

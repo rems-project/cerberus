@@ -111,7 +111,7 @@ module Make (G : sig val global : Global.t end) = struct
     let points = 
       List.filter_map (fun (name, (re, where)) ->
           match RE.pointer re with
-          | Some pointer when equal local it pointer -> Some (where) 
+          | Some pointer when equal local it pointer -> Some where
           | _ -> None
         ) (L.all_named_used_resources local)
     in

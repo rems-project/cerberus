@@ -244,32 +244,7 @@ module Make (G : sig val global : Global.t end) = struct
              (Var (make_name veclass), false)
 
 
-(* let normalise_resource = function
- *   | RE.Block b -> 
- *      let pointer_s = Sym.fresh () in
- *      let size_s = Sym.fresh () in
- *      let r = 
- *        RE.Block {b with pointer = S (BaseTypes.Loc, pointer_s);
- *                         size = S (BaseTypes.Integer, size_s) }
- *      in
- *      ([(pointer_s, b.pointer); (size_s, b.size)], r)
- *   | Points p -> 
- *      let pointer_s = Sym.fresh () in
- *      let r = RE.Points {p with pointer = S (BaseTypes.Loc, pointer_s)} in
- *      ([(pointer_s, p.pointer)], r)
- *   | Predicate p -> 
- *      let def = match Global.get_predicate_def G.global p.name with
- *        | Some def -> def
- *        | None -> Debug_ocaml.error "missing predicate definition"
- *      in
- *      let typed_iargs = List.combine p.iargs (List.map snd def.iargs) in
- *      let vars, iargs = 
- *        List.fold_left (fun (vars, iargs) (it, LS.Base bt) ->
- *            let s = Sym.fresh () in
- *            (vars @ [(s, it)], iargs @ [IT.S (bt, s)])
- *          ) ([], []) typed_iargs
- *      in
- *      (vars, Predicate {p with iargs}) *)
+
 
 
 

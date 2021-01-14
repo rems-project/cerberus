@@ -661,7 +661,8 @@ let int x = Num (Z.of_int x)
 
 
 
-
+let disjoint_from fp fps =
+  And (List.map (fun fp' -> Disjoint (fp, fp')) fps)
 
 
 
