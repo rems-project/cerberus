@@ -148,6 +148,23 @@ module Make (G : sig val global : Global.t end) = struct
   type variable_relation = 
     | Pointee
 
+  
+
+
+    
+    
+  type veclass_explanation = {
+      name : Path.t;
+      good : bool;
+      veclass : veclass;
+    }
+  
+  type explanation = {
+      substitutions : (Sym.t, Sym.t) Subst.t list;
+      veclasses : veclass_explanation list;
+    }
+
+    
   let veclasses_partial_order local veclasses =
     List.fold_right (fun resource (graph, rels) ->
         match resource with
@@ -201,9 +218,11 @@ module Make (G : sig val global : Global.t end) = struct
     List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
       preferred_names
 
+
+
   let related_name (named_veclasses, rels) veclass =
     let rec aux = function
-      | (named_veclass, name, good) :: named_veclasses ->
+      | {veclass = named_veclass; name; good} :: named_veclasses ->
          begin match VEClassRelMap.find_opt (named_veclass, veclass) rels with
          | Some Pointee -> Some (pointee name, good)
          | None -> aux named_veclasses
@@ -224,56 +243,53 @@ module Make (G : sig val global : Global.t end) = struct
              (Addr name, true)
           | None -> 
              (Var (make_name veclass), false)
-    
-    
-  type explanation = {
-      substitutions : (Sym.t, Sym.t) Subst.t list;
-      introduce : (Path.t * LS.t) list
-    }
 
 
   let explanation preferred_names local =
     let c = L.all_computational local in
     let l = L.all_logical local in
     let veclasses = 
-      let veclasses = 
+      let with_logical_variables = 
         List.fold_left (fun veclasses (l, ls) ->
             let (LS.Base bt) = ls in
             classify local veclasses (None, l, bt)
           ) [] l
       in
-      List.fold_left (fun veclasses (c, (l, bt)) ->
-          classify local veclasses (Some c, l, bt)
-        ) veclasses c
-    in
-    let (veclasses_sorted, rels) = 
-      veclasses_total_order local veclasses in
-    let named_veclasses, introduce = 
-      List.fold_left (fun (named_veclasses, need_explaining) veclass ->
-          let (name,good) = pick_name (named_veclasses, rels) preferred_names veclass in
-          let named_veclasses = named_veclasses @ [(veclass, name, good)] in
-          let need_explaining = 
-            if good 
-            then need_explaining 
-            else need_explaining @ [(name, veclass.sort)]
-          in
-          (named_veclasses, need_explaining)
-        ) ([],[]) veclasses_sorted
+      let with_all_variables =
+        List.fold_left (fun veclasses (c, (l, bt)) ->
+            classify local veclasses (Some c, l, bt)
+          ) with_logical_variables c
+      in
+      let (sorted, rels) = veclasses_total_order local with_all_variables in
+      List.fold_left (fun veclasses_explanation veclass ->
+          let (name,good) = pick_name (veclasses_explanation, rels) preferred_names veclass in
+          veclasses_explanation @ [{veclass; name; good}]
+        ) [] sorted
     in
     let substitutions = 
-      List.fold_right (fun (veclass,name,good) substs ->
+      List.fold_right (fun {veclass;name;good} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
           SymSet.fold (fun sym substs ->
               let named_symbol = Sym.fresh_named (Pp.plain (Path.pp name)) in
               Subst.{ before = sym; after = named_symbol } :: substs
             ) to_substitute substs 
-        ) named_veclasses []
+        ) veclasses []
     in
-    {substitutions; introduce}
+    {substitutions; veclasses}
 
 
-  let state preferred_names local =    
-    let {substitutions; introduce} = explanation preferred_names local in
+  let unexplained_symbols explanation vars =
+    SymSet.filter 
+      (fun sym ->
+        let veclass = 
+          List.find (fun ve -> is_in_veclass ve.veclass sym
+            ) explanation.veclasses
+        in
+        not veclass.good
+      )
+      vars 
+
+  let state local {substitutions; _} =
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
     let open Pp in
@@ -281,21 +297,20 @@ module Make (G : sig val global : Global.t end) = struct
     Pp.item "constaints" (Pp.list LC.pp constraints)
 
   let logical_constraint preferred_names local lc = 
-    let {substitutions; introduce} = explanation preferred_names local in
-    let lc = LC.subst_vars substitutions lc in
-    if introduce = [] then
-      (lc, None)
-    else
-      let resources = List.map (RE.subst_vars substitutions) 
-                        (L.all_resources local) in
-      let constraints = List.map (LC.subst_vars substitutions) 
-                          (L.all_constraints local) in
-      let open Pp in
-      let state_pp = 
-        Pp.item "resources" (Pp.list RE.pp resources) ^/^
-          Pp.item "constaints" (Pp.list LC.pp constraints)
-      in
-    (lc, Some state_pp)
+    let explanation = explanation preferred_names local in
+    let unexplained_symbols = unexplained_symbols explanation (LC.vars_in lc) in
+    let lc = LC.subst_vars explanation.substitutions lc in
+    if SymSet.is_empty unexplained_symbols 
+    then (lc, None)
+    else (lc, Some (state local explanation))
+
+  let resource preferred_names local re = 
+    let explanation = explanation preferred_names local in
+    let unexplained_symbols = unexplained_symbols explanation (RE.vars_in re) in
+    let lc = RE.subst_vars explanation.substitutions re in
+    if SymSet.is_empty unexplained_symbols 
+    then (lc, None)
+    else (lc, Some (state local explanation))
     
 
 

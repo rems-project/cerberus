@@ -65,7 +65,7 @@ type type_error =
   | Missing_resource of RE.t * (Loc.t list) option * situation (*  *)
   | Resource_mismatch of { has: RE.t; expect: RE.t; situation : situation} (*  *)
   | Cannot_unpack of Resources.predicate * situation (*  *)
-  | Unused_resource of { resource: Resources.t } (*  *)
+  | Unused_resource of { resource: RE.t } (*  *)
   | Uninitialised of BT.member option
   | Misaligned of access
 
