@@ -234,6 +234,7 @@ module Make (G : sig val global : Global.t end) = struct
   type args = arg list
 
   let arg_of_sym (loc : loc) (local : L.t) (sym : Sym.t) : (arg, type_error) m = 
+    let* () = check_computational_bound loc sym local in
     let (bt,lname) = get_a sym local in
     return {lname; bt; loc}
 
@@ -263,18 +264,18 @@ module Make (G : sig val global : Global.t end) = struct
       { local : L.t;
         unis : Sym.t Uni.unis;
         situation: situation;
-        loc: Loc.t;
+        loc: loc;
         resource : RE.t;
       }
 
     type packing_request = 
       { local : L.t;
         situation: situation;
-        loc: Loc.t;
+        loc: loc;
         lft : LFT.t;
       }
 
-    type err = Locations.t * Tools.stacktrace option * type_error
+    type err = loc * Tools.stacktrace option * type_error
 
     type 'a m = 
       | Done : 'a -> 'a m
@@ -342,9 +343,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       let preferred_names = 
         List.filter_map (fun (arg,o_path) -> 
-            match o_path with
-            | Some path -> Some (arg.lname, path)
-            | None -> None
+            Option.map (fun path -> (arg.lname, path)) o_path
           ) earguments
       in
 
@@ -454,10 +453,9 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let predicate_substs pred (def : Global.predicate_definition) = 
-    let open Subst in
-    let open Global in
     let open Resources in
-    List.map (fun ((before, _), after) -> {before; after}
+    List.map (fun ((before, _), after) -> 
+        Subst.{before; after}
       ) (List.combine def.iargs pred.iargs)
 
   let predicate_pack_functions pred def =
