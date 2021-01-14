@@ -1,3 +1,4 @@
+module IT = IndexTerms
 module BT = BaseTypes
 module RE = Resources
 module LC = LogicalConstraints
@@ -287,28 +288,52 @@ module Make (G : sig val global : Global.t end) = struct
       )
       vars 
 
-  let state local {substitutions; _} =
+  let do_state local {substitutions; _} =
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
     let open Pp in
     Pp.item "resources" (Pp.list RE.pp resources) ^/^
     Pp.item "constaints" (Pp.list LC.pp constraints)
 
+  let state preferred_names local = 
+    let explanation = explanation preferred_names local in
+    (do_state local explanation)
+
+  let index_term preferred_names local it = 
+    let explanation = explanation preferred_names local in
+    let unexplained_symbols = unexplained_symbols explanation (IT.vars_in it) in
+    let it = IT.pp (IT.subst_vars explanation.substitutions it) in
+    if SymSet.is_empty unexplained_symbols 
+    then (it, None)
+    else (it, Some (do_state local explanation))
+
   let logical_constraint preferred_names local lc = 
     let explanation = explanation preferred_names local in
     let unexplained_symbols = unexplained_symbols explanation (LC.vars_in lc) in
-    let lc = LC.subst_vars explanation.substitutions lc in
+    let lc = LC.pp (LC.subst_vars explanation.substitutions lc) in
     if SymSet.is_empty unexplained_symbols 
     then (lc, None)
-    else (lc, Some (state local explanation))
+    else (lc, Some (do_state local explanation))
 
   let resource preferred_names local re = 
     let explanation = explanation preferred_names local in
     let unexplained_symbols = unexplained_symbols explanation (RE.vars_in re) in
-    let lc = RE.subst_vars explanation.substitutions re in
+    let re = RE.pp (RE.subst_vars explanation.substitutions re) in
     if SymSet.is_empty unexplained_symbols 
-    then (lc, None)
-    else (lc, Some (state local explanation))
+    then (re, None)
+    else (re, Some (do_state local explanation))
+
+  let resources preferred_names local (re1, re2) = 
+    let explanation = explanation preferred_names local in
+    let unexplained_symbols = 
+      unexplained_symbols explanation 
+        (SymSet.union (RE.vars_in re1) (RE.vars_in re2))
+    in
+    let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
+    let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
+    if SymSet.is_empty unexplained_symbols 
+    then ((re1, re2), None)
+    else ((re1, re2), Some (do_state local explanation))
     
 
 

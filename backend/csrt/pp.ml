@@ -5,6 +5,8 @@ include PPrint
 (* copying from backend.ml *)
 external get_terminal_size: unit -> (int * int) option = "terminal_size"
 
+type doc = document
+
 (* copying from backend.ml *)
 let term_col = match get_terminal_size () with
   | Some (_, col) -> col - 1
@@ -116,7 +118,7 @@ let nats n =
 module IntMap = Map.Make(Int)
 
 let (table2, table3, table4, table5) = 
-  let table (n_rows : int) (headers: string list) (lines : ((alignment * document) list) list) =
+  let table (n_rows : int) (headers: string list) (lines : ((alignment * doc) list) list) =
     let maxes = 
       List.fold_left (fun maxes line ->
           let (_, maxes) = 

@@ -262,6 +262,8 @@ module Make (G : sig val global : Global.t end) = struct
 
     type resource_request = 
       { local : L.t;
+        original_local : L.t;
+        preferred_names : (Sym.t * Explain.Path.t) list;
         unis : Sym.t Uni.unis;
         situation: situation;
         loc: loc;
@@ -337,7 +339,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       let open NFT in
 
-      let local_before = local in
+      let original_local = local in
 
       let arguments = List.map fst earguments in
 
@@ -396,8 +398,16 @@ module Make (G : sig val global : Global.t end) = struct
           debug 6 (lazy (item "spec" (NFT.pp_r ftyp)));
           match ftyp with
           | Resource (resource, ftyp) -> 
-             let* (unis, local) = 
-               prompt (R_Resource {loc; situation; local; unis; resource}) in
+             let rr = {
+                 loc; 
+                 original_local; 
+                 preferred_names;
+                 situation; local; 
+                 unis; 
+                 resource;
+               }
+             in
+             let* (unis, local) = prompt (R_Resource rr) in
              let new_substs = Uni.find_resolved local unis in
              let ftyp' = NFT.subst_vars_r new_substs ftyp in
              infer_resources local unis ftyp'
@@ -427,11 +437,11 @@ module Make (G : sig val global : Global.t end) = struct
              debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
              let (holds, _) = S.constraint_holds local c in
              if holds then check_constraints ftyp else 
-               let (lc,state_pp) = 
+               let (constr,state) = 
                  Explain.logical_constraint
-                   preferred_names local_before c 
+                   preferred_names original_local c 
                in
-               fail loc (Unsat_constraint (lc, state_pp))
+               fail loc (Unsat_constraint {constr; state})
           | I rt -> 
              return rt
         in
@@ -482,7 +492,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let rec remove_ownership_prompt (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
+  let rec remove_ownership_prompt (loc: loc) ~original_local ~preferred_names situation local (pointer: IT.t) (need_size: IT.t) = 
     let open Prompt.Operators in
     if S.equal local need_size (Num Z.zero) then 
       return local
@@ -490,14 +500,18 @@ module Make (G : sig val global : Global.t end) = struct
       let o_resource = S.resource_for_pointer local pointer in
       let* resource_name, resource = match o_resource with
         | None -> 
-           let olast_used = S.used_resource_for_pointer local pointer in
-           fail loc (Missing_ownership (olast_used, situation))
+           let (addr, state) = Explain.index_term preferred_names original_local pointer in
+           let used = S.used_resource_for_pointer local pointer in
+           fail loc (Missing_ownership {addr; state; used; situation})
         | Some (resource_name, resource) -> 
            return (resource_name, resource)
       in
       let* have_size = match resource with
         | Predicate pred -> 
-           fail loc (Cannot_unpack (pred, situation))
+           let (resource, state) = 
+             Explain.resource preferred_names original_local (Predicate pred) 
+           in
+           fail loc (Cannot_unpack {resource; state; situation})
         | Block {size; _} ->
            return size
         | Points {size; _} ->
@@ -505,7 +519,8 @@ module Make (G : sig val global : Global.t end) = struct
       in
       if S.ge local need_size have_size then 
         let local = L.use_resource resource_name [loc] local in
-        remove_ownership_prompt loc situation local (Offset (pointer, have_size)) 
+        remove_ownership_prompt loc  ~original_local ~preferred_names
+          situation local (Offset (pointer, have_size)) 
           (IT.Sub (need_size, have_size))
       else if S.lt local need_size have_size then 
         (* if the resource is bigger than needed, keep the remainder
@@ -520,18 +535,22 @@ module Make (G : sig val global : Global.t end) = struct
         in
         return local
       else
-        fail loc (Unknown_resource_size (resource, situation))
+        let (resource, state) = Explain.resource preferred_names original_local resource in
+        fail loc (Unknown_resource_size {resource; state; situation})
 
 
 
 
 
-  let rec resource_request_prompt loc situation local request unis = 
+  let rec resource_request_prompt loc ~original_local ~preferred_names situation local request unis = 
     let open Prompt.Operators in
     let open Resources in
     match request with
     | Block b ->
-       let* local = remove_ownership_prompt loc situation local b.pointer b.size in
+       let* local = 
+         remove_ownership_prompt loc ~original_local ~preferred_names
+           situation local b.pointer b.size 
+       in
        return (unis, local)
     | Points p ->
        let o_resource = S.resource_for_pointer local p.pointer in
@@ -542,13 +561,19 @@ module Make (G : sig val global : Global.t end) = struct
              let local = use_resource resource_name [loc] local in
              return (unis, local)
           | None -> 
-             fail loc (Resource_mismatch {expect = request; has = Points p'; situation})
+             let ((expect,has), state) = 
+               Explain.resources preferred_names original_local (request, Points p') in
+             fail loc (Resource_mismatch {expect; has; state; situation})
           end
        | Some (resource_name, resource)  ->
-          fail loc (Resource_mismatch {expect = request; has = resource; situation})             
+          let ((expect,has), state) = 
+            Explain.resources preferred_names original_local (request, resource) in
+          fail loc (Resource_mismatch {expect; has; state; situation})             
        | None -> 
-          let olast_used = S.used_resource_for_pointer local p.pointer in
-          fail loc (Missing_ownership (olast_used, situation))
+          let (addr, state) = 
+            Explain.index_term preferred_names original_local p.pointer in
+          let used = S.used_resource_for_pointer local p.pointer in
+          fail loc (Missing_ownership {addr; state; used; situation})
        end
     | Predicate p ->
        let o_resource = S.predicate_for local p.name p.iargs in
@@ -559,7 +584,9 @@ module Make (G : sig val global : Global.t end) = struct
              let local = use_resource resource_name [loc] local in
              return (unis, local)
           | _ ->
-             fail loc (Resource_mismatch {expect = request; has = Predicate p'; situation}) 
+             let ((expect,has), state) = 
+               Explain.resources preferred_names original_local (request, Predicate p') in
+             fail loc (Resource_mismatch {expect; has; state; situation}) 
           end
        | _ ->         
           let def = match Global.get_predicate_def loc G.global p.name with
@@ -567,7 +594,9 @@ module Make (G : sig val global : Global.t end) = struct
             | None -> Debug_ocaml.error "missing predicate definition"
           in
           let else_prompt = 
-            fail loc (Missing_resource (request, None, situation))
+            let (resource, state) = 
+              Explain.resource preferred_names original_local request in
+            fail loc (Missing_resource {resource; used = None; state; situation})
           in
           let attempt_prompts = 
             List.map (fun lft ->
@@ -578,7 +607,8 @@ module Make (G : sig val global : Global.t end) = struct
           let choices1 = List1.make (List.hd choices, List.tl choices) in
           let* (lrt, local) = try_choices choices1 in
           let local = bind_logical local lrt in
-          resource_request_prompt loc situation local request unis
+          resource_request_prompt loc ~original_local ~preferred_names
+            situation local request unis
        end
 
 
@@ -592,9 +622,10 @@ module Make (G : sig val global : Global.t end) = struct
        begin match r with
        | Prompt.R_Error (loc,tr,error) -> 
           Error (loc,tr,error)
-       | R_Resource {loc; local; unis; situation; resource} ->
+       | R_Resource {loc; original_local; preferred_names; local; unis; situation; resource} ->
           let prompt = 
-            resource_request_prompt loc situation local resource unis in
+            resource_request_prompt loc ~original_local ~preferred_names 
+              situation local resource unis in
           let* (unis, local) = handle_prompt prompt in
           handle_prompt (c (unis, local))
        | R_Packing {loc; local; situation; lft} ->
@@ -644,7 +675,10 @@ module Make (G : sig val global : Global.t end) = struct
     return local
 
   let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
-    let prompt = remove_ownership_prompt loc situation local pointer need_size in
+    let prompt = 
+      remove_ownership_prompt loc ~original_local:local ~preferred_names:[]
+        situation local pointer need_size 
+    in
     handle_prompt prompt
 
 
@@ -899,24 +933,25 @@ module Make (G : sig val global : Global.t end) = struct
      resources *)
   (* all_empty: do the same for the whole local environment (without
      supplying a marker) *)
-  let (pop_empty, all_empty) = 
-      let rec aux loc = function
-        | (s, VB.Resource resource) :: _ -> 
-           fail loc (Unused_resource {resource})
-        | _ :: rest -> aux loc rest
-        | [] -> return ()
-      in
-    let pop_empty loc local = 
-      let (new_local, old_local) = since local in
-      let* () = aux loc new_local in
-      return old_local
+  let check_all_used loc ~original_local vbs = 
+    let rec aux = function
+      | (s, VB.Resource resource) :: _ -> 
+         let (resource, state) = Explain.resource [] original_local resource in
+         fail loc (Unused_resource {resource; state})
+      | _ :: rest -> aux rest
+      | [] -> return ()
     in
-    let all_empty loc local = 
-      let new_local = all local in
-      let* () = aux loc new_local in
-      return ()
-    in
-    (pop_empty, all_empty)
+    aux vbs
+
+  let pop_empty loc local = 
+    let (new_local, old_local) = since local in
+    let* () = check_all_used loc ~original_local:local new_local in
+    return old_local
+
+  let all_empty loc local = 
+    let new_local = all local in
+    let* () = check_all_used loc ~original_local:local new_local in
+    return ()
 
 
 
@@ -1248,8 +1283,9 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let load (loc: loc) local (bt: BT.t) (pointer: IT.t)
-           (size: RE.size) (return_it: IT.t) (is_field: BT.member option) =
-    let rec aux local bt pointer size path is_field = 
+           (size: RE.size) (return_it: IT.t) (is_member: BT.member option) =
+    let original_local = local in
+    let rec aux local bt pointer size path is_member = 
       match bt with
       | Struct tag ->
          let* decl = get_struct_decl loc tag in
@@ -1268,26 +1304,38 @@ module Make (G : sig val global : Global.t end) = struct
          aux_members (Global.members decl.layout)
       | _ ->
          let o_resource = S.resource_for_pointer local pointer in
+         let situation = Access (Load is_member) in
          let* pointee = match o_resource with
            | Some (_,resource) -> 
               begin match resource with
-              | Points p when Z.equal size p.size -> return p.pointee
-              | Points p -> fail loc (Generic !^"resource of wrong size for load")
-              | Block {block_type = Uninit; _} -> fail loc (Uninitialised is_field)
-              | Block {block_type = Padding; _} -> fail loc (Generic !^"cannot read padding bytes")
-              | Block {block_type = Nothing; _} -> fail loc (Generic !^"cannot read empty bytes")
-              | Predicate pred -> fail loc (Cannot_unpack (pred, Access (Load is_field)))
+              | Points p when Z.equal size p.size -> 
+                 return p.pointee
+              | Points p -> 
+                 fail loc (Generic !^"resource of wrong size for load")
+              | Block {block_type = Uninit; _} -> 
+                 let state = Explain.state [] original_local in
+                 fail loc (Uninitialised_read {is_member; state})
+              | Block {block_type = Padding; _} -> 
+                 fail loc (Generic !^"cannot read padding bytes")
+              | Block {block_type = Nothing; _} -> 
+                 fail loc (Generic !^"cannot read empty bytes")
+              | Predicate pred -> 
+                 let (resource,state) = 
+                   Explain.resource [] original_local (Predicate pred) in
+                 fail loc (Cannot_unpack {resource; state; situation})
               end
            | None -> 
-              let olast_used = S.used_resource_for_pointer local pointer in
-              fail loc (Missing_ownership (olast_used, Access (Load is_field)))
+                 let (addr,state) = 
+                   Explain.index_term [] original_local pointer in
+              let used = S.used_resource_for_pointer local pointer in
+              fail loc (Missing_ownership {addr; state; used; situation})
          in
          let (Base vbt) = L.get_l pointee local in
          if BT.equal vbt bt 
          then return [IT.EQ (path, S (vbt,pointee))]
          else fail loc (Mismatch {has = Base vbt; expect = Base bt})
     in
-    let* constraints = aux local bt pointer size return_it is_field in
+    let* constraints = aux local bt pointer size return_it is_member in
     return (LC (And constraints))
 
 

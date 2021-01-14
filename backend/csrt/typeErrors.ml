@@ -1,11 +1,11 @@
 open Pp
-module Loc=Locations
+open Locations
 module BT=BaseTypes
 module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
 module RE=Resources
-
+module Loc = Locations
 
 type label_kind = 
   | Return
@@ -60,13 +60,13 @@ type type_error =
   | Missing_predicate of string
   | Missing_member of BT.tag * BT.member
 
-  | Missing_ownership of (Loc.t list) option * situation (*  *)
-  | Unknown_resource_size of RE.t * situation (*  *)
-  | Missing_resource of RE.t * (Loc.t list) option * situation (*  *)
-  | Resource_mismatch of { has: RE.t; expect: RE.t; situation : situation} (*  *)
-  | Cannot_unpack of Resources.predicate * situation (*  *)
-  | Unused_resource of { resource: RE.t } (*  *)
-  | Uninitialised of BT.member option
+  | Missing_ownership of {addr : doc; state : doc option; used : (loc list) option; situation : situation}   
+  | Unknown_resource_size of {resource: doc; state : doc option; situation : situation}
+  | Missing_resource of {resource : doc; state : doc option; used: (loc list) option; situation : situation}
+  | Resource_mismatch of {has: doc; state : doc option; expect: doc; situation : situation}
+  | Cannot_unpack of {resource : doc; state : doc option; situation : situation}
+  | Uninitialised_read of {is_member : BT.member option; state : doc}
+  | Unused_resource of {resource: doc; state : doc option}
   | Misaligned of access
 
   | Number_members of {has: int; expect: int}
@@ -74,7 +74,7 @@ type type_error =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it : 'bt IndexTerms.term -> type_error
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Unsat_constraint of LogicalConstraints.t * Pp.document option
+  | Unsat_constraint of {constr : doc; state : doc option}
   | Unconstrained_logical_variable of Sym.t
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
@@ -98,7 +98,17 @@ type type_error =
 
 
 
-let pp_type_error = function
+let pp_type_error te = 
+
+  let pp_o_used locs = 
+    !^"Maybe last used in the following places:" ^^^
+      Pp.list Loc.pp locs
+  in
+  let pp_used = Option.map pp_o_used in
+  let pp_state state = !^"in state" ^/^ state in
+  let pp_o_state = Option.map pp_state in
+
+  match te with
   | Unbound_name unbound ->
      let name_pp = match unbound with
        | Sym s -> Sym.pp s
@@ -121,47 +131,37 @@ let pp_type_error = function
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])
 
-  | Missing_ownership (owhere, situation) ->
-     let msg = !^"Missing ownership" ^^^ for_situation situation in
-     let extra = match owhere with
-       | None -> []
-       | Some locs -> 
-          [!^"Maybe last used in the following places:" ^^^
-             Pp.list Loc.pp locs]
-     in
-     (msg, extra)
-  | Unknown_resource_size (re, situation) ->
-     let msg = !^"Unknown size of resource" ^^^ for_situation situation in
-     (msg, [])
-  | Missing_resource (re, owhere, situation) ->
-     let msg = !^"Missing resource" ^^^ for_situation situation in
-     let extra = match owhere with
-       | None -> []
-       | Some locs -> 
-          [!^"Maybe last used in the following places:" ^^^
-             Pp.list Loc.pp locs]
-     in
-     (msg, extra)
-  | Resource_mismatch {has; expect; situation} ->
-     (!^"Need a resource" ^^^ RE.pp expect ^^^
-        !^"but have resource" ^^^ RE.pp has, [])
-  | Cannot_unpack (predicate, situation) ->
-     let re = RE.Predicate predicate in
+  | Missing_ownership {addr; state; used; situation} ->
      let msg = 
-       !^"Cannot unpack resource needed" ^^^ 
-         for_situation situation
+       !^"Missing ownership of location" ^^^ 
+         addr ^^^ for_situation situation 
      in
-     (msg ^^^ parens (RE.pp re), [])
+     (msg, Option.list [pp_o_state state; pp_used used])
+  | Unknown_resource_size {resource; state; situation} ->
+     let msg = 
+       !^"Cannot tell size of resource" ^^^ 
+         resource ^^^ for_situation situation 
+     in
+     (msg, Option.list [pp_o_state state])
+  | Missing_resource {resource; state; used; situation} ->
+     let msg = !^"Missing resource" ^^^ resource ^^^ for_situation situation in
+     (msg, Option.list [pp_o_state state; pp_used used] )
+  | Resource_mismatch {has; state; expect; situation} ->
+     let msg = !^"Need a resource" ^^^ has ^^^ !^"but have resource" ^^^ expect in
+     (msg, Option.list [pp_o_state state])
+  | Cannot_unpack {resource; state; situation} ->
+     let msg = !^"Cannot unpack resource" ^^^ resource ^^^ for_situation situation in
+     (msg, Option.list [pp_o_state state])
 
-  | Uninitialised omember ->
-     begin match omember with
-     | None -> 
-        (!^"Trying to read uninitialised data", [])
-     | Some m -> 
-        (!^"Trying to read uninitialised struct member" ^^^ Id.pp m, [])
-     end
-  | Unused_resource {resource;_} ->
-     (!^"Left-over unused resource" ^^^ Resources.pp resource, [])
+  | Uninitialised_read {is_member; state} ->
+     let msg = match is_member with
+       | None -> !^"Trying to read uninitialised data"
+       | Some m -> !^"Trying to read uninitialised struct member" ^^^ Id.pp m
+     in
+     (msg, [pp_state state])
+  | Unused_resource {resource;state} ->
+     let msg = !^"Left-over unused resource" ^^^ resource in
+     (msg, Option.list [pp_o_state state])
   | Misaligned access ->
      let msg = match access with
      | Kill -> !^"Misaligned de-allocation operation"
@@ -186,9 +186,9 @@ let pp_type_error = function
      (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
-  | Unsat_constraint (c,o_extra) ->
-     let extra = Option.to_list o_extra in
-     (!^"Unsatisfied constraint" ^^^ LogicalConstraints.pp c, extra)
+  | Unsat_constraint {constr;state} ->
+     let msg = !^"Unsatisfied constraint" ^^^ constr in
+     (msg, Option.list [pp_o_state state])
   | Unconstrained_logical_variable name ->
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
   | Kind_mismatch {has; expect} ->
