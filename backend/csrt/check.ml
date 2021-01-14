@@ -23,6 +23,7 @@ open LogicalConstraints
 open CF.Mucore
 open Pp
 open BT
+module Mapping = Parse_ast.Mapping
 
 
 
@@ -54,7 +55,7 @@ module Make (G : sig val global : Global.t end) = struct
   type 'bty object_value = (cti, 'bty) mu_object_value
   type mem_value = CF.Impl_mem.mem_value
   type pointer_value = CF.Impl_mem.pointer_value
-  type 'bty label_defs = (LT.t, cti, BT.t, 'bty) mu_label_defs
+  type 'bty label_defs = (LT.t, cti, BT.t, 'bty, Mapping.t) mu_label_defs
 
 
   (*** mucore pp setup **********************************************************)
@@ -1908,10 +1909,10 @@ module Make (G : sig val global : Global.t end) = struct
              let lt = LT.subst_vars substs lt in
              let () = debug 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
              M_Return (loc, lt)
-          | M_Label (loc, lt, args, body, annots) -> 
+          | M_Label (loc, lt, args, body, annots, mapping) -> 
              let lt = LT.subst_vars substs lt in
              let () = debug 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
-             M_Label (loc, lt, args, body, annots)
+             M_Label (loc, lt, args, body, annots, mapping)
         ) label_defs 
     in
     let* labels = 
@@ -1920,7 +1921,7 @@ module Make (G : sig val global : Global.t end) = struct
           | M_Return (loc, lt) ->
              let* () = WT.WLT.welltyped loc pure_delta lt in
              return (SymMap.add sym (lt, Return) acc)
-          | M_Label (loc, lt, _, _, annots) -> 
+          | M_Label (loc, lt, _, _, annots, mapping) -> 
              let label_kind = match CF.Annot.get_label_annot annots with
                | Some (LAloop_body loop_id) -> Loop
                | Some (LAloop_continue loop_id) -> Loop
@@ -1934,7 +1935,7 @@ module Make (G : sig val global : Global.t end) = struct
       match def with
       | M_Return (loc, lt) ->
          return ()
-      | M_Label (loc, lt, args, body, annots) ->
+      | M_Label (loc, lt, args, body, annots, mapping) ->
          debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
          debug 2 (lazy (item "type" (LT.pp lt)));
          let* (rt, delta_label, _, _) = 

@@ -391,7 +391,7 @@ let dtree_of_label l def =
   match def with
   | M_Return (loc,_) -> 
      (Dleaf (!^"return" ^^^ Location_ocaml.pp_location ~clever:false loc))
-  | M_Label (loc, _, _, body, _) -> 
+  | M_Label (loc, _, _, body, _, _) -> 
      Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_expr body])
 
 let dtrees_of_labels labels = 

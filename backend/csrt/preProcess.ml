@@ -20,8 +20,7 @@ open ListM
 open Parse_ast
 
 
-
-type funinfos = FT.t mu_funinfos
+type funinfos = (FT.t, Mapping.t) mu_funinfos
 type funinfo_extras = (Sym.t, Conversions.funinfo_extra) Pmap.map
 
 
@@ -348,10 +347,10 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 
-let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty) mu_file)
+let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty, 'mapping) mu_file)
     : ((FT.t, LT.t, ctype_information, BT.t, 
         CA.ct mu_struct_def * Global.struct_decl, 
-        CA.ct mu_union_def, 'bty) mu_file,
+        CA.ct mu_union_def, 'bty, Mapping.t) mu_file,
       TypeErrors.type_error) m =
 
 
@@ -417,7 +416,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
   let* ((funinfo : funinfos), 
         (funinfo_extra : funinfo_extras)) =
     let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
-      let (M_funinfo (floc,attrs,(ret_ctype,args),is_variadic,has_proto)) = funinfo_entry in
+      let (M_funinfo (floc,attrs,(ret_ctype,args),is_variadic,has_proto, _mapping)) = funinfo_entry in
       let loc = Loc.update Loc.unknown floc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
@@ -432,7 +431,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
         in
         let* (ftyp, extra) = 
           Conversions.make_fun_spec loc structs glob_typs args ret_ctype attrs in
-        let funinfo_entry = M_funinfo (floc,attrs,ftyp,is_variadic,has_proto) in
+        let funinfo_entry = M_funinfo (floc,attrs,ftyp,is_variadic,has_proto, extra.init_mapping) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
         let funinfo_extra = Pmap.add fsym extra funinfo_extra in
         return (funinfo, funinfo_extra)
@@ -443,7 +442,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
 
   let retype_label ~fsym lsym def = 
     let ftyp = match Pmap.lookup fsym funinfo with
-      | Some (M_funinfo (_,_,ftyp,_,_)) -> ftyp 
+      | Some (M_funinfo (_,_,ftyp,_,_,_)) -> ftyp 
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
     let extra = match Pmap.lookup fsym funinfo_extra with
@@ -454,7 +453,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
     | M_Return (loc, _) ->
        let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
        return (M_Return (loc, lt))
-    | M_Label (loc, argtyps, args, e, annots) -> 
+    | M_Label (loc, argtyps, args, e, annots, _) -> 
        let* args = mapM (retype_arg loc) args in
        let* argtyps = 
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
@@ -471,11 +470,11 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
             | Some attrs -> attrs 
             | None -> CF.Annot.no_attributes
           in
-          let* (lt,_) = 
+          let* (lt,mapping) = 
             Conversions.make_label_spec loc lsym extra argtyps this_attrs
           in
           let* e = retype_expr e in
-          return (M_Label (loc, lt,args,e,annots))
+          return (M_Label (loc, lt,args,e,annots,mapping))
        | Some (LAloop_break loop_id) ->
           error "break label has not been inlined"
        | Some LAreturn -> 
@@ -488,14 +487,14 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
   in
 
 
- let retype_fun_map_decl fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map_decl) = 
+ let retype_fun_map_decl fsym (decl: (CA.lt, CA.ct, CA.bt, 'bty, 'mapping) mu_fun_map_decl) = 
    match decl with
    | M_Fun (cbt,args,pexpr) ->
       let* bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
       let* args = mapM (retype_arg Loc.unknown) args in
       let* pexpr = retype_pexpr pexpr in
       return (M_Fun (bt,args,pexpr))
-   | M_Proc (loc,cbt,args,expr,(labels : (CA.lt, CA.ct, CA.bt, 'bty) mu_label_defs)) ->
+   | M_Proc (loc,cbt,args,expr,labels) ->
       let* bt = Conversions.bt_of_core_base_type loc cbt in
       let* args = mapM (retype_arg loc) args in
       let* expr = retype_expr expr in
@@ -511,7 +510,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
       return (M_BuiltinDecl (loc,bt,args))
  in
 
-  let retype_fun_map (fun_map : (CA.lt, CA.ct, CA.bt, 'bty) mu_fun_map) = 
+  let retype_fun_map (fun_map : (CA.lt, CA.ct, CA.bt, 'bty, 'mapping) mu_fun_map) = 
     PmapM.mapM (fun fsym decl -> retype_fun_map_decl fsym decl) fun_map Sym.compare
   in
   

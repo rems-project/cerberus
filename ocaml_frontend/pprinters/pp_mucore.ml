@@ -43,8 +43,8 @@ module type PP_Typ = sig
   val pp_lt: (lt -> PPrint.document) option
   val pp_st: st -> PPrint.document
   val pp_ut: ut -> PPrint.document
-  val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, (ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Symbol.sym,(ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
 end
 
 module type CONFIG = sig
@@ -91,8 +91,8 @@ module type PP_CORE = sig
     (ct,bt,'ty) mu_expr -> 
     PPrint.document
     
-  val pp_funinfo: (Symbol.sym, ft mu_funinfo) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym,ft mu_funinfo) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, (ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Symbol.sym,(ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
 
   val pp_file: 
     budget -> 
@@ -102,7 +102,8 @@ module type PP_CORE = sig
      bt,
      st,
      ut,
-     'ty) mu_file -> 
+     'ty,
+     'mapping) mu_file -> 
     PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
@@ -886,7 +887,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                         | Some pp_lt -> P.colon ^^^ pp_lt lt
                         | None -> P.empty
                         end
-                   | M_Label (_, lt, args, lbody, annots) ->
+                   | M_Label (_, lt, args, lbody, annots, _mapping) ->
                         begin
                           begin match pp_lt with
                           | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
@@ -1081,14 +1082,14 @@ module Pp_standard_typ = (struct
 
   let pp_funinfo finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    Pmap.fold (fun sym (M_funinfo (_, _, (ret_ty, params), is_variadic, has_proto)) acc ->
+    Pmap.fold (fun sym (M_funinfo (_, _, (ret_ty, params), is_variadic, has_proto, _mapping)) acc ->
         acc ^^ pp_symbol sym ^^ P.colon
         ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^ P.hardline) finfos P.empty
     
   let pp_funinfo_with_attributes finfos =
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    Pmap.fold (fun sym (M_funinfo (loc, attrs, (ret_ty, params), is_variadic, has_proto)) acc ->
+    Pmap.fold (fun sym (M_funinfo (loc, attrs, (ret_ty, params), is_variadic, has_proto, _mapping)) acc ->
         acc ^^ pp_symbol sym ^^ P.colon
         ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs

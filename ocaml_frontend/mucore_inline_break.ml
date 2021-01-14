@@ -86,8 +86,8 @@ let rec inline_label_labels_and_body to_inline to_keep body =
      let to_keep' = 
        (Pmap.map (fun def -> (match def with
          | M_Return _ -> def
-         | M_Label(loc, lt, args, lbody, annot) -> 
-            M_Label(loc, lt, args, (ib_expr l lbody), annot)
+         | M_Label(loc, lt, args, lbody, annot, mapping) -> 
+            M_Label(loc, lt, args, (ib_expr l lbody), annot, mapping)
          )) to_keep)
      in
      let body' = (ib_expr l body) in
@@ -97,15 +97,15 @@ let rec inline_label_labels_and_body to_inline to_keep body =
 
 let ib_fun_map_decl 
       (name1: symbol)
-      (d : ('lt, 'ct, 'bt, 'bty) mu_fun_map_decl) 
-    : ('lt, 'ct, 'bt, 'bty) mu_fun_map_decl=
+      (d : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map_decl) 
+    : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map_decl=
    (try ((match d with
      | M_Proc( loc, rbt, arg_bts, body, label_defs) -> 
         let (to_keep, to_inline) =
           (let aux label def (to_keep, to_inline)=
              ((match def with
             | M_Return _ -> (Pmap.add label def to_keep, to_inline)
-            | M_Label(_loc, lt1, args, lbody, annot2) ->
+            | M_Label(_loc, lt1, args, lbody, annot2, _mapping) ->
                if is_loop_break annot2
                then (to_keep, ((label, map fst args, lbody) :: to_inline))
                else (Pmap.add label def to_keep, to_inline)
@@ -121,8 +121,8 @@ let ib_fun_map_decl
      )) with | Failure error -> failwith ( (let Symbol.Symbol( d, n, str_opt) = name1 in
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))  ^ error) )
 
-let ib_fun_map (fmap1 : ('lt, 'ct, 'bt, 'bty) mu_fun_map) 
-    : ('lt, 'ct, 'bt, 'bty) mu_fun_map= 
+let ib_fun_map (fmap1 : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map) 
+    : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map = 
    (Pmap.mapi ib_fun_map_decl fmap1)
   
 

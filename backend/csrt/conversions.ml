@@ -311,10 +311,11 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
 
 
 
-type funinfo_extra = 
-  {mapping : mapping;
-   globs : Parse_ast.gargs;
-   fargs : Parse_ast.aargs}
+type funinfo_extra = {
+    init_mapping : mapping;
+    globs : Parse_ast.gargs;
+    fargs : Parse_ast.aargs;
+  }
 
 
 let rec deref_path_pp name deref = 
@@ -527,7 +528,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   let rt = RT.mComputational oA lrt in
   let lft = FT.mLogicals iL (FT.mResources iR (FT.mConstraints iC (FT.I rt))) in
   let ft = FT.mComputationals iA lft in
-  return (ft, {mapping = init_mapping; globs; fargs})
+  return (ft, {init_mapping; globs; fargs})
 
 
   
@@ -554,7 +555,7 @@ let make_label_spec
   in
 
   let iA, iL, iR, iC = [], [], [], [] in
-  let mapping = extra.mapping in
+  let mapping = extra.init_mapping in
 
   (* globs *)
   let* (iL, iR, iC, mapping) = 

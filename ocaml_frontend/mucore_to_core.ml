@@ -562,7 +562,7 @@ let mu_to_core__fun_map_decl d : ('bty, unit) Core.generic_fun_map_decl=
      Core.BuiltinDecl( loc, bt1, bts)
   ))
 
-let mu_to_core__fun_map (fmap1 : ('DLTY, Ctype.ctype, mu_base_type, 'bty)mu_fun_map) 
+let mu_to_core__fun_map (fmap1 : ('DLTY, Ctype.ctype, mu_base_type, 'bty, 'mapping)mu_fun_map) 
     : ('bty, unit) Core.generic_fun_map= 
    (Pmap.map mu_to_core__fun_map_decl fmap1)
   
@@ -593,7 +593,7 @@ let mu_to_core__globs_list (gs : (symbol * (Ctype.ctype, mu_base_type, 'bty) mu_
    (map (fun (sym1,g) -> (sym1, mu_to_core__globs g)) gs)
 
 
-let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args),b1,b2)):Location_ocaml.t*attributes*'b*'a*bool*bool=
+let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args),b1,b2,_mapping)):Location_ocaml.t*attributes*'b*'a*bool*bool=
    (loc,annots2,ret,args,b1,b2)
 
 let mu_to_core__funinfos dict_Map_MapKeyType_c funinfos:('c,(Location_ocaml.t*attributes*'a*'b*bool*bool))Pmap.map= 

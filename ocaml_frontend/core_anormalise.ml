@@ -37,6 +37,7 @@ type st = ct mu_struct_def
 type ft = ct Mucore.mu_funinfo_type
 type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
 type bt = Mucore.mu_base_type
+type mapping = unit
 
 type mu_value = (ct, bt, unit) Mucore.mu_value
 type mu_values = mu_value list
@@ -679,7 +680,7 @@ let normalise_impl (i : unit generic_impl) : (ct, bt, unit) mu_impl=
 let normalise_fun_map_decl 
       (name1: symbol)
       (d : (unit, 'a) generic_fun_map_decl) 
-    : (lt, ct, bt, unit) mu_fun_map_decl=
+    : (lt, ct, bt, unit, mapping) mu_fun_map_decl=
   match d with
   | Fun (bt, args, pe) -> 
      M_Fun(bt, args, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain pe)
@@ -700,14 +701,14 @@ let normalise_fun_map_decl
             let lloc = update_loc loc (Annot.get_loc_ annots) in
             if is_return annots
             then M_Return (lloc, param_tys)
-            else M_Label(lloc, param_tys, params, normalise_expr loc body, annots)
+            else M_Label(lloc, param_tys, params, normalise_expr loc body, annots, ())
           ) saves)
      in
      M_Proc(loc, bt, args, normalise_expr loc e, saves')
   | ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
   | BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 
-let normalise_fun_map (fmap1 : (unit, 'a) generic_fun_map) : (lt, ct, bt, unit) mu_fun_map= 
+let normalise_fun_map (fmap1 : (unit, 'a) generic_fun_map) : (lt, ct, bt, unit, mapping) mu_fun_map= 
    (Pmap.mapi normalise_fun_map_decl fmap1)
   
 
@@ -746,7 +747,7 @@ let normalise_funinfo (loc,annots2,ret,args,b1,b2) =
         | None -> (Symbol.fresh (), ct)
       ) args 
   in
-  M_funinfo (loc,annots2,(ret,args),b1,b2)
+  M_funinfo (loc,annots2,(ret,args),b1,b2, ())
 
 let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)
@@ -802,7 +803,7 @@ let check_supported file =
   in
   ()
 
-let normalise_file file : (ft, lt, ct, bt, st, ut, unit) Mucore.mu_file = 
+let normalise_file file : (ft, lt, ct, bt, st, ut, unit, mapping) Mucore.mu_file = 
   check_supported file;
    ({ mu_main = (file.main)
    ; mu_tagDefs = (normalise_tag_definitions file.tagDefs)

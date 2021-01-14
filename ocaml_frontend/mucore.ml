@@ -203,21 +203,21 @@ type ('ct, 'bt, 'TY) mu_impl_decl =
 type ('ct, 'bt, 'TY) mu_impl = (Implementation.implementation_constant, (('ct, 'bt, 'TY) mu_impl_decl)) 
   Pmap.map
 
-type ('lt, 'ct, 'bt, 'TY) mu_label_def = 
+type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_def = 
   | M_Return of loc * 'lt
-  | M_Label of loc * 'lt * ((symbol * 'bt) list) * ('ct, 'bt, 'TY) mu_expr * annot list
+  | M_Label of loc * 'lt * ((symbol * 'bt) list) * ('ct, 'bt, 'TY) mu_expr * annot list * 'mapping
 
-type ('lt, 'ct, 'bt, 'TY) mu_label_defs = (symbol, (('lt, 'ct, 'bt, 'TY) mu_label_def))
+type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs = (symbol, (('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_def))
   Pmap.map
 
 
-type ('lt, 'ct, 'bt, 'TY) mu_fun_map_decl =
+type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map_decl =
   | M_Fun of 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_pexpr
-  | M_Proc of Location_ocaml.t * 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_expr * ('lt, 'ct, 'bt, 'TY) mu_label_defs
+  | M_Proc of Location_ocaml.t * 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_expr * ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs
   | M_ProcDecl of Location_ocaml.t * 'bt * 'bt list
   | M_BuiltinDecl of Location_ocaml.t * 'bt * 'bt list
 
-type ('lt, 'ct, 'bt, 'TY) mu_fun_map = (symbol, (('lt, 'ct, 'bt, 'TY) mu_fun_map_decl)) 
+type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map = (symbol, (('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map_decl)) 
   Pmap.map
 
 
@@ -247,23 +247,24 @@ type ('st,'ut) mu_tag_definitions = (Symbol.sym, ('st,'ut) mu_tag_definition)
 
 type 'ct mu_funinfo_type = 'ct * (symbol * 'ct) list
 
-type 'ft mu_funinfo = 
-  M_funinfo of (Location_ocaml.t * Annot.attributes * 'ft * bool * bool)
+type ('ft,'mapping) mu_funinfo = 
+  M_funinfo of (Location_ocaml.t * Annot.attributes * 'ft * bool * bool * 'mapping)
 
-type 'ft mu_funinfos = (symbol, ('ft mu_funinfo)) Pmap.map
+type ('ft,'mapping) mu_funinfos = 
+  (symbol, ('ft,'mapping) mu_funinfo) Pmap.map
 
 type ('ct, 'bt, 'TY) mu_globs_list = (symbol * ('ct, 'bt, 'TY) mu_globs) list
 
 (* a Core file is just a set of named functions *)
-type ('ft, 'lt, 'ct, 'bt, 'st_def, 'ut_def, 'TY) mu_file = {
+type ('ft, 'lt, 'ct, 'bt, 'st_def, 'ut_def, 'TY, 'mapping) mu_file = {
   mu_main    : symbol option;
   mu_tagDefs : ('st_def,'ut_def) mu_tag_definitions;
-  mu_stdlib  : ('lt, 'ct, 'bt, 'TY) mu_fun_map;
+  mu_stdlib  : ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map;
   mu_impl    : ('ct, 'bt, 'TY) mu_impl;
   mu_globs   : ('ct, 'bt, 'TY) mu_globs_list;
-  mu_funs    : ('lt, 'ct, 'bt, 'TY) mu_fun_map;
+  mu_funs    : ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map;
   mu_extern  : mu_extern_map;
-  mu_funinfo : 'ft mu_funinfos;
+  mu_funinfo : ('ft,'mapping) mu_funinfos;
   mu_loop_attributes : Annot.loop_attributes;
 }
 
