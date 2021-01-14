@@ -4,6 +4,8 @@ type t = CF.Symbol.identifier
 
 let s (CF.Symbol.Identifier (_,s)) = s
 
+let loc (CF.Symbol.Identifier (loc,_)) = loc
+
 let pp id = PPrint.(!^)(s id)
 
 let equal = CF.Symbol.idEqual

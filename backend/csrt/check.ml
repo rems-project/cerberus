@@ -1915,7 +1915,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
-     - check that no "cn::__" other than the right ones are used
+     - use Explain in the right places.
+     - combine Explain with counter-models
      - check resource definition well-formedness
      - check globals with expressions
      - fix problems with order of multiple "requires" clauses

@@ -109,12 +109,12 @@ type resource_spec = Loc.t * (string * Path.predarg list)
 
 type varg = { name: string; vsym: Sym.t; typ : Sctypes.t }
 type aarg = { name: string; asym: Sym.t; typ : Sctypes.t }
-type garg = { name: string; lsym: Sym.t; typ : Sctypes.t; accessed : bool }
+type garg = { name: string; lsym: Sym.t; typ : Sctypes.t; accessed : Loc.t option }
 
-type arg = 
-  | Aarg of aarg
-  | Varg of varg
-  | Garg of garg
+(* type arg = 
+ *   | Aarg of aarg
+ *   | Varg of varg
+ *   | Garg of garg *)
 
 type vargs = varg list
 type aargs = aarg list

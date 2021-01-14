@@ -40,13 +40,12 @@ type type_error =
   | Missing_predicate of string
   | Missing_member of BT.tag * BT.member
 
-  | Missing_ownership of BT.member option * (Loc.t list) option * situation
-  | Resource_mismatch of { has: RE.t; expect: RE.t; situation : situation}
-  | Cannot_unpack of Resources.predicate * situation
-  | Cannot_pack of Resources.t * situation
-
+  | Missing_ownership of BT.member option * (Loc.t list) option * situation (*  *)
+  | Resource_mismatch of { has: RE.t; expect: RE.t; situation : situation} (*  *)
+  | Cannot_unpack of Resources.predicate * situation (*  *)
+  | Cannot_pack of Resources.t * situation           (*  *)
+  | Unused_resource of { resource: Resources.t } (*  *)
   | Uninitialised of BT.member option
-  | Unused_resource of { resource: Resources.t }
   | Misaligned of access
 
   | Number_members of {has: int; expect: int}
@@ -59,7 +58,7 @@ type type_error =
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Model.t option
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Model.t option (*  *)
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 

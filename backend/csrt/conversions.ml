@@ -420,7 +420,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
     : (FT.t * funinfo_extra, type_error) m = 
   let open FT in
   let open RT in
-  let* typ = Assertions.parse_function_type loc attrs globals (ret_sct, arguments) in
+  let* typ = Assertions.parse_function_type attrs globals (ret_sct, arguments) in
 
   let (FT (FA {globs; fargs}, pre, FRet ret, post)) = typ in
 
@@ -439,9 +439,9 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
     ListM.fold_leftM (fun (iL, iR, iC, mapping) garg ->
         let item = garg_item Pre garg in
         let* (l, r, c, mapping') = 
-          if garg.accessed 
-          then make_owned loc garg.lsym item.path garg.typ 
-          else return ([], [], [], [])
+          match garg.accessed with
+          | Some loc -> make_owned loc garg.lsym item.path garg.typ 
+          | None -> return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
       )
@@ -488,9 +488,9 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
     ListM.fold_leftM (fun (oL, oR, oC, mapping) garg ->
         let item = garg_item Post garg in
         let* (l, r, c, mapping') = 
-          if garg.accessed 
-          then make_owned loc garg.lsym item.path garg.typ 
-          else return ([], [], [], [])
+          match garg.accessed with
+          | Some loc -> make_owned loc garg.lsym item.path garg.typ 
+          | None -> return ([], [], [], [])
         in
         return (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
       )
@@ -561,9 +561,9 @@ let make_label_spec
     ListM.fold_leftM (fun (iL, iR, iC, mapping) garg ->
         let item = garg_item (Inv lname) garg in
         let* (l, r, c, mapping') = 
-          if garg.accessed 
-          then make_owned loc garg.lsym item.path garg.typ 
-          else return ([], [], [], [])
+          match garg.accessed with
+          | Some loc -> make_owned loc garg.lsym item.path garg.typ 
+          | None ->  return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
