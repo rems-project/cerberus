@@ -84,9 +84,9 @@ end
 
 module Make (G : sig val global : Global.t end) = struct
 
-  open VariableBinding
+  module VB = VariableBinding
 
-  type binding = Sym.t * VariableBinding.t
+  type binding = Sym.t * VB.t
 
   type context_item = 
     | Binding of binding
@@ -121,7 +121,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
-    | Binding (sym,binding) -> VariableBinding.pp ~print_all_names ~print_used (sym,binding)
+    | Binding (sym,binding) -> VB.pp ~print_all_names ~print_used (sym,binding)
     | Marker -> uformat [FG (Blue,Dark)] "\u{25CF}" 1 
 
   (* reverses the list order for matching standard mathematical
@@ -137,7 +137,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* internal *)
-  let get_safe (sym: Sym.t) (Local local) : VariableBinding.t option =
+  let get_safe (sym: Sym.t) (Local local) : VB.t option =
     let rec aux = function
     | Binding (sym',b) :: _ when Sym.equal sym' sym -> Some b
     | _ :: local -> aux local
@@ -244,7 +244,7 @@ module Make (G : sig val global : Global.t end) = struct
        begin match b with
        | Resource re -> Binding (sym', UsedResource (re,where)) :: rest
        | _ -> kind_mismatch_internal_error 
-                ~expect:KResource ~has:(VariableBinding.kind b)
+                ~expect:KResource ~has:(VB.kind b)
        end
     | i :: rest -> i :: aux rest
     | [] -> unbound_internal_error sym
@@ -275,7 +275,7 @@ module Make (G : sig val global : Global.t end) = struct
   let kind sym (Local local) = 
     Option.bind 
       (get_safe sym (Local local))
-      (fun b -> Some (kind b))
+      (fun b -> Some (VB.kind b))
 
 
 
@@ -297,7 +297,7 @@ module Make (G : sig val global : Global.t end) = struct
     let merge_ci = function
       | (Marker, Marker) -> Marker
       | (Binding (s1,vb1), Binding(s2,vb2)) ->
-         begin match Sym.equal s1 s2, VariableBinding.agree vb1 vb2 with
+         begin match Sym.equal s1 s2, VB.agree vb1 vb2 with
          | true, Some vb -> Binding (s1,vb)
          | _ -> incompatible ()
          end
@@ -319,21 +319,21 @@ module Make (G : sig val global : Global.t end) = struct
     | None -> unbound_internal_error name
     | Some (Computational (lname,bt)) -> (bt,lname)
     | Some b -> kind_mismatch_internal_error 
-                  ~expect:KComputational ~has:(VariableBinding.kind b)
+                  ~expect:KComputational ~has:(VB.kind b)
 
   let get_l (name: Sym.t) (local:t) = 
     match get_safe name local with 
     | None -> unbound_internal_error name
     | Some (Logical ls) -> ls
     | Some b -> kind_mismatch_internal_error 
-                  ~expect:KLogical ~has:(VariableBinding.kind b)
+                  ~expect:KLogical ~has:(VB.kind b)
 
   let get_r (name: Sym.t) (local:t) = 
     match get_safe name local with 
     | None -> unbound_internal_error name
     | Some (Resource re) -> re
     | Some b -> kind_mismatch_internal_error 
-                  ~expect:KResource ~has:(VariableBinding.kind b)
+                  ~expect:KResource ~has:(VB.kind b)
 
 
   let add_a aname (bt,lname) = 

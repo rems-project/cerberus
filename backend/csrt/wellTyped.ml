@@ -344,7 +344,7 @@ module Make (G : sig val global : Global.t end) = struct
          let* () = check_bound loc local KLogical p.pointee in
          WIT.welltyped loc local (LS.Base BT.Loc) p.pointer
       | Predicate p -> 
-         let* def = match Global.get_predicate_def loc G.global p.name, p.name with
+         let* def = match Global.get_predicate_def G.global p.name, p.name with
            | Some def, _ -> return def
            | None, Tag tag -> fail loc (Missing_struct tag)
            | None, Id id -> fail loc (Missing_predicate id)

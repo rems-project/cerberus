@@ -7,7 +7,6 @@ module SymMap = Map.Make(Sym)
 module IdMap = Map.Make(Id)
 module StringMap = Map.Make(String)
 module CF = Cerb_frontend
-module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
 module IT = IndexTerms
@@ -159,13 +158,12 @@ module BTMap = Map.Make(BT)
 
 type t = 
   { struct_decls : struct_decls; 
-    fun_decls : (Loc.t * FT.t) SymMap.t;
+    fun_decls : (Locations.t * FT.t) SymMap.t;
     impl_fun_decls : (FT.t) ImplMap.t;
     impl_constants : BT.t ImplMap.t;
     stdlib_funs : SymSet.t;
     resource_predicates : predicate_definition StringMap.t;
     solver_context : Z3.context;
-    (* solver_bt_mapping : Z3.Sort.sort BTMap.t; *)
     logical : (Sym.t * LS.t) list;
     computational : (Sym.t * (Sym.t * BT.t)) list;
     constraints : (LC.t * Z3.Expr.expr) list;
@@ -179,13 +177,12 @@ let empty solver_context =
     stdlib_funs = SymSet.empty;
     resource_predicates = builtin_predicates;
     solver_context;
-    (* solver_bt_mapping = BTMap.empty; *)
     logical = [];
     computational = [];
     constraints = [];
   }
 
-let get_predicate_def loc global predicate_name = 
+let get_predicate_def global predicate_name = 
   let open Resources in
   match predicate_name with
   | Id id -> 

@@ -589,7 +589,7 @@ module Make (G : sig val global : Global.t end) = struct
              fail loc (Resource_mismatch {expect; has; state; situation}) 
           end
        | _ ->         
-          let def = match Global.get_predicate_def loc G.global p.name with
+          let def = match Global.get_predicate_def G.global p.name with
             | Some def -> def
             | None -> Debug_ocaml.error "missing predicate definition"
           in
@@ -692,7 +692,7 @@ module Make (G : sig val global : Global.t end) = struct
         ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
             match resource with
             | RE.Predicate p ->
-               let def = match Global.get_predicate_def loc G.global p.name with
+               let def = match Global.get_predicate_def G.global p.name with
                  | Some def -> def
                  | None -> Debug_ocaml.error "missing predicate definition"
                in

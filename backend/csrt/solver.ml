@@ -107,8 +107,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let used_resource_for_pointer local it
-      : (Loc.t list) option = 
+  let used_resource_for_pointer local it : (Locations.t list) option = 
     let points = 
       List.filter_map (fun (name, (re, where)) ->
           match RE.pointer re with
