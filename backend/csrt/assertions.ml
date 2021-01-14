@@ -1,5 +1,4 @@
 open Pp
-open TypeErrors
 open Resultat
 
 module CF = Cerb_frontend
@@ -8,10 +7,14 @@ module IT = IndexTerms
 module AST = Parse_ast
 module LC = LogicalConstraints
 module PIT = Parse_ast.IndexTerms
+module TE = TypeErrors
+
 open Parse_ast
 
-(* probably should record source location information *)
-(* stealing some things from core_parser *)
+(* probably should record better source location information *)
+
+(* stealing some things from core_parser and core_parser_driver *)
+(* and https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)
 
 
 
@@ -39,16 +42,14 @@ let cn_attributes (CF.Annot.Attrs attrs) =
 
 
 
-let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, type_error) m = 
-  (* print stderr (item "mapping" (Mapping.pp mapping));
-   * print stderr (item "o" (Path.pp o)); *)
+let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, TE.type_error) m = 
   let open Mapping in
   let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
   match found with
-  | None -> 
-     fail loc (Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
   | Some {sym; bt; _} -> 
      return (bt, sym)
+  | None -> 
+     fail loc (TE.Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
 
 
 
@@ -56,7 +57,7 @@ let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, type_erro
 (* change this to return unit IT.term, then apply index term type
    checker *)
 let rec resolve_index_term loc mapping (it: PIT.index_term) 
-        : (BT.t IT.term, type_error) m =
+        : (BT.t IT.term, TE.type_error) m =
   let aux = resolve_index_term loc mapping in
   let (IndexTerm (l, it_)) = it in
   match it_ with
@@ -137,8 +138,6 @@ let resolve_constraints mapping its =
 
 
 
-(* https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html *)
-(* stealing from core_parser_driver *)
 
 let parse_condition default_label (loc, s) =
   let module P = Parser.Make(struct let default_label = default_label end) in
@@ -146,14 +145,14 @@ let parse_condition default_label (loc, s) =
   try return (loc, P.spec_entry Lexer.read lexbuf) with
   | Lexer.SyntaxError c ->
      (* let loc = Locations.point @@ Lexing.lexeme_start_p lexbuf in *)
-     fail loc (Generic !^("invalid symbol: " ^ c))
+     fail loc (TE.Generic !^("invalid symbol: " ^ c))
   | P.Error ->
      (* let loc = 
       *   let startp = Lexing.lexeme_start_p lexbuf in
       *   let endp = Lexing.lexeme_end_p lexbuf in
       *   Locations.region (startp, endp) None 
       * in *)
-     fail loc (Generic !^("unexpected token: " ^ Lexing.lexeme lexbuf))
+     fail loc (TE.Generic !^("unexpected token: " ^ Lexing.lexeme lexbuf))
   | Failure msg ->
      Debug_ocaml.error "assertion parsing error"
 
@@ -195,7 +194,7 @@ let check_accessed glob_cts (loc, name) =
       ) glob_cts
   in
   if exists then return ()
-  else fail loc (Generic !^(name ^ " not a global"))
+  else fail loc (TE.Generic !^(name ^ " not a global"))
 
 
 let name sym = 
@@ -222,8 +221,10 @@ let parse_function_type attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sym.t 
         | "ensures" -> 
            let* (r,c) = parse_conditions "end" attr.args in
            return (accessed, (pre_r, pre_c), (post_r @ r, post_c @ c))
-        | "inv" -> fail (Id.loc attr.keyword) (Generic !^"cannot use 'inv' here")
-        | wrong -> fail (Id.loc attr.keyword) (Generic !^("unknown keyword '" ^ wrong ^ "'"))
+        | "inv" -> 
+           fail (Id.loc attr.keyword) (TE.Generic !^"cannot use 'inv' here")
+        | wrong -> 
+           fail (Id.loc attr.keyword) (TE.Generic !^("unknown keyword '" ^ wrong ^ "'"))
       ) ([],([],[]),([],[])) cn_attributes
   in
   let* () = ListM.iterM (check_accessed glob_cts) accessed in
@@ -250,25 +251,25 @@ let parse_function_type attrs glob_cts ((ret_ct, arg_cts) : (Sctypes.t * (Sym.t 
 
 
 
-let parse_label_type loc lname attrs globs (fargs : aarg list) (larg_cts : (Sym.t * Sctypes.t) list) =
+let parse_label_type loc label attrs globs (fargs : aarg list) (larg_cts : (Sym.t * Sctypes.t) list) =
   let cn_attributes = cn_attributes attrs in
   let* (pre_r, pre_c) = 
     ListM.fold_leftM (fun (pre_r, pre_c) attr ->
         match Id.s attr.keyword with
         | "inv" -> 
-           let* (r,c) = parse_conditions lname attr.args in
+           let* (r,c) = parse_conditions label attr.args in
            return (pre_r @ r, pre_c @ c)
         | "accesses" -> 
            fail (Id.loc attr.keyword) 
-             (Generic !^"cannot use 'accesses' here")
+             (TE.Generic !^"cannot use 'accesses' here")
         | "requires" -> 
            fail (Id.loc attr.keyword) 
-             (Generic !^"cannot use 'requires' here")
+             (TE.Generic !^"cannot use 'requires' here")
         | "ensures" -> 
            fail (Id.loc attr.keyword) 
-             (Generic !^"cannot use 'ensures' here")
+             (TE.Generic !^"cannot use 'ensures' here")
         | wrong -> 
-           fail (Id.loc attr.keyword) (Generic !^("unknown keyword '" ^ wrong ^ "'"))
+           fail (Id.loc attr.keyword) (TE.Generic !^("unknown keyword '" ^ wrong ^ "'"))
       ) ([],[]) cn_attributes
   in
   let largs = 

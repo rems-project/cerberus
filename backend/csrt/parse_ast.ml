@@ -111,10 +111,6 @@ type varg = { name: string; vsym: Sym.t; typ : Sctypes.t }
 type aarg = { name: string; asym: Sym.t; typ : Sctypes.t }
 type garg = { name: string; lsym: Sym.t; typ : Sctypes.t; accessed : Loc.t option }
 
-(* type arg = 
- *   | Aarg of aarg
- *   | Varg of varg
- *   | Garg of garg *)
 
 type vargs = varg list
 type aargs = aarg list

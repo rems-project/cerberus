@@ -146,9 +146,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   type variable_relation = 
-    | Pointee
-
-  
+    | Pointee  
 
 
     

@@ -13,7 +13,7 @@ module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
 open CF.Mucore
-open TypeErrors
+(* open TypeErrors *)
 open Pp
 open Debug_ocaml
 open ListM
@@ -39,7 +39,7 @@ type ctype_information = {
 let ct_of_ct loc ct = 
   match Sctypes.of_ctype ct with
   | Some ct -> return ct
-  | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+  | None -> fail loc (TypeErrors.Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
 
 
 (* for convenience *)
@@ -352,7 +352,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
     : ((FT.t, LT.t, ctype_information, BT.t, 
         CA.ct mu_struct_def * Global.struct_decl, 
         CA.ct mu_union_def, 'bty) mu_file,
-      type_error) m =
+      TypeErrors.type_error) m =
 
 
   let* ((tagDefs : (CA.ct mu_struct_def * Global.struct_decl, CA.ct mu_union_def) mu_tag_definitions),
@@ -421,7 +421,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
       let loc = Loc.update Loc.unknown floc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
-        fail loc (Unsupported err) 
+        fail loc (TypeErrors.Unsupported err) 
       else
         let* ret_ctype = ct_of_ct loc ret_ctype in
         let* args = 

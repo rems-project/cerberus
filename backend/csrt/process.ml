@@ -2,7 +2,6 @@ open Pp
 open Resultat
 module CF=Cerb_frontend
 open CF.Mucore
-open TypeErrors
 open ReturnTypes
 
 
@@ -19,7 +18,7 @@ let record_tagDefs (global: Global.t) tagDefs =
   PmapM.foldM (fun sym def (global: Global.t) ->
       match def with
       | M_UnionDef _ -> 
-         fail Loc.unknown (Unsupported !^"todo: union types")
+         fail Loc.unknown (TypeErrors.Unsupported !^"todo: union types")
       | M_StructDef (_ct, decl) -> 
          let struct_decls = SymMap.add sym decl global.struct_decls in
          return { global with struct_decls }
@@ -30,15 +29,14 @@ let record_funinfo global funinfo =
   let module WT = WellTyped.Make(struct let global = global end) in
   PmapM.foldM
     (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, is_variadic, has_proto)) global ->
-      let loc' = Loc.update Loc.unknown loc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
-        fail loc' (Unsupported err)
+        fail loc (TypeErrors.Unsupported err)
       else
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
-        let* () = WT.WFT.welltyped loc' WT.L.empty ftyp in
-        let fun_decls = SymMap.add fsym (loc', ftyp) global.Global.fun_decls in
+        let* () = WT.WFT.welltyped loc WT.L.empty ftyp in
+        let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global
 
@@ -72,14 +70,13 @@ let process_functions genv fns =
       | M_Fun (rbt, args, body) ->
          let* (loc, ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t
-           | None -> fail Loc.unknown (Missing_function fsym)
+           | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
          in
          C.check_function loc fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels) ->
-         let loc = Loc.update Loc.unknown loc in
          let* (loc', ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t
-           | None -> fail loc (Missing_function fsym)
+           | None -> fail loc (TypeErrors.Missing_function fsym)
          in
          C.check_procedure loc' fsym args rbt body ftyp labels
       | M_ProcDecl _
