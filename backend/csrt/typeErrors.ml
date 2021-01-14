@@ -14,8 +14,8 @@ type label_kind =
 
 
 type access =
-  | Load 
-  | Store
+  | Load of BT.member option
+  | Store of BT.member option
   | Kill
   | Free
 
@@ -25,6 +25,26 @@ type situation =
   | LabelCall of label_kind
   | Subtyping
   | Unpacking
+
+let for_access = function
+  | Kill -> !^"for de-allocating"
+  | Load None ->  !^"for reading"
+  | Load (Some m) -> !^"for reading struct member" ^^^ Id.pp m
+  | Store None ->  !^"for writing"
+  | Store (Some m) -> !^"struct member" ^^^ Id.pp m
+  | Free -> !^"for free-ing"
+
+let for_situation = function
+  | Access access -> for_access access
+  | FunctionCall -> !^"for calling function"
+  | LabelCall Return -> !^"for returning"
+  | LabelCall Loop -> !^"for loop"
+  | LabelCall Other -> !^"for calling label"
+  | Subtyping -> !^"for subtyping"
+  | Unpacking -> !^"for unpacking"
+
+
+
 
 
 type sym_or_string = 
@@ -40,10 +60,11 @@ type type_error =
   | Missing_predicate of string
   | Missing_member of BT.tag * BT.member
 
-  | Missing_ownership of BT.member option * (Loc.t list) option * situation (*  *)
+  | Missing_ownership of (Loc.t list) option * situation (*  *)
+  | Unknown_resource_size of RE.t * situation (*  *)
+  | Missing_resource of RE.t * (Loc.t list) option * situation (*  *)
   | Resource_mismatch of { has: RE.t; expect: RE.t; situation : situation} (*  *)
   | Cannot_unpack of Resources.predicate * situation (*  *)
-  | Cannot_pack of Resources.t * situation           (*  *)
   | Unused_resource of { resource: Resources.t } (*  *)
   | Uninitialised of BT.member option
   | Misaligned of access
@@ -100,35 +121,20 @@ let pp_type_error = function
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])
 
-    | Missing_ownership (omember, owhere, situation) ->
-     let msg = match situation, omember with
-     | Access Kill, None ->  
-        !^"Missing ownership for de-allocating"
-     | Access Kill, Some m ->  
-        !^"Missing ownership for de-allocating struct member" ^^^ Id.pp m
-     | Access Load, None   ->  
-        !^"Missing ownership for reading"
-     | Access Load, Some m -> 
-        !^"Missing ownership for reading struct member" ^^^ Id.pp m
-     | Access Store, None   -> 
-        !^"Missing ownership for writing"
-     | Access Store, Some m -> 
-        !^"Missing ownership for writing struct member" ^^^ Id.pp m
-     | Access Free, _ -> 
-        !^"Missing ownership for free-ing"
-     | FunctionCall, _ -> 
-        !^"Missing ownership for calling function"
-     | LabelCall Return, _ -> 
-        !^"Missing ownership for returning"
-     | LabelCall Loop, _ -> 
-        !^"Missing ownership for loop"
-     | LabelCall Other, _ -> 
-        !^"Missing ownership for calling label"
-     | Subtyping, _ -> 
-        !^"Missing ownership for subtyping"
-     | Unpacking, _ -> 
-        !^"Missing ownership for unpacking"
+  | Missing_ownership (owhere, situation) ->
+     let msg = !^"Missing ownership" ^^^ for_situation situation in
+     let extra = match owhere with
+       | None -> []
+       | Some locs -> 
+          [!^"Maybe last used in the following places:" ^^^
+             Pp.list Loc.pp locs]
      in
+     (msg, extra)
+  | Unknown_resource_size (re, situation) ->
+     let msg = !^"Unknown size of resource" ^^^ for_situation situation in
+     (msg, [])
+  | Missing_resource (re, owhere, situation) ->
+     let msg = !^"Missing resource" ^^^ for_situation situation in
      let extra = match owhere with
        | None -> []
        | Some locs -> 
@@ -141,51 +147,9 @@ let pp_type_error = function
         !^"but have resource" ^^^ RE.pp has, [])
   | Cannot_unpack (predicate, situation) ->
      let re = RE.Predicate predicate in
-     let msg = match situation with
-     | Access Kill ->
-        !^"Cannot unpack resource needed for de-allocating"
-     | Access Load ->
-        !^"Cannot unpack resource needed for reading"
-     | Access Store ->
-        !^"Cannot unpack resource needed for writing"
-     | Access Free ->
-        !^"Cannot unpack resource needed for free-ing"
-     | FunctionCall ->
-        !^"Cannot unpack resource needed for calling function"
-     | LabelCall Return ->
-        !^"Cannot unpack resource needed for returning"
-     | LabelCall Loop ->
-        !^"Cannot unpack resource needed for loop"
-     | LabelCall Other ->
-        !^"Cannot unpack resource needed for jumping to label"
-     | Subtyping ->
-        !^"Cannot unpack resource needed for subtyping"
-     | Unpacking ->
-        !^"Cannot unpack resource needed for unpacking"
-     in
-     (msg ^^^ parens (RE.pp re), [])
-  | Cannot_pack (re, situation) ->
-     let msg = match situation with
-     | Access Kill ->
-        !^"Cannot pack resource needed for de-allocating"
-     | Access Load ->
-        !^"Cannot pack resource needed for reading"
-     | Access Store ->
-        !^"Cannot pack resource needed for writing"
-     | Access Free ->
-        !^"Cannot pack resource needed for free-ing"
-     | FunctionCall ->
-        !^"Cannot pack resource needed for calling function"
-     | LabelCall Return ->
-        !^"Cannot pack resource needed for returning"
-     | LabelCall Loop ->
-        !^"Cannot pack resource needed for loop"
-     | LabelCall Other ->
-        !^"Cannot pack resource needed for jumping to label"
-     | Subtyping ->
-        !^"Cannot pack resource needed for subtyping"
-     | Unpacking ->
-        !^"Cannot pack resource needed for unpacking"
+     let msg = 
+       !^"Cannot unpack resource needed" ^^^ 
+         for_situation situation
      in
      (msg ^^^ parens (RE.pp re), [])
 
@@ -201,8 +165,8 @@ let pp_type_error = function
   | Misaligned access ->
      let msg = match access with
      | Kill -> !^"Misaligned de-allocation operation"
-     | Load -> !^"Misaligned read"
-     | Store ->  !^"Misaligned write"
+     | Load _ -> !^"Misaligned read"
+     | Store _ ->  !^"Misaligned write"
      | Free ->  !^"Misaligned free"
      in
      (msg, [])

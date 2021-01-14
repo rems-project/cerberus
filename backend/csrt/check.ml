@@ -491,7 +491,7 @@ module Make (G : sig val global : Global.t end) = struct
       let* resource_name, resource = match o_resource with
         | None -> 
            let olast_used = S.used_resource_for_pointer local pointer in
-           fail loc (Missing_ownership (None, olast_used, situation))
+           fail loc (Missing_ownership (olast_used, situation))
         | Some (resource_name, resource) -> 
            return (resource_name, resource)
       in
@@ -520,7 +520,7 @@ module Make (G : sig val global : Global.t end) = struct
         in
         return local
       else
-        fail loc (Generic (!^"cannot tell size of available resource" ^^^ RE.pp resource))
+        fail loc (Unknown_resource_size (resource, situation))
 
 
 
@@ -548,7 +548,7 @@ module Make (G : sig val global : Global.t end) = struct
           fail loc (Resource_mismatch {expect = request; has = resource; situation})             
        | None -> 
           let olast_used = S.used_resource_for_pointer local p.pointer in
-          fail loc (Missing_ownership (None, olast_used, situation))
+          fail loc (Missing_ownership (olast_used, situation))
        end
     | Predicate p ->
        let o_resource = S.predicate_for local p.name p.iargs in
@@ -567,18 +567,15 @@ module Make (G : sig val global : Global.t end) = struct
             | None -> Debug_ocaml.error "missing predicate definition"
           in
           let else_prompt = 
-            fail loc (Missing_ownership (None, None, situation))
+            fail loc (Missing_resource (request, None, situation))
           in
-          debug 6 (lazy (!^"trying to pack" ^^^ RE.pp request));
           let attempt_prompts = 
             List.map (fun lft ->
-                debug 6 (lazy (item "clause" (LFT.pp lft)));
                 prompt (R_Packing {loc; situation; local; lft})
               ) (predicate_pack_functions p def)
           in
           let choices = attempt_prompts @ [else_prompt] in
           let choices1 = List1.make (List.hd choices, List.tl choices) in
-          debug 6 (lazy !^"success");
           let* (lrt, local) = try_choices choices1 in
           let local = bind_logical local lrt in
           resource_request_prompt loc situation local request unis
@@ -1279,11 +1276,11 @@ module Make (G : sig val global : Global.t end) = struct
               | Block {block_type = Uninit; _} -> fail loc (Uninitialised is_field)
               | Block {block_type = Padding; _} -> fail loc (Generic !^"cannot read padding bytes")
               | Block {block_type = Nothing; _} -> fail loc (Generic !^"cannot read empty bytes")
-              | Predicate pred -> fail loc (Cannot_unpack (pred, Access Load))
+              | Predicate pred -> fail loc (Cannot_unpack (pred, Access (Load is_field)))
               end
            | None -> 
               let olast_used = S.used_resource_for_pointer local pointer in
-              fail loc (Missing_ownership (is_field, olast_used, Access Load))
+              fail loc (Missing_ownership (olast_used, Access (Load is_field)))
          in
          let (Base vbt) = L.get_l pointee local in
          if BT.equal vbt bt 
@@ -1359,7 +1356,7 @@ module Make (G : sig val global : Global.t end) = struct
     let v = Sym.fresh () in
     let bt = Struct tag in
     let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
-    let* local = remove_ownership loc (Access Load) local pointer (Num size) in
+    let* local = remove_ownership loc (Access (Load None)) local pointer (Num size) in
     let rt = 
       LRT.Logical ((v, Base bt), 
       LRT.Resource (Points {pointer; pointee = v; size},
@@ -1518,7 +1515,7 @@ module Make (G : sig val global : Global.t end) = struct
             let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
             let* () = ensure_base_type loc ~expect:Loc parg.bt in
             let* () = 
-              ensure_aligned loc local Store (S (parg.bt, parg.lname)) act.item.ct
+              ensure_aligned loc local (Store None) (S (parg.bt, parg.lname)) act.item.ct
             in
             (* The generated Core program will in most cases before this
                already have checked whether the store value is
@@ -1534,7 +1531,8 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let size = Memory.size_of_ctype act.item.ct in
             let* local = 
-              remove_ownership parg.loc (Access Store) local (S (parg.bt, parg.lname)) 
+              remove_ownership parg.loc (Access (Store None)) 
+                local (S (parg.bt, parg.lname)) 
                 (Num size) in
             let* bindings = 
               store loc local varg.bt (S (parg.bt, parg.lname))
@@ -1545,7 +1543,7 @@ module Make (G : sig val global : Global.t end) = struct
             let* parg = arg_of_asym local pasym in
             let* () = ensure_base_type loc ~expect:Loc parg.bt in
             let* () = 
-              ensure_aligned loc local Load (S (parg.bt, parg.lname)) act.item.ct
+              ensure_aligned loc local (Load None) (S (parg.bt, parg.lname)) act.item.ct
             in
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
