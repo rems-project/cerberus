@@ -310,1423 +310,931 @@ module Make (G : sig val global : Global.t end) = struct
 
     open DefaultNames
 
-  module Prompt = struct
+    module Prompt = struct
 
-    type resource_request = 
-      { local : L.t;
-        original_local : L.t;
-        preferred_names : Explain.names;
-        unis : Sym.t Uni.unis;
-        situation: situation;
-        loc: loc;
-        resource : RE.t;
-      }
+      type resource_request = 
+        { local : L.t;
+          original_local : L.t;
+          preferred_names : Explain.names;
+          unis : Sym.t Uni.unis;
+          situation: situation;
+          loc: loc;
+          resource : RE.t;
+        }
 
-    type packing_request = 
-      { local : L.t;
-        preferred_names : Explain.names;
-        situation: situation;
-        loc: loc;
-        lft : LFT.t;
-      }
+      type packing_request = 
+        { local : L.t;
+          preferred_names : Explain.names;
+          situation: situation;
+          loc: loc;
+          lft : LFT.t;
+        }
 
-    type err = loc * Tools.stacktrace option * type_error
+      type err = loc * Tools.stacktrace option * type_error
 
-    type 'a m = 
-      | Done : 'a -> 'a m
-      | Prompt : 'r prompt * ('r -> 'a m) -> 'a m
+      type 'a m = 
+        | Done : 'a -> 'a m
+        | Prompt : 'r prompt * ('r -> 'a m) -> 'a m
 
-    and 'r prompt = 
-      | R_Resource : resource_request -> (Sym.t Uni.unis * L.t) prompt
-      | R_Packing : packing_request -> (LRT.t * L.t) prompt
-      | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
-      | R_Error : err -> 'r prompt
-
-
-    module Operators = struct
-
-      let return a = 
-        Done a
-
-      let fail loc err = 
-        let r = R_Error (loc, Tools.do_stack_trace (),  err) in
-        Prompt (r, fun r -> Done r)
-
-      let prompt r = 
-        Prompt (r, fun reply -> Done reply)
-
-      let try_choices choices = 
-        let r = R_Try choices in
-        Prompt (r, fun reply -> Done reply)
+      and 'r prompt = 
+        | R_Resource : resource_request -> (Sym.t Uni.unis * L.t) prompt
+        | R_Packing : packing_request -> (LRT.t * L.t) prompt
+        | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
+        | R_Error : err -> 'r prompt
 
 
-      let rec bind m f = 
-        match m with
-        | Done a -> f a
-        | Prompt (r, c) -> Prompt (r, fun r -> bind (c r) f)
+      module Operators = struct
 
-      let (let*) = bind
+        let return a = 
+          Done a
+
+        let fail loc err = 
+          let r = R_Error (loc, Tools.do_stack_trace (),  err) in
+          Prompt (r, fun r -> Done r)
+
+        let prompt r = 
+          Prompt (r, fun reply -> Done reply)
+
+        let try_choices choices = 
+          let r = R_Try choices in
+          Prompt (r, fun reply -> Done reply)
+
+
+        let rec bind m f = 
+          match m with
+          | Done a -> f a
+          | Prompt (r, c) -> Prompt (r, fun r -> bind (c r) f)
+
+        let (let*) = bind
+
+      end
 
     end
 
-  end
 
 
+    module Spine (I : AT.I_Sig) = struct
 
-  module Spine (I : AT.I_Sig) = struct
+      module FT = AT.Make(I)
+      module NFT = NormalisedArgumentTypes.Make(I)
 
-    module FT = AT.Make(I)
-    module NFT = NormalisedArgumentTypes.Make(I)
+      let pp_argslocs =
+        Pp.list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
 
-    let pp_argslocs =
-      Pp.list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
-
-    open Prompt
-    open Prompt.Operators
+      open Prompt
+      open Prompt.Operators
 
 
-    let spine 
-          (loc : loc) 
-          preferred_names
-          situation 
-          local
-          (arguments : arg list) 
-          (ftyp : FT.t) : (I.t * L.t) m =
+      let spine 
+            (loc : loc) 
+            preferred_names
+            situation 
+            local
+            (arguments : arg list) 
+            (ftyp : FT.t) : (I.t * L.t) m =
 
-      let open NFT in
+        let open NFT in
 
-      let original_local = local in
-      let names = Explain.{preferred_names; default_names} in
+        let original_local = local in
+        let names = Explain.{preferred_names; default_names} in
 
-      let ftyp = NFT.normalise ftyp in
-      let unis = SymMap.empty in
+        let ftyp = NFT.normalise ftyp in
+        let unis = SymMap.empty in
 
-      debug 6 (lazy (!^"function call"));
-      debug 6 (lazy (item "local" (L.pp local)));
-      debug 6 (lazy (item "spec" (NFT.pp ftyp)));
+        debug 6 (lazy (!^"function call"));
+        debug 6 (lazy (item "local" (L.pp local)));
+        debug 6 (lazy (item "spec" (NFT.pp ftyp)));
 
-      let* ftyp_l = 
-        let rec check_computational args ftyp = 
-          match args, ftyp with
-          | (arg :: args), (Computational ((s, bt), ftyp))
-               when BT.equal arg.bt bt ->
-             let ftyp' = NFT.subst_var {before = s; after = arg.lname} ftyp in
-             check_computational args ftyp'
-          | (arg :: _), (Computational ((_, bt), _))  ->
-             fail arg.loc (Mismatch {has = Base arg.bt; expect = Base bt})
-          | [], (L ftyp) -> 
-             return ftyp
-          | _ -> 
-             let expect = NFT.count_computational ftyp in
-             let has = List.length arguments in
-             fail loc (Number_arguments {expect; has})
+        let* ftyp_l = 
+          let rec check_computational args ftyp = 
+            match args, ftyp with
+            | (arg :: args), (Computational ((s, bt), ftyp))
+                 when BT.equal arg.bt bt ->
+               let ftyp' = NFT.subst_var {before = s; after = arg.lname} ftyp in
+               check_computational args ftyp'
+            | (arg :: _), (Computational ((_, bt), _))  ->
+               fail arg.loc (Mismatch {has = Base arg.bt; expect = Base bt})
+            | [], (L ftyp) -> 
+               return ftyp
+            | _ -> 
+               let expect = NFT.count_computational ftyp in
+               let has = List.length arguments in
+               fail loc (Number_arguments {expect; has})
+          in
+          check_computational arguments ftyp 
         in
-        check_computational arguments ftyp 
-      in
 
-      let* ((unis, lspec), ftyp_r) = 
-        let rec delay_logical (unis, lspec) ftyp =
-          debug 6 (lazy (item "local" (L.pp local)));
-          debug 6 (lazy (item "spec" (NFT.pp_l ftyp)));
-          match ftyp with
-          | Logical ((s, ls), ftyp) ->
-             let s' = Sym.fresh () in
-             let unis = SymMap.add s' Uni.{resolved = None} unis in
-             let ftyp' = NFT.subst_var_l {before = s; after = s'} ftyp in
-             delay_logical (unis, lspec @ [(s', ls)]) ftyp'
-          | R ftyp -> 
-             return ((unis, lspec), ftyp)
+        let* ((unis, lspec), ftyp_r) = 
+          let rec delay_logical (unis, lspec) ftyp =
+            debug 6 (lazy (item "local" (L.pp local)));
+            debug 6 (lazy (item "spec" (NFT.pp_l ftyp)));
+            match ftyp with
+            | Logical ((s, ls), ftyp) ->
+               let s' = Sym.fresh () in
+               let unis = SymMap.add s' Uni.{resolved = None} unis in
+               let ftyp' = NFT.subst_var_l {before = s; after = s'} ftyp in
+               delay_logical (unis, lspec @ [(s', ls)]) ftyp'
+            | R ftyp -> 
+               return ((unis, lspec), ftyp)
+          in
+          delay_logical (unis, []) ftyp_l
         in
-        delay_logical (unis, []) ftyp_l
-      in
 
-      let* (local, unis, ftyp_c) = 
-        let rec infer_resources local unis ftyp = 
-          debug 6 (lazy (item "local" (L.pp local)));
-          debug 6 (lazy (item "spec" (NFT.pp_r ftyp)));
-          match ftyp with
-          | Resource (resource, ftyp) -> 
-             let rr = {
-                 loc; 
-                 original_local; 
-                 preferred_names;
-                 situation; local; 
-                 unis; 
-                 resource;
-               }
-             in
-             let* (unis, local) = prompt (R_Resource rr) in
-             let new_substs = Uni.find_resolved local unis in
-             let ftyp' = NFT.subst_vars_r new_substs ftyp in
-             infer_resources local unis ftyp'
-          | C ftyp ->
-             return (local, unis, ftyp)
-        in
-        infer_resources local unis ftyp_r
-      in
-
-      let () = 
-        List.iter (fun (s, ls) ->
-            let Uni.{resolved} = SymMap.find s unis in
-            match resolved with
-            | None -> 
-               Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
-            | Some sym ->
-               if not (LS.equal (get_l sym local) ls) then
-                 Debug_ocaml.error "type-incorrectly instantiated logical variable"
-          ) lspec
-      in
-
-      let* rt = 
-        let rec check_constraints = function
-          | Constraint (c, ftyp) ->
-             debug 6 (lazy (item "local" (L.pp local)));
-             debug 6 (lazy (item "lc" (LC.pp c)));
-             debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
-             let (holds, _) = S.constraint_holds local c in
-             if holds then check_constraints ftyp else 
-               let (constr,state) = 
-                 Explain.logical_constraint names original_local c 
+        let* (local, unis, ftyp_c) = 
+          let rec infer_resources local unis ftyp = 
+            debug 6 (lazy (item "local" (L.pp local)));
+            debug 6 (lazy (item "spec" (NFT.pp_r ftyp)));
+            match ftyp with
+            | Resource (resource, ftyp) -> 
+               let rr = {
+                   loc; 
+                   original_local; 
+                   preferred_names;
+                   situation; local; 
+                   unis; 
+                   resource;
+                 }
                in
-               fail loc (Unsat_constraint {constr; state})
-          | I rt -> 
-             return rt
+               let* (unis, local) = prompt (R_Resource rr) in
+               let new_substs = Uni.find_resolved local unis in
+               let ftyp' = NFT.subst_vars_r new_substs ftyp in
+               infer_resources local unis ftyp'
+            | C ftyp ->
+               return (local, unis, ftyp)
+          in
+          infer_resources local unis ftyp_r
         in
-        check_constraints ftyp_c
-      in
 
-      return (rt, local)
-
-  end
-
-  module Spine_FT = Spine(ReturnTypes)
-  module Spine_LFT = Spine(LogicalReturnTypes)
-  module Spine_LT = Spine(False)
-
-
-
-
-  (*** resource inference *******************************************************)
-
-
-  let predicate_substs pred (def : Global.predicate_definition) = 
-    let open Resources in
-    List.map (fun ((before, _), after) -> 
-        Subst.{before; after}
-      ) (List.combine def.iargs pred.iargs)
-
-  let predicate_pack_functions pred def =
-    let substs = predicate_substs pred def in
-    List.map (fun clause ->
-      List.fold_left (fun lft subst ->
-          Option.value_err
-            "predicate arguments not well-sorted"
-            (LFT.subst_it subst lft)
-        ) clause substs
-      ) def.pack_functions
-
-  let predicate_unpack_functions pred def =
-    let substs = predicate_substs pred def in
-    List.map (fun clause ->
-      List.fold_left (fun lft subst ->
-          Option.value_err
-            "predicate arguments not well-sorted"
-            (LFT.subst_it subst lft)
-        ) clause substs
-      ) def.unpack_functions
-    
-
-
-
-
-  let rec remove_ownership_prompt (loc: loc) ~original_local ~preferred_names situation local (pointer: IT.t) (need_size: IT.t) = 
-    let names = Explain.{default_names; preferred_names} in
-    let open Prompt.Operators in
-    if S.equal local need_size (Num Z.zero) then 
-      return local
-    else
-      let o_resource = S.resource_for_pointer local pointer in
-      let* resource_name, resource = match o_resource with
-        | None -> 
-           let (addr, state) = Explain.index_term names original_local pointer in
-           let used = S.used_resource_for_pointer local pointer in
-           fail loc (Missing_ownership {addr; state; used; situation})
-        | Some (resource_name, resource) -> 
-           return (resource_name, resource)
-      in
-      let* have_size = match resource with
-        | Predicate pred -> 
-           let (resource, state) = 
-             Explain.resource names original_local (Predicate pred) 
-           in
-           fail loc (Cannot_unpack {resource; state; situation})
-        | Block {size; _} ->
-           return size
-        | Points {size; _} ->
-           return (Num size)
-      in
-      if S.ge local need_size have_size then 
-        let local = L.use_resource resource_name [loc] local in
-        remove_ownership_prompt loc  ~original_local ~preferred_names
-          situation local (Offset (pointer, have_size)) 
-          (IT.Sub (need_size, have_size))
-      else if S.lt local need_size have_size then 
-        (* if the resource is bigger than needed, keep the remainder
-           as unitialised memory *)
-        let local = L.use_resource resource_name [loc] local in
-        let local = 
-          add_ur (
-              RE.Block {pointer = Offset (pointer, need_size); 
-                        size = IT.Sub (have_size, need_size); 
-                        block_type = Nothing}
-            ) local
+        let () = 
+          List.iter (fun (s, ls) ->
+              let Uni.{resolved} = SymMap.find s unis in
+              match resolved with
+              | None -> 
+                 Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+              | Some sym ->
+                 if not (LS.equal (get_l sym local) ls) then
+                   Debug_ocaml.error "type-incorrectly instantiated logical variable"
+            ) lspec
         in
+
+        let* rt = 
+          let rec check_constraints = function
+            | Constraint (c, ftyp) ->
+               debug 6 (lazy (item "local" (L.pp local)));
+               debug 6 (lazy (item "lc" (LC.pp c)));
+               debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
+               let (holds, _) = S.constraint_holds local c in
+               if holds then check_constraints ftyp else 
+                 let (constr,state) = 
+                   Explain.logical_constraint names original_local c 
+                 in
+                 fail loc (Unsat_constraint {constr; state})
+            | I rt -> 
+               return rt
+          in
+          check_constraints ftyp_c
+        in
+
+        return (rt, local)
+
+    end
+
+    module Spine_FT = Spine(ReturnTypes)
+    module Spine_LFT = Spine(LogicalReturnTypes)
+    module Spine_LT = Spine(False)
+
+
+
+
+    (*** resource inference *******************************************************)
+
+
+    let predicate_substs pred (def : Global.predicate_definition) = 
+      let open Resources in
+      List.map (fun ((before, _), after) -> 
+          Subst.{before; after}
+        ) (List.combine def.iargs pred.iargs)
+
+    let predicate_pack_functions pred def =
+      let substs = predicate_substs pred def in
+      List.map (fun clause ->
+        List.fold_left (fun lft subst ->
+            Option.value_err
+              "predicate arguments not well-sorted"
+              (LFT.subst_it subst lft)
+          ) clause substs
+        ) def.pack_functions
+
+    let predicate_unpack_functions pred def =
+      let substs = predicate_substs pred def in
+      List.map (fun clause ->
+        List.fold_left (fun lft subst ->
+            Option.value_err
+              "predicate arguments not well-sorted"
+              (LFT.subst_it subst lft)
+          ) clause substs
+        ) def.unpack_functions
+
+
+
+
+
+    let rec remove_ownership_prompt (loc: loc) ~original_local ~preferred_names situation local (pointer: IT.t) (need_size: IT.t) = 
+      let names = Explain.{default_names; preferred_names} in
+      let open Prompt.Operators in
+      if S.equal local need_size (Num Z.zero) then 
         return local
       else
-        let (resource, state) = Explain.resource names original_local resource in
-        fail loc (Unknown_resource_size {resource; state; situation})
-
-
-
-
-  let rec resource_request_prompt loc ~original_local ~preferred_names situation local request unis = 
-    let names = Explain.{default_names; preferred_names} in
-    let open Prompt.Operators in
-    let open Resources in
-    match request with
-    | Block b ->
-       let* local = 
-         remove_ownership_prompt loc ~original_local ~preferred_names
-           situation local b.pointer b.size 
-       in
-       return (unis, local)
-    | Points p ->
-       let o_resource = S.resource_for_pointer local p.pointer in
-       begin match o_resource with
-       | Some (resource_name, Points p') when Z.equal p.size p'.size ->
-          begin match Uni.unify_sym p.pointee p'.pointee unis with
-          | Some unis -> 
-             let local = use_resource resource_name [loc] local in
-             return (unis, local)
+        let o_resource = S.resource_for_pointer local pointer in
+        let* resource_name, resource = match o_resource with
           | None -> 
-             let ((expect,has), state) = 
-               Explain.resources names original_local (request, Points p') in
-             fail loc (Resource_mismatch {expect; has; state; situation})
-          end
-       | Some (resource_name, resource)  ->
-          let ((expect,has), state) = 
-            Explain.resources names original_local (request, resource) in
-          fail loc (Resource_mismatch {expect; has; state; situation})             
-       | None -> 
-          let (addr, state) = 
-            Explain.index_term names original_local p.pointer in
-          let used = S.used_resource_for_pointer local p.pointer in
-          fail loc (Missing_ownership {addr; state; used; situation})
-       end
-    | Predicate p ->
-       let o_resource = S.predicate_for local p.name p.iargs in
-       begin match o_resource with
-       | Some (resource_name, p') -> 
-          begin match Uni.unify_syms p.oargs p'.oargs unis with
-          | Some unis -> 
-             let local = use_resource resource_name [loc] local in
-             return (unis, local)
-          | _ ->
-             let ((expect,has), state) = 
-               Explain.resources names original_local (request, Predicate p') in
-             fail loc (Resource_mismatch {expect; has; state; situation}) 
-          end
-       | _ ->         
-          let def = match Global.get_predicate_def G.global p.name with
-            | Some def -> def
-            | None -> Debug_ocaml.error "missing predicate definition"
-          in
-          let else_prompt = 
-            lazy (
-                let (resource, state) = 
-                  Explain.resource names original_local request in
-                fail loc (Missing_resource {resource; used = None; state; situation})
-              )
-          in
-          let attempt_prompts = 
-            List.map (fun lft ->
-                lazy (prompt (R_Packing {loc; preferred_names; situation; local; lft}))
-              ) (predicate_pack_functions p def)
-          in
-          let choices = attempt_prompts @ [else_prompt] in
-          let choices1 = List1.make (List.hd choices, List.tl choices) in
-          let* (lrt, local) = try_choices choices1 in
-          let local = bind_logical local lrt in
-          resource_request_prompt loc ~original_local ~preferred_names
-            situation local request unis
-       end
-
-
-
-  let rec handle_prompt : 'a. 'a Prompt.m -> ('a, type_error) m =
-    fun prompt ->
-    match prompt with
-    | Prompt.Done a -> 
-       return a
-    | Prompt.Prompt (r, c) ->
-       begin match r with
-       | Prompt.R_Error (loc,tr,error) -> 
-          Error (loc,tr,error)
-       | R_Resource {loc; original_local; preferred_names; local; unis; situation; resource} ->
-          let prompt = 
-            resource_request_prompt loc ~original_local ~preferred_names 
-              situation local resource unis in
-          let* (unis, local) = handle_prompt prompt in
-          handle_prompt (c (unis, local))
-       | R_Packing {loc; local; preferred_names; situation; lft} ->
-          let prompt = Spine_LFT.spine loc preferred_names situation local [] lft in
-          let* (lrt, local) = handle_prompt prompt in
-          handle_prompt (c (lrt, local))
-       | R_Try choices ->
-          let rec first_success list1 =
-             let (hd, tl) = List1.dest list1 in
-             let hd_run = handle_prompt (Lazy.force hd) in
-             match tl with
-             | [] -> hd_run
-             | hd' :: tl' -> msum hd_run (lazy (first_success (List1.make (hd', tl'))))
-          in
-          let* reply = first_success choices in
-          handle_prompt (c reply)
-       end
-
-
-
-
-
-  let calltype_ft loc local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
-    let preferred_names = 
-      List.mapi (fun i arg ->
-          let v = "ARG" ^ string_of_int i in
-          (arg.lname, Path.Addr v)
-        ) args
-    in
-    let prompt = Spine_FT.spine loc preferred_names FunctionCall local args ftyp in
-    let* (rt, local) = handle_prompt prompt in
-    return (rt, local)
-
-  let calltype_lt loc local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
-    let prompt = Spine_LT.spine loc [] (LabelCall label_kind) local args ltyp in
-    let* (rt, local) = handle_prompt prompt in
-    return (rt, local)
-
-  (* The "subtyping" judgment needs the same resource/lvar/constraint
-     inference as the spine judgment. So implement the subtyping
-     judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
-  let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
-    let preferred_names = [(arg.lname, Path.Addr "return")] in
-    let lt = LT.of_rt rtyp (LT.I False.False) in
-    let prompt = Spine_LT.spine loc preferred_names Subtyping local [arg] lt in
-    let* (False.False, local) = handle_prompt prompt in
-    return local
-
-  let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
-    let prompt = 
-      remove_ownership_prompt loc ~original_local:local ~preferred_names:[]
-        situation local pointer need_size 
-    in
-    handle_prompt prompt
-
-
-
-  let unpack_resources loc local = 
-    let rec aux local = 
-      let* (local, changed) = 
-        ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
-            match resource with
-            | RE.Predicate p ->
-               let def = match Global.get_predicate_def G.global p.name with
-                 | Some def -> def
-                 | None -> Debug_ocaml.error "missing predicate definition"
-               in
-               let* possible_unpackings = 
-                 ListM.filter_mapM (fun clause ->
-                     let prompt = Spine_LFT.spine loc [] Unpacking local [] clause in
-                     let* (lrt, test_local) = handle_prompt prompt in
-                     let test_local = bind_logical test_local lrt in
-                     let is_reachable = S.is_consistent test_local in
-                     return (if is_reachable then Some test_local else None)
-                   ) (predicate_unpack_functions p def)
-               in
-               begin match possible_unpackings with
-               | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
-               | [new_local] -> return (new_local, true)
-               | _ -> return (local, changed)
-               end
-            | _ ->
-               return (local, changed)
-          ) (local, false) (L.all_named_resources local)
-      in
-      if changed then aux local else return local
-    in
-    aux local
-
-
-
-
-
-  (*** pure value inference *****************************************************)
-
-  (* these functions return types `{x : bt | phi(x), ..}` *)
-  type vt = Sym.t * BT.t * LC.t list
-
-  let rt_of_vt (ret,bt,lcs) = 
-    RT.Computational ((ret, bt), LRT.mConstraints lcs LRT.I)
-
-
-  let infer_tuple (loc : loc) local (args : args) : (vt, type_error) m = 
-    let ret = Sym.fresh () in
-    let bts = List.map (fun arg -> arg.bt) args in
-    let bt = Tuple bts in
-    let lcs = 
-      List.mapi (fun i arg -> 
-          LC.LC (IT.EQ (NthTuple (bt, i, S (bt, ret)), S (arg.bt, arg.lname)))
-        ) args 
-    in
-    return (ret, bt, lcs)
-
-  let infer_constructor (loc : loc) local (constructor : ctor) 
-                        (args : args) : (vt, type_error) m = 
-    let ret = Sym.fresh () in
-    match constructor, args with
-    | M_Ctuple, _ -> 
-       infer_tuple loc local args
-    | M_Carray, _ -> 
-       Debug_ocaml.error "todo: array types"
-    | M_CivCOMPL, _
-    | M_CivAND, _
-    | M_CivOR, _
-    | M_CivXOR, _ 
-      -> 
-       Debug_ocaml.error "todo: Civ..."
-    | M_Cspecified, [arg] ->
-       return (ret, arg.bt, [LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname)))])
-    | M_Cspecified, _ ->
-       fail loc (Number_arguments {has = List.length args; expect = 1})
-    | M_Cnil item_bt, [] -> 
-       let bt = List item_bt in
-       return (ret, bt, [LC (EQ (S (bt, ret), Nil item_bt))])
-    | M_Cnil item_bt, _ -> 
-       fail loc (Number_arguments {has = List.length args; expect=0})
-    | M_Ccons, [arg1; arg2] -> 
-       let bt = List arg1.bt in
-       let* () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
-       let constr = LC (EQ (S (bt, ret), Cons (S (arg1.bt, arg1.lname), S (arg2.bt, arg2.lname)))) in
-       return (ret, arg2.bt, [constr])
-    | M_Ccons, _ ->
-       fail loc (Number_arguments {has = List.length args; expect = 2})
-    | M_Cfvfromint, _ -> 
-       fail loc (Unsupported !^"floats")
-    | M_Civfromfloat, _ -> 
-       fail loc (Unsupported !^"floats")
-
-
-  let ct_of_ct loc ct = 
-    match Sctypes.of_ctype ct with
-    | Some ct -> return ct
-    | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
-
-  let infer_ptrval (loc : loc) local (ptrval : pointer_value) : (vt, type_error) m =
-    let ret = Sym.fresh () in
-    CF.Impl_mem.case_ptrval ptrval
-      ( fun ct -> 
-        let* ct = ct_of_ct loc ct in
-        let it = S (BT.Loc, ret) in
-        let lcs = 
-          [LC.LC (IT.Null it);
-           LC.LC (IT.Representable (ST_Ctype ct, it));
-           (* check: aligned? *)
-           LC.LC (IT.Aligned (ST.of_ctype ct, it))]
+             let (addr, state) = Explain.index_term names original_local pointer in
+             let used = S.used_resource_for_pointer local pointer in
+             fail loc (Missing_ownership {addr; state; used; situation})
+          | Some (resource_name, resource) -> 
+             return (resource_name, resource)
         in
-        return (ret, Loc, lcs) )
-      ( fun sym -> return (ret, FunctionPointer sym, []) )
-      ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
-      ( fun () -> Debug_ocaml.error "unspecified pointer value" )
-
-  let rec infer_mem_value (loc : loc) local (mem : mem_value) : (vt, type_error) m =
-    let open BT in
-    CF.Impl_mem.case_mem_value mem
-      ( fun ct -> fail loc (Unspecified ct) )
-      ( fun _ _ -> 
-        fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
-      ( fun it iv -> 
-        let ret = Sym.fresh () in
-        let v = Memory.integer_value_to_num iv in
-        return (ret, Integer, [LC (EQ (S (Integer, ret), Num v))]) )
-      ( fun ft fv -> fail loc (Unsupported !^"floats") )
-      ( fun _ ptrval -> infer_ptrval loc local ptrval  )
-      ( fun mem_values -> infer_array loc local mem_values )
-      ( fun tag mvals -> 
-        let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
-        infer_struct loc local tag mvals )
-      ( fun tag id mv -> infer_union loc local tag id mv )
-
-  and infer_struct (loc : loc) local (tag : tag) 
-                   (member_values : (member * mem_value) list) : (vt, type_error) m =
-    (* might have to make sure the fields are ordered in the same way as
-       in the struct declaration *)
-    let ret = Sym.fresh () in
-    let* spec = get_struct_decl loc tag in
-    let rec check fields spec =
-      match fields, spec with
-      | ((member, mv) :: fields), ((smember, sct) :: spec) 
-           when member = smember ->
-         let* constrs = check fields spec in
-         let* (s, bt, lcs) = infer_mem_value loc local mv in
-         let* () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
-         let this = IT.StructMember (tag, S (Struct tag, ret), member) in
-         let constrs2 = List.map (LC.subst_it {before = s; after = this}) lcs in
-         return (constrs @ constrs2)
-      | [], [] -> 
-         return []
-      | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-         Debug_ocaml.error "mismatch in fields in infer_struct"
-      | [], ((member, _) :: _) ->
-         fail loc (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing"))
-      | ((member,_) :: _), [] ->
-         fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
-    in
-    let* lcs = check member_values (Global.member_types spec.layout) in
-    return (ret, Struct tag, lcs)
-
-  and infer_union (loc : loc) local (tag : tag) (id : Id.t) 
-                  (mv : mem_value) : (vt, type_error) m =
-    Debug_ocaml.error "todo: union types"
-
-  and infer_array (loc : loc) local (mem_values : mem_value list) = 
-    Debug_ocaml.error "todo: arrays"
-
-  let infer_object_value (loc : loc) local
-                         (ov : 'bty object_value) : (vt, type_error) m =
-    match ov with
-    | M_OVinteger iv ->
-       let ret = Sym.fresh () in
-       let i = Memory.integer_value_to_num iv in
-       return (ret, Integer, [LC (EQ (S (Integer, ret), Num i))])
-    | M_OVpointer p -> 
-       infer_ptrval loc local p
-    | M_OVarray items ->
-       Debug_ocaml.error "todo: arrays"
-    | M_OVstruct (tag, fields) -> 
-       let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
-       infer_struct loc local tag mvals       
-    | M_OVunion (tag, id, mv) -> 
-       infer_union loc local tag id mv
-    | M_OVfloating iv ->
-       fail loc (Unsupported !^"floats")
-
-  let infer_value (loc : loc) local (v : 'bty value) : (vt, type_error) m = 
-    match v with
-    | M_Vobject ov
-    | M_Vloaded (M_LVspecified ov) 
-      ->
-       infer_object_value loc local ov
-    | M_Vunit ->
-       return (Sym.fresh (), Unit, [])
-    | M_Vtrue ->
-       let ret = Sym.fresh () in
-       return (ret, Bool, [LC (S (Bool, ret))])
-    | M_Vfalse -> 
-       let ret = Sym.fresh () in
-       return (ret, Bool, [LC (Not (S (Bool, ret)))])
-    | M_Vlist (ibt, asyms) ->
-       let ret = Sym.fresh () in
-       let* args = args_of_asyms local asyms in
-       let* () = 
-         ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
-       in
-       let its = List.map (fun arg -> IT.S (arg.bt, arg.lname)) args in
-       return (ret, List ibt, [LC (EQ (S (List ibt, ret), List (its, ibt)))])
-    | M_Vtuple asyms ->
-       let* args = args_of_asyms local asyms in
-       infer_tuple loc local args
+        let* have_size = match resource with
+          | Predicate pred -> 
+             let (resource, state) = 
+               Explain.resource names original_local (Predicate pred) 
+             in
+             fail loc (Cannot_unpack {resource; state; situation})
+          | Block {size; _} ->
+             return size
+          | Points {size; _} ->
+             return (Num size)
+        in
+        if S.ge local need_size have_size then 
+          let local = L.use_resource resource_name [loc] local in
+          remove_ownership_prompt loc  ~original_local ~preferred_names
+            situation local (Offset (pointer, have_size)) 
+            (IT.Sub (need_size, have_size))
+        else if S.lt local need_size have_size then 
+          (* if the resource is bigger than needed, keep the remainder
+             as unitialised memory *)
+          let local = L.use_resource resource_name [loc] local in
+          let local = 
+            add_ur (
+                RE.Block {pointer = Offset (pointer, need_size); 
+                          size = IT.Sub (have_size, need_size); 
+                          block_type = Nothing}
+              ) local
+          in
+          return local
+        else
+          let (resource, state) = Explain.resource names original_local resource in
+          fail loc (Unknown_resource_size {resource; state; situation})
 
 
 
 
+    let rec resource_request_prompt loc ~original_local ~preferred_names situation local request unis = 
+      let names = Explain.{default_names; preferred_names} in
+      let open Prompt.Operators in
+      let open Resources in
+      match request with
+      | Block b ->
+         let* local = 
+           remove_ownership_prompt loc ~original_local ~preferred_names
+             situation local b.pointer b.size 
+         in
+         return (unis, local)
+      | Points p ->
+         let o_resource = S.resource_for_pointer local p.pointer in
+         begin match o_resource with
+         | Some (resource_name, Points p') when Z.equal p.size p'.size ->
+            begin match Uni.unify_sym p.pointee p'.pointee unis with
+            | Some unis -> 
+               let local = use_resource resource_name [loc] local in
+               return (unis, local)
+            | None -> 
+               let ((expect,has), state) = 
+                 Explain.resources names original_local (request, Points p') in
+               fail loc (Resource_mismatch {expect; has; state; situation})
+            end
+         | Some (resource_name, resource)  ->
+            let ((expect,has), state) = 
+              Explain.resources names original_local (request, resource) in
+            fail loc (Resource_mismatch {expect; has; state; situation})             
+         | None -> 
+            let (addr, state) = 
+              Explain.index_term names original_local p.pointer in
+            let used = S.used_resource_for_pointer local p.pointer in
+            fail loc (Missing_ownership {addr; state; used; situation})
+         end
+      | Predicate p ->
+         let o_resource = S.predicate_for local p.name p.iargs in
+         begin match o_resource with
+         | Some (resource_name, p') -> 
+            begin match Uni.unify_syms p.oargs p'.oargs unis with
+            | Some unis -> 
+               let local = use_resource resource_name [loc] local in
+               return (unis, local)
+            | _ ->
+               let ((expect,has), state) = 
+                 Explain.resources names original_local (request, Predicate p') in
+               fail loc (Resource_mismatch {expect; has; state; situation}) 
+            end
+         | _ ->         
+            let def = match Global.get_predicate_def G.global p.name with
+              | Some def -> def
+              | None -> Debug_ocaml.error "missing predicate definition"
+            in
+            let else_prompt = 
+              lazy (
+                  let (resource, state) = 
+                    Explain.resource names original_local request in
+                  fail loc (Missing_resource {resource; used = None; state; situation})
+                )
+            in
+            let attempt_prompts = 
+              List.map (fun lft ->
+                  lazy (prompt (R_Packing {loc; preferred_names; situation; local; lft}))
+                ) (predicate_pack_functions p def)
+            in
+            let choices = attempt_prompts @ [else_prompt] in
+            let choices1 = List1.make (List.hd choices, List.tl choices) in
+            let* (lrt, local) = try_choices choices1 in
+            let local = bind_logical local lrt in
+            resource_request_prompt loc ~original_local ~preferred_names
+              situation local request unis
+         end
 
 
 
-
-
-  (* logic around markers in the environment *)
-
-  (* pop_return: "pop" the local environment back until last mark and
-     add to `rt` *)
-  let pop_return ((rt : RT.t), (local : L.t)) : RT.t * L.t = 
-    let (RT.Computational (abinding, lrt)) = rt in
-    let rec aux vbs acc = 
-      match vbs with
-      | [] -> acc
-      | (_, VB.Computational _) :: vbs ->
-         aux vbs acc
-      | (s, VB.Logical ls) :: vbs ->
-         let s' = Sym.fresh () in
-         let acc = LRT.subst_var {before = s;after = s'} acc in
-         aux vbs (LRT.Logical ((s', ls), acc))
-      | (_, VB.Resource re) :: vbs ->
-         aux vbs (LRT.Resource (re,acc))
-      | (_, VB.UsedResource _) :: vbs ->
-         aux vbs acc
-      | (_, VB.Constraint (lc,_)) :: vbs ->
-         aux vbs (LRT.Constraint (lc,acc))
-    in
-    let (new_local, old_local) = since local in
-    (RT.Computational (abinding, aux new_local lrt), old_local)
-
-  (* pop_empty: "pop" the local environment back until last mark and
-     drop the content, while ensuring that it does not contain unused
-     resources *)
-  (* all_empty: do the same for the whole local environment (without
-     supplying a marker) *)
-  let check_all_used loc ~original_local vbs = 
-    let rec aux = function
-      | (s, VB.Resource resource) :: _ -> 
-         let preferred_names = [] in
-         let names = Explain.{default_names; preferred_names} in
-         let (resource, state) = Explain.resource names original_local resource in
-         fail loc (Unused_resource {resource; state})
-      | _ :: rest -> aux rest
-      | [] -> return ()
-    in
-    aux vbs
-
-  let pop_empty loc local = 
-    let (new_local, old_local) = since local in
-    let* () = check_all_used loc ~original_local:local new_local in
-    return old_local
-
-  let all_empty loc local = 
-    let new_local = all local in
-    let* () = check_all_used loc ~original_local:local new_local in
-    return ()
+    let rec handle_prompt : 'a. 'a Prompt.m -> ('a, type_error) m =
+      fun prompt ->
+      match prompt with
+      | Prompt.Done a -> 
+         return a
+      | Prompt.Prompt (r, c) ->
+         begin match r with
+         | Prompt.R_Error (loc,tr,error) -> 
+            Error (loc,tr,error)
+         | R_Resource {loc; original_local; preferred_names; local; unis; situation; resource} ->
+            let prompt = 
+              resource_request_prompt loc ~original_local ~preferred_names 
+                situation local resource unis in
+            let* (unis, local) = handle_prompt prompt in
+            handle_prompt (c (unis, local))
+         | R_Packing {loc; local; preferred_names; situation; lft} ->
+            let prompt = Spine_LFT.spine loc preferred_names situation local [] lft in
+            let* (lrt, local) = handle_prompt prompt in
+            handle_prompt (c (lrt, local))
+         | R_Try choices ->
+            let rec first_success list1 =
+               let (hd, tl) = List1.dest list1 in
+               let hd_run = handle_prompt (Lazy.force hd) in
+               match tl with
+               | [] -> hd_run
+               | hd' :: tl' -> msum hd_run (lazy (first_success (List1.make (hd', tl'))))
+            in
+            let* reply = first_success choices in
+            handle_prompt (c reply)
+         end
 
 
 
 
 
+    let calltype_ft loc local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
+      let preferred_names = 
+        List.mapi (fun i arg ->
+            let v = "ARG" ^ string_of_int i in
+            (arg.lname, Path.Addr v)
+          ) args
+      in
+      let prompt = Spine_FT.spine loc preferred_names FunctionCall local args ftyp in
+      let* (rt, local) = handle_prompt prompt in
+      return (rt, local)
 
-  (* merging information after control-flow join points  *)
+    let calltype_lt loc local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
+      let prompt = Spine_LT.spine loc [] (LabelCall label_kind) local args ltyp in
+      let* (rt, local) = handle_prompt prompt in
+      return (rt, local)
 
-  (* note: first argument is the "summarised" return type so far *)
-  let merge_return_types loc (LC c, rt) (LC c2, rt2) = 
-    let RT.Computational ((lname, bt), lrt) = rt in
-    let RT.Computational ((lname2, bt2), lrt2) = rt2 in
-    let* () = ensure_base_type loc ~expect:bt bt2 in
-    let rec aux lrt lrt2 = 
-      match lrt, lrt2 with
-      | LRT.I, LRT.I -> 
-         return LRT.I
-      | LRT.Logical ((s, ls), lrt1), _ ->
-         let* lrt = aux lrt1 lrt2 in
-         return (LRT.Logical ((s, ls), lrt))
-      | LRT.Constraint (LC lc, lrt1), _ ->
-         let* lrt = aux lrt1 lrt2 in
-         return (LRT.Constraint (LC lc, lrt))
-      | _, LRT.Logical ((s, ls), lrt2) ->
-         let s' = Sym.fresh () in
-         let* lrt = aux lrt (LRT.subst_var {before = s; after = s'} lrt2) in
-         return (LRT.Logical ((s', ls), lrt))
-      | _, Constraint (LC lc, lrt2) ->
-         let* lrt = aux lrt lrt2 in
-         return (LRT.Constraint (LC (Impl (c2, lc)), lrt))
-      | Resource _, _
-      | _, Resource _ -> 
-         (* maybe make this an internal error? *)
-         fail loc (Generic !^"Cannot infer type of this (cannot merge)")
-    in
-    let lrt2' = LRT.subst_var {before = lname2; after = lname} lrt2 in
-    let* lrt = aux lrt lrt2' in
-    return (LC (Or [c; c2]), RT.Computational ((lname, bt), lrt))
+    (* The "subtyping" judgment needs the same resource/lvar/constraint
+       inference as the spine judgment. So implement the subtyping
+       judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
+    let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
+      let preferred_names = [(arg.lname, Path.Addr "return")] in
+      let lt = LT.of_rt rtyp (LT.I False.False) in
+      let prompt = Spine_LT.spine loc preferred_names Subtyping local [arg] lt in
+      let* (False.False, local) = handle_prompt prompt in
+      return local
 
-
-  let big_merge_return_types (loc : loc) (name, bt) 
-                             (crts : (LC.t * RT.t) list) : (LC.t * RT.t, type_error) m =
-    ListM.fold_leftM (merge_return_types loc) 
-      (LC.LC (IT.Bool true), RT.Computational ((name, bt), LRT.I)) crts
-
-  let merge_paths 
-        (loc : loc) 
-        (local_or_falses : (L.t fallible) list) : L.t fallible =
-    let locals = non_false local_or_falses in
-    match locals with
-    | [] -> False
-    | first :: _ -> 
-       (* for every local environment L: merge L L = L *)
-       let local = L.big_merge first locals in 
-       Normal local
-
-  let merge_return_paths
-        (loc : loc)
-        (rt_local_or_falses : (((LC.t * RT.t) * L.t) fallible) list) 
-      : ((RT.t * L.t) fallible, type_error) m =
-    let rts_locals = non_false rt_local_or_falses in
-    let rts, locals = List.split rts_locals in
-    match rts_locals with
-    | [] -> return False
-    | ((_,RT.Computational (b,_)), first_local) :: _ -> 
-       let* (_, rt) = big_merge_return_types loc b rts in 
-       let local = L.big_merge first_local locals in 
-       let result = (Normal (rt, local)) in
-       return result
+    let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
+      let prompt = 
+        remove_ownership_prompt loc ~original_local:local ~preferred_names:[]
+          situation local pointer need_size 
+      in
+      handle_prompt prompt
 
 
 
+    let unpack_resources loc local = 
+      let rec aux local = 
+        let* (local, changed) = 
+          ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
+              match resource with
+              | RE.Predicate p ->
+                 let def = match Global.get_predicate_def G.global p.name with
+                   | Some def -> def
+                   | None -> Debug_ocaml.error "missing predicate definition"
+                 in
+                 let* possible_unpackings = 
+                   ListM.filter_mapM (fun clause ->
+                       let prompt = Spine_LFT.spine loc [] Unpacking local [] clause in
+                       let* (lrt, test_local) = handle_prompt prompt in
+                       let test_local = bind_logical test_local lrt in
+                       let is_reachable = S.is_consistent test_local in
+                       return (if is_reachable then Some test_local else None)
+                     ) (predicate_unpack_functions p def)
+                 in
+                 begin match possible_unpackings with
+                 | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
+                 | [new_local] -> return (new_local, true)
+                 | _ -> return (local, changed)
+                 end
+              | _ ->
+                 return (local, changed)
+            ) (local, false) (L.all_named_resources local)
+        in
+        if changed then aux local else return local
+      in
+      aux local
 
-  let false_if_unreachable (loc : loc) local : (unit fallible, type_error) m =
-    let is_reachable = S.is_consistent local in
-    return (if is_reachable then Normal () else False)
 
 
-  (*** pure expression inference ************************************************)
 
-  (* infer_pexpr: the raw type inference logic for pure expressions;
-     returns a return type and a "reduced" local environment *)
-  (* infer_pexpr_pop: place a marker in the local environment, run
-     the raw type inference, and return, in addition to what the raw
-     inference returns, all logical (logical variables, resources,
-     constraints) in the local environment *)
 
-  let rec infer_pexpr local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
-    let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
-    debug 3 (lazy (action "inferring pure expression"));
-    debug 3 (lazy (item "expr" (pp_pexpr pe)));
-    debug 3 (lazy (item "ctxt" (L.pp local)));
-    let*? (rt, local) = match pe_ with
-      | M_PEsym sym ->
+    (*** pure value inference *****************************************************)
+
+    (* these functions return types `{x : bt | phi(x), ..}` *)
+    type vt = Sym.t * BT.t * LC.t list
+
+    let rt_of_vt (ret,bt,lcs) = 
+      RT.Computational ((ret, bt), LRT.mConstraints lcs LRT.I)
+
+
+    let infer_tuple (loc : loc) local (args : args) : (vt, type_error) m = 
+      let ret = Sym.fresh () in
+      let bts = List.map (fun arg -> arg.bt) args in
+      let bt = Tuple bts in
+      let lcs = 
+        List.mapi (fun i arg -> 
+            LC.LC (IT.EQ (NthTuple (bt, i, S (bt, ret)), S (arg.bt, arg.lname)))
+          ) args 
+      in
+      return (ret, bt, lcs)
+
+    let infer_constructor (loc : loc) local (constructor : ctor) 
+                          (args : args) : (vt, type_error) m = 
+      let ret = Sym.fresh () in
+      match constructor, args with
+      | M_Ctuple, _ -> 
+         infer_tuple loc local args
+      | M_Carray, _ -> 
+         Debug_ocaml.error "todo: array types"
+      | M_CivCOMPL, _
+      | M_CivAND, _
+      | M_CivOR, _
+      | M_CivXOR, _ 
+        -> 
+         Debug_ocaml.error "todo: Civ..."
+      | M_Cspecified, [arg] ->
+         return (ret, arg.bt, [LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname)))])
+      | M_Cspecified, _ ->
+         fail loc (Number_arguments {has = List.length args; expect = 1})
+      | M_Cnil item_bt, [] -> 
+         let bt = List item_bt in
+         return (ret, bt, [LC (EQ (S (bt, ret), Nil item_bt))])
+      | M_Cnil item_bt, _ -> 
+         fail loc (Number_arguments {has = List.length args; expect=0})
+      | M_Ccons, [arg1; arg2] -> 
+         let bt = List arg1.bt in
+         let* () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
+         let constr = LC (EQ (S (bt, ret), Cons (S (arg1.bt, arg1.lname), S (arg2.bt, arg2.lname)))) in
+         return (ret, arg2.bt, [constr])
+      | M_Ccons, _ ->
+         fail loc (Number_arguments {has = List.length args; expect = 2})
+      | M_Cfvfromint, _ -> 
+         fail loc (Unsupported !^"floats")
+      | M_Civfromfloat, _ -> 
+         fail loc (Unsupported !^"floats")
+
+
+    let ct_of_ct loc ct = 
+      match Sctypes.of_ctype ct with
+      | Some ct -> return ct
+      | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+
+    let infer_ptrval (loc : loc) local (ptrval : pointer_value) : (vt, type_error) m =
+      let ret = Sym.fresh () in
+      CF.Impl_mem.case_ptrval ptrval
+        ( fun ct -> 
+          let* ct = ct_of_ct loc ct in
+          let it = S (BT.Loc, ret) in
+          let lcs = 
+            [LC.LC (IT.Null it);
+             LC.LC (IT.Representable (ST_Ctype ct, it));
+             (* check: aligned? *)
+             LC.LC (IT.Aligned (ST.of_ctype ct, it))]
+          in
+          return (ret, Loc, lcs) )
+        ( fun sym -> return (ret, FunctionPointer sym, []) )
+        ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
+        ( fun () -> Debug_ocaml.error "unspecified pointer value" )
+
+    let rec infer_mem_value (loc : loc) local (mem : mem_value) : (vt, type_error) m =
+      let open BT in
+      CF.Impl_mem.case_mem_value mem
+        ( fun ct -> fail loc (Unspecified ct) )
+        ( fun _ _ -> 
+          fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
+        ( fun it iv -> 
+          let ret = Sym.fresh () in
+          let v = Memory.integer_value_to_num iv in
+          return (ret, Integer, [LC (EQ (S (Integer, ret), Num v))]) )
+        ( fun ft fv -> fail loc (Unsupported !^"floats") )
+        ( fun _ ptrval -> infer_ptrval loc local ptrval  )
+        ( fun mem_values -> infer_array loc local mem_values )
+        ( fun tag mvals -> 
+          let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
+          infer_struct loc local tag mvals )
+        ( fun tag id mv -> infer_union loc local tag id mv )
+
+    and infer_struct (loc : loc) local (tag : tag) 
+                     (member_values : (member * mem_value) list) : (vt, type_error) m =
+      (* might have to make sure the fields are ordered in the same way as
+         in the struct declaration *)
+      let ret = Sym.fresh () in
+      let* spec = get_struct_decl loc tag in
+      let rec check fields spec =
+        match fields, spec with
+        | ((member, mv) :: fields), ((smember, sct) :: spec) 
+             when member = smember ->
+           let* constrs = check fields spec in
+           let* (s, bt, lcs) = infer_mem_value loc local mv in
+           let* () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
+           let this = IT.StructMember (tag, S (Struct tag, ret), member) in
+           let constrs2 = List.map (LC.subst_it {before = s; after = this}) lcs in
+           return (constrs @ constrs2)
+        | [], [] -> 
+           return []
+        | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
+           Debug_ocaml.error "mismatch in fields in infer_struct"
+        | [], ((member, _) :: _) ->
+           fail loc (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing"))
+        | ((member,_) :: _), [] ->
+           fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
+      in
+      let* lcs = check member_values (Global.member_types spec.layout) in
+      return (ret, Struct tag, lcs)
+
+    and infer_union (loc : loc) local (tag : tag) (id : Id.t) 
+                    (mv : mem_value) : (vt, type_error) m =
+      Debug_ocaml.error "todo: union types"
+
+    and infer_array (loc : loc) local (mem_values : mem_value list) = 
+      Debug_ocaml.error "todo: arrays"
+
+    let infer_object_value (loc : loc) local
+                           (ov : 'bty object_value) : (vt, type_error) m =
+      match ov with
+      | M_OVinteger iv ->
          let ret = Sym.fresh () in
-         let* arg = arg_of_sym loc local sym in
-         let constr = LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname))) in
-         let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
-         return (Normal (rt, local))
-      | M_PEimpl i ->
-         let bt = Global.get_impl_constant G.global i in
-         return (Normal (RT.Computational ((Sym.fresh (), bt), I), local))
-      | M_PEval v ->
-         let* vt = infer_value loc local v in
-         return (Normal (rt_of_vt vt, local))
-      | M_PEconstrained _ ->
-         Debug_ocaml.error "todo: PEconstrained"
-      | M_PEundef (_loc, undef) ->
-         let (reachable, model) = Model.is_reachable_and_model local in
-         if not reachable 
-         then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-         else fail loc (Undefined_behaviour (undef, model))
-      | M_PEerror (err, asym) ->
-         let* arg = arg_of_asym local asym in
-         fail arg.loc (StaticError err)
-      | M_PEctor (ctor, asyms) ->
+         let i = Memory.integer_value_to_num iv in
+         return (ret, Integer, [LC (EQ (S (Integer, ret), Num i))])
+      | M_OVpointer p -> 
+         infer_ptrval loc local p
+      | M_OVarray items ->
+         Debug_ocaml.error "todo: arrays"
+      | M_OVstruct (tag, fields) -> 
+         let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
+         infer_struct loc local tag mvals       
+      | M_OVunion (tag, id, mv) -> 
+         infer_union loc local tag id mv
+      | M_OVfloating iv ->
+         fail loc (Unsupported !^"floats")
+
+    let infer_value (loc : loc) local (v : 'bty value) : (vt, type_error) m = 
+      match v with
+      | M_Vobject ov
+      | M_Vloaded (M_LVspecified ov) 
+        ->
+         infer_object_value loc local ov
+      | M_Vunit ->
+         return (Sym.fresh (), Unit, [])
+      | M_Vtrue ->
+         let ret = Sym.fresh () in
+         return (ret, Bool, [LC (S (Bool, ret))])
+      | M_Vfalse -> 
+         let ret = Sym.fresh () in
+         return (ret, Bool, [LC (Not (S (Bool, ret)))])
+      | M_Vlist (ibt, asyms) ->
+         let ret = Sym.fresh () in
          let* args = args_of_asyms local asyms in
-         let* vt = infer_constructor loc (local, G.global) ctor args in
-         return (Normal (rt_of_vt vt, local))
-      | M_PEarray_shift _ ->
-         Debug_ocaml.error "todo: PEarray_shift"
-      | M_PEmember_shift (asym, tag, member) ->
-         let* arg = arg_of_asym local asym in
-         let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-         let ret = Sym.fresh () in
-         let* decl = get_struct_decl loc tag in
-         let* _member_bt = get_member_type loc tag member decl in
-         let shifted_pointer = IT.StructMemberOffset (tag, S (arg.bt, arg.lname), member) in
-         let constr = LC (EQ (S (BT.Loc, ret), shifted_pointer)) in
-         let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
-         return (Normal (rt, local))
-      | M_PEnot asym ->
-         let* arg = arg_of_asym local asym in
-         let* () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-         let ret = Sym.fresh () in 
-         let constr = (LC (EQ (S (Bool, ret), Not (S (arg.bt, arg.lname))))) in
-         let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-         return (Normal (rt, local))
-      | M_PEop (op, asym1, asym2) ->
-         let* arg1 = arg_of_asym local asym1 in
-         let* arg2 = arg_of_asym local asym2 in
-         let open CF.Core in
-         let binop_typ (op : CF.Core.binop) (v1 : IT.t) (v2 : IT.t) =
-           let open BT in
-           match op with
-           | OpAdd -> (((Integer, Integer), Integer), IT.Add (v1, v2))
-           | OpSub -> (((Integer, Integer), Integer), IT.Sub (v1, v2))
-           | OpMul -> (((Integer, Integer), Integer), IT.Mul (v1, v2))
-           | OpDiv -> (((Integer, Integer), Integer), IT.Div (v1, v2))
-           | OpRem_t -> (((Integer, Integer), Integer), IT.Rem_t (v1, v2))
-           | OpRem_f -> (((Integer, Integer), Integer), IT.Rem_f (v1, v2))
-           | OpExp -> (((Integer, Integer), Integer), IT.Exp (v1, v2))
-           | OpEq -> (((Integer, Integer), Bool), IT.EQ (v1, v2))
-           | OpGt -> (((Integer, Integer), Bool), IT.GT (v1, v2))
-           | OpLt -> (((Integer, Integer), Bool), IT.LT (v1, v2))
-           | OpGe -> (((Integer, Integer), Bool), IT.GE (v1, v2))
-           | OpLe -> (((Integer, Integer), Bool), IT.LE (v1, v2))
-           | OpAnd -> (((Bool, Bool), Bool), IT.And [v1; v2])
-           | OpOr -> (((Bool, Bool), Bool), IT.Or [v1; v2])
+         let* () = 
+           ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
          in
-         let (((ebt1, ebt2), rbt), result_it) = 
-           binop_typ op (S (arg1.bt, arg1.lname)) (S (arg2.bt,arg2.lname))
-         in
-         let* () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
-         let* () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
-         let ret = Sym.fresh () in
-         let constr = LC (EQ (S (rbt, ret), result_it)) in
-         let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
-         return (Normal (rt, local))
-      | M_PEstruct _ ->
-         Debug_ocaml.error "todo: PEstruct"
-      | M_PEunion _ ->
-         Debug_ocaml.error "todo: PEunion"
-      | M_PEmemberof _ ->
-         Debug_ocaml.error "todo: M_PEmemberof"
-      | M_PEcall (called, asyms) ->
-         let* decl_typ = match called with
-           | CF.Core.Impl impl -> 
-              return (Global.get_impl_fun_decl G.global impl )
-           | CF.Core.Sym sym -> 
-              let* (_, t) = match Global.get_fun_decl G.global sym with
-                | Some t -> return t
-                | None -> fail loc (Missing_function sym)
-              in
-              return t
-         in
+         let its = List.map (fun arg -> IT.S (arg.bt, arg.lname)) args in
+         return (ret, List ibt, [LC (EQ (S (List ibt, ret), List (its, ibt)))])
+      | M_Vtuple asyms ->
          let* args = args_of_asyms local asyms in
-         let* (rt, local) = calltype_ft loc local args decl_typ in
-         return (Normal (rt, local))
-      | M_PElet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr local e1 in
-         let* delta = match p with
-           | M_Symbol sym -> return (bind sym rt)
-           | M_Pat pat -> pattern_match_rt pat rt
-         in
-         infer_pexpr_pop delta local e2
-      | M_PEcase _ -> Debug_ocaml.error "PEcase in inferring position"
+         infer_tuple loc local args
+
+
+
+
+
+
+
+
+
+    (* logic around markers in the environment *)
+
+    (* pop_return: "pop" the local environment back until last mark and
+       add to `rt` *)
+    let pop_return ((rt : RT.t), (local : L.t)) : RT.t * L.t = 
+      let (RT.Computational (abinding, lrt)) = rt in
+      let rec aux vbs acc = 
+        match vbs with
+        | [] -> acc
+        | (_, VB.Computational _) :: vbs ->
+           aux vbs acc
+        | (s, VB.Logical ls) :: vbs ->
+           let s' = Sym.fresh () in
+           let acc = LRT.subst_var {before = s;after = s'} acc in
+           aux vbs (LRT.Logical ((s', ls), acc))
+        | (_, VB.Resource re) :: vbs ->
+           aux vbs (LRT.Resource (re,acc))
+        | (_, VB.UsedResource _) :: vbs ->
+           aux vbs acc
+        | (_, VB.Constraint (lc,_)) :: vbs ->
+           aux vbs (LRT.Constraint (lc,acc))
+      in
+      let (new_local, old_local) = since local in
+      (RT.Computational (abinding, aux new_local lrt), old_local)
+
+    (* pop_empty: "pop" the local environment back until last mark and
+       drop the content, while ensuring that it does not contain unused
+       resources *)
+    (* all_empty: do the same for the whole local environment (without
+       supplying a marker) *)
+    let check_all_used loc ~original_local vbs = 
+      let rec aux = function
+        | (s, VB.Resource resource) :: _ -> 
+           let preferred_names = [] in
+           let names = Explain.{default_names; preferred_names} in
+           let (resource, state) = Explain.resource names original_local resource in
+           fail loc (Unused_resource {resource; state})
+        | _ :: rest -> aux rest
+        | [] -> return ()
+      in
+      aux vbs
+
+    let pop_empty loc local = 
+      let (new_local, old_local) = since local in
+      let* () = check_all_used loc ~original_local:local new_local in
+      return old_local
+
+    let all_empty loc local = 
+      let new_local = all local in
+      let* () = check_all_used loc ~original_local:local new_local in
+      return ()
+
+
+
+
+
+
+    (* merging information after control-flow join points  *)
+
+    (* note: first argument is the "summarised" return type so far *)
+    let merge_return_types loc (LC c, rt) (LC c2, rt2) = 
+      let RT.Computational ((lname, bt), lrt) = rt in
+      let RT.Computational ((lname2, bt2), lrt2) = rt2 in
+      let* () = ensure_base_type loc ~expect:bt bt2 in
+      let rec aux lrt lrt2 = 
+        match lrt, lrt2 with
+        | LRT.I, LRT.I -> 
+           return LRT.I
+        | LRT.Logical ((s, ls), lrt1), _ ->
+           let* lrt = aux lrt1 lrt2 in
+           return (LRT.Logical ((s, ls), lrt))
+        | LRT.Constraint (LC lc, lrt1), _ ->
+           let* lrt = aux lrt1 lrt2 in
+           return (LRT.Constraint (LC lc, lrt))
+        | _, LRT.Logical ((s, ls), lrt2) ->
+           let s' = Sym.fresh () in
+           let* lrt = aux lrt (LRT.subst_var {before = s; after = s'} lrt2) in
+           return (LRT.Logical ((s', ls), lrt))
+        | _, Constraint (LC lc, lrt2) ->
+           let* lrt = aux lrt lrt2 in
+           return (LRT.Constraint (LC (Impl (c2, lc)), lrt))
+        | Resource _, _
+        | _, Resource _ -> 
+           (* maybe make this an internal error? *)
+           fail loc (Generic !^"Cannot infer type of this (cannot merge)")
+      in
+      let lrt2' = LRT.subst_var {before = lname2; after = lname} lrt2 in
+      let* lrt = aux lrt lrt2' in
+      return (LC (Or [c; c2]), RT.Computational ((lname, bt), lrt))
+
+
+    let big_merge_return_types (loc : loc) (name, bt) 
+                               (crts : (LC.t * RT.t) list) : (LC.t * RT.t, type_error) m =
+      ListM.fold_leftM (merge_return_types loc) 
+        (LC.LC (IT.Bool true), RT.Computational ((name, bt), LRT.I)) crts
+
+    let merge_paths 
+          (loc : loc) 
+          (local_or_falses : (L.t fallible) list) : L.t fallible =
+      let locals = non_false local_or_falses in
+      match locals with
+      | [] -> False
+      | first :: _ -> 
+         (* for every local environment L: merge L L = L *)
+         let local = L.big_merge first locals in 
+         Normal local
+
+    let merge_return_paths
+          (loc : loc)
+          (rt_local_or_falses : (((LC.t * RT.t) * L.t) fallible) list) 
+        : ((RT.t * L.t) fallible, type_error) m =
+      let rts_locals = non_false rt_local_or_falses in
+      let rts, locals = List.split rts_locals in
+      match rts_locals with
+      | [] -> return False
+      | ((_,RT.Computational (b,_)), first_local) :: _ -> 
+         let* (_, rt) = big_merge_return_types loc b rts in 
+         let local = L.big_merge first_local locals in 
+         let result = (Normal (rt, local)) in
+         return result
+
+
+
+
+    let false_if_unreachable (loc : loc) local : (unit fallible, type_error) m =
+      let is_reachable = S.is_consistent local in
+      return (if is_reachable then Normal () else False)
+
+
+    (*** pure expression inference ************************************************)
+
+    (* infer_pexpr: the raw type inference logic for pure expressions;
+       returns a return type and a "reduced" local environment *)
+    (* infer_pexpr_pop: place a marker in the local environment, run
+       the raw type inference, and return, in addition to what the raw
+       inference returns, all logical (logical variables, resources,
+       constraints) in the local environment *)
+
+    let rec infer_pexpr local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+      let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
+      debug 3 (lazy (action "inferring pure expression"));
+      debug 3 (lazy (item "expr" (pp_pexpr pe)));
+      debug 3 (lazy (item "ctxt" (L.pp local)));
+      let*? (rt, local) = match pe_ with
+        | M_PEsym sym ->
+           let ret = Sym.fresh () in
+           let* arg = arg_of_sym loc local sym in
+           let constr = LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname))) in
+           let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
+           return (Normal (rt, local))
+        | M_PEimpl i ->
+           let bt = Global.get_impl_constant G.global i in
+           return (Normal (RT.Computational ((Sym.fresh (), bt), I), local))
+        | M_PEval v ->
+           let* vt = infer_value loc local v in
+           return (Normal (rt_of_vt vt, local))
+        | M_PEconstrained _ ->
+           Debug_ocaml.error "todo: PEconstrained"
+        | M_PEundef (_loc, undef) ->
+           let (reachable, model) = Model.is_reachable_and_model local in
+           if not reachable 
+           then (Pp.warn !^"unexpected unreachable Undefined"; return False)
+           else fail loc (Undefined_behaviour (undef, model))
+        | M_PEerror (err, asym) ->
+           let* arg = arg_of_asym local asym in
+           fail arg.loc (StaticError err)
+        | M_PEctor (ctor, asyms) ->
+           let* args = args_of_asyms local asyms in
+           let* vt = infer_constructor loc (local, G.global) ctor args in
+           return (Normal (rt_of_vt vt, local))
+        | M_PEarray_shift _ ->
+           Debug_ocaml.error "todo: PEarray_shift"
+        | M_PEmember_shift (asym, tag, member) ->
+           let* arg = arg_of_asym local asym in
+           let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+           let ret = Sym.fresh () in
+           let* decl = get_struct_decl loc tag in
+           let* _member_bt = get_member_type loc tag member decl in
+           let shifted_pointer = IT.StructMemberOffset (tag, S (arg.bt, arg.lname), member) in
+           let constr = LC (EQ (S (BT.Loc, ret), shifted_pointer)) in
+           let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
+           return (Normal (rt, local))
+        | M_PEnot asym ->
+           let* arg = arg_of_asym local asym in
+           let* () = ensure_base_type arg.loc ~expect:Bool arg.bt in
+           let ret = Sym.fresh () in 
+           let constr = (LC (EQ (S (Bool, ret), Not (S (arg.bt, arg.lname))))) in
+           let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
+           return (Normal (rt, local))
+        | M_PEop (op, asym1, asym2) ->
+           let* arg1 = arg_of_asym local asym1 in
+           let* arg2 = arg_of_asym local asym2 in
+           let open CF.Core in
+           let binop_typ (op : CF.Core.binop) (v1 : IT.t) (v2 : IT.t) =
+             let open BT in
+             match op with
+             | OpAdd -> (((Integer, Integer), Integer), IT.Add (v1, v2))
+             | OpSub -> (((Integer, Integer), Integer), IT.Sub (v1, v2))
+             | OpMul -> (((Integer, Integer), Integer), IT.Mul (v1, v2))
+             | OpDiv -> (((Integer, Integer), Integer), IT.Div (v1, v2))
+             | OpRem_t -> (((Integer, Integer), Integer), IT.Rem_t (v1, v2))
+             | OpRem_f -> (((Integer, Integer), Integer), IT.Rem_f (v1, v2))
+             | OpExp -> (((Integer, Integer), Integer), IT.Exp (v1, v2))
+             | OpEq -> (((Integer, Integer), Bool), IT.EQ (v1, v2))
+             | OpGt -> (((Integer, Integer), Bool), IT.GT (v1, v2))
+             | OpLt -> (((Integer, Integer), Bool), IT.LT (v1, v2))
+             | OpGe -> (((Integer, Integer), Bool), IT.GE (v1, v2))
+             | OpLe -> (((Integer, Integer), Bool), IT.LE (v1, v2))
+             | OpAnd -> (((Bool, Bool), Bool), IT.And [v1; v2])
+             | OpOr -> (((Bool, Bool), Bool), IT.Or [v1; v2])
+           in
+           let (((ebt1, ebt2), rbt), result_it) = 
+             binop_typ op (S (arg1.bt, arg1.lname)) (S (arg2.bt,arg2.lname))
+           in
+           let* () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
+           let* () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
+           let ret = Sym.fresh () in
+           let constr = LC (EQ (S (rbt, ret), result_it)) in
+           let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
+           return (Normal (rt, local))
+        | M_PEstruct _ ->
+           Debug_ocaml.error "todo: PEstruct"
+        | M_PEunion _ ->
+           Debug_ocaml.error "todo: PEunion"
+        | M_PEmemberof _ ->
+           Debug_ocaml.error "todo: M_PEmemberof"
+        | M_PEcall (called, asyms) ->
+           let* decl_typ = match called with
+             | CF.Core.Impl impl -> 
+                return (Global.get_impl_fun_decl G.global impl )
+             | CF.Core.Sym sym -> 
+                let* (_, t) = match Global.get_fun_decl G.global sym with
+                  | Some t -> return t
+                  | None -> fail loc (Missing_function sym)
+                in
+                return t
+           in
+           let* args = args_of_asyms local asyms in
+           let* (rt, local) = calltype_ft loc local args decl_typ in
+           return (Normal (rt, local))
+        | M_PElet (p, e1, e2) ->
+           let*? (rt, local) = infer_pexpr local e1 in
+           let* delta = match p with
+             | M_Symbol sym -> return (bind sym rt)
+             | M_Pat pat -> pattern_match_rt pat rt
+           in
+           infer_pexpr_pop delta local e2
+        | M_PEcase _ -> Debug_ocaml.error "PEcase in inferring position"
+        | M_PEif (casym, e1, e2) ->
+           let* carg = arg_of_asym local casym in
+           let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+           let* paths =
+             ListM.mapM (fun (lc, e) ->
+                 let delta = add_uc lc L.empty in
+                 let*? () = false_if_unreachable loc (delta ++ local) in
+                 let*? (rt, local) = infer_pexpr_pop delta local e in
+                 return (Normal ((lc, rt), local))
+               ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+           in
+           merge_return_paths loc paths
+      in  
+      debug 3 (lazy (item "type" (RT.pp rt)));
+      return (Normal (rt, local))
+
+    and infer_pexpr_pop delta local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+      let local = delta ++ marked ++ local in 
+      let* result = infer_pexpr local pe in
+      let result' = Fallible.map pop_return result in
+      return result'
+
+
+    (* check_pexpr: type check the pure expression `e` against return type
+       `typ`; returns a "reduced" local environment *)
+
+    let rec check_pexpr local (e : 'bty pexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
+      let (M_Pexpr (loc, _annots, _, e_)) = e in
+      debug 3 (lazy (action "checking pure expression"));
+      debug 3 (lazy (item "expr" (group (pp_pexpr e))));
+      debug 3 (lazy (item "type" (RT.pp typ)));
+      debug 3 (lazy (item "ctxt" (L.pp local)));
+      match e_ with
       | M_PEif (casym, e1, e2) ->
-         let* carg = arg_of_asym local casym in
-         let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-         let* paths =
-           ListM.mapM (fun (lc, e) ->
-               let delta = add_uc lc L.empty in
-               let*? () = false_if_unreachable loc (delta ++ local) in
-               let*? (rt, local) = infer_pexpr_pop delta local e in
-               return (Normal ((lc, rt), local))
-             ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
-         in
-         merge_return_paths loc paths
-    in  
-    debug 3 (lazy (item "type" (RT.pp rt)));
-    return (Normal (rt, local))
-
-  and infer_pexpr_pop delta local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
-    let local = delta ++ marked ++ local in 
-    let* result = infer_pexpr local pe in
-    let result' = Fallible.map pop_return result in
-    return result'
-
-
-  (* check_pexpr: type check the pure expression `e` against return type
-     `typ`; returns a "reduced" local environment *)
-
-  let rec check_pexpr local (e : 'bty pexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
-    let (M_Pexpr (loc, _annots, _, e_)) = e in
-    debug 3 (lazy (action "checking pure expression"));
-    debug 3 (lazy (item "expr" (group (pp_pexpr e))));
-    debug 3 (lazy (item "type" (RT.pp typ)));
-    debug 3 (lazy (item "ctxt" (L.pp local)));
-    match e_ with
-    | M_PEif (casym, e1, e2) ->
-       let* carg = arg_of_asym local casym in
-       let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-       let* paths =
-         ListM.mapM (fun (lc, e) ->
-             let delta = add_uc lc L.empty in
-             let*? () = 
-               false_if_unreachable loc (delta ++ local)
-             in
-             check_pexpr_pop loc delta local e typ
-           ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
-       in
-       return (merge_paths loc paths)
-    | M_PEcase (asym, pats_es) ->
-       let* arg = arg_of_asym local asym in
-       let* paths = 
-         ListM.mapM (fun (pat, pe) ->
-             (* TODO: make pattern matching return (in delta)
-                constraints corresponding to the pattern *)
-             let* delta = pattern_match (S (arg.bt, arg.lname)) pat arg.bt in
-             let*? () = 
-               false_if_unreachable loc (delta ++ local)
-             in
-             check_pexpr_pop loc delta local e typ
-           ) pats_es
-       in
-       return (merge_paths loc paths)
-    | M_PElet (p, e1, e2) ->
-       let*? (rt, local) = infer_pexpr local e1 in
-       let* delta = match p with
-         | M_Symbol sym -> return (bind sym rt)
-         | M_Pat pat -> pattern_match_rt pat rt
-       in
-       check_pexpr_pop loc delta local e2 typ
-    | _ ->
-       let*? (rt, local) = infer_pexpr local e in
-       let* ((bt, lname), delta) = bind_logically rt in
-       let local = delta ++ marked ++ local in
-       let* local = subtype loc local {bt; lname; loc} typ in
-       let* local = pop_empty loc local in
-       return (Normal local)
-
-  and check_pexpr_pop (loc : loc) delta local (pe : 'bty pexpr) 
-                      (typ : RT.t) : (L.t fallible, type_error) m =
-    let local = delta ++ marked ++ local in 
-    let*? local = check_pexpr local pe typ in
-    let* local = pop_empty loc local in
-    return (Normal local)
-
-
-
-
-  (*** memory related logic *****************************************************)
-
-
-
-  let load (loc: loc)  local (bt: BT.t) (pointer: IT.t)
-           (size: RE.size) (return_it: IT.t) (is_member: BT.member option) =
-    let names = Explain.{default_names; preferred_names = []} in
-    let original_local = local in
-    let rec aux local bt pointer size path is_member = 
-      match bt with
-      | Struct tag ->
-         let* decl = get_struct_decl loc tag in
-         let rec aux_members = function
-           | Global.{size; member = (member, member_sct); _} :: members ->
-              let member_pointer = IT.StructMemberOffset (tag,pointer,member) in
-              let member_path = IT.StructMember (tag, path, member) in
-              let* constraints = aux_members members in
-              let* constraints2 = 
-                aux local (BT.of_sct member_sct) member_pointer 
-                  size member_path (Some member) 
-              in
-              return (constraints2 @ constraints)
-           | [] -> return []
-         in  
-         aux_members (Global.members decl.layout)
-      | _ ->
-         let o_resource = S.resource_for_pointer local pointer in
-         let situation = Access (Load is_member) in
-         let* pointee = match o_resource with
-           | Some (_,resource) -> 
-              begin match resource with
-              | Points p when Z.equal size p.size -> 
-                 return p.pointee
-              | Points p -> 
-                 fail loc (Generic !^"resource of wrong size for load")
-              | Block {block_type = Uninit; _} -> 
-                 let state = Explain.state names original_local in
-                 fail loc (Uninitialised_read {is_member; state})
-              | Block {block_type = Padding; _} -> 
-                 fail loc (Generic !^"cannot read padding bytes")
-              | Block {block_type = Nothing; _} -> 
-                 fail loc (Generic !^"cannot read empty bytes")
-              | Predicate pred -> 
-                 let (resource,state) = 
-                   Explain.resource names original_local (Predicate pred) in
-                 fail loc (Cannot_unpack {resource; state; situation})
-              end
-           | None -> 
-                 let (addr,state) = 
-                   Explain.index_term names original_local pointer in
-              let used = S.used_resource_for_pointer local pointer in
-              fail loc (Missing_ownership {addr; state; used; situation})
-         in
-         let (Base vbt) = L.get_l pointee local in
-         if BT.equal vbt bt 
-         then return [IT.EQ (path, S (vbt,pointee))]
-         else fail loc (Mismatch {has = Base vbt; expect = Base bt})
-    in
-    let* constraints = aux local bt pointer size return_it is_member in
-    return (LC (And constraints))
-
-
-
-  (* does not check for the right to write, this is done elsewhere *)
-  let rec store (loc: loc)
-                local
-                (bt: BT.t)
-                (pointer: IT.t)
-                (size: RE.size)
-                (o_value: IT.t option) 
-    =
-    let open LRT in
-    match bt with
-    | Struct tag ->
-       let* decl = get_struct_decl loc tag in
-       let rec aux = function
-         | [] -> return I
-         | Global.{offset; size; member_or_padding} :: members ->
-            match member_or_padding with
-            | Some (member,member_sct) -> 
-               let o_member_value = 
-                 Option.map (fun v -> IT.StructMember (tag, v, member)) o_value 
-               in
-               let member_offset = IT.Offset (pointer, Num offset) in
-               let* rt = store loc local (BT.of_sct member_sct) member_offset
-                           size o_member_value in
-               let* rt2 = aux members in
-               return (rt@@rt2)
-            | None ->
-               let block = 
-                 RE.Block {pointer = IT.Offset (pointer, Num offset); 
-                           size = Num size; 
-                           block_type = Padding} 
-               in
-               let rt = LRT.Resource (block, LRT.I) in
-               let* rt2 = aux members in
-               return (rt@@rt2)
-       in  
-       aux decl.layout
-    | _ -> 
-       let vsym = Sym.fresh () in 
-       match o_value with
-       | Some v -> 
-          let rt = 
-            Logical ((vsym, Base bt), 
-            Resource (Points {pointer; pointee = vsym; size}, 
-            Constraint (LC (EQ (S (bt,vsym), v)), I)))
-          in
-          return rt
-       | None -> 
-          let block = 
-            RE.Block {pointer; 
-                      size = Num size; 
-                      block_type = Uninit}
-          in
-          let rt = Resource (block, LRT.I) in
-          return rt
-
-
-
-  (* not used right now *)
-  (* todo: right access kind *)
-  let pack_stored_struct loc local (pointer: IT.t) (tag: BT.tag) =
-    let size = Memory.size_of_struct tag in
-    let v = Sym.fresh () in
-    let bt = Struct tag in
-    let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
-    let* local = remove_ownership loc (Access (Load None)) local pointer (Num size) in
-    let rt = 
-      LRT.Logical ((v, Base bt), 
-      LRT.Resource (Points {pointer; pointee = v; size},
-      LRT.Constraint (constraints, LRT.I)))
-    in
-    return rt
-
-
-  let ensure_aligned loc local access pointer ctype = 
-    let (aligned, _) = 
-      S.constraint_holds local
-        (LC.LC (Aligned (ST.of_ctype ctype, pointer))) 
-    in
-    if aligned then return () else fail loc (Misaligned access)
-
-
-
-  (*** auxiliary ****************************************************************)
-
-
-  let json_local loc local : Yojson.Safe.t = 
-    `Assoc [("loc", json_loc loc);
-            ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
-
-  let json_false loc  : Yojson.Safe.t = 
-    `Assoc [("loc", json_loc loc);
-            ("context_or_unreachable", `Variant ("unreachable", None))]
-
-  let json_local_or_false loc = function
-    | Normal local -> json_local loc local
-    | False -> json_false loc
-
-
-
-  (*** impure expression inference **********************************************)
-
-
-  (* type inference of impure expressions; returns either a return type
-     and new local environment or False *)
-  (* infer_expr: the raw type inference for impure expressions. *)
-  (* infer_expr_pop: analogously to infer_pexpr: place a marker, run
-     the raw type inference, and additionally return whatever is left in
-     the local environment since that marker (except for computational
-     variables) *)
-
-
-  type labels = (LT.t * label_kind) SymMap.t
-
-
-  let rec infer_expr (local, labels) (e : 'bty expr) 
-          : ((RT.t * L.t) fallible, type_error) m = 
-    let (M_Expr (loc, _annots, e_)) = e in
-    debug 3 (lazy (action "inferring expression"));
-    debug 3 (lazy (item "expr" (group (pp_expr e))));
-    debug 3 (lazy (item "ctxt" (L.pp local)));
-    let* r = match e_ with
-      | M_Epure pe -> 
-         infer_pexpr local pe
-      | M_Ememop memop ->
-         let* local = unpack_resources loc local in
-         begin match memop with
-         | M_PtrEq _ ->
-            Debug_ocaml.error "todo: M_PtrEq"
-         | M_PtrNe _ ->
-            Debug_ocaml.error "todo: M_PtrNe"
-         | M_PtrLt _ ->
-            Debug_ocaml.error "todo: M_PtrLt"
-         | M_PtrGt _ ->
-            Debug_ocaml.error "todo: M_PtrGt"
-         | M_PtrLe _ ->
-            Debug_ocaml.error "todo: M_PtrLe"
-         | M_PtrGe _ ->
-            Debug_ocaml.error "todo: M_PtrGe"
-         | M_Ptrdiff _ ->
-            Debug_ocaml.error "todo: M_Ptrdiff"
-         | M_IntFromPtr _ ->
-            Debug_ocaml.error "todo: M_IntFromPtr"
-         | M_PtrFromInt (act_from, act2_to, asym) ->
-            let ret = Sym.fresh () in 
-            let* arg = arg_of_asym local asym in
-            let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-            let constr = LC (EQ (S (Loc, ret), IntegerToPointerCast (S (Integer, arg.lname)))) in
-            let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
-            return (Normal (rt, local))            
-         | M_PtrValidForDeref (act, asym) ->
-            (* check *)
-            let* local = unpack_resources loc local in
-            let* arg = arg_of_asym local asym in
-            let ret = Sym.fresh () in
-            let size = Memory.size_of_ctype act.item.ct in
-            let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let o_resource = S.resource_for_pointer local (S (arg.bt, arg.lname)) in
-            let resource_ok = 
-              match Option.bind o_resource (Tools.comp RE.size snd) with
-              | Some size' when S.equal local size' (Num size) -> true
-              | Some _ -> false
-              | _ -> false
-            in
-            let (aligned, _) = 
-              S.constraint_holds local
-                (LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))))
-            in
-            let ok = resource_ok && aligned in
-            let constr = LC (EQ (S (Bool, ret), Bool ok)) in
-            let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-            return (Normal (rt, local))
-         | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
-         | M_PtrArrayShift _ (* (asym 'bty * actype 'bty * asym 'bty  ) *)
-         | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *)
-         | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *)
-         | M_Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *)
-         | M_Va_start _ (* (asym 'bty * asym 'bty) *)
-         | M_Va_copy _ (* (asym 'bty) *)
-         | M_Va_arg _ (* (asym 'bty * actype 'bty) *)
-         | M_Va_end _ (* (asym 'bty) *) 
-           -> 
-            Debug_ocaml.error "todo: ememop"
-         end
-      | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
-         let* local = unpack_resources loc local in
-         begin match action_ with
-         | M_Create (asym, act, _prefix) -> 
-            let* arg = arg_of_asym local asym in
-            let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-            let ret = Sym.fresh () in
-            let size = Memory.size_of_ctype act.item.ct in
-            let* lrt = store loc local act.item.bt (S (Loc, ret)) size None in
-            let rt = 
-              RT.Computational ((ret, Loc), 
-              LRT.Constraint (LC.LC (Representable (ST_Ctype (Sctypes.pointer_sct act.item.ct), S (Loc, ret))), 
-              LRT.Constraint (LC.LC (AlignedI (S (arg.bt, arg.lname), S (Loc, ret))), 
-              (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
-              lrt)))
-            in
-            return (Normal (rt, local))
-         | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
-            Debug_ocaml.error "todo: CreateReadOnly"
-         | M_Alloc (ct, sym, _prefix) -> 
-            Debug_ocaml.error "todo: Alloc"
-         | M_Kill (M_Dynamic, asym) -> 
-            Debug_ocaml.error "todo: free"
-         | M_Kill (M_Static cti, asym) -> 
-            let* arg = arg_of_asym local asym in
-            let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let* () = 
-              ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
-            in
-            let size = Memory.size_of_ctype cti.ct in
-            let* local = remove_ownership loc (Access Kill) local (S (arg.bt, arg.lname)) 
-                           (Num size) in
-            let rt = RT.Computational ((Sym.fresh (), Unit), I) in
-            return (Normal (rt, local))
-         | M_Store (_is_locking, act, pasym, vasym, mo) -> 
-            let* parg = arg_of_asym local pasym in
-            let* varg = arg_of_asym local vasym in
-            let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
-            let* () = ensure_base_type loc ~expect:Loc parg.bt in
-            let* () = 
-              ensure_aligned loc local (Store None) (S (parg.bt, parg.lname)) act.item.ct
-            in
-            (* The generated Core program will in most cases before this
-               already have checked whether the store value is
-               representable and done the right thing. Pointers, as I
-               understand, are an exception. *)
-            let* () = 
-              let (in_range, _) = 
-                S.constraint_holds local
-                  (LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))))
-              in
-              if in_range then return () else
-                fail loc (Generic !^"write value unrepresentable")
-            in
-            let size = Memory.size_of_ctype act.item.ct in
-            let* local = 
-              remove_ownership parg.loc (Access (Store None)) 
-                local (S (parg.bt, parg.lname)) 
-                (Num size) in
-            let* bindings = 
-              store loc local varg.bt (S (parg.bt, parg.lname))
-                size (Some (S (varg.bt, varg.lname))) in
-            let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
-            return (Normal (rt, local))
-         | M_Load (act, pasym, _mo) -> 
-            let* parg = arg_of_asym local pasym in
-            let* () = ensure_base_type loc ~expect:Loc parg.bt in
-            let* () = 
-              ensure_aligned loc local (Load None) (S (parg.bt, parg.lname)) act.item.ct
-            in
-            let ret = Sym.fresh () in
-            let size = Memory.size_of_ctype act.item.ct in
-            let* constraints = 
-              load loc local act.item.bt (S (parg.bt, parg.lname)) 
-                size (S (act.item.bt, ret)) None 
-            in
-            let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, LRT.I)) in
-            return (Normal (rt, local))
-         | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
-            Debug_ocaml.error "todo: RMW"
-         | M_Fence mo -> 
-            Debug_ocaml.error "todo: Fence"
-         | M_CompareExchangeStrong (ct, sym1, sym2, sym3, mo1, mo2) -> 
-            Debug_ocaml.error "todo: CompareExchangeStrong"
-         | M_CompareExchangeWeak (ct, sym1, sym2, sym3, mo1, mo2) -> 
-            Debug_ocaml.error "todo: CompareExchangeWeak"
-         | M_LinuxFence mo -> 
-            Debug_ocaml.error "todo: LinuxFemce"
-         | M_LinuxLoad (ct, sym1, mo) -> 
-            Debug_ocaml.error "todo: LinuxLoad"
-         | M_LinuxStore (ct, sym1, sym2, mo) -> 
-            Debug_ocaml.error "todo: LinuxStore"
-         | M_LinuxRMW (ct, sym1, sym2, mo) -> 
-            Debug_ocaml.error "todo: LinuxRMW"
-         end
-      | M_Eskip -> 
-         let rt = RT.Computational ((Sym.fresh (), Unit), I) in
-         return (Normal (rt, local))
-      | M_Eccall (_ctype, afsym, asyms) ->
-         let* local = unpack_resources loc local in
-         let* f_arg = arg_of_asym local afsym in
-         let* args = args_of_asyms local asyms in
-         begin match f_arg.bt with
-           | FunctionPointer sym -> 
-              let* (_loc, ft) = match Global.get_fun_decl G.global sym with
-                | Some (loc, ft) -> return (loc, ft)
-                | None -> fail loc (Missing_function sym)
-              in
-              let* (rt, local) = calltype_ft loc local args ft in
-              return (Normal (rt, local))
-           | _ -> 
-              fail afsym.loc (Generic !^"expected function pointer")
-         end
-      | M_Eproc (fname, asyms) ->
-         let* local = unpack_resources loc local in
-         let* decl_typ = match fname with
-           | CF.Core.Impl impl -> 
-              return (Global.get_impl_fun_decl G.global impl)
-           | CF.Core.Sym sym ->
-              let* (_loc, decl_typ) = match Global.get_fun_decl G.global sym with
-                | Some (loc, ft) -> return (loc, ft)
-                | None -> fail loc (Missing_function sym)
-              in
-              return decl_typ
-         in
-         let* args = args_of_asyms local asyms in
-         let* (rt, local) = calltype_ft loc local args decl_typ in
-         return (Normal (rt, local))
-      | M_Ebound (n, e) ->
-         infer_expr (local, labels) e
-      | M_End _ ->
-         Debug_ocaml.error "todo: End"
-      | M_Erun (label_sym, asyms) ->
-         let* local = unpack_resources loc local in
-         let* lt = match SymMap.find_opt label_sym labels with
-         | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
-         | Some lt -> return lt
-         in
-         let* args = args_of_asyms local asyms in
-         let* (False, local) = calltype_lt loc local args lt in
-         let* () = all_empty loc local in
-         return False
-      | M_Ecase _ -> 
-         Debug_ocaml.error "Ecase in inferring position"
-      | M_Eif (casym, e1, e2) ->
-         let* carg = arg_of_asym local casym in
-         let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-         let* paths =
-           ListM.mapM (fun (lc, e) ->
-               let delta = add_uc lc L.empty in
-               let*? () = false_if_unreachable loc (delta ++ local) in
-               let*? (rt, local) = infer_expr_pop delta (local, labels) e in
-               return (Normal ((lc, rt), local))
-             ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
-         in
-         merge_return_paths loc paths
-      | M_Elet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr local e1 in
-         let* delta = match p with
-           | M_Symbol sym -> return (bind sym rt)
-           | M_Pat pat -> pattern_match_rt pat rt
-         in
-         infer_expr_pop delta (local, labels) e2
-      | M_Ewseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr (local, labels) e1 in
-         let* delta = pattern_match_rt pat rt in
-         infer_expr_pop delta (local, labels) e2
-      | M_Esseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr (local, labels) e1 in
-         let* delta = pattern_match_rt pat rt in
-         infer_expr_pop delta (local, labels) e2
-    in
-    debug 3 (lazy (match r with
-                   | False -> item "type" (parens !^"no return")
-                   | Normal (rt,_) -> item "type" (RT.pp rt)));
-    return r
-
-  and infer_expr_pop delta (local, labels) (e : 'bty expr) 
-      : ((RT.t * L.t) fallible, type_error) m =
-    let local = delta ++ marked ++ local in 
-    let* result = infer_expr (local, labels) e in
-    return (Fallible.map pop_return result)
-
-  (* check_expr: type checking for impure epressions; type checks `e`
-     against `typ`, which is either a return type or `False`; returns
-     either an updated environment, or `False` in case of Goto *)
-  let rec check_expr (local, labels) (e : 'bty expr) (typ : RT.t fallible) 
-          : (L.t fallible, type_error) m = 
-    let (M_Expr (loc, _annots, e_)) = e in
-    debug 3 (lazy (action "checking expression"));
-    debug 3 (lazy (item "expr" (group (pp_expr e))));
-    debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
-    debug 3 (lazy (item "ctxt" (L.pp local)));
-    let* result = match e_ with
-      | M_Eif (casym, e1, e2) ->
          let* carg = arg_of_asym local casym in
          let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          let* paths =
@@ -1735,11 +1243,11 @@ module Make (G : sig val global : Global.t end) = struct
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_expr_pop delta (local, labels) e typ 
+               check_pexpr_pop loc delta local e typ
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
          return (merge_paths loc paths)
-      | M_Ecase (asym, pats_es) ->
+      | M_PEcase (asym, pats_es) ->
          let* arg = arg_of_asym local asym in
          let* paths = 
            ListM.mapM (fun (pat, pe) ->
@@ -1749,57 +1257,549 @@ module Make (G : sig val global : Global.t end) = struct
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_expr_pop delta (local, labels) e typ
+               check_pexpr_pop loc delta local e typ
              ) pats_es
          in
          return (merge_paths loc paths)
-      | M_Elet (p, e1, e2) ->
+      | M_PElet (p, e1, e2) ->
          let*? (rt, local) = infer_pexpr local e1 in
-         let* delta = match p with 
+         let* delta = match p with
            | M_Symbol sym -> return (bind sym rt)
            | M_Pat pat -> pattern_match_rt pat rt
          in
-         check_expr_pop delta (local, labels) e2 typ
-      | M_Ewseq (pat, e1, e2) ->         
-         let*? (rt, local) = infer_expr (local, labels) e1 in
-         let* delta = pattern_match_rt pat rt in
-         check_expr_pop delta (local, labels) e2 typ
-      | M_Esseq (pat, e1, e2) ->
-         (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
-         let*? (rt, local) = infer_expr (local, labels) e1 in
-         let* delta = pattern_match_rt pat rt in
-         check_expr_pop ~print:true delta (local, labels) e2 typ
+         check_pexpr_pop loc delta local e2 typ
       | _ ->
-         let*? (rt, local) = infer_expr (local, labels) e in
+         let*? (rt, local) = infer_pexpr local e in
          let* ((bt, lname), delta) = bind_logically rt in
          let local = delta ++ marked ++ local in
-         match typ with
-         | Normal typ ->
-            let* local = subtype loc local {bt; lname; loc} typ in
-            let* local = pop_empty loc local in
-            return (Normal local)
-         | False ->
-            let err = 
-              !^("This expression returns but is expected "^
-                   "to have non-return type.") 
+         let* local = subtype loc local {bt; lname; loc} typ in
+         let* local = pop_empty loc local in
+         return (Normal local)
+
+    and check_pexpr_pop (loc : loc) delta local (pe : 'bty pexpr) 
+                        (typ : RT.t) : (L.t fallible, type_error) m =
+      let local = delta ++ marked ++ local in 
+      let*? local = check_pexpr local pe typ in
+      let* local = pop_empty loc local in
+      return (Normal local)
+
+
+
+
+    (*** memory related logic *****************************************************)
+
+
+
+    let load (loc: loc)  local (bt: BT.t) (pointer: IT.t)
+             (size: RE.size) (return_it: IT.t) (is_member: BT.member option) =
+      let names = Explain.{default_names; preferred_names = []} in
+      let original_local = local in
+      let rec aux local bt pointer size path is_member = 
+        match bt with
+        | Struct tag ->
+           let* decl = get_struct_decl loc tag in
+           let rec aux_members = function
+             | Global.{size; member = (member, member_sct); _} :: members ->
+                let member_pointer = IT.StructMemberOffset (tag,pointer,member) in
+                let member_path = IT.StructMember (tag, path, member) in
+                let* constraints = aux_members members in
+                let* constraints2 = 
+                  aux local (BT.of_sct member_sct) member_pointer 
+                    size member_path (Some member) 
+                in
+                return (constraints2 @ constraints)
+             | [] -> return []
+           in  
+           aux_members (Global.members decl.layout)
+        | _ ->
+           let o_resource = S.resource_for_pointer local pointer in
+           let situation = Access (Load is_member) in
+           let* pointee = match o_resource with
+             | Some (_,resource) -> 
+                begin match resource with
+                | Points p when Z.equal size p.size -> 
+                   return p.pointee
+                | Points p -> 
+                   fail loc (Generic !^"resource of wrong size for load")
+                | Block {block_type = Uninit; _} -> 
+                   let state = Explain.state names original_local in
+                   fail loc (Uninitialised_read {is_member; state})
+                | Block {block_type = Padding; _} -> 
+                   fail loc (Generic !^"cannot read padding bytes")
+                | Block {block_type = Nothing; _} -> 
+                   fail loc (Generic !^"cannot read empty bytes")
+                | Predicate pred -> 
+                   let (resource,state) = 
+                     Explain.resource names original_local (Predicate pred) in
+                   fail loc (Cannot_unpack {resource; state; situation})
+                end
+             | None -> 
+                   let (addr,state) = 
+                     Explain.index_term names original_local pointer in
+                let used = S.used_resource_for_pointer local pointer in
+                fail loc (Missing_ownership {addr; state; used; situation})
+           in
+           let (Base vbt) = L.get_l pointee local in
+           if BT.equal vbt bt 
+           then return [IT.EQ (path, S (vbt,pointee))]
+           else fail loc (Mismatch {has = Base vbt; expect = Base bt})
+      in
+      let* constraints = aux local bt pointer size return_it is_member in
+      return (LC (And constraints))
+
+
+
+    (* does not check for the right to write, this is done elsewhere *)
+    let rec store (loc: loc)
+                  local
+                  (bt: BT.t)
+                  (pointer: IT.t)
+                  (size: RE.size)
+                  (o_value: IT.t option) 
+      =
+      let open LRT in
+      match bt with
+      | Struct tag ->
+         let* decl = get_struct_decl loc tag in
+         let rec aux = function
+           | [] -> return I
+           | Global.{offset; size; member_or_padding} :: members ->
+              match member_or_padding with
+              | Some (member,member_sct) -> 
+                 let o_member_value = 
+                   Option.map (fun v -> IT.StructMember (tag, v, member)) o_value 
+                 in
+                 let member_offset = IT.Offset (pointer, Num offset) in
+                 let* rt = store loc local (BT.of_sct member_sct) member_offset
+                             size o_member_value in
+                 let* rt2 = aux members in
+                 return (rt@@rt2)
+              | None ->
+                 let block = 
+                   RE.Block {pointer = IT.Offset (pointer, Num offset); 
+                             size = Num size; 
+                             block_type = Padding} 
+                 in
+                 let rt = LRT.Resource (block, LRT.I) in
+                 let* rt2 = aux members in
+                 return (rt@@rt2)
+         in  
+         aux decl.layout
+      | _ -> 
+         let vsym = Sym.fresh () in 
+         match o_value with
+         | Some v -> 
+            let rt = 
+              Logical ((vsym, Base bt), 
+              Resource (Points {pointer; pointee = vsym; size}, 
+              Constraint (LC (EQ (S (bt,vsym), v)), I)))
             in
-            fail loc (Generic err)
-    in
-    return result
+            return rt
+         | None -> 
+            let block = 
+              RE.Block {pointer; 
+                        size = Num size; 
+                        block_type = Uninit}
+            in
+            let rt = Resource (block, LRT.I) in
+            return rt
 
 
-  and check_expr_pop ?(print=false) delta (local, labels) (e : 'bty expr) (typ : RT.t fallible)
-      : (L.t fallible, type_error) m =
-    let (M_Expr (loc, _, _)) = e in    
-    let local = delta ++ marked ++ local in 
-    let () = print_json (lazy (json_local loc local)) in
-    let* result = check_expr (local, labels) e typ in
-    match result with
-    | False -> 
-       return False
-    | Normal local -> 
-       let* local = pop_empty loc local in
-       return (Normal local)
+
+    (* not used right now *)
+    (* todo: right access kind *)
+    let pack_stored_struct loc local (pointer: IT.t) (tag: BT.tag) =
+      let size = Memory.size_of_struct tag in
+      let v = Sym.fresh () in
+      let bt = Struct tag in
+      let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
+      let* local = remove_ownership loc (Access (Load None)) local pointer (Num size) in
+      let rt = 
+        LRT.Logical ((v, Base bt), 
+        LRT.Resource (Points {pointer; pointee = v; size},
+        LRT.Constraint (constraints, LRT.I)))
+      in
+      return rt
+
+
+    let ensure_aligned loc local access pointer ctype = 
+      let (aligned, _) = 
+        S.constraint_holds local
+          (LC.LC (Aligned (ST.of_ctype ctype, pointer))) 
+      in
+      if aligned then return () else fail loc (Misaligned access)
+
+
+
+    (*** auxiliary ****************************************************************)
+
+
+    let json_local loc local : Yojson.Safe.t = 
+      `Assoc [("loc", json_loc loc);
+              ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
+
+    let json_false loc  : Yojson.Safe.t = 
+      `Assoc [("loc", json_loc loc);
+              ("context_or_unreachable", `Variant ("unreachable", None))]
+
+    let json_local_or_false loc = function
+      | Normal local -> json_local loc local
+      | False -> json_false loc
+
+
+
+    (*** impure expression inference **********************************************)
+
+
+    (* type inference of impure expressions; returns either a return type
+       and new local environment or False *)
+    (* infer_expr: the raw type inference for impure expressions. *)
+    (* infer_expr_pop: analogously to infer_pexpr: place a marker, run
+       the raw type inference, and additionally return whatever is left in
+       the local environment since that marker (except for computational
+       variables) *)
+
+
+    type labels = (LT.t * label_kind) SymMap.t
+
+
+    let rec infer_expr (local, labels) (e : 'bty expr) 
+            : ((RT.t * L.t) fallible, type_error) m = 
+      let (M_Expr (loc, _annots, e_)) = e in
+      debug 3 (lazy (action "inferring expression"));
+      debug 3 (lazy (item "expr" (group (pp_expr e))));
+      debug 3 (lazy (item "ctxt" (L.pp local)));
+      let* r = match e_ with
+        | M_Epure pe -> 
+           infer_pexpr local pe
+        | M_Ememop memop ->
+           let* local = unpack_resources loc local in
+           begin match memop with
+           | M_PtrEq _ ->
+              Debug_ocaml.error "todo: M_PtrEq"
+           | M_PtrNe _ ->
+              Debug_ocaml.error "todo: M_PtrNe"
+           | M_PtrLt _ ->
+              Debug_ocaml.error "todo: M_PtrLt"
+           | M_PtrGt _ ->
+              Debug_ocaml.error "todo: M_PtrGt"
+           | M_PtrLe _ ->
+              Debug_ocaml.error "todo: M_PtrLe"
+           | M_PtrGe _ ->
+              Debug_ocaml.error "todo: M_PtrGe"
+           | M_Ptrdiff _ ->
+              Debug_ocaml.error "todo: M_Ptrdiff"
+           | M_IntFromPtr _ ->
+              Debug_ocaml.error "todo: M_IntFromPtr"
+           | M_PtrFromInt (act_from, act2_to, asym) ->
+              let ret = Sym.fresh () in 
+              let* arg = arg_of_asym local asym in
+              let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
+              let constr = LC (EQ (S (Loc, ret), IntegerToPointerCast (S (Integer, arg.lname)))) in
+              let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
+              return (Normal (rt, local))            
+           | M_PtrValidForDeref (act, asym) ->
+              (* check *)
+              let* local = unpack_resources loc local in
+              let* arg = arg_of_asym local asym in
+              let ret = Sym.fresh () in
+              let size = Memory.size_of_ctype act.item.ct in
+              let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+              let o_resource = S.resource_for_pointer local (S (arg.bt, arg.lname)) in
+              let resource_ok = 
+                match Option.bind o_resource (Tools.comp RE.size snd) with
+                | Some size' when S.equal local size' (Num size) -> true
+                | Some _ -> false
+                | _ -> false
+              in
+              let (aligned, _) = 
+                S.constraint_holds local
+                  (LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))))
+              in
+              let ok = resource_ok && aligned in
+              let constr = LC (EQ (S (Bool, ret), Bool ok)) in
+              let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
+              return (Normal (rt, local))
+           | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
+           | M_PtrArrayShift _ (* (asym 'bty * actype 'bty * asym 'bty  ) *)
+           | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *)
+           | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *)
+           | M_Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *)
+           | M_Va_start _ (* (asym 'bty * asym 'bty) *)
+           | M_Va_copy _ (* (asym 'bty) *)
+           | M_Va_arg _ (* (asym 'bty * actype 'bty) *)
+           | M_Va_end _ (* (asym 'bty) *) 
+             -> 
+              Debug_ocaml.error "todo: ememop"
+           end
+        | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
+           let* local = unpack_resources loc local in
+           begin match action_ with
+           | M_Create (asym, act, _prefix) -> 
+              let* arg = arg_of_asym local asym in
+              let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
+              let ret = Sym.fresh () in
+              let size = Memory.size_of_ctype act.item.ct in
+              let* lrt = store loc local act.item.bt (S (Loc, ret)) size None in
+              let rt = 
+                RT.Computational ((ret, Loc), 
+                LRT.Constraint (LC.LC (Representable (ST_Ctype (Sctypes.pointer_sct act.item.ct), S (Loc, ret))), 
+                LRT.Constraint (LC.LC (AlignedI (S (arg.bt, arg.lname), S (Loc, ret))), 
+                (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
+                lrt)))
+              in
+              return (Normal (rt, local))
+           | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
+              Debug_ocaml.error "todo: CreateReadOnly"
+           | M_Alloc (ct, sym, _prefix) -> 
+              Debug_ocaml.error "todo: Alloc"
+           | M_Kill (M_Dynamic, asym) -> 
+              Debug_ocaml.error "todo: free"
+           | M_Kill (M_Static cti, asym) -> 
+              let* arg = arg_of_asym local asym in
+              let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+              let* () = 
+                ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
+              in
+              let size = Memory.size_of_ctype cti.ct in
+              let* local = remove_ownership loc (Access Kill) local (S (arg.bt, arg.lname)) 
+                             (Num size) in
+              let rt = RT.Computational ((Sym.fresh (), Unit), I) in
+              return (Normal (rt, local))
+           | M_Store (_is_locking, act, pasym, vasym, mo) -> 
+              let* parg = arg_of_asym local pasym in
+              let* varg = arg_of_asym local vasym in
+              let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
+              let* () = ensure_base_type loc ~expect:Loc parg.bt in
+              let* () = 
+                ensure_aligned loc local (Store None) (S (parg.bt, parg.lname)) act.item.ct
+              in
+              (* The generated Core program will in most cases before this
+                 already have checked whether the store value is
+                 representable and done the right thing. Pointers, as I
+                 understand, are an exception. *)
+              let* () = 
+                let (in_range, _) = 
+                  S.constraint_holds local
+                    (LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))))
+                in
+                if in_range then return () else
+                  fail loc (Generic !^"write value unrepresentable")
+              in
+              let size = Memory.size_of_ctype act.item.ct in
+              let* local = 
+                remove_ownership parg.loc (Access (Store None)) 
+                  local (S (parg.bt, parg.lname)) 
+                  (Num size) in
+              let* bindings = 
+                store loc local varg.bt (S (parg.bt, parg.lname))
+                  size (Some (S (varg.bt, varg.lname))) in
+              let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
+              return (Normal (rt, local))
+           | M_Load (act, pasym, _mo) -> 
+              let* parg = arg_of_asym local pasym in
+              let* () = ensure_base_type loc ~expect:Loc parg.bt in
+              let* () = 
+                ensure_aligned loc local (Load None) (S (parg.bt, parg.lname)) act.item.ct
+              in
+              let ret = Sym.fresh () in
+              let size = Memory.size_of_ctype act.item.ct in
+              let* constraints = 
+                load loc local act.item.bt (S (parg.bt, parg.lname)) 
+                  size (S (act.item.bt, ret)) None 
+              in
+              let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, LRT.I)) in
+              return (Normal (rt, local))
+           | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
+              Debug_ocaml.error "todo: RMW"
+           | M_Fence mo -> 
+              Debug_ocaml.error "todo: Fence"
+           | M_CompareExchangeStrong (ct, sym1, sym2, sym3, mo1, mo2) -> 
+              Debug_ocaml.error "todo: CompareExchangeStrong"
+           | M_CompareExchangeWeak (ct, sym1, sym2, sym3, mo1, mo2) -> 
+              Debug_ocaml.error "todo: CompareExchangeWeak"
+           | M_LinuxFence mo -> 
+              Debug_ocaml.error "todo: LinuxFemce"
+           | M_LinuxLoad (ct, sym1, mo) -> 
+              Debug_ocaml.error "todo: LinuxLoad"
+           | M_LinuxStore (ct, sym1, sym2, mo) -> 
+              Debug_ocaml.error "todo: LinuxStore"
+           | M_LinuxRMW (ct, sym1, sym2, mo) -> 
+              Debug_ocaml.error "todo: LinuxRMW"
+           end
+        | M_Eskip -> 
+           let rt = RT.Computational ((Sym.fresh (), Unit), I) in
+           return (Normal (rt, local))
+        | M_Eccall (_ctype, afsym, asyms) ->
+           let* local = unpack_resources loc local in
+           let* f_arg = arg_of_asym local afsym in
+           let* args = args_of_asyms local asyms in
+           begin match f_arg.bt with
+             | FunctionPointer sym -> 
+                let* (_loc, ft) = match Global.get_fun_decl G.global sym with
+                  | Some (loc, ft) -> return (loc, ft)
+                  | None -> fail loc (Missing_function sym)
+                in
+                let* (rt, local) = calltype_ft loc local args ft in
+                return (Normal (rt, local))
+             | _ -> 
+                fail afsym.loc (Generic !^"expected function pointer")
+           end
+        | M_Eproc (fname, asyms) ->
+           let* local = unpack_resources loc local in
+           let* decl_typ = match fname with
+             | CF.Core.Impl impl -> 
+                return (Global.get_impl_fun_decl G.global impl)
+             | CF.Core.Sym sym ->
+                let* (_loc, decl_typ) = match Global.get_fun_decl G.global sym with
+                  | Some (loc, ft) -> return (loc, ft)
+                  | None -> fail loc (Missing_function sym)
+                in
+                return decl_typ
+           in
+           let* args = args_of_asyms local asyms in
+           let* (rt, local) = calltype_ft loc local args decl_typ in
+           return (Normal (rt, local))
+        | M_Ebound (n, e) ->
+           infer_expr (local, labels) e
+        | M_End _ ->
+           Debug_ocaml.error "todo: End"
+        | M_Erun (label_sym, asyms) ->
+           let* local = unpack_resources loc local in
+           let* lt = match SymMap.find_opt label_sym labels with
+           | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
+           | Some lt -> return lt
+           in
+           let* args = args_of_asyms local asyms in
+           let* (False, local) = calltype_lt loc local args lt in
+           let* () = all_empty loc local in
+           return False
+        | M_Ecase _ -> 
+           Debug_ocaml.error "Ecase in inferring position"
+        | M_Eif (casym, e1, e2) ->
+           let* carg = arg_of_asym local casym in
+           let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+           let* paths =
+             ListM.mapM (fun (lc, e) ->
+                 let delta = add_uc lc L.empty in
+                 let*? () = false_if_unreachable loc (delta ++ local) in
+                 let*? (rt, local) = infer_expr_pop delta (local, labels) e in
+                 return (Normal ((lc, rt), local))
+               ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+           in
+           merge_return_paths loc paths
+        | M_Elet (p, e1, e2) ->
+           let*? (rt, local) = infer_pexpr local e1 in
+           let* delta = match p with
+             | M_Symbol sym -> return (bind sym rt)
+             | M_Pat pat -> pattern_match_rt pat rt
+           in
+           infer_expr_pop delta (local, labels) e2
+        | M_Ewseq (pat, e1, e2) ->
+           let*? (rt, local) = infer_expr (local, labels) e1 in
+           let* delta = pattern_match_rt pat rt in
+           infer_expr_pop delta (local, labels) e2
+        | M_Esseq (pat, e1, e2) ->
+           let*? (rt, local) = infer_expr (local, labels) e1 in
+           let* delta = pattern_match_rt pat rt in
+           infer_expr_pop delta (local, labels) e2
+      in
+      debug 3 (lazy (match r with
+                     | False -> item "type" (parens !^"no return")
+                     | Normal (rt,_) -> item "type" (RT.pp rt)));
+      return r
+
+    and infer_expr_pop delta (local, labels) (e : 'bty expr) 
+        : ((RT.t * L.t) fallible, type_error) m =
+      let local = delta ++ marked ++ local in 
+      let* result = infer_expr (local, labels) e in
+      return (Fallible.map pop_return result)
+
+    (* check_expr: type checking for impure epressions; type checks `e`
+       against `typ`, which is either a return type or `False`; returns
+       either an updated environment, or `False` in case of Goto *)
+    let rec check_expr (local, labels) (e : 'bty expr) (typ : RT.t fallible) 
+            : (L.t fallible, type_error) m = 
+      let (M_Expr (loc, _annots, e_)) = e in
+      debug 3 (lazy (action "checking expression"));
+      debug 3 (lazy (item "expr" (group (pp_expr e))));
+      debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
+      debug 3 (lazy (item "ctxt" (L.pp local)));
+      let* result = match e_ with
+        | M_Eif (casym, e1, e2) ->
+           let* carg = arg_of_asym local casym in
+           let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+           let* paths =
+             ListM.mapM (fun (lc, e) ->
+                 let delta = add_uc lc L.empty in
+                 let*? () = 
+                   false_if_unreachable loc (delta ++ local)
+                 in
+                 check_expr_pop delta (local, labels) e typ 
+               ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+           in
+           return (merge_paths loc paths)
+        | M_Ecase (asym, pats_es) ->
+           let* arg = arg_of_asym local asym in
+           let* paths = 
+             ListM.mapM (fun (pat, pe) ->
+                 (* TODO: make pattern matching return (in delta)
+                    constraints corresponding to the pattern *)
+                 let* delta = pattern_match (S (arg.bt, arg.lname)) pat arg.bt in
+                 let*? () = 
+                   false_if_unreachable loc (delta ++ local)
+                 in
+                 check_expr_pop delta (local, labels) e typ
+               ) pats_es
+           in
+           return (merge_paths loc paths)
+        | M_Elet (p, e1, e2) ->
+           let*? (rt, local) = infer_pexpr local e1 in
+           let* delta = match p with 
+             | M_Symbol sym -> return (bind sym rt)
+             | M_Pat pat -> pattern_match_rt pat rt
+           in
+           check_expr_pop delta (local, labels) e2 typ
+        | M_Ewseq (pat, e1, e2) ->         
+           let*? (rt, local) = infer_expr (local, labels) e1 in
+           let* delta = pattern_match_rt pat rt in
+           check_expr_pop delta (local, labels) e2 typ
+        | M_Esseq (pat, e1, e2) ->
+           (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
+           let*? (rt, local) = infer_expr (local, labels) e1 in
+           let* delta = pattern_match_rt pat rt in
+           check_expr_pop ~print:true delta (local, labels) e2 typ
+        | _ ->
+           let*? (rt, local) = infer_expr (local, labels) e in
+           let* ((bt, lname), delta) = bind_logically rt in
+           let local = delta ++ marked ++ local in
+           match typ with
+           | Normal typ ->
+              let* local = subtype loc local {bt; lname; loc} typ in
+              let* local = pop_empty loc local in
+              return (Normal local)
+           | False ->
+              let err = 
+                !^("This expression returns but is expected "^
+                     "to have non-return type.") 
+              in
+              fail loc (Generic err)
+      in
+      return result
+
+
+    and check_expr_pop ?(print=false) delta (local, labels) (e : 'bty expr) (typ : RT.t fallible)
+        : (L.t fallible, type_error) m =
+      let (M_Expr (loc, _, _)) = e in    
+      let local = delta ++ marked ++ local in 
+      let () = print_json (lazy (json_local loc local)) in
+      let* result = check_expr (local, labels) e typ in
+      match result with
+      | False -> 
+         return False
+      | Normal local -> 
+         let* local = pop_empty loc local in
+         return (Normal local)
 
 
   end (* Checker *)
