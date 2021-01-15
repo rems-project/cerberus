@@ -315,7 +315,7 @@ module Make (G : sig val global : Global.t end) = struct
       type resource_request = 
         { local : L.t;
           original_local : L.t;
-          preferred_names : Explain.names;
+          alternative_names : Explain.names;
           unis : Sym.t Uni.unis;
           situation: situation;
           loc: loc;
@@ -324,7 +324,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       type packing_request = 
         { local : L.t;
-          preferred_names : Explain.names;
+          alternative_names : Explain.names;
           situation: situation;
           loc: loc;
           lft : LFT.t;
@@ -387,7 +387,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       let spine 
             (loc : loc) 
-            preferred_names
+            alternative_names
             situation 
             local
             (arguments : arg list) 
@@ -396,7 +396,7 @@ module Make (G : sig val global : Global.t end) = struct
         let open NFT in
 
         let original_local = local in
-        let names = Explain.{preferred_names; default_names} in
+        let names = Explain.{alternative_names; default_names} in
 
         let ftyp = NFT.normalise ftyp in
         let unis = SymMap.empty in
@@ -449,7 +449,7 @@ module Make (G : sig val global : Global.t end) = struct
                let rr = {
                    loc; 
                    original_local; 
-                   preferred_names;
+                   alternative_names;
                    situation; local; 
                    unis; 
                    resource;
@@ -539,8 +539,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec remove_ownership_prompt (loc: loc) ~original_local ~preferred_names situation local (pointer: IT.t) (need_size: IT.t) = 
-      let names = Explain.{default_names; preferred_names} in
+    let rec remove_ownership_prompt (loc: loc) ~original_local ~alternative_names situation local (pointer: IT.t) (need_size: IT.t) = 
+      let names = Explain.{default_names; alternative_names} in
       let open Prompt.Operators in
       if S.equal local need_size (Num Z.zero) then 
         return local
@@ -567,7 +567,7 @@ module Make (G : sig val global : Global.t end) = struct
         in
         if S.ge local need_size have_size then 
           let local = L.use_resource resource_name [loc] local in
-          remove_ownership_prompt loc  ~original_local ~preferred_names
+          remove_ownership_prompt loc  ~original_local ~alternative_names
             situation local (Offset (pointer, have_size)) 
             (IT.Sub (need_size, have_size))
         else if S.lt local need_size have_size then 
@@ -589,14 +589,14 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec resource_request_prompt loc ~original_local ~preferred_names situation local request unis = 
-      let names = Explain.{default_names; preferred_names} in
+    let rec resource_request_prompt loc ~original_local ~alternative_names situation local request unis = 
+      let names = Explain.{default_names; alternative_names} in
       let open Prompt.Operators in
       let open Resources in
       match request with
       | Block b ->
          let* local = 
-           remove_ownership_prompt loc ~original_local ~preferred_names
+           remove_ownership_prompt loc ~original_local ~alternative_names
              situation local b.pointer b.size 
          in
          return (unis, local)
@@ -650,14 +650,14 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let attempt_prompts = 
               List.map (fun lft ->
-                  lazy (prompt (R_Packing {loc; preferred_names; situation; local; lft}))
+                  lazy (prompt (R_Packing {loc; alternative_names; situation; local; lft}))
                 ) (predicate_pack_functions p def)
             in
             let choices = attempt_prompts @ [else_prompt] in
             let choices1 = List1.make (List.hd choices, List.tl choices) in
             let* (lrt, local) = try_choices choices1 in
             let local = bind_logical local lrt in
-            resource_request_prompt loc ~original_local ~preferred_names
+            resource_request_prompt loc ~original_local ~alternative_names
               situation local request unis
          end
 
@@ -672,14 +672,14 @@ module Make (G : sig val global : Global.t end) = struct
          begin match r with
          | Prompt.R_Error (loc,tr,error) -> 
             Error (loc,tr,error)
-         | R_Resource {loc; original_local; preferred_names; local; unis; situation; resource} ->
+         | R_Resource {loc; original_local; alternative_names; local; unis; situation; resource} ->
             let prompt = 
-              resource_request_prompt loc ~original_local ~preferred_names 
+              resource_request_prompt loc ~original_local ~alternative_names 
                 situation local resource unis in
             let* (unis, local) = handle_prompt prompt in
             handle_prompt (c (unis, local))
-         | R_Packing {loc; local; preferred_names; situation; lft} ->
-            let prompt = Spine_LFT.spine loc preferred_names situation local [] lft in
+         | R_Packing {loc; local; alternative_names; situation; lft} ->
+            let prompt = Spine_LFT.spine loc alternative_names situation local [] lft in
             let* (lrt, local) = handle_prompt prompt in
             handle_prompt (c (lrt, local))
          | R_Try choices ->
@@ -699,13 +699,13 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let calltype_ft loc local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
-      let preferred_names = 
+      let alternative_names = 
         List.mapi (fun i arg ->
             let v = "ARG" ^ string_of_int i in
             (arg.lname, Path.Addr v)
           ) args
       in
-      let prompt = Spine_FT.spine loc preferred_names FunctionCall local args ftyp in
+      let prompt = Spine_FT.spine loc alternative_names FunctionCall local args ftyp in
       let* (rt, local) = handle_prompt prompt in
       return (rt, local)
 
@@ -718,15 +718,15 @@ module Make (G : sig val global : Global.t end) = struct
        inference as the spine judgment. So implement the subtyping
        judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
     let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
-      let preferred_names = [(arg.lname, Path.Addr "return")] in
+      let alternative_names = [(arg.lname, Path.Addr "return")] in
       let lt = LT.of_rt rtyp (LT.I False.False) in
-      let prompt = Spine_LT.spine loc preferred_names Subtyping local [arg] lt in
+      let prompt = Spine_LT.spine loc alternative_names Subtyping local [arg] lt in
       let* (False.False, local) = handle_prompt prompt in
       return local
 
     let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
       let prompt = 
-        remove_ownership_prompt loc ~original_local:local ~preferred_names:[]
+        remove_ownership_prompt loc ~original_local:local ~alternative_names:[]
           situation local pointer need_size 
       in
       handle_prompt prompt
@@ -986,8 +986,8 @@ module Make (G : sig val global : Global.t end) = struct
     let check_all_used loc ~original_local vbs = 
       let rec aux = function
         | (s, VB.Resource resource) :: _ -> 
-           let preferred_names = [] in
-           let names = Explain.{default_names; preferred_names} in
+           let alternative_names = [] in
+           let names = Explain.{default_names; alternative_names} in
            let (resource, state) = Explain.resource names original_local resource in
            fail loc (Unused_resource {resource; state})
         | _ :: rest -> aux rest
@@ -1292,7 +1292,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let load (loc: loc)  local (bt: BT.t) (pointer: IT.t)
              (size: RE.size) (return_it: IT.t) (is_member: BT.member option) =
-      let names = Explain.{default_names; preferred_names = []} in
+      let names = Explain.{default_names; alternative_names = []} in
       let original_local = local in
       let rec aux local bt pointer size path is_member = 
         match bt with
@@ -1891,8 +1891,7 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let* local_or_false =
       let default_names = 
-        Explain.default_names_substs substs
-          (Explain.default_names_of_mapping mapping)  
+        Explain.names_substs substs (Explain.names_of_mapping mapping)  
       in
       let module C = Checker(struct let default_names = default_names end) in
       C.check_pexpr_pop loc delta L.empty body rt 
@@ -1960,8 +1959,8 @@ module Make (G : sig val global : Global.t end) = struct
          let* local_or_false = 
            let () = print stderr (item "label mapping" (Parse_ast.Mapping.pp mapping)) in
            let default_names = 
-             Explain.default_names_substs substs
-               (Explain.default_names_of_mapping mapping)  
+             Explain.names_substs substs
+               (Explain.names_of_mapping mapping)  
            in
            let module C = Checker(struct let default_names = default_names end) in
            C.check_expr_pop ~print:true (delta_label ++ pure_delta) 
@@ -1973,8 +1972,8 @@ module Make (G : sig val global : Global.t end) = struct
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let* local_or_false = 
       let default_names = 
-        Explain.default_names_substs substs
-          (Explain.default_names_of_mapping mapping) 
+        Explain.names_substs substs
+          (Explain.names_of_mapping mapping) 
       in
       let module C = Checker(struct let default_names = default_names end) in
       C.check_expr_pop ~print:true delta (L.empty, labels) body (Normal rt)

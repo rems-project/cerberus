@@ -142,25 +142,20 @@ module Make (G : sig val global : Global.t end) = struct
 
   type names = (Sym.t * Path.t) list
 
-  let names_subst subst default_names = 
-    List.map (fun (sym,p) ->
-        Sym.subst subst sym
-      ) default_names
-
-  let default_names_subst subst default_names = 
+  let names_subst subst names = 
     List.map (fun (sym,p) ->
         (Sym.subst subst sym, p)
-      ) default_names
+      ) names
 
-  let default_names_substs substs default_names = 
-    Subst.make_substs default_names_subst substs default_names
+  let names_substs substs names = 
+    Subst.make_substs names_subst substs names
 
   type names_explained = {
       default_names : names;
-      preferred_names : names;
+      alternative_names : names;
     }
 
-  let default_names_of_mapping mapping = 
+  let names_of_mapping mapping = 
     List.map (fun i ->
         Parse_ast.Mapping.(i.sym, i.path)
       ) mapping
@@ -233,10 +228,10 @@ module Make (G : sig val global : Global.t end) = struct
     in
     (List.sort graph_compare veclasses, rels)
 
-  let preferred_name names veclass =
+  let alternative_name names veclass =
     Option.map snd 
       (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
-         names.preferred_names)
+         names.alternative_names)
 
   let default_name names veclass =
     Option.map snd
@@ -257,13 +252,13 @@ module Make (G : sig val global : Global.t end) = struct
     aux named_veclasses
 
   let pick_name (named_veclasses, rels) names veclass =
-    match preferred_name names veclass with
+    match default_name names veclass with
     | Some name -> (name, true)
     | None -> 
        match related_name (named_veclasses, rels) veclass with
        | Some name -> (name, true)
        | None -> 
-          match default_name names veclass with
+          match alternative_name names veclass with
           | Some name -> (name, true)
           | None -> 
              match good_name veclass with
