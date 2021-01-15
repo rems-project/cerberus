@@ -305,9 +305,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  module Checker (N : sig val default_names : Explain.names end) = struct
+  module type DefaultNames = sig val default_names : Explain.names end
+  module Checker (DefaultNames : DefaultNames) = struct
 
-    open N 
+    open DefaultNames
 
   module Prompt = struct
 
@@ -1802,6 +1803,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   end (* Checker *)
+
 
 
   (* check_and_bind_arguments: typecheck the function/procedure/label
