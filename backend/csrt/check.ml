@@ -33,6 +33,56 @@ module Mapping = Parse_ast.Mapping
 
 let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
 
+module Fallible = struct
+
+  (* `t` is used for inferring/checking the type of unreachable control-flow
+     positions, including after Run/Goto: Goto has no return type (because the
+     control flow does not return there), but instead returns `False`. Type
+     checking of pure expressions returns a local environment or `False`; type
+     inference of impure expressions returns either a return type and a local
+     environment or `False` *)
+  type 'a t = 
+    | Normal of 'a
+    | False
+
+  type 'a fallible = 'a t
+
+  (* bind: check if the monadic argument evaluates to `False`; if so, the value
+     is `False, otherwise whatever the continuation (taking a non-False
+     argument) returns *)
+  let mbind (m : ('a t, 'e) m) (f : 'a -> ('b t, 'e) m) : ('b t, 'e) m =
+    let* aof = m in
+    match aof with
+    | Normal a -> f a
+    | False -> return False
+
+  (* special syntax for `or_false` *)
+  let (let*?) = mbind
+
+  let pp (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document = 
+    match m with
+    | Normal a -> ppf a
+    | False -> if !unicode then !^"\u{22A5}" else !^"bot"
+
+  let non_false (ms : ('a t) list) : 'a list = 
+    List.filter_map (function
+        | Normal a -> Some a
+        | False -> None
+      ) ms
+
+  let map f m = 
+    match m with
+    | Normal a -> Normal (f a)
+    | False -> False
+
+end
+
+open Fallible
+
+
+
+
+
 module Make (G : sig val global : Global.t end) = struct
 
   module L = Local.Make(G)
@@ -255,15 +305,16 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
+  module Checker (N : sig val default_names : Explain.names end) = struct
 
-
+    open N 
 
   module Prompt = struct
 
     type resource_request = 
       { local : L.t;
         original_local : L.t;
-        names : Explain.names_explained;
+        preferred_names : Explain.names;
         unis : Sym.t Uni.unis;
         situation: situation;
         loc: loc;
@@ -272,8 +323,8 @@ module Make (G : sig val global : Global.t end) = struct
 
     type packing_request = 
       { local : L.t;
+        preferred_names : Explain.names;
         situation: situation;
-        names : Explain.names_explained;
         loc: loc;
         lft : LFT.t;
       }
@@ -335,7 +386,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let spine 
           (loc : loc) 
-          names
+          preferred_names
           situation 
           local
           (arguments : arg list) 
@@ -344,6 +395,7 @@ module Make (G : sig val global : Global.t end) = struct
       let open NFT in
 
       let original_local = local in
+      let names = Explain.{preferred_names; default_names} in
 
       let ftyp = NFT.normalise ftyp in
       let unis = SymMap.empty in
@@ -396,7 +448,7 @@ module Make (G : sig val global : Global.t end) = struct
              let rr = {
                  loc; 
                  original_local; 
-                 names;
+                 preferred_names;
                  situation; local; 
                  unis; 
                  resource;
@@ -486,7 +538,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let rec remove_ownership_prompt (loc: loc) ~original_local ~names situation local (pointer: IT.t) (need_size: IT.t) = 
+  let rec remove_ownership_prompt (loc: loc) ~original_local ~preferred_names situation local (pointer: IT.t) (need_size: IT.t) = 
+    let names = Explain.{default_names; preferred_names} in
     let open Prompt.Operators in
     if S.equal local need_size (Num Z.zero) then 
       return local
@@ -513,7 +566,7 @@ module Make (G : sig val global : Global.t end) = struct
       in
       if S.ge local need_size have_size then 
         let local = L.use_resource resource_name [loc] local in
-        remove_ownership_prompt loc  ~original_local ~names
+        remove_ownership_prompt loc  ~original_local ~preferred_names
           situation local (Offset (pointer, have_size)) 
           (IT.Sub (need_size, have_size))
       else if S.lt local need_size have_size then 
@@ -535,14 +588,14 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-  let rec resource_request_prompt loc ~original_local ~names situation local request unis = 
+  let rec resource_request_prompt loc ~original_local ~preferred_names situation local request unis = 
+    let names = Explain.{default_names; preferred_names} in
     let open Prompt.Operators in
     let open Resources in
     match request with
     | Block b ->
        let* local = 
-         remove_ownership_prompt loc ~original_local ~names
+         remove_ownership_prompt loc ~original_local ~preferred_names
            situation local b.pointer b.size 
        in
        return (unis, local)
@@ -596,14 +649,14 @@ module Make (G : sig val global : Global.t end) = struct
           in
           let attempt_prompts = 
             List.map (fun lft ->
-                lazy (prompt (R_Packing {loc; names; situation; local; lft}))
+                lazy (prompt (R_Packing {loc; preferred_names; situation; local; lft}))
               ) (predicate_pack_functions p def)
           in
           let choices = attempt_prompts @ [else_prompt] in
           let choices1 = List1.make (List.hd choices, List.tl choices) in
           let* (lrt, local) = try_choices choices1 in
           let local = bind_logical local lrt in
-          resource_request_prompt loc ~original_local ~names
+          resource_request_prompt loc ~original_local ~preferred_names
             situation local request unis
        end
 
@@ -618,14 +671,14 @@ module Make (G : sig val global : Global.t end) = struct
        begin match r with
        | Prompt.R_Error (loc,tr,error) -> 
           Error (loc,tr,error)
-       | R_Resource {loc; original_local; names; local; unis; situation; resource} ->
+       | R_Resource {loc; original_local; preferred_names; local; unis; situation; resource} ->
           let prompt = 
-            resource_request_prompt loc ~original_local ~names 
+            resource_request_prompt loc ~original_local ~preferred_names 
               situation local resource unis in
           let* (unis, local) = handle_prompt prompt in
           handle_prompt (c (unis, local))
-       | R_Packing {loc; local; names; situation; lft} ->
-          let prompt = Spine_LFT.spine loc names situation local [] lft in
+       | R_Packing {loc; local; preferred_names; situation; lft} ->
+          let prompt = Spine_LFT.spine loc preferred_names situation local [] lft in
           let* (lrt, local) = handle_prompt prompt in
           handle_prompt (c (lrt, local))
        | R_Try choices ->
@@ -644,50 +697,42 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let calltype_ft loc default_names local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
+  let calltype_ft loc local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
     let preferred_names = 
       List.mapi (fun i arg ->
           let v = "ARG" ^ string_of_int i in
           (arg.lname, Path.Addr v)
         ) args
     in
-    let names = Explain.{default_names; preferred_names} in
-    let prompt = Spine_FT.spine loc names FunctionCall local args ftyp in
+    let prompt = Spine_FT.spine loc preferred_names FunctionCall local args ftyp in
     let* (rt, local) = handle_prompt prompt in
     return (rt, local)
 
-  let calltype_lt loc default_names local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
-    let names = Explain.{default_names; preferred_names = []} in
-    let prompt = Spine_LT.spine loc names (LabelCall label_kind) local args ltyp in
+  let calltype_lt loc local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
+    let prompt = Spine_LT.spine loc [] (LabelCall label_kind) local args ltyp in
     let* (rt, local) = handle_prompt prompt in
     return (rt, local)
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
      inference as the spine judgment. So implement the subtyping
      judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
-  let subtype (loc : loc) default_names local arg (rtyp : RT.t) : (L.t, type_error) m =
-    let preferred_names = 
-      [(arg.lname, Path.Addr "return")]
-    in
-    let names = Explain.{default_names; preferred_names} in
+  let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
+    let preferred_names = [(arg.lname, Path.Addr "return")] in
     let lt = LT.of_rt rtyp (LT.I False.False) in
-    let prompt = Spine_LT.spine loc names Subtyping local [arg] lt in
+    let prompt = Spine_LT.spine loc preferred_names Subtyping local [arg] lt in
     let* (False.False, local) = handle_prompt prompt in
     return local
 
-  let remove_ownership (loc: loc) default_names situation local (pointer: IT.t) (need_size: IT.t) = 
-    let names = Explain.{default_names; preferred_names = []} in
+  let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
     let prompt = 
-      remove_ownership_prompt loc ~original_local:local ~names
+      remove_ownership_prompt loc ~original_local:local ~preferred_names:[]
         situation local pointer need_size 
     in
     handle_prompt prompt
 
 
 
-
-  let unpack_resources loc default_names local = 
-    let names = Explain.{default_names; preferred_names = []} in
+  let unpack_resources loc local = 
     let rec aux local = 
       let* (local, changed) = 
         ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
@@ -699,7 +744,7 @@ module Make (G : sig val global : Global.t end) = struct
                in
                let* possible_unpackings = 
                  ListM.filter_mapM (fun clause ->
-                     let prompt = Spine_LFT.spine loc names Unpacking local [] clause in
+                     let prompt = Spine_LFT.spine loc [] Unpacking local [] clause in
                      let* (lrt, test_local) = handle_prompt prompt in
                      let test_local = bind_logical test_local lrt in
                      let is_reachable = S.is_consistent test_local in
@@ -718,6 +763,7 @@ module Make (G : sig val global : Global.t end) = struct
       if changed then aux local else return local
     in
     aux local
+
 
 
 
@@ -936,7 +982,7 @@ module Make (G : sig val global : Global.t end) = struct
      resources *)
   (* all_empty: do the same for the whole local environment (without
      supplying a marker) *)
-  let check_all_used loc default_names ~original_local vbs = 
+  let check_all_used loc ~original_local vbs = 
     let rec aux = function
       | (s, VB.Resource resource) :: _ -> 
          let preferred_names = [] in
@@ -948,64 +994,20 @@ module Make (G : sig val global : Global.t end) = struct
     in
     aux vbs
 
-  let pop_empty loc default_names local = 
+  let pop_empty loc local = 
     let (new_local, old_local) = since local in
-    let* () = check_all_used loc default_names ~original_local:local new_local in
+    let* () = check_all_used loc ~original_local:local new_local in
     return old_local
 
-  let all_empty loc default_names local = 
+  let all_empty loc local = 
     let new_local = all local in
-    let* () = check_all_used loc default_names ~original_local:local new_local in
+    let* () = check_all_used loc ~original_local:local new_local in
     return ()
 
 
 
 
-  module Fallible = struct
 
-    (* `t` is used for inferring/checking the type of unreachable control-flow
-       positions, including after Run/Goto: Goto has no return type (because the
-       control flow does not return there), but instead returns `False`. Type
-       checking of pure expressions returns a local environment or `False`; type
-       inference of impure expressions returns either a return type and a local
-       environment or `False` *)
-    type 'a t = 
-      | Normal of 'a
-      | False
-
-    type 'a fallible = 'a t
-
-    (* bind: check if the monadic argument evaluates to `False`; if so, the value
-       is `False, otherwise whatever the continuation (taking a non-False
-       argument) returns *)
-    let mbind (m : ('a t, 'e) m) (f : 'a -> ('b t, 'e) m) : ('b t, 'e) m =
-      let* aof = m in
-      match aof with
-      | Normal a -> f a
-      | False -> return False
-
-    (* special syntax for `or_false` *)
-    let (let*?) = mbind
-
-    let pp (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document = 
-      match m with
-      | Normal a -> ppf a
-      | False -> if !unicode then !^"\u{22A5}" else !^"bot"
-
-    let non_false (ms : ('a t) list) : 'a list = 
-      List.filter_map (function
-          | Normal a -> Some a
-          | False -> None
-        ) ms
-
-    let map f m = 
-      match m with
-      | Normal a -> Normal (f a)
-      | False -> False
-
-  end
-
-  open Fallible
 
   (* merging information after control-flow join points  *)
 
@@ -1088,7 +1090,7 @@ module Make (G : sig val global : Global.t end) = struct
      inference returns, all logical (logical variables, resources,
      constraints) in the local environment *)
 
-  let rec infer_pexpr default_names local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+  let rec infer_pexpr local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
     let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
     debug 3 (lazy (action "inferring pure expression"));
     debug 3 (lazy (item "expr" (pp_pexpr pe)));
@@ -1188,15 +1190,15 @@ module Make (G : sig val global : Global.t end) = struct
               return t
          in
          let* args = args_of_asyms local asyms in
-         let* (rt, local) = calltype_ft loc default_names local args decl_typ in
+         let* (rt, local) = calltype_ft loc local args decl_typ in
          return (Normal (rt, local))
       | M_PElet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr default_names local e1 in
+         let*? (rt, local) = infer_pexpr local e1 in
          let* delta = match p with
            | M_Symbol sym -> return (bind sym rt)
            | M_Pat pat -> pattern_match_rt pat rt
          in
-         infer_pexpr_pop default_names delta local e2
+         infer_pexpr_pop delta local e2
       | M_PEcase _ -> Debug_ocaml.error "PEcase in inferring position"
       | M_PEif (casym, e1, e2) ->
          let* carg = arg_of_asym local casym in
@@ -1205,7 +1207,7 @@ module Make (G : sig val global : Global.t end) = struct
            ListM.mapM (fun (lc, e) ->
                let delta = add_uc lc L.empty in
                let*? () = false_if_unreachable loc (delta ++ local) in
-               let*? (rt, local) = infer_pexpr_pop default_names delta local e in
+               let*? (rt, local) = infer_pexpr_pop delta local e in
                return (Normal ((lc, rt), local))
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
@@ -1214,9 +1216,9 @@ module Make (G : sig val global : Global.t end) = struct
     debug 3 (lazy (item "type" (RT.pp rt)));
     return (Normal (rt, local))
 
-  and infer_pexpr_pop default_names delta local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+  and infer_pexpr_pop delta local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
     let local = delta ++ marked ++ local in 
-    let* result = infer_pexpr default_names local pe in
+    let* result = infer_pexpr local pe in
     let result' = Fallible.map pop_return result in
     return result'
 
@@ -1224,7 +1226,7 @@ module Make (G : sig val global : Global.t end) = struct
   (* check_pexpr: type check the pure expression `e` against return type
      `typ`; returns a "reduced" local environment *)
 
-  let rec check_pexpr default_names local (e : 'bty pexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
+  let rec check_pexpr local (e : 'bty pexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
     let (M_Pexpr (loc, _annots, _, e_)) = e in
     debug 3 (lazy (action "checking pure expression"));
     debug 3 (lazy (item "expr" (group (pp_pexpr e))));
@@ -1240,7 +1242,7 @@ module Make (G : sig val global : Global.t end) = struct
              let*? () = 
                false_if_unreachable loc (delta ++ local)
              in
-             check_pexpr_pop loc default_names delta local e typ
+             check_pexpr_pop loc delta local e typ
            ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
        in
        return (merge_paths loc paths)
@@ -1254,30 +1256,30 @@ module Make (G : sig val global : Global.t end) = struct
              let*? () = 
                false_if_unreachable loc (delta ++ local)
              in
-             check_pexpr_pop loc default_names delta local e typ
+             check_pexpr_pop loc delta local e typ
            ) pats_es
        in
        return (merge_paths loc paths)
     | M_PElet (p, e1, e2) ->
-       let*? (rt, local) = infer_pexpr default_names local e1 in
+       let*? (rt, local) = infer_pexpr local e1 in
        let* delta = match p with
          | M_Symbol sym -> return (bind sym rt)
          | M_Pat pat -> pattern_match_rt pat rt
        in
-       check_pexpr_pop loc default_names delta local e2 typ
+       check_pexpr_pop loc delta local e2 typ
     | _ ->
-       let*? (rt, local) = infer_pexpr default_names local e in
+       let*? (rt, local) = infer_pexpr local e in
        let* ((bt, lname), delta) = bind_logically rt in
        let local = delta ++ marked ++ local in
-       let* local = subtype loc default_names local {bt; lname; loc} typ in
-       let* local = pop_empty loc default_names local in
+       let* local = subtype loc local {bt; lname; loc} typ in
+       let* local = pop_empty loc local in
        return (Normal local)
 
-  and check_pexpr_pop (loc : loc) default_names delta local (pe : 'bty pexpr) 
+  and check_pexpr_pop (loc : loc) delta local (pe : 'bty pexpr) 
                       (typ : RT.t) : (L.t fallible, type_error) m =
     let local = delta ++ marked ++ local in 
-    let*? local = check_pexpr default_names local pe typ in
-    let* local = pop_empty loc default_names local in
+    let*? local = check_pexpr local pe typ in
+    let* local = pop_empty loc local in
     return (Normal local)
 
 
@@ -1287,7 +1289,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let load (loc: loc) default_names local (bt: BT.t) (pointer: IT.t)
+  let load (loc: loc)  local (bt: BT.t) (pointer: IT.t)
            (size: RE.size) (return_it: IT.t) (is_member: BT.member option) =
     let names = Explain.{default_names; preferred_names = []} in
     let original_local = local in
@@ -1405,12 +1407,12 @@ module Make (G : sig val global : Global.t end) = struct
 
   (* not used right now *)
   (* todo: right access kind *)
-  let pack_stored_struct loc default_names local (pointer: IT.t) (tag: BT.tag) =
+  let pack_stored_struct loc local (pointer: IT.t) (tag: BT.tag) =
     let size = Memory.size_of_struct tag in
     let v = Sym.fresh () in
     let bt = Struct tag in
-    let* constraints = load loc default_names local (Struct tag) pointer size (S (Struct tag, v)) None in
-    let* local = remove_ownership loc default_names (Access (Load None)) local pointer (Num size) in
+    let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
+    let* local = remove_ownership loc (Access (Load None)) local pointer (Num size) in
     let rt = 
       LRT.Logical ((v, Base bt), 
       LRT.Resource (Points {pointer; pointee = v; size},
@@ -1460,7 +1462,7 @@ module Make (G : sig val global : Global.t end) = struct
   type labels = (LT.t * label_kind) SymMap.t
 
 
-  let rec infer_expr default_names (local, labels) (e : 'bty expr) 
+  let rec infer_expr (local, labels) (e : 'bty expr) 
           : ((RT.t * L.t) fallible, type_error) m = 
     let (M_Expr (loc, _annots, e_)) = e in
     debug 3 (lazy (action "inferring expression"));
@@ -1468,9 +1470,9 @@ module Make (G : sig val global : Global.t end) = struct
     debug 3 (lazy (item "ctxt" (L.pp local)));
     let* r = match e_ with
       | M_Epure pe -> 
-         infer_pexpr default_names local pe
+         infer_pexpr local pe
       | M_Ememop memop ->
-         let* local = unpack_resources loc default_names local in
+         let* local = unpack_resources loc local in
          begin match memop with
          | M_PtrEq _ ->
             Debug_ocaml.error "todo: M_PtrEq"
@@ -1497,7 +1499,7 @@ module Make (G : sig val global : Global.t end) = struct
             return (Normal (rt, local))            
          | M_PtrValidForDeref (act, asym) ->
             (* check *)
-            let* local = unpack_resources loc default_names local in
+            let* local = unpack_resources loc local in
             let* arg = arg_of_asym local asym in
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
@@ -1530,7 +1532,7 @@ module Make (G : sig val global : Global.t end) = struct
             Debug_ocaml.error "todo: ememop"
          end
       | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
-         let* local = unpack_resources loc default_names local in
+         let* local = unpack_resources loc local in
          begin match action_ with
          | M_Create (asym, act, _prefix) -> 
             let* arg = arg_of_asym local asym in
@@ -1559,7 +1561,7 @@ module Make (G : sig val global : Global.t end) = struct
               ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
             in
             let size = Memory.size_of_ctype cti.ct in
-            let* local = remove_ownership loc default_names (Access Kill) local (S (arg.bt, arg.lname)) 
+            let* local = remove_ownership loc (Access Kill) local (S (arg.bt, arg.lname)) 
                            (Num size) in
             let rt = RT.Computational ((Sym.fresh (), Unit), I) in
             return (Normal (rt, local))
@@ -1585,7 +1587,7 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let size = Memory.size_of_ctype act.item.ct in
             let* local = 
-              remove_ownership parg.loc default_names (Access (Store None)) 
+              remove_ownership parg.loc (Access (Store None)) 
                 local (S (parg.bt, parg.lname)) 
                 (Num size) in
             let* bindings = 
@@ -1602,7 +1604,7 @@ module Make (G : sig val global : Global.t end) = struct
             let ret = Sym.fresh () in
             let size = Memory.size_of_ctype act.item.ct in
             let* constraints = 
-              load loc default_names local act.item.bt (S (parg.bt, parg.lname)) 
+              load loc local act.item.bt (S (parg.bt, parg.lname)) 
                 size (S (act.item.bt, ret)) None 
             in
             let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, LRT.I)) in
@@ -1628,7 +1630,7 @@ module Make (G : sig val global : Global.t end) = struct
          let rt = RT.Computational ((Sym.fresh (), Unit), I) in
          return (Normal (rt, local))
       | M_Eccall (_ctype, afsym, asyms) ->
-         let* local = unpack_resources loc default_names local in
+         let* local = unpack_resources loc local in
          let* f_arg = arg_of_asym local afsym in
          let* args = args_of_asyms local asyms in
          begin match f_arg.bt with
@@ -1637,13 +1639,13 @@ module Make (G : sig val global : Global.t end) = struct
                 | Some (loc, ft) -> return (loc, ft)
                 | None -> fail loc (Missing_function sym)
               in
-              let* (rt, local) = calltype_ft loc default_names local args ft in
+              let* (rt, local) = calltype_ft loc local args ft in
               return (Normal (rt, local))
            | _ -> 
               fail afsym.loc (Generic !^"expected function pointer")
          end
       | M_Eproc (fname, asyms) ->
-         let* local = unpack_resources loc default_names local in
+         let* local = unpack_resources loc local in
          let* decl_typ = match fname with
            | CF.Core.Impl impl -> 
               return (Global.get_impl_fun_decl G.global impl)
@@ -1655,21 +1657,21 @@ module Make (G : sig val global : Global.t end) = struct
               return decl_typ
          in
          let* args = args_of_asyms local asyms in
-         let* (rt, local) = calltype_ft loc default_names local args decl_typ in
+         let* (rt, local) = calltype_ft loc local args decl_typ in
          return (Normal (rt, local))
       | M_Ebound (n, e) ->
-         infer_expr default_names (local, labels) e
+         infer_expr (local, labels) e
       | M_End _ ->
          Debug_ocaml.error "todo: End"
       | M_Erun (label_sym, asyms) ->
-         let* local = unpack_resources loc default_names local in
+         let* local = unpack_resources loc local in
          let* lt = match SymMap.find_opt label_sym labels with
          | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
          | Some lt -> return lt
          in
          let* args = args_of_asyms local asyms in
-         let* (False, local) = calltype_lt loc default_names local args lt in
-         let* () = all_empty loc default_names local in
+         let* (False, local) = calltype_lt loc local args lt in
+         let* () = all_empty loc local in
          return False
       | M_Ecase _ -> 
          Debug_ocaml.error "Ecase in inferring position"
@@ -1680,42 +1682,42 @@ module Make (G : sig val global : Global.t end) = struct
            ListM.mapM (fun (lc, e) ->
                let delta = add_uc lc L.empty in
                let*? () = false_if_unreachable loc (delta ++ local) in
-               let*? (rt, local) = infer_expr_pop default_names delta (local, labels) e in
+               let*? (rt, local) = infer_expr_pop delta (local, labels) e in
                return (Normal ((lc, rt), local))
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
          merge_return_paths loc paths
       | M_Elet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr default_names local e1 in
+         let*? (rt, local) = infer_pexpr local e1 in
          let* delta = match p with
            | M_Symbol sym -> return (bind sym rt)
            | M_Pat pat -> pattern_match_rt pat rt
          in
-         infer_expr_pop default_names delta (local, labels) e2
+         infer_expr_pop delta (local, labels) e2
       | M_Ewseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr default_names (local, labels) e1 in
+         let*? (rt, local) = infer_expr (local, labels) e1 in
          let* delta = pattern_match_rt pat rt in
-         infer_expr_pop default_names delta (local, labels) e2
+         infer_expr_pop delta (local, labels) e2
       | M_Esseq (pat, e1, e2) ->
-         let*? (rt, local) = infer_expr default_names (local, labels) e1 in
+         let*? (rt, local) = infer_expr (local, labels) e1 in
          let* delta = pattern_match_rt pat rt in
-         infer_expr_pop default_names delta (local, labels) e2
+         infer_expr_pop delta (local, labels) e2
     in
     debug 3 (lazy (match r with
                    | False -> item "type" (parens !^"no return")
                    | Normal (rt,_) -> item "type" (RT.pp rt)));
     return r
 
-  and infer_expr_pop default_names delta (local, labels) (e : 'bty expr) 
+  and infer_expr_pop delta (local, labels) (e : 'bty expr) 
       : ((RT.t * L.t) fallible, type_error) m =
     let local = delta ++ marked ++ local in 
-    let* result = infer_expr default_names (local, labels) e in
+    let* result = infer_expr (local, labels) e in
     return (Fallible.map pop_return result)
 
   (* check_expr: type checking for impure epressions; type checks `e`
      against `typ`, which is either a return type or `False`; returns
      either an updated environment, or `False` in case of Goto *)
-  let rec check_expr default_names (local, labels) (e : 'bty expr) (typ : RT.t fallible) 
+  let rec check_expr (local, labels) (e : 'bty expr) (typ : RT.t fallible) 
           : (L.t fallible, type_error) m = 
     let (M_Expr (loc, _annots, e_)) = e in
     debug 3 (lazy (action "checking expression"));
@@ -1732,7 +1734,7 @@ module Make (G : sig val global : Global.t end) = struct
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_expr_pop default_names delta (local, labels) e typ 
+               check_expr_pop delta (local, labels) e typ 
              ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
          in
          return (merge_paths loc paths)
@@ -1746,34 +1748,34 @@ module Make (G : sig val global : Global.t end) = struct
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_expr_pop default_names delta (local, labels) e typ
+               check_expr_pop delta (local, labels) e typ
              ) pats_es
          in
          return (merge_paths loc paths)
       | M_Elet (p, e1, e2) ->
-         let*? (rt, local) = infer_pexpr default_names local e1 in
+         let*? (rt, local) = infer_pexpr local e1 in
          let* delta = match p with 
            | M_Symbol sym -> return (bind sym rt)
            | M_Pat pat -> pattern_match_rt pat rt
          in
-         check_expr_pop default_names delta (local, labels) e2 typ
+         check_expr_pop delta (local, labels) e2 typ
       | M_Ewseq (pat, e1, e2) ->         
-         let*? (rt, local) = infer_expr default_names (local, labels) e1 in
+         let*? (rt, local) = infer_expr (local, labels) e1 in
          let* delta = pattern_match_rt pat rt in
-         check_expr_pop default_names delta (local, labels) e2 typ
+         check_expr_pop delta (local, labels) e2 typ
       | M_Esseq (pat, e1, e2) ->
          (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
-         let*? (rt, local) = infer_expr default_names (local, labels) e1 in
+         let*? (rt, local) = infer_expr (local, labels) e1 in
          let* delta = pattern_match_rt pat rt in
-         check_expr_pop default_names ~print:true delta (local, labels) e2 typ
+         check_expr_pop ~print:true delta (local, labels) e2 typ
       | _ ->
-         let*? (rt, local) = infer_expr default_names (local, labels) e in
+         let*? (rt, local) = infer_expr (local, labels) e in
          let* ((bt, lname), delta) = bind_logically rt in
          let local = delta ++ marked ++ local in
          match typ with
          | Normal typ ->
-            let* local = subtype loc default_names local {bt; lname; loc} typ in
-            let* local = pop_empty loc default_names local in
+            let* local = subtype loc local {bt; lname; loc} typ in
+            let* local = pop_empty loc local in
             return (Normal local)
          | False ->
             let err = 
@@ -1785,18 +1787,21 @@ module Make (G : sig val global : Global.t end) = struct
     return result
 
 
-  and check_expr_pop default_names ?(print=false) delta (local, labels) (e : 'bty expr) (typ : RT.t fallible)
+  and check_expr_pop ?(print=false) delta (local, labels) (e : 'bty expr) (typ : RT.t fallible)
       : (L.t fallible, type_error) m =
     let (M_Expr (loc, _, _)) = e in    
     let local = delta ++ marked ++ local in 
     let () = print_json (lazy (json_local loc local)) in
-    let* result = check_expr default_names (local, labels) e typ in
+    let* result = check_expr (local, labels) e typ in
     match result with
     | False -> 
        return False
     | Normal local -> 
-       let* local = pop_empty loc default_names local in
+       let* local = pop_empty loc local in
        return (Normal local)
+
+
+  end (* Checker *)
 
 
   (* check_and_bind_arguments: typecheck the function/procedure/label
@@ -1869,11 +1874,11 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* check_function: type check a (pure) function *)
-  let check_function (loc : loc) default_names (fsym : Sym.t) 
+  let check_function (loc : loc) mapping (fsym : Sym.t) 
                      (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                      (body : 'bty pexpr) (function_typ : FT.t) : (unit, type_error) m =
     debug 2 (lazy (headline ("checking function " ^ Sym.pp_string fsym)));
-    let* (rt, delta, _, _substs) = 
+    let* (rt, delta, _, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in
     let* () = check_initial_environment_consistent loc `Fun delta in
@@ -1882,8 +1887,13 @@ module Make (G : sig val global : Global.t end) = struct
       let Computational ((sname, sbt), t) = rt in
       ensure_base_type loc ~expect:sbt rbt
     in
-    let* local_or_false = 
-      check_pexpr_pop loc default_names delta L.empty body rt 
+    let* local_or_false =
+      let default_names = 
+        Explain.default_names_substs substs
+          (Explain.default_names_of_mapping mapping)  
+      in
+      let module C = Checker(struct let default_names = default_names end) in
+      C.check_pexpr_pop loc delta L.empty body rt 
     in
     return ()
 
@@ -1947,11 +1957,12 @@ module Make (G : sig val global : Global.t end) = struct
          let* () = check_initial_environment_consistent loc `Label delta in
          let* local_or_false = 
            let () = print stderr (item "label mapping" (Parse_ast.Mapping.pp mapping)) in
-           let names = 
+           let default_names = 
              Explain.default_names_substs substs
-               (Explain.default_names_of_mapping mapping) 
+               (Explain.default_names_of_mapping mapping)  
            in
-           check_expr_pop names ~print:true (delta_label ++ pure_delta) 
+           let module C = Checker(struct let default_names = default_names end) in
+           C.check_expr_pop ~print:true (delta_label ++ pure_delta) 
              (L.empty, labels) body False
          in
          return ()
@@ -1959,11 +1970,12 @@ module Make (G : sig val global : Global.t end) = struct
     let* () = PmapM.foldM check_label label_defs () in
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let* local_or_false = 
-      let names = 
+      let default_names = 
         Explain.default_names_substs substs
           (Explain.default_names_of_mapping mapping) 
       in
-      check_expr_pop names ~print:true delta (L.empty, labels) body (Normal rt)
+      let module C = Checker(struct let default_names = default_names end) in
+      C.check_expr_pop ~print:true delta (L.empty, labels) body (Normal rt)
     in
     return ()
 
