@@ -28,7 +28,7 @@ let record_tagDefs (global: Global.t) tagDefs =
 let record_funinfo global funinfo =
   let module WT = WellTyped.Make(struct let global = global end) in
   PmapM.foldM
-    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, is_variadic, has_proto)) global ->
+    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, is_variadic, has_proto, _mapping)) global ->
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc (TypeErrors.Unsupported err)
@@ -72,13 +72,13 @@ let process_functions genv fns =
            | Some t -> return t
            | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
          in
-         C.check_function loc fsym args rbt body ftyp
-      | M_Proc (loc, rbt, args, body, labels) ->
+         C.check_function loc Parse_ast.Mapping.empty fsym args rbt body ftyp
+      | M_Proc (loc, rbt, args, body, labels, mapping) ->
          let* (loc', ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t
            | None -> fail loc (TypeErrors.Missing_function fsym)
          in
-         C.check_procedure loc' fsym args rbt body ftyp labels
+         C.check_procedure loc' mapping fsym args rbt body ftyp labels
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()

@@ -137,13 +137,33 @@ module Make (G : sig val global : Global.t end) = struct
 
   open VEClass
 
-  module Path = Path.Make(struct 
-      type t = String.t
-      let equal = String.equal
-      let pp = Pp.string
-    end)
-
   open Path
+
+
+  type names = (Sym.t * Path.t) list
+
+  let names_subst subst default_names = 
+    List.map (fun (sym,p) ->
+        Sym.subst subst sym
+      ) default_names
+
+  let default_names_subst subst default_names = 
+    List.map (fun (sym,p) ->
+        (Sym.subst subst sym, p)
+      ) default_names
+
+  let default_names_substs substs default_names = 
+    Subst.make_substs default_names_subst substs default_names
+
+  type names_explained = {
+      default_names : names;
+      preferred_names : names;
+    }
+
+  let default_names_of_mapping mapping = 
+    List.map (fun i ->
+        Parse_ast.Mapping.(i.sym, i.path)
+      ) mapping
 
 
   type variable_relation = 
@@ -213,9 +233,15 @@ module Make (G : sig val global : Global.t end) = struct
     in
     (List.sort graph_compare veclasses, rels)
 
-  let preferred_name preferred_names veclass =
-    List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
-      preferred_names
+  let preferred_name names veclass =
+    Option.map snd 
+      (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
+         names.preferred_names)
+
+  let default_name names veclass =
+    Option.map snd
+      (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
+         names.default_names)
 
 
 
@@ -223,25 +249,31 @@ module Make (G : sig val global : Global.t end) = struct
     let rec aux = function
       | {veclass = named_veclass; name; good} :: named_veclasses ->
          begin match VEClassRelMap.find_opt (named_veclass, veclass) rels with
-         | Some Pointee -> Some (pointee name, good)
+         | Some Pointee -> Some (pointee None name)
          | None -> aux named_veclasses
          end
       | [] -> None         
     in
     aux named_veclasses
 
-  let pick_name (named_veclasses, rels) preferred_names veclass =
-    match preferred_name preferred_names veclass with
-    | Some (_, name) -> (name, true)
+  let pick_name (named_veclasses, rels) names veclass =
+    match preferred_name names veclass with
+    | Some name -> (name, true)
     | None -> 
        match related_name (named_veclasses, rels) veclass with
-       | Some name -> name
+       | Some name -> (name, true)
        | None -> 
-          match good_name veclass with
-          | Some name -> 
-             (Addr name, true)
+          match default_name names veclass with
+          | Some name -> (name, true)
           | None -> 
-             (Var (make_name veclass), false)
+             match good_name veclass with
+             | Some str -> 
+                (* think about whether the 'Addr' part is safe to put
+                   here *)
+                (Addr str, true)
+             | None -> 
+                let name = LabeledName.{label = None; v = make_name veclass} in
+                (Var name, false)
 
 
 
@@ -250,6 +282,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation preferred_names local =
+    (* let () = Pp.print stderr (Pp.paction "generating error summary") in *)
     let c = L.all_computational local in
     let l = L.all_logical local in
     let veclasses = 
@@ -293,6 +326,8 @@ module Make (G : sig val global : Global.t end) = struct
       )
       vars 
 
+  let always_state = true
+
   let do_state local {substitutions; _} =
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
@@ -308,7 +343,7 @@ module Make (G : sig val global : Global.t end) = struct
     let explanation = explanation preferred_names local in
     let unexplained_symbols = unexplained_symbols explanation (IT.vars_in it) in
     let it = IT.pp (IT.subst_vars explanation.substitutions it) in
-    if SymSet.is_empty unexplained_symbols 
+    if (not always_state) && SymSet.is_empty unexplained_symbols
     then (it, None)
     else (it, Some (do_state local explanation))
 
@@ -316,7 +351,7 @@ module Make (G : sig val global : Global.t end) = struct
     let explanation = explanation preferred_names local in
     let unexplained_symbols = unexplained_symbols explanation (LC.vars_in lc) in
     let lc = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    if SymSet.is_empty unexplained_symbols 
+    if (not always_state) && SymSet.is_empty unexplained_symbols 
     then (lc, None)
     else (lc, Some (do_state local explanation))
 
@@ -324,7 +359,7 @@ module Make (G : sig val global : Global.t end) = struct
     let explanation = explanation preferred_names local in
     let unexplained_symbols = unexplained_symbols explanation (RE.vars_in re) in
     let re = RE.pp (RE.subst_vars explanation.substitutions re) in
-    if SymSet.is_empty unexplained_symbols 
+    if (not always_state) && SymSet.is_empty unexplained_symbols 
     then (re, None)
     else (re, Some (do_state local explanation))
 
@@ -336,7 +371,7 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    if SymSet.is_empty unexplained_symbols 
+    if (not always_state) && SymSet.is_empty unexplained_symbols 
     then ((re1, re2), None)
     else ((re1, re2), Some (do_state local explanation))
     

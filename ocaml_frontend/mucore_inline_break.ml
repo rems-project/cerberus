@@ -100,7 +100,7 @@ let ib_fun_map_decl
       (d : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map_decl) 
     : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map_decl=
    (try ((match d with
-     | M_Proc( loc, rbt, arg_bts, body, label_defs) -> 
+     | M_Proc( loc, rbt, arg_bts, body, label_defs, mapping) -> 
         let (to_keep, to_inline) =
           (let aux label def (to_keep, to_inline)=
              ((match def with
@@ -116,7 +116,7 @@ let ib_fun_map_decl
         let (label_defs, body) = 
           (inline_label_labels_and_body to_inline to_keep body)
         in
-        M_Proc( loc, rbt, arg_bts, body, label_defs)
+        M_Proc( loc, rbt, arg_bts, body, label_defs, mapping)
      | _ -> d
      )) with | Failure error -> failwith ( (let Symbol.Symbol( d, n, str_opt) = name1 in
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))  ^ error) )

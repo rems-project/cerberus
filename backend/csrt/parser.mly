@@ -42,9 +42,12 @@ spec_entry:
 
 
 
-basename:
-  | id = ID AT label = ID            { {label; v = id} }
-  | id = ID                          { {label = Arg.default_label; v = id} }
+name: 
+  | id = ID                          { id }
+
+labeledname:
+  | id = ID AT label = ID            { {label = Some label; v = id} }
+  | id = ID                          { {label = Some Arg.default_label; v = id} }
 
 
 /* stealing from Core parser */
@@ -152,9 +155,9 @@ predarg:
 
 path: 
   | LPAREN pr_ps = pred_with_args RPAREN DOT id = ID   { Path.PredArg (fst pr_ps, snd pr_ps, id) }
-  | AMPERSAND bn = basename          { Path.Addr bn }
+  | AMPERSAND n = name               { Path.Addr n }
   | STAR p = path                    { Path.Pointee p }
-  | bn = basename                    { Path.Var bn }
+  | bn = labeledname                 { Path.Var bn }
 
 %inline resource:
   | pr_ps = pred_with_args         { R (fst pr_ps, snd pr_ps) }

@@ -494,12 +494,16 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
       let* args = mapM (retype_arg Loc.unknown) args in
       let* pexpr = retype_pexpr pexpr in
       return (M_Fun (bt,args,pexpr))
-   | M_Proc (loc,cbt,args,expr,labels) ->
+   | M_Proc (loc,cbt,args,expr,labels,_) ->
       let* bt = Conversions.bt_of_core_base_type loc cbt in
       let* args = mapM (retype_arg loc) args in
       let* expr = retype_expr expr in
       let* labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
-      return (M_Proc (loc,bt,args,expr,labels))
+      let mapping = match Pmap.lookup fsym funinfo_extra with
+        | Some extra -> extra.init_mapping
+        | None -> Parse_ast.Mapping.empty
+      in
+      return (M_Proc (loc,bt,args,expr,labels, mapping))
    | M_ProcDecl (loc,cbt,args) ->
       let* bt = Conversions.bt_of_core_base_type loc cbt in
       let* args = mapM (Conversions.bt_of_core_base_type loc) args in

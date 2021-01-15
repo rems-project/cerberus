@@ -871,7 +871,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
         | M_BuiltinDecl (loc, bTy, bTys) ->
             pp_cond loc @@
             pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) ^^ P.hardline ^^ P.hardline
-        | M_Proc (loc, bTy, params, e, labels) ->
+        | M_Proc (loc, bTy, params, e, labels, _mapping) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^

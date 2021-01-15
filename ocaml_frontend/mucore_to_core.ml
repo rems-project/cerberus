@@ -553,7 +553,7 @@ let mu_to_core__fun_map_decl d : ('bty, unit) Core.generic_fun_map_decl=
   | M_Fun( bt1, args, pe) ->
      Core.Fun( bt1, args, (mu_to_core__pexpr (Pmap.empty (fun sym1 sym2->ordCompare 
   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) pe))
-  | M_Proc( loc, bt1, args, e, _labels) ->
+  | M_Proc( loc, bt1, args, e, _labels, _mapping) ->
      Core.Proc( loc, bt1, args, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) e))
   | M_ProcDecl( loc, bt1, bts) ->

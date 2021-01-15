@@ -408,7 +408,7 @@ let dtree_of_funs xs =
           Dnode ( pp_field "Fun" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy
                 , [ Dnode (pp_field ".params", List.map dtree_of_param params)
                   ; Dnode (pp_field ".body", [dtree_of_pexpr pe]) ] )
-      | M_Proc (loc, bTy, params, e, labels) ->
+      | M_Proc (loc, bTy, params, e, labels, _mapping) ->
           Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ Pp_core.Basic.pp_core_base_type bTy
                 , [ Dnode (pp_field ".params", List.map dtree_of_param params)
                   ; Dnode (pp_field ".body", [dtree_of_expr e])

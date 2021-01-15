@@ -704,7 +704,7 @@ let normalise_fun_map_decl
             else M_Label(lloc, param_tys, params, normalise_expr loc body, annots, ())
           ) saves)
      in
-     M_Proc(loc, bt, args, normalise_expr loc e, saves')
+     M_Proc(loc, bt, args, normalise_expr loc e, saves', ())
   | ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
   | BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 

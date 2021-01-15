@@ -1,17 +1,26 @@
-module type BN_Sig = sig
-  type t
-  val equal : t -> t -> bool
-  val pp : t -> Pp.document
-end
-
 open Pp
 
-module Make (BN: BN_Sig) = struct
+module LabeledName = struct
+
+  type t = 
+    {label : string option; v : string}
+
+  let equal b1 b2 = 
+    Option.equal String.equal b1.label b2.label && 
+      String.equal b1.v b2.v
+
+  let pp {label; v} = 
+    let open Pp in
+    match label with
+    | Some label -> !^v ^^ at ^^ !^label
+    | None -> !^v
+end
+
 
 
 type path = 
-  | Addr of BN.t
-  | Var of BN.t
+  | Addr of string
+  | Var of LabeledName.t
   | Pointee of path
   | PredArg of string * predarg list * string
 
@@ -25,9 +34,9 @@ type t = path
 let rec equal p1 p2 =
   match p1, p2 with
   | Addr b1, Addr b2 ->
-     BN.equal b1 b2
+     String.equal b1 b2
   | Var b1, Var b2 -> 
-     BN.equal b1 b2
+     LabeledName.equal b1 b2
   | Pointee p1, Pointee p2 ->
      equal p1 p2
   | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
@@ -50,8 +59,8 @@ and predarg_equal pa1 pa2 =
 
 
 let rec pp = function
-  | Addr b -> ampersand ^^ BN.pp b
-  | Var b -> BN.pp b
+  | Addr b -> ampersand ^^ !^b
+  | Var b -> LabeledName.pp b
   | Pointee p -> star ^^ (pp p)
   | PredArg (p,t,a) -> !^p ^^ parens (separate_map comma pp_predarg t) ^^ dot ^^ !^a
 
@@ -66,8 +75,8 @@ let var bn =
   Var bn
 
 
-let pointee = function
-  | Addr bn -> Var bn
+let pointee olabel = function
+  | Addr bn -> Var {label = olabel; v = bn}
   | Var bn -> Pointee (Var bn)
   | Pointee p -> Pointee p
   | PredArg (pr,p,a) -> Pointee (PredArg (pr,p,a))
@@ -87,4 +96,4 @@ let rec deref_path = function
      None
 
 
-end
+

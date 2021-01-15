@@ -213,7 +213,7 @@ type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs = (symbol, (('lt, 'ct, 'bt, 'T
 
 type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map_decl =
   | M_Fun of 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_pexpr
-  | M_Proc of Location_ocaml.t * 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_expr * ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs
+  | M_Proc of Location_ocaml.t * 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_expr * ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs * 'mapping
   | M_ProcDecl of Location_ocaml.t * 'bt * 'bt list
   | M_BuiltinDecl of Location_ocaml.t * 'bt * 'bt list
 

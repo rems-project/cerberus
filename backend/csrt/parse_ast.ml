@@ -1,12 +1,9 @@
 module BT = BaseTypes
 module Loc = Locations
+module CF = Cerb_frontend
+open Pp
 (* some from https://gitlab.inria.fr/fpottier/menhir/-/tree/master/demos/calc-param *)
 
-
-
-module CF = Cerb_frontend
-
-open Pp
 
 module type ParserArg = sig
   val default_label : string
@@ -14,30 +11,12 @@ end
 
 
 
-module BaseName = struct
-
-  type t = 
-    {label : string; v : string}
-
-  type basename
-
-  let equal b1 b2 = 
-    String.equal b1.label b2.label && String.equal b1.v b2.v
-
-  let pp {v; label} = 
-    !^v ^^ at ^^ !^label
-
-end
-
-
-module Path = Path.Make(BaseName)
-
-
 
 module Mapping = struct
 
   type item = {path : Path.t; sym : Sym.t; bt : BaseTypes.t}
   type t = item list
+
 
   let pp_item {path; sym; bt} = 
     Pp.parens (Path.pp path ^^ comma ^^ Sym.pp sym ^^ comma ^^ BT.pp false bt)

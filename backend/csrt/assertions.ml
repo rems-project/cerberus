@@ -37,6 +37,18 @@ let cn_attributes (CF.Annot.Attrs attrs) =
 
 
 
+type pre_or_post = 
+  | Pre 
+  | Post
+  | Inv of string
+
+let label_name = function
+  | Pre -> "start"
+  | Post -> "end"
+  | Inv label -> label
+
+
+
 
 
 
@@ -140,13 +152,13 @@ let resolve_constraints mapping its =
 
 
 let parse_condition default_label (loc, s) =
-  let module P = Parser.Make(struct let default_label = default_label end) in
+  let module Parser = Parser.Make(struct let default_label = default_label end) in
   let lexbuf = Lexing.from_string s in
-  try return (loc, P.spec_entry Lexer.read lexbuf) with
+  try return (loc, Parser.spec_entry Lexer.read lexbuf) with
   | Lexer.SyntaxError c ->
      (* let loc = Locations.point @@ Lexing.lexeme_start_p lexbuf in *)
      fail loc (TE.Generic !^("invalid symbol: " ^ c))
-  | P.Error ->
+  | Parser.Error ->
      (* let loc = 
       *   let startp = Lexing.lexeme_start_p lexbuf in
       *   let endp = Lexing.lexeme_end_p lexbuf in
@@ -172,18 +184,6 @@ let parse_conditions label conditions =
       ) ([], []) requirements
   in
   return (ownership,constraints)
-
-
-
-type pre_or_post = 
-  | Pre 
-  | Post
-  | Inv of string
-
-let label_name = function
-  | Pre -> "start"
-  | Post -> "end"
-  | Inv label -> label
 
 
 
