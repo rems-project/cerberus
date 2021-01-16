@@ -341,17 +341,23 @@ module Make (G : sig val global : Global.t end) = struct
     let open IndexTerms in
     let open LogicalConstraints in
     match re with
-    | RE.Block b -> 
+    | RE.Block block -> 
+       let pointer_s = Sym.fresh () in
+       let resource = RE.Block {block with pointer = S (Loc, pointer_s)} in
+       let lvars = [(pointer_s, LS.Base Loc)] in
+       let lcs = [LC (EQ (S (Loc, pointer_s), block.pointer))] in
+       (lvars, lcs, resource)
+    | RE.Region region -> 
        let pointer_s = Sym.fresh () in
        let size_s = Sym.fresh () in
-       let r = 
-         RE.Block {b with pointer = S (Loc, pointer_s);
-                          size = S (Integer, size_s) }
+       let resource = 
+         RE.Region {pointer = S (Loc, pointer_s);
+                    size = S (Integer, size_s) }
        in
        let lvars = [(pointer_s, LS.Base Loc); (size_s, LS.Base Integer)] in
-       let lcs = [LC (EQ (S (Loc, pointer_s), b.pointer)); 
-                  LC (EQ (S (Integer, size_s), b.size))] in
-       (lvars, lcs, r)
+       let lcs = [LC (EQ (S (Loc, pointer_s), region.pointer)); 
+                  LC (EQ (S (Integer, size_s), region.size))] in
+       (lvars, lcs, resource)
     | RE.Points p -> 
        let pointer_s = Sym.fresh () in
        let r = RE.Points {p with pointer = S (BT.Loc, pointer_s)} in
@@ -397,10 +403,10 @@ module Make (G : sig val global : Global.t end) = struct
   (* not used *)
   let _add_r_with_normalisation rname r local = 
     let (lvars, lcs1, r) = normalise_resource r in
-    let lcs2 = match RE.fp r with
+    let lcs2 = match RE.footprint r with
       | None -> []
       | Some ((addr,_) as fp) ->
-         let fps = List.filter_map RE.fp (all_resources local) in
+         let fps = List.filter_map RE.footprint (all_resources local) in
          LC.LC (IT.Not (IT.Null addr)) ::
          (List.map LC.pack (IT.disjoint_from fp fps))
     in
@@ -411,10 +417,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let add_r rname r local = 
-    let lcs = match RE.fp r with
+    let lcs = match RE.footprint r with
       | None -> []
       | Some ((addr,_) as fp) ->
-         let fps = List.filter_map RE.fp (all_resources local) in
+         let fps = List.filter_map RE.footprint (all_resources local) in
          LC.LC (IT.Not (IT.Null addr)) ::
          List.map LC.pack (IT.disjoint_from fp fps)
     in

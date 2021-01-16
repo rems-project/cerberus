@@ -47,10 +47,9 @@ let early =
       } 
   in
   let block = 
-    RE.Block {
+    RE.Region {
         pointer = IntegerToPointerCast start_t;
         size = Add (Sub (end_t, start_t), Num (Z.of_int 1));
-        block_type = Nothing
       }
   in
   let pack_functions =
@@ -122,12 +121,12 @@ type stored_struct_predicate =
 
 type struct_piece = 
   { offset: Z.t;
-    size: RE.size;
+    size: Z.t;
     member_or_padding: (BT.member * Sctypes.t) option }
 
 type struct_member = 
   { offset: Z.t;
-    size: RE.size;
+    size: Z.t;
     member: BT.member * Sctypes.t }
 
 type struct_decl = 

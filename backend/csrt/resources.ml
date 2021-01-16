@@ -36,7 +36,8 @@ type block_type =
 
 
 type t = 
-  | Block of {pointer: IndexTerms.t; size: IndexTerms.t; block_type: block_type}
+  | Block of {pointer: IndexTerms.t; size: Z.t; block_type: block_type}
+  | Region of {pointer: IndexTerms.t; size: IndexTerms.t}
   | Points of {pointer: IndexTerms.t; pointee: Sym.t; size: size}
   | Predicate of predicate
 
@@ -44,14 +45,14 @@ type resource = t
 
 let pp = function
   | Block {pointer; size; block_type} ->
-     begin match block_type with
-     | Nothing -> 
-        !^"Block" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
-     | Uninit -> 
-        !^"Uninit" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
-     | Padding -> 
-        !^"Padding" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
-     end
+     let typ_pp = match block_type with
+       | Nothing -> !^"Block"
+       | Uninit -> !^"Uninit"
+       | Padding -> !^"Padding"
+     in
+     typ_pp ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+  | Region {pointer; size} ->
+     !^"Region" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
   | Points {pointer; pointee; size} ->
      !^"Points" ^^ 
        parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp pointee ^^ 
@@ -76,8 +77,11 @@ let json re : Yojson.Safe.t =
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
   | Block {pointer; size; block_type} ->
      let pointer = IndexTerms.subst_var subst pointer in
-     let size = IndexTerms.subst_var subst size in
      Block {pointer; size; block_type}
+  | Region {pointer; size} ->
+     let pointer = IndexTerms.subst_var subst pointer in
+     let size = IndexTerms.subst_var subst size in
+     Region {pointer; size}
   | Points {pointer; pointee; size} -> 
      let pointer = IndexTerms.subst_var subst pointer in
      let pointee = Sym.subst subst pointee in
@@ -94,8 +98,11 @@ let subst_it (subst: (Sym.t,IndexTerms.t) Subst.t) resource =
   match resource with
   | Block {pointer; size; block_type} ->
      let pointer = IndexTerms.subst_it subst pointer in
-     let size = IndexTerms.subst_it subst size in
      return (Block {pointer; size; block_type})
+  | Region {pointer; size} ->
+     let pointer = IndexTerms.subst_it subst pointer in
+     let size = IndexTerms.subst_it subst size in
+     return (Region {pointer; size})
   | Points {pointer; pointee; size} -> 
      let pointer = IndexTerms.subst_it subst pointer in
      let* pointee = subst_sym pointee in
@@ -122,9 +129,13 @@ let block_type_equal b1 b2 =
 
 let equal t1 t2 = 
   match t1, t2 with
-  | Block u1, Block u2 ->
-     IndexTerms.equal u1.pointer u2.pointer &&
-     IndexTerms.equal u1.size u2.size
+  | Block b1, Block b2 ->
+     IndexTerms.equal b1.pointer b2.pointer &&
+     block_type_equal b1.block_type b2.block_type &&
+     Z.equal b1.size b2.size
+  | Region r1, Region r2 ->
+     IndexTerms.equal r1.pointer r2.pointer &&
+     IndexTerms.equal r1.size r2.size
   | Points p1, Points p2 ->
      IndexTerms.equal p1.pointer p2.pointer &&
      Sym.equal p1.pointee p2.pointee &&
@@ -136,29 +147,28 @@ let equal t1 t2 =
   | _, _ -> false
 
 
-let pointer = function
-  | Block b -> Some b.pointer
-  | Points p -> Some p.pointer
+let footprint = function
+  | Block b -> Some (b.pointer, IndexTerms.Num b.size)
+  | Region r -> Some (r.pointer, r.size)
+  | Points p -> Some (p.pointer, IndexTerms.Num p.size)
   | Predicate p -> None
 
-let size = function
-  | Block b -> Some b.size
-  | Points p -> Some (IndexTerms.Num p.size)
-  | Predicate _p -> None
-
-
-let fp resource = 
-  match pointer resource, size resource with
-  | Some pointer, Some size -> Some (pointer, size)
-  | _ -> None
+let pointer r = Option.map fst (footprint r)
+let size r = Option.map snd (footprint r)
 
 let vars_in = function
   | Block b -> 
-     SymSet.union (IndexTerms.vars_in b.size) (IndexTerms.vars_in b.pointer)
+     IndexTerms.vars_in b.pointer
+  | Region r -> 
+     SymSet.union
+       (IndexTerms.vars_in r.pointer) 
+       (IndexTerms.vars_in r.size) 
   | Points p -> 
-     SymSet.add p.pointee (IndexTerms.vars_in p.pointer)
+     SymSet.add p.pointee 
+       (IndexTerms.vars_in p.pointer)
   | Predicate p -> 
-     SymSet.union (IndexTerms.vars_in_list p.iargs)
+     SymSet.union 
+       (IndexTerms.vars_in_list p.iargs)
        (SymSet.of_list p.oargs)
 
 
@@ -200,12 +210,14 @@ let vars_in = function
 
 
 let input = function
-  | Block b -> IndexTerms.vars_in_list [b.size; b.pointer]
+  | Block b -> IndexTerms.vars_in_list [b.pointer]
+  | Region r -> IndexTerms.vars_in_list [r.pointer; r.size]
   | Points p -> IndexTerms.vars_in p.pointer
   | Predicate p -> IndexTerms.vars_in_list p.iargs
 
 let output = function
   | Block b -> SymSet.empty
+  | Region r -> SymSet.empty
   | Points p -> SymSet.singleton p.pointee
   | Predicate p -> SymSet.of_list p.oargs
 

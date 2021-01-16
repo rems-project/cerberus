@@ -539,7 +539,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec remove_ownership_prompt (loc: loc) ~original_local ~alternative_names situation local (pointer: IT.t) (need_size: IT.t) = 
+    let rec ownership_request_prompt (loc: loc) ~original_local ~alternative_names situation local (pointer: IT.t) (need_size: IT.t) = 
       let names = Explain.{default_names; alternative_names} in
       let open Prompt.Operators in
       if S.equal local need_size (Num Z.zero) then 
@@ -561,13 +561,15 @@ module Make (G : sig val global : Global.t end) = struct
              in
              fail loc (Cannot_unpack {resource; state; situation})
           | Block {size; _} ->
+             return (Num size)
+          | Region {size; _} ->
              return size
           | Points {size; _} ->
              return (Num size)
         in
         if S.ge local need_size have_size then 
           let local = L.use_resource resource_name [loc] local in
-          remove_ownership_prompt loc  ~original_local ~alternative_names
+          ownership_request_prompt loc  ~original_local ~alternative_names
             situation local (Offset (pointer, have_size)) 
             (IT.Sub (need_size, have_size))
         else if S.lt local need_size have_size then 
@@ -576,9 +578,8 @@ module Make (G : sig val global : Global.t end) = struct
           let local = L.use_resource resource_name [loc] local in
           let local = 
             add_ur (
-                RE.Block {pointer = Offset (pointer, need_size); 
-                          size = IT.Sub (have_size, need_size); 
-                          block_type = Nothing}
+                RE.Region {pointer = Offset (pointer, need_size); 
+                           size = IT.Sub (have_size, need_size)}
               ) local
           in
           return local
@@ -596,8 +597,14 @@ module Make (G : sig val global : Global.t end) = struct
       match request with
       | Block b ->
          let* local = 
-           remove_ownership_prompt loc ~original_local ~alternative_names
-             situation local b.pointer b.size 
+           ownership_request_prompt loc ~original_local ~alternative_names
+             situation local b.pointer (Num b.size)
+         in
+         return (unis, local)
+      | Region r ->
+         let* local = 
+           ownership_request_prompt loc ~original_local ~alternative_names
+             situation local r.pointer r.size 
          in
          return (unis, local)
       | Points p ->
@@ -724,9 +731,9 @@ module Make (G : sig val global : Global.t end) = struct
       let* (False.False, local) = handle_prompt prompt in
       return local
 
-    let remove_ownership (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
+    let ownership_request (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
       let prompt = 
-        remove_ownership_prompt loc ~original_local:local ~alternative_names:[]
+        ownership_request_prompt loc ~original_local:local ~alternative_names:[]
           situation local pointer need_size 
       in
       handle_prompt prompt
@@ -1291,7 +1298,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let load (loc: loc)  local (bt: BT.t) (pointer: IT.t)
-             (size: RE.size) (return_it: IT.t) (is_member: BT.member option) =
+             (size: Z.t) (return_it: IT.t) (is_member: BT.member option) =
       let names = Explain.{default_names; alternative_names = []} in
       let original_local = local in
       let rec aux local bt pointer size path is_member = 
@@ -1328,6 +1335,8 @@ module Make (G : sig val global : Global.t end) = struct
                    fail loc (Generic !^"cannot read padding bytes")
                 | Block {block_type = Nothing; _} -> 
                    fail loc (Generic !^"cannot read empty bytes")
+                | Region _ -> 
+                   fail loc (Generic !^"cannot read empty bytes")
                 | Predicate pred -> 
                    let (resource,state) = 
                      Explain.resource names original_local (Predicate pred) in
@@ -1354,7 +1363,7 @@ module Make (G : sig val global : Global.t end) = struct
                   local
                   (bt: BT.t)
                   (pointer: IT.t)
-                  (size: RE.size)
+                  (size: Z.t)
                   (o_value: IT.t option) 
       =
       let open LRT in
@@ -1377,7 +1386,7 @@ module Make (G : sig val global : Global.t end) = struct
               | None ->
                  let block = 
                    RE.Block {pointer = IT.Offset (pointer, Num offset); 
-                             size = Num size; 
+                             size; 
                              block_type = Padding} 
                  in
                  let rt = LRT.Resource (block, LRT.I) in
@@ -1398,7 +1407,7 @@ module Make (G : sig val global : Global.t end) = struct
          | None -> 
             let block = 
               RE.Block {pointer; 
-                        size = Num size; 
+                        size; 
                         block_type = Uninit}
             in
             let rt = Resource (block, LRT.I) in
@@ -1413,7 +1422,7 @@ module Make (G : sig val global : Global.t end) = struct
       let v = Sym.fresh () in
       let bt = Struct tag in
       let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
-      let* local = remove_ownership loc (Access (Load None)) local pointer (Num size) in
+      let* local = ownership_request loc (Access (Load None)) local pointer (Num size) in
       let rt = 
         LRT.Logical ((v, Base bt), 
         LRT.Resource (Points {pointer; pointee = v; size},
@@ -1562,7 +1571,7 @@ module Make (G : sig val global : Global.t end) = struct
                 ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
               in
               let size = Memory.size_of_ctype cti.ct in
-              let* local = remove_ownership loc (Access Kill) local (S (arg.bt, arg.lname)) 
+              let* local = ownership_request loc (Access Kill) local (S (arg.bt, arg.lname)) 
                              (Num size) in
               let rt = RT.Computational ((Sym.fresh (), Unit), I) in
               return (Normal (rt, local))
@@ -1588,7 +1597,7 @@ module Make (G : sig val global : Global.t end) = struct
               in
               let size = Memory.size_of_ctype act.item.ct in
               let* local = 
-                remove_ownership parg.loc (Access (Store None)) 
+                ownership_request parg.loc (Access (Store None)) 
                   local (S (parg.bt, parg.lname)) 
                   (Num size) in
               let* bindings = 

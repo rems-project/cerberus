@@ -339,6 +339,9 @@ module Make (G : sig val global : Global.t end) = struct
     let welltyped loc local = function
       | Block b -> 
          WIT.welltyped loc local (LS.Base BT.Loc) b.pointer
+      | Region r -> 
+         let* () = WIT.welltyped loc local (LS.Base BT.Loc) r.pointer in
+         WIT.welltyped loc local (LS.Base BT.Integer) r.size
       | Points p -> 
          (* points is "polymorphic" in the pointee *)
          let* () = check_bound loc local KLogical p.pointee in

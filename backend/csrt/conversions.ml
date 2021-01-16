@@ -165,7 +165,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                (lrt, value)
             | None ->
                let lrt = 
-                 LRT.Resource (RE.Block {pointer = member_p; size = Num size; block_type = Padding}, lrt)
+                 LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt)
                in
                (lrt, values)
           ) layout (LRT.I, [])
@@ -261,11 +261,7 @@ let make_region loc pointer size path sct =
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
-     let r = 
-       [RE.Block {pointer = S (BT.Loc, pointer); 
-                  size;
-                  block_type = Nothing}]
-     in
+     let r = [RE.Region {pointer = S (BT.Loc, pointer); size}] in
      return ([], r, [], [])
   | _ -> 
      fail loc (Generic !^"can only make void* pointers a region")
@@ -279,7 +275,7 @@ let make_block loc pointer path sct =
   | _ -> 
      let r = 
        [RE.Block {pointer = S (BT.Loc, pointer); 
-                  size = Num (Memory.size_of_ctype sct);
+                  size = Memory.size_of_ctype sct;
                   block_type = Nothing}]
      in
      return ([], r, [], [])
