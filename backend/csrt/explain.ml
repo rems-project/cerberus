@@ -38,26 +38,18 @@ module Make (G : sig val global : Global.t end) = struct
     let add_c c veclass = 
       { veclass with c_elements = SymSet.add c veclass.c_elements }
 
-    let o_add_c o_c veclass = 
-      match o_c with
-      | None -> veclass
-      | Some c -> add_c c veclass
-
     let should_be_in_veclass local veclass (it, bt) = 
       if not (LS.equal veclass.sort (Base bt)) then false 
       else S.equal local (S (bt,veclass.repr)) it
 
-    let classify local veclasses (o_c, l, (bt : BT.t)) : veclass list =
+    let classify local veclasses (l, (bt : BT.t)) : veclass list =
       let rec aux = function
         | veclass :: veclasses ->
-           if should_be_in_veclass local veclass (S (bt, l), bt) then 
-             let veclass' = o_add_c o_c (add_l l veclass) in
-             (veclass' :: veclasses)
-           else 
-             let veclasses' = aux veclasses in
-             (veclass :: veclasses')
+           if should_be_in_veclass local veclass (S (bt, l), bt) 
+           then (add_l l veclass :: veclasses)
+           else (veclass :: aux veclasses)
         | [] -> 
-           [o_add_c o_c (new_veclass l (Base bt))]
+           [new_veclass l (Base bt)]
       in
       aux veclasses
 
@@ -67,7 +59,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     (* think about whether the 'Addr' part is always safe' *)
-    let good_name veclass = 
+    let has_symbol_name veclass = 
       let all = SymSet.elements (SymSet.union veclass.c_elements veclass.l_elements) in
       Option.map (fun s -> Path.Addr s) (List.find_map Sym.name all)
 
@@ -137,21 +129,21 @@ module Make (G : sig val global : Global.t end) = struct
   open Path
 
 
-  type names = (Sym.t * Path.t) list
+  type naming = (Sym.t * Path.t) list
 
-  let names_subst subst names = 
+  let naming_subst subst names = 
     List.map (fun (sym,p) ->
         (Sym.subst subst sym, p)
       ) names
 
-  let names_substs substs names = 
-    Subst.make_substs names_subst substs names
+  let naming_substs substs names = 
+    Subst.make_substs naming_subst substs names
 
-  let pp_names = 
+  let pp_naming = 
     let open Pp in
     Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Path.pp p))
 
-  let names_of_mapping mapping = 
+  let naming_of_mapping mapping = 
     List.map (fun i ->
         Parse_ast.Mapping.(i.sym, i.path)
       ) mapping
@@ -161,10 +153,8 @@ module Make (G : sig val global : Global.t end) = struct
     | Pointee  
 
 
-    
-    
   type veclass_explanation = {
-      name : Path.t;
+      path : Path.t;
       good : bool;
       veclass : veclass;
     }
@@ -224,17 +214,17 @@ module Make (G : sig val global : Global.t end) = struct
     in
     (List.sort graph_compare veclasses, rels)
 
-  let default_name names veclass =
+  let has_given_name names veclass =
     Option.map snd
       (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) names)
 
 
 
-  let related_name (named_veclasses, rels) veclass =
+  let has_derived_name (named_veclasses, rels) veclass =
     let rec aux = function
-      | {veclass = named_veclass; name; good} :: named_veclasses ->
+      | {veclass = named_veclass; path; good} :: named_veclasses ->
          begin match VEClassRelMap.find_opt (named_veclass, veclass) rels with
-         | Some Pointee -> Some (pointee None name)
+         | Some Pointee -> Some (pointee None path)
          | None -> aux named_veclasses
          end
       | [] -> None         
@@ -243,15 +233,19 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let pick_name (named_veclasses, rels) names veclass =
-    let open Path in
-    let default_name = default_name names veclass in
-    let good_name = good_name veclass in
-    let related_name = related_name (named_veclasses, rels) veclass in
-    let any_ok = List.filter_map (fun p -> p) [default_name; good_name; related_name] in
-    match any_ok with
+    let candidate_names = 
+      List.filter_map (fun p -> p) [
+          has_given_name names veclass; 
+          has_symbol_name veclass; 
+          has_derived_name (named_veclasses, rels) veclass;
+      ] 
+    in
+    match candidate_names with
     | p :: _ -> 
        let without_labels = Path.remove_labels p in
-       if List.mem without_labels any_ok then (without_labels, true) else (p, true)
+       if List.mem without_labels candidate_names 
+       then (without_labels, true) 
+       else (p, true)
     | _ ->
        let name = LabeledName.{label = None; v = make_name veclass} in
        (Var name, false)
@@ -263,34 +257,50 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local =
+    Debug_ocaml.begin_csv_timing "explanation";
     let () = Pp.print stderr (Pp.string "(generating error summary)") in
     let veclasses = 
+      Debug_ocaml.begin_csv_timing "classifying variables";
       let with_logical_variables = 
         List.fold_left (fun veclasses (l, ls) ->
             let (LS.Base bt) = ls in
-            classify local veclasses (None, l, bt)
+            classify local veclasses (l, bt)
           ) [] (L.all_logical local)
       in
       let with_all_variables =
-        List.fold_left (fun veclasses (c, (l, bt)) ->
-            classify local veclasses (Some c, l, bt)
+        List.fold_left (fun veclasses (c, (l, _)) ->
+            List.map (fun veclass ->
+                if is_in_veclass veclass l 
+                then add_c c veclass else veclass
+              ) veclasses
           ) with_logical_variables (L.all_computational local)
       in
+      Debug_ocaml.end_csv_timing ();
+      Debug_ocaml.begin_csv_timing "ordering classes";
       let (sorted, rels) = veclasses_total_order local with_all_variables in
-      List.fold_left (fun veclasses_explanation veclass ->
-          let (name,good) = pick_name (veclasses_explanation, rels) names veclass in
-          veclasses_explanation @ [{veclass; name; good}]
-        ) [] sorted
+      Debug_ocaml.end_csv_timing ();
+      Debug_ocaml.begin_csv_timing "naming classes";
+      let named =
+        List.fold_left (fun veclasses_explanation veclass ->
+            let (path,good) = pick_name (veclasses_explanation, rels) names veclass in
+            veclasses_explanation @ [{veclass; path; good}]
+          ) [] sorted
+      in
+      Debug_ocaml.end_csv_timing ();
+      named
     in
+    Debug_ocaml.begin_csv_timing "substitutions";
     let substitutions = 
-      List.fold_right (fun {veclass;name;_} substs ->
+      List.fold_right (fun {veclass;path;_} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
-          let named_symbol = Sym.fresh_named (Pp.plain (Path.pp name)) in
+          let named_symbol = Sym.fresh_named (Pp.plain (Path.pp path)) in
           SymSet.fold (fun sym substs ->
               Subst.{ before = sym; after = named_symbol } :: substs
             ) to_substitute substs 
         ) veclasses []
     in
+    Debug_ocaml.end_csv_timing ();
+    Debug_ocaml.end_csv_timing ();
     {substitutions; veclasses}
 
 
@@ -323,12 +333,30 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let do_state local {substitutions; veclasses} =
+    Debug_ocaml.begin_csv_timing "do_state";
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
     let interesting_constraints = List.filter interesting_lc constraints in
+    (* let relevant_vars = 
+     *   List.fold_right SymSet.union 
+     *     (List.map RE.vars_in resources @ List.map LC.vars_in interesting_constraints)
+     *     SymSet.empty
+     * in
+     * let vars = 
+     *   List.filter_map (fun e -> 
+     *       let repr = Sym.substs substitutions e.veclass.repr in
+     *       if not e.good && SymSet.mem repr relevant_vars
+     *       then Some (e.path, e.veclass.sort) else None
+     *     ) veclasses
+     * in *)
     let open Pp in
-    Pp.item "resources" (Pp.list RE.pp resources) ^/^
-      Pp.item "constaints" (Pp.list LC.pp interesting_constraints)
+    let pp = 
+      Pp.item "resources" (Pp.list RE.pp resources) ^/^
+          (* Pp.item "with variables" (Pp.list (fun (p,LS.Base bt) -> Path.pp p ^^ colon ^^^ BT.pp false bt) vars) ^/^ *)
+            Pp.item "and constaints" (Pp.list LC.pp interesting_constraints)
+    in
+    Debug_ocaml.end_csv_timing ();
+    pp
 
   let state names local = 
     let explanation = explanation names local in
@@ -343,12 +371,17 @@ module Make (G : sig val global : Global.t end) = struct
     else (it, Some (do_state local explanation))
 
   let logical_constraint names local lc = 
+    Debug_ocaml.begin_csv_timing "overall explanation";
     let explanation = explanation names local in
     let unexplained_symbols = unexplained_symbols explanation (LC.vars_in lc) in
     let lc = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    if (not always_state) && SymSet.is_empty unexplained_symbols 
-    then (lc, None)
-    else (lc, Some (do_state local explanation))
+    let pp = 
+      if (not always_state) && SymSet.is_empty unexplained_symbols 
+      then (lc, None)
+      else (lc, Some (do_state local explanation))
+    in
+    Debug_ocaml.end_csv_timing ();
+    pp
 
   let resource names local re = 
     let explanation = explanation names local in

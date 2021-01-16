@@ -305,8 +305,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  module type Names = sig val names : Explain.names end
-  module Checker (Names : Names) = struct
+  module type Naming = sig val names : Explain.naming end
+  module Checker (Names : Naming) = struct
 
     open Names
 
@@ -315,7 +315,7 @@ module Make (G : sig val global : Global.t end) = struct
       type resource_request = 
         { local : L.t;
           original_local : L.t;
-          extra_names : Explain.names;
+          extra_names : Explain.naming;
           unis : Sym.t Uni.unis;
           situation: situation;
           loc: loc;
@@ -324,7 +324,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       type packing_request = 
         { local : L.t;
-          extra_names : Explain.names;
+          extra_names : Explain.naming;
           situation: situation;
           loc: loc;
           lft : LFT.t;
@@ -1896,7 +1896,7 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let* local_or_false =
       let names = 
-        Explain.names_substs substs (Explain.names_of_mapping mapping)  
+        Explain.naming_substs substs (Explain.naming_of_mapping mapping)  
       in
       let module C = Checker(struct let names = names end) in
       C.check_pexpr_pop loc delta L.empty body rt 
@@ -1962,10 +1962,9 @@ module Make (G : sig val global : Global.t end) = struct
          in
          let* () = check_initial_environment_consistent loc `Label delta in
          let* local_or_false = 
-           let () = print stderr (item "label mapping" (Parse_ast.Mapping.pp mapping)) in
            let names = 
-             Explain.names_substs (lsubsts @ substs)
-               (Explain.names_of_mapping mapping)  
+             Explain.naming_substs (lsubsts @ substs)
+               (Explain.naming_of_mapping mapping)  
            in
            let module C = Checker(struct let names = names end) in
            C.check_expr_pop ~print:true (delta_label ++ pure_delta) 
@@ -1977,8 +1976,8 @@ module Make (G : sig val global : Global.t end) = struct
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let* local_or_false = 
       let names = 
-        Explain.names_substs substs
-          (Explain.names_of_mapping mapping) 
+        Explain.naming_substs substs
+          (Explain.naming_of_mapping mapping) 
       in
       let module C = Checker(struct let names = names end) in
       C.check_expr_pop ~print:true delta (L.empty, labels) body (Normal rt)

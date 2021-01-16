@@ -400,7 +400,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | LocLE (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | Disjoint ((o1,s1),(o2,s2)) ->
-       mparens (!^"disjoint" ^^ 
+       mparens (!^"disj" ^^ 
                   parens (
                     parens (aux false o1 ^^ comma ^^ aux false s1) ^^ comma ^^
                       parens (aux false o2 ^^ comma ^^ aux false s2)))
@@ -419,7 +419,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | MaxInteger it ->
        mparens (!^"max" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
     | Representable (rt, t) ->
-       mparens (!^"representable" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
+       mparens (!^"repr" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
     (* lists *)
     | Head (o1) -> 
        mparens (!^"hd" ^^ parens (aux false o1))

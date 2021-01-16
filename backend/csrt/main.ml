@@ -67,13 +67,13 @@ open Setup
 let print_file ?(remove_path = false) filename file =
   match file with
   | CORE file ->
-     CB.Pipeline.run_pp ~remove_path (Some (filename,"core.ast")) 
-       (CF.Pp_core_ast.pp_file file);
+     (* CB.Pipeline.run_pp ~remove_path (Some (filename,"core.ast")) 
+      *   (CF.Pp_core_ast.pp_file file); *)
      CB.Pipeline.run_pp ~remove_path (Some (filename,"core")) 
        (CF.Pp_core.Basic.pp_file file);
   | MUCORE file ->
-     CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
-       (CF.Pp_mucore_ast.pp_file file);
+     (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
+      *   (CF.Pp_mucore_ast.pp_file file); *)
      CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
        (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
 
