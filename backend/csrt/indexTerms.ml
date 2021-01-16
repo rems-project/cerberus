@@ -579,8 +579,8 @@ let map_sym f it : t =
     | Offset (it, it') -> Offset (aux it, aux it')
     | LocLT (it, it') -> LocLT (aux it, aux it')
     | LocLE (it, it') -> LocLE (aux it, aux it')
-    | Disjoint ((it,s), (it',s')) -> 
-       Disjoint ((aux it,s), (aux it',s'))
+    | Disjoint ((it1,it2), (it1',it2')) -> 
+       Disjoint ((aux it1, aux it2), (aux it1', aux it2'))
     | AlignedI (it,it') -> AlignedI (aux it, aux it')
     | Aligned (rt,t) -> Aligned (rt, aux t)
     | IntegerToPointerCast t -> IntegerToPointerCast (aux t)

@@ -294,6 +294,17 @@ module Make (G : sig val global : Global.t end) = struct
           veclasses_explanation @ [{veclass; name; good}]
         ) [] sorted
     in
+    (* let () =
+     *   let open Pp in
+     *   print stderr (
+     *   list (fun e ->
+     *       item "veclass" 
+     *         (
+     *           item "c_elements" (list Sym.pp (SymSet.elements e.veclass.c_elements)) ^^^
+     *           item "l_elements" (list Sym.pp (SymSet.elements e.veclass.l_elements))
+     *         )
+     *     ) veclasses)
+     * in *)
     let substitutions = 
       List.fold_right (fun {veclass;name;good} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
