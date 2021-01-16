@@ -322,7 +322,7 @@ module Make (G : sig val global : Global.t end) = struct
     not (boring_lc lc)
 
 
-  let do_state local {substitutions; _} =
+  let do_state local {substitutions; veclasses} =
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
     let interesting_constraints = List.filter interesting_lc constraints in

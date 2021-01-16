@@ -200,8 +200,15 @@ let rec of_index_term global it =
      let a'' = of_index_term global it'' in
      Z3.Boolean.mk_ite ctxt a a' a''
   (* tuples *)
-  | Tuple ts ->
-     Debug_ocaml.error "todo: Z3: Tuple"
+  | Tuple (bts, ts) ->
+     let sort = bt_to_sort global (Tuple bts) in
+     let constructor = Z3.Tuple.get_mk_decl sort in
+     let components = 
+       List.map (fun it ->
+           of_index_term global it
+         ) ts
+     in
+     Z3.Expr.mk_app ctxt constructor components
   | NthTuple (bt,i,t) ->
      let a = of_index_term global t in
      let fundecl = nth_to_fundecl bt i in

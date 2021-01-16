@@ -134,7 +134,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* t'' = check_aux loc (Base Integer) t'' in
            return (ls, ITE (t, t', t''))
         (* tuples *)
-        | Tuple ts ->
+        | Tuple (bts, ts) ->
            let* bts_ts = 
              ListM.mapM (fun it -> 
                  let* (Base bt, t) = infer loc it in
@@ -142,7 +142,7 @@ module Make (G : sig val global : Global.t end) = struct
                ) ts 
            in
            let (bts,ts) = List.split bts_ts in
-           return (Base (BT.Tuple bts), Tuple ts)
+           return (Base (BT.Tuple bts), Tuple (bts, ts))
         | NthTuple (_, n, t') ->
            let* (ls,t') = infer loc t' in
            let* tuple_bt, item_bt = match ls with

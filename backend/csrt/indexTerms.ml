@@ -69,7 +69,7 @@ type 'bt term =
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term  (* bool -> int -> int *)
   (* tuples *)
-  | Tuple of 'bt term list
+  | Tuple of 'bt list * 'bt term list
   | NthTuple of 'bt * int * 'bt term (* bt is tuple bt *)
   | Struct of BT.tag * (BT.member * 'bt term) list
   | StructMember of BT.tag * 'bt term * BT.member
@@ -172,7 +172,8 @@ let rec equal it it' =
   | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
      equal t1 t1' && equal t2 t2' && equal t3 t3'
   (* tuples *)
-  | Tuple its, Tuple its' -> 
+  | Tuple (bts,its), Tuple (bts',its') -> 
+     List.equal BT.equal bts bts' &&
      List.equal equal its its'
   | NthTuple (bt, n,t), NthTuple (bt', n',t') -> 
      BT.equal bt bt' && n = n' && equal t t' 
@@ -377,7 +378,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     (* tuples *)
     | NthTuple (bt,n,it2) -> 
        mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
-    | Tuple its -> 
+    | Tuple (_, its) -> 
        braces (separate_map (semi ^^ space) (aux false) its)
     | Struct (_tag, members) ->
        braces (separate_map comma (fun (member,it) -> 
@@ -482,7 +483,7 @@ let rec vars_in it : SymSet.t =
   | Not it -> vars_in it
   | ITE (it,it',it'') -> vars_in_list [it;it';it'']
   (* tuples *)
-  | Tuple its -> vars_in_list (it :: its)
+  | Tuple (_, its) -> vars_in_list (it :: its)
   | NthTuple (_, _, it) -> vars_in it
   | Struct (_tag, members) -> vars_in_list (map snd members)
   | StructMember (_tag, it, s) -> vars_in_list [it;it]
@@ -562,8 +563,8 @@ let map_sym f it : t =
     | ITE (it,it',it'') -> 
        ITE (aux it, aux it', aux it'')
     (* tuples *)
-    | Tuple its ->
-       Tuple (map (fun it -> aux it) its)
+    | Tuple (bt, its) ->
+       Tuple (bt, map (fun it -> aux it) its)
     | NthTuple (bt, n, it') ->
        NthTuple (bt, n, aux it')
     | Struct (tag, members) ->

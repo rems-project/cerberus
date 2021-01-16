@@ -789,11 +789,8 @@ module Make (G : sig val global : Global.t end) = struct
       let ret = Sym.fresh () in
       let bts = List.map (fun arg -> arg.bt) args in
       let bt = Tuple bts in
-      let lcs = 
-        List.mapi (fun i arg -> 
-            LC.LC (IT.EQ (NthTuple (bt, i, S (bt, ret)), S (arg.bt, arg.lname)))
-          ) args 
-      in
+      let tuple_it = IT.Tuple (bts, List.map (fun arg -> S (arg.bt, arg.lname)) args) in
+      let lcs = [LC (EQ (S (Tuple bts, ret), tuple_it))] in
       return (ret, bt, lcs)
 
     let infer_constructor (loc : loc) local (constructor : ctor) 
