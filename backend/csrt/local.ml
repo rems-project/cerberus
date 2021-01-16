@@ -394,7 +394,8 @@ module Make (G : sig val global : Global.t end) = struct
       ) local lcs
 
 
-  let add_r rname r local = 
+  (* not used *)
+  let _add_r_with_normalisation rname r local = 
     let (lvars, lcs1, r) = normalise_resource r in
     let lcs2 = match RE.fp r with
       | None -> []
@@ -406,6 +407,19 @@ module Make (G : sig val global : Global.t end) = struct
     let local = add_ls lvars local in
     let local = add (rname, Resource r) local in
     let local = add_ucs (lcs1 @ lcs2) local in
+    local
+
+
+  let add_r rname r local = 
+    let lcs = match RE.fp r with
+      | None -> []
+      | Some ((addr,_) as fp) ->
+         let fps = List.filter_map RE.fp (all_resources local) in
+         [LC.LC (IT.Not (IT.Null addr));
+          LC.LC (IT.disjoint_from fp fps)]
+    in
+    let local = add (rname, Resource r) local in
+    let local = add_ucs lcs local in
     local
 
   let add_ur re local = 
