@@ -6,13 +6,10 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
-let offset_location lexbuf new_file new_lnum =
-  Lexing.(
-    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = new_file;
-                                                  pos_lnum = new_lnum-1;
-                         };
-    new_line lexbuf
-  )
+let offset_location lexbuf pos_fname pos_lnum =
+  let pos_lnum = pos_lnum - 1 in
+  lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname; pos_lnum};
+  new_line lexbuf
 
 (* STD §6.4.1#1 *)
 let keywords: (string * Tokens.token) list = [
@@ -79,18 +76,16 @@ let keywords: (string * Tokens.token) list = [
     "__volatile__", ASM_VOLATILE;
   ]
 
-let lexicon: (string, token) Hashtbl.t = Hashtbl.create 0
-
-let () =
-  List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder) keywords
-
+let lexicon: (string, token) Hashtbl.t =
+  let lexicon = Hashtbl.create 0 in
+  let add (key, builder) = Hashtbl.add lexicon key builder in
+  List.iter add keywords; lexicon
 
 let lex_comment remainder lexbuf =
-  let ch = Lexing.lexeme_char lexbuf 0 in
+  let ch = lexeme_char lexbuf 0 in
   let prefix = Int64.of_int (Char.code ch) in
-  if ch = '\n' then Lexing.new_line lexbuf;
+  if ch = '\n' then new_line lexbuf;
   prefix :: remainder lexbuf
-
 }
 
 (* ========================================================================== *)
@@ -417,59 +412,20 @@ and initial = parse
 (* ========================================================================== *)
 
 {
+type lexer_state =
+  | LSRegular
+  | LSIdentifier of string
 
-  let merge_encoding_prefixes pref1_opt pref2_opt =
-    match (pref1_opt, pref2_opt) with
-    | (None, None) ->                                Some None
-    | (None     , Some pref)
-    | (Some pref, None     ) ->                      Some (Some pref)
-    | (Some pref1, Some pref2) when pref1 = pref2 -> Some (Some pref1)
-    | _ -> None
+let lexer_state = ref LSRegular
 
-  type lexer_state =
-    | LSRegular
-    | LSIdentifier of string
-      (* next token, its starting and ending position after a STRING_LITERAL *)
-    | LSStringLiteral of (token * (Lexing.position * Lexing.position))
-
-  let lexer_state = ref LSRegular
-
-  let lexer lexbuf =
-    let concat_strings (pref_opt, strs) lex_curr_p =
-      let rec aux (prev_pref_opt, strs_rev_acc) lex_curr_p =
-        match initial lexbuf with
-        | STRING_LITERAL (new_pref_opt, strs) ->
-            begin match merge_encoding_prefixes prev_pref_opt new_pref_opt with
-            | Some pref_opt ->
-                aux (pref_opt, strs :: strs_rev_acc) lexbuf.lex_curr_p
-            | None          ->
-                raise (Error Errors.Cparser_non_standard_string_concatenation)
-            end
-        | tok -> ((prev_pref_opt, List.concat (List.rev strs_rev_acc)), tok, lex_curr_p) in
-      aux (pref_opt, [strs]) lex_curr_p
-    in
-    match !lexer_state with
-    | LSRegular ->
-        let token = initial lexbuf in
-        begin match token with
-        | NAME i -> lexer_state := LSIdentifier i; token
-        | STRING_LITERAL lit ->
-            let saved_lex_start_p = lexbuf.lex_start_p in
-            let (lit', tok', lex_curr_p')= concat_strings lit lexbuf.lex_curr_p in
-            lexer_state := LSStringLiteral (tok',
-                              (lexbuf.lex_start_p, lexbuf.lex_curr_p));
-            lexbuf.lex_start_p <- saved_lex_start_p;
-            lexbuf.lex_curr_p  <- lex_curr_p';
-            STRING_LITERAL lit'
-        | _ -> lexer_state := LSRegular; token
-        end
-    | LSIdentifier i ->
-        lexer_state := LSRegular;
-        if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
-    | LSStringLiteral (tok, (lex_start_p, lex_curr_p)) ->
-        lexer_state := LSRegular;
-        lexbuf.lex_start_p <- lex_start_p;
-        lexbuf.lex_curr_p  <- lex_curr_p;
-        tok
-
+let lexer : lexbuf -> token = fun lexbuf ->
+  match !lexer_state with
+  | LSRegular ->
+      begin match initial lexbuf with
+      | NAME i as tok -> lexer_state := LSIdentifier i; tok
+      | _      as tok -> lexer_state := LSRegular; tok
+      end
+  | LSIdentifier i ->
+      lexer_state := LSRegular;
+      if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
 }

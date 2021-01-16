@@ -60,7 +60,7 @@ type token =
   | CONSTANT of Cabs.cabs_constant
 
   (* §6.4.5 String Literals *)
-  | STRING_LITERAL of Cabs.cabs_string_literal
+  | STRING_LITERAL of (Cabs.cabs_encoding_prefix option * string list)
 
   (* §6.4.6 Punctuators *)
   | LBRACK

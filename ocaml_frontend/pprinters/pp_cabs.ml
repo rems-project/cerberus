@@ -161,6 +161,7 @@ let pp_cabs_encoding_prefix = function
   | CabsEncPrefix_L  -> !^ "L"
 
 let pp_cabs_string_literal (pref_opt, strs) =
+  let strs = List.concat (List.map snd strs) in
   P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ (String.concat "" strs))
 
 let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =

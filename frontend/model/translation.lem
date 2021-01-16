@@ -2819,6 +2819,7 @@ else (* is_pointer *)
       
       (* TODO: prefix + check, §6.4.5#6 *)
       | A.AilEstr (pref_opt, strs) ->
+          let strs = List.concat (List.map snd strs) in (* FIXME *)
           let elem_ty = match pref_opt with
             | Nothing ->
                 (* STD §6.4.5#6, sentence 3 *)

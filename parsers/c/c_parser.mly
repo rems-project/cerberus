@@ -84,7 +84,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 %token<Cabs.cabs_constant> CONSTANT
 
 (* §6.4.5 String literals *)
-%token<Cabs.cabs_string_literal> STRING_LITERAL
+%token<Cabs.cabs_encoding_prefix option * string list> STRING_LITERAL
 
 (* §6.4.6 Punctuators *)
 %token LBRACK RBRACK LPAREN RPAREN LBRACE RBRACE DOT MINUS_GT
@@ -257,6 +257,15 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 %type<Cabs.function_definition>
   function_definition
 
+%type<Cabs.cabs_encoding_prefix option * (Location_ocaml.t * string list)>
+  string_literal_component
+
+%type<Cabs.cabs_string_literal>
+  string_literal
+
+%type<Location_ocaml.t * string * (Location_ocaml.t * string) list>
+  located_string_literal
+
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
 
 %% (* ======================================================================= *)
@@ -399,7 +408,7 @@ primary_expression:
 | cst= CONSTANT
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
                       CabsEconst cst) }
-| lit= STRING_LITERAL
+| lit= string_literal
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
@@ -1213,7 +1222,7 @@ designator:
 (* §6.7.10 Static assertions *)
 static_assert_declaration:
 | STATIC_ASSERT LPAREN expr= constant_expression COMMA
-  lit= STRING_LITERAL RPAREN SEMICOLON
+  lit= string_literal RPAREN SEMICOLON
     { Static_assert (expr, lit) }
 ;
 
@@ -1354,7 +1363,7 @@ jump_statement:
 
 (* GCC inline assembly extension *)
 asm_register:
-| ASM LPAREN STRING_LITERAL RPAREN
+| ASM LPAREN string_literal RPAREN
     { () }
 
 asm_qualifier:
@@ -1368,12 +1377,12 @@ asm_qualifier:
 ;
 
 asm_output_input:
-|                    STRING_LITERAL LPAREN expression RPAREN
-| LBRACK NAME VARIABLE RBRACK STRING_LITERAL LPAREN expression RPAREN
+|                             string_literal LPAREN expression RPAREN
+| LBRACK NAME VARIABLE RBRACK string_literal LPAREN expression RPAREN
     { () }
 
 asm_clobber:
-| STRING_LITERAL
+| string_literal
     { () }
 
 asm_label:
@@ -1412,28 +1421,24 @@ asm_with_labels:
     { xs }
 
 asm_statement:
-| ASM qs= asm_qualifier* LPAREN xs= STRING_LITERAL+ RPAREN
+| ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN
     { let is_volatile = List.mem `VOLATILE qs in
       let is_inline = List.mem `INLINE qs in
-      let strs = List.map (function
-        | Some _, _ ->
-            (* TODO: better error *)
-            failwith "encoding prefix found inside a __asm__ ()"
-        | None, str ->
-            str
-      ) xs in
+      let strs =
+        if fst s = None then snd s else
+          (* TODO: better error *)
+          failwith "encoding prefix found inside a __asm__ ()"
+      in
       CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs)) }
-| ASM qs= asm_qualifier* LPAREN xs= STRING_LITERAL+ args= asm_with_output RPAREN
+| ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN
     { let is_volatile = List.mem `VOLATILE qs in
       let is_inline = List.mem `INLINE qs in
-      let strs = List.map (function
-        | Some _, _ ->
-            (* TODO: better error *)
-            failwith "encoding prefix found inside a __asm__ ()"
-        | None, str ->
-            str
-      ) xs in
+      let strs =
+        if fst s = None then snd s else
+          (* TODO: better error *)
+          failwith "encoding prefix found inside a __asm__ ()"
+      in
 (*      let (outputs, inputs, clobbers, labels) = args in *)
       CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs(*, outputs, intputs, clobbers, labels*))) }
@@ -1538,10 +1543,33 @@ balanced_token_sequence: (* NOTE: the list is in reverse *)
     { tk :: tks }
 ;
 
-located_string_literal:
+string_literal_component:
 | STRING_LITERAL
     { let loc = Location_ocaml.region ($startpos, $endpos) None in
-      (loc, String.concat "" (snd $1)) }
+      (fst $1, (loc, snd $1)) }
+;
+
+string_literal:
+| string_literal_component+
+    { let (pref_opts, components) = List.split $1 in
+      (* Check that the encoding prefixes are not inconsistent. *)
+      let rec merge_prefix pref_opt ls =
+        match (pref_opt, ls) with
+        | (_         , []              ) -> pref_opt
+        | (_         , None       :: ls) -> merge_prefix pref_opt ls
+        | (None      , pref_opt   :: ls) -> merge_prefix pref_opt ls
+        | (Some pref1, Some pref2 :: ls) ->
+            if pref1 = pref2 then merge_prefix pref_opt ls else
+              raise (C_lexer.Error Errors.Cparser_non_standard_string_concatenation)
+      in
+      (merge_prefix None pref_opts, components) }
+;
+
+located_string_literal:
+| string_literal
+    { let loc = Location_ocaml.region ($startpos, $endpos) None in
+      let strs = List.map (fun (loc, s) -> (loc, String.concat "" s)) (snd $1) in
+      (loc, String.concat "" (List.map snd strs), strs) }
 ;
 
 balanced_token:
