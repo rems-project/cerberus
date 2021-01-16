@@ -306,10 +306,10 @@ module Make (G : sig val global : Global.t end) = struct
      *     ) veclasses)
      * in *)
     let substitutions = 
-      List.fold_right (fun {veclass;name;good} substs ->
+      List.fold_right (fun {veclass;name;_} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
+          let named_symbol = Sym.fresh_named (Pp.plain (Path.pp name)) in
           SymSet.fold (fun sym substs ->
-              let named_symbol = Sym.fresh_named (Pp.plain (Path.pp name)) in
               Subst.{ before = sym; after = named_symbol } :: substs
             ) to_substitute substs 
         ) veclasses []
@@ -330,12 +330,28 @@ module Make (G : sig val global : Global.t end) = struct
 
   let always_state = true
 
+  let rec boring_it = 
+    let open IT in
+    function
+    | EQ (it1, And [it2;it3]) -> IT.equal it1 it2 && IT.equal it2 it3
+    | EQ (it1, it2) -> IT.equal it1 it2 || boring_it it2
+    | Impl (it1, it2) -> IT.equal it1 it2 || boring_it it2
+    | (And its | Or its) -> List.for_all boring_it its
+    | _ -> false
+
+  let boring_lc (LC.LC it) = boring_it it
+
+  let interesting_lc lc = 
+    not (boring_lc lc)
+
+
   let do_state local {substitutions; _} =
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let constraints = List.map (LC.subst_vars substitutions) (L.all_constraints local) in
+    let interesting_constraints = List.filter interesting_lc constraints in
     let open Pp in
     Pp.item "resources" (Pp.list RE.pp resources) ^/^
-    Pp.item "constaints" (Pp.list LC.pp constraints)
+      Pp.item "constaints" (Pp.list LC.pp interesting_constraints)
 
   let state preferred_names local = 
     let explanation = explanation preferred_names local in

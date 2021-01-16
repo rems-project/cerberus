@@ -401,8 +401,8 @@ module Make (G : sig val global : Global.t end) = struct
       | None -> []
       | Some ((addr,_) as fp) ->
          let fps = List.filter_map RE.fp (all_resources local) in
-         [LC.LC (IT.Not (IT.Null addr));
-          LC.LC (IT.disjoint_from fp fps)]
+         LC.LC (IT.Not (IT.Null addr)) ::
+         (List.map LC.pack (IT.disjoint_from fp fps))
     in
     let local = add_ls lvars local in
     let local = add (rname, Resource r) local in
@@ -415,8 +415,8 @@ module Make (G : sig val global : Global.t end) = struct
       | None -> []
       | Some ((addr,_) as fp) ->
          let fps = List.filter_map RE.fp (all_resources local) in
-         [LC.LC (IT.Not (IT.Null addr));
-          LC.LC (IT.disjoint_from fp fps)]
+         LC.LC (IT.Not (IT.Null addr)) ::
+         List.map LC.pack (IT.disjoint_from fp fps)
     in
     let local = add (rname, Resource r) local in
     let local = add_ucs lcs local in

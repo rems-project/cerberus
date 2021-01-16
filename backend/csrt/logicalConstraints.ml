@@ -23,9 +23,7 @@ let equal (LC c) (LC c') = IndexTerms.equal c c'
 let negate (LC c) = LC (Not c)
 
 
-let index_term (LC c) = c
-
-
+let pack c = LC c
 let unpack (LC c) = c
 
 
