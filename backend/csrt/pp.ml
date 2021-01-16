@@ -17,8 +17,8 @@ let print_level = ref 0
 
 (* from run_pp *)
 let print channel doc = 
-  PPrint.ToChannel.pretty 1.0 term_col channel (doc ^^ hardline)
-
+  PPrint.ToChannel.pretty 1.0 term_col channel (doc ^^ hardline);
+  flush channel
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
@@ -208,7 +208,6 @@ let warn pp =
 (* stealing some logic from pp_errors *)
 let error (loc : Locations.t) msg extras = 
   let (head, pos) = Locations.head_pos_of_location loc in
-  debug 1 (lazy hardline);
   print stderr (format [FG (Red, Bright)] "error:" ^^^ 
                 format [FG (Default, Bright)] head ^^^ msg);
   if Locations.is_unknown loc then () else print stderr !^pos;

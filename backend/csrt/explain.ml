@@ -275,7 +275,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local =
-    let () = Pp.print stderr (Pp.paction "generating error summary") in
+    let () = Pp.print stderr (Pp.string "(generating error summary)") in
     let veclasses = 
       let with_logical_variables = 
         List.fold_left (fun veclasses (l, ls) ->
