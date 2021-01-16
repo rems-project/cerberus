@@ -151,11 +151,6 @@ module Make (G : sig val global : Global.t end) = struct
     let open Pp in
     Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Path.pp p))
 
-  type names_explained = {
-      default_names : names;
-      alternative_names : names;
-    }
-
   let names_of_mapping mapping = 
     List.map (fun i ->
         Parse_ast.Mapping.(i.sym, i.path)
@@ -229,15 +224,9 @@ module Make (G : sig val global : Global.t end) = struct
     in
     (List.sort graph_compare veclasses, rels)
 
-  let alternative_name names veclass =
-    Option.map snd 
-      (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
-         names.alternative_names)
-
   let default_name names veclass =
     Option.map snd
-      (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) 
-         names.default_names)
+      (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) names)
 
 
 
@@ -258,8 +247,7 @@ module Make (G : sig val global : Global.t end) = struct
     let default_name = default_name names veclass in
     let good_name = good_name veclass in
     let related_name = related_name (named_veclasses, rels) veclass in
-    let alternative_name = alternative_name names veclass in
-    let any_ok = List.filter_map (fun p -> p) [default_name; good_name; related_name; alternative_name] in
+    let any_ok = List.filter_map (fun p -> p) [default_name; good_name; related_name] in
     match any_ok with
     | p :: _ -> 
        let without_labels = Path.remove_labels p in
@@ -342,36 +330,36 @@ module Make (G : sig val global : Global.t end) = struct
     Pp.item "resources" (Pp.list RE.pp resources) ^/^
       Pp.item "constaints" (Pp.list LC.pp interesting_constraints)
 
-  let state preferred_names local = 
-    let explanation = explanation preferred_names local in
+  let state names local = 
+    let explanation = explanation names local in
     (do_state local explanation)
 
-  let index_term preferred_names local it = 
-    let explanation = explanation preferred_names local in
+  let index_term names local it = 
+    let explanation = explanation names local in
     let unexplained_symbols = unexplained_symbols explanation (IT.vars_in it) in
     let it = IT.pp (IT.subst_vars explanation.substitutions it) in
     if (not always_state) && SymSet.is_empty unexplained_symbols
     then (it, None)
     else (it, Some (do_state local explanation))
 
-  let logical_constraint preferred_names local lc = 
-    let explanation = explanation preferred_names local in
+  let logical_constraint names local lc = 
+    let explanation = explanation names local in
     let unexplained_symbols = unexplained_symbols explanation (LC.vars_in lc) in
     let lc = LC.pp (LC.subst_vars explanation.substitutions lc) in
     if (not always_state) && SymSet.is_empty unexplained_symbols 
     then (lc, None)
     else (lc, Some (do_state local explanation))
 
-  let resource preferred_names local re = 
-    let explanation = explanation preferred_names local in
+  let resource names local re = 
+    let explanation = explanation names local in
     let unexplained_symbols = unexplained_symbols explanation (RE.vars_in re) in
     let re = RE.pp (RE.subst_vars explanation.substitutions re) in
     if (not always_state) && SymSet.is_empty unexplained_symbols 
     then (re, None)
     else (re, Some (do_state local explanation))
 
-  let resources preferred_names local (re1, re2) = 
-    let explanation = explanation preferred_names local in
+  let resources names local (re1, re2) = 
+    let explanation = explanation names local in
     let unexplained_symbols = 
       unexplained_symbols explanation 
         (SymSet.union (RE.vars_in re1) (RE.vars_in re2))
