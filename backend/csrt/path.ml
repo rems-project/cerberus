@@ -14,6 +14,10 @@ module LabeledName = struct
     match label with
     | Some label -> !^v ^^ at ^^ !^label
     | None -> !^v
+
+  let remove_label {v; _} = 
+    {v; label = None}
+
 end
 
 
@@ -95,5 +99,13 @@ let rec deref_path = function
   | PredArg _ -> 
      None
 
+let rec remove_labels = function
+  | Addr bn -> Addr bn
+  | Var bn -> Var (LabeledName.remove_label bn)
+  | Pointee p -> Pointee (remove_labels p)
+  | PredArg (pr,p,a) -> PredArg (pr, List.map remove_labels_predarg p, a)
 
+and remove_labels_predarg = function
+  | PathArg p -> PathArg (remove_labels p)
+  | NumArg z -> NumArg z
 

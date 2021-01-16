@@ -66,13 +66,10 @@ module Make (G : sig val global : Global.t end) = struct
         SymSet.mem sym veclass.l_elements
 
 
+    (* think about whether the 'Addr' part is always safe' *)
     let good_name veclass = 
-      match SymSet.find_first_opt Sym.named veclass.c_elements with
-      | Some s -> Sym.name s
-      | None -> 
-         match SymSet.find_first_opt Sym.named veclass.l_elements with
-         | Some s -> Sym.name s
-         | None -> None
+      let all = SymSet.elements (SymSet.union veclass.c_elements veclass.l_elements) in
+      Option.map (fun s -> Path.Addr s) (List.find_map Sym.name all)
 
     let make_name = 
       let faa counter = 
@@ -149,6 +146,10 @@ module Make (G : sig val global : Global.t end) = struct
 
   let names_substs substs names = 
     Subst.make_substs names_subst substs names
+
+  let pp_names = 
+    let open Pp in
+    Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Path.pp p))
 
   type names_explained = {
       default_names : names;
@@ -251,24 +252,21 @@ module Make (G : sig val global : Global.t end) = struct
     in
     aux named_veclasses
 
+
   let pick_name (named_veclasses, rels) names veclass =
-    match default_name names veclass with
-    | Some name -> (name, true)
-    | None -> 
-       match related_name (named_veclasses, rels) veclass with
-       | Some name -> (name, true)
-       | None -> 
-          match alternative_name names veclass with
-          | Some name -> (name, true)
-          | None -> 
-             match good_name veclass with
-             | Some str -> 
-                (* think about whether the 'Addr' part is safe to put
-                   here *)
-                (Addr str, true)
-             | None -> 
-                let name = LabeledName.{label = None; v = make_name veclass} in
-                (Var name, false)
+    let open Path in
+    let default_name = default_name names veclass in
+    let good_name = good_name veclass in
+    let related_name = related_name (named_veclasses, rels) veclass in
+    let alternative_name = alternative_name names veclass in
+    let any_ok = List.filter_map (fun p -> p) [default_name; good_name; related_name; alternative_name] in
+    match any_ok with
+    | p :: _ -> 
+       let without_labels = Path.remove_labels p in
+       if List.mem without_labels any_ok then (without_labels, true) else (p, true)
+    | _ ->
+       let name = LabeledName.{label = None; v = make_name veclass} in
+       (Var name, false)
 
 
 
@@ -276,25 +274,23 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let explanation preferred_names local =
+  let explanation names local =
     (* let () = Pp.print stderr (Pp.paction "generating error summary") in *)
-    let c = L.all_computational local in
-    let l = L.all_logical local in
     let veclasses = 
       let with_logical_variables = 
         List.fold_left (fun veclasses (l, ls) ->
             let (LS.Base bt) = ls in
             classify local veclasses (None, l, bt)
-          ) [] l
+          ) [] (L.all_logical local)
       in
       let with_all_variables =
         List.fold_left (fun veclasses (c, (l, bt)) ->
             classify local veclasses (Some c, l, bt)
-          ) with_logical_variables c
+          ) with_logical_variables (L.all_computational local)
       in
       let (sorted, rels) = veclasses_total_order local with_all_variables in
       List.fold_left (fun veclasses_explanation veclass ->
-          let (name,good) = pick_name (veclasses_explanation, rels) preferred_names veclass in
+          let (name,good) = pick_name (veclasses_explanation, rels) names veclass in
           veclasses_explanation @ [{veclass; name; good}]
         ) [] sorted
     in

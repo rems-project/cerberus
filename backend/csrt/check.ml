@@ -1952,14 +1952,14 @@ module Make (G : sig val global : Global.t end) = struct
       | M_Label (loc, lt, args, body, annots, mapping) ->
          debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
          debug 2 (lazy (item "type" (LT.pp lt)));
-         let* (rt, delta_label, _, substs) = 
+         let* (rt, delta_label, _, lsubsts) = 
            CBF_LT.check_and_bind_arguments loc args lt 
          in
          let* () = check_initial_environment_consistent loc `Label delta in
          let* local_or_false = 
            let () = print stderr (item "label mapping" (Parse_ast.Mapping.pp mapping)) in
            let default_names = 
-             Explain.names_substs substs
+             Explain.names_substs (lsubsts @ substs)
                (Explain.names_of_mapping mapping)  
            in
            let module C = Checker(struct let default_names = default_names end) in

@@ -445,7 +445,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
           | Some loc -> make_owned loc Pre garg.lsym item.path garg.typ 
           | None -> return ([], [], [], [])
         in
-        return (iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
+        return (iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
       (iL, iR, iC, mapping) globs
   in
@@ -457,7 +457,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
         let item = aarg_item Pre aarg in
         let* (l, r, c, mapping') = make_owned loc Pre aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
-        return (iA @ a, iL @ l, iR @ r, iC @ c, mapping @ (item :: mapping'))
+        return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
       (iA, iL, iR, iC, mapping) fargs
   in
@@ -467,7 +467,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   let* (iL, iR, iC, mapping) = 
     ListM.fold_leftM (fun (iL, iR, iC, mapping) spec ->
         let* (l, r, c, mapping') = apply_ownership_spec Pre var_typs mapping spec in
-        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+        return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
       (iL, iR, iC, mapping) pre_resources
   in
@@ -494,7 +494,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
           | Some loc -> make_owned loc Post garg.lsym item.path garg.typ 
           | None -> return ([], [], [], [])
         in
-        return (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
+        return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
       (oL, oR, oC, mapping) globs
   in
@@ -505,7 +505,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
         let item = aarg_item Post aarg in
         let* (l, r, c, mapping') = make_owned loc Post aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ) ):: c in
-        return (oL @ l, oR @ r, oC @ c, mapping @ (item :: mapping'))
+        return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
       (oL, oR, oC, mapping) fargs
   in
@@ -515,7 +515,7 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   let* (oL, oR, oC, mapping) = 
     ListM.fold_leftM (fun (oL, oR, oC, mapping) spec ->
         let* (l, r, c, mapping') = apply_ownership_spec Post var_typs mapping spec in
-        return (oL @ l, oR @ r, oC @ c, mapping @ mapping')
+        return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
       )
       (oL, oR, oC, mapping) post_resources
   in
@@ -567,7 +567,7 @@ let make_label_spec
           | Some loc -> make_owned loc (Inv lname) garg.lsym item.path garg.typ 
           | None ->  return ([], [], [], [])
         in
-        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+        return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
       (iL, iR, iC, mapping) globs
   in
@@ -577,7 +577,7 @@ let make_label_spec
     ListM.fold_leftM (fun (iL, iR, iC, mapping) aarg ->
         let item = aarg_item (Inv lname) aarg in
         let* (l, r, c, mapping') = make_owned loc (Inv lname) aarg.asym item.path aarg.typ in
-        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+        return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
       (iL, iR, iC, mapping) fargs
   in
@@ -588,7 +588,7 @@ let make_label_spec
         let item = varg_item (Inv lname) varg in
         let a = (varg.vsym, item.bt) in
         let c = [LC (good_value varg.vsym varg.typ)] in
-        (iA @ [a], iC @ c, mapping @ [item])
+        (iA @ [a], iC @ c, item :: mapping)
       )
       (iA, iC, mapping) largs
   in
