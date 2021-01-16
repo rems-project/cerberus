@@ -275,7 +275,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local =
-    (* let () = Pp.print stderr (Pp.paction "generating error summary") in *)
+    let () = Pp.print stderr (Pp.paction "generating error summary") in
     let veclasses = 
       let with_logical_variables = 
         List.fold_left (fun veclasses (l, ls) ->
@@ -294,17 +294,6 @@ module Make (G : sig val global : Global.t end) = struct
           veclasses_explanation @ [{veclass; name; good}]
         ) [] sorted
     in
-    (* let () =
-     *   let open Pp in
-     *   print stderr (
-     *   list (fun e ->
-     *       item "veclass" 
-     *         (
-     *           item "c_elements" (list Sym.pp (SymSet.elements e.veclass.c_elements)) ^^^
-     *           item "l_elements" (list Sym.pp (SymSet.elements e.veclass.l_elements))
-     *         )
-     *     ) veclasses)
-     * in *)
     let substitutions = 
       List.fold_right (fun {veclass;name;_} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in

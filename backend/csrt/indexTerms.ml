@@ -376,7 +376,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (!^"?" ^^^ parens (separate_map comma (aux false) [o1; o2; o3]))
     (* tuples *)
     | NthTuple (bt,n,it2) -> 
-       mparens (aux true it2 ^^ dot ^^ !^(string_of_int n))
+       mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
     | Tuple its -> 
        braces (separate_map (semi ^^ space) (aux false) its)
     | Struct (_tag, members) ->
