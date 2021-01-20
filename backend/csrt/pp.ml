@@ -187,7 +187,8 @@ let item item content =
 let c_comment pp = 
   !^"/*" ^^ pp ^^ !^"*/"
 
-
+let c_app f args = 
+  f ^^ parens (separate (comma ^^ space) args)
 
 
 

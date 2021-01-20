@@ -25,11 +25,11 @@ let (let*) = bind
 type ('a,'e) m = ('a, 'e error) Result.t
 
 
-let lift_error (f : 'e1 -> 'e2) (m : ('a,'e1) m) : ('a,'e2) m =
-  match m with
-  | Ok a -> Ok a
-  | Error (loc, stacktrace, e1) -> 
-     Error (loc, stacktrace, f e1)
+(* let lift_error (f : 'e1 -> 'e2) (m : ('a,'e1) m) : ('a,'e2) m =
+ *   match m with
+ *   | Ok a -> Ok a
+ *   | Error (loc, stacktrace, e1) -> 
+ *      Error (loc, stacktrace, f e1) *)
 
 
 let msum (m1 : ('a,'e) t) (m2 : (('a,'e) t) Lazy.t) : ('a,'e) t = 

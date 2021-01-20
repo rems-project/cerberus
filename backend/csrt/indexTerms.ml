@@ -374,14 +374,14 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | Not (o1) -> 
        mparens (!^"not" ^^^ aux true o1)
     | ITE (o1,o2,o3) -> 
-       mparens (!^"?" ^^^ parens (separate_map comma (aux false) [o1; o2; o3]))
+       mparens (aux true o1 ^^^ !^"?" ^^^ aux true o2 ^^^ colon ^^^ aux false o3)
     (* tuples *)
     | NthTuple (bt,n,it2) -> 
        mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
     | Tuple (_, its) -> 
        braces (separate_map (semi ^^ space) (aux false) its)
     | Struct (_tag, members) ->
-       braces (separate_map comma (fun (member,it) -> 
+       braces (separate_map (comma ^^ space) (fun (member,it) -> 
                    Id.pp member ^^^ equals ^^^ aux false it 
                  ) members)
     | StructMember (_tag, t, member) ->
@@ -394,21 +394,17 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | AllocationSize t1 ->
        mparens (!^"allocationSize" ^^ parens (aux false t1))
     | Offset (t1, t2) ->
-       mparens (!^"offset" ^^ parens (aux false t1 ^^ comma ^^ aux false t2))
+       mparens (aux true t1 ^^^ plus ^^^ aux true t2)
     | LocLT (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^^ aux true o2)
     | LocLE (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | Disjoint ((o1,s1),(o2,s2)) ->
-       mparens (!^"disj" ^^ 
-                  parens (
-                    parens (aux false o1 ^^ comma ^^ aux false s1) ^^ comma ^^
-                      parens (aux false o2 ^^ comma ^^ aux false s2)))
-
+       c_app !^"disj" [aux false o1; aux false s1; aux false o2; aux false s2]
     | AlignedI (t, t') ->
-       mparens (!^"aligned" ^^ parens (aux false t ^^ comma ^^ aux false t'))
+       c_app !^"aligned" [aux false t; aux false t']
     | Aligned (rt, t) ->
-       mparens (!^"aligned" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
+       c_app !^"aligned" [ST.pp rt; aux false t]
     | IntegerToPointerCast t ->
        mparens (parens(!^"pointer") ^^ aux true t)
     | PointerToIntegerCast t ->
@@ -419,7 +415,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | MaxInteger it ->
        mparens (!^"max" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
     | Representable (rt, t) ->
-       mparens (!^"repr" ^^ parens (ST.pp rt ^^ comma ^^ aux false t))
+       c_app !^"repr" [ST.pp rt; aux false t]
     (* lists *)
     | Head (o1) -> 
        mparens (!^"hd" ^^ parens (aux false o1))
@@ -430,7 +426,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | Cons (t1,t2) -> 
        mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
     | List (its, _bt) -> 
-       mparens (brackets (separate_map comma (aux false) its))
+       mparens (brackets (separate_map (comma ^^ space) (aux false) its))
     | NthList (n, t) ->
        mparens (aux true t ^^ brackets !^(string_of_int n))
     (* sets *)

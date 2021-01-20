@@ -50,13 +50,12 @@ let pp = function
        | Uninit -> !^"Uninit"
        | Padding -> !^"Padding"
      in
-     typ_pp ^^ parens (IndexTerms.pp pointer ^^ comma ^^ Z.pp size)
+     c_app typ_pp [IndexTerms.pp pointer; Z.pp size]
   | Region {pointer; size} ->
      !^"Region" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
   | Points {pointer; pointee; size} ->
-     !^"Points" ^^ 
-       parens (IndexTerms.pp pointer ^^ comma ^^ Sym.pp pointee ^^ 
-                 comma ^^ Z.pp size)
+     c_app (!^"Points")
+       [IndexTerms.pp pointer; Sym.pp pointee; Z.pp size]
   | Predicate {name; iargs; oargs} ->
      let args = 
        List.map IndexTerms.pp iargs @ 
@@ -64,9 +63,10 @@ let pp = function
      in
      match name with
      | Id id -> 
-        !^id ^^ parens (separate comma args)
+        c_app !^id args
      | Tag tag ->
-        !^"StoredStruct" ^^ parens (Sym.pp tag) ^^ parens (separate comma args)
+        c_app (!^"StoredStruct" ^^ parens (Sym.pp tag)) args
+          
         
 
 
