@@ -47,8 +47,8 @@ let all_it_names_good it =
 
 
 
-let model local solver : t option =
-  match Z3.Solver.get_model solver with
+let model_ local : t option =
+  match Z3.Solver.get_model Solver.solver with
   | None -> None
   | Some model ->
      let all_locations = 
@@ -131,12 +131,13 @@ let model local solver : t option =
      Some { memory_state; variable_locations }
 
 
+let model local = 
+  Solver.z3_wrapper (lazy (model_ local))
 
-
-let is_reachable_and_model local =
-  let (unreachable, solver) = Solver.constraint_holds local (LC (Bool false)) in
-  let model = Solver.z3_wrapper (lazy (model local solver)) in
-  (not unreachable, model)
+(* let is_reachable_and_model local =
+ *   let unreachable = Solver.constraint_holds local (LC (Bool false)) in
+ *   let model = Solver.z3_wrapper (lazy (model local)) in
+ *   (not unreachable, model) *)
 
 
 end

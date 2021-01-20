@@ -25,39 +25,40 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error ("Z3 error:" ^ msg)
 
 
+
+  let ctxt = G.global.solver_context
+  let solver = Z3.Solver.mk_simple_solver ctxt
+
+  let get_model () = Z3.Solver.get_model solver
+
+
   let constraint_holds local lc = 
-    let ctxt = G.global.solver_context in
-    let solver = Z3.Solver.mk_simple_solver ctxt in
     let sc = SolverConstraints.of_index_term G.global (LC.unpack (LC.negate lc)) in
     let lcs = sc :: L.all_solver_constraints local in
     (* let () = debug_typecheck_lcs lcs (local, global) in *)
     let checked = z3_wrapper (lazy (Z3.Solver.check solver lcs)) in
     match checked with
-    | UNSATISFIABLE -> (true,solver)
-    | SATISFIABLE -> (false,solver)
+    | UNSATISFIABLE -> true
+    | SATISFIABLE -> false
     | UNKNOWN -> Debug_ocaml.error "constraint solver returned Unknown"
 
 
 
   let is_consistent local =
-    let (unreachable,_) = constraint_holds local (LC (Bool false)) in
-    (not unreachable)
+    not (constraint_holds local (LC (Bool false)))
+
+  let is_unreachable local = 
+    not (is_consistent local)
 
 
   let equal local it1 it2 =
-    let c = LC.LC (IndexTerms.EQ (it1, it2)) in
-    let (holds,_) = constraint_holds local c in
-    holds
+    constraint_holds local (LC.LC (IndexTerms.EQ (it1, it2)))
 
   let ge local it1 it2 =
-    let c = LC.LC (IndexTerms.GE (it1, it2)) in
-    let (holds,_) = constraint_holds local c in
-    holds
+    constraint_holds local (LC.LC (IndexTerms.GE (it1, it2)))
 
   let lt local it1 it2 =
-    let c = LC.LC (IndexTerms.LT (it1, it2)) in
-    let (holds,_) = constraint_holds local c in
-    holds
+    constraint_holds local (LC.LC (IndexTerms.LT (it1, it2)))
 
 
   let resource_for_pointer local it
@@ -89,9 +90,7 @@ module Make (G : sig val global : Global.t end) = struct
                      (IndexTerms.EQ (iarg, iarg'))
                  ) (List.combine iargs pred.iargs)
              in
-             let lc = LC.LC (IndexTerms.And its) in
-             let (holds,_) = constraint_holds local lc in
-             if holds 
+             if constraint_holds local (LC.LC (IndexTerms.And its))
              then Some (name, pred) 
              else None
           | _ ->

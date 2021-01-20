@@ -139,13 +139,13 @@ module Make (G : sig val global : Global.t end) = struct
   let bind (name : Sym.t) (rt : RT.t) : L.t =
     bind_computational L.empty name rt
 
-  let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * L.t, type_error) m =
+  let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * L.t) =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst_var {before = s; after = s'} rt in
     let delta = add_l s' (Base bt) L.empty in
     let delta' = bind_logical delta rt' in
-    return ((bt, s'), delta')
+    ((bt, s'), delta')
 
 
   (*** auxiliaries **************************************************************)
@@ -266,7 +266,7 @@ module Make (G : sig val global : Global.t end) = struct
      logical variable and record constraints about how the variables
      introduced in the pattern-matching relate to (name,bound). *)
   let pattern_match_rt (pat : pattern) (rt : RT.t) : (L.t, type_error) m =
-    let* ((bt, s'), delta) = bind_logically rt in
+    let ((bt, s'), delta) = bind_logically rt in
     let* delta' = pattern_match (S (bt, s')) pat bt in
     return (delta' ++ delta)
 
@@ -483,10 +483,12 @@ module Make (G : sig val global : Global.t end) = struct
                debug 6 (lazy (item "local" (L.pp local)));
                debug 6 (lazy (item "lc" (LC.pp c)));
                debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
-               let (holds, _) = S.constraint_holds local c in
-               if holds then check_constraints ftyp else 
+               if S.constraint_holds local c then 
+                 check_constraints ftyp 
+               else 
+                 let model = S.get_model () in
                  let (constr,state) = 
-                   Explain.logical_constraint names original_local c 
+                   Explain.unsatisfied_constraint names original_local c model
                  in
                  fail loc (Unsat_constraint {constr; state})
             | I rt -> 
@@ -548,7 +550,7 @@ module Make (G : sig val global : Global.t end) = struct
         let o_resource = S.resource_for_pointer local pointer in
         let* resource_name, resource = match o_resource with
           | None -> 
-             let (addr, state) = Explain.index_term names original_local pointer in
+             let (addr, state) = Explain.missing_ownership names original_local pointer in
              let used = S.used_resource_for_pointer local pointer in
              fail loc (Missing_ownership {addr; state; used; situation})
           | Some (resource_name, resource) -> 
@@ -626,7 +628,7 @@ module Make (G : sig val global : Global.t end) = struct
             fail loc (Resource_mismatch {expect; has; state; situation})             
          | None -> 
             let (addr, state) = 
-              Explain.index_term names original_local p.pointer in
+              Explain.missing_ownership names original_local p.pointer in
             let used = S.used_resource_for_pointer local p.pointer in
             fail loc (Missing_ownership {addr; state; used; situation})
          end
@@ -716,8 +718,8 @@ module Make (G : sig val global : Global.t end) = struct
       let* (rt, local) = handle_prompt prompt in
       return (rt, local)
 
-    let calltype_lt loc local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
-      let prompt = Spine_LT.spine loc [] (LabelCall label_kind) local args ltyp in
+    let calltype_lt loc extra_names local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
+      let prompt = Spine_LT.spine loc extra_names (LabelCall label_kind) local args ltyp in
       let* (rt, local) = handle_prompt prompt in
       return (rt, local)
 
@@ -987,10 +989,9 @@ module Make (G : sig val global : Global.t end) = struct
        resources *)
     (* all_empty: do the same for the whole local environment (without
        supplying a marker) *)
-    let check_all_used loc ~original_local vbs = 
+    let check_all_used loc ~original_local extra_names vbs = 
       let rec aux = function
         | (s, VB.Resource resource) :: _ -> 
-           let extra_names = [] in
            let names = names @ extra_names in
            let (resource, state) = Explain.resource names original_local resource in
            fail loc (Unused_resource {resource; state})
@@ -999,14 +1000,14 @@ module Make (G : sig val global : Global.t end) = struct
       in
       aux vbs
 
-    let pop_empty loc local = 
+    let pop_empty loc extra_names local = 
       let (new_local, old_local) = since local in
-      let* () = check_all_used loc ~original_local:local new_local in
+      let* () = check_all_used loc ~original_local:local extra_names new_local in
       return old_local
 
-    let all_empty loc local = 
+    let all_empty loc extra_names local = 
       let new_local = all local in
-      let* () = check_all_used loc ~original_local:local new_local in
+      let* () = check_all_used loc ~original_local:local extra_names new_local in
       return ()
 
 
@@ -1116,10 +1117,9 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEconstrained _ ->
            Debug_ocaml.error "todo: PEconstrained"
         | M_PEundef (_loc, undef) ->
-           let (reachable, model) = Model.is_reachable_and_model local in
-           if not reachable 
+           if S.is_unreachable local 
            then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-           else fail loc (Undefined_behaviour (undef, model))
+           else fail loc (Undefined_behaviour (undef, Model.model local))
         | M_PEerror (err, asym) ->
            let* arg = arg_of_asym local asym in
            fail arg.loc (StaticError err)
@@ -1274,17 +1274,17 @@ module Make (G : sig val global : Global.t end) = struct
          check_pexpr_pop loc delta local e2 typ
       | _ ->
          let*? (rt, local) = infer_pexpr local e in
-         let* ((bt, lname), delta) = bind_logically rt in
+         let ((bt, lname), delta) = bind_logically rt in
          let local = delta ++ marked ++ local in
          let* local = subtype loc local {bt; lname; loc} typ in
-         let* local = pop_empty loc local in
+         let* local = pop_empty loc [] local in
          return (Normal local)
 
     and check_pexpr_pop (loc : loc) delta local (pe : 'bty pexpr) 
                         (typ : RT.t) : (L.t fallible, type_error) m =
       let local = delta ++ marked ++ local in 
       let*? local = check_pexpr local pe typ in
-      let* local = pop_empty loc local in
+      let* local = pop_empty loc [] local in
       return (Normal local)
 
 
@@ -1340,7 +1340,7 @@ module Make (G : sig val global : Global.t end) = struct
                 end
              | None -> 
                    let (addr,state) = 
-                     Explain.index_term names original_local pointer in
+                     Explain.missing_ownership names original_local pointer in
                 let used = S.used_resource_for_pointer local pointer in
                 fail loc (Missing_ownership {addr; state; used; situation})
            in
@@ -1428,11 +1428,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let ensure_aligned loc local access pointer ctype = 
-      let (aligned, _) = 
-        S.constraint_holds local
-          (LC.LC (Aligned (ST.of_ctype ctype, pointer))) 
-      in
-      if aligned then return () else fail loc (Misaligned access)
+      let alignment_lc = LC.LC (Aligned (ST.of_ctype ctype, pointer)) in
+      if S.constraint_holds local alignment_lc 
+      then return () 
+      else fail loc (Misaligned access)
 
 
 
@@ -1517,11 +1516,9 @@ module Make (G : sig val global : Global.t end) = struct
                 | Some _ -> false
                 | _ -> false
               in
-              let (aligned, _) = 
-                S.constraint_holds local
-                  (LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))))
-              in
-              let ok = resource_ok && aligned in
+              let alignment_lc = 
+                LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))) in
+              let ok = resource_ok && S.constraint_holds local alignment_lc in
               let constr = LC (EQ (S (Bool, ret), Bool ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
               return (Normal (rt, local))
@@ -1584,12 +1581,11 @@ module Make (G : sig val global : Global.t end) = struct
                  representable and done the right thing. Pointers, as I
                  understand, are an exception. *)
               let* () = 
-                let (in_range, _) = 
-                  S.constraint_holds local
-                    (LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))))
-                in
-                if in_range then return () else
-                  fail loc (Generic !^"write value unrepresentable")
+                let in_range_lc = 
+                  LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))) in
+                if S.constraint_holds local in_range_lc
+                then return () 
+                else fail loc (Generic !^"write value unrepresentable")
               in
               let size = Memory.size_of_ctype act.item.ct in
               let* local = 
@@ -1671,13 +1667,17 @@ module Make (G : sig val global : Global.t end) = struct
            Debug_ocaml.error "todo: End"
         | M_Erun (label_sym, asyms) ->
            let* local = unpack_resources loc local in
-           let* lt = match SymMap.find_opt label_sym labels with
+           let* (lt,lkind) = match SymMap.find_opt label_sym labels with
            | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
-           | Some lt -> return lt
+           | Some (lt,lkind) -> return (lt,lkind)
            in
            let* args = args_of_asyms local asyms in
-           let* (False, local) = calltype_lt loc local args lt in
-           let* () = all_empty loc local in
+           let extra_names = match args, lkind with
+             | [arg], Return -> [arg.lname, Path.Var {label = None; v = "return"}]
+             | _ -> []
+           in
+           let* (False, local) = calltype_lt loc extra_names local args (lt,lkind) in
+           let* () = all_empty loc extra_names local in
            return False
         | M_Ecase _ -> 
            Debug_ocaml.error "Ecase in inferring position"
@@ -1776,12 +1776,12 @@ module Make (G : sig val global : Global.t end) = struct
            check_expr_pop ~print:true delta (local, labels) e2 typ
         | _ ->
            let*? (rt, local) = infer_expr (local, labels) e in
-           let* ((bt, lname), delta) = bind_logically rt in
+           let ((bt, lname), delta) = bind_logically rt in
            let local = delta ++ marked ++ local in
            match typ with
            | Normal typ ->
               let* local = subtype loc local {bt; lname; loc} typ in
-              let* local = pop_empty loc local in
+              let* local = pop_empty loc [] local in
               return (Normal local)
            | False ->
               let err = 
@@ -1803,7 +1803,7 @@ module Make (G : sig val global : Global.t end) = struct
       | False -> 
          return False
       | Normal local -> 
-         let* local = pop_empty loc local in
+         let* local = pop_empty loc [] local in
          return (Normal local)
 
 

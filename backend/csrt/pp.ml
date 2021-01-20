@@ -109,6 +109,11 @@ let list f l =
   | [] -> !^"(empty)"
   | l -> flow_map (comma ^^ break 1) f l
 
+let list_filtered f l = 
+  match List.filter_map f l with
+  | [] -> !^"(empty)"
+  | l -> flow (comma ^^ break 1) l
+
 
 
 let nats n =
