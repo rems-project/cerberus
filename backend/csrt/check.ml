@@ -444,6 +444,7 @@ module Make (G : sig val global : Global.t end) = struct
           let rec infer_resources local unis ftyp = 
             debug 6 (lazy (item "local" (L.pp local)));
             debug 6 (lazy (item "spec" (NFT.pp_r ftyp)));
+            debug 6 (lazy (item "unis" (pp_unis unis)));
             match ftyp with
             | Resource (resource, ftyp) -> 
                let rr = {
@@ -530,11 +531,11 @@ module Make (G : sig val global : Global.t end) = struct
     let predicate_unpack_functions pred def =
       let substs = predicate_substs pred def in
       List.map (fun clause ->
-        List.fold_left (fun lft subst ->
-            Option.value_err
-              "predicate arguments not well-sorted"
-              (LFT.subst_it subst lft)
-          ) clause substs
+          List.fold_left (fun lft subst ->
+              Option.value_err
+                "predicate arguments not well-sorted"
+                (LFT.subst_it subst lft)
+            ) clause substs
         ) def.unpack_functions
 
 
@@ -757,8 +758,8 @@ module Make (G : sig val global : Global.t end) = struct
                        let prompt = Spine_LFT.spine loc [] Unpacking local [] clause in
                        let* (lrt, test_local) = handle_prompt prompt in
                        let test_local = bind_logical test_local lrt in
-                       let is_reachable = S.is_consistent test_local in
-                       return (if is_reachable then Some test_local else None)
+                       return (if S.is_consistent test_local 
+                               then Some test_local else None)
                      ) (predicate_unpack_functions p def)
                  in
                  begin match possible_unpackings with
@@ -1119,7 +1120,9 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEundef (_loc, undef) ->
            if S.is_unreachable local 
            then (Pp.warn !^"unexpected unreachable Undefined"; return False)
-           else fail loc (Undefined_behaviour (undef, Model.model local))
+           else 
+             let expl = Explain.undefined_behaviour names local (S.get_model ()) in
+             fail loc (Undefined_behaviour (undef, expl))
         | M_PEerror (err, asym) ->
            let* arg = arg_of_asym local asym in
            fail arg.loc (StaticError err)
@@ -1339,8 +1342,8 @@ module Make (G : sig val global : Global.t end) = struct
                    fail loc (Cannot_unpack {resource; state; situation})
                 end
              | None -> 
-                   let (addr,state) = 
-                     Explain.missing_ownership names original_local pointer in
+                let (addr,state) = 
+                  Explain.missing_ownership names original_local pointer in
                 let used = S.used_resource_for_pointer local pointer in
                 fail loc (Missing_ownership {addr; state; used; situation})
            in
@@ -1991,7 +1994,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
-     - use Explain in the right places.
+     - not produce explanation multiple times
      - combine Explain with counter-models
      - check resource definition well-formedness
      - check globals with expressions

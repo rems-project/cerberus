@@ -325,22 +325,19 @@ module Make (G : sig val global : Global.t end) = struct
         (List.map RE.vars_in (L.all_resources local)) relevant 
     in
     let open Pp in
-    let pp = 
-      let resource_pp = Pp.list RE.pp resources in
-      let var_pp = 
-        Pp.list_filtered (fun (c,value) -> 
-            let (Base bt) = c.veclass.sort in
-            let relevant = not (SymSet.is_empty (SymSet.inter relevant c.veclass.l_elements)) in
-            match relevant, not c.good_name, value with
-            | true, _, Some v -> Some (Path.pp c.path ^^^ colon ^^^ BT.pp false bt ^^^ equals ^^ equals ^^^ !^v)
-            | true, true, None -> Some (Path.pp c.path ^^^ colon ^^^ BT.pp false bt)
-            | _ -> None
-          ) veclasses_with_values
-      in
-      Pp.item "resources" resource_pp ^/^
-        Pp.item "logical variables" var_pp
+    let resource_pp = List.map RE.pp resources in
+    let var_pp = 
+      List.filter_map (fun (c,value) -> 
+          let (Base bt) = c.veclass.sort in
+          let relevant = not (SymSet.is_empty (SymSet.inter relevant c.veclass.l_elements)) in
+          match relevant, not c.good_name, value with
+          | true, _, Some v -> Some (Path.pp c.path ^^^ colon ^^^ BT.pp false bt ^^^ equals ^^ equals ^^^ !^v)
+          | true, true, None -> Some (Path.pp c.path ^^^ colon ^^^ BT.pp false bt)
+          | _ -> None
+        ) veclasses_with_values
     in
-    pp
+    (resource_pp, var_pp)
+
 
 
 
@@ -348,28 +345,31 @@ module Make (G : sig val global : Global.t end) = struct
     let explanation = explanation names local in
     (pp_state local explanation None SymSet.empty )
 
+  let undefined_behaviour names local model = 
+    let explanation = explanation names local in
+    (pp_state local explanation model SymSet.empty)
+
   let missing_ownership names local it = 
     let explanation = explanation names local in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, Some (pp_state local explanation None (IT.vars_in it)))
+    (it_pp, pp_state local explanation None (IT.vars_in it))
 
   let unsatisfied_constraint names local lc model = 
     let explanation = explanation names local in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    (lc_pp, Some (pp_state local explanation model (LC.vars_in lc)))
-
+    (lc_pp, pp_state local explanation model (LC.vars_in lc))
 
   let resource names local re = 
     let explanation = explanation names local in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, Some (pp_state local explanation None (RE.vars_in re)))
+    (re_pp, pp_state local explanation None (RE.vars_in re))
 
   let resources names local (re1, re2) = 
     let explanation = explanation names local in
     let vars = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    ((re1, re2), Some (pp_state local explanation None vars))
+    ((re1, re2), pp_state local explanation None vars)
     
 
 

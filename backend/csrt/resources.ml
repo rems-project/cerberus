@@ -43,29 +43,28 @@ type t =
 
 type resource = t
 
-let pp = function
-  | Block {pointer; size; block_type} ->
-     let typ_pp = match block_type with
-       | Nothing -> !^"Block"
-       | Uninit -> !^"Uninit"
-       | Padding -> !^"Padding"
-     in
-     c_app typ_pp [IndexTerms.pp pointer; Z.pp size]
-  | Region {pointer; size} ->
-     !^"Region" ^^ parens (IndexTerms.pp pointer ^^ comma ^^ IndexTerms.pp size)
-  | Points {pointer; pointee; size} ->
-     c_app (!^"Points")
-       [IndexTerms.pp pointer; Sym.pp pointee; Z.pp size]
-  | Predicate {name; iargs; oargs} ->
-     let args = 
-       List.map IndexTerms.pp iargs @ 
-       List.map Sym.pp oargs
-     in
-     match name with
-     | Id id -> 
-        c_app !^id args
-     | Tag tag ->
-        c_app (!^"StoredStruct" ^^ parens (Sym.pp tag)) args
+let pp resource = 
+  let rname, args = match resource with
+    | Block {pointer; size; block_type} ->
+       let rname = match block_type with
+         | Nothing -> !^"Block"
+         | Uninit -> !^"Uninit"
+         | Padding -> !^"Padding"
+       in
+       (rname, [IndexTerms.pp pointer; Z.pp size])
+    | Region {pointer; size} ->
+       (!^"Region",  [IndexTerms.pp pointer; IndexTerms.pp size])
+    | Points {pointer; pointee; size} ->
+       (!^"Points", [IndexTerms.pp pointer; Sym.pp pointee; Z.pp size])
+    | Predicate {name; iargs; oargs} ->
+       let rname = match name with
+         | Id id -> !^id
+         | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
+       in
+       let args = List.map IndexTerms.pp iargs @ List.map Sym.pp oargs in
+       (rname, args)
+  in
+  c_app rname args
           
         
 

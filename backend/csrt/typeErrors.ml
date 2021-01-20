@@ -52,6 +52,9 @@ type sym_or_string =
   | String of string
 
 
+type state_pp = doc list * doc list
+
+
 type type_error = 
   | Unbound_name of sym_or_string
   | Name_bound_twice of sym_or_string
@@ -60,13 +63,13 @@ type type_error =
   | Missing_predicate of string
   | Missing_member of BT.tag * BT.member
 
-  | Missing_ownership of {addr : doc; state : doc option; used : (loc list) option; situation : situation}   
-  | Unknown_resource_size of {resource: doc; state : doc option; situation : situation}
-  | Missing_resource of {resource : doc; state : doc option; used: (loc list) option; situation : situation}
-  | Resource_mismatch of {has: doc; state : doc option; expect: doc; situation : situation}
-  | Cannot_unpack of {resource : doc; state : doc option; situation : situation}
-  | Uninitialised_read of {is_member : BT.member option; state : doc}
-  | Unused_resource of {resource: doc; state : doc option}
+  | Missing_ownership of {addr : doc; state : state_pp; used : (loc list) option; situation : situation}   
+  | Unknown_resource_size of {resource: doc; state : state_pp; situation : situation}
+  | Missing_resource of {resource : doc; state : state_pp; used: (loc list) option; situation : situation}
+  | Resource_mismatch of {has: doc; state : state_pp; expect: doc; situation : situation}
+  | Cannot_unpack of {resource : doc; state : state_pp; situation : situation}
+  | Uninitialised_read of {is_member : BT.member option; state : state_pp}
+  | Unused_resource of {resource: doc; state : state_pp}
   | Misaligned of access
 
   | Number_members of {has: int; expect: int}
@@ -74,12 +77,12 @@ type type_error =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it : 'bt IndexTerms.term -> type_error
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Unsat_constraint of {constr : doc; state : doc option}
+  | Unsat_constraint of {constr : doc; state : state_pp}
   | Unconstrained_logical_variable of Sym.t
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * Model.t option (*  *)
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_pp (*  *)
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -105,8 +108,23 @@ let pp_type_error te =
       Pp.list Loc.pp locs
   in
   let pp_used = Option.map pp_o_used in
-  let pp_state state = !^"in state" ^/^ state in
-  let pp_o_state = Option.map pp_state in
+  let in_state, consider_state = 
+    let pp_state (resources,vars) =
+      let resource_pp = match resources with
+      | [] -> None
+      | _ -> Some (!^"memory ownership:" ^^^ flow (comma ^^ break 1) resources)
+      in
+      let var_pp = match vars with
+      | [] -> None
+      | _ -> Some (!^"logical variables:" ^^^ flow (comma ^^ break 1) vars)
+      in
+      flow (comma ^^ break 1) (Option.list [resource_pp; var_pp]) 
+    in
+    let in_state s = !^"In state:" ^^^ pp_state s in
+    let consider_state s = !^"Consider the state:" ^^^ pp_state s in
+    (in_state, consider_state)
+  in
+
 
   match te with
   | Unbound_name unbound ->
@@ -136,32 +154,32 @@ let pp_type_error te =
        !^"Missing ownership of location" ^^^ 
          addr ^^^ for_situation situation 
      in
-     (msg, Option.list [pp_o_state state; pp_used used])
+     (msg, in_state state :: Option.list [pp_used used])
   | Unknown_resource_size {resource; state; situation} ->
      let msg = 
        !^"Cannot tell size of resource" ^^^ 
          resource ^^^ for_situation situation 
      in
-     (msg, Option.list [pp_o_state state])
+     (msg, [in_state state])
   | Missing_resource {resource; state; used; situation} ->
      let msg = !^"Missing resource" ^^^ resource ^^^ for_situation situation in
-     (msg, Option.list [pp_o_state state; pp_used used] )
+     (msg, in_state state :: Option.list [pp_used used] )
   | Resource_mismatch {has; state; expect; situation} ->
      let msg = !^"Need a resource" ^^^ has ^^^ !^"but have resource" ^^^ expect in
-     (msg, Option.list [pp_o_state state])
+     (msg, [in_state state])
   | Cannot_unpack {resource; state; situation} ->
      let msg = !^"Cannot unpack resource" ^^^ resource ^^^ for_situation situation in
-     (msg, Option.list [pp_o_state state])
+     (msg, [in_state state])
 
   | Uninitialised_read {is_member; state} ->
      let msg = match is_member with
        | None -> !^"Trying to read uninitialised data"
        | Some m -> !^"Trying to read uninitialised struct member" ^^^ Id.pp m
      in
-     (msg, [pp_state state])
+     (msg, [in_state state])
   | Unused_resource {resource;state} ->
      let msg = !^"Left-over unused resource" ^^^ resource in
-     (msg, Option.list [pp_o_state state])
+     (msg, [in_state state])
   | Misaligned access ->
      let msg = match access with
      | Kill -> !^"Misaligned de-allocation operation"
@@ -188,20 +206,16 @@ let pp_type_error te =
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Unsat_constraint {constr;state} ->
      let msg = !^"Unsatisfied constraint" ^^^ constr in
-     (msg, Option.list [pp_o_state state])
+     (msg, [consider_state state])
   | Unconstrained_logical_variable name ->
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
   | Kind_mismatch {has; expect} ->
      (!^"Expected" ^^^ Kind.pp expect ^^^ 
         !^"but found" ^^^ Kind.pp has, [])
 
-  | Undefined_behaviour (undef, omodel) -> 
+  | Undefined_behaviour (undef, state) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
-     let extras = match omodel with 
-       | Some model -> [!^ub; !^"Consider the case:" ^/^ Model.pp model] 
-       | None -> [!^ub] 
-     in
-     (!^"Undefined behaviour", extras)
+     (!^"Undefined behaviour", [!^ub; consider_state state])
   | Unspecified _ctype ->
      (!^"Unspecified value", [])
   | StaticError err ->

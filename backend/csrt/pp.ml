@@ -196,7 +196,7 @@ let headline a =
   (if !print_level >= 2 then hardline else empty) ^^
     format [FG(Magenta,Bright)] ("# " ^ a)
 
-let paction a = format [FG (Default,Bright)] (a ^ " ")
+let bold a = format [FG (Default,Bright)] a
 
 let action a = format [FG (Cyan,Dark)] ("## " ^ a ^ " ")
 

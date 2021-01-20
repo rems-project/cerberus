@@ -191,20 +191,10 @@ let get_predicate_def global predicate_name =
      | None -> None
      | Some decl ->
         let pred = decl.stored_struct_predicate in
-        let iargs = [(pred.value, LS.Base Loc)] in
+        let iargs = [(pred.pointer, LS.Base Loc)] in
         let oargs = [(pred.value, LS.Base (Struct tag))] in
-        let pack_functions =
-          match iargs with
-          | [] -> [(pred.pack_function)]
-          | _ -> 
-             Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
-        in
-        let unpack_functions = 
-          match iargs with
-          | [] -> [(pred.unpack_function)]
-          | _ ->
-             Debug_ocaml.error "struct predicate unexpectedly applied to wrong number of arguments"
-        in
+        let pack_functions = [(pred.pack_function)] in
+        let unpack_functions = [(pred.unpack_function)] in
         Some {iargs; oargs; pack_functions; unpack_functions}
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
