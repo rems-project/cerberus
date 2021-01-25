@@ -250,9 +250,10 @@ module Make (G : sig val global : Global.t end) = struct
           ) [] (L.all_logical local)
       in
       let with_all_variables =
-        List.fold_left (fun veclasses (c, (l, _)) ->
+        List.fold_left (fun veclasses (c, (l, bt)) ->
             List.map (fun veclass ->
-                if is_in_veclass veclass l 
+                if is_in_veclass veclass l || 
+                     should_be_in_veclass local veclass (S (bt, l), bt)
                 then add_c c veclass else veclass
               ) veclasses
           ) with_logical_variables (L.all_computational local)

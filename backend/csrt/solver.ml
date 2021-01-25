@@ -32,19 +32,23 @@ module Make (G : sig val global : Global.t end) = struct
   let get_model () = Z3.Solver.get_model solver
 
 
-  let constraint_holds local lc = 
-    let sc = SolverConstraints.of_index_term G.global (LC.unpack (LC.negate lc)) in
-    let lcs = sc :: L.all_solver_constraints local in
-    (* let () = debug_typecheck_lcs lcs (local, global) in *)
-    let checked = z3_wrapper (lazy (Z3.Solver.check solver lcs)) in
-    match checked with
+  let constraint_holds local constr = 
+    let to_check = 
+      Z3.Boolean.mk_not ctxt (
+          Z3.Boolean.mk_implies ctxt
+            (Z3.Boolean.mk_and ctxt (L.all_solver_constraints local)) 
+            (SolverConstraints.of_index_term G.global (LC.unpack constr))
+        )
+    in
+    match z3_wrapper (lazy (Z3.Solver.check solver [to_check])) with
     | UNSATISFIABLE -> true
     | SATISFIABLE -> false
     | UNKNOWN -> 
        let open Pp in
        print stderr !^"internal error: constraint solver returned 'Unknown'";
        print stderr (item "reason" (!^(Z3.Solver.get_reason_unknown solver)));
-       print stderr (item "lcs" !^(String.concat "," (List.map (Z3.Expr.to_string) lcs)));
+       print stderr (item "lc" (LC.pp constr));
+       print stderr (item "checked" !^(Z3.Expr.to_string to_check));
        Debug_ocaml.error "constraint solver returned 'Unknown'"
 
 
