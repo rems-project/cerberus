@@ -40,7 +40,12 @@ module Make (G : sig val global : Global.t end) = struct
     match checked with
     | UNSATISFIABLE -> true
     | SATISFIABLE -> false
-    | UNKNOWN -> false (* Debug_ocaml.error "constraint solver returned Unknown" *)
+    | UNKNOWN -> 
+       let open Pp in
+       print stderr !^"internal error: constraint solver returned 'Unknown'";
+       print stderr (item "reason" (!^(Z3.Solver.get_reason_unknown solver)));
+       print stderr (item "lcs" !^(String.concat "," (List.map (Z3.Expr.to_string) lcs)));
+       Debug_ocaml.error "constraint solver returned 'Unknown'"
 
 
 
