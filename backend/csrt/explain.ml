@@ -161,6 +161,7 @@ module Make (G : sig val global : Global.t end) = struct
   type explanation = {
       substitutions : (Sym.t, Sym.t) Subst.t list;
       veclasses : veclass_explanation list;
+      relevant : SymSet.t;
     }
 
 
@@ -233,13 +234,20 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let explanation names local =
+  let explanation names local relevant =
     let () = Pp.print stderr (Pp.string "(generating error summary)") in
+    let relevant =
+      List.fold_left (fun acc r -> SymSet.union acc (RE.vars_in r))
+        relevant (L.all_resources local)
+    in
     let veclasses = 
       let with_logical_variables = 
         List.fold_left (fun veclasses (l, ls) ->
-            let (LS.Base bt) = ls in
-            classify local veclasses (l, bt)
+            if SymSet.mem l relevant then
+              let (LS.Base bt) = ls in
+              classify local veclasses (l, bt)
+            else 
+              veclasses
           ) [] (L.all_logical local)
       in
       let with_all_variables =
@@ -284,7 +292,7 @@ module Make (G : sig val global : Global.t end) = struct
             ) to_substitute substs 
         ) veclasses []
     in
-    {substitutions; veclasses}
+    {substitutions; veclasses; relevant}
 
 
 
@@ -311,7 +319,7 @@ module Make (G : sig val global : Global.t end) = struct
     | Some evaluated_expr -> Z3.Expr.to_string evaluated_expr
 
 
-  let pp_state local {substitutions; veclasses} model relevant =
+  let pp_state local {substitutions; veclasses; relevant} model =
     let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
     let veclasses_with_values =
       List.map (fun veclass ->
@@ -319,10 +327,6 @@ module Make (G : sig val global : Global.t end) = struct
           | Some model, Base Integer -> (veclass, Some (evaluate model (S (Integer, veclass.veclass.repr))))
           | _ -> (veclass, None)
         ) veclasses
-    in
-    let relevant = 
-      List.fold_right SymSet.union 
-        (List.map RE.vars_in (L.all_resources local)) relevant 
     in
     let open Pp in
     let resource_pp = List.map RE.pp resources in
@@ -342,34 +346,34 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let state names local = 
-    let explanation = explanation names local in
-    (pp_state local explanation None SymSet.empty )
+    let explanation = explanation names local SymSet.empty in
+    (pp_state local explanation None)
 
   let undefined_behaviour names local model = 
-    let explanation = explanation names local in
-    (pp_state local explanation model SymSet.empty)
+    let explanation = explanation names local SymSet.empty in
+    (pp_state local explanation model)
 
   let missing_ownership names local it = 
-    let explanation = explanation names local in
+    let explanation = explanation names local (IT.vars_in it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, pp_state local explanation None (IT.vars_in it))
+    (it_pp, pp_state local explanation None)
 
   let unsatisfied_constraint names local lc model = 
-    let explanation = explanation names local in
+    let explanation = explanation names local (LC.vars_in lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    (lc_pp, pp_state local explanation model (LC.vars_in lc))
+    (lc_pp, pp_state local explanation model)
 
   let resource names local re = 
-    let explanation = explanation names local in
+    let explanation = explanation names local (RE.vars_in re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state local explanation None (RE.vars_in re))
+    (re_pp, pp_state local explanation None)
 
   let resources names local (re1, re2) = 
-    let explanation = explanation names local in
-    let vars = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
+    let relevant = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
+    let explanation = explanation names local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    ((re1, re2), pp_state local explanation None vars)
+    ((re1, re2), pp_state local explanation None)
     
 
 

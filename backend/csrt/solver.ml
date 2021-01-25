@@ -40,15 +40,12 @@ module Make (G : sig val global : Global.t end) = struct
     match checked with
     | UNSATISFIABLE -> true
     | SATISFIABLE -> false
-    | UNKNOWN -> Debug_ocaml.error "constraint solver returned Unknown"
+    | UNKNOWN -> false (* Debug_ocaml.error "constraint solver returned Unknown" *)
 
 
 
-  let is_consistent local =
-    not (constraint_holds local (LC (Bool false)))
-
-  let is_unreachable local = 
-    not (is_consistent local)
+  let is_inconsistent local =
+    constraint_holds local (LC (Bool false))
 
 
   let equal local it1 it2 =

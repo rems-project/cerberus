@@ -757,7 +757,7 @@ module Make (G : sig val global : Global.t end) = struct
                        let prompt = Spine_LFT.spine loc [] Unpacking local [] clause in
                        let* (lrt, test_local) = handle_prompt prompt in
                        let test_local = bind_logical test_local lrt in
-                       return (if S.is_consistent test_local 
+                       return (if not (S.is_inconsistent test_local)
                                then Some test_local else None)
                      ) (predicate_unpack_functions p def)
                  in
@@ -1083,8 +1083,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let false_if_unreachable (loc : loc) local : (unit fallible, type_error) m =
-      let is_reachable = S.is_consistent local in
-      return (if is_reachable then Normal () else False)
+      return (if S.is_inconsistent local then False else Normal ())
 
 
     (*** pure expression inference ************************************************)
@@ -1117,7 +1116,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEconstrained _ ->
            Debug_ocaml.error "todo: PEconstrained"
         | M_PEundef (_loc, undef) ->
-           if S.is_unreachable local 
+           if S.is_inconsistent local 
            then (Pp.warn !^"unexpected unreachable Undefined"; return False)
            else 
              let expl = Explain.undefined_behaviour names local (S.get_model ()) in
@@ -1873,13 +1872,13 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let check_initial_environment_consistent loc info local =
-    match S.is_consistent local, info with
-    | true, _ -> 
-       return ()
-    | false, `Label -> 
+    match S.is_inconsistent local, info with
+    | true, `Label -> 
        fail loc (Generic (!^"this label makes inconsistent assumptions"))
-    | false, `Fun -> 
+    | true, `Fun -> 
        fail loc (Generic (!^"this function makes inconsistent assumptions"))
+    | _ -> 
+       return ()
 
 
   (* check_function: type check a (pure) function *)
