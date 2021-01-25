@@ -235,7 +235,6 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local relevant =
-    let () = Pp.print stderr (Pp.string "(generating error summary)") in
     let relevant =
       List.fold_left (fun acc r -> SymSet.union acc (RE.vars_in r))
         relevant (L.all_resources local)
