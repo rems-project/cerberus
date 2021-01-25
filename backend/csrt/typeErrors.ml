@@ -111,14 +111,14 @@ let pp_type_error te =
   let in_state, consider_state = 
     let pp_state (resources,vars) =
       let resource_pp = match resources with
-      | [] -> None
-      | _ -> Some (!^"memory ownership:" ^^^ flow (comma ^^ break 1) resources)
+      | [] -> parens !^"no owned memory"
+      | _ -> flow (comma ^^ break 1) resources
       in
       let var_pp = match vars with
       | [] -> None
-      | _ -> Some (!^"logical variables:" ^^^ flow (comma ^^ break 1) vars)
+      | _ -> Some (!^"with logical variables:" ^^^ flow (comma ^^ break 1) vars)
       in
-      flow (comma ^^ break 1) (Option.list [resource_pp; var_pp]) 
+      flow (comma ^^ break 1) (resource_pp :: Option.list [var_pp]) 
     in
     let in_state s = !^"In state:" ^^^ pp_state s in
     let consider_state s = !^"Consider the state:" ^^^ pp_state s in
