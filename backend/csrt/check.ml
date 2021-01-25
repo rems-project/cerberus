@@ -87,7 +87,6 @@ module Make (G : sig val global : Global.t end) = struct
 
   module L = Local.Make(G)
   module S = Solver.Make(G)
-  module Model = Model.Make(G)
   module WT = WellTyped.Make(G)
   module Explain = Explain.Make(G)
   open L
