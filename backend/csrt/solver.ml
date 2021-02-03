@@ -33,14 +33,11 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let constraint_holds local constr = 
-    let to_check = 
-      Z3.Boolean.mk_not ctxt (
-          Z3.Boolean.mk_implies ctxt
-            (Z3.Boolean.mk_and ctxt (L.all_solver_constraints local)) 
-            (SolverConstraints.of_index_term G.global (LC.unpack constr))
-        )
+    let constrs = 
+      SolverConstraints.of_index_term G.global (LC.unpack (LC.negate constr)) ::
+      L.all_solver_constraints local 
     in
-    match z3_wrapper (lazy (Z3.Solver.check solver [to_check])) with
+    match z3_wrapper (lazy (Z3.Solver.check solver constrs)) with
     | UNSATISFIABLE -> true
     | SATISFIABLE -> false
     | UNKNOWN -> 
@@ -48,7 +45,7 @@ module Make (G : sig val global : Global.t end) = struct
        print stderr !^"internal error: constraint solver returned 'Unknown'";
        print stderr (item "reason" (!^(Z3.Solver.get_reason_unknown solver)));
        print stderr (item "lc" (LC.pp constr));
-       print stderr (item "checked" !^(Z3.Expr.to_string to_check));
+       print stderr (item "checked" (flow_map (break 1) string (List.map Z3.Expr.to_string constrs)));
        Debug_ocaml.error "constraint solver returned 'Unknown'"
 
 

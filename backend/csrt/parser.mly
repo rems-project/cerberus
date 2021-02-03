@@ -190,6 +190,7 @@ expr:
   | expr_or_path DIV expr_or_path           { pit ($startpos, $endpos) (Div ($1,$3)) }
   | MIN LPAREN i1 = expr_or_path COMMA i2 = expr_or_path RPAREN    { pit ($startpos, $endpos) (Min (i1,i2)) }
   | MAX LPAREN i1 = expr_or_path COMMA i2 = expr_or_path RPAREN    { pit ($startpos, $endpos) (Max (i1,i2)) }
+  | POWER LPAREN i1 = expr_or_path COMMA i2 = expr_or_path RPAREN  { pit ($startpos, $endpos) (Exp (i1,i2)) }
   | LPAREN expr RPAREN { $2 }
 ;
 

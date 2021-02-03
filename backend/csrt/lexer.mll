@@ -41,6 +41,7 @@ rule read = parse
   | ">="           { GE }
   | "!="           { NE }
   | "=="           { EQEQ }
+  | "power"        { POWER }
   | "min"          { MIN }
   | "max"          { MAX }
   | "."            { DOT }

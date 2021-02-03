@@ -49,6 +49,7 @@ module IndexTerms = struct
     | Sub of t * t
     | Mul of t * t
     | Div of t * t
+    | Exp of t * t
     | Min of t * t
     | Max of t * t
     | MinInteger of CF.Ctype.integerType

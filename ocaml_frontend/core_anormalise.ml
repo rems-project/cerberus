@@ -781,26 +781,26 @@ let check_supported file =
           ()
       ) file.funinfo
   in
-  let _ = 
-    Pmap.iter (fun _sym def -> 
-        match def with
-        | Ctype.StructDef (members, flexible_array_members) ->
-           if List.exists (fun (_,(_,_,ct)) -> ctype_contains_function_pointer ct) members 
-           then 
-             let err = Errors.UNSUPPORTED "function pointers" in
-             Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
-           else if flexible_array_members <> None then
-             let err = Errors.UNSUPPORTED "function pointers" in
-             Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
-           else ()
-        | Ctype.UnionDef members ->
-           if List.exists (fun (_,(_,_,ct)) -> ctype_contains_function_pointer ct) members 
-           then 
-             let err = Errors.UNSUPPORTED "function pointers" in
-             Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
-           else ()
-      ) file.tagDefs
-  in
+  (* let _ = 
+   *   Pmap.iter (fun _sym def -> 
+   *       match def with
+   *       | Ctype.StructDef (members, flexible_array_members) ->
+   *          if List.exists (fun (_,(_,_,ct)) -> ctype_contains_function_pointer ct) members 
+   *          then 
+   *            let err = Errors.UNSUPPORTED "function pointers" in
+   *            Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
+   *          else if flexible_array_members <> None then
+   *            let err = Errors.UNSUPPORTED "function pointers" in
+   *            Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
+   *          else ()
+   *       | Ctype.UnionDef members ->
+   *          if List.exists (fun (_,(_,_,ct)) -> ctype_contains_function_pointer ct) members 
+   *          then 
+   *            let err = Errors.UNSUPPORTED "function pointers" in
+   *            Pp_errors.fatal (Pp_errors.to_string (Loc.unknown, err)); 
+   *          else ()
+   *     ) file.tagDefs
+   * in *)
   ()
 
 let normalise_file file : (ft, lt, ct, bt, st, ut, unit, mapping) Mucore.mu_file = 

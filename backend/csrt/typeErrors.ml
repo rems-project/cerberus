@@ -52,7 +52,7 @@ type sym_or_string =
   | String of string
 
 
-type state_pp = doc list * doc list
+type state_pp = doc
 
 
 type type_error = 
@@ -109,19 +109,8 @@ let pp_type_error te =
   in
   let pp_used = Option.map pp_o_used in
   let in_state, consider_state = 
-    let pp_state (resources,vars) =
-      let resource_pp = match resources with
-      | [] -> parens !^"no owned memory"
-      | _ -> flow (comma ^^ break 1) resources
-      in
-      let var_pp = match vars with
-      | [] -> None
-      | _ -> Some (!^"with logical variables:" ^^^ flow (comma ^^ break 1) vars)
-      in
-      flow (comma ^^ break 1) (resource_pp :: Option.list [var_pp]) 
-    in
-    let in_state s = !^"In state:" ^^^ pp_state s in
-    let consider_state s = !^"Consider the state:" ^^^ pp_state s in
+    let in_state s = !^"In state:" ^/^ s in
+    let consider_state s = !^"Consider the state:" ^/^ s in
     (in_state, consider_state)
   in
 

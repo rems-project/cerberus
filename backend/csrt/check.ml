@@ -1992,8 +1992,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
+     - make spine take original_local argument
      - not produce explanation multiple times
-     - combine Explain with counter-models
      - check resource definition well-formedness
      - check globals with expressions
      - fix problems with order of multiple "requires" clauses

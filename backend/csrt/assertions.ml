@@ -93,6 +93,10 @@ let rec resolve_index_term loc mapping (it: PIT.index_term)
      let* it = aux it in
      let* it' = aux it' in
      return (IT.Div (it, it'))
+  | Exp (it, it') -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.Exp (it, it'))
   | Min (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in

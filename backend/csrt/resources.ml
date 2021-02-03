@@ -43,28 +43,28 @@ type t =
 
 type resource = t
 
-let pp resource = 
-  let rname, args = match resource with
-    | Block {pointer; size; block_type} ->
-       let rname = match block_type with
-         | Nothing -> !^"Block"
-         | Uninit -> !^"Uninit"
-         | Padding -> !^"Padding"
-       in
-       (rname, [IndexTerms.pp pointer; Z.pp size])
-    | Region {pointer; size} ->
-       (!^"Region",  [IndexTerms.pp pointer; IndexTerms.pp size])
-    | Points {pointer; pointee; size} ->
-       (!^"Points", [IndexTerms.pp pointer; Sym.pp pointee; Z.pp size])
-    | Predicate {name; iargs; oargs} ->
-       let rname = match name with
-         | Id id -> !^id
-         | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
-       in
-       let args = List.map IndexTerms.pp iargs @ List.map Sym.pp oargs in
-       (rname, args)
-  in
-  c_app rname args
+let pp_predicate_name = function
+  | Id id -> !^id
+  | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
+
+let pp_predicate {name; iargs; oargs} =
+  let args = List.map IndexTerms.pp iargs @ List.map Sym.pp oargs in
+  c_app (pp_predicate_name name) args
+
+let pp = function
+  | Block {pointer; size; block_type} ->
+     let rname = match block_type with
+       | Nothing -> !^"Block"
+       | Uninit -> !^"Uninit"
+       | Padding -> !^"Padding"
+     in
+     c_app rname [IndexTerms.pp pointer; Z.pp size]
+  | Region {pointer; size} ->
+     c_app !^"Region" [IndexTerms.pp pointer; IndexTerms.pp size]
+  | Points {pointer; pointee; size} ->
+     c_app !^"Points" [IndexTerms.pp pointer; Sym.pp pointee; Z.pp size]
+  | Predicate p ->
+     pp_predicate p
           
         
 

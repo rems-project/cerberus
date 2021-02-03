@@ -7,6 +7,9 @@ module SymSet = Set.Make(Sym)
 module StringMap = Map.Make(String)
 module SymPairMap = Map.Make(SymRel.SymPair)
 
+open Resources
+open Pp
+
 module Make (G : sig val global : Global.t end) = struct 
 
   module L = Local.Make(G)
@@ -140,7 +143,6 @@ module Make (G : sig val global : Global.t end) = struct
     Subst.make_substs naming_subst substs names
 
   let pp_naming = 
-    let open Pp in
     Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Path.pp p))
 
   let naming_of_mapping mapping = 
@@ -152,9 +154,15 @@ module Make (G : sig val global : Global.t end) = struct
   type variable_relation = 
     | Pointee  
 
+  type name_kind = 
+    | Given
+    | Symbol
+    | Derived
+    | Default
+
   type veclass_explanation = {
       path : Path.t;
-      good_name : bool;
+      name_kind : name_kind;
       veclass : veclass;
     }
   
@@ -236,8 +244,9 @@ module Make (G : sig val global : Global.t end) = struct
 
   let explanation names local relevant =
     let relevant =
-      List.fold_left (fun acc r -> SymSet.union acc (RE.vars_in r))
-        relevant (L.all_resources local)
+      List.fold_right (fun r acc -> SymSet.union acc (RE.vars_in r))
+        (L.all_resources local) 
+        (SymSet.union (SymSet.of_list (List.map fst names)) relevant)
     in
     let veclasses = 
       let with_logical_variables = 
@@ -261,24 +270,25 @@ module Make (G : sig val global : Global.t end) = struct
       let (sorted, rels) = veclasses_total_order local with_all_variables in
       let named =
         List.fold_left (fun veclasses_explanation veclass ->
-            let candidate_names = 
-              List.filter_map (fun p -> p) [
-                  has_given_name names veclass; 
-                  has_symbol_name veclass; 
-                  has_derived_name (veclasses_explanation, rels) veclass;
-                ] 
-            in
-            let (path,good_name) = match candidate_names with
-              | p :: _ -> 
-                 let without_labels = Path.remove_labels p in
-                 if List.mem without_labels candidate_names 
-                 then (without_labels, true) 
-                 else (p, true)
-              | _ ->
-                 let name = LabeledName.{label = None; v = make_name veclass} in
-                 (Var name, false)
-            in
-            veclasses_explanation @ [{veclass; path; good_name}]
+            match has_given_name names veclass, 
+                  has_symbol_name veclass,
+                  has_derived_name (veclasses_explanation, rels) veclass with
+            | Some given_name, o_symbol_name, o_derived_name ->
+               let without_labels = Path.remove_labels given_name in
+               let path = 
+                 if Option.equal Path.equal (Some without_labels) (o_symbol_name) ||
+                      Option.equal Path.equal (Some without_labels) (o_derived_name) 
+                 then without_labels
+                 else given_name
+               in
+               veclasses_explanation @ [{veclass; path; name_kind = Given}]
+            | None, Some symbol_name, _ ->
+               veclasses_explanation @ [{veclass; path = symbol_name; name_kind = Symbol}]
+            | None, None, Some derived_name ->
+               veclasses_explanation @ [{veclass; path = derived_name; name_kind = Symbol}]
+            | None, None, None ->
+               let name = LabeledName.{label = None; v = make_name veclass} in
+               veclasses_explanation @ [{veclass; path = Var name; name_kind = Default}]
           ) [] sorted
       in
       named
@@ -319,61 +329,181 @@ module Make (G : sig val global : Global.t end) = struct
     | Some evaluated_expr -> Z3.Expr.to_string evaluated_expr
 
 
-  let pp_state local {substitutions; veclasses; relevant} model =
-    let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in
+  let symbol_it = function
+    | IT.S (_, s) -> SymSet.singleton s
+    | _ -> SymSet.empty
+
+
+  let resource_table_entry o_veclasses_with_values substitutions = function
+    | Block b ->
+       let state = match b.block_type with
+         | Nothing -> "block"
+         | Uninit -> "uninit"
+         | Padding -> "padding"
+       in
+       let entry =
+         ((L, IT.pp (IT.subst_vars substitutions b.pointer)), 
+          (L, Z.pp b.size), 
+          (L, !^state),
+          (L, Pp.empty),
+          (L, Pp.empty)
+         )
+       in
+       (entry, symbol_it b.pointer)
+    | Region r ->
+       let entry = 
+         ((L, IT.pp (IT.subst_vars substitutions r.pointer)), 
+          (L, IT.pp (IT.subst_vars substitutions r.size)), 
+          (L, !^"region"),
+          (L, Pp.empty),
+          (L, Pp.empty)
+         )
+       in
+       (entry, symbol_it r.pointer)
+    | Points p -> 
+       (* take substs into account *)
+       let found = 
+         Option.bind o_veclasses_with_values 
+           (List.find_opt (fun (c,v) -> SymSet.mem p.pointee c.veclass.l_elements))
+       in
+       let entry = match found with
+         | Some (_, Some value) ->
+            ((L, IT.pp (IT.subst_vars substitutions p.pointer)), 
+             (L, Z.pp p.size),
+             (L, !^"owned"),
+             (L, Sym.pp (Sym.substs substitutions p.pointee)),
+             (L, !^value)
+            )
+         | _ ->
+            ((L, IT.pp (IT.subst_vars substitutions p.pointer)), 
+             (L, Z.pp p.size), 
+             (L, !^"owned"),
+             (L, Sym.pp (Sym.substs substitutions p.pointee)), 
+             (L, Pp.empty)
+            )
+       in
+       (entry, SymSet.union (symbol_it p.pointer) (SymSet.singleton p.pointee))
+    | Predicate p ->
+       let entry =
+         ((L, empty), 
+          (L, empty), 
+          (L, pp_predicate p),
+          (L, Pp.empty),
+          (L, Pp.empty)
+         )
+       in
+       (entry, SymSet.empty)
+
+
+  let pp_var relevant reported_pointees (c,value) =
+    let (Base bt) = c.veclass.sort in
+    let relevant = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements relevant)) in
+    let reported = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements reported_pointees)) in
+    let value_pp = match value with 
+      | Some v -> !^v 
+      | None -> Pp.empty
+    in
+    if (not reported) && relevant then
+      match bt with
+      | BT.Loc -> 
+         Some ((L, Path.pp c.path), 
+               (L, Pp.empty), 
+               (L, Pp.empty), 
+               (L, Pp.empty), 
+               (L, value_pp))
+      | _ -> 
+         Some ((L, Pp.empty), 
+               (L, Pp.empty), 
+               (L, Pp.empty), 
+               (L, Path.pp c.path), 
+               (L, value_pp))
+    else
+      None
+
+
+  let pp_state_with_model local {substitutions; veclasses; relevant} o_model =
+    (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
     let veclasses_with_values =
       List.map (fun veclass ->
-          match model, veclass.veclass.sort with
+          match o_model, veclass.veclass.sort with
           | Some model, Base Integer -> (veclass, Some (evaluate model (S (Integer, veclass.veclass.repr))))
           | _ -> (veclass, None)
         ) veclasses
     in
-    let open Pp in
-    let resource_pp = List.map RE.pp resources in
-    let var_pp = 
-      List.filter_map (fun (c,value) -> 
-          let (Base bt) = c.veclass.sort in
-          let relevant = not (SymSet.is_empty (SymSet.inter relevant c.veclass.l_elements)) in
-          match relevant, not c.good_name, value with
-          | true, _, Some v -> Some (Path.pp c.path ^^^ colon ^^^ BT.pp false bt ^^^ equals ^^ equals ^^^ !^v)
-          | true, true, None -> Some (Path.pp c.path ^^^ colon ^^^ BT.pp false bt)
-          | _ -> None
-        ) veclasses_with_values
+    let (resource_lines, reported_pointees) = 
+      List.fold_right (fun resource (acc_table, acc_pointees) ->
+          let ((pointer, size, state, variable, o_value), reported_pointees) = 
+            resource_table_entry (Some veclasses_with_values) substitutions resource
+          in
+          ((pointer, size, state, variable, o_value) :: acc_table,
+           SymSet.union reported_pointees acc_pointees)
+        ) (L.all_resources local) ([], SymSet.empty)
     in
-    (resource_pp, var_pp)
+    let var_lines = 
+      List.filter_map (pp_var relevant reported_pointees) 
+        veclasses_with_values
+    in
+    table5 ("location", "size", "state", "variable", "value") (resource_lines @ var_lines)
+
+
+
+  let pp_state local {substitutions; veclasses; relevant} =
+    (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
+    let veclasses_with_values = List.map (fun veclass -> (veclass, None)) veclasses in
+    let (resource_lines, reported_pointees) = 
+      List.fold_right (fun resource (acc_table, acc_pointees) ->
+          let ((pointer, size, state, variable, _), reported_pointees) = 
+            resource_table_entry (Some veclasses_with_values) substitutions resource
+          in
+          ((pointer, size, state, variable) :: acc_table,
+           SymSet.union reported_pointees acc_pointees)
+        ) (L.all_resources local) ([], SymSet.empty)
+    in
+    let var_lines = 
+      List.filter_map (fun cv -> 
+          Option.map (fun (a,b,c,d,_) -> (a,b,c,d)) 
+            (pp_var relevant reported_pointees cv)
+        )
+        veclasses_with_values
+    in
+    table4 ("location", "size", "state", "variable") (resource_lines @ var_lines)
+
+
+
+
 
 
 
 
   let state names local = 
     let explanation = explanation names local SymSet.empty in
-    (pp_state local explanation None)
+    pp_state local explanation
 
-  let undefined_behaviour names local model = 
+  let undefined_behaviour names local o_model = 
     let explanation = explanation names local SymSet.empty in
-    (pp_state local explanation model)
+    pp_state_with_model local explanation o_model
 
   let missing_ownership names local it = 
     let explanation = explanation names local (IT.vars_in it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, pp_state local explanation None)
+    (it_pp, pp_state local explanation)
 
-  let unsatisfied_constraint names local lc model = 
+  let unsatisfied_constraint names local lc o_model = 
     let explanation = explanation names local (LC.vars_in lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    (lc_pp, pp_state local explanation model)
+    (lc_pp, pp_state_with_model local explanation o_model)
 
   let resource names local re = 
     let explanation = explanation names local (RE.vars_in re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state local explanation None)
+    (re_pp, pp_state local explanation)
 
   let resources names local (re1, re2) = 
     let relevant = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
     let explanation = explanation names local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    ((re1, re2), pp_state local explanation None)
+    ((re1, re2), pp_state local explanation)
     
 
 
