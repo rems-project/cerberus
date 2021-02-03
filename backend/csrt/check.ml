@@ -842,12 +842,7 @@ module Make (G : sig val global : Global.t end) = struct
         ( fun ct -> 
           let* ct = ct_of_ct loc ct in
           let it = S (BT.Loc, ret) in
-          let lcs = 
-            [LC.LC (IT.Null it);
-             LC.LC (IT.Representable (ST_Ctype ct, it));
-             (* check: aligned? *)
-             LC.LC (IT.Aligned (ST.of_ctype ct, it))]
-          in
+          let lcs = [LC.LC (IT.Null it)] in
           return (ret, Loc, lcs) )
         ( fun sym -> return (ret, FunctionPointer sym, []) )
         ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
@@ -1439,16 +1434,16 @@ module Make (G : sig val global : Global.t end) = struct
     (*** auxiliary ****************************************************************)
 
 
-    let json_local loc local : Yojson.Safe.t = 
+    let json_local loc names local : Yojson.Safe.t = 
       `Assoc [("loc", json_loc loc);
-              ("context_or_unreachable", `Variant ("context", Some (L.json local)))]
+              ("context", `Variant ("context", Some (Explain.json_state names local)))]
 
-    let json_false loc  : Yojson.Safe.t = 
+    let json_false loc : Yojson.Safe.t = 
       `Assoc [("loc", json_loc loc);
-              ("context_or_unreachable", `Variant ("unreachable", None))]
+              ("context", `Variant ("unreachable", None))]
 
-    let json_local_or_false loc = function
-      | Normal local -> json_local loc local
+    let json_local_or_false loc names = function
+      | Normal local -> json_local loc names local
       | False -> json_false loc
 
 
@@ -1798,7 +1793,7 @@ module Make (G : sig val global : Global.t end) = struct
         : (L.t fallible, type_error) m =
       let (M_Expr (loc, _, _)) = e in    
       let local = delta ++ marked ++ local in 
-      let () = print_json (lazy (json_local loc local)) in
+      let () = print_json (lazy (json_local loc names local)) in
       let* result = check_expr (local, labels) e typ in
       match result with
       | False -> 

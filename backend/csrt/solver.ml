@@ -11,7 +11,7 @@ module LC = LogicalConstraints
 let initial_context =
   Z3.mk_context [
       ("model", "true");
-      ("well_sorted_check","true")
+      ("well_sorted_check","true");
     ] 
 
 

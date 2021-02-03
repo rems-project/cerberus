@@ -49,6 +49,11 @@ let pp ppf oa =
   | Some a -> !^"Some" ^^^ parens (ppf a)
   | None -> !^"None"
 
+let json jsonf oa =
+  match oa with
+  | Some a -> jsonf a
+  | None -> `Null
+
 
 let to_list = function
   | Some a -> [a]

@@ -437,20 +437,34 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let pp_state_with_model local {substitutions; veclasses; relevant} o_model =
+  let pp_state_with_model local explanation o_model =
     let lines = 
       List.map (fun (a,b,c,d,e) -> ((L,a), (L,b), (L,c), (L,d), (L,e)))
-        (pp_state_aux local {substitutions; veclasses; relevant} o_model)
+        (pp_state_aux local explanation o_model)
     in
     table5 ("location", "size", "state", "variable", "value") lines
       
 
-  let pp_state local {substitutions; veclasses; relevant} =
+  let pp_state local explanation =
     let lines = 
       List.map (fun (a,b,c,d,_) -> ((L,a), (L,b), (L,c), (L,d)))
-        (pp_state_aux local {substitutions; veclasses; relevant} None)
+        (pp_state_aux local explanation None)
     in
     table4 ("location", "size", "state", "variable") lines
+
+
+  let json_state names local : Yojson.Safe.t = 
+    let explanation = explanation names local SymSet.empty in
+    let lines = 
+      List.map (fun (a,b,c,d,_) : Yojson.Safe.t ->
+          let jsonf doc = `String (Pp.plain doc) in
+          `Assoc [("location", Option.json jsonf a);
+                  ("size", Option.json jsonf b);
+                  ("state", Option.json jsonf c);
+                  ("variable", Option.json jsonf d)]
+        ) (pp_state_aux local explanation None)
+    in
+    `List lines
 
 
   let state names local = 
