@@ -123,21 +123,27 @@ let nats n =
 module IntMap = Map.Make(Int)
 
 let (table2, table3, table4, table5) = 
-  let table (n_rows : int) (headers: string list) (lines : ((alignment * doc) list) list) =
+  let table (n_rows : int) (headers: string list) (lines : ((alignment * doc option) list) list) =
+    let placeholder = minus ^^ minus in
+
     let maxes = 
       List.fold_left (fun maxes line ->
           let (_, maxes) = 
-            List.fold_left (fun (j, maxes) (_alignment, cell) ->
+            List.fold_left (fun (j, maxes) (_alignment, o_cell) ->
                 let j_max = match IntMap.find_opt j maxes with
                   | Some j_max -> j_max
                   | None -> 0
                 in
-                let maxes = IntMap.add j (max j_max (requirement cell)) maxes in
+                let req = match o_cell with
+                  | Some cell -> requirement cell
+                  | None -> requirement placeholder
+                in
+                let maxes = IntMap.add j (max j_max req) maxes in
                 (j + 1, maxes)
               ) (0, maxes) line
           in
           maxes
-        ) IntMap.empty (List.map (fun s -> (L, string s)) headers :: lines) 
+        ) IntMap.empty (List.map (fun s -> (L, Some (string s))) headers :: lines) 
     in
     let headers = 
       List.mapi (fun j h ->
@@ -146,7 +152,13 @@ let (table2, table3, table4, table5) =
     in
     let padded_lines = 
       List.map (fun line ->
-          List.mapi (fun j (alignment,cell) -> pad alignment (IntMap.find j maxes) cell) line
+          List.mapi (fun j (alignment,o_cell) -> 
+              match o_cell with
+              | Some cell ->
+                 pad alignment (IntMap.find j maxes) cell
+              | None ->
+                 pad alignment (IntMap.find j maxes) placeholder
+            ) line
         ) lines
     in
     separate (space ^^ bar ^^ space) headers ^^ hardline ^^
