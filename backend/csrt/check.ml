@@ -1556,9 +1556,6 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Kill (M_Static cti, asym) -> 
               let* arg = arg_of_asym local asym in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let* () = 
-                ensure_aligned loc local Kill (S (arg.bt, arg.lname)) cti.ct
-              in
               let size = Memory.size_of_ctype cti.ct in
               let* local = ownership_request loc (Access Kill) local (S (arg.bt, arg.lname)) 
                              (Num size) in
@@ -1569,9 +1566,6 @@ module Make (G : sig val global : Global.t end) = struct
               let* varg = arg_of_asym local vasym in
               let* () = ensure_base_type loc ~expect:act.item.bt varg.bt in
               let* () = ensure_base_type loc ~expect:Loc parg.bt in
-              let* () = 
-                ensure_aligned loc local (Store None) (S (parg.bt, parg.lname)) act.item.ct
-              in
               (* The generated Core program will in most cases before this
                  already have checked whether the store value is
                  representable and done the right thing. Pointers, as I
@@ -1596,9 +1590,6 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Load (act, pasym, _mo) -> 
               let* parg = arg_of_asym local pasym in
               let* () = ensure_base_type loc ~expect:Loc parg.bt in
-              let* () = 
-                ensure_aligned loc local (Load None) (S (parg.bt, parg.lname)) act.item.ct
-              in
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.item.ct in
               let* constraints = 
