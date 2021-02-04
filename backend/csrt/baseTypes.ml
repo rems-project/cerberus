@@ -109,7 +109,4 @@ let of_sct (Sctype (_, sct_)) =
   | Integer _ -> Integer
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
-
-
-
-
+  | Function _ -> Debug_ocaml.error "todo: function types"

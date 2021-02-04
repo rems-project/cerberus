@@ -98,8 +98,6 @@ type 'bt term =
   | NthList of int * 'bt term
   (* sets *)
   | SetMember of 'bt term * 'bt term
-  | SetAdd of 'bt term * 'bt term
-  | SetRemove of 'bt term * 'bt term
   | SetUnion of ('bt term) List1.t
   | SetIntersection of ('bt term) List1.t
   | SetDifference of 'bt term * 'bt term
@@ -230,10 +228,6 @@ let rec equal it it' =
   (* sets *)
   | SetMember (t1,t2), SetMember (t1',t2') ->
      equal t1 t1' && equal t1' t2'
-  | SetAdd (t1,t2), SetAdd (t1',t2') ->
-     equal t1 t1' && equal t1' t2'
-  | SetRemove (t1, t2), SetRemove (t1', t2') ->
-     equal t1 t1' && equal t1' t2'
   | SetUnion ts, SetUnion ts' ->
      List1.equal equal ts ts'
   | SetIntersection ts, SetIntersection ts' ->
@@ -302,8 +296,6 @@ let rec equal it it' =
   | NthList _, _
   (* sets *)
   | SetMember _, _
-  | SetAdd _, _
-  | SetRemove _, _
   | SetUnion _, _
   | SetIntersection _, _
   | SetDifference _, _
@@ -342,15 +334,15 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | Div (it1,it2) -> 
        mparens (aux true it1 ^^^ slash ^^^ aux true it2)
     | Exp (it1,it2) -> 
-       mparens (aux true it1 ^^^ caret ^^^ aux true it2)
+       c_app !^"power" [aux true it1; aux true it2]
     | Rem_t (it1,it2) -> 
-       mparens (!^ "rem_t" ^^^ aux true it1 ^^^ aux true it2)
+       c_app !^"rem_t" [aux true it1; aux true it2]
     | Rem_f (it1,it2) -> 
-       mparens (!^ "rem_f" ^^^ aux true it1 ^^^ aux true it2)
+       c_app !^"rem_f" [aux true it1; aux true it2]
     | Min (it1,it2) -> 
-       mparens (!^ "min" ^^^ aux true it1 ^^^ aux true it2)
+       c_app !^"min" [aux true it1; aux true it2]
     | Max (it1,it2) -> 
-       mparens (!^ "max" ^^^ aux true it1 ^^^ aux true it2)
+       c_app !^ "max" [aux true it1; aux true it2]
     (* comparisons *)
     | EQ (o1,o2) -> 
        mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
@@ -390,9 +382,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (ampersand ^^ aux true t ^^ !^"->" ^^ Id.pp member)
     (* pointers *)
     | Null o1 -> 
-       mparens (!^"null" ^^ parens (aux false o1))
+       c_app !^"null" [aux false o1]
     | AllocationSize t1 ->
-       mparens (!^"allocationSize" ^^ parens (aux false t1))
+       c_app !^"allocationSize" [aux false t1]
     | Offset (t1, t2) ->
        mparens (aux true t1 ^^^ plus ^^^ aux true t2)
     | LocLT (o1,o2) -> 
@@ -411,16 +403,16 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (parens(!^"integer") ^^ aux true t)
     (* representability *)
     | MinInteger it ->
-       mparens (!^"min" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
+       c_app !^"min" [CF.Pp_core_ctype.pp_integer_ctype it]
     | MaxInteger it ->
-       mparens (!^"max" ^^ parens (CF.Pp_core_ctype.pp_integer_ctype it))
+       c_app !^"max" [CF.Pp_core_ctype.pp_integer_ctype it]
     | Representable (rt, t) ->
        c_app !^"repr" [ST.pp rt; aux false t]
     (* lists *)
     | Head (o1) -> 
-       mparens (!^"hd" ^^ parens (aux false o1))
+       c_app !^"hd" [aux false o1]
     | Tail (o1) -> 
-       mparens (!^"tl" ^^^ parens (aux false o1))
+       c_app !^"tl" [aux false o1]
     | Nil _ -> 
        brackets empty
     | Cons (t1,t2) -> 
@@ -431,19 +423,15 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux true t ^^ brackets !^(string_of_int n))
     (* sets *)
     | SetMember (t1,t2) ->
-       mparens (aux false t1 ^^^ !^"IN" ^^^ aux false t2)
-    | SetAdd (t1,t2) ->
-       mparens (braces (aux false t1) ^^^ !^"union" ^^^ aux false t2)
-    | SetRemove (t1, t2) ->
-       mparens (aux false t1 ^^^ !^"/" ^^^ braces (aux false t2))
+       c_app !^"member" [aux false t1; aux false t2]
     | SetUnion ts ->
-       mparens (!^"union" ^^^ Pp.list (aux false) (List1.to_list ts))
+       c_app !^"union" (List.map (aux false) (List1.to_list ts))
     | SetIntersection ts ->
-       mparens (!^"intersection" ^^^ Pp.list (aux false) (List1.to_list ts))
+       c_app !^"intersection" (List.map (aux false) (List1.to_list ts))
     | SetDifference (t1, t2) ->
-       mparens (aux false t1 ^^^ !^"/" ^^^ aux false t2)
+       c_app !^"difference" [aux false t1; aux false t2]
     | Subset (t1, t2) ->
-       mparens (aux false t1 ^^^ !^"<=" ^^^ aux false t2)
+       c_app !^"subset" [aux false t1; aux false t2]
   in
   aux false it
 
@@ -508,8 +496,6 @@ let rec vars_in it : SymSet.t =
   | NthList (_,it) -> vars_in it
   (* sets *)
   | SetMember (t1,t2) -> vars_in_list [t1;t2]
-  | SetAdd (t1,t2) -> vars_in_list [t1;t2]
-  | SetRemove (t1, t2) -> vars_in_list [t1;t2]
   | SetUnion ts -> vars_in_list (List1.to_list ts)
   | SetIntersection ts -> vars_in_list (List1.to_list ts)
   | SetDifference (t1, t2) -> vars_in_list [t1;t2]
@@ -600,10 +586,6 @@ let map_sym f it : t =
     (* sets *)
     | SetMember (t1,t2) ->
        SetMember (aux t1, aux t2)
-    | SetAdd (t1,t2) ->
-       SetAdd (aux t1, aux t2)
-    | SetRemove (t1, t2) ->
-       SetRemove (aux t1, aux t2)
     | SetUnion ts ->
        SetUnion (List1.map (aux) ts)
     | SetIntersection ts ->

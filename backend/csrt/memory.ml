@@ -106,6 +106,7 @@ let rec representable_ctype struct_decls (Sctype (_, ct) : Sctypes.t) about =
   | Integer it -> representable_integer_type it about
   | Pointer _ -> representable_pointer about
   | Struct tag -> representable_struct struct_decls tag about
+  | Function _ -> Debug_ocaml.error "todo: function types"
 
 and representable_struct struct_decls tag about =
   let decl = SymMap.find tag struct_decls in

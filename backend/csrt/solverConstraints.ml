@@ -314,14 +314,6 @@ let rec of_index_term global it =
      let a = of_index_term global it in
      let a' = of_index_term global it' in
      Z3.Set.mk_membership ctxt a a'
-  | SetAdd (it,it') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Set.mk_set_add ctxt a a'
-  | SetRemove (it, it') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Set.mk_del ctxt a a'
   | SetUnion its ->
      let ts = List.map (of_index_term global) 
                 (List1.to_list its) in

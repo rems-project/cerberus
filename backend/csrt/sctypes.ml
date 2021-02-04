@@ -1,52 +1,70 @@
-module CF = Cerb_frontend
+open Cerb_frontend
 
 (* copying subset of Ctype.ctype *)
 
 
 type t_ =
   | Void
-  | Integer of CF.Ctype.integerType
-  | Pointer of CF.Ctype.qualifiers * t
+  | Integer of Ctype.integerType
+  | Pointer of Ctype.qualifiers * t
   | Struct of Sym.t
+  | Function of (* has_proto *)bool * (Ctype.qualifiers * t)
+                * (Ctype.qualifiers * t * (* is_register *)bool) list
+                * (* is_variadic *)bool
+
 
 and t = 
-  Sctype of CF.Annot.annot list * t_
+  Sctype of Annot.annot list * t_
 
 let pointer_sct sct = 
-  Sctype ([], Pointer (CF.Ctype.no_qualifiers, sct))
+  Sctype ([], Pointer (Ctype.no_qualifiers, sct))
 
 
-let rec to_ctype : t -> CF.Ctype.ctype = 
+let rec to_ctype : t -> Ctype.ctype = 
   fun (Sctype (annots, sct_)) ->
   let ct_ = match sct_ with
-    | Void -> CF.Ctype.Void
+    | Void -> Ctype.Void
     | Integer it -> Basic (Integer it)
     | Pointer (q,t) -> Pointer (q, to_ctype t)
     | Struct t -> Struct t
+    | Function (has_proto, (ret_q,ret_ct), args, variadic) ->
+       let args = 
+         List.map (fun (arg_q, arg_ct, is_reg) -> (arg_q, to_ctype arg_ct, is_reg))
+           args
+       in
+       let ret_ct = to_ctype ret_ct in
+       Function (has_proto, (ret_q, ret_ct), args, variadic)
   in
   Ctype (annots, ct_)
 
 
-let rec of_ctype : CF.Ctype.ctype -> t option =
-  fun (CF.Ctype.Ctype (annots,ct_)) ->
+let rec of_ctype : Ctype.ctype -> t option =
+  fun (Ctype.Ctype (annots,ct_)) ->
   let open Option in
   match ct_ with
-  | CF.Ctype.Void -> 
+  | Ctype.Void -> 
      (Some (Sctype (annots, Void)) : t option)
-  | CF.Ctype.Basic (Integer it) -> 
+  | Ctype.Basic (Integer it) -> 
      (Some (Sctype (annots, Integer it)) : t option)
-  | CF.Ctype.Basic (Floating it) -> 
+  | Ctype.Basic (Floating it) -> 
      None
-  | CF.Ctype.Array _ -> 
+  | Ctype.Array _ -> 
      None
-  | CF.Ctype.Function _ -> 
-     None
-  | CF.Ctype.Pointer (qualifiers,ctype) -> 
+  | Ctype.Function (has_proto, (ret_q,ret_ct), args, variadic) ->
+     let* args = 
+       ListM.mapM (fun (arg_q, arg_ct, is_reg) -> 
+           let* arg_ct = of_ctype arg_ct in
+           return (arg_q, arg_ct, is_reg)
+         ) args
+     in
+     let* ret_ct = of_ctype ret_ct in
+     Some (Sctype (annots, Function (has_proto, (ret_q, ret_ct), args, variadic)))
+  | Ctype.Pointer (qualifiers,ctype) -> 
      let* t = of_ctype ctype in
      Some (Sctype (annots, Pointer (qualifiers, t)))
-  | CF.Ctype.Atomic _ ->
+  | Ctype.Atomic _ ->
      None
-  | CF.Ctype.Struct s ->
+  | Ctype.Struct s ->
      Some (Sctype (annots, Struct s))
   | Union _ ->
      None
@@ -55,9 +73,9 @@ let rec of_ctype : CF.Ctype.ctype -> t option =
 
 
 let equal t1 t2 = 
-  CF.Ctype.ctypeEqual (to_ctype t1) (to_ctype t2)
+  Ctype.ctypeEqual (to_ctype t1) (to_ctype t2)
 
 let pp t = 
-  CF.Pp_core_ctype.pp_ctype (to_ctype t)
+  Pp_core_ctype.pp_ctype (to_ctype t)
 
 

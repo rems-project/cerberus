@@ -277,14 +277,6 @@ module Make (G : sig val global : Global.t end) = struct
            let* (Base bt, t) = infer loc t in
            let* t' = check_aux loc (Base (Set bt)) t' in
            return (Base BT.Bool, SetMember (t, t'))
-        | SetAdd (t,t') ->
-           let* (Base bt, t) = infer loc t in
-           let* t' = check_aux loc (Base (Set bt)) t' in
-           return (Base (Set bt), SetAdd (t, t'))
-        | SetRemove (t,t') ->
-           let* (Base bt, t) = infer loc t in
-           let* t' = check_aux loc (Base (Set bt)) t' in
-           return (Base (Set bt), SetRemove (t, t'))
         | SetUnion its
         | SetIntersection its ->
            let (t, ts) = List1.dest its in
