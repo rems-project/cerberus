@@ -155,7 +155,7 @@ type ('ct, 'TY) mu_memop =
   | M_PtrLe of ('TY asym * 'TY asym)
   | M_PtrGe of ('TY asym * 'TY asym)
   | M_Ptrdiff of ((('ct, 'TY) a) * 'TY asym * 'TY asym)
-  | M_IntFromPtr of ((('ct, 'TY) a) * 'TY asym)
+  | M_IntFromPtr of ((('ct, 'TY) a) * (('ct, 'TY) a) * 'TY asym)
   | M_PtrFromInt of ((('ct, 'TY) a) * (('ct, 'TY) a) * 'TY asym)
   | M_PtrValidForDeref of ((('ct, 'TY) a) * 'TY asym)
   | M_PtrWellAligned of ((('ct, 'TY) a) * 'TY asym)

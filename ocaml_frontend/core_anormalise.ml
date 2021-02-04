@@ -514,10 +514,11 @@ let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr =
      let ct1 = (fensure_ctype__pexpr loc "Ptrdiff: not a ctype" ct1) in
      n_pexpr_in_expr_name_2 (pe1, pe2) (fun (sym1,sym2) ->
      k (M_Ptrdiff (ct1, sym1, sym2)))
-  | (Mem_common.IntFromPtr, [ct1;pe]) ->
+  | (Mem_common.IntFromPtr, [ct1;ct2;pe]) ->
      let ct1 = (fensure_ctype__pexpr loc "IntFromPtr: not a ctype" ct1) in
+     let ct2 = (fensure_ctype__pexpr loc "IntFromPtr: not a ctype" ct2) in
      n_pexpr_in_expr_name pe (fun sym1 ->
-     k (M_IntFromPtr (ct1, sym1)))
+     k (M_IntFromPtr (ct1, ct2, sym1)))
   | (Mem_common.PtrFromInt, [ct1;ct2;pe]) ->
      let ct1 = (fensure_ctype__pexpr loc "PtrFromInt: not a ctype" ct1) in
      let ct2 = (fensure_ctype__pexpr loc "PtrFromInt: not a ctype" ct2) in
