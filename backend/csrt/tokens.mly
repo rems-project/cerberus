@@ -1,4 +1,4 @@
-%token <int> NUM
+%token <Z.t> NUM
 %token <string> ID
 /* %token <string> PID */
 %token TRUE FALSE

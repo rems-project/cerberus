@@ -32,7 +32,7 @@ let a_pack loc annot type_annot item =
 type 'TY asym = (Symbol.sym, 'TY) a
 type 'TY asyms = ('TY asym) list
 
-type 'TY ov_asym = 'TY asym       (* object_value *)
+type 'TY f_asym = 'TY asym
 type 'TY lv_asym = 'TY asym       (* loaded_value *)
 type 'TY va_asym = 'TY asym       (* value *)
 

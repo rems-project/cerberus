@@ -57,7 +57,7 @@ rule read = parse
   | "unsigned"     { UNSIGNED }
   | white          { read lexbuf }
   | newline        { next_line lexbuf; read lexbuf }
-  | int            { NUM (int_of_string (Lexing.lexeme lexbuf)) }
+  | int            { NUM (Z.of_string (Lexing.lexeme lexbuf)) }
   (* | pid            { PID (Lexing.lexeme lexbuf) } *)
   | id             { ID (Lexing.lexeme lexbuf) }
 (* stealing from Core parser *)

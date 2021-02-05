@@ -66,8 +66,6 @@ let rec bt_to_sort global bt =
        Z3.Sort.mk_uninterpreted_s ctxt btname
     | List _ ->
        Z3.Sort.mk_uninterpreted_s ctxt btname
-    | FunctionPointer _ -> 
-       Z3.Sort.mk_uninterpreted_s ctxt btname
     | Set bt ->
        Z3.Set.mk_sort ctxt (bt_to_sort global bt)
   in

@@ -83,7 +83,6 @@ module Make (G : sig val global : Global.t end) = struct
       let list_counter = ref 0 in
       let tuple_counter = ref 0 in
       let struct_counter = ref 0 in
-      let function_pointer_counter = ref 0 in
       let set_counter = ref 0 in
       fun veclass ->
       let (Base bt) = veclass.sort in
@@ -97,7 +96,6 @@ module Make (G : sig val global : Global.t end) = struct
         | List _ -> ("l", faa list_counter)
         | Tuple _ ->  ("t", faa tuple_counter)
         | Struct _ -> ("s", faa struct_counter)
-        | FunctionPointer _ -> ("f", faa function_pointer_counter)
         | Set _ -> ("set", faa set_counter)
         end
 

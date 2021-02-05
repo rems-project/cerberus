@@ -151,7 +151,7 @@ pred_with_args:
 
 predarg:
   | p = path { Path.PathArg p }
-  | z = NUM  { Path.NumArg (Z.of_int z) }
+  | z = NUM  { Path.NumArg z }
 
 path: 
   | LPAREN pr_ps = pred_with_args RPAREN DOT id = ID   { Path.PredArg (fst pr_ps, snd pr_ps, id) }
@@ -173,7 +173,7 @@ expr_or_path:
 expr:
   | TRUE                                    { pit ($startpos, $endpos) (Bool true) }
   | FALSE                                   { pit ($startpos, $endpos) (Bool false) }
-  | i = NUM                                 { pit ($startpos, $endpos) (Num (Z.of_int i)) }
+  | i = NUM                                 { pit ($startpos, $endpos) (Num i) }
   | MIN LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MinInteger it) }
   | MAX LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MaxInteger it) }
   | POINTER_TO_INTEGER expr_or_path        { pit ($startpos, $endpos) (PointerToIntegerCast ($2)) }

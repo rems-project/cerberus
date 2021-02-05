@@ -629,9 +629,25 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
           a_pack loc annots bty ct1
        | _ -> error "core_anormalisation: Eccall with non-ctype first argument"
      in
-     n_pexpr_in_expr_name e2 (fun e2 ->
+     let e2 = 
+       let err () = 
+         error "core_anormalisation: Eccall where function is not statically known" in
+       match e2 with
+       | Core.Pexpr(annots, bty, Core.PEval v) ->
+          begin match v with
+          | Vobject (OVpointer ptrval)
+          | Vloaded (LVspecified (OVpointer ptrval)) ->
+             Impl_mem.case_ptrval ptrval
+               ( fun ct -> err ())
+               ( fun sym -> a_pack loc annots bty sym )
+               ( fun _prov _ -> err () )
+               ( fun () -> err () )
+          | _ -> err ()
+          end
+       | _ -> err ()
+     in
      n_pexpr_in_expr_names es (fun es ->
-     k (wrap (M_Eccall(ct1, e2, es)))))
+     k (wrap (M_Eccall(ct1, e2, es))))
   | Eproc(_a, name1, es) ->
      n_pexpr_in_expr_names es (fun es ->
      k (wrap (M_Eproc(name1, es))))

@@ -844,7 +844,7 @@ module Make (G : sig val global : Global.t end) = struct
           let it = S (BT.Loc, ret) in
           let lcs = [LC.LC (IT.Null it)] in
           return (ret, Loc, lcs) )
-        ( fun sym -> return (ret, FunctionPointer sym, []) )
+        ( fun sym -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), S (BT.Loc, sym)))]) )
         ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
         ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
@@ -1489,8 +1489,13 @@ module Make (G : sig val global : Global.t end) = struct
               Debug_ocaml.error "todo: M_PtrGe"
            | M_Ptrdiff _ ->
               Debug_ocaml.error "todo: M_Ptrdiff"
-           | M_IntFromPtr _ ->
-              Debug_ocaml.error "todo: M_IntFromPtr"
+           | M_IntFromPtr (act_from, act2_to, asym) ->
+              let ret = Sym.fresh () in 
+              let* arg = arg_of_asym local asym in
+              let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+              let constr = LC (EQ (S (Loc, ret), PointerToIntegerCast (S (Loc, arg.lname)))) in
+              let rt = RT.Computational ((ret, Integer), Constraint (constr, I)) in
+              return (Normal (rt, local))            
            | M_PtrFromInt (act_from, act2_to, asym) ->
               let ret = Sym.fresh () in 
               let* arg = arg_of_asym local asym in
@@ -1620,19 +1625,13 @@ module Make (G : sig val global : Global.t end) = struct
            return (Normal (rt, local))
         | M_Eccall (_ctype, afsym, asyms) ->
            let* local = unpack_resources loc local in
-           let* f_arg = arg_of_asym local afsym in
            let* args = args_of_asyms local asyms in
-           begin match f_arg.bt with
-             | FunctionPointer sym -> 
-                let* (_loc, ft) = match Global.get_fun_decl G.global sym with
-                  | Some (loc, ft) -> return (loc, ft)
-                  | None -> fail loc (Missing_function sym)
-                in
-                let* (rt, local) = calltype_ft loc local args ft in
-                return (Normal (rt, local))
-             | _ -> 
-                fail afsym.loc (Generic !^"expected function pointer")
-           end
+           let* (_loc, ft) = match Global.get_fun_decl G.global afsym.item with
+             | Some (loc, ft) -> return (loc, ft)
+             | None -> fail loc (Missing_function afsym.item)
+           in
+           let* (rt, local) = calltype_ft loc local args ft in
+           return (Normal (rt, local))
         | M_Eproc (fname, asyms) ->
            let* local = unpack_resources loc local in
            let* decl_typ = match fname with
