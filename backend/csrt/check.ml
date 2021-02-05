@@ -490,7 +490,7 @@ module Make (G : sig val global : Global.t end) = struct
                  let (constr,state) = 
                    Explain.unsatisfied_constraint names original_local c model
                  in
-                 fail loc (Unsat_constraint {constr; state})
+                 fail loc (Unsat_constraint {constr; hint = None; state})
             | I rt -> 
                return rt
           in
@@ -841,10 +841,12 @@ module Make (G : sig val global : Global.t end) = struct
       CF.Impl_mem.case_ptrval ptrval
         ( fun ct -> 
           let* ct = ct_of_ct loc ct in
-          let it = S (BT.Loc, ret) in
-          let lcs = [LC.LC (IT.Null it)] in
+          let lcs = [LC.LC (IT.Null (S (BT.Loc, ret)))] in
           return (ret, Loc, lcs) )
-        ( fun sym -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), S (BT.Loc, sym)))]) )
+        ( fun sym -> 
+          let lcs = [LC (EQ (S (BT.Loc, ret), S (BT.Loc, sym)));
+                     LC (Representable (ST_Pointer, S (Loc, ret)))] in
+          return (ret, Loc, lcs) )
         ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
         ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
@@ -1580,7 +1582,12 @@ module Make (G : sig val global : Global.t end) = struct
                   LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))) in
                 if S.constraint_holds local in_range_lc
                 then return () 
-                else fail loc (Generic !^"write value unrepresentable")
+                else 
+                 let model = S.get_model () in
+                 let (constr,state) = 
+                   Explain.unsatisfied_constraint names local in_range_lc model
+                 in
+                 fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
               let size = Memory.size_of_ctype act.item.ct in
               let* local = 

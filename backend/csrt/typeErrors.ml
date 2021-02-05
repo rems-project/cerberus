@@ -77,7 +77,7 @@ type type_error =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it : 'bt IndexTerms.term -> type_error
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Unsat_constraint of {constr : doc; state : state_pp}
+  | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp}
   | Unconstrained_logical_variable of Sym.t
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
@@ -193,8 +193,11 @@ let pp_type_error te =
      (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
-  | Unsat_constraint {constr;state} ->
-     let msg = !^"Unsatisfied constraint" ^^^ constr in
+  | Unsat_constraint {constr;hint; state} ->
+     let msg = match hint with
+       | Some hint -> !^"Unsatisfied constraint" ^^^ parens hint ^^^ constr 
+       | None -> !^"Unsatisfied constraint" ^^^ constr 
+     in
      (msg, [consider_state state])
   | Unconstrained_logical_variable name ->
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
