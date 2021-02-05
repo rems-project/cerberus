@@ -321,13 +321,18 @@ module Make (G : sig val global : Global.t end) = struct
   let interesting_lc lc = not (boring_lc lc)
 
 
-  let evaluate model expr = 
+  let o_evaluate o_model expr bt = 
+    let open Option in
+    let* model = o_model in
     match Z3.Model.evaluate model (SolverConstraints.of_index_term G.global expr) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
-    | Some evaluated_expr -> Pp.string (Z3.Expr.to_string evaluated_expr)
-
-  let o_evaluate o_model expr = 
-    Option.map (fun model -> evaluate model expr) o_model
+    | Some evaluated_expr -> 
+       match bt with
+       | BT.Integer -> 
+          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+       | BT.Loc ->
+          Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
+       | _ -> None
 
 
   let symbol_it = function
@@ -349,7 +354,7 @@ module Make (G : sig val global : Global.t end) = struct
              in
              let entry =
                (Some (IT.pp (IT.subst_vars substitutions b.pointer)), 
-                o_evaluate o_model b.pointer,
+                o_evaluate o_model b.pointer BT.Loc,
                 Some (Z.pp b.size), 
                 Some !^state,
                 None,
@@ -360,7 +365,7 @@ module Make (G : sig val global : Global.t end) = struct
           | Region r ->
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions r.pointer)), 
-                o_evaluate o_model r.pointer,
+                o_evaluate o_model r.pointer BT.Loc,
                 Some (IT.pp (IT.subst_vars substitutions r.size)), 
                 Some !^"region",
                 None,
@@ -373,11 +378,11 @@ module Make (G : sig val global : Global.t end) = struct
              let (Base pointee_bt) = L.get_l p.pointee local in
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions p.pointer)), 
-                o_evaluate o_model p.pointer,
+                o_evaluate o_model p.pointer BT.Loc,
                 Some (Z.pp p.size),
                 Some !^"owned",
                 Some (Sym.pp (Sym.substs substitutions p.pointee)),
-                o_evaluate o_model (IT.S (pointee_bt, p.pointee))
+                o_evaluate o_model (IT.S (pointee_bt, p.pointee)) pointee_bt
                )
              in
              (entry, SymSet.union (symbol_it p.pointer) (SymSet.singleton p.pointee))
@@ -405,7 +410,7 @@ module Make (G : sig val global : Global.t end) = struct
             match bt with
             | BT.Loc -> 
                Some (Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.S (bt, c.veclass.repr)),
+                     o_evaluate o_model (IT.S (bt, c.veclass.repr)) bt,
                      None, 
                      None, 
                      None, 
@@ -416,7 +421,7 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.S (bt, c.veclass.repr)))
+                     o_evaluate o_model (IT.S (bt, c.veclass.repr)) bt)
           else
             None)
         veclasses

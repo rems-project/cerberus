@@ -48,3 +48,15 @@ let string_of_hexadecimal n =
     Bytes.set ret (i+2) c
   ) l;
   Bytes.to_string ret
+
+
+let string_of_hexadecimal_pad length n =
+  let l = chars_of_num_with_basis 16 false n in
+  let has_length = List.length l in
+  let ret = Bytes.create has_length in
+  List.iteri (fun i c ->
+    Bytes.set ret i c
+  ) l;
+  if has_length < length 
+  then "0x" ^ String.make (length - has_length) '0' ^ Bytes.to_string ret
+  else "0x" ^ Bytes.to_string ret

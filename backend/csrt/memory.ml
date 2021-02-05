@@ -63,9 +63,9 @@ let align_of_pointer =
 let representable_pointer about = 
   let pointer_byte_size = size_of_pointer in
   let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
-  let max = Z.power_int_positive_big_int 2 (Z.sub_big_int pointer_size (Z.of_int 1)) in
+  let max = Z.power_int_positive_big_int 2 pointer_size in
   LC.LC (IT.And [IT.LocLE (Pointer Z.zero, about); 
-                 IT.LocLE (about, Pointer max)])
+                 IT.LocLT (about, Pointer max)])
   
 
 
