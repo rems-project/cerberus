@@ -205,12 +205,16 @@ let get_impl_constant global i = impl_lookup global.impl_constants i
 
 let pp_struct_decl (tag,decl) = 
   item ("struct " ^ plain (Sym.pp tag) ^ " (raw)") 
-       (Pp.list (fun {offset; size; member_or_padding} -> 
-            match member_or_padding with 
-            | Some (member, sct) -> 
-               typ (Id.pp member) (Sctypes.pp sct)
-            | None ->
-               parens (!^"padding" ^^^ Z.pp size)
+       (separate_map hardline (fun {offset; size; member_or_padding} -> 
+            item "offset" (Z.pp offset) ^^ comma ^^^
+            item "size" (Z.pp size) ^^ comma ^^^
+            item "content" 
+              begin match member_or_padding with 
+              | Some (member, sct) -> 
+                 typ (Id.pp member) (Sctypes.pp sct)
+              | None ->
+                 parens (!^"padding" ^^^ Z.pp size)
+              end
           ) decl.layout
        )
   ^/^

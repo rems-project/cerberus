@@ -100,7 +100,7 @@ let struct_layout loc members tag =
          else [] 
        in
        let member = [Global.{offset; size; member_or_padding = Some (member, sct)}] in
-       let* rest = aux members (Z.add_big_int to_pad size) in
+       let* rest = aux members (Z.add_big_int offset size) in
        return (padding @ member @ rest)
   in
   (aux members Z.zero)
