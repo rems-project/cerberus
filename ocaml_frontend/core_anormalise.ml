@@ -37,6 +37,7 @@ type st = ct mu_struct_def
 type ft = ct Mucore.mu_funinfo_type
 type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
 type bt = Mucore.mu_base_type
+type gt = ct
 type mapping = unit
 
 type mu_value = (ct, bt, unit) Mucore.mu_value
@@ -734,7 +735,7 @@ let fresh_relative (s : symbol) (f : string -> string) : symbol =
   | Some name -> Symbol.fresh_pretty (f name)
   | None -> Symbol.fresh ()
 
-let normalise_globs sym (g : ('a, unit) generic_globs) : (ct, bt, unit) mu_globs = 
+let normalise_globs sym (g : ('a, unit) generic_globs) : (gt, ct, bt, unit) mu_globs = 
   match g with
   | GlobalDef((bt1, ct), e) -> 
      M_GlobalDef (fresh_relative sym (fun s -> s^"_l"), (bt1, ct), normalise_expr Loc.unknown e)
@@ -743,7 +744,7 @@ let normalise_globs sym (g : ('a, unit) generic_globs) : (ct, bt, unit) mu_globs
 
 
 let normalise_globs_list (gs : (Symbol.sym * ('a, unit) generic_globs) list)
-    : (Symbol.sym * (ct, bt, unit) mu_globs) list= 
+    : (Symbol.sym * (gt, ct, bt, unit) mu_globs) list= 
    (map (fun (sym1,g) -> (sym1, normalise_globs sym1 g)) gs)
 
 
@@ -820,7 +821,7 @@ let check_supported file =
    * in *)
   ()
 
-let normalise_file file : (ft, lt, ct, bt, st, ut, unit, mapping) Mucore.mu_file = 
+let normalise_file file : (ft, lt, gt, ct, bt, st, ut, unit, mapping) Mucore.mu_file = 
   check_supported file;
    ({ mu_main = (file.main)
    ; mu_tagDefs = (normalise_tag_definitions file.tagDefs)

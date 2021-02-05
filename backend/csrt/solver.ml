@@ -50,7 +50,6 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error "constraint solver returned 'Unknown'"
 
 
-
   let is_inconsistent local =
     constraint_holds local (LC (Bool false))
 

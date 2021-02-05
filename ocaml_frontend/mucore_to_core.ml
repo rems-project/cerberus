@@ -568,7 +568,7 @@ let mu_to_core__fun_map (fmap1 : ('DLTY, Ctype.ctype, mu_base_type, 'bty, 'mappi
    (Pmap.map mu_to_core__fun_map_decl fmap1)
   
 
-let mu_to_core__globs (g : (Ctype.ctype, mu_base_type, 'bty) mu_globs) 
+let mu_to_core__globs (g : ('gt, Ctype.ctype, mu_base_type, 'bty) mu_globs) 
     : (unit, 'bty) Core.generic_globs= 
    ((match g with
   | M_GlobalDef(_, bt1, e) -> Core.GlobalDef( bt1, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
@@ -589,7 +589,7 @@ let mu_to_core__tag_definitions dict_Map_MapKeyType_a tagDefs1:('a,(tag_definiti
    (Pmap.map mu_to_core__tag_definition tagDefs1)
 
   
-let mu_to_core__globs_list (gs : (symbol * (Ctype.ctype, mu_base_type, 'bty) mu_globs) list )
+let mu_to_core__globs_list (gs : (symbol * ('gt, Ctype.ctype, mu_base_type, 'bty) mu_globs) list )
     : (symbol * (unit, 'bty) Core.generic_globs) list= 
    (map (fun (sym1,g) -> (sym1, mu_to_core__globs g)) gs)
 

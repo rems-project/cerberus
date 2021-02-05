@@ -348,10 +348,16 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 
-let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty, 'mapping) mu_file)
-    : ((FT.t, LT.t, ctype_information, BT.t, 
+let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct mu_union_def, 'bty, 'mapping) mu_file)
+    : ((FT.t, 
+        LT.t, 
+        ctype_information,
+        ctype_information, 
+        BT.t, 
         CA.ct mu_struct_def * Global.struct_decl, 
-        CA.ct mu_union_def, 'bty, Mapping.t) mu_file,
+        CA.ct mu_union_def, 
+        'bty, 
+        Mapping.t) mu_file,
       TypeErrors.type_error) m =
 
 
@@ -377,18 +383,29 @@ let retype_file (file : (CA.ft, CA.lt, CA.ct, CA.bt, CA.ct mu_struct_def, CA.ct 
   let* (globs, glob_typs) = 
     let retype_globs (sym, glob) (globs, glob_typs) =
       let loc = Loc.unknown in
-      match glob with
-      | M_GlobalDef (lsym, (cbt,ct),expr) ->
-         let* bt = Conversions.bt_of_core_base_type loc cbt in
+      let aux ct = 
          let* cti = ctype_information loc ct in
+         let rt =
+           let pointer = Sym.fresh () in
+           let pointee = Sym.fresh () in
+           let size = Memory.size_of_ctype cti.ct in
+           RT.Computational ((pointer, BT.Loc),
+           LRT.Logical ((pointee, Base cti.bt),
+           LRT.Resource (Resources.Points {pointer = S (Loc, pointer);pointee; size},
+           LRT.I)))
+         in
+         return (cti, rt)
+      in
+      match glob with
+      | M_GlobalDef (lsym, (_,ct),expr) ->
+         let* (cti, rt) = aux ct in
          let* expr = retype_expr expr in
-         let globs = (sym, M_GlobalDef (lsym, (bt,cti),expr)) :: globs in
+         let globs = (sym, M_GlobalDef (lsym, (cti.bt,cti),expr)) :: globs in
          let glob_typs = (sym, lsym, cti.ct) :: glob_typs in
          return (globs, glob_typs)
       | M_GlobalDecl (lsym, (cbt,ct)) ->
-         let* bt = Conversions.bt_of_core_base_type loc cbt in
-         let* cti = ctype_information loc ct in
-         let globs = (sym, M_GlobalDecl (lsym, (bt,cti))) :: globs in
+         let* (cti, rt) = aux ct in
+         let globs = (sym, M_GlobalDecl (lsym, (cti.bt,cti))) :: globs in
          let glob_typs = (sym, lsym, cti.ct) :: glob_typs in
          return (globs, glob_typs)
     in

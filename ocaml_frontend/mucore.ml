@@ -226,11 +226,11 @@ type mu_linking_kind = Core.linking_kind
 
 type mu_extern_map = Core.extern_map
 
-type ('ct, 'bt, 'TY) mu_globs =
-  | M_GlobalDef of symbol * ('bt * 'ct) * ('ct, 'bt, 'TY) mu_expr
-  | M_GlobalDecl of symbol * ('bt * 'ct)
+type ('gt, 'ct, 'bt, 'TY) mu_globs =
+  | M_GlobalDef of symbol * ('bt * 'gt) * ('ct, 'bt, 'TY) mu_expr
+  | M_GlobalDecl of symbol * ('bt * 'gt)
 
-type ('ct, 'bt, 'TY) mu_globs_map = (symbol, (('ct, 'bt, 'TY) mu_globs))
+type ('gt, 'ct, 'bt, 'TY) mu_globs_map = (symbol, (('gt, 'ct, 'bt, 'TY) mu_globs))
   Pmap.map
 
 
@@ -253,15 +253,15 @@ type ('ft,'mapping) mu_funinfo =
 type ('ft,'mapping) mu_funinfos = 
   (symbol, ('ft,'mapping) mu_funinfo) Pmap.map
 
-type ('ct, 'bt, 'TY) mu_globs_list = (symbol * ('ct, 'bt, 'TY) mu_globs) list
+type ('gt, 'ct, 'bt, 'TY) mu_globs_list = (symbol * ('gt, 'ct, 'bt, 'TY) mu_globs) list
 
 (* a Core file is just a set of named functions *)
-type ('ft, 'lt, 'ct, 'bt, 'st_def, 'ut_def, 'TY, 'mapping) mu_file = {
+type ('ft, 'lt, 'gt, 'ct, 'bt, 'st_def, 'ut_def, 'TY, 'mapping) mu_file = {
   mu_main    : symbol option;
   mu_tagDefs : ('st_def,'ut_def) mu_tag_definitions;
   mu_stdlib  : ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map;
   mu_impl    : ('ct, 'bt, 'TY) mu_impl;
-  mu_globs   : ('ct, 'bt, 'TY) mu_globs_list;
+  mu_globs   : ('gt, 'ct, 'bt, 'TY) mu_globs_list;
   mu_funs    : ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map;
   mu_extern  : mu_extern_map;
   mu_funinfo : ('ft,'mapping) mu_funinfos;

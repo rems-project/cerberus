@@ -11,6 +11,7 @@ open PreProcess
 type bt = BT.t
 type ct = ctype_information
 (* type ct = PreProcess.ctype_information *)
+type gt = RT.t
 type ft = FT.t
 type lt = LT.t
 type st = CF.Ctype.ctype CF.Mucore.mu_struct_def * Global.struct_decl
@@ -21,6 +22,7 @@ let pp_bt = BT.pp true
 let pp_ct cti = Sctypes.pp cti.ct
 
 let pp_ft = FT.pp
+let pp_gt = RT.pp
 let pp_lt = Some (LT.pp)
 let pp_funinfo _ = failwith "not implemented"
 let pp_funinfo_with_attributes _  = failwith "not implemented"

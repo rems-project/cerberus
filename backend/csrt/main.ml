@@ -14,6 +14,7 @@ type core_file = (unit,unit) CF.Core.generic_file
 type mu_file = 
   (CA.ft, 
    CA.lt, 
+   CA.ct,
    CA.ct, 
    CA.bt,
    CA.ct CF.Mucore.mu_struct_def,

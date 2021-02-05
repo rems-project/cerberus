@@ -126,15 +126,15 @@ let ib_fun_map (fmap1 : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map)
    (Pmap.mapi ib_fun_map_decl fmap1)
   
 
-let ib_globs (g : ('ct, 'bt, 'bty) mu_globs) 
-    : ('ct, 'bt, 'bty) mu_globs= 
+let ib_globs (g : ('gt, 'ct, 'bt, 'bty) mu_globs) 
+    : ('gt, 'ct, 'bt, 'bty) mu_globs= 
    ((match g with
   | M_GlobalDef(s, bt1, e) -> M_GlobalDef(s, bt1, e)
   | M_GlobalDecl (s, bt1) -> M_GlobalDecl (s, bt1)
   ))
 
-let ib_globs_list (gs : ('ct, 'bt, 'bty) mu_globs_list)
-    : ('ct, 'bt, 'bty) mu_globs_list= 
+let ib_globs_list (gs : ('gt, 'ct, 'bt, 'bty) mu_globs_list)
+    : ('gt, 'ct, 'bt, 'bty) mu_globs_list= 
    (map (fun (sym1,g) -> (sym1, ib_globs g)) gs)
 
 

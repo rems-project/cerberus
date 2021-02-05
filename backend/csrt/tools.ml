@@ -11,7 +11,7 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
 let do_stack_trace () = 
   let open Debug_ocaml in
   if !debug_level > 0 then 
-    let backtrace = Printexc.get_callstack (!debug_level * 10) in
+    let backtrace = Printexc.get_callstack 200 in
     Some (Printexc.raw_backtrace_to_string backtrace)
   else 
     None

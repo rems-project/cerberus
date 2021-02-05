@@ -30,6 +30,7 @@ module type PP_Typ = sig
   (* type object_type *)
   type bt
   type ct
+  type gt
   type ft
   type lt
   type st 
@@ -40,6 +41,7 @@ module type PP_Typ = sig
   (* val pp_object_type: object_type -> PPrint.document *)
   val pp_ct: ct -> PPrint.document
   val pp_ft: ft -> PPrint.document
+  val pp_gt: gt -> PPrint.document
   val pp_lt: (lt -> PPrint.document) option
   val pp_st: st -> PPrint.document
   val pp_ut: ut -> PPrint.document
@@ -62,6 +64,7 @@ module type PP_CORE = sig
   type ct
   type ft
   type lt
+  type gt
   type st 
   type ut
 
@@ -98,6 +101,7 @@ module type PP_CORE = sig
     budget -> 
     (ft,
      lt,
+     gt, 
      ct,
      bt,
      st,
@@ -126,6 +130,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
        : PP_CORE with type bt = Pp_typ.bt 
                   and type ct = Pp_typ.ct
                   and type lt = Pp_typ.lt
+                  and type gt = Pp_typ.gt
                   and type ft = Pp_typ.ft
                   and type st = Pp_typ.st
                   and type ut = Pp_typ.ut
@@ -936,9 +941,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
   let pp_globs budget globs =
     List.fold_left (fun acc (sym, decl) ->
         match decl with
-        | M_GlobalDef (_, (bTy, ct), e) ->
+        | M_GlobalDef (_, (bTy, gt), e) ->
           acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
-            P.brackets (!^"ct" ^^^ P.equals ^^^ pp_ct ct) ^^^
+            P.brackets (!^"ct" ^^^ P.equals ^^^ pp_gt gt) ^^^
                 P.colon ^^ P.equals ^^
                 P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
         | M_GlobalDecl _ ->
@@ -1032,11 +1037,12 @@ module Pp_standard_typ = (struct
   let pp_bt = pp_core_base_type
 
   type ct = CA.ct
+  type gt = ct
   type ut = ct Mucore.mu_union_def
   type st = ct Mucore.mu_struct_def
 
   let pp_ct ty = P.squotes (Pp_core_ctype.pp_ctype ~compact:true ty)
-
+  let pp_gt = pp_ct
 
   let pp_ut (membrs) = 
     let (ty, tags) = ("union", membrs) in

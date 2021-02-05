@@ -90,23 +90,25 @@ let process_functions genv fns =
 
 
 let process mu_file =
-
   let* mu_file = PreProcess.retype_file mu_file in
-
   let solver_context = Solver.initial_context in
-
   let global = Global.empty solver_context in
-
-  let* global = record_tagDefs global mu_file.mu_tagDefs in
-
+  let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
+  let global = { global with stdlib_funs } in
   let global = record_impl global mu_file.mu_impl in
-
+  let* global = record_tagDefs global mu_file.mu_tagDefs in
   let* global = 
     let open Global in
     let open PreProcess in
     ListM.fold_leftM (fun global (sym, def) ->
         match def with
         | M_GlobalDef (lsym, (_, cti), e) ->
+           (* let module C1 = Check.Make(struct let global = global end) in
+            * let module C2 = C1.Checker(struct let names = Parse_ast.Mapping.empty end) in
+            * let* local_or_false = 
+            *   C2.check_expr_pop ~print:true C1.L.empty (C1.L.empty, SymMap.empty) 
+            *     e (Check.Fallible.Normal rt)
+            * in            *)
            let logical = (lsym, LS.Base Loc) :: global.logical in
            let computational = (sym, (lsym, BT.Loc)) :: global.computational in
            let it = IT.good_pointer lsym cti.ct in
@@ -122,15 +124,8 @@ let process mu_file =
            return {global with logical; computational; constraints}
       ) global mu_file.mu_globs
   in
-
   let* global = record_funinfo global mu_file.mu_funinfo in
-
-  let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
-
-  let global = { global with stdlib_funs } in
-
   let* () = print_initial_environment global in
-
   let* result = process_functions global mu_file.mu_funs in
 
   return result
