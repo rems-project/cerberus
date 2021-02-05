@@ -326,7 +326,10 @@ module Make (G : sig val global : Global.t end) = struct
   let evaluate model expr = 
     match Z3.Model.evaluate model (SolverConstraints.of_index_term G.global expr) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
-    | Some evaluated_expr -> Z3.Expr.to_string evaluated_expr
+    | Some evaluated_expr -> Pp.string (Z3.Expr.to_string evaluated_expr)
+
+  let o_evaluate o_model expr = 
+    Option.map (fun model -> evaluate model expr) o_model
 
 
   let symbol_it = function
@@ -336,13 +339,6 @@ module Make (G : sig val global : Global.t end) = struct
 
   let pp_state_aux local {substitutions; veclasses; relevant} o_model =
     (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
-    let veclasses_with_values =
-      List.map (fun veclass ->
-          match o_model, veclass.veclass.sort with
-          | Some model, Base Integer -> (veclass, Some (evaluate model (S (Integer, veclass.veclass.repr))))
-          | _ -> (veclass, None)
-        ) veclasses
-    in
     let (resource_lines, reported_pointees) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           let (entry, reported) = 
@@ -355,6 +351,7 @@ module Make (G : sig val global : Global.t end) = struct
              in
              let entry =
                (Some (IT.pp (IT.subst_vars substitutions b.pointer)), 
+                o_evaluate o_model b.pointer,
                 Some (Z.pp b.size), 
                 Some !^state,
                 None,
@@ -365,6 +362,7 @@ module Make (G : sig val global : Global.t end) = struct
           | Region r ->
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions r.pointer)), 
+                o_evaluate o_model r.pointer,
                 Some (IT.pp (IT.subst_vars substitutions r.size)), 
                 Some !^"region",
                 None,
@@ -374,30 +372,21 @@ module Make (G : sig val global : Global.t end) = struct
              (entry, symbol_it r.pointer)
           | Points p -> 
              (* take substs into account *)
-             let found = 
-               List.find_opt (fun (c,v) -> SymSet.mem p.pointee c.veclass.l_elements) 
-                 veclasses_with_values 
-             in
-             let entry = match found with
-               | Some (_, Some value) ->
-                  (Some (IT.pp (IT.subst_vars substitutions p.pointer)), 
-                   Some (Z.pp p.size),
-                   Some !^"owned",
-                   Some (Sym.pp (Sym.substs substitutions p.pointee)),
-                   Some !^value
-                  )
-               | _ ->
-                  (Some (IT.pp (IT.subst_vars substitutions p.pointer)), 
-                   Some (Z.pp p.size), 
-                   Some !^"owned",
-                   Some (Sym.pp (Sym.substs substitutions p.pointee)), 
-                   None
-                  )
+             let (Base pointee_bt) = L.get_l p.pointee local in
+             let entry = 
+               (Some (IT.pp (IT.subst_vars substitutions p.pointer)), 
+                o_evaluate o_model p.pointer,
+                Some (Z.pp p.size),
+                Some !^"owned",
+                Some (Sym.pp (Sym.substs substitutions p.pointee)),
+                o_evaluate o_model (IT.S (pointee_bt, p.pointee))
+               )
              in
              (entry, SymSet.union (symbol_it p.pointer) (SymSet.singleton p.pointee))
           | Predicate p ->
              let entry =
-               (None, 
+               (None,
+                None, 
                 None, 
                 Some (pp_predicate p),
                 None,
@@ -410,28 +399,29 @@ module Make (G : sig val global : Global.t end) = struct
         ) (L.all_resources local) ([], SymSet.empty)
     in
     let var_lines = 
-      List.filter_map (fun (c,value) ->
+      List.filter_map (fun c ->
           let (Base bt) = c.veclass.sort in
           let relevant = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements relevant)) in
           let reported = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements reported_pointees)) in
-          let value_pp = Option.map Pp.string value in
           if (not reported) && relevant then
             match bt with
             | BT.Loc -> 
                Some (Some (Path.pp c.path), 
+                     o_evaluate o_model (IT.S (bt, c.veclass.repr)),
                      None, 
                      None, 
                      None, 
-                     value_pp)
+                     None)
             | _ -> 
-               Some (None, 
+               Some (None,
+                     None, 
                      None, 
                      None, 
                      Some (Path.pp c.path), 
-                     value_pp)
+                     o_evaluate o_model (IT.S (bt, c.veclass.repr)))
           else
             None)
-        veclasses_with_values
+        veclasses
     in
     resource_lines @ var_lines
 
@@ -439,29 +429,29 @@ module Make (G : sig val global : Global.t end) = struct
 
   let pp_state_with_model local explanation o_model =
     let lines = 
-      List.map (fun (a,b,c,d,e) -> ((L,a), (L,b), (L,c), (L,d), (L,e)))
+      List.map (fun (a,b,c,d,e,f) -> ((L,a), (R,b), (R,c), (L,d), (L,e), (R,f)))
         (pp_state_aux local explanation o_model)
     in
-    table5 ("location", "size", "state", "variable", "value") lines
+    table6 ("pointer", "location", "size", "state", "variable", "value") lines
       
 
   let pp_state local explanation =
     let lines = 
-      List.map (fun (a,b,c,d,_) -> ((L,a), (L,b), (L,c), (L,d)))
+      List.map (fun (a,_,c,d,e,_) -> ((L,a), (R,c), (L,d), (L,e)))
         (pp_state_aux local explanation None)
     in
-    table4 ("location", "size", "state", "variable") lines
+    table4 ("pointer", "size", "state", "variable") lines
 
 
   let json_state names local : Yojson.Safe.t = 
     let explanation = explanation names local SymSet.empty in
     let lines = 
-      List.map (fun (a,b,c,d,_) : Yojson.Safe.t ->
+      List.map (fun (a,_,c,d,e,_) : Yojson.Safe.t ->
           let jsonf doc = `String (Pp.plain doc) in
-          `Assoc [("location", Option.json jsonf a);
-                  ("size", Option.json jsonf b);
-                  ("state", Option.json jsonf c);
-                  ("variable", Option.json jsonf d)]
+          `Assoc [("pointer", Option.json jsonf a);
+                  ("size", Option.json jsonf c);
+                  ("state", Option.json jsonf d);
+                  ("variable", Option.json jsonf e)]
         ) (pp_state_aux local explanation None)
     in
     `List lines

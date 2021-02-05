@@ -122,7 +122,7 @@ let nats n =
 
 module IntMap = Map.Make(Int)
 
-let (table2, table3, table4, table5) = 
+let (table2, table3, table4, table5, table6) = 
   let table (n_rows : int) (headers: string list) (lines : ((alignment * doc option) list) list) =
     let placeholder = minus ^^ minus in
 
@@ -186,7 +186,13 @@ let (table2, table3, table4, table5) =
     table 5 [th1; th2; th3; th4; th5]
       (List.map (fun (c1, c2, c3, c4, c5) -> [c1; c2; c3; c4; c5]) lines)
   in
-  (table2, table3, table4, table5)
+
+  let table6 (th1, th2, th3, th4, th5, th6) lines =
+    table 6 [th1; th2; th3; th4; th5; th6]
+      (List.map (fun (c1, c2, c3, c4, c5, c6) -> [c1; c2; c3; c4; c5; c6]) lines)
+  in
+
+  (table2, table3, table4, table5, table6)
 
   
 
