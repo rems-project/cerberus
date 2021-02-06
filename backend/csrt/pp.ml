@@ -122,6 +122,15 @@ let nats n =
 
 module IntMap = Map.Make(Int)
 
+let box_vline_n = utf8string "\u{2502}"
+let box_vline_b = utf8string "\u{2503}"
+let box_hline_d = utf8string "\u{2504}"
+let box_hline_n = utf8string "\u{2500}"
+let box_hline_b = utf8string "\u{2501}"
+let box_cross_vn_hb = utf8string "\u{2542}"
+let box_cross_vb_hb = utf8string "\u{254B}"
+
+
 let (table2, table3, table4, table5, table6) = 
   let table (n_rows : int) (headers: string list) (lines : ((alignment * doc option) list) list) =
     let placeholder = minus ^^ minus in
@@ -145,6 +154,16 @@ let (table2, table3, table4, table5, table6) =
           maxes
         ) IntMap.empty (List.map (fun s -> (L, Some (string s))) headers :: lines) 
     in
+    let oline =
+      List.mapi (fun j _ ->
+          repeat (IntMap.find j maxes) (box_hline_b)
+        ) headers 
+    in
+    let sepline =
+      List.mapi (fun j _ ->
+          repeat (IntMap.find j maxes) (box_hline_d)
+        ) headers 
+    in
     let headers = 
       List.mapi (fun j h ->
           pad_ L (IntMap.find j maxes) (String.length h) (format [FG(Default,Bright)] h)
@@ -161,10 +180,15 @@ let (table2, table3, table4, table5, table6) =
             ) line
         ) lines
     in
-    separate (space ^^ bar ^^ space) headers ^^ hardline ^^
-    separate_map hardline (fun line ->
-        separate (space ^^ bar ^^ space) line
-      ) padded_lines
+    (* separate (minus ^^ plus ^^ minus) sepline ^^ hardline ^^ *)
+    separate hardline 
+      begin 
+        (utf8string "\u{250F}" ^^ separate (utf8string "\u{252F}") oline ^^ utf8string "\u{2513}") ::
+        (box_vline_b ^^ separate (box_vline_n) headers ^^ box_vline_b) ::
+        (box_vline_b ^^ separate (box_vline_n) sepline ^^ box_vline_b) ::
+        (List.map (fun line -> box_vline_b ^^ separate (box_vline_n) line  ^^ box_vline_b) padded_lines) @
+        [utf8string "\u{2517}" ^^ separate (utf8string "\u{2537}") oline ^^ utf8string "\u{251B}"]
+      end
   in
 
   let table2 (th1, th2) lines =

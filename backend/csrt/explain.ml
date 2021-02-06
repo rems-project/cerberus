@@ -332,6 +332,8 @@ module Make (G : sig val global : Global.t end) = struct
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Loc ->
           Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
+       | BT.Unit ->
+          Some (BT.pp false BT.Unit)
        | _ -> None
 
 
