@@ -593,15 +593,15 @@ let make_label_spec
 
   let (LInv (pre_resources, pre_constraints)) = inv in
   let* (iL, iR, iC, mapping) = 
-    ListM.fold_rightM (fun spec (iL, iR, iC, mapping) ->
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) spec ->
         let* (l, r, c, mapping') = apply_ownership_spec (Inv lname) var_typs mapping spec in
-        return (l @ iL, r @ iR, c @ iC, mapping' @ mapping)
+        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
       )
-      pre_resources (iL, iR, iC, mapping)
+      (iL, iR, iC, mapping) pre_resources
   in
   let* iC = 
     let* lcs = Assertions.resolve_constraints mapping pre_constraints in
-    return (lcs @ iC)
+    return (iC @ lcs)
   in
 
   let llt = LT.mLogicals iL (LT.mResources iR (LT.mConstraints iC (LT.I False.False))) in
