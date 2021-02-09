@@ -91,10 +91,15 @@ type varg = { name: string; vsym: Sym.t; typ : Sctypes.t }
 type aarg = { name: string; asym: Sym.t; typ : Sctypes.t }
 type garg = { name: string; lsym: Sym.t; typ : Sctypes.t; accessed : Loc.t option }
 
+(* type larg =
+ *   | Varg of varg
+ *   | Aarg of aarg *)
+
 
 type vargs = varg list
 type aargs = aarg list
 type gargs = garg list
+(* type largs = larg list *)
 
 type function_post = 
   | FPost of resource_spec list * logical_spec list
@@ -119,7 +124,7 @@ type label_inv =
   | LInv of resource_spec list * logical_spec list
 
 type label_args = 
-  | LA of {globs : gargs; fargs : aargs; largs : vargs} 
+  | LA of {globs : gargs; fargs : aargs; largs : aargs} 
 
 type label_type = 
   | LT of label_args * label_inv

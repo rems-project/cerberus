@@ -278,7 +278,7 @@ let parse_label_type loc label attrs globs (fargs : aarg list) (larg_cts : (Sym.
   in
   let largs = 
     List.map (fun (sym, ct) ->
-        { name = name sym; vsym = sym; typ = ct }
+        { name = name sym; asym = sym; typ = ct }
       ) larg_cts 
   in
   let lt = LT (LA {globs; fargs; largs}, LInv (pre_r, pre_c)) in

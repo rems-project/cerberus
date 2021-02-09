@@ -548,7 +548,7 @@ let make_label_spec
   let var_typs = 
     List.map (fun (garg : garg) -> (garg.name, garg.typ)) globs @
     List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fargs @
-    List.map (fun (varg : varg) -> (varg.name, varg.typ)) largs
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) largs
   in
 
   let iA, iL, iR, iC = [], [], [], [] in
@@ -579,15 +579,17 @@ let make_label_spec
   in
 
   (* largs *)
-  let (iA, iC, mapping) = 
-    List.fold_left (fun (iA, iC, mapping) varg ->
-        let item = varg_item (Inv lname) varg in
-        let a = (varg.vsym, item.bt) in
-        let c = [LC (good_value varg.vsym varg.typ)] in
-        (iA @ [a], iC @ c, item :: mapping)
+  let* (iA, iL, iR, iC, mapping) = 
+    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) aarg ->
+        let a = [(aarg.asym, BT.Loc)] in
+        let item = aarg_item (Inv lname) aarg in
+        let* (l, r, c, mapping') = make_owned loc (Inv lname) aarg.asym item.path aarg.typ in
+        let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
+        return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
-      (iA, iC, mapping) largs
+      (iA, iL, iR, iC, mapping) largs
   in
+
 
   let (LInv (pre_resources, pre_constraints)) = inv in
   let* (iL, iR, iC, mapping) = 
