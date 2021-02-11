@@ -111,7 +111,7 @@ let rec pp_aux lrt =
   match lrt with
   | Logical ((name,ls),t) ->
      let op = if !unicode then utf8string "\u{2203}" else !^"E" in
-     (op ^^^ typ (Sym.pp name) (LogicalSorts.pp false ls) ^^ dot) :: pp_aux t
+     (op ^^^ typ (Sym.pp name) (LogicalSorts.pp ls) ^^ dot) :: pp_aux t
   | Resource (re,t) ->
      let op = star in
      (Resources.pp re ^^^ op) :: pp_aux t

@@ -40,9 +40,9 @@ module VariableBinding = struct
       format [Pp.FG(Default,Bright)] (Sym.pp_string sym) ^^ colon ^^ pped in
     match binding with
     | Computational (lname,bt) -> 
-       btyp sym (BT.pp true bt ^^ tilde ^^ Sym.pp lname)
+       btyp sym (BT.pp bt ^^ tilde ^^ Sym.pp lname)
     | Logical ls -> 
-       btyp sym (LS.pp false ls)
+       btyp sym (LS.pp ls)
     | Resource re -> 
        if print_all_names 
        then btyp sym (squotes (RE.pp re))

@@ -21,7 +21,7 @@ let sym_to_symbol ctxt sym =
   Z3.Symbol.mk_int ctxt num
 
 let bt_name bt = 
-  plain (BT.pp false bt)
+  plain (BT.pp bt)
 
 let tuple_component_name bt i =
   bt_name bt ^ "__" ^ string_of_int i
@@ -68,6 +68,8 @@ let rec bt_to_sort global bt =
        Z3.Sort.mk_uninterpreted_s ctxt btname
     | Set bt ->
        Z3.Set.mk_sort ctxt (bt_to_sort global bt)
+    | Map (bt1,bt2) ->
+       Z3.Z3Array.mk_sort ctxt (bt_to_sort global bt1) (bt_to_sort global bt2)
   in
   sort
 

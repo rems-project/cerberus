@@ -19,7 +19,7 @@ module Mapping = struct
 
 
   let pp_item {path; sym; bt} = 
-    Pp.parens (Path.pp path ^^ comma ^^ Sym.pp sym ^^ comma ^^ BT.pp false bt)
+    Pp.parens (Path.pp path ^^ comma ^^ Sym.pp sym ^^ comma ^^ BT.pp bt)
 
   let pp = Pp.list pp_item
 

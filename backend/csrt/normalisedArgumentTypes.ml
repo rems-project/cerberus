@@ -97,13 +97,13 @@ module Make (I: AT.I_Sig) = struct
     let rec aux_l = function
       | Logical ((name,ls),t) ->
          let op = if !unicode then utf8string "\u{2200}" else !^"AL" in
-         (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux_l t
+         (op ^^^ typ (Sym.pp name) (LS.pp ls) ^^ dot) :: aux_l t
       | R r -> aux_r r
     in
     let rec aux_a = function
       | Computational ((name,bt),t) ->
          let op = if !unicode then utf8string "\u{03A0}" else !^"AC" in
-         (op ^^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot) :: aux_a t
+         (op ^^^ typ (Sym.pp name) (BT.pp bt) ^^ dot) :: aux_a t
       | L l -> aux_l l
     in
     let pp_a t = flow (break 1) (aux_a t) in

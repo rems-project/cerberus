@@ -77,7 +77,7 @@ let pp_aux rt =
   match rt with
   | Computational ((name,bt),t) ->
      let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
-     (op ^^^ typ (Sym.pp name) (BaseTypes.pp false bt) ^^ dot) :: LRT.pp_aux t
+     (op ^^^ typ (Sym.pp name) (BaseTypes.pp bt) ^^ dot) :: LRT.pp_aux t
 
 let pp rt = 
   Pp.flow (Pp.break 1) (pp_aux rt)

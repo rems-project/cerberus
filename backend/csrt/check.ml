@@ -216,8 +216,7 @@ module Make (G : sig val global : Global.t end) = struct
             return local'
          | _, M_Ccons, [p1; p2] ->
             let err = 
-              !^"cons pattern incompatible with expect type" ^/^ 
-                BT.pp false expect 
+              !^"cons pattern incompatible with expect type" ^/^ BT.pp expect 
             in
             fail loc (Generic err)
          | _, M_Ccons, _ -> 
@@ -238,8 +237,7 @@ module Make (G : sig val global : Global.t end) = struct
             components local' 0 pats bts
          | _, M_Ctuple, _ ->
             let err = 
-              !^"tuple pattern incompatible with expect type" ^/^ 
-                BT.pp false expect
+              !^"tuple pattern incompatible with expect type" ^/^ BT.pp expect
             in
             fail loc (Generic err)
          | _, M_Cspecified, [pat] ->
@@ -378,7 +376,7 @@ module Make (G : sig val global : Global.t end) = struct
       module NFT = NormalisedArgumentTypes.Make(I)
 
       let pp_argslocs =
-        Pp.list (fun ca -> parens (BT.pp false ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
+        Pp.list (fun ca -> parens (BT.pp ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
 
       open Prompt
       open Prompt.Operators

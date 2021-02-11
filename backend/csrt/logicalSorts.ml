@@ -5,7 +5,7 @@ module SymSet = Set.Make(Sym)
 type t = Base of BaseTypes.t
 type sort = t                      
 
-let pp atomic (Base bt) = BaseTypes.pp atomic bt
+let pp (Base bt) = BaseTypes.pp bt
 
 let json (Base bt) : Yojson.Safe.t = 
   BaseTypes.json bt

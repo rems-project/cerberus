@@ -124,10 +124,10 @@ module Make (I: I_Sig) = struct
     let rec aux = function
       | Computational ((name,bt),t) ->
          let op = if !unicode then utf8string "\u{03A0}" else !^"AC" in
-         (op ^^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot) :: aux t
+         (op ^^^ typ (Sym.pp name) (BT.pp bt) ^^ dot) :: aux t
       | Logical ((name,ls),t) ->
          let op = if !unicode then utf8string "\u{2200}" else !^"AL" in
-         (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux t
+         (op ^^^ typ (Sym.pp name) (LS.pp ls) ^^ dot) :: aux t
       | Resource (re,t) ->
          let op = minus ^^ star in
          (RE.pp re ^^^ op) :: aux t

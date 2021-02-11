@@ -97,6 +97,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Tuple _ ->  ("t", faa tuple_counter)
         | Struct _ -> ("s", faa struct_counter)
         | Set _ -> ("set", faa set_counter)
+        | Map _ -> ("map", faa set_counter)
         end
 
     let compare veclass1 veclass2 = 
@@ -333,7 +334,7 @@ module Make (G : sig val global : Global.t end) = struct
        | BT.Loc ->
           Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
        | BT.Unit ->
-          Some (BT.pp false BT.Unit)
+          Some (BT.pp BT.Unit)
        | _ -> None
 
 

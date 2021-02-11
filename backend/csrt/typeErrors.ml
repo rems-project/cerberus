@@ -187,8 +187,8 @@ let pp_type_error te =
         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
           !^"has" ^^^ !^(string_of_int has), [])
   | Mismatch {has; expect} ->
-     (!^"Expected value of type" ^^^ LS.pp false expect ^^^
-        !^"but found value of type" ^^^ LS.pp false has, [])
+     (!^"Expected value of type" ^^^ LS.pp expect ^^^
+        !^"but found value of type" ^^^ LS.pp has, [])
   | Illtyped_it it ->
      (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Polymorphic_it it ->

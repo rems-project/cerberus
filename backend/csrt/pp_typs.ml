@@ -17,7 +17,7 @@ type lt = LT.t
 type st = CF.Ctype.ctype CF.Mucore.mu_struct_def * Global.struct_decl
 type ut = CF.Ctype.ctype CF.Mucore.mu_union_def
 
-let pp_bt = BT.pp true
+let pp_bt = BT.pp 
 
 let pp_ct cti = Sctypes.pp cti.ct
 
