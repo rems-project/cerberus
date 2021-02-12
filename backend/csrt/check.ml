@@ -611,7 +611,7 @@ module Make (G : sig val global : Global.t end) = struct
          begin match o_resource with
          | Some (resource_name, Points p') ->
             let local = use_resource resource_name [loc] local in
-            return (Points {p with pointee = p'.pointee}, local)
+            return (Points {p' with pointer = p.pointer}, local)
          | Some (resource_name, resource) ->
             let ((expect,has), state) = 
               Explain.resources names original_local (request, resource) in
@@ -624,6 +624,21 @@ module Make (G : sig val global : Global.t end) = struct
          end
       | Array a ->
          failwith "asd"
+         (* let o_resource = S.resource_for_pointer local a.pointer in
+          * begin match o_resource with
+          * | Some (resource_name, Array a') ->
+          *    let local = use_resource resource_name [loc] local in
+          *    return (Points {p with pointee = p'.pointee}, local)
+          * | Some (resource_name, resource) ->
+          *    let ((expect,has), state) = 
+          *      Explain.resources names original_local (request, resource) in
+          *    fail loc (Resource_mismatch {expect; has; state; situation})
+          * | None -> 
+          *    let (addr, state) = 
+          *      Explain.missing_ownership names original_local p.pointer in
+          *    let used = S.used_resource_for_pointer local p.pointer in
+          *    fail loc (Missing_ownership {addr; state; used; situation})
+          * end *)
       | Predicate p ->
          let o_resource = S.predicate_for local p.name p.iargs in
          begin match o_resource with
