@@ -364,6 +364,18 @@ module Make (G : sig val global : Global.t end) = struct
        let lvars = [(pointer_s, LS.Base BT.Loc)] in
        let lcs = [LC (EQ (S (BT.Loc, pointer_s), p.pointer))] in
        (lvars, lcs, r)
+    | RE.Array a -> 
+       let pointer_s = Sym.fresh () in
+       let length_s = Sym.fresh () in
+       let r = 
+         RE.Array {a with pointer = S (BT.Loc, pointer_s); 
+                          length = S (BT.Integer, length_s)} 
+       in
+       let lvars = [(pointer_s, LS.Base BT.Loc);
+                    (length_s, LS.Base BT.Integer)] in
+       let lcs = [LC (And [EQ (S (BT.Loc, pointer_s), a.pointer);
+                           EQ (S (BT.Integer, length_s), a.length)])] in
+       (lvars, lcs, r)
     | Predicate p -> 
        let def = match Global.get_predicate_def G.global p.name with
          | Some def -> def

@@ -313,7 +313,6 @@ module Make (G : sig val global : Global.t end) = struct
         { local : L.t;
           original_local : L.t;
           extra_names : Explain.naming;
-          unis : Sym.t Uni.unis;
           situation: situation;
           loc: loc;
           resource : RE.t;
@@ -334,7 +333,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Prompt : 'r prompt * ('r -> 'a m) -> 'a m
 
       and 'r prompt = 
-        | R_Resource : resource_request -> (Sym.t Uni.unis * L.t) prompt
+        | R_Resource : resource_request -> (RE.t * L.t) prompt
         | R_Packing : packing_request -> (LRT.t * L.t) prompt
         | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
         | R_Error : err -> 'r prompt
@@ -449,11 +448,18 @@ module Make (G : sig val global : Global.t end) = struct
                    original_local; 
                    extra_names;
                    situation; local; 
-                   unis; 
                    resource;
                  }
                in
-               let* (unis, local) = prompt (R_Resource rr) in
+               let* (resource', local) = prompt (R_Resource rr) in
+               let* unis = match RE.unify resource resource' unis with
+                 | Some unis -> return unis
+                 | None ->
+                    let ((expect,has), state) = 
+                      Explain.resources names original_local (resource, resource') in
+                    fail loc (Resource_mismatch {expect; has; state; situation})
+      
+               in
                let new_substs = Uni.find_resolved local unis in
                let ftyp' = NFT.subst_vars_r new_substs ftyp in
                infer_resources local unis ftyp'
@@ -538,7 +544,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
+    (* use resource_around_pointer to make this succeed for more cases *)
     let rec ownership_request_prompt (loc: loc) ~original_local ~extra_names situation local (pointer: IT.t) (need_size: IT.t) = 
       let names = names @ extra_names in
       let open Prompt.Operators in
@@ -554,18 +560,13 @@ module Make (G : sig val global : Global.t end) = struct
           | Some (resource_name, resource) -> 
              return (resource_name, resource)
         in
-        let* have_size = match resource with
-          | Predicate pred -> 
+        let* (_, have_size) = match RE.footprint resource with
+          | None -> 
              let (resource, state) = 
-               Explain.resource names original_local (Predicate pred) 
-             in
+               Explain.resource names original_local resource in
              fail loc (Cannot_unpack {resource; state; situation})
-          | Block {size; _} ->
-             return (Num size)
-          | Region {size; _} ->
-             return size
-          | Points {size; _} ->
-             return (Num size)
+          | Some fp ->
+             return fp
         in
         if S.ge local need_size have_size then 
           let local = L.use_resource resource_name [loc] local in
@@ -590,7 +591,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec resource_request_prompt loc ~original_local ~extra_names situation local request unis = 
+    let rec resource_request_prompt loc ~original_local ~extra_names situation local request = 
       let names = names @ extra_names in
       let open Prompt.Operators in
       let open Resources in
@@ -598,51 +599,37 @@ module Make (G : sig val global : Global.t end) = struct
       | Block b ->
          let* local = 
            ownership_request_prompt loc ~original_local ~extra_names
-             situation local b.pointer (Num b.size)
-         in
-         return (unis, local)
+             situation local b.pointer (Num b.size) in
+         return (Block b, local)
       | Region r ->
          let* local = 
            ownership_request_prompt loc ~original_local ~extra_names
-             situation local r.pointer r.size 
-         in
-         return (unis, local)
+             situation local r.pointer r.size in
+         return (Region r, local)
       | Points p ->
          let o_resource = S.resource_for_pointer local p.pointer in
          begin match o_resource with
-         | Some (resource_name, Points p') when Z.equal p.size p'.size ->
-            begin match Uni.unify_sym p.pointee p'.pointee unis with
-            | Some unis -> 
-               let local = use_resource resource_name [loc] local in
-               return (unis, local)
-            | None -> 
-               let ((expect,has), state) = 
-                 Explain.resources names original_local (request, Points p') in
-               fail loc (Resource_mismatch {expect; has; state; situation})
-            end
-         | Some (resource_name, resource)  ->
+         | Some (resource_name, Points p') ->
+            let local = use_resource resource_name [loc] local in
+            return (Points {p with pointee = p'.pointee}, local)
+         | Some (resource_name, resource) ->
             let ((expect,has), state) = 
               Explain.resources names original_local (request, resource) in
-            fail loc (Resource_mismatch {expect; has; state; situation})             
+            fail loc (Resource_mismatch {expect; has; state; situation})
          | None -> 
             let (addr, state) = 
               Explain.missing_ownership names original_local p.pointer in
             let used = S.used_resource_for_pointer local p.pointer in
             fail loc (Missing_ownership {addr; state; used; situation})
          end
+      | Array a ->
+         failwith "asd"
       | Predicate p ->
          let o_resource = S.predicate_for local p.name p.iargs in
          begin match o_resource with
          | Some (resource_name, p') -> 
-            begin match Uni.unify_syms p.oargs p'.oargs unis with
-            | Some unis -> 
-               let local = use_resource resource_name [loc] local in
-               return (unis, local)
-            | _ ->
-               let ((expect,has), state) = 
-                 Explain.resources names original_local (request, Predicate p') in
-               fail loc (Resource_mismatch {expect; has; state; situation}) 
-            end
+            let local = use_resource resource_name [loc] local in
+            return (Predicate { p with oargs = p'.oargs }, local)
          | _ ->         
             let def = match Global.get_predicate_def G.global p.name with
               | Some def -> def
@@ -665,7 +652,7 @@ module Make (G : sig val global : Global.t end) = struct
             let* (lrt, local) = try_choices choices1 in
             let local = bind_logical local lrt in
             resource_request_prompt loc ~original_local ~extra_names
-              situation local request unis
+              situation local request
          end
 
 
@@ -679,10 +666,10 @@ module Make (G : sig val global : Global.t end) = struct
          begin match r with
          | Prompt.R_Error (loc,tr,error) -> 
             Error (loc,tr,error)
-         | R_Resource {loc; original_local; extra_names; local; unis; situation; resource} ->
+         | R_Resource {loc; original_local; extra_names; local; situation; resource} ->
             let prompt = 
               resource_request_prompt loc ~original_local ~extra_names 
-                situation local resource unis in
+                situation local resource in
             let* (unis, local) = handle_prompt prompt in
             handle_prompt (c (unis, local))
          | R_Packing {loc; local; extra_names; situation; lft} ->
@@ -1329,6 +1316,8 @@ module Make (G : sig val global : Global.t end) = struct
                    fail loc (Generic !^"cannot read empty bytes")
                 | Region _ -> 
                    fail loc (Generic !^"cannot read empty bytes")
+                | Array a ->
+                   failwith "asd"
                 | Predicate pred -> 
                    let (resource,state) = 
                      Explain.resource names original_local (Predicate pred) in

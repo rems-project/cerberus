@@ -30,6 +30,14 @@ module Make (G : sig val global : Global.t end) = struct
   let ctxt = G.global.solver_context
   let solver = Z3.Solver.mk_simple_solver ctxt
 
+
+  let array_select_after_sym = Z3.Symbol.mk_string ctxt "array_select_after"
+  let array_index_shift_right_sym = Z3.Symbol.mk_string ctxt "array_index_shift_right_sym"
+
+  let array_select_after_sym = 
+    Z3.FuncDecl.mk_func_decl ctxt array_select_after_sym
+      []
+
   let get_model () = Z3.Solver.get_model solver
 
 
@@ -80,6 +88,26 @@ module Make (G : sig val global : Global.t end) = struct
     | [r] -> Some r
     | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points))))
 
+  let resource_around_pointer local it
+       : (Sym.t * RE.t) option = 
+    let points = 
+      List.filter_map (fun (name, re) ->
+          match RE.footprint re with
+          | Some (pointer,size) when 
+                 constraint_holds local 
+                   (LC.LC (IT.And [IT.LocLE (pointer, it);
+                                   IT.LocLT (it, Offset (pointer, size));
+                      ])) ->
+             Some (name, re) 
+          | _ ->
+             None
+        ) (L.all_named_resources local)
+    in
+    match points with
+    | [] -> None
+    | [r] -> Some r
+    | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points))))
+
 
   let predicate_for local id iargs
        : (Sym.t * RE.predicate) option = 
@@ -115,6 +143,27 @@ module Make (G : sig val global : Global.t end) = struct
           match RE.pointer re with
           | Some pointer when equal local it pointer -> Some where
           | _ -> None
+        ) (L.all_named_used_resources local)
+    in
+    match points with
+    | [] -> None
+    | r :: _ -> Some r
+
+
+
+  let used_resource_around_pointer local it
+       : (Locations.t list) option = 
+    let points = 
+      List.filter_map (fun (name, (re, where)) ->
+          match RE.footprint re with
+          | Some (pointer,size) when 
+                 constraint_holds local 
+                   (LC.LC (IT.And [IT.LocLE (pointer, it);
+                                   IT.LocLT (it, Offset (pointer, size));
+                      ])) ->
+             Some where 
+          | _ ->
+             None
         ) (L.all_named_used_resources local)
     in
     match points with

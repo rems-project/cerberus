@@ -291,7 +291,30 @@ module Make (G : sig val global : Global.t end) = struct
            let* (bt, t) = infer_set_type loc t in
            let* t' = check_aux loc (Base (Set bt)) t' in
            return (Base Bool, Subset (t,t'))
-
+        (* maps *)
+        | ConstArray (it, _) ->
+           let* (Base bt, it) = infer loc it in
+           let mbt = BT.Map (Integer, bt) in
+           return (Base (mbt), ConstArray (it, mbt))
+        | ArrayGet (it,it') ->
+           let* (bt, it) = infer_integer_map_type loc it in
+           let* it' = check_aux loc (Base Integer) it' in
+           return (Base bt, ArrayGet (it, it'))
+        | ArraySet (it,it',it'') ->
+           let* (bt, it) = infer_integer_map_type loc it in
+           let* it' = check_aux loc (Base Integer) it' in
+           let* it'' = check_aux loc (Base bt) it'' in
+           return (Base (Map (Integer, bt)), ArraySet (it, it', it''))
+        | ArraySelectAfter ((it,it'), it'') ->
+           let* (bt, it) = infer_integer_map_type loc it in
+           let* it' = check_aux loc (Base Integer) it' in
+           let* it'' = check_aux loc (Base (Map (Integer, bt))) it'' in
+           return (Base (Map (Integer, bt)), ArraySelectAfter ((it, it'), it''))
+        | ArrayIndexShiftRight (it, it') ->
+           let* (bt, it) = infer_integer_map_type loc it in
+           let* it' = check_aux loc (Base Integer) it' in
+           return (Base (Map (Integer, bt)), ArrayIndexShiftRight (it, it'))
+    
       and check_aux : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
         fun loc ls it ->
         match it, ls with
@@ -313,9 +336,21 @@ module Make (G : sig val global : Global.t end) = struct
           | _ -> fail loc (Illtyped_it context)
         in
         return (bt, t)
-      in
 
+      and infer_integer_map_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
+        fun loc it ->
+        let* (ls, t) = infer loc it in
+        let* bt = match ls with
+          | Base (Map (Integer, bt)) -> return bt
+          | _ -> fail loc (Illtyped_it context)
+        in
+        return (bt, t)
+                   
+      in  
       check_aux loc ls it
+
+
+
 
     let welltyped loc env ls it = 
       let* _ = check_and_type_annot loc env ls it in
@@ -335,9 +370,23 @@ module Make (G : sig val global : Global.t end) = struct
          let* () = WIT.welltyped loc local (LS.Base BT.Loc) r.pointer in
          WIT.welltyped loc local (LS.Base BT.Integer) r.size
       | Points p -> 
+         let* () = WIT.welltyped loc local (LS.Base BT.Loc) p.pointer in
          (* points is "polymorphic" in the pointee *)
-         let* () = check_bound loc local KLogical p.pointee in
-         WIT.welltyped loc local (LS.Base BT.Loc) p.pointer
+         check_bound loc local KLogical p.pointee
+      | Array a -> 
+         let* () = WIT.welltyped loc local (LS.Base BT.Loc) a.pointer in
+         let* () = WIT.welltyped loc local (LS.Base BT.Integer) a.length in
+         (* array is "polymorphic" in the content type *)
+         let* () = check_bound loc local KLogical a.content in
+         let content_t = L.get_l a.content local in
+         begin match content_t with
+         | Base (Map (Integer, _)) -> return ()
+         | _ ->
+            let err = 
+              let open Pp in
+              !^"Array content argument not a map:" ^^^ LS.pp content_t in
+            fail loc (Generic err)
+         end
       | Predicate p -> 
          let* def = match Global.get_predicate_def G.global p.name, p.name with
            | Some def, _ -> return def

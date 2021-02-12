@@ -38,6 +38,8 @@ end
 
 
 
+
+
 type 'bt term =
   (* literals *)
   | S of 'bt * Sym.t
@@ -102,7 +104,12 @@ type 'bt term =
   | SetIntersection of ('bt term) List1.t
   | SetDifference of 'bt term * 'bt term
   | Subset of 'bt term * 'bt term
-
+  (* maps *)
+  | ConstArray of 'bt term * 'bt
+  | ArrayGet of 'bt term * 'bt term
+  | ArraySet of 'bt term * 'bt term * 'bt term
+  | ArraySelectAfter of ('bt term * 'bt term) * 'bt term
+  | ArrayIndexShiftRight of 'bt term * 'bt term
 
 type typed = BT.t term
 type untyped = unit term
@@ -236,6 +243,17 @@ let rec equal it it' =
      equal t1 t1' && equal t1' t2'
   | Subset (t1, t2), Subset (t1', t2') ->
      equal t1 t1' && equal t1' t2'
+  (* maps *)
+  | ConstArray (t,bt), ConstArray (t',bt') ->
+     equal t t' && BT.equal bt bt'
+  | ArrayGet (t1,t2), ArrayGet (t1',t2') ->
+     equal t1 t1' && equal t2 t2'
+  | ArraySet (t1,t2,t3), ArraySet (t1',t2',t3') ->
+     equal t1 t1' && equal t2 t2' && equal t3 t3'
+  | ArraySelectAfter ((t1,t2), t3), ArraySelectAfter ((t1',t2'), t3') ->
+     equal t1 t1' && equal t2 t2' && equal t3 t3'
+  | ArrayIndexShiftRight (t1, t2), ArrayIndexShiftRight (t1', t2') ->
+     equal t1 t1' && equal t2 t2'
 
   (* literals *)
   | S _, _
@@ -300,6 +318,11 @@ let rec equal it it' =
   | SetIntersection _, _
   | SetDifference _, _
   | Subset _, _
+  | ConstArray _, _
+  | ArrayGet _, _
+  | ArraySet _, _
+  | ArraySelectAfter _, _
+  | ArrayIndexShiftRight _, _
 
     -> false
 
@@ -432,6 +455,17 @@ let pp (type bt) (it : bt term) : PPrint.document =
        c_app !^"difference" [aux false t1; aux false t2]
     | Subset (t1, t2) ->
        c_app !^"subset" [aux false t1; aux false t2]
+    (* maps *)
+    | ConstArray (t,_) ->
+       c_app !^"all" [aux false t]
+    | ArrayGet (t1,t2) ->
+       aux true t1 ^^ lbracket ^^ aux false t2 ^^ rbracket
+    | ArraySet (t1,t2,t3) ->
+       aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
+    | ArraySelectAfter ((t1,t2), t3) ->
+       c_app !^"array_select_after" [aux false t1; aux false t2; aux false t3]
+    | ArrayIndexShiftRight (t1, t2) ->
+       c_app !^"array_index_shift_right" [aux false t1; aux false t2]
   in
   aux false it
 
@@ -500,6 +534,12 @@ let rec vars_in it : SymSet.t =
   | SetIntersection ts -> vars_in_list (List1.to_list ts)
   | SetDifference (t1, t2) -> vars_in_list [t1;t2]
   | Subset (t1, t2) -> vars_in_list [t1;t2]
+  (* maps *)
+  | ConstArray (t,_) -> vars_in t
+  | ArrayGet (t1,t2) -> vars_in_list [t1;t2]
+  | ArraySet (t1,t2,t3) -> vars_in_list [t1;t2;t3]
+  | ArraySelectAfter ((t1, t2), t3) -> vars_in_list [t1; t2; t3]
+  | ArrayIndexShiftRight (t1, t2) -> vars_in_list [t1; t2]
 
 and vars_in_list l = 
   List.fold_left (fun acc sym -> SymSet.union acc (vars_in sym))
@@ -594,6 +634,16 @@ let map_sym f it : t =
        SetDifference (aux t1, aux t2)
     | Subset (t1, t2) ->
        Subset (aux t1, aux t2)
+    | ConstArray (t, bt) ->
+       ConstArray (aux t, bt)
+    | ArrayGet (t1, t2) ->
+       ArrayGet (aux t1, aux t2)
+    | ArraySet (t1, t2, t3) ->
+       ArraySet (aux t1, aux t2, aux t3)
+    | ArraySelectAfter ((t1,t2),t3) ->
+       ArraySelectAfter ((aux t1,aux t2),aux t3)
+    | ArrayIndexShiftRight (t1, t2) ->
+       ArrayIndexShiftRight (aux t1, aux t2)
   in
   aux it
 
@@ -667,3 +717,6 @@ let good_value v sct =
      good_pointer v pointee_sct
   | _ ->
      Representable (ST_Ctype sct, v_it)
+
+
+

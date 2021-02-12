@@ -389,6 +389,23 @@ module Make (G : sig val global : Global.t end) = struct
                )
              in
              (entry, SymSet.union (symbol_it p.pointer) (SymSet.singleton p.pointee))
+          | Array a -> 
+             (* take substs into account *)
+             let (Base content_t) = L.get_l a.content local in
+             let length = match o_evaluate o_model a.length BT.Integer with
+               | Some length -> length
+               | None -> IT.pp (IT.subst_vars substitutions a.length)
+             in
+             let entry = 
+               (Some (IT.pp (IT.subst_vars substitutions a.pointer)), 
+                o_evaluate o_model a.pointer BT.Loc,
+                Some (length ^^ star ^^ Z.pp a.element_size),
+                Some !^"owned",
+                Some (Sym.pp (Sym.substs substitutions a.content)),
+                o_evaluate o_model (IT.S (content_t, a.content)) content_t
+               )
+             in
+             (entry, SymSet.union (symbol_it a.pointer) (SymSet.singleton a.content))
           | Predicate p ->
              let entry =
                (None,

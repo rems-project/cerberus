@@ -279,7 +279,6 @@ let rec of_index_term global it =
      Z3.Boolean.mk_eq ctxt
        (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
        (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
-
   | IntegerToPointerCast it ->
      (* identity, at the moment *)
      of_index_term global it
@@ -330,10 +329,27 @@ let rec of_index_term global it =
      let a = of_index_term global it in
      let a' = of_index_term global it' in
      Z3.Set.mk_subset ctxt a a'
-
-
-
-
-
-
-
+  | ConstArray (it, bt) ->
+     let sort = bt_to_sort global bt in
+     let a = of_index_term global it in
+     Z3.Z3Array.mk_const_array ctxt sort a
+  | ArrayGet (it,it') ->
+     let a = of_index_term global it in
+     let a' = of_index_term global it' in
+     Z3.Z3Array.mk_select ctxt a a'
+  | ArraySet (it,it',it'') ->
+     let a = of_index_term global it in
+     let a' = of_index_term global it' in
+     let a'' = of_index_term global it'' in
+     Z3.Z3Array.mk_store ctxt a a' a''
+  | ArraySelectAfter ((t1,t2), t3) ->
+     (* let a = of_index_term global t1 in
+      * let a' = of_index_term global t2 in
+      * let a'' = of_index_term global t3 in *)
+     Debug_ocaml.error "Z3 mapping for ArraySelectAfter"
+     (* Z3.Expr.mk_app ctxt array_select_after [a;a';a''] *)
+  | ArrayIndexShiftRight (t1, t2) ->
+     (* let a = of_index_term global t1 in
+      * let a' = of_index_term global t2 in *)
+     Debug_ocaml.error "Z3 mapping for ArrayIndexShiftRight"
+     (* Z3.Expr.mk_app ctxt array_index_shift_right [a;a']) *)
