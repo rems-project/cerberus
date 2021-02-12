@@ -68,6 +68,12 @@ module Make (G : sig val global : Global.t end) = struct
   let ge local it1 it2 =
     constraint_holds local (LC.LC (IndexTerms.GE (it1, it2)))
 
+  let gt local it1 it2 =
+    constraint_holds local (LC.LC (IndexTerms.GT (it1, it2)))
+
+  let le local it1 it2 =
+    constraint_holds local (LC.LC (IndexTerms.LE (it1, it2)))
+
   let lt local it1 it2 =
     constraint_holds local (LC.LC (IndexTerms.LT (it1, it2)))
 

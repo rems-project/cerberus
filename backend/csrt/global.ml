@@ -78,8 +78,71 @@ let early =
   (id, predicate)
 
 
+
+let zero_region = 
+  let open Resources in
+  let open BT in
+  let open IT in
+  let id = "ZeroRegion" in
+  let pointer_s = Sym.fresh () in
+  let pointer_t = S (Loc, pointer_s) in
+  let length_s = Sym.fresh () in
+  let length_t = S (Integer, length_s) in
+  let content_s = Sym.fresh () in
+  let content_t = S (Map (Integer, Integer), Sym.fresh ()) in
+  let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
+  let oargs = [] in
+  let pred = 
+    Predicate {
+        name = Id id; 
+        iargs = [pointer_t; length_t];
+        oargs = [];
+      } 
+  in
+  let array = 
+    RE.Array {
+        pointer = pointer_t;
+        length = length_t;
+        element_size = Z.of_int 1;
+        content = content_s;
+      }
+  in
+  let pack_functions =
+    [LFT.Logical ((content_s, Base (Map (Integer, Integer))),
+     LFT.Resource (array, 
+     LFT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
+     LFT.Constraint (LC (EQ (content_t, ConstArray (IT.Num Z.zero, BT.Integer))),
+     LFT.I (
+     LRT.Resource (pred,
+     LRT.I))))))] 
+  in
+  let unpack_functions =
+    [LFT.Resource (pred,
+     LFT.I (
+     LRT.Logical ((content_s, Base (Map (Integer, Integer))),
+     LRT.Resource (array,
+     LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
+     LRT.Constraint (LC (EQ (content_t, ConstArray (IT.Num Z.zero, BT.Integer))),
+     LRT.I))))))]
+  in
+  let predicate = {
+      iargs; 
+      oargs; 
+      pack_functions; 
+      unpack_functions
+    } 
+  in
+  (id, predicate)
+
+
+
+
+
+
+
 let builtin_predicates_list = [
-    early
+    early;
+    zero_region;
   ]
 
 let builtin_predicates =

@@ -585,6 +585,7 @@ module Make (G : sig val global : Global.t end) = struct
           in
           return local
         else
+          (* fix this: could be either side that has unknown length *)
           let (resource, state) = Explain.resource names original_local resource in
           fail loc (Unknown_resource_size {resource; state; situation})
 
@@ -609,7 +610,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Points p ->
          let o_resource = S.resource_for_pointer local p.pointer in
          begin match o_resource with
-         | Some (resource_name, Points p') ->
+         | Some (resource_name, Points p') when Z.equal p.size p'.size ->
             let local = use_resource resource_name [loc] local in
             return (Points {p' with pointer = p.pointer}, local)
          | Some (resource_name, resource) ->
@@ -623,22 +624,75 @@ module Make (G : sig val global : Global.t end) = struct
             fail loc (Missing_ownership {addr; state; used; situation})
          end
       | Array a ->
-         failwith "asd"
-         (* let o_resource = S.resource_for_pointer local a.pointer in
-          * begin match o_resource with
-          * | Some (resource_name, Array a') ->
-          *    let local = use_resource resource_name [loc] local in
-          *    return (Points {p with pointee = p'.pointee}, local)
-          * | Some (resource_name, resource) ->
-          *    let ((expect,has), state) = 
-          *      Explain.resources names original_local (request, resource) in
-          *    fail loc (Resource_mismatch {expect; has; state; situation})
-          * | None -> 
-          *    let (addr, state) = 
-          *      Explain.missing_ownership names original_local p.pointer in
-          *    let used = S.used_resource_for_pointer local p.pointer in
-          *    fail loc (Missing_ownership {addr; state; used; situation})
-          * end *)
+         let o_resource = S.resource_for_pointer local a.pointer in
+         begin match o_resource with
+         | Some (resource_name, Array a') when Z.equal a.element_size a'.element_size ->
+            if S.le local a.length (Num Z.zero) then
+              return (Array a, local)
+            else if S.equal local a.length a'.length then
+              let local = use_resource resource_name [loc] local in
+              return (Array {a' with pointer = a.pointer; length = a'.length}, local)
+            else if S.lt local a.length a'.length then
+              let local = use_resource resource_name [loc] local in
+              let local = 
+                let left = 
+                  Array {a' with pointer = Offset (a.pointer, Mul (a.length, Num a.element_size)); 
+                                 length = Sub (a'.length, a.length)} in
+                add_ur left local
+              in
+              return (Array {a' with pointer = a.pointer; length = a'.length}, local)
+            else if S.gt local a.length a'.length then
+              begin 
+                if S.gt local (Add (a.length, Num (Z.of_int 1))) a'.length then
+                  let array_bt = match get_l a'.content local with
+                    | LS.Base (Map (Integer, bt)) -> bt
+                    | _ -> Debug_ocaml.error "illtyped array resource"
+                  in
+                  let o_extra_resource = 
+                    S.resource_for_pointer local 
+                      (Offset (a.pointer, Mul (a'.length, Num a'.element_size))) 
+                  in
+                  begin match o_extra_resource with
+                  | Some (extra_resource_name, Points p') 
+                       when Z.equal a.element_size p'.size &&
+                              (LS.equal (L.get_l p'.pointee local) (Base array_bt))
+                    ->
+                     let local = use_resource resource_name [loc] local in
+                     let local = use_resource extra_resource_name [loc] local in
+                     let new_content = Sym.fresh () in
+                     let local = add_l new_content (Base array_bt) local in
+                     let local = add_uc (LC (IT.EQ (S (array_bt, new_content), 
+                                                    IT.ArraySet (S (Map (Integer, array_bt), a'.content), a'.length, 
+                                                                 (S (array_bt, p'.pointee)))))) local in
+                     let resource = 
+                       Array {a' with pointer = a.pointer;
+                                      length = a.length;
+                                      content = new_content}
+                     in
+                     return (resource, local)
+                  | _ ->
+                     let (addr, state) = 
+                       Explain.missing_ownership names original_local a.pointer in
+                     let used = S.used_resource_for_pointer local a.pointer in
+                     fail loc (Missing_ownership {addr; state; used; situation})
+                  end
+                else
+                  Debug_ocaml.error "todo: better array inference"
+              end
+            else
+              (* fix this: could be either resource that has unknown length *)
+              let (resource, state) = Explain.resource names original_local (Array a') in
+              fail loc (Unknown_resource_size {resource; state; situation})
+         | Some (resource_name, resource) ->
+            let ((expect,has), state) = 
+              Explain.resources names original_local (request, resource) in
+            fail loc (Resource_mismatch {expect; has; state; situation})
+         | None -> 
+            let (addr, state) = 
+              Explain.missing_ownership names original_local a.pointer in
+            let used = S.used_resource_for_pointer local a.pointer in
+            fail loc (Missing_ownership {addr; state; used; situation})
+         end
       | Predicate p ->
          let o_resource = S.predicate_for local p.name p.iargs in
          begin match o_resource with
