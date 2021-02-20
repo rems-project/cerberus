@@ -63,6 +63,7 @@ type type_error =
   | Missing_predicate of string
   | Missing_member of BT.tag * BT.member
 
+  | Missing_global_ownership of {addr : doc; used : (loc list) option; situation : situation}   
   | Missing_ownership of {addr : doc; state : state_pp; used : (loc list) option; situation : situation}   
   | Unknown_resource_size of {resource: doc; state : state_pp; situation : situation}
   | Missing_resource of {resource : doc; state : state_pp; used: (loc list) option; situation : situation}
@@ -138,6 +139,13 @@ let pp_type_error te =
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])
 
+  | Missing_global_ownership {addr; used; situation} ->
+     let msg = 
+       !^"Missing ownership of global location" ^^^ 
+         addr ^^^ for_situation situation ^^ hardline ^^^
+       !^"Maybe missing an 'accesses' specification?"
+     in
+     (msg, Option.list [pp_used used])
   | Missing_ownership {addr; state; used; situation} ->
      let msg = 
        !^"Missing ownership of location" ^^^ 

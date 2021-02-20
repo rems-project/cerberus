@@ -77,6 +77,11 @@ module Make (G : sig val global : Global.t end) = struct
   let lt local it1 it2 =
     constraint_holds local (LC.LC (IndexTerms.LT (it1, it2)))
 
+  let is_global local it = 
+    List.exists (fun (s, LS.Base bt) ->
+      equal local it (S (bt, s))
+    ) G.global.logical
+
 
   let resource_for_pointer local it
        : (Sym.t * RE.t) option = 

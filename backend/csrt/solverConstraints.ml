@@ -138,13 +138,13 @@ let rec of_index_term global it =
      let a' = of_index_term global it' in
      Z3.Arithmetic.mk_power ctxt a a'
   | Rem_t (it,it') -> 
-     if not !rem_t_warned then
+     if not (!Debug_ocaml.debug_level > 0) && !rem_t_warned then
        (rem_t_warned := true; Pp.warn !^"Rem_t constraint");
      let a = of_index_term global it in
      let a' = of_index_term global it' in
      Z3.Arithmetic.Integer.mk_rem ctxt a a'
   | Rem_f (it,it') -> 
-     if not !rem_f_warned then
+     if not (!Debug_ocaml.debug_level > 0) && !rem_f_warned then
        (rem_f_warned := true; Pp.warn !^"Rem_f constraint");
      let a = of_index_term global it in
      let a' = of_index_term global it' in

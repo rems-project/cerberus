@@ -556,7 +556,9 @@ module Make (G : sig val global : Global.t end) = struct
           | None -> 
              let (addr, state) = Explain.missing_ownership names original_local pointer in
              let used = S.used_resource_for_pointer local pointer in
-             fail loc (Missing_ownership {addr; state; used; situation})
+             if S.is_global original_local pointer 
+             then fail loc (Missing_global_ownership {addr; used; situation})
+             else fail loc (Missing_ownership {addr; state; used; situation})
           | Some (resource_name, resource) -> 
              return (resource_name, resource)
         in
@@ -621,7 +623,9 @@ module Make (G : sig val global : Global.t end) = struct
             let (addr, state) = 
               Explain.missing_ownership names original_local p.pointer in
             let used = S.used_resource_for_pointer local p.pointer in
-            fail loc (Missing_ownership {addr; state; used; situation})
+            if S.is_global original_local p.pointer 
+            then fail loc (Missing_global_ownership {addr; used; situation})
+            else fail loc (Missing_ownership {addr; state; used; situation})
          end
       | Array a ->
          let o_resource = S.resource_for_pointer local a.pointer in
@@ -674,7 +678,9 @@ module Make (G : sig val global : Global.t end) = struct
                      let (addr, state) = 
                        Explain.missing_ownership names original_local a.pointer in
                      let used = S.used_resource_for_pointer local a.pointer in
-                     fail loc (Missing_ownership {addr; state; used; situation})
+                     if S.is_global original_local a.pointer 
+                     then fail loc (Missing_global_ownership {addr; used; situation})
+                     else fail loc (Missing_ownership {addr; state; used; situation})
                   end
                 else
                   Debug_ocaml.error "todo: better array inference"
@@ -691,7 +697,9 @@ module Make (G : sig val global : Global.t end) = struct
             let (addr, state) = 
               Explain.missing_ownership names original_local a.pointer in
             let used = S.used_resource_for_pointer local a.pointer in
-            fail loc (Missing_ownership {addr; state; used; situation})
+            if S.is_global original_local a.pointer 
+            then fail loc (Missing_global_ownership {addr; used; situation})
+            else fail loc (Missing_ownership {addr; state; used; situation})
          end
       | Predicate p ->
          let o_resource = S.predicate_for local p.name p.iargs in
@@ -1396,7 +1404,9 @@ module Make (G : sig val global : Global.t end) = struct
                 let (addr,state) = 
                   Explain.missing_ownership names original_local pointer in
                 let used = S.used_resource_for_pointer local pointer in
-                fail loc (Missing_ownership {addr; state; used; situation})
+                if S.is_global original_local pointer 
+                then fail loc (Missing_global_ownership {addr; used; situation})
+                else fail loc (Missing_ownership {addr; state; used; situation})
            in
            let (Base vbt) = L.get_l pointee local in
            if BT.equal vbt bt 
