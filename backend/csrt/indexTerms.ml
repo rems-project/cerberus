@@ -416,9 +416,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | AllocationSize t1 ->
        c_app !^"allocationSize" [aux false t1]
     | AddPointer (t1, t2) ->
-       mparens (aux true t1 ^^^ plus ^^^ aux true t2)
+       mparens (aux true t1 ^^^ plus ^^ dot ^^^ aux true t2)
     | SubPointer (t1, t2) ->
-       mparens (aux true t1 ^^^ minus ^^^ aux true t2)
+       mparens (aux true t1 ^^^ minus ^^ dot ^^^ aux true t2)
     | MulPointer (t1, t2) ->
        mparens (aux true t1 ^^^ star ^^^ aux true t2)
     | LocLT (o1,o2) -> 

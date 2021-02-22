@@ -152,8 +152,10 @@ pred_with_args:
 predarg:
   | p = path { Path.PathArg p }
   | z = NUM  { Path.NumArg z }
-  | p = path PLUS a = predarg            { Path.AddPointer (p, a)}
-  | p = path MINUS a = predarg            { Path.SubPointer (p, a)}
+  | p = predarg PLUS a = predarg            { Path.Add (p, a)}
+  | p = predarg MINUS a = predarg            { Path.Sub (p, a)}
+  | p = predarg PLUSDOT a = predarg            { Path.AddPointer (p, a)}
+  | p = predarg MINUSDOT a = predarg            { Path.SubPointer (p, a)}
 
 path: 
   | LPAREN pr_ps = pred_with_args RPAREN DOT id = ID   { Path.PredArg (fst pr_ps, snd pr_ps, id) }

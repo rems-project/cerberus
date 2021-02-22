@@ -30,8 +30,10 @@ type path =
 
 and predarg = 
   | PathArg of path
-  | AddPointer of path * predarg
-  | SubPointer of path * predarg
+  | Add of predarg * predarg
+  | Sub of predarg * predarg
+  | AddPointer of predarg * predarg
+  | SubPointer of predarg * predarg
   | NumArg of Z.t
 
 type t = path
@@ -59,10 +61,14 @@ let rec equal p1 p2 =
 and predarg_equal pa1 pa2 = 
   match pa1, pa2 with
   | PathArg p1, PathArg p2 -> equal p1 p2
-  | AddPointer (p1,i1), AddPointer (p2,i2) -> equal p1 p2 && predarg_equal i1 i2
-  | SubPointer (p1,i1), SubPointer (p2,i2) -> equal p1 p2 && predarg_equal i1 i2
+  | Add (p1,i1), Add (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
+  | Sub (p1,i1), Sub (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
+  | AddPointer (p1,i1), AddPointer (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
+  | SubPointer (p1,i1), SubPointer (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
   | NumArg z1, NumArg z2 -> Z.equal z1 z2
   | PathArg _, _ -> false
+  | Add _, _ -> false
+  | Sub _, _ -> false
   | AddPointer _, _ -> false
   | SubPointer _, _ -> false
   | NumArg _, _ -> false
@@ -76,8 +82,10 @@ let rec pp = function
 
 and pp_predarg = function
   | PathArg t -> pp t
-  | AddPointer (p,t) -> pp p ^^^ plus ^^^ pp_predarg t
-  | SubPointer (p,t) -> pp p ^^^ minus ^^^ pp_predarg t
+  | Add (p,t) -> pp_predarg p ^^^ plus ^^^ pp_predarg t
+  | Sub (p,t) -> pp_predarg p ^^^ minus ^^^ pp_predarg t
+  | AddPointer (p,t) -> pp_predarg p ^^^ plus ^^ dot ^^^ pp_predarg t
+  | SubPointer (p,t) -> pp_predarg p ^^^ minus ^^ dot ^^^ pp_predarg t
   | NumArg z -> Z.pp z
 
 let addr bn = 
@@ -114,7 +122,9 @@ let rec remove_labels = function
 
 and remove_labels_predarg = function
   | PathArg p -> PathArg (remove_labels p)
-  | AddPointer(p,i) -> AddPointer (remove_labels p, i)
-  | SubPointer(p,i) -> SubPointer (remove_labels p, i)
+  | Add(p,i) -> Add (remove_labels_predarg p, i)
+  | Sub(p,i) -> Sub (remove_labels_predarg p, i)
+  | AddPointer(p,i) -> AddPointer (remove_labels_predarg p, i)
+  | SubPointer(p,i) -> SubPointer (remove_labels_predarg p, i)
   | NumArg z -> NumArg z
 

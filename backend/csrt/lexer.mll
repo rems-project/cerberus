@@ -28,6 +28,8 @@ let newline = '\r' | '\n' | "\r\n"
 rule read = parse
   | "+"            { PLUS }
   | "-"            { MINUS }
+  | "+."           { PLUSDOT }
+  | "-."           { MINUSDOT }
   | "*"            { STAR }
   | "&"            { AMPERSAND }
   | "/"            { DIV }

@@ -1612,10 +1612,10 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.item.ct in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let o_resource = S.resource_for_pointer local (S (arg.bt, arg.lname)) in
+              let o_resource = S.resource_around_pointer local (S (arg.bt, arg.lname)) in
               let resource_ok = 
                 match Option.bind o_resource (Tools.comp RE.size snd) with
-                | Some size' when S.equal local size' (Num size) -> true
+                | Some size' when S.ge local size' (Num size) -> true
                 | Some _ -> false
                 | _ -> false
               in

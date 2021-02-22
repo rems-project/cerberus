@@ -147,14 +147,22 @@ let rec resolve_index_term loc mapping (it: PIT.index_term)
 let rec resolve_predarg loc mapping = function
   | Path.NumArg z -> 
      return (IT.Num z)
+  | Add (p,a) -> 
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.Add (it, it'))
+  | Sub (p,a) -> 
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.Sub (it, it'))
   | AddPointer (p,a) -> 
-     let* (ls, s) = resolve_path loc mapping p in
-     let* it = resolve_predarg loc mapping a in
-     return (IT.AddPointer (S (ls, s), it))
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.AddPointer (it, it'))
   | SubPointer (p,a) -> 
-     let* (ls, s) = resolve_path loc mapping p in
-     let* it = resolve_predarg loc mapping a in
-     return (IT.SubPointer (S (ls, s), it))
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.SubPointer (it, it'))
   | PathArg p ->
      let* (ls, s) = resolve_path loc mapping p in
      return (IT.S (ls, s))
