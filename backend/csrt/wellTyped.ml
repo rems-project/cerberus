@@ -11,9 +11,9 @@ open TE
 module Make (G : sig val global : Global.t end) = struct
 
   module L = Local.Make(G)
+  module Explain = Explain.Make(G)
 
-
-  let check_bound loc local kind s = 
+  let check_bound loc (names : Explain.naming) local kind s = 
     match L.kind s local with
     | Some kind' when kind' = kind -> 
        return ()
@@ -28,12 +28,22 @@ module Make (G : sig val global : Global.t end) = struct
     open BaseTypes
     open LogicalSorts
     open IndexTerms
+    open Pp
 
     type t = IndexTerms.t
 
-    let check_and_type_annot loc local ls it = 
+    let check_and_type_annot loc names local ls it = 
 
       let context = it in
+
+      let does_not_have_member loc context it member = 
+        let (context, it) = Explain.index_terms names local (context, it) in
+        let err = 
+          !^"Illtyped index term" ^^^ context ^^ dot ^^^
+            it ^^^ !^"does not have member" ^^^ Id.pp member
+        in
+        fail loc (Generic err)
+      in
 
       let rec infer : 'bt. Loc.t -> 'bt IT.term -> (LogicalSorts.t * IT.t, type_error) m =
         fun loc it ->
@@ -41,7 +51,7 @@ module Make (G : sig val global : Global.t end) = struct
         match it with
         (* literals *)
         | S (_, s) ->
-           let* () = check_bound loc local KLogical s in
+           let* () = check_bound loc names local KLogical s in
            let (Base bt) = L.get_l s local in
            return (Base bt, S (bt, s))
         | Num n -> 
@@ -149,9 +159,24 @@ module Make (G : sig val global : Global.t end) = struct
              | Base (Tuple bts) ->
                 begin match List.nth_opt bts n with
                 | Some t -> return (BT.Tuple bts, t)
-                | None -> fail loc (Illtyped_it context)
+                | None -> 
+                   let (context, t') = Explain.index_terms names local (context, t') in
+                   let err = 
+                     !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                       !^"Expected" ^^^ t' ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
+                         !^"components, but has type" ^^^ BT.pp (Tuple bts)
+                   in
+                   fail loc (Generic err)
                 end
-             | _ -> fail loc (Illtyped_it context)
+             | _ -> 
+                let (context, t') = Explain.index_terms names local (context, t') in
+                let err = 
+                  !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                    !^"Expected" ^^^ t' ^^^ !^"to have tuple type, but has type" ^^^
+                      LS.pp ls
+                in
+                fail loc (Generic err)
+
            in
            return (Base item_bt, NthTuple (tuple_bt, n, t'))
         | Struct (tag, members) ->
@@ -168,7 +193,10 @@ module Make (G : sig val global : Global.t end) = struct
            in
            let* members = 
              ListM.mapM (fun (member,t) ->
-                 let* sct = assoc_err loc Id.equal member decl_members (Illtyped_it context) in
+                 let* sct = match List.assoc_opt Id.equal member decl_members with
+                   | Some sct -> return sct
+                   | None -> does_not_have_member loc context it member
+                 in
                  let* t = check_aux loc (Base (BT.of_sct sct)) t in
                  return (member, t)
                ) members
@@ -181,7 +209,10 @@ module Make (G : sig val global : Global.t end) = struct
              | None -> fail loc (Missing_struct tag)
            in
            let decl_members = Global.member_types decl.layout in
-           let* sct = assoc_err loc Id.equal member decl_members (Illtyped_it context) in
+           let* sct = match List.assoc_opt Id.equal member decl_members with
+             | Some sct -> return sct 
+             | None -> does_not_have_member loc context t member
+           in
            return (Base (BT.of_sct sct), StructMember (tag, t, member))
         | StructMemberOffset (tag, t, member) ->
            let* t = check_aux loc (Base Loc) t in
@@ -190,7 +221,10 @@ module Make (G : sig val global : Global.t end) = struct
              | None -> fail loc (Missing_struct tag)
            in
            let decl_members = Global.member_types decl.layout in
-           let* _ = assoc_err loc Id.equal member decl_members (Illtyped_it context) in
+           let* () = match List.assoc_opt Id.equal member decl_members with
+             | Some _ -> return () 
+             | None -> does_not_have_member loc context t member
+           in
            return (Base Loc, StructMemberOffset (tag, t, member))
         (* pointers *)
         | Null t ->
@@ -199,10 +233,18 @@ module Make (G : sig val global : Global.t end) = struct
         | AllocationSize t ->
            let* t = check_aux loc (Base Loc) t in
            return (Base Integer, AllocationSize t)
-        | Offset (t, t') ->
+        | AddPointer (t, t') ->
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Integer) t' in
-           return (Base Loc, Offset (t, t'))
+           return (Base Loc, AddPointer (t, t'))
+        | SubPointer (t, t') ->
+           let* t = check_aux loc (Base Loc) t in
+           let* t' = check_aux loc (Base Integer) t' in
+           return (Base Loc, SubPointer (t, t'))
+        | MulPointer (t, t') ->
+           let* t = check_aux loc (Base Loc) t in
+           let* t' = check_aux loc (Base Integer) t' in
+           return (Base Loc, MulPointer (t, t'))
         | LocLT (t, t') ->
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Loc) t' in
@@ -252,32 +294,24 @@ module Make (G : sig val global : Global.t end) = struct
            let* ts = ListM.mapM (check_aux loc (Base bt)) ts in
            return (Base (List bt), List (t :: ts, bt))
         | Head t ->
-           let* (ls,t) = infer loc t in
-           let* bt = match ls with
-             | Base (List bt) -> return (Base bt)
-             | _ -> fail loc (Illtyped_it context)
-           in
-           return (bt, Head t)
+           let* (bt,t) = infer_list_type loc t in
+           return (Base bt, Head t)
         | Tail t ->
-           let* (ls, t) = infer loc t in
-           let* () = match ls with
-             | Base (List bt) -> return ()
-             | _ -> fail loc (Illtyped_it context)
-           in
-           return (ls, Tail t)
+           let* (bt,t) = infer_list_type loc t in
+           return (Base (List bt), Head t)
         | NthList (i, t) ->
-           let* (ls, t) = infer loc t in
-           let* bt = match ls with
-             | Base (List bt) -> return bt
-             | _ -> fail loc (Illtyped_it context)
-           in
-           return (Base bt, NthList (i, t))
+           let* (bt,t) = infer_list_type loc t in
+           return (Base bt, Head t)
         (* sets *)
         | SetMember (t,t') ->
            let* (Base bt, t) = infer loc t in
            let* t' = check_aux loc (Base (Set bt)) t' in
            return (Base BT.Bool, SetMember (t, t'))
-        | SetUnion its
+        | SetUnion its ->
+           let (t, ts) = List1.dest its in
+           let* (itembt, t) = infer_set_type loc t in
+           let* ts = ListM.mapM (check_aux loc (Base (Set itembt))) ts in
+           return (Base (Set itembt), SetUnion (List1.make (t, ts)))
         | SetIntersection its ->
            let (t, ts) = List1.dest its in
            let* (itembt, t) = infer_set_type loc t in
@@ -322,29 +356,62 @@ module Make (G : sig val global : Global.t end) = struct
            return (Nil bt)
         | _, _ ->
            let* (ls',it) = infer loc it in
-           if not (LS.equal ls ls')
-           then fail loc (Illtyped_it context)
-           else 
+           if LS.equal ls ls' then
              let (Base bt) = ls in
              return it
+           else
+             let (context, it) = Explain.index_terms names local (context, it) in
+             fail loc (Illtyped_it {context; it; has = ls'; expected = ls})
+
+      and infer_list_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
+        fun loc it ->
+        let* (ls,it) = infer loc it in
+        let* bt = match ls with
+          | Base (List bt) -> return bt
+          | ls -> 
+             let (context, it) = Explain.index_terms names local (context, it) in
+             let err = 
+               !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                 !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
+                   !^"but has type" ^^^ LS.pp ls
+             in
+             fail loc (Generic err)
+        in
+        return (bt, it)
+
 
       and infer_set_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc it ->
         let* (ls, t) = infer loc it in
         let* bt = match ls with
           | Base (Set bt) -> return bt
-          | _ -> fail loc (Illtyped_it context)
+          | _ -> 
+             let (context, it) = Explain.index_terms names local (context, it) in
+             let err = 
+               !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                 !^"Expected" ^^^ it ^^^ !^"to have set type" ^^ comma ^^^
+                   !^"but has type" ^^^ LS.pp ls
+             in
+             fail loc (Generic err)
         in
         return (bt, t)
 
       and infer_integer_map_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc it ->
-        let* (ls, t) = infer loc it in
+        let* (ls, it) = infer loc it in
         let* bt = match ls with
           | Base (Map (Integer, bt)) -> return bt
-          | _ -> fail loc (Illtyped_it context)
+          | _ -> 
+             let (context, it) = Explain.index_terms names local (context, it) in
+             let err = 
+               !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                 !^"Expected" ^^^ it ^^^ !^"to have integer map type" ^^ comma ^^^
+                   !^"but has type" ^^^ LS.pp ls
+             in
+             fail loc (Generic err)
+
         in
-        return (bt, t)
+        return (bt, it)
                    
       in  
       check_aux loc ls it
@@ -352,8 +419,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let welltyped loc env ls it = 
-      let* _ = check_and_type_annot loc env ls it in
+    let welltyped loc (names : Explain.naming) local ls it = 
+      let* _ = check_and_type_annot loc names local ls it in
       return ()
 
 
@@ -363,21 +430,21 @@ module Make (G : sig val global : Global.t end) = struct
   module WRE = struct
     open Resources
     type t = Resources.t
-    let welltyped loc local = function
+    let welltyped loc (names : Explain.naming) local = function
       | Block b -> 
-         WIT.welltyped loc local (LS.Base BT.Loc) b.pointer
+         WIT.welltyped loc names local (LS.Base BT.Loc) b.pointer
       | Region r -> 
-         let* () = WIT.welltyped loc local (LS.Base BT.Loc) r.pointer in
-         WIT.welltyped loc local (LS.Base BT.Integer) r.size
+         let* () = WIT.welltyped loc names local (LS.Base BT.Loc) r.pointer in
+         WIT.welltyped loc names local (LS.Base BT.Integer) r.size
       | Points p -> 
-         let* () = WIT.welltyped loc local (LS.Base BT.Loc) p.pointer in
+         let* () = WIT.welltyped loc names local (LS.Base BT.Loc) p.pointer in
          (* points is "polymorphic" in the pointee *)
-         check_bound loc local KLogical p.pointee
+         check_bound loc names local KLogical p.pointee
       | Array a -> 
-         let* () = WIT.welltyped loc local (LS.Base BT.Loc) a.pointer in
-         let* () = WIT.welltyped loc local (LS.Base BT.Integer) a.length in
+         let* () = WIT.welltyped loc names local (LS.Base BT.Loc) a.pointer in
+         let* () = WIT.welltyped loc names local (LS.Base BT.Integer) a.length in
          (* array is "polymorphic" in the content type *)
-         let* () = check_bound loc local KLogical a.content in
+         let* () = check_bound loc names local KLogical a.content in
          let content_t = L.get_l a.content local in
          begin match content_t with
          | Base (Map (Integer, _)) -> return ()
@@ -401,7 +468,7 @@ module Make (G : sig val global : Global.t end) = struct
          in
          let* () = 
            ListM.iterM (fun (arg, expected_sort) ->
-               WIT.welltyped loc local expected_sort arg
+               WIT.welltyped loc names local expected_sort arg
              ) (List.combine p.iargs (List.map snd def.iargs))
          in
          let* () = 
@@ -412,7 +479,7 @@ module Make (G : sig val global : Global.t end) = struct
          in
          let* () = 
            ListM.iterM (fun (arg, expected_sort) ->
-               let* () = check_bound loc local KLogical arg in
+               let* () = check_bound loc names local KLogical arg in
                let has_sort = L.get_l arg local in
                if LS.equal has_sort expected_sort then return ()
                else fail loc (Mismatch { has = has_sort; expect = expected_sort; })
@@ -425,8 +492,8 @@ module Make (G : sig val global : Global.t end) = struct
   module WLC = struct
     open LogicalConstraints
     type t = LogicalConstraints.t
-    let welltyped loc env = function
-      | LC it -> WIT.welltyped loc env (LS.Base BT.Bool) it
+    let welltyped loc names env = function
+      | LC it -> WIT.welltyped loc names env (LS.Base BT.Bool) it
   end
 
   module WLRT = struct
@@ -434,21 +501,21 @@ module Make (G : sig val global : Global.t end) = struct
     open LogicalReturnTypes
     type t = LogicalReturnTypes.t
 
-    let rec welltyped loc local lrt = 
+    let rec welltyped loc names local lrt = 
       match lrt with
       | Logical ((s,ls), lrt) -> 
          let lname = Sym.fresh_same s in
          let local = L.add_l lname ls local in
          let lrt = subst_var Subst.{before = s; after = lname} lrt in
-         welltyped loc local lrt
+         welltyped loc names local lrt
       | Resource (re, lrt) -> 
-         let* () = WRE.welltyped loc local re in
+         let* () = WRE.welltyped loc names local re in
          let local = L.add_ur re local in
-         welltyped loc local lrt
+         welltyped loc names local lrt
       | Constraint (lc, lrt) ->
-         let* () = WLC.welltyped loc local lc in
+         let* () = WLC.welltyped loc names local lc in
          let local = L.add_uc lc local in
-         welltyped loc local lrt
+         welltyped loc names local lrt
       | I -> 
          return ()
 
@@ -460,7 +527,7 @@ module Make (G : sig val global : Global.t end) = struct
     open ReturnTypes
     type t = ReturnTypes.t
 
-    let welltyped loc local rt = 
+    let welltyped loc names local rt = 
       match rt with 
       | Computational ((name,bt), lrt) ->
          let name' = Sym.fresh_same name in
@@ -468,7 +535,7 @@ module Make (G : sig val global : Global.t end) = struct
          let local = L.add_l lname (LS.Base bt) local in
          let local = L.add_a name' (bt, lname) local in
          let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
-         WLRT.welltyped loc local lrt
+         WLRT.welltyped loc names local lrt
 
   end
 
@@ -476,13 +543,13 @@ module Make (G : sig val global : Global.t end) = struct
 
   module WFalse = struct
     type t = False.t
-    let welltyped _ _ _ = return ()
+    let welltyped _ _ _ _ = return ()
   end
 
 
   module type WI_Sig = sig
     type t
-    val welltyped : Loc.t -> (L.t) -> t -> (unit,type_error) m
+    val welltyped : Loc.t -> Explain.naming -> (L.t) -> t -> (unit,type_error) m
   end
 
 
@@ -492,7 +559,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     type t = T.t
 
-    let rec check loc local (at : T.t) : (unit, type_error) m = 
+    let rec check loc names local (at : T.t) : (unit, type_error) m = 
       let open Resultat in
       match at with
       | T.Computational ((name,bt), at) ->
@@ -501,22 +568,22 @@ module Make (G : sig val global : Global.t end) = struct
          let local = L.add_l lname (LS.Base bt) local in
          let local = L.add_a name' (bt, lname) local in
          let at = T.subst_var Subst.{before = name; after = lname} at in
-         check loc local at
+         check loc names local at
       | T.Logical ((s,ls), at) -> 
          let lname = Sym.fresh_same s in
          let local = L.add_l lname ls local in
          let at = T.subst_var Subst.{before = s; after = lname} at in
-         check loc local at
+         check loc names local at
       | T.Resource (re, at) -> 
-         let* () = WRE.welltyped loc local re in
+         let* () = WRE.welltyped loc names local re in
          let local = L.add_ur re local in
-         check loc local at
+         check loc names local at
       | T.Constraint (lc, at) ->
-         let* () = WLC.welltyped loc local lc in
+         let* () = WLC.welltyped loc names local lc in
          let local = L.add_uc lc local in
-         check loc local at
+         check loc names local at
       | T.I i -> 
-         WI.welltyped loc local i
+         WI.welltyped loc names local i
 
 
     let wellpolarised loc determined ft = 
@@ -546,8 +613,8 @@ module Make (G : sig val global : Global.t end) = struct
       in
       aux determined SymSet.empty ft
 
-    let welltyped loc local at = 
-      let* () = check loc local at in
+    let welltyped loc names local at = 
+      let* () = check loc names local at in
       wellpolarised loc (SymSet.of_list (L.all_names local)) at
 
   end

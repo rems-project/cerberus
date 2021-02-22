@@ -455,8 +455,9 @@ module Make (G : sig val global : Global.t end) = struct
                let* unis = match RE.unify resource resource' unis with
                  | Some unis -> return unis
                  | None ->
+                    let model = S.get_model () in
                     let ((expect,has), state) = 
-                      Explain.resources names original_local (resource, resource') in
+                      Explain.resources names original_local (resource, resource') model in
                     fail loc (Resource_mismatch {expect; has; state; situation})
       
                in
@@ -554,7 +555,8 @@ module Make (G : sig val global : Global.t end) = struct
         let o_resource = S.resource_for_pointer local pointer in
         let* resource_name, resource = match o_resource with
           | None -> 
-             let (addr, state) = Explain.missing_ownership names original_local pointer in
+             let model = S.get_model () in
+             let (addr, state) = Explain.missing_ownership names original_local pointer model in
              let used = S.used_resource_for_pointer local pointer in
              if S.is_global original_local pointer 
              then fail loc (Missing_global_ownership {addr; used; situation})
@@ -564,8 +566,9 @@ module Make (G : sig val global : Global.t end) = struct
         in
         let* (_, have_size) = match RE.footprint resource with
           | None -> 
+             let model = S.get_model () in
              let (resource, state) = 
-               Explain.resource names original_local resource in
+               Explain.resource names original_local resource model in
              fail loc (Cannot_unpack {resource; state; situation})
           | Some fp ->
              return fp
@@ -573,7 +576,7 @@ module Make (G : sig val global : Global.t end) = struct
         if S.ge local need_size have_size then 
           let local = L.use_resource resource_name [loc] local in
           ownership_request_prompt loc ~original_local ~extra_names
-            situation local (Offset (pointer, have_size)) 
+            situation local (AddPointer (pointer, have_size)) 
             (IT.Sub (need_size, have_size))
         else if S.lt local need_size have_size then 
           (* if the resource is bigger than needed, keep the remainder
@@ -581,14 +584,15 @@ module Make (G : sig val global : Global.t end) = struct
           let local = L.use_resource resource_name [loc] local in
           let local = 
             add_ur (
-                RE.Region {pointer = Offset (pointer, need_size); 
+                RE.Region {pointer = AddPointer (pointer, need_size); 
                            size = IT.Sub (have_size, need_size)}
               ) local
           in
           return local
         else
           (* fix this: could be either side that has unknown length *)
-          let (resource, state) = Explain.resource names original_local resource in
+          let model = S.get_model () in
+          let (resource, state) = Explain.resource names original_local resource model in
           fail loc (Unknown_resource_size {resource; state; situation})
 
 
@@ -616,12 +620,14 @@ module Make (G : sig val global : Global.t end) = struct
             let local = use_resource resource_name [loc] local in
             return (Points {p' with pointer = p.pointer}, local)
          | Some (resource_name, resource) ->
+            let model = S.get_model () in
             let ((expect,has), state) = 
-              Explain.resources names original_local (request, resource) in
+              Explain.resources names original_local (request, resource) model in
             fail loc (Resource_mismatch {expect; has; state; situation})
          | None -> 
+            let model = S.get_model () in
             let (addr, state) = 
-              Explain.missing_ownership names original_local p.pointer in
+              Explain.missing_ownership names original_local p.pointer model in
             let used = S.used_resource_for_pointer local p.pointer in
             if S.is_global original_local p.pointer 
             then fail loc (Missing_global_ownership {addr; used; situation})
@@ -640,7 +646,7 @@ module Make (G : sig val global : Global.t end) = struct
               let local = use_resource resource_name [loc] local in
               let local = 
                 let left = 
-                  Array {a' with pointer = Offset (a.pointer, Mul (a.length, Num a.element_size)); 
+                  Array {a' with pointer = AddPointer (a.pointer, Mul (a.length, Num a.element_size)); 
                                  length = Sub (a'.length, a.length)} in
                 add_ur left local
               in
@@ -654,7 +660,7 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   let o_extra_resource = 
                     S.resource_for_pointer local 
-                      (Offset (a.pointer, Mul (a'.length, Num a'.element_size))) 
+                      (AddPointer (a.pointer, Mul (a'.length, Num a'.element_size))) 
                   in
                   begin match o_extra_resource with
                   | Some (extra_resource_name, Points p') 
@@ -675,8 +681,9 @@ module Make (G : sig val global : Global.t end) = struct
                      in
                      return (resource, local)
                   | _ ->
+                     let model = S.get_model () in
                      let (addr, state) = 
-                       Explain.missing_ownership names original_local a.pointer in
+                       Explain.missing_ownership names original_local a.pointer model in
                      let used = S.used_resource_for_pointer local a.pointer in
                      if S.is_global original_local a.pointer 
                      then fail loc (Missing_global_ownership {addr; used; situation})
@@ -687,15 +694,18 @@ module Make (G : sig val global : Global.t end) = struct
               end
             else
               (* fix this: could be either resource that has unknown length *)
-              let (resource, state) = Explain.resource names original_local (Array a') in
+              let model = S.get_model () in
+              let (resource, state) = Explain.resource names original_local (Array a') model in
               fail loc (Unknown_resource_size {resource; state; situation})
          | Some (resource_name, resource) ->
+            let model = S.get_model () in
             let ((expect,has), state) = 
-              Explain.resources names original_local (request, resource) in
+              Explain.resources names original_local (request, resource) model in
             fail loc (Resource_mismatch {expect; has; state; situation})
          | None -> 
+            let model = S.get_model () in
             let (addr, state) = 
-              Explain.missing_ownership names original_local a.pointer in
+              Explain.missing_ownership names original_local a.pointer model in
             let used = S.used_resource_for_pointer local a.pointer in
             if S.is_global original_local a.pointer 
             then fail loc (Missing_global_ownership {addr; used; situation})
@@ -714,8 +724,9 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let else_prompt = 
               lazy (
+                  let model = S.get_model () in
                   let (resource, state) = 
-                    Explain.resource names original_local request in
+                    Explain.resource names original_local request model in
                   fail loc (Missing_resource {resource; used = None; state; situation})
                 )
             in
@@ -1052,7 +1063,8 @@ module Make (G : sig val global : Global.t end) = struct
       let rec aux = function
         | (s, VB.Resource resource) :: _ -> 
            let names = names @ extra_names in
-           let (resource, state) = Explain.resource names original_local resource in
+           let model = S.get_model () in
+           let (resource, state) = Explain.resource names original_local resource model in
            fail loc (Unused_resource {resource; state})
         | _ :: rest -> aux rest
         | [] -> return ()
@@ -1154,6 +1166,21 @@ module Make (G : sig val global : Global.t end) = struct
        inference returns, all logical (logical variables, resources,
        constraints) in the local environment *)
 
+    let infer_array_shift local asym1 cti asym2 =
+      let ret = Sym.fresh () in
+      let* arg1 = arg_of_asym local asym1 in
+      let* arg2 = arg_of_asym local asym2 in
+      let* () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
+      let* () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
+      let element_size = Memory.size_of_ctype cti.PreProcess.ct in
+      let constr = 
+        let base = S (BT.Loc, arg1.lname) in
+        let offset = MulPointer (Num element_size, S (BT.Integer, arg2.lname)) in
+        EQ (S (Loc, ret), AddPointer (base, offset)) in
+      let rt = RT.Computational ((ret, Loc), Constraint (LC.LC constr, I)) in
+      return (Normal (rt, local))
+
+
     let rec infer_pexpr local (pe : 'bty pexpr) : ((RT.t * L.t) fallible, type_error) m = 
       let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
       debug 3 (lazy (action "inferring pure expression"));
@@ -1187,8 +1214,8 @@ module Make (G : sig val global : Global.t end) = struct
            let* args = args_of_asyms local asyms in
            let* vt = infer_constructor loc (local, G.global) ctor args in
            return (Normal (rt_of_vt vt, local))
-        | M_PEarray_shift _ ->
-           Debug_ocaml.error "todo: PEarray_shift"
+        | M_PEarray_shift (asym1, ct, asym2) ->
+           infer_array_shift local asym1 ct asym2
         | M_PEmember_shift (asym, tag, member) ->
            let* arg = arg_of_asym local asym in
            let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1396,13 +1423,15 @@ module Make (G : sig val global : Global.t end) = struct
                 | Array a ->
                    failwith "asd"
                 | Predicate pred -> 
+                   let model = S.get_model () in
                    let (resource,state) = 
-                     Explain.resource names original_local (Predicate pred) in
+                     Explain.resource names original_local (Predicate pred) model in
                    fail loc (Cannot_unpack {resource; state; situation})
                 end
              | None -> 
+                let model = S.get_model () in
                 let (addr,state) = 
-                  Explain.missing_ownership names original_local pointer in
+                  Explain.missing_ownership names original_local pointer model in
                 let used = S.used_resource_for_pointer local pointer in
                 if S.is_global original_local pointer 
                 then fail loc (Missing_global_ownership {addr; used; situation})
@@ -1438,14 +1467,14 @@ module Make (G : sig val global : Global.t end) = struct
                  let o_member_value = 
                    Option.map (fun v -> IT.StructMember (tag, v, member)) o_value 
                  in
-                 let member_offset = IT.Offset (pointer, Num offset) in
+                 let member_offset = IT.AddPointer (pointer, Num offset) in
                  let* rt = store loc local (BT.of_sct member_sct) member_offset
                              size o_member_value in
                  let* rt2 = aux members in
                  return (rt@@rt2)
               | None ->
                  let block = 
-                   RE.Block {pointer = IT.Offset (pointer, Num offset); 
+                   RE.Block {pointer = IT.AddPointer (pointer, Num offset); 
                              size; 
                              block_type = Padding} 
                  in
@@ -1528,6 +1557,11 @@ module Make (G : sig val global : Global.t end) = struct
        variables) *)
 
 
+
+    
+
+
+
     type labels = (LT.t * label_kind) SymMap.t
 
 
@@ -1591,17 +1625,29 @@ module Make (G : sig val global : Global.t end) = struct
               let constr = LC (EQ (S (Bool, ret), Bool ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
               return (Normal (rt, local))
-           | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
-           | M_PtrArrayShift _ (* (asym 'bty * actype 'bty * asym 'bty  ) *)
-           | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *)
-           | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *)
-           | M_Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *)
-           | M_Va_start _ (* (asym 'bty * asym 'bty) *)
-           | M_Va_copy _ (* (asym 'bty) *)
-           | M_Va_arg _ (* (asym 'bty * actype 'bty) *)
-           | M_Va_end _ (* (asym 'bty) *) 
-             -> 
-              Debug_ocaml.error "todo: ememop"
+           | M_PtrWellAligned (act, asym) ->
+              let ret = Sym.fresh () in
+              let* arg = arg_of_asym local asym in
+              let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+              let constr = EQ (S (Bool, ret), Aligned (ST.of_ctype act.item.ct, S (BT.Loc, arg.lname))) in
+              let rt = RT.Computational ((ret, Bool), Constraint (LC.LC constr, I)) in
+              return (Normal (rt, local))
+           | M_PtrArrayShift (asym1, act, asym2) ->
+              infer_array_shift local asym1 act.item asym2
+           | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+              Debug_ocaml.error "todo: M_Memcpy"
+           | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+              Debug_ocaml.error "todo: M_Memcmp"
+           | M_Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
+              Debug_ocaml.error "todo: M_Realloc"
+           | M_Va_start _ (* (asym 'bty * asym 'bty) *) ->
+              Debug_ocaml.error "todo: M_Va_start"
+           | M_Va_copy _ (* (asym 'bty) *) ->
+              Debug_ocaml.error "todo: M_Va_copy"
+           | M_Va_arg _ (* (asym 'bty * actype 'bty) *) ->
+              Debug_ocaml.error "todo: M_Va_arg"
+           | M_Va_end _ (* (asym 'bty) *) ->
+              Debug_ocaml.error "todo: M_Va_end"
            end
         | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
            let* local = unpack_resources loc local in
@@ -1974,6 +2020,10 @@ module Make (G : sig val global : Global.t end) = struct
     let* (rt, delta, pure_delta, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in
+    let fnames = 
+      Explain.naming_substs substs
+        (Explain.naming_of_mapping mapping) 
+    in
     let* () = check_initial_environment_consistent loc `Fun delta in
     (* rbt consistency *)
     let* () = 
@@ -1997,7 +2047,7 @@ module Make (G : sig val global : Global.t end) = struct
       PmapM.foldM (fun sym def acc ->
           match def with
           | M_Return (loc, lt) ->
-             let* () = WT.WLT.welltyped loc pure_delta lt in
+             let* () = WT.WLT.welltyped loc fnames pure_delta lt in
              return (SymMap.add sym (lt, Return) acc)
           | M_Label (loc, lt, _, _, annots, mapping) -> 
              let label_kind = match CF.Annot.get_label_annot annots with
@@ -2005,7 +2055,7 @@ module Make (G : sig val global : Global.t end) = struct
                | Some (LAloop_continue loop_id) -> Loop
                | _ -> Other
              in
-             let* () = WT.WLT.welltyped loc pure_delta lt in
+             let* () = WT.WLT.welltyped loc fnames pure_delta lt in
              return (SymMap.add sym (lt, label_kind) acc)
         ) label_defs SymMap.empty 
     in
@@ -2034,11 +2084,7 @@ module Make (G : sig val global : Global.t end) = struct
     let* () = PmapM.foldM check_label label_defs () in
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let* local_or_false = 
-      let names = 
-        Explain.naming_substs substs
-          (Explain.naming_of_mapping mapping) 
-      in
-      let module C = Checker(struct let names = names end) in
+      let module C = Checker(struct let names = fnames end) in
       C.check_expr_pop ~print:true delta (L.empty, labels) body (Normal rt)
     in
     return ()

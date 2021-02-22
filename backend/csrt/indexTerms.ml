@@ -79,7 +79,9 @@ type 'bt term =
   (* pointers *)
   | Null of 'bt term
   | AllocationSize of 'bt term
-  | Offset of 'bt term * 'bt term
+  | AddPointer of 'bt term * 'bt term
+  | SubPointer of 'bt term * 'bt term
+  | MulPointer of 'bt term * 'bt term
   | LocLT of 'bt term * 'bt term
   | LocLE of 'bt term * 'bt term
   | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term)
@@ -122,9 +124,8 @@ let rec equal it it' =
   (* literals *)
   | S (bt,sym), S (bt',sym') -> 
      let eq = Sym.equal sym sym' in
-     if eq && !Debug_ocaml.debug_level >= 1 && not (BT.equal bt bt')
-     then Debug_ocaml.error "equal symbols with different base type"
-     else eq
+     assert (!Debug_ocaml.debug_level = 0 || not eq || BT.equal bt bt');
+     eq
   | Num n, Num n' -> 
      Z.equal n n'
   | Pointer p, Pointer p' -> 
@@ -195,7 +196,11 @@ let rec equal it it' =
      equal t t' 
   | AllocationSize t1, AllocationSize t1' -> 
      equal t1 t1'
-  | Offset (t1, t2), Offset (t1', t2') -> 
+  | AddPointer (t1, t2), AddPointer (t1', t2') -> 
+     equal t1 t1' && equal t2 t2'
+  | SubPointer (t1, t2), SubPointer (t1', t2') -> 
+     equal t1 t1' && equal t2 t2'
+  | MulPointer (t1, t2), MulPointer (t1', t2') -> 
      equal t1 t1' && equal t2 t2'
   | LocLT (t1, t2), LocLT (t1', t2') -> 
      equal t1 t1' && equal t2 t2'
@@ -293,7 +298,9 @@ let rec equal it it' =
   (* pointers *)
   | Null _, _
   | AllocationSize _, _
-  | Offset _, _
+  | AddPointer _, _
+  | SubPointer _, _
+  | MulPointer _, _
   | LocLT _, _
   | LocLE _, _
   | Disjoint _, _
@@ -408,8 +415,12 @@ let pp (type bt) (it : bt term) : PPrint.document =
        c_app !^"null" [aux false o1]
     | AllocationSize t1 ->
        c_app !^"allocationSize" [aux false t1]
-    | Offset (t1, t2) ->
+    | AddPointer (t1, t2) ->
        mparens (aux true t1 ^^^ plus ^^^ aux true t2)
+    | SubPointer (t1, t2) ->
+       mparens (aux true t1 ^^^ minus ^^^ aux true t2)
+    | MulPointer (t1, t2) ->
+       mparens (aux true t1 ^^^ star ^^^ aux true t2)
     | LocLT (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^^ aux true o2)
     | LocLE (o1,o2) -> 
@@ -470,7 +481,8 @@ let pp (type bt) (it : bt term) : PPrint.document =
   aux false it
 
 
-let rec vars_in it : SymSet.t = 
+let rec vars_in : 'bt. 'bt term -> SymSet.t =
+  fun it ->
   match it with
   | S (_, symbol) -> SymSet.singleton symbol
   | Num _ -> SymSet.empty
@@ -508,7 +520,9 @@ let rec vars_in it : SymSet.t =
   | StructMemberOffset (_tag, it, s) -> vars_in_list [it;it]
   (* pointers *)
   | Null it -> vars_in it
-  | Offset (it, it') -> vars_in_list [it; it']
+  | AddPointer (it, it') -> vars_in_list [it; it']
+  | SubPointer (it, it') -> vars_in_list [it; it']
+  | MulPointer (it, it') -> vars_in_list [it; it']
   | LocLT (it, it')  -> vars_in_list [it; it']
   | LocLE (it, it') -> vars_in_list [it; it']
   | Disjoint ((it,_), (it',_)) -> vars_in_list [it; it']
@@ -551,7 +565,7 @@ let json it : Yojson.Safe.t =
 
 
 
-let map_sym f it : t = 
+let map_sym (type bt) (f : bt * Sym.t -> bt term) (it : bt term) : bt term = 
   let rec aux it = 
     match it with
     (* literals *)
@@ -599,7 +613,9 @@ let map_sym f it : t =
     (* pointers *)
     | Null it -> Null (aux it)
     | AllocationSize it -> AllocationSize (aux it)
-    | Offset (it, it') -> Offset (aux it, aux it')
+    | AddPointer (it, it') -> AddPointer (aux it, aux it')
+    | SubPointer (it, it') -> SubPointer (aux it, aux it')
+    | MulPointer (it, it') -> MulPointer (aux it, aux it')
     | LocLT (it, it') -> LocLT (aux it, aux it')
     | LocLE (it, it') -> LocLE (aux it, aux it')
     | Disjoint ((it1,it2), (it1',it2')) -> 
@@ -653,7 +669,7 @@ let subst_var (subst : (Sym.t, Sym.t) Subst.t) it =
       S (bt, Sym.subst subst s)
     ) it
 
-let subst_vars = make_substs subst_var
+let subst_vars it = make_substs subst_var it
 
 
 let subst_it (subst : (Sym.t, 'bt term) Subst.t) it =
@@ -663,7 +679,7 @@ let subst_it (subst : (Sym.t, 'bt term) Subst.t) it =
       else S (bt, s)
     ) it
 
-let subst_its = make_substs subst_var
+let subst_its it = make_substs subst_var it
 
 
 

@@ -27,15 +27,17 @@ let record_tagDefs (global: Global.t) tagDefs =
 
 let record_funinfo global funinfo =
   let module WT = WellTyped.Make(struct let global = global end) in
+  let module Explain = Explain.Make(struct let global = global end) in
   PmapM.foldM
-    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, is_variadic, has_proto, _mapping)) global ->
+    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, is_variadic, has_proto, mapping)) global ->
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         fail loc (TypeErrors.Unsupported err)
       else
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
-        let* () = WT.WFT.welltyped loc WT.L.empty ftyp in
+        let names =Explain.naming_of_mapping mapping in
+        let* () = WT.WFT.welltyped loc names WT.L.empty ftyp in
         let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global

@@ -157,7 +157,17 @@ let equal t1 t2 =
      predicate_name_equal p1.name p2.name && 
      List.equal IT.equal p1.iargs p2.iargs && 
      List.equal Sym.equal p1.oargs p2.oargs
-  | _, _ -> false
+  | Array a1, Array a2 ->
+     IT.equal a1.pointer a2.pointer &&
+     Z.equal a1.element_size a2.element_size &&
+     IT.equal a1.length a2.length &&
+     Sym.equal a1.content a2.content
+  | Block _, _ -> false
+  | Region _, _ -> false
+  | Points _, _ -> false
+  | Array _, _ -> false
+  | Predicate _, _ -> false
+
 
 
 let footprint = function

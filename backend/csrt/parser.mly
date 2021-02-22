@@ -152,12 +152,15 @@ pred_with_args:
 predarg:
   | p = path { Path.PathArg p }
   | z = NUM  { Path.NumArg z }
+  | p = path PLUS a = predarg            { Path.AddPointer (p, a)}
+  | p = path MINUS a = predarg            { Path.SubPointer (p, a)}
 
 path: 
   | LPAREN pr_ps = pred_with_args RPAREN DOT id = ID   { Path.PredArg (fst pr_ps, snd pr_ps, id) }
   | AMPERSAND n = name               { Path.Addr n }
-  | STAR p = path                    { Path.Pointee p }
   | bn = labeledname                 { Path.Var bn }
+  | STAR p = path                    { Path.Pointee p }
+  | LPAREN path RPAREN               { $2 }
 
 %inline resource:
   | pr_ps = pred_with_args         { R (fst pr_ps, snd pr_ps) }
@@ -176,8 +179,8 @@ expr:
   | i = NUM                                 { pit ($startpos, $endpos) (Num i) }
   | MIN LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MinInteger it) }
   | MAX LPAREN it = integer_type RPAREN     { pit ($startpos, $endpos) (MaxInteger it) }
-  | POINTER_TO_INTEGER expr_or_path        { pit ($startpos, $endpos) (PointerToIntegerCast ($2)) }
-  | INTEGER_TO_POINTER expr_or_path        { pit ($startpos, $endpos) (IntegerToPointerCast ($2)) }
+  | POINTER_TO_INTEGER expr_or_path         { pit ($startpos, $endpos) (PointerToIntegerCast ($2)) }
+  | INTEGER_TO_POINTER expr_or_path         { pit ($startpos, $endpos) (IntegerToPointerCast ($2)) }
   | expr_or_path LT expr_or_path            { pit ($startpos, $endpos) (LT ($1,$3)) }
   | expr_or_path GT expr_or_path            { pit ($startpos, $endpos) (GT ($1,$3)) }
   | expr_or_path LE expr_or_path            { pit ($startpos, $endpos) (LE ($1,$3)) }

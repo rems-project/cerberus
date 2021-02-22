@@ -249,10 +249,18 @@ let rec of_index_term global it =
      let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "allocationSize" [locsort] intsort in
      let a = of_index_term global t in
      Z3.Expr.mk_app ctxt fundecl [a]
-  | Offset (it,it') -> 
+  | AddPointer (it,it') -> 
      let a = of_index_term global it in
      let a' = of_index_term global it' in
      Z3.Arithmetic.mk_add ctxt [a;a']
+  | SubPointer (it,it') -> 
+     let a = of_index_term global it in
+     let a' = of_index_term global it' in
+     Z3.Arithmetic.mk_sub ctxt [a;a']
+  | MulPointer (it,it') -> 
+     let a = of_index_term global it in
+     let a' = of_index_term global it' in
+     Z3.Arithmetic.mk_mul ctxt [a;a']
   | LocLT (it,it') -> 
      let a = of_index_term global it in
      let a' = of_index_term global it' in
@@ -262,8 +270,8 @@ let rec of_index_term global it =
      let a' = of_index_term global it' in
      Z3.Arithmetic.mk_le ctxt a a'
   | Disjoint ((it,s),(it',s')) ->
-     let fp1_before_fp2 = IT.LocLT (Offset (Offset (it, s), IT.int (-1)), it') in
-     let fp2_before_fp1 = IT.LocLT (Offset (Offset (it', s'), IT.int (-1)), it) in
+     let fp1_before_fp2 = IT.LocLT (AddPointer (AddPointer (it, s), IT.int (-1)), it') in
+     let fp2_before_fp1 = IT.LocLT (AddPointer (AddPointer (it', s'), IT.int (-1)), it) in
      let t = Or [fp1_before_fp2; fp2_before_fp1] in
      of_index_term global t
   | Aligned (st,it') -> 

@@ -145,7 +145,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     let clause = 
       let (lrt, values) = 
         List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
-            let member_p = Offset (struct_pointer_t, Num offset) in
+            let member_p = AddPointer (struct_pointer_t, Num offset) in
             match member_or_padding with
             | Some (member, sct) ->
                let member_v = Sym.fresh () in
@@ -257,14 +257,10 @@ let make_owned loc label pointer path sct =
      return(l, r, c, mapping)
 
 
-let make_region loc pointer size path sct =
-  let open Sctypes in
-  match sct with
-  | Sctype (_, Void) ->
-     let r = [RE.Region {pointer = S (BT.Loc, pointer); size}] in
-     return ([], r, [], [])
-  | _ -> 
-     fail loc (Generic !^"can only make void* pointers a region")
+let make_region loc pointer_it size =
+  (* let open Sctypes in *)
+  let r = [RE.Region {pointer = pointer_it; size}] in
+  return ([], r, [], [])
 
 
 let make_block loc pointer path sct =
@@ -370,31 +366,16 @@ let apply_ownership_spec label var_typs mapping (loc, (pred,predargs)) =
   | "Block", _ ->
      fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
 
-  | "Region", [PathArg path; NumArg z] ->
-     begin match Path.deref_path path with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
-     | Some (bn, derefs) -> 
-        let* sct = type_of__vars loc var_typs bn.v derefs in
-        let* (_, sym) = Assertions.resolve_path loc mapping path in
-        match sct with
-        | Sctype (_, Pointer (_, sct2)) ->
-          make_region loc sym (Num z) (Path.var bn) sct2
-        | _ ->
-          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
-     end
+  | "Region", [pointer_arg; size_arg] ->
+     let* pointer_it = Assertions.resolve_predarg loc mapping pointer_arg in
+     let* size_it = Assertions.resolve_predarg loc mapping size_arg in
+     make_region loc pointer_it size_it
   | "Region", _ ->
      fail loc (Generic !^"Region predicate takes 2 arguments, a path and a size")
 
   | _, _ ->
-
      let* iargs_resolved = 
-       ListM.mapM (function
-           | NumArg z -> 
-              return (IT.Num z)
-           | PathArg p ->
-              let* (ls, s) = Assertions.resolve_path loc mapping p in
-              return (S (ls, s))
-         ) predargs
+       ListM.mapM (Assertions.resolve_predarg loc mapping) predargs
      in
      make_pred loc pred predargs iargs_resolved
 

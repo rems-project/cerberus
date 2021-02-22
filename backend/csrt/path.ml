@@ -30,6 +30,8 @@ type path =
 
 and predarg = 
   | PathArg of path
+  | AddPointer of path * predarg
+  | SubPointer of path * predarg
   | NumArg of Z.t
 
 type t = path
@@ -57,8 +59,12 @@ let rec equal p1 p2 =
 and predarg_equal pa1 pa2 = 
   match pa1, pa2 with
   | PathArg p1, PathArg p2 -> equal p1 p2
+  | AddPointer (p1,i1), AddPointer (p2,i2) -> equal p1 p2 && predarg_equal i1 i2
+  | SubPointer (p1,i1), SubPointer (p2,i2) -> equal p1 p2 && predarg_equal i1 i2
   | NumArg z1, NumArg z2 -> Z.equal z1 z2
   | PathArg _, _ -> false
+  | AddPointer _, _ -> false
+  | SubPointer _, _ -> false
   | NumArg _, _ -> false
 
 
@@ -70,6 +76,8 @@ let rec pp = function
 
 and pp_predarg = function
   | PathArg t -> pp t
+  | AddPointer (p,t) -> pp p ^^^ plus ^^^ pp_predarg t
+  | SubPointer (p,t) -> pp p ^^^ minus ^^^ pp_predarg t
   | NumArg z -> Z.pp z
 
 let addr bn = 
@@ -82,20 +90,19 @@ let var bn =
 let pointee olabel = function
   | Addr bn -> Var {label = olabel; v = bn}
   | Var bn -> Pointee (Var bn)
-  | Pointee p -> Pointee p
+  | Pointee p -> Pointee (Pointee p)
   | PredArg (pr,p,a) -> Pointee (PredArg (pr,p,a))
 
 let predarg pr p a =
   PredArg (pr,p,a)
 
 let rec deref_path = function
+  | Addr _ -> 
+     None
   | Var bn -> 
      Some (bn, 0)
   | Pointee p -> 
-     Option.bind (deref_path p) 
-       (fun (bn, pp) -> Some (bn, pp+1))
-  | Addr _ -> 
-     None
+     Option.bind (deref_path p) (fun (bn, pp) -> Some (bn, pp+1))
   | PredArg _ -> 
      None
 
@@ -107,5 +114,7 @@ let rec remove_labels = function
 
 and remove_labels_predarg = function
   | PathArg p -> PathArg (remove_labels p)
+  | AddPointer(p,i) -> AddPointer (remove_labels p, i)
+  | SubPointer(p,i) -> SubPointer (remove_labels p, i)
   | NumArg z -> NumArg z
 

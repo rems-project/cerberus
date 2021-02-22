@@ -107,7 +107,7 @@ module Make (G : sig val global : Global.t end) = struct
           | Some (pointer,size) when 
                  constraint_holds local 
                    (LC.LC (IT.And [IT.LocLE (pointer, it);
-                                   IT.LocLT (it, Offset (pointer, size));
+                                   IT.LocLT (it, AddPointer (pointer, size));
                       ])) ->
              Some (name, re) 
           | _ ->
@@ -170,7 +170,7 @@ module Make (G : sig val global : Global.t end) = struct
           | Some (pointer,size) when 
                  constraint_holds local 
                    (LC.LC (IT.And [IT.LocLE (pointer, it);
-                                   IT.LocLT (it, Offset (pointer, size));
+                                   IT.LocLT (it, AddPointer (pointer, size));
                       ])) ->
              Some where 
           | _ ->

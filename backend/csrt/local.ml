@@ -284,27 +284,32 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let incompatible_environments l1 l2 =
+  let incompatible_environments l1 l2 (mismatch1,mismatch2) =
     let msg = 
       !^"Merging incompatible contexts." ^/^ 
         item "ctxt1" (pp ~print_used:true ~print_all_names:true l1) ^/^
-        item "ctxt2" (pp ~print_used:true ~print_all_names:true l2)
+        item "ctxt2" (pp ~print_used:true ~print_all_names:true l2) ^/^ 
+        mismatch1 ^^^ !^"vs" ^^^ mismatch2
     in
     Debug_ocaml.error (plain msg)
 
   let merge (Local l1) (Local l2) =
-    let incompatible () = incompatible_environments (Local l1) (Local l2) in
+    let incompatible = incompatible_environments (Local l1) (Local l2) in
     let merge_ci = function
       | (Marker, Marker) -> Marker
       | (Binding (s1,vb1), Binding(s2,vb2)) ->
          begin match Sym.equal s1 s2, VB.agree vb1 vb2 with
          | true, Some vb -> Binding (s1,vb)
-         | _ -> incompatible ()
+         | _ -> incompatible (VB.pp (s1, vb1), VB.pp (s2, vb2))
          end
-      | (Marker, Binding (_,_)) -> incompatible ()
-      | (Binding (_,_), Marker) -> incompatible ()
+      | (Marker, Binding (s2,vb2)) -> 
+         incompatible (!^"marker", VB.pp (s2,vb2))
+      | (Binding (s1,vb1), Marker) -> 
+         incompatible (!^"marker", VB.pp (s1,vb1))
     in
-    if List.length l1 <> List.length l2 then incompatible () else 
+    if List.length l1 <> List.length l2 then 
+      incompatible (!^"length ctxt1",!^"length ctxt2") 
+    else 
       Local (List.map merge_ci (List.combine l1 l2))
 
 

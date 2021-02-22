@@ -400,7 +400,7 @@ module Make (G : sig val global : Global.t end) = struct
                (Some (IT.pp (IT.subst_vars substitutions a.pointer)), 
                 o_evaluate o_model a.pointer BT.Loc,
                 Some (length ^^ star ^^ Z.pp a.element_size),
-                Some !^"owned",
+                Some !^"array",
                 Some (Sym.pp (Sym.substs substitutions a.content)),
                 o_evaluate o_model (IT.S (content_t, a.content)) content_t
                )
@@ -488,29 +488,35 @@ module Make (G : sig val global : Global.t end) = struct
     let explanation = explanation names local SymSet.empty in
     pp_state_with_model local explanation o_model
 
-  let missing_ownership names local it = 
+  let missing_ownership names local it o_model = 
     let explanation = explanation names local (IT.vars_in it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, pp_state local explanation)
+    (it_pp, pp_state_with_model local explanation o_model)
+
+  let index_terms names local (it,it') = 
+    let explanation = 
+      explanation names local 
+        (SymSet.union (IT.vars_in it) (IT.vars_in it'))
+    in
+    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
+    let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
+    (it_pp, it_pp')
 
   let unsatisfied_constraint names local lc o_model = 
     let explanation = explanation names local (LC.vars_in lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation o_model)
 
-  let resource names local re = 
+  let resource names local re o_model = 
     let explanation = explanation names local (RE.vars_in re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state local explanation)
+    (re_pp, pp_state_with_model local explanation o_model)
 
-  let resources names local (re1, re2) = 
+  let resources names local (re1, re2) o_model = 
     let relevant = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
     let explanation = explanation names local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    ((re1, re2), pp_state local explanation)
-    
-
-
+    ((re1, re2), pp_state_with_model local explanation o_model)
 
 end

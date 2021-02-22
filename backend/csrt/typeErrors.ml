@@ -76,7 +76,7 @@ type type_error =
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
-  | Illtyped_it : 'bt IndexTerms.term -> type_error
+  | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: LS.t}
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
   | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp}
   | Unconstrained_logical_variable of Sym.t
@@ -109,11 +109,7 @@ let pp_type_error te =
       Pp.list Loc.pp locs
   in
   let pp_used = Option.map pp_o_used in
-  let in_state, consider_state = 
-    let in_state s = !^"In state:" ^/^ s in
-    let consider_state s = !^"Consider the state:" ^/^ s in
-    (in_state, consider_state)
-  in
+  let consider_state s = !^"Consider the state:" ^/^ s in
 
 
   match te with
@@ -142,7 +138,7 @@ let pp_type_error te =
   | Missing_global_ownership {addr; used; situation} ->
      let msg = 
        !^"Missing ownership of global location" ^^^ 
-         addr ^^^ for_situation situation ^^ hardline ^^^
+         addr ^^^ for_situation situation ^^ hardline ^^
        !^"Maybe missing an 'accesses' specification?"
      in
      (msg, Option.list [pp_used used])
@@ -151,32 +147,32 @@ let pp_type_error te =
        !^"Missing ownership of location" ^^^ 
          addr ^^^ for_situation situation 
      in
-     (msg, in_state state :: Option.list [pp_used used])
+     (msg, consider_state state :: Option.list [pp_used used])
   | Unknown_resource_size {resource; state; situation} ->
      let msg = 
        !^"Cannot tell size of resource" ^^^ 
          resource ^^^ for_situation situation 
      in
-     (msg, [in_state state])
+     (msg, [consider_state state])
   | Missing_resource {resource; state; used; situation} ->
      let msg = !^"Missing resource" ^^^ resource ^^^ for_situation situation in
-     (msg, in_state state :: Option.list [pp_used used] )
+     (msg, consider_state state :: Option.list [pp_used used] )
   | Resource_mismatch {has; state; expect; situation} ->
      let msg = !^"Need a resource" ^^^ has ^^^ !^"but have resource" ^^^ expect in
-     (msg, [in_state state])
+     (msg, [consider_state state])
   | Cannot_unpack {resource; state; situation} ->
      let msg = !^"Cannot unpack resource" ^^^ resource ^^^ for_situation situation in
-     (msg, [in_state state])
+     (msg, [consider_state state])
 
   | Uninitialised_read {is_member; state} ->
      let msg = match is_member with
        | None -> !^"Trying to read uninitialised data"
        | Some m -> !^"Trying to read uninitialised struct member" ^^^ Id.pp m
      in
-     (msg, [in_state state])
+     (msg, [consider_state state])
   | Unused_resource {resource;state} ->
      let msg = !^"Left-over unused resource" ^^^ resource in
-     (msg, [in_state state])
+     (msg, [consider_state state])
   | Misaligned access ->
      let msg = match access with
      | Kill -> !^"Misaligned de-allocation operation"
@@ -197,8 +193,10 @@ let pp_type_error te =
   | Mismatch {has; expect} ->
      (!^"Expected value of type" ^^^ LS.pp expect ^^^
         !^"but found value of type" ^^^ LS.pp has, [])
-  | Illtyped_it it ->
-     (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it), [])
+  | Illtyped_it {context;it;has;expected} ->
+     (!^"Illtyped index term" ^^ colon ^^^ context ^^ dot ^^^ 
+        !^"Expected" ^^^ it ^^^ !^"to have type" ^^^ LS.pp expected ^^^
+          !^"but has type" ^^^ LS.pp has,  [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Unsat_constraint {constr;hint; state} ->

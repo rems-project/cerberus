@@ -144,6 +144,23 @@ let rec resolve_index_term loc mapping (it: PIT.index_term)
      return (IT.PointerToIntegerCast it)
 
 
+let rec resolve_predarg loc mapping = function
+  | Path.NumArg z -> 
+     return (IT.Num z)
+  | AddPointer (p,a) -> 
+     let* (ls, s) = resolve_path loc mapping p in
+     let* it = resolve_predarg loc mapping a in
+     return (IT.AddPointer (S (ls, s), it))
+  | SubPointer (p,a) -> 
+     let* (ls, s) = resolve_path loc mapping p in
+     let* it = resolve_predarg loc mapping a in
+     return (IT.SubPointer (S (ls, s), it))
+  | PathArg p ->
+     let* (ls, s) = resolve_path loc mapping p in
+     return (IT.S (ls, s))
+
+
+
 let resolve_constraints mapping its =
   ListM.mapM (fun (loc,lc) ->
       let* it = resolve_index_term loc mapping lc in
