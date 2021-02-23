@@ -3,8 +3,8 @@
 (executable
  (name main)
  (modes exe)
- (public_name csrt)
- (package csrt)
+ (public_name cn)
+ (package cn)
  (flags (:standard -w -27))
  (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util))

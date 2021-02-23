@@ -21,7 +21,7 @@ Q = @
 normal: cerberus
 
 .PHONY: all
-all: cerberus cerberus-bmc cerberus-web csrt #rustic
+all: cerberus cerberus-bmc cerberus-web cn #rustic
 
 .PHONY: full-build
 full-build: prelude-src
@@ -54,10 +54,10 @@ rustic: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build cerberus.install rustic.install
 
-.PHONY: csrt
-csrt: prelude-src
+.PHONY: cn
+cn: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install csrt.install
+	$(Q)dune build cerberus.install cn.install
 	@echo "\nDONE"
 
 
@@ -238,17 +238,17 @@ install: cerberus
 	@echo "[DUNE] install cerberus"
 	$(Q)dune install cerberus
 
-.PHONY: install_csrt
-install_csrt: csrt
-	@echo "[DUNE] install csrt"
-	$(Q)dune install csrt
+.PHONY: install_cn
+install_cn: cn
+	@echo "[DUNE] install cn"
+	$(Q)dune install cn
 
 .PHONY: uninstall
 uninstall: cerberus
 	@echo "[DUNE] uninstall cerberus"
 	$(Q)dune uninstall cerberus
 
-.PHONY: uninstall_csrt
-uninstall_csrt: csrt
-	@echo "[DUNE] uninstall csrt"
-	$(Q)dune uninstall csrt
+.PHONY: uninstall_cn
+uninstall_cn: cn
+	@echo "[DUNE] uninstall cn"
+	$(Q)dune uninstall cn

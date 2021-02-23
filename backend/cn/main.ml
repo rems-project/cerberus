@@ -230,4 +230,4 @@ let json_file =
 
 let () =
   let check_t = Term.(pure main $ file $ json_file $ debug_level $ print_level) in
-  Term.exit @@ Term.eval (check_t, Term.info "csrt")
+  Term.exit @@ Term.eval (check_t, Term.info "cn")
