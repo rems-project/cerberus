@@ -64,8 +64,8 @@ let representable_pointer about =
   let pointer_byte_size = size_of_pointer in
   let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
   let max = Z.power_int_positive_big_int 2 pointer_size in
-  LC.LC (IT.And [IT.LocLE (Pointer Z.zero, about); 
-                 IT.LocLT (about, Pointer max)])
+  LC.LC (IT.And [IT.LEPointer (Pointer Z.zero, about); 
+                 IT.LTPointer (about, Pointer max)])
   
 
 

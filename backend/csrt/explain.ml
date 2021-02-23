@@ -399,7 +399,7 @@ module Make (G : sig val global : Global.t end) = struct
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions a.pointer)), 
                 o_evaluate o_model a.pointer BT.Loc,
-                Some (length ^^ star ^^ Z.pp a.element_size),
+                Some (length ^^^ star ^^^ Z.pp a.element_size),
                 Some !^"array",
                 Some (Sym.pp (Sym.substs substitutions a.content)),
                 o_evaluate o_model (IT.S (content_t, a.content)) content_t

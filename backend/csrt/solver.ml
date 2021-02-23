@@ -87,8 +87,11 @@ module Make (G : sig val global : Global.t end) = struct
        : (Sym.t * RE.t) option = 
     let points = 
       List.filter_map (fun (name, re) ->
-          match RE.pointer re with
-          | Some pointer when equal local it pointer ->
+          match RE.footprint re with
+          | Some (pointer,size) when 
+                 constraint_holds local 
+                   (LC.LC (And [EQ (it, pointer)])) ->
+                                (* LT (Num Z.zero, size)])) -> *)
              Some (name, re) 
           | _ ->
              None
@@ -106,8 +109,8 @@ module Make (G : sig val global : Global.t end) = struct
           match RE.footprint re with
           | Some (pointer,size) when 
                  constraint_holds local 
-                   (LC.LC (IT.And [IT.LocLE (pointer, it);
-                                   IT.LocLT (it, AddPointer (pointer, size));
+                   (LC.LC (IT.And [IT.LEPointer (pointer, it);
+                                   IT.LTPointer (it, AddPointer (pointer, size));
                       ])) ->
              Some (name, re) 
           | _ ->
@@ -169,8 +172,8 @@ module Make (G : sig val global : Global.t end) = struct
           match RE.footprint re with
           | Some (pointer,size) when 
                  constraint_holds local 
-                   (LC.LC (IT.And [IT.LocLE (pointer, it);
-                                   IT.LocLT (it, AddPointer (pointer, size));
+                   (LC.LC (IT.And [IT.LEPointer (pointer, it);
+                                   IT.LTPointer (it, AddPointer (pointer, size));
                       ])) ->
              Some where 
           | _ ->

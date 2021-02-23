@@ -82,8 +82,8 @@ type 'bt term =
   | AddPointer of 'bt term * 'bt term
   | SubPointer of 'bt term * 'bt term
   | MulPointer of 'bt term * 'bt term
-  | LocLT of 'bt term * 'bt term
-  | LocLE of 'bt term * 'bt term
+  | LTPointer of 'bt term * 'bt term
+  | LEPointer of 'bt term * 'bt term
   | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term)
   | AlignedI of 'bt term * 'bt term
   | Aligned of ST.t * 'bt term
@@ -202,9 +202,9 @@ let rec equal it it' =
      equal t1 t1' && equal t2 t2'
   | MulPointer (t1, t2), MulPointer (t1', t2') -> 
      equal t1 t1' && equal t2 t2'
-  | LocLT (t1, t2), LocLT (t1', t2') -> 
+  | LTPointer (t1, t2), LTPointer (t1', t2') -> 
      equal t1 t1' && equal t2 t2'
-  | LocLE (t1, t2), LocLE (t1', t2') -> 
+  | LEPointer (t1, t2), LEPointer (t1', t2') -> 
      equal t1 t1' && equal t2 t2'
   | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
      equal t1 t1' && equal t2 t2' && 
@@ -301,8 +301,8 @@ let rec equal it it' =
   | AddPointer _, _
   | SubPointer _, _
   | MulPointer _, _
-  | LocLT _, _
-  | LocLE _, _
+  | LTPointer _, _
+  | LEPointer _, _
   | Disjoint _, _
   | AlignedI _, _
   | Aligned _, _
@@ -421,9 +421,9 @@ let pp (type bt) (it : bt term) : PPrint.document =
        mparens (aux true t1 ^^^ minus ^^ dot ^^^ aux true t2)
     | MulPointer (t1, t2) ->
        mparens (aux true t1 ^^^ star ^^^ aux true t2)
-    | LocLT (o1,o2) -> 
+    | LTPointer (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^^ aux true o2)
-    | LocLE (o1,o2) -> 
+    | LEPointer (o1,o2) -> 
        mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
     | Disjoint ((o1,s1),(o2,s2)) ->
        c_app !^"disj" [aux false o1; aux false s1; aux false o2; aux false s2]
@@ -523,8 +523,8 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   | AddPointer (it, it') -> vars_in_list [it; it']
   | SubPointer (it, it') -> vars_in_list [it; it']
   | MulPointer (it, it') -> vars_in_list [it; it']
-  | LocLT (it, it')  -> vars_in_list [it; it']
-  | LocLE (it, it') -> vars_in_list [it; it']
+  | LTPointer (it, it')  -> vars_in_list [it; it']
+  | LEPointer (it, it') -> vars_in_list [it; it']
   | Disjoint ((it,_), (it',_)) -> vars_in_list [it; it']
   | AllocationSize it -> vars_in it
   | AlignedI (it, it') -> vars_in_list [it;it]
@@ -616,8 +616,8 @@ let map_sym (type bt) (f : bt * Sym.t -> bt term) (it : bt term) : bt term =
     | AddPointer (it, it') -> AddPointer (aux it, aux it')
     | SubPointer (it, it') -> SubPointer (aux it, aux it')
     | MulPointer (it, it') -> MulPointer (aux it, aux it')
-    | LocLT (it, it') -> LocLT (aux it, aux it')
-    | LocLE (it, it') -> LocLE (aux it, aux it')
+    | LTPointer (it, it') -> LTPointer (aux it, aux it')
+    | LEPointer (it, it') -> LEPointer (aux it, aux it')
     | Disjoint ((it1,it2), (it1',it2')) -> 
        Disjoint ((aux it1, aux it2), (aux it1', aux it2'))
     | AlignedI (it,it') -> AlignedI (aux it, aux it')

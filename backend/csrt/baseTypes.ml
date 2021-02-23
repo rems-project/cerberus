@@ -96,7 +96,7 @@ let pp bt =
     | Tuple nbts -> parens (flow_map (comma) (aux false) nbts)
     | Struct sym -> mparens (!^"struct" ^^^ Sym.pp sym)
     | Set t -> mparens (!^"set" ^^^ parens (aux false t))
-    | Map (t1,t2) -> mparens (!^"map" ^^ langle ^^ aux false t1 ^^ comma ^^ aux false t2)
+    | Map (t1,t2) -> mparens (!^"map" ^^ langle ^^ aux false t1 ^^ comma ^^ aux false t2 ^^ rangle)
   in
   aux false bt
 

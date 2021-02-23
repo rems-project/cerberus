@@ -34,6 +34,15 @@ let for_access = function
   | Store (Some m) -> !^"struct member" ^^^ Id.pp m
   | Free -> !^"for free-ing"
 
+let checking_situation = function
+  | Access access -> !^"checking access"
+  | FunctionCall -> !^"checking function call"
+  | LabelCall Return -> !^"checking return"
+  | LabelCall Loop -> !^"checking loop entry"
+  | LabelCall Other -> !^"checking label call"
+  | Subtyping -> !^"checking subtyping"
+  | Unpacking -> !^"checking unpacking"
+
 let for_situation = function
   | Access access -> for_access access
   | FunctionCall -> !^"for calling function"

@@ -245,14 +245,14 @@ module Make (G : sig val global : Global.t end) = struct
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Integer) t' in
            return (Base Loc, MulPointer (t, t'))
-        | LocLT (t, t') ->
+        | LTPointer (t, t') ->
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Loc) t' in
-           return (Base Bool, LocLT (t, t'))
-        | LocLE (t, t') ->
+           return (Base Bool, LTPointer (t, t'))
+        | LEPointer (t, t') ->
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Loc) t' in
-           return (Base Bool, LocLT (t, t'))
+           return (Base Bool, LEPointer (t, t'))
         | Disjoint ((t,s), (t',s')) ->
            let* t = check_aux loc (Base Loc) t in
            let* t' = check_aux loc (Base Loc) t' in
