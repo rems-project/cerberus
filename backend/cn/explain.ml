@@ -480,18 +480,24 @@ module Make (G : sig val global : Global.t end) = struct
     `List lines
 
 
+  let counter_model local = 
+    let _ = S.is_inconsistent local in
+    S.get_model ()
+
+
+
   let state names local = 
     let explanation = explanation names local SymSet.empty in
     pp_state local explanation
 
-  let undefined_behaviour names local o_model = 
+  let undefined_behaviour names local = 
     let explanation = explanation names local SymSet.empty in
-    pp_state_with_model local explanation o_model
+    pp_state_with_model local explanation (counter_model local)
 
-  let missing_ownership names local it o_model = 
+  let missing_ownership names local it = 
     let explanation = explanation names local (IT.vars_in it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, pp_state_with_model local explanation o_model)
+    (it_pp, pp_state_with_model local explanation (counter_model local))
 
   let index_terms names local (it,it') = 
     let explanation = 
@@ -502,21 +508,21 @@ module Make (G : sig val global : Global.t end) = struct
     let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
     (it_pp, it_pp')
 
-  let unsatisfied_constraint names local lc o_model = 
+  let unsatisfied_constraint names local lc = 
     let explanation = explanation names local (LC.vars_in lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    (lc_pp, pp_state_with_model local explanation o_model)
+    (lc_pp, pp_state_with_model local explanation (counter_model local))
 
-  let resource names local re o_model = 
+  let resource names local re = 
     let explanation = explanation names local (RE.vars_in re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state_with_model local explanation o_model)
+    (re_pp, pp_state_with_model local explanation (counter_model local))
 
-  let resources names local (re1, re2) o_model = 
+  let resources names local (re1, re2) = 
     let relevant = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
     let explanation = explanation names local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    ((re1, re2), pp_state_with_model local explanation o_model)
+    ((re1, re2), pp_state_with_model local explanation (counter_model local))
 
 end

@@ -109,7 +109,7 @@ module Make (G : sig val global : Global.t end) = struct
   (*** mucore pp setup **********************************************************)
   module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(Pp_typs)
   (* let pp_budget () = Some !debug_level *)
-  let pp_budget () = Some !print_level
+  let pp_budget () = Some (!print_level*5)
   let pp_expr e = PP_MUCORE.pp_expr (pp_budget ()) e
   let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
 
@@ -457,9 +457,8 @@ module Make (G : sig val global : Global.t end) = struct
                let* unis = match RE.unify resource resource' unis with
                  | Some unis -> return unis
                  | None ->
-                    let model = S.get_model () in
                     let ((expect,has), state) = 
-                      Explain.resources names original_local (resource, resource') model in
+                      Explain.resources names original_local (resource, resource') in
                     fail loc (Resource_mismatch {expect; has; state; situation})
       
                in
@@ -493,9 +492,8 @@ module Make (G : sig val global : Global.t end) = struct
                if S.constraint_holds local c then 
                  check_constraints ftyp 
                else 
-                 let model = S.get_model () in
                  let (constr,state) = 
-                   Explain.unsatisfied_constraint names original_local c model
+                   Explain.unsatisfied_constraint names original_local c
                  in
                  fail loc (Unsat_constraint {constr; hint = None; state})
             | I rt -> 
@@ -557,8 +555,7 @@ module Make (G : sig val global : Global.t end) = struct
         let o_resource = S.resource_for_pointer local pointer in
         let* resource_name, resource = match o_resource with
           | None -> 
-             let model = S.get_model () in
-             let (addr, state) = Explain.missing_ownership names original_local pointer model in
+             let (addr, state) = Explain.missing_ownership names original_local pointer in
              let used = S.used_resource_for_pointer local pointer in
              if S.is_global original_local pointer 
              then fail loc (Missing_global_ownership {addr; used; situation})
@@ -568,9 +565,8 @@ module Make (G : sig val global : Global.t end) = struct
         in
         let* (_, have_size) = match RE.footprint resource with
           | None -> 
-             let model = S.get_model () in
              let (resource, state) = 
-               Explain.resource names original_local resource model in
+               Explain.resource names original_local resource in
              fail loc (Cannot_unpack {resource; state; situation})
           | Some fp ->
              return fp
@@ -593,8 +589,7 @@ module Make (G : sig val global : Global.t end) = struct
           return local
         else
           (* fix this: could be either side that has unknown length *)
-          let model = S.get_model () in
-          let (resource, state) = Explain.resource names original_local resource model in
+          let (resource, state) = Explain.resource names original_local resource in
           fail loc (Unknown_resource_size {resource; state; situation})
 
 
@@ -622,14 +617,12 @@ module Make (G : sig val global : Global.t end) = struct
             let local = use_resource resource_name [loc] local in
             return (Points {p' with pointer = p.pointer}, local)
          | Some (resource_name, resource) ->
-            let model = S.get_model () in
             let ((expect,has), state) = 
-              Explain.resources names original_local (request, resource) model in
+              Explain.resources names original_local (request, resource) in
             fail loc (Resource_mismatch {expect; has; state; situation})
          | None -> 
-            let model = S.get_model () in
             let (addr, state) = 
-              Explain.missing_ownership names original_local p.pointer model in
+              Explain.missing_ownership names original_local p.pointer in
             let used = S.used_resource_for_pointer local p.pointer in
             if S.is_global original_local p.pointer 
             then fail loc (Missing_global_ownership {addr; used; situation})
@@ -648,17 +641,16 @@ module Make (G : sig val global : Global.t end) = struct
            let content = Sym.fresh () in
            let local = add_l content (Base (Map (Integer, a_array_bt))) local in
            return (Array {pointer = a.pointer; content; 
-                          element_size = a.element_size; length = Num Z.zero}, local)
+                          element_size = a.element_size; length = a.length}, local)
          else
            let o_resource = S.resource_for_pointer local a.pointer in
            begin match o_resource with
            | Some (resource_name, Array a') when 
                   LS.equal (get_l a'.content local) (Base (Map (Integer, a_array_bt))) &&
                     Z.equal a.element_size a'.element_size ->
-              let () = print stderr !^"HEREHEREHEREHEREHEREHEREHEREHERE" in
               if S.equal local a.length a'.length then
                 let local = use_resource resource_name [loc] local in
-                return (Array {a' with pointer = a.pointer; length = a'.length}, local)
+                return (Array {a' with pointer = a.pointer; length = a.length }, local)
               else if S.le local a.length a'.length then
                 let local = use_resource resource_name [loc] local in
                 let local = 
@@ -695,9 +687,8 @@ module Make (G : sig val global : Global.t end) = struct
                        in
                        return (resource, local)
                     | _ ->
-                       let model = S.get_model () in
                        let (addr, state) = 
-                         Explain.missing_ownership names original_local a.pointer model in
+                         Explain.missing_ownership names original_local a.pointer in
                        let used = S.used_resource_for_pointer local a.pointer in
                        if S.is_global original_local a.pointer 
                        then fail loc (Missing_global_ownership {addr; used; situation})
@@ -708,8 +699,7 @@ module Make (G : sig val global : Global.t end) = struct
                 end
               else
                 (* fix this: could be either resource that has unknown length *)
-                let model = S.get_model () in
-                let (resource, state) = Explain.resource names original_local (Array a') model in
+                let (resource, state) = Explain.resource names original_local (Array a') in
                 fail loc (Unknown_resource_size {resource; state; situation})
            | Some (resource_name, Points p') when 
                   LS.equal (get_l p'.pointee local) (Base a_array_bt) &&
@@ -729,14 +719,12 @@ module Make (G : sig val global : Global.t end) = struct
               in
               return (resource, local)
            | Some (resource_name, resource) ->
-              let model = S.get_model () in
               let ((expect,has), state) = 
-                Explain.resources names original_local (request, resource) model in
+                Explain.resources names original_local (request, resource) in
               fail loc (Resource_mismatch {expect; has; state; situation})
            | None -> 
-              let model = S.get_model () in
               let (addr, state) = 
-                Explain.missing_ownership names original_local a.pointer model in
+                Explain.missing_ownership names original_local a.pointer in
               let used = S.used_resource_for_pointer local a.pointer in
               if S.is_global original_local a.pointer 
               then fail loc (Missing_global_ownership {addr; used; situation})
@@ -755,9 +743,7 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let else_prompt = 
               lazy (
-                  let model = S.get_model () in
-                  let (resource, state) = 
-                    Explain.resource names original_local request model in
+                  let (resource, state) = Explain.resource names original_local request in
                   fail loc (Missing_resource {resource; used = None; state; situation})
                 )
             in
@@ -1098,8 +1084,7 @@ module Make (G : sig val global : Global.t end) = struct
               aux rest
            | _ -> 
               let names = names @ extra_names in
-              let model = S.get_model () in
-              let (resource, state) = Explain.resource names original_local resource model in
+              let (resource, state) = Explain.resource names original_local resource in
               fail loc (Unused_resource {resource; state})
            end
         | _ :: rest -> aux rest
@@ -1241,7 +1226,7 @@ module Make (G : sig val global : Global.t end) = struct
            if S.is_inconsistent local 
            then (Pp.warn !^"unexpected unreachable Undefined"; return False)
            else 
-             let expl = Explain.undefined_behaviour names local (S.get_model ()) in
+             let expl = Explain.undefined_behaviour names local in
              fail loc (Undefined_behaviour (undef, expl))
         | M_PEerror (err, asym) ->
            let* arg = arg_of_asym local asym in
@@ -1459,15 +1444,13 @@ module Make (G : sig val global : Global.t end) = struct
                 | Array a ->
                    failwith "asd"
                 | Predicate pred -> 
-                   let model = S.get_model () in
                    let (resource,state) = 
-                     Explain.resource names original_local (Predicate pred) model in
+                     Explain.resource names original_local (Predicate pred) in
                    fail loc (Cannot_unpack {resource; state; situation})
                 end
              | None -> 
-                let model = S.get_model () in
                 let (addr,state) = 
-                  Explain.missing_ownership names original_local pointer model in
+                  Explain.missing_ownership names original_local pointer in
                 let used = S.used_resource_for_pointer local pointer in
                 if S.is_global original_local pointer 
                 then fail loc (Missing_global_ownership {addr; used; situation})
@@ -1731,9 +1714,8 @@ module Make (G : sig val global : Global.t end) = struct
                 if S.constraint_holds local in_range_lc
                 then return () 
                 else 
-                 let model = S.get_model () in
                  let (constr,state) = 
-                   Explain.unsatisfied_constraint names local in_range_lc model
+                   Explain.unsatisfied_constraint names local in_range_lc
                  in
                  fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
@@ -1827,6 +1809,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
            let* paths =
              ListM.mapM (fun (lc, e) ->
+                 debug 6 (lazy (!^"checking branch under assumption" ^^^ LC.pp lc));
                  let delta = add_uc lc L.empty in
                  let*? () = false_if_unreachable loc (delta ++ local) in
                  let*? (rt, local) = infer_expr_pop delta (local, labels) e in
@@ -1877,6 +1860,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* () = ensure_base_type carg.loc ~expect:Bool carg.bt in
            let* paths =
              ListM.mapM (fun (lc, e) ->
+                 debug 6 (lazy (!^"checking branch under assumption" ^^^ LC.pp lc));
                  let delta = add_uc lc L.empty in
                  let*? () = 
                    false_if_unreachable loc (delta ++ local)
@@ -1911,7 +1895,6 @@ module Make (G : sig val global : Global.t end) = struct
            let* delta = pattern_match_rt pat rt in
            check_expr_pop delta (local, labels) e2 typ
         | M_Esseq (pat, e1, e2) ->
-           (* let () = maybe_print_json was_updated (lazy (json_local_or_false_with_path loc (Normal local))) in *)
            let*? (rt, local) = infer_expr (local, labels) e1 in
            let* delta = pattern_match_rt pat rt in
            check_expr_pop ~print:true delta (local, labels) e2 typ
