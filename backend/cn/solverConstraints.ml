@@ -32,6 +32,7 @@ let struct_member_name bt member =
 let member_sort ctxt = 
   Z3.Sort.mk_uninterpreted_s ctxt "member"
 
+
 (* maybe fix Loc *)
 let rec bt_to_sort global bt = 
   let ctxt = global.solver_context in
@@ -350,49 +351,39 @@ let rec of_index_term global it =
      let a' = of_index_term global it' in
      let a'' = of_index_term global it'' in
      Z3.Z3Array.mk_store ctxt a a' a''
-  | ArrayEqualOnRange(t1,t2,t3,t4) ->
-     let integer_sort = bt_to_sort global Integer in
-     let a1 = of_index_term global t1 in
-     let a2 = of_index_term global t2 in
-     let a3 = of_index_term global t3 in
-     let a4 = of_index_term global t4 in
-     (* let index = Z3.Z3Array.mk_array_ext ctxt a1 a2 in *)
-     let i_sym = sym_to_symbol ctxt (Sym.fresh ()) in
-     let i = Z3.Expr.mk_const ctxt i_sym integer_sort in
+  | ArrayEqualOnRange(array1,array2,i_from,i_to) ->
+     let array1 = of_index_term global array1 in
+     let array2 = of_index_term global array2 in
+     let i_from = of_index_term global i_from in
+     let i_to = of_index_term global i_to in
+     let i = 
+       Z3.Expr.mk_const ctxt 
+         (sym_to_symbol ctxt (Sym.fresh ()))
+         (bt_to_sort global Integer) 
+     in
      let in_range = 
        Z3.Boolean.mk_and ctxt [
-           Z3.Arithmetic.mk_le ctxt a3 i;
-           Z3.Arithmetic.mk_le ctxt i a4;
+           Z3.Arithmetic.mk_le ctxt i_from i;
+           Z3.Arithmetic.mk_le ctxt i i_to;
          ]
      in
      let select_equal = 
        Z3.Boolean.mk_eq ctxt
-         (Z3.Z3Array.mk_select ctxt a1 i)
-         (Z3.Z3Array.mk_select ctxt a2 i)
+         (Z3.Z3Array.mk_select ctxt array1 i)
+         (Z3.Z3Array.mk_select ctxt array2 i)
      in
-     let body = 
-       Z3.Boolean.mk_implies ctxt in_range select_equal
+     let body = Z3.Boolean.mk_implies ctxt in_range select_equal in
+     let subrange_equal = 
+       Z3.Quantifier.expr_of_quantifier 
+         (Z3.Quantifier.mk_forall_const 
+            ctxt [i] body None [] (* pattern list *)
+            [] None None)
      in
-     let q = 
-       Z3.Quantifier.mk_forall_const 
-         ctxt
-         [i]
-         body
-         None
-         []                     (* pattern list *)
-         []
-         None
-         None
-     in
-     Z3.Quantifier.expr_of_quantifier q
+     Z3.Boolean.mk_or ctxt [
+         Z3.Boolean.mk_eq ctxt array1 array2;
+         subrange_equal
+       ]
   | ArraySelectAfter ((t1,t2), t3) ->
-     (* let a = of_index_term global t1 in
-      * let a' = of_index_term global t2 in
-      * let a'' = of_index_term global t3 in *)
      Debug_ocaml.error "Z3 mapping for ArraySelectAfter"
-     (* Z3.Expr.mk_app ctxt array_select_after [a;a';a''] *)
   | ArrayIndexShiftRight (t1, t2) ->
-     (* let a = of_index_term global t1 in
-      * let a' = of_index_term global t2 in *)
      Debug_ocaml.error "Z3 mapping for ArrayIndexShiftRight"
-     (* Z3.Expr.mk_app ctxt array_index_shift_right [a;a']) *)

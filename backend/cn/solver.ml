@@ -8,12 +8,8 @@ module LC = LogicalConstraints
 
 
 
-let initial_context =
-  Z3.mk_context [
-      ("model", "true");
-      ("well_sorted_check","true");
-      ("unsat_core", "true");
-    ] 
+
+
 
 
 module Make (G : sig val global : Global.t end) = struct
@@ -31,12 +27,10 @@ module Make (G : sig val global : Global.t end) = struct
   let solver = Z3.Solver.mk_simple_solver ctxt
 
 
-  let array_select_after_sym = Z3.Symbol.mk_string ctxt "array_select_after"
-  let array_index_shift_right_sym = Z3.Symbol.mk_string ctxt "array_index_shift_right_sym"
+  
+    
 
-  let array_select_after_sym = 
-    Z3.FuncDecl.mk_func_decl ctxt array_select_after_sym
-      []
+
 
   let get_model () = Z3.Solver.get_model solver
 

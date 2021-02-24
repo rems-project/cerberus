@@ -93,7 +93,7 @@ let process_functions genv fns =
 
 let process mu_file =
   let* mu_file = PreProcess.retype_file mu_file in
-  let solver_context = Solver.initial_context in
+  let solver_context = SolverInitialContext.initial_context in
   let global = Global.empty solver_context in
   let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
   let global = { global with stdlib_funs } in
