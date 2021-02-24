@@ -350,6 +350,41 @@ let rec of_index_term global it =
      let a' = of_index_term global it' in
      let a'' = of_index_term global it'' in
      Z3.Z3Array.mk_store ctxt a a' a''
+  | ArrayEqualOnRange(t1,t2,t3,t4) ->
+     let integer_sort = bt_to_sort global Integer in
+     let a1 = of_index_term global t1 in
+     let a2 = of_index_term global t2 in
+     let a3 = of_index_term global t3 in
+     let a4 = of_index_term global t4 in
+     (* let index = Z3.Z3Array.mk_array_ext ctxt a1 a2 in *)
+     let i_sym = sym_to_symbol ctxt (Sym.fresh ()) in
+     let i = Z3.Expr.mk_const ctxt i_sym integer_sort in
+     let in_range = 
+       Z3.Boolean.mk_and ctxt [
+           Z3.Arithmetic.mk_le ctxt a3 i;
+           Z3.Arithmetic.mk_le ctxt i a4;
+         ]
+     in
+     let select_equal = 
+       Z3.Boolean.mk_eq ctxt
+         (Z3.Z3Array.mk_select ctxt a1 i)
+         (Z3.Z3Array.mk_select ctxt a2 i)
+     in
+     let body = 
+       Z3.Boolean.mk_implies ctxt in_range select_equal
+     in
+     let q = 
+       Z3.Quantifier.mk_forall_const 
+         ctxt
+         [i]
+         body
+         None
+         []                     (* pattern list *)
+         []
+         None
+         None
+     in
+     Z3.Quantifier.expr_of_quantifier q
   | ArraySelectAfter ((t1,t2), t3) ->
      (* let a = of_index_term global t1 in
       * let a' = of_index_term global t2 in

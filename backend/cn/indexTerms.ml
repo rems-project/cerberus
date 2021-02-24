@@ -110,6 +110,7 @@ type 'bt term =
   | ConstArray of 'bt term * 'bt
   | ArrayGet of 'bt term * 'bt term
   | ArraySet of 'bt term * 'bt term * 'bt term
+  | ArrayEqualOnRange of 'bt term * 'bt term * 'bt term * 'bt term
   | ArraySelectAfter of ('bt term * 'bt term) * 'bt term
   | ArrayIndexShiftRight of 'bt term * 'bt term
 
@@ -255,6 +256,8 @@ let rec equal it it' =
      equal t1 t1' && equal t2 t2'
   | ArraySet (t1,t2,t3), ArraySet (t1',t2',t3') ->
      equal t1 t1' && equal t2 t2' && equal t3 t3'
+  | ArrayEqualOnRange (t1,t2,t3,t4), ArrayEqualOnRange (t1',t2',t3',t4') ->
+     equal t1 t1' && equal t2 t2' && equal t3 t3' && equal t4 t4'
   | ArraySelectAfter ((t1,t2), t3), ArraySelectAfter ((t1',t2'), t3') ->
      equal t1 t1' && equal t2 t2' && equal t3 t3'
   | ArrayIndexShiftRight (t1, t2), ArrayIndexShiftRight (t1', t2') ->
@@ -328,6 +331,7 @@ let rec equal it it' =
   | ConstArray _, _
   | ArrayGet _, _
   | ArraySet _, _
+  | ArrayEqualOnRange _, _
   | ArraySelectAfter _, _
   | ArrayIndexShiftRight _, _
 
@@ -473,6 +477,8 @@ let pp (type bt) (it : bt term) : PPrint.document =
        aux true t1 ^^ lbracket ^^ aux false t2 ^^ rbracket
     | ArraySet (t1,t2,t3) ->
        aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
+    | ArrayEqualOnRange (t1,t2,t3,t4) ->
+       c_app !^"equalOnRange" [aux false t1; aux false t2; aux false t3; aux false t4]
     | ArraySelectAfter ((t1,t2), t3) ->
        c_app !^"array_select_after" [aux false t1; aux false t2; aux false t3]
     | ArrayIndexShiftRight (t1, t2) ->
@@ -552,6 +558,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   | ConstArray (t,_) -> vars_in t
   | ArrayGet (t1,t2) -> vars_in_list [t1;t2]
   | ArraySet (t1,t2,t3) -> vars_in_list [t1;t2;t3]
+  | ArrayEqualOnRange (t1,t2,t3,t4) -> vars_in_list [t1;t2;t3; t4]
   | ArraySelectAfter ((t1, t2), t3) -> vars_in_list [t1; t2; t3]
   | ArrayIndexShiftRight (t1, t2) -> vars_in_list [t1; t2]
 
@@ -656,6 +663,8 @@ let map_sym (type bt) (f : bt * Sym.t -> bt term) (it : bt term) : bt term =
        ArrayGet (aux t1, aux t2)
     | ArraySet (t1, t2, t3) ->
        ArraySet (aux t1, aux t2, aux t3)
+    | ArrayEqualOnRange (t1, t2, t3, t4) ->
+       ArrayEqualOnRange (aux t1, aux t2, aux t3, aux t4)
     | ArraySelectAfter ((t1,t2),t3) ->
        ArraySelectAfter ((aux t1,aux t2),aux t3)
     | ArrayIndexShiftRight (t1, t2) ->

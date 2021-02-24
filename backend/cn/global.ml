@@ -89,7 +89,7 @@ let zero_region =
   let length_s = Sym.fresh () in
   let length_t = S (Integer, length_s) in
   let content_s = Sym.fresh () in
-  let content_t = S (Map (Integer, Integer), Sym.fresh ()) in
+  let content_t = S (Map (Integer, Integer), content_s) in
   let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
   let oargs = [] in
   let pred = 
@@ -107,11 +107,19 @@ let zero_region =
         content = content_s;
       }
   in
+  let equality_constr = 
+    ArrayEqualOnRange (
+        content_t, 
+        ConstArray (IT.Num Z.zero, BT.Integer),
+        Num Z.zero,
+        Sub (length_t, Num (Z.of_int 1))
+      )
+  in
   let pack_functions =
     [LFT.Logical ((content_s, Base (Map (Integer, Integer))),
      LFT.Resource (array, 
      LFT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
-     LFT.Constraint (LC (EQ (content_t, ConstArray (IT.Num Z.zero, BT.Integer))),
+     LFT.Constraint (LC equality_constr,
      LFT.I (
      LRT.Resource (pred,
      LRT.I))))))] 
@@ -122,7 +130,7 @@ let zero_region =
      LRT.Logical ((content_s, Base (Map (Integer, Integer))),
      LRT.Resource (array,
      LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
-     LRT.Constraint (LC (EQ (content_t, ConstArray (IT.Num Z.zero, BT.Integer))),
+     LRT.Constraint (LC equality_constr,
      LRT.I))))))]
   in
   let predicate = {

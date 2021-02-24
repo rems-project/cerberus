@@ -339,6 +339,12 @@ module Make (G : sig val global : Global.t end) = struct
            let* it' = check_aux loc (Base Integer) it' in
            let* it'' = check_aux loc (Base bt) it'' in
            return (Base (Map (Integer, bt)), ArraySet (it, it', it''))
+        | ArrayEqualOnRange (it,it',it'',it''') ->
+           let* (bt, it) = infer_integer_map_type loc it in
+           let* it' = check_aux loc (Base (Map (Integer, bt))) it' in
+           let* it'' = check_aux loc (Base Integer) it'' in
+           let* it''' = check_aux loc (Base Integer) it''' in
+           return (Base Bool, ArrayEqualOnRange (it, it', it'', it'''))
         | ArraySelectAfter ((it,it'), it'') ->
            let* (bt, it) = infer_integer_map_type loc it in
            let* it' = check_aux loc (Base Integer) it' in
