@@ -2,42 +2,9 @@ open Subst
 open List
 open Pp
 module BT=BaseTypes
+module CT = Sctypes
 module CF=Cerb_frontend
-
 module SymSet = Set.Make(Sym)
-
-
-module ST = struct
-
-  type t = 
-    | ST_Ctype of Sctypes.t
-    | ST_Pointer
-
-
-  let equal rt1 rt2 = 
-    match rt1, rt2 with
-    | ST_Ctype ct1, ST_Ctype ct2 -> Sctypes.equal ct1 ct2
-    | ST_Pointer, ST_Pointer -> true
-
-    | ST_Ctype _, _
-    | ST_Pointer, _ -> 
-       false
-
-  let pp = function
-    | ST_Ctype ct -> Sctypes.pp ct
-    | ST_Pointer -> Pp.string "pointer"
-
-  let of_ctype ct = ST_Ctype ct
-
-  let to_bt = function
-    | ST_Pointer -> BT.Loc
-    | ST_Ctype sct -> BT.of_sct sct
-
-end
-
-
-
-
 
 
 type 'bt term =
@@ -86,13 +53,13 @@ type 'bt term =
   | LEPointer of 'bt term * 'bt term
   | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term)
   | AlignedI of 'bt term * 'bt term
-  | Aligned of ST.t * 'bt term
+  | Aligned of CT.t * 'bt term
   | IntegerToPointerCast of 'bt term
   | PointerToIntegerCast of 'bt term
   (* representability *)
   | MinInteger of CF.Ctype.integerType
   | MaxInteger of CF.Ctype.integerType
-  | Representable of ST.t * 'bt term
+  | Representable of CT.t * 'bt term
   (* lists *)
   | Nil of 'bt
   | Cons of 'bt term * 'bt term
@@ -217,10 +184,10 @@ let rec equal it it' =
   | AlignedI (t1, t2), AlignedI (t1', t2') ->
      equal t1 t1' && equal t2 t2'
   | Aligned (rt, t), Aligned (rt', t') ->
-     ST.equal rt rt' && equal t t'
+     CT.equal rt rt' && equal t t'
   (* representability *)
   | Representable (rt, t), Representable (rt', t') ->
-     ST.equal rt rt' && equal t t'
+     CT.equal rt rt' && equal t t'
   | MinInteger it, MinInteger it' ->
      CF.Ctype.integerTypeEqual it it'
   | MaxInteger it, MaxInteger it' ->
@@ -434,7 +401,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | AlignedI (t, t') ->
        c_app !^"aligned" [aux false t; aux false t']
     | Aligned (rt, t) ->
-       c_app !^"aligned" [ST.pp rt; aux false t]
+       c_app !^"aligned" [CT.pp rt; aux false t]
     | IntegerToPointerCast t ->
        mparens (parens(!^"pointer") ^^ aux true t)
     | PointerToIntegerCast t ->
@@ -445,7 +412,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | MaxInteger it ->
        c_app !^"max" [CF.Pp_core_ctype.pp_integer_ctype it]
     | Representable (rt, t) ->
-       c_app !^"repr" [ST.pp rt; aux false t]
+       c_app !^"repr" [CT.pp rt; aux false t]
     (* lists *)
     | Head (o1) -> 
        c_app !^"hd" [aux false o1]
@@ -722,12 +689,12 @@ let disjoint_from fp fps =
 
 let good_pointer_it pointer_it pointee_sct = 
   match pointee_sct with
-  | Sctypes.Sctype (_, Void) ->
-     Representable (ST_Ctype (Sctypes.pointer_sct pointee_sct), pointer_it);
+  | CT.Sctype (_, Void) ->
+     Representable (CT.pointer_sct pointee_sct, pointer_it);
   | _ -> 
      And [
-         Representable (ST_Ctype (Sctypes.pointer_sct pointee_sct), pointer_it);
-         Aligned (ST_Ctype pointee_sct, pointer_it);
+         Representable (CT.pointer_sct pointee_sct, pointer_it);
+         Aligned (pointee_sct, pointer_it);
        ]
 
 let good_pointer pointer pointee_sct = 
@@ -741,7 +708,7 @@ let good_value v sct =
   | Sctype (_, Pointer (qualifiers, pointee_sct)) ->
      good_pointer v pointee_sct
   | _ ->
-     Representable (ST_Ctype sct, v_it)
+     Representable (sct, v_it)
 
 
 

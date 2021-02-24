@@ -934,8 +934,9 @@ module Make (G : sig val global : Global.t end) = struct
           let lcs = [LC.LC (IT.Null (S (BT.Loc, ret)))] in
           return (ret, Loc, lcs) )
         ( fun sym -> 
+          let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
           let lcs = [LC (EQ (S (BT.Loc, ret), S (BT.Loc, sym)));
-                     LC (Representable (ST_Pointer, S (Loc, ret)))] in
+                     LC (Representable (voidstar, S (Loc, ret)))] in
           return (ret, Loc, lcs) )
         ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
         ( fun () -> Debug_ocaml.error "unspecified pointer value" )
@@ -1540,7 +1541,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let ensure_aligned loc local access pointer ctype = 
-      let alignment_lc = LC.LC (Aligned (ST.of_ctype ctype, pointer)) in
+      let alignment_lc = LC.LC (Aligned (ctype, pointer)) in
       if S.constraint_holds local alignment_lc 
       then return () 
       else fail loc (Misaligned access)
@@ -1639,7 +1640,7 @@ module Make (G : sig val global : Global.t end) = struct
                 | _ -> false
               in
               let alignment_lc = 
-                LC.LC (Aligned (ST.of_ctype act.item.ct, S (arg.bt, arg.lname))) in
+                LC.LC (Aligned (act.item.ct, S (arg.bt, arg.lname))) in
               let ok = resource_ok && S.constraint_holds local alignment_lc in
               let constr = LC (EQ (S (Bool, ret), Bool ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
@@ -1648,7 +1649,7 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in
               let* arg = arg_of_asym local asym in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = EQ (S (Bool, ret), Aligned (ST.of_ctype act.item.ct, S (BT.Loc, arg.lname))) in
+              let constr = EQ (S (Bool, ret), Aligned (act.item.ct, S (BT.Loc, arg.lname))) in
               let rt = RT.Computational ((ret, Bool), Constraint (LC.LC constr, I)) in
               return (Normal (rt, local))
            | M_PtrArrayShift (asym1, act, asym2) ->
@@ -1679,7 +1680,7 @@ module Make (G : sig val global : Global.t end) = struct
               let* lrt = store loc local act.item.bt (S (Loc, ret)) size None in
               let rt = 
                 RT.Computational ((ret, Loc), 
-                LRT.Constraint (LC.LC (Representable (ST_Ctype (Sctypes.pointer_sct act.item.ct), S (Loc, ret))), 
+                LRT.Constraint (LC.LC (Representable (Sctypes.pointer_sct act.item.ct, S (Loc, ret))), 
                 LRT.Constraint (LC.LC (AlignedI (S (arg.bt, arg.lname), S (Loc, ret))), 
                 (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
                 lrt)))
@@ -1710,7 +1711,7 @@ module Make (G : sig val global : Global.t end) = struct
                  understand, are an exception. *)
               let* () = 
                 let in_range_lc = 
-                  LC (Representable (ST.of_ctype act.item.ct, S (varg.bt, varg.lname))) in
+                  LC (Representable (act.item.ct, S (varg.bt, varg.lname))) in
                 if S.constraint_holds local in_range_lc
                 then return () 
                 else 

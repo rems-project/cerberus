@@ -130,23 +130,3 @@ let member_offset tag member =
   let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
   integer_value_to_num iv
 
-
-
-
-
-
-
-let size_of_stored_type st = 
-  match st with
-  | ST.ST_Ctype ct -> size_of_ctype ct
-  | ST.ST_Pointer -> size_of_pointer
-
-let align_of_stored_type st = 
-  match st with
-  | ST.ST_Ctype ct -> align_of_ctype ct
-  | ST.ST_Pointer -> align_of_pointer
-
-let representable_stored_type struct_decls st = 
-  match st with
-  | ST.ST_Ctype ct -> representable_ctype struct_decls ct
-  | ST.ST_Pointer -> representable_pointer

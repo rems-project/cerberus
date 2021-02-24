@@ -276,7 +276,7 @@ let rec of_index_term global it =
      let t = Or [fp1_before_fp2; fp2_before_fp1] in
      of_index_term global t
   | Aligned (st,it') -> 
-     let align = Memory.align_of_stored_type st in
+     let align = Memory.align_of_ctype st in
      let a = of_index_term global (Num align) in
      let a' = of_index_term global it' in
      Z3.Boolean.mk_eq ctxt
@@ -302,7 +302,7 @@ let rec of_index_term global it =
      of_index_term global 
        (Num (Memory.max_integer_type it))
   | Representable (st, t) ->
-     let rangef = Memory.representable_stored_type global.struct_decls st in
+     let rangef = Memory.representable_ctype global.struct_decls st in
      of_index_term global (LC.unpack (rangef t))
   (* lists *)
   | Nil _ ->

@@ -171,8 +171,8 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
           ) layout (LRT.I, [])
       in
       let value = IT.Struct (tag, values) in
-      let st = ST.ST_Ctype (Sctypes.Sctype ([], Sctypes.Struct tag)) in
-      let lrt = lrt @@ Constraint (LC (IT.Representable (st, value)), LRT.I) in
+      let ct = Sctypes.Sctype ([], Sctypes.Struct tag) in
+      let lrt = lrt @@ Constraint (LC (IT.Representable (ct, value)), LRT.I) in
       let constr = LC (IT.EQ (S (BT.Struct tag, struct_value_s), value)) in
       (lrt, constr)
     in

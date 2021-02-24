@@ -277,9 +277,9 @@ module Make (G : sig val global : Global.t end) = struct
            return (Base BT.Integer, MinInteger it)
         | MaxInteger it ->
            return (Base BT.Integer, MaxInteger it)
-        | Representable (st, t) ->
-           let* t = check_aux loc (Base (ST.to_bt st)) t in
-           return (Base BT.Bool, Representable (st, t))
+        | Representable (ct, t) ->
+           let* t = check_aux loc (Base (BT.of_sct ct)) t in
+           return (Base BT.Bool, Representable (ct, t))
         (* lists *)
         | Nil _ -> 
            fail loc (Polymorphic_it context)
