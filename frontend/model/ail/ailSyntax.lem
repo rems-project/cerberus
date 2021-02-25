@@ -41,7 +41,7 @@ type encodingPrefix =
   | Enc_U
   | Enc_L
 
-type stringLiteral = maybe encodingPrefix * list string
+type stringLiteral = maybe encodingPrefix * list (Loc.t * list string)
 
 type arithmeticOperator [name = "aop.*"] =
   (* STD §6.5.5 Multiplicative operators *)

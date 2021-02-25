@@ -41,7 +41,7 @@ type cabs_encoding_prefix =
   | CabsEncPrefix_U
   | CabsEncPrefix_L
 
-type cabs_string_literal = maybe cabs_encoding_prefix * list string
+type cabs_string_literal = maybe cabs_encoding_prefix * list (Loc.t * list string)
 
 
 (* §6.5 Expressions *)
@@ -308,7 +308,7 @@ and cabs_statement_ =
   (* NON-STD cppmem par construct *)
   | CabsSpar of list cabs_statement
   (* GCC inline assembly extension *)
-  | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (list string)
+  | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
 
 and cabs_statement =
   | CabsStatement of Loc.t * Annot.attributes * cabs_statement_

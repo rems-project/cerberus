@@ -473,6 +473,7 @@ let pp_encodingPrefix pref =
   P.string (to_string pref)
 
 let pp_stringLiteral (pref_opt, strs) =
+  let strs = List.concat (List.map snd strs) in
   (P.optional pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Green] (P.dquotes (!^ (String.concat "" strs)))
 
 
@@ -902,7 +903,7 @@ let pp_program_with_annot =
 
 
 let pp_id_only (Symbol.Identifier (_,n)) = P.string n
-let pp_attr_arg (_, arg) = P.dquotes (P.string arg)
+let pp_attr_arg (_, arg, _) = P.dquotes (P.string arg)
 let pp_attr_args args = P.parens (P.separate_map P.comma pp_attr_arg args)
 
 

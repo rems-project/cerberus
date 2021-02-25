@@ -106,7 +106,7 @@ let string_of_bop = function
 let dtree_of_pexpr pexpr =
   let rec self current_loc (Pexpr (annot, _, pexpr_)) =
     let current_loc =
-      Option.value (Annot.get_loc annot) ~default:current_loc in
+      match Annot.get_loc annot with Some l -> l | _ -> current_loc in
     let self expr = self current_loc expr in
     
     let pp_ctor str =
@@ -267,7 +267,7 @@ let dtree_of_action act =
 let dtree_of_expr expr =
   let rec self current_loc (Expr (annot, expr_) as expr) =
     let current_loc =
-      Option.value (Annot.get_loc annot) ~default:current_loc in
+      match Annot.get_loc annot with Some l -> l | _ -> current_loc in
     let self expr = self current_loc expr in
 
     let pp_ctor str =

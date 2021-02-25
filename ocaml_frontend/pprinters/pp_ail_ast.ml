@@ -219,6 +219,7 @@ let rec pp_constant = function
    ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
 
 let pp_stringLiteral (pref_opt, strs) =
+  let strs = List.concat (List.map snd strs) in
   (P.optional Pp_ail.pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (P.dquotes (!^ (String.concat "" strs)))
 
 let empty_qs =

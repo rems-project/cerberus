@@ -1181,7 +1181,7 @@ let translate_cabs_string_literal (pref_opt, str) =
 
 val string_of_string_literal: cabs_string_literal -> string
 let string_of_string_literal (_, ss) =
-  String.concat "" ss
+  String.concat "" (List.map (fun (_, s) -> String.concat "" s) ss)
 
 
 val project_base_type_specifier: cabs_type_specifier -> maybe (cabs_base_type_specifier * Loc.t)
@@ -2876,6 +2876,7 @@ and foo_aux
                   end in
                   match lit with
                     | (Nothing, strs) ->
+                        let strs = List.concat (List.map snd strs) in (* FIXME *)
                         let str_xs = List.map (fun str ->
                           (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, str)))))
                         ) strs ++ begin
@@ -3147,6 +3148,8 @@ let () = error "DONE" in
           (* TODO: KAYVAN CHECK: this is dead code, `_is_string_literal_init` will filter this out! *)
           E.undef loc Undefined.UB083
     end >>= fun (_(*pref_opt*), char_strs) ->
+
+    let char_strs = List.concat (List.map snd char_strs) in
     
     let (elem_ty, mk_ty, current_size_opt) = match current_ty with
       | Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty sz))) ->
