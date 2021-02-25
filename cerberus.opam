@@ -1,11 +1,22 @@
 opam-version: "2.0"
-synopsis: "The Cerberus C semantics"
-description: "The Cerberus C semantics and related tools."
-maintainer: ["FIXME"]
-authors: ["FIXME" "FIXME"]
-license: "FIXME"
-homepage: "https://github.com/rems-project/cerberus-private"
-bug-reports: "https://github.com/rems-project/cerberus-private/issues"
+synopsis: "The Cerberus C semantics (pre-release snapshot, not to be used for development)"
+description: "The Cerberus C semantics and related tools (pre-release snapshot, not to be used for development)."
+maintainer: ["Kayvan Memarian <kayvan.memarian@cl.cam.ac.uk>"]
+authors: [
+  "Kayvan Memarian"
+  "Victor Gomes"
+  "Justus Matthiesen"
+  "Peter Sewell"
+  "Kyndylan Nienhuis"
+  "Stella Lau"
+  "Jean Pichon-Pharabod"
+  "Christopher Pulte"
+  "Rodolphe Lepigre"
+  "James Lingard"
+]
+license: "BSD2"
+homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
+bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
   "dune" {>= "2.0.0"}
   "sha" {>= "1.12"}
@@ -18,6 +29,8 @@ depends: [
   "apron" {>= "v0.9.12"}
   "menhir" {= "20190924"}
   "lem" {= "2020-06-03"}
+  "menhir" {>= "20190924"}
+  "result" {>= "1.4"}
 ]
 build: [
   ["dune" "subst"] {pinned}
@@ -33,4 +46,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/rems-project/cerberus-private.git"
+dev-repo: "git+https://github.com/rems-project/cerberus.git"
