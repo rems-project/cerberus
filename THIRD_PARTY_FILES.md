@@ -1,3 +1,13 @@
+.cat files in isla-cat:
+
+| License      | Files                             | From      |
+| ------------ | --------------------------------- | --------- |
+| CeCILL-B     | runtime/bmc/c11.cat               | herdtools |
+| GPL 2.0+     | runtime/bmc/linux.cat             | linux     |
+| GPL 2.0+     | runtime/bmc/linux_without_rcu.cat | linux     |
+
+---
+
 The following file is derived from the Cppmem project:
 
 | License      | Files                  | From      |
@@ -6,16 +16,58 @@ The following file is derived from the Cppmem project:
 
 (see the license notice there)
 
+---
+
 The fragment of C standard library is based on the musl libc:
-| License      | Files                  | From      |
-| ------------ | ---------------------- | --------- |
-| MIT          | runtime/libc/src/*     | musl-libc |
+
+| License      | Files                    | From      |
+| ------------ | ------------------------ | --------- |
+| MIT          | runtime/libc/src/*.{c,h} | musl-libc |
 
 (see LICENSE file in that directory)
 
+---
+
 A slightly modified version of SibylFS is included:
+
 | License      | Files                  | From      |
 | ------------ | ---------------------- | --------- |
 | ISC          | sibylfs/*              | SibylFS   |
 
 (see LICENSE file in that directory)
+
+---
+
+The web interface contains MIT licensed javascript:
+
+| License | Files                              | From         |
+| ------- | ---------------------------------- | ------------ |
+| MIT     | public/src/js/clike.js             | codemirror   |
+| MIT     | public/src/js/core.js              | codemirror   |
+| MIT     | public/src/js/gas.js               | codemirror   |
+| MIT     | public/src/js/herd.js              | codemirror   |
+| MIT     | public/src/js/ocaml.js             | codemirror   |
+| MIT     | public/src/js/panzoom.js           | panzoom      |
+| MIT     | public/src/js/placeholder.js       | codemirror   |
+| MIT     | public/src/css/codemirror.css      | codemirror   |
+| MIT     | public/src/css/goldenlayout-\*.css | goldenlayout |
+
+---
+
+The following files were generated from the WG14 N1570 document:
+
+| Files              |
+| ------------------ |
+| tools/n1570.html   |
+| tools/n1570.json   |
+| tools/n1570_2.html |
+
+---
+
+in the test/ directory:
+
+| License      | Files                        | From             |
+| BSD 3-Clause | tests/freebsd/{cat.c,echo.c} | FreeBSD          |
+| GPL          | tests/gcc-torture/*.{c,h}    | GCC torture test |
+| BSD 3-Clause | tests/tcc/*                  | TinyCC           |
+| Apache 2.0   | tests/hacl-star/*            | hacl-star        |
