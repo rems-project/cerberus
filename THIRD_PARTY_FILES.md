@@ -67,6 +67,7 @@ The following files were generated from the WG14 N1570 document:
 in the test/ directory:
 
 | License      | Files                        | From             |
+| ------------ | ---------------------------- | ---------------- |
 | BSD 3-Clause | tests/freebsd/{cat.c,echo.c} | FreeBSD          |
 | GPL          | tests/gcc-torture/*.{c,h}    | GCC torture test |
 | BSD 3-Clause | tests/tcc/*                  | TinyCC           |
