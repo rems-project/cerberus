@@ -29,7 +29,12 @@ type cn_attribute = {
 let cn_attribute a = 
   match a.CF.Annot.attr_ns with
   | Some ns when String.equal (Id.s ns) "cn" ->
-     Some {keyword = a.attr_id; args = a.attr_args}
+     let xs =
+       List.map (fun (loc, str, strs) ->
+         (* TODO: ignore the more precise locations for string concatenations *)
+         (loc, str)
+       ) a.attr_args in
+     Some {keyword = a.attr_id; args = xs}
   | _ -> None
 
 let cn_attributes (CF.Annot.Attrs attrs) = 
