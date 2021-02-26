@@ -1,6 +1,14 @@
 Cerberus C semantics
 =====
 
+
+Web interfaces, papers, and web page
+---
+
+See <https://www.cl.cam.ac.uk/~pes20/cerberus/>.
+
+
+
 Build instructions for the CLI
 ---
 
@@ -170,3 +178,47 @@ creates a Docker image than can be used for example with:
 $ docker run --volume `PWD`:/data/ cerberus:0.1 tests/tcc/00_assignment.c --pp=core
 ```
 This image contains all the source code.
+
+
+
+People
+------
+
+Contributors:
+<ul>
+<li>  <a href="http://www.cl.cam.ac.uk/users/km569">Kayvan Memarian</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/users/cp526">Christopher Pulte</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/users/vb358">Victor B. F. Gomes</a></li>
+<li>  <a href="https://www.csail.mit.edu/person/stella-lau">Stella Lau</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/users/kn307">Kyndylan Nienhuis</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/~jm614">Justus Matthiesen</a></li>
+<li>  <a href="http://www.jchl.co.uk">James Lingard</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/~dc552">David Chisnall</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/~rnw24">Robert N. M. Watson</a></li>
+<li>  <a href="http://www.cl.cam.ac.uk/~pes20">Peter Sewell</a></li>
+</ul>
+
+The main Cerberus developer is Kayvan Memarian.
+The experimental CN backend is by Christopher Pulte.
+Victor Gomes made substantial contributions across the system, and Stella Lau was the main developer of Cerberus BMC. 
+Kyndylan Nienhuis worked on the operational semantics for C11
+concurrency. 
+Cerberus originated with Justus Matthiesen's 2010-11 Part II project
+dissertation and his 2011-12 MPhil dissertation. James Lingard's
+2013-14 MPhil dissertation developed a certifying translation
+validator for simple C programs for the Clang front-end, w.r.t. the
+Cerberus and Vellvm semantics. 
+
+
+
+Funding
+-----
+This software was developed largely within the Rigorous Engineering of
+Mainstream Systems (REMS) project at the University of Cambridge.  It
+has received funding from the European Research Council (ERC) under
+the European Union's Horizon 2020 research and innovation programme
+(grant agreement No 789108, ELVER); the EPSRC Programme Grant REMS:
+Rigorous Engineering of Mainstream Systems (EP/K008528/1); an EPSRC
+Leadership Fellowship EP/H005633 (Sewell); a Gates Cambridge
+Scholarship (Nienhuis); an MIT EECS Graduate Alumni Fellowship
+(Lau); and Google. 

@@ -1,4 +1,4 @@
-.cat files in isla-cat:
+Axiomatic model .cat files in isla-cat:
 
 | License      | Files                             | From      |
 | ------------ | --------------------------------- | --------- |
@@ -8,7 +8,7 @@
 
 ---
 
-The following file is derived from the Cppmem project:
+The following file is derived from the U. Cambridge Cppmem project:
 
 | License      | Files                  | From      |
 | ------------ | ---------------------- | --------- |
@@ -18,7 +18,7 @@ The following file is derived from the Cppmem project:
 
 ---
 
-The fragment of C standard library is based on the musl libc:
+The fragment of the C standard library is based on the musl libc:
 
 | License      | Files                    | From      |
 | ------------ | ------------------------ | --------- |
@@ -38,7 +38,7 @@ A slightly modified version of SibylFS is included:
 
 ---
 
-The web interface contains MIT licensed javascript:
+The web interface contains MIT-licensed javascript:
 
 | License | Files                              | From         |
 | ------- | ---------------------------------- | ------------ |
@@ -64,7 +64,7 @@ The following files were generated from the WG14 N1570 document:
 
 ---
 
-in the test/ directory:
+In the test/ directory:
 
 | License      | Files                        | From             |
 | ------------ | ---------------------------- | ---------------- |
