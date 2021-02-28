@@ -138,14 +138,14 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     let open LRT in
     let struct_value_s = Sym.fresh () in
     let struct_pointer_s = Sym.fresh () in
-    let struct_pointer_t = S (Loc, struct_pointer_s) in
+    let struct_pointer_t = sym_ (Loc, struct_pointer_s) in
     (* let size = Memory.size_of_struct loc tag in *)
     let* def_members = get_struct_members tag in
     let* layout = struct_layout loc def_members tag in
     let clause = 
       let (lrt, values) = 
         List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
-            let member_p = AddPointer (struct_pointer_t, Num offset) in
+            let member_p = addPointer_ (struct_pointer_t, num_ offset) in
             match member_or_padding with
             | Some (member, sct) ->
                let member_v = Sym.fresh () in
@@ -161,7 +161,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                  LRT.Logical ((member_v, LS.Base bt), 
                  LRT.Resource (resource, lrt))
                in
-               let value = (member, S (bt, member_v)) :: values in
+               let value = (member, sym_ (bt, member_v)) :: values in
                (lrt, value)
             | None ->
                let lrt = 
@@ -170,10 +170,10 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                (lrt, values)
           ) layout (LRT.I, [])
       in
-      let value = IT.Struct (tag, values) in
+      let value = IT.struct_ (tag, values) in
       let ct = Sctypes.Sctype ([], Sctypes.Struct tag) in
-      let lrt = lrt @@ Constraint (LC (IT.Representable (ct, value)), LRT.I) in
-      let constr = LC (IT.EQ (S (BT.Struct tag, struct_value_s), value)) in
+      let lrt = lrt @@ Constraint (LC (IT.representable_ (ct, value)), LRT.I) in
+      let constr = LC (IT.eq_ (sym_ (BT.Struct tag, struct_value_s), value)) in
       (lrt, constr)
     in
     let predicate = 
@@ -235,7 +235,7 @@ let make_owned loc label pointer path sct =
      let pointee = Sym.fresh () in
      let r = 
        [RE.Predicate {name = Tag tag; 
-                      iargs = [S (BT.Loc, pointer)];
+                      iargs = [sym_ (BT.Loc, pointer)];
                       oargs = [pointee]}]
      in
      let l = [(pointee, LS.Base (Struct tag))] in
@@ -245,7 +245,7 @@ let make_owned loc label pointer path sct =
   | sct -> 
      let pointee = Sym.fresh () in
      let r = 
-       [RE.Points {pointer = S (BT.Loc, pointer); 
+       [RE.Points {pointer = sym_ (BT.Loc, pointer); 
                    pointee; 
                    size = Memory.size_of_ctype sct}]
      in
@@ -270,7 +270,7 @@ let make_block loc pointer path sct =
      fail loc (Generic !^"cannot make void* pointer a block")
   | _ -> 
      let r = 
-       [RE.Block {pointer = S (BT.Loc, pointer); 
+       [RE.Block {pointer = sym_ (BT.Loc, pointer); 
                   size = Memory.size_of_ctype sct;
                   block_type = Nothing}]
      in

@@ -53,27 +53,27 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let is_inconsistent local =
-    constraint_holds local (LC (Bool false))
+    constraint_holds local (LC (IT.bool_ false))
 
 
   let equal local it1 it2 =
-    constraint_holds local (LC.LC (IndexTerms.EQ (it1, it2)))
+    constraint_holds local (LC.LC (IT.eq_ (it1, it2)))
 
   let ge local it1 it2 =
-    constraint_holds local (LC.LC (IndexTerms.GE (it1, it2)))
+    constraint_holds local (LC.LC (IT.ge_ (it1, it2)))
 
   let gt local it1 it2 =
-    constraint_holds local (LC.LC (IndexTerms.GT (it1, it2)))
+    constraint_holds local (LC.LC (IT.gt_ (it1, it2)))
 
   let le local it1 it2 =
-    constraint_holds local (LC.LC (IndexTerms.LE (it1, it2)))
+    constraint_holds local (LC.LC (IT.le_ (it1, it2)))
 
   let lt local it1 it2 =
-    constraint_holds local (LC.LC (IndexTerms.LT (it1, it2)))
+    constraint_holds local (LC.LC (IT.lt_ (it1, it2)))
 
   let is_global local it = 
     List.exists (fun (s, LS.Base bt) ->
-      equal local it (S (bt, s))
+      equal local it (IT.sym_ (bt, s))
     ) G.global.logical
 
 
@@ -84,7 +84,7 @@ module Make (G : sig val global : Global.t end) = struct
           match RE.footprint re with
           | Some (pointer,size) when 
                  constraint_holds local 
-                   (LC.LC (And [EQ (it, pointer)])) ->
+                   (LC.LC (IT.and_ [IT.eq_ (it, pointer)])) ->
                                 (* LT (Num Z.zero, size)])) -> *)
              Some (name, re) 
           | _ ->
@@ -103,8 +103,8 @@ module Make (G : sig val global : Global.t end) = struct
           match RE.footprint re with
           | Some (pointer,size) when 
                  constraint_holds local 
-                   (LC.LC (IT.And [IT.LEPointer (pointer, it);
-                                   IT.LTPointer (it, AddPointer (pointer, size));
+                   (LC.LC (IT.and_ [IT.lePointer_ (pointer, it);
+                                    IT.ltPointer_ (it, IT.addPointer_ (pointer, size));
                       ])) ->
              Some (name, re) 
           | _ ->
@@ -126,10 +126,10 @@ module Make (G : sig val global : Global.t end) = struct
           | Predicate pred when predicate_name_equal pred.name id ->
              let its = 
                List.map (fun (iarg, iarg') ->
-                     (IndexTerms.EQ (iarg, iarg'))
+                     (IT.eq_ (iarg, iarg'))
                  ) (List.combine iargs pred.iargs)
              in
-             if constraint_holds local (LC.LC (IndexTerms.And its))
+             if constraint_holds local (LC.LC (IT.and_ its))
              then Some (name, pred) 
              else None
           | _ ->
@@ -166,8 +166,8 @@ module Make (G : sig val global : Global.t end) = struct
           match RE.footprint re with
           | Some (pointer,size) when 
                  constraint_holds local 
-                   (LC.LC (IT.And [IT.LEPointer (pointer, it);
-                                   IT.LTPointer (it, AddPointer (pointer, size));
+                   (LC.LC (IT.and_ [IT.lePointer_ (pointer, it);
+                                    IT.ltPointer_ (it, IT.addPointer_ (pointer, size));
                       ])) ->
              Some where 
           | _ ->

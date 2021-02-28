@@ -79,98 +79,98 @@ let rec resolve_index_term loc mapping (it: PIT.index_term)
   let (IndexTerm (l, it_)) = it in
   match it_ with
   | Num n -> 
-     return (IT.Num n)
+     return (IT.num_ n)
   | Bool b -> 
-     return (IT.Bool b)
+     return (IT.bool_ b)
   | Add (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Add (it, it'))
+     return (IT.add_ (it, it'))
   | Sub (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Sub (it, it'))
+     return (IT.sub_ (it, it'))
   | Mul (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Mul (it, it'))
+     return (IT.mul_ (it, it'))
   | Div (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Div (it, it'))
+     return (IT.div_ (it, it'))
   | Exp (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Exp (it, it'))
+     return (IT.exp_ (it, it'))
   | Min (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Min (it, it'))
+     return (IT.min_ (it, it'))
   | Max (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.Max (it, it'))
+     return (IT.max_ (it, it'))
   | EQ (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.EQ (it, it'))
+     return (IT.eq_ (it, it'))
   | NE (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.NE (it, it'))
+     return (IT.ne_ (it, it'))
   | LT (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.LT (it, it'))
+     return (IT.lt_ (it, it'))
   | GT (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.GT (it, it'))
+     return (IT.gt_ (it, it'))
   | LE (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.LE (it, it'))
+     return (IT.le_ (it, it'))
   | GE (it, it') -> 
      let* it = aux it in
      let* it' = aux it' in
-     return (IT.GE (it, it'))
+     return (IT.ge_ (it, it'))
   | Path o -> 
      let* (bt,s) = resolve_path loc mapping o in
-     return (IT.S (bt, s))
+     return (IT.sym_ (bt, s))
   | MinInteger it ->
-     return (IT.MinInteger it)
+     return (IT.minInteger_ it)
   | MaxInteger it ->
-     return (IT.MaxInteger it)
+     return (IT.maxInteger_ it)
   | IntegerToPointerCast it ->
      let* it = aux it in
-     return (IT.IntegerToPointerCast it)
+     return (IT.integerToPointerCast_ it)
   | PointerToIntegerCast it -> 
      let* it = aux it in
-     return (IT.PointerToIntegerCast it)
+     return (IT.pointerToIntegerCast_ it)
 
 
 let rec resolve_predarg loc mapping = function
   | Path.NumArg z -> 
-     return (IT.Num z)
+     return (IT.num_ z)
   | Add (p,a) -> 
      let* it = resolve_predarg loc mapping p in
      let* it' = resolve_predarg loc mapping a in
-     return (IT.Add (it, it'))
+     return (IT.add_ (it, it'))
   | Sub (p,a) -> 
      let* it = resolve_predarg loc mapping p in
      let* it' = resolve_predarg loc mapping a in
-     return (IT.Sub (it, it'))
+     return (IT.sub_ (it, it'))
   | AddPointer (p,a) -> 
      let* it = resolve_predarg loc mapping p in
      let* it' = resolve_predarg loc mapping a in
-     return (IT.AddPointer (it, it'))
+     return (IT.addPointer_ (it, it'))
   | SubPointer (p,a) -> 
      let* it = resolve_predarg loc mapping p in
      let* it' = resolve_predarg loc mapping a in
-     return (IT.SubPointer (it, it'))
+     return (IT.subPointer_ (it, it'))
   | PathArg p ->
      let* (ls, s) = resolve_path loc mapping p in
-     return (IT.S (ls, s))
+     return (IT.sym_ (ls, s))
 
 
 

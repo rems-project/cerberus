@@ -201,7 +201,7 @@ module Make (G : sig val global : Global.t end) = struct
            | Some s -> return (add_a s (has_bt, s') local')
            | None -> return local'
          in
-         let local' = add_uc (LC (EQ (this, S (has_bt, s')))) local' in
+         let local' = add_uc (LC (eq_ (this, sym_ (has_bt, s')))) local' in
          return local'
       | M_Pattern (loc, annots, M_CaseCtor (constructor, pats)) ->
          match expect, constructor, pats with
@@ -211,8 +211,8 @@ module Make (G : sig val global : Global.t end) = struct
          | _, (M_Cnil item_bt), _ ->
             fail loc (Number_arguments {has = List.length pats; expect = 0})
          | (List item_bt), M_Ccons, [p1; p2] ->
-            let* local' = aux local' (Head this) p1 item_bt in
-            let* local' = aux local' (Tail this) p2 expect in
+            let* local' = aux local' (head_ this) p1 item_bt in
+            let* local' = aux local' (tail_ this) p2 expect in
             return local'
          | _, M_Ccons, [p1; p2] ->
             let err = 
@@ -225,7 +225,7 @@ module Make (G : sig val global : Global.t end) = struct
             let rec components local' i pats bts =
               match pats, bts with
               | pat :: pats', bt :: bts' ->
-                 let* local' = aux local' (NthTuple (expect, i, this)) pat bt in
+                 let* local' = aux local' (nthTuple_ (expect, i, this)) pat bt in
                  components local' (i+1) pats' bts'
               | [], [] -> 
                  return local'
@@ -264,7 +264,7 @@ module Make (G : sig val global : Global.t end) = struct
      introduced in the pattern-matching relate to (name,bound). *)
   let pattern_match_rt (pat : pattern) (rt : RT.t) : (L.t, type_error) m =
     let ((bt, s'), delta) = bind_logically rt in
-    let* delta' = pattern_match (S (bt, s')) pat bt in
+    let* delta' = pattern_match (sym_ (bt, s')) pat bt in
     return (delta' ++ delta)
 
 
@@ -549,7 +549,7 @@ module Make (G : sig val global : Global.t end) = struct
     let rec ownership_request_prompt (loc: loc) ~original_local ~extra_names situation local (pointer: IT.t) (need_size: IT.t) = 
       let names = names @ extra_names in
       let open Prompt.Operators in
-      if S.le local need_size (Num Z.zero) then 
+      if S.le local need_size (num_ Z.zero) then 
         return local
       else
         let o_resource = S.resource_for_pointer local pointer in
@@ -574,16 +574,16 @@ module Make (G : sig val global : Global.t end) = struct
         if S.ge local need_size have_size then 
           let local = L.use_resource resource_name [loc] local in
           ownership_request_prompt loc ~original_local ~extra_names
-            situation local (AddPointer (pointer, have_size)) 
-            (IT.Sub (need_size, have_size))
+            situation local (addPointer_ (pointer, have_size)) 
+            (IT.sub_ (need_size, have_size))
         else if S.le local need_size have_size then 
           (* if the resource is bigger than needed, keep the remainder
              as unitialised memory *)
           let local = L.use_resource resource_name [loc] local in
           let local = 
             add_ur (
-                RE.Region {pointer = AddPointer (pointer, need_size); 
-                           size = IT.Sub (have_size, need_size)}
+                RE.Region {pointer = addPointer_ (pointer, need_size); 
+                           size = sub_ (have_size, need_size)}
               ) local
           in
           return local
@@ -603,7 +603,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Block b ->
          let* local = 
            ownership_request_prompt loc ~original_local ~extra_names
-             situation local b.pointer (Num b.size) in
+             situation local b.pointer (num_ b.size) in
          return (Block b, local)
       | Region r ->
          let* local = 
@@ -637,7 +637,7 @@ module Make (G : sig val global : Global.t end) = struct
            | LS.Base (Map (Integer, bt)) -> bt
            | _ -> Debug_ocaml.error "illtyped array resource"
          in
-         if S.le local a.length (Num Z.zero) then
+         if S.le local a.length (num_ Z.zero) then
            let content = Sym.fresh () in
            let local = add_l content (Base (Map (Integer, a_array_bt))) local in
            return (Array {pointer = a.pointer; content; 
@@ -655,17 +655,17 @@ module Make (G : sig val global : Global.t end) = struct
                 let local = use_resource resource_name [loc] local in
                 let local = 
                   let left = 
-                    Array {a' with pointer = AddPointer (a.pointer, Mul (a.length, Num a.element_size)); 
-                                   length = Sub (a'.length, a.length)} in
+                    Array {a' with pointer = addPointer_ (a.pointer, mul_ (a.length, num_ a.element_size)); 
+                                   length = sub_ (a'.length, a.length)} in
                   add_ur left local
                 in
                 return (Array {a' with pointer = a.pointer; length = a'.length}, local)
               else if S.ge local a.length a'.length then
                 begin 
-                  if S.equal local a.length (Add (a'.length, Num (Z.of_int 1))) then
+                  if S.equal local a.length (add_ (a'.length, num_ (Z.of_int 1))) then
                     let o_extra_resource = 
                       S.resource_for_pointer local 
-                        (AddPointer (a.pointer, Mul (a'.length, Num a'.element_size))) 
+                        (addPointer_ (a.pointer, mul_ (a'.length, num_ a'.element_size))) 
                     in
                     begin match o_extra_resource with
                     | Some (extra_resource_name, Points p') 
@@ -676,10 +676,10 @@ module Make (G : sig val global : Global.t end) = struct
                        let local = use_resource extra_resource_name [loc] local in
                        let new_content = Sym.fresh () in
                        let local = add_l new_content (Base (Map (Integer, a_array_bt))) local in
-                       let local = add_uc (LC (IT.EQ (S (Map (Integer, a_array_bt), new_content), 
-                                                      IT.ArraySet (S (Map (Integer, a_array_bt), a'.content), 
-                                                                   a'.length, 
-                                                                   (S (a_array_bt, p'.pointee)))))) local in
+                       let local = add_uc (LC (IT.eq_ (sym_ (Map (Integer, a_array_bt), new_content), 
+                                                      IT.arraySet_ (sym_ (Map (Integer, a_array_bt), a'.content), 
+                                                                    a'.length, 
+                                                                    (sym_ (a_array_bt, p'.pointee)))))) local in
                        let resource = 
                          Array {a' with pointer = a.pointer;
                                         length = a.length;
@@ -704,12 +704,12 @@ module Make (G : sig val global : Global.t end) = struct
            | Some (resource_name, Points p') when 
                   LS.equal (get_l p'.pointee local) (Base a_array_bt) &&
                     Z.equal a.element_size p'.size &&
-                      S.equal local a.length (Num (Z.of_int 1)) ->
+                      S.equal local a.length (num_ (Z.of_int 1)) ->
               let local = use_resource resource_name [loc] local in
               let new_content = Sym.fresh () in
               let local = add_l new_content (Base (Map (Integer, a_array_bt))) local in
-              let local = add_uc (LC (IT.EQ (S (Map (Integer, a_array_bt), new_content), 
-                                             ConstArray (S (a_array_bt, p'.pointee), a_array_bt)))) 
+              let local = add_uc (LC (eq_ (sym_ (Map (Integer, a_array_bt), new_content), 
+                                           constArray_ (sym_ (a_array_bt, p'.pointee), a_array_bt)))) 
                             local in
               let resource = 
                 Array {pointer = a.pointer;
@@ -881,8 +881,8 @@ module Make (G : sig val global : Global.t end) = struct
       let ret = Sym.fresh () in
       let bts = List.map (fun arg -> arg.bt) args in
       let bt = Tuple bts in
-      let tuple_it = IT.Tuple (bts, List.map (fun arg -> S (arg.bt, arg.lname)) args) in
-      let lcs = [LC (EQ (S (Tuple bts, ret), tuple_it))] in
+      let tuple_it = IT.tuple_ (bts, List.map (fun arg -> sym_ (arg.bt, arg.lname)) args) in
+      let lcs = [LC (eq_ (sym_ (Tuple bts, ret), tuple_it))] in
       return (ret, bt, lcs)
 
     let infer_constructor (loc : loc) local (constructor : ctor) 
@@ -900,18 +900,18 @@ module Make (G : sig val global : Global.t end) = struct
         -> 
          Debug_ocaml.error "todo: Civ..."
       | M_Cspecified, [arg] ->
-         return (ret, arg.bt, [LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname)))])
+         return (ret, arg.bt, [LC (eq_ (sym_ (arg.bt, ret), sym_ (arg.bt, arg.lname)))])
       | M_Cspecified, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 1})
       | M_Cnil item_bt, [] -> 
          let bt = List item_bt in
-         return (ret, bt, [LC (EQ (S (bt, ret), Nil item_bt))])
+         return (ret, bt, [LC (eq_ (sym_ (bt, ret), nil_ item_bt))])
       | M_Cnil item_bt, _ -> 
          fail loc (Number_arguments {has = List.length args; expect=0})
       | M_Ccons, [arg1; arg2] -> 
          let bt = List arg1.bt in
          let* () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
-         let constr = LC (EQ (S (bt, ret), Cons (S (arg1.bt, arg1.lname), S (arg2.bt, arg2.lname)))) in
+         let constr = LC (eq_ (sym_ (bt, ret), cons_ (sym_ (arg1.bt, arg1.lname), sym_ (arg2.bt, arg2.lname)))) in
          return (ret, arg2.bt, [constr])
       | M_Ccons, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 2})
@@ -931,14 +931,14 @@ module Make (G : sig val global : Global.t end) = struct
       CF.Impl_mem.case_ptrval ptrval
         ( fun ct -> 
           let* ct = ct_of_ct loc ct in
-          let lcs = [LC.LC (IT.Null (S (BT.Loc, ret)))] in
+          let lcs = [LC.LC (IT.null_ (sym_ (BT.Loc, ret)))] in
           return (ret, Loc, lcs) )
         ( fun sym -> 
           let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
-          let lcs = [LC (EQ (S (BT.Loc, ret), S (BT.Loc, sym)));
-                     LC (Representable (voidstar, S (Loc, ret)))] in
+          let lcs = [LC (eq_ (sym_ (BT.Loc, ret), sym_ (BT.Loc, sym)));
+                     LC (representable_ (voidstar, sym_ (Loc, ret)))] in
           return (ret, Loc, lcs) )
-        ( fun _prov loc -> return (ret, Loc, [LC (EQ (S (BT.Loc, ret), Pointer loc))]) )
+        ( fun _prov loc -> return (ret, Loc, [LC (eq_ (sym_ (BT.Loc, ret), pointer_ loc))]) )
         ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
     let rec infer_mem_value (loc : loc) local (mem : mem_value) : (vt, type_error) m =
@@ -950,7 +950,7 @@ module Make (G : sig val global : Global.t end) = struct
         ( fun it iv -> 
           let ret = Sym.fresh () in
           let v = Memory.integer_value_to_num iv in
-          return (ret, Integer, [LC (EQ (S (Integer, ret), Num v))]) )
+          return (ret, Integer, [LC (eq_ (sym_ (Integer, ret), num_ v))]) )
         ( fun ft fv -> fail loc (Unsupported !^"floats") )
         ( fun _ ptrval -> infer_ptrval loc local ptrval  )
         ( fun mem_values -> infer_array loc local mem_values )
@@ -972,7 +972,7 @@ module Make (G : sig val global : Global.t end) = struct
            let* constrs = check fields spec in
            let* (s, bt, lcs) = infer_mem_value loc local mv in
            let* () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
-           let this = IT.StructMember (tag, S (Struct tag, ret), member) in
+           let this = IT.structMember_ (tag, sym_ (Struct tag, ret), member) in
            let constrs2 = List.map (LC.subst_it {before = s; after = this}) lcs in
            return (constrs @ constrs2)
         | [], [] -> 
@@ -1000,7 +1000,7 @@ module Make (G : sig val global : Global.t end) = struct
       | M_OVinteger iv ->
          let ret = Sym.fresh () in
          let i = Memory.integer_value_to_num iv in
-         return (ret, Integer, [LC (EQ (S (Integer, ret), Num i))])
+         return (ret, Integer, [LC (eq_ (sym_ (Integer, ret), num_ i))])
       | M_OVpointer p -> 
          infer_ptrval loc local p
       | M_OVarray items ->
@@ -1023,18 +1023,18 @@ module Make (G : sig val global : Global.t end) = struct
          return (Sym.fresh (), Unit, [])
       | M_Vtrue ->
          let ret = Sym.fresh () in
-         return (ret, Bool, [LC (S (Bool, ret))])
+         return (ret, Bool, [LC (sym_ (Bool, ret))])
       | M_Vfalse -> 
          let ret = Sym.fresh () in
-         return (ret, Bool, [LC (Not (S (Bool, ret)))])
+         return (ret, Bool, [LC (not_ (sym_ (Bool, ret)))])
       | M_Vlist (ibt, asyms) ->
          let ret = Sym.fresh () in
          let* args = args_of_asyms local asyms in
          let* () = 
            ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
          in
-         let its = List.map (fun arg -> IT.S (arg.bt, arg.lname)) args in
-         return (ret, List ibt, [LC (EQ (S (List ibt, ret), List (its, ibt)))])
+         let its = List.map (fun arg -> IT.sym_ (arg.bt, arg.lname)) args in
+         return (ret, List ibt, [LC (eq_ (sym_ (List ibt, ret), list_ (its, ibt)))])
       | M_Vtuple asyms ->
          let* args = args_of_asyms local asyms in
          infer_tuple loc local args
@@ -1081,7 +1081,7 @@ module Make (G : sig val global : Global.t end) = struct
       let rec aux = function
         | (s, VB.Resource resource) :: rest -> 
            begin match RE.size resource with
-           | Some size when S.le original_local size (Num Z.zero) ->
+           | Some size when S.le original_local size (num_ Z.zero) ->
               aux rest
            | _ -> 
               let names = names @ extra_names in
@@ -1131,7 +1131,7 @@ module Make (G : sig val global : Global.t end) = struct
            return (LRT.Logical ((s', ls), lrt))
         | _, Constraint (LC lc, lrt2) ->
            let* lrt = aux lrt lrt2 in
-           return (LRT.Constraint (LC (Impl (c2, lc)), lrt))
+           return (LRT.Constraint (LC (impl_ (c2, lc)), lrt))
         | Resource _, _
         | _, Resource _ -> 
            (* maybe make this an internal error? *)
@@ -1139,13 +1139,13 @@ module Make (G : sig val global : Global.t end) = struct
       in
       let lrt2' = LRT.subst_var {before = lname2; after = lname} lrt2 in
       let* lrt = aux lrt lrt2' in
-      return (LC (Or [c; c2]), RT.Computational ((lname, bt), lrt))
+      return (LC (or_ [c; c2]), RT.Computational ((lname, bt), lrt))
 
 
     let big_merge_return_types (loc : loc) (name, bt) 
                                (crts : (LC.t * RT.t) list) : (LC.t * RT.t, type_error) m =
       ListM.fold_leftM (merge_return_types loc) 
-        (LC.LC (IT.Bool true), RT.Computational ((name, bt), LRT.I)) crts
+        (LC.LC (IT.bool_ true), RT.Computational ((name, bt), LRT.I)) crts
 
     let merge_paths 
           (loc : loc) 
@@ -1196,9 +1196,9 @@ module Make (G : sig val global : Global.t end) = struct
       let* () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
       let element_size = Memory.size_of_ctype cti.PreProcess.ct in
       let constr = 
-        let base = S (BT.Loc, arg1.lname) in
-        let offset = MulPointer (Num element_size, S (BT.Integer, arg2.lname)) in
-        EQ (S (Loc, ret), AddPointer (base, offset)) in
+        let base = sym_ (BT.Loc, arg1.lname) in
+        let offset = mulPointer_ (num_ element_size, sym_ (BT.Integer, arg2.lname)) in
+        eq_ (sym_ (Loc, ret), addPointer_ (base, offset)) in
       let rt = RT.Computational ((ret, Loc), Constraint (LC.LC constr, I)) in
       return (Normal (rt, local))
 
@@ -1212,7 +1212,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEsym sym ->
            let ret = Sym.fresh () in
            let* arg = arg_of_sym loc local sym in
-           let constr = LC (EQ (S (arg.bt, ret), S (arg.bt, arg.lname))) in
+           let constr = LC (eq_ (sym_ (arg.bt, ret), sym_ (arg.bt, arg.lname))) in
            let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
            return (Normal (rt, local))
         | M_PEimpl i ->
@@ -1244,15 +1244,15 @@ module Make (G : sig val global : Global.t end) = struct
            let ret = Sym.fresh () in
            let* decl = get_struct_decl loc tag in
            let* _member_bt = get_member_type loc tag member decl in
-           let shifted_pointer = IT.StructMemberOffset (tag, S (arg.bt, arg.lname), member) in
-           let constr = LC (EQ (S (BT.Loc, ret), shifted_pointer)) in
+           let shifted_pointer = IT.structMemberOffset_ (tag, sym_ (arg.bt, arg.lname), member) in
+           let constr = LC (eq_ (sym_ (BT.Loc, ret), shifted_pointer)) in
            let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
            return (Normal (rt, local))
         | M_PEnot asym ->
            let* arg = arg_of_asym local asym in
            let* () = ensure_base_type arg.loc ~expect:Bool arg.bt in
            let ret = Sym.fresh () in 
-           let constr = (LC (EQ (S (Bool, ret), Not (S (arg.bt, arg.lname))))) in
+           let constr = (LC (eq_ (sym_ (Bool, ret), not_ (sym_ (arg.bt, arg.lname))))) in
            let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
            return (Normal (rt, local))
         | M_PEop (op, asym1, asym2) ->
@@ -1262,28 +1262,28 @@ module Make (G : sig val global : Global.t end) = struct
            let binop_typ (op : CF.Core.binop) (v1 : IT.t) (v2 : IT.t) =
              let open BT in
              match op with
-             | OpAdd -> (((Integer, Integer), Integer), IT.Add (v1, v2))
-             | OpSub -> (((Integer, Integer), Integer), IT.Sub (v1, v2))
-             | OpMul -> (((Integer, Integer), Integer), IT.Mul (v1, v2))
-             | OpDiv -> (((Integer, Integer), Integer), IT.Div (v1, v2))
-             | OpRem_t -> (((Integer, Integer), Integer), IT.Rem_t (v1, v2))
-             | OpRem_f -> (((Integer, Integer), Integer), IT.Rem_f (v1, v2))
-             | OpExp -> (((Integer, Integer), Integer), IT.Exp (v1, v2))
-             | OpEq -> (((Integer, Integer), Bool), IT.EQ (v1, v2))
-             | OpGt -> (((Integer, Integer), Bool), IT.GT (v1, v2))
-             | OpLt -> (((Integer, Integer), Bool), IT.LT (v1, v2))
-             | OpGe -> (((Integer, Integer), Bool), IT.GE (v1, v2))
-             | OpLe -> (((Integer, Integer), Bool), IT.LE (v1, v2))
-             | OpAnd -> (((Bool, Bool), Bool), IT.And [v1; v2])
-             | OpOr -> (((Bool, Bool), Bool), IT.Or [v1; v2])
+             | OpAdd -> (((Integer, Integer), Integer), IT.add_ (v1, v2))
+             | OpSub -> (((Integer, Integer), Integer), IT.sub_ (v1, v2))
+             | OpMul -> (((Integer, Integer), Integer), IT.mul_ (v1, v2))
+             | OpDiv -> (((Integer, Integer), Integer), IT.div_ (v1, v2))
+             | OpRem_t -> (((Integer, Integer), Integer), IT.rem_t_ (v1, v2))
+             | OpRem_f -> (((Integer, Integer), Integer), IT.rem_f_ (v1, v2))
+             | OpExp -> (((Integer, Integer), Integer), IT.exp_ (v1, v2))
+             | OpEq -> (((Integer, Integer), Bool), IT.eq_ (v1, v2))
+             | OpGt -> (((Integer, Integer), Bool), IT.gt_ (v1, v2))
+             | OpLt -> (((Integer, Integer), Bool), IT.lt_ (v1, v2))
+             | OpGe -> (((Integer, Integer), Bool), IT.ge_ (v1, v2))
+             | OpLe -> (((Integer, Integer), Bool), IT.le_ (v1, v2))
+             | OpAnd -> (((Bool, Bool), Bool), IT.and_ [v1; v2])
+             | OpOr -> (((Bool, Bool), Bool), IT.or_ [v1; v2])
            in
            let (((ebt1, ebt2), rbt), result_it) = 
-             binop_typ op (S (arg1.bt, arg1.lname)) (S (arg2.bt,arg2.lname))
+             binop_typ op (sym_ (arg1.bt, arg1.lname)) (sym_ (arg2.bt,arg2.lname))
            in
            let* () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
            let* () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
            let ret = Sym.fresh () in
-           let constr = LC (EQ (S (rbt, ret), result_it)) in
+           let constr = LC (eq_ (sym_ (rbt, ret), result_it)) in
            let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
            return (Normal (rt, local))
         | M_PEstruct _ ->
@@ -1323,7 +1323,8 @@ module Make (G : sig val global : Global.t end) = struct
                  let*? () = false_if_unreachable loc (delta ++ local) in
                  let*? (rt, local) = infer_pexpr_pop delta local e in
                  return (Normal ((lc, rt), local))
-               ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+               ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
+                  (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
            in
            merge_return_paths loc paths
       in  
@@ -1357,7 +1358,8 @@ module Make (G : sig val global : Global.t end) = struct
                  false_if_unreachable loc (delta ++ local)
                in
                check_pexpr_pop loc delta local e typ
-             ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+             ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
+                (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
          in
          return (merge_paths loc paths)
       | M_PEcase (asym, pats_es) ->
@@ -1366,7 +1368,7 @@ module Make (G : sig val global : Global.t end) = struct
            ListM.mapM (fun (pat, pe) ->
                (* TODO: make pattern matching return (in delta)
                   constraints corresponding to the pattern *)
-               let* delta = pattern_match (S (arg.bt, arg.lname)) pat arg.bt in
+               let* delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
                let*? () = 
                  false_if_unreachable loc (delta ++ local)
                in
@@ -1412,8 +1414,8 @@ module Make (G : sig val global : Global.t end) = struct
            let* decl = get_struct_decl loc tag in
            let rec aux_members = function
              | Global.{size; member = (member, member_sct); _} :: members ->
-                let member_pointer = IT.StructMemberOffset (tag,pointer,member) in
-                let member_path = IT.StructMember (tag, path, member) in
+                let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
+                let member_path = IT.structMember_ (tag, path, member) in
                 let* constraints = aux_members members in
                 let* constraints2 = 
                   aux local (BT.of_sct member_sct) member_pointer 
@@ -1459,11 +1461,11 @@ module Make (G : sig val global : Global.t end) = struct
            in
            let (Base vbt) = L.get_l pointee local in
            if BT.equal vbt bt 
-           then return [IT.EQ (path, S (vbt,pointee))]
+           then return [IT.eq_ (path, sym_ (vbt,pointee))]
            else fail loc (Mismatch {has = Base vbt; expect = Base bt})
       in
       let* constraints = aux local bt pointer size return_it is_member in
-      return (LC (And constraints))
+      return (LC (and_ constraints))
 
 
 
@@ -1485,16 +1487,16 @@ module Make (G : sig val global : Global.t end) = struct
               match member_or_padding with
               | Some (member,member_sct) -> 
                  let o_member_value = 
-                   Option.map (fun v -> IT.StructMember (tag, v, member)) o_value 
+                   Option.map (fun v -> IT.structMember_ (tag, v, member)) o_value 
                  in
-                 let member_offset = IT.AddPointer (pointer, Num offset) in
+                 let member_offset = IT.addPointer_ (pointer, num_ offset) in
                  let* rt = store loc local (BT.of_sct member_sct) member_offset
                              size o_member_value in
                  let* rt2 = aux members in
                  return (rt@@rt2)
               | None ->
                  let block = 
-                   RE.Block {pointer = IT.AddPointer (pointer, Num offset); 
+                   RE.Block {pointer = IT.addPointer_ (pointer, num_ offset); 
                              size; 
                              block_type = Padding} 
                  in
@@ -1510,7 +1512,7 @@ module Make (G : sig val global : Global.t end) = struct
             let rt = 
               Logical ((vsym, Base bt), 
               Resource (Points {pointer; pointee = vsym; size}, 
-              Constraint (LC (EQ (S (bt,vsym), v)), I)))
+              Constraint (LC (eq_ (sym_ (bt,vsym), v)), I)))
             in
             return rt
          | None -> 
@@ -1530,8 +1532,8 @@ module Make (G : sig val global : Global.t end) = struct
       let size = Memory.size_of_struct tag in
       let v = Sym.fresh () in
       let bt = Struct tag in
-      let* constraints = load loc local (Struct tag) pointer size (S (Struct tag, v)) None in
-      let* local = ownership_request loc (Access (Load None)) local pointer (Num size) in
+      let* constraints = load loc local (Struct tag) pointer size (sym_ (Struct tag, v)) None in
+      let* local = ownership_request loc (Access (Load None)) local pointer (num_ size) in
       let rt = 
         LRT.Logical ((v, Base bt), 
         LRT.Resource (Points {pointer; pointee = v; size},
@@ -1541,7 +1543,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let ensure_aligned loc local access pointer ctype = 
-      let alignment_lc = LC.LC (Aligned (ctype, pointer)) in
+      let alignment_lc = LC.LC (aligned_ (ctype, pointer)) in
       if S.constraint_holds local alignment_lc 
       then return () 
       else fail loc (Misaligned access)
@@ -1615,14 +1617,14 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in 
               let* arg = arg_of_asym local asym in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = LC (EQ (S (Loc, ret), PointerToIntegerCast (S (Loc, arg.lname)))) in
+              let constr = LC (eq_ (sym_ (Loc, ret), pointerToIntegerCast_ (sym_ (Loc, arg.lname)))) in
               let rt = RT.Computational ((ret, Integer), Constraint (constr, I)) in
               return (Normal (rt, local))            
            | M_PtrFromInt (act_from, act2_to, asym) ->
               let ret = Sym.fresh () in 
               let* arg = arg_of_asym local asym in
               let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-              let constr = LC (EQ (S (Loc, ret), IntegerToPointerCast (S (Integer, arg.lname)))) in
+              let constr = LC (eq_ (sym_ (Loc, ret), integerToPointerCast_ (sym_ (Integer, arg.lname)))) in
               let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
               return (Normal (rt, local))            
            | M_PtrValidForDeref (act, asym) ->
@@ -1632,24 +1634,24 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.item.ct in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let o_resource = S.resource_around_pointer local (S (arg.bt, arg.lname)) in
+              let o_resource = S.resource_around_pointer local (sym_ (arg.bt, arg.lname)) in
               let resource_ok = 
                 match Option.bind o_resource (Tools.comp RE.size snd) with
-                | Some size' when S.ge local size' (Num size) -> true
+                | Some size' when S.ge local size' (num_ size) -> true
                 | Some _ -> false
                 | _ -> false
               in
               let alignment_lc = 
-                LC.LC (Aligned (act.item.ct, S (arg.bt, arg.lname))) in
+                LC.LC (aligned_ (act.item.ct, sym_ (arg.bt, arg.lname))) in
               let ok = resource_ok && S.constraint_holds local alignment_lc in
-              let constr = LC (EQ (S (Bool, ret), Bool ok)) in
+              let constr = LC (eq_ (sym_ (Bool, ret), bool_ ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
               return (Normal (rt, local))
            | M_PtrWellAligned (act, asym) ->
               let ret = Sym.fresh () in
               let* arg = arg_of_asym local asym in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = EQ (S (Bool, ret), Aligned (act.item.ct, S (BT.Loc, arg.lname))) in
+              let constr = eq_ (sym_ (Bool, ret), aligned_ (act.item.ct, sym_ (BT.Loc, arg.lname))) in
               let rt = RT.Computational ((ret, Bool), Constraint (LC.LC constr, I)) in
               return (Normal (rt, local))
            | M_PtrArrayShift (asym1, act, asym2) ->
@@ -1677,11 +1679,11 @@ module Make (G : sig val global : Global.t end) = struct
               let* () = ensure_base_type arg.loc ~expect:Integer arg.bt in
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.item.ct in
-              let* lrt = store loc local act.item.bt (S (Loc, ret)) size None in
+              let* lrt = store loc local act.item.bt (sym_ (Loc, ret)) size None in
               let rt = 
                 RT.Computational ((ret, Loc), 
-                LRT.Constraint (LC.LC (Representable (Sctypes.pointer_sct act.item.ct, S (Loc, ret))), 
-                LRT.Constraint (LC.LC (AlignedI (S (arg.bt, arg.lname), S (Loc, ret))), 
+                LRT.Constraint (LC.LC (representable_ (Sctypes.pointer_sct act.item.ct, sym_ (Loc, ret))), 
+                LRT.Constraint (LC.LC (alignedI_ (sym_ (arg.bt, arg.lname), sym_ (Loc, ret))), 
                 (* RT.Constraint (LC.LC (EQ (AllocationSize (S ret), Num size)), *)
                 lrt)))
               in
@@ -1696,8 +1698,8 @@ module Make (G : sig val global : Global.t end) = struct
               let* arg = arg_of_asym local asym in
               let* () = ensure_base_type arg.loc ~expect:Loc arg.bt in
               let size = Memory.size_of_ctype cti.ct in
-              let* local = ownership_request loc (Access Kill) local (S (arg.bt, arg.lname)) 
-                             (Num size) in
+              let* local = ownership_request loc (Access Kill) local (sym_ (arg.bt, arg.lname)) 
+                             (num_ size) in
               let rt = RT.Computational ((Sym.fresh (), Unit), I) in
               return (Normal (rt, local))
            | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1711,7 +1713,7 @@ module Make (G : sig val global : Global.t end) = struct
                  understand, are an exception. *)
               let* () = 
                 let in_range_lc = 
-                  LC (Representable (act.item.ct, S (varg.bt, varg.lname))) in
+                  LC (representable_ (act.item.ct, sym_ (varg.bt, varg.lname))) in
                 if S.constraint_holds local in_range_lc
                 then return () 
                 else 
@@ -1723,11 +1725,11 @@ module Make (G : sig val global : Global.t end) = struct
               let size = Memory.size_of_ctype act.item.ct in
               let* local = 
                 ownership_request parg.loc (Access (Store None)) 
-                  local (S (parg.bt, parg.lname)) 
-                  (Num size) in
+                  local (sym_ (parg.bt, parg.lname)) 
+                  (num_ size) in
               let* bindings = 
-                store loc local varg.bt (S (parg.bt, parg.lname))
-                  size (Some (S (varg.bt, varg.lname))) in
+                store loc local varg.bt (sym_ (parg.bt, parg.lname))
+                  size (Some (sym_ (varg.bt, varg.lname))) in
               let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
               return (Normal (rt, local))
            | M_Load (act, pasym, _mo) -> 
@@ -1736,8 +1738,8 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.item.ct in
               let* constraints = 
-                load loc local act.item.bt (S (parg.bt, parg.lname)) 
-                  size (S (act.item.bt, ret)) None 
+                load loc local act.item.bt (sym_ (parg.bt, parg.lname)) 
+                  size (sym_ (act.item.bt, ret)) None 
               in
               let rt = RT.Computational ((ret, act.item.bt), Constraint (constraints, LRT.I)) in
               return (Normal (rt, local))
@@ -1815,7 +1817,7 @@ module Make (G : sig val global : Global.t end) = struct
                  let*? () = false_if_unreachable loc (delta ++ local) in
                  let*? (rt, local) = infer_expr_pop delta (local, labels) e in
                  return (Normal ((lc, rt), local))
-               ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+               ) [(LC (sym_ (carg.bt, carg.lname)), e1); (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
            in
            merge_return_paths loc paths
         | M_Elet (p, e1, e2) ->
@@ -1867,7 +1869,8 @@ module Make (G : sig val global : Global.t end) = struct
                    false_if_unreachable loc (delta ++ local)
                  in
                  check_expr_pop delta (local, labels) e typ 
-               ) [(LC (S (carg.bt, carg.lname)), e1); (LC (Not (S (carg.bt, carg.lname))), e2)]
+               ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
+                  (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
            in
            return (merge_paths loc paths)
         | M_Ecase (asym, pats_es) ->
@@ -1876,7 +1879,7 @@ module Make (G : sig val global : Global.t end) = struct
              ListM.mapM (fun (pat, pe) ->
                  (* TODO: make pattern matching return (in delta)
                     constraints corresponding to the pattern *)
-                 let* delta = pattern_match (S (arg.bt, arg.lname)) pat arg.bt in
+                 let* delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
                  let*? () = 
                    false_if_unreachable loc (delta ++ local)
                  in

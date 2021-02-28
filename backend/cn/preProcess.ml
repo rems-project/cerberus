@@ -12,13 +12,13 @@ module LT=ArgumentTypes.Make(False)
 module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
+module IT = IndexTerms
 open CF.Mucore
 (* open TypeErrors *)
 open Pp
 open Debug_ocaml
 open ListM
 open Parse_ast
-
 
 type funinfos = (FT.t, Mapping.t) mu_funinfos
 type funinfo_extras = (Sym.t, Conversions.funinfo_extra) Pmap.map
@@ -391,7 +391,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
            let size = Memory.size_of_ctype cti.ct in
            RT.Computational ((pointer, BT.Loc),
            LRT.Logical ((pointee, Base cti.bt),
-           LRT.Resource (Resources.Points {pointer = S (Loc, pointer);pointee; size},
+           LRT.Resource (Resources.Points {pointer = IT.sym_ (BT.Loc, pointer);pointee; size},
            LRT.I)))
          in
          return (cti, rt)

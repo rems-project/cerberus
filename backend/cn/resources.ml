@@ -171,10 +171,10 @@ let equal t1 t2 =
 
 
 let footprint = function
-  | Block b -> Some (b.pointer, IT.Num b.size)
+  | Block b -> Some (b.pointer, IT.num_ b.size)
   | Region r -> Some (r.pointer, r.size)
-  | Points p -> Some (p.pointer, IT.Num p.size)
-  | Array a -> Some (a.pointer, IT.Mul (a.length, Num a.element_size))
+  | Points p -> Some (p.pointer, IT.num_ p.size)
+  | Array a -> Some (a.pointer, IT.mul_ (a.length, IT.num_ a.element_size))
   | Predicate p -> None
 
 let pointer r = Option.map fst (footprint r)

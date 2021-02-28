@@ -348,38 +348,38 @@ module Make (G : sig val global : Global.t end) = struct
     match re with
     | RE.Block block -> 
        let pointer_s = Sym.fresh () in
-       let resource = RE.Block {block with pointer = S (Loc, pointer_s)} in
+       let resource = RE.Block {block with pointer = sym_ (BT.Loc, pointer_s)} in
        let lvars = [(pointer_s, LS.Base Loc)] in
-       let lcs = [LC (EQ (S (Loc, pointer_s), block.pointer))] in
+       let lcs = [LC (eq_ (sym_ (BT.Loc, pointer_s), block.pointer))] in
        (lvars, lcs, resource)
     | RE.Region region -> 
        let pointer_s = Sym.fresh () in
        let size_s = Sym.fresh () in
        let resource = 
-         RE.Region {pointer = S (Loc, pointer_s);
-                    size = S (Integer, size_s) }
+         RE.Region {pointer = sym_ (BT.Loc, pointer_s);
+                    size = sym_ (BT.Integer, size_s) }
        in
        let lvars = [(pointer_s, LS.Base Loc); (size_s, LS.Base Integer)] in
-       let lcs = [LC (EQ (S (Loc, pointer_s), region.pointer)); 
-                  LC (EQ (S (Integer, size_s), region.size))] in
+       let lcs = [LC (eq_ (sym_ (BT.Loc, pointer_s), region.pointer)); 
+                  LC (eq_ (sym_ (BT.Integer, size_s), region.size))] in
        (lvars, lcs, resource)
     | RE.Points p -> 
        let pointer_s = Sym.fresh () in
-       let r = RE.Points {p with pointer = S (BT.Loc, pointer_s)} in
+       let r = RE.Points {p with pointer = sym_ (BT.Loc, pointer_s)} in
        let lvars = [(pointer_s, LS.Base BT.Loc)] in
-       let lcs = [LC (EQ (S (BT.Loc, pointer_s), p.pointer))] in
+       let lcs = [LC (eq_ (sym_ (BT.Loc, pointer_s), p.pointer))] in
        (lvars, lcs, r)
     | RE.Array a -> 
        let pointer_s = Sym.fresh () in
        let length_s = Sym.fresh () in
        let r = 
-         RE.Array {a with pointer = S (BT.Loc, pointer_s); 
-                          length = S (BT.Integer, length_s)} 
+         RE.Array {a with pointer = sym_ (BT.Loc, pointer_s); 
+                          length = sym_ (BT.Integer, length_s)} 
        in
        let lvars = [(pointer_s, LS.Base BT.Loc);
                     (length_s, LS.Base BT.Integer)] in
-       let lcs = [LC (And [EQ (S (BT.Loc, pointer_s), a.pointer);
-                           EQ (S (BT.Integer, length_s), a.length)])] in
+       let lcs = [LC (and_ [eq_ (sym_ (BT.Loc, pointer_s), a.pointer);
+                            eq_ (sym_ (BT.Integer, length_s), a.length)])] in
        (lvars, lcs, r)
     | Predicate p -> 
        let def = match Global.get_predicate_def G.global p.name with
@@ -390,7 +390,7 @@ module Make (G : sig val global : Global.t end) = struct
        let lvars, lcs, iargs = 
          List.fold_left (fun (lvars, lcs, iargs) (it, LogicalSorts.Base bt) ->
              let s = Sym.fresh () in
-             (lvars @ [(s, LS.Base bt)], lcs @ [LC (EQ (IT.S (bt, s), it))], iargs @ [IT.S (bt, s)])
+             (lvars @ [(s, LS.Base bt)], lcs @ [LC (eq_ (IT.sym_ (bt, s), it))], iargs @ [IT.sym_ (bt, s)])
            ) ([], [], []) typed_iargs
        in
        (lvars, lcs, Predicate {p with iargs})
@@ -424,7 +424,7 @@ module Make (G : sig val global : Global.t end) = struct
       | None -> []
       | Some ((addr,_) as fp) ->
          let fps = List.filter_map RE.footprint (all_resources local) in
-         LC.LC (IT.Not (IT.Null addr)) ::
+         LC.LC (IT.not_ (IT.null_ addr)) ::
          (List.map LC.pack (IT.disjoint_from fp fps))
     in
     let local = add_ls lvars local in
@@ -438,7 +438,7 @@ module Make (G : sig val global : Global.t end) = struct
       | None -> []
       | Some ((addr,_) as fp) ->
          let fps = List.filter_map RE.footprint (all_resources local) in
-         LC.LC (IT.Not (IT.Null addr)) ::
+         LC.LC (IT.not_ (IT.null_ addr)) ::
          List.map LC.pack (IT.disjoint_from fp fps)
     in
     let local = add (rname, Resource r) local in

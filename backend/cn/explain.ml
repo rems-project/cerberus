@@ -43,12 +43,12 @@ module Make (G : sig val global : Global.t end) = struct
 
     let should_be_in_veclass local veclass (it, bt) = 
       if not (LS.equal veclass.sort (Base bt)) then false 
-      else S.equal local (S (bt,veclass.repr)) it
+      else S.equal local (IT.sym_ (bt,veclass.repr)) it
 
     let classify local veclasses (l, (bt : BT.t)) : veclass list =
       let rec aux = function
         | veclass :: veclasses ->
-           if should_be_in_veclass local veclass (S (bt, l), bt) 
+           if should_be_in_veclass local veclass (IT.sym_ (bt, l), bt) 
            then (add_l l veclass :: veclasses)
            else (veclass :: aux veclasses)
         | [] -> 
@@ -261,7 +261,7 @@ module Make (G : sig val global : Global.t end) = struct
         List.fold_left (fun veclasses (c, (l, bt)) ->
             List.map (fun veclass ->
                 if is_in_veclass veclass l || 
-                     should_be_in_veclass local veclass (S (bt, l), bt)
+                     should_be_in_veclass local veclass (IT.sym_ (bt, l), bt)
                 then add_c c veclass else veclass
               ) veclasses
           ) with_logical_variables (L.all_computational local)
@@ -312,10 +312,10 @@ module Make (G : sig val global : Global.t end) = struct
   let rec boring_it = 
     let open IT in
     function
-    | EQ (it1, And [it2;it3]) -> IT.equal it1 it2 && IT.equal it2 it3
-    | EQ (it1, it2) -> IT.equal it1 it2 || boring_it it2
-    | Impl (it1, it2) -> IT.equal it1 it2 || boring_it it2
-    | (And its | Or its) -> List.for_all boring_it its
+    | Cmp_op (EQ (it1, Bool_op (And [it2;it3]))) -> IT.equal it1 it2 && IT.equal it2 it3
+    | Cmp_op (EQ (it1, it2)) -> IT.equal it1 it2 || boring_it it2
+    | Bool_op (Impl (it1, it2)) -> IT.equal it1 it2 || boring_it it2
+    | Bool_op (And its | Or its) -> List.for_all boring_it its
     | _ -> false
 
   let boring_lc (LC.LC it) = boring_it it
@@ -339,7 +339,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let symbol_it = function
-    | IT.S (_, s) -> SymSet.singleton s
+    | IT.Lit (IT.Sym (_, s)) -> SymSet.singleton s
     | _ -> SymSet.empty
 
 
@@ -385,7 +385,7 @@ module Make (G : sig val global : Global.t end) = struct
                 Some (Z.pp p.size),
                 Some !^"owned",
                 Some (Sym.pp (Sym.substs substitutions p.pointee)),
-                o_evaluate o_model (IT.S (pointee_bt, p.pointee)) pointee_bt
+                o_evaluate o_model (IT.sym_ (pointee_bt, p.pointee)) pointee_bt
                )
              in
              (entry, SymSet.union (symbol_it p.pointer) (SymSet.singleton p.pointee))
@@ -402,7 +402,7 @@ module Make (G : sig val global : Global.t end) = struct
                 Some (length ^^^ star ^^^ Z.pp a.element_size),
                 Some !^"array",
                 Some (Sym.pp (Sym.substs substitutions a.content)),
-                o_evaluate o_model (IT.S (content_t, a.content)) content_t
+                o_evaluate o_model (IT.sym_ (content_t, a.content)) content_t
                )
              in
              (entry, SymSet.union (symbol_it a.pointer) (SymSet.singleton a.content))
@@ -430,7 +430,7 @@ module Make (G : sig val global : Global.t end) = struct
             match bt with
             | BT.Loc -> 
                Some (Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.S (bt, c.veclass.repr)) bt,
+                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)) bt,
                      None, 
                      None, 
                      None, 
@@ -441,7 +441,7 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.S (bt, c.veclass.repr)) bt)
+                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)) bt)
           else
             None)
         veclasses

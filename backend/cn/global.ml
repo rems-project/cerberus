@@ -34,9 +34,9 @@ let early =
   let open IT in
   let id = "EarlyAlloc" in
   let start_s = Sym.fresh () in
-  let start_t = S (Integer, start_s) in
+  let start_t = sym_ (Integer, start_s) in
   let end_s = Sym.fresh () in
-  let end_t = S (Integer, end_s) in
+  let end_t = sym_ (Integer, end_s) in
   let iargs = [(start_s, LS.Base Integer); (end_s, LS.Base Integer)] in
   let oargs = [] in
   let pred = 
@@ -48,14 +48,14 @@ let early =
   in
   let block = 
     RE.Region {
-        pointer = IntegerToPointerCast start_t;
-        size = Add (Sub (end_t, start_t), Num (Z.of_int 1));
+        pointer = integerToPointerCast_ start_t;
+        size = add_ (sub_ (end_t, start_t), num_ (Z.of_int 1));
       }
   in
   let pack_functions =
     [LFT.Resource (block, 
-     LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
-     LFT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
+     LFT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void))),
+     LFT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void))),
      LFT.I (
      LRT.Resource (pred,
      LRT.I)))))] 
@@ -64,8 +64,8 @@ let early =
     [LFT.Resource (pred,
      LFT.I (
      LRT.Resource (block,
-     LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast start_t) (Sctypes.Sctype ([], Void))),
-     LRT.Constraint (LC (IT.good_pointer_it (IntegerToPointerCast end_t) (Sctypes.Sctype ([], Void))),
+     LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void))),
+     LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void))),
      LRT.I)))))]
   in
   let predicate = {
@@ -85,11 +85,11 @@ let zero_region =
   let open IT in
   let id = "ZeroRegion" in
   let pointer_s = Sym.fresh () in
-  let pointer_t = S (Loc, pointer_s) in
+  let pointer_t = sym_ (Loc, pointer_s) in
   let length_s = Sym.fresh () in
-  let length_t = S (Integer, length_s) in
+  let length_t = sym_ (Integer, length_s) in
   let content_s = Sym.fresh () in
-  let content_t = S (Map (Integer, Integer), content_s) in
+  let content_t = sym_ (Map (Integer, Integer), content_s) in
   let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
   let oargs = [] in
   let pred = 
@@ -108,11 +108,11 @@ let zero_region =
       }
   in
   let equality_constr = 
-    ArrayEqualOnRange (
+    arrayEqualOnRange_ (
         content_t, 
-        ConstArray (IT.Num Z.zero, BT.Integer),
-        Num Z.zero,
-        Sub (length_t, Num (Z.of_int 1))
+        constArray_ (IT.num_ Z.zero, BT.Integer),
+        num_ Z.zero,
+        sub_ (length_t, num_ (Z.of_int 1))
       )
   in
   let pack_functions =

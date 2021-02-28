@@ -40,7 +40,7 @@ let representable_integer_type it about =
     | CF.Ctype.Bool -> (Z.of_int 0, Z.of_int 1)
     | _ -> (min_integer_type it, max_integer_type it)
   in
-  LC.LC (IT.in_range about (Num min, Num max))
+  LC.LC (IT.in_range about (num_ min, num_ max))
 
 
 
@@ -64,8 +64,8 @@ let representable_pointer about =
   let pointer_byte_size = size_of_pointer in
   let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
   let max = Z.power_int_positive_big_int 2 pointer_size in
-  LC.LC (IT.And [IT.LEPointer (Pointer Z.zero, about); 
-                 IT.LTPointer (about, Pointer max)])
+  LC.LC (IT.and_ [IT.lePointer_ (pointer_ Z.zero, about); 
+                  IT.ltPointer_ (about, pointer_ max)])
   
 
 
@@ -102,7 +102,7 @@ let align_of_ctype (ct : Sctypes.t) =
 let rec representable_ctype struct_decls (Sctype (_, ct) : Sctypes.t) about =
   let open Sctypes in
   match ct with
-  | Void -> LC.LC (Bool true)
+  | Void -> LC.LC (bool_ true)
   | Integer it -> representable_integer_type it about
   | Pointer _ -> representable_pointer about
   | Struct tag -> representable_struct struct_decls tag about
@@ -113,10 +113,10 @@ and representable_struct struct_decls tag about =
   let lcs =
     List.filter_map (fun Global.{member = (member, sct); _} ->
             let rangef = representable_ctype struct_decls sct in
-            Some (LC.unpack (rangef (IT.StructMember (tag, about, member))))
+            Some (LC.unpack (rangef (IT.structMember_ (tag, about, member))))
       ) (Global.members decl.Global.layout)
   in
-  (LC.LC (And lcs))
+  (LC.LC (and_ lcs))
 
 
 let size_of_struct tag =

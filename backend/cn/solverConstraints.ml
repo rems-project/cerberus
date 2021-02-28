@@ -99,291 +99,312 @@ let rec of_index_term global it =
     assoc Id.equal member member_funs
   in
   match it with
-  (* literals *)
-  | S (bt, s) -> 
-     let sym = sym_to_symbol ctxt s in
-     let sort = bt_to_sort global bt in
-     Z3.Expr.mk_const ctxt sym sort
-  | Num n -> 
-     let nstr = Nat_big_num.to_string n in
-     Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr
-  | Pointer n -> 
-     let nstr = Nat_big_num.to_string n in
-     Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr
-  | Bool true -> 
-     Z3.Boolean.mk_true ctxt
-  | Bool false -> 
-     Z3.Boolean.mk_false ctxt
-  | Unit ->
-     let unitsort = ls_to_sort global (Base Unit) in
-     Z3.Expr.mk_const_s ctxt "unit" unitsort
-  (* arithmetic *)
-  | Add (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_add ctxt [a;a']
-  | Sub (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_sub ctxt [a;a']
-  | Mul (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_mul ctxt [a; a']
-  | Div (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_div ctxt a a'
-  | Exp (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_power ctxt a a'
-  | Rem_t (it,it') -> 
-     if not (!Debug_ocaml.debug_level > 0) && !rem_t_warned then
-       (rem_t_warned := true; Pp.warn !^"Rem_t constraint");
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.Integer.mk_rem ctxt a a'
-  | Rem_f (it,it') -> 
-     if not (!Debug_ocaml.debug_level > 0) && !rem_f_warned then
-       (rem_f_warned := true; Pp.warn !^"Rem_f constraint");
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.Integer.mk_rem ctxt a a'
-  | Min (it,it') -> 
-     let it_elab = ITE (it %< it', it, it') in
-     of_index_term global it_elab 
-  | Max (it,it') -> 
-     let it_elab = ITE (it %> it', it, it') in
-     of_index_term global it_elab 
-  (* comparisons *)
-  | EQ (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Boolean.mk_eq ctxt a a'
-  | NE (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Boolean.mk_distinct ctxt [a; a']
-  | LT (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_lt ctxt a a'
-  | GT (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_gt ctxt a a'
-  | LE (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_le ctxt a a'
-  | GE (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_ge ctxt a a'
-  (* booleans *)
-  | And its -> 
-     let ts = List.map (of_index_term global) its in
-     Z3.Boolean.mk_and ctxt ts
-  | Or its -> 
-     let ts = List.map (of_index_term global) its in
-     Z3.Boolean.mk_or ctxt ts
-  | Impl (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Boolean.mk_implies ctxt a a'
-  | Not it -> 
-     let a = of_index_term global it in
-     Z3.Boolean.mk_not ctxt a
-  | ITE (it,it',it'') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     let a'' = of_index_term global it'' in
-     Z3.Boolean.mk_ite ctxt a a' a''
-  (* tuples *)
-  | Tuple (bts, ts) ->
-     let sort = bt_to_sort global (Tuple bts) in
-     let constructor = Z3.Tuple.get_mk_decl sort in
-     let components = 
-       List.map (fun it ->
-           of_index_term global it
-         ) ts
-     in
-     Z3.Expr.mk_app ctxt constructor components
-  | NthTuple (bt,i,t) ->
-     let a = of_index_term global t in
-     let fundecl = nth_to_fundecl bt i in
-     Z3.Expr.mk_app ctxt fundecl [a]
-  | Struct (tag,members) ->
-     let sort = bt_to_sort global (Struct tag) in
-     let constructor = Z3.Tuple.get_mk_decl sort in
-     let member_vals = 
-       List.map (fun (_member,it) ->
-           of_index_term global it
-         ) members
-     in
-     Z3.Expr.mk_app ctxt constructor member_vals
-  | StructMember (tag, t, member) ->
-     let a = of_index_term global t in
-     let fundecl = member_to_fundecl tag member in
-     Z3.Expr.mk_app ctxt fundecl [a]
-  | StructMemberOffset (tag, t, member) ->
-     let a = of_index_term global t in
-     let offset = Memory.member_offset tag member in
-     let offset_s = Nat_big_num.to_string offset in
-     let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
-     Z3.Arithmetic.mk_add ctxt [a;offset_n]
-  (* pointers *)
-  | Null t -> 
-     let locsort = ls_to_sort global (Base Loc) in
-     let boolsort = ls_to_sort global (Base Bool) in
-     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
-     let a = of_index_term global t in
-     let is_null = Z3.Expr.mk_app ctxt fundecl [a] in
-     let zero_str = Nat_big_num.to_string Z.zero in
-     let zero_expr = Z3.Arithmetic.Integer.mk_numeral_s ctxt zero_str in
-     let is_zero = Z3.Boolean.mk_eq ctxt a zero_expr in
-     Z3.Boolean.mk_and ctxt [is_null; is_zero]
-  | AllocationSize t ->
-     let locsort = ls_to_sort global (Base Loc) in
-     let intsort = ls_to_sort global (Base Integer) in
-     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "allocationSize" [locsort] intsort in
-     let a = of_index_term global t in
-     Z3.Expr.mk_app ctxt fundecl [a]
-  | AddPointer (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_add ctxt [a;a']
-  | SubPointer (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_sub ctxt [a;a']
-  | MulPointer (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_mul ctxt [a;a']
-  | LTPointer (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_lt ctxt a a'
-  | LEPointer (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Arithmetic.mk_le ctxt a a'
-  | Disjoint ((it,s),(it',s')) ->
-     let fp1_before_fp2 = IT.LTPointer (AddPointer (AddPointer (it, s), IT.int (-1)), it') in
-     let fp2_before_fp1 = IT.LTPointer (AddPointer (AddPointer (it', s'), IT.int (-1)), it) in
-     let t = Or [fp1_before_fp2; fp2_before_fp1] in
-     of_index_term global t
-  | Aligned (st,it') -> 
-     let align = Memory.align_of_ctype st in
-     let a = of_index_term global (Num align) in
-     let a' = of_index_term global it' in
-     Z3.Boolean.mk_eq ctxt
-       (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
-       (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
-  | AlignedI (it,it') -> 
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Boolean.mk_eq ctxt
-       (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
-       (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
-  | IntegerToPointerCast it ->
-     (* identity, at the moment *)
-     of_index_term global it
-  | PointerToIntegerCast it ->
-     (* identity, at the moment *)
-     of_index_term global it
-  (* representability *)
-  | MinInteger it ->
-     of_index_term global 
-       (Num (Memory.min_integer_type it))
-  | MaxInteger it ->
-     of_index_term global 
-       (Num (Memory.max_integer_type it))
-  | Representable (st, t) ->
-     let rangef = Memory.representable_ctype global.struct_decls st in
-     of_index_term global (LC.unpack (rangef t))
-  (* lists *)
-  | Nil _ ->
-     Debug_ocaml.error "todo: Z3: Nil"
-  | Cons _ ->
-     Debug_ocaml.error "todo: Z3: Cons"
-  | Head t ->
-     Debug_ocaml.error "todo: Z3: Head"
-  | Tail t ->
-     Debug_ocaml.error "todo: Z3: Tail"
-  | List (ts,bt) ->
-     Debug_ocaml.error "todo: Z3: List"
-  | NthList (i,it) ->
-     Debug_ocaml.error "todo: Z3: NthList"
-  (* sets *)
-  | SetMember (it,it') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Set.mk_membership ctxt a a'
-  | SetUnion its ->
-     let ts = List.map (of_index_term global) 
-                (List1.to_list its) in
-     Z3.Set.mk_union ctxt ts
-  | SetIntersection its ->
-     let ts = List.map (of_index_term global) 
-                (List1.to_list its) in
-     Z3.Set.mk_intersection ctxt ts
-  | SetDifference (it, it') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Set.mk_difference ctxt a a'
-  | Subset (it, it') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Set.mk_subset ctxt a a'
-  | ConstArray (it, bt) ->
-     let sort = bt_to_sort global bt in
-     let a = of_index_term global it in
-     Z3.Z3Array.mk_const_array ctxt sort a
-  | ArrayGet (it,it') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     Z3.Z3Array.mk_select ctxt a a'
-  | ArraySet (it,it',it'') ->
-     let a = of_index_term global it in
-     let a' = of_index_term global it' in
-     let a'' = of_index_term global it'' in
-     Z3.Z3Array.mk_store ctxt a a' a''
-  | ArrayEqualOnRange(array1,array2,i_from,i_to) ->
-     let array1 = of_index_term global array1 in
-     let array2 = of_index_term global array2 in
-     let i_from = of_index_term global i_from in
-     let i_to = of_index_term global i_to in
-     let i = 
-       Z3.Expr.mk_const ctxt 
-         (sym_to_symbol ctxt (Sym.fresh ()))
-         (bt_to_sort global Integer) 
-     in
-     let in_range = 
-       Z3.Boolean.mk_and ctxt [
-           Z3.Arithmetic.mk_le ctxt i_from i;
-           Z3.Arithmetic.mk_le ctxt i i_to;
-         ]
-     in
-     let select_equal = 
-       Z3.Boolean.mk_eq ctxt
-         (Z3.Z3Array.mk_select ctxt array1 i)
-         (Z3.Z3Array.mk_select ctxt array2 i)
-     in
-     let body = Z3.Boolean.mk_implies ctxt in_range select_equal in
-     let subrange_equal = 
-       Z3.Quantifier.expr_of_quantifier 
-         (Z3.Quantifier.mk_forall_const 
-            ctxt [i] body None [] (* pattern list *)
-            [] None None)
-     in
-     Z3.Boolean.mk_or ctxt [
-         Z3.Boolean.mk_eq ctxt array1 array2;
-         subrange_equal
-       ]
-  | ArraySelectAfter ((t1,t2), t3) ->
-     Debug_ocaml.error "Z3 mapping for ArraySelectAfter"
-  | ArrayIndexShiftRight (t1, t2) ->
-     Debug_ocaml.error "Z3 mapping for ArrayIndexShiftRight"
+  | Lit lit ->
+     begin match lit with
+     | Sym (bt, s) -> 
+        let sym = sym_to_symbol ctxt s in
+        let sort = bt_to_sort global bt in
+        Z3.Expr.mk_const ctxt sym sort
+     | Num n -> 
+        let nstr = Nat_big_num.to_string n in
+        Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr
+     | Pointer n -> 
+        let nstr = Nat_big_num.to_string n in
+        Z3.Arithmetic.Integer.mk_numeral_s ctxt nstr
+     | Bool true -> 
+        Z3.Boolean.mk_true ctxt
+     | Bool false -> 
+        Z3.Boolean.mk_false ctxt
+     | Unit ->
+        let unitsort = ls_to_sort global (Base Unit) in
+        Z3.Expr.mk_const_s ctxt "unit" unitsort
+     end
+  | Arith_op arithop ->
+     begin match arithop with
+     | Add (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_add ctxt [a;a']
+     | Sub (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_sub ctxt [a;a']
+     | Mul (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_mul ctxt [a; a']
+     | Div (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_div ctxt a a'
+     | Exp (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_power ctxt a a'
+     | Rem_t (it,it') -> 
+        if not (!Debug_ocaml.debug_level > 0) && !rem_t_warned then
+          (rem_t_warned := true; Pp.warn !^"Rem_t constraint");
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.Integer.mk_rem ctxt a a'
+     | Rem_f (it,it') -> 
+        if not (!Debug_ocaml.debug_level > 0) && !rem_f_warned then
+          (rem_f_warned := true; Pp.warn !^"Rem_f constraint");
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.Integer.mk_rem ctxt a a'
+     | Min (it,it') -> 
+        let it_elab = ite_ (lt_ (it, it'), it, it') in
+        of_index_term global it_elab 
+     | Max (it,it') -> 
+        let it_elab = ite_ (gt_ (it, it'), it, it') in
+        of_index_term global it_elab 
+     end
+  | Cmp_op cmpop ->
+     begin match cmpop with
+     | EQ (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Boolean.mk_eq ctxt a a'
+     | NE (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Boolean.mk_distinct ctxt [a; a']
+     | LT (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_lt ctxt a a'
+     | GT (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_gt ctxt a a'
+     | LE (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_le ctxt a a'
+     | GE (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_ge ctxt a a'
+     end
+  | Bool_op boolop ->
+     begin match boolop with
+     | And its -> 
+        let ts = List.map (of_index_term global) its in
+        Z3.Boolean.mk_and ctxt ts
+     | Or its -> 
+        let ts = List.map (of_index_term global) its in
+        Z3.Boolean.mk_or ctxt ts
+     | Impl (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Boolean.mk_implies ctxt a a'
+     | Not it -> 
+        let a = of_index_term global it in
+        Z3.Boolean.mk_not ctxt a
+     | ITE (it,it',it'') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        let a'' = of_index_term global it'' in
+        Z3.Boolean.mk_ite ctxt a a' a''
+     end
+  | Tuple_op tupleop ->
+     begin match tupleop with
+     | Tuple (bts, ts) ->
+        let sort = bt_to_sort global (Tuple bts) in
+        let constructor = Z3.Tuple.get_mk_decl sort in
+        let components = 
+          List.map (fun it ->
+              of_index_term global it
+            ) ts
+        in
+        Z3.Expr.mk_app ctxt constructor components
+     | NthTuple (bt,i,t) ->
+        let a = of_index_term global t in
+        let fundecl = nth_to_fundecl bt i in
+        Z3.Expr.mk_app ctxt fundecl [a]
+     | Struct (tag,members) ->
+        let sort = bt_to_sort global (Struct tag) in
+        let constructor = Z3.Tuple.get_mk_decl sort in
+        let member_vals = 
+          List.map (fun (_member,it) ->
+              of_index_term global it
+            ) members
+        in
+        Z3.Expr.mk_app ctxt constructor member_vals
+     | StructMember (tag, t, member) ->
+        let a = of_index_term global t in
+        let fundecl = member_to_fundecl tag member in
+        Z3.Expr.mk_app ctxt fundecl [a]
+     | StructMemberOffset (tag, t, member) ->
+        let a = of_index_term global t in
+        let offset = Memory.member_offset tag member in
+        let offset_s = Nat_big_num.to_string offset in
+        let offset_n = Z3.Arithmetic.Integer.mk_numeral_s ctxt offset_s in
+        Z3.Arithmetic.mk_add ctxt [a;offset_n]
+     end
+  | Pointer_op pointerop ->
+     begin match pointerop with
+     | Null t -> 
+        let locsort = ls_to_sort global (Base Loc) in
+        let boolsort = ls_to_sort global (Base Bool) in
+        let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
+        let a = of_index_term global t in
+        let is_null = Z3.Expr.mk_app ctxt fundecl [a] in
+        let zero_str = Nat_big_num.to_string Z.zero in
+        let zero_expr = Z3.Arithmetic.Integer.mk_numeral_s ctxt zero_str in
+        let is_zero = Z3.Boolean.mk_eq ctxt a zero_expr in
+        Z3.Boolean.mk_and ctxt [is_null; is_zero]
+     | AllocationSize t ->
+        let locsort = ls_to_sort global (Base Loc) in
+        let intsort = ls_to_sort global (Base Integer) in
+        let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "allocationSize" [locsort] intsort in
+        let a = of_index_term global t in
+        Z3.Expr.mk_app ctxt fundecl [a]
+     | AddPointer (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_add ctxt [a;a']
+     | SubPointer (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_sub ctxt [a;a']
+     | MulPointer (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_mul ctxt [a;a']
+     | LTPointer (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_lt ctxt a a'
+     | LEPointer (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Arithmetic.mk_le ctxt a a'
+     | Disjoint ((it,s),(it',s')) ->
+        let fp1_before_fp2 = IT.ltPointer_ (addPointer_ (addPointer_ (it, s), IT.int_ (-1)), it') in
+        let fp2_before_fp1 = IT.ltPointer_ (addPointer_ (addPointer_ (it', s'), IT.int_ (-1)), it) in
+        let t = or_ [fp1_before_fp2; fp2_before_fp1] in
+        of_index_term global t
+     | IntegerToPointerCast it ->
+        (* identity, at the moment *)
+        of_index_term global it
+     | PointerToIntegerCast it ->
+        (* identity, at the moment *)
+        of_index_term global it
+     end
+  | CT_pred ctpred ->
+     begin match ctpred with
+     | Aligned (st,it') -> 
+        let align = Memory.align_of_ctype st in
+        let a = of_index_term global (num_ align) in
+        let a' = of_index_term global it' in
+        Z3.Boolean.mk_eq ctxt
+          (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
+          (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+     | AlignedI (it,it') -> 
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Boolean.mk_eq ctxt
+          (Z3.Arithmetic.Integer.mk_mod ctxt a' a)
+          (Z3.Arithmetic.Integer.mk_numeral_s ctxt "0")
+     | MinInteger it ->
+        of_index_term global 
+          (num_ (Memory.min_integer_type it))
+     | MaxInteger it ->
+        of_index_term global 
+          (num_ (Memory.max_integer_type it))
+     | Representable (st, t) ->
+        let rangef = Memory.representable_ctype global.struct_decls st in
+        of_index_term global (LC.unpack (rangef t))
+     end
+  | List_op listop ->
+     begin match listop with
+     | Nil _ ->
+        Debug_ocaml.error "todo: Z3: Nil"
+     | Cons _ ->
+        Debug_ocaml.error "todo: Z3: Cons"
+     | Head t ->
+        Debug_ocaml.error "todo: Z3: Head"
+     | Tail t ->
+        Debug_ocaml.error "todo: Z3: Tail"
+     | List (ts,bt) ->
+        Debug_ocaml.error "todo: Z3: List"
+     | NthList (i,it) ->
+        Debug_ocaml.error "todo: Z3: NthList"
+     end
+  | Set_op setop ->
+     begin match setop with
+     | SetMember (it,it') ->
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Set.mk_membership ctxt a a'
+     | SetUnion its ->
+        let ts = List.map (of_index_term global) 
+                   (List1.to_list its) in
+        Z3.Set.mk_union ctxt ts
+     | SetIntersection its ->
+        let ts = List.map (of_index_term global) 
+                   (List1.to_list its) in
+        Z3.Set.mk_intersection ctxt ts
+     | SetDifference (it, it') ->
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Set.mk_difference ctxt a a'
+     | Subset (it, it') ->
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Set.mk_subset ctxt a a'
+     end
+  | Array_op arrayop ->
+     begin match arrayop with
+     | ConstArray (it, bt) ->
+        let sort = bt_to_sort global bt in
+        let a = of_index_term global it in
+        Z3.Z3Array.mk_const_array ctxt sort a
+     | ArrayGet (it,it') ->
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        Z3.Z3Array.mk_select ctxt a a'
+     | ArraySet (it,it',it'') ->
+        let a = of_index_term global it in
+        let a' = of_index_term global it' in
+        let a'' = of_index_term global it'' in
+        Z3.Z3Array.mk_store ctxt a a' a''
+     | ArrayEqualOnRange(array1,array2,i_from,i_to) ->
+        let array1 = of_index_term global array1 in
+        let array2 = of_index_term global array2 in
+        let i_from = of_index_term global i_from in
+        let i_to = of_index_term global i_to in
+        let i = 
+          Z3.Expr.mk_const ctxt 
+            (sym_to_symbol ctxt (Sym.fresh ()))
+            (bt_to_sort global Integer) 
+        in
+        let in_range = 
+          Z3.Boolean.mk_and ctxt [
+              Z3.Arithmetic.mk_le ctxt i_from i;
+              Z3.Arithmetic.mk_le ctxt i i_to;
+            ]
+        in
+        let select_equal = 
+          Z3.Boolean.mk_eq ctxt
+            (Z3.Z3Array.mk_select ctxt array1 i)
+            (Z3.Z3Array.mk_select ctxt array2 i)
+        in
+        let body = Z3.Boolean.mk_implies ctxt in_range select_equal in
+        let subrange_equal = 
+          Z3.Quantifier.expr_of_quantifier 
+            (Z3.Quantifier.mk_forall_const 
+               ctxt [i] body None [] (* pattern list *)
+               [] None None)
+        in
+        Z3.Boolean.mk_or ctxt [
+            Z3.Boolean.mk_eq ctxt array1 array2;
+            subrange_equal
+          ]
+     | ArraySelectAfter ((t1,t2), t3) ->
+        Debug_ocaml.error "Z3 mapping for ArraySelectAfter"
+     | ArrayIndexShiftRight (t1, t2) ->
+        Debug_ocaml.error "Z3 mapping for ArrayIndexShiftRight"
+     end

@@ -20,7 +20,7 @@ let vars_in (LC c) = IndexTerms.vars_in c
 
 let equal (LC c) (LC c') = IndexTerms.equal c c'
 
-let negate (LC c) = LC (Not c)
+let negate (LC c) = LC (IndexTerms.not_ c)
 
 
 let pack c = LC c
