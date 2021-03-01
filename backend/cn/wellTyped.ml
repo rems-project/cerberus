@@ -144,7 +144,7 @@ module Make (G : sig val global : Global.t end) = struct
              return (Base Bool, Not t)
           | ITE (t,t',t'') ->
              let* t = check_aux loc (Base Bool) t in
-             let* t' = check_aux loc (Base Integer) t' in
+             let* (ls, t') = infer loc t' in
              let* t'' = check_aux loc (Base Integer) t'' in
              return (ls, ITE (t, t', t''))
         in
