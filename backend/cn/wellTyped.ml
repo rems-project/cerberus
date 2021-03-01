@@ -160,7 +160,7 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let tuple_op = function
-          | Tuple (bts, ts) ->
+          | Tuple (_, ts) ->
              let* bts_ts = 
                ListM.mapM (fun it -> 
                    let* (Base bt, t) = infer loc it in
