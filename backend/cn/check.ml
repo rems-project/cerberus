@@ -309,22 +309,23 @@ module Make (G : sig val global : Global.t end) = struct
 
     module Prompt = struct
 
+      type request_ui_info = 
+        { original_local : L.t;
+          extra_names : Explain.naming;
+          loc: loc;
+          situation: situation }
+
       type resource_request = 
         { local : L.t;
-          original_local : L.t;
-          extra_names : Explain.naming;
-          situation: situation;
-          loc: loc;
           lspec: (Sym.t * LS.t) list;
           resource : RE.t;
+          ui_info : request_ui_info;
         }
 
       type packing_request = 
         { local : L.t;
-          extra_names : Explain.naming;
-          situation: situation;
-          loc: loc;
           lft : LFT.t;
+          ui_info : request_ui_info;
         }
 
       type err = loc * Tools.stacktrace option * type_error
@@ -383,17 +384,17 @@ module Make (G : sig val global : Global.t end) = struct
 
 
       let spine 
-            (loc : loc) 
-            extra_names
-            situation 
+            ui_info
             local
             (arguments : arg list) 
             (ftyp : FT.t) : (I.t * L.t) m =
 
         let open NFT in
 
-        let original_local = local in
-        let names = names @ extra_names in
+        let loc = ui_info.loc in
+        let original_local = ui_info.original_local in
+        let situation = ui_info.situation in
+        let names = names @ ui_info.extra_names in
 
         let ftyp = NFT.normalise ftyp in
         let unis = SymMap.empty in
@@ -444,15 +445,7 @@ module Make (G : sig val global : Global.t end) = struct
             debug 6 (lazy (item "unis" (pp_unis unis)));
             match ftyp with
             | Resource (resource, ftyp) -> 
-               let rr = {
-                   loc; 
-                   original_local; 
-                   extra_names;
-                   situation; local; 
-                   resource;
-                   lspec;
-                 }
-               in
+               let rr = { ui_info; local; resource; lspec; } in
                let* (resource', local) = prompt (R_Resource rr) in
                let* unis = match RE.unify resource resource' unis with
                  | Some unis -> return unis
@@ -546,9 +539,13 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     (* use resource_around_pointer to make this succeed for more cases *)
-    let rec ownership_request_prompt (loc: loc) ~original_local ~extra_names situation local (pointer: IT.t) (need_size: IT.t) = 
-      let names = names @ extra_names in
+    let rec ownership_request_prompt ui_info local (pointer: IT.t) (need_size: IT.t) = 
+      let open Prompt in
       let open Prompt.Operators in
+      let loc = ui_info.loc in
+      let original_local = ui_info.original_local in
+      let situation = ui_info.situation in
+      let names = names @ ui_info.extra_names in
       if S.le local need_size (num_ Z.zero) then 
         return local
       else
@@ -573,8 +570,7 @@ module Make (G : sig val global : Global.t end) = struct
         in
         if S.ge local need_size have_size then 
           let local = L.use_resource resource_name [loc] local in
-          ownership_request_prompt loc ~original_local ~extra_names
-            situation local (addPointer_ (pointer, have_size)) 
+          ownership_request_prompt ui_info local (addPointer_ (pointer, have_size)) 
             (IT.sub_ (need_size, have_size))
         else if S.le local need_size have_size then 
           (* if the resource is bigger than needed, keep the remainder
@@ -595,20 +591,22 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec resource_request_prompt loc ~original_local ~extra_names ~lspec situation local request = 
-      let names = names @ extra_names in
+    let rec resource_request_prompt ui_info ~lspec local request = 
+      let open Prompt in
       let open Prompt.Operators in
       let open Resources in
+      let loc = ui_info.loc in
+      let original_local = ui_info.original_local in
+      let situation = ui_info.situation in
+      let names = names @ ui_info.extra_names in
       match request with
       | Block b ->
          let* local = 
-           ownership_request_prompt loc ~original_local ~extra_names
-             situation local b.pointer (num_ b.size) in
+           ownership_request_prompt ui_info local b.pointer (num_ b.size) in
          return (Block b, local)
       | Region r ->
          let* local = 
-           ownership_request_prompt loc ~original_local ~extra_names
-             situation local r.pointer r.size in
+           ownership_request_prompt ui_info local r.pointer r.size in
          return (Region r, local)
       | Points p ->
          let o_resource = S.resource_for_pointer local p.pointer in
@@ -749,15 +747,14 @@ module Make (G : sig val global : Global.t end) = struct
             in
             let attempt_prompts = 
               List.map (fun lft ->
-                  lazy (prompt (R_Packing {loc; extra_names; situation; local; lft}))
+                  lazy (prompt (R_Packing {ui_info; local; lft}))
                 ) (predicate_pack_functions p def)
             in
             let choices = attempt_prompts @ [else_prompt] in
             let choices1 = List1.make (List.hd choices, List.tl choices) in
             let* (lrt, local) = try_choices choices1 in
             let local = bind_logical local lrt in
-            resource_request_prompt loc ~original_local ~extra_names
-              ~lspec situation local request
+            resource_request_prompt ui_info ~lspec local request
          end
 
 
@@ -771,14 +768,13 @@ module Make (G : sig val global : Global.t end) = struct
          begin match r with
          | Prompt.R_Error (loc,tr,error) -> 
             Error (loc,tr,error)
-         | R_Resource {loc; original_local; extra_names; local; situation; resource; lspec} ->
+         | R_Resource {ui_info; local; resource; lspec} ->
             let prompt = 
-              resource_request_prompt loc ~original_local ~extra_names ~lspec
-                situation local resource in
+              resource_request_prompt ui_info ~lspec local resource in
             let* (unis, local) = handle_prompt prompt in
             handle_prompt (c (unis, local))
-         | R_Packing {loc; local; extra_names; situation; lft} ->
-            let prompt = Spine_LFT.spine loc extra_names situation local [] lft in
+         | R_Packing {ui_info; local; lft} ->
+            let prompt = Spine_LFT.spine ui_info local [] lft in
             let* (lrt, local) = handle_prompt prompt in
             handle_prompt (c (lrt, local))
          | R_Try choices ->
@@ -804,12 +800,16 @@ module Make (G : sig val global : Global.t end) = struct
             (arg.lname, Path.Addr v)
           ) args
       in
-      let prompt = Spine_FT.spine loc extra_names FunctionCall local args ftyp in
+      let open Prompt in
+      let ui_info = { loc; extra_names; situation = FunctionCall; original_local = local } in
+      let prompt = Spine_FT.spine ui_info local args ftyp in
       let* (rt, local) = handle_prompt prompt in
       return (rt, local)
 
     let calltype_lt loc extra_names local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
-      let prompt = Spine_LT.spine loc extra_names (LabelCall label_kind) local args ltyp in
+      let open Prompt in
+      let ui_info = { loc; extra_names; situation = LabelCall label_kind; original_local = local } in
+      let prompt = Spine_LT.spine ui_info local args ltyp in
       let* (rt, local) = handle_prompt prompt in
       return (rt, local)
 
@@ -818,16 +818,17 @@ module Make (G : sig val global : Global.t end) = struct
        judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
     let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
       let extra_names = [(arg.lname, Path.Addr "return")] in
+      let open Prompt in
+      let ui_info = { loc; extra_names; situation = Subtyping; original_local = local } in
       let lt = LT.of_rt rtyp (LT.I False.False) in
-      let prompt = Spine_LT.spine loc extra_names Subtyping local [arg] lt in
+      let prompt = Spine_LT.spine ui_info local [arg] lt in
       let* (False.False, local) = handle_prompt prompt in
       return local
 
     let ownership_request (loc: loc) situation local (pointer: IT.t) (need_size: IT.t) = 
-      let prompt = 
-        ownership_request_prompt loc ~original_local:local ~extra_names:[]
-          situation local pointer need_size 
-      in
+      let open Prompt in
+      let ui_info = { loc; extra_names = []; situation; original_local = local } in
+      let prompt = ownership_request_prompt ui_info local pointer need_size in
       handle_prompt prompt
 
 
@@ -844,7 +845,9 @@ module Make (G : sig val global : Global.t end) = struct
                  in
                  let* possible_unpackings = 
                    ListM.filter_mapM (fun clause ->
-                       let prompt = Spine_LFT.spine loc [] Unpacking local [] clause in
+                       let open Prompt in
+                       let ui_info = { loc; situation = Unpacking; extra_names = []; original_local = local } in
+                       let prompt = Spine_LFT.spine ui_info local [] clause in
                        let* (lrt, test_local) = handle_prompt prompt in
                        let test_local = bind_logical test_local lrt in
                        return (if not (S.is_inconsistent test_local)
@@ -2120,10 +2123,8 @@ module Make (G : sig val global : Global.t end) = struct
 
   (* TODO: 
      - make spine take original_local argument
-     - not produce explanation multiple times
      - check resource definition well-formedness
      - check globals with expressions
-     - fix problems with order of multiple "requires" clauses
      - give types for standard library functions
      - fix Ecase "LC (Bool true)"
    *)

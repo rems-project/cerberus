@@ -341,68 +341,13 @@ module Make (G : sig val global : Global.t end) = struct
                   ~expect:KResource ~has:(VB.kind b)
 
 
-  let normalise_resource re = 
-    let open Resources in
-    let open IndexTerms in
-    let open LogicalConstraints in
-    match re with
-    | RE.Block block -> 
-       let pointer_s = Sym.fresh () in
-       let resource = RE.Block {block with pointer = sym_ (BT.Loc, pointer_s)} in
-       let lvars = [(pointer_s, LS.Base Loc)] in
-       let lcs = [LC (eq_ (sym_ (BT.Loc, pointer_s), block.pointer))] in
-       (lvars, lcs, resource)
-    | RE.Region region -> 
-       let pointer_s = Sym.fresh () in
-       let size_s = Sym.fresh () in
-       let resource = 
-         RE.Region {pointer = sym_ (BT.Loc, pointer_s);
-                    size = sym_ (BT.Integer, size_s) }
-       in
-       let lvars = [(pointer_s, LS.Base Loc); (size_s, LS.Base Integer)] in
-       let lcs = [LC (eq_ (sym_ (BT.Loc, pointer_s), region.pointer)); 
-                  LC (eq_ (sym_ (BT.Integer, size_s), region.size))] in
-       (lvars, lcs, resource)
-    | RE.Points p -> 
-       let pointer_s = Sym.fresh () in
-       let r = RE.Points {p with pointer = sym_ (BT.Loc, pointer_s)} in
-       let lvars = [(pointer_s, LS.Base BT.Loc)] in
-       let lcs = [LC (eq_ (sym_ (BT.Loc, pointer_s), p.pointer))] in
-       (lvars, lcs, r)
-    | RE.Array a -> 
-       let pointer_s = Sym.fresh () in
-       let length_s = Sym.fresh () in
-       let r = 
-         RE.Array {a with pointer = sym_ (BT.Loc, pointer_s); 
-                          length = sym_ (BT.Integer, length_s)} 
-       in
-       let lvars = [(pointer_s, LS.Base BT.Loc);
-                    (length_s, LS.Base BT.Integer)] in
-       let lcs = [LC (and_ [eq_ (sym_ (BT.Loc, pointer_s), a.pointer);
-                            eq_ (sym_ (BT.Integer, length_s), a.length)])] in
-       (lvars, lcs, r)
-    | Predicate p -> 
-       let def = match Global.get_predicate_def G.global p.name with
-         | Some def -> def
-         | None -> Debug_ocaml.error "missing predicate definition"
-       in
-       let typed_iargs = List.combine p.iargs (List.map snd def.iargs) in
-       let lvars, lcs, iargs = 
-         List.fold_left (fun (lvars, lcs, iargs) (it, LogicalSorts.Base bt) ->
-             let s = Sym.fresh () in
-             (lvars @ [(s, LS.Base bt)], lcs @ [LC (eq_ (IT.sym_ (bt, s), it))], iargs @ [IT.sym_ (bt, s)])
-           ) ([], [], []) typed_iargs
-       in
-       (lvars, lcs, Predicate {p with iargs})
-
-
   let add_a aname (bt,lname) = 
     add (aname, Computational (lname,bt))
 
   let add_l lname ls local = 
     add (lname, Logical ls) local
 
-  let add_ls ls local = 
+  let _add_ls ls local = 
     List.fold_left (fun local (lname,ls) ->
         add_l lname ls local
       ) local ls
@@ -415,22 +360,6 @@ module Make (G : sig val global : Global.t end) = struct
     List.fold_left (fun local lc ->
         add_uc lc local
       ) local lcs
-
-
-  (* not used *)
-  let _add_r_with_normalisation rname r local = 
-    let (lvars, lcs1, r) = normalise_resource r in
-    let lcs2 = match RE.footprint r with
-      | None -> []
-      | Some ((addr,_) as fp) ->
-         let fps = List.filter_map RE.footprint (all_resources local) in
-         LC.LC (IT.not_ (IT.null_ addr)) ::
-         (List.map LC.pack (IT.disjoint_from fp fps))
-    in
-    let local = add_ls lvars local in
-    let local = add (rname, Resource r) local in
-    let local = add_ucs (lcs1 @ lcs2) local in
-    local
 
 
   let add_r rname r local = 
@@ -447,9 +376,6 @@ module Make (G : sig val global : Global.t end) = struct
 
   let add_ur re local = 
     add_r (Sym.fresh ()) re local
-
-
-
 
 
 
