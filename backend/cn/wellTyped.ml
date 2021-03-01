@@ -36,14 +36,24 @@ module Make (G : sig val global : Global.t end) = struct
 
       let context = it in
 
-      let does_not_have_member loc context it member = 
-        let (context, it) = Explain.index_terms names local (context, it) in
-        let err = 
-          !^"Illtyped index term" ^^^ context ^^ dot ^^^
-            it ^^^ !^"does not have member" ^^^ Id.pp member
-        in
-        fail loc (Generic err)
+      let get_struct_decl tag = 
+        match SymMap.find_opt tag G.global.struct_decls with
+        | Some decl -> return decl
+        | None -> fail loc (Missing_struct tag)
       in
+
+      let get_member_type decl_members member it =
+        match List.assoc_opt Id.equal member decl_members with
+        | Some sct -> return (BT.of_sct sct)
+        | None -> 
+           let (context, it) = Explain.index_terms names local (context, it) in
+           let err = 
+             !^"Illtyped index term" ^^^ context ^^ dot ^^^
+               it ^^^ !^"does not have member" ^^^ Id.pp member
+           in
+           fail loc (Generic err)
+      in
+                   
 
       let rec infer : 'bt. Loc.t -> 'bt IT.term -> (LogicalSorts.t * IT.t, type_error) m =
 
@@ -185,10 +195,7 @@ module Make (G : sig val global : Global.t end) = struct
              in
              return (Base item_bt, NthTuple (tuple_bt, n, t'))
           | Struct (tag, members) ->
-             let* decl = match SymMap.find_opt tag G.global.struct_decls with
-               | Some decl -> return decl
-               | None -> fail loc (Missing_struct tag)
-             in
+             let* decl = get_struct_decl tag in
              let decl_members = Global.member_types decl.layout in
              let* () = 
                let has = List.length members in
@@ -198,38 +205,23 @@ module Make (G : sig val global : Global.t end) = struct
              in
              let* members = 
                ListM.mapM (fun (member,t) ->
-                   let* sct = match List.assoc_opt Id.equal member decl_members with
-                     | Some sct -> return sct
-                     | None -> does_not_have_member loc context it member
-                   in
-                   let* t = check_aux loc (Base (BT.of_sct sct)) t in
+                   let* bt = get_member_type decl_members member it in
+                   let* t = check_aux loc (Base bt) t in
                    return (member, t)
                  ) members
              in
              return (Base (Struct tag), Struct (tag, members))
           | StructMember (tag, t, member) ->
              let* t = check_aux loc (Base (Struct tag)) t in
-             let* decl = match SymMap.find_opt tag G.global.struct_decls with
-               | Some decl -> return decl
-               | None -> fail loc (Missing_struct tag)
-             in
+             let* decl = get_struct_decl tag in
              let decl_members = Global.member_types decl.layout in
-             let* sct = match List.assoc_opt Id.equal member decl_members with
-               | Some sct -> return sct 
-               | None -> does_not_have_member loc context t member
-             in
-             return (Base (BT.of_sct sct), StructMember (tag, t, member))
+             let* bt = get_member_type decl_members member t in
+             return (Base bt, StructMember (tag, t, member))
           | StructMemberOffset (tag, t, member) ->
              let* t = check_aux loc (Base Loc) t in
-             let* decl = match SymMap.find_opt tag G.global.struct_decls with
-               | Some decl -> return decl
-               | None -> fail loc (Missing_struct tag)
-             in
+             let* decl = get_struct_decl tag in
              let decl_members = Global.member_types decl.layout in
-             let* () = match List.assoc_opt Id.equal member decl_members with
-               | Some _ -> return () 
-               | None -> does_not_have_member loc context t member
-             in
+             let* _ = get_member_type decl_members member t in
              return (Base Loc, StructMemberOffset (tag, t, member))
         in
 
