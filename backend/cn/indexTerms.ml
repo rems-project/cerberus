@@ -194,13 +194,13 @@ let rec equal it it' =
     | NthTuple (bt, n,t), NthTuple (bt', n',t') -> 
        BT.equal bt bt' && n = n' && equal t t' 
     | Struct (tag, members), Struct (tag2, members2) ->
-       tag = tag2 && 
-         List.equal (fun (m,t) (m',t') -> m = m' && equal t t') 
+       Sym.equal tag tag2 && 
+         List.equal (fun (m,t) (m',t') -> Id.equal m m' && equal t t') 
            members members2
     | StructMember (tag,t,member), StructMember (tag',t',member') ->
-       tag = tag' && equal t t' && member = member'
+       Sym.equal tag tag' && equal t t' && Id.equal member member'
     | StructMemberOffset (tag,t,member), StructMemberOffset (tag',t',member') ->
-       tag = tag' && equal t t' && member = member'
+       Sym.equal tag tag' && equal t t' && Id.equal member member'
     | Tuple _, _ -> false
     | NthTuple _, _ -> false
     | Struct _, _ -> false
