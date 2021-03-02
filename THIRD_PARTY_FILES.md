@@ -2,7 +2,7 @@ Axiomatic model .cat files in isla-cat:
 
 | License      | Files                             | From      |
 | ------------ | --------------------------------- | --------- |
-| CeCILL-B     | runtime/bmc/c11.cat               | herdtools |
+| MIT          | runtime/bmc/c11.cat               | memalloy  |
 | GPL 2.0+     | runtime/bmc/linux.cat             | linux     |
 | GPL 2.0+     | runtime/bmc/linux_without_rcu.cat | linux     |
 
@@ -10,19 +10,23 @@ Axiomatic model .cat files in isla-cat:
 
 The following file is derived from the U. Cambridge Cppmem project:
 
-| License      | Files                  | From      |
-| ------------ | ---------------------- | --------- |
-| BSD 3-Clause | backend/common/auxl.ml | cppmem    |
+| License      | Files                             | From      |
+| ------------ | --------------------------------- | --------- |
+| BSD 3-Clause | frontend/concurrency/cmm_csem.lem | cppmem    |
+| BSD 3-Clause | backend/common/auxl.ml            | cppmem    |
+| BSD 3-Clause | backend/bmc/bmc_types.ml          | cppmem    |
 
 (see the license notice there)
 
 ---
 
-The fragment of the C standard library is based on the musl libc:
+The fragment of the C standard library is based on the musl-libc and BSD:
 
-| License      | Files                    | From      |
-| ------------ | ------------------------ | --------- |
-| MIT          | runtime/libc/src/*.{c,h} | musl-libc |
+| License      | Files                                  | From      |
+| ------------ | -------------------------------------- | --------- |
+| MIT          | runtime/libc/src/*.{c,h}               | musl-libc |
+| BSD 4-Clause | runtime/libc/include/posix/sys/ioctl.h | BSD       |
+| BSD 4-Clause | runtime/libc/include/posix/sys/cdefs.h | BSD       |
 
 (see LICENSE file in that directory)
 
@@ -66,9 +70,16 @@ The following files were generated from the WG14 N1570 document:
 
 In the test/ directory:
 
-| License      | Files                        | From             |
-| ------------ | ---------------------------- | ---------------- |
-| BSD 3-Clause | tests/freebsd/{cat.c,echo.c} | FreeBSD          |
-| GPL          | tests/gcc-torture/*.{c,h}    | GCC torture test |
-| BSD 3-Clause | tests/tcc/*                  | TinyCC           |
-| Apache 2.0   | tests/hacl-star/*            | hacl-star        |
+| License      | Files                                           | From                                 |
+| ------------ | ----------------------------------------------- | ------------------------------------ |
+| BSD 3-Clause | tests/freebsd/{cat.c,echo.c}                    | FreeBSD                              |
+| GPL          | tests/gcc-torture/*.{c,h}                       | GCC torture tests                    |
+| BSD 4-Clause | tests/gcc-torture/breakdown/success/pr20527-1.c | Bzip2 (as part of GCC torture tests) |
+| BSD 4-Clause | tests/gcc-torture/execute/pr20527-1.c           | Bzip2 (as part of GCC torture tests) |
+| BSD 3-Clause | tests/tcc/*                                     | TinyCC                               |
+| Apache 2.0   | tests/hacl-star/*                               | hacl-star                            |
+| BSD 2-Clause | tests/csmith/runtime/csmith.h                   | Csmith                               |
+| BSD 2-Clause | tests/csmith/runtime/csmith_minimal.h           | Csmith                               |
+| BSD 2-Clause | tests/csmith/runtime/custom_stdint_x86.h        | Csmith                               |
+| LGPL         | tests/csmith/runtime/custom_limits.h            | Csmith                               |
+| BSD 2-Clause | tests/csmith/runtime/safe_math.h                | Csmith                               |
