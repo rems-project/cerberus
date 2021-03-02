@@ -14,7 +14,7 @@ let name (s : t) : string option = S.symbol_name s
 let named (s : t) : bool = Option.is_some (S.symbol_name s)
 
 
-let pp_string = CF.Pp_symbol.to_string_pretty ~compact:true
+let pp_string = CF.Pp_symbol.to_string_pretty
 let pp sym = Pp.string (pp_string sym)
 
 let num = S.symbol_num

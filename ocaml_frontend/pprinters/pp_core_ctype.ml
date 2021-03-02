@@ -12,8 +12,8 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 
 
 
-let pp_symbol ?(compact = false) a = 
-  !^ (Pp_symbol.to_string_pretty ~compact:compact a)
+let pp_symbol a = 
+  !^ (Pp_symbol.to_string_pretty a)
 
 let pp_integer_base_ctype ibty =
   !^ (match ibty with
@@ -39,7 +39,7 @@ let pp_integer_ctype ?(compact = false) ity =
         !^ "u" ^^ pp_integer_base_ctype ibty
     | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
     | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
-    | Enum sym         -> !^ "enum" ^^^ pp_symbol ~compact:compact sym
+    | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
     | Size_t           -> !^ "size_t"
     | Wchar_t          -> !^ "wchar_t"
     | Wint_t           -> !^ "wint_t"
@@ -60,7 +60,7 @@ let pp_basic_ctype bty =
     | Integer ity -> pp_integer_ctype ity
     | Floating fty -> pp_floating_ctype fty
 
-let rec pp_ctype ?(compact = false) (Ctype (_, ty)) =
+let rec pp_ctype (Ctype (_, ty)) =
   match ty with
 (*   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
 
@@ -80,9 +80,9 @@ let rec pp_ctype ?(compact = false) (Ctype (_, ty)) =
   | Atomic atom_ty ->
       !^ "_Atomic" ^^^ P.parens (pp_ctype atom_ty)
   | Struct sym ->
-      !^ "struct" ^^^ pp_symbol ~compact:compact sym (*!^(Pp_symbol.to_string sym)*)
+      !^ "struct" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
   | Union sym ->
-      !^ "union" ^^^ pp_symbol ~compact:compact sym (*!^(Pp_symbol.to_string sym)*)
+      !^ "union" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
 
 
 (*
