@@ -23,7 +23,6 @@ open LogicalConstraints
 open CF.Mucore
 open Pp
 open BT
-module Mapping = Parse_ast.Mapping
 
 
 

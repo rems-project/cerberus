@@ -9,6 +9,7 @@ module LC = LogicalConstraints
 module PIT = Parse_ast.IndexTerms
 module TE = TypeErrors
 
+open Mapping
 open Parse_ast
 
 (* probably should record better source location information *)

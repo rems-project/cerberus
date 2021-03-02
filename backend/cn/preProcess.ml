@@ -519,7 +519,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
       let* labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
       let mapping = match Pmap.lookup fsym funinfo_extra with
         | Some extra -> extra.init_mapping
-        | None -> Parse_ast.Mapping.empty
+        | None -> Mapping.empty
       in
       return (M_Proc (loc,bt,args,expr,labels, mapping))
    | M_ProcDecl (loc,cbt,args) ->

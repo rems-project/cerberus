@@ -74,7 +74,7 @@ let process_functions genv fns =
            | Some t -> return t
            | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
          in
-         C.check_function loc Parse_ast.Mapping.empty fsym args rbt body ftyp
+         C.check_function loc Mapping.empty fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels, mapping) ->
          let* (loc', ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t

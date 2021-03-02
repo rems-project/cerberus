@@ -146,7 +146,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let naming_of_mapping mapping = 
     List.map (fun i ->
-        Parse_ast.Mapping.(i.sym, i.path)
+        Mapping.(i.sym, i.path)
       ) mapping
 
 
