@@ -13,12 +13,12 @@ module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
 module IT = IndexTerms
+module BT = BaseTypes
 open CF.Mucore
 (* open TypeErrors *)
 open Pp
 open Debug_ocaml
 open ListM
-open Parse_ast
 open Parse
 
 type funinfos = (FT.t, Mapping.t) mu_funinfos
