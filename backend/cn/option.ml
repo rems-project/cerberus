@@ -1,5 +1,3 @@
-(* include Stdlib.Option *)
-
 type 'a m = 'a option
 
 let map f = function
@@ -13,6 +11,9 @@ let is_some = function
 let is_none = function
   | None -> true
   | Some _ -> false
+
+let get = Stdlib.Option.get
+
 
 let return (a: 'a): 'a m = Some a
 

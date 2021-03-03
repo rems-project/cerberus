@@ -464,16 +464,21 @@ module Make (G : sig val global : Global.t end) = struct
           infer_resources local unis ftyp_r
         in
 
-        let () = 
-          List.iter (fun (s, ls) ->
-              let Uni.{resolved} = SymMap.find s unis in
-              match resolved with
-              | None -> 
-                 Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
-              | Some sym ->
-                 if not (LS.equal (get_l sym local) ls) then
-                   Debug_ocaml.error "type-incorrectly instantiated logical variable"
-            ) lspec
+        let* () = 
+          let rec check_logical_variables = function
+            | [] -> return ()
+            | (s, expect) :: lspec ->
+               let Uni.{resolved} = SymMap.find s unis in
+               match resolved with
+               | Some sym ->
+                  let has = get_l sym local in
+                  if LS.equal has expect 
+                  then check_logical_variables lspec
+                  else fail loc (Mismatch { has; expect })
+               | None -> 
+                  Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+          in
+          check_logical_variables lspec
         in
 
         let* rt = 
@@ -843,10 +848,7 @@ module Make (G : sig val global : Global.t end) = struct
             let local = use_resource resource_name [loc] local in
             return (Predicate { p with oargs = p'.oargs }, local)
          | _ ->         
-            let def = match Global.get_predicate_def G.global p.name with
-              | Some def -> def
-              | None -> Debug_ocaml.error "missing predicate definition"
-            in
+            let def = Option.get (Global.get_predicate_def G.global p.name) in
             let else_prompt = 
               lazy (
                   let (resource, state) = Explain.resource names original_local request in
@@ -947,10 +949,7 @@ module Make (G : sig val global : Global.t end) = struct
           ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
               match resource with
               | RE.Predicate p ->
-                 let def = match Global.get_predicate_def G.global p.name with
-                   | Some def -> def
-                   | None -> Debug_ocaml.error "missing predicate definition"
-                 in
+                 let def = Option.get (Global.get_predicate_def G.global p.name) in
                  let* possible_unpackings = 
                    ListM.filter_mapM (fun clause ->
                        let open Prompt in
@@ -2229,13 +2228,11 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* TODO: 
-     - make spine take original_local argument
      - check resource definition well-formedness
      - check globals with expressions
      - give types for standard library functions
      - fix Ecase "LC (Bool true)"
    *)
-
 
 end
  
