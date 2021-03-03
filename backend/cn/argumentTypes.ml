@@ -83,10 +83,10 @@ module Make (I: I_Sig) = struct
        else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name; after=newname} t in
-         let* t'' = subst_it substitution t' in
+         let@ t'' = subst_it substitution t' in
          return (Computational ((newname,bt),t''))
        else
-         let* t = subst_it substitution t in
+         let@ t = subst_it substitution t in
          return (Computational ((name,bt),t))
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
@@ -94,21 +94,21 @@ module Make (I: I_Sig) = struct
        else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name; after=newname} t in
-         let* t'' = subst_it substitution t' in
+         let@ t'' = subst_it substitution t' in
          return (Logical ((newname,ls),t''))
        else
-         let* t' = subst_it substitution t in
+         let@ t' = subst_it substitution t in
          return (Logical ((name,ls),t'))
     | Resource (re,t) -> 
-       let* re = Resources.subst_it substitution re in
-       let* t = subst_it substitution t in
+       let@ re = Resources.subst_it substitution re in
+       let@ t = subst_it substitution t in
        return (Resource (re,t))
     | Constraint (lc,t) -> 
        let lc = LC.subst_it substitution lc in
-       let* t = subst_it substitution t in
+       let@ t = subst_it substitution t in
        return (Constraint (lc,t))
     | I i -> 
-       let* i = I.subst_it substitution i in
+       let@ i = I.subst_it substitution i in
        return (I i)
 
   let rec free_vars = function

@@ -46,7 +46,7 @@ let rec to_ctype (Sctype (annots, ct_)) =
 
 let rec of_ctype (Ctype.Ctype (annots,ct_)) =
   let open Option in
-  let* ct_ = match ct_ with
+  let@ ct_ = match ct_ with
   | Ctype.Void -> 
      return Void
   | Ctype.Basic (Integer it) -> 
@@ -56,16 +56,16 @@ let rec of_ctype (Ctype.Ctype (annots,ct_)) =
   | Ctype.Array _ -> 
      fail
   | Ctype.Function (has_proto, (ret_q,ret_ct), args, variadic) ->
-     let* args = 
+     let@ args = 
        ListM.mapM (fun (arg_q, arg_ct, is_reg) -> 
-           let* arg_ct = of_ctype arg_ct in
+           let@ arg_ct = of_ctype arg_ct in
            return (arg_q, arg_ct, is_reg)
          ) args
      in
-     let* ret_ct = of_ctype ret_ct in
+     let@ ret_ct = of_ctype ret_ct in
      return (Function (has_proto, (ret_q, ret_ct), args, variadic))
   | Ctype.Pointer (qualifiers,ctype) -> 
-     let* t = of_ctype ctype in
+     let@ t = of_ctype ctype in
      return (Pointer (qualifiers, t))
   | Ctype.Atomic _ ->
      None

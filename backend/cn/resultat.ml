@@ -18,18 +18,11 @@ let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t =
   | Ok a -> f a
   | Error e -> Error e
 
-let (let*) = bind
+let (let@) = bind
 
 
 
 type ('a,'e) m = ('a, 'e error) Result.t
-
-
-(* let lift_error (f : 'e1 -> 'e2) (m : ('a,'e1) m) : ('a,'e2) m =
- *   match m with
- *   | Ok a -> Ok a
- *   | Error (loc, stacktrace, e1) -> 
- *      Error (loc, stacktrace, f e1) *)
 
 
 let msum (m1 : ('a,'e) t) (m2 : (('a,'e) t) Lazy.t) : ('a,'e) t = 
@@ -38,16 +31,10 @@ let msum (m1 : ('a,'e) t) (m2 : (('a,'e) t) Lazy.t) : ('a,'e) t =
   | Error _ -> Lazy.force m2
 
 
-
-
-
-
-
 let assoc_err loc equality entry list err =
   match List.assoc_opt equality entry list with
   | Some result -> return result
   | None -> fail loc err
-
 
 
 
@@ -59,8 +46,8 @@ module ListM = struct
     let rec aux = function
       | [] -> return []
       | x :: xs -> 
-         let* y = f x in
-         let* ys = aux xs in
+         let@ y = f x in
+         let@ ys = aux xs in
          return (y :: ys)
     in
     aux l
@@ -72,32 +59,32 @@ module ListM = struct
       match l with
       | [] -> return []
       | x :: xs -> 
-         let* y = f i x in
-         let* ys = aux (i + 1) xs in
+         let@ y = f i x in
+         let@ ys = aux (i + 1) xs in
          return (y :: ys)
     in
     aux 0 l
 
   let iterM (f : ('a -> (unit,'e) result)) (l : 'a list) : (unit, 'e) result = 
-    let* _ = mapM f l in 
+    let@ _ = mapM f l in 
     return ()
 
   let concat_mapM f l = 
-    let* xs = mapM f l in
+    let@ xs = mapM f l in
     return (concat xs)
 
   let filter_mapM f l = 
-    let* xs = mapM f l in
+    let@ xs = mapM f l in
     return (filter_map (fun x -> x) xs)
 
 
 
   let fold_leftM (f : 'a -> 'b -> ('c,'e) result) (a : 'a) (bs : 'b list) =
-    Stdlib.List.fold_left (fun aM b -> let* a = aM in f a b) (return a) bs
+    Stdlib.List.fold_left (fun aM b -> let@ a = aM in f a b) (return a) bs
 
   (* maybe from Exception.lem *)
   let fold_rightM (f : 'b -> 'a -> ('c,'e) result) (bs : 'b list) (a : 'a) =
-    Stdlib.List.fold_right (fun b aM -> let* a = aM in f b a) bs (return a)
+    Stdlib.List.fold_right (fun b aM -> let@ a = aM in f b a) bs (return a)
 
 end
 
@@ -109,10 +96,10 @@ module PmapM = struct
   let foldM 
         (f : 'k -> 'x -> 'y -> ('y,'e) t)
         (map : ('k,'x) Pmap.map) (init: 'y) : ('y,'e) t =
-    Pmap.fold (fun k v aM -> let* a = aM in f k v a) map (return init)
+    Pmap.fold (fun k v aM -> let@ a = aM in f k v a) map (return init)
 
   let iterM f m = 
-    Pmap.fold (fun k v m -> let* () = m in f k v) 
+    Pmap.fold (fun k v m -> let@ () = m in f k v) 
       m (return ())
 
   let mapM 
@@ -122,7 +109,7 @@ module PmapM = struct
       : (('k,'w) Pmap.map, 'e) t
     = 
     foldM (fun k v m -> 
-        let* v' = f k v in 
+        let@ v' = f k v in 
         return (Pmap.add k v' m)
       ) m (Pmap.empty cmp)
 

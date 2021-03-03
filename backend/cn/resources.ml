@@ -113,16 +113,16 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
      return (Region {pointer; size})
   | Points {pointer; pointee; size} -> 
      let pointer = IT.subst_it subst pointer in
-     let* pointee = subst_sym pointee in
+     let@ pointee = subst_sym pointee in
      return (Points {pointer; pointee; size})
   | Array {pointer; element_size; length; content} ->
      let pointer = IT.subst_it subst pointer in
      let length = IT.subst_it subst length in
-     let* content = subst_sym content in
+     let@ content = subst_sym content in
      return (Array {pointer; element_size; length; content})
   | Predicate {name; iargs; oargs} -> 
      let iargs = List.map (IT.subst_it subst) iargs in
-     let* oargs = Option.ListM.mapM subst_sym oargs in
+     let@ oargs = Option.ListM.mapM subst_sym oargs in
      return (Predicate {name; iargs; oargs})
 
 
@@ -234,7 +234,7 @@ let unify r1 r2 res =
               List.equal IT.equal p.iargs p'.iargs &&
               List.length p.oargs = List.length p'.oargs ->
      List.fold_left (fun ores (sym1,sym2) ->
-         let* res = ores in
+         let@ res = ores in
          Uni.unify_sym sym1 sym2 res
        ) (Some res) (List.combine p.oargs p'.oargs)
   | _ -> 

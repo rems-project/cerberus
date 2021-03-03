@@ -42,7 +42,7 @@ let value_err (err : string) (oa : 'a option) =
   | Some a -> a
   | None -> Debug_ocaml.error err
 
-let (let*) = bind
+let (let@) = bind
 
 let pp ppf oa =
   let open Pp in
@@ -70,8 +70,8 @@ module ListM = struct
     match xs with
     | [] -> return []
     | x :: xs ->
-       let* y = f x in
-       let* ys = mapM f xs in
+       let@ y = f x in
+       let@ ys = mapM f xs in
        return (y :: ys)
 
 end

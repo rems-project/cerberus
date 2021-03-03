@@ -322,7 +322,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let o_evaluate o_model expr bt = 
     let open Option in
-    let* model = o_model in
+    let@ model = o_model in
     match Z3.Model.evaluate model (SolverConstraints.of_index_term G.global expr) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 

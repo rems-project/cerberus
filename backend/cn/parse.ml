@@ -34,7 +34,7 @@ let parse_condition default_label (loc, string) =
     | Some filename -> lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname= filename }
     | None -> () 
   in
-  let* parsed_spec =
+  let@ parsed_spec =
     try return (Assertion_parser.start Assertion_lexer.main lexbuf) with
     | Assertion_lexer.Error ->
        let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
@@ -76,7 +76,7 @@ let make_accessed globals (loc, name) =
        | None -> return ({ garg with accessed = Some loc } :: gargs)
        end
     | garg :: gargs -> 
-       let* gargs = aux gargs in
+       let@ gargs = aux gargs in
        return (garg :: gargs)
   in
   aux globals
@@ -101,21 +101,21 @@ let parse_function
         {name = give_name asym; asym; lsym; typ; accessed = None}
       ) globals 
   in
-  let* (globals, pre, post) = 
+  let@ (globals, pre, post) = 
     ListM.fold_leftM (fun (globals,pre,post) attr ->
         match snd attr.keyword with
         | "accesses" -> 
-           let* globals = 
+           let@ globals = 
              ListM.fold_leftM (fun globals arg ->
                  make_accessed globals arg
                ) globals attr.arguments
            in
            return (globals, pre, post)
         | "requires" -> 
-           let* new_pre = ListM.mapM (parse_condition "start") attr.arguments in
+           let@ new_pre = ListM.mapM (parse_condition "start") attr.arguments in
            return (globals, pre @ new_pre, post)
         | "ensures" -> 
-           let* new_post = ListM.mapM (parse_condition "end") attr.arguments in
+           let@ new_post = ListM.mapM (parse_condition "end") attr.arguments in
            return (globals, pre, post @ new_post)
         | "inv" ->
            fail (fst attr.keyword) (Generic !^"'inv' is for loop specifications")
@@ -153,7 +153,7 @@ let parse_label
         {name = give_name asym; asym; typ}
       ) arguments 
   in
-  let* inv = 
+  let@ inv = 
     ListM.fold_leftM (fun inv attr ->
         match snd attr.keyword with
         | "accesses" -> 
@@ -163,7 +163,7 @@ let parse_label
         | "ensures" -> 
            fail (fst attr.keyword) (Generic !^"'ensures' is for function specifications")
         | "inv" ->
-           let* new_inv = ListM.mapM (parse_condition lname) attr.arguments in
+           let@ new_inv = ListM.mapM (parse_condition lname) attr.arguments in
            return (inv @ new_inv)
         | other ->
            fail (fst attr.keyword) (Generic !^("unknown keyword '"^other^"'"))

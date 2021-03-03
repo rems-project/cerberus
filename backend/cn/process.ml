@@ -37,7 +37,7 @@ let record_funinfo global funinfo =
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
         let names =Explain.naming_of_mapping mapping in
-        let* () = WT.WFT.welltyped loc names WT.L.empty ftyp in
+        let@ () = WT.WFT.welltyped loc names WT.L.empty ftyp in
         let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
         return {global with fun_decls}
     ) funinfo global
@@ -70,13 +70,13 @@ let process_functions genv fns =
   PmapM.iterM (fun fsym fn -> 
       match fn with
       | M_Fun (rbt, args, body) ->
-         let* (loc, ftyp) = match Global.get_fun_decl genv fsym with
+         let@ (loc, ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t
            | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
          in
          C.check_function loc Mapping.empty fsym args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels, mapping) ->
-         let* (loc', ftyp) = match Global.get_fun_decl genv fsym with
+         let@ (loc', ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t
            | None -> fail loc (TypeErrors.Missing_function fsym)
          in
@@ -92,14 +92,14 @@ let process_functions genv fns =
 
 
 let process mu_file =
-  let* mu_file = PreProcess.retype_file mu_file in
+  let@ mu_file = PreProcess.retype_file mu_file in
   let solver_context = SolverInitialContext.context in
   let global = Global.empty solver_context in
   let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
   let global = { global with stdlib_funs } in
   let global = record_impl global mu_file.mu_impl in
-  let* global = record_tagDefs global mu_file.mu_tagDefs in
-  let* global = 
+  let@ global = record_tagDefs global mu_file.mu_tagDefs in
+  let@ global = 
     let open Global in
     let open PreProcess in
     ListM.fold_leftM (fun global (sym, def) ->
@@ -107,7 +107,7 @@ let process mu_file =
         | M_GlobalDef (lsym, (_, cti), e) ->
            (* let module C1 = Check.Make(struct let global = global end) in
             * let module C2 = C1.Checker(struct let names = Mapping.empty end) in
-            * let* local_or_false = 
+            * let@ local_or_false = 
             *   C2.check_expr_pop ~print:true C1.L.empty (C1.L.empty, SymMap.empty) 
             *     e (Check.Fallible.Normal rt)
             * in            *)
@@ -126,9 +126,9 @@ let process mu_file =
            return {global with logical; computational; constraints}
       ) global mu_file.mu_globs
   in
-  let* global = record_funinfo global mu_file.mu_funinfo in
-  let* () = print_initial_environment global in
-  let* result = process_functions global mu_file.mu_funs in
+  let@ global = record_funinfo global mu_file.mu_funinfo in
+  let@ () = print_initial_environment global in
+  let@ result = process_functions global mu_file.mu_funs in
 
   return result
 
