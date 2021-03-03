@@ -335,7 +335,7 @@ module Make (G : sig val global : Global.t end) = struct
         let array_op = function
           | ConstArray (it, _) ->
              let* (Base bt, it) = infer loc it in
-             let mbt = BT.Map (Integer, bt) in
+             let mbt = BT.Map bt in
              return (Base (mbt), ConstArray (it, mbt))
           | ArrayGet (it,it') ->
              let* (bt, it) = infer_integer_map_type loc it in
@@ -345,22 +345,22 @@ module Make (G : sig val global : Global.t end) = struct
              let* (bt, it) = infer_integer_map_type loc it in
              let* it' = check_aux loc (Base Integer) it' in
              let* it'' = check_aux loc (Base bt) it'' in
-             return (Base (Map (Integer, bt)), ArraySet (it, it', it''))
+             return (Base (Map bt), ArraySet (it, it', it''))
           | ArrayEqualOnRange (it,it',it'',it''') ->
              let* (bt, it) = infer_integer_map_type loc it in
-             let* it' = check_aux loc (Base (Map (Integer, bt))) it' in
+             let* it' = check_aux loc (Base (Map bt)) it' in
              let* it'' = check_aux loc (Base Integer) it'' in
              let* it''' = check_aux loc (Base Integer) it''' in
              return (Base Bool, ArrayEqualOnRange (it, it', it'', it'''))
           | ArraySelectAfter ((it,it'), it'') ->
              let* (bt, it) = infer_integer_map_type loc it in
              let* it' = check_aux loc (Base Integer) it' in
-             let* it'' = check_aux loc (Base (Map (Integer, bt))) it'' in
-             return (Base (Map (Integer, bt)), ArraySelectAfter ((it, it'), it''))
+             let* it'' = check_aux loc (Base (Map bt)) it'' in
+             return (Base (Map bt), ArraySelectAfter ((it, it'), it''))
           | ArrayIndexShiftRight (it, it') ->
              let* (bt, it) = infer_integer_map_type loc it in
              let* it' = check_aux loc (Base Integer) it' in
-             return (Base (Map (Integer, bt)), ArrayIndexShiftRight (it, it'))
+             return (Base (Map bt), ArrayIndexShiftRight (it, it'))
         in
 
         fun loc it ->
@@ -447,7 +447,7 @@ module Make (G : sig val global : Global.t end) = struct
         fun loc it ->
         let* (ls, it) = infer loc it in
         let* bt = match ls with
-          | Base (Map (Integer, bt)) -> return bt
+          | Base (Map bt) -> return bt
           | _ -> 
              let (context, it) = Explain.index_terms names local (context, it) in
              let err = 
@@ -494,7 +494,7 @@ module Make (G : sig val global : Global.t end) = struct
          let* () = check_bound loc names local KLogical a.content in
          let content_t = L.get_l a.content local in
          begin match content_t with
-         | Base (Map (Integer, _)) -> return ()
+         | Base (Map _) -> return ()
          | _ ->
             let err = 
               let open Pp in

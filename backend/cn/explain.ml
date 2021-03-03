@@ -13,7 +13,7 @@ open Pp
 module Make (G : sig val global : Global.t end) = struct 
 
   module L = Local.Make(G)
-  module S = Solver.Make(G)
+  module S = SolverNew.Make(G)
 
 
   module VEClass = struct
@@ -43,7 +43,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let should_be_in_veclass local veclass (it, bt) = 
       if not (LS.equal veclass.sort (Base bt)) then false 
-      else S.equal local (IT.sym_ (bt,veclass.repr)) it
+      else S.holds local (IT.eq_ (IT.sym_ (bt,veclass.repr), it))
 
     let classify local veclasses (l, (bt : BT.t)) : veclass list =
       let rec aux = function
@@ -79,7 +79,6 @@ module Make (G : sig val global : Global.t end) = struct
       let bool_counter = ref 0 in
       let integer_counter = ref 0 in
       let loc_counter = ref 0 in
-      let array_counter = ref 0 in
       let list_counter = ref 0 in
       let tuple_counter = ref 0 in
       let struct_counter = ref 0 in
@@ -92,7 +91,6 @@ module Make (G : sig val global : Global.t end) = struct
         | Bool -> ("b", faa bool_counter)
         | Integer -> ("i", faa integer_counter)
         | Loc -> ("l", faa loc_counter)
-        | Array -> ("a", faa array_counter)
         | List _ -> ("l", faa list_counter)
         | Tuple _ ->  ("t", faa tuple_counter)
         | Struct _ -> ("s", faa struct_counter)
@@ -325,7 +323,7 @@ module Make (G : sig val global : Global.t end) = struct
   let o_evaluate o_model expr bt = 
     let open Option in
     let* model = o_model in
-    match Z3.Model.evaluate model (SolverConstraints.of_index_term G.global expr) true with
+    match Z3.Model.evaluate model (SolverConstraintsNew.of_index_term G.global expr) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 
        match bt with

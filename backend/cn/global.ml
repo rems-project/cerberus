@@ -89,7 +89,7 @@ let zero_region =
   let length_s = Sym.fresh () in
   let length_t = sym_ (Integer, length_s) in
   let content_s = Sym.fresh () in
-  let content_t = sym_ (Map (Integer, Integer), content_s) in
+  let content_t = sym_ (Map Integer, content_s) in
   let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
   let oargs = [] in
   let pred = 
@@ -116,7 +116,7 @@ let zero_region =
       )
   in
   let pack_functions =
-    [LFT.Logical ((content_s, Base (Map (Integer, Integer))),
+    [LFT.Logical ((content_s, Base (Map Integer)),
      LFT.Resource (array, 
      LFT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
      LFT.Constraint (LC equality_constr,
@@ -127,7 +127,7 @@ let zero_region =
   let unpack_functions =
     [LFT.Resource (pred,
      LFT.I (
-     LRT.Logical ((content_s, Base (Map (Integer, Integer))),
+     LRT.Logical ((content_s, Base (Map Integer)),
      LRT.Resource (array,
      LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
      LRT.Constraint (LC equality_constr,

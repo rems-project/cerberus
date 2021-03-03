@@ -353,7 +353,7 @@ module Make (G : sig val global : Global.t end) = struct
       ) local ls
 
   let add_uc (LC.LC lc) local = 
-    let sc = SolverConstraints.of_index_term G.global lc in
+    let sc = SolverConstraintsNew.of_index_term G.global lc in
     add (Sym.fresh (), Constraint (LC lc, sc)) local
 
   let add_ucs lcs local = 

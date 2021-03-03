@@ -93,7 +93,7 @@ let process_functions genv fns =
 
 let process mu_file =
   let* mu_file = PreProcess.retype_file mu_file in
-  let solver_context = SolverInitialContext.initial_context in
+  let solver_context = SolverInitialContext.context in
   let global = Global.empty solver_context in
   let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
   let global = { global with stdlib_funs } in
@@ -114,14 +114,14 @@ let process mu_file =
            let logical = (lsym, LS.Base Loc) :: global.logical in
            let computational = (sym, (lsym, BT.Loc)) :: global.computational in
            let it = IT.good_pointer lsym cti.ct in
-           let sc = SolverConstraints.of_index_term global it in
+           let sc = SolverConstraintsNew.of_index_term global it in
            let constraints = (LC.LC it,sc) :: global.constraints in
            return {global with logical; computational; constraints}
         | M_GlobalDecl (lsym, (_, cti)) ->
            let logical = (lsym, LS.Base Loc) :: global.logical in
            let computational = (sym, (lsym, BT.Loc)) :: global.computational in
            let it = IT.good_pointer lsym cti.ct in
-           let sc = SolverConstraints.of_index_term global it in
+           let sc = SolverConstraintsNew.of_index_term global it in
            let constraints = (LC.LC it,sc) :: global.constraints in
            return {global with logical; computational; constraints}
       ) global mu_file.mu_globs

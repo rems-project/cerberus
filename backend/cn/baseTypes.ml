@@ -9,12 +9,11 @@ type t =
   | Bool
   | Integer
   | Loc
-  | Array
   | List of t
   | Tuple of t list
   | Struct of tag
   | Set of t
-  | Map of t * t
+  | Map of t
 
 let is_struct = function
   | Struct tag -> Some tag
@@ -26,18 +25,16 @@ let rec equal t t' =
   | Bool, Bool -> true
   | Integer, Integer -> true
   | Loc, Loc -> true
-  | Array, Array -> true
   | List t, List t' -> equal t t'
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
   | Struct t, Struct t' -> Sym.equal t t'
   | Set t, Set t' -> equal t t'
-  | Map (t1, t2), Map (t1', t2') -> equal t1 t1' && equal t2 t2'
+  | Map t, Map t' -> equal t t'
 
   | Unit, _
   | Bool, _
   | Integer, _
   | Loc, _
-  | Array, _
   | List _, _
   | Tuple _, _
   | Struct _, _
@@ -60,9 +57,6 @@ let compare bt bt' =
   | Loc, Loc -> 0
   | Loc, _ -> -1
 
-  | Array, Array -> 0
-  | Array, _ -> -1
-
   | List bt, List bt' -> compare bt bt'
   | List _, _ -> -1
 
@@ -76,9 +70,7 @@ let compare bt bt' =
   | Set t, Set t' -> compare t t'
   | Set _, _ -> -1
 
-  | Map (t1,t2), Map (t1',t2') -> 
-     let c = compare t1 t1' in
-     if c = 0 then compare t2 t2' else c
+  | Map t, Map t' -> compare t t'
   | Map _, _ -> -1
 
 
@@ -91,12 +83,11 @@ let pp bt =
     | Bool -> !^"bool"
     | Integer -> !^"integer"
     | Loc -> !^"pointer"
-    | Array -> !^ "array"
     | List bt -> mparens ((!^ "list") ^^^ aux true bt)
     | Tuple nbts -> parens (flow_map (comma) (aux false) nbts)
     | Struct sym -> mparens (!^"struct" ^^^ Sym.pp sym)
     | Set t -> mparens (!^"set" ^^^ parens (aux false t))
-    | Map (t1,t2) -> mparens (!^"map" ^^ langle ^^ aux false t1 ^^ comma ^^ aux false t2 ^^ rangle)
+    | Map t -> mparens (!^"map" ^^ langle ^^ aux false t ^^ rangle)
   in
   aux false bt
 

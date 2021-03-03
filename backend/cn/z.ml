@@ -14,8 +14,9 @@ let sub = sub_big_int
 
 let compare = compare_big_int
 
-let pp n = 
-  PPrint.(!^)(string_of_big_int n)
+let to_string = string_of_big_int
+
+let pp n = PPrint.(!^)(to_string n)
 
 let pp_hex length n = 
   let open Cerb_frontend.String_nat_big_num in
