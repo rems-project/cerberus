@@ -465,28 +465,8 @@ let n_paction loc pa (k : mu_paction -> mu_expr) : (ct, bt, unit) Mucore.mu_expr
 
 
 
-(* this is copied from what is probably originally a lem-inlined
-   function from Mem_common or similar*)
-let show_n_memop = function
-  | Mem_common.PtrEq -> "ptreq"
-  | Mem_common.PtrNe -> "ptrne"
-  | Mem_common.PtrLt -> "ptrlt"
-  | Mem_common.PtrGt -> "ptrgt"
-  | Mem_common.PtrLe -> "ptrle"
-  | Mem_common.PtrGe -> "ptrge"
-  | Mem_common.Ptrdiff -> "ptrdiff"
-  | Mem_common.IntFromPtr -> "intfromptr"
-  | Mem_common.PtrFromInt -> "ptrfromint"
-  | Mem_common.PtrValidForDeref -> "ptrvalidforderef"
-  | Mem_common.PtrWellAligned -> "ptrwellaligned"
-  | Mem_common.Memcpy -> "memcpy"
-  | Mem_common.Memcmp -> "memcmp"
-  | Mem_common.Realloc -> "realloc"
-  | Mem_common.PtrArrayShift -> "ptrarrayshift"
-  | Mem_common.Va_start -> "va_start"
-  | Mem_common.Va_copy -> "va_copy"
-  | Mem_common.Va_arg -> "va_arg"
-  | Mem_common.Va_end -> "va_end"
+let show_n_memop = 
+  Mem_common.instance_Show_Show_Mem_common_memop_dict.show_method
 
 let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr = 
   let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc in
