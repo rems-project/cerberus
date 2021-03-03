@@ -19,9 +19,10 @@ open Pp
 open Debug_ocaml
 open ListM
 open Parse_ast
+open Parse
 
 type funinfos = (FT.t, Mapping.t) mu_funinfos
-type funinfo_extras = (Sym.t, Conversions.funinfo_extra) Pmap.map
+type funinfo_extras = (Sym.t, Ast.function_spec * Mapping.t) Pmap.map
 
 
 
@@ -361,22 +362,17 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
       TypeErrors.type_error) m =
 
 
-  let* ((tagDefs : (CA.ct mu_struct_def * Global.struct_decl, CA.ct mu_union_def) mu_tag_definitions),
-        (structs : Global.struct_decl SymMap.t),
-        (unions : unit SymMap.t))
+  let* (tagDefs : (CA.ct mu_struct_def * Global.struct_decl, CA.ct mu_union_def) mu_tag_definitions)
     =
-    let retype_tagDef tag def (acc, acc_structs, acc_unions) =
+    let retype_tagDef tag def =
       match def with
       | M_UnionDef _ -> 
          Debug_ocaml.error "todo: union types"
       | M_StructDef (fields, f) ->
          let* decl = Conversions.struct_decl Loc.unknown file.mu_tagDefs fields tag in
-         let acc = Pmap.add tag (M_StructDef ((fields, f), decl)) acc in
-         let acc_structs = SymMap.add tag decl acc_structs in
-         return (acc,acc_structs,acc_unions)
+         return (M_StructDef ((fields, f), decl))
     in
-    PmapM.foldM retype_tagDef file.mu_tagDefs 
-      (Pmap.empty Sym.compare,SymMap.empty,SymMap.empty)
+    PmapM.mapM retype_tagDef file.mu_tagDefs Sym.compare
   in
 
 
@@ -447,23 +443,24 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
               return (msym, ct)
             ) args
         in
-        let* (ftyp, extra) = 
-          Conversions.make_fun_spec loc structs glob_typs args ret_ctype attrs in
-        let funinfo_entry = M_funinfo (floc,attrs,ftyp,is_variadic,has_proto, extra.init_mapping) in
+        let* fspec = Parse.parse_function glob_typs args ret_ctype attrs in
+
+        let* (ftyp, init_mapping) = Conversions.make_fun_spec loc fspec in
+        let funinfo_entry = M_funinfo (floc,attrs,ftyp,is_variadic,has_proto, init_mapping) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
-        let funinfo_extra = Pmap.add fsym extra funinfo_extra in
+        let funinfo_extra = Pmap.add fsym (fspec, init_mapping) funinfo_extra in
         return (funinfo, funinfo_extra)
     in
     PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
   in
 
 
-  let retype_label ~fsym lsym def = 
+  let retype_label ~fsym (lsym : Sym.t) def = 
     let ftyp = match Pmap.lookup fsym funinfo with
       | Some (M_funinfo (_,_,ftyp,_,_,_)) -> ftyp 
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
-    let extra = match Pmap.lookup fsym funinfo_extra with
+    let (fspec, init_mapping) = match Pmap.lookup fsym funinfo_extra with
       | Some extra -> extra
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
@@ -475,9 +472,10 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
        let* args = mapM (retype_arg loc) args in
        let* argtyps = 
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
+             let sym = Option.value (Sym.fresh ()) msym in
              let () = if not by_pointer then error "label argument passed as value" in
              let* ct = ct_of_ct loc ct in
-             return (msym,ct) 
+             return (sym,ct) 
            ) argtyps
        in
        begin match CF.Annot.get_label_annot annots with
@@ -488,8 +486,13 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
             | Some attrs -> attrs 
             | None -> CF.Annot.no_attributes
           in
+          let lname = match Sym.name lsym with
+            | Some lname -> lname
+            | None -> Sym.pp_string lsym (* check *)
+          in
+          let* lspec = Parse.parse_label lname argtyps fspec this_attrs in
           let* (lt,mapping) = 
-            Conversions.make_label_spec loc lsym extra argtyps this_attrs
+            Conversions.make_label_spec loc lname init_mapping lspec
           in
           let* e = retype_expr e in
           return (M_Label (loc, lt,args,e,annots,mapping))
@@ -518,7 +521,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
       let* expr = retype_expr expr in
       let* labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
       let mapping = match Pmap.lookup fsym funinfo_extra with
-        | Some extra -> extra.init_mapping
+        | Some (_, init_mapping) -> init_mapping
         | None -> Mapping.empty
       in
       return (M_Proc (loc,bt,args,expr,labels, mapping))

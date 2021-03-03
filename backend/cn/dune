@@ -1,30 +1,18 @@
 (include_subdirs unqualified)
 
 (executable
- (name main)
- (modes exe)
- (public_name cn)
- (package cn)
- (flags (:standard -w -27))
- (libraries cmdliner str unix
-  cerb_frontend cerb_backend mem_concrete util))
+  (name main)
+  (modes exe)
+  (public_name cn)
+  (package cn)
+  (flags (:standard -w -27))
+  (libraries cmdliner str unix
+   cerb_frontend cerb_backend mem_concrete util))
 
-(ocamllex lexer)
+;; from parsers/core/dune
 
-
-; Compile tokens.mly into a definition of the type [token].
-; https://gitlab.inria.fr/fpottier/menhir/-/blob/master/demos/calc-param/dune
+(ocamllex assertion_lexer)
 (menhir
-  (modules tokens)
-  (flags --only-tokens)
-)
+ (flags (--external-tokens Assertion_parser_util --explain --dump))
+ (modules assertion_parser))
 
-; Compile parser.mly into a (parameterized) parser.
-; We need tokens.mly too, because it contains the token definitions.
-; The resulting OCaml files should be named parser.{ml,mli}
-; and should *not* contain a definition of the [token] type.
-(menhir
-  (modules tokens parser)
-  (merge_into parser)
-  (flags --explain --dump --external-tokens Tokens)
-)

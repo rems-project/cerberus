@@ -15,8 +15,10 @@ module LabeledName = struct
     | Some label -> !^v ^^ at ^^ !^label
     | None -> !^v
 
-  let remove_label {v; _} = 
-    {v; label = None}
+  let map_label f {v; label} = 
+    {v; label = f label}
+
+  let remove_label = map_label (fun _ -> None)
 
 end
 
@@ -114,17 +116,21 @@ let rec deref_path = function
   | PredArg _ -> 
      None
 
-let rec remove_labels = function
+let rec map_labels f = function
   | Addr bn -> Addr bn
-  | Var bn -> Var (LabeledName.remove_label bn)
-  | Pointee p -> Pointee (remove_labels p)
-  | PredArg (pr,p,a) -> PredArg (pr, List.map remove_labels_predarg p, a)
+  | Var bn -> Var (LabeledName.map_label f bn)
+  | Pointee p -> Pointee (map_labels f p)
+  | PredArg (pr,p,a) -> PredArg (pr, List.map (map_labels_predarg f) p, a)
 
-and remove_labels_predarg = function
-  | PathArg p -> PathArg (remove_labels p)
-  | Add(p,i) -> Add (remove_labels_predarg p, i)
-  | Sub(p,i) -> Sub (remove_labels_predarg p, i)
-  | AddPointer(p,i) -> AddPointer (remove_labels_predarg p, i)
-  | SubPointer(p,i) -> SubPointer (remove_labels_predarg p, i)
+and map_labels_predarg f pa = 
+  let aux = map_labels_predarg f in
+  match pa with
+  | PathArg p -> PathArg (map_labels f p)
+  | Add(p,p') -> Add (aux p, aux p')
+  | Sub(p,p') -> Sub (aux p, aux p')
+  | AddPointer(p,p') -> AddPointer (aux p, aux p')
+  | SubPointer(p,p') -> SubPointer (aux p, aux p')
   | NumArg z -> NumArg z
 
+let remove_labels = map_labels (fun _ -> None)
+let remove_labels_predarg = map_labels_predarg (fun _ -> None)

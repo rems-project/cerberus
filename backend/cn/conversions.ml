@@ -15,11 +15,10 @@ open IndexTerms
 open BaseTypes
 open LogicalConstraints
 open Resources
-open Parse_ast
 open Sctypes
 open Mapping
 open Path.LabeledName
-open Assertions
+open Ast
 
 
 module StringMap = Map.Make(String)
@@ -217,7 +216,6 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
 
 let make_owned loc label pointer path sct =
   let open Sctypes in
-  let label = Assertions.label_name label in
   match sct with
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
@@ -305,12 +303,6 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
 
 
 
-type funinfo_extra = {
-    init_mapping : mapping;
-    globs : Parse_ast.gargs;
-    fargs : Parse_ast.aargs;
-  }
-
 
 let rec deref_path_pp name deref = 
   match deref with
@@ -333,15 +325,118 @@ let type_of__vars loc var_typs name derefs =
   
 
 
-let apply_ownership_spec label var_typs mapping (loc, (pred,predargs)) =
+
+
+let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, type_error) m = 
+  let open Mapping in
+  (* let () = print stderr (item "o" (Path.pp o)) in
+   * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
+  let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
+  match found with
+  | Some {sym; bt; _} -> 
+     return (bt, sym)
+  | None -> 
+     fail loc (Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
+
+
+(* change this to return unit IT.term, then apply index term type
+   checker *)
+let rec resolve_index_term loc mapping (it: Ast.term) 
+        : (BT.t IT.term, type_error) m =
+  let aux = resolve_index_term loc mapping in
+  match it with
+  | Lit (Integer i) -> 
+     return (IT.num_ i)
+  | Path o -> 
+     let* (bt,s) = resolve_path loc mapping o in
+     return (IT.sym_ (bt, s))
+  | ArithOp (Addition (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.add_ (it, it'))
+  | ArithOp (Subtraction (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.sub_ (it, it'))
+  | ArithOp (Multiplication (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.mul_ (it, it'))
+  | ArithOp (Division (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.div_ (it, it'))
+  | ArithOp (Exponentiation (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.exp_ (it, it'))
+  | CmpOp (Equality (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.eq_ (it, it'))
+  | CmpOp (Inequality (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.ne_ (it, it'))
+  | CmpOp (LessThan (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.lt_ (it, it'))
+  | CmpOp (GreaterThan (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.gt_ (it, it'))
+  | CmpOp (LessOrEqual (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.le_ (it, it'))
+  | CmpOp (GreaterOrEqual (it, it')) -> 
+     let* it = aux it in
+     let* it' = aux it' in
+     return (IT.ge_ (it, it'))
+
+
+let rec resolve_predarg loc mapping = function
+  | Path.NumArg z -> 
+     return (IT.num_ z)
+  | Add (p,a) -> 
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.add_ (it, it'))
+  | Sub (p,a) -> 
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.sub_ (it, it'))
+  | AddPointer (p,a) -> 
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.addPointer_ (it, it'))
+  | SubPointer (p,a) -> 
+     let* it = resolve_predarg loc mapping p in
+     let* it' = resolve_predarg loc mapping a in
+     return (IT.subPointer_ (it, it'))
+  | PathArg p ->
+     let* (ls, s) = resolve_path loc mapping p in
+     return (IT.sym_ (ls, s))
+
+
+
+let resolve_constraint loc mapping lc =
+  let* lc = resolve_index_term loc mapping lc in
+  return (LogicalConstraints.LC lc)
+
+
+
+
+let apply_ownership_spec label var_typs mapping (loc, {predicate;arguments}) =
   let open Path in
-  match pred, predargs with
+  match predicate, arguments with
   | "Owned", [PathArg path] ->
      begin match Path.deref_path path with
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
      | Some (bn, derefs) -> 
         let* sct = type_of__vars loc var_typs bn.v derefs in
-        let* (_, sym) = Assertions.resolve_path loc mapping path in
+        let* (_, sym) = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
            make_owned loc label sym (Path.var bn) sct2
@@ -356,7 +451,7 @@ let apply_ownership_spec label var_typs mapping (loc, (pred,predargs)) =
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
      | Some (bn, derefs) -> 
         let* sct = type_of__vars loc var_typs bn.v derefs in
-        let* (_, sym) = Assertions.resolve_path loc mapping path in
+        let* (_, sym) = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
            make_block loc sym (Path.var bn) sct2
@@ -367,17 +462,17 @@ let apply_ownership_spec label var_typs mapping (loc, (pred,predargs)) =
      fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
 
   | "Region", [pointer_arg; size_arg] ->
-     let* pointer_it = Assertions.resolve_predarg loc mapping pointer_arg in
-     let* size_it = Assertions.resolve_predarg loc mapping size_arg in
+     let* pointer_it = resolve_predarg loc mapping pointer_arg in
+     let* size_it = resolve_predarg loc mapping size_arg in
      make_region loc pointer_it size_it
   | "Region", _ ->
      fail loc (Generic !^"Region predicate takes 2 arguments, a path and a size")
 
   | _, _ ->
      let* iargs_resolved = 
-       ListM.mapM (Assertions.resolve_predarg loc mapping) predargs
+       ListM.mapM (resolve_predarg loc mapping) arguments
      in
-     make_pred loc pred predargs iargs_resolved
+     make_pred loc predicate arguments iargs_resolved
 
 
 let aarg_item l (aarg : aarg) =
@@ -385,7 +480,7 @@ let aarg_item l (aarg : aarg) =
   {path; sym = aarg.asym; bt = BT.Loc}
 
 let varg_item l (varg : varg) =
-  let bn = {v = varg.name; label = Some (Assertions.label_name l)} in
+  let bn = {v = varg.name; label = Some l} in
   let path = Path.var bn in
   {path; sym = varg.vsym; bt = BT.of_sct varg.typ} 
 
@@ -394,70 +489,67 @@ let garg_item l (garg : garg) =
   {path; sym = garg.lsym; bt = BT.of_sct garg.typ} 
 
 
-let make_fun_spec loc struct_decls globals arguments ret_sct attrs 
-    : (FT.t * funinfo_extra, type_error) m = 
+let make_fun_spec loc (fspec : function_spec)
+    : (FT.t * Mapping.t, type_error) m = 
   let open FT in
   let open RT in
-  let* typ = Assertions.parse_function_type attrs globals (ret_sct, arguments) in
-
-  let (FT (FA {globs; fargs}, pre, FRet ret, post)) = typ in
-
   let var_typs = 
-    List.map (fun (garg : garg) -> (garg.name, garg.typ)) globs @
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fargs @
-    [(ret.name, ret.typ)]
+    List.map (fun (garg : garg) -> (garg.name, garg.typ)) fspec.global_arguments @
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fspec.function_arguments @
+    [(fspec.function_return.name, 
+      fspec.function_return.typ)]
   in
 
   let iA, iL, iR, iC = [], [], [], [] in
   let oL, oR, oC = [], [], [] in
   let mapping = [] in
 
-
   (* globs *)
   let* (iL, iR, iC, mapping) = 
     ListM.fold_leftM (fun (iL, iR, iC, mapping) garg ->
-        let item = garg_item Pre garg in
+        let item = garg_item "start" garg in
         let* (l, r, c, mapping') = 
           match garg.accessed with
-          | Some loc -> make_owned loc Pre garg.lsym item.path garg.typ 
+          | Some loc -> make_owned loc "start" garg.lsym item.path garg.typ 
           | None -> return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
-      (iL, iR, iC, mapping) globs
+      (iL, iR, iC, mapping) fspec.global_arguments
   in
 
   (* fargs *)
   let* (iA, iL, iR, iC, mapping) = 
-    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) aarg ->
+    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
         let a = [(aarg.asym, BT.Loc)] in
-        let item = aarg_item Pre aarg in
-        let* (l, r, c, mapping') = make_owned loc Pre aarg.asym item.path aarg.typ in
+        let item = aarg_item "start" aarg in
+        let* (l, r, c, mapping') = make_owned loc "start" aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
         return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
-      (iA, iL, iR, iC, mapping) fargs
+      (iA, iL, iR, iC, mapping) fspec.function_arguments
   in
-
-  let (FPre (pre_resources, pre_constraints)) = pre in
 
   let* (iL, iR, iC, mapping) = 
-    ListM.fold_leftM (fun (iL, iR, iC, mapping) spec ->
-        let* (l, r, c, mapping') = apply_ownership_spec Pre var_typs mapping spec in
-        return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) (loc, spec) ->
+        match spec with
+        | Ast.Resource cond ->
+           let* (l, r, c, mapping') = 
+             apply_ownership_spec "start" var_typs mapping (loc, cond) in
+           return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
+        | Ast.Logical cond ->
+           let* c = resolve_constraint loc mapping cond in
+           return (iL, iR, iC @ [c], mapping)
       )
-      (iL, iR, iC, mapping) pre_resources
-  in
-  let* iC = 
-    let* lcs = Assertions.resolve_constraints mapping pre_constraints in
-    return (lcs @ iC)
+      (iL, iR, iC, mapping) fspec.pre_condition
   in
 
   let init_mapping = mapping in
 
   (* ret *)
   let (oA, oC, mapping) = 
-    let item = varg_item Post ret in
+    let ret = fspec.function_return in
+    let item = varg_item "end" ret in
     let c = [LC (good_value ret.vsym ret.typ)] in
     ((ret.vsym, item.bt), c, item :: mapping)
   in
@@ -465,124 +557,115 @@ let make_fun_spec loc struct_decls globals arguments ret_sct attrs
   (* globs *)
   let* (oL, oR, oC, mapping) = 
     ListM.fold_leftM (fun (oL, oR, oC, mapping) garg ->
-        let item = garg_item Post garg in
+        let item = garg_item "end" garg in
         let* (l, r, c, mapping') = 
           match garg.accessed with
-          | Some loc -> make_owned loc Post garg.lsym item.path garg.typ 
+          | Some loc -> make_owned loc "end" garg.lsym item.path garg.typ 
           | None -> return ([], [], [], [])
         in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
-      (oL, oR, oC, mapping) globs
+      (oL, oR, oC, mapping) fspec.global_arguments
   in
 
   (* fargs *)
   let* (oL, oR, oC, mapping) = 
     ListM.fold_leftM (fun (oL, oR, oC, mapping) aarg ->
-        let item = aarg_item Post aarg in
-        let* (l, r, c, mapping') = make_owned loc Post aarg.asym item.path aarg.typ in
+        let item = aarg_item "end" aarg in
+        let* (l, r, c, mapping') = make_owned loc "end" aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ) ):: c in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
-      (oL, oR, oC, mapping) fargs
+      (oL, oR, oC, mapping) fspec.function_arguments
   in
-
-  let (FPost (post_resources, post_constraints)) = post in
 
   let* (oL, oR, oC, mapping) = 
-    ListM.fold_leftM (fun (oL, oR, oC, mapping) spec ->
-        let* (l, r, c, mapping') = apply_ownership_spec Post var_typs mapping spec in
-        return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
+    ListM.fold_leftM (fun (oL, oR, oC, mapping) (loc, spec) ->
+        match spec with
+        | Ast.Resource cond ->
+           let* (l, r, c, mapping') = 
+             apply_ownership_spec "end" var_typs mapping (loc, cond) in
+           return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
+        | Ast.Logical cond ->
+           let* c = resolve_constraint loc mapping cond in
+           return (oL, oR, oC @ [c], mapping)
       )
-      (oL, oR, oC, mapping) post_resources
-  in
-
-  let* oC = 
-    let* lcs = Assertions.resolve_constraints mapping post_constraints in
-    return (lcs @ oC)
+      (oL, oR, oC, mapping) fspec.post_condition
   in
 
   let lrt = LRT.mLogicals oL (LRT.mResources oR (LRT.mConstraints oC LRT.I)) in
   let rt = RT.mComputational oA lrt in
   let lft = FT.mLogicals iL (FT.mResources iR (FT.mConstraints iC (FT.I rt))) in
   let ft = FT.mComputationals iA lft in
-  return (ft, {init_mapping; globs; fargs})
+  return (ft, init_mapping)
 
 
   
 let make_label_spec
       (loc : Loc.t) 
-      (lsym: Sym.t)
-      (extra: funinfo_extra)
-      (largs : (Sym.t option * Sctypes.t) list) 
-      attrs = 
-
-  let lname = match Sym.name lsym with
-    | Some lname -> lname
-    | None -> Sym.pp_string lsym (* check *)
-  in
-  let largs = List.map (fun (os, t) -> (Option.value (Sym.fresh ()) os, t)) largs in
-  let* ltyp = Assertions.parse_label_type loc lname attrs extra.globs extra.fargs largs in
-
-  let (LT (LA {globs; fargs; largs}, inv)) = ltyp in
-
+      (lname : string)
+      init_mapping
+      (lspec: Ast.label_spec)
+  =
+  (* let largs = List.map (fun (os, t) -> (Option.value (Sym.fresh ()) os, t)) largs in *)
   let var_typs = 
-    List.map (fun (garg : garg) -> (garg.name, garg.typ)) globs @
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fargs @
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) largs
+    List.map (fun (garg : garg) -> (garg.name, garg.typ)) lspec.global_arguments @
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) lspec.function_arguments @
+    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) lspec.label_arguments
   in
 
   let iA, iL, iR, iC = [], [], [], [] in
-  let mapping = extra.init_mapping in
+  let mapping = init_mapping in
 
   (* globs *)
   let* (iL, iR, iC, mapping) = 
     ListM.fold_leftM (fun (iL, iR, iC, mapping) garg ->
-        let item = garg_item (Inv lname) garg in
+        let item = garg_item lname garg in
         let* (l, r, c, mapping') = 
           match garg.accessed with
-          | Some loc -> make_owned loc (Inv lname) garg.lsym item.path garg.typ 
+          | Some loc -> make_owned loc lname garg.lsym item.path garg.typ 
           | None ->  return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
-      (iL, iR, iC, mapping) globs
+      (iL, iR, iC, mapping) lspec.global_arguments
   in
 
   (* fargs *)
   let* (iL, iR, iC, mapping) = 
     ListM.fold_leftM (fun (iL, iR, iC, mapping) aarg ->
-        let item = aarg_item (Inv lname) aarg in
-        let* (l, r, c, mapping') = make_owned loc (Inv lname) aarg.asym item.path aarg.typ in
+        let item = aarg_item lname aarg in
+        let* (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
         return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
-      (iL, iR, iC, mapping) fargs
+      (iL, iR, iC, mapping) lspec.function_arguments
   in
 
   (* largs *)
   let* (iA, iL, iR, iC, mapping) = 
-    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) aarg ->
+    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
         let a = [(aarg.asym, BT.Loc)] in
-        let item = aarg_item (Inv lname) aarg in
-        let* (l, r, c, mapping') = make_owned loc (Inv lname) aarg.asym item.path aarg.typ in
+        let item = aarg_item lname aarg in
+        let* (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
         let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
         return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
-      (iA, iL, iR, iC, mapping) largs
+      (iA, iL, iR, iC, mapping) lspec.label_arguments
   in
 
 
-  let (LInv (pre_resources, pre_constraints)) = inv in
   let* (iL, iR, iC, mapping) = 
-    ListM.fold_leftM (fun (iL, iR, iC, mapping) spec ->
-        let* (l, r, c, mapping') = apply_ownership_spec (Inv lname) var_typs mapping spec in
-        return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+    ListM.fold_leftM (fun (iL, iR, iC, mapping) (loc, spec) ->
+        match spec with
+        | Ast.Resource cond ->
+           let* (l, r, c, mapping') = 
+             apply_ownership_spec lname var_typs mapping (loc, cond) in
+           return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+        | Ast.Logical cond ->
+           let* c = resolve_constraint loc mapping cond in
+           return (iL, iR, iC @ [c], mapping)
       )
-      (iL, iR, iC, mapping) pre_resources
-  in
-  let* iC = 
-    let* lcs = Assertions.resolve_constraints mapping pre_constraints in
-    return (iC @ lcs)
+      (iL, iR, iC, mapping) lspec.invariant
   in
 
   let llt = LT.mLogicals iL (LT.mResources iR (LT.mConstraints iC (LT.I False.False))) in

@@ -106,7 +106,7 @@ let process mu_file =
         match def with
         | M_GlobalDef (lsym, (_, cti), e) ->
            (* let module C1 = Check.Make(struct let global = global end) in
-            * let module C2 = C1.Checker(struct let names = Parse_ast.Mapping.empty end) in
+            * let module C2 = C1.Checker(struct let names = Mapping.empty end) in
             * let* local_or_false = 
             *   C2.check_expr_pop ~print:true C1.L.empty (C1.L.empty, SymMap.empty) 
             *     e (Check.Fallible.Normal rt)
