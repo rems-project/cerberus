@@ -36,8 +36,7 @@ module VariableBinding = struct
 
 
   let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
-    let btyp sym pped = 
-      format [Pp.FG(Default,Bright)] (Sym.pp_string sym) ^^ colon ^^ pped in
+    let btyp sym pped = format [Bold] (Sym.pp_string sym) ^^ colon ^^ pped in
     match binding with
     | Computational (lname,bt) -> 
        btyp sym (BT.pp bt ^^ tilde ^^ Sym.pp lname)
@@ -122,7 +121,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
     | Binding (sym,binding) -> VB.pp ~print_all_names ~print_used (sym,binding)
-    | Marker -> uformat [FG (Blue,Dark)] "\u{25CF}" 1 
+    | Marker -> uformat [Blue] "\u{25CF}" 1 
 
   (* reverses the list order for matching standard mathematical
      presentation *)
@@ -353,7 +352,7 @@ module Make (G : sig val global : Global.t end) = struct
       ) local ls
 
   let add_uc (LC.LC lc) local = 
-    let sc = SolverConstraintsNew.of_index_term G.global lc in
+    let sc = SolverConstraints.of_index_term G.global lc in
     add (Sym.fresh (), Constraint (LC lc, sc)) local
 
   let add_ucs lcs local = 

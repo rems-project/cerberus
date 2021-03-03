@@ -24,65 +24,8 @@ let print channel doc =
 let plain = CF.Pp_utils.to_plain_pretty_string
 let (^^^) = Pp_prelude.(^^^)
 
-(* adapting from colour.ml *)
-(* and https://en.wikipedia.org/wiki/ANSI_escape_code#Colors *)
 
-type colour =
-  | Default
-  | Black
-  | Red
-  | Green
-  | Yellow
-  | Blue
-  | Magenta
-  | Cyan
-  | White
-
-type brightness = 
-  | Bright 
-  | Dark
-
-type format = 
-  | BG of colour * brightness
-  | FG of colour * brightness
-  | Blinking
-  | Underline
-
-let bg_item_code = function
-  | Default -> ""
-  | Black -> "40"
-  | Red -> "41"
-  | Green -> "42"
-  | Yellow -> "43"
-  | Blue -> "44"
-  | Magenta -> "45"
-  | Cyan -> "46"
-  | White -> "47"
-
-let fg_item_code = function
-  | Default -> ""
-  | Black -> "30"
-  | Red -> "31"
-  | Green -> "32"
-  | Yellow -> "33"
-  | Blue -> "34"
-  | Magenta -> "35"
-  | Cyan -> "36"
-  | White -> "37"
-
-
-let format_item_code = function
-  | Blinking -> "5"
-  | Underline -> "4"
-  | BG (colour,Dark) -> bg_item_code colour
-  | BG (colour,Bright) -> bg_item_code colour ^ ";1"
-  | FG (colour,Dark) -> fg_item_code colour
-  | FG (colour,Bright) -> fg_item_code colour ^ ";1"
-
-(* from colour.ml *)
-let format_string format str =
-  let code = String.concat ";" (List.map (fun z -> format_item_code z) format) ^ "m" in
-  "\x1b[" ^ code ^ str ^ "\x1b[0m"
+let format_string format str = Colour.ansi_format format str
 
 let format format string = 
   let n = String.length string in
@@ -166,7 +109,7 @@ let (table2, table3, table4, table5, table6) =
     in
     let headers = 
       List.mapi (fun j h ->
-          pad_ L (IntMap.find j maxes) (String.length h) (format [FG(Default,Bright)] h)
+          pad_ L (IntMap.find j maxes) (String.length h) (format [Bold] h)
         ) headers
     in
     let padded_lines = 
@@ -225,7 +168,7 @@ let typ n typ =
   n ^^^ colon ^^^ typ
 
 let item item content = 
-  format [FG(Default,Bright)] item ^^ colon ^^ space ^^ align content
+  format [Bold] item ^^ colon ^^ space ^^ align content
 
 let c_comment pp = 
   !^"/*" ^^ pp ^^ !^"*/"
@@ -237,18 +180,18 @@ let c_app f args =
 
 let headline a = 
   (if !print_level >= 2 then hardline else empty) ^^
-    format [FG(Magenta,Bright)] ("# " ^ a)
+    format [Bold; Magenta] ("# " ^ a)
 
-let bold a = format [FG (Default,Bright)] a
+let bold a = format [Bold] a
 
-let action a = format [FG (Cyan,Dark)] ("## " ^ a ^ " ")
+let action a = format [Cyan] ("## " ^ a ^ " ")
 
 let debug l pp = 
   if !print_level >= l 
   then print stderr (Lazy.force pp) 
 
 let warn pp = 
-  print stderr (format [FG (Yellow,Bright)] "Warning:" ^^^ pp)
+  print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
 
 
@@ -257,8 +200,8 @@ let warn pp =
 (* stealing some logic from pp_errors *)
 let error (loc : Locations.t) msg extras = 
   let (head, pos) = Locations.head_pos_of_location loc in
-  print stderr (format [FG (Red, Bright)] "error:" ^^^ 
-                format [FG (Default, Bright)] head ^^^ msg);
+  print stderr (format [Bold; Red] "error:" ^^^ 
+                format [Bold] head ^^^ msg);
   if Locations.is_unknown loc then () else print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
 

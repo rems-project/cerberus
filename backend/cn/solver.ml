@@ -9,7 +9,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let holds local (it : IndexTerms.t) = 
     let constraints = 
-      SolverConstraintsNew.of_index_term G.global (not_ it) ::
+      SolverConstraints.of_index_term G.global (not_ it) ::
       L.all_solver_constraints local
     in
     match Z3.Solver.check solver constraints with
