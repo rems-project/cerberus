@@ -19,6 +19,7 @@ let parse_condition default_label (loc, string) =
   let () = 
     let open Location_ocaml in
     Lexing.set_position lexbuf
+      (* revisit *)
       begin match Location_ocaml.to_raw loc with
       | Loc_unknown -> lexbuf.lex_curr_p
       | Loc_other _ -> lexbuf.lex_curr_p
@@ -92,6 +93,8 @@ let parse_function
       (return_type : Sctypes.t)
       (Attrs attributes)
   = 
+  (* TODO: make it so reverse does not need to happen here *)
+  let attributes = List.rev attributes in
   let cn_attributes = cn_attributes attributes in
   let globals = 
     List.map (fun (asym, lsym, typ) ->
@@ -142,6 +145,8 @@ let parse_label
       (function_spec : Ast.function_spec)
       (Attrs attributes)
   = 
+  (* TODO: make it so reverse does not need to happen here *)
+  let attributes = List.rev attributes in
   let cn_attributes = cn_attributes attributes in
   let arguments = 
     List.map (fun (asym, typ) -> 
