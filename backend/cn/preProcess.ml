@@ -445,7 +445,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
         in
         let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
 
-        let@ (ftyp, init_mapping) = Conversions.make_fun_spec loc fspec in
+        let@ (ftyp, init_mapping) = Conversions.make_fun_spec loc fsym fspec in
         let funinfo_entry = M_funinfo (floc,attrs,ftyp,is_variadic,has_proto, init_mapping) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
         let funinfo_extra = Pmap.add fsym (fspec, init_mapping) funinfo_extra in

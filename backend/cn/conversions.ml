@@ -489,7 +489,7 @@ let garg_item l (garg : garg) =
   {path; sym = garg.lsym; bt = BT.of_sct garg.typ} 
 
 
-let make_fun_spec loc (fspec : function_spec)
+let make_fun_spec loc fsym (fspec : function_spec)
     : (FT.t * Mapping.t, type_error) m = 
   let open FT in
   let open RT in
@@ -643,14 +643,20 @@ let make_label_spec
 
   (* largs *)
   let@ (iA, iL, iR, iC, mapping) = 
-    ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
-        let a = [(aarg.asym, BT.Loc)] in
-        let item = aarg_item lname aarg in
-        let@ (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
-        let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
-        return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
-      )
-      (iA, iL, iR, iC, mapping) lspec.label_arguments
+    (* In the label's argument list, the left-most arguments have the
+       inner-most scope. In the mapping, we also want the arguments
+       that are inner-most scoped-wise to be left-most. *)
+    let@ (ia, iL, iR, iC, mapping') = 
+      ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
+          let a = [(aarg.asym, BT.Loc)] in
+          let item = aarg_item lname aarg in
+          let@ (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
+          let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
+          return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
+        )
+        (iA, iL, iR, iC, []) lspec.label_arguments
+    in
+    return (ia, iL, iR, iC, List.rev mapping' @ mapping)
   in
 
 
@@ -660,7 +666,7 @@ let make_label_spec
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
              apply_ownership_spec lname var_typs mapping (loc, cond) in
-           return (iL @ l, iR @ r, iC @ c, mapping @ mapping')
+           return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc mapping cond in
            return (iL, iR, iC @ [c], mapping)
