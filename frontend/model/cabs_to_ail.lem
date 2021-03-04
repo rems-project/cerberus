@@ -3721,6 +3721,7 @@ type stmt_context = <|
 |>
 
 let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
+  let attrs_outer = attrs in
   let self = desugar_statement_aux ctx in
   AnnotatedStatement loc attrs <$>
     match stmt_ with
@@ -3876,7 +3877,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               desugar_init_declarator attrs isAtomic base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             let loop_id = Symbol.fresh_int () in
-            E.record_loop_attribute loop_id attrs >> 
+            E.record_loop_attribute loop_id attrs_outer >> 
             (* for each [init_declarator] *)
             E.foldrM (fun opt (acc1, acc2) ->
               match opt with

@@ -153,7 +153,7 @@ let process core_file =
     core_file >>= fun core_file -> 
   let mu_file = CA_.normalise_file core_file in
   print_log_file "after_anf" (MUCORE mu_file);
-  let mu_file = CF.Mucore_inline_break.ib_file mu_file in
+  let mu_file = CF.Mucore_label_inline.ib_file mu_file in
   print_log_file "after_inlining_break" (MUCORE mu_file);
   Colour.do_colour := true;
   return mu_file
