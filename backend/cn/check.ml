@@ -545,7 +545,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let is_global local it = 
       List.exists (fun (s, LS.Base bt) ->
-        S.holds local (eq_ (it, IT.sym_ (bt, s)))
+          BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
       ) G.global.logical
 
 

@@ -506,10 +506,11 @@ module Make (G : sig val global : Global.t end) = struct
     let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
     (it_pp, it_pp')
 
-  let unsatisfied_constraint names local lc = 
-    let explanation = explanation names local (LC.vars_in lc) in
-    let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
-    (lc_pp, pp_state_with_model local explanation (counter_model local))
+  let unsatisfied_constraint names local (LC.LC lc) = 
+    let model = let _ = S.holds local lc in S.get_model () in
+    let explanation = explanation names local (LC.vars_in (LC lc)) in
+    let lc_pp = LC.pp (LC.subst_vars explanation.substitutions (LC lc)) in
+    (lc_pp, pp_state_with_model local explanation model)
 
   let resource names local re = 
     let explanation = explanation names local (RE.vars_in re) in
