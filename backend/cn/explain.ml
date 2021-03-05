@@ -174,15 +174,15 @@ module Make (G : sig val global : Global.t end) = struct
   let veclasses_partial_order local veclasses =
     List.fold_right (fun resource (graph, rels) ->
         match resource with
-        | RE.Points p ->
+        | RE.Point {pointer; size; content = Value pointee} ->
            let found1 = 
              List.find_opt (fun veclass ->
-                 should_be_in_veclass local veclass (p.pointer, BT.Loc)
+                 should_be_in_veclass local veclass (pointer, BT.Loc)
                ) veclasses
            in
            let found2 = 
              List.find_opt (fun veclass ->
-                 is_in_veclass veclass p.pointee
+                 is_in_veclass veclass pointee
                ) veclasses
            in
            begin match found1, found2 with
@@ -347,22 +347,35 @@ module Make (G : sig val global : Global.t end) = struct
       List.fold_right (fun resource (acc_table, acc_reported) ->
           let (entry, reported) = 
           match resource with
-          | Block b ->
-             let state = match b.block_type with
+          | Point {pointer; size; content = Block block_type} ->
+             let state = match block_type with
                | Nothing -> "block"
                | Uninit -> "uninit"
                | Padding -> "padding"
              in
              let entry =
-               (Some (IT.pp (IT.subst_vars substitutions b.pointer)), 
-                o_evaluate o_model b.pointer BT.Loc,
-                Some (Z.pp b.size), 
+               (Some (IT.pp (IT.subst_vars substitutions pointer)), 
+                o_evaluate o_model pointer BT.Loc,
+                Some (Z.pp size), 
                 Some !^state,
                 None,
                 None
                )
              in
-             (entry, symbol_it b.pointer)
+             (entry, symbol_it pointer)
+          | Point {pointer; size; content = Value pointee} -> 
+             (* take substs into account *)
+             let (Base pointee_bt) = L.get_l pointee local in
+             let entry = 
+               (Some (IT.pp (IT.subst_vars substitutions pointer)), 
+                o_evaluate o_model pointer BT.Loc,
+                Some (Z.pp size),
+                Some !^"owned",
+                Some (Sym.pp (Sym.substs substitutions pointee)),
+                o_evaluate o_model (IT.sym_ (pointee_bt, pointee)) pointee_bt
+               )
+             in
+             (entry, SymSet.union (symbol_it pointer) (SymSet.singleton pointee))
           | Region r ->
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions r.pointer)), 
@@ -374,19 +387,6 @@ module Make (G : sig val global : Global.t end) = struct
                )
              in
              (entry, symbol_it r.pointer)
-          | Points p -> 
-             (* take substs into account *)
-             let (Base pointee_bt) = L.get_l p.pointee local in
-             let entry = 
-               (Some (IT.pp (IT.subst_vars substitutions p.pointer)), 
-                o_evaluate o_model p.pointer BT.Loc,
-                Some (Z.pp p.size),
-                Some !^"owned",
-                Some (Sym.pp (Sym.substs substitutions p.pointee)),
-                o_evaluate o_model (IT.sym_ (pointee_bt, p.pointee)) pointee_bt
-               )
-             in
-             (entry, SymSet.union (symbol_it p.pointer) (SymSet.singleton p.pointee))
           | Array a -> 
              (* take substs into account *)
              let (Base content_t) = L.get_l a.content local in

@@ -387,7 +387,7 @@ let retype_file (file : (CA.ft, CA.lt, CA.gt, CA.ct, CA.bt, CA.ct mu_struct_def,
            let size = Memory.size_of_ctype cti.ct in
            RT.Computational ((pointer, BT.Loc),
            LRT.Logical ((pointee, Base cti.bt),
-           LRT.Resource (Resources.Points {pointer = IT.sym_ (BT.Loc, pointer);pointee; size},
+           LRT.Resource (Resources.Point {pointer = IT.sym_ (BT.Loc, pointer); content = Value pointee; size},
            LRT.I)))
          in
          return (cti, rt)

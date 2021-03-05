@@ -713,32 +713,32 @@ module Make (G : sig val global : Global.t end) = struct
       let situation = ui_info.situation in
       let names = names @ ui_info.extra_names in
       match request with
-      | Block b ->
+      | Point ({pointer; size; content = Block bt} as p) ->
          let@ local = 
-           ownership_request_prompt ui_info local b.pointer (num_ b.size) in
-         return (Block b, local)
-      | Region r ->
-         let@ local = 
-           ownership_request_prompt ui_info local r.pointer r.size in
-         return (Region r, local)
-      | Points p ->
-         let o_resource = resource_for_pointer local p.pointer in
+           ownership_request_prompt ui_info local pointer (num_ size) in
+         return (Point p, local)
+      | Point {pointer; size; content = Value v} ->
+         let o_resource = resource_for_pointer local pointer in
          begin match o_resource with
-         | Some (resource_name, Points p') when Z.equal p.size p'.size ->
+         | Some (resource_name, Point p') when Z.equal size p'.size ->
             let local = use_resource resource_name [loc] local in
-            return (Points {p' with pointer = p.pointer}, local)
+            return (Point {p' with pointer}, local)
          | Some (resource_name, resource) ->
             let ((expect,has), state) = 
               Explain.resources names original_local (request, resource) in
             fail loc (Resource_mismatch {expect; has; state; situation})
          | None -> 
             let (addr, state) = 
-              Explain.missing_ownership names original_local p.pointer in
-            let used = used_resource_for_pointer local p.pointer in
-            if is_global original_local p.pointer 
+              Explain.missing_ownership names original_local pointer in
+            let used = used_resource_for_pointer local pointer in
+            if is_global original_local pointer 
             then fail loc (Missing_global_ownership {addr; used; situation})
             else fail loc (Missing_ownership {addr; state; used; situation})
          end
+      | Region r ->
+         let@ local = 
+           ownership_request_prompt ui_info local r.pointer r.size in
+         return (Region r, local)
       | Array a ->
          let content_ls = match List.assoc_opt Sym.equal a.content lspec with
            | Some ls -> ls
@@ -779,9 +779,9 @@ module Make (G : sig val global : Global.t end) = struct
                         (addPointer_ (a.pointer, mul_ (a'.length, num_ a'.element_size))) 
                     in
                     begin match o_extra_resource with
-                    | Some (extra_resource_name, Points p') 
+                    | Some (extra_resource_name, Point ({content = Value v'; _} as p')) 
                          when Z.equal a.element_size p'.size &&
-                                (LS.equal (L.get_l p'.pointee local) (Base a_array_bt))
+                                (LS.equal (L.get_l v' local) (Base a_array_bt))
                       ->
                        let local = use_resource resource_name [loc] local in
                        let local = use_resource extra_resource_name [loc] local in
@@ -790,7 +790,7 @@ module Make (G : sig val global : Global.t end) = struct
                        let local = add_uc (LC (IT.eq_ (sym_ (Map a_array_bt, new_content), 
                                                       IT.arraySet_ (sym_ (Map a_array_bt, a'.content), 
                                                                     a'.length, 
-                                                                    (sym_ (a_array_bt, p'.pointee)))))) local in
+                                                                    (sym_ (a_array_bt, v')))))) local in
                        let resource = 
                          Array {a' with pointer = a.pointer;
                                         length = a.length;
@@ -812,15 +812,15 @@ module Make (G : sig val global : Global.t end) = struct
                 (* fix this: could be either resource that has unknown length *)
                 let (resource, state) = Explain.resource names original_local (Array a') in
                 fail loc (Unknown_resource_size {resource; state; situation})
-           | Some (resource_name, Points p') when 
-                  LS.equal (get_l p'.pointee local) (Base a_array_bt) &&
+           | Some (resource_name, Point ({content = Value v; _} as p')) when 
+                  LS.equal (get_l v local) (Base a_array_bt) &&
                     Z.equal a.element_size p'.size &&
                       S.holds local (eq_ (a.length, num_ (Z.of_int 1))) ->
               let local = use_resource resource_name [loc] local in
               let new_content = Sym.fresh () in
               let local = add_l new_content (Base (Map a_array_bt)) local in
               let local = add_uc (LC (eq_ (sym_ (Map a_array_bt, new_content), 
-                                           constArray_ (sym_ (a_array_bt, p'.pointee), a_array_bt)))) 
+                                           constArray_ (sym_ (a_array_bt, v), a_array_bt)))) 
                             local in
               let resource = 
                 Array {pointer = a.pointer;
@@ -1541,17 +1541,19 @@ module Make (G : sig val global : Global.t end) = struct
            let@ pointee = match o_resource with
              | Some (_,resource) -> 
                 begin match resource with
-                | Points p when Z.equal size p.size -> 
-                   return p.pointee
-                | Points p -> 
-                   fail loc (Generic !^"resource of wrong size for load")
-                | Block {block_type = Uninit; _} -> 
-                   let state = Explain.state names original_local in
-                   fail loc (Uninitialised_read {is_member; state})
-                | Block {block_type = Padding; _} -> 
-                   fail loc (Generic !^"cannot read padding bytes")
-                | Block {block_type = Nothing; _} -> 
-                   fail loc (Generic !^"cannot read empty bytes")
+                | Point p ->
+                   begin match p.content with
+                   | Value v when Z.equal size p.size -> return v
+                   | Value v ->
+                      fail loc (Generic !^"resource of wrong size for load")
+                   | Block Uninit ->
+                      let state = Explain.state names original_local in
+                      fail loc (Uninitialised_read {is_member; state})
+                   | Block Padding ->
+                      fail loc (Generic !^"cannot read padding bytes")
+                   | Block Nothing ->
+                      fail loc (Generic !^"cannot read empty bytes")
+                   end
                 | Region _ -> 
                    fail loc (Generic !^"cannot read empty bytes")
                 | Array a ->
@@ -1606,9 +1608,9 @@ module Make (G : sig val global : Global.t end) = struct
                  return (rt@@rt2)
               | None ->
                  let block = 
-                   RE.Block {pointer = IT.addPointer_ (pointer, num_ offset); 
+                   RE.Point {pointer = IT.addPointer_ (pointer, num_ offset); 
                              size; 
-                             block_type = Padding} 
+                             content = Block Padding} 
                  in
                  let rt = LRT.Resource (block, LRT.I) in
                  let@ rt2 = aux members in
@@ -1621,16 +1623,12 @@ module Make (G : sig val global : Global.t end) = struct
          | Some v -> 
             let rt = 
               Logical ((vsym, Base bt), 
-              Resource (Points {pointer; pointee = vsym; size}, 
+              Resource (Point {pointer; content = Value vsym; size}, 
               Constraint (LC (eq_ (sym_ (bt,vsym), v)), I)))
             in
             return rt
          | None -> 
-            let block = 
-              RE.Block {pointer; 
-                        size; 
-                        block_type = Uninit}
-            in
+            let block = RE.Point {pointer; size; content = Block Uninit} in
             let rt = Resource (block, LRT.I) in
             return rt
 
@@ -1646,7 +1644,7 @@ module Make (G : sig val global : Global.t end) = struct
       let@ local = ownership_request loc (Access (Load None)) local pointer (num_ size) in
       let rt = 
         LRT.Logical ((v, Base bt), 
-        LRT.Resource (Points {pointer; pointee = v; size},
+        LRT.Resource (Point {pointer; content = Value v; size},
         LRT.Constraint (constraints, LRT.I)))
       in
       return rt

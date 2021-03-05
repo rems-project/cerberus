@@ -478,15 +478,17 @@ module Make (G : sig val global : Global.t end) = struct
     open Resources
     type t = Resources.t
     let welltyped loc (names : Explain.naming) local = function
-      | Block b -> 
-         WIT.welltyped loc names local (LS.Base BT.Loc) b.pointer
+      | Point b -> 
+         let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) b.pointer in
+         begin match b.content with
+         | Block _ -> return ()
+         | Value v -> 
+            (* points is "polymorphic" in the pointee *)
+            check_bound loc names local KLogical v
+         end
       | Region r -> 
          let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) r.pointer in
          WIT.welltyped loc names local (LS.Base BT.Integer) r.size
-      | Points p -> 
-         let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) p.pointer in
-         (* points is "polymorphic" in the pointee *)
-         check_bound loc names local KLogical p.pointee
       | Array a -> 
          let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) a.pointer in
          let@ () = WIT.welltyped loc names local (LS.Base BT.Integer) a.length in

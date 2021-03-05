@@ -35,11 +35,14 @@ type block_type =
   | Uninit
   | Padding
 
+type point_content = 
+  | Block of block_type
+  | Value of Sym.t
+
 
 type t = 
-  | Block of {pointer: IT.t; size: Z.t; block_type: block_type}
+  | Point of {pointer: IT.t; size: Z.t; content: point_content}
   | Region of {pointer: IT.t; size: IT.t}
-  | Points of {pointer: IT.t; pointee: Sym.t; size: size}
   | Array of {pointer: IT.t; element_size: Z.t; length: IT.t; content: Sym.t }
   | Predicate of predicate
 
@@ -54,17 +57,20 @@ let pp_predicate {name; iargs; oargs} =
   c_app (pp_predicate_name name) args
 
 let pp = function
-  | Block {pointer; size; block_type} ->
-     let rname = match block_type with
-       | Nothing -> !^"Block"
-       | Uninit -> !^"Uninit"
-       | Padding -> !^"Padding"
-     in
-     c_app rname [IT.pp pointer; Z.pp size]
+  | Point {pointer; size; content} ->
+     begin match content with
+     | Block block_type ->
+        let rname = match block_type with
+          | Nothing -> !^"Block"
+          | Uninit -> !^"Uninit"
+          | Padding -> !^"Padding"
+        in
+        c_app rname [IT.pp pointer; Z.pp size]
+     | Value v ->
+        c_app !^"Points" [IT.pp pointer; Sym.pp v; Z.pp size]
+     end
   | Region {pointer; size} ->
      c_app !^"Region" [IT.pp pointer; IT.pp size]
-  | Points {pointer; pointee; size} ->
-     c_app !^"Points" [IT.pp pointer; Sym.pp pointee; Z.pp size]
   | Array a ->
      c_app !^"Array" [IT.pp a.pointer; Sym.pp a.content; IT.pp a.length]
   | Predicate p ->
@@ -78,17 +84,17 @@ let json re : Yojson.Safe.t =
   `String (Pp.plain (pp re))
 
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
-  | Block {pointer; size; block_type} ->
+  | Point {pointer; size; content} ->
      let pointer = IT.subst_var subst pointer in
-     Block {pointer; size; block_type}
+     let content = match content with
+       | Block block_type -> Block block_type
+       | Value v -> Value (Sym.subst subst v)
+     in
+     Point {pointer; size; content}
   | Region {pointer; size} ->
      let pointer = IT.subst_var subst pointer in
      let size = IT.subst_var subst size in
      Region {pointer; size}
-  | Points {pointer; pointee; size} -> 
-     let pointer = IT.subst_var subst pointer in
-     let pointee = Sym.subst subst pointee in
-     Points {pointer; pointee; size}
   | Array {pointer; element_size; length; content} ->
      let pointer = IT.subst_var subst pointer in
      let length = IT.subst_var subst length in
@@ -104,17 +110,20 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
   let open Option in
   let subst_sym s = if Sym.equal s subst.before then None else Some s in
   match resource with
-  | Block {pointer; size; block_type} ->
+  | Point {pointer; size; content} ->
      let pointer = IT.subst_it subst pointer in
-     return (Block {pointer; size; block_type})
+     let@ block_type = match content with
+       | Block block_type -> 
+          return (Block block_type)
+       | Value v ->
+          let@ v = subst_sym v in
+          return (Value v)
+     in
+     return (Point {pointer; size; content})
   | Region {pointer; size} ->
      let pointer = IT.subst_it subst pointer in
      let size = IT.subst_it subst size in
      return (Region {pointer; size})
-  | Points {pointer; pointee; size} -> 
-     let pointer = IT.subst_it subst pointer in
-     let@ pointee = subst_sym pointee in
-     return (Points {pointer; pointee; size})
   | Array {pointer; element_size; length; content} ->
      let pointer = IT.subst_it subst pointer in
      let length = IT.subst_it subst length in
@@ -142,17 +151,20 @@ let block_type_equal b1 b2 =
 
 let equal t1 t2 = 
   match t1, t2 with
-  | Block b1, Block b2 ->
+  | Point b1, Point b2 ->
      IT.equal b1.pointer b2.pointer &&
-     block_type_equal b1.block_type b2.block_type &&
-     Z.equal b1.size b2.size
+     Z.equal b1.size b2.size &&
+     begin match b1.content, b2. content with
+     | Block bt1, Block bt2 ->
+        block_type_equal bt1 bt2 
+     | Value v1, Value v2 -> 
+        Sym.equal v1 v2
+     | _, _ -> 
+        false
+     end
   | Region r1, Region r2 ->
      IT.equal r1.pointer r2.pointer &&
      IT.equal r1.size r2.size
-  | Points p1, Points p2 ->
-     IT.equal p1.pointer p2.pointer &&
-     Sym.equal p1.pointee p2.pointee &&
-     Z.equal p1.size p2.size
   | Predicate p1, Predicate p2 ->
      predicate_name_equal p1.name p2.name && 
      List.equal IT.equal p1.iargs p2.iargs && 
@@ -162,18 +174,16 @@ let equal t1 t2 =
      Z.equal a1.element_size a2.element_size &&
      IT.equal a1.length a2.length &&
      Sym.equal a1.content a2.content
-  | Block _, _ -> false
+  | Point _, _ -> false
   | Region _, _ -> false
-  | Points _, _ -> false
   | Array _, _ -> false
   | Predicate _, _ -> false
 
 
 
 let footprint = function
-  | Block b -> Some (b.pointer, IT.num_ b.size)
+  | Point b -> Some (b.pointer, IT.num_ b.size)
   | Region r -> Some (r.pointer, r.size)
-  | Points p -> Some (p.pointer, IT.num_ p.size)
   | Array a -> Some (a.pointer, IT.mul_ (a.length, IT.num_ a.element_size))
   | Predicate p -> None
 
@@ -181,15 +191,16 @@ let pointer r = Option.map fst (footprint r)
 let size r = Option.map snd (footprint r)
 
 let vars_in = function
-  | Block b -> 
-     IT.vars_in b.pointer
+  | Point b -> 
+     SymSet.union 
+       (IT.vars_in b.pointer)
+       (match b.content with
+        | Block _ -> SymSet.empty
+        | Value v -> SymSet.singleton v)
   | Region r -> 
      SymSet.union
        (IT.vars_in r.pointer) 
        (IT.vars_in r.size) 
-  | Points p -> 
-     SymSet.add p.pointee 
-       (IT.vars_in p.pointer)
   | Array a -> 
      SymSet.add a.content
        (SymSet.union 
@@ -212,18 +223,21 @@ let vars_in = function
 let unify r1 r2 res = 
   let open Option in
   match r1, r2 with
-  | Block b, Block b' (* Block unifies with Blocks of other block type *)
+  | Point b, Point b' 
        when IT.equal b.pointer b'.pointer &&
               Z.equal b.size b'.size ->
-     return res
+     begin match b.content, b'.content with
+     | Block _, Block _ -> (* Block unifies with Blocks of other block type *)
+        return res
+     | Value v, Value v' ->          
+        Uni.unify_sym v v' res
+     | _, _ -> 
+        fail
+     end
   | Region r, Region r' 
        when IT.equal r.pointer r'.pointer &&
               IT.equal r.size r'.size ->
      return res
-  | Points p, Points p' 
-       when IT.equal p.pointer p'.pointer &&
-              Z.equal p.size p'.size ->              
-     Uni.unify_sym p.pointee p'.pointee res
   | Array a, Array a' 
        when IT.equal a.pointer a'.pointer && 
               Z.equal a.element_size a'.element_size &&
@@ -251,16 +265,15 @@ let unify r1 r2 res =
 
 
 let input = function
-  | Block b -> IT.vars_in_list [b.pointer]
+  | Point p -> IT.vars_in_list [p.pointer]
   | Region r -> IT.vars_in_list [r.pointer; r.size]
-  | Points p -> IT.vars_in p.pointer
   | Array a -> SymSet.union (IT.vars_in a.pointer) (IT.vars_in a.length)
   | Predicate p -> IT.vars_in_list p.iargs
 
 let output = function
-  | Block b -> SymSet.empty
+  | Point {content = Block _; _} -> SymSet.empty
+  | Point {content = Value v; _} -> SymSet.singleton v
   | Region r -> SymSet.empty
-  | Points p -> SymSet.singleton p.pointee
   | Array a -> SymSet.singleton a.content
   | Predicate p -> SymSet.of_list p.oargs
 

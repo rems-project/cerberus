@@ -153,7 +153,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                  | Sctypes.Struct tag ->
                     RE.Predicate {name = Tag tag; iargs = [member_p]; oargs = [member_v]}
                  | _ -> 
-                    RE.Points {pointer = member_p; pointee = member_v; size}
+                    RE.Point {pointer = member_p; content = Value member_v; size}
                in
                let bt = BT.of_sct sct in
                let lrt = 
@@ -164,7 +164,7 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
                (lrt, value)
             | None ->
                let lrt = 
-                 LRT.Resource (RE.Block {pointer = member_p; size; block_type = Padding}, lrt)
+                 LRT.Resource (RE.Point {pointer = member_p; size; content = Block Padding}, lrt)
                in
                (lrt, values)
           ) layout (LRT.I, [])
@@ -243,9 +243,9 @@ let make_owned loc label pointer path sct =
   | sct -> 
      let pointee = Sym.fresh () in
      let r = 
-       [RE.Points {pointer = sym_ (BT.Loc, pointer); 
-                   pointee; 
-                   size = Memory.size_of_ctype sct}]
+       [RE.Point {pointer = sym_ (BT.Loc, pointer); 
+                  content = Value pointee; 
+                  size = Memory.size_of_ctype sct}]
      in
      let bt = BT.of_sct sct in
      let l = [(pointee, LS.Base bt)] in
@@ -268,9 +268,9 @@ let make_block loc pointer path sct =
      fail loc (Generic !^"cannot make void* pointer a block")
   | _ -> 
      let r = 
-       [RE.Block {pointer = sym_ (BT.Loc, pointer); 
+       [RE.Point {pointer = sym_ (BT.Loc, pointer); 
                   size = Memory.size_of_ctype sct;
-                  block_type = Nothing}]
+                  content = Block Nothing}]
      in
      return ([], r, [], [])
 
