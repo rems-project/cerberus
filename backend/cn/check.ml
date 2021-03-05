@@ -487,9 +487,7 @@ module Make (G : sig val global : Global.t end) = struct
                debug 6 (lazy (item "local" (L.pp local)));
                debug 6 (lazy (item "lc" (LC.pp (LC c))));
                debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
-               if S.holds local c then 
-                 check_constraints ftyp 
-               else 
+               if S.holds local c then check_constraints ftyp else 
                  let (constr,state) = 
                    Explain.unsatisfied_constraint names original_local (LC c)
                  in
@@ -568,26 +566,6 @@ module Make (G : sig val global : Global.t end) = struct
       | [r] -> Some r
       | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points))))
 
-    let resource_around_pointer local it
-         : (Sym.t * RE.t) option = 
-      let points = 
-        List.filter_map (fun (name, re) ->
-            match RE.footprint re with
-            | Some (pointer,size) when 
-                   S.holds local 
-                     (IT.and_ [IT.lePointer_ (pointer, it);
-                               IT.ltPointer_ (it, IT.addPointer_ (pointer, size));
-                        ]) ->
-               Some (name, re) 
-            | _ ->
-               None
-          ) (L.all_named_resources local)
-      in
-      match points with
-      | [] -> None
-      | [r] -> Some r
-      | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points))))
-
 
     let predicate_for local id iargs
          : (Sym.t * RE.predicate) option = 
@@ -623,27 +601,6 @@ module Make (G : sig val global : Global.t end) = struct
             match RE.pointer re with
             | Some pointer when S.holds local (eq_ (it, pointer)) -> Some where
             | _ -> None
-          ) (L.all_named_used_resources local)
-      in
-      match points with
-      | [] -> None
-      | r :: _ -> Some r
-
-
-
-    let used_resource_around_pointer local it
-         : (Locations.t list) option = 
-      let points = 
-        List.filter_map (fun (name, (re, where)) ->
-            match RE.footprint re with
-            | Some (pointer,size) when 
-                   S.holds local 
-                     (IT.and_ [IT.lePointer_ (pointer, it);
-                               IT.ltPointer_ (it, IT.addPointer_ (pointer, size));
-                        ]) ->
-               Some where 
-            | _ ->
-               None
           ) (L.all_named_used_resources local)
       in
       match points with
@@ -1736,21 +1693,16 @@ module Make (G : sig val global : Global.t end) = struct
               return (Normal (rt, local))            
            | M_PtrValidForDeref (act, asym) ->
               (* check *)
-              let@ local = unpack_resources loc local in
               let@ arg = arg_of_asym local asym in
-              let ret = Sym.fresh () in
-              let size = Memory.size_of_ctype act.item.ct in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let o_resource = resource_around_pointer local (sym_ (arg.bt, arg.lname)) in
-              let resource_ok = 
-                match Option.bind o_resource (Tools.comp RE.size snd) with
-                | Some size' when S.holds local (ge_ (size', num_ size)) -> true
-                | Some _ -> false
-                | _ -> false
+              let@ local = unpack_resources loc local in
+              let ret = Sym.fresh () in
+              let ok = 
+                let fps = List.filter_map RE.footprint (L.all_resources local) in
+                let in_some_fp = or_ (List.map (IT.in_footprint (sym_ (Loc, arg.lname))) fps) in
+                let alignment_lc = aligned_ (act.item.ct, sym_ (arg.bt, arg.lname)) in
+                S.holds local (and_ [in_some_fp; alignment_lc])
               in
-              let alignment_lc = 
-                aligned_ (act.item.ct, sym_ (arg.bt, arg.lname)) in
-              let ok = resource_ok && S.holds local alignment_lc in
               let constr = LC (eq_ (sym_ (Bool, ret), bool_ ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
               return (Normal (rt, local))
@@ -1821,9 +1773,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ () = 
                 let in_range_lc = 
                   representable_ (act.item.ct, sym_ (varg.bt, varg.lname)) in
-                if S.holds local in_range_lc
-                then return () 
-                else 
+                if S.holds local in_range_lc then return () else 
                  let (constr,state) = 
                    Explain.unsatisfied_constraint names local (LC in_range_lc)
                  in

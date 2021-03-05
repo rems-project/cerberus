@@ -10,6 +10,8 @@ let of_index_term (global: Global.t) (it: IT.t) =
 
   let open Global in
 
+  let () = Debug_ocaml.begin_csv_timing "of_index_term" in
+
   let context = global.solver_context in
 
   let rec bt_name = function
@@ -251,5 +253,13 @@ let of_index_term (global: Global.t) (it: IT.t) =
        term (eq_ (rem_t_ (t, num_ (Memory.align_of_ctype ct)), num_ Z.zero))
   in
 
-  term it
+
+
+  let result = term it in
+  
+
+
+  let () = Debug_ocaml.end_csv_timing () in
+
+  result
 

@@ -916,6 +916,9 @@ let alignedI_ (it, it') = CT_pred (AlignedI (it, it'))
 let in_range within (min, max) = 
   and_ [le_ (min, within); le_ (within, max)]
 
+let in_footprint within (pointer, size) = 
+  and_ [lePointer_ (pointer, within); 
+        ltPointer_ (within, addPointer_ (pointer, size))]
 
 
 
