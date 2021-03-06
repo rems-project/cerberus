@@ -5,30 +5,17 @@ module LC = LogicalConstraints
 module Loc = Locations
 
 
-module VariableBinding : sig
-
-  type solver_constraint
-
-  type t =
-    | Computational of Sym.t * BT.t
-    | Logical of LS.t
-    | Resource of RE.t
-    | UsedResource of RE.t * Loc.t list
-    | Constraint of LC.t * solver_constraint
-
-end
 
 
 module Make : functor (G : sig val global : Global.t end) -> sig
 
-  type binding = Sym.t * VariableBinding.t
   type t
   val empty : t
   val marked : t
   val concat : t -> t -> t
   val use_resource : Sym.t -> Loc.t list -> t -> t
-  val since : t -> binding list * t
-  val all : t -> binding list
+  val since : t -> VariableBindings.binding list * t
+  val all : t -> VariableBindings.binding list
   val kind : Sym.t -> t -> Kind.t option
   val bound : Sym.t -> t -> bool
   val merge : t -> t -> t

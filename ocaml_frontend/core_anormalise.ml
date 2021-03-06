@@ -5,12 +5,17 @@ open Lem_assert_extra
 
 
 open Core
-open Mucore
 open Annot
 
 open Debug_ocaml
 
-module Loc = Location_ocaml
+
+module Mu = Mucore.Make(Mucore.SimpleTypes)
+open Mu
+
+module Loc = Mucore.Loc
+type symbol = Symbol.sym
+
 
 (* The a-normalisation should happen after some partial evaluation and
    rewrites that remove expressions passing ctypes and function
@@ -24,31 +29,21 @@ type values = value list
 type 'bty pexpr = ('bty, Symbol.sym) generic_pexpr
 type 'bty pexprs = ('bty pexpr) list
 type ('a, 'bty) expr = ('a, 'bty, Symbol.sym) generic_expr
-type pattern = mu_base_type mu_pattern
 type annot = Annot.annot
 type annots = annot list
 type outer_annots = annots
 type ('a, 'bty) action1 = ('a, 'bty, Symbol.sym) generic_action
 type ('a, 'bty) paction = ('a, 'bty, Symbol.sym) generic_paction
 
-type ct = Ctype.ctype
-type ut = ct mu_union_def
-type st = ct mu_struct_def
-type ft = ct Mucore.mu_funinfo_type
-type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
-type bt = Mucore.mu_base_type
-type gt = ct
-type mapping = unit
-
-type mu_value = (ct, bt, unit) Mucore.mu_value
+type mu_value = unit Mu.mu_value
 type mu_values = mu_value list
-type mu_pexpr = (ct, bt, unit) Mucore.mu_pexpr
+type mu_pexpr = unit Mu.mu_pexpr
 type mu_pexprs = mu_pexpr list
-type mu_expr = (ct, bt, unit) Mucore.mu_expr
-type mu_pattern = bt Mucore.mu_pattern
-type mu_action = (ct, unit) Mucore.mu_action
-type mu_paction = (ct, unit) Mucore.mu_paction
-type mu_sym_or_pattern = (bt, unit) Mucore.mu_sym_or_pattern
+type mu_expr = unit Mu.mu_expr
+type mu_pattern = Mu.mu_pattern
+type mu_action = unit Mu.mu_action
+type mu_paction = unit Mu.mu_paction
+type mu_sym_or_pattern = unit Mu.mu_sym_or_pattern
 
 
 type asym = unit Mucore.asym
@@ -65,6 +60,9 @@ module type LocationCheck = sig
 end
 
 
+
+
+
 module Make (L : LocationCheck) = struct
 
 (* include other things to ignore *)
@@ -78,29 +76,29 @@ let update_loc loc1 loc2 =
 
 let bty_of_mu_pexpr (M_Pexpr (_, _, bty, _)) =  bty
 
-let is_symbol (M_Pexpr(loc, annots, bty, e)): ((Symbol.sym, 'a) a) option = 
+let is_symbol (M_Pexpr(loc, annots, bty, e)): asym option = 
   match e with
-  | M_PEsym sym -> Some (a_pack loc annots bty sym)
+  | M_PEsym sym -> Some (asym_pack loc annots bty sym)
   | _ -> None
 
 
 
 let ensure_ctype__pexpr loc = function
   | Core.Pexpr (annots, bty, Core.PEval (Core.Vctype ct)) -> 
-     Some (a_pack loc annots bty ct)
+     Some (act_pack loc annots bty ct)
   | _ -> None
 
 
-let fensure_ctype__pexpr loc err pe : (ctype,'b) a = 
+let fensure_ctype__pexpr loc err pe : 'TY act = 
   match ensure_ctype__pexpr loc pe with
   | Some ctype -> ctype
-  | None -> error (err ^ " (" ^ Location_ocaml.location_to_string loc ^ ")")
+  | None -> error (err ^ " (" ^ Loc.location_to_string loc ^ ")")
 
 
 
 
 
-let core_to_mu__ctor loc ctor : core_base_type mu_ctor = 
+let core_to_mu__ctor loc ctor : mu_ctor = 
   match ctor with 
   | Core.Cnil bt1 -> M_Cnil bt1
   | Core.Ccons -> M_Ccons
@@ -120,7 +118,7 @@ let core_to_mu__ctor loc ctor : core_base_type mu_ctor =
   | Core.Cunspecified -> error ("core_anormalisation: Cunspecified")
 
 
-let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : core_base_type Mucore.mu_pattern = 
+let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern = 
   let loc = update_loc loc (Annot.get_loc_ annots) in
   let wrap pat_ = M_Pattern(loc, annots, pat_) in
   match pat_ with
@@ -134,7 +132,7 @@ let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : core_base_type M
 
 
 type ('bound, 'body) letbinder = 
-  loc -> mu_sym_or_pattern -> 'bound -> 'body -> 'body
+  Loc.t -> mu_sym_or_pattern -> 'bound -> 'body -> 'body
 
 type 'd n_pexpr_domain = 
   { letbinder : (mu_pexpr, 'd) letbinder }
@@ -157,7 +155,7 @@ let expr_n_pexpr_domain = { letbinder = letbinder_pexpr_in_expr }
 let letbind_pexpr domain pexpr ctxt : 'a = 
   let (M_Pexpr (loc, _, bty, _)) = pexpr in
   let sym = Symbol.fresh () in
-  let asym = a_pack loc [] bty sym in
+  let asym = asym_pack loc [] bty sym in
   let body = ctxt asym in
   domain.letbinder loc (M_Symbol sym) pexpr body
 
@@ -385,7 +383,7 @@ let n_kill_kind = function
 
 
 let n_action loc (action : ('a, unit) action1) 
-      (k : mu_action -> mu_expr) : (ct, bt, unit) Mucore.mu_expr = 
+      (k : mu_action -> mu_expr) : mu_expr = 
   let (Action (loc', _, a1)) = action in
   let loc = update_loc loc loc' in
   let wrap a1 = M_Action(loc, a1) in
@@ -455,7 +453,7 @@ let n_action loc (action : ('a, unit) action1)
 
      
 
-let n_paction loc pa (k : mu_paction -> mu_expr) : (ct, bt, unit) Mucore.mu_expr= 
+let n_paction loc pa (k : mu_paction -> mu_expr) : mu_expr= 
   let (Paction(pol, a)) = pa in
   let wrap a = M_Paction (pol, a) in
   n_action loc a (fun a -> 
@@ -468,7 +466,7 @@ let n_paction loc pa (k : mu_paction -> mu_expr) : (ct, bt, unit) Mucore.mu_expr
 let show_n_memop = 
   Mem_common.instance_Show_Show_Mem_common_memop_dict.show_method
 
-let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr = 
+let n_memop loc memop pexprs k: mu_expr = 
   let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc in
   let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 loc in
   let n_pexpr_in_expr_name_3 = n_pexpr_in_expr_name_3 loc in
@@ -549,7 +547,7 @@ let n_memop loc memop pexprs k:(ct, bt, unit) Mucore.mu_expr =
      error err
 
 
-let rec normalise_expr loc e : (ctype, core_base_type, unit) Mucore.mu_expr =
+let rec normalise_expr loc e : mu_expr =
   n_expr loc e (fun e -> e)
 
 and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr = 
@@ -607,7 +605,7 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
      let ct1 = match ct1 with
        | Core.Pexpr(annots, bty, Core.PEval (Core.Vctype ct1)) -> 
           let loc = update_loc loc (get_loc_ annots) in
-          a_pack loc annots bty ct1
+          act_pack loc annots bty ct1
        | _ -> error "core_anormalisation: Eccall with non-ctype first argument"
      in
      let e2 = 
@@ -620,7 +618,7 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
-               ( fun sym -> a_pack loc annots bty sym )
+               ( fun sym -> asym_pack loc annots bty sym )
                ( fun _prov _ -> err () )
                ( fun () -> err () )
           | _ -> err ()
@@ -665,20 +663,20 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
 
 
 
-let normalise_impl_decl (i : unit generic_impl_decl) : (ct, bt, unit) mu_impl_decl =
+let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl =
   match i with
   | Def(bt1, p) -> 
      M_Def (bt1, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain p)
   | IFun(bt1, args, body) -> 
      M_IFun (bt1, args, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain body)
 
-let normalise_impl (i : unit generic_impl) : (ct, bt, unit) mu_impl=
+let normalise_impl (i : unit generic_impl) : unit mu_impl=
    (Pmap.map normalise_impl_decl i)
 
 let normalise_fun_map_decl 
       (name1: symbol)
       (d : (unit, 'a) generic_fun_map_decl) 
-    : (lt, ct, bt, unit, mapping) mu_fun_map_decl=
+    : unit mu_fun_map_decl=
   match d with
   | Fun (bt, args, pe) -> 
      M_Fun(bt, args, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain pe)
@@ -706,7 +704,7 @@ let normalise_fun_map_decl
   | ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
   | BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 
-let normalise_fun_map (fmap1 : (unit, 'a) generic_fun_map) : (lt, ct, bt, unit, mapping) mu_fun_map= 
+let normalise_fun_map (fmap1 : (unit, 'a) generic_fun_map) : unit mu_fun_map= 
    (Pmap.mapi normalise_fun_map_decl fmap1)
   
 
@@ -715,16 +713,16 @@ let fresh_relative (s : symbol) (f : string -> string) : symbol =
   | Some name -> Symbol.fresh_pretty (f name)
   | None -> Symbol.fresh ()
 
-let normalise_globs sym (g : ('a, unit) generic_globs) : (gt, ct, bt, unit) mu_globs = 
+let normalise_globs sym (g : ('a, unit) generic_globs) : unit mu_globs = 
   match g with
-  | GlobalDef((bt1, ct), e) -> 
-     M_GlobalDef (fresh_relative sym (fun s -> s^"_l"), (bt1, ct), normalise_expr Loc.unknown e)
-  | GlobalDecl bt1 -> 
-     M_GlobalDecl (fresh_relative sym (fun s -> s^"_l"), bt1)
+  | GlobalDef((bt, ct), e) -> 
+     M_GlobalDef (fresh_relative sym (fun s -> s^"_l"), (bt, ct), normalise_expr Loc.unknown e)
+  | GlobalDecl (bt, ct) -> 
+     M_GlobalDecl (fresh_relative sym (fun s -> s^"_l"), (bt, ct))
 
 
 let normalise_globs_list (gs : (Symbol.sym * ('a, unit) generic_globs) list)
-    : (Symbol.sym * (gt, ct, bt, unit) mu_globs) list= 
+    : (Symbol.sym * unit mu_globs) list= 
    (map (fun (sym1,g) -> (sym1, normalise_globs sym1 g)) gs)
 
 
@@ -745,7 +743,7 @@ let normalise_funinfo (loc,annots2,ret,args,b1,b2) =
         | None -> (Symbol.fresh (), ct)
       ) args 
   in
-  M_funinfo (loc,annots2,(ret,args),b1,b2, ())
+  M_funinfo (loc,annots2,(ret,args,b1),b2, ())
 
 let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)
@@ -801,7 +799,7 @@ let check_supported file =
    * in *)
   ()
 
-let normalise_file file : (ft, lt, gt, ct, bt, st, ut, unit, mapping) Mucore.mu_file = 
+let normalise_file file : unit Mu.mu_file = 
   check_supported file;
    ({ mu_main = (file.main)
    ; mu_tagDefs = (normalise_tag_definitions file.tagDefs)

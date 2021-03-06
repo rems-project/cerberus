@@ -11,20 +11,13 @@ let return = CF.Exception.except_return
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = 
-  (CA.ft, 
-   CA.lt, 
-   CA.ct,
-   CA.ct, 
-   CA.bt,
-   CA.ct CF.Mucore.mu_struct_def,
-   CA.ct CF.Mucore.mu_union_def,
-   unit,
-   unit) CF.Mucore.mu_file
+type mu_file = unit Retype.Old.mu_file
+type retyped_mu_file = unit Retype.New.mu_file
 
 type file = 
   | CORE of core_file
   | MUCORE of mu_file
+  | RETYPED_MUCORE of retyped_mu_file
 
 
 
@@ -77,6 +70,11 @@ let print_file ?(remove_path = false) filename file =
       *   (CF.Pp_mucore_ast.pp_file file); *)
      CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
        (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
+  | RETYPED_MUCORE file ->
+     (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
+      *   (CF.Pp_mucore_ast.pp_file file); *)
+     CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
+       (Check.PP_MUCORE.pp_file None file);
 
 
 module Log : sig 
@@ -141,7 +139,7 @@ let rec do_rewrites_and_log named_rewrites core_file =
 
 module CA_ = CA.Make(Locations)
 
-let process core_file =
+let rewrite core_file =
   Colour.do_colour := false;
   print_log_file "original" (CORE core_file);
   do_rewrites_and_log
@@ -165,9 +163,7 @@ let frontend filename =
   load_core_impl stdlib impl_name >>= fun impl ->
   c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
-  process core_file
-
-
+  rewrite core_file
 
 
 
@@ -188,9 +184,11 @@ let main filename mjsonfile debug_level print_level =
     | CF.Exception.Result file ->
        if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
        try 
+         let open Resultat in
          Pp.maybe_open_json_output mjsonfile;
          Debug_ocaml.maybe_open_csv_timing_file ();
-         let result = Process.process file in
+         let@ file = Retype.retype_file file in
+         let result = Check.check file in
          Pp.maybe_close_json_output ();
          Debug_ocaml.maybe_close_csv_timing_file ();
          match result with

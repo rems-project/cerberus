@@ -3,15 +3,17 @@ open Ctype
 open Lem_assert_extra
 
 open Core
-open Mucore
 open Annot
 
+open Mucore
+module Mu = Core_anormalise.Mu
+open Mu
 
 
 let rec ib_expr 
-          (label : symbol * symbol list * ('ct, 'bt, 'bty) mu_expr)
-          (e : ('ct, 'bt, 'bty) mu_expr) 
-           : ('ct, 'bt, 'bty) mu_expr=
+          (label : symbol * symbol list * unit mu_expr)
+          (e : unit mu_expr) 
+           : unit mu_expr=
   let (M_Expr(loc, oannots, e_)) = e in
   let wrap e_= M_Expr(loc, oannots, e_) in
   let aux = (ib_expr label) in
@@ -59,8 +61,8 @@ let rec ib_expr
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))))) in
       let arguments = (Lem_list.list_combine label_arg_syms args) in
       let (M_Expr(_, annots2, e_)) = 
-        (List.fold_right (fun (spec_arg, asym) body ->
-            let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.item) in
+        (List.fold_right (fun (spec_arg, (asym : 'TY asym)) body ->
+            let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
             M_Expr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
           ) arguments label_body)
       in
@@ -93,15 +95,15 @@ let rec inline_label_labels_and_body to_inline to_keep body =
 
 let ib_fun_map_decl 
       (name1: symbol)
-      (d : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map_decl) 
-    : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map_decl=
+      (d : unit mu_fun_map_decl) 
+    : unit mu_fun_map_decl=
    (try ((match d with
      | M_Proc( loc, rbt, arg_bts, body, label_defs, mapping) -> 
         let (to_keep, to_inline) =
           (let aux label def (to_keep, to_inline)=
              ((match def with
             | M_Return _ -> (Pmap.add label def to_keep, to_inline)
-            | M_Label(_loc, lt1, args, lbody, annot2, _mapping) ->
+            | M_Label(_loc, lt1, args, lbody, annot2, _) ->
                match get_label_annot annot2 with
                | Some (LAloop_break _)
                | Some (LAloop_continue _) 
@@ -121,20 +123,19 @@ let ib_fun_map_decl
      )) with | Failure error -> failwith ( (let Symbol.Symbol( d, n, str_opt) = name1 in
     "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))  ^ error) )
 
-let ib_fun_map (fmap1 : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map) 
-    : ('lt, 'ct, 'bt, 'bty, 'mapping) mu_fun_map = 
+let ib_fun_map (fmap1 : unit mu_fun_map) : unit mu_fun_map = 
    (Pmap.mapi ib_fun_map_decl fmap1)
   
 
-let ib_globs (g : ('gt, 'ct, 'bt, 'bty) mu_globs) 
-    : ('gt, 'ct, 'bt, 'bty) mu_globs= 
+let ib_globs (g : unit mu_globs) 
+    : unit mu_globs= 
    ((match g with
   | M_GlobalDef(s, bt1, e) -> M_GlobalDef(s, bt1, e)
   | M_GlobalDecl (s, bt1) -> M_GlobalDecl (s, bt1)
   ))
 
-let ib_globs_list (gs : ('gt, 'ct, 'bt, 'bty) mu_globs_list)
-    : ('gt, 'ct, 'bt, 'bty) mu_globs_list= 
+let ib_globs_list (gs : unit mu_globs_list)
+    : unit mu_globs_list= 
    (map (fun (sym1,g) -> (sym1, ib_globs g)) gs)
 
 

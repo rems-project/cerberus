@@ -24,26 +24,14 @@ module Loc = Location_ocaml
 
 
 module type PP_Typ = sig
-  (* type object_type *)
-  type bt
-  type ct
-  type gt
-  type ft
-  type lt
-  type st 
-  type ut
-  (* val pp_object_type: object_type -> PPrint.document *)
-  val pp_bt: bt -> PPrint.document
-  (* type object_type *)
-  (* val pp_object_type: object_type -> PPrint.document *)
-  val pp_ct: ct -> PPrint.document
-  val pp_ft: ft -> PPrint.document
-  val pp_gt: gt -> PPrint.document
-  val pp_lt: (lt -> PPrint.document) option
-  val pp_st: st -> PPrint.document
-  val pp_ut: ut -> PPrint.document
-  val pp_funinfo: (Symbol.sym, (ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym,(ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
+  module T : Mucore.TYPES
+  val pp_bt: T.bt -> PPrint.document
+  val pp_ct: T.ct -> PPrint.document
+  val pp_ft: T.ft -> PPrint.document
+  val pp_gt: T.gt -> PPrint.document
+  val pp_lt: T.lt -> PPrint.document
+  val pp_st: T.st -> PPrint.document
+  val pp_ut: T.ut -> PPrint.document
 end
 
 module type CONFIG = sig
@@ -55,65 +43,6 @@ module type CONFIG = sig
   val handle_uid: string -> P.range -> unit
 end
 
-module type PP_CORE = sig
-
-  type bt
-  type ct
-  type ft
-  type lt
-  type gt
-  type st 
-  type ut
-
-  val pp_bt: 
-    bt -> 
-    PPrint.document
-
-  val pp_object_value: 
-    (ct,'bty) mu_object_value -> 
-    PPrint.document
-
-  val pp_value: 
-    (ct,bt,'bty) mu_value -> 
-    PPrint.document
-
-  val pp_params: 
-    (Symbol.sym * bt) list -> 
-    PPrint.document
-
-  val pp_pexpr: 
-    budget -> 
-    (ct,bt,'ty) mu_pexpr -> 
-    PPrint.document
-
-  val pp_expr: 
-    budget -> 
-    (ct,bt,'ty) mu_expr -> 
-    PPrint.document
-    
-  val pp_funinfo: (Symbol.sym, (ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym,(ft,'mapping) mu_funinfo) Pmap.map -> PPrint.document
-
-  val pp_file: 
-    budget -> 
-    (ft,
-     lt,
-     gt, 
-     ct,
-     bt,
-     st,
-     ut,
-     'ty,
-     'mapping) mu_file -> 
-    PPrint.document
-  val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
-
-  val pp_action: (ct,'a) mu_action_ -> PPrint.document
-
-  val pp_pattern: bt mu_pattern -> PPrint.document
-
-end
-
 
 
 
@@ -123,17 +52,12 @@ let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty a))
 
 
 
-module Make (Config: CONFIG) (Pp_typ: PP_Typ) 
-       : PP_CORE with type bt = Pp_typ.bt 
-                  and type ct = Pp_typ.ct
-                  and type lt = Pp_typ.lt
-                  and type gt = Pp_typ.gt
-                  and type ft = Pp_typ.ft
-                  and type st = Pp_typ.st
-                  and type ut = Pp_typ.ut
-  = struct
+module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
   open Config
+
+  module Mu = Mucore.Make(Pp_typ.T)
+  open Mu
 
   include Pp_typ
 
@@ -313,9 +237,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
 
 
 
-  let pp_asym asym = pp_symbol asym.item
+  let pp_asym asym = pp_symbol asym.sym
 
-  let pp_actype actype = pp_ct actype.item
+  let pp_actype actype = pp_ct actype.ct
 
   let pp_actype_or_asym = function 
     | Left ct -> pp_actype ct 
@@ -642,9 +566,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                     pp_linux_memory_order mo)
 
 
-  let pp_expr budget (expr : (ct,bt,'ty) mu_expr) =
+  let pp_expr budget (expr : 'ty mu_expr) =
 
-    let rec pp budget is_semi prec (M_Expr (loc, annot, e) : (ct,bt,'ty) mu_expr) =
+    let rec pp budget is_semi prec (M_Expr (loc, annot, e) : 'ty mu_expr) =
 
       match budget with
       | Some 0 -> abbreviated
@@ -702,12 +626,77 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
            * else *)
             P.parens
         end
-        begin match (e : (ct,bt,'ty) mu_expr_) with
+        begin match (e : 'ty mu_expr_) with
           | M_Epure pe ->
               pp_keyword "pure" ^^ P.parens (pp_pexpr budget pe)
           | M_Ememop memop ->
-             let (memop, pes) = Mucore_to_core.mu_to_core__memop__ memop in
-              pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
+
+             let aux memop =
+               let open Mem_common in
+               let mctype ct1=  (Either.Left ct1) in
+               let msym sym1=  (Either.Right sym1) in
+               match memop with
+               | M_PtrEq (sym1,sym2) ->
+                  (PtrEq, 
+                   [msym sym1; msym sym2])
+               | M_PtrNe (sym1,sym2) ->
+                  (PtrNe, 
+                   [msym sym1; msym sym2])
+               | M_PtrLt (sym1,sym2) ->
+                  (PtrLt, 
+                   [msym sym1; msym sym2])
+               | M_PtrGt (sym1,sym2) ->
+                  (PtrGt, 
+                   [msym sym1; msym sym2])
+               | M_PtrLe (sym1,sym2) ->
+                  (PtrLe, 
+                   [msym sym1; msym sym2])
+               | M_PtrGe (sym1,sym2) ->
+                  (PtrGe, 
+                   [msym sym1; msym sym2])
+               | M_Ptrdiff (ct1,sym1,sym2) ->
+                  (Ptrdiff, 
+                   [mctype ct1; msym sym1; msym sym2])
+               | M_IntFromPtr (ct1,ct2,sym1) ->
+                  (IntFromPtr, 
+                   [mctype ct1; mctype ct2; msym sym1])
+               | M_PtrFromInt (ct1,ct2,sym1) ->
+                  (PtrFromInt, 
+                   [mctype ct1; mctype ct2; msym sym1])
+               | M_PtrValidForDeref (ct1,sym1) ->
+                  (PtrValidForDeref, 
+                   [mctype ct1; msym sym1])
+               | M_PtrWellAligned (ct1,sym1) ->
+                  (PtrWellAligned, 
+                   [mctype ct1; msym sym1])
+               | M_PtrArrayShift (sym1,ct1,sym2) ->
+                  (PtrArrayShift, 
+                   [msym sym1; mctype ct1; msym sym2])
+               | M_Memcpy (sym1,sym2,sym3) ->
+                  (Memcpy, 
+                   [msym sym1; msym sym2; msym sym3])
+               | M_Memcmp (sym1,sym2,sym3) ->
+                  (Memcmp, 
+                   [msym sym1; msym sym2; msym sym3])
+               | M_Realloc (sym1,sym2,sym3) ->
+                  (Realloc, 
+                   [msym sym1; msym sym2; msym sym3])
+               | M_Va_start (sym1,sym2) ->
+                  (Va_start, 
+                   [msym sym1; msym sym2])
+               | M_Va_copy sym1 ->
+                  (Va_copy, 
+                   [msym sym1])
+               | M_Va_arg (sym1,ct1) ->
+                  (Va_arg, 
+                   [msym sym1; mctype ct1])
+               | M_Va_end sym1 ->
+                  (Va_end, 
+                   [msym sym1])
+             in
+            
+             let (memop, pes) = aux memop in
+             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
           | M_Eaction (M_Paction (p, (M_Action (_, act)))) ->
               pp_polarity p (pp_action act)
           | M_Ecase (pe, pat_es) ->
@@ -735,7 +724,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
           | M_Eproc (nm, pes) ->
               pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_asym pes)
           | M_Eccall (pe_ty, pe, pes) ->
-              pp_keyword "ccall" ^^ P.parens (pp_ctype pe_ty.item) ^^
+              pp_keyword "ccall" ^^ P.parens (pp_ct pe_ty.ct) ^^
                 P.parens (comma_list pp_actype_or_asym ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
           (* | M_Eunseq [] ->
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
@@ -885,16 +874,11 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
                    match def with
                    | M_Return (_, lt) -> 
                       P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ 
-                        begin match pp_lt with
-                        | Some pp_lt -> P.colon ^^^ pp_lt lt
-                        | None -> P.empty
-                        end
+                        P.colon ^^^ pp_lt lt
                    | M_Label (_, lt, args, lbody, annots, _mapping) ->
                         begin
-                          begin match pp_lt with
-                          | Some pp_lt -> P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
-                          | None -> P.empty
-                          end ^^
+                          P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
+                           ^^
                             (* label core function definition *)
                          P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
                            P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
@@ -946,6 +930,20 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
         | M_GlobalDecl _ ->
           acc) P.empty globs
 
+  let pp_funinfo finfos =
+      Pmap.fold (fun sym (M_funinfo (_, _, ft, has_proto, _mapping)) acc ->
+          acc ^^ pp_symbol sym ^^ P.colon
+          ^^^ pp_ft ft
+          ^^ P.hardline) finfos P.empty
+
+    let pp_funinfo_with_attributes finfos =
+      Pmap.fold (fun sym (M_funinfo (loc, attrs, ft, has_proto, _mapping)) acc ->
+          acc ^^ pp_symbol sym ^^ P.colon
+          ^^^ pp_ft ft
+          ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
+          ^^ P.hardline) finfos P.empty
+
+
   let pp_file budget file =
     let show_aggregate = not @@ Pmap.is_empty file.mu_tagDefs in
     let show_globs = file.mu_globs != [] in
@@ -986,6 +984,23 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ)
       end ^^
       pp_fun_map budget file.mu_funs
     end
+
+
+  (* let string_of_mucore_object_type oTy =
+   *   Pp_utils.to_plain_string (pp_object_type oTy) *)
+  let string_of_core_base_type bTy =
+    Pp_utils.to_plain_string (pp_bt bTy)
+  let string_of_value cval =
+    Pp_utils.to_plain_string (pp_value cval)
+  let string_of_action act =
+    Pp_utils.to_plain_string (pp_action act)
+  let string_of_pexpr pe =
+    Pp_utils.to_plain_string (pp_pexpr None pe)
+  let string_of_expr e =
+    Pp_utils.to_plain_string (pp_expr None e)
+  let string_of_file f =
+    Pp_utils.to_plain_string (pp_file None f)
+
 
 end
 
@@ -1028,15 +1043,16 @@ let rec pp_core_base_type = function
 module CA = Core_anormalise
 
 module Pp_standard_typ = (struct
-  type object_type = core_object_type
-  type bt = core_base_type
-  let pp_object_type = pp_core_object_type
-  let pp_bt = pp_core_base_type
 
-  type ct = CA.ct
-  type gt = ct
-  type ut = ct Mucore.mu_union_def
-  type st = ct Mucore.mu_struct_def
+  module T = Mucore.SimpleTypes
+
+
+  (* type object_type = core_object_type
+   * type bt = core_base_type
+   * let pp_object_type = pp_core_object_type *)
+
+  let pp_bt = pp_core_base_type
+  
 
   let pp_ct ty = P.squotes (Pp_core_ctype.pp_ctype ty)
   let pp_gt = pp_ct
@@ -1067,36 +1083,23 @@ module Pp_standard_typ = (struct
 
 
 
-  type ft = CA.ft
-  type lt = CA.lt
+  (* type ft = CA.ft
+   * type lt = CA.lt *)
 
   (* stealing from Pp_core *)
-  let pp_ft (ret_ty, params) = 
+  let pp_ft (ret_ty, params, is_variadic) = 
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    pp_ctype (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, false)))
+    pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
 
-    let pp_lt = None
+    (* let pp_lt = None *)
   (* stealing from Pp_core *)
-  (* let pp_lt params = 
-   *   comma_list (fun (_,(ty,by_pointer)) -> 
-   *       if by_pointer then pp_ctype ty else pp_ctype ty ^^^ P.parens (P.string "val")
-   *     ) params *)
+  let pp_lt params =
+    comma_list (fun (_,(ty,by_pointer)) -> 
+        if by_pointer then pp_ctype ty else pp_ctype ty ^^^ P.parens (P.string "val")
+      ) params
 
 
-  let pp_funinfo finfos =
-    let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    Pmap.fold (fun sym (M_funinfo (_, _, (ret_ty, params), is_variadic, has_proto, _mapping)) acc ->
-        acc ^^ pp_symbol sym ^^ P.colon
-        ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
-        ^^ P.hardline) finfos P.empty
-    
-  let pp_funinfo_with_attributes finfos =
-    let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    Pmap.fold (fun sym (M_funinfo (loc, attrs, (ret_ty, params), is_variadic, has_proto, _mapping)) acc ->
-        acc ^^ pp_symbol sym ^^ P.colon
-        ^^^ pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
-        ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
-        ^^ P.hardline) finfos P.empty
+  
 end)
 
 

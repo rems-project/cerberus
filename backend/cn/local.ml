@@ -11,81 +11,12 @@ module Loc = Locations
 module IT = IndexTerms
 
 
-module VariableBinding = struct
-
-  open Kind
-
-  type solver_constraint = Z3.Expr.expr
-
-  type t =
-    | Computational of Sym.t * BT.t
-    | Logical of LS.t
-    | Resource of RE.t
-    | UsedResource of RE.t * Loc.t list
-    | Constraint of LC.t * solver_constraint
-
-
-  let kind = function
-    | Computational _ -> KComputational
-    | Logical _ -> KLogical
-    | Resource _ -> KResource
-    | Constraint _ -> KConstraint
-    | UsedResource _ -> KUsedResource 
-
-
-
-
-  let pp ?(print_all_names = false) ?(print_used = false) (sym,binding) =
-    let btyp sym pped = format [Bold] (Sym.pp_string sym) ^^ colon ^^ pped in
-    match binding with
-    | Computational (lname,bt) -> 
-       btyp sym (BT.pp bt ^^ tilde ^^ Sym.pp lname)
-    | Logical ls -> 
-       btyp sym (LS.pp ls)
-    | Resource re -> 
-       if print_all_names 
-       then btyp sym (squotes (RE.pp re))
-       else squotes (RE.pp re)
-    | UsedResource (re,_locs) -> 
-       if not print_used then underscore 
-       else if print_all_names 
-       then btyp sym (!^"used" ^^^ (squotes (RE.pp re)))
-       else !^"used" ^^^ squotes (RE.pp re)
-    | Constraint (lc, _) -> 
-       if print_all_names 
-       then btyp sym (LC.pp lc)
-       else LC.pp lc
-
-
-
-  let agree vb1 vb2 = 
-    match vb1, vb2 with
-    | Computational (l1,bt1), Computational (l2,bt2)
-         when Sym.equal l1 l2 && BT.equal bt1 bt2 -> 
-       Some (Computational (l1,bt1))
-    | Logical ls1, Logical ls2 
-         when LS.equal ls1 ls2 -> 
-       Some (Logical ls1)
-    | Constraint (lc1,sc), Constraint (lc2, _)
-           when LC.equal lc1 lc2 ->
-       Some (Constraint (lc1, sc))
-    | Resource re1, Resource re2 
-         when RE.equal re1 re2 ->
-       Some (Resource re1)
-    | UsedResource (re1,locs1), UsedResource (re2,locs2)
-           when RE.equal re1 re2 ->
-       Some (UsedResource (re1, locs1 @ locs2))
-    | _, _ ->
-       None
-
-end
-
 
 module Make (G : sig val global : Global.t end) = struct
 
-  module VB = VariableBinding
+  module VB = VariableBindings
 
-  type binding = Sym.t * VB.t
+  open VB
 
   type context_item = 
     | Binding of binding
@@ -136,17 +67,11 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* internal *)
-  let get_safe (sym: Sym.t) (Local local) : VB.t option =
+  let get_safe (sym: Sym.t) (Local local) : VB.bound option =
     let rec aux = function
     | Binding (sym',b) :: _ when Sym.equal sym' sym -> Some b
     | _ :: local -> aux local
-    | [] -> 
-       match List.assoc_opt Sym.equal sym G.global.logical with
-       | Some ls -> Some (Logical ls)
-       | None ->
-          match List.assoc_opt Sym.equal sym G.global.computational with
-          | Some (lsym, bt) -> Some (Computational (lsym, bt))
-          | None -> None
+    | [] -> List.assoc_opt Sym.equal sym G.global.bindings
     in
     aux local
 
@@ -155,51 +80,46 @@ module Make (G : sig val global : Global.t end) = struct
   let add (name, b) (Local e) = Local (Binding (name, b) :: e)
 
   let filter p (Local e) = 
-    filter_map (function Binding (sym,b) -> p sym b | _ -> None) e
-
+    filter_map (function Binding (sym,b) -> p (sym, b) | _ -> None) e @
+      List.filter_map p G.global.bindings
 
   let all_computational local = 
-    filter (fun name b ->
+    filter (fun (name, b) ->
         match b with
         | Computational (lname, b) -> Some (name, (lname, b))
         | _ -> None
       ) local
-    @
-    G.global.computational
 
   let all_logical local = 
-    filter (fun name b ->
+    filter (fun (name, b) ->
         match b with
         | Logical ls -> Some (name, ls)
         | _ -> None
       ) local
-    @
-    G.global.logical
 
   let all_resources local = 
-    filter (fun name b ->
+    filter (fun (name, b) ->
         match b with
         | Resource re -> Some re
         | _ -> None
       ) local
 
   let all_named_resources local = 
-    filter (fun name b ->
+    filter (fun (name, b) ->
         match b with
         | Resource re -> Some (name, re)
         | _ -> None
       ) local
 
-
   let all_used_resources local = 
-    filter (fun name b ->
+    filter (fun (name, b) ->
         match b with
         | UsedResource (re,where) -> Some (re, where)
         | _ -> None
       ) local
 
   let all_named_used_resources local = 
-    filter (fun name b ->
+    filter (fun (name, b) ->
         match b with
         | UsedResource (re,where) -> Some (name, (re, where))
         | _ -> None
@@ -207,27 +127,19 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let all_constraints local = 
-    let from_local = 
-      filter (fun name b ->
-          match b with
-          | Constraint (lc, _) -> Some lc
-          | _ -> None
-        ) local
-    in
-    let from_global = List.map fst G.global.constraints in
-    from_local @ from_global
+    filter (fun (name, b) ->
+        match b with
+        | Constraint (lc, _) -> Some lc
+        | _ -> None
+      ) local
   
 
   let all_solver_constraints local = 
-    let from_local = 
-      filter (fun name b ->
-          match b with
-          | Constraint (_, sc) -> Some sc
-          | _ -> None
-        ) local
-    in
-    let from_global = List.map snd G.global.constraints in
-    from_local @ from_global
+    filter (fun (name, b) ->
+        match b with
+        | Constraint (_, sc) -> Some sc
+        | _ -> None
+      ) local
 
 
 
@@ -380,10 +292,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let (++) = concat
 
-  let all_names local = 
-    filter (fun sym _ -> Some sym) local @
-    List.map fst G.global.computational @
-    List.map fst G.global.logical
+  let all_names local = filter (fun (sym, _) -> Some sym) local
 
 
 

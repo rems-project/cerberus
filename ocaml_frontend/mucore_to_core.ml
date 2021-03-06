@@ -15,6 +15,10 @@ open Core_aux
 open Lem_assert_extra
 
 open Mucore
+module Mu = Core_anormalise.Mu
+open Mu
+
+
 
 
 
@@ -28,30 +32,30 @@ let insert_symbol sym1 v env1:('b,'a)Pmap.map=
    (Pmap.add sym1 v env1)
 
 let get_pexpr _where env asym:('b,'a)Core.generic_pexpr= 
-  match Pmap.lookup asym.item env with
+  match Pmap.lookup asym.sym env with
   | Some pexpr2 -> pexpr2
   (* Maybe there was already a symbol before a-normalisation. Then the
      a-normalisation would not have added a new let-expression. So
      when reverting, we have to turn those symbols into PEsym
      expressions. *)
-  | None -> Core.Pexpr(asym.annot, asym.type_annot, (Core.PEsym asym.item))
+  | None -> Core.Pexpr(asym.annot, asym.type_annot, (Core.PEsym asym.sym))
 
 
 let get_loaded_value env1 asym2:'a Core.generic_loaded_value= 
-  match Pmap.lookup asym2.item env1 with
+  match Pmap.lookup asym2.sym env1 with
   | Some (Core.Pexpr( _, _, (Core.PEval (Core.Vloaded lv)))) -> lv
   | Some _ -> failwith "not a loaded value"
   | None -> failwith ("get_loaded_value: symbol not found")
 
 let get_object_value env1 asym:'a Core.generic_object_value= 
-  match (lookupBy Symbol.symbolEquality asym.item env1) with
+  match (lookupBy Symbol.symbolEquality asym.sym env1) with
   | Some (Core.Pexpr( _, _, (Core.PEval (Core.Vobject ov)))) -> ov
   | Some _ -> failwith "not an object value"
   | None -> failwith ("get_object_value: symbol not found")
 
 
 let get_value env1 asym:'a Core.generic_value= 
-  match Pmap.lookup asym.item env1 with
+  match Pmap.lookup asym.sym env1 with
   | Some (Core.Pexpr( _, _, (Core.PEval v))) -> v
   | Some _ -> failwith "not an object value"
   | None -> failwith ("get_value: symbol not found")
@@ -59,11 +63,11 @@ let get_value env1 asym:'a Core.generic_value=
 
 
 let make_symbol_pexpr asym : ('bty, symbol) Core.generic_pexpr=
-  let (_loc, annots, bty, sym) = a_unpack asym in
+  let (_loc, annots, bty, sym) = asym_unpack asym in
    (Core.Pexpr( annots, bty, (Core.PEsym sym)))
 
 let make_ctype_pexpr asym : ('bty, symbol) Core.generic_pexpr=
-  let (_, annots, bty, ctype) = a_unpack asym in
+  let (_, annots, bty, ctype) = act_unpack asym in
    (Core.Pexpr (annots, bty, (Core.PEval (Core.Vctype ctype))))
 
 
@@ -87,7 +91,7 @@ and mu_to_core__loaded_value (env1 : 'bty env) lv:(Symbol.sym)Core.generic_loade
   ))
 
 
-let rec mu_to_core__value (env1 : 'bty env) (v : (Ctype.ctype, mu_base_type, 'bty) mu_value)
+let rec mu_to_core__value (env1 : 'bty env) (v : 'bty mu_value)
         : symbol Core.generic_value=
    ((match v with
   | M_Vobject ov -> Core.Vobject (mu_to_core__object_value env1 ov)
@@ -104,7 +108,7 @@ let rec mu_to_core__value (env1 : 'bty env) (v : (Ctype.ctype, mu_base_type, 'bt
      Core.Vtuple is
   ))
   
-let mu_to_core__ctor:(Core.core_base_type)mu_ctor ->Core.generic_ctor=  ((function
+let mu_to_core__ctor:mu_ctor ->Core.generic_ctor=  ((function
  | M_Cnil bt1 -> Core.Cnil bt1
  | M_Ccons -> Core.Ccons
  | M_Ctuple -> Core.Ctuple
@@ -130,7 +134,7 @@ let rec mu_to_core__pattern (M_Pattern(_, annots, pat_)):(Symbol.sym)Core.generi
              (map mu_to_core__pattern pats)))
 
 
-let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : (Ctype.ctype, mu_base_type, 'bty) mu_pexpr)
+let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
         : ('bty, symbol) Core.generic_pexpr=
    (let (M_Pexpr(_, annots2, bty, pexpr_)) = pexpr2 in
   let wrap pexpr_=  (Core.Pexpr( annots2, bty, pexpr_)) in
@@ -216,12 +220,12 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : (Ctype.ctype, mu_base_type
 
   ))
 
-let mu_to_core__kill_kind:(ctype)m_kill_kind ->Core.kill_kind=  ((function
+let mu_to_core__kill_kind:m_kill_kind ->Core.kill_kind=  ((function
   | M_Dynamic -> Core.Dynamic
   | M_Static ct1 -> Core.Static0 ct1
   ))
 
-let mu_to_core__action_ env1 (action_ : (Ctype.ctype, 'bty) mu_action_)
+let mu_to_core__action_ env1 (action_ :'bty mu_action_)
         : ('bty, symbol) Core.generic_action_=
    ((match action_ with
   | M_Create( p11, p21, prefix1) ->
@@ -311,68 +315,7 @@ let mu_to_core__action env1 (M_Action( t5, action_)):((unit),'a,(Symbol.sym))Cor
 let mu_to_core__paction env1 (M_Paction( p, action3)):((unit),'a,(Symbol.sym))Core.generic_paction= 
    (Core.Paction( p, (mu_to_core__action env1 action3)))
 
-let mu_to_core__memop__ memop1:memop*(((('b,'a)a),(((Symbol.sym),'a)a))Either.either)list= 
-   (let mctype ct1=  (Either.Left ct1) in
-  let msym sym1=  (Either.Right sym1) in
-  (match memop1 with
-  | M_PtrEq (sym1,sym2) ->
-     (PtrEq, 
-      [msym sym1; msym sym2])
-  | M_PtrNe (sym1,sym2) ->
-     (PtrNe, 
-      [msym sym1; msym sym2])
-  | M_PtrLt (sym1,sym2) ->
-     (PtrLt, 
-      [msym sym1; msym sym2])
-  | M_PtrGt (sym1,sym2) ->
-     (PtrGt, 
-      [msym sym1; msym sym2])
-  | M_PtrLe (sym1,sym2) ->
-     (PtrLe, 
-      [msym sym1; msym sym2])
-  | M_PtrGe (sym1,sym2) ->
-     (PtrGe, 
-      [msym sym1; msym sym2])
-  | M_Ptrdiff (ct1,sym1,sym2) ->
-     (Ptrdiff, 
-      [mctype ct1; msym sym1; msym sym2])
-  | M_IntFromPtr (ct1,ct2,sym1) ->
-     (IntFromPtr, 
-      [mctype ct1; mctype ct2; msym sym1])
-  | M_PtrFromInt (ct1,ct2,sym1) ->
-     (PtrFromInt, 
-      [mctype ct1; mctype ct2; msym sym1])
-  | M_PtrValidForDeref (ct1,sym1) ->
-     (PtrValidForDeref, 
-      [mctype ct1; msym sym1])
-  | M_PtrWellAligned (ct1,sym1) ->
-     (PtrWellAligned, 
-      [mctype ct1; msym sym1])
-  | M_PtrArrayShift (sym1,ct1,sym2) ->
-     (PtrArrayShift, 
-      [msym sym1; mctype ct1; msym sym2])
-  | M_Memcpy (sym1,sym2,sym3) ->
-     (Memcpy, 
-      [msym sym1; msym sym2; msym sym3])
-  | M_Memcmp (sym1,sym2,sym3) ->
-     (Memcmp, 
-      [msym sym1; msym sym2; msym sym3])
-  | M_Realloc (sym1,sym2,sym3) ->
-     (Realloc, 
-      [msym sym1; msym sym2; msym sym3])
-  | M_Va_start (sym1,sym2) ->
-     (Va_start, 
-      [msym sym1; msym sym2])
-  | M_Va_copy sym1 ->
-     (Va_copy, 
-      [msym sym1])
-  | M_Va_arg (sym1,ct1) ->
-     (Va_arg, 
-      [msym sym1; mctype ct1])
-  | M_Va_end sym1 ->
-     (Va_end, 
-      [msym sym1])
-  ))
+
 
 
 let mu_to_core__memop env1 memop1:memop*(('a,(Symbol.sym))Core.generic_pexpr)list= 
@@ -498,7 +441,7 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap Core.Eskip
     | M_Eccall( (act), pe2, pes) ->
        wrap (Core.Eccall( (),
-               (Core.Pexpr( act.annot, act.type_annot, (Core.PEval (Core.Vctype act.item)))),
+               (Core.Pexpr( act.annot, act.type_annot, (Core.PEval (Core.Vctype act.ct)))),
                (get_pexpr "Eccall" env1 pe2), 
                (map (get_pexpr "Eccall" env1) pes)))
     | M_Eproc( name1, pes) ->
@@ -533,7 +476,7 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
   ))
 
 
-let mu_to_core__impl_decl (i : (Ctype.ctype, mu_base_type, 'bty) mu_impl_decl) 
+let mu_to_core__impl_decl (i : 'bty mu_impl_decl) 
     : 'bty Core.generic_impl_decl=
    ((match i with
   | M_Def( bt1, p) -> 
@@ -544,7 +487,7 @@ let mu_to_core__impl_decl (i : (Ctype.ctype, mu_base_type, 'bty) mu_impl_decl)
   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) body))
   ))
 
-let mu_to_core__impl (i : (Ctype.ctype, mu_base_type, 'bty) mu_impl) 
+let mu_to_core__impl (i : 'bty mu_impl) 
     : 'bty Core.generic_impl=
    (Pmap.map mu_to_core__impl_decl i)
 
@@ -563,12 +506,12 @@ let mu_to_core__fun_map_decl d : ('bty, unit) Core.generic_fun_map_decl=
      Core.BuiltinDecl( loc, bt1, bts)
   ))
 
-let mu_to_core__fun_map (fmap1 : ('DLTY, Ctype.ctype, mu_base_type, 'bty, 'mapping)mu_fun_map) 
+let mu_to_core__fun_map (fmap1 : 'bty mu_fun_map) 
     : ('bty, unit) Core.generic_fun_map= 
    (Pmap.map mu_to_core__fun_map_decl fmap1)
   
 
-let mu_to_core__globs (g : ('gt, Ctype.ctype, mu_base_type, 'bty) mu_globs) 
+let mu_to_core__globs (g : 'bty  mu_globs) 
     : (unit, 'bty) Core.generic_globs= 
    ((match g with
   | M_GlobalDef(_, bt1, e) -> Core.GlobalDef( bt1, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
@@ -589,12 +532,13 @@ let mu_to_core__tag_definitions dict_Map_MapKeyType_a tagDefs1:('a,(tag_definiti
    (Pmap.map mu_to_core__tag_definition tagDefs1)
 
   
-let mu_to_core__globs_list (gs : (symbol * ('gt, Ctype.ctype, mu_base_type, 'bty) mu_globs) list )
+let mu_to_core__globs_list (gs : (symbol * 'bty mu_globs) list )
     : (symbol * (unit, 'bty) Core.generic_globs) list= 
    (map (fun (sym1,g) -> (sym1, mu_to_core__globs g)) gs)
 
 
-let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args),b1,b2,_mapping)):Location_ocaml.t*attributes*'b*'a*bool*bool=
+let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args,b1),b2,_mapping)):Location_ocaml.t*attributes*'b*'a*bool*bool=
+  let args = List.map (fun (s,ct) -> (Some s, ct)) args in
    (loc,annots2,ret,args,b1,b2)
 
 let mu_to_core__funinfos dict_Map_MapKeyType_c funinfos:('c,(Location_ocaml.t*attributes*'a*'b*bool*bool))Pmap.map= 

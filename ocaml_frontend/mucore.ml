@@ -10,262 +10,312 @@ open Core_aux
 open Lem_assert_extra
 
 module Loc = Location_ocaml
-
 type loc = Loc.t
 
-type symbol = Symbol.sym
-type mu_object_type = Core.core_object_type
-type mu_base_type = Core.core_base_type
-type mu_name = symbol Core.generic_name
 
-type ('o, 'TY) a = 
-  { loc: loc;
+
+
+
+type 'TY asym = { 
+    loc: loc;
     annot: Annot.annot list;
     type_annot : 'TY;
-    item: 'o }
+    sym: Symbol.sym 
+  }
 
-let a_unpack a = 
-  (a.loc, a.annot, a.type_annot, a.item)
-let a_pack loc annot type_annot item = 
-  {loc; annot; type_annot; item}
 
-type 'TY asym = (Symbol.sym, 'TY) a
-type 'TY asyms = ('TY asym) list
-
-type 'TY f_asym = 'TY asym
-type 'TY lv_asym = 'TY asym       (* loaded_value *)
-type 'TY va_asym = 'TY asym       (* value *)
-
-
-
-
-
-
-
-type ('ct, 'TY) mu_object_value =  (* C object values *)
- | M_OVinteger of Impl_mem.integer_value (* integer value *)
- | M_OVfloating of Impl_mem.floating_value (* floating-point value *)
- | M_OVpointer of Impl_mem.pointer_value (* pointer value *)
- | M_OVarray of ('TY lv_asym) list (* C array value *)
- | M_OVstruct of symbol * (Symbol.identifier * 'ct * Impl_mem.mem_value) list (* C struct value *)
- | M_OVunion of symbol * Symbol.identifier * Impl_mem.mem_value (* C union value *)
+module type TYPES = sig
 
+  type ct
+  type bt
 
-type ('ct, 'TY) mu_loaded_value =  (* potentially unspecified C object values *)
- | M_LVspecified of ('ct, 'TY) mu_object_value (* non-unspecified loaded value *)
-
-
-(* again, we might remove something from the definition here,
-   e.g. Vctype *)
-type ('ct, 'bt, 'TY) mu_value =  (* Core values *)
- | M_Vobject of ('ct, 'TY) mu_object_value (* C object value *)
- | M_Vloaded of ('ct, 'TY) mu_loaded_value (* loaded C object value *)
- | M_Vunit
- | M_Vtrue
- | M_Vfalse
- | M_Vlist of 'bt * ('TY asym) list
- | M_Vtuple of ('TY asym) list (* tuple *)
-
-
-
-type 'bt mu_ctor =  (* data constructors *)
- | M_Cnil of 'bt (* empty list *) 
- (* annotated with the type of the list items *)
- | M_Ccons (* list cons *)
- | M_Ctuple (* tuple *)
- | M_Carray (* C array *)
- | M_CivCOMPL (* bitwise complement *)
- | M_CivAND (* bitwise AND *)
- | M_CivOR (* bitwise OR *)
- | M_CivXOR (* bitwise XOR *)
- | M_Cspecified (* non-unspecified loaded value *)
- | M_Cfvfromint (* cast integer to floating value *)
- | M_Civfromfloat (* cast floating to integer value *)
-
-type 'bt mu_pattern_ = 
- | M_CaseBase of (Symbol.sym option * 'bt)
- | M_CaseCtor of 'bt mu_ctor * ('bt mu_pattern) list
-
-and 'bt mu_pattern = 
- | M_Pattern of loc * annot list * ('bt mu_pattern_)
-
-type ('bt, 'TY) mu_sym_or_pattern = 
-  | M_Symbol of symbol
-  | M_Pat of 'bt mu_pattern
-
-type ('ct, 'bt, 'TY) mu_pexpr_ =  (* Core pure expressions *)
- | M_PEsym of symbol
- | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
- | M_PEval of ('ct, 'bt, 'TY) mu_value
- | M_PEconstrained of (Mem.mem_iv_constraint * 'TY asym) list (* constrained value *)
- | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
- | M_PEerror of string * 'TY asym (* impl-defined static error *)
- | M_PEctor of 'bt mu_ctor * ('TY asym) list (* data constructor application *)
- | M_PEcase of ('TY asym) * ('bt mu_pattern * ('ct, 'bt, 'TY) mu_pexpr) list (* pattern matching *)
- | M_PEarray_shift of ('TY asym) * 'ct * ('TY asym) (* pointer array shift *)
- | M_PEmember_shift of ('TY asym) * symbol * Symbol.identifier (* pointer struct/union member shift *)
- | M_PEnot of 'TY asym (* boolean not *)
- | M_PEop of Core.binop * ('TY asym) * ('TY asym)
- | M_PEstruct of symbol * (Symbol.identifier * 'TY asym) list (* C struct expression *)
- | M_PEunion of symbol * Symbol.identifier * 'TY asym (* C union expression *)
- | M_PEmemberof of symbol * Symbol.identifier * 'TY asym (* C struct/union member access *)
- | M_PEcall of mu_name * ('TY asym) list (* pure function call *)
- | M_PElet of (('bt, 'TY) mu_sym_or_pattern) * (('ct, 'bt, 'TY) mu_pexpr) * (('ct, 'bt, 'TY) mu_pexpr) (* pure let *)
- | M_PEif of 'TY asym * (('ct, 'bt, 'TY) mu_pexpr) * (('ct, 'bt, 'TY) mu_pexpr) (* pure if *)
-
-
-and ('ct, 'bt, 'TY) mu_pexpr = 
- | M_Pexpr of loc * annot list * 'TY * (('ct, 'bt, 'TY) mu_pexpr_)
-
-
-
-type 'ct m_kill_kind = 
-  | M_Dynamic
-  | M_Static of 'ct
+  type ut
+  type st
+  type ft
+  type lt
+  type gt
+  type mapping
 
-type ('ct, 'TY) mu_action_ =  (* memory actions *)
- | M_Create of 'TY asym * (('ct, 'TY) a) * Symbol.prefix
- | M_CreateReadOnly of 'TY asym * (('ct, 'TY) a) * 'TY asym * Symbol.prefix
- | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
- | M_Kill of 'ct m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
- | M_Store of bool * (('ct, 'TY) a) * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
- | M_Load of (('ct, 'TY) a) * 'TY asym * Cmm_csem.memory_order
- | M_RMW of (('ct, 'TY) a) * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of (('ct, 'TY) a) * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of (('ct, 'TY) a) * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of (('ct, 'TY) a) * 'TY asym * Linux.linux_memory_order
- | M_LinuxStore of (('ct, 'TY) a) * 'TY asym * 'TY asym * Linux.linux_memory_order
- | M_LinuxRMW of (('ct, 'TY) a) * 'TY asym * 'TY asym * Linux.linux_memory_order
+end
 
 
-type ('ct, 'TY) mu_action = 
- | M_Action of Location_ocaml.t * (('ct, 'TY) mu_action_)
 
 
-type ('ct, 'TY) mu_paction =  (* memory actions with Core.polarity *)
- | M_Paction of Core.polarity * (('ct, 'TY) mu_action)
 
-type ('ct, 'TY) mu_memop =
-  | M_PtrEq of ('TY asym * 'TY asym)
-  | M_PtrNe of ('TY asym * 'TY asym)
-  | M_PtrLt of ('TY asym * 'TY asym)
-  | M_PtrGt of ('TY asym * 'TY asym)
-  | M_PtrLe of ('TY asym * 'TY asym)
-  | M_PtrGe of ('TY asym * 'TY asym)
-  | M_Ptrdiff of ((('ct, 'TY) a) * 'TY asym * 'TY asym)
-  | M_IntFromPtr of ((('ct, 'TY) a) * (('ct, 'TY) a) * 'TY asym)
-  | M_PtrFromInt of ((('ct, 'TY) a) * (('ct, 'TY) a) * 'TY asym)
-  | M_PtrValidForDeref of ((('ct, 'TY) a) * 'TY asym)
-  | M_PtrWellAligned of ((('ct, 'TY) a) * 'TY asym)
-  | M_PtrArrayShift of ('TY asym * (('ct, 'TY) a) * 'TY asym)
-  | M_Memcpy of ('TY asym * 'TY asym * 'TY asym)
-  | M_Memcmp of ('TY asym * 'TY asym * 'TY asym)
-  | M_Realloc of ('TY asym * 'TY asym * 'TY asym)
-  | M_Va_start  of ('TY asym * 'TY asym)
-  | M_Va_copy of ('TY asym)
-  | M_Va_arg of ('TY asym * (('ct, 'TY) a))
-  | M_Va_end of ('TY asym)
+module Make(T : TYPES) = struct
 
 
-type ('ct, 'bt, 'TY) mu_expr_ =  (* (effectful) expression *)
- | M_Epure of (('ct, 'bt, 'TY) mu_pexpr)
- | M_Ememop of ('ct, 'TY) mu_memop
- | M_Eaction of (('ct, 'TY) mu_paction) (* memory action *)
- | M_Ecase of 'TY asym * ('bt mu_pattern * (('ct, 'bt, 'TY) mu_expr)) list (* pattern matching *)
- | M_Elet of (('bt, 'TY) mu_sym_or_pattern) * (('ct, 'bt, 'TY) mu_pexpr) * (('ct, 'bt, 'TY) mu_expr)
- | M_Eif of 'TY asym * (('ct, 'bt, 'TY) mu_expr) * (('ct, 'bt, 'TY) mu_expr)
- | M_Eskip
- | M_Eccall of (((ctype, 'TY) a)) * 'TY asym * ('TY asym) list (* C function call *)
- | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
- | M_Ewseq of 'bt mu_pattern * (('ct, 'bt, 'TY) mu_expr) * (('ct, 'bt, 'TY) mu_expr) (* weak sequencing *)
- | M_Esseq of 'bt mu_pattern * (('ct, 'bt, 'TY) mu_expr) * (('ct, 'bt, 'TY) mu_expr) (* strong sequencing *)
- | M_Ebound of int * (('ct, 'bt, 'TY) mu_expr) (* $\ldots$and boundary *)
- | M_End of (('ct, 'bt, 'TY) mu_expr) list (* nondeterministic choice *)
- | M_Erun of symbol * ('TY asym) list (* run from label *)
 
-and ('ct, 'bt, 'TY) mu_expr = 
- | M_Expr of loc * annot list * (('ct, 'bt, 'TY) mu_expr_)
+  type symbol = Symbol.sym
+  type mu_name = symbol Core.generic_name
 
+  type 'TY act = { 
+      loc: loc;
+      annot: Annot.annot list;
+      type_annot : 'TY;
+      ct: T.ct
+    }
 
+  let asym_unpack (a : 'TY asym) = 
+    (a.loc, a.annot, a.type_annot, a.sym)
+  let asym_pack loc annot type_annot sym = 
+    {loc; annot; type_annot; sym}
 
+  let act_unpack (a : 'TY act) = 
+    (a.loc, a.annot, a.type_annot, a.ct)
+  let act_pack loc annot type_annot ct = 
+    {loc; annot; type_annot; ct}
 
-let embed_pexpr_expr pe : ('c,'b,'a) mu_expr= 
-  let (M_Pexpr (loc, _, _, _)) = pe in
-  M_Expr (loc, [], (M_Epure pe))
+  type 'TY asyms = ('TY asym) list
+  type 'TY acts = ('TY act) list
 
 
-type ('ct, 'bt, 'TY) mu_impl_decl =
-  | M_Def of 'bt * ('ct, 'bt, 'TY) mu_pexpr
-  | M_IFun of 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_pexpr
 
-type ('ct, 'bt, 'TY) mu_impl = (Implementation.implementation_constant, (('ct, 'bt, 'TY) mu_impl_decl)) 
-  Pmap.map
+  type 'TY mu_object_value =  (* C object values *)
+   | M_OVinteger of Impl_mem.integer_value (* integer value *)
+   | M_OVfloating of Impl_mem.floating_value (* floating-point value *)
+   | M_OVpointer of Impl_mem.pointer_value (* pointer value *)
+   | M_OVarray of ('TY asym) list (* C array value *)
+   | M_OVstruct of symbol * (Symbol.identifier * T.ct * Impl_mem.mem_value) list (* C struct value *)
+   | M_OVunion of symbol * Symbol.identifier * Impl_mem.mem_value (* C union value *)
 
-type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_def = 
-  | M_Return of loc * 'lt
-  | M_Label of loc * 'lt * ((symbol * 'bt) list) * ('ct, 'bt, 'TY) mu_expr * annot list * 'mapping
 
-type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs = (symbol, (('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_def))
-  Pmap.map
+  type 'TY mu_loaded_value =  (* potentially unspecified C object values *)
+   | M_LVspecified of 'TY mu_object_value (* non-unspecified loaded value *)
 
 
-type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map_decl =
-  | M_Fun of 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_pexpr
-  | M_Proc of Location_ocaml.t * 'bt * (symbol * 'bt) list * ('ct, 'bt, 'TY) mu_expr * ('lt, 'ct, 'bt, 'TY, 'mapping) mu_label_defs * 'mapping
-  | M_ProcDecl of Location_ocaml.t * 'bt * 'bt list
-  | M_BuiltinDecl of Location_ocaml.t * 'bt * 'bt list
+  type 'TY mu_value =  (* Core values *)
+   | M_Vobject of 'TY mu_object_value (* C object value *)
+   | M_Vloaded of 'TY mu_loaded_value (* loaded C object value *)
+   | M_Vunit
+   | M_Vtrue
+   | M_Vfalse
+   | M_Vlist of T.bt * ('TY asym) list
+   | M_Vtuple of ('TY asym) list (* tuple *)
+
+
+
+  type mu_ctor =  (* data constructors *)
+   | M_Cnil of T.bt (* empty list *) 
+   (* annotated with the type of the list items *)
+   | M_Ccons (* list cons *)
+   | M_Ctuple (* tuple *)
+   | M_Carray (* C array *)
+   | M_CivCOMPL (* bitwise complement *)
+   | M_CivAND (* bitwise AND *)
+   | M_CivOR (* bitwise OR *)
+   | M_CivXOR (* bitwise XOR *)
+   | M_Cspecified (* non-unspecified loaded value *)
+   | M_Cfvfromint (* cast integer to floating value *)
+   | M_Civfromfloat (* cast floating to integer value *)
+
+  type mu_pattern_ = 
+   | M_CaseBase of (Symbol.sym option * T.bt)
+   | M_CaseCtor of mu_ctor * mu_pattern list
+
+  and mu_pattern = 
+   | M_Pattern of loc * annot list * mu_pattern_
+
+  type 'TY mu_sym_or_pattern = 
+    | M_Symbol of symbol
+    | M_Pat of mu_pattern
+
+  type 'TY mu_pexpr_ =  (* Core pure expressions *)
+   | M_PEsym of symbol
+   | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
+   | M_PEval of 'TY mu_value
+   | M_PEconstrained of (Mem.mem_iv_constraint * 'TY asym) list (* constrained value *)
+   | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+   | M_PEerror of string * 'TY asym (* impl-defined static error *)
+   | M_PEctor of mu_ctor * ('TY asym) list (* data constructor application *)
+   | M_PEcase of ('TY asym) * (mu_pattern * 'TY mu_pexpr) list (* pattern matching *)
+   | M_PEarray_shift of ('TY asym) * T.ct * ('TY asym) (* pointer array shift *)
+   | M_PEmember_shift of ('TY asym) * symbol * Symbol.identifier (* pointer struct/union member shift *)
+   | M_PEnot of 'TY asym (* boolean not *)
+   | M_PEop of Core.binop * ('TY asym) * ('TY asym)
+   | M_PEstruct of symbol * (Symbol.identifier * 'TY asym) list (* C struct expression *)
+   | M_PEunion of symbol * Symbol.identifier * 'TY asym (* C union expression *)
+   | M_PEmemberof of symbol * Symbol.identifier * 'TY asym (* C struct/union member access *)
+   | M_PEcall of mu_name * ('TY asym) list (* pure function call *)
+   | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
+   | M_PEif of 'TY asym * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure if *)
+
+
+  and 'TY mu_pexpr = 
+   | M_Pexpr of loc * annot list * 'TY * ('TY mu_pexpr_)
+
+
+
+  type m_kill_kind = 
+    | M_Dynamic
+    | M_Static of T.ct
+
+  type 'TY mu_action_ =  (* memory actions *)
+   | M_Create of 'TY asym * ('TY act) * Symbol.prefix
+   | M_CreateReadOnly of 'TY asym * 'TY act * 'TY asym * Symbol.prefix
+   | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
+   | M_Kill of m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
+   | M_Store of bool * 'TY act * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+   | M_Load of 'TY act * 'TY asym * Cmm_csem.memory_order
+   | M_RMW of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+   | M_Fence of Cmm_csem.memory_order
+   | M_CompareExchangeStrong of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+   | M_CompareExchangeWeak of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+   | M_LinuxFence of Linux.linux_memory_order
+   | M_LinuxLoad of 'TY act * 'TY asym * Linux.linux_memory_order
+   | M_LinuxStore of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
+   | M_LinuxRMW of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
+
+
+  type 'TY mu_action = 
+   | M_Action of Location_ocaml.t * ('TY mu_action_)
+
+
+  type 'TY mu_paction =  (* memory actions with Core.polarity *)
+   | M_Paction of Core.polarity * ('TY mu_action)
+
+  type 'TY mu_memop =
+    | M_PtrEq of ('TY asym * 'TY asym)
+    | M_PtrNe of ('TY asym * 'TY asym)
+    | M_PtrLt of ('TY asym * 'TY asym)
+    | M_PtrGt of ('TY asym * 'TY asym)
+    | M_PtrLe of ('TY asym * 'TY asym)
+    | M_PtrGe of ('TY asym * 'TY asym)
+    | M_Ptrdiff of ('TY act * 'TY asym * 'TY asym)
+    | M_IntFromPtr of ('TY act * 'TY act * 'TY asym)
+    | M_PtrFromInt of ('TY act * 'TY act * 'TY asym)
+    | M_PtrValidForDeref of ('TY act * 'TY asym)
+    | M_PtrWellAligned of ('TY act * 'TY asym)
+    | M_PtrArrayShift of ('TY asym * 'TY act * 'TY asym)
+    | M_Memcpy of ('TY asym * 'TY asym * 'TY asym)
+    | M_Memcmp of ('TY asym * 'TY asym * 'TY asym)
+    | M_Realloc of ('TY asym * 'TY asym * 'TY asym)
+    | M_Va_start  of ('TY asym * 'TY asym)
+    | M_Va_copy of ('TY asym)
+    | M_Va_arg of ('TY asym * 'TY act)
+    | M_Va_end of ('TY asym)
 
-type ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map = (symbol, (('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map_decl)) 
-  Pmap.map
 
+  type 'TY mu_expr_ =  (* (effectful) expression *)
+   | M_Epure of ('TY mu_pexpr)
+   | M_Ememop of 'TY mu_memop
+   | M_Eaction of ('TY mu_paction) (* memory action *)
+   | M_Ecase of 'TY asym * (mu_pattern * ('TY mu_expr)) list (* pattern matching *)
+   | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
+   | M_Eif of 'TY asym * ('TY mu_expr) * ('TY mu_expr)
+   | M_Eskip
+   | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
+   | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
+   | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
+   | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)
+   | M_Ebound of int * ('TY mu_expr) (* $\ldots$and boundary *)
+   | M_End of ('TY mu_expr) list (* nondeterministic choice *)
+   | M_Erun of symbol * ('TY asym) list (* run from label *)
 
+  and 'TY mu_expr = 
+   | M_Expr of loc * annot list * ('TY mu_expr_)
 
-type mu_linking_kind = Core.linking_kind
 
-type mu_extern_map = Core.extern_map
 
-type ('gt, 'ct, 'bt, 'TY) mu_globs =
-  | M_GlobalDef of symbol * ('bt * 'gt) * ('ct, 'bt, 'TY) mu_expr
-  | M_GlobalDecl of symbol * ('bt * 'gt)
 
-type ('gt, 'ct, 'bt, 'TY) mu_globs_map = (symbol, (('gt, 'ct, 'bt, 'TY) mu_globs))
-  Pmap.map
+  let embed_pexpr_expr pe : 'TY mu_expr= 
+    let (M_Pexpr (loc, _, _, _)) = pe in
+    M_Expr (loc, [], (M_Epure pe))
 
 
+  type 'TY mu_impl_decl =
+    | M_Def of T.bt * 'TY mu_pexpr
+    | M_IFun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
 
-type 'ct mu_struct_def = (Symbol.identifier * (Annot.attributes * qualifiers * 'ct)) list *  flexible_array_member option
-type 'ct mu_union_def = (Symbol.identifier * (Annot.attributes * qualifiers * 'ct)) list
+  type 'TY mu_impl = (Implementation.implementation_constant, ('TY mu_impl_decl)) 
+    Pmap.map
 
-type ('st_def, 'ut_def) mu_tag_definition =
-  | M_StructDef of 'st_def
-  | M_UnionDef of 'ut_def
+  type 'TY mu_label_def = 
+    | M_Return of loc * T.lt
+    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_expr * annot list * T.mapping
 
-type ('st,'ut) mu_tag_definitions = (Symbol.sym, ('st,'ut) mu_tag_definition)
-  Pmap.map
+  type 'TY mu_label_defs = (symbol, ('TY mu_label_def)) Pmap.map
 
-type 'ct mu_funinfo_type = 'ct * (symbol * 'ct) list
 
-type ('ft,'mapping) mu_funinfo = 
-  M_funinfo of (Location_ocaml.t * Annot.attributes * 'ft * bool * bool * 'mapping)
+  type 'TY mu_fun_map_decl =
+    | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
+    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_expr * 'TY mu_label_defs * T.mapping
+    | M_ProcDecl of Location_ocaml.t * T.bt * T.bt list
+    | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list
 
-type ('ft,'mapping) mu_funinfos = 
-  (symbol, ('ft,'mapping) mu_funinfo) Pmap.map
+  type 'TY mu_fun_map = (symbol, ('TY mu_fun_map_decl)) 
+    Pmap.map
 
-type ('gt, 'ct, 'bt, 'TY) mu_globs_list = (symbol * ('gt, 'ct, 'bt, 'TY) mu_globs) list
 
-(* a Core file is just a set of named functions *)
-type ('ft, 'lt, 'gt, 'ct, 'bt, 'st_def, 'ut_def, 'TY, 'mapping) mu_file = {
-  mu_main    : symbol option;
-  mu_tagDefs : ('st_def,'ut_def) mu_tag_definitions;
-  mu_stdlib  : ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map;
-  mu_impl    : ('ct, 'bt, 'TY) mu_impl;
-  mu_globs   : ('gt, 'ct, 'bt, 'TY) mu_globs_list;
-  mu_funs    : ('lt, 'ct, 'bt, 'TY, 'mapping) mu_fun_map;
-  mu_extern  : mu_extern_map;
-  mu_funinfo : ('ft,'mapping) mu_funinfos;
-  mu_loop_attributes : Annot.loop_attributes;
-}
 
+  type mu_linking_kind = Core.linking_kind
 
+  type mu_extern_map = Core.extern_map
+
+  type 'TY mu_globs =
+    | M_GlobalDef of symbol * (T.bt * T.gt) * 'TY mu_expr
+    | M_GlobalDecl of symbol * (T.bt * T.gt)
+
+  type 'TY mu_globs_map = (symbol, 'TY mu_globs)
+    Pmap.map
+
+
+
+  type mu_tag_definition =
+    | M_StructDef of T.st
+    | M_UnionDef of T.ut
+
+  type mu_tag_definitions = (Symbol.sym, mu_tag_definition)
+    Pmap.map
+
+  type mu_funinfo = 
+    M_funinfo of Location_ocaml.t * Annot.attributes * T.ft * bool * T.mapping
+
+  type mu_funinfos = 
+    (symbol, mu_funinfo) Pmap.map
+
+  type 'TY mu_globs_list = (symbol * 'TY mu_globs) list
+
+  (* a Core file is just a set of named functions *)
+  type 'TY mu_file = {
+    mu_main    : symbol option;
+    mu_tagDefs : mu_tag_definitions;
+    mu_stdlib  : 'TY mu_fun_map;
+    mu_impl    : 'TY mu_impl;
+    mu_globs   : 'TY mu_globs_list;
+    mu_funs    : 'TY mu_fun_map;
+    mu_extern  : mu_extern_map;
+    mu_funinfo :  mu_funinfos;
+    mu_loop_attributes : Annot.loop_attributes;
+  }
+
+
+end
+
+
+
+
+
+
+
+module SimpleTypes : TYPES
+       with type ct = Ctype.ctype
+       with type ut = (Symbol.identifier * (Annot.attributes * qualifiers * Ctype.ctype)) list
+       with type st = (Symbol.identifier * (Annot.attributes * qualifiers * Ctype.ctype)) list *  flexible_array_member option
+       with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
+       with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
+       with type bt = Core.core_base_type
+       with type gt = Ctype.ctype
+       with type mapping = unit
+  = struct
+
+  type ct = Ctype.ctype
+  type ut = (Symbol.identifier * (Annot.attributes * qualifiers * ct)) list
+  type st = (Symbol.identifier * (Annot.attributes * qualifiers * ct)) list *  flexible_array_member option
+  type ft = ct * (Symbol.sym * ct) list * bool
+  type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
+  type bt = Core.core_base_type
+  type gt = ct
+  type mapping = unit
+
+end

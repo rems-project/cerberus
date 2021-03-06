@@ -108,29 +108,10 @@ let struct_layout loc members tag =
 
 module CA = CF.Core_anormalise
 
-let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fields (tag : BT.tag) = 
+let struct_decl loc fields (tag : BT.tag) = 
   let open Global in
 
-  let get_struct_members tag = 
-    match Pmap.lookup tag tagDefs with
-    | None -> fail loc (Missing_struct tag)
-    | Some (M_UnionDef _) -> fail loc (Generic !^"expected struct")
-    | Some (M_StructDef (fields, _)) -> return fields
-  in
-
-  let@ members = 
-    ListM.mapM (fun (member, (_,_, ct)) ->
-        let loc = Loc.update loc (get_loc_ (annot_of_ct ct)) in
-        let@ sct = sct_of_ct loc ct in
-        let bt = BT.of_sct sct in
-        return (member, (sct, bt))
-    ) fields
-  in
-
-  let@ layout = 
-    struct_layout loc fields tag
-  in
-
+  let@ layout = struct_layout loc fields tag in
 
   let@ stored_struct_predicate = 
     let open RT in
@@ -139,8 +120,6 @@ let struct_decl loc (tagDefs : (CA.st, CA.ut) CF.Mucore.mu_tag_definitions) fiel
     let struct_pointer_s = Sym.fresh () in
     let struct_pointer_t = sym_ (Loc, struct_pointer_s) in
     (* let size = Memory.size_of_struct loc tag in *)
-    let@ def_members = get_struct_members tag in
-    let@ layout = struct_layout loc def_members tag in
     let clause = 
       let (lrt, values) = 
         List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->

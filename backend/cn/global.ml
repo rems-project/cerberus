@@ -234,9 +234,7 @@ type t =
     stdlib_funs : SymSet.t;
     resource_predicates : predicate_definition StringMap.t;
     solver_context : Z3.context;
-    logical : (Sym.t * LS.t) list;
-    computational : (Sym.t * (Sym.t * BT.t)) list;
-    constraints : (LC.t * Z3.Expr.expr) list;
+    bindings: VariableBindings.binding list;
   } 
 
 let empty solver_context = 
@@ -247,9 +245,7 @@ let empty solver_context =
     stdlib_funs = SymSet.empty;
     resource_predicates = builtin_predicates;
     solver_context;
-    logical = [];
-    computational = [];
-    constraints = [];
+    bindings = [];
   }
 
 let get_predicate_def global predicate_name = 
