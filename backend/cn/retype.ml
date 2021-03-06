@@ -24,9 +24,11 @@ open TypeErrors
 
 module SR_Types = struct
   type ct = Sctypes.t
+  type bt = BT.t
+  type ift = FT.t
+  type ict = RT.t
   type ft = FT.t
   type lt = LT.t
-  type bt = BT.t
   type st = Global.struct_decl
   type gt = ct
   type ut = unit
@@ -416,15 +418,33 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   let@ impls = 
     let retype_impl_decl impl def = 
       match def with
-      | Old.M_Def (cbt,pexpr) ->
+      | Old.M_Def (ict,cbt,pexpr) ->
+         let@ ict = 
+           let@ bt = Conversions.bt_of_core_base_type Loc.unknown ict in
+           return (RT.Computational ((Sym.fresh (), bt), LRT.I))
+         in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
          let@ pexpr = retype_pexpr pexpr in
-         return (New.M_Def (bt,pexpr))
-      | Old.M_IFun (cbt,args,pexpr) ->
+         return (New.M_Def (ict,bt,pexpr))
+      | Old.M_IFun (ift,cbt,args,pexpr) ->
+         let@ ift = 
+           let (rbt, argbts) = ift in
+           let@ rbt = Conversions.bt_of_core_base_type Loc.unknown rbt in
+           let@ args = 
+             ListM.mapM (fun bt -> 
+                 let@ bt = Conversions.bt_of_core_base_type Loc.unknown bt in
+                 return (Sym.fresh (), bt)
+               ) argbts 
+           in
+           let ft = (FT.mComputationals args) 
+                      (FT.I (RT.Computational ((Sym.fresh (), rbt), LRT.I)))
+           in
+           return ft
+         in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
          let@ args = mapM (retype_arg Loc.unknown) args in
          let@ pexpr = retype_pexpr pexpr in
-         return (New.M_IFun (bt,args,pexpr))
+         return (New.M_IFun (ift,bt,args,pexpr))
     in
     PmapM.mapM retype_impl_decl file.mu_impl 
       CF.Implementation.implementation_constant_compare

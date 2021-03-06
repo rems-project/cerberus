@@ -29,6 +29,9 @@ module type TYPES = sig
   type ct
   type bt
 
+  type ift
+  type ict
+
   type ut
   type st
   type ft
@@ -224,8 +227,8 @@ module Make(T : TYPES) = struct
 
 
   type 'TY mu_impl_decl =
-    | M_Def of T.bt * 'TY mu_pexpr
-    | M_IFun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
+    | M_Def of T.ict * T.bt * 'TY mu_pexpr
+    | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_pexpr
 
   type 'TY mu_impl = (Implementation.implementation_constant, ('TY mu_impl_decl)) 
     Pmap.map
@@ -300,21 +303,27 @@ end
 
 module SimpleTypes : TYPES
        with type ct = Ctype.ctype
+       with type bt = Core.core_base_type
+       with type ift = Core.core_base_type * (Core.core_base_type) list
+       with type ict = Core.core_base_type
        with type ut = (Symbol.identifier * (Annot.attributes * qualifiers * Ctype.ctype)) list
        with type st = (Symbol.identifier * (Annot.attributes * qualifiers * Ctype.ctype)) list *  flexible_array_member option
        with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
-       with type bt = Core.core_base_type
        with type gt = Ctype.ctype
        with type mapping = unit
-  = struct
+  = 
+struct
 
   type ct = Ctype.ctype
+  type bt = Core.core_base_type
+  type ift = bt * bt list
+  type ict = bt
+
   type ut = (Symbol.identifier * (Annot.attributes * qualifiers * ct)) list
   type st = (Symbol.identifier * (Annot.attributes * qualifiers * ct)) list *  flexible_array_member option
   type ft = ct * (Symbol.sym * ct) list * bool
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
-  type bt = Core.core_base_type
   type gt = ct
   type mapping = unit
 

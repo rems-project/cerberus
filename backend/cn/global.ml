@@ -229,9 +229,9 @@ module BTMap = Map.Make(BT)
 type t = 
   { struct_decls : struct_decls; 
     fun_decls : (Locations.t * FT.t) SymMap.t;
-    impl_fun_decls : (FT.t) ImplMap.t;
-    impl_constants : BT.t ImplMap.t;
-    stdlib_funs : SymSet.t;
+    impl_fun_decls : FT.t ImplMap.t;
+    impl_constants : RT.t ImplMap.t;
+    (* stdlib_funs : FT.t SymMap.t; *)
     resource_predicates : predicate_definition StringMap.t;
     solver_context : Z3.context;
     bindings: VariableBindings.binding list;
@@ -242,11 +242,21 @@ let empty solver_context =
     fun_decls = SymMap.empty;
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
-    stdlib_funs = SymSet.empty;
+    (* stdlib_funs = SymMap.empty; *)
     resource_predicates = builtin_predicates;
     solver_context;
     bindings = [];
   }
+
+
+let struct_decl_to_predicate_def tag decl = 
+  let pred = decl.stored_struct_predicate in
+  let iargs = [(pred.pointer, LS.Base Loc)] in
+  let oargs = [(pred.value, LS.Base (Struct tag))] in
+  let pack_functions = [(pred.pack_function)] in
+  let unpack_functions = [(pred.unpack_function)] in
+  {iargs; oargs; pack_functions; unpack_functions}
+
 
 let get_predicate_def global predicate_name = 
   let open Resources in
@@ -256,13 +266,7 @@ let get_predicate_def global predicate_name =
   | Tag tag ->
      match SymMap.find_opt tag global.struct_decls with
      | None -> None
-     | Some decl ->
-        let pred = decl.stored_struct_predicate in
-        let iargs = [(pred.pointer, LS.Base Loc)] in
-        let oargs = [(pred.value, LS.Base (Struct tag))] in
-        let pack_functions = [(pred.pack_function)] in
-        let unpack_functions = [(pred.unpack_function)] in
-        Some {iargs; oargs; pack_functions; unpack_functions}
+     | Some decl -> Some (struct_decl_to_predicate_def tag decl)
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i

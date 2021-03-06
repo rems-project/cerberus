@@ -89,6 +89,7 @@ open Fallible
 
 
 (*** mucore pp setup **********************************************************)
+
 module PP_TYPS = struct
   module T = Retype.SR_Types
   let pp_bt = BT.pp 
@@ -1300,8 +1301,8 @@ module Make (G : sig val global : Global.t end) = struct
            let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
            return (Normal (rt, local))
         | M_PEimpl i ->
-           let bt = Global.get_impl_constant G.global i in
-           return (Normal (RT.Computational ((Sym.fresh (), bt), I), local))
+           let rt = Global.get_impl_constant G.global i in
+           return (Normal (rt, local))
         | M_PEval v ->
            let@ vt = infer_value loc local v in
            return (Normal (rt_of_vt vt, local))
@@ -2072,7 +2073,7 @@ module Make (G : sig val global : Global.t end) = struct
   module CBF_FT = CBF(ReturnTypes)
   module CBF_LT = CBF(False)
 
-
+  
   let check_initial_environment_consistent loc info local =
     match S.is_inconsistent local, info with
     | true, `Label -> 
@@ -2084,10 +2085,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* check_function: type check a (pure) function *)
-  let check_function (loc : loc) mapping (fsym : Sym.t) 
+  let check_function (loc : loc) mapping (info : string) 
                      (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
                      (body : 'bty mu_pexpr) (function_typ : FT.t) : (unit, type_error) m =
-    debug 2 (lazy (headline ("checking function " ^ Sym.pp_string fsym)));
+    debug 2 (lazy (headline ("checking function " ^ info)));
     let@ (rt, delta, _, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in
@@ -2199,15 +2200,47 @@ end
  
 
 
-let record_tagDefs (global: Global.t) tagDefs = 
-  PmapM.foldM (fun sym def (global: Global.t) ->
+let initial_global = 
+  Global.empty 
+    (Z3.mk_context [
+         ("model", "true");
+         ("well_sorted_check","true");
+         ("unsat_core", "true");
+       ] 
+    )
+
+
+
+
+(* TODO: do this when we've added the machinery for user-defined predicates *)
+let check_predicate_definition def = return ()
+
+
+let check_and_record_tagDefs (global: Global.t) tagDefs = 
+  let open Global in
+  PmapM.foldM (fun tag def (global: Global.t) ->
       match def with
       | M_UnionDef _ -> 
          fail Loc.unknown (TypeErrors.Unsupported !^"todo: union types")
       | M_StructDef decl -> 
-         let struct_decls = SymMap.add sym decl global.struct_decls in
+         let@ () =
+           ListM.iterM (fun piece ->
+               match piece.member_or_padding with
+               | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
+                  begin match SymMap.find_opt sym2 global.struct_decls with
+                  | Some _ -> return ()
+                  | None -> fail Loc.unknown (Missing_struct sym2)
+                  end
+               | _ -> return ()
+             ) decl.layout
+         in
+         let predicate_def = Global.struct_decl_to_predicate_def tag decl in
+         let@ () = check_predicate_definition predicate_def in
+         let struct_decls = SymMap.add tag decl global.struct_decls in
          return { global with struct_decls }
     ) tagDefs global
+
+
 
 
 let record_funinfo global funinfo =
@@ -2224,29 +2257,13 @@ let record_funinfo global funinfo =
     ) funinfo global
 
 
-(* check the types? *)
-let record_impl genv impls = 
-  let open Global in
-  Pmap.fold (fun impl impl_decl genv ->
-      match impl_decl with
-      | M_Def (bt, _p) -> 
-         { genv with impl_constants = ImplMap.add impl bt genv.impl_constants}
-      | M_IFun (rbt, args, _body) ->
-         let args_ts = List.map FT.mComputational args in
-         let rt = FT.I (Computational ((Sym.fresh (), rbt), I)) in
-         let ftyp = (Tools.comps args_ts) rt in
-         let impl_fun_decls = ImplMap.add impl ftyp genv.impl_fun_decls in
-         { genv with impl_fun_decls }
-    ) impls genv
-
-
 let print_initial_environment genv = 
   debug 1 (lazy (headline "initial environment"));
   debug 1 (lazy (Global.pp genv));
   return ()
 
 
-let process_functions genv fns =
+let check_functions genv fns =
   let module C = Make(struct let global = genv end) in
   PmapM.iterM (fun fsym fn -> 
       match fn with
@@ -2255,7 +2272,7 @@ let process_functions genv fns =
            | Some t -> return t
            | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
          in
-         C.check_function loc Mapping.empty fsym args rbt body ftyp
+         C.check_function loc Mapping.empty (Sym.pp_string fsym) args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels, mapping) ->
          let@ (loc', ftyp) = match Global.get_fun_decl genv fsym with
            | Some t -> return t
@@ -2269,48 +2286,71 @@ let process_functions genv fns =
 
 
 
+let check_and_record_impls global impls = 
+  let open Global in
+  PmapM.foldM (fun impl impl_decl global ->
+      let module G = struct let global = global end in
+      let module C = Make(G) in
+      let module WT = WellTyped.Make(G) in
+      let descr = CF.Implementation.string_of_implementation_constant impl in
+      match impl_decl with
+      | M_Def (rt, rbt, pexpr) -> 
+         let@ () = WT.WRT.welltyped Loc.unknown [] WT.L.empty rt in
+         let@ () = 
+           C.check_function Loc.unknown [] descr [] rbt pexpr (FT.I rt) in
+         let global = 
+           { global with impl_constants = 
+                           ImplMap.add impl rt global.impl_constants}
+         in
+         return global
+      | M_IFun (ft, rbt, args, pexpr) ->
+         let@ () = WT.WFT.welltyped Loc.unknown [] WT.L.empty ft in
+         let@ () = 
+           C.check_function Loc.unknown [] 
+             (CF.Implementation.string_of_implementation_constant impl)
+             args rbt pexpr ft
+         in
+         let impl_fun_decls = ImplMap.add impl ft global.impl_fun_decls in
+         return { global with impl_fun_decls }
+    ) impls global
+
+
+
+
+(* TODO: check the expressions *)
+let record_globals global globs = 
+  let open Global in
+  ListM.fold_leftM (fun global (sym, def) ->
+      let new_bindings ct lsym = 
+        let it = IT.good_pointer lsym ct in
+        let sc = SolverConstraints.of_index_term global it in
+        let new_bindings = 
+          [(Sym.fresh (), VB.Constraint (LC.LC it, sc));
+           (sym, VB.Computational (lsym, Loc));
+           (lsym, VB.Logical (Base Loc));
+          ]
+        in
+        List.rev new_bindings
+      in
+      match def with
+      | M_GlobalDef (lsym, (_, ct), e) ->
+         return {global with bindings = new_bindings ct lsym @ global.bindings }
+      | M_GlobalDecl (lsym, (_, ct)) ->
+         return {global with bindings = new_bindings ct lsym @ global.bindings }
+    ) global globs
 
 
 
 let check mu_file = 
   let () = Debug_ocaml.begin_csv_timing "total" in
-  let solver_context = 
-    Z3.mk_context [
-        ("model", "true");
-        ("well_sorted_check","true");
-        ("unsat_core", "true");
-      ] 
-  in
-  let global = Global.empty solver_context in
-
-  let stdlib_funs = SymSet.of_list (Pset.elements (Pmap.domain mu_file.mu_stdlib)) in
-  let global = { global with stdlib_funs } in
-  let global = record_impl global mu_file.mu_impl in
-  let@ global = record_tagDefs global mu_file.mu_tagDefs in
-  let@ global = 
-    let open Global in
-    ListM.fold_leftM (fun global (sym, def) ->
-        let new_bindings ct lsym = 
-           let it = IT.good_pointer lsym ct in
-           let sc = SolverConstraints.of_index_term global it in
-           let new_bindings = 
-             [(Sym.fresh (), VB.Constraint (LC.LC it, sc));
-              (sym, VB.Computational (lsym, Loc));
-              (lsym, VB.Logical (Base Loc));
-             ]
-           in
-           List.rev new_bindings
-        in
-        match def with
-        | M_GlobalDef (lsym, (_, ct), e) ->
-           return {global with bindings = new_bindings ct lsym @ global.bindings }
-        | M_GlobalDecl (lsym, (_, ct)) ->
-           return {global with bindings = new_bindings ct lsym @ global.bindings }
-      ) global mu_file.mu_globs
-  in
+  let global = initial_global in
+  let@ global = check_and_record_impls global mu_file.mu_impl in
+  let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in
+  let@ global = record_globals global mu_file.mu_globs in
   let@ global = record_funinfo global mu_file.mu_funinfo in
   let@ () = print_initial_environment global in
-  let@ result = process_functions global mu_file.mu_funs in
+  let@ result = check_functions global mu_file.mu_stdlib in
+  let@ result = check_functions global mu_file.mu_funs in
   let () = Debug_ocaml.end_csv_timing () in
   return result
 

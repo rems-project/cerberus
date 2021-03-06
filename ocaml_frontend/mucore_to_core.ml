@@ -479,10 +479,10 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
 let mu_to_core__impl_decl (i : 'bty mu_impl_decl) 
     : 'bty Core.generic_impl_decl=
    ((match i with
-  | M_Def( bt1, p) -> 
+  | M_Def(_, bt1, p) -> 
      Core.Def( bt1, (mu_to_core__pexpr (Pmap.empty (fun sym1 sym2->ordCompare 
   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) p))
-  | M_IFun( bt1, args, body) -> 
+  | M_IFun(_, bt1, args, body) -> 
      Core.IFun( bt1, args, (mu_to_core__pexpr (Pmap.empty (fun sym1 sym2->ordCompare 
   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) body))
   ))

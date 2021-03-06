@@ -898,11 +898,11 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     Pmap.fold (fun iCst iDecl acc ->
       acc ^^
       match iDecl with
-        | M_Def (bty, pe) ->
+        | M_Def (_, bty, pe) ->
             pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
             P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
 
-        | M_IFun (bTy, params, pe) ->
+        | M_IFun (_, bTy, params, pe) ->
             pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
             P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1

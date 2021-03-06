@@ -665,10 +665,12 @@ and n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_expr) : mu_expr =
 
 let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl =
   match i with
-  | Def(bt1, p) -> 
-     M_Def (bt1, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain p)
-  | IFun(bt1, args, body) -> 
-     M_IFun (bt1, args, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain body)
+  | Def(bt, p) -> 
+     let ict = bt in
+     M_Def (ict, bt, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain p)
+  | IFun(bt, args, body) -> 
+     let ift = (bt, map snd args) in
+     M_IFun (ift, bt, args, normalise_pexpr Loc.unknown pexpr_n_pexpr_domain body)
 
 let normalise_impl (i : unit generic_impl) : unit mu_impl=
    (Pmap.map normalise_impl_decl i)
