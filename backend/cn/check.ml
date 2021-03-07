@@ -551,18 +551,18 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     (* fix *)
-    let is_global local it =  false
-      (* List.exists (fun (s, bound) ->
-       *     match bound with
-       *     | VB.Computational (l, bt) ->
-       *        BT.equal Loc bt && 
-       *          S.holds local 
-       *            (or_ [eq_ (it, IT.sym_ (bt, s)); 
-       *                  eq_ (it, IT.sym_ (bt, l))])
-       *     | VB.Logical (Base bt) ->
-       *        BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
-       *     | _ -> false          
-       * ) G.global.bindings *)
+    let is_global local it =
+      List.exists (fun (s, bound) ->
+          match bound with
+          | VB.Computational (l, bt) ->
+             BT.equal Loc bt && 
+               S.holds local 
+                 (or_ [eq_ (it, IT.sym_ (bt, s)); 
+                       eq_ (it, IT.sym_ (bt, l))])
+          | VB.Logical (Base bt) ->
+             BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
+          | _ -> false          
+      ) G.global.bindings
 
 
     let resource_for_pointer local it
