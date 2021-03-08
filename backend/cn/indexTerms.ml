@@ -530,7 +530,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
 
 let rec vars_in : 'bt. 'bt term -> SymSet.t =
 
-  let lit = function
+  let lit : 'bt lit -> SymSet.t = function
     | Sym (_, symbol) -> SymSet.singleton symbol
     | Num _ -> SymSet.empty
     | Pointer _ -> SymSet.empty
@@ -538,7 +538,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | Unit -> SymSet.empty
   in
 
-  let arith_op = function
+  let arith_op : 'bt arith_op -> SymSet.t = function
     | Add (it, it') -> vars_in_list [it; it']
     | Sub (it, it') -> vars_in_list [it; it']
     | Mul (it, it') -> vars_in_list [it; it']
@@ -550,7 +550,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | Max (it, it') -> vars_in_list [it; it']
   in
 
-  let cmp_op = function
+  let cmp_op : 'bt cmp_op -> SymSet.t = function
     | EQ (it, it') -> vars_in_list [it; it']
     | NE (it, it') -> vars_in_list [it; it']
     | LT (it, it') -> vars_in_list [it; it']
@@ -559,7 +559,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | GE (it, it') -> vars_in_list [it; it']
   in
 
-  let bool_op = function
+  let bool_op : 'bt bool_op -> SymSet.t = function
     | And its -> vars_in_list its
     | Or its -> vars_in_list its
     | Impl (it, it') -> vars_in_list [it; it']
@@ -567,7 +567,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | ITE (it,it',it'') -> vars_in_list [it;it';it'']
   in
 
-  let tuple_op = function
+  let tuple_op : 'bt tuple_op -> SymSet.t = function
     | Tuple (_, its) -> vars_in_list its
     | NthTuple (_, _, it) -> vars_in it
     | Struct (_tag, members) -> vars_in_list (map snd members)
@@ -575,7 +575,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | StructMemberOffset (_tag, it, s) -> vars_in_list [it;it]
   in
 
-  let pointer_op = function
+  let pointer_op : 'bt pointer_op -> SymSet.t = function
     | Null it -> vars_in it
     | AddPointer (it, it') -> vars_in_list [it; it']
     | SubPointer (it, it') -> vars_in_list [it; it']
@@ -588,7 +588,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | PointerToIntegerCast t -> vars_in t
   in
 
-  let ct_pred = function
+  let ct_pred : 'bt ct_pred -> SymSet.t = function
     | Aligned (_rt, t) -> vars_in t
     | AlignedI (t, t') -> vars_in_list [t; t']
     | MinInteger _ -> SymSet.empty
@@ -596,7 +596,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | Representable (_rt,t) -> vars_in t
   in
 
-  let list_op = function
+  let list_op : 'bt list_op -> SymSet.t = function
     | Nil _  -> SymSet.empty
     | Cons (it, it') -> vars_in_list [it; it']
     | List (its,bt) -> vars_in_list its
@@ -605,7 +605,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | NthList (_,it) -> vars_in it
   in
 
-  let set_op = function
+  let set_op : 'bt set_op -> SymSet.t = function
     | SetMember (t1,t2) -> vars_in_list [t1;t2]
     | SetUnion ts -> vars_in_list (List1.to_list ts)
     | SetIntersection ts -> vars_in_list (List1.to_list ts)
@@ -613,7 +613,7 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | Subset (t1, t2) -> vars_in_list [t1;t2]
   in
 
-  let array_op = function
+  let array_op : 'bt array_op -> SymSet.t = function
     | ConstArray (t,_) -> vars_in t
     | ArrayGet (t1,t2) -> vars_in_list [t1;t2]
     | ArraySet (t1,t2,t3) -> vars_in_list [t1;t2;t3]
