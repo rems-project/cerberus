@@ -50,17 +50,17 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let pp_context_item ?(print_all_names = false) ?(print_used = false) = function
-    | Binding (sym,binding) -> VB.pp ~print_all_names ~print_used (sym,binding)
+  let pp_context_item ?(print_all_names = false) = function
+    | Binding (sym,binding) -> VB.pp ~print_all_names (sym,binding)
     | Marker -> uformat [Blue] "\u{25CF}" 1 
 
   (* reverses the list order for matching standard mathematical
      presentation *)
-  let pp ?(print_all_names = false) ?(print_used = false) (Local local) = 
+  let pp ?(print_all_names = false) (Local local) = 
     match local with
     | [] -> !^"(empty)"
     | _ -> flow_map (comma ^^ break 1) 
-             (pp_context_item ~print_all_names ~print_used) 
+             (pp_context_item ~print_all_names) 
              (rev local)
 
 
@@ -111,20 +111,6 @@ module Make (G : sig val global : Global.t end) = struct
         | _ -> None
       ) local
 
-  let all_used_resources local = 
-    filter (fun (name, b) ->
-        match b with
-        | UsedResource (re,where) -> Some (re, where)
-        | _ -> None
-      ) local
-
-  let all_named_used_resources local = 
-    filter (fun (name, b) ->
-        match b with
-        | UsedResource (re,where) -> Some (name, (re, where))
-        | _ -> None
-      ) local
-
 
   let all_constraints local = 
     filter (fun (name, b) ->
@@ -153,7 +139,9 @@ module Make (G : sig val global : Global.t end) = struct
     let rec aux = function
     | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
        begin match b with
-       | Resource re -> Binding (sym', UsedResource (re,where)) :: rest
+       | Resource re -> 
+          (* Binding (sym', UsedResource (re,where)) ::  *)
+            rest
        | _ -> kind_mismatch_internal_error 
                 ~expect:KResource ~has:(VB.kind b)
        end
@@ -198,8 +186,8 @@ module Make (G : sig val global : Global.t end) = struct
   let incompatible_environments l1 l2 (mismatch1,mismatch2) =
     let msg = 
       !^"Merging incompatible contexts." ^/^ 
-        item "ctxt1" (pp ~print_used:true ~print_all_names:true l1) ^/^
-        item "ctxt2" (pp ~print_used:true ~print_all_names:true l2) ^/^ 
+        item "ctxt1" (pp ~print_all_names:true l1) ^/^
+        item "ctxt2" (pp ~print_all_names:true l2) ^/^ 
         mismatch1 ^^^ !^"vs" ^^^ mismatch2
     in
     Debug_ocaml.error (plain msg)
@@ -318,12 +306,12 @@ module Make (G : sig val global : Global.t end) = struct
           RE.json re
         ) (all_resources local)
     in
-    let used_resources = 
-      List.map (fun (re, used) ->
-          `Assoc [("location_used", List.json Loc.json_loc used);
-                  ("resource", RE.json re)]
-        ) (all_used_resources local)
-    in
+    (* let used_resources = 
+     *   List.map (fun (re, used) ->
+     *       `Assoc [("location_used", List.json Loc.json_loc used);
+     *               ("resource", RE.json re)]
+     *     ) (all_used_resources local)
+     * in *)
     let constraints = 
       List.map (fun lc ->
           LC.json lc
@@ -334,7 +322,7 @@ module Make (G : sig val global : Global.t end) = struct
       `Assoc [("computational", `List computational);
               ("logical", `List logical);
               ("resources", `List resources);
-              ("used resources", `List used_resources);
+              (* ("used resources", `List used_resources); *)
               ("constraints", `List constraints)
         ]
     in

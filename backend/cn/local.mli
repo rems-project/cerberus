@@ -20,7 +20,7 @@ module Make : functor (G : sig val global : Global.t end) -> sig
   val bound : Sym.t -> t -> bool
   val merge : t -> t -> t
   val big_merge : t -> t list -> t
-  val pp : ?print_all_names:bool -> ?print_used:bool -> t -> Pp.document
+  val pp : ?print_all_names:bool -> t -> Pp.document
   val get_a : Sym.t -> t -> (BT.t * Sym.t)
   val get_l : Sym.t -> t -> LS.t
   val get_r : Sym.t -> t -> RE.t
@@ -36,8 +36,6 @@ module Make : functor (G : sig val global : Global.t end) -> sig
   val all_logical : t -> (Sym.t * LS.t) list
   val all_resources : t -> RE.t list
   val all_named_resources : t -> (Sym.t * RE.t) list
-  val all_used_resources : t -> (RE.t * Loc.t list) list
-  val all_named_used_resources : t -> (Sym.t * (RE.t * Loc.t list)) list
   val (++) : t -> t -> t
   val json :  t -> Yojson.Safe.t
 

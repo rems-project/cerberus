@@ -5,7 +5,6 @@ type t =
   | KLogical
   | KResource
   | KConstraint
-  | KUsedResource
 
 type kind = t
 
@@ -14,4 +13,3 @@ let pp = function
   | KLogical -> !^"logical variable"
   | KResource -> !^"resource"
   | KConstraint -> !^"constraint"
-  | KUsedResource -> !^"used resource"

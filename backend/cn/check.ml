@@ -613,19 +613,6 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let used_resource_for_pointer local it : (Locations.t list) option = 
-      let points = 
-        List.filter_map (fun (name, (re, where)) ->
-            match RE.pointer re with
-            | Some pointer when S.holds local (eq_ (it, pointer)) -> Some where
-            | _ -> None
-          ) (L.all_named_used_resources local)
-      in
-      match points with
-      | [] -> None
-      | r :: _ -> Some r
-
-
     (* use resource_around_pointer to make this succeed for more cases *)
     let rec ownership_request_prompt ui_info local (pointer: IT.t) (need_size: IT.t) = 
       let open Prompt in
@@ -641,10 +628,9 @@ module Make (G : sig val global : Global.t end) = struct
         let@ resource_name, resource = match o_resource with
           | None -> 
              let (addr, state) = Explain.missing_ownership names original_local pointer in
-             let used = used_resource_for_pointer local pointer in
              if is_global original_local pointer 
-             then fail loc (Missing_global_ownership {addr; used; situation})
-             else fail loc (Missing_ownership {addr; state; used; situation})
+             then fail loc (Missing_global_ownership {addr; used = None; situation})
+             else fail loc (Missing_ownership {addr; state; used = None; situation})
           | Some (resource_name, resource) -> 
              return (resource_name, resource)
         in
@@ -705,10 +691,9 @@ module Make (G : sig val global : Global.t end) = struct
          | None -> 
             let (addr, state) = 
               Explain.missing_ownership names original_local pointer in
-            let used = used_resource_for_pointer local pointer in
             if is_global original_local pointer 
-            then fail loc (Missing_global_ownership {addr; used; situation})
-            else fail loc (Missing_ownership {addr; state; used; situation})
+            then fail loc (Missing_global_ownership {addr; used = None; situation})
+            else fail loc (Missing_ownership {addr; state; used = None; situation})
          end
       | Region r ->
          let@ local = 
@@ -775,10 +760,9 @@ module Make (G : sig val global : Global.t end) = struct
                     | _ ->
                        let (addr, state) = 
                          Explain.missing_ownership names original_local a.pointer in
-                       let used = used_resource_for_pointer local a.pointer in
                        if is_global original_local a.pointer 
-                       then fail loc (Missing_global_ownership {addr; used; situation})
-                       else fail loc (Missing_ownership {addr; state; used; situation})
+                       then fail loc (Missing_global_ownership {addr; used = None; situation})
+                       else fail loc (Missing_ownership {addr; state; used = None; situation})
                     end
                   else
                     Debug_ocaml.error "todo: better array inference"
@@ -811,10 +795,9 @@ module Make (G : sig val global : Global.t end) = struct
            | None -> 
               let (addr, state) = 
                 Explain.missing_ownership names original_local a.pointer in
-              let used = used_resource_for_pointer local a.pointer in
               if is_global original_local a.pointer 
-              then fail loc (Missing_global_ownership {addr; used; situation})
-              else fail loc (Missing_ownership {addr; state; used; situation})
+              then fail loc (Missing_global_ownership {addr; used = None; situation})
+              else fail loc (Missing_ownership {addr; state; used = None; situation})
            end
       | Predicate p ->
          let o_resource = predicate_for local p.name p.iargs in
@@ -1149,8 +1132,8 @@ module Make (G : sig val global : Global.t end) = struct
            aux vbs (LRT.Logical ((s', ls), acc))
         | (_, VB.Resource re) :: vbs ->
            aux vbs (LRT.Resource (re,acc))
-        | (_, VB.UsedResource _) :: vbs ->
-           aux vbs acc
+        (* | (_, VB.UsedResource _) :: vbs ->
+         *    aux vbs acc *)
         | (_, VB.Constraint (lc,_)) :: vbs ->
            aux vbs (LRT.Constraint (lc,acc))
       in
@@ -1541,10 +1524,9 @@ module Make (G : sig val global : Global.t end) = struct
              | None -> 
                 let (addr,state) = 
                   Explain.missing_ownership names original_local pointer in
-                let used = used_resource_for_pointer local pointer in
                 if is_global original_local pointer 
-                then fail loc (Missing_global_ownership {addr; used; situation})
-                else fail loc (Missing_ownership {addr; state; used; situation})
+                then fail loc (Missing_global_ownership {addr; used = None; situation})
+                else fail loc (Missing_ownership {addr; state; used = None; situation})
            in
            let (Base vbt) = L.get_l pointee local in
            if BT.equal vbt bt 
