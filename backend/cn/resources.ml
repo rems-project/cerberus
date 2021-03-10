@@ -112,7 +112,7 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
   match resource with
   | Point {pointer; size; content} ->
      let pointer = IT.subst_it subst pointer in
-     let@ block_type = match content with
+     let@ content = match content with
        | Block block_type -> 
           return (Block block_type)
        | Value v ->
