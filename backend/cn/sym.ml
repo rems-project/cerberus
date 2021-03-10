@@ -38,7 +38,7 @@ open Subst
 
 let subst (subst: (sym, sym) Subst.t) symbol = 
   let {before;after} = subst in
-  if symbol = before then after else symbol
+  if equal symbol before then after else symbol
 
 
 

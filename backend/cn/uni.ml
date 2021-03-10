@@ -30,7 +30,7 @@ let unify_sym sym sym' (res : Sym.t t) =
   if sym = sym' then Some res else
     let@ uni = SymMap.find_opt sym res in
     begin match uni.resolved with
-    | Some s when s = sym' -> return res 
+    | Some s when Sym.equal s sym' -> return res 
     | Some s -> fail
     | None -> return (SymMap.add sym {resolved = Some sym'} res)
     end

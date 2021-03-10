@@ -163,7 +163,7 @@ let of_index_term (global: Global.t) (it: IT.t) =
        let destructor = List.assoc Id.equal member member_destructors in
        Z3.Expr.mk_app context destructor [term t]       
     | StructMemberOffset (tag, t, member) ->
-       let offset = Memory.member_offset tag member in
+       let offset = Memory.member_offset global.Global.struct_decls tag member in
        Z3.Arithmetic.mk_add context [term t; term (num_ offset)]
 
   and pointer_op = function

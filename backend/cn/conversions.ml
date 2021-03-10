@@ -83,26 +83,6 @@ let rec bt_of_core_base_type loc cbt =
 
 
 
-let struct_layout loc members tag = 
-  let rec aux members position =
-    match members with
-    | [] -> 
-       return []
-    | (member, (attrs, qualifiers, ct)) :: members ->
-       let@ sct = sct_of_ct loc ct in
-       let offset = Memory.member_offset tag member in
-       let size = Memory.size_of_ctype sct in
-       let to_pad = Z.sub offset position in
-       let padding = 
-         if Z.gt_big_int to_pad Z.zero 
-         then [Global.{offset = position; size = to_pad; member_or_padding = None}] 
-         else [] 
-       in
-       let member = [Global.{offset; size; member_or_padding = Some (member, sct)}] in
-       let@ rest = aux members (Z.add_big_int offset size) in
-       return (padding @ member @ rest)
-  in
-  (aux members Z.zero)
 
 
 
@@ -110,6 +90,34 @@ module CA = CF.Core_anormalise
 
 let struct_decl loc fields (tag : BT.tag) = 
   let open Global in
+
+  let member_offset tag member = 
+    let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
+    Memory.integer_value_to_num iv
+  in
+
+  let struct_layout loc members tag = 
+    let rec aux members position =
+      match members with
+      | [] -> 
+         return []
+      | (member, (attrs, qualifiers, ct)) :: members ->
+         let@ sct = sct_of_ct loc ct in
+         let offset = member_offset tag member in
+         let size = Memory.size_of_ctype sct in
+         let to_pad = Z.sub offset position in
+         let padding = 
+           if Z.gt_big_int to_pad Z.zero 
+           then [Global.{offset = position; size = to_pad; member_or_padding = None}] 
+           else [] 
+         in
+         let member = [Global.{offset; size; member_or_padding = Some (member, sct)}] in
+         let@ rest = aux members (Z.add_big_int offset size) in
+         return (padding @ member @ rest)
+    in
+    (aux members Z.zero)
+  in
+
 
   let@ layout = struct_layout loc fields tag in
 

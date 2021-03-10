@@ -126,7 +126,11 @@ let align_of_struct tag =
   align_of_ctype (Sctype ([], Struct tag))
 
 
-let member_offset tag member = 
-  let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
-  integer_value_to_num iv
+let member_offset struct_decls tag member = 
+  let open Global in
+  let decl = SymMap.find tag struct_decls in
+  let members = Global.members decl.Global.layout in
+  (List.find (fun piece -> Id.equal (fst piece.member) member) members).offset
+
+
 
