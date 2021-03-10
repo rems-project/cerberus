@@ -305,20 +305,6 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let always_state = true
-
-  let rec boring_it = 
-    let open IT in
-    function
-    | Cmp_op (EQ (it1, Bool_op (And [it2;it3]))) -> IT.equal it1 it2 && IT.equal it2 it3
-    | Cmp_op (EQ (it1, it2)) -> IT.equal it1 it2 || boring_it it2
-    | Bool_op (Impl (it1, it2)) -> IT.equal it1 it2 || boring_it it2
-    | Bool_op (And its | Or its) -> List.for_all boring_it its
-    | _ -> false
-
-  let boring_lc (LC.LC it) = boring_it it
-  let interesting_lc lc = not (boring_lc lc)
-
 
   let o_evaluate o_model expr bt = 
     let open Option in
@@ -337,7 +323,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let symbol_it = function
-    | IT.Lit (IT.Sym (_, s)) -> SymSet.singleton s
+    | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
     | _ -> SymSet.empty
 
 

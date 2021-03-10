@@ -70,20 +70,23 @@ let of_index_term (global: Global.t) (it: IT.t) =
   let _sort_of_ls (Base bt) = sort_of_bt bt in
 
 
-  let rec term = function
-    | Lit t -> lit t
-    | Arith_op t -> arith_op t
-    | Bool_op t -> bool_op t
-    | Cmp_op t -> cmp_op t
-    | Tuple_op t -> tuple_op t
-    | Pointer_op t -> pointer_op t
-    | List_op t -> list_op t
-    | Set_op t -> set_op t 
-    | Array_op t -> array_op t
-    | CT_pred t -> ct_pred t
+  let rec term (IT (it, bt)) : Z3.Expr.expr = 
+    match it with
+    | Lit t -> lit t bt
+    | Arith_op t -> arith_op t bt
+    | Bool_op t -> bool_op t bt
+    | Cmp_op t -> cmp_op t bt
+    | Tuple_op t -> tuple_op t bt
+    | Struct_op t -> struct_op t bt
+    | Pointer_op t -> pointer_op t bt
+    | List_op t -> list_op t bt
+    | Set_op t -> set_op t bt
+    | Array_op t -> array_op t bt
+    | CT_pred t -> ct_pred t bt
 
-  and lit = function
-    | Sym (bt, s) -> 
+  and lit it bt =
+    match it with
+    | Sym s -> 
        let sym = Z3.Symbol.mk_string context (Sym.pp_string s) in
        Z3.Expr.mk_const context sym (sort_of_bt bt)
     | Num z ->
@@ -96,10 +99,11 @@ let of_index_term (global: Global.t) (it: IT.t) =
        Z3.Boolean.mk_false context
     | Unit ->
        Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
-       
+
 
   (* fix rem_t vs rem_f *)
-  and arith_op = function
+  and arith_op it bt = 
+    match it with
     | Add (t1, t2) ->
        Z3.Arithmetic.mk_add context [term t1; term t2]
     | Sub (t1, t2) ->
@@ -115,11 +119,12 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | Rem_f (t1, t2) ->
        Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
     | Min (t1, t2) ->
-       term (ite_ (le_ (t1, t2), t1, t2))
+       term (ite_ bt (le_ (t1, t2), t1, t2))
     | Max (t1, t2) ->
-       term (ite_ (ge_ (t1, t2), t1, t2))
+       term (ite_ bt (ge_ (t1, t2), t1, t2))
 
-  and bool_op = function
+  and bool_op it bt =
+    match it with
     | And ts -> 
        Z3.Boolean.mk_and context (List.map term ts)
     | Or ts -> 
@@ -131,7 +136,8 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | ITE (t1, t2, t3) ->
        Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
 
-  and cmp_op = function
+  and cmp_op it bt =
+    match it with
     | EQ (t1, t2) ->
        Z3.Boolean.mk_eq context (term t1) (term t2)
     | NE (t1, t2) ->
@@ -145,15 +151,20 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | GE (t1, t2) ->
        Z3.Arithmetic.mk_ge context (term t1) (term t2)
 
-  and tuple_op = function 
-    | Tuple (bts, ts) ->
-       let constructor = Z3.Tuple.get_mk_decl (sort_of_bt (Tuple bts)) in
+  and tuple_op it bt =
+    match it with
+    | Tuple ts ->
+       let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
        Z3.Expr.mk_app context constructor (List.map term ts)
-    | NthTuple (tuple_bt, n, t) ->
+    | NthTuple (n, t) ->
+       let (IT (_, tuple_bt)) = t in
        let destructors = Z3.Tuple.get_field_decls (sort_of_bt tuple_bt) in
        Z3.Expr.mk_app context (List.nth destructors n) [term t]
+
+  and struct_op it bt =
+    match it with
     | Struct (tag, mts) ->
-       let constructor = Z3.Tuple.get_mk_decl (sort_of_bt (Struct tag)) in
+       let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
        Z3.Expr.mk_app context constructor (List.map (fun (_, t) -> term t) mts)
     | StructMember (tag, t, member) ->
        let decl = SymMap.find tag global.struct_decls in
@@ -166,7 +177,8 @@ let of_index_term (global: Global.t) (it: IT.t) =
        let offset = Memory.member_offset global.Global.struct_decls tag member in
        Z3.Arithmetic.mk_add context [term t; term (num_ offset)]
 
-  and pointer_op = function
+  and pointer_op it bt =
+    match it with
     | Null t ->
        term (eq_ (t, num_ Z.zero))
     | AllocationSize t ->
@@ -190,10 +202,12 @@ let of_index_term (global: Global.t) (it: IT.t) =
        term t
     | PointerToIntegerCast t ->
        term t
-  and list_op _ = 
+
+  and list_op _ _ =
     Debug_ocaml.error "todo: SMT mapping for list operations"
 
-  and set_op = function
+  and set_op it bt =
+    match it with
     | SetMember (t1, t2) ->
         Z3.Set.mk_membership context (term t1) (term t2)
     | SetUnion ts ->
@@ -205,9 +219,14 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | Subset (t1, t2) ->
        Z3.Set.mk_subset context (term t1) (term t2)
 
-  and array_op = function
-    | ConstArray (t, bt) ->
-       Z3.Z3Array.mk_const_array context (sort_of_bt bt) (term t)
+  and array_op it bt =
+    match it with
+    | ConstArray t ->
+       let item_bt = match bt with
+         | Map bt -> bt
+         | _ -> Debug_ocaml.error "illtyped_index term"
+       in
+       Z3.Z3Array.mk_const_array context (sort_of_bt item_bt) (term t)
     | ArrayGet (t1, t2) ->
        Z3.Z3Array.mk_select context (term t1) (term t2)
     | ArraySet (t1, t2, t3) ->
@@ -234,12 +253,9 @@ let of_index_term (global: Global.t) (it: IT.t) =
          Z3.Quantifier.expr_of_quantifier q
        in
        Z3.Boolean.mk_or context [straight_equality; restricted_equality]
-    | ArraySelectAfter _ ->
-       Debug_ocaml.error "todo: SMT mapping for ArraySelectAfter"
-    | ArrayIndexShiftRight _ ->
-       Debug_ocaml.error "todo: SMT mapping for ArrayIndexShiftRight"
 
-  and ct_pred = function
+  and ct_pred it bt =
+    match it with
     | MinInteger it ->
        term (num_ (Memory.min_integer_type it))
     | MaxInteger it ->

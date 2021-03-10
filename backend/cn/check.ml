@@ -220,7 +220,7 @@ module Make (G : sig val global : Global.t end) = struct
          | _, (M_Cnil item_bt), _ ->
             fail loc (Number_arguments {has = List.length pats; expect = 0})
          | (List item_bt), M_Ccons, [p1; p2] ->
-            let@ local' = aux local' (head_ this) p1 item_bt in
+            let@ local' = aux local' (head_ ~item_bt this) p1 item_bt in
             let@ local' = aux local' (tail_ this) p2 expect in
             return local'
          | _, M_Ccons, [p1; p2] ->
@@ -234,7 +234,7 @@ module Make (G : sig val global : Global.t end) = struct
             let rec components local' i pats bts =
               match pats, bts with
               | pat :: pats', bt :: bts' ->
-                 let@ local' = aux local' (nthTuple_ (expect, i, this)) pat bt in
+                 let@ local' = aux local' (nthTuple_ ~item_bt:bt (i, this)) pat bt in
                  components local' (i+1) pats' bts'
               | [], [] -> 
                  return local'
@@ -748,9 +748,12 @@ module Make (G : sig val global : Global.t end) = struct
                        let new_content = Sym.fresh () in
                        let local = add_l new_content (Base (Map a_array_bt)) local in
                        let local = add_uc (LC (IT.eq_ (sym_ (Map a_array_bt, new_content), 
-                                                      IT.arraySet_ (sym_ (Map a_array_bt, a'.content), 
-                                                                    a'.length, 
-                                                                    (sym_ (a_array_bt, v')))))) local in
+                                                      IT.arraySet_ 
+                                                       ~item_bt:a_array_bt
+                                                        (sym_ (Map a_array_bt, a'.content), 
+                                                         a'.length, 
+                                                         (sym_ (a_array_bt, v')))
+                                     ))) local in
                        let resource = 
                          Array {a' with pointer = a.pointer;
                                         length = a.length;
@@ -779,7 +782,7 @@ module Make (G : sig val global : Global.t end) = struct
               let new_content = Sym.fresh () in
               let local = add_l new_content (Base (Map a_array_bt)) local in
               let local = add_uc (LC (eq_ (sym_ (Map a_array_bt, new_content), 
-                                           constArray_ (sym_ (a_array_bt, v), a_array_bt)))) 
+                                           constArray_ ~item_bt:a_array_bt (sym_ (a_array_bt, v)))) )
                             local in
               let resource = 
                 Array {pointer = a.pointer;
@@ -949,7 +952,7 @@ module Make (G : sig val global : Global.t end) = struct
       let ret = Sym.fresh () in
       let bts = List.map (fun arg -> arg.bt) args in
       let bt = Tuple bts in
-      let tuple_it = IT.tuple_ (bts, List.map (fun arg -> sym_ (arg.bt, arg.lname)) args) in
+      let tuple_it = IT.tuple_ ~item_bts:bts (List.map (fun arg -> sym_ (arg.bt, arg.lname)) args) in
       let lcs = [LC (eq_ (sym_ (Tuple bts, ret), tuple_it))] in
       return (ret, bt, lcs)
 
@@ -973,7 +976,7 @@ module Make (G : sig val global : Global.t end) = struct
          fail loc (Number_arguments {has = List.length args; expect = 1})
       | M_Cnil item_bt, [] -> 
          let bt = List item_bt in
-         return (ret, bt, [LC (eq_ (sym_ (bt, ret), nil_ item_bt))])
+         return (ret, bt, [LC (eq_ (sym_ (bt, ret), nil_ ~item_bt))])
       | M_Cnil item_bt, _ -> 
          fail loc (Number_arguments {has = List.length args; expect=0})
       | M_Ccons, [arg1; arg2] -> 
@@ -1040,7 +1043,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ constrs = check fields spec in
            let@ (s, bt, lcs) = infer_mem_value loc local mv in
            let@ () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
-           let this = IT.structMember_ (tag, sym_ (Struct tag, ret), member) in
+           let this = IT.structMember_ ~member_bt:bt (tag, sym_ (Struct tag, ret), member) in
            let constrs2 = List.map (LC.subst_it {before = s; after = this}) lcs in
            return (constrs @ constrs2)
         | [], [] -> 
@@ -1102,7 +1105,7 @@ module Make (G : sig val global : Global.t end) = struct
            ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
          in
          let its = List.map (fun arg -> IT.sym_ (arg.bt, arg.lname)) args in
-         return (ret, List ibt, [LC (eq_ (sym_ (List ibt, ret), list_ (its, ibt)))])
+         return (ret, List ibt, [LC (eq_ (sym_ (List ibt, ret), list_ ~item_bt:ibt its))])
       | M_Vtuple asyms ->
          let@ args = args_of_asyms local asyms in
          infer_tuple loc local args
@@ -1483,7 +1486,7 @@ module Make (G : sig val global : Global.t end) = struct
            let rec aux_members = function
              | Global.{size; member = (member, member_sct); _} :: members ->
                 let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
-                let member_path = IT.structMember_ (tag, path, member) in
+                let member_path = IT.structMember_ ~member_bt:(BT.of_sct member_sct) (tag, path, member) in
                 let@ constraints = aux_members members in
                 let@ constraints2 = 
                   aux local (BT.of_sct member_sct) member_pointer 
@@ -1554,12 +1557,13 @@ module Make (G : sig val global : Global.t end) = struct
            | [] -> return I
            | Global.{offset; size; member_or_padding} :: members ->
               match member_or_padding with
-              | Some (member,member_sct) -> 
+              | Some (member,member_sct) ->
+                 let member_bt = BT.of_sct member_sct in
                  let o_member_value = 
-                   Option.map (fun v -> IT.structMember_ (tag, v, member)) o_value 
+                   Option.map (fun v -> IT.structMember_ ~member_bt (tag, v, member)) o_value 
                  in
                  let member_offset = IT.addPointer_ (pointer, num_ offset) in
-                 let@ rt = store loc local (BT.of_sct member_sct) member_offset
+                 let@ rt = store loc local member_bt member_offset
                              size o_member_value in
                  let@ rt2 = aux members in
                  return (rt@@rt2)

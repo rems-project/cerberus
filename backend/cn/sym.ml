@@ -21,24 +21,18 @@ let num = S.symbol_num
 
 let fresh = S.fresh
 let fresh_named = S.fresh_pretty
-let fresh_onamed = S.fresh_fancy
 
 
-let fresh_relative (s : t) (f : string -> string) : t =
+let fresh_same (s : t) : t =
   match S.symbol_name s with
-  | Some name -> fresh_named (f name)
+  | Some name -> fresh_named name
   | None -> fresh ()
-
-let fresh_same s = fresh_relative s (fun id -> id)
-
-
 
 
 open Subst
 
 let subst (subst: (sym, sym) Subst.t) symbol = 
-  let {before;after} = subst in
-  if equal symbol before then after else symbol
+  if equal symbol subst.before then subst.after else symbol
 
 
 

@@ -110,7 +110,7 @@ let zero_region =
   let equality_constr = 
     arrayEqualOnRange_ (
         content_t, 
-        constArray_ (IT.num_ Z.zero, BT.Integer),
+        constArray_ ~item_bt:BT.Integer (IT.num_ Z.zero),
         num_ Z.zero,
         sub_ (length_t, num_ (Z.of_int 1))
       )

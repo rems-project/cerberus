@@ -7,8 +7,8 @@ module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
 
 
-type 'bt lit = 
-  | Sym of 'bt * Sym.t
+type lit = 
+  | Sym of Sym.t
   | Num of Z.t
   | Pointer of Z.t
   | Bool of bool
@@ -41,8 +41,10 @@ and 'bt bool_op =
   | ITE of 'bt term * 'bt term * 'bt term
 
 and 'bt tuple_op = 
-  | Tuple of 'bt list * 'bt term list
-  | NthTuple of 'bt * int * 'bt term (* bt is tuple bt *)
+  | Tuple of 'bt term list
+  | NthTuple of int * 'bt term
+
+and 'bt struct_op =
   | Struct of BT.tag * (BT.member * 'bt term) list
   | StructMember of BT.tag * 'bt term * BT.member
   | StructMemberOffset of BT.tag * 'bt term * BT.member
@@ -60,9 +62,9 @@ and 'bt pointer_op =
   | PointerToIntegerCast of 'bt term
 
 and 'bt list_op = 
-  | Nil of 'bt
+  | Nil
   | Cons of 'bt term * 'bt term
-  | List of 'bt term list * 'bt
+  | List of 'bt term list
   | Head of 'bt term
   | Tail of 'bt term
   | NthList of int * 'bt term
@@ -75,12 +77,10 @@ and 'bt set_op =
   | Subset of 'bt term * 'bt term
 
 and 'bt array_op = 
-  | ConstArray of 'bt term * 'bt
+  | ConstArray of 'bt term
   | ArrayGet of 'bt term * 'bt term
   | ArraySet of 'bt term * 'bt term * 'bt term
   | ArrayEqualOnRange of 'bt term * 'bt term * 'bt term * 'bt term
-  | ArraySelectAfter of ('bt term * 'bt term) * 'bt term
-  | ArrayIndexShiftRight of 'bt term * 'bt term
 
 and 'bt ct_pred = 
   | MinInteger of CF.Ctype.integerType
@@ -89,17 +89,23 @@ and 'bt ct_pred =
   | AlignedI of 'bt term * 'bt term
   | Aligned of CT.t * 'bt term
 
-and 'bt term =
-  | Lit of 'bt lit
+and 'bt term_ =
+  | Lit of lit
   | Arith_op of 'bt arith_op
   | Bool_op of 'bt bool_op
   | Cmp_op of 'bt cmp_op
   | Tuple_op of 'bt tuple_op
+  | Struct_op of 'bt struct_op
   | Pointer_op of 'bt pointer_op
   | List_op of 'bt list_op
   | Set_op of 'bt set_op
   | Array_op of 'bt array_op
   | CT_pred of 'bt ct_pred
+
+and 'bt term =
+  | IT of 'bt term_ * 'bt
+
+
 
 type typed = BT.t term
 type untyped = unit term
@@ -108,11 +114,11 @@ type it = typed
 type t = typed
 
 
-let rec equal it it' = 
+let rec equal (IT (it, _)) (IT (it', _)) = 
 
   let lit it it' =
     match it, it' with
-    | Sym (_,sym), Sym (_,sym') -> Sym.equal sym sym'
+    | Sym sym, Sym sym' -> Sym.equal sym sym'
     | Num n, Num n' -> Z.equal n n'
     | Pointer p, Pointer p' -> Z.equal p p'
     | Bool b, Bool b' -> b = b'
@@ -188,11 +194,16 @@ let rec equal it it' =
 
   let tuple_op it it' =
     match it, it' with
-    | Tuple (bts,its), Tuple (bts',its') -> 
-       List.equal BT.equal bts bts' &&
+    | Tuple its, Tuple its' -> 
        List.equal equal its its'
-    | NthTuple (bt, n,t), NthTuple (bt', n',t') -> 
-       BT.equal bt bt' && n = n' && equal t t' 
+    | NthTuple (n,t), NthTuple (n',t') -> 
+       n = n' && equal t t' 
+    | Tuple _, _ -> false
+    | NthTuple _, _ -> false
+  in
+
+  let struct_op it it' =
+    match it, it' with
     | Struct (tag, members), Struct (tag2, members2) ->
        Sym.equal tag tag2 && 
          List.equal (fun (m,t) (m',t') -> Id.equal m m' && equal t t') 
@@ -201,8 +212,6 @@ let rec equal it it' =
        Sym.equal tag tag' && equal t t' && Id.equal member member'
     | StructMemberOffset (tag,t,member), StructMemberOffset (tag',t',member') ->
        Sym.equal tag tag' && equal t t' && Id.equal member member'
-    | Tuple _, _ -> false
-    | NthTuple _, _ -> false
     | Struct _, _ -> false
     | StructMember _, _ -> false
     | StructMemberOffset _, _ -> false
@@ -245,19 +254,19 @@ let rec equal it it' =
 
   let list_op it it' = 
     match it, it' with
-    | Nil bt, Nil bt' -> 
-       BT.equal bt bt'
+    | Nil, Nil -> 
+       true
     | Cons (t1,t2), Cons (t1',t2') -> 
        equal t1 t1' && equal t2 t2'
-    | List (its,bt), List (its',bt') ->
-       List.equal equal its its' && BT.equal bt bt'
+    | List its, List its' ->
+       List.equal equal its its'
     | Head t, Head t' ->
        equal t t'
     | Tail t, Tail t' ->
        equal t t'
     | NthList (n,t), NthList (n',t') ->
        n = n' && equal t t'
-    | Nil _, _ -> false
+    | Nil, _ -> false
     | Cons _, _ -> false
     | List _, _ -> false
     | Head _, _ -> false
@@ -287,24 +296,18 @@ let rec equal it it' =
 
   let array_op it it' =
     match it, it' with
-    | ConstArray (t,bt), ConstArray (t',bt') ->
-       equal t t' && BT.equal bt bt'
+    | ConstArray t, ConstArray t' ->
+       equal t t'
     | ArrayGet (t1,t2), ArrayGet (t1',t2') ->
        equal t1 t1' && equal t2 t2'
     | ArraySet (t1,t2,t3), ArraySet (t1',t2',t3') ->
        equal t1 t1' && equal t2 t2' && equal t3 t3'
     | ArrayEqualOnRange (t1,t2,t3,t4), ArrayEqualOnRange (t1',t2',t3',t4') ->
        equal t1 t1' && equal t2 t2' && equal t3 t3' && equal t4 t4'
-    | ArraySelectAfter ((t1,t2), t3), ArraySelectAfter ((t1',t2'), t3') ->
-       equal t1 t1' && equal t2 t2' && equal t3 t3'
-    | ArrayIndexShiftRight (t1, t2), ArrayIndexShiftRight (t1', t2') ->
-       equal t1 t1' && equal t2 t2'
     | ConstArray _, _ -> false
     | ArrayGet _, _ -> false
     | ArraySet _, _ -> false
     | ArrayEqualOnRange _, _ -> false
-    | ArraySelectAfter _, _ -> false
-    | ArrayIndexShiftRight _, _ -> false
   in
 
   let ct_pred it it' = 
@@ -333,6 +336,7 @@ let rec equal it it' =
   | Bool_op it, Bool_op it' -> bool_op it it'
   | Cmp_op it, Cmp_op it' -> cmp_op it it'
   | Tuple_op it, Tuple_op it' -> tuple_op it it'
+  | Struct_op it, Struct_op it' -> struct_op it it'
   | Pointer_op it, Pointer_op it' -> pointer_op it it'
   | List_op it, List_op it' -> list_op it it'
   | Set_op it, Set_op it' -> set_op it it'
@@ -343,6 +347,7 @@ let rec equal it it' =
   | Bool_op _, _ -> false
   | Cmp_op _, _ -> false
   | Tuple_op _, _ -> false
+  | Struct_op _, _ -> false
   | Pointer_op _, _ -> false
   | List_op _, _ -> false
   | Set_op _, _ -> false
@@ -355,12 +360,12 @@ let rec equal it it' =
 
 let pp (type bt) (it : bt term) : PPrint.document = 
 
-  let rec aux atomic it = 
+  let rec aux atomic (IT (it, _)) = 
 
     let mparens pped = if atomic then parens pped else pped in
     
     let lit = function
-      | Sym (_,sym) -> Sym.pp sym
+      | Sym sym -> Sym.pp sym
       | Num i -> Z.pp i
       | Pointer i -> Z.pp i
       | Bool true -> !^"true"
@@ -418,10 +423,13 @@ let pp (type bt) (it : bt term) : PPrint.document =
     in
 
     let tuple_op = function
-      | NthTuple (bt,n,it2) -> 
+      | NthTuple (n,it2) -> 
          mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
-      | Tuple (_, its) -> 
+      | Tuple its -> 
          braces (separate_map (semi ^^ space) (aux false) its)
+    in
+
+    let struct_op = function
       | Struct (_tag, members) ->
          braces (separate_map (comma ^^ space) (fun (member,it) -> 
                      Id.pp member ^^^ equals ^^^ aux false it 
@@ -473,11 +481,11 @@ let pp (type bt) (it : bt term) : PPrint.document =
          c_app !^"hd" [aux false o1]
       | Tail (o1) -> 
          c_app !^"tl" [aux false o1]
-      | Nil _ -> 
+      | Nil -> 
          brackets empty
       | Cons (t1,t2) -> 
          mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-      | List (its, _bt) -> 
+      | List its -> 
          mparens (brackets (separate_map (comma ^^ space) (aux false) its))
       | NthList (n, t) ->
          mparens (aux true t ^^ brackets !^(string_of_int n))
@@ -497,7 +505,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     in
 
     let array_op = function    
-      | ConstArray (t,_) ->
+      | ConstArray t ->
          c_app !^"all" [aux false t]
       | ArrayGet (t1,t2) ->
          aux true t1 ^^ lbracket ^^ aux false t2 ^^ rbracket
@@ -505,10 +513,6 @@ let pp (type bt) (it : bt term) : PPrint.document =
          aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
       | ArrayEqualOnRange (t1,t2,t3,t4) ->
          c_app !^"equalOnRange" [aux false t1; aux false t2; aux false t3; aux false t4]
-      | ArraySelectAfter ((t1,t2), t3) ->
-         c_app !^"array_select_after" [aux false t1; aux false t2; aux false t3]
-      | ArrayIndexShiftRight (t1, t2) ->
-         c_app !^"array_index_shift_right" [aux false t1; aux false t2]
     in
 
     match it with
@@ -517,6 +521,7 @@ let pp (type bt) (it : bt term) : PPrint.document =
     | Cmp_op it -> cmp_op it
     | Bool_op it -> bool_op it
     | Tuple_op it -> tuple_op it
+    | Struct_op it -> struct_op it
     | Pointer_op it -> pointer_op it
     | CT_pred it -> ct_pred it
     | List_op it -> list_op it
@@ -530,8 +535,8 @@ let pp (type bt) (it : bt term) : PPrint.document =
 
 let rec vars_in : 'bt. 'bt term -> SymSet.t =
 
-  let lit : 'bt lit -> SymSet.t = function
-    | Sym (_, symbol) -> SymSet.singleton symbol
+  let lit : lit -> SymSet.t = function
+    | Sym symbol -> SymSet.singleton symbol
     | Num _ -> SymSet.empty
     | Pointer _ -> SymSet.empty
     | Bool _ -> SymSet.empty
@@ -568,8 +573,11 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   in
 
   let tuple_op : 'bt tuple_op -> SymSet.t = function
-    | Tuple (_, its) -> vars_in_list its
-    | NthTuple (_, _, it) -> vars_in it
+    | Tuple its -> vars_in_list its
+    | NthTuple ( _, it) -> vars_in it
+  in
+  
+  let struct_op : 'bt struct_op -> SymSet.t = function
     | Struct (_tag, members) -> vars_in_list (map snd members)
     | StructMember (_tag, it, s) -> vars_in_list [it;it]
     | StructMemberOffset (_tag, it, s) -> vars_in_list [it;it]
@@ -597,9 +605,9 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   in
 
   let list_op : 'bt list_op -> SymSet.t = function
-    | Nil _  -> SymSet.empty
+    | Nil  -> SymSet.empty
     | Cons (it, it') -> vars_in_list [it; it']
-    | List (its,bt) -> vars_in_list its
+    | List its -> vars_in_list its
     | Head it -> vars_in it
     | Tail it -> vars_in it
     | NthList (_,it) -> vars_in it
@@ -614,20 +622,20 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   in
 
   let array_op : 'bt array_op -> SymSet.t = function
-    | ConstArray (t,_) -> vars_in t
+    | ConstArray t -> vars_in t
     | ArrayGet (t1,t2) -> vars_in_list [t1;t2]
     | ArraySet (t1,t2,t3) -> vars_in_list [t1;t2;t3]
     | ArrayEqualOnRange (t1,t2,t3,t4) -> vars_in_list [t1;t2;t3; t4]
-    | ArraySelectAfter ((t1, t2), t3) -> vars_in_list [t1; t2; t3]
-    | ArrayIndexShiftRight (t1, t2) -> vars_in_list [t1; t2]
   in
   
-  function
+  fun (IT (it, _)) ->
+  match it with
   | Lit it -> lit it
   | Arith_op it -> arith_op it
   | Cmp_op it -> cmp_op it
   | Bool_op it -> bool_op it
   | Tuple_op it -> tuple_op it
+  | Struct_op it -> struct_op it
   | Pointer_op it -> pointer_op it
   | CT_pred it -> ct_pred it
   | List_op it -> list_op it
@@ -645,18 +653,18 @@ let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 
 
-let map_sym (type bt) (f : bt * Sym.t -> bt term) =
+let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
 
   let rec aux = 
 
-    let lit = function
-      | Sym (bt, symbol) -> f (bt, symbol)
-      | it -> Lit it
+    let lit it bt = 
+      match it with
+      | Sym symbol -> f symbol bt
+      | it -> IT (Lit it, bt)
     in
 
-    let arith_op it = 
-      Arith_op 
-        begin match it with
+    let arith_op it bt = 
+      let it = match it with
         | Add (it, it') -> Add (aux it, aux it')
         | Sub (it, it') -> Sub (aux it, aux it')
         | Mul (it, it') -> Mul (aux it, aux it')
@@ -666,39 +674,45 @@ let map_sym (type bt) (f : bt * Sym.t -> bt term) =
         | Rem_f (it, it') -> Rem_f (aux it, aux it')
         | Min (it, it') -> Min (aux it, aux it')
         | Max (it, it') -> Max (aux it, aux it')
-        end
+      in
+      IT (Arith_op it, bt)
     in
 
-    let cmp_op it = 
-      Cmp_op 
-        begin match it with
+    let cmp_op it bt = 
+      let it = match it with
         | EQ (it, it') -> EQ (aux it, aux it')
         | NE (it, it') -> NE (aux it, aux it')
         | LT (it, it') -> LT (aux it, aux it')
         | GT (it, it') -> GT (aux it, aux it')
         | LE (it, it') -> LE (aux it, aux it')
         | GE (it, it') -> GE (aux it, aux it')
-        end
+      in
+      IT (Cmp_op it, bt)
     in
 
-    let bool_op it = 
-      Bool_op 
-        begin match it with
+    let bool_op it bt = 
+      let it = match it with
         | And its -> And (map (aux) its)
         | Or its -> Or (map (aux) its)
         | Impl (it, it') -> Impl (aux it, aux it')
         | Not it -> Not (aux it)
         | ITE (it,it',it'') -> ITE (aux it, aux it', aux it'')
-        end
+      in
+      IT (Bool_op it, bt)
     in
 
-    let tuple_op it = 
-      Tuple_op
-        begin match it with
-        | Tuple (bt, its) ->
-           Tuple (bt, map aux its)
-        | NthTuple (bt, n, it') ->
-           NthTuple (bt, n, aux it')
+    let tuple_op it bt = 
+      let it = match it with
+        | Tuple its ->
+           Tuple (map aux its)
+        | NthTuple (n, it') ->
+           NthTuple (n, aux it')
+      in
+      IT (Tuple_op it, bt)
+    in
+    
+    let struct_op it bt =
+      let it = match it with
         | Struct (tag, members) ->
            let members = map (fun (member,it) -> (member,aux it)) members in
            Struct (tag, members)
@@ -706,12 +720,12 @@ let map_sym (type bt) (f : bt * Sym.t -> bt term) =
            StructMember (tag, aux t, f)
         | StructMemberOffset (tag,t,f) ->
            StructMemberOffset (tag,aux t, f)
-        end
+      in
+      IT (Struct_op it, bt)
     in
 
-    let pointer_op it =
-      Pointer_op
-        begin match it with
+    let pointer_op it bt =
+      let it = match it with
         | Null it -> 
            Null (aux it)
         | AllocationSize it -> 
@@ -732,72 +746,71 @@ let map_sym (type bt) (f : bt * Sym.t -> bt term) =
            IntegerToPointerCast (aux t)
         | PointerToIntegerCast t -> 
            PointerToIntegerCast (aux t)
-        end
+      in
+      IT (Pointer_op it, bt)
     in
 
-    let ct_pred it =
-      CT_pred
-        begin match it with
+    let ct_pred it bt =
+      let it = match it with
         | Aligned (rt,t) -> Aligned (rt, aux t)
         | AlignedI (t,t') -> AlignedI (aux t, aux t')
         | MinInteger it -> MinInteger it
         | MaxInteger it -> MaxInteger it
         | Representable (rt,t) -> Representable (rt,aux t)
-        end
+      in
+      IT (CT_pred it, bt)
     in
 
-    let list_op it =
-      List_op
-        begin match it with
-        | Nil bt -> Nil bt
+    let list_op it bt =
+      let it = match it with
+        | Nil -> Nil
         | Cons (it1,it2) -> Cons (aux it1, aux it2)
-        | List (its,bt) -> List (map aux its, bt)
+        | List its -> List (map aux its)
         | Head it -> Head (aux it)
         | Tail it -> Tail (aux it)
         | NthList (i, it) -> NthList (i, aux it)
-        end
+      in
+      IT (List_op it, bt)
     in
 
-    let set_op it = 
-      Set_op 
-        begin match it with
+    let set_op it bt = 
+      let it = match it with
         | SetMember (t1,t2) -> SetMember (aux t1, aux t2)
         | SetUnion ts -> SetUnion (List1.map aux ts)
         | SetIntersection ts -> SetIntersection (List1.map aux ts)
         | SetDifference (t1, t2) -> SetDifference (aux t1, aux t2)
         | Subset (t1, t2) -> Subset (aux t1, aux t2)
-        end
+      in
+      IT (Set_op it, bt)
     in
 
-    let array_op it = 
-      Array_op
-        begin match it with
-        | ConstArray (t, bt) ->
-           ConstArray (aux t, bt)
+    let array_op it bt = 
+      let it = match it with
+        | ConstArray t ->
+           ConstArray (aux t)
         | ArrayGet (t1, t2) ->
            ArrayGet (aux t1, aux t2)
         | ArraySet (t1, t2, t3) ->
            ArraySet (aux t1, aux t2, aux t3)
         | ArrayEqualOnRange (t1, t2, t3, t4) ->
            ArrayEqualOnRange (aux t1, aux t2, aux t3, aux t4)
-        | ArraySelectAfter ((t1,t2),t3) ->
-           ArraySelectAfter ((aux t1,aux t2),aux t3)
-        | ArrayIndexShiftRight (t1, t2) ->
-           ArrayIndexShiftRight (aux t1, aux t2)
-        end
+      in
+      IT (Array_op it, bt)
     in
 
-    function
-    | Lit it -> lit it
-    | Arith_op it -> arith_op it
-    | Cmp_op it -> cmp_op it
-    | Bool_op it -> bool_op it
-    | Tuple_op it -> tuple_op it
-    | Pointer_op it -> pointer_op it
-    | CT_pred it -> ct_pred it
-    | List_op it -> list_op it
-    | Set_op it -> set_op it
-    | Array_op it -> array_op it
+    fun (IT (it, bt)) ->
+    match it with
+    | Lit it -> lit it bt
+    | Arith_op it -> arith_op it bt
+    | Cmp_op it -> cmp_op it bt
+    | Bool_op it -> bool_op it bt
+    | Tuple_op it -> tuple_op it bt
+    | Struct_op it -> struct_op it bt
+    | Pointer_op it -> pointer_op it bt
+    | CT_pred it -> ct_pred it bt
+    | List_op it -> list_op it bt
+    | Set_op it -> set_op it bt
+    | Array_op it -> array_op it bt
 
   in
 
@@ -805,18 +818,18 @@ let map_sym (type bt) (f : bt * Sym.t -> bt term) =
 
 
 let subst_var (subst : (Sym.t, Sym.t) Subst.t) it =
-  map_sym (fun (bt, s) ->
-      Lit (Sym (bt, Sym.subst subst s))
+  map_sym (fun s bt ->
+      IT (Lit (Sym (Sym.subst subst s)), bt)
     ) it
 
 let subst_vars it = make_substs subst_var it
 
 
 let subst_it (subst : (Sym.t, 'bt term) Subst.t) it =
-  map_sym (fun (bt, s) ->
+  map_sym (fun s bt ->
       if Sym.equal s subst.before 
       then subst.after
-      else Lit (Sym (bt, s))
+      else IT (Lit (Sym s), bt)
     ) it
 
 let subst_its it = make_substs subst_var it
@@ -827,89 +840,117 @@ let subst_its it = make_substs subst_var it
 
 
 (* lit *)
-let sym_ (bt, sym) = Lit (Sym (bt, sym))
-let num_ n = Lit (Num n)
-let pointer_ n = Lit (Pointer n)
-let bool_ b = Lit (Bool b)
-let unit = Lit Unit
+let sym_ (bt, sym) = IT (Lit (Sym sym), bt)
+let num_ n = IT (Lit (Num n), BT.Integer)
+let pointer_ n = IT (Lit (Pointer n), BT.Loc)
+let bool_ b = IT (Lit (Bool b), BT.Bool)
+let unit = IT (Lit Unit, BT.Unit)
 
 let int_ n = num_ (Z.of_int n)
 
 
 (* arith_op *)
-let add_ (it, it') = Arith_op (Add (it, it'))
-let sub_ (it, it') = Arith_op (Sub (it, it'))
-let mul_ (it, it') = Arith_op (Mul (it, it'))
-let div_ (it, it') = Arith_op (Div (it, it'))
-let exp_ (it, it') = Arith_op (Exp (it, it'))
-let rem_t_ (it, it') = Arith_op (Rem_t (it, it'))
-let rem_f_ (it, it') = Arith_op (Rem_f (it, it'))
-let min_ (it, it') = Arith_op (Min (it, it'))
-let max_ (it, it') = Arith_op (Max (it, it'))
+let add_ (it, it') = IT (Arith_op (Add (it, it')), BT.Integer)
+let sub_ (it, it') = IT (Arith_op (Sub (it, it')), BT.Integer)
+let mul_ (it, it') = IT (Arith_op (Mul (it, it')), BT.Integer)
+let div_ (it, it') = IT (Arith_op (Div (it, it')), BT.Integer)
+let exp_ (it, it') = IT (Arith_op (Exp (it, it')), BT.Integer)
+let rem_t_ (it, it') = IT (Arith_op (Rem_t (it, it')), BT.Integer)
+let rem_f_ (it, it') = IT (Arith_op (Rem_f (it, it')), BT.Integer)
+let min_ (it, it') = IT (Arith_op (Min (it, it')), BT.Integer)
+let max_ (it, it') = IT (Arith_op (Max (it, it')), BT.Integer)
 
 (* cmp_op *)
-let eq_ (it, it') = Cmp_op (EQ (it, it'))
-let ne_ (it, it') = Cmp_op (NE (it, it'))
-let lt_ (it, it') = Cmp_op (LT (it, it'))
-let gt_ (it, it') = Cmp_op (GT (it, it'))
-let le_ (it, it') = Cmp_op (LE (it, it'))
-let ge_ (it, it') = Cmp_op (GE (it, it'))
+let eq_ (it, it') = IT (Cmp_op (EQ (it, it')), BT.Bool)
+let ne_ (it, it') = IT (Cmp_op (NE (it, it')), BT.Bool)
+let lt_ (it, it') = IT (Cmp_op (LT (it, it')), BT.Bool)
+let gt_ (it, it') = IT (Cmp_op (GT (it, it')), BT.Bool)
+let le_ (it, it') = IT (Cmp_op (LE (it, it')), BT.Bool)
+let ge_ (it, it') = IT (Cmp_op (GE (it, it')), BT.Bool)
 
 (* bool_op *)
-let and_ its = Bool_op (And its)
-let or_ its = Bool_op (Or its)
-let impl_ (it, it') = Bool_op (Impl (it, it'))
-let not_ it = Bool_op (Not it)
-let ite_ (it, it', it'') = Bool_op (ITE (it, it', it''))
+let and_ its = IT (Bool_op (And its), BT.Bool)
+let or_ its = IT (Bool_op (Or its), BT.Bool)
+let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
+let not_ it = IT (Bool_op (Not it), BT.Bool)
+let ite_ bt (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt)
 
 (* tuple_op *)
-let tuple_ (bts, its) = Tuple_op (Tuple (bts, its))
-let nthTuple_ (bt, n, it) = Tuple_op (NthTuple (bt, n, it))
-let struct_ (s, members) = Tuple_op (Struct (s, members))
-let structMember_ (s, it, member) = Tuple_op (StructMember (s, it, member))
-let structMemberOffset_ (s, it, member) = Tuple_op (StructMemberOffset (s, it, member))
+let tuple_ ~item_bts its = IT (Tuple_op (Tuple its), BT.Tuple item_bts)
+let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
+
+(* struct_op *)
+let struct_ (tag, members) = 
+  IT (Struct_op (Struct (tag, members)), BT.Struct tag) 
+let structMember_ ~member_bt (tag, it, member) = 
+  IT (Struct_op (StructMember (tag, it, member)), member_bt)
+let structMemberOffset_ (tag, it, member) = 
+  IT (Struct_op (StructMemberOffset (tag, it, member)), BT.Loc)
 
 (* pointer_op *)
-let null_ it = Pointer_op (Null it)
-let allocationSize_ it = Pointer_op (AllocationSize it)
-let addPointer_ (it, it') = Pointer_op (AddPointer (it, it'))
-let subPointer_ (it, it') = Pointer_op (SubPointer (it, it'))
-let mulPointer_ (it, it') = Pointer_op (MulPointer (it, it'))
-let ltPointer_ (it, it') = Pointer_op (LTPointer (it, it'))
-let lePointer_ (it, it') = Pointer_op (LEPointer (it, it'))
-let disjoint_ (fp, fp') = Pointer_op (Disjoint (fp, fp'))
-let integerToPointerCast_ it = Pointer_op (IntegerToPointerCast it)
-let pointerToIntegerCast_ it = Pointer_op (PointerToIntegerCast it)
+let null_ it = IT (Pointer_op (Null it), BT.Bool)
+let allocationSize_ it = IT (Pointer_op (AllocationSize it), BT.Integer)
+let addPointer_ (it, it') = IT (Pointer_op (AddPointer (it, it')), BT.Loc)
+let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)
+let mulPointer_ (it, it') = IT (Pointer_op (MulPointer (it, it')), BT.Loc)
+let ltPointer_ (it, it') = IT (Pointer_op (LTPointer (it, it')), BT.Bool)
+let lePointer_ (it, it') = IT (Pointer_op (LEPointer (it, it')), BT.Bool)
+let disjoint_ (fp, fp') = IT (Pointer_op (Disjoint (fp, fp')), BT.Bool)
+let integerToPointerCast_ it = IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
+let pointerToIntegerCast_ it = IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
 
 (* list_op *)
-let nil_ bt = List_op (Nil bt)
-let cons_ (it, it') = List_op (Cons (it, it'))
-let list_ (its, bt) = List_op (List (its, bt))
-let head_ it = List_op (Head it)
-let tail_ it = List_op (Tail it)
-let nthList_ (n, it) = List_op (NthList (n, it))
+let nil_ ~item_bt = 
+  IT (List_op Nil, BT.List item_bt)
+let cons_ (it, it') = 
+  let (IT (_, bt)) = it' in
+  IT (List_op (Cons (it, it')), bt)
+let list_ ~item_bt its = 
+  IT (List_op (List its), BT.List item_bt)
+let head_ ~item_bt it = 
+  IT (List_op (Head it), item_bt)
+let tail_ it = 
+  let (IT (_, bt)) = it in
+  IT (List_op (Tail it), bt)
+let nthList_ ~item_bt (n, it) = 
+  IT (List_op (NthList (n, it)), item_bt)
 
 (* set_op *)
-let setMember_ (it, it') = Set_op (SetMember (it, it'))
-let setUnion_ its = Set_op (SetUnion its)
-let setIntersection_ its = Set_op (SetIntersection its)
-let setDifference_ (it, it') = Set_op (SetDifference (it, it'))
-let subset_ (it, it') = Set_op (Subset (it, it'))
+let setMember_ bt (it, it') = 
+  IT (Set_op (SetMember (it, it')), BT.Bool)
+let setUnion_ its = 
+  let (IT (_, bt),_) = List1.dest its in
+  IT (Set_op (SetUnion its), bt)
+let setIntersection_ its = 
+  let (IT (_, bt),_) = List1.dest its in
+  IT (Set_op (SetIntersection its), bt)
+let setDifference_ (it, it') = 
+  let (IT (_, bt)) = it in
+  IT (Set_op (SetDifference (it, it')), bt)
+let subset_ (it, it') = 
+  IT (Set_op (Subset (it, it')), BT.Bool)
 
 (* array_op *)
-let constArray_ (it, bt) = Array_op (ConstArray (it, bt))
-let arrayGet_ (it, it') = Array_op (ArrayGet (it, it'))
-let arraySet_ (it, it', it'') = Array_op (ArraySet (it, it', it''))
-let arrayEqualOnRange_ (it, it', it'', it''') = Array_op (ArrayEqualOnRange (it, it', it'', it'''))
-let arraySelectAfter_ ((it, it'), it'') =  Array_op (ArraySelectAfter ((it, it'), it''))
-let arrayIndexShiftRight_ (it, it') = Array_op (ArrayIndexShiftRight (it, it'))
+let constArray_ ~item_bt it = 
+  IT (Array_op (ConstArray it), BT.Map item_bt)
+let arrayGet_ ~item_bt (it, it') = 
+  IT (Array_op (ArrayGet (it, it')), item_bt)
+let arraySet_ ~item_bt (it, it', it'') = 
+  IT (Array_op (ArraySet (it, it', it'')), BT.Map item_bt)
+let arrayEqualOnRange_ (it, it', it'', it''') = 
+  IT (Array_op (ArrayEqualOnRange (it, it', it'', it''')), BT.Bool)
 
 (* ct_pred *)
-let minInteger_ t = CT_pred (MinInteger t)
-let maxInteger_ t = CT_pred (MaxInteger t)
-let representable_ (t, it) = CT_pred (Representable (t, it))
-let aligned_ (t, it) = CT_pred (Aligned (t, it))
-let alignedI_ (it, it') = CT_pred (AlignedI (it, it'))
+let minInteger_ t = 
+  IT (CT_pred (MinInteger t), BT.Integer)
+let maxInteger_ t = 
+  IT (CT_pred (MaxInteger t), BT.Integer)
+let representable_ (t, it) = 
+  IT (CT_pred (Representable (t, it)), BT.Bool)
+let aligned_ (t, it) = 
+  IT (CT_pred (Aligned (t, it)), BT.Bool)
+let alignedI_ (it, it') = 
+  IT (CT_pred (AlignedI (it, it')), BT.Bool)
 
 
 
@@ -949,7 +990,7 @@ let good_value v sct =
   | Sctype (_, Pointer (qualifiers, pointee_sct)) ->
      good_pointer v pointee_sct
   | _ ->
-     CT_pred (Representable (sct, v_it))
+     representable_ (sct, v_it)
 
 
 

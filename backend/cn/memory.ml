@@ -113,7 +113,10 @@ and representable_struct struct_decls tag about =
   let lcs =
     List.filter_map (fun Global.{member = (member, sct); _} ->
             let rangef = representable_ctype struct_decls sct in
-            Some (LC.unpack (rangef (IT.structMember_ (tag, about, member))))
+            let bt = BT.of_sct sct in
+            let member_it = 
+              IT.structMember_ ~member_bt:bt (tag, about, member) in
+            Some (LC.unpack (rangef member_it))
       ) (Global.members decl.Global.layout)
   in
   (LC.LC (and_ lcs))
