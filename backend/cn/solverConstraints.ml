@@ -18,6 +18,7 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | Unit -> "void"
     | Bool -> "bool"
     | Integer -> "integer"
+    | Real -> "real"
     | Loc -> "pointer"
     | List bt -> "list("^bt_name bt^")"
     | Tuple bts -> "list("^String.concat "," (List.map bt_name bts)^")"
@@ -40,6 +41,8 @@ let of_index_term (global: Global.t) (it: IT.t) =
        Z3.Boolean.mk_sort context
     | Integer ->
        Z3.Arithmetic.Integer.mk_sort context
+    | Real -> 
+       Z3.Arithmetic.Real.mk_sort context
     | Loc ->
        Z3.Arithmetic.Integer.mk_sort context
     | List bt ->
@@ -123,6 +126,17 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | Max (t1, t2) ->
        term (ite_ bt (ge_ (t1, t2), t1, t2))
 
+  and cmp_op it bt =
+    match it with
+    | LT (t1, t2) ->
+       Z3.Arithmetic.mk_lt context (term t1) (term t2)
+    | GT (t1, t2) ->
+       Z3.Arithmetic.mk_gt context (term t1) (term t2)
+    | LE (t1, t2) ->
+       Z3.Arithmetic.mk_le context (term t1) (term t2)
+    | GE (t1, t2) ->
+       Z3.Arithmetic.mk_ge context (term t1) (term t2)
+
   and bool_op it bt =
     match it with
     | And ts -> 
@@ -135,21 +149,10 @@ let of_index_term (global: Global.t) (it: IT.t) =
        Z3.Boolean.mk_not context (term t)
     | ITE (t1, t2, t3) ->
        Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
-
-  and cmp_op it bt =
-    match it with
     | EQ (t1, t2) ->
        Z3.Boolean.mk_eq context (term t1) (term t2)
     | NE (t1, t2) ->
        Z3.Boolean.mk_distinct context [term t1; term t2]
-    | LT (t1, t2) ->
-       Z3.Arithmetic.mk_lt context (term t1) (term t2)
-    | GT (t1, t2) ->
-       Z3.Arithmetic.mk_gt context (term t1) (term t2)
-    | LE (t1, t2) ->
-       Z3.Arithmetic.mk_le context (term t1) (term t2)
-    | GE (t1, t2) ->
-       Z3.Arithmetic.mk_ge context (term t1) (term t2)
 
   and tuple_op it bt =
     match it with

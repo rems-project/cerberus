@@ -128,14 +128,6 @@ module Make (G : sig val global : Global.t end) = struct
              let@ t = check loc (Base Integer) t in
              let@ t' = check loc (Base Integer) t' in
              return (Base Bool, GE (t, t'))
-          | EQ (t,t') ->
-             let@ (ls,t) = infer loc t in
-             let@ t' = check loc ls t' in
-             return (Base Bool, EQ (t,t')) 
-          | NE (t,t') ->
-             let@ (ls,t) = infer loc t in
-             let@ t' = check loc ls t' in
-             return (Base Bool, NE (t,t'))
         in
 
         let bool_op = function
@@ -157,6 +149,14 @@ module Make (G : sig val global : Global.t end) = struct
              let@ (ls, t') = infer loc t' in
              let@ t'' = check loc (Base Integer) t'' in
              return (ls, ITE (t, t', t''))
+          | EQ (t,t') ->
+             let@ (ls,t) = infer loc t in
+             let@ t' = check loc ls t' in
+             return (Base Bool, EQ (t,t')) 
+          | NE (t,t') ->
+             let@ (ls,t) = infer loc t in
+             let@ t' = check loc ls t' in
+             return (Base Bool, NE (t,t'))
         in
 
         let tuple_op = function

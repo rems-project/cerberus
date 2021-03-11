@@ -27,8 +27,6 @@ type 'bt arith_op =
   | Max of 'bt term * 'bt term
 
 and 'bt cmp_op =
-  | EQ of 'bt term * 'bt term
-  | NE of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | GT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
@@ -40,6 +38,8 @@ and 'bt bool_op =
   | Impl of 'bt term * 'bt term
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
+  | EQ of 'bt term * 'bt term
+  | NE of 'bt term * 'bt term
 
 and 'bt tuple_op = 
   | Tuple of 'bt term list
@@ -156,6 +156,18 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Max _, _ -> false
   in
 
+  let cmp_op it it' = 
+    match it, it' with
+    | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
+    | GT (t1,t2), GT (t1',t2') -> equal t1 t1' && equal t2 t2' 
+    | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
+    | GE (t1,t2), GE (t1',t2') -> equal t1 t1' && equal t2 t2' 
+    | LT _, _ -> false
+    | GT _, _ -> false
+    | LE _, _ -> false
+    | GE _, _ -> false
+  in
+
   let bool_op it it' = 
     match it, it' with
     | And ts, And ts' -> 
@@ -168,6 +180,10 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t t' 
     | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
        equal t1 t1' && equal t2 t2' && equal t3 t3'
+    | EQ (t1,t2), EQ (t1',t2') -> 
+       equal t1 t1' && equal t2 t2' 
+    | NE (t1,t2), NE (t1',t2') -> 
+       equal t1 t1' && equal t2 t2' 
     | And _, _ -> 
        false
     | Or _, _ -> 
@@ -178,22 +194,10 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        false
     | ITE _, _ ->
        false
-  in
-
-  let cmp_op it it' = 
-    match it, it' with
-    | EQ (t1,t2), EQ (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | NE (t1,t2), NE (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | GT (t1,t2), GT (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | GE (t1,t2), GE (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | EQ _, _ -> false
-    | NE _, _ -> false
-    | LT _, _ -> false
-    | GT _, _ -> false
-    | LE _, _ -> false
-    | GE _, _ -> false
+    | EQ _, _ -> 
+       false
+    | NE _, _ -> 
+       false
   in
 
   let tuple_op it it' =
@@ -399,10 +403,6 @@ let pp (type bt) (it : bt term) : PPrint.document =
     in
 
     let cmp_op = function
-      | EQ (o1,o2) -> 
-         mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
-      | NE (o1,o2) -> 
-         mparens (aux true o1 ^^^ !^"!=" ^^^ aux true o2)
       | LT (o1,o2) -> 
          mparens (aux true o1 ^^^ langle ^^^ aux true o2)
       | GT (o1,o2) -> 
@@ -414,16 +414,20 @@ let pp (type bt) (it : bt term) : PPrint.document =
     in
 
     let bool_op = function
-    | And o -> 
-       Pp.group (mparens (flow_map (space ^^ !^"&&" ^^ space) (aux false) o))
-    | Or o -> 
-       Pp.group (mparens (flow_map (space ^^ !^"||" ^^ space) (aux false) o))
-    | Impl (o1,o2) -> 
-       mparens (aux true o1 ^^^ equals ^^ rangle ^^^ aux true o2)
-    | Not (o1) -> 
-       mparens (!^"not" ^^^ aux true o1)
-    | ITE (o1,o2,o3) -> 
-       mparens (aux true o1 ^^^ !^"?" ^^^ aux true o2 ^^^ colon ^^^ aux false o3)
+      | And o -> 
+         Pp.group (mparens (flow_map (space ^^ !^"&&" ^^ space) (aux false) o))
+      | Or o -> 
+         Pp.group (mparens (flow_map (space ^^ !^"||" ^^ space) (aux false) o))
+      | Impl (o1,o2) -> 
+         mparens (aux true o1 ^^^ equals ^^ rangle ^^^ aux true o2)
+      | Not (o1) -> 
+         mparens (!^"not" ^^^ aux true o1)
+      | ITE (o1,o2,o3) -> 
+         mparens (aux true o1 ^^^ !^"?" ^^^ aux true o2 ^^^ colon ^^^ aux false o3)
+      | EQ (o1,o2) -> 
+         mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
+      | NE (o1,o2) -> 
+         mparens (aux true o1 ^^^ !^"!=" ^^^ aux true o2)
     in
 
     let tuple_op = function
@@ -560,8 +564,6 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   in
 
   let cmp_op : 'bt cmp_op -> SymSet.t = function
-    | EQ (it, it') -> vars_in_list [it; it']
-    | NE (it, it') -> vars_in_list [it; it']
     | LT (it, it') -> vars_in_list [it; it']
     | GT (it, it') -> vars_in_list [it; it']
     | LE (it, it') -> vars_in_list [it; it']
@@ -574,6 +576,8 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
     | Impl (it, it') -> vars_in_list [it; it']
     | Not it -> vars_in it
     | ITE (it,it',it'') -> vars_in_list [it;it';it'']
+    | EQ (it, it') -> vars_in_list [it; it']
+    | NE (it, it') -> vars_in_list [it; it']
   in
 
   let tuple_op : 'bt tuple_op -> SymSet.t = function
@@ -684,8 +688,6 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
 
     let cmp_op it bt = 
       let it = match it with
-        | EQ (it, it') -> EQ (aux it, aux it')
-        | NE (it, it') -> NE (aux it, aux it')
         | LT (it, it') -> LT (aux it, aux it')
         | GT (it, it') -> GT (aux it, aux it')
         | LE (it, it') -> LE (aux it, aux it')
@@ -701,6 +703,8 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
         | Impl (it, it') -> Impl (aux it, aux it')
         | Not it -> Not (aux it)
         | ITE (it,it',it'') -> ITE (aux it, aux it', aux it'')
+        | EQ (it, it') -> EQ (aux it, aux it')
+        | NE (it, it') -> NE (aux it, aux it')
       in
       IT (Bool_op it, bt)
     in
@@ -883,8 +887,6 @@ let min_ (it, it') = IT (Arith_op (Min (it, it')), BT.Integer)
 let max_ (it, it') = IT (Arith_op (Max (it, it')), BT.Integer)
 
 (* cmp_op *)
-let eq_ (it, it') = IT (Cmp_op (EQ (it, it')), BT.Bool)
-let ne_ (it, it') = IT (Cmp_op (NE (it, it')), BT.Bool)
 let lt_ (it, it') = IT (Cmp_op (LT (it, it')), BT.Bool)
 let gt_ (it, it') = IT (Cmp_op (GT (it, it')), BT.Bool)
 let le_ (it, it') = IT (Cmp_op (LE (it, it')), BT.Bool)
@@ -896,6 +898,8 @@ let or_ its = IT (Bool_op (Or its), BT.Bool)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
 let not_ it = IT (Bool_op (Not it), BT.Bool)
 let ite_ bt (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt)
+let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
+let ne_ (it, it') = IT (Bool_op (NE (it, it')), BT.Bool)
 
 (* tuple_op *)
 let tuple_ ~item_bts its = IT (Tuple_op (Tuple its), BT.Tuple item_bts)

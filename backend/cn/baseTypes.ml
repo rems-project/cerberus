@@ -8,6 +8,7 @@ type t =
   | Unit 
   | Bool
   | Integer
+  | Real
   | Loc
   | List of t
   | Tuple of t list
@@ -24,6 +25,7 @@ let rec equal t t' =
   | Unit, Unit -> true
   | Bool, Bool -> true
   | Integer, Integer -> true
+  | Real, Real -> true
   | Loc, Loc -> true
   | List t, List t' -> equal t t'
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
@@ -34,6 +36,7 @@ let rec equal t t' =
   | Unit, _
   | Bool, _
   | Integer, _
+  | Real, _
   | Loc, _
   | List _, _
   | Tuple _, _
@@ -53,6 +56,9 @@ let compare bt bt' =
 
   | Integer, Integer -> 0
   | Integer, _ -> -1
+
+  | Real, Real -> 0
+  | Real, _ -> -1
 
   | Loc, Loc -> 0
   | Loc, _ -> -1
@@ -82,6 +88,7 @@ let pp bt =
     | Unit -> !^"void"
     | Bool -> !^"bool"
     | Integer -> !^"integer"
+    | Real -> !^"real"
     | Loc -> !^"pointer"
     | List bt -> mparens ((!^ "list") ^^^ aux true bt)
     | Tuple nbts -> parens (flow_map (comma) (aux false) nbts)

@@ -91,6 +91,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Unit -> ("u", faa unit_counter)
         | Bool -> ("b", faa bool_counter)
         | Integer -> ("i", faa integer_counter)
+        | Real -> ("r", faa integer_counter)
         | Loc -> ("l", faa loc_counter)
         | List _ -> ("l", faa list_counter)
         | Tuple _ ->  ("t", faa tuple_counter)

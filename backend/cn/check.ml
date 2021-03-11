@@ -2156,13 +2156,6 @@ module Make (G : sig val global : Global.t end) = struct
     return ()
 
 
-  (* TODO: 
-     - check resource definition well-formedness
-     - check globals with expressions
-     - give types for standard library functions
-     - fix Ecase "LC (Bool true)"
-   *)
-
 end
  
 
@@ -2323,3 +2316,12 @@ let check mu_file =
 
 
 
+
+
+(* TODO: 
+   - rem_t vs rem_f
+   - check resource definition well-formedness
+   - check globals with expressions
+   - give types for standard library functions
+   - fix Ecase "LC (Bool true)"
+ *)
