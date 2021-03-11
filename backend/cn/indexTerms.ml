@@ -15,6 +15,7 @@ type lit =
   | Bool of bool
   | Unit
 
+(* over integers and reals *)
 type 'bt arith_op =
   | Add of 'bt term * 'bt term
   | Sub of 'bt term * 'bt term
@@ -26,6 +27,7 @@ type 'bt arith_op =
   | Min of 'bt term * 'bt term
   | Max of 'bt term * 'bt term
 
+(* over integers and reals *)
 and 'bt cmp_op =
   | LT of 'bt term * 'bt term
   | GT of 'bt term * 'bt term
@@ -876,15 +878,15 @@ let int_ n = num_ (Z.of_int n)
 
 
 (* arith_op *)
-let add_ (it, it') = IT (Arith_op (Add (it, it')), BT.Integer)
-let sub_ (it, it') = IT (Arith_op (Sub (it, it')), BT.Integer)
-let mul_ (it, it') = IT (Arith_op (Mul (it, it')), BT.Integer)
-let div_ (it, it') = IT (Arith_op (Div (it, it')), BT.Integer)
-let exp_ (it, it') = IT (Arith_op (Exp (it, it')), BT.Integer)
+let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
+let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
+let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
+let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
+let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
 let rem_t_ (it, it') = IT (Arith_op (Rem_t (it, it')), BT.Integer)
 let rem_f_ (it, it') = IT (Arith_op (Rem_f (it, it')), BT.Integer)
-let min_ (it, it') = IT (Arith_op (Min (it, it')), BT.Integer)
-let max_ (it, it') = IT (Arith_op (Max (it, it')), BT.Integer)
+let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
+let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
 
 (* cmp_op *)
 let lt_ (it, it') = IT (Cmp_op (LT (it, it')), BT.Bool)

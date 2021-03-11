@@ -74,25 +74,25 @@ module Make (G : sig val global : Global.t end) = struct
 
         let arith_op = function
           | Add (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Add (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Add (t, t'))
           | Sub (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Sub (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Sub (t, t'))
           | Mul (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Mul (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Mul (t, t'))
           | Div (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Div (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Div (t, t'))
           | Exp (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Exp (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Exp (t, t'))
           | Rem_t (t,t') ->
              let@ t = check loc (Base Integer) t in
              let@ t' = check loc (Base Integer) t' in
@@ -102,31 +102,31 @@ module Make (G : sig val global : Global.t end) = struct
              let@ t' = check loc (Base Integer) t' in
              return (Base Integer, Rem_f (t, t'))
           | Min (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Min (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Min (t, t'))
           | Max (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Max (t, t'))
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
+             return (Base bt, Max (t, t'))
         in
 
         let cmp_op = function
           | LT (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
              return (Base Bool, LT (t, t'))
           | GT (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
              return (Base Bool, GT (t, t'))
           | LE (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
              return (Base Bool, LE (t, t'))
           | GE (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
+             let@ (bt, t) = infer_integer_or_real_type loc t in
+             let@ t' = check loc (Base bt) t' in
              return (Base Bool, GE (t, t'))
         in
 
@@ -392,7 +392,8 @@ module Make (G : sig val global : Global.t end) = struct
         | Array_op it ->
            let@ (Base bt, array_op) = array_op it in
            return (Base bt, IT (Array_op array_op, bt))
-    
+
+
       and check : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
         fun loc ls it ->
         match it, ls with
@@ -417,6 +418,23 @@ module Make (G : sig val global : Global.t end) = struct
              let err = 
                !^"Illtyped index term" ^^^ context ^^ dot ^^^
                  !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
+                   !^"but has type" ^^^ LS.pp ls
+             in
+             fail loc (Generic err)
+        in
+        return (bt, it)
+
+      and infer_integer_or_real_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
+        fun loc it ->
+        let@ (ls,it) = infer loc it in
+        let@ bt = match ls with
+          | Base Integer -> return Integer
+          | Base Real -> return Real
+          | ls -> 
+             let (context, it) = Explain.index_terms names local (context, it) in
+             let err = 
+               !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                 !^"Expected" ^^^ it ^^^ !^"to have integer or real type" ^^^ 
                    !^"but has type" ^^^ LS.pp ls
              in
              fail loc (Generic err)
