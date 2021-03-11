@@ -26,7 +26,7 @@ let predicate_name_equal pn1 pn2 =
 type predicate = {
     name : predicate_name; 
     iargs: IT.t list;
-    oargs: Sym.t list
+    oargs: IT.t list;
   }
 
 (* for error reporting only *)
@@ -37,14 +37,16 @@ type block_type =
 
 type point_content = 
   | Block of block_type
-  | Value of Sym.t
+  | Value of IT.t
 
 
 type t = 
   | Point of {pointer: IT.t; size: Z.t; content: point_content}
   | Region of {pointer: IT.t; size: IT.t}
-  | Array of {pointer: IT.t; element_size: Z.t; length: IT.t; content: Sym.t }
+  | Array of {pointer: IT.t; element_size: Z.t; length: IT.t; content: IT.t }
   | Predicate of predicate
+
+
 
 type resource = t
 
@@ -53,7 +55,7 @@ let pp_predicate_name = function
   | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
 
 let pp_predicate {name; iargs; oargs} =
-  let args = List.map IT.pp iargs @ List.map Sym.pp oargs in
+  let args = List.map IT.pp (iargs @ oargs) in
   c_app (pp_predicate_name name) args
 
 let pp = function
@@ -67,12 +69,12 @@ let pp = function
         in
         c_app rname [IT.pp pointer; Z.pp size]
      | Value v ->
-        c_app !^"Points" [IT.pp pointer; Sym.pp v; Z.pp size]
+        c_app !^"Points" [IT.pp pointer; IT.pp v; Z.pp size]
      end
   | Region {pointer; size} ->
      c_app !^"Region" [IT.pp pointer; IT.pp size]
   | Array a ->
-     c_app !^"Array" [IT.pp a.pointer; Sym.pp a.content; IT.pp a.length]
+     c_app !^"Array" [IT.pp a.pointer; IT.pp a.content; IT.pp a.length]
   | Predicate p ->
      pp_predicate p
           
@@ -88,7 +90,7 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
      let pointer = IT.subst_var subst pointer in
      let content = match content with
        | Block block_type -> Block block_type
-       | Value v -> Value (Sym.subst subst v)
+       | Value v -> Value (IT.subst_var subst v)
      in
      Point {pointer; size; content}
   | Region {pointer; size} ->
@@ -98,41 +100,36 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
   | Array {pointer; element_size; length; content} ->
      let pointer = IT.subst_var subst pointer in
      let length = IT.subst_var subst length in
-     let content = Sym.subst subst content in
+     let content = IT.subst_var subst content in
      Array {pointer; element_size; length; content}
   | Predicate {name; iargs; oargs} -> 
      let iargs = List.map (IT.subst_var subst) iargs in
-     let oargs = List.map (Sym.subst subst) oargs in
+     let oargs = List.map (IT.subst_var subst) oargs in
      Predicate {name; iargs; oargs}
 
 
 let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
-  let open Option in
-  let subst_sym s = if Sym.equal s subst.before then None else Some s in
   match resource with
   | Point {pointer; size; content} ->
      let pointer = IT.subst_it subst pointer in
-     let@ content = match content with
-       | Block block_type -> 
-          return (Block block_type)
-       | Value v ->
-          let@ v = subst_sym v in
-          return (Value v)
+     let content = match content with
+       | Block block_type -> Block block_type
+       | Value v -> Value (IT.subst_it subst v)
      in
-     return (Point {pointer; size; content})
+     Point {pointer; size; content}
   | Region {pointer; size} ->
      let pointer = IT.subst_it subst pointer in
      let size = IT.subst_it subst size in
-     return (Region {pointer; size})
+     Region {pointer; size}
   | Array {pointer; element_size; length; content} ->
      let pointer = IT.subst_it subst pointer in
      let length = IT.subst_it subst length in
-     let@ content = subst_sym content in
-     return (Array {pointer; element_size; length; content})
+     let content = IT.subst_it subst content in
+     Array {pointer; element_size; length; content}
   | Predicate {name; iargs; oargs} -> 
      let iargs = List.map (IT.subst_it subst) iargs in
-     let@ oargs = Option.ListM.mapM subst_sym oargs in
-     return (Predicate {name; iargs; oargs})
+     let oargs = List.map (IT.subst_it subst) oargs in
+     Predicate {name; iargs; oargs}
 
 
 let subst_vars = Subst.make_substs subst_var
@@ -155,12 +152,9 @@ let equal t1 t2 =
      IT.equal b1.pointer b2.pointer &&
      Z.equal b1.size b2.size &&
      begin match b1.content, b2. content with
-     | Block bt1, Block bt2 ->
-        block_type_equal bt1 bt2 
-     | Value v1, Value v2 -> 
-        Sym.equal v1 v2
-     | _, _ -> 
-        false
+     | Block bt1, Block bt2 -> block_type_equal bt1 bt2 
+     | Value v1, Value v2 -> IT.equal v1 v2
+     | _, _ -> false
      end
   | Region r1, Region r2 ->
      IT.equal r1.pointer r2.pointer &&
@@ -168,12 +162,12 @@ let equal t1 t2 =
   | Predicate p1, Predicate p2 ->
      predicate_name_equal p1.name p2.name && 
      List.equal IT.equal p1.iargs p2.iargs && 
-     List.equal Sym.equal p1.oargs p2.oargs
+     List.equal IT.equal p1.oargs p2.oargs
   | Array a1, Array a2 ->
      IT.equal a1.pointer a2.pointer &&
      Z.equal a1.element_size a2.element_size &&
      IT.equal a1.length a2.length &&
-     Sym.equal a1.content a2.content
+     IT.equal a1.content a2.content
   | Point _, _ -> false
   | Region _, _ -> false
   | Array _, _ -> false
@@ -196,20 +190,18 @@ let vars_in = function
        (IT.vars_in b.pointer)
        (match b.content with
         | Block _ -> SymSet.empty
-        | Value v -> SymSet.singleton v)
+        | Value v -> IT.vars_in v)
   | Region r -> 
-     SymSet.union
-       (IT.vars_in r.pointer) 
-       (IT.vars_in r.size) 
+     IT.vars_in_list [r.pointer; r.size]
   | Array a -> 
-     SymSet.add a.content
-       (SymSet.union 
-          (IT.vars_in a.length)
-          (IT.vars_in a.pointer))
+     IT.vars_in_list [a.content; a.length; a.pointer]
   | Predicate p -> 
-     SymSet.union 
-       (IT.vars_in_list p.iargs)
-       (SymSet.of_list p.oargs)
+     IT.vars_in_list (p.iargs @ p.oargs)
+
+let vars_in_list l = 
+  List.fold_left (fun acc sym -> 
+      SymSet.union acc (vars_in sym)
+    ) SymSet.empty l
 
 
 (* let set_pointer re pointer = 
@@ -226,13 +218,11 @@ let unify r1 r2 res =
   | Point b, Point b' 
        when IT.equal b.pointer b'.pointer &&
               Z.equal b.size b'.size ->
+     (* Block unifies with Blocks of other block type *)
      begin match b.content, b'.content with
-     | Block _, Block _ -> (* Block unifies with Blocks of other block type *)
-        return res
-     | Value v, Value v' ->          
-        Uni.unify_sym v v' res
-     | _, _ -> 
-        fail
+     | Block _, Block _ -> return res
+     | Value v, Value v' -> IT.unify v v' res
+     | _, _ -> fail
      end
   | Region r, Region r' 
        when IT.equal r.pointer r'.pointer &&
@@ -242,14 +232,14 @@ let unify r1 r2 res =
        when IT.equal a.pointer a'.pointer && 
               Z.equal a.element_size a'.element_size &&
               IT.equal a.length a'.length ->
-     Uni.unify_sym a.content a'.content res
+     IT.unify a.content a'.content res
   | Predicate p, Predicate p' 
        when predicate_name_equal p.name p'.name &&
               List.equal IT.equal p.iargs p'.iargs &&
               List.length p.oargs = List.length p'.oargs ->
      List.fold_left (fun ores (sym1,sym2) ->
          let@ res = ores in
-         Uni.unify_sym sym1 sym2 res
+         IT.unify sym1 sym2 res
        ) (Some res) (List.combine p.oargs p'.oargs)
   | _ -> 
      fail
@@ -272,10 +262,10 @@ let input = function
 
 let output = function
   | Point {content = Block _; _} -> SymSet.empty
-  | Point {content = Value v; _} -> SymSet.singleton v
+  | Point {content = Value v; _} -> IT.vars_in v
   | Region r -> SymSet.empty
-  | Array a -> SymSet.singleton a.content
-  | Predicate p -> SymSet.of_list p.oargs
+  | Array a -> IT.vars_in a.content
+  | Predicate p -> IT.vars_in_list p.oargs
 
 
 

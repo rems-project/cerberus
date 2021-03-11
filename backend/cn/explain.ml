@@ -45,20 +45,21 @@ module Make (G : sig val global : Global.t end) = struct
       if not (LS.equal veclass.sort (Base bt)) then false 
       else S.holds local (IT.eq_ (IT.sym_ (bt,veclass.repr), it))
 
+    let is_in_veclass veclass sym = 
+      SymSet.mem sym veclass.c_elements ||
+        SymSet.mem sym veclass.l_elements
+
     let classify local veclasses (l, (bt : BT.t)) : veclass list =
       let rec aux = function
         | veclass :: veclasses ->
-           if should_be_in_veclass local veclass (IT.sym_ (bt, l), bt) 
+           if is_in_veclass veclass l ||
+             should_be_in_veclass local veclass (IT.sym_ (bt, l), bt) 
            then (add_l l veclass :: veclasses)
            else (veclass :: aux veclasses)
         | [] -> 
            [new_veclass l (Base bt)]
       in
       aux veclasses
-
-    let is_in_veclass veclass sym = 
-      SymSet.mem sym veclass.c_elements ||
-        SymSet.mem sym veclass.l_elements
 
 
     (* think about whether the 'Addr' part is always safe' *)
@@ -170,6 +171,11 @@ module Make (G : sig val global : Global.t end) = struct
     }
 
 
+  let is_sym (IT.IT (it, _)) = 
+    match it with
+    | Lit (Sym sym) -> sym
+    | _ -> Debug_ocaml.error ("not a symbol")
+
     
   let veclasses_partial_order local veclasses =
     List.fold_right (fun resource (graph, rels) ->
@@ -177,12 +183,12 @@ module Make (G : sig val global : Global.t end) = struct
         | RE.Point {pointer; size; content = Value pointee} ->
            let found1 = 
              List.find_opt (fun veclass ->
-                 should_be_in_veclass local veclass (pointer, BT.Loc)
+                 is_in_veclass veclass (is_sym pointer)
                ) veclasses
            in
            let found2 = 
              List.find_opt (fun veclass ->
-                 is_in_veclass veclass pointee
+                 is_in_veclass veclass (is_sym pointee)
                ) veclasses
            in
            begin match found1, found2 with
@@ -240,31 +246,34 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local relevant =
+    let local = L.normalise_resources local in
     let relevant =
-      List.fold_right (fun r acc -> SymSet.union acc (RE.vars_in r))
-        (L.all_resources local) 
-        (SymSet.union (SymSet.of_list (List.map fst names)) relevant)
+      let names_syms = SymSet.of_list (List.map fst names) in
+      let named_syms = SymSet.of_list (List.filter Sym.named (L.all_names local)) in
+      let from_resources = RE.vars_in_list (L.all_resources local) in
+      SymSet.union (SymSet.union names_syms named_syms) from_resources
     in
     let veclasses = 
-      let with_logical_variables = 
-        List.fold_left (fun veclasses (l, ls) ->
-            if SymSet.mem l relevant then
-              let (LS.Base bt) = ls in
-              classify local veclasses (l, bt)
-            else 
-              veclasses
-          ) [] (L.all_logical local)
-      in
-      let with_all_variables =
+      let with_some =
         List.fold_left (fun veclasses (c, (l, bt)) ->
-            List.map (fun veclass ->
-                if is_in_veclass veclass l || 
-                     should_be_in_veclass local veclass (IT.sym_ (bt, l), bt)
-                then add_c c veclass else veclass
-              ) veclasses
-          ) with_logical_variables (L.all_computational local)
+            if SymSet.mem c relevant || SymSet.mem l relevant then
+              let veclasses = classify local veclasses (l, bt) in
+              List.map (fun veclass ->
+                  if is_in_veclass veclass l
+                  then add_c c veclass 
+                  else veclass
+                ) veclasses
+            else veclasses
+          ) [] (L.all_computational local)
       in
-      let (sorted, rels) = veclasses_total_order local with_all_variables in
+      let with_all = 
+        List.fold_left (fun veclasses (l, LS.Base bt) ->
+            if SymSet.mem l relevant 
+            then classify local veclasses (l, bt)
+            else veclasses
+          ) with_some (L.all_logical local)
+      in
+      let (sorted, rels) = veclasses_total_order local with_all in
       let named =
         List.fold_left (fun veclasses_explanation veclass ->
             match has_given_name names veclass, 
@@ -299,15 +308,16 @@ module Make (G : sig val global : Global.t end) = struct
             ) to_substitute substs 
         ) veclasses []
     in
-    {substitutions; veclasses; relevant}
+    ({substitutions; veclasses; relevant}, local)
 
 
 
 
 
 
-  let o_evaluate o_model expr bt = 
+  let o_evaluate o_model expr = 
     let open Option in
+    let (IT.IT (_, bt)) = expr in
     let@ model = o_model in
     match Z3.Model.evaluate model (SolverConstraints.of_index_term G.global expr) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
@@ -341,7 +351,7 @@ module Make (G : sig val global : Global.t end) = struct
              in
              let entry =
                (Some (IT.pp (IT.subst_vars substitutions pointer)), 
-                o_evaluate o_model pointer BT.Loc,
+                o_evaluate o_model pointer,
                 Some (Z.pp size), 
                 Some !^state,
                 None,
@@ -350,22 +360,20 @@ module Make (G : sig val global : Global.t end) = struct
              in
              (entry, symbol_it pointer)
           | Point {pointer; size; content = Value pointee} -> 
-             (* take substs into account *)
-             let (Base pointee_bt) = L.get_l pointee local in
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions pointer)), 
-                o_evaluate o_model pointer BT.Loc,
+                o_evaluate o_model pointer,
                 Some (Z.pp size),
                 Some !^"owned",
-                Some (Sym.pp (Sym.substs substitutions pointee)),
-                o_evaluate o_model (IT.sym_ (pointee_bt, pointee)) pointee_bt
+                Some (IT.pp (IT.subst_vars substitutions pointee)),
+                o_evaluate o_model pointee
                )
              in
-             (entry, SymSet.union (symbol_it pointer) (SymSet.singleton pointee))
+             (entry, SymSet.union (symbol_it pointer) (symbol_it pointee))
           | Region r ->
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions r.pointer)), 
-                o_evaluate o_model r.pointer BT.Loc,
+                o_evaluate o_model r.pointer,
                 Some (IT.pp (IT.subst_vars substitutions r.size)), 
                 Some !^"region",
                 None,
@@ -375,21 +383,20 @@ module Make (G : sig val global : Global.t end) = struct
              (entry, symbol_it r.pointer)
           | Array a -> 
              (* take substs into account *)
-             let (Base content_t) = L.get_l a.content local in
-             let length = match o_evaluate o_model a.length BT.Integer with
+             let length = match o_evaluate o_model a.length with
                | Some length -> length
                | None -> IT.pp (IT.subst_vars substitutions a.length)
              in
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions a.pointer)), 
-                o_evaluate o_model a.pointer BT.Loc,
+                o_evaluate o_model a.pointer,
                 Some (length ^^^ star ^^^ Z.pp a.element_size),
                 Some !^"array",
-                Some (Sym.pp (Sym.substs substitutions a.content)),
-                o_evaluate o_model (IT.sym_ (content_t, a.content)) content_t
+                Some (IT.pp (IT.subst_vars substitutions a.content)),
+                o_evaluate o_model a.content
                )
              in
-             (entry, SymSet.union (symbol_it a.pointer) (SymSet.singleton a.content))
+             (entry, SymSet.union (symbol_it a.pointer) (symbol_it a.content))
           | Predicate p ->
              let entry =
                (None,
@@ -414,7 +421,7 @@ module Make (G : sig val global : Global.t end) = struct
             match bt with
             | BT.Loc -> 
                Some (Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)) bt,
+                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)),
                      None, 
                      None, 
                      None, 
@@ -425,7 +432,7 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)) bt)
+                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)))
           else
             None)
         veclasses
@@ -451,7 +458,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let json_state names local : Yojson.Safe.t = 
-    let explanation = explanation names local SymSet.empty in
+    let (explanation, local) = explanation names local SymSet.empty in
     let lines = 
       List.map (fun (a,_,c,d,e,_) : Yojson.Safe.t ->
           let jsonf doc = `String (Pp.plain doc) in
@@ -471,20 +478,20 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let state names local = 
-    let explanation = explanation names local SymSet.empty in
+    let (explanation, local) = explanation names local SymSet.empty in
     pp_state local explanation
 
   let undefined_behaviour names local = 
-    let explanation = explanation names local SymSet.empty in
+    let (explanation, local) = explanation names local SymSet.empty in
     pp_state_with_model local explanation (counter_model local)
 
   let missing_ownership names local it = 
-    let explanation = explanation names local (IT.vars_in it) in
+    let (explanation, local) = explanation names local (IT.vars_in it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation (counter_model local))
 
   let index_terms names local (it,it') = 
-    let explanation = 
+    let (explanation, local) = 
       explanation names local 
         (SymSet.union (IT.vars_in it) (IT.vars_in it'))
     in
@@ -494,18 +501,19 @@ module Make (G : sig val global : Global.t end) = struct
 
   let unsatisfied_constraint names local (LC.LC lc) = 
     let model = let _ = S.holds local lc in S.get_model () in
-    let explanation = explanation names local (LC.vars_in (LC lc)) in
+    let (explanation, local) = explanation names local (LC.vars_in (LC lc)) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions (LC lc)) in
     (lc_pp, pp_state_with_model local explanation model)
 
-  let resource names local re = 
-    let explanation = explanation names local (RE.vars_in re) in
+  let resource names local re do_model = 
+    let omodel = if do_model then (counter_model local) else None in
+    let (explanation, local) = explanation names local (RE.vars_in re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state_with_model local explanation (counter_model local))
+    (re_pp, pp_state_with_model local explanation omodel)
 
   let resources names local (re1, re2) = 
     let relevant = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
-    let explanation = explanation names local relevant in
+    let (explanation, local) = explanation names local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
     ((re1, re2), pp_state_with_model local explanation (counter_model local))

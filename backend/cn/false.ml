@@ -10,7 +10,7 @@ let subst_var substitution = function
   | False -> False
 
 let subst_it substitution = function
-  | False -> Some False
+  | False -> False
 
 let instantiate_struct_member substitution = function
   | False -> False

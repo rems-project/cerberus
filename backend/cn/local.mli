@@ -38,5 +38,6 @@ module Make : functor (G : sig val global : Global.t end) -> sig
   val all_named_resources : t -> (Sym.t * RE.t) list
   val (++) : t -> t -> t
   val json :  t -> Yojson.Safe.t
+  val normalise_resources : t -> t
 
 end

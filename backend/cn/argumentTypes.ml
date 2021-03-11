@@ -11,7 +11,7 @@ module SymSet = Set.Make(Sym)
 module type I_Sig = sig
   type t
   val subst_var : (Sym.t, Sym.t) Subst.t -> t -> t
-  val subst_it : (Sym.t, IndexTerms.t) Subst.t -> t -> t option
+  val subst_it : (Sym.t, IndexTerms.t) Subst.t -> t -> t
   val free_vars : t -> SymSet.t
   val pp : t -> Pp.document
 end
@@ -75,41 +75,40 @@ module Make (I: I_Sig) = struct
 
 
   let rec subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) at =
-    let open Option in
     match at with
     | Computational ((name,bt),t) -> 
        if Sym.equal name substitution.before then 
-         return (Computational ((name,bt),t) )
+         Computational ((name,bt),t)
        else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name; after=newname} t in
-         let@ t'' = subst_it substitution t' in
-         return (Computational ((newname,bt),t''))
+         let t'' = subst_it substitution t' in
+         Computational ((newname,bt),t'')
        else
-         let@ t = subst_it substitution t in
-         return (Computational ((name,bt),t))
+         let t = subst_it substitution t in
+         Computational ((name,bt),t)
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
-         return (Logical ((name,ls),t))
+         Logical ((name,ls),t)
        else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name; after=newname} t in
-         let@ t'' = subst_it substitution t' in
-         return (Logical ((newname,ls),t''))
+         let t'' = subst_it substitution t' in
+         Logical ((newname,ls),t'')
        else
-         let@ t' = subst_it substitution t in
-         return (Logical ((name,ls),t'))
+         let t' = subst_it substitution t in
+         Logical ((name,ls),t')
     | Resource (re,t) -> 
-       let@ re = Resources.subst_it substitution re in
-       let@ t = subst_it substitution t in
-       return (Resource (re,t))
+       let re = Resources.subst_it substitution re in
+       let t = subst_it substitution t in
+       Resource (re,t)
     | Constraint (lc,t) -> 
        let lc = LC.subst_it substitution lc in
-       let@ t = subst_it substitution t in
-       return (Constraint (lc,t))
+       let t = subst_it substitution t in
+       Constraint (lc,t)
     | I i -> 
-       let@ i = I.subst_it substitution i in
-       return (I i)
+       let i = I.subst_it substitution i in
+       I i
 
   let rec free_vars = function
     | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)

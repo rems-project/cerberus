@@ -284,6 +284,102 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
+  let normalise_resources (Local local) = 
+    
+    let normalise_resource = function
+      | RE.Point p ->
+         let pointer_s = Sym.fresh () in
+         let pointer_t = IT.sym_ (BT.Loc, pointer_s) in
+         let pointer_lc = IT.eq_ (pointer_t, p.pointer) in
+         begin match p.content with
+         | Block b -> 
+            ([(pointer_s, BT.Loc)], 
+             [pointer_lc], 
+             RE.Point {p with pointer = pointer_t})
+         | Value value ->
+            let value_s = Sym.fresh () in
+            let (IT.IT (_, value_bt)) = value in
+            let value_t = IT.sym_ (value_bt, value_s) in
+            let value_lc = IT.eq_ (value_t, value) in
+            ([(pointer_s, BT.Loc); (value_s, value_bt)], 
+             [pointer_lc; value_lc], 
+             Point {p with pointer = pointer_t; content = Value value_t})
+         end
+      | Region r ->
+         let pointer_s = Sym.fresh () in
+         let pointer_t = IT.sym_ (BT.Loc, pointer_s) in
+         let pointer_lc = IT.eq_ (pointer_t, r.pointer) in
+         ([(pointer_s, BT.Loc)], 
+          [pointer_lc], 
+          Region {r with pointer = pointer_t})
+      | Array a ->
+         let pointer_s = Sym.fresh () in
+         let pointer_t = IT.sym_ (BT.Loc, pointer_s) in
+         let pointer_lc = IT.eq_ (pointer_t, a.pointer) in
+         let content_s = Sym.fresh () in
+         let (IT.IT (_, content_bt)) = a.content in
+         let content_t = IT.sym_ (content_bt, content_s) in
+         let content_lc = IT.eq_ (content_t, a.content) in
+         ([(pointer_s, BT.Loc); (content_s, content_bt)], 
+          [pointer_lc; content_lc], 
+          Array {a with pointer = pointer_t; content = content_t})
+
+      | Predicate p ->
+         let logicals, lcs, oargs = 
+           List.fold_right (fun arg (logicals, lcs, args) ->
+               let arg_s = Sym.fresh () in 
+               let (IT.IT (_, arg_bt)) = arg in
+               let arg_t = IT.sym_ (arg_bt, arg_s) in
+               ((arg_s, arg_bt) :: logicals,
+                IT.eq_ (arg_t, arg) :: lcs,
+                arg_t :: args)                 
+             ) p.oargs ([], [], [])
+         in
+         let logicals, lcs, iargs = 
+           List.fold_right (fun arg (logicals, lcs, args) ->
+               let arg_s = Sym.fresh () in 
+               let (IT.IT (_, arg_bt)) = arg in
+               let arg_t = IT.sym_ (arg_bt, arg_s) in
+               ((arg_s, arg_bt) :: logicals,
+                IT.eq_ (arg_t, arg) :: lcs,
+                arg_t :: args)                 
+             ) p.iargs (logicals, lcs, []) 
+         in
+         (logicals, lcs, Predicate {p with iargs; oargs })
+
+    in
+
+    let local = 
+      List.concat_map (function
+          | Marker -> [Marker]
+          | Binding (sym, bound) ->
+             match bound with
+             | Resource resource -> 
+                let (logicals, constraints, resource) = normalise_resource resource in
+                let new_logical_bindings = 
+                  List.map (fun (s, bt) ->
+                      Binding (s, Logical (Base bt))
+                    ) logicals
+                in
+                let new_constraint_bindings = 
+                  List.map (fun lc ->
+                      let sc = SolverConstraints.of_index_term G.global lc in
+                      Binding (Sym.fresh (), Constraint (LC lc, sc))
+                    ) constraints
+                in
+                let new_resource_binding = 
+                  Binding (sym, Resource resource)
+                in
+                new_resource_binding ::
+                  List.rev new_constraint_bindings @ 
+                  List.rev new_logical_bindings
+             | _ ->
+                [Binding (sym, bound)]
+        ) local
+    in
+    Local local
+
+
 
 
   let json local : Yojson.Safe.t = 

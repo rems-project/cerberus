@@ -41,19 +41,18 @@ let subst_vars = Subst.make_substs subst_var
 
 
 let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) rt = 
-  let open Option in
   match rt with
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
-       return (Computational ((name,bt),t))
+       Computational ((name,bt),t)
      else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
        let newname = Sym.fresh () in
        let t' = LRT.subst_var {before=name; after=newname} t in
-       let@ t'' = LRT.subst_it substitution t' in
-       return (Computational ((newname,bt), t''))
+       let t'' = LRT.subst_it substitution t' in
+       Computational ((newname,bt), t'')
      else
-       let@ t = LRT.subst_it substitution t in
-       return (Computational ((name,bt), t))
+       let t = LRT.subst_it substitution t in
+       Computational ((name,bt), t)
 
 
 

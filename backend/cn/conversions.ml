@@ -124,9 +124,10 @@ let struct_decl loc fields (tag : BT.tag) =
   let@ stored_struct_predicate = 
     let open RT in
     let open LRT in
-    let struct_value_s = Sym.fresh () in
     let struct_pointer_s = Sym.fresh () in
     let struct_pointer_t = sym_ (Loc, struct_pointer_s) in
+    let struct_value_s = Sym.fresh () in
+    let struct_value_t = sym_ (BT.Struct tag, struct_value_s) in
     (* let size = Memory.size_of_struct loc tag in *)
     let clause = 
       let (lrt, values) = 
@@ -134,15 +135,24 @@ let struct_decl loc fields (tag : BT.tag) =
             let member_p = addPointer_ (struct_pointer_t, num_ offset) in
             match member_or_padding with
             | Some (member, sct) ->
+               let bt = BT.of_sct sct in
                let member_v = Sym.fresh () in
+               let member_t = sym_ (bt, member_v) in
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
                  | Sctypes.Struct tag ->
-                    RE.Predicate {name = Tag tag; iargs = [member_p]; oargs = [member_v]}
+                    RE.Predicate {
+                        name = Tag tag; 
+                        iargs = [member_p]; 
+                        oargs = [member_t]
+                      }
                  | _ -> 
-                    RE.Point {pointer = member_p; content = Value member_v; size}
+                    RE.Point {
+                        pointer = member_p; 
+                        content = Value member_t; 
+                        size
+                      }
                in
-               let bt = BT.of_sct sct in
                let lrt = 
                  LRT.Logical ((member_v, LS.Base bt), 
                  LRT.Resource (resource, lrt))
@@ -165,7 +175,7 @@ let struct_decl loc fields (tag : BT.tag) =
     let predicate = 
       Predicate {name = Tag tag; 
                  iargs = [struct_pointer_t];
-                 oargs = [struct_value_s]} 
+                 oargs = [struct_value_t]} 
     in
     let unpack_function = 
       let (lrt, constr) = clause in
@@ -219,9 +229,11 @@ let make_owned loc label pointer path sct =
   | Sctype (_, Struct tag) ->
      let pointee = Sym.fresh () in
      let r = 
-       [RE.Predicate {name = Tag tag; 
-                      iargs = [sym_ (BT.Loc, pointer)];
-                      oargs = [pointee]}]
+       [RE.Predicate {
+            name = Tag tag; 
+            iargs = [sym_ (BT.Loc, pointer)];
+            oargs = [sym_ (BT.Struct tag, pointee)]
+       }]
      in
      let l = [(pointee, LS.Base (Struct tag))] in
      let mapping = 
@@ -229,12 +241,14 @@ let make_owned loc label pointer path sct =
      return (l, r, [], mapping)
   | sct -> 
      let pointee = Sym.fresh () in
-     let r = 
-       [RE.Point {pointer = sym_ (BT.Loc, pointer); 
-                  content = Value pointee; 
-                  size = Memory.size_of_ctype sct}]
-     in
      let bt = BT.of_sct sct in
+     let r = 
+       [RE.Point {
+            pointer = sym_ (BT.Loc, pointer); 
+            content = Value (sym_ (bt, pointee)); 
+            size = Memory.size_of_ctype sct
+       }]
+     in
      let l = [(pointee, LS.Base bt)] in
      let c = [LC (good_value pointee sct)] in
      let mapping = 
@@ -282,7 +296,11 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
         return (mapping, l)
       ) def.oargs ([], [])
   in
-  let oargs = List.map fst l in
+  let oargs = 
+    List.map (fun (s, LS.Base bt) ->
+        sym_ (bt, s)
+      )l 
+  in
   let r = [RE.Predicate {name = Id pred; iargs; oargs}] in
   return (l, r, [], mapping)
 

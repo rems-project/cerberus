@@ -55,29 +55,28 @@ let subst_vars = Subst.make_substs subst_var
 
 
 let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt = 
-  let open Option in
   let rec aux substitution = function
     | I -> 
-       return I
+       I
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
-         return (Logical ((name,ls),t))
+         Logical ((name,ls),t)
        else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name;after=newname} t in
-         let@ t'' = aux substitution t' in
-         return (Logical ((newname,ls),t''))
+         let t'' = aux substitution t' in
+         Logical ((newname,ls),t'')
        else
-         let@ t' = aux substitution t in
-         return (Logical ((name,ls),t'))
+         let t' = aux substitution t in
+         Logical ((name,ls),t')
     | Resource (re,t) -> 
-       let@ re = Resources.subst_it substitution re in
-       let@ t = aux substitution t in
-       return (Resource (re,t))
+       let re = Resources.subst_it substitution re in
+       let t = aux substitution t in
+       Resource (re,t)
     | Constraint (lc,t) -> 
        let lc = LogicalConstraints.subst_it substitution lc in
-       let@ t = aux substitution t in
-       return (Constraint (lc,t))
+       let t = aux substitution t in
+       Constraint (lc,t)
   in
   aux substitution lrt
 

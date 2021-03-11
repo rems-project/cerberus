@@ -104,7 +104,7 @@ let zero_region =
         pointer = pointer_t;
         length = length_t;
         element_size = Z.of_int 1;
-        content = content_s;
+        content = content_t;
       }
   in
   let equality_constr = 

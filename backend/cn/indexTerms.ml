@@ -5,6 +5,7 @@ module BT=BaseTypes
 module CT = Sctypes
 module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
+module SymMap = Map.Make(Sym)
 
 
 type lit = 
@@ -112,6 +113,9 @@ type untyped = unit term
 
 type it = typed
 type t = typed
+
+
+let bt (IT (_, bt)) : BT.t = bt
 
 
 let rec equal (IT (it, _)) (IT (it', _)) = 
@@ -833,6 +837,24 @@ let subst_it (subst : (Sym.t, 'bt term) Subst.t) it =
     ) it
 
 let subst_its it = make_substs subst_var it
+
+
+let unify it it' res = 
+  let equal_it = equal in
+  let open Option in
+  let open Uni in
+  if equal_it it it' then return res else
+    match it with
+    | IT (Lit (Sym s), _) ->
+       let@ uni = SymMap.find_opt s res in
+       begin match uni.resolved with
+       | Some it_res when equal_it it_res it' -> return res 
+       | Some s -> fail
+       | None -> return (SymMap.add s {resolved = Some it'} res)
+       end
+    | _ -> fail
+
+
 
 
 

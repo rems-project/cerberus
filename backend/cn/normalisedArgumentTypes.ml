@@ -77,7 +77,61 @@ module Make (I: AT.I_Sig) = struct
   let subst_vars_a = Subst.make_substs subst_var_a
 
   let subst_var = subst_var_a
-  let subst_vars_a = subst_vars_a
+  let subst_vars = subst_vars_a
+
+
+
+
+
+
+  let rec subst_it_c substitution = function
+    | Constraint (lc, t) -> 
+       Constraint (LC.subst_it substitution lc, 
+                   subst_it_c substitution t)
+    | I rt -> I (I.subst_it substitution rt)
+
+  let rec subst_it_r substitution = function
+    | Resource (re, t) ->
+       Resource (RE.subst_it substitution re, 
+                 subst_it_r substitution t)
+    | C c -> C (subst_it_c substitution c)
+
+  let rec subst_it_l substitution = function
+    | Logical ((name,ls),t) -> 
+       if Sym.equal name substitution.before then 
+         Logical ((name,ls),t) 
+       else if SymSet.mem name (IT.vars_in substitution.after) then
+         let newname = Sym.fresh () in
+         let t' = subst_var_l {before=name; after=newname} t in
+         let t'' = subst_it_l substitution t' in
+         Logical ((newname,ls),t'')
+       else
+         let t' = subst_it_l substitution t in
+         Logical ((name,ls),t')
+    | R r -> R (subst_it_r substitution r)
+
+  let rec subst_it_a substitution = function
+    | Computational ((name,bt),t) -> 
+       if Sym.equal name substitution.before then 
+         Computational ((name,bt),t) 
+       else if SymSet.mem name (IT.vars_in substitution.after) then
+         let newname = Sym.fresh () in
+         let t' = subst_var_a {before=name; after=newname} t in
+         let t'' = subst_it_a substitution t' in
+         Computational ((newname,bt),t'')
+       else
+         Computational ((name,bt),subst_it_a substitution t)
+    | L l -> L (subst_it_l substitution l)
+
+  let subst_its_l = Subst.make_substs subst_it_l
+  let subst_its_r = Subst.make_substs subst_it_r
+  let subst_its_c = Subst.make_substs subst_it_c
+  let subst_its_a = Subst.make_substs subst_it_a
+
+  let subst_it = subst_it_a
+  let subst_its = subst_its_a
+
+
 
 
   let (pp_a,pp_l,pp_r,pp_c) =

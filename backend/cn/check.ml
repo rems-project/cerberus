@@ -301,10 +301,10 @@ module Make (G : sig val global : Global.t end) = struct
     ListM.mapM (arg_of_asym local) asyms
 
 
-  let pp_unis (unis : Sym.t Uni.t) : Pp.document = 
+  let pp_unis (unis : IT.t Uni.t) : Pp.document = 
    let pp_entry (sym, Uni.{resolved}) =
      match resolved with
-     | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ Sym.pp res
+     | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp res
      | None -> Sym.pp sym ^^^ !^"unresolved"
    in
    Pp.list pp_entry (SymMap.bindings unis)
@@ -465,7 +465,7 @@ module Make (G : sig val global : Global.t end) = struct
       
                in
                let new_substs = Uni.find_resolved local unis in
-               let ftyp' = NFT.subst_vars_r new_substs ftyp in
+               let ftyp' = NFT.subst_its_r new_substs ftyp in
                infer_resources local unis ftyp'
             | C ftyp ->
                return (local, unis, ftyp)
@@ -479,11 +479,10 @@ module Make (G : sig val global : Global.t end) = struct
             | (s, expect) :: lspec ->
                let Uni.{resolved} = SymMap.find s unis in
                match resolved with
-               | Some sym ->
-                  let has = get_l sym local in
-                  if LS.equal has expect 
+               | Some (IT (_, has_bt)) ->
+                  if LS.equal (Base has_bt) expect 
                   then check_logical_variables lspec
-                  else fail loc (Mismatch { has; expect })
+                  else fail loc (Mismatch { has = Base has_bt; expect })
                | None -> 
                   Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
           in
@@ -531,9 +530,7 @@ module Make (G : sig val global : Global.t end) = struct
       let substs = predicate_substs pred def in
       List.map (fun clause ->
         List.fold_left (fun lft subst ->
-            Option.value_err
-              "predicate arguments not well-sorted"
-              (LFT.subst_it subst lft)
+            LFT.subst_it subst lft
           ) clause substs
         ) def.pack_functions
 
@@ -541,9 +538,7 @@ module Make (G : sig val global : Global.t end) = struct
       let substs = predicate_substs pred def in
       List.map (fun clause ->
           List.fold_left (fun lft subst ->
-              Option.value_err
-                "predicate arguments not well-sorted"
-                (LFT.subst_it subst lft)
+              LFT.subst_it subst lft
             ) clause substs
         ) def.unpack_functions
 
@@ -637,7 +632,7 @@ module Make (G : sig val global : Global.t end) = struct
         let@ (_, have_size) = match RE.footprint resource with
           | None -> 
              let (resource, state) = 
-               Explain.resource names original_local resource in
+               Explain.resource names original_local resource true in
              fail loc (Cannot_unpack {resource; state; situation})
           | Some fp ->
              return fp
@@ -659,7 +654,7 @@ module Make (G : sig val global : Global.t end) = struct
           return local
         else
           (* fix this: could be either side that has unknown length *)
-          let (resource, state) = Explain.resource names original_local resource in
+          let (resource, state) = Explain.resource names original_local resource true in
           fail loc (Unknown_resource_size {resource; state; situation})
 
 
@@ -700,24 +695,27 @@ module Make (G : sig val global : Global.t end) = struct
            ownership_request_prompt ui_info local r.pointer r.size in
          return (Region r, local)
       | Array a ->
-         let content_ls = match List.assoc_opt Sym.equal a.content lspec with
-           | Some ls -> ls
-           | None -> get_l a.content local 
-         in
-         let a_array_bt = match content_ls with
-           | LS.Base (Map bt) -> bt
+         let (IT (_, content_bt)) = a.content in
+         let a_array_bt = match content_bt with
+           | Map bt -> bt
            | _ -> Debug_ocaml.error "illtyped array resource"
          in
          if S.holds local (le_ (a.length, num_ Z.zero)) then
            let content = Sym.fresh () in
            let local = add_l content (Base (Map a_array_bt)) local in
-           return (Array {pointer = a.pointer; content; 
-                          element_size = a.element_size; length = a.length}, local)
+           let array = 
+             Array {
+                 pointer = a.pointer; 
+                 content = sym_ (Map a_array_bt, content); 
+                 element_size = a.element_size; length = a.length
+               }
+           in
+           return (array, local)
          else
            let o_resource = resource_for_pointer local a.pointer in
            begin match o_resource with
-           | Some (resource_name, Array a') when 
-                  LS.equal (get_l a'.content local) (Base (Map a_array_bt)) &&
+           | Some (resource_name, Array ({content = IT (_, a'bt); _} as a')) when 
+                  LS.equal (Base a'bt) (Base (Map a_array_bt)) &&
                     Z.equal a.element_size a'.element_size ->
               if S.holds local (eq_ (a.length, a'.length)) then
                 let local = use_resource resource_name [loc] local in
@@ -739,21 +737,13 @@ module Make (G : sig val global : Global.t end) = struct
                         (addPointer_ (a.pointer, mul_ (a'.length, num_ a'.element_size))) 
                     in
                     begin match o_extra_resource with
-                    | Some (extra_resource_name, Point ({content = Value v'; _} as p')) 
+                    | Some (extra_resource_name, Point ({content = Value ((IT (_, a'bt)) as v'); _} as p')) 
                          when Z.equal a.element_size p'.size &&
-                                (LS.equal (L.get_l v' local) (Base a_array_bt))
+                                (LS.equal (Base a'bt) (Base a_array_bt))
                       ->
                        let local = use_resource resource_name [loc] local in
                        let local = use_resource extra_resource_name [loc] local in
-                       let new_content = Sym.fresh () in
-                       let local = add_l new_content (Base (Map a_array_bt)) local in
-                       let local = add_uc (LC (IT.eq_ (sym_ (Map a_array_bt, new_content), 
-                                                      IT.arraySet_ 
-                                                       ~item_bt:a_array_bt
-                                                        (sym_ (Map a_array_bt, a'.content), 
-                                                         a'.length, 
-                                                         (sym_ (a_array_bt, v')))
-                                     ))) local in
+                       let new_content = IT.arraySet_ ~item_bt:a_array_bt (a'.content, a'.length, v')in 
                        let resource = 
                          Array {a' with pointer = a.pointer;
                                         length = a.length;
@@ -772,18 +762,15 @@ module Make (G : sig val global : Global.t end) = struct
                 end
               else
                 (* fix this: could be either resource that has unknown length *)
-                let (resource, state) = Explain.resource names original_local (Array a') in
+                let (resource, state) = 
+                  Explain.resource names original_local (Array a') true in
                 fail loc (Unknown_resource_size {resource; state; situation})
            | Some (resource_name, Point ({content = Value v; _} as p')) when 
-                  LS.equal (get_l v local) (Base a_array_bt) &&
+                  LS.equal (Base (IT.bt v)) (Base a_array_bt) &&
                     Z.equal a.element_size p'.size &&
                       S.holds local (eq_ (a.length, num_ (Z.of_int 1))) ->
               let local = use_resource resource_name [loc] local in
-              let new_content = Sym.fresh () in
-              let local = add_l new_content (Base (Map a_array_bt)) local in
-              let local = add_uc (LC (eq_ (sym_ (Map a_array_bt, new_content), 
-                                           constArray_ ~item_bt:a_array_bt (sym_ (a_array_bt, v)))) )
-                            local in
+              let new_content = constArray_ ~item_bt:a_array_bt v in
               let resource = 
                 Array {pointer = a.pointer;
                        length = a.length;
@@ -812,7 +799,7 @@ module Make (G : sig val global : Global.t end) = struct
             let def = Option.get (Global.get_predicate_def G.global p.name) in
             let else_prompt = 
               lazy (
-                  let (resource, state) = Explain.resource names original_local request in
+                  let (resource, state) = Explain.resource names original_local request true in
                   fail loc (Missing_resource {resource; used = None; state; situation})
                 )
             in
@@ -1156,7 +1143,7 @@ module Make (G : sig val global : Global.t end) = struct
               aux rest
            | _ -> 
               let names = names @ extra_names in
-              let (resource, state) = Explain.resource names original_local resource in
+              let (resource, state) = Explain.resource names original_local resource true in
               fail loc (Unused_resource {resource; state})
            end
         | _ :: rest -> aux rest
@@ -1521,7 +1508,7 @@ module Make (G : sig val global : Global.t end) = struct
                    failwith "asd"
                 | Predicate pred -> 
                    let (resource,state) = 
-                     Explain.resource names original_local (Predicate pred) in
+                     Explain.resource names original_local (Predicate pred) true in
                    fail loc (Cannot_unpack {resource; state; situation})
                 end
              | None -> 
@@ -1531,9 +1518,9 @@ module Make (G : sig val global : Global.t end) = struct
                 then fail loc (Missing_global_ownership {addr; used = None; situation})
                 else fail loc (Missing_ownership {addr; state; used = None; situation})
            in
-           let (Base vbt) = L.get_l pointee local in
+           let vbt = IT.bt pointee in
            if BT.equal vbt bt 
-           then return [IT.eq_ (path, sym_ (vbt,pointee))]
+           then return [IT.eq_ (path, pointee)]
            else fail loc (Mismatch {has = Base vbt; expect = Base bt})
       in
       let@ constraints = aux local bt pointer size return_it is_member in
@@ -1579,15 +1566,9 @@ module Make (G : sig val global : Global.t end) = struct
          in  
          aux decl.layout
       | _ -> 
-         let vsym = Sym.fresh () in 
          match o_value with
          | Some v -> 
-            let rt = 
-              Logical ((vsym, Base bt), 
-              Resource (Point {pointer; content = Value vsym; size}, 
-              Constraint (LC (eq_ (sym_ (bt,vsym), v)), I)))
-            in
-            return rt
+            return (Resource (Point {pointer; content = Value v; size}, I))
          | None -> 
             let block = RE.Point {pointer; size; content = Block Uninit} in
             let rt = Resource (block, LRT.I) in
@@ -1595,20 +1576,20 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    (* not used right now *)
-    (* todo: right access kind *)
-    let pack_stored_struct loc local (pointer: IT.t) (tag: BT.tag) =
-      let size = Memory.size_of_struct tag in
-      let v = Sym.fresh () in
-      let bt = Struct tag in
-      let@ constraints = load loc local (Struct tag) pointer size (sym_ (Struct tag, v)) None in
-      let@ local = ownership_request loc (Access (Load None)) local pointer (num_ size) in
-      let rt = 
-        LRT.Logical ((v, Base bt), 
-        LRT.Resource (Point {pointer; content = Value v; size},
-        LRT.Constraint (constraints, LRT.I)))
-      in
-      return rt
+    (* (\* not used right now *\)
+     * (\* todo: right access kind *\)
+     * let pack_stored_struct loc local (pointer: IT.t) (tag: BT.tag) =
+     *   let size = Memory.size_of_struct tag in
+     *   let v = Sym.fresh () in
+     *   let bt = Struct tag in
+     *   let@ constraints = load loc local (Struct tag) pointer size (sym_ (Struct tag, v)) None in
+     *   let@ local = ownership_request loc (Access (Load None)) local pointer (num_ size) in
+     *   let rt = 
+     *     LRT.Logical ((v, Base bt), 
+     *     LRT.Resource (Point {pointer; content = Value v; size},
+     *     LRT.Constraint (constraints, LRT.I)))
+     *   in
+     *   return rt *)
 
 
     let ensure_aligned loc local access pointer ctype = 
