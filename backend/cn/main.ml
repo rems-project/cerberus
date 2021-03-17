@@ -183,12 +183,14 @@ let main filename mjsonfile debug_level print_level =
        exit 1
     | CF.Exception.Result file ->
        if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
-       try 
+       try
          let open Resultat in
          Pp.maybe_open_json_output mjsonfile;
          Debug_ocaml.maybe_open_csv_timing_file ();
-         let@ file = Retype.retype_file file in
-         let result = Check.check file in
+         let result = 
+           let@ file = Retype.retype_file file in
+           Check.check file 
+         in
          Pp.maybe_close_json_output ();
          Debug_ocaml.maybe_close_csv_timing_file ();
          match result with
@@ -201,7 +203,7 @@ let main filename mjsonfile debug_level print_level =
        | exc -> 
           Pp.maybe_close_json_output (); 
           Debug_ocaml.maybe_close_csv_timing_file ();
-          raise exc
+          Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
     end
 
 
