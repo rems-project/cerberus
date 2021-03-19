@@ -233,9 +233,8 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let pointer_op = function
-          | Null t ->
-             let@ t = check loc (Base Loc) t in
-             return (Base Bool, Null t)
+          | Null ->
+             return (Base BT.Loc, Null)
           | AllocationSize t ->
              let@ t = check loc (Base Loc) t in
              return (Base Integer, AllocationSize t)

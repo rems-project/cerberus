@@ -273,7 +273,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
 
-  let pp_object_value = function
+  let rec pp_object_value = function
     | M_OVinteger ival ->
         Impl_mem.pp_integer_value_for_core ival
     | M_OVfloating fval ->
@@ -287,7 +287,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_OVpointer ptr_val ->
         Impl_mem.pp_pointer_value ptr_val
     | M_OVarray lvals ->
-        pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_asym lvals))
+        pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
     | M_OVstruct (tag_sym, xs) ->
         P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
         P.braces (
@@ -303,12 +303,12 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     (*| M_OVcfunction nm ->
         !^ "Cfunction" ^^ P.parens (pp_name nm) *)
 
-  let pp_loaded_value = function
+  and pp_loaded_value = function
     | M_LVspecified oval ->
         pp_const "Specified" ^^ P.parens (pp_object_value oval)
 
 
-  let rec pp_value = function
+  and pp_value = function
   (*
     | Vconstrained xs ->
         !^ "{-val-}" ^^^ pp_keyword "constrained" ^^ P.parens (
@@ -325,9 +325,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Vfalse ->
         pp_const "False"
     | M_Vlist (_, cvals) ->
-        P.brackets (comma_list pp_asym cvals)
+        P.brackets (comma_list pp_value cvals)
     | M_Vtuple cvals ->
-        P.parens (comma_list pp_asym cvals)
+        P.parens (comma_list pp_value cvals)
     | M_Vobject oval ->
         pp_object_value oval
     | M_Vloaded lval ->

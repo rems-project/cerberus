@@ -160,59 +160,34 @@ let letbind_pexpr domain pexpr ctxt : 'a =
   domain.letbinder loc (M_Symbol sym) pexpr body
 
 
-let rec n_ov loc domain v k : 'a = 
+let rec n_ov loc v =
   match v with
-  | Core.OVinteger iv -> k (M_OVinteger iv)
-  | Core.OVfloating fv -> k (M_OVfloating fv)
-  | Core.OVpointer pv -> k (M_OVpointer pv)
-  | Core.OVarray is -> 
-     let vs = (map (fun g -> Vloaded g) is) in
-     n_val_names loc domain vs (fun syms ->
-     k (M_OVarray syms))
-  | Core.OVstruct (sym1, is) -> k (M_OVstruct (sym1, is))
-  | Core.OVunion (sym1, id1, mv) -> k (M_OVunion (sym1, id1, mv))
+  | Core.OVinteger iv -> M_OVinteger iv
+  | Core.OVfloating fv -> M_OVfloating fv
+  | Core.OVpointer pv -> M_OVpointer pv
+  | Core.OVarray is -> M_OVarray (List.map (n_lv loc) is)
+  | Core.OVstruct (sym1, is) -> M_OVstruct (sym1, is)
+  | Core.OVunion (sym1, id1, mv) -> M_OVunion (sym1, id1, mv)
 
-and n_lv loc domain v k :'a = 
+and n_lv loc v =
   match v with
-  | LVspecified ov ->
-     n_ov loc domain ov (fun ov -> k (M_LVspecified ov))
-  | LVunspecified ct1 ->
-     error "core_anormalisation: LVunspeified"
+  | LVspecified ov -> M_LVspecified (n_ov loc ov)
+  | LVunspecified ct1 -> error "core_anormalisation: LVunspecified"
 
 
-and n_val loc domain v k :'a = 
+and n_val loc v =
   match v with
-  | Vobject ov -> n_ov loc domain ov (fun ov -> k (M_Vobject ov))
-  | Vloaded lv -> n_lv loc domain lv (fun lv -> k (M_Vloaded lv))
-  | Vunit -> k M_Vunit
-  | Vtrue -> k M_Vtrue
-  | Vfalse -> k M_Vfalse
+  | Vobject ov -> M_Vobject (n_ov loc ov)
+  | Vloaded lv -> M_Vloaded (n_lv loc lv)
+  | Vunit -> M_Vunit
+  | Vtrue -> M_Vtrue
+  | Vfalse -> M_Vfalse
   | Vctype ct1 -> error "core_anormalisation: Vctype"
-  | Vlist (cbt, vs) -> 
-     n_val_names loc domain vs (fun vs -> k (M_Vlist (cbt, vs)))
-  | Vtuple vs -> 
-     n_val_names loc domain vs (fun vs -> k (M_Vtuple vs))
+  | Vlist (cbt, vs) -> M_Vlist (cbt, (List.map (n_val loc) vs))
+  | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
 
 
- (* here we make explicit unit btys *)
-and n_val_name loc domain v k :'a = 
-  let bty = () in
-  n_val loc domain v (fun v -> 
-  let pe = M_Pexpr (loc, [], bty, (M_PEval v)) in
-  letbind_pexpr domain pe (fun sym -> 
-  k sym))
-
-and n_val_names loc domain vs k :'a = 
-  match vs with
-  | [] -> k []
-  | v :: vs ->
-     n_val_name loc domain v (fun sym ->
-     n_val_names loc domain vs (fun syms ->
-     k (sym :: syms)))
-
-
-
-
+ 
 
 
 (* This code now twice, once for m_pexpr, once for embedding into
@@ -271,8 +246,7 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
   | PEimpl i -> 
      k (annotate (M_PEimpl i))
   | PEval v -> 
-     n_val loc domain v (fun v ->
-     k (annotate (M_PEval v)))
+     k (annotate (M_PEval (n_val loc v)))
   | PEconstrained l -> 
      let (constraints,exprs) = (List.split l) in
      n_pexpr_names loc domain exprs (fun exprs ->

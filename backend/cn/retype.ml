@@ -120,11 +120,13 @@ let retype_sym_or_pattern = function
      return (New.M_Pat pat)
 
 
-let retype_object_value (loc : Loc.t) = function
+let rec retype_object_value (loc : Loc.t) = function
   | Old.M_OVinteger iv -> return (New.M_OVinteger iv)
   | Old.M_OVfloating fv -> return (New.M_OVfloating fv)
   | Old.M_OVpointer pv -> return (New.M_OVpointer pv)
-  | Old.M_OVarray asyms -> return (New.M_OVarray asyms)
+  | Old.M_OVarray lvs -> 
+     let@ lvs = ListM.mapM (retype_loaded_value loc) lvs in
+     return (New.M_OVarray lvs)
   | Old.M_OVstruct (s, members) ->
      let@ members = 
        mapM (fun (id, ct, mv) ->
@@ -137,13 +139,12 @@ let retype_object_value (loc : Loc.t) = function
      return (New.M_OVunion (s,id,mv))
 
 
-let retype_loaded_value (loc : Loc.t) = function
+and retype_loaded_value (loc : Loc.t) = function
   | Old.M_LVspecified ov ->
      let@ ov = retype_object_value loc ov in
      return (New.M_LVspecified ov)
 
-
-let retype_value (loc : Loc.t) = function 
+and retype_value (loc : Loc.t) = function 
  | Old.M_Vobject ov -> 
     let@ ov = retype_object_value loc ov in
     return (New.M_Vobject ov)
@@ -153,10 +154,13 @@ let retype_value (loc : Loc.t) = function
  | Old.M_Vunit -> return (New.M_Vunit)
  | Old.M_Vtrue -> return (New.M_Vtrue)
  | Old.M_Vfalse -> return (New.M_Vfalse)
- | Old.M_Vlist (cbt,asyms) -> 
+ | Old.M_Vlist (cbt,vs) -> 
     let@ bt = Conversions.bt_of_core_base_type loc cbt in
-    return (New.M_Vlist (bt,asyms))
- | Old.M_Vtuple asyms -> return (New.M_Vtuple asyms)
+    let@ vs = ListM.mapM (retype_value loc) vs in
+    return (New.M_Vlist (bt,vs))
+ | Old.M_Vtuple vs -> 
+    let@ vs = ListM.mapM (retype_value loc) vs in
+    return (New.M_Vtuple vs)
 
 
 let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) = 

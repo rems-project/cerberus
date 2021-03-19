@@ -1040,27 +1040,26 @@ module Make (G : sig val global : Global.t end) = struct
 
     (*** pure value inference *****************************************************)
 
-    (* these functions return types `{x : bt | phi(x), ..}` *)
-    type vt = Sym.t * BT.t * LC.t list
+    type vt = BT.t * IT.t
 
-    let rt_of_vt (ret,bt,lcs) = 
-      RT.Computational ((ret, bt), LRT.mConstraints lcs LRT.I)
-
-
-    let infer_tuple (loc : loc) local (args : args) : (vt, type_error) m = 
+    let rt_of_vt (bt,it) = 
       let ret = Sym.fresh () in
+      RT.Computational ((ret, bt), 
+      LRT.Constraint (LC (eq_ (sym_ (bt, ret), it)), 
+      LRT.I))
+
+
+    let infer_tuple (loc : loc) (args : args) : (vt, type_error) m = 
       let bts = List.map (fun arg -> arg.bt) args in
       let bt = Tuple bts in
       let tuple_it = IT.tuple_ ~item_bts:bts (List.map (fun arg -> sym_ (arg.bt, arg.lname)) args) in
-      let lcs = [LC (eq_ (sym_ (Tuple bts, ret), tuple_it))] in
-      return (ret, bt, lcs)
+      return (bt, tuple_it)
 
     let infer_constructor (loc : loc) local (constructor : mu_ctor) 
                           (args : args) : (vt, type_error) m = 
-      let ret = Sym.fresh () in
       match constructor, args with
       | M_Ctuple, _ -> 
-         infer_tuple loc local args
+         infer_tuple loc args
       | M_Carray, _ -> 
          Debug_ocaml.error "todo: array types"
       | M_CivCOMPL, _
@@ -1070,19 +1069,19 @@ module Make (G : sig val global : Global.t end) = struct
         -> 
          Debug_ocaml.error "todo: Civ..."
       | M_Cspecified, [arg] ->
-         return (ret, arg.bt, [LC (eq_ (sym_ (arg.bt, ret), sym_ (arg.bt, arg.lname)))])
+         return (arg.bt, sym_ (arg.bt, arg.lname))
       | M_Cspecified, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 1})
       | M_Cnil item_bt, [] -> 
          let bt = List item_bt in
-         return (ret, bt, [LC (eq_ (sym_ (bt, ret), nil_ ~item_bt))])
+         return (bt, nil_ ~item_bt)
       | M_Cnil item_bt, _ -> 
          fail loc (Number_arguments {has = List.length args; expect=0})
       | M_Ccons, [arg1; arg2] -> 
          let bt = List arg1.bt in
          let@ () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
-         let constr = LC (eq_ (sym_ (bt, ret), cons_ (sym_ (arg1.bt, arg1.lname), sym_ (arg2.bt, arg2.lname)))) in
-         return (ret, arg2.bt, [constr])
+         let it = cons_ (sym_ (arg1.bt, arg1.lname), sym_ (arg2.bt, arg2.lname)) in
+         return (arg2.bt, it)
       | M_Ccons, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 2})
       | M_Cfvfromint, _ -> 
@@ -1096,55 +1095,52 @@ module Make (G : sig val global : Global.t end) = struct
       | Some ct -> return ct
       | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
 
-    let infer_ptrval (loc : loc) local (ptrval : pointer_value) : (vt, type_error) m =
-      let ret = Sym.fresh () in
+    let infer_ptrval (loc : loc) (ptrval : pointer_value) : (vt, type_error) m =
       CF.Impl_mem.case_ptrval ptrval
         ( fun ct -> 
           let@ ct = ct_of_ct loc ct in
-          let lcs = [LC.LC (IT.null_ (sym_ (BT.Loc, ret)))] in
-          return (ret, Loc, lcs) )
+          return (Loc, IT.null_) )
         ( fun sym -> 
-          let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
-          let lcs = [LC (eq_ (sym_ (BT.Loc, ret), sym_ (BT.Loc, sym)));
-                     LC (representable_ (voidstar, sym_ (Loc, ret)))] in
-          return (ret, Loc, lcs) )
-        ( fun _prov loc -> return (ret, Loc, [LC (eq_ (sym_ (BT.Loc, ret), pointer_ loc))]) )
+          (* let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in *)
+          (* let lcs = [LC (eq_ (sym_ (BT.Loc, ret), sym_ (BT.Loc, sym)));
+           *            LC (representable_ (voidstar, sym_ (Loc, ret)))] in *)
+          (* let lcs = [LC (eq_ (sym_ (BT.Loc, ret), sym_ (BT.Loc, sym)));
+           *            LC (representable_ (voidstar, sym_ (Loc, ret)))] in *)
+          return (Loc, sym_ (BT.Loc, sym)) )
+        ( fun _prov loc -> return (Loc, pointer_ loc) )
         ( fun () -> Debug_ocaml.error "unspecified pointer value" )
 
-    let rec infer_mem_value (loc : loc) local (mem : mem_value) : (vt, type_error) m =
+    let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
       let open BT in
       CF.Impl_mem.case_mem_value mem
         ( fun ct -> fail loc (Unspecified ct) )
         ( fun _ _ -> 
           fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
         ( fun it iv -> 
-          let ret = Sym.fresh () in
           let v = Memory.integer_value_to_num iv in
-          return (ret, Integer, [LC (eq_ (sym_ (Integer, ret), z_ v))]) )
+          return (Integer, z_ v) )
         ( fun ft fv -> fail loc (Unsupported !^"floats") )
-        ( fun _ ptrval -> infer_ptrval loc local ptrval  )
-        ( fun mem_values -> infer_array loc local mem_values )
+        ( fun _ ptrval -> infer_ptrval loc ptrval  )
+        ( fun mem_values -> infer_array loc mem_values )
         ( fun tag mvals -> 
           let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
-          infer_struct loc local tag mvals )
-        ( fun tag id mv -> infer_union loc local tag id mv )
+          infer_struct loc tag mvals )
+        ( fun tag id mv -> infer_union loc tag id mv )
 
-    and infer_struct (loc : loc) local (tag : tag) 
+    and infer_struct (loc : loc) (tag : tag) 
                      (member_values : (member * mem_value) list) : (vt, type_error) m =
       (* might have to make sure the fields are ordered in the same way as
          in the struct declaration *)
-      let ret = Sym.fresh () in
       let@ spec = get_struct_decl loc tag in
       let rec check fields spec =
         match fields, spec with
         | ((member, mv) :: fields), ((smember, sct) :: spec) 
              when member = smember ->
-           let@ constrs = check fields spec in
-           let@ (s, bt, lcs) = infer_mem_value loc local mv in
+           let@ members = check fields spec in
+           let@ (bt, it) = infer_mem_value loc mv in
            let@ () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
-           let this = IT.structMember_ ~member_bt:bt (tag, sym_ (Struct tag, ret), member) in
-           let constrs2 = List.map (LC.subst_it {before = s; after = this}) lcs in
-           return (constrs @ constrs2)
+           (* return (members @ [(member, it)]) *)
+           return ((member, it) :: members)
         | [], [] -> 
            return []
         | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
@@ -1154,60 +1150,58 @@ module Make (G : sig val global : Global.t end) = struct
         | ((member,_) :: _), [] ->
            fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
       in
-      let@ lcs = check member_values (Global.member_types spec.layout) in
-      return (ret, Struct tag, lcs)
+      let@ members = check member_values (Global.member_types spec.layout) in
+      return (BT.Struct tag, IT.struct_ (tag, members))
 
-    and infer_union (loc : loc) local (tag : tag) (id : Id.t) 
+    and infer_union (loc : loc) (tag : tag) (id : Id.t) 
                     (mv : mem_value) : (vt, type_error) m =
       Debug_ocaml.error "todo: union types"
 
-    and infer_array (loc : loc) local (mem_values : mem_value list) = 
+    and infer_array (loc : loc) (mem_values : mem_value list) = 
       Debug_ocaml.error "todo: arrays"
 
-    let infer_object_value (loc : loc) local
+    let infer_object_value (loc : loc)
                            (ov : 'bty mu_object_value) : (vt, type_error) m =
       match ov with
       | M_OVinteger iv ->
-         let ret = Sym.fresh () in
          let i = Memory.integer_value_to_num iv in
-         return (ret, Integer, [LC (eq_ (sym_ (Integer, ret), z_ i))])
+         return (Integer, z_ i)
       | M_OVpointer p -> 
-         infer_ptrval loc local p
+         infer_ptrval loc p
       | M_OVarray items ->
          Debug_ocaml.error "todo: arrays"
       | M_OVstruct (tag, fields) -> 
          let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
-         infer_struct loc local tag mvals       
+         infer_struct loc tag mvals       
       | M_OVunion (tag, id, mv) -> 
-         infer_union loc local tag id mv
+         infer_union loc tag id mv
       | M_OVfloating iv ->
          fail loc (Unsupported !^"floats")
 
-    let infer_value (loc : loc) local (v : 'bty mu_value) : (vt, type_error) m = 
+    let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m = 
       match v with
       | M_Vobject ov
       | M_Vloaded (M_LVspecified ov) 
         ->
-         infer_object_value loc local ov
+         infer_object_value loc ov
       | M_Vunit ->
-         return (Sym.fresh (), Unit, [])
+         return (Unit, IT.unit_)
       | M_Vtrue ->
-         let ret = Sym.fresh () in
-         return (ret, Bool, [LC (sym_ (Bool, ret))])
+         return (Bool, IT.bool_ true)
       | M_Vfalse -> 
-         let ret = Sym.fresh () in
-         return (ret, Bool, [LC (not_ (sym_ (Bool, ret)))])
-      | M_Vlist (ibt, asyms) ->
-         let ret = Sym.fresh () in
-         let@ args = args_of_asyms local asyms in
+         return (Bool, IT.bool_ false)
+      | M_Vlist (ibt, vals) ->
+         let@ vts = ListM.mapM (infer_value loc) vals in
          let@ () = 
-           ListM.iterM (fun arg -> ensure_base_type loc ~expect:ibt arg.bt) args 
+           ListM.iterM (fun (bt,_) -> ensure_base_type loc ~expect:ibt bt) vts 
          in
-         let its = List.map (fun arg -> IT.sym_ (arg.bt, arg.lname)) args in
-         return (ret, List ibt, [LC (eq_ (sym_ (List ibt, ret), list_ ~item_bt:ibt its))])
-      | M_Vtuple asyms ->
-         let@ args = args_of_asyms local asyms in
-         infer_tuple loc local args
+         let its = List.map snd vts in
+         return (List ibt, list_ ~item_bt:ibt its)
+      | M_Vtuple vals ->
+         let@ vts = ListM.mapM (infer_value loc) vals in
+         let bts = List.map fst vts in
+         let its = List.map snd vts in
+         return (Tuple bts, IT.tuple_ ~item_bts:bts its)
 
 
 
@@ -1397,7 +1391,7 @@ module Make (G : sig val global : Global.t end) = struct
            let rt = Global.get_impl_constant G.global i in
            return (Normal (rt, local))
         | M_PEval v ->
-           let@ vt = infer_value loc local v in
+           let@ vt = infer_value loc v in
            return (Normal (rt_of_vt vt, local))
         | M_PEconstrained _ ->
            Debug_ocaml.error "todo: PEconstrained"
@@ -2361,7 +2355,13 @@ let record_funinfo global funinfo =
       let names = Explain.naming_of_mapping mapping in
       let@ () = WT.WFT.welltyped loc names WT.L.empty ftyp in
       let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
-      return {global with fun_decls}
+      let bindings = 
+        let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
+        let lc = representable_ (voidstar, sym_ (Loc, fsym)) in
+        let sc = SolverConstraints.of_index_term global lc in
+        (Sym.fresh (), VB.Constraint (LC.LC lc, sc)) :: global.bindings 
+      in
+      return {global with fun_decls; bindings}
     ) funinfo global
 
 

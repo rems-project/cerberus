@@ -195,8 +195,8 @@ let of_index_term global (it: IT.t) =
 
   and pointer_op it bt =
     match it with
-    | Null t ->
-       term (eq_ (t, int_ 0))
+    | Null ->
+       term (int_ 0)
     | AllocationSize t ->
        Debug_ocaml.error "todo: SMT mapping for AllocationSize"
     | AddPointer (t1, t2) ->

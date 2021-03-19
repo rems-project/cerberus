@@ -55,7 +55,7 @@ and 'bt struct_op =
   | StructMemberOffset of BT.tag * 'bt term * BT.member
 
 and 'bt pointer_op = 
-  | Null of 'bt term
+  | Null
   | AllocationSize of 'bt term
   | AddPointer of 'bt term * 'bt term
   | SubPointer of 'bt term * 'bt term
@@ -235,8 +235,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
 
   let pointer_op it it' =
     match it, it' with
-    | Null t, Null t' -> 
-       equal t t' 
+    | Null, Null -> 
+       true
     | AllocationSize t1, AllocationSize t1' -> 
        equal t1 t1'
     | AddPointer (t1, t2), AddPointer (t1', t2') -> 
@@ -256,7 +256,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t1 t2
     | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
        equal t1 t2
-    | Null _, _ -> false
+    | Null, _ -> false
     | AllocationSize _, _ -> false
     | AddPointer _, _ -> false
     | SubPointer _, _ -> false
@@ -459,8 +459,8 @@ let pp (type bt) (it : bt term) : PPrint.document =
     in
 
     let pointer_op = function    
-      | Null o1 -> 
-         c_app !^"null" [aux false o1]
+      | Null -> 
+         !^"null"
       | AllocationSize t1 ->
          c_app !^"allocationSize" [aux false t1]
       | AddPointer (t1, t2) ->
@@ -604,7 +604,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   in
 
   let pointer_op : 'bt pointer_op -> SymSet.t = function
-    | Null it -> free_vars it
+    | Null -> SymSet.empty
     | AddPointer (it, it') -> free_vars_list [it; it']
     | SubPointer (it, it') -> free_vars_list [it; it']
     | MulPointer (it, it') -> free_vars_list [it; it']
@@ -746,8 +746,8 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
 
     let pointer_op it bt =
       let it = match it with
-        | Null it -> 
-           Null (aux it)
+        | Null -> 
+           Null
         | AllocationSize it -> 
            AllocationSize (aux it)
         | AddPointer (it, it') -> 
@@ -934,7 +934,7 @@ let structMemberOffset_ (tag, it, member) =
   IT (Struct_op (StructMemberOffset (tag, it, member)), BT.Loc)
 
 (* pointer_op *)
-let null_ it = IT (Pointer_op (Null it), BT.Bool)
+let null_ = IT (Pointer_op Null, BT.Loc)
 let allocationSize_ it = IT (Pointer_op (AllocationSize it), BT.Integer)
 let addPointer_ (it, it') = IT (Pointer_op (AddPointer (it, it')), BT.Loc)
 let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)

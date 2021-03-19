@@ -71,40 +71,38 @@ let make_ctype_pexpr asym : ('bty, symbol) Core.generic_pexpr=
    (Core.Pexpr (annots, bty, (Core.PEval (Core.Vctype ctype))))
 
 
-let rec mu_to_core__object_value (env1 : 'bty env) ov:(Symbol.sym)Core.generic_object_value= 
+let rec mu_to_core__object_value ov:(Symbol.sym)Core.generic_object_value= 
    ((match ov with
   | M_OVinteger iv -> Core.OVinteger iv
   | M_OVfloating fv -> Core.OVfloating fv
   | M_OVpointer ov -> Core.OVpointer ov
   | M_OVstruct( s, is) -> Core.OVstruct( s, is)
   | M_OVunion( s, i, mv) -> Core.OVunion( s, i, mv)
-  | M_OVarray is ->
-     let is = (map (get_loaded_value env1) is) in
-     Core.OVarray is
+  | M_OVarray is -> Core.OVarray (List.map mu_to_core__loaded_value is)
   ))
 
-and mu_to_core__loaded_value (env1 : 'bty env) lv:(Symbol.sym)Core.generic_loaded_value= 
+and mu_to_core__loaded_value lv:(Symbol.sym)Core.generic_loaded_value= 
    ((match lv with
   | M_LVspecified ov ->
-     Core.LVspecified (mu_to_core__object_value env1 ov)
+     Core.LVspecified (mu_to_core__object_value ov)
   (* | M_LVunspecified ct -> Core.LVunspecified ct *)
   ))
 
 
-let rec mu_to_core__value (env1 : 'bty env) (v : 'bty mu_value)
+let rec mu_to_core__value (v : 'bty mu_value)
         : symbol Core.generic_value=
    ((match v with
-  | M_Vobject ov -> Core.Vobject (mu_to_core__object_value env1 ov)
-  | M_Vloaded lv -> Core.Vloaded (mu_to_core__loaded_value env1 lv)
+  | M_Vobject ov -> Core.Vobject (mu_to_core__object_value ov)
+  | M_Vloaded lv -> Core.Vloaded (mu_to_core__loaded_value lv)
   | M_Vunit -> Core.Vunit
   | M_Vtrue -> Core.Vtrue
   | M_Vfalse -> Core.Vfalse
   (* | M_Vctype ct -> Core.Vctype ct *)
   | M_Vlist( cbt, is) -> 
-     let is = (map (get_value env1) is) in
+     let is = (map mu_to_core__value is) in
      Core.Vlist( cbt, is)
   | M_Vtuple is ->
-     let is = (map (get_value env1) is) in
+     let is = (map mu_to_core__value is) in
      Core.Vtuple is
   ))
   
@@ -144,7 +142,7 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
   | M_PEimpl ic -> 
      wrap (Core.PEimpl ic)
   | M_PEval v -> 
-     wrap (Core.PEval (mu_to_core__value env1 v))
+     wrap (Core.PEval (mu_to_core__value v))
   | M_PEconstrained l -> 
      let l = (mapsnd (get_pexpr "PEconstrained" env1) l) in
      wrap (Core.PEconstrained l)

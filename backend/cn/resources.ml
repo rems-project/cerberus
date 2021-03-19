@@ -308,7 +308,7 @@ let derived_constraint resource =
   let open IT in
   match resource with
   | Point p -> 
-     impl_ (gt_ (p.permission, q_ (0, 1)), not_ (null_ p.pointer))
+     impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
   | Star p ->
      (* todo *)
      bool_ true
