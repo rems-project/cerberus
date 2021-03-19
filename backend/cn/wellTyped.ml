@@ -151,7 +151,7 @@ module Make (G : sig val global : Global.t end) = struct
           | ITE (t,t',t'') ->
              let@ t = check loc (Base Bool) t in
              let@ (ls, t') = infer loc t' in
-             let@ t'' = check loc (Base Integer) t'' in
+             let@ t'' = check loc ls t'' in
              return (ls, ITE (t, t', t''))
           | EQ (t,t') ->
              let@ (ls,t) = infer loc t in
@@ -503,6 +503,7 @@ module Make (G : sig val global : Global.t end) = struct
     let welltyped loc (names : Explain.naming) local = function
       | Point b -> 
          let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) b.pointer in
+         let@ _ = WIT.check_or_infer loc names local (Some (LS.Base BT.Real)) b.permission in
          begin match b.content with
          | Block _ -> return ()
          | Value v -> 
@@ -512,10 +513,11 @@ module Make (G : sig val global : Global.t end) = struct
          end
       | IteratedStar b -> 
          let local' = L.add_l b.qpointer (LS.Base Loc) local in
+         let@ _ = WIT.check_or_infer loc names local' (Some (LS.Base BT.Real)) b.permission in
          begin match b.content with
          | Block _ -> return ()
          | Value v -> 
-            (* points is "polymorphic" in the pointee *)
+            (* iterated star is "polymorphic" in the pointee *)
             let@ _ = WIT.check_or_infer loc names local' None v in
             return ()
          end
