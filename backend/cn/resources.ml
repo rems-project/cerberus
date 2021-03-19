@@ -57,7 +57,7 @@ type qpoint = {
 
 type t = 
   | Point of point
-  | Star of qpoint
+  | IteratedStar of qpoint
   | Predicate of predicate
 
 
@@ -86,7 +86,7 @@ let pp = function
      | Value v ->
         group (c_app !^"Points" [IT.pp pointer; IT.pp v; Z.pp size; IT.pp permission])
      end
-  | Star {qpointer; size; content; permission} ->
+  | IteratedStar {qpointer; size; content; permission} ->
      begin match content with
      | Block block_type ->
         let rname = match block_type with
@@ -125,13 +125,13 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
      let content = subst_var_content subst content in
      let permission = IT.subst_var subst permission in
      Point {pointer; size; content; permission}
-  | Star {qpointer; size; content; permission} ->
+  | IteratedStar {qpointer; size; content; permission} ->
      if Sym.equal subst.before qpointer then 
-       Star {qpointer; size; content; permission}
+       IteratedStar {qpointer; size; content; permission}
      else
        let content = subst_var_content subst content in
        let permission = IT.subst_var subst permission in
-       Star {qpointer; size; content; permission}
+       IteratedStar {qpointer; size; content; permission}
   | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (IT.subst_var subst) iargs in
      let oargs = List.map (IT.subst_var subst) oargs in
@@ -151,13 +151,13 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
      let content = subst_it_content subst content in
      let permission = IT.subst_it subst permission in
      Point {pointer; size; content; permission}
-  | Star {qpointer; size; content; permission} ->
+  | IteratedStar {qpointer; size; content; permission} ->
      if Sym.equal subst.before qpointer then 
-       Star {qpointer; size; content; permission}
+       IteratedStar {qpointer; size; content; permission}
      else
        let content = subst_it_content subst content in
        let permission = IT.subst_it subst permission in
-       Star {qpointer; size; content; permission}
+       IteratedStar {qpointer; size; content; permission}
   | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (IT.subst_it subst) iargs in
      let oargs = List.map (IT.subst_it subst) oargs in
@@ -177,7 +177,7 @@ let block_type_equal b1 b2 =
   | Uninit, _ -> false
   | Padding, _ -> false
 
-(* at the moment literal equality, no alpha renaming of Star
+(* at the moment literal equality, no alpha renaming of IteratedStar
    quantifier *)
 let equal t1 t2 = 
   match t1, t2 with
@@ -190,7 +190,7 @@ let equal t1 t2 =
      | _, _ -> false
      end &&
      IT.equal b1.permission b2.permission
-  | Star b1, Star b2 ->
+  | IteratedStar b1, IteratedStar b2 ->
      Sym.equal b1.qpointer b2.qpointer &&
      Z.equal b1.size b2.size &&
      begin match b1.content, b2. content with
@@ -205,7 +205,7 @@ let equal t1 t2 =
      List.equal IT.equal p1.oargs p2.oargs &&
      (* IT.equal *) p1.unused = p2.unused
   | Point _, _ -> false
-  | Star _, _ -> false
+  | IteratedStar _, _ -> false
   | Predicate _, _ -> false
 
 
@@ -229,7 +229,7 @@ let unify r1 r2 res =
             IT.equal b.permission b'.permission ->
      (* Block unifies with Blocks of other block type *)
      unify_content b.content b'.content res
-  | Star b, Star b' when
+  | IteratedStar b, IteratedStar b' when
          Z.equal b.size b'.size ->
      let b = 
        let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
@@ -260,7 +260,7 @@ let free_vars = function
        | Value v -> [b.pointer; b.permission; v]
      in
      IT.free_vars_list itlist
-  | Star b -> 
+  | IteratedStar b -> 
      let itlist = match b.content with
        | Block _ -> [b.permission]
        | Value v -> [b.permission; v]
@@ -277,27 +277,27 @@ let free_vars_list l =
 
 let quantified = function
   | Point p -> []
-  | Star p -> [(p.qpointer, BaseTypes.Loc)]
+  | IteratedStar p -> [(p.qpointer, BaseTypes.Loc)]
   | Predicate p -> []
 
 
-(* the quantifier in Star is neither input nor output *)
+(* the quantifier in IteratedStar is neither input nor output *)
 let inputs = function
   | Point p -> [p.pointer; p.permission]
-  | Star p -> [p.permission]
+  | IteratedStar p -> [p.permission]
   | Predicate p -> p.iargs
 
 let outputs = function
   | Point {content = Block _; _} -> []
   | Point {content = Value v; _} -> [v]
-  | Star {content = Block _; _} -> []
-  | Star {content = Value v; _} -> [v]
+  | IteratedStar {content = Block _; _} -> []
+  | IteratedStar {content = Value v; _} -> [v]
   | Predicate p -> p.oargs
 
 
 let permission = function
   | Point p -> p.permission
-  | Star s -> s.permission
+  | IteratedStar s -> s.permission
   | Predicate p when p.unused -> IT.q_ (1, 1)
   | Predicate p -> IT.q_ (0, 1)
 
@@ -309,7 +309,7 @@ let derived_constraint resource =
   match resource with
   | Point p -> 
      impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
-  | Star p ->
+  | IteratedStar p ->
      (* todo *)
      bool_ true
   | Predicate _ ->
@@ -358,7 +358,7 @@ let region pointer size permission =
       permission = ite_ BT.Real (condition, permission, q_ (0,1))
     }
   in
-  Star point
+  IteratedStar point
 
 
 (* check this *)
@@ -383,4 +383,4 @@ let array pointer length element_size content permission =
       permission = ite_ BT.Real (condition, permission, q_ (0,1))
     }
   in
-  Star point
+  IteratedStar point

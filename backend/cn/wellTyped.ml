@@ -510,7 +510,7 @@ module Make (G : sig val global : Global.t end) = struct
             let@ _ = WIT.check_or_infer loc names local None v in
             return ()
          end
-      | Star b -> 
+      | IteratedStar b -> 
          let local' = L.add_l b.qpointer (LS.Base Loc) local in
          begin match b.content with
          | Block _ -> return ()

@@ -378,7 +378,7 @@ module Make (G : sig val global : Global.t end) = struct
                )
              in
              (entry, SymSet.union (symbol_it pointer) (symbol_it pointee))
-          | Star p ->
+          | IteratedStar p ->
              let entry =
                (None,
                 None, 

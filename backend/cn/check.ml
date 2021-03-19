@@ -687,7 +687,7 @@ module Make (G : sig val global : Global.t end) = struct
                   let needed = simplify (sub_ (needed, can_take)) in
                   let permission' = simplify (sub_ (p'.permission, can_take)) in
                   (Point {p' with permission = permission'}, needed)
-               | Star p' 
+               | IteratedStar p' 
                     when Z.equal requested.size p'.size ->
                   let can_take = 
                     simplify (
@@ -704,7 +704,7 @@ module Make (G : sig val global : Global.t end) = struct
                            p'.permission)
                       )
                   in
-                  (Star {p' with permission = permission'}, needed)
+                  (IteratedStar {p' with permission = permission'}, needed)
                | re ->
                   (re, needed)
              ) local needed
@@ -733,7 +733,7 @@ module Make (G : sig val global : Global.t end) = struct
                   let needed = simplify (sub_ (needed, can_take)) in
                   let permission' = simplify (sub_ (p'.permission, can_take)) in
                   (Point {p' with permission = permission'}, (needed, content))
-               | Star ({content = Value v'; _} as p') 
+               | IteratedStar ({content = Value v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -758,7 +758,7 @@ module Make (G : sig val global : Global.t end) = struct
                           p'.permission)
                       )
                   in
-                  (Star {p' with permission = permission'}, (needed, content))
+                  (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->
                   (re, (needed, content))
              ) local (needed, default_ bt)
@@ -766,7 +766,7 @@ module Make (G : sig val global : Global.t end) = struct
          if S.holds local (eq_ (needed, q_ (0, 1))) 
          then return (Point {requested with content = Value content}, updated_local)
          else missing ()
-      | Star ({content = Block block_type; _} as requested) ->
+      | IteratedStar ({content = Block block_type; _} as requested) ->
          let qp = Sym.fresh () in 
          let needed = 
            IT.subst_var {before = requested.qpointer; after = qp} 
@@ -793,7 +793,7 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   let permission' = simplify (sub_ (p'.permission, can_take)) in
                   (Point {p' with permission = permission'}, needed)
-               | Star p' 
+               | IteratedStar p' 
                     when Z.equal requested.size p'.size ->
                   let can_take = 
                     simplify (
@@ -808,15 +808,15 @@ module Make (G : sig val global : Global.t end) = struct
                               IT.subst_var {before=qp; after = p'.qpointer} can_take)
                       )
                   in
-                  (Star {p' with permission = permission'}, needed)
+                  (IteratedStar {p' with permission = permission'}, needed)
                | re ->
                   (re, needed)
              ) local needed
          in
          if S.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
-         then return (Star requested, updated_local)
+         then return (IteratedStar requested, updated_local)
          else missing ()
-      | Star ({content = Value (IT (_, bt)); _} as requested) ->
+      | IteratedStar ({content = Value (IT (_, bt)); _} as requested) ->
          let qp = Sym.fresh () in
          let needed = 
            IT.subst_var {before = requested.qpointer; after = qp}
@@ -853,7 +853,7 @@ module Make (G : sig val global : Global.t end) = struct
                   let permission' = 
                     simplify (sub_ (p'.permission, can_take)) in
                   (Point {p' with permission = permission'}, (needed, content))
-               | Star ({content = Value v'; _} as p') 
+               | IteratedStar ({content = Value v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -878,7 +878,7 @@ module Make (G : sig val global : Global.t end) = struct
                               IT.subst_var {before=qp; after = p'.qpointer} can_take)
                       )
                   in
-                  (Star {p' with permission = permission'}, (needed, content))
+                  (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->
                   (re, (needed, content))
              ) local (needed, default_ bt)
@@ -886,7 +886,7 @@ module Make (G : sig val global : Global.t end) = struct
          if S.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
          then 
            let resource = 
-             Star {requested with 
+             IteratedStar {requested with 
                  content = Value (IT.subst_var {before = qp; after = requested.qpointer} content)
                } 
            in
@@ -1248,7 +1248,7 @@ module Make (G : sig val global : Global.t end) = struct
            | Point p when 
                   S.holds original_local (le_ (p.permission, q_ (0, 1))) ->
               aux rest
-           | Star p when 
+           | IteratedStar p when 
                   S.holds_forall original_local [(p.qpointer, BT.Loc)]
                     (le_ (p.permission, q_ (0, 1))) ->
               aux rest
