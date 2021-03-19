@@ -36,6 +36,7 @@ and predarg =
   | Sub of predarg * predarg
   | AddPointer of predarg * predarg
   | SubPointer of predarg * predarg
+  | MulPointer of predarg * predarg
   | NumArg of Z.t
 
 type t = path
@@ -67,12 +68,14 @@ and predarg_equal pa1 pa2 =
   | Sub (p1,i1), Sub (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
   | AddPointer (p1,i1), AddPointer (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
   | SubPointer (p1,i1), SubPointer (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
+  | MulPointer (p1,i1), MulPointer (p2,i2) -> predarg_equal p1 p2 && predarg_equal i1 i2
   | NumArg z1, NumArg z2 -> Z.equal z1 z2
   | PathArg _, _ -> false
   | Add _, _ -> false
   | Sub _, _ -> false
   | AddPointer _, _ -> false
   | SubPointer _, _ -> false
+  | MulPointer _, _ -> false
   | NumArg _, _ -> false
 
 
@@ -88,6 +91,7 @@ and pp_predarg = function
   | Sub (p,t) -> pp_predarg p ^^^ minus ^^^ pp_predarg t
   | AddPointer (p,t) -> pp_predarg p ^^^ plus ^^ dot ^^^ pp_predarg t
   | SubPointer (p,t) -> pp_predarg p ^^^ minus ^^ dot ^^^ pp_predarg t
+  | MulPointer (p,t) -> pp_predarg p ^^^ star ^^ dot ^^^ pp_predarg t
   | NumArg z -> Z.pp z
 
 let addr bn = 
@@ -130,6 +134,7 @@ and map_labels_predarg f pa =
   | Sub(p,p') -> Sub (aux p, aux p')
   | AddPointer(p,p') -> AddPointer (aux p, aux p')
   | SubPointer(p,p') -> SubPointer (aux p, aux p')
+  | MulPointer(p,p') -> MulPointer (aux p, aux p')
   | NumArg z -> NumArg z
 
 let remove_labels = map_labels (fun _ -> None)

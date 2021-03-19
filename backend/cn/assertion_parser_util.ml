@@ -12,6 +12,7 @@ type token =
 
   | PLUSDOT
   | MINUSDOT
+  | STARDOT
 
   | EQ
   | NE

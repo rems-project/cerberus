@@ -53,7 +53,7 @@ module Make (G : sig val global : Global.t end) = struct
            in
            fail loc (Generic err)
       in
-                   
+      
 
       let rec infer : 'bt. Loc.t -> 'bt IT.term -> (LogicalSorts.t * IT.t, type_error) m =
 
@@ -62,14 +62,18 @@ module Make (G : sig val global : Global.t end) = struct
              let@ () = check_bound loc names local KLogical s in
              let (Base bt) = L.get_l s local in
              return (Base bt, Sym s)
-          | Num n -> 
-             return (Base Integer, Num n)
+          | Z z -> 
+             return (Base Integer, Z z)
+          | Q (n,n') -> 
+             return (Base Real, Q (n,n'))
           | Pointer p -> 
              return (Base Loc, Pointer p)
           | Bool b -> 
              return (Base Bool, Bool b)
           | Unit -> 
              return (Base Unit, Unit)
+          | Default bt -> 
+             return (Base bt, Default bt)
         in
 
         let arith_op = function
@@ -474,7 +478,7 @@ module Make (G : sig val global : Global.t end) = struct
 
         in
         return (bt, it)
-                   
+    
       in  
 
       match ols with
@@ -507,21 +511,14 @@ module Make (G : sig val global : Global.t end) = struct
             let@ _ = WIT.check_or_infer loc names local None v in
             return ()
          end
-      | Region r -> 
-         let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) r.pointer in
-         WIT.welltyped loc names local (LS.Base BT.Integer) r.size
-      | Array a -> 
-         let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) a.pointer in
-         let@ () = WIT.welltyped loc names local (LS.Base BT.Integer) a.length in
-         (* array is "polymorphic" in the content type *)
-         let@ (content_t, _) = WIT.check_or_infer loc names local None a.content in
-         begin match content_t with
-         | Base (Map _) -> return ()
-         | _ ->
-            let err = 
-              let open Pp in
-              !^"Array content argument not a map:" ^^^ LS.pp content_t in
-            fail loc (Generic err)
+      | Star b -> 
+         let local' = L.add_l b.qpointer (LS.Base Loc) local in
+         begin match b.content with
+         | Block _ -> return ()
+         | Value v -> 
+            (* points is "polymorphic" in the pointee *)
+            let@ _ = WIT.check_or_infer loc names local' None v in
+            return ()
          end
       | Predicate p -> 
          let@ def = match Global.get_predicate_def G.global p.name, p.name with
@@ -556,7 +553,7 @@ module Make (G : sig val global : Global.t end) = struct
                match arg with
                | IT.IT (Lit (Sym _), _) -> return (i + 1)
                | _ ->
-                  let (resource, _) = Explain.resource names local (Predicate p) false in
+                  let (resource, _) = Explain.resource names local (Predicate p) None in
                   let open Pp in
                   let err = 
                     !^("output argument " ^ string_of_int i ^ " of resource") ^^^ resource ^^^
@@ -568,6 +565,37 @@ module Make (G : sig val global : Global.t end) = struct
          return ()
   end
 
+
+  let resource_inputs_ok loc resource determined = 
+    let bound = SymSet.of_list (List.map fst (RE.quantified resource)) in
+    let free = IT.free_vars_list (RE.inputs resource) in
+    let undetermined = SymSet.diff free (SymSet.union determined bound) in
+    match SymSet.elements undetermined with
+    | [] -> return ()
+    | s :: _ -> fail loc (Unconstrained_logical_variable s)
+
+  let resource_outputs_ok loc resource determined =
+    let bound = SymSet.of_list (List.map fst (RE.quantified resource)) in
+    let rec aux fixed = function
+      | [] -> return fixed
+      | output :: outputs -> 
+         let undetermined = 
+           SymSet.diff (IT.free_vars output) 
+             (SymSet.union determined bound) 
+         in
+         match SymSet.elements undetermined, IT.is_sym output with
+         (* if the logical variables in tht outputs are already determined, ok *)
+         | [], _ -> 
+            aux fixed outputs
+         (* if the output is an (unresolved) logical variable, then it can be
+            resolved by unification *)       
+         | _ :: _, Some (sym, _) -> 
+            aux (SymSet.add sym fixed) outputs
+         (* otherwise, fail *)
+         | lvar :: _, _ ->
+            fail loc (Logical_variable_not_good_for_unification lvar)
+    in
+    aux SymSet.empty (RE.outputs resource)
 
   module WLC = struct
     open LogicalConstraints
@@ -606,15 +634,8 @@ module Make (G : sig val global : Global.t end) = struct
       | Logical ((s, _), lrt) ->
          aux determined (SymSet.add s undetermined) lrt
       | Resource (re, lrt) ->
-         let@ () = match SymSet.elements (SymSet.diff (RE.input re) determined) with
-           | [] -> return ()
-           | s :: _ -> fail loc (Unconstrained_logical_variable s)
-         in
-         let@ () = match SymSet.elements (SymSet.inter (RE.output re) determined) with
-           | [] -> return ()
-           | s :: _ -> fail loc (Double_output_position s)
-         in
-         let fixed = RE.output re in
+         let@ () = resource_inputs_ok loc re determined in
+         let@ fixed = resource_outputs_ok loc re determined in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined lrt
@@ -721,15 +742,8 @@ module Make (G : sig val global : Global.t end) = struct
       | T.Logical ((s, _), ft) ->
          aux determined (SymSet.add s undetermined) ft
       | T.Resource (re, ft) ->
-         let@ () = match SymSet.elements (SymSet.diff (RE.input re) determined) with
-           | [] -> return ()
-           | s :: _ -> fail loc (Unconstrained_logical_variable s)
-         in
-         let@ () = match SymSet.elements (SymSet.inter (RE.output re) determined) with
-           | [] -> return ()
-           | s :: _ -> fail loc (Double_output_position s)
-         in
-         let fixed = RE.output re in
+         let@ () = resource_inputs_ok loc re determined in
+         let@ fixed = resource_outputs_ok loc re determined in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined ft

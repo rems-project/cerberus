@@ -10,10 +10,12 @@ module SymMap = Map.Make(Sym)
 
 type lit = 
   | Sym of Sym.t
-  | Num of Z.t
+  | Z of Z.t
+  | Q of int * int
   | Pointer of Z.t
   | Bool of bool
   | Unit
+  | Default of BT.t
 
 (* over integers and reals *)
 type 'bt arith_op =
@@ -125,15 +127,19 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   let lit it it' =
     match it, it' with
     | Sym sym, Sym sym' -> Sym.equal sym sym'
-    | Num n, Num n' -> Z.equal n n'
+    | Z n, Z n' -> Z.equal n n'
+    | Q (n1,n2), Q (n1',n2') -> n1 = n1' && n2 = n2'
     | Pointer p, Pointer p' -> Z.equal p p'
     | Bool b, Bool b' -> b = b'
     | Unit, Unit -> true
+    | Default bt, Default bt' -> BT.equal bt bt'
     | Sym _, _ -> false
-    | Num _, _ -> false
+    | Z _, _ -> false
+    | Q _, _ -> false
     | Pointer _, _ -> false
     | Bool _, _ -> false
     | Unit, _ -> false
+    | Default _, _ -> false
   in
 
   let arith_op it it' =
@@ -376,22 +382,24 @@ let pp (type bt) (it : bt term) : PPrint.document =
     
     let lit = function
       | Sym sym -> Sym.pp sym
-      | Num i -> Z.pp i
+      | Z i -> Z.pp i
+      | Q (i,i') -> c_app !^"frac" [!^(string_of_int i); !^(string_of_int i')]
       | Pointer i -> Z.pp i
       | Bool true -> !^"true"
       | Bool false -> !^"false"
       | Unit -> !^"void"
+      | Default bt -> parens (!^("default") ^^^ colon ^^^ BT.pp bt)
     in
 
     let arith_op = function
       | Add (it1,it2) -> 
-         mparens (aux true it1 ^^^ plus ^^^ aux true it2)
+         mparens (flow (break 1) [aux true it1; plus; aux true it2])
       | Sub (it1,it2) -> 
-         mparens (aux true it1 ^^^ minus ^^^ aux true it2)
+         mparens (flow (break 1) [aux true it1; minus; aux true it2])
       | Mul (it1,it2) -> 
-         mparens (aux true it1 ^^^ star ^^^ aux true it2)
+         mparens (flow (break 1) [aux true it1; star; aux true it2])
       | Div (it1,it2) -> 
-         mparens (aux true it1 ^^^ slash ^^^ aux true it2)
+         mparens (flow (break 1) [aux true it1; slash; aux true it2])
       | Exp (it1,it2) -> 
          c_app !^"power" [aux true it1; aux true it2]
       | Rem_t (it1,it2) -> 
@@ -406,30 +414,30 @@ let pp (type bt) (it : bt term) : PPrint.document =
 
     let cmp_op = function
       | LT (o1,o2) -> 
-         mparens (aux true o1 ^^^ langle ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; langle; aux true o2])
       | GT (o1,o2) -> 
-         mparens (aux true o1 ^^^ rangle ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; rangle; aux true o2])
       | LE (o1,o2) -> 
-         mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; (langle ^^ equals); aux true o2])
       | GE (o1,o2) -> 
-         mparens (aux true o1 ^^^ rangle ^^ equals ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; (rangle ^^ equals); aux true o2])
     in
 
     let bool_op = function
       | And o -> 
-         Pp.group (mparens (flow_map (space ^^ !^"&&" ^^ space) (aux false) o))
+         Pp.group (mparens (flow_map (break 1 ^^ !^"&&" ^^ break 1) (aux false) o))
       | Or o -> 
-         Pp.group (mparens (flow_map (space ^^ !^"||" ^^ space) (aux false) o))
+         Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux false) o))
       | Impl (o1,o2) -> 
-         mparens (aux true o1 ^^^ equals ^^ rangle ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
       | Not (o1) -> 
          mparens (!^"not" ^^^ aux true o1)
       | ITE (o1,o2,o3) -> 
-         mparens (aux true o1 ^^^ !^"?" ^^^ aux true o2 ^^^ colon ^^^ aux false o3)
+         mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
       | EQ (o1,o2) -> 
-         mparens (aux true o1 ^^^ equals ^^ equals ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
       | NE (o1,o2) -> 
-         mparens (aux true o1 ^^^ !^"!=" ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; !^"!="; aux true o2])
     in
 
     let tuple_op = function
@@ -456,15 +464,15 @@ let pp (type bt) (it : bt term) : PPrint.document =
       | AllocationSize t1 ->
          c_app !^"allocationSize" [aux false t1]
       | AddPointer (t1, t2) ->
-         mparens (aux true t1 ^^^ plus ^^ dot ^^^ aux true t2)
+         mparens (flow (break 1) [aux true t1; plus ^^ dot; aux true t2])
       | SubPointer (t1, t2) ->
-         mparens (aux true t1 ^^^ minus ^^ dot ^^^ aux true t2)
+         mparens (flow (break 1) [aux true t1; minus ^^ dot; aux true t2])
       | MulPointer (t1, t2) ->
-         mparens (aux true t1 ^^^ star ^^^ aux true t2)
+         mparens (flow (break 1) [aux true t1; star ^^ dot; aux true t2])
       | LTPointer (o1,o2) -> 
-         mparens (aux true o1 ^^^ langle ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; langle; aux true o2])
       | LEPointer (o1,o2) -> 
-         mparens (aux true o1 ^^^ langle ^^ equals ^^^ aux true o2)
+         mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
       | Disjoint ((o1,s1),(o2,s2)) ->
          c_app !^"disj" [aux false o1; aux false s1; aux false o2; aux false s2]
       | IntegerToPointerCast t ->
@@ -543,99 +551,101 @@ let pp (type bt) (it : bt term) : PPrint.document =
   aux false it
 
 
-let rec vars_in : 'bt. 'bt term -> SymSet.t =
+let rec free_vars : 'bt. 'bt term -> SymSet.t =
 
   let lit : lit -> SymSet.t = function
     | Sym symbol -> SymSet.singleton symbol
-    | Num _ -> SymSet.empty
+    | Z _ -> SymSet.empty
+    | Q _ -> SymSet.empty
     | Pointer _ -> SymSet.empty
     | Bool _ -> SymSet.empty
     | Unit -> SymSet.empty
+    | Default _ -> SymSet.empty
   in
 
   let arith_op : 'bt arith_op -> SymSet.t = function
-    | Add (it, it') -> vars_in_list [it; it']
-    | Sub (it, it') -> vars_in_list [it; it']
-    | Mul (it, it') -> vars_in_list [it; it']
-    | Div (it, it') -> vars_in_list [it; it']
-    | Exp (it, it') -> vars_in_list [it; it']
-    | Rem_t (it, it') -> vars_in_list [it; it']
-    | Rem_f (it, it') -> vars_in_list [it; it']
-    | Min (it, it') -> vars_in_list [it; it']
-    | Max (it, it') -> vars_in_list [it; it']
+    | Add (it, it') -> free_vars_list [it; it']
+    | Sub (it, it') -> free_vars_list [it; it']
+    | Mul (it, it') -> free_vars_list [it; it']
+    | Div (it, it') -> free_vars_list [it; it']
+    | Exp (it, it') -> free_vars_list [it; it']
+    | Rem_t (it, it') -> free_vars_list [it; it']
+    | Rem_f (it, it') -> free_vars_list [it; it']
+    | Min (it, it') -> free_vars_list [it; it']
+    | Max (it, it') -> free_vars_list [it; it']
   in
 
   let cmp_op : 'bt cmp_op -> SymSet.t = function
-    | LT (it, it') -> vars_in_list [it; it']
-    | GT (it, it') -> vars_in_list [it; it']
-    | LE (it, it') -> vars_in_list [it; it']
-    | GE (it, it') -> vars_in_list [it; it']
+    | LT (it, it') -> free_vars_list [it; it']
+    | GT (it, it') -> free_vars_list [it; it']
+    | LE (it, it') -> free_vars_list [it; it']
+    | GE (it, it') -> free_vars_list [it; it']
   in
 
   let bool_op : 'bt bool_op -> SymSet.t = function
-    | And its -> vars_in_list its
-    | Or its -> vars_in_list its
-    | Impl (it, it') -> vars_in_list [it; it']
-    | Not it -> vars_in it
-    | ITE (it,it',it'') -> vars_in_list [it;it';it'']
-    | EQ (it, it') -> vars_in_list [it; it']
-    | NE (it, it') -> vars_in_list [it; it']
+    | And its -> free_vars_list its
+    | Or its -> free_vars_list its
+    | Impl (it, it') -> free_vars_list [it; it']
+    | Not it -> free_vars it
+    | ITE (it,it',it'') -> free_vars_list [it;it';it'']
+    | EQ (it, it') -> free_vars_list [it; it']
+    | NE (it, it') -> free_vars_list [it; it']
   in
 
   let tuple_op : 'bt tuple_op -> SymSet.t = function
-    | Tuple its -> vars_in_list its
-    | NthTuple ( _, it) -> vars_in it
+    | Tuple its -> free_vars_list its
+    | NthTuple ( _, it) -> free_vars it
   in
   
   let struct_op : 'bt struct_op -> SymSet.t = function
-    | Struct (_tag, members) -> vars_in_list (map snd members)
-    | StructMember (_tag, it, s) -> vars_in_list [it;it]
-    | StructMemberOffset (_tag, it, s) -> vars_in_list [it;it]
+    | Struct (_tag, members) -> free_vars_list (map snd members)
+    | StructMember (_tag, it, s) -> free_vars_list [it;it]
+    | StructMemberOffset (_tag, it, s) -> free_vars_list [it;it]
   in
 
   let pointer_op : 'bt pointer_op -> SymSet.t = function
-    | Null it -> vars_in it
-    | AddPointer (it, it') -> vars_in_list [it; it']
-    | SubPointer (it, it') -> vars_in_list [it; it']
-    | MulPointer (it, it') -> vars_in_list [it; it']
-    | LTPointer (it, it')  -> vars_in_list [it; it']
-    | LEPointer (it, it') -> vars_in_list [it; it']
-    | Disjoint ((it,_), (it',_)) -> vars_in_list [it; it']
-    | AllocationSize it -> vars_in it
-    | IntegerToPointerCast t -> vars_in t
-    | PointerToIntegerCast t -> vars_in t
+    | Null it -> free_vars it
+    | AddPointer (it, it') -> free_vars_list [it; it']
+    | SubPointer (it, it') -> free_vars_list [it; it']
+    | MulPointer (it, it') -> free_vars_list [it; it']
+    | LTPointer (it, it')  -> free_vars_list [it; it']
+    | LEPointer (it, it') -> free_vars_list [it; it']
+    | Disjoint ((it,_), (it',_)) -> free_vars_list [it; it']
+    | AllocationSize it -> free_vars it
+    | IntegerToPointerCast t -> free_vars t
+    | PointerToIntegerCast t -> free_vars t
   in
 
   let ct_pred : 'bt ct_pred -> SymSet.t = function
-    | Aligned (_rt, t) -> vars_in t
-    | AlignedI (t, t') -> vars_in_list [t; t']
+    | Aligned (_rt, t) -> free_vars t
+    | AlignedI (t, t') -> free_vars_list [t; t']
     | MinInteger _ -> SymSet.empty
     | MaxInteger _ -> SymSet.empty
-    | Representable (_rt,t) -> vars_in t
+    | Representable (_rt,t) -> free_vars t
   in
 
   let list_op : 'bt list_op -> SymSet.t = function
     | Nil  -> SymSet.empty
-    | Cons (it, it') -> vars_in_list [it; it']
-    | List its -> vars_in_list its
-    | Head it -> vars_in it
-    | Tail it -> vars_in it
-    | NthList (_,it) -> vars_in it
+    | Cons (it, it') -> free_vars_list [it; it']
+    | List its -> free_vars_list its
+    | Head it -> free_vars it
+    | Tail it -> free_vars it
+    | NthList (_,it) -> free_vars it
   in
 
   let set_op : 'bt set_op -> SymSet.t = function
-    | SetMember (t1,t2) -> vars_in_list [t1;t2]
-    | SetUnion ts -> vars_in_list (List1.to_list ts)
-    | SetIntersection ts -> vars_in_list (List1.to_list ts)
-    | SetDifference (t1, t2) -> vars_in_list [t1;t2]
-    | Subset (t1, t2) -> vars_in_list [t1;t2]
+    | SetMember (t1,t2) -> free_vars_list [t1;t2]
+    | SetUnion ts -> free_vars_list (List1.to_list ts)
+    | SetIntersection ts -> free_vars_list (List1.to_list ts)
+    | SetDifference (t1, t2) -> free_vars_list [t1;t2]
+    | Subset (t1, t2) -> free_vars_list [t1;t2]
   in
 
   let array_op : 'bt array_op -> SymSet.t = function
-    | ConstArray t -> vars_in t
-    | ArrayGet (t1,t2) -> vars_in_list [t1;t2]
-    | ArraySet (t1,t2,t3) -> vars_in_list [t1;t2;t3]
-    | ArrayEqualOnRange (t1,t2,t3,t4) -> vars_in_list [t1;t2;t3; t4]
+    | ConstArray t -> free_vars t
+    | ArrayGet (t1,t2) -> free_vars_list [t1;t2]
+    | ArraySet (t1,t2,t3) -> free_vars_list [t1;t2;t3]
+    | ArrayEqualOnRange (t1,t2,t3,t4) -> free_vars_list [t1;t2;t3; t4]
   in
   
   fun (IT (it, _)) ->
@@ -653,9 +663,9 @@ let rec vars_in : 'bt. 'bt term -> SymSet.t =
   | Array_op it -> array_op it
 
 
-and vars_in_list l = 
+and free_vars_list l = 
   List.fold_left (fun acc sym -> 
-      SymSet.union acc (vars_in sym)
+      SymSet.union acc (free_vars sym)
     ) SymSet.empty l
 
 
@@ -864,17 +874,25 @@ let unify it it' res =
 
 
 
+let is_sym = function
+  | IT (Lit (Sym sym), bt) -> Some (sym, bt)
+  | _ -> None
+
+
+
 (* shorthands *)
 
 
 (* lit *)
 let sym_ (bt, sym) = IT (Lit (Sym sym), bt)
-let num_ n = IT (Lit (Num n), BT.Integer)
+let z_ n = IT (Lit (Z n), BT.Integer)
+let q_ (n,n') = IT (Lit (Q (n,n')), BT.Real)
 let pointer_ n = IT (Lit (Pointer n), BT.Loc)
 let bool_ b = IT (Lit (Bool b), BT.Bool)
-let unit = IT (Lit Unit, BT.Unit)
+let unit_ = IT (Lit Unit, BT.Unit)
+let default_ bt = IT (Lit (Default bt), bt)
 
-let int_ n = num_ (Z.of_int n)
+let int_ n = z_ (Z.of_int n)
 
 
 (* arith_op *)
@@ -928,35 +946,19 @@ let integerToPointerCast_ it = IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
 let pointerToIntegerCast_ it = IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
 
 (* list_op *)
-let nil_ ~item_bt = 
-  IT (List_op Nil, BT.List item_bt)
-let cons_ (it, it') = 
-  let (IT (_, bt)) = it' in
-  IT (List_op (Cons (it, it')), bt)
-let list_ ~item_bt its = 
-  IT (List_op (List its), BT.List item_bt)
-let head_ ~item_bt it = 
-  IT (List_op (Head it), item_bt)
-let tail_ it = 
-  let (IT (_, bt)) = it in
-  IT (List_op (Tail it), bt)
-let nthList_ ~item_bt (n, it) = 
-  IT (List_op (NthList (n, it)), item_bt)
+let nil_ ~item_bt = IT (List_op Nil, BT.List item_bt)
+let cons_ (it, it') = IT (List_op (Cons (it, it')), bt it')
+let list_ ~item_bt its = IT (List_op (List its), BT.List item_bt)
+let head_ ~item_bt it = IT (List_op (Head it), item_bt)
+let tail_ it = IT (List_op (Tail it), bt it)
+let nthList_ ~item_bt (n, it) = IT (List_op (NthList (n, it)), item_bt)
 
 (* set_op *)
-let setMember_ bt (it, it') = 
-  IT (Set_op (SetMember (it, it')), BT.Bool)
-let setUnion_ its = 
-  let (IT (_, bt),_) = List1.dest its in
-  IT (Set_op (SetUnion its), bt)
-let setIntersection_ its = 
-  let (IT (_, bt),_) = List1.dest its in
-  IT (Set_op (SetIntersection its), bt)
-let setDifference_ (it, it') = 
-  let (IT (_, bt)) = it in
-  IT (Set_op (SetDifference (it, it')), bt)
-let subset_ (it, it') = 
-  IT (Set_op (Subset (it, it')), BT.Bool)
+let setMember_ bt (it, it') = IT (Set_op (SetMember (it, it')), BT.Bool)
+let setUnion_ its = IT (Set_op (SetUnion its), bt (List1.head its))
+let setIntersection_ its = IT (Set_op (SetIntersection its), bt (List1.head its))
+let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
+let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
 (* array_op *)
 let constArray_ ~item_bt it = 
@@ -1022,3 +1024,155 @@ let good_value v sct =
 
 
 
+let simplify equalities term = 
+
+
+
+
+  let rec aux (IT (it, bt)) =
+    match it with
+    | Lit it -> lit it bt
+    | Arith_op it -> arith_op it bt
+    | Bool_op it -> bool_op it bt
+    | Cmp_op it -> cmp_op it bt
+    | Tuple_op it -> IT (Tuple_op it, bt)
+    | Struct_op it -> IT (Struct_op it, bt)
+    | Pointer_op it -> IT (Pointer_op it, bt)
+    | List_op it -> IT (List_op it, bt)
+    | Set_op it -> IT (Set_op it, bt)
+    | Array_op it -> IT (Array_op it, bt)
+    | CT_pred it -> IT (CT_pred it, bt)
+
+  and lit it bt = 
+    match it with
+    | Sym sym ->
+       IT (Lit (Sym sym), bt)
+    | Z z ->
+       IT (Lit (Z z), bt)
+    | Q (i1, i2) ->
+       IT (Lit (Q (i1, i2)), bt)
+    | Pointer z ->
+       IT (Lit (Pointer z), bt)
+    | Bool b ->
+       IT (Lit (Bool b), bt)
+    | Unit ->
+       IT (Lit Unit, bt)
+    | Default bt' ->
+       IT (Lit (Default bt'), bt)
+
+  and arith_op it bt = 
+    match it with
+    | Add (a, b) ->
+       IT (Arith_op (Add (aux a, aux b)), bt)
+    | Sub (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match b, bt with
+       | IT (Lit (Q (0, _)), _), _ -> 
+          a
+       | _, BT.Integer when equal a b -> 
+          IT (Lit (Z Z.zero), bt)
+       | _, BT.Real when equal a b -> 
+          IT (Lit (Q (0, 1)), bt)
+       | _ ->
+          IT (Arith_op (Sub (a, b)), bt) 
+       end
+    | Mul (a, b) ->
+       IT (Arith_op (Mul (aux a, aux b)), bt) 
+    | Div (a, b) ->
+       let a = aux a in
+       let b = aux b in 
+       begin match a, b with
+       | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
+          a
+       | _ ->
+          IT (Arith_op (Div (a, b)), bt) 
+       end
+    | Exp (a, b) ->
+       IT (Arith_op (Exp (aux a, aux b)), bt) 
+    | Rem_t (a, b) ->
+       let a = aux a in
+       let b = aux b in 
+       begin match a, b with
+       | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
+          IT (Lit (Z Z.zero), bt)
+       | _ ->
+          IT (Arith_op (Rem_t (a, b)), bt) 
+       end
+    | Rem_f (a, b) ->
+       let a = aux a in
+       let b = aux b in 
+       begin match a, b with
+       | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
+          IT (Lit (Z Z.zero), bt)
+       | _ ->
+          IT (Arith_op (Rem_f (a, b)), bt) 
+       end
+    | Min (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | _ when equal a b -> 
+          a
+       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) 
+            when i1 <= i2 && j1 = j2 ->
+          a
+       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) 
+            when i1 > i2 && j1 = j2 ->
+          b
+       | _ ->
+          IT (Arith_op (Min (a, b)), bt)
+       end
+    | Max (a, b)  ->
+       let a = aux a in
+       let b = aux b in
+       if equal a b then a 
+       else IT (Arith_op (Max (a, b)), bt)
+
+  and bool_op it bt = 
+    match it with
+    | And its ->
+       IT (Bool_op (And (List.map aux its)), bt)
+    | Or its ->
+       IT (Bool_op (And (List.map aux its)), bt)
+    | Impl (a, b) ->
+       IT (Bool_op (Impl (aux a, aux b)), bt)
+    | Not a ->
+       IT (Bool_op (Not (aux a)), bt)
+    | ITE (a, b, c) ->
+       let a = aux a in
+       let b = aux b in
+       let c = aux c in
+       begin match a with
+       | IT (Lit (Bool true), _) -> b
+       | IT (Lit (Bool false), _) -> c
+       | _ when equal b c -> b
+       | _ -> IT (Bool_op (ITE (a, b, c)), bt)
+       end
+    | EQ (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if equal a b 
+       then IT (Lit (Bool true), bt)
+       else IT (Bool_op (EQ (aux a, aux b)), bt)
+    | NE (a, b) ->
+       IT (Bool_op (NE (aux a, aux b)), bt)
+
+  and cmp_op it bt = 
+    let cmp_rule mk z_op int_op a b =
+       match aux a, aux b with
+       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+          IT (Lit (Bool (z_op z1 z2)), bt)
+       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) when j1 = j2 ->
+          IT (Lit (Bool (int_op i1 i2)), bt)
+       | a, b ->
+          IT (Cmp_op (mk (a, b)), bt)
+    in
+    match it with
+    | LT (a, b) -> cmp_rule (fun (a, b) -> LT (a, b)) Z.lt_big_int (<) a b
+    | GT (a, b) -> cmp_rule (fun (a, b) -> GT (a, b)) Z.gt_big_int (>) a b
+    | LE (a, b) -> cmp_rule (fun (a, b) -> LE (a, b)) Z.le_big_int (<=) a b
+    | GE (a, b) -> cmp_rule (fun (a, b) -> GE (a, b)) Z.ge_big_int (>=) a b
+  in
+  
+  aux term

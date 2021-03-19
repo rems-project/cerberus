@@ -44,13 +44,14 @@ let early =
         name = Id id; 
         iargs = [start_t; end_t];
         oargs = [];
+        unused = (* bool_ *) true;
       } 
   in
   let block = 
-    RE.Region {
-        pointer = integerToPointerCast_ start_t;
-        size = add_ (sub_ (end_t, start_t), num_ (Z.of_int 1));
-      }
+    Resources.region 
+      (integerToPointerCast_ start_t)
+      (add_ (sub_ (end_t, start_t), int_ 1))
+      (q_ (1, 1))
   in
   let pack_functions =
     [LFT.Resource (block, 
@@ -88,8 +89,6 @@ let zero_region =
   let pointer_t = sym_ (Loc, pointer_s) in
   let length_s = Sym.fresh () in
   let length_t = sym_ (Integer, length_s) in
-  let content_s = Sym.fresh () in
-  let content_t = sym_ (Map Integer, content_s) in
   let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
   let oargs = [] in
   let pred = 
@@ -97,41 +96,26 @@ let zero_region =
         name = Id id; 
         iargs = [pointer_t; length_t];
         oargs = [];
+        unused = (* bool_ *) true;
       } 
   in
   let array = 
-    RE.Array {
-        pointer = pointer_t;
-        length = length_t;
-        element_size = Z.of_int 1;
-        content = content_t;
-      }
-  in
-  let equality_constr = 
-    arrayEqualOnRange_ (
-        content_t, 
-        constArray_ ~item_bt:BT.Integer (IT.num_ Z.zero),
-        num_ Z.zero,
-        sub_ (length_t, num_ (Z.of_int 1))
-      )
+    RE.array pointer_t length_t (Z.of_int 1)
+      (fun q -> int_ 0) (q_ (1,1))
   in
   let pack_functions =
-    [LFT.Logical ((content_s, Base (Map Integer)),
-     LFT.Resource (array, 
+    [LFT.Resource (array, 
      LFT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
-     LFT.Constraint (LC equality_constr,
      LFT.I (
      LRT.Resource (pred,
-     LRT.I))))))] 
+     LRT.I))))] 
   in
   let unpack_functions =
     [LFT.Resource (pred,
      LFT.I (
-     LRT.Logical ((content_s, Base (Map Integer)),
      LRT.Resource (array,
      LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
-     LRT.Constraint (LC equality_constr,
-     LRT.I))))))]
+     LRT.I))))]
   in
   let predicate = {
       iargs; 
@@ -233,18 +217,16 @@ type t =
     impl_constants : RT.t ImplMap.t;
     (* stdlib_funs : FT.t SymMap.t; *)
     resource_predicates : predicate_definition StringMap.t;
-    solver_context : Z3.context;
     bindings: VariableBindings.binding list;
   } 
 
-let empty solver_context = 
+let empty = 
   { struct_decls = SymMap.empty; 
     fun_decls = SymMap.empty;
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
     (* stdlib_funs = SymMap.empty; *)
     resource_predicates = builtin_predicates;
-    solver_context;
     bindings = [];
   }
 

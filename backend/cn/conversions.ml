@@ -132,7 +132,7 @@ let struct_decl loc fields (tag : BT.tag) =
     let clause = 
       let (lrt, values) = 
         List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
-            let member_p = addPointer_ (struct_pointer_t, num_ offset) in
+            let member_p = addPointer_ (struct_pointer_t, z_ offset) in
             match member_or_padding with
             | Some (member, sct) ->
                let bt = BT.of_sct sct in
@@ -144,13 +144,15 @@ let struct_decl loc fields (tag : BT.tag) =
                     RE.Predicate {
                         name = Tag tag; 
                         iargs = [member_p]; 
-                        oargs = [member_t]
+                        oargs = [member_t];
+                        unused = (* bool_ *) true;
                       }
                  | _ -> 
                     RE.Point {
                         pointer = member_p; 
                         content = Value member_t; 
-                        size
+                        size;
+                        permission = q_ (1, 1);
                       }
                in
                let lrt = 
@@ -160,9 +162,15 @@ let struct_decl loc fields (tag : BT.tag) =
                let value = (member, sym_ (bt, member_v)) :: values in
                (lrt, value)
             | None ->
-               let lrt = 
-                 LRT.Resource (RE.Point {pointer = member_p; size; content = Block Padding}, lrt)
+               let resource = 
+                 RE.Point {
+                     pointer = member_p; 
+                     size; 
+                     content = Block Padding;
+                     permission = q_ (1, 1);
+                   }
                in
+               let lrt = LRT.Resource (resource, lrt) in
                (lrt, values)
           ) layout (LRT.I, [])
       in
@@ -173,9 +181,12 @@ let struct_decl loc fields (tag : BT.tag) =
       (lrt, constr)
     in
     let predicate = 
-      Predicate {name = Tag tag; 
-                 iargs = [struct_pointer_t];
-                 oargs = [struct_value_t]} 
+      Predicate {
+          name = Tag tag; 
+          iargs = [struct_pointer_t];
+          oargs = [struct_value_t];
+          unused = (* bool_ *) true;
+        } 
     in
     let unpack_function = 
       let (lrt, constr) = clause in
@@ -232,7 +243,8 @@ let make_owned loc label pointer path sct =
        [RE.Predicate {
             name = Tag tag; 
             iargs = [sym_ (BT.Loc, pointer)];
-            oargs = [sym_ (BT.Struct tag, pointee)]
+            oargs = [sym_ (BT.Struct tag, pointee)];
+            unused = (* bool_ *) true;
        }]
      in
      let l = [(pointee, LS.Base (Struct tag))] in
@@ -246,7 +258,8 @@ let make_owned loc label pointer path sct =
        [RE.Point {
             pointer = sym_ (BT.Loc, pointer); 
             content = Value (sym_ (bt, pointee)); 
-            size = Memory.size_of_ctype sct
+            size = Memory.size_of_ctype sct;
+            permission = q_ (1, 1);
        }]
      in
      let l = [(pointee, LS.Base bt)] in
@@ -256,10 +269,10 @@ let make_owned loc label pointer path sct =
      return(l, r, c, mapping)
 
 
-let make_region loc pointer_it size =
+let make_region loc pointer size =
   (* let open Sctypes in *)
-  let r = [RE.Region {pointer = pointer_it; size}] in
-  return ([], r, [], [])
+  let resource = Resources.region pointer size (q_ (1, 1)) in
+  return ([], [resource], [], [])
 
 
 let make_block loc pointer path sct =
@@ -269,9 +282,12 @@ let make_block loc pointer path sct =
      fail loc (Generic !^"cannot make void* pointer a block")
   | _ -> 
      let r = 
-       [RE.Point {pointer = sym_ (BT.Loc, pointer); 
-                  size = Memory.size_of_ctype sct;
-                  content = Block Nothing}]
+       [RE.Point {
+            pointer = sym_ (BT.Loc, pointer); 
+            size = Memory.size_of_ctype sct;
+            content = Block Nothing;
+            permission = q_ (1, 1);
+       }]
      in
      return ([], r, [], [])
 
@@ -294,15 +310,22 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
           | None -> []
         in
         return (mapping, l)
-      ) def.oargs ([], [])
+      ) def.Global.oargs ([], [])
   in
   let oargs = 
     List.map (fun (s, LS.Base bt) ->
         sym_ (bt, s)
-      )l 
+      )l
   in
-  let r = [RE.Predicate {name = Id pred; iargs; oargs}] in
-  return (l, r, [], mapping)
+  let r = 
+    RE.Predicate {
+        name = Id pred; 
+        iargs; 
+        oargs;
+        unused = (* bool_ *) true;
+      } 
+  in
+  return (l, [r], [], mapping)
 
 
 
@@ -351,7 +374,7 @@ let rec resolve_index_term loc mapping (it: Ast.term)
   let aux = resolve_index_term loc mapping in
   match it with
   | Lit (Integer i) -> 
-     return (IT.num_ i)
+     return (IT.z_ i)
   | Path o -> 
      let@ (bt,s) = resolve_path loc mapping o in
      return (IT.sym_ (bt, s))
@@ -403,7 +426,7 @@ let rec resolve_index_term loc mapping (it: Ast.term)
 
 let rec resolve_predarg loc mapping = function
   | Path.NumArg z -> 
-     return (IT.num_ z)
+     return (IT.z_ z)
   | Add (p,a) -> 
      let@ it = resolve_predarg loc mapping p in
      let@ it' = resolve_predarg loc mapping a in
@@ -420,6 +443,10 @@ let rec resolve_predarg loc mapping = function
      let@ it = resolve_predarg loc mapping p in
      let@ it' = resolve_predarg loc mapping a in
      return (IT.subPointer_ (it, it'))
+  | MulPointer (p,a) -> 
+     let@ it = resolve_predarg loc mapping p in
+     let@ it' = resolve_predarg loc mapping a in
+     return (IT.mulPointer_ (it, it'))
   | PathArg p ->
      let@ (ls, s) = resolve_path loc mapping p in
      return (IT.sym_ (ls, s))
@@ -477,7 +504,8 @@ let apply_ownership_spec label var_typs mapping (loc, {predicate;arguments}) =
      let@ iargs_resolved = 
        ListM.mapM (resolve_predarg loc mapping) arguments
      in
-     make_pred loc predicate arguments iargs_resolved
+     let@ result = make_pred loc predicate arguments iargs_resolved in
+     return result
 
 
 let aarg_item l (aarg : aarg) =
@@ -682,6 +710,7 @@ let make_label_spec
   let llt = LT.mLogicals iL (LT.mResources iR (LT.mConstraints iC (LT.I False.False))) in
   let lt = LT.mComputationals iA llt in
   return (lt, mapping)
+
 
 
 

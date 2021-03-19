@@ -15,6 +15,7 @@ open Assertion_parser_util
 
 %token PLUSDOT
 %token MINUSDOT
+%token STARDOT
 
 %token EQ
 %token NE
@@ -35,7 +36,7 @@ open Assertion_parser_util
 /* STAR? */
 %left EQ NE GT LT GE LE
 %left PLUS MINUS PLUSDOT MINUSDOT
-%left STAR SLASH
+%left STAR STARDOT SLASH
 /* %nonassoc POWER */
 
 %type <Ast.term>term
@@ -78,6 +79,8 @@ predarg:
       { Path.AddPointer (a1, a2) }
   | a1=predarg MINUSDOT a2=predarg
       { Path.SubPointer (a1, a2) }
+  | a1=predarg STARDOT a2=predarg
+      { Path.MulPointer (a1, a2) }
   | z=Z
       { Path.NumArg z }
 

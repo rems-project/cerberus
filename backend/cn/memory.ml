@@ -40,7 +40,7 @@ let representable_integer_type it about =
     | CF.Ctype.Bool -> (Z.of_int 0, Z.of_int 1)
     | _ -> (min_integer_type it, max_integer_type it)
   in
-  LC.LC (IT.in_range about (num_ min, num_ max))
+  LC.LC (IT.in_range about (z_ min, z_ max))
 
 
 

@@ -5,14 +5,19 @@ module IT = IndexTerms
 module SymMap=Map.Make(Sym)
 
 
+let context = 
+  Z3.mk_context [
+      ("model", "true");
+      ("well_sorted_check","true");
+      ("unsat_core", "true");
+    ] 
 
-let of_index_term (global: Global.t) (it: IT.t) =
+
+
+
+let of_index_term global (it: IT.t) =
 
   let open Global in
-
-  let () = Debug_ocaml.begin_csv_timing "of_index_term" in
-
-  let context = global.solver_context in
 
   let rec bt_name = function
     | Unit -> "void"
@@ -27,6 +32,9 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | Map bt -> "map("^bt_name bt^")"
   in
   let bt_symbol bt = Z3.Symbol.mk_string context (bt_name bt) in
+
+  let default_name (bt : BT.t) = "default" ^ bt_name bt in
+
 
   let tuple_field_name i = "comp" ^ string_of_int i in
   let tuple_field_symbol i = Z3.Symbol.mk_string context (tuple_field_name i) in
@@ -92,8 +100,10 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | Sym s -> 
        let sym = Z3.Symbol.mk_string context (Sym.pp_string s) in
        Z3.Expr.mk_const context sym (sort_of_bt bt)
-    | Num z ->
+    | Z z ->
        Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
+    | Q (i,i') ->
+       Z3.Arithmetic.Real.mk_numeral_nd context i i'
     | Pointer z ->
        Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
     | Bool true ->
@@ -102,6 +112,10 @@ let of_index_term (global: Global.t) (it: IT.t) =
        Z3.Boolean.mk_false context
     | Unit ->
        Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
+    | Default bt ->
+       Z3.Expr.mk_const_s context (default_name bt) (sort_of_bt bt)
+       
+       
 
 
   (* fix rem_t vs rem_f *)
@@ -160,8 +174,7 @@ let of_index_term (global: Global.t) (it: IT.t) =
        let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
        Z3.Expr.mk_app context constructor (List.map term ts)
     | NthTuple (n, t) ->
-       let (IT (_, tuple_bt)) = t in
-       let destructors = Z3.Tuple.get_field_decls (sort_of_bt tuple_bt) in
+       let destructors = Z3.Tuple.get_field_decls (sort_of_bt (IT.bt t)) in
        Z3.Expr.mk_app context (List.nth destructors n) [term t]
 
   and struct_op it bt =
@@ -178,12 +191,12 @@ let of_index_term (global: Global.t) (it: IT.t) =
        Z3.Expr.mk_app context destructor [term t]       
     | StructMemberOffset (tag, t, member) ->
        let offset = Memory.member_offset global.Global.struct_decls tag member in
-       Z3.Arithmetic.mk_add context [term t; term (num_ offset)]
+       Z3.Arithmetic.mk_add context [term t; term (z_ offset)]
 
   and pointer_op it bt =
     match it with
     | Null t ->
-       term (eq_ (t, num_ Z.zero))
+       term (eq_ (t, int_ 0))
     | AllocationSize t ->
        Debug_ocaml.error "todo: SMT mapping for AllocationSize"
     | AddPointer (t1, t2) ->
@@ -197,9 +210,10 @@ let of_index_term (global: Global.t) (it: IT.t) =
     | LEPointer (t1, t2) ->
        Z3.Arithmetic.mk_le context (term t1) (term t2)
     | Disjoint ((p1, s1), (p2, s2)) ->
-       let p1notin = or_ [lt_ (p1, p2); ge_ (p1, addPointer_ (p2, s2))] in
-       let p2notin = or_ [lt_ (p2, p1); ge_ (p2, addPointer_ (p1, s1))] in
-       let disjoint = and_ [p1notin; p2notin] in
+       let disjoint = 
+         or_ [lePointer_ (addPointer_ (p1, s1), p2); 
+              lePointer_ (addPointer_ (p2, s2), p1)] 
+       in
        term disjoint
     | IntegerToPointerCast t ->
        term t
@@ -260,25 +274,21 @@ let of_index_term (global: Global.t) (it: IT.t) =
   and ct_pred it bt =
     match it with
     | MinInteger it ->
-       term (num_ (Memory.min_integer_type it))
+       term (z_ (Memory.min_integer_type it))
     | MaxInteger it ->
-       term (num_ (Memory.max_integer_type it))
+       term (z_ (Memory.max_integer_type it))
     | Representable (ct, t) ->
        let (LC it) = Memory.representable_ctype global.struct_decls ct t in
        term it
     | AlignedI (t1, t2) ->
-       term (eq_ (rem_t_ (t2, t1), num_ Z.zero))
+       term (eq_ (rem_t_ (t2, t1), int_ 0))
     | Aligned (ct, t) ->
-       term (eq_ (rem_t_ (t, num_ (Memory.align_of_ctype ct)), num_ Z.zero))
+       term (eq_ (rem_t_ (t, z_ (Memory.align_of_ctype ct)), int_ 0))
   in
 
-
-
+  let () = Debug_ocaml.begin_csv_timing "of_index_term" in
   let result = term it in
-  
-
-
   let () = Debug_ocaml.end_csv_timing () in
-
   result
+
 

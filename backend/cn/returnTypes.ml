@@ -45,7 +45,7 @@ let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) rt =
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
        Computational ((name,bt),t)
-     else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
+     else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
        let newname = Sym.fresh () in
        let t' = LRT.subst_var {before=name; after=newname} t in
        let t'' = LRT.subst_it substitution t' in

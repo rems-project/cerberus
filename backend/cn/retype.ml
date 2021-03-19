@@ -451,6 +451,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   in
 
 
+  
   let@ ((funinfo : funinfos), 
         (funinfo_extra : funinfo_extras)) =
     let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
@@ -468,7 +469,6 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
             ) args
         in
         let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
-
         let@ (ftyp, init_mapping) = Conversions.make_fun_spec loc fsym fspec in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto, init_mapping) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
@@ -477,6 +477,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
     in
     PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
   in
+  
 
 
   let retype_label ~fsym (lsym : Sym.t) def = 
@@ -565,7 +566,6 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   
   let@ stdlib = retype_fun_map file.mu_stdlib in
   let@ funs = retype_fun_map file.mu_funs in
-
 
   let file = 
     New.{ mu_main = file.mu_main;

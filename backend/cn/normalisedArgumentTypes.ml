@@ -100,7 +100,7 @@ module Make (I: AT.I_Sig) = struct
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
          Logical ((name,ls),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if SymSet.mem name (IT.free_vars substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var_l {before=name; after=newname} t in
          let t'' = subst_it_l substitution t' in
@@ -114,7 +114,7 @@ module Make (I: AT.I_Sig) = struct
     | Computational ((name,bt),t) -> 
        if Sym.equal name substitution.before then 
          Computational ((name,bt),t) 
-       else if SymSet.mem name (IT.vars_in substitution.after) then
+       else if SymSet.mem name (IT.free_vars substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var_a {before=name; after=newname} t in
          let t'' = subst_it_a substitution t' in

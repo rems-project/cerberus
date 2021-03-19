@@ -61,7 +61,7 @@ let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt =
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
          Logical ((name,ls),t)
-       else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
+       else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name;after=newname} t in
          let t'' = aux substitution t' in
@@ -99,8 +99,8 @@ let rec freshify = function
 
 let rec free_vars = function
   | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
-  | Resource (r,t) -> SymSet.union (Resources.vars_in r) (free_vars t)
-  | Constraint (c,t) -> SymSet.union (LogicalConstraints.vars_in c) (free_vars t)
+  | Resource (r,t) -> SymSet.union (Resources.free_vars r) (free_vars t)
+  | Constraint (c,t) -> SymSet.union (LogicalConstraints.free_vars c) (free_vars t)
   | I -> SymSet.empty
 
 
@@ -110,13 +110,13 @@ let rec pp_aux lrt =
   match lrt with
   | Logical ((name,ls),t) ->
      let op = if !unicode then utf8string "\u{2203}" else !^"E" in
-     (op ^^^ typ (Sym.pp name) (LogicalSorts.pp ls) ^^ dot) :: pp_aux t
+     group (op ^^^ typ (Sym.pp name) (LogicalSorts.pp ls) ^^ dot) :: pp_aux t
   | Resource (re,t) ->
      let op = star in
-     (Resources.pp re ^^^ op) :: pp_aux t
+     group (Resources.pp re ^^^ op) :: pp_aux t
   | Constraint (lc,t) ->
      let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
-     (LogicalConstraints.pp lc ^^^ op) :: pp_aux t
+     group (LogicalConstraints.pp lc ^^^ op) :: pp_aux t
   | I -> 
      [!^"I"]
 

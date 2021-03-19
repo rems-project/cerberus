@@ -95,13 +95,11 @@ let maybe_open_csv_timing_file () =
 
 let maybe_close_csv_timing_file () = 
   if !debug_level >= 1 then 
-    match !csv_timing_stack_file, !csv_timing_stack with
-    | None, [] -> ()
-    | Some oc, [] ->
+    match !csv_timing_stack_file with
+    | None -> ()
+    | Some oc ->
        close_out oc;
        csv_timing_stack_file := None
-    | _, _ :: _ ->
-       error "non-empty timing stack when closing file"
 
 
 let begin_csv_timing (fun_name: string) =

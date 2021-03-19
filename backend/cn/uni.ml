@@ -16,12 +16,16 @@ let find_resolved env unis =
     ) unis []
 
 
-let unresolved_var unis (vars : SymSet.t) =
-  SymMap.fold (fun usym {resolved} found ->
-      match resolved with
-      | None when SymSet.mem usym vars -> Some usym
-      | _ -> found
-    ) unis None
+let unresolved_var (unis : 'res unis) (vars : SymSet.t) =
+  SymSet.fold (fun var found ->
+      match SymMap.find_opt var unis with
+      | None -> found
+      | Some {resolved = Some _} -> found
+      | Some {resolved = None} -> Some var
+    ) vars None
+
+let all_resolved unis vars = 
+  Option.is_none (unresolved_var unis vars)
 
 
 

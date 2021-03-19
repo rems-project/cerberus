@@ -24,13 +24,13 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* left-most is most recent *)
-  type t = Local of context_item list
+  type t = 
+    Local of context_item list
+  
 
   let empty = Local []
 
   let marked = Local [Marker]
-
-  let concat (Local local') (Local local) = Local (local' @ local)
 
 
 
@@ -130,25 +130,21 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-
-
-
-
-  let use_resource sym where (Local local) = 
-    let rec aux = function
-    | Binding (sym',b) :: rest when Sym.equal sym sym' -> 
-       begin match b with
-       | Resource re -> 
-          (* Binding (sym', UsedResource (re,where)) ::  *)
-            rest
-       | _ -> kind_mismatch_internal_error 
-                ~expect:KResource ~has:(VB.kind b)
-       end
-    | i :: rest -> i :: aux rest
-    | [] -> unbound_internal_error sym
+  let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) (Local initial_local) (acc : 'acc) = 
+    let local, acc =
+      List.fold_right (fun context_item (local, acc) ->
+          let (context_item, acc) = 
+            match context_item with
+            | Binding (sym, Resource resource) ->
+               let (resource, acc) = f resource acc in
+               (Binding (sym, Resource resource), acc)
+            | _ ->
+               (context_item, acc)
+          in
+          (context_item :: local, acc)
+        ) initial_local ([], acc)
     in
-    Local (aux local)
+    (Local local, acc)
 
 
 
@@ -251,6 +247,9 @@ module Make (G : sig val global : Global.t end) = struct
         add_l lname ls local
       ) local ls
 
+  let add_c cname (lc, sc) local = 
+    add (cname, Constraint (lc, sc)) local
+
   let add_uc (LC.LC lc) local = 
     let sc = SolverConstraints.of_index_term G.global lc in
     add (Sym.fresh (), Constraint (LC lc, sc)) local
@@ -262,15 +261,13 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let add_r rname r local = 
-    let lcs = match RE.footprint r with
-      | None -> []
-      | Some ((addr,_) as fp) ->
-         let fps = List.filter_map RE.footprint (all_resources local) in
-         LC.LC (IT.not_ (IT.null_ addr)) ::
-         List.map LC.pack (IT.disjoint_from fp fps)
+    let lcs = 
+      RE.derived_constraint r ::
+      List.concat_map (RE.derived_constraints r) 
+        (all_resources local)
     in
     let local = add (rname, Resource r) local in
-    let local = add_ucs lcs local in
+    let local = add_ucs (List.map LC.pack lcs) local in
     local
 
   let add_ur re local = 
@@ -278,108 +275,62 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
+
+
+  (* let equalities local = 
+   *   let pairs = 
+   *     List.filter_map (fun (LC.LC it) ->
+   *         match it with
+   *         | IT (Bool_op (EQ (IT (Lit (Sym s1), _), IT (Lit (Sym s2), _))), _) ->
+   *            if Sym.compare s1 s2 <= 0 then Some (s1, s2) else Some (s2, s1)
+   *         |  _ -> 
+   *             None
+   *       ) (all_constraints local)
+   *   in *)
+    (* let pairs_sorted =
+     *   List.sort (fun (a1, a2) (b1, b2) ->
+     *       let cmp1 = Sym.compare a1 b1 in
+     *       if cmp1 = 0 then Sym.compare a2 b2 else cmp1
+     *     ) pairs
+     * in
+     * List.fold_left (fun classes (a1, b1) ->
+     *     let rec aux = function
+     *       | clss :: classes when SymSet.elem a1 clss ->
+     *          SymSet.add b1 clss :: classes
+     *       | clss :: classes ->
+     *          clss :: aux classes
+     *       | [] -> 
+     *          [SymSet.of_list [a1; b1]]         1,5  2,3  3,4  4,5
+     *     in
+     *     aux classes
+     *   ) [] pairs_sorted *)
+
+
+
+
+
+
+
+  let concat (Local local') (Local local) = 
+    List.fold_right (fun context_item (Local local) ->
+        match context_item with
+        | Marker -> (Local (Marker :: local))
+        | Binding (sym,bound) ->
+           match bound with
+           | Computational (lsym, bt) ->
+              add_a sym (bt, lsym) (Local local)
+           | Logical ls ->
+              add_l sym ls (Local local)
+           | Resource re ->
+              add_r sym re (Local local)
+           | Constraint (lc, sc) ->
+              add_c sym (lc, sc) (Local local)
+      ) local' (Local local)
+
+
   let (++) = concat
 
   let all_names local = filter (fun (sym, _) -> Some sym) local
-
-
-
-  let normalise_resources (Local local) = 
-    
-    let normalise_resource = function
-      | RE.Point p ->
-         let pointer_s = Sym.fresh () in
-         let pointer_t = IT.sym_ (BT.Loc, pointer_s) in
-         let pointer_lc = IT.eq_ (pointer_t, p.pointer) in
-         begin match p.content with
-         | Block b -> 
-            ([(pointer_s, BT.Loc)], 
-             [pointer_lc], 
-             RE.Point {p with pointer = pointer_t})
-         | Value value ->
-            let value_s = Sym.fresh () in
-            let (IT.IT (_, value_bt)) = value in
-            let value_t = IT.sym_ (value_bt, value_s) in
-            let value_lc = IT.eq_ (value_t, value) in
-            ([(pointer_s, BT.Loc); (value_s, value_bt)], 
-             [pointer_lc; value_lc], 
-             Point {p with pointer = pointer_t; content = Value value_t})
-         end
-      | Region r ->
-         let pointer_s = Sym.fresh () in
-         let pointer_t = IT.sym_ (BT.Loc, pointer_s) in
-         let pointer_lc = IT.eq_ (pointer_t, r.pointer) in
-         ([(pointer_s, BT.Loc)], 
-          [pointer_lc], 
-          Region {r with pointer = pointer_t})
-      | Array a ->
-         let pointer_s = Sym.fresh () in
-         let pointer_t = IT.sym_ (BT.Loc, pointer_s) in
-         let pointer_lc = IT.eq_ (pointer_t, a.pointer) in
-         let content_s = Sym.fresh () in
-         let (IT.IT (_, content_bt)) = a.content in
-         let content_t = IT.sym_ (content_bt, content_s) in
-         let content_lc = IT.eq_ (content_t, a.content) in
-         ([(pointer_s, BT.Loc); (content_s, content_bt)], 
-          [pointer_lc; content_lc], 
-          Array {a with pointer = pointer_t; content = content_t})
-
-      | Predicate p ->
-         let logicals, lcs, oargs = 
-           List.fold_right (fun arg (logicals, lcs, args) ->
-               let arg_s = Sym.fresh () in 
-               let (IT.IT (_, arg_bt)) = arg in
-               let arg_t = IT.sym_ (arg_bt, arg_s) in
-               ((arg_s, arg_bt) :: logicals,
-                IT.eq_ (arg_t, arg) :: lcs,
-                arg_t :: args)                 
-             ) p.oargs ([], [], [])
-         in
-         let logicals, lcs, iargs = 
-           List.fold_right (fun arg (logicals, lcs, args) ->
-               let arg_s = Sym.fresh () in 
-               let (IT.IT (_, arg_bt)) = arg in
-               let arg_t = IT.sym_ (arg_bt, arg_s) in
-               ((arg_s, arg_bt) :: logicals,
-                IT.eq_ (arg_t, arg) :: lcs,
-                arg_t :: args)                 
-             ) p.iargs (logicals, lcs, []) 
-         in
-         (logicals, lcs, Predicate {p with iargs; oargs })
-
-    in
-
-    let local = 
-      List.concat_map (function
-          | Marker -> [Marker]
-          | Binding (sym, bound) ->
-             match bound with
-             | Resource resource -> 
-                let (logicals, constraints, resource) = normalise_resource resource in
-                let new_logical_bindings = 
-                  List.map (fun (s, bt) ->
-                      Binding (s, Logical (Base bt))
-                    ) logicals
-                in
-                let new_constraint_bindings = 
-                  List.map (fun lc ->
-                      let sc = SolverConstraints.of_index_term G.global lc in
-                      Binding (Sym.fresh (), Constraint (LC lc, sc))
-                    ) constraints
-                in
-                let new_resource_binding = 
-                  Binding (sym, Resource resource)
-                in
-                new_resource_binding ::
-                  List.rev new_constraint_bindings @ 
-                  List.rev new_logical_bindings
-             | _ ->
-                [Binding (sym, bound)]
-        ) local
-    in
-    Local local
-
-
 
 
   let json local : Yojson.Safe.t = 

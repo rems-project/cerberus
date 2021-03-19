@@ -79,7 +79,7 @@ module Make (I: I_Sig) = struct
     | Computational ((name,bt),t) -> 
        if Sym.equal name substitution.before then 
          Computational ((name,bt),t)
-       else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
+       else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name; after=newname} t in
          let t'' = subst_it substitution t' in
@@ -90,7 +90,7 @@ module Make (I: I_Sig) = struct
     | Logical ((name,ls),t) -> 
        if Sym.equal name substitution.before then 
          Logical ((name,ls),t)
-       else if SymSet.mem name (IndexTerms.vars_in substitution.after) then
+       else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
          let newname = Sym.fresh () in
          let t' = subst_var {before=name; after=newname} t in
          let t'' = subst_it substitution t' in
@@ -113,8 +113,8 @@ module Make (I: I_Sig) = struct
   let rec free_vars = function
     | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)
     | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
-    | Resource (r,t) -> SymSet.union (RE.vars_in r) (free_vars t)
-    | Constraint (c,t) -> SymSet.union (LC.vars_in c) (free_vars t)
+    | Resource (r,t) -> SymSet.union (RE.free_vars r) (free_vars t)
+    | Constraint (c,t) -> SymSet.union (LC.free_vars c) (free_vars t)
     | I i -> I.free_vars i
 
 
@@ -123,16 +123,16 @@ module Make (I: I_Sig) = struct
     let rec aux = function
       | Computational ((name,bt),t) ->
          let op = if !unicode then utf8string "\u{03A0}" else !^"AC" in
-         (op ^^^ typ (Sym.pp name) (BT.pp bt) ^^ dot) :: aux t
+         group (op ^^^ typ (Sym.pp name) (BT.pp bt) ^^ dot) :: aux t
       | Logical ((name,ls),t) ->
          let op = if !unicode then utf8string "\u{2200}" else !^"AL" in
-         (op ^^^ typ (Sym.pp name) (LS.pp ls) ^^ dot) :: aux t
+         group (op ^^^ typ (Sym.pp name) (LS.pp ls) ^^ dot) :: aux t
       | Resource (re,t) ->
          let op = minus ^^ star in
-         (RE.pp re ^^^ op) :: aux t
+         group (RE.pp re ^^^ op) :: aux t
       | Constraint (lc,t) ->
          let op = equals ^^ rangle in
-         (LC.pp lc ^^^ op) :: aux t
+         group (LC.pp lc ^^^ op) :: aux t
       | I i -> 
          [I.pp i]
     in

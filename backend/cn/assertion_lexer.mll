@@ -21,6 +21,7 @@ rule main = parse
 
   | "+."   { T.PLUSDOT }
   | "-."   { T.MINUSDOT }
+  | "*."   { T.STARDOT }
 
   | "=="  { T.EQ }
   | "!="  { T.NE }

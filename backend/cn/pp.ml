@@ -77,7 +77,6 @@ let box_cross_vb_hb = utf8string "\u{254B}"
 let (table2, table3, table4, table5, table6) = 
   let table (n_rows : int) (headers: string list) (lines : ((alignment * doc option) list) list) =
     let placeholder = minus ^^ minus in
-
     let maxes = 
       List.fold_left (fun maxes line ->
           let (_, maxes) = 
@@ -174,7 +173,7 @@ let c_comment pp =
   !^"/*" ^^ pp ^^ !^"*/"
 
 let c_app f args = 
-  f ^^ parens (separate (comma ^^ space) args)
+  group (f ^^ group (parens (flow (comma ^^ break 1) args)))
 
 
 

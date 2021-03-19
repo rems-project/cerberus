@@ -16,7 +16,7 @@ let subst_it substitution (LC c) =
 let subst_vars = Subst.make_substs subst_var
 let subst_its = Subst.make_substs subst_it
 
-let vars_in (LC c) = IndexTerms.vars_in c
+let free_vars (LC c) = IndexTerms.free_vars c
 
 let equal (LC c) (LC c') = IndexTerms.equal c c'
 

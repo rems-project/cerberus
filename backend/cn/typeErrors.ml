@@ -89,7 +89,7 @@ type type_error =
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
   | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp}
   | Unconstrained_logical_variable of Sym.t
-  | Double_output_position of Sym.t
+  | Logical_variable_not_good_for_unification of Sym.t
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
@@ -217,8 +217,8 @@ let pp_type_error te =
      (msg, [consider_state state])
   | Unconstrained_logical_variable name ->
      (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
-  | Double_output_position name ->
-     (!^"Logical variable appears" ^^^ Sym.pp name ^^^ !^"appears twice in output position", [])
+  | Logical_variable_not_good_for_unification name ->
+     (!^"Logical variable not soluble by unification" ^^^ Sym.pp name, [])
   | Kind_mismatch {has; expect} ->
      (!^"Expected" ^^^ Kind.pp expect ^^^ 
         !^"but found" ^^^ Kind.pp has, [])

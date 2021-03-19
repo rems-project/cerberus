@@ -27,6 +27,7 @@ type predicate = {
     name : predicate_name; 
     iargs: IT.t list;
     oargs: IT.t list;
+    unused: bool;
   }
 
 (* for error reporting only *)
@@ -39,12 +40,26 @@ type point_content =
   | Block of block_type
   | Value of IT.t
 
+type point = {
+    pointer: IT.t; 
+    size: Z.t; 
+    content: point_content; 
+    permission: IT.t
+  }
+
+type qpoint = {
+    qpointer: Sym.t; 
+    size: Z.t; 
+    content: point_content; 
+    permission: IT.t
+  }
+
 
 type t = 
-  | Point of {pointer: IT.t; size: Z.t; content: point_content}
-  | Region of {pointer: IT.t; size: IT.t}
-  | Array of {pointer: IT.t; element_size: Z.t; length: IT.t; content: IT.t }
+  | Point of point
+  | Star of qpoint
   | Predicate of predicate
+
 
 
 
@@ -54,12 +69,12 @@ let pp_predicate_name = function
   | Id id -> !^id
   | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
 
-let pp_predicate {name; iargs; oargs} =
-  let args = List.map IT.pp (iargs @ oargs) in
+let pp_predicate {name; iargs; oargs; unused} =
+  let args = List.map IT.pp (iargs @ oargs) @ [IT.pp (IT.bool_ unused)] in
   c_app (pp_predicate_name name) args
 
 let pp = function
-  | Point {pointer; size; content} ->
+  | Point {pointer; size; content; permission} ->
      begin match content with
      | Block block_type ->
         let rname = match block_type with
@@ -67,14 +82,28 @@ let pp = function
           | Uninit -> !^"Uninit"
           | Padding -> !^"Padding"
         in
-        c_app rname [IT.pp pointer; Z.pp size]
+        group (c_app rname [IT.pp pointer; Z.pp size; IT.pp permission])
      | Value v ->
-        c_app !^"Points" [IT.pp pointer; IT.pp v; Z.pp size]
+        group (c_app !^"Points" [IT.pp pointer; IT.pp v; Z.pp size; IT.pp permission])
      end
-  | Region {pointer; size} ->
-     c_app !^"Region" [IT.pp pointer; IT.pp size]
-  | Array a ->
-     c_app !^"Array" [IT.pp a.pointer; IT.pp a.content; IT.pp a.length]
+  | Star {qpointer; size; content; permission} ->
+     begin match content with
+     | Block block_type ->
+        let rname = match block_type with
+          | Nothing -> !^"Block"
+          | Uninit -> !^"Uninit"
+          | Padding -> !^"Padding"
+        in
+        group 
+          (flow (break 1) 
+             [!^"forall" ^^^ Sym.pp qpointer ^^ dot;
+              c_app rname [Sym.pp qpointer; Z.pp size; IT.pp permission]])
+     | Value v ->
+        group 
+          (flow (break 1)
+             [!^"forall" ^^^ Sym.pp qpointer ^^ dot;
+              c_app !^"Points" [Sym.pp qpointer; IT.pp v; Z.pp size; IT.pp permission]])
+     end
   | Predicate p ->
      pp_predicate p
           
@@ -85,67 +114,71 @@ let pp = function
 let json re : Yojson.Safe.t = 
   `String (Pp.plain (pp re))
 
+let subst_var_content subst content =
+  match content with
+  | Block block_type -> Block block_type
+  | Value v -> Value (IT.subst_var subst v)
+
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
-  | Point {pointer; size; content} ->
+  | Point {pointer; size; content; permission} ->
      let pointer = IT.subst_var subst pointer in
-     let content = match content with
-       | Block block_type -> Block block_type
-       | Value v -> Value (IT.subst_var subst v)
-     in
-     Point {pointer; size; content}
-  | Region {pointer; size} ->
-     let pointer = IT.subst_var subst pointer in
-     let size = IT.subst_var subst size in
-     Region {pointer; size}
-  | Array {pointer; element_size; length; content} ->
-     let pointer = IT.subst_var subst pointer in
-     let length = IT.subst_var subst length in
-     let content = IT.subst_var subst content in
-     Array {pointer; element_size; length; content}
-  | Predicate {name; iargs; oargs} -> 
+     let content = subst_var_content subst content in
+     let permission = IT.subst_var subst permission in
+     Point {pointer; size; content; permission}
+  | Star {qpointer; size; content; permission} ->
+     if Sym.equal subst.before qpointer then 
+       Star {qpointer; size; content; permission}
+     else
+       let content = subst_var_content subst content in
+       let permission = IT.subst_var subst permission in
+       Star {qpointer; size; content; permission}
+  | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (IT.subst_var subst) iargs in
      let oargs = List.map (IT.subst_var subst) oargs in
-     Predicate {name; iargs; oargs}
+     (* let unused = IT.subst_var subst unused in *)
+     Predicate {name; iargs; oargs; unused}
 
+
+let subst_it_content subst content =
+  match content with
+  | Block block_type -> Block block_type
+  | Value v -> Value (IT.subst_it subst v)
 
 let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
   match resource with
-  | Point {pointer; size; content} ->
+  | Point {pointer; size; content; permission} ->
      let pointer = IT.subst_it subst pointer in
-     let content = match content with
-       | Block block_type -> Block block_type
-       | Value v -> Value (IT.subst_it subst v)
-     in
-     Point {pointer; size; content}
-  | Region {pointer; size} ->
-     let pointer = IT.subst_it subst pointer in
-     let size = IT.subst_it subst size in
-     Region {pointer; size}
-  | Array {pointer; element_size; length; content} ->
-     let pointer = IT.subst_it subst pointer in
-     let length = IT.subst_it subst length in
-     let content = IT.subst_it subst content in
-     Array {pointer; element_size; length; content}
-  | Predicate {name; iargs; oargs} -> 
+     let content = subst_it_content subst content in
+     let permission = IT.subst_it subst permission in
+     Point {pointer; size; content; permission}
+  | Star {qpointer; size; content; permission} ->
+     if Sym.equal subst.before qpointer then 
+       Star {qpointer; size; content; permission}
+     else
+       let content = subst_it_content subst content in
+       let permission = IT.subst_it subst permission in
+       Star {qpointer; size; content; permission}
+  | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (IT.subst_it subst) iargs in
      let oargs = List.map (IT.subst_it subst) oargs in
-     Predicate {name; iargs; oargs}
+     (* let unused = IT.subst_it subst unused in *)
+     Predicate {name; iargs; oargs; unused}
+
 
 
 let subst_vars = Subst.make_substs subst_var
-
 
 let block_type_equal b1 b2 = 
   match b1, b2 with
   | Nothing, Nothing -> true
   | Uninit, Uninit -> true
   | Padding, Padding -> true
+  | Nothing, _ -> false
+  | Uninit, _ -> false
+  | Padding, _ -> false
 
-  | Nothing, _
-  | Uninit, _ 
-  | Padding, _ -> 
-     false
-
+(* at the moment literal equality, no alpha renaming of Star
+   quantifier *)
 let equal t1 t2 = 
   match t1, t2 with
   | Point b1, Point b2 ->
@@ -155,60 +188,35 @@ let equal t1 t2 =
      | Block bt1, Block bt2 -> block_type_equal bt1 bt2 
      | Value v1, Value v2 -> IT.equal v1 v2
      | _, _ -> false
-     end
-  | Region r1, Region r2 ->
-     IT.equal r1.pointer r2.pointer &&
-     IT.equal r1.size r2.size
+     end &&
+     IT.equal b1.permission b2.permission
+  | Star b1, Star b2 ->
+     Sym.equal b1.qpointer b2.qpointer &&
+     Z.equal b1.size b2.size &&
+     begin match b1.content, b2. content with
+     | Block bt1, Block bt2 -> block_type_equal bt1 bt2 
+     | Value v1, Value v2 -> IT.equal v1 v2
+     | _, _ -> false
+     end &&
+     IT.equal b1.permission b2.permission
   | Predicate p1, Predicate p2 ->
      predicate_name_equal p1.name p2.name && 
      List.equal IT.equal p1.iargs p2.iargs && 
-     List.equal IT.equal p1.oargs p2.oargs
-  | Array a1, Array a2 ->
-     IT.equal a1.pointer a2.pointer &&
-     Z.equal a1.element_size a2.element_size &&
-     IT.equal a1.length a2.length &&
-     IT.equal a1.content a2.content
+     List.equal IT.equal p1.oargs p2.oargs &&
+     (* IT.equal *) p1.unused = p2.unused
   | Point _, _ -> false
-  | Region _, _ -> false
-  | Array _, _ -> false
+  | Star _, _ -> false
   | Predicate _, _ -> false
 
 
 
-let footprint = function
-  | Point b -> Some (b.pointer, IT.num_ b.size)
-  | Region r -> Some (r.pointer, r.size)
-  | Array a -> Some (a.pointer, IT.mul_ (a.length, IT.num_ a.element_size))
-  | Predicate p -> None
-
-let pointer r = Option.map fst (footprint r)
-let size r = Option.map snd (footprint r)
-
-let vars_in = function
-  | Point b -> 
-     SymSet.union 
-       (IT.vars_in b.pointer)
-       (match b.content with
-        | Block _ -> SymSet.empty
-        | Value v -> IT.vars_in v)
-  | Region r -> 
-     IT.vars_in_list [r.pointer; r.size]
-  | Array a -> 
-     IT.vars_in_list [a.content; a.length; a.pointer]
-  | Predicate p -> 
-     IT.vars_in_list (p.iargs @ p.oargs)
-
-let vars_in_list l = 
-  List.fold_left (fun acc sym -> 
-      SymSet.union acc (vars_in sym)
-    ) SymSet.empty l
-
-
-(* let set_pointer re pointer = 
- *   match re with
- *   | Block b -> Block { b with pointer }
- *   | Points p -> Points { p with pointer }
- *   | Predicate p -> Predicate { p with key } *)
+(* Block unifies with Blocks of other block type *)
+let unify_content c c' res = 
+  let open Option in
+  match c, c' with
+  | Block _, Block _ -> return res
+  | Value v, Value v' -> IT.unify v v' res
+  | _, _ -> fail
 
 
 (* requires equality on inputs, unifies outputs *)
@@ -217,26 +225,26 @@ let unify r1 r2 res =
   match r1, r2 with
   | Point b, Point b' 
        when IT.equal b.pointer b'.pointer &&
-              Z.equal b.size b'.size ->
+            Z.equal b.size b'.size &&
+            IT.equal b.permission b'.permission ->
      (* Block unifies with Blocks of other block type *)
-     begin match b.content, b'.content with
-     | Block _, Block _ -> return res
-     | Value v, Value v' -> IT.unify v v' res
-     | _, _ -> fail
-     end
-  | Region r, Region r' 
-       when IT.equal r.pointer r'.pointer &&
-              IT.equal r.size r'.size ->
-     return res
-  | Array a, Array a' 
-       when IT.equal a.pointer a'.pointer && 
-              Z.equal a.element_size a'.element_size &&
-              IT.equal a.length a'.length ->
-     IT.unify a.content a'.content res
+     unify_content b.content b'.content res
+  | Star b, Star b' when
+         Z.equal b.size b'.size ->
+     let b = 
+       let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
+       let content = subst_var_content subst b.content in
+       let permission = IT.subst_var subst b.permission in
+       {b with qpointer = b'.qpointer; content; permission}
+     in
+     if IT.equal b.permission b'.permission 
+     then unify_content b.content b'.content res
+     else fail
   | Predicate p, Predicate p' 
        when predicate_name_equal p.name p'.name &&
-              List.equal IT.equal p.iargs p'.iargs &&
-              List.length p.oargs = List.length p'.oargs ->
+            List.equal IT.equal p.iargs p'.iargs &&
+            List.length p.oargs = List.length p'.oargs &&
+            (* IT.equal *) p.unused = p'.unused ->
      List.fold_left (fun ores (sym1,sym2) ->
          let@ res = ores in
          IT.unify sym1 sym2 res
@@ -245,28 +253,134 @@ let unify r1 r2 res =
      fail
 
 
-(* let subst_non_pointer subst = function
- *   | Block p -> Block p
- *   | Points p -> Points {p with pointee = Sym.subst subst p.pointee}
- *   | Predicate p -> Predicate {p with args = List.map (Sym.subst subst) p.args} *)
+let free_vars = function
+  | Point b -> 
+     let itlist = match b.content with
+       | Block _ -> [b.pointer; b.permission]
+       | Value v -> [b.pointer; b.permission; v]
+     in
+     IT.free_vars_list itlist
+  | Star b -> 
+     let itlist = match b.content with
+       | Block _ -> [b.permission]
+       | Value v -> [b.permission; v]
+     in
+     SymSet.remove b.qpointer (IT.free_vars_list itlist)
+  | Predicate p -> 
+     IT.free_vars_list ((* p.unused :: *) (p.iargs @ p.oargs))
+
+let free_vars_list l = 
+  List.fold_left (fun acc sym -> 
+      SymSet.union acc (free_vars sym)
+    ) SymSet.empty l
+
+
+let quantified = function
+  | Point p -> []
+  | Star p -> [(p.qpointer, BaseTypes.Loc)]
+  | Predicate p -> []
+
+
+(* the quantifier in Star is neither input nor output *)
+let inputs = function
+  | Point p -> [p.pointer; p.permission]
+  | Star p -> [p.permission]
+  | Predicate p -> p.iargs
+
+let outputs = function
+  | Point {content = Block _; _} -> []
+  | Point {content = Value v; _} -> [v]
+  | Star {content = Block _; _} -> []
+  | Star {content = Value v; _} -> [v]
+  | Predicate p -> p.oargs
+
+
+let permission = function
+  | Point p -> p.permission
+  | Star s -> s.permission
+  | Predicate p when p.unused -> IT.q_ (1, 1)
+  | Predicate p -> IT.q_ (0, 1)
+
+
+
+(* assumption: resource is owned *)
+let derived_constraint resource = 
+  let open IT in
+  match resource with
+  | Point p -> 
+     impl_ (gt_ (p.permission, q_ (0, 1)), not_ (null_ p.pointer))
+  | Star p ->
+     (* todo *)
+     bool_ true
+  | Predicate _ ->
+     bool_ true
+
+
+(* assumption: two resources owned at the same time *)
+(* todo, depending on how much we need *)
+let derived_constraints resource resource' =
+  (* let open IT in *)
+  match resource, resource' with
+  | Point p, Point p' -> 
+     (* [] *)
+     let open IT in
+     [impl_ (
+          gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+          disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
+        )]
+  | Predicate _, _
+  | _, Predicate _ -> 
+     []
+  | _ ->
+     (* todo *)
+     []
 
 
 
 
 
-let input = function
-  | Point p -> IT.vars_in_list [p.pointer]
-  | Region r -> IT.vars_in_list [r.pointer; r.size]
-  | Array a -> SymSet.union (IT.vars_in a.pointer) (IT.vars_in a.length)
-  | Predicate p -> IT.vars_in_list p.iargs
-
-let output = function
-  | Point {content = Block _; _} -> SymSet.empty
-  | Point {content = Value v; _} -> IT.vars_in v
-  | Region r -> SymSet.empty
-  | Array a -> IT.vars_in a.content
-  | Predicate p -> IT.vars_in_list p.oargs
 
 
+let region pointer size permission =
+  let open IT in
+  let q = Sym.fresh () in
+  let qt = sym_ (BT.Loc, q) in
+  let condition = 
+    and_ [
+        lePointer_ (pointer, qt);
+        ltPointer_ (qt, addPointer_ (pointer, size));
+      ]
+  in
+  let point = {
+      qpointer = q;
+      size = Z.of_int 1;
+      content = Block Nothing;
+      permission = ite_ BT.Real (condition, permission, q_ (0,1))
+    }
+  in
+  Star point
 
 
+(* check this *)
+let array pointer length element_size content permission =
+  let open IT in
+  let q = Sym.fresh () in
+  let qt = sym_ (BT.Loc, q) in
+  let qt_int = pointerToIntegerCast_ qt in
+  let pointer_int = pointerToIntegerCast_ pointer in
+  let it = div_ (sub_ (qt_int, pointer_int), z_ element_size) in
+  let condition = 
+    and_ [
+        le_ (int_ 0, it);
+        lt_ (it, length);
+        eq_ (rem_f_ (sub_ (qt_int, pointer_int), z_ element_size), int_ 0);
+      ]
+  in
+  let point = {
+      qpointer = q;
+      size = element_size;
+      content = Value (content it);
+      permission = ite_ BT.Real (condition, permission, q_ (0,1))
+    }
+  in
+  Star point

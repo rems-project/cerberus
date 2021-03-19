@@ -41,7 +41,8 @@ module Make (G : sig val global : Global.t end) = struct
     let add_c c veclass = 
       { veclass with c_elements = SymSet.add c veclass.c_elements }
 
-    let should_be_in_veclass local veclass (it, bt) = 
+    let should_be_in_veclass local veclass it = 
+      let bt = IT.bt it in
       if not (LS.equal veclass.sort (Base bt)) then false 
       else S.holds local (IT.eq_ (IT.sym_ (bt,veclass.repr), it))
 
@@ -53,7 +54,7 @@ module Make (G : sig val global : Global.t end) = struct
       let rec aux = function
         | veclass :: veclasses ->
            if is_in_veclass veclass l ||
-             should_be_in_veclass local veclass (IT.sym_ (bt, l), bt) 
+             should_be_in_veclass local veclass (IT.sym_ (bt, l)) 
            then (add_l l veclass :: veclasses)
            else (veclass :: aux veclasses)
         | [] -> 
@@ -79,6 +80,7 @@ module Make (G : sig val global : Global.t end) = struct
       let unit_counter = ref 0 in
       let bool_counter = ref 0 in
       let integer_counter = ref 0 in
+      let real_counter = ref 0 in
       let loc_counter = ref 0 in
       let list_counter = ref 0 in
       let tuple_counter = ref 0 in
@@ -91,7 +93,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Unit -> ("u", faa unit_counter)
         | Bool -> ("b", faa bool_counter)
         | Integer -> ("i", faa integer_counter)
-        | Real -> ("r", faa integer_counter)
+        | Real -> ("r", faa real_counter)
         | Loc -> ("l", faa loc_counter)
         | List _ -> ("l", faa list_counter)
         | Tuple _ ->  ("t", faa tuple_counter)
@@ -172,24 +174,20 @@ module Make (G : sig val global : Global.t end) = struct
     }
 
 
-  let is_sym (IT.IT (it, _)) = 
-    match it with
-    | Lit (Sym sym) -> sym
-    | _ -> Debug_ocaml.error ("not a symbol")
 
     
   let veclasses_partial_order local veclasses =
     List.fold_right (fun resource (graph, rels) ->
         match resource with
-        | RE.Point {pointer; size; content = Value pointee} ->
+        | RE.Point {pointer; size; content = Value pointee; permission} ->
            let found1 = 
              List.find_opt (fun veclass ->
-                 is_in_veclass veclass (is_sym pointer)
+                 should_be_in_veclass local veclass pointer
                ) veclasses
            in
            let found2 = 
              List.find_opt (fun veclass ->
-                 is_in_veclass veclass (is_sym pointee)
+                 should_be_in_veclass local veclass pointee
                ) veclasses
            in
            begin match found1, found2 with
@@ -247,11 +245,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local relevant =
-    let local = L.normalise_resources local in
     let relevant =
       let names_syms = SymSet.of_list (List.map fst names) in
       let named_syms = SymSet.of_list (List.filter Sym.named (L.all_names local)) in
-      let from_resources = RE.vars_in_list (L.all_resources local) in
+      let from_resources = RE.free_vars_list (L.all_resources local) in
       SymSet.union (SymSet.union names_syms named_syms) from_resources
     in
     let veclasses = 
@@ -318,13 +315,14 @@ module Make (G : sig val global : Global.t end) = struct
 
   let o_evaluate o_model expr = 
     let open Option in
-    let (IT.IT (_, bt)) = expr in
     let@ model = o_model in
     match Z3.Model.evaluate model (SolverConstraints.of_index_term G.global expr) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 
-       match bt with
+       match IT.bt expr with
        | BT.Integer -> 
+          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+       | BT.Real -> 
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Loc ->
           Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
@@ -340,64 +338,57 @@ module Make (G : sig val global : Global.t end) = struct
 
   let pp_state_aux local {substitutions; veclasses; relevant} o_model =
     (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
+
     let (resource_lines, reported_pointees) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           let (entry, reported) = 
           match resource with
-          | Point {pointer; size; content = Block block_type} ->
+          | Point {pointer; size; content = Block block_type; permission} ->
              let state = match block_type with
                | Nothing -> "block"
                | Uninit -> "uninit"
                | Padding -> "padding"
              in
+             let state = match o_evaluate o_model permission with
+               | Some permission -> !^state ^^^ parens (!^"permission:" ^^^ permission)
+               | None -> !^state
+             in
              let entry =
                (Some (IT.pp (IT.subst_vars substitutions pointer)), 
                 o_evaluate o_model pointer,
                 Some (Z.pp size), 
-                Some !^state,
+                Some state,
                 None,
                 None
                )
              in
              (entry, symbol_it pointer)
-          | Point {pointer; size; content = Value pointee} -> 
+          | Point {pointer; size; content = Value pointee; permission} ->
+             let state = match o_evaluate o_model permission with
+               | Some permission -> !^"owned" ^^^ parens (!^"permission:" ^^^ permission)
+               | None -> !^"owned"
+             in
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions pointer)), 
                 o_evaluate o_model pointer,
                 Some (Z.pp size),
-                Some !^"owned",
+                Some state,
                 Some (IT.pp (IT.subst_vars substitutions pointee)),
                 o_evaluate o_model pointee
                )
              in
              (entry, SymSet.union (symbol_it pointer) (symbol_it pointee))
-          | Region r ->
-             let entry = 
-               (Some (IT.pp (IT.subst_vars substitutions r.pointer)), 
-                o_evaluate o_model r.pointer,
-                Some (IT.pp (IT.subst_vars substitutions r.size)), 
-                Some !^"region",
+          | Star p ->
+             let entry =
+               (None,
+                None, 
+                None, 
+                Some (RE.pp resource),
                 None,
                 None
                )
              in
-             (entry, symbol_it r.pointer)
-          | Array a -> 
-             (* take substs into account *)
-             let length = match o_evaluate o_model a.length with
-               | Some length -> length
-               | None -> IT.pp (IT.subst_vars substitutions a.length)
-             in
-             let entry = 
-               (Some (IT.pp (IT.subst_vars substitutions a.pointer)), 
-                o_evaluate o_model a.pointer,
-                Some (length ^^^ star ^^^ Z.pp a.element_size),
-                Some !^"array",
-                Some (IT.pp (IT.subst_vars substitutions a.content)),
-                o_evaluate o_model a.content
-               )
-             in
-             (entry, SymSet.union (symbol_it a.pointer) (symbol_it a.content))
+             (entry, SymSet.singleton p.qpointer)             
           | Predicate p ->
              let entry =
                (None,
@@ -487,14 +478,14 @@ module Make (G : sig val global : Global.t end) = struct
     pp_state_with_model local explanation (counter_model local)
 
   let missing_ownership names local it = 
-    let (explanation, local) = explanation names local (IT.vars_in it) in
+    let (explanation, local) = explanation names local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation (counter_model local))
 
   let index_terms names local (it,it') = 
     let (explanation, local) = 
       explanation names local 
-        (SymSet.union (IT.vars_in it) (IT.vars_in it'))
+        (SymSet.union (IT.free_vars it) (IT.free_vars it'))
     in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
@@ -502,18 +493,17 @@ module Make (G : sig val global : Global.t end) = struct
 
   let unsatisfied_constraint names local (LC.LC lc) = 
     let model = let _ = S.holds local lc in S.get_model () in
-    let (explanation, local) = explanation names local (LC.vars_in (LC lc)) in
+    let (explanation, local) = explanation names local (LC.free_vars (LC lc)) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions (LC lc)) in
     (lc_pp, pp_state_with_model local explanation model)
 
-  let resource names local re do_model = 
-    let omodel = if do_model then (counter_model local) else None in
-    let (explanation, local) = explanation names local (RE.vars_in re) in
+  let resource names local re omodel = 
+    let (explanation, local) = explanation names local (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation omodel)
 
   let resources names local (re1, re2) = 
-    let relevant = (SymSet.union (RE.vars_in re1) (RE.vars_in re2)) in
+    let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
     let (explanation, local) = explanation names local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in

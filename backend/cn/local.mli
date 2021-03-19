@@ -13,7 +13,6 @@ module Make : functor (G : sig val global : Global.t end) -> sig
   val empty : t
   val marked : t
   val concat : t -> t -> t
-  val use_resource : Sym.t -> Loc.t list -> t -> t
   val since : t -> VariableBindings.binding list * t
   val all : t -> VariableBindings.binding list
   val kind : Sym.t -> t -> Kind.t option
@@ -36,8 +35,9 @@ module Make : functor (G : sig val global : Global.t end) -> sig
   val all_logical : t -> (Sym.t * LS.t) list
   val all_resources : t -> RE.t list
   val all_named_resources : t -> (Sym.t * RE.t) list
+  val map_and_fold_resources : 
+    (RE.t -> 'acc -> RE.t * 'acc) -> t -> 'acc -> t * 'acc
   val (++) : t -> t -> t
   val json :  t -> Yojson.Safe.t
-  val normalise_resources : t -> t
 
 end
