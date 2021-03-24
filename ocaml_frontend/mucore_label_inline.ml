@@ -10,64 +10,74 @@ module Mu = Core_anormalise.Mu
 open Mu
 
 
-let rec ib_expr 
-          (label : symbol * symbol list * unit mu_expr)
-          (e : unit mu_expr) 
-           : unit mu_expr=
-  let (M_Expr(loc, oannots, e_)) = e in
-  let wrap e_= M_Expr(loc, oannots, e_) in
-  let aux = (ib_expr label) in
+
+
+let rec ib_texpr label e = 
+
+
+  let aux (e : unit mu_expr) =
+    let (M_Expr(loc, oannots, e_)) = e in
+    let wrap e_= M_Expr(loc, oannots, e_) in
+    match e_ with
+    | M_Epure _ -> `Expr (wrap e_)
+    | M_Ememop _ -> `Expr (wrap e_)
+    | M_Eaction _ -> `Expr (wrap e_)
+    | M_Eskip -> `Expr (wrap e_)
+    | M_Eccall( _, _, _) -> `Expr (wrap e_)
+    | M_Eproc( _, _) -> `Expr (wrap e_)
+    | M_Erun(l, args) -> 
+       let (label_sym, label_arg_syms, label_body) = label in
+       if not (Symbol.symbolEquality l label_sym) then 
+         `Expr e
+       else if not ((List.length label_arg_syms) = (List.length args)) then
+         failwith "M_Erun supplied wrong number of arguments"
+       else
+         let () = (Debug_ocaml.print_debug 1 [] (fun () -> ("REPLACING LABEL " ^ (let Symbol.Symbol( d, n, str_opt) = l in
+                                                                                  "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))))) in
+         let arguments = (Lem_list.list_combine label_arg_syms args) in
+         let (M_TExpr(_, annots2, e_)) = 
+           (List.fold_right (fun (spec_arg, (asym : 'TY asym)) body ->
+                let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
+                M_TExpr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
+              ) arguments label_body)
+         in
+         (* this combines annotations *)
+         `TExpr (M_TExpr (loc, annots2 @ oannots, e_))
+  in
+
+  let (M_TExpr(loc, oannots, e_)) = e in
+  let wrap e_= M_TExpr(loc, oannots, e_) in
+  let taux = ib_texpr label in
   match e_ with
-  | M_Epure _ -> wrap e_
-  | M_Ememop _ -> wrap e_
-  | M_Eaction _ -> wrap e_
   | M_Ecase( asym2, pats_es) ->
      let pats_es = 
        (Lem_list.map (fun (pat,e) -> 
-           (pat, aux e)
-         ) pats_es)
+            (pat, taux e)
+          ) pats_es)
      in
      wrap (M_Ecase( asym2, pats_es))
- | M_Elet( sym_or_pat, pe, e) ->
-    wrap (M_Elet( sym_or_pat, pe, (aux e)))
- | M_Eif( asym2, e1, e2) ->
-    let e1 = (aux e1) in
-    let e2 = (aux e2) in
-    wrap (M_Eif( asym2, e1, e2))
- | M_Eskip -> wrap e_
- | M_Eccall( _, _, _) -> wrap e_
- | M_Eproc( _, _) -> wrap e_
- | M_Ewseq( pat, e1, e2) -> 
-    let e1 = (aux e1) in
-    let e2 = (aux e2) in
-    wrap (M_Ewseq( pat, e1, e2))
- | M_Esseq( pat, e1, e2) ->
-    let e1 = (aux e1) in
-    let e2 = (aux e2) in
-    wrap (M_Esseq( pat, e1, e2))
- | M_Ebound( n, e) ->
-    let e = (aux e) in
-    wrap (M_Ebound( n, e))
- | M_End es ->
-    let es = (map aux es) in
-    wrap (M_End es)
- | M_Erun(l, args) -> 
-    let (label_sym, label_arg_syms, label_body) = label in
-    if not (Symbol.symbolEquality l label_sym) then e
-    else if not ((List.length label_arg_syms) = (List.length args)) then
-      failwith "M_Erun supplied wrong number of arguments"
-    else
-      let () = (Debug_ocaml.print_debug 1 [] (fun () -> ("REPLACING LABEL " ^ (let Symbol.Symbol( d, n, str_opt) = l in
-    "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))))) in
-      let arguments = (Lem_list.list_combine label_arg_syms args) in
-      let (M_Expr(_, annots2, e_)) = 
-        (List.fold_right (fun (spec_arg, (asym : 'TY asym)) body ->
-            let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
-            M_Expr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
-          ) arguments label_body)
-      in
-      (* this combines annotations *)
-      M_Expr(loc, annots2 @ oannots, e_)
+  | M_Elet( sym_or_pat, pe, e) ->
+     wrap (M_Elet( sym_or_pat, pe, (taux e)))
+  | M_Eif( asym2, e1, e2) ->
+     wrap (M_Eif( asym2, taux e1, taux e2))
+  | M_Ewseq( pat, e1, e2) -> 
+     begin match aux e1 with
+     | `TExpr te -> te
+     | `Expr e1 -> wrap (M_Ewseq( pat, e1, taux e2))
+     end
+  | M_Esseq( pat, e1, e2) ->
+     begin match aux e1 with
+     | `TExpr te -> te
+     | `Expr e1 -> wrap (M_Esseq( pat, e1, taux e2))
+     end
+  | M_Ebound( n, e) ->
+     wrap (M_Ebound( n, taux e))
+  | M_End es ->
+     wrap (M_End (map taux es))
+  | M_Edone asym ->
+     wrap (M_Edone asym)
+
+
 
     
 
@@ -78,17 +88,17 @@ let rec inline_label_labels_and_body to_inline to_keep body =
   | l :: to_inline' ->
      let to_inline' = 
        (map (fun (lname,arg_syms,lbody) -> 
-           (lname,arg_syms,ib_expr l lbody)
+           (lname,arg_syms,ib_texpr l lbody)
          ) to_inline')
      in
      let to_keep' = 
        (Pmap.map (fun def -> (match def with
          | M_Return _ -> def
          | M_Label(loc, lt, args, lbody, annot, mapping) -> 
-            M_Label(loc, lt, args, (ib_expr l lbody), annot, mapping)
+            M_Label(loc, lt, args, (ib_texpr l lbody), annot, mapping)
          )) to_keep)
      in
-     let body' = (ib_expr l body) in
+     let body' = (ib_texpr l body) in
      inline_label_labels_and_body to_inline' to_keep' body'
   ))
 

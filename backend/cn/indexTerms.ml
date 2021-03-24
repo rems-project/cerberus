@@ -374,14 +374,19 @@ let rec equal (IT (it, _)) (IT (it', _)) =
 
 
 
-let pp (type bt) (it : bt term) : PPrint.document = 
+let pp ?(print_symbol_type=(None : (Sym.t -> 'bt -> doc) option)) 
+      (it : 'bt term) : PPrint.document = 
 
-  let rec aux atomic (IT (it, _)) = 
+  let rec aux atomic (IT (it, bt)) = 
 
     let mparens pped = if atomic then parens pped else pped in
     
     let lit = function
-      | Sym sym -> Sym.pp sym
+      | Sym sym ->
+         begin match print_symbol_type with
+         | Some f -> f sym bt
+         | None -> Sym.pp sym
+         end
       | Z i -> Z.pp i
       | Q (i,i') -> c_app !^"frac" [!^(string_of_int i); !^(string_of_int i')]
       | Pointer i -> Z.pp i

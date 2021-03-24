@@ -109,15 +109,14 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   let string_of_bop = Pp_core_ast.string_of_bop
 
-  let dtree_of_pexpr pexpr =
-    let rec self (M_Pexpr (loc, annot, _, pexpr_)) =
+  let dtree_of_pexpr (M_Pexpr (loc, annot, _, pexpr_)) =
 
-      let pp_ctor str =
-        pp_pure_ctor str ^^^ 
-          Location_ocaml.pp_location ~clever:false loc
-      in
+    let pp_ctor str =
+      pp_pure_ctor str ^^^ 
+        Location_ocaml.pp_location ~clever:false loc
+    in
 
-      match pexpr_ with
+    match pexpr_ with
         | M_PEsym sym ->
             Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
         | M_PEimpl iCst ->
@@ -133,8 +132,6 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                   , [dtree_of_asym pe] )
         | M_PEctor (ctor, pes) ->
             Dleaf (pp_ctor "PEctor" ^^^ !^ (ansi_format [Red] "TODO"))
-        | M_PEcase (pe, xs) ->
-            Dleaf (pp_ctor "PEcase" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEarray_shift (pe1, ty, pe2) ->
             Dleaf (pp_ctor "PEarray_shift" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEmember_shift (pe, sym, ident) ->
@@ -152,9 +149,18 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
             assert false
         | M_PEcall (nm, pes) ->
             assert false
+
+
+
+  let dtree_of_tpexpr pexpr =
+    let rec self (M_TPexpr (loc, annot, _, pexpr_)) =
+
+      match pexpr_ with
+        | M_PEcase (pe, xs) ->
+            Dleaf (pp_ctor "PEcase" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PElet (pat, pe1, pe2) ->
             Dnode ( pp_ctor "PElet" (* ^^^ Pp_core.Basic.pp_pattern pat *)
-                  , [ self pe1; self pe2] )
+                  , [ dtree_of_pexpr pe1; self pe2] )
         | M_PEif (pe1, pe2, pe3) ->
             Dnode ( pp_ctor "PEif"
                   , [ dtree_of_asym pe1; self pe2; self pe3 ] )
@@ -245,8 +251,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
           , dtrees )
 
 
-  let dtree_of_expr expr =
-    let rec self (M_Expr (loc, annot, expr_) as expr) =
+  let dtree_of_expr (M_Expr (loc, annot, expr_) as expr) =
 
       let pp_ctor str =
         pp_eff_ctor str ^^^ 
@@ -254,14 +259,34 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       in
 
       match expr_ with
-        | M_Epure pe ->
-            Dnode ( pp_ctor "Epure"
-                  , (*add_std_annot*) [dtree_of_pexpr pe] )
   (*
         | Ememop of Mem_common.memop * ('bty, 'sym) generic_pexpr list
   *)
+        | M_Epure pe ->
+            Dnode ( pp_ctor "Epure"
+                  , (*add_std_annot*) [dtree_of_pexpr pe] )
+         | M_Eskip ->
+             Dleaf (pp_ctor "Eskip")
         | M_Eaction (M_Paction (p, M_Action (act_loc, act))) ->
             dtree_of_action act
+        | M_Erun (l, asyms) ->
+           Dnode ( pp_pure_ctor "Erun"
+                 , List.map dtree_of_asym asyms)
+
+  (*
+      | Eccall of 'a * ('bty, 'sym) generic_pexpr *
+          ('bty, 'sym) generic_pexpr * ('bty, 'sym) generic_pexpr list
+      | Eproc of 'a * 'sym generic_name * ('bty, 'sym) generic_pexpr list
+  *)
+        | _ ->
+            Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_expr expr))
+
+
+
+  let dtree_of_texpr expr =
+    let rec self (M_TExpr (loc, annot, expr_) as expr) =
+
+      match expr_ with
   (*
         | Ecase of ('bty, 'sym) generic_pexpr * ('sym generic_pattern * ('a, 'bty, 'sym) generic_expr) list
         | Eif of ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr * ('a, 'bty, 'sym) generic_expr
@@ -272,26 +297,15 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_pexpr e1
                                     ; self e2 ] )
-
-
-
-         | M_Eskip ->
-             Dleaf (pp_ctor "Eskip")
-
-  (*
-      | Eccall of 'a * ('bty, 'sym) generic_pexpr *
-          ('bty, 'sym) generic_pexpr * ('bty, 'sym) generic_pexpr list
-      | Eproc of 'a * 'sym generic_name * ('bty, 'sym) generic_pexpr list
-  *)
       | M_Ewseq (pat, e1, e2) ->
           Dnode ( pp_ctor "Ewseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
-                                    ; *) self e1
+                                    ; *) dtree_of_expr e1
                                     ; self e2 ] )
       | M_Esseq (pat, e1, e2) ->
           Dnode ( pp_ctor "Esseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
-                                    ; *) self e1
+                                    ; *) dtree_of_expr e1
                                     ; self e2 ] )
 
 
@@ -304,9 +318,6 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
   (*
       | End of ('a, 'bty, 'sym) generic_expr list
   *)
-      | M_Erun (l, asyms) ->
-        Dnode ( pp_pure_ctor "Erun"
-              , List.map dtree_of_asym asyms)
 
   (*
 
@@ -314,7 +325,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       | Ewait of Mem_common.thread_id
   *)
         | _ ->
-            Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_expr expr))
+            Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_texpr expr))
     in
     self expr
 
@@ -386,7 +397,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       match glob with
       | M_GlobalDef (_, (bTy,_), e) ->
           Dnode ( pp_field "GlobalDef" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
-                , [dtree_of_expr e] )
+                , [dtree_of_texpr e] )
       | M_GlobalDecl (_, (bTy,_)) ->
           Dleaf (pp_field "GlobalDecl" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy)
     in
@@ -398,7 +409,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
     | M_Return (loc,_) -> 
        (Dleaf (!^"return" ^^^ Location_ocaml.pp_location ~clever:false loc))
     | M_Label (loc, _, _, body, _, _) -> 
-       Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_expr body])
+       Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_texpr body])
 
   let dtrees_of_labels labels = 
     Pmap.fold (fun l def acc ->
@@ -413,11 +424,11 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_Fun (bTy, params, pe) ->
             Dnode ( pp_field "Fun" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                    ; Dnode (pp_field ".body", [dtree_of_pexpr pe]) ] )
+                    ; Dnode (pp_field ".body", [dtree_of_tpexpr pe]) ] )
         | M_Proc (loc, bTy, params, e, labels, _mapping) ->
             Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                    ; Dnode (pp_field ".body", [dtree_of_expr e])
+                    ; Dnode (pp_field ".body", [dtree_of_texpr e])
                     ; Dnode (pp_field ".labels", dtrees_of_labels labels) ] )
         | M_ProcDecl (loc, ret_bTy, params_bTys) ->
             (* TODO: loc*)

@@ -17,6 +17,13 @@ and t_ =
                 * (* is_variadic *)bool
 
 
+let is_unsigned_integer_type = function
+  | Sctype (_, Integer ty) ->
+     AilTypesAux.is_unsigned_integer_type 
+       (Ctype ([], Ctype.Basic (Ctype.Integer ty)))
+  | _ -> false
+     
+
 
 let pointer_sct sct = 
   Sctype ([], Pointer (Ctype.no_qualifiers, sct))

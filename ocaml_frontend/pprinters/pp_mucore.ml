@@ -110,7 +110,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEsym _
     | M_PEimpl _
     | M_PEctor _
-    | M_PEcase _
     | M_PEarray_shift _
     | M_PEmember_shift _
     | M_PEnot _
@@ -118,27 +117,36 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEunion _
     | M_PEmemberof _
     | M_PEcall _
-    | M_PElet _
+    | M_PEconv_int _
+    | M_PEwrapI _ ->
+       None
+
+  let tprecedence = function
+    | M_PEcase _ -> None
+    | M_PElet _ -> None
     | M_PEif _ -> None
 
-  let rec precedence_expr = function
+  let precedence_expr = function
     | M_Epure _
     | M_Ememop _
     | M_Eaction _
-    | M_Ecase _
     | M_Eskip
     | M_Eproc _
     | M_Eccall _
     (* | M_Eunseq _ *)
     (* | M_Eindet _ *)
-    | M_Ebound _
-    | M_End _
-    | M_Erun _
     (* | M_Epar _ *)
     (* | M_Ewait _ -> *)
+    | M_Erun _
       -> 
         None
 
+
+
+  let rec precedence_texpr = function
+    | M_Ecase _ -> None
+    | M_Ebound _ -> None
+    | M_End _ -> None
     | M_Eif _ ->
         Some 1
     | M_Elet _ ->
@@ -149,6 +157,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         Some 3
     | M_Ewseq _ ->
         Some 4
+    | M_Edone _ -> 
+       None
     (* | M_Esave _ ->
      *     Some 5 *)
 
@@ -377,24 +387,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
   let abbreviated = P.dot ^^ P.dot ^^ P.dot
 
-  let pp_pexpr budget pe =
 
-
-    let rec pp budget prec (M_Pexpr (loc, annot, _, pe)) =
-
-      match budget with
-      | Some 0 -> abbreviated
-      | _ -> 
-
-      let budget' = match budget with
-        | Some n -> Some (n-1)
-        | None -> None
-      in
-
-      let prec' = precedence pe in
-      let pp z = P.group (pp budget' prec' z) in
-      (maybe_print_location loc) ^^
-      (if compare_precedence prec' prec then fun z -> z else P.parens)
+  let pp_pexpr (M_Pexpr (loc, annot, _, pe)) =
+    (maybe_print_location loc) ^^
       begin
         match pe with
           | M_PEundef (_, ub) ->
@@ -415,55 +410,11 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_PEimpl iCst ->
               pp_impl iCst
           | M_PEctor (M_Cnil _, pes) ->
-              if not (pes <> []) then
-                Debug_ocaml.warn [] (fun () ->
-                  "Pp_core found a Cnil with pes <> []"
-                );
-              P.brackets P.empty
-          (* | M_PEctor (Ccons, pes) ->
-           *     let to_list_value =
-           *       let rec aux acc = function
-           *         | M_PEctor (Cnil _, []) ->
-           *             Some (List.rev acc)
-           *         | M_PEctor (Ccons, [pe1; pe2]) ->
-           *               aux (pe1 :: acc) pe2
-           *         | _ ->
-           *             None
-           *       in
-           *       aux [] pe in
-           *     begin match to_list_value with
-           *       | M_Some pes' ->
-           *           P.brackets (comma_list pp pes')
-           *       | M_None ->
-           *           P.separate_map (P.space ^^ P.colon ^^ P.colon ^^ P.space) pp pes
-           *     end *)
+             P.brackets P.empty
           | M_PEctor (M_Ctuple, pes) ->
               P.parens (comma_list pp_asym pes)
           | M_PEctor (ctor, pes) ->
               pp_ctor ctor ^^ P.parens (comma_list pp_asym pes)
-          | M_PEcase (pe, pat_pes) ->
-            pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
-            P.nest 2 (
-              P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) ->
-                P.prefix 4 1
-                  (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
-                  (pp pe)
-              ) pat_pes
-            ) ^^ P.break 1 ^^ pp_keyword "end"
-
-  (*
-              pp_keyword "case" ^^^ pp pe ^^^ pp_keyword "of" ^^
-              P.nest 2 (
-                P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) ->
-                  P.group (
-                    P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle ^^^
-                    P.ifflat
-                      (pp pe)
-                      (P.nest 2 (P.break 0 ^^ pp pe))
-                  )
-                ) pat_pes
-              ) ^^ P.break 1 ^^ pp_keyword "end"
-  *)
           | M_PEarray_shift (pe1, ty, pe2) ->
               pp_keyword "array_shift" ^^ P.parens (
                 pp_asym pe1 ^^ P.comma ^^^ pp_ct ty ^^ P.comma ^^^ pp_asym pe2
@@ -476,10 +427,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "not" ^^ P.parens (pp_asym pe)
           | M_PEop (bop, pe1, pe2) ->
               pp_asym pe1 ^^^ pp_binop bop ^^^ pp_asym pe2
-  (*
-          | M_PEmemop (pure_memop, pes) ->
-              pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
-  *)
           | M_PEstruct (tag_sym, xs) ->
               P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
               P.braces (
@@ -500,16 +447,54 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               )
           | M_PEcall (nm, pes) ->
               pp_name nm ^^ P.parens (comma_list pp_asym pes)
+          | M_PEassert_undef (asym, _uloc, ub) ->
+              pp_keyword "assert_undef" ^^ P.parens (pp_asym asym ^^ P.comma ^^^pp_undef ub)
+          | M_PEbool_to_integer asym ->
+              pp_keyword "bool_to_integer" ^^ P.parens (pp_asym asym)
+          | M_PEconv_int (act, asym) ->
+              !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+          | M_PEwrapI (act, asym) ->
+              !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+      end
+
+  let pp_tpexpr budget pe =
+
+    let rec pp budget prec (M_TPexpr (loc, annot, _, pe)) =
+      match budget with
+      | Some 0 -> abbreviated
+      | _ -> 
+      let budget' = match budget with
+        | Some n -> Some (n-1)
+        | None -> None
+      in
+      let prec' = tprecedence pe in
+      let pp z = P.group (pp budget' prec' z) in
+      let pp_pexpr pe = P.group (pp_pexpr pe) in
+      (maybe_print_location loc) ^^
+      (if compare_precedence prec' prec then fun z -> z else P.parens)
+      begin
+        match pe with
+          | M_PEcase (pe, pat_pes) ->
+            pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
+            P.nest 2 (
+              P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) ->
+                P.prefix 4 1
+                  (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
+                  (pp pe)
+              ) pat_pes
+            ) ^^ P.break 1 ^^ pp_keyword "end"
           | M_PElet (pat, pe1, pe2) ->
               (* DEBUG  !^ "{-pe-}" ^^^ *)
               pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^
-              pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2
+              pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2
           | M_PEif (pe1, pe2, pe3) ->
               P.group (
                 pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
                 P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
                 pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
               )
+          | M_PEdone asym ->
+              pp_control "done" ^^^ pp_asym asym
       end
     in pp budget None pe
 
@@ -565,28 +550,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
                     pp_linux_memory_order mo)
 
-
-  let pp_expr budget (expr : 'ty mu_expr) =
-
-    let rec pp budget is_semi prec (M_Expr (loc, annot, e) : 'ty mu_expr) =
-
-      match budget with
-      | Some 0 -> abbreviated
-      | _ -> 
-
-      let budget' = match budget with
-        | Some n -> Some (n-1)
-        | None -> None
-      in
-
-
-
-
-      let prec' = precedence_expr e in
-      (* let pp_ z = pp budget' true prec' z in  (\* TODO: this is sad *\) *)
-      let pp  z = pp budget' false prec' z in
-
-      begin
+  let do_annots annot = 
         fun doc ->
           List.fold_left (fun acc annot_elem ->
             match annot_elem with
@@ -611,24 +575,15 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               | Alabel _ -> acc
                  (* !^"{-return-}" ^^ acc *)
           ) doc annot
-      end
+
+  let pp_expr (M_Expr (loc, annot, e) : 'ty mu_expr) =
+
+    do_annots annot
       begin
         (maybe_print_location loc) ^^
-        begin
-          (* Here we check whether parentheses are needed *)
-          (* if compare_precedence prec' prec then
-           *   (\* right associativity of ; *\)
-           *   match (is_semi, e) with
-           *     | (true, M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), _, _)) ->
-           *         P.parens
-           *     | _ ->
-           *         fun z -> z
-           * else *)
-            P.parens
-        end
         begin match (e : 'ty mu_expr_) with
           | M_Epure pe ->
-              pp_keyword "pure" ^^ P.parens (pp_pexpr budget pe)
+              pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
           | M_Ememop memop ->
 
              let aux memop =
@@ -699,26 +654,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
              pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
           | M_Eaction (M_Paction (p, (M_Action (_, act)))) ->
               pp_polarity p (pp_action act)
-          | M_Ecase (pe, pat_es) ->
-              pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
-              P.nest 2 (
-                P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
-                  P.prefix 4 1
-                    (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
-                    (pp e)
-                ) pat_es
-              ) ^^ P.break 1 ^^ pp_keyword "end"
-          | M_Elet (pat, pe1, e2) ->
-              P.group (
-                P.prefix 0 1
-                  (pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^ 
-                     pp_pexpr budget' pe1 ^^^ pp_control "in")
-                  (pp e2)
-             )
-          | M_Eif (pe1, e2, e3) ->
-              pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
-              P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
-              pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
           | M_Eskip ->
               pp_keyword "skip"
           | M_Eproc (nm, pes) ->
@@ -732,10 +667,69 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]") *)
           (* | M_Eunseq es ->
            *     pp_control "unseq" ^^ P.parens (comma_list pp es) *)
+          | M_Erun (sym, pes) ->
+              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
+        end
+      end
+
+
+  let pp_texpr budget (expr : 'ty mu_texpr) =
+
+    let rec pp budget prec (M_TExpr (loc, annot, e) : 'ty mu_texpr) =
+
+      match budget with
+      | Some 0 -> abbreviated
+      | _ -> 
+
+      let budget' = match budget with
+        | Some n -> Some (n-1)
+        | None -> None
+      in
+
+      let prec' = precedence_texpr e in
+      (* let pp_ z = pp budget' true prec' z in  (\* TODO: this is sad *\) *)
+      let pp z = pp budget' prec' z in
+
+      do_annots annot
+      begin
+        (maybe_print_location loc) ^^
+        begin
+          (* Here we check whether parentheses are needed *)
+          (* if compare_precedence prec' prec then
+           *   (\* right associativity of ; *\)
+           *   match (is_semi, e) with
+           *     | (true, M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), _, _)) ->
+           *         P.parens
+           *     | _ ->
+           *         fun z -> z
+           * else *)
+            P.parens
+        end
+        begin match (e : 'ty mu_texpr_) with
+          | M_Ecase (pe, pat_es) ->
+              pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
+              P.nest 2 (
+                P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
+                  P.prefix 4 1
+                    (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
+                    (pp e)
+                ) pat_es
+              ) ^^ P.break 1 ^^ pp_keyword "end"
+          | M_Elet (pat, pe1, e2) ->
+              P.group (
+                P.prefix 0 1
+                  (pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^ 
+                     pp_pexpr pe1 ^^^ pp_control "in")
+                  (pp e2)
+             )
+          | M_Eif (pe1, e2, e3) ->
+              pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
+              P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
+              pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
           | M_Ewseq (pat, e1, e2) ->
               P.group (
                 pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
-                let doc_e1 = pp e1 in
+                let doc_e1 = pp_expr e1 in
                 P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
               ) ^^
               P.break 1 ^^ (pp e2)
@@ -743,8 +737,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     (pp_ e1 ^^^ P.semi) ^/^ (pp e2) *)
           | M_Esseq (pat, e1, e2) ->
               P.group (
-                pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
-                let doc_e1 = pp e1 in
+                pp_control "let strong" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^
+                let doc_e1 = pp_expr e1 in
                 P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
               ) ^^
               P.break 1 ^^ (pp e2)
@@ -760,8 +754,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     ) sym_bTy_pes) ^^^
            *     pp_control "in" ^^^
            *     P.nest 2 (P.break 1 ^^ pp e) *)
-          | M_Erun (sym, pes) ->
-              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
           (* | M_Epar es ->
            *     pp_keyword "par" ^^ P.parens (comma_list pp es) *)
           (* | M_Ewait tid ->
@@ -771,9 +763,11 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_Ebound (i, e) ->
               pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^/^
               P.parens (pp e)
+          | M_Edone asym ->
+              pp_control "done" ^^^ pp_asym asym
         end
       end
-      in pp budget false None expr
+      in pp budget None expr
 
 
 
@@ -855,13 +849,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         | M_Fun (bTy, params, pe) ->
             pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.hardline ^^ P.hardline
+            P.nest 2 (P.break 1 ^^ pp_tpexpr budget pe)
         | M_ProcDecl (loc, bTy, bTys) ->
             pp_cond loc @@
-            pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) ^^ P.hardline ^^ P.hardline
+            pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
         | M_BuiltinDecl (loc, bTy, bTys) ->
             pp_cond loc @@
-            pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) ^^ P.hardline ^^ P.hardline
+            pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
         | M_Proc (loc, bTy, params, e, labels, _mapping) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
@@ -871,26 +865,24 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                 (* pp label definitions *)
               (Pmap.fold (fun sym def acc ->
                    acc ^^
-                   match def with
+                   begin match def with
                    | M_Return (_, lt) -> 
-                      P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ 
-                        P.colon ^^^ pp_lt lt
+                      P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
                    | M_Label (_, lt, args, lbody, annots, _mapping) ->
-                        begin
-                          P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
-                           ^^
-                            (* label core function definition *)
-                         P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
-                           P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
-                            (P.nest 2 (P.break 1 ^^ pp_expr budget lbody)) ^^ P.hardline
-                        end
+                      P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt ^^
+                        (* label core function definition *)
+                        P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
+                          P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
+                            (P.nest 2 (P.break 1 ^^ pp_texpr budget lbody))
+                   end  ^^ P.hardline
                  ) labels P.empty
               ) 
               ^^ 
                 (* pp body *)
-              P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
+              P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_texpr budget e)
             )
-      end
+      end ^^ P.hardline ^^ P.hardline
+               
       ) funs P.empty
 
 
@@ -900,12 +892,12 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
       match iDecl with
         | M_Def (_, bty, pe) ->
             pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
+            P.nest 2 (P.break 1 ^^ pp_tpexpr budget pe) ^^ P.break 1 ^^ P.break 1
 
         | M_IFun (_, bTy, params, pe) ->
             pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
+            P.nest 2 (P.break 1 ^^ pp_tpexpr budget pe) ^^ P.break 1 ^^ P.break 1
     ) impl P.empty
 
   let pp_extern_symmap symmap =
@@ -926,7 +918,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
             P.brackets (!^"ct" ^^^ P.equals ^^^ pp_gt gt) ^^^
                 P.colon ^^ P.equals ^^
-                P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
+                P.nest 2 (P.break 1 ^^ pp_texpr budget e) ^^ P.break 1 ^^ P.break 1
         | M_GlobalDecl _ ->
           acc) P.empty globs
 
@@ -995,9 +987,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
   let string_of_action act =
     Pp_utils.to_plain_string (pp_action act)
   let string_of_pexpr pe =
-    Pp_utils.to_plain_string (pp_pexpr None pe)
+    Pp_utils.to_plain_string (pp_pexpr pe)
+  let string_of_tpexpr pe =
+    Pp_utils.to_plain_string (pp_tpexpr None pe)
   let string_of_expr e =
-    Pp_utils.to_plain_string (pp_expr None e)
+    Pp_utils.to_plain_string (pp_expr e)
+  let string_of_texpr e =
+    Pp_utils.to_plain_string (pp_texpr None e)
   let string_of_file f =
     Pp_utils.to_plain_string (pp_file None f)
 
@@ -1039,8 +1035,6 @@ let rec pp_core_base_type = function
   | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
 
 
-
-module CA = Core_anormalise
 
 module Pp_standard_typ = (struct
 

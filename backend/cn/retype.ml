@@ -162,8 +162,7 @@ and retype_value (loc : Loc.t) = function
     let@ vs = ListM.mapM (retype_value loc) vs in
     return (New.M_Vtuple vs)
 
-
-let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) = 
+let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
   let@ pexpr_ = match pexpr_ with
     | M_PEsym sym -> 
        return (New.M_PEsym sym)
@@ -181,15 +180,6 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEctor (ctor,asyms) -> 
        let@ ctor = retype_ctor loc ctor in
        return (New.M_PEctor (ctor,asyms))
-    | M_PEcase (asym,pats_pes) ->
-       let@ pats_pes = 
-         mapM (fun (pat,pexpr) ->
-             let@ pat = retype_pattern pat in
-             let@ pexpr = retype_pexpr pexpr in
-             return (pat,pexpr)
-           ) pats_pes
-       in
-       return (New.M_PEcase (asym,pats_pes))
     | M_PEarray_shift (asym,ct,asym') ->
        let@ ict = ct_of_ct loc ct in
        return (New.M_PEarray_shift (asym,ict,asym'))
@@ -207,17 +197,45 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        return (New.M_PEmemberof (sym,id,asym))
     | M_PEcall (name,asyms) ->
        return (New.M_PEcall (name,asyms))
+    | M_PEassert_undef (asym, loc, undef) ->
+       return (New.M_PEassert_undef (asym, loc, undef))
+    | M_PEbool_to_integer asym ->
+       return (New.M_PEbool_to_integer asym)
+    | M_PEconv_int (act, asym) ->
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_PEconv_int (act, asym))
+    | M_PEwrapI (act, asym) ->
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_PEwrapI (act, asym))
+  in
+  return (New.M_Pexpr (loc, annots,bty,pexpr_))
+
+
+let rec retype_tpexpr (Old.M_TPexpr (loc, annots,bty,pexpr_)) = 
+  let@ pexpr_ = match pexpr_ with
+    | M_PEcase (asym,pats_pes) ->
+       let@ pats_pes = 
+         mapM (fun (pat,pexpr) ->
+             let@ pat = retype_pattern pat in
+             let@ pexpr = retype_tpexpr pexpr in
+             return (pat,pexpr)
+           ) pats_pes
+       in
+       return (New.M_PEcase (asym,pats_pes))
     | M_PElet (sym_or_pattern,pexpr,pexpr') ->
        let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
        let@ pexpr = retype_pexpr pexpr in
-       let@ pexpr' = retype_pexpr pexpr' in
+       let@ pexpr' = retype_tpexpr pexpr' in
        return (New.M_PElet (sym_or_pattern,pexpr,pexpr'))
     | M_PEif (asym,pexpr1,pexpr2) ->
-       let@ pexpr1 = retype_pexpr pexpr1 in
-       let@ pexpr2 = retype_pexpr pexpr2 in
+       let@ pexpr1 = retype_tpexpr pexpr1 in
+       let@ pexpr2 = retype_tpexpr pexpr2 in
        return (New.M_PEif (asym,pexpr1,pexpr2))
+    | M_PEdone asym ->
+       return (New.M_PEdone asym)
+       
   in
-  return (New.M_Pexpr (loc, annots,bty,pexpr_))
+  return (New.M_TPexpr (loc, annots,bty,pexpr_))
 
 
 let retype_memop (loc : Loc.t) = function
@@ -315,7 +333,7 @@ let retype_paction = function
     return (New.M_Paction (pol,action))
 
 
-let rec retype_expr (Old.M_Expr (loc, annots, expr_)) = 
+let retype_expr (Old.M_Expr (loc, annots, expr_)) =
   let@ expr_ = match expr_ with
     | M_Epure pexpr -> 
        let@ pexpr = retype_pexpr pexpr in
@@ -326,24 +344,6 @@ let rec retype_expr (Old.M_Expr (loc, annots, expr_)) =
     | M_Eaction paction ->
        let@ paction = retype_paction paction in
        return (New.M_Eaction paction)
-    | M_Ecase (asym,pats_es) ->
-       let@ pats_es = 
-         mapM (fun (pat,e) ->
-             let@ pat = retype_pattern pat in
-             let@ e = retype_expr e in
-             return (pat,e)
-           ) pats_es
-       in
-       return (New.M_Ecase (asym,pats_es))
-    | M_Elet (sym_or_pattern,pexpr,expr) ->
-       let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
-       let@ pexpr = retype_pexpr pexpr in
-       let@ expr = retype_expr expr in
-       return (New.M_Elet (sym_or_pattern,pexpr,expr))
-    | M_Eif (asym,expr1,expr2) ->
-       let@ expr1 = retype_expr expr1 in
-       let@ expr2 = retype_expr expr2 in
-       return (New.M_Eif (asym,expr1,expr2))
     | M_Eskip ->
        return (New.M_Eskip)
     | M_Eccall (act,asym,asyms) ->
@@ -351,26 +351,52 @@ let rec retype_expr (Old.M_Expr (loc, annots, expr_)) =
        return (New.M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (New.M_Eproc (name,asyms))
-    | M_Ewseq (pat,expr1,expr2) ->
-       let@ pat = retype_pattern pat in
-       let@ expr1 = retype_expr expr1 in
-       let@ expr2 = retype_expr expr2 in
-       return (New.M_Ewseq (pat,expr1,expr2))
-    | M_Esseq (pat,expr1,expr2) ->
-       let@ pat = retype_pattern pat in
-       let@ expr1 = retype_expr expr1 in
-       let@ expr2 = retype_expr expr2 in
-       return (New.M_Esseq (pat,expr1,expr2))
-    | M_Ebound (n,expr) ->
-       let@ expr = retype_expr expr in
-       return (New.M_Ebound (n,expr))
-    | M_End es ->
-       let@ es = mapM retype_expr es in
-       return (New.M_End es)
     | M_Erun (sym,asyms) ->
        return (New.M_Erun (sym,asyms))
   in
+
   return (New.M_Expr (loc, annots,expr_))
+
+let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) = 
+  let@ expr_ = match expr_ with
+    | M_Ecase (asym,pats_es) ->
+       let@ pats_es = 
+         mapM (fun (pat,e) ->
+             let@ pat = retype_pattern pat in
+             let@ e = retype_texpr e in
+             return (pat,e)
+           ) pats_es
+       in
+       return (New.M_Ecase (asym,pats_es))
+    | M_Elet (sym_or_pattern,pexpr,expr) ->
+       let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
+       let@ pexpr = retype_pexpr pexpr in
+       let@ expr = retype_texpr expr in
+       return (New.M_Elet (sym_or_pattern,pexpr,expr))
+    | M_Eif (asym,expr1,expr2) ->
+       let@ expr1 = retype_texpr expr1 in
+       let@ expr2 = retype_texpr expr2 in
+       return (New.M_Eif (asym,expr1,expr2))
+    | M_Ewseq (pat,expr1,expr2) ->
+       let@ pat = retype_pattern pat in
+       let@ expr1 = retype_expr expr1 in
+       let@ expr2 = retype_texpr expr2 in
+       return (New.M_Ewseq (pat,expr1,expr2))
+    | M_Esseq (pat,expr1,expr2) ->
+       let@ pat = retype_sym_or_pattern pat in
+       let@ expr1 = retype_expr expr1 in
+       let@ expr2 = retype_texpr expr2 in
+       return (New.M_Esseq (pat,expr1,expr2))
+    | M_Ebound (n,expr) ->
+       let@ expr = retype_texpr expr in
+       return (New.M_Ebound (n,expr))
+    | M_End es ->
+       let@ es = mapM retype_texpr es in
+       return (New.M_End es)
+    | M_Edone asym ->
+       return (New.M_Edone asym)
+  in
+  return (New.M_TExpr (loc, annots,expr_))
 
 
 let retype_arg (loc : Loc.t) (sym,acbt) = 
@@ -404,7 +430,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       | Old.M_GlobalDef (lsym, (bt,ct),expr) ->
          let@ ct = ct_of_ct loc ct in
          let bt = BT.of_sct ct in
-         let@ expr = retype_expr expr in
+         let@ expr = retype_texpr expr in
          let globs = (sym, New.M_GlobalDef (lsym, (bt,ct),expr)) :: globs in
          let glob_typs = (sym, lsym, ct) :: glob_typs in
          return (globs, glob_typs)
@@ -428,7 +454,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
            return (RT.Computational ((Sym.fresh (), bt), LRT.I))
          in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
-         let@ pexpr = retype_pexpr pexpr in
+         let@ pexpr = retype_tpexpr pexpr in
          return (New.M_Def (ict,bt,pexpr))
       | Old.M_IFun (ift,cbt,args,pexpr) ->
          let@ ift = 
@@ -447,7 +473,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
          in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
          let@ args = mapM (retype_arg Loc.unknown) args in
-         let@ pexpr = retype_pexpr pexpr in
+         let@ pexpr = retype_tpexpr pexpr in
          return (New.M_IFun (ift,bt,args,pexpr))
     in
     PmapM.mapM retype_impl_decl file.mu_impl 
@@ -523,7 +549,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           let@ (lt,mapping) = 
             Conversions.make_label_spec loc lname init_mapping lspec
           in
-          let@ e = retype_expr e in
+          let@ e = retype_texpr e in
           return (New.M_Label (loc, lt,args,e,annots,mapping))
        | Some (LAloop_break loop_id) ->
           error "break label has not been inlined"
@@ -542,12 +568,12 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
    | Old.M_Fun (cbt,args,pexpr) ->
       let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
       let@ args = mapM (retype_arg Loc.unknown) args in
-      let@ pexpr = retype_pexpr pexpr in
+      let@ pexpr = retype_tpexpr pexpr in
       return (New.M_Fun (bt,args,pexpr))
    | Old.M_Proc (loc,cbt,args,expr,labels,_) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (retype_arg loc) args in
-      let@ expr = retype_expr expr in
+      let@ expr = retype_texpr expr in
       let@ labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
       let mapping = match Pmap.lookup fsym funinfo_extra with
         | Some (_, init_mapping) -> init_mapping

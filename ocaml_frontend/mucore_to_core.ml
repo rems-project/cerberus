@@ -132,9 +132,9 @@ let rec mu_to_core__pattern (M_Pattern(_, annots, pat_)):(Symbol.sym)Core.generi
              (map mu_to_core__pattern pats)))
 
 
-let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
+let mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
         : ('bty, symbol) Core.generic_pexpr=
-   (let (M_Pexpr(_, annots2, bty, pexpr_)) = pexpr2 in
+  (let (M_Pexpr(_, annots2, bty, pexpr_)) = pexpr2 in
   let wrap pexpr_=  (Core.Pexpr( annots2, bty, pexpr_)) in
   (match pexpr_ with
   | M_PEsym s ->
@@ -154,13 +154,6 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
      wrap (Core.PEctor( 
              (mu_to_core__ctor ctor1),
              (map (get_pexpr "PEctor" env1) pes)))
-  | M_PEcase( p, pats_pes) ->
-     let pats_pes = 
-       (map (fun (pat,e) -> 
-           (mu_to_core__pattern pat, 
-            mu_to_core__pexpr env1 e)) 
-         pats_pes) in
-     wrap (Core.PEcase( (get_pexpr "PEcase" env1 p), pats_pes))
   | M_PEarray_shift( pe1, ctype1, pe2) ->
      wrap (Core.PEarray_shift( 
              (get_pexpr "PEarray_shift" env1 pe1), 
@@ -185,23 +178,6 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
      wrap (Core.PEmemberof( sym1, id1, (get_pexpr "PEmemberof" env1 p)))
   | M_PEcall( name1, args) ->
      wrap (Core.PEcall( name1, (map (get_pexpr "PEcall" env1) args)))
-  | M_PElet( pat, p11, p21) ->
-     (match pat with
-     | M_Symbol sym1 ->
-        let p11 = (mu_to_core__pexpr env1 p11) in
-        let env' = (insert_symbol sym1 p11 env1) in
-        mu_to_core__pexpr env' p21
-     | M_Pat pat ->
-        wrap (Core.PElet( 
-                (mu_to_core__pattern pat),
-                (mu_to_core__pexpr env1 p11), 
-                (mu_to_core__pexpr env1 p21)))
-     )
-  | M_PEif( p0, p11, p21) ->
-     wrap (Core.PEif( 
-             (get_pexpr "PEif" env1 p0),
-                (mu_to_core__pexpr env1 p11), 
-                (mu_to_core__pexpr env1 p21)))
   (* | M_PEis_scalar p ->
    *    Core.PEis_scalar (get_pexpr p)
    * | M_PEis_integer p ->
@@ -215,8 +191,41 @@ let rec mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
    * | M_PEare_compatible p1 p2 ->
    *    Core.PEare_compatible (get_pexpr p1) (get_pexpr p2) *)
 
-
   ))
+
+let rec mu_to_core__tpexpr (env1 : 'bty env) (pexpr2 : 'bty mu_tpexpr)
+        : ('bty, symbol) Core.generic_pexpr=
+  let (M_TPexpr(_, annots2, bty, pexpr_)) = pexpr2 in
+  let wrap pexpr_=  (Core.Pexpr( annots2, bty, pexpr_)) in
+  match pexpr_ with
+  | M_PEcase( p, pats_pes) ->
+     let pats_pes = 
+       (map (fun (pat,e) -> 
+           (mu_to_core__pattern pat, 
+            mu_to_core__tpexpr env1 e)) 
+         pats_pes) in
+     wrap (Core.PEcase( (get_pexpr "PEcase" env1 p), pats_pes))
+  | M_PElet( pat, p11, p21) ->
+     (match pat with
+     | M_Symbol sym1 ->
+        let p11 = (mu_to_core__pexpr env1 p11) in
+        let env' = (insert_symbol sym1 p11 env1) in
+        mu_to_core__tpexpr env' p21
+     | M_Pat pat ->
+        wrap (Core.PElet( 
+                (mu_to_core__pattern pat),
+                (mu_to_core__pexpr env1 p11), 
+                (mu_to_core__tpexpr env1 p21)))
+     )
+  | M_PEif( p0, p11, p21) ->
+     wrap (Core.PEif( 
+             (get_pexpr "PEif" env1 p0),
+                (mu_to_core__tpexpr env1 p11), 
+                (mu_to_core__tpexpr env1 p21)))
+  | M_PEdone asym ->
+     (get_pexpr "PEdone" env1 asym)
+
+
 
 let mu_to_core__kill_kind:m_kill_kind ->Core.kill_kind=  ((function
   | M_Dynamic -> Core.Dynamic
@@ -403,7 +412,7 @@ let mu_to_core__memop env1 memop1:memop*(('a,(Symbol.sym))Core.generic_pexpr)lis
       [msym "Va_end" sym1])
   ))
 
-let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
+let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
    (let (M_Expr(_, annots, expr_)) = expr2 in
   let wrap expr_=  (Core.Expr(annots, expr_)) in
   (match expr_ with
@@ -414,27 +423,6 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap (Core.Ememop( memop1, args))
     | M_Eaction pa ->
        wrap (Core.Eaction (mu_to_core__paction env1 pa))
-    | M_Ecase( pe, es) ->
-       wrap (Core.Ecase( (get_pexpr "Ecase" env1 pe), 
-               (map (fun (pat,e) -> 
-                    (mu_to_core__pattern pat, 
-                     mu_to_core__expr env1 e)) es)))
-    | M_Elet( pat, pe, e) ->
-       (match pat with
-       | M_Symbol sym1 ->
-          let pe = (mu_to_core__pexpr env1 pe) in
-          let env' = (insert_symbol sym1 pe env1) in
-          mu_to_core__expr env' e
-       | M_Pat pat ->
-          wrap (Core.Elet( 
-                  (mu_to_core__pattern pat),
-                  (mu_to_core__pexpr env1 pe), 
-                  (mu_to_core__expr env1 e)))
-       )
-    | M_Eif( pe, e1, e2) ->
-       wrap (Core.Eif( (get_pexpr "Eif" env1 pe),
-               (mu_to_core__expr env1 e1),
-               (mu_to_core__expr env1 e2)))
     | M_Eskip ->
        wrap Core.Eskip
     | M_Eccall( (act), pe2, pes) ->
@@ -446,24 +434,10 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap (Core.Eproc( (), name1, (map (get_pexpr "Eproc" env1) pes)))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
-    | M_Ewseq( pat, e1, e2) ->
-       wrap (Core.Ewseq( 
-               (mu_to_core__pattern pat),
-               (mu_to_core__expr env1 e1),
-               (mu_to_core__expr env1 e2)))
-    | M_Esseq( pat, e1, e2) ->
-       wrap (Core.Esseq( 
-               (mu_to_core__pattern pat),
-               (mu_to_core__expr env1 e1),
-               (mu_to_core__expr env1 e2)))
     (* | M_Easeq (s,bt) pa ->
      *    Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa) *)
     (* | M_Eindet n e ->
      *    Core.Eindet n (mu_to_core__expr env e) *)
-    | M_Ebound( n, e) ->
-       wrap (Core.Ebound( n, (mu_to_core__expr env1 e)))
-    | M_End es ->
-       wrap (Core.End (map (mu_to_core__expr env1) es))
     | M_Erun( sym1, pes) ->
        wrap (Core.Erun( (), sym1, (map (get_pexpr "Erun" env1) pes)))
        (* wrap (Core.Erun () sym (map (get_pexpr "Ereturn" env) [pe])) *)
@@ -473,16 +447,65 @@ let rec mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
      *    Core.Ewait tid *)
   ))
 
+let rec mu_to_core__texpr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
+   let (M_TExpr(_, annots, expr_)) = expr2 in
+  let wrap expr_=  (Core.Expr(annots, expr_)) in
+  match expr_ with
+    | M_Ecase( pe, es) ->
+       wrap (Core.Ecase( (get_pexpr "Ecase" env1 pe), 
+               (map (fun (pat,e) -> 
+                    (mu_to_core__pattern pat, 
+                     mu_to_core__texpr env1 e)) es)))
+    | M_Elet( pat, pe, e) ->
+       (match pat with
+       | M_Symbol sym1 ->
+          let pe = (mu_to_core__pexpr env1 pe) in
+          let env' = (insert_symbol sym1 pe env1) in
+          mu_to_core__texpr env' e
+       | M_Pat pat ->
+          wrap (Core.Elet( 
+                  (mu_to_core__pattern pat),
+                  (mu_to_core__pexpr env1 pe), 
+                  (mu_to_core__texpr env1 e)))
+       )
+    | M_Eif( pe, e1, e2) ->
+       wrap (Core.Eif( (get_pexpr "Eif" env1 pe),
+               (mu_to_core__texpr env1 e1),
+               (mu_to_core__texpr env1 e2)))
+    | M_Ewseq( pat, e1, e2) ->
+       wrap (Core.Ewseq( 
+               (mu_to_core__pattern pat),
+               (mu_to_core__expr env1 e1),
+               (mu_to_core__texpr env1 e2)))
+    | M_Esseq( pat, e1, e2) ->
+       begin match pat with
+       | M_Symbol sym1 ->
+          failwith "todo: M_Essseq with M_Symbol"
+       | M_Pat pat ->
+          wrap (Core.Esseq( 
+                    (mu_to_core__pattern pat),
+                    (mu_to_core__expr env1 e1),
+                    (mu_to_core__texpr env1 e2)))
+       end
+    | M_Ebound( n, e) ->
+       wrap (Core.Ebound( n, (mu_to_core__texpr env1 e)))
+    | M_End es ->
+       wrap (Core.End (map (mu_to_core__texpr env1) es))
+    | M_Edone asym ->
+       failwith "todo: M_Edone"
+
+
+
+
+
 
 let mu_to_core__impl_decl (i : 'bty mu_impl_decl) 
     : 'bty Core.generic_impl_decl=
    ((match i with
   | M_Def(_, bt1, p) -> 
-     Core.Def( bt1, (mu_to_core__pexpr (Pmap.empty (fun sym1 sym2->ordCompare 
-  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) p))
+     Core.Def( bt1, (mu_to_core__tpexpr (Pmap.empty Symbol.symbol_compare) p))
   | M_IFun(_, bt1, args, body) -> 
-     Core.IFun( bt1, args, (mu_to_core__pexpr (Pmap.empty (fun sym1 sym2->ordCompare 
-  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) body))
+     Core.IFun( bt1, args, (mu_to_core__tpexpr (Pmap.empty Symbol.symbol_compare) body))
   ))
 
 let mu_to_core__impl (i : 'bty mu_impl) 
@@ -493,11 +516,9 @@ let mu_to_core__impl (i : 'bty mu_impl)
 let mu_to_core__fun_map_decl d : ('bty, unit) Core.generic_fun_map_decl=
    ((match d with
   | M_Fun( bt1, args, pe) ->
-     Core.Fun( bt1, args, (mu_to_core__pexpr (Pmap.empty (fun sym1 sym2->ordCompare 
-  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) pe))
+     Core.Fun( bt1, args, (mu_to_core__tpexpr (Pmap.empty Symbol.symbol_compare) pe))
   | M_Proc( loc, bt1, args, e, _labels, _mapping) ->
-     Core.Proc( loc, bt1, args, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
-  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) e))
+     Core.Proc( loc, bt1, args, (mu_to_core__texpr (Pmap.empty Symbol.symbol_compare) e))
   | M_ProcDecl( loc, bt1, bts) ->
      Core.ProcDecl( loc, bt1, bts)
   | M_BuiltinDecl( loc, bt1, bts) ->
@@ -512,8 +533,7 @@ let mu_to_core__fun_map (fmap1 : 'bty mu_fun_map)
 let mu_to_core__globs (g : 'bty  mu_globs) 
     : (unit, 'bty) Core.generic_globs= 
    ((match g with
-  | M_GlobalDef(_, bt1, e) -> Core.GlobalDef( bt1, (mu_to_core__expr (Pmap.empty (fun sym1 sym2->ordCompare 
-  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict Symbol.instance_Basic_classes_Ord_Symbol_sym_dict sym1 sym2)) e))
+  | M_GlobalDef(_, bt1, e) -> Core.GlobalDef( bt1, (mu_to_core__texpr (Pmap.empty Symbol.symbol_compare) e))
   | M_GlobalDecl (_, bt1) -> Core.GlobalDecl bt1 
   ))
 

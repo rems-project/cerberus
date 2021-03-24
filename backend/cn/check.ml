@@ -105,8 +105,10 @@ end
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(PP_TYPS)
 (* let pp_budget () = Some !debug_level *)
 let pp_budget () = Some (!print_level*5)
-let pp_expr e = PP_MUCORE.pp_expr (pp_budget ()) e
-let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
+let pp_pexpr e = PP_MUCORE.pp_pexpr e
+let pp_tpexpr e = PP_MUCORE.pp_tpexpr (pp_budget ()) e
+let pp_expr e = PP_MUCORE.pp_expr e
+let pp_texpr e = PP_MUCORE.pp_texpr (pp_budget ()) e
 
 
 module Make (G : sig val global : Global.t end) = struct
@@ -1277,47 +1279,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-
-
     (* merging information after control-flow join points  *)
-
-    (* note: first argument is the "summarised" return type so far *)
-    let merge_return_types loc (LC c, rt) (LC c2, rt2) = 
-      let RT.Computational ((lname, bt), lrt) = rt in
-      let RT.Computational ((lname2, bt2), lrt2) = rt2 in
-      let@ () = ensure_base_type loc ~expect:bt bt2 in
-      let rec aux lrt lrt2 = 
-        match lrt, lrt2 with
-        | LRT.I, LRT.I -> 
-           return LRT.I
-        | LRT.Logical ((s, ls), lrt1), _ ->
-           let@ lrt = aux lrt1 lrt2 in
-           return (LRT.Logical ((s, ls), lrt))
-        | LRT.Constraint (LC lc, lrt1), _ ->
-           let@ lrt = aux lrt1 lrt2 in
-           return (LRT.Constraint (LC lc, lrt))
-        | _, LRT.Logical ((s, ls), lrt2) ->
-           let s' = Sym.fresh () in
-           let@ lrt = aux lrt (LRT.subst_var {before = s; after = s'} lrt2) in
-           return (LRT.Logical ((s', ls), lrt))
-        | _, Constraint (LC lc, lrt2) ->
-           let@ lrt = aux lrt lrt2 in
-           return (LRT.Constraint (LC (impl_ (c2, lc)), lrt))
-        | Resource _, _
-        | _, Resource _ -> 
-           (* maybe make this an internal error? *)
-           fail loc (Generic !^"Cannot infer type of this (cannot merge)")
-      in
-      let lrt2' = LRT.subst_var {before = lname2; after = lname} lrt2 in
-      let@ lrt = aux lrt lrt2' in
-      return (LC (or_ [c; c2]), RT.Computational ((lname, bt), lrt))
-
-
-    let big_merge_return_types (loc : loc) (name, bt) 
-                               (crts : (LC.t * RT.t) list) : (LC.t * RT.t, type_error) m =
-      ListM.fold_leftM (merge_return_types loc) 
-        (LC.LC (IT.bool_ true), RT.Computational ((name, bt), LRT.I)) crts
 
     let merge_paths 
           (loc : loc) 
@@ -1329,20 +1291,6 @@ module Make (G : sig val global : Global.t end) = struct
          (* for every local environment L: merge L L = L *)
          let local = L.big_merge first locals in 
          Normal local
-
-    let merge_return_paths
-          (loc : loc)
-          (rt_local_or_falses : (((LC.t * RT.t) * L.t) fallible) list) 
-        : ((RT.t * L.t) fallible, type_error) m =
-      let rts_locals = non_false rt_local_or_falses in
-      let rts, locals = List.split rts_locals in
-      match rts_locals with
-      | [] -> return False
-      | ((_,RT.Computational (b,_)), first_local) :: _ -> 
-         let@ (_, rt) = big_merge_return_types loc b rts in 
-         let local = L.big_merge first_local locals in 
-         let result = (Normal (rt, local)) in
-         return result
 
 
 
@@ -1374,8 +1322,33 @@ module Make (G : sig val global : Global.t end) = struct
       let rt = RT.Computational ((ret, Loc), Constraint (LC.LC constr, I)) in
       return (Normal (rt, local))
 
+    let infer_wrapI local ct asym =
+      match ct with
+      | Sctypes.Sctype (_, Integer ty) ->
+         let ret = Sym.fresh () in
+         let@ arg = arg_of_asym local asym in
+         let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
+         let arg_it = sym_ (Integer,arg.lname) in
+         (* try to follow wrapI from runtime/libcore/std.core *)
+         let dlt = add_ (sub_ (maxInteger_ ty, minInteger_ ty), int_ 1) in
+         let r = rem_f_ (arg_it, dlt) in
+         let result_it = 
+           ite_ BT.Integer
+             (le_ (r, maxInteger_ ty), 
+              r,
+              sub_ (r, dlt))
+         in
+         let constr = eq_ (sym_ (Integer,ret), result_it) in
+         let rt = RT.Computational ((ret, BT.Integer), 
+                  LRT.Constraint (LC.LC constr, LRT.I)) in
+         return (Normal (rt, local))
+      | _ ->
+         Debug_ocaml.error "wrapI applied to non-ctype"
 
-    let rec infer_pexpr local (pe : 'bty mu_pexpr) : ((RT.t * L.t) fallible, type_error) m = 
+
+
+
+    let infer_pexpr local (pe : 'bty mu_pexpr) : ((RT.t * L.t) fallible, type_error) m = 
       let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
       debug 3 (lazy (action "inferring pure expression"));
       debug 3 (lazy (item "expr" (pp_pexpr pe)));
@@ -1478,45 +1451,72 @@ module Make (G : sig val global : Global.t end) = struct
            let@ args = args_of_asyms local asyms in
            let@ (rt, local) = calltype_ft loc local args decl_typ in
            return (Normal (rt, local))
-        | M_PElet (p, e1, e2) ->
-           let@? (rt, local) = infer_pexpr local e1 in
-           let@ delta = match p with
-             | M_Symbol sym -> return (bind sym rt)
-             | M_Pat pat -> pattern_match_rt pat rt
+        | M_PEassert_undef (asym, _uloc, undef) ->
+           let ret = Sym.fresh () in
+           let@ arg = arg_of_asym local asym in
+           let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
+           if S.holds local (sym_ (BT.Bool, arg.lname)) then
+             let rt = RT.Computational ((ret, BT.Unit), LRT.I) in
+             return (Normal (rt, local))
+           else
+             let expl = Explain.undefined_behaviour names local in
+             fail loc (Undefined_behaviour (undef, expl))
+        | M_PEbool_to_integer asym ->
+           let ret = Sym.fresh () in
+           let@ arg = arg_of_asym local asym in
+           let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
+           let constr = 
+             eq_ (sym_ (BT.Integer, ret),
+                  ite_ BT.Integer (sym_ (BT.Bool, arg.lname), int_ 1, int_ 0))
            in
-           infer_pexpr_pop delta local e2
-        | M_PEcase _ -> Debug_ocaml.error "PEcase in inferring position"
-        | M_PEif (casym, e1, e2) ->
-           let@ carg = arg_of_asym local casym in
-           let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-           let@ paths =
-             ListM.mapM (fun (lc, e) ->
-                 let delta = add_uc lc L.empty in
-                 let@? () = false_if_unreachable loc (delta ++ local) in
-                 let@? (rt, local) = infer_pexpr_pop delta local e in
-                 return (Normal ((lc, rt), local))
-               ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
-                  (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
-           in
-           merge_return_paths loc paths
+           let rt = RT.Computational ((ret, BT.Integer), 
+                    LRT.Constraint (LC.LC constr, LRT.I)) in
+           return (Normal (rt, local))
+        | M_PEconv_int (act, asym) ->
+           let ret = Sym.fresh () in
+           let@ arg = arg_of_asym local asym in
+           let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
+           (* try to follow conv_int from runtime/libcore/std.core *)
+           let arg_it = sym_ (Integer,arg.lname) in
+           begin match act.ct with
+           | Sctype (_, Integer Bool) ->
+              let result_it = 
+                ite_ BT.Integer (eq_ (arg_it, int_ 0), int_ 0, int_ 1) in
+              let constr = eq_ (sym_ (Integer,ret), result_it) in
+              let rt = RT.Computational ((ret, BT.Integer), 
+                       LRT.Constraint (LC.LC constr, LRT.I)) in
+              return (Normal (rt, local))
+           | _ 
+                when S.holds local (representable_ (act.ct, arg_it)) ->
+              let constr = eq_ (sym_ (Integer,ret), arg_it) in
+              let rt = RT.Computational ((ret, BT.Integer), 
+                       LRT.Constraint (LC.LC constr, LRT.I)) in
+              return (Normal (rt, local))
+           | Sctype (_, Integer ty) 
+                when Sctypes.is_unsigned_integer_type act.ct ->
+              infer_wrapI local act.ct asym
+           | _ ->
+              let ftyp = 
+                Global.get_impl_fun_decl G.global                
+                    Integer__conv_nonrepresentable_signed_integer
+              in
+              let@ (rt, local) = calltype_ft loc local [arg] ftyp in
+              return (Normal (rt, local))
+           end
+        | M_PEwrapI (act, asym) ->
+           infer_wrapI local act.ct asym
       in  
       debug 3 (lazy (item "type" (RT.pp rt)));
       return (Normal (rt, local))
-
-    and infer_pexpr_pop delta local (pe : 'bty mu_pexpr) : ((RT.t * L.t) fallible, type_error) m = 
-      let local = delta ++ marked ++ local in 
-      let@ result = infer_pexpr local pe in
-      let result' = Fallible.map pop_return result in
-      return result'
 
 
     (* check_pexpr: type check the pure expression `e` against return type
        `typ`; returns a "reduced" local environment *)
 
-    let rec check_pexpr local (e : 'bty mu_pexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
-      let (M_Pexpr (loc, _annots, _, e_)) = e in
+    let rec check_tpexpr local (e : 'bty mu_tpexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
+      let (M_TPexpr (loc, _annots, _, e_)) = e in
       debug 3 (lazy (action "checking pure expression"));
-      debug 3 (lazy (item "expr" (group (pp_pexpr e))));
+      debug 3 (lazy (item "expr" (group (pp_tpexpr e))));
       debug 3 (lazy (item "type" (RT.pp typ)));
       debug 3 (lazy (item "ctxt" (L.pp local)));
       match e_ with
@@ -1529,7 +1529,7 @@ module Make (G : sig val global : Global.t end) = struct
                let@? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_pexpr_pop loc delta local e typ
+               check_tpexpr_pop loc delta local e typ
              ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
                 (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
          in
@@ -1544,7 +1544,7 @@ module Make (G : sig val global : Global.t end) = struct
                let@? () = 
                  false_if_unreachable loc (delta ++ local)
                in
-               check_pexpr_pop loc delta local e typ
+               check_tpexpr_pop loc delta local e typ
              ) pats_es
          in
          return (merge_paths loc paths)
@@ -1554,19 +1554,17 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Symbol sym -> return (bind sym rt)
            | M_Pat pat -> pattern_match_rt pat rt
          in
-         check_pexpr_pop loc delta local e2 typ
-      | _ ->
-         let@? (rt, local) = infer_pexpr local e in
-         let ((bt, lname), delta) = bind_logically rt in
-         let local = delta ++ marked ++ local in
-         let@ local = subtype loc local {bt; lname; loc} typ in
+         check_tpexpr_pop loc delta local e2 typ
+      | M_PEdone asym ->
+         let@ arg = arg_of_asym local asym in
+         let@ local = subtype loc local arg typ in
          let@ local = pop_empty loc [] local in
          return (Normal local)
 
-    and check_pexpr_pop (loc : loc) delta local (pe : 'bty mu_pexpr) 
+    and check_tpexpr_pop (loc : loc) delta local (pe : 'bty mu_tpexpr) 
                         (typ : RT.t) : (L.t fallible, type_error) m =
       let local = delta ++ marked ++ local in 
-      let@? local = check_pexpr local pe typ in
+      let@? local = check_tpexpr local pe typ in
       let@ local = pop_empty loc [] local in
       return (Normal local)
 
@@ -1761,14 +1759,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    
-
-
-
     type labels = (LT.t * label_kind) SymMap.t
 
 
-    let rec infer_expr (local, labels) (e : 'bty mu_expr) 
+    let infer_expr (local, labels) (e : 'bty mu_expr) 
             : ((RT.t * L.t) fallible, type_error) m = 
       let (M_Expr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "inferring expression"));
@@ -1817,7 +1811,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ ok = 
                 let size = Memory.size_of_ctype act.ct in
                 let@ _ = 
-                  resource_request loc local (Access Kill) local
+                  resource_request loc local (Access Deref) local
                     (Point {pointer = sym_ (Loc, arg.lname); 
                             size; 
                             content = Block Nothing;
@@ -1981,10 +1975,6 @@ module Make (G : sig val global : Global.t end) = struct
            let@ args = args_of_asyms local asyms in
            let@ (rt, local) = calltype_ft loc local args decl_typ in
            return (Normal (rt, local))
-        | M_Ebound (n, e) ->
-           infer_expr (local, labels) e
-        | M_End _ ->
-           Debug_ocaml.error "todo: End"
         | M_Erun (label_sym, asyms) ->
            let@ local = unpack_resources loc local in
            let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
@@ -1999,56 +1989,20 @@ module Make (G : sig val global : Global.t end) = struct
            let@ (False, local) = calltype_lt loc extra_names local args (lt,lkind) in
            let@ () = all_empty loc extra_names local in
            return False
-        | M_Ecase _ -> 
-           Debug_ocaml.error "Ecase in inferring position"
-        | M_Eif (casym, e1, e2) ->
-           let@ carg = arg_of_asym local casym in
-           let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-           let@ paths =
-             ListM.mapM (fun (lc, e) ->
-                 debug 6 (lazy (!^"checking branch under assumption" ^^^ LC.pp lc));
-                 let delta = add_uc lc L.empty in
-                 let@? () = false_if_unreachable loc (delta ++ local) in
-                 let@? (rt, local) = infer_expr_pop delta (local, labels) e in
-                 return (Normal ((lc, rt), local))
-               ) [(LC (sym_ (carg.bt, carg.lname)), e1); (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
-           in
-           merge_return_paths loc paths
-        | M_Elet (p, e1, e2) ->
-           let@? (rt, local) = infer_pexpr local e1 in
-           let@ delta = match p with
-             | M_Symbol sym -> return (bind sym rt)
-             | M_Pat pat -> pattern_match_rt pat rt
-           in
-           infer_expr_pop delta (local, labels) e2
-        | M_Ewseq (pat, e1, e2) ->
-           let@? (rt, local) = infer_expr (local, labels) e1 in
-           let@ delta = pattern_match_rt pat rt in
-           infer_expr_pop delta (local, labels) e2
-        | M_Esseq (pat, e1, e2) ->
-           let@? (rt, local) = infer_expr (local, labels) e1 in
-           let@ delta = pattern_match_rt pat rt in
-           infer_expr_pop delta (local, labels) e2
       in
       debug 3 (lazy (match r with
                      | False -> item "type" (parens !^"no return")
                      | Normal (rt,_) -> item "type" (RT.pp rt)));
       return r
 
-    and infer_expr_pop delta (local, labels) (e : 'bty mu_expr) 
-        : ((RT.t * L.t) fallible, type_error) m =
-      let local = delta ++ marked ++ local in 
-      let@ result = infer_expr (local, labels) e in
-      return (Fallible.map pop_return result)
-
     (* check_expr: type checking for impure epressions; type checks `e`
        against `typ`, which is either a return type or `False`; returns
        either an updated environment, or `False` in case of Goto *)
-    let rec check_expr (local, labels) (e : 'bty mu_expr) (typ : RT.t fallible) 
+    let rec check_texpr (local, labels) (e : 'bty mu_texpr) (typ : RT.t fallible) 
             : (L.t fallible, type_error) m = 
-      let (M_Expr (loc, _annots, e_)) = e in
+      let (M_TExpr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "checking expression"));
-      debug 3 (lazy (item "expr" (group (pp_expr e))));
+      debug 3 (lazy (item "expr" (group (pp_texpr e))));
       debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
       debug 3 (lazy (item "ctxt" (L.pp local)));
       let@ result = match e_ with
@@ -2062,11 +2016,15 @@ module Make (G : sig val global : Global.t end) = struct
                  let@? () = 
                    false_if_unreachable loc (delta ++ local)
                  in
-                 check_expr_pop delta (local, labels) e typ 
+                 check_texpr_pop delta (local, labels) e typ 
                ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
                   (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
            in
            return (merge_paths loc paths)
+        | M_Ebound (_, e) ->
+           check_texpr (local, labels) e typ 
+        | M_End _ ->
+           Debug_ocaml.error "todo: End"
         | M_Ecase (asym, pats_es) ->
            let@ arg = arg_of_asym local asym in
            let@ paths = 
@@ -2077,7 +2035,7 @@ module Make (G : sig val global : Global.t end) = struct
                  let@? () = 
                    false_if_unreachable loc (delta ++ local)
                  in
-                 check_expr_pop delta (local, labels) e typ
+                 check_texpr_pop delta (local, labels) e typ
                ) pats_es
            in
            return (merge_paths loc paths)
@@ -2087,22 +2045,23 @@ module Make (G : sig val global : Global.t end) = struct
              | M_Symbol sym -> return (bind sym rt)
              | M_Pat pat -> pattern_match_rt pat rt
            in
-           check_expr_pop delta (local, labels) e2 typ
+           check_texpr_pop delta (local, labels) e2 typ
         | M_Ewseq (pat, e1, e2) ->         
            let@? (rt, local) = infer_expr (local, labels) e1 in
            let@ delta = pattern_match_rt pat rt in
-           check_expr_pop delta (local, labels) e2 typ
+           check_texpr_pop delta (local, labels) e2 typ
         | M_Esseq (pat, e1, e2) ->
            let@? (rt, local) = infer_expr (local, labels) e1 in
-           let@ delta = pattern_match_rt pat rt in
-           check_expr_pop ~print:true delta (local, labels) e2 typ
-        | _ ->
-           let@? (rt, local) = infer_expr (local, labels) e in
-           let ((bt, lname), delta) = bind_logically rt in
-           let local = delta ++ marked ++ local in
+           let@ delta = match pat with
+             | M_Symbol sym -> return (bind sym rt)
+             | M_Pat pat -> pattern_match_rt pat rt
+           in
+           check_texpr_pop ~print:true delta (local, labels) e2 typ
+        | M_Edone asym ->
            match typ with
            | Normal typ ->
-              let@ local = subtype loc local {bt; lname; loc} typ in
+              let@ arg = arg_of_asym local asym in
+              let@ local = subtype loc local arg typ in
               let@ local = pop_empty loc [] local in
               return (Normal local)
            | False ->
@@ -2115,12 +2074,12 @@ module Make (G : sig val global : Global.t end) = struct
       return result
 
 
-    and check_expr_pop ?(print=false) delta (local, labels) (e : 'bty mu_expr) (typ : RT.t fallible)
+    and check_texpr_pop ?(print=false) delta (local, labels) (e : 'bty mu_texpr) (typ : RT.t fallible)
         : (L.t fallible, type_error) m =
-      let (M_Expr (loc, _, _)) = e in    
+      let (M_TExpr (loc, _, _)) = e in    
       let local = delta ++ marked ++ local in 
       let () = print_json (lazy (json_local loc names local)) in
-      let@ result = check_expr (local, labels) e typ in
+      let@ result = check_texpr (local, labels) e typ in
       match result with
       | False -> 
          return False
@@ -2205,7 +2164,7 @@ module Make (G : sig val global : Global.t end) = struct
   (* check_function: type check a (pure) function *)
   let check_function (loc : loc) mapping (info : string) 
                      (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-                     (body : 'bty mu_pexpr) (function_typ : FT.t) : (unit, type_error) m =
+                     (body : 'bty mu_tpexpr) (function_typ : FT.t) : (unit, type_error) m =
     debug 2 (lazy (headline ("checking function " ^ info)));
     let@ (rt, delta, _, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
@@ -2221,7 +2180,7 @@ module Make (G : sig val global : Global.t end) = struct
         Explain.naming_substs substs (Explain.naming_of_mapping mapping)  
       in
       let module C = Checker(struct let names = names end) in
-      C.check_pexpr_pop loc delta L.empty body rt 
+      C.check_tpexpr_pop loc delta L.empty body rt 
     in
     return ()
 
@@ -2229,7 +2188,7 @@ module Make (G : sig val global : Global.t end) = struct
   (* check_procedure: type check an (impure) procedure *)
   let check_procedure (loc : loc) mapping (fsym : Sym.t)
                       (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-                      (body : 'bty mu_expr) (function_typ : FT.t) 
+                      (body : 'bty mu_texpr) (function_typ : FT.t) 
                       (label_defs : 'bty mu_label_defs) : (unit, type_error) m =
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
     debug 2 (lazy (item "type" (FT.pp function_typ)));
@@ -2293,7 +2252,7 @@ module Make (G : sig val global : Global.t end) = struct
                (Explain.naming_of_mapping mapping)  
            in
            let module C = Checker(struct let names = names end) in
-           C.check_expr_pop ~print:true (delta_label ++ pure_delta) 
+           C.check_texpr_pop ~print:true (delta_label ++ pure_delta) 
              (L.empty, labels) body False
          in
          return ()
@@ -2302,7 +2261,7 @@ module Make (G : sig val global : Global.t end) = struct
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let@ local_or_false = 
       let module C = Checker(struct let names = fnames end) in
-      C.check_expr_pop ~print:true delta (L.empty, labels) body (Normal rt)
+      C.check_texpr_pop ~print:true delta (L.empty, labels) body (Normal rt)
     in
     return ()
 
@@ -2467,6 +2426,7 @@ let check mu_file =
 
 
 (* TODO: 
+   - get rid of default index term
    - be more careful about which counter-model to use in Explain
    - forbid specifications with completely ownership-empty resources
    - rem_t vs rem_f

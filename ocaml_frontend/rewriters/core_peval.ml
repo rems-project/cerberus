@@ -432,9 +432,14 @@ let apply_substs_expr xs e =
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 let core_peval file : 'bty RW.rewriter =
 
-  let stdlib_unfold_pred  _ fdecl =
-    match fdecl with
-    | Fun (_, sym_bTys, _) ->
+  let module StringSet = Set.Make(String) in
+
+  let not_unfold = Not_unfold.not_unfold in
+
+  let stdlib_unfold_pred fsym fdecl =
+    match Symbol.symbol_name fsym, fdecl with
+    | Some name, Fun (_, sym_bTys, _) ->
+       not (List.mem name not_unfold) &&
        List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
     | _ ->
        false

@@ -63,17 +63,16 @@ let print_file ?(remove_path = false) filename file =
   | CORE file ->
      (* CB.Pipeline.run_pp ~remove_path (Some (filename,"core.ast")) 
       *   (CF.Pp_core_ast.pp_file file); *)
-     CB.Pipeline.run_pp ~remove_path (Some (filename,"core")) 
-       (CF.Pp_core.All.pp_file file);
+     Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
      (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
       *   (CF.Pp_mucore_ast.pp_file file); *)
-     CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
+     Pp.print_file (filename ^ ".mucore")
        (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
   | RETYPED_MUCORE file ->
      (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
       *   (CF.Pp_mucore_ast.pp_file file); *)
-     CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
+     Pp.print_file (filename ^ ".mucore")
        (Check.PP_MUCORE.pp_file None file);
 
 
@@ -169,9 +168,9 @@ let frontend filename =
 
 
 let main filename mjsonfile debug_level print_level =
-  if debug_level > 0 then Printexc.record_backtrace true else ();
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
+  if debug_level > 0 then Printexc.record_backtrace true else ();
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
   else if not (String.equal (Filename.extension filename) ".c") then
@@ -182,16 +181,17 @@ let main filename mjsonfile debug_level print_level =
        prerr_endline (CF.Pp_errors.to_string err);
        exit 1
     | CF.Exception.Result file ->
-       if !Pp.print_level > 0 then Printexc.record_backtrace true else ();
        try
          let open Resultat in
          Pp.maybe_open_json_output mjsonfile;
+         assert (Z3.Log.open_ "/tmp/z3.log");
          Debug_ocaml.maybe_open_csv_timing_file ();
          let result = 
            let@ file = Retype.retype_file file in
            Check.check file 
          in
          Pp.maybe_close_json_output ();
+         Z3.Log.close ();
          Debug_ocaml.maybe_close_csv_timing_file ();
          match result with
          | Ok () -> 
@@ -202,6 +202,7 @@ let main filename mjsonfile debug_level print_level =
        with
        | exc -> 
           Pp.maybe_close_json_output (); 
+          Z3.Log.close ();
           Debug_ocaml.maybe_close_csv_timing_file ();
           Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
     end

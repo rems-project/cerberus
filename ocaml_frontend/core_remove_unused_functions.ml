@@ -147,6 +147,7 @@ module RW = Rewriter(State)
 
 
 
+
 type ('a,'bty,'sym) name_collector =
   { names_in_pointer_value : Impl_mem.pointer_value -> unit t; 
     names_in_memory_value : Impl_mem.mem_value -> unit t; 
@@ -275,7 +276,11 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
   in
 
   let names_in_name = function
-    | Sym sym -> record_dep (Sym sym)
+    (* | Sym (Symbol.Symbol (_, _, Some name)) when
+     *        List.mem name Not_unfold.not_unfold ->
+     *    return () *)
+    | Sym sym -> 
+       record_dep (Sym sym)
     | Impl impl -> record_dep (Impl impl)
   in
 

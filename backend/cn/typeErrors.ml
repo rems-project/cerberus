@@ -16,6 +16,7 @@ type label_kind =
 type access =
   | Load of BT.member option
   | Store of BT.member option
+  | Deref
   | Kill
   | Free
 
@@ -28,6 +29,7 @@ type situation =
 
 let for_access = function
   | Kill -> !^"for de-allocating"
+  | Deref -> !^"for dereferencing"
   | Load None ->  !^"for reading"
   | Load (Some m) -> !^"for reading struct member" ^^^ Id.pp m
   | Store None ->  !^"for writing"
@@ -186,6 +188,7 @@ let pp_type_error te =
   | Misaligned access ->
      let msg = match access with
      | Kill -> !^"Misaligned de-allocation operation"
+     | Deref -> !^"Misaligned dereference operation"
      | Load _ -> !^"Misaligned read"
      | Store _ ->  !^"Misaligned write"
      | Free ->  !^"Misaligned free"

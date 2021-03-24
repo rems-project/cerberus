@@ -20,6 +20,13 @@ let print channel doc =
   PPrint.ToChannel.pretty 1.0 term_col channel (doc ^^ hardline);
   flush channel
 
+(* adapting from pipeline.ml *)
+let print_file filename doc = 
+  let oc = open_out filename in
+  print oc doc;
+  close_out oc
+
+
 
 let plain = CF.Pp_utils.to_plain_pretty_string
 let (^^^) = Pp_prelude.(^^^)

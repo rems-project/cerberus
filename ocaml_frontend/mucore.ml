@@ -130,7 +130,6 @@ module Make(T : TYPES) = struct
    | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
    | M_PEerror of string * 'TY asym (* impl-defined static error *)
    | M_PEctor of mu_ctor * ('TY asym) list (* data constructor application *)
-   | M_PEcase of ('TY asym) * (mu_pattern * 'TY mu_pexpr) list (* pattern matching *)
    | M_PEarray_shift of ('TY asym) * T.ct * ('TY asym) (* pointer array shift *)
    | M_PEmember_shift of ('TY asym) * symbol * Symbol.identifier (* pointer struct/union member shift *)
    | M_PEnot of 'TY asym (* boolean not *)
@@ -139,13 +138,25 @@ module Make(T : TYPES) = struct
    | M_PEunion of symbol * Symbol.identifier * 'TY asym (* C union expression *)
    | M_PEmemberof of symbol * Symbol.identifier * 'TY asym (* C struct/union member access *)
    | M_PEcall of mu_name * ('TY asym) list (* pure function call *)
-   | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
-   | M_PEif of 'TY asym * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure if *)
+
+   | M_PEassert_undef of 'TY asym * Location_ocaml.t * Undefined.undefined_behaviour
+   | M_PEbool_to_integer of 'TY asym
+   | M_PEconv_int of 'TY act * 'TY asym
+   | M_PEwrapI of 'TY act * 'TY asym
 
 
   and 'TY mu_pexpr = 
    | M_Pexpr of loc * annot list * 'TY * ('TY mu_pexpr_)
 
+
+  type 'TY mu_tpexpr_ = 
+   | M_PEcase of ('TY asym) * (mu_pattern * 'TY mu_tpexpr) list (* pattern matching *)
+   | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_tpexpr) (* pure let *)
+   | M_PEif of 'TY asym * ('TY mu_tpexpr) * ('TY mu_tpexpr) (* pure if *)
+   | M_PEdone of 'TY asym
+
+  and 'TY mu_tpexpr = 
+   | M_TPexpr of loc * annot list * 'TY * ('TY mu_tpexpr_)
 
 
   type m_kill_kind = 
@@ -202,22 +213,27 @@ module Make(T : TYPES) = struct
    | M_Epure of ('TY mu_pexpr)
    | M_Ememop of 'TY mu_memop
    | M_Eaction of ('TY mu_paction) (* memory action *)
-   | M_Ecase of 'TY asym * (mu_pattern * ('TY mu_expr)) list (* pattern matching *)
-   | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
-   | M_Eif of 'TY asym * ('TY mu_expr) * ('TY mu_expr)
    | M_Eskip
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
-   | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
-   | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)
-   | M_Ebound of int * ('TY mu_expr) (* $\ldots$and boundary *)
-   | M_End of ('TY mu_expr) list (* nondeterministic choice *)
    | M_Erun of symbol * ('TY asym) list (* run from label *)
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
 
 
+  type 'TY mu_texpr_ =
+   | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_texpr)
+   | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_texpr) (* weak sequencing *)
+   | M_Esseq of ('TY mu_sym_or_pattern) * ('TY mu_expr) * ('TY mu_texpr) (* strong sequencing *)
+   | M_Ecase of 'TY asym * (mu_pattern * ('TY mu_texpr)) list (* pattern matching *)
+   | M_Eif of 'TY asym * ('TY mu_texpr) * ('TY mu_texpr)
+   | M_Ebound of int * ('TY mu_texpr) (* $\ldots$and boundary *)
+   | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
+   | M_Edone of 'TY asym
+
+  and 'TY mu_texpr = 
+   | M_TExpr of loc * annot list * ('TY mu_texpr_)
 
 
   let embed_pexpr_expr pe : 'TY mu_expr= 
@@ -226,22 +242,22 @@ module Make(T : TYPES) = struct
 
 
   type 'TY mu_impl_decl =
-    | M_Def of T.ict * T.bt * 'TY mu_pexpr
-    | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_pexpr
+    | M_Def of T.ict * T.bt * 'TY mu_tpexpr
+    | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_tpexpr
 
   type 'TY mu_impl = (Implementation.implementation_constant, ('TY mu_impl_decl)) 
     Pmap.map
 
   type 'TY mu_label_def = 
     | M_Return of loc * T.lt
-    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_expr * annot list * T.mapping
+    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_texpr * annot list * T.mapping
 
   type 'TY mu_label_defs = (symbol, ('TY mu_label_def)) Pmap.map
 
 
   type 'TY mu_fun_map_decl =
-    | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
-    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_expr * 'TY mu_label_defs * T.mapping
+    | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_tpexpr
+    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_texpr * 'TY mu_label_defs * T.mapping
     | M_ProcDecl of Location_ocaml.t * T.bt * T.bt list
     | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list
 
@@ -255,7 +271,7 @@ module Make(T : TYPES) = struct
   type mu_extern_map = Core.extern_map
 
   type 'TY mu_globs =
-    | M_GlobalDef of symbol * (T.bt * T.gt) * 'TY mu_expr
+    | M_GlobalDef of symbol * (T.bt * T.gt) * 'TY mu_texpr
     | M_GlobalDecl of symbol * (T.bt * T.gt)
 
   type 'TY mu_globs_map = (symbol, 'TY mu_globs)

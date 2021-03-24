@@ -15,7 +15,8 @@ let context =
 
 
 
-let of_index_term global (it: IT.t) =
+
+let of_index_term_unsafe global (it: IT.t) =
 
   let open Global in
 
@@ -292,3 +293,7 @@ let of_index_term global (it: IT.t) =
   result
 
 
+let of_index_term global it = 
+  try of_index_term_unsafe global it with
+  | Z3.Error err -> 
+     Debug_ocaml.error ("Z3 error: " ^ err)
