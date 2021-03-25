@@ -18,6 +18,11 @@ let do_stack_trace () =
 
 
 
+let pair_equal equalityA equalityB (a,b) (a',b') = 
+  equalityA a a' && equalityB b b'
+
+
+
 (* let at_most_one err_str = function
  *   | [] -> None
  *   | [x] -> (Some x)

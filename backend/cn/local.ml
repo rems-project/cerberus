@@ -98,13 +98,6 @@ module Make (G : sig val global : Global.t end) = struct
         | _ -> None
       ) local
 
-  let all_named_resources (local : t) = 
-    filter (fun (name, b) ->
-        match b with
-        | Resource re -> Some (name, re)
-        | _ -> None
-      ) local
-
 
   let all_constraints (local : t) = 
     filter (fun (name, b) ->
@@ -142,8 +135,6 @@ module Make (G : sig val global : Global.t end) = struct
     (local, acc)
 
 
-
-  let all (local : t) = SymMap.bindings local
 
   let kind sym (local : t) = Option.map VB.kind (get_safe sym local)
   let bound sym (local : t) = Option.is_some (kind sym local)
@@ -200,7 +191,7 @@ module Make (G : sig val global : Global.t end) = struct
   let add_r rname r (local : t) = 
     let lcs = 
       RE.derived_constraint r ::
-      List.concat_map (fun r' -> RE.derived_constraints r r') 
+      List.map (fun r' -> RE.derived_constraints r r') 
         (all_resources local)
     in
     let local = add (rname, Resource r) local in

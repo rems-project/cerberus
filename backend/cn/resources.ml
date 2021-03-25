@@ -306,34 +306,36 @@ let permission = function
 (* assumption: resource is owned *)
 let derived_constraint resource = 
   let open IT in
-  match resource with
-  | Point p -> 
-     impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
-  | IteratedStar p ->
-     (* todo *)
-     bool_ true
-  | Predicate _ ->
-     bool_ true
+  simplify []
+    begin match resource with
+    | Point p -> 
+       impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
+    | IteratedStar p ->
+       (* todo *)
+       bool_ true
+    | Predicate _ ->
+       bool_ true
+    end
 
 
-(* assumption: two resources owned at the same time *)
+(* assumption: resource owned at the same time as resources' *)
 (* todo, depending on how much we need *)
 let derived_constraints resource resource' =
-  (* let open IT in *)
-  match resource, resource' with
-  | Point p, Point p' -> 
-     (* [] *)
-     let open IT in
-     [impl_ (
-          gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
-          disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
-        )]
-  | Predicate _, _
-  | _, Predicate _ -> 
-     []
-  | _ ->
-     (* todo *)
-     []
+  let open IT in
+  simplify [] 
+    begin match resource, resource' with
+    | Point p, Point p' -> 
+       and_ [impl_ (
+                 gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+                 disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
+         )]
+    | Predicate _, _
+      | _, Predicate _ -> 
+       bool_ true
+    | _ ->
+       (* todo *)
+       bool_ true
+    end
 
 
 

@@ -924,6 +924,7 @@ let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
 let not_ it = IT (Bool_op (Not it), BT.Bool)
 let ite_ bt (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt)
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
+let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = IT (Bool_op (NE (it, it')), BT.Bool)
 
 (* tuple_op *)
@@ -1031,9 +1032,6 @@ let good_value v sct =
 
 let simplify equalities term = 
 
-
-
-
   let rec aux (IT (it, bt)) =
     match it with
     | Lit it -> lit it bt
@@ -1068,18 +1066,30 @@ let simplify equalities term =
   and arith_op it bt = 
     match it with
     | Add (a, b) ->
-       IT (Arith_op (Add (aux a, aux b)), bt)
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Lit (Q (ad, ad')), _), IT (Lit (Q (bd, bd')), _) 
+            when ad' = bd' ->
+          IT (Lit (Q (ad + bd, ad')), bt)
+       | _, IT (Lit (Q (0, _)), _) ->
+          a
+       | IT (Lit (Q (0, _)), _), _ ->
+          b
+       | _, _ ->
+          IT (Arith_op (Add (a, b)), bt)
+       end
     | Sub (a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match b, bt with
-       | IT (Lit (Q (0, _)), _), _ -> 
+       begin match a, b, bt with
+       | _, IT (Lit (Q (0, _)), _), _ -> 
           a
-       | _, BT.Integer when equal a b -> 
+       | _, _, BT.Integer when equal a b -> 
           IT (Lit (Z Z.zero), bt)
-       | _, BT.Real when equal a b -> 
+       | _, _, BT.Real when equal a b -> 
           IT (Lit (Q (0, 1)), bt)
-       | _ ->
+       | _, _, _ ->
           IT (Arith_op (Sub (a, b)), bt) 
        end
     | Mul (a, b) ->
@@ -1141,7 +1151,16 @@ let simplify equalities term =
     | Or its ->
        IT (Bool_op (And (List.map aux its)), bt)
     | Impl (a, b) ->
-       IT (Bool_op (Impl (aux a, aux b)), bt)
+       let a = aux a in
+       let b = aux b in
+       begin match a with
+       | IT (Lit (Bool true), _) ->
+          b
+       | IT (Lit (Bool false), _) ->
+          IT (Lit (Bool true), bt) 
+       | _ ->
+          IT (Bool_op (Impl (aux a, aux b)), bt)
+       end
     | Not a ->
        IT (Bool_op (Not (aux a)), bt)
     | ITE (a, b, c) ->
@@ -1165,12 +1184,14 @@ let simplify equalities term =
 
   and cmp_op it bt = 
     let cmp_rule mk z_op int_op a b =
-       match aux a, aux b with
+      let a = aux a in
+      let b = aux b in
+       match a, b with
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
           IT (Lit (Bool (z_op z1 z2)), bt)
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) when j1 = j2 ->
           IT (Lit (Bool (int_op i1 i2)), bt)
-       | a, b ->
+       | _, _ ->
           IT (Cmp_op (mk (a, b)), bt)
     in
     match it with
