@@ -36,51 +36,6 @@ open Resources
 (* some of this is informed by impl_mem *)
 
 
-module Fallible = struct
-
-  (* `t` is used for inferring/checking the type of unreachable control-flow
-     positions, including after Run/Goto: Goto has no return type (because the
-     control flow does not return there), but instead returns `False`. Type
-     checking of pure expressions returns a local environment or `False`; type
-     inference of impure expressions returns either a return type and a local
-     environment or `False` *)
-  type 'a t = 
-    | Normal of 'a
-    | False
-
-  type 'a fallible = 'a t
-
-  (* bind: check if the monadic argument evaluates to `False`; if so, the value
-     is `False, otherwise whatever the continuation (taking a non-False
-     argument) returns *)
-  let mbind (m : ('a t, 'e) m) (f : 'a -> (unit, 'e) m) : (unit, 'e) m =
-    let@ aof = m in
-    match aof with
-    | Normal a -> f a
-    | False -> return ()
-
-  let (let@?) = mbind
-
-  let pp (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document = 
-    match m with
-    | Normal a -> ppf a
-    | False -> parens !^"no return"
-
-  let map f m = 
-    match m with
-    | Normal a -> Normal (f a)
-    | False -> False
-
-end
-
-open Fallible
-
-
-
-
-
-
-
 
 (*** mucore pp setup **********************************************************)
 
@@ -201,8 +156,7 @@ module Make (G : sig val global : Global.t end) = struct
          let s' = Sym.fresh () in 
          let local' = add_l s' (Base has_bt) local' in
          let@ local' = match o_s with
-           | Some s when L.bound s local' -> 
-              fail loc (Name_bound_twice (Sym s))
+           | Some s when L.bound s local' -> fail loc (Name_bound_twice (Sym s))
            | Some s -> return (add_a s (has_bt, s') local')
            | None -> return local'
          in
@@ -1016,34 +970,34 @@ module Make (G : sig val global : Global.t end) = struct
     let infer_ptrval (loc : loc) (ptrval : pointer_value) : (vt, type_error) m =
       CF.Impl_mem.case_ptrval ptrval
         ( fun ct -> 
-          let@ ct = ct_of_ct loc ct in
           return (Loc, IT.null_) )
         ( fun sym -> 
-          (* let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in *)
-          (* let lcs = [LC (eq_ (sym_ (BT.Loc, ret), sym_ (BT.Loc, sym)));
-           *            LC (representable_ (voidstar, sym_ (Loc, ret)))] in *)
-          (* let lcs = [LC (eq_ (sym_ (BT.Loc, ret), sym_ (BT.Loc, sym)));
-           *            LC (representable_ (voidstar, sym_ (Loc, ret)))] in *)
           return (Loc, sym_ (BT.Loc, sym)) )
-        ( fun _prov loc -> return (Loc, pointer_ loc) )
-        ( fun () -> Debug_ocaml.error "unspecified pointer value" )
+        ( fun _prov loc -> 
+          return (Loc, pointer_ loc) )
+        ( fun () -> 
+          Debug_ocaml.error "unspecified pointer value" )
 
     let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
       let open BT in
       CF.Impl_mem.case_mem_value mem
-        ( fun ct -> fail loc (Unspecified ct) )
+        ( fun ct -> 
+          fail loc (Unspecified ct) )
         ( fun _ _ -> 
           fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
         ( fun it iv -> 
-          let v = Memory.integer_value_to_num iv in
-          return (Integer, z_ v) )
-        ( fun ft fv -> fail loc (Unsupported !^"floats") )
-        ( fun _ ptrval -> infer_ptrval loc ptrval  )
-        ( fun mem_values -> infer_array loc mem_values )
+          return (Integer, z_ (Memory.integer_value_to_num iv)) )
+        ( fun ft fv -> 
+          fail loc (Unsupported !^"floats") )
+        ( fun _ ptrval -> 
+          infer_ptrval loc ptrval  )
+        ( fun mem_values -> 
+          infer_array loc mem_values )
         ( fun tag mvals -> 
           let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
           infer_struct loc tag mvals )
-        ( fun tag id mv -> infer_union loc tag id mv )
+        ( fun tag id mv -> 
+          infer_union loc tag id mv )
 
     and infer_struct (loc : loc) (tag : tag) 
                      (member_values : (member * mem_value) list) : (vt, type_error) m =
@@ -1057,7 +1011,6 @@ module Make (G : sig val global : Global.t end) = struct
            let@ members = check fields spec in
            let@ (bt, it) = infer_mem_value loc mv in
            let@ () = ensure_base_type loc ~expect:(BT.of_sct sct) bt in
-           (* return (members @ [(member, it)]) *)
            return ((member, it) :: members)
         | [], [] -> 
            return []
@@ -1123,45 +1076,10 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-
-    let all_empty loc extra_names local = 
-      let bad = 
-        SymMap.filter_map (fun name bound ->
-            match bound with
-            | VB.Resource resource ->
-               begin match resource with
-               | Point p when 
-                      not (S.holds local (le_ (p.permission, q_ (0, 1)))) ->
-                  Some resource
-               | IteratedStar p when 
-                      not (S.holds_forall local [(p.qpointer, BT.Loc)]
-                             (le_ (p.permission, q_ (0, 1)))) ->
-                  Some resource
-               | Predicate p when p.unused ->
-                  Some resource
-               | (IteratedStar _ | Point _ | Predicate _) -> None
-               end
-            | _ -> None
-          ) local
-      in
-      match SymMap.choose_opt bad with
-      | None -> return ()
-      | Some (_, resource) ->
-         let names = names @ extra_names in
-         let (resource, state) = Explain.resource names local resource (S.get_model ()) in
-         fail loc (Unused_resource {resource; state})
-
-
-
-    let false_if_unreachable (loc : loc) local : (unit fallible, type_error) m =
-      return (if S.is_inconsistent local then False else Normal ())
-
-
     (*** pure expression inference ************************************************)
 
     (* infer_pexpr: the raw type inference logic for pure expressions;
-       returns a return type and a "reduced" local environment *)
+       returns a return type and a local environment *)
     (* infer_pexpr_pop: place a marker in the local environment, run
        the raw type inference, and return, in addition to what the raw
        inference returns, all logical (logical variables, resources,
@@ -1366,6 +1284,11 @@ module Make (G : sig val global : Global.t end) = struct
     (* check_pexpr: type check the pure expression `e` against return type
        `typ`; returns a "reduced" local environment *)
 
+
+
+
+
+
     let rec check_tpexpr local (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m = 
       let (M_TPexpr (loc, _annots, _, e_)) = e in
       debug 3 (lazy (action "checking pure expression"));
@@ -1402,7 +1325,7 @@ module Make (G : sig val global : Global.t end) = struct
       | M_PEdone asym ->
          let@ arg = arg_of_asym local asym in
          let@ local = subtype loc local arg typ in
-         all_empty loc [] local
+         return ()
 
 
     (*** memory related logic *****************************************************)
@@ -1503,20 +1426,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    (*** auxiliary ****************************************************************)
 
-
-    let json_local loc names local : Yojson.Safe.t = 
-      `Assoc [("loc", json_loc loc);
-              ("context", `Variant ("context", Some (Explain.json_state names local)))]
-
-    let json_false loc : Yojson.Safe.t = 
-      `Assoc [("loc", json_loc loc);
-              ("context", `Variant ("unreachable", None))]
-
-    let json_local_or_false loc names = function
-      | Normal local -> json_local loc names local
-      | False -> json_false loc
 
 
 
@@ -1531,13 +1441,72 @@ module Make (G : sig val global : Global.t end) = struct
        the local environment since that marker (except for computational
        variables) *)
 
+    (* `t` is used for the type of Run/Goto: Goto has no return type
+       (because the control flow does not return there), but instead
+       returns `False`. Type inference of impure expressions returns
+       either a return type and a local environment or `False` *)
+    type 'a t = 
+      | Normal of 'a
+      | False
+
+    type 'a orFalse = 'a t
+
+    let pp_or_false (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document = 
+      match m with
+      | Normal a -> ppf a
+      | False -> parens !^"no return"
+
+
+    (*** auxiliary ****************************************************************)
+    let json_local loc names local : Yojson.Safe.t = 
+      `Assoc [("loc", json_loc loc);
+              ("context", `Variant ("context", Some (Explain.json_state names local)))]
+
+    let json_false loc : Yojson.Safe.t = 
+      `Assoc [("loc", json_loc loc);
+              ("context", `Variant ("unreachable", None))]
+
+    let json_local_or_false loc names = function
+      | Normal local -> json_local loc names local
+      | False -> json_false loc
+
+
+
+
+
+    let all_empty loc extra_names local = 
+      let bad = 
+        SymMap.filter_map (fun name bound ->
+            match bound with
+            | VB.Resource resource ->
+               begin match resource with
+               | Point p when 
+                      not (S.holds local (le_ (p.permission, q_ (0, 1)))) ->
+                  Some resource
+               | IteratedStar p when 
+                      not (S.holds_forall local [(p.qpointer, BT.Loc)]
+                             (le_ (p.permission, q_ (0, 1)))) ->
+                  Some resource
+               | Predicate p when p.unused ->
+                  Some resource
+               | (IteratedStar _ | Point _ | Predicate _) -> None
+               end
+            | _ -> None
+          ) local
+      in
+      match SymMap.choose_opt bad with
+      | None -> return ()
+      | Some (_, resource) ->
+         let names = names @ extra_names in
+         let (resource, state) = Explain.resource names local resource (S.get_model ()) in
+         fail loc (Unused_resource {resource; state})
 
 
     type labels = (LT.t * label_kind) SymMap.t
 
 
     let infer_expr (local, labels) (e : 'bty mu_expr) 
-            : ((RT.t * L.t) fallible, type_error) m = 
+            : ((RT.t * L.t) orFalse, type_error) m = 
       let (M_Expr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "inferring expression"));
       debug 3 (lazy (item "expr" (group (pp_expr e))));
@@ -1764,18 +1733,18 @@ module Make (G : sig val global : Global.t end) = struct
            let@ () = all_empty loc extra_names local in
            return False
       in
-      debug 3 (lazy (Fallible.pp (fun (rt, _) -> item "type" (RT.pp rt)) result));
+      debug 3 (lazy (pp_or_false (fun (rt, _) -> item "type" (RT.pp rt)) result));
       return result
 
     (* check_expr: type checking for impure epressions; type checks `e`
        against `typ`, which is either a return type or `False`; returns
        either an updated environment, or `False` in case of Goto *)
-    let rec check_texpr (local, labels) (e : 'bty mu_texpr) (typ : RT.t fallible) 
+    let rec check_texpr (local, labels) (e : 'bty mu_texpr) (typ : RT.t orFalse) 
             : (unit, type_error) m = 
       let (M_TExpr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "checking expression"));
       debug 3 (lazy (item "expr" (group (pp_texpr e))));
-      debug 3 (lazy (item "type" (Fallible.pp RT.pp typ)));
+      debug 3 (lazy (item "type" (pp_or_false RT.pp typ)));
       debug 3 (lazy (item "ctxt" (L.pp local)));
       let@ result = match e_ with
         | M_Eif (casym, e1, e2) ->
@@ -1808,17 +1777,25 @@ module Make (G : sig val global : Global.t end) = struct
              | M_Pat pat -> pattern_match_rt pat rt
            in
            check_texpr (delta ++ local, labels) e2 typ
-        | M_Ewseq (pat, e1, e2) ->         
-           let@? (rt, local) = infer_expr (local, labels) e1 in
-           let@ delta = pattern_match_rt pat rt in
-           check_texpr (delta ++ local, labels) e2 typ
+        | M_Ewseq (pat, e1, e2) ->
+           let@ inferred = infer_expr (local, labels) e1 in
+           begin match inferred with
+           | False -> return ()
+           | Normal (rt, local) ->
+              let@ delta = pattern_match_rt pat rt in
+              check_texpr (delta ++ local, labels) e2 typ
+           end
         | M_Esseq (pat, e1, e2) ->
-           let@? (rt, local) = infer_expr (local, labels) e1 in
-           let@ delta = match pat with
-             | M_Symbol sym -> return (bind sym rt)
-             | M_Pat pat -> pattern_match_rt pat rt
-           in
-           check_texpr (delta ++ local, labels) e2 typ
+           let@ inferred = infer_expr (local, labels) e1 in
+           begin match inferred with
+           | False -> return ()
+           | Normal (rt, local) ->
+              let@ delta = match pat with
+                | M_Symbol sym -> return (bind sym rt)
+                | M_Pat pat -> pattern_match_rt pat rt
+              in
+              check_texpr (delta ++ local, labels) e2 typ
+           end
         | M_Edone asym ->
            match typ with
            | Normal typ ->
