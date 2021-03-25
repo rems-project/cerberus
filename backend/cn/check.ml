@@ -59,19 +59,12 @@ module Fallible = struct
     | Normal a -> f a
     | False -> return False
 
-  (* special syntax for `or_false` *)
   let (let@?) = mbind
 
   let pp (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document = 
     match m with
     | Normal a -> ppf a
     | False -> if !unicode then !^"\u{22A5}" else !^"bot"
-
-  let non_false (ms : ('a t) list) : 'a list = 
-    List.filter_map (function
-        | Normal a -> Some a
-        | False -> None
-      ) ms
 
   let map f m = 
     match m with
@@ -574,7 +567,7 @@ module Make (G : sig val global : Global.t end) = struct
         ) def.unpack_functions
 
     let is_global local it =
-      List.exists (fun (s, bound) ->
+      SymMap.exists (fun s bound ->
           match bound with
           | VB.Computational (l, bt) ->
              BT.equal Loc bt && 
@@ -585,81 +578,6 @@ module Make (G : sig val global : Global.t end) = struct
              BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
           | _ -> false          
       ) G.global.bindings
-
-
-    (* let resource_for_pointer local it
-     *      : (Sym.t * RE.t) option = 
-     *   let points = 
-     *     List.filter_map (fun (name, re) ->
-     *         match RE.footprint re with
-     *         | Some (pointer,size,permission) when 
-     *                S.holds local 
-     *                  (IT.and_ [IT.eq_ (it, pointer);
-     *                            IT.eq_ (q_ (1,1), permission)]) ->
-     *            Some (name, re) 
-     *         | _ ->
-     *            None
-     *       ) (L.all_named_resources local)
-     *   in
-     *   match points with
-     *   | [] -> None
-     *   | [r] -> Some r
-     *   | _ -> Debug_ocaml.error ("multiple resources found: " ^ (Pp.plain (Pp.list RE.pp (List.map snd points)))) *)
-
-
-    (* (\* use resource_around_pointer to make this succeed for more cases *\)
-     * let rec ownership_request_prompt ui_info local (pointer: IT.t) (need_size: IT.t) = 
-     *   let open Prompt in
-     *   let open Prompt.Operators in
-     *   let loc = ui_info.loc in
-     *   let original_local = ui_info.original_local in
-     *   let situation = ui_info.situation in
-     *   let names = names @ ui_info.extra_names in
-     *   if S.holds local (le_ (need_size, int_ 0)) then 
-     *     return local
-     *   else
-     *     let o_resource = resource_for_pointer local pointer in
-     *     let@ resource_name, resource = match o_resource with
-     *       | None -> 
-     *          let (addr, state) = Explain.missing_ownership names original_local pointer in
-     *          if is_global original_local pointer 
-     *          then fail loc (Missing_global_ownership {addr; used = None; situation})
-     *          else fail loc (Missing_ownership {addr; state; used = None; situation})
-     *       | Some (resource_name, resource) -> 
-     *          return (resource_name, resource)
-     *     in
-     *     let@ (_, have_size, permission) = match RE.footprint resource with
-     *       | None -> 
-     *          let (resource, state) = 
-     *            Explain.resource names original_local resource true in
-     *          fail loc (Cannot_unpack {resource; state; situation})
-     *       | Some fp ->
-     *          return fp
-     *     in
-     *     if S.holds local (ge_ (need_size, have_size)) then 
-     *       let local = L.use_resource resource_name [loc] local in
-     *       ownership_request_prompt ui_info local (addPointer_ (pointer, have_size)) 
-     *         (IT.sub_ (need_size, have_size))
-     *     else if S.holds local (le_ (need_size, have_size)) then 
-     *       (\* if the resource is bigger than needed, keep the remainder
-     *          as unitialised memory *\)
-     *       let local = L.use_resource resource_name [loc] local in
-     *       let local = 
-     *         add_ur (
-     *             RE.Region {
-     *                 pointer = addPointer_ (pointer, need_size); 
-     *                 size = sub_ (have_size, need_size);
-     *                 permission;
-     *               }
-     *           ) local
-     *       in
-     *       return local
-     *     else
-     *       (\* fix this: could be either side that has unknown length *\)
-     *       let (resource, state) = Explain.resource names original_local resource true in
-     *       fail loc (Unknown_resource_size {resource; state; situation}) *)
-
-
 
 
 
@@ -1003,7 +921,7 @@ module Make (G : sig val global : Global.t end) = struct
     let unpack_resources loc local = 
       let rec aux local = 
         let@ (local, changed) = 
-          ListM.fold_leftM (fun (local, changed) (resource_name, resource) ->
+          ListM.fold_leftM (fun (local, changed) resource ->
               match resource with
               | RE.Predicate p when p.unused ->
                  let def = Option.get (Global.get_predicate_def G.global p.name) in
@@ -1025,7 +943,7 @@ module Make (G : sig val global : Global.t end) = struct
                  end
               | _ ->
                  return (local, changed)
-            ) (local, false) (L.all_named_resources local)
+            ) (local, false) (L.all_resources local)
         in
         if changed then aux local else return local
       in
@@ -1209,89 +1127,32 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-
-
-
-    (* logic around markers in the environment *)
-
-    (* pop_return: "pop" the local environment back until last mark and
-       add to `rt` *)
-    let pop_return ((rt : RT.t), (local : L.t)) : RT.t * L.t = 
-      let (RT.Computational (abinding, lrt)) = rt in
-      let rec aux vbs acc = 
-        match vbs with
-        | [] -> acc
-        | (_, VB.Computational _) :: vbs ->
-           aux vbs acc
-        | (s, VB.Logical ls) :: vbs ->
-           let s' = Sym.fresh () in
-           let acc = LRT.subst_var {before = s;after = s'} acc in
-           aux vbs (LRT.Logical ((s', ls), acc))
-        | (_, VB.Resource re) :: vbs ->
-           aux vbs (LRT.Resource (re,acc))
-        (* | (_, VB.UsedResource _) :: vbs ->
-         *    aux vbs acc *)
-        | (_, VB.Constraint (lc,_)) :: vbs ->
-           aux vbs (LRT.Constraint (lc,acc))
-      in
-      let (new_local, old_local) = since local in
-      (RT.Computational (abinding, aux new_local lrt), old_local)
-
-    (* pop_empty: "pop" the local environment back until last mark and
-       drop the content, while ensuring that it does not contain unused
-       resources *)
-    (* all_empty: do the same for the whole local environment (without
-       supplying a marker) *)
-    let check_all_used loc ~original_local extra_names vbs = 
-      let rec aux = function
-        | (s, VB.Resource resource) :: rest -> 
-           begin match resource with
-           | Point p when 
-                  S.holds original_local (le_ (p.permission, q_ (0, 1))) ->
-              aux rest
-           | IteratedStar p when 
-                  S.holds_forall original_local [(p.qpointer, BT.Loc)]
-                    (le_ (p.permission, q_ (0, 1))) ->
-              aux rest
-           | Predicate p when 
-                  (not p.unused) ->
-              aux rest
-           | _ -> 
-              let names = names @ extra_names in
-              let (resource, state) = Explain.resource names original_local resource (S.get_model ()) in
-              fail loc (Unused_resource {resource; state})
-           end
-        | _ :: rest -> aux rest
-        | [] -> return ()
-      in
-      aux vbs
-
-    let pop_empty loc extra_names local = 
-      let (new_local, old_local) = since local in
-      let@ () = check_all_used loc ~original_local:local extra_names new_local in
-      return old_local
-
     let all_empty loc extra_names local = 
-      let new_local = all local in
-      let@ () = check_all_used loc ~original_local:local extra_names new_local in
-      return ()
-
-
-
-    (* merging information after control-flow join points  *)
-
-    let merge_paths 
-          (loc : loc) 
-          (local_or_falses : (L.t fallible) list) : L.t fallible =
-      let locals = non_false local_or_falses in
-      match locals with
-      | [] -> False
-      | first :: _ -> 
-         (* for every local environment L: merge L L = L *)
-         let local = L.big_merge first locals in 
-         Normal local
-
+      let bad = 
+        SymMap.filter_map (fun name bound ->
+            match bound with
+            | VB.Resource resource ->
+               begin match resource with
+               | Point p when 
+                      not (S.holds local (le_ (p.permission, q_ (0, 1)))) ->
+                  Some resource
+               | IteratedStar p when 
+                      not (S.holds_forall local [(p.qpointer, BT.Loc)]
+                             (le_ (p.permission, q_ (0, 1)))) ->
+                  Some resource
+               | Predicate p when p.unused ->
+                  Some resource
+               | (IteratedStar _ | Point _ | Predicate _) -> None
+               end
+            | _ -> None
+          ) local
+      in
+      match SymMap.choose_opt bad with
+      | None -> return ()
+      | Some (_, resource) ->
+         let names = names @ extra_names in
+         let (resource, state) = Explain.resource names local resource (S.get_model ()) in
+         fail loc (Unused_resource {resource; state})
 
 
 
@@ -1513,7 +1374,7 @@ module Make (G : sig val global : Global.t end) = struct
     (* check_pexpr: type check the pure expression `e` against return type
        `typ`; returns a "reduced" local environment *)
 
-    let rec check_tpexpr local (e : 'bty mu_tpexpr) (typ : RT.t) : (L.t fallible, type_error) m = 
+    let rec check_tpexpr local (e : 'bty mu_tpexpr) (typ : RT.t) : (unit fallible, type_error) m = 
       let (M_TPexpr (loc, _annots, _, e_)) = e in
       debug 3 (lazy (action "checking pure expression"));
       debug 3 (lazy (item "expr" (group (pp_tpexpr e))));
@@ -1525,15 +1386,13 @@ module Make (G : sig val global : Global.t end) = struct
          let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          let@ paths =
            ListM.mapM (fun (lc, e) ->
-               let delta = add_uc lc L.empty in
-               let@? () = 
-                 false_if_unreachable loc (delta ++ local)
-               in
-               check_tpexpr_pop loc delta local e typ
+               let local = add_uc lc local in
+               let@? () = false_if_unreachable loc local in
+               check_tpexpr local e typ
              ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
                 (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
          in
-         return (merge_paths loc paths)
+         return (Normal ())
       | M_PEcase (asym, pats_es) ->
          let@ arg = arg_of_asym local asym in
          let@ paths = 
@@ -1541,34 +1400,24 @@ module Make (G : sig val global : Global.t end) = struct
                (* TODO: make pattern matching return (in delta)
                   constraints corresponding to the pattern *)
                let@ delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
-               let@? () = 
-                 false_if_unreachable loc (delta ++ local)
-               in
-               check_tpexpr_pop loc delta local e typ
+               let local = delta ++ local in
+               let@? () = false_if_unreachable loc local in
+               check_tpexpr local e typ
              ) pats_es
          in
-         return (merge_paths loc paths)
+         return (Normal ())
       | M_PElet (p, e1, e2) ->
          let@? (rt, local) = infer_pexpr local e1 in
          let@ delta = match p with
            | M_Symbol sym -> return (bind sym rt)
            | M_Pat pat -> pattern_match_rt pat rt
          in
-         check_tpexpr_pop loc delta local e2 typ
+         check_tpexpr (delta ++ local) e2 typ
       | M_PEdone asym ->
          let@ arg = arg_of_asym local asym in
          let@ local = subtype loc local arg typ in
-         let@ local = pop_empty loc [] local in
-         return (Normal local)
-
-    and check_tpexpr_pop (loc : loc) delta local (pe : 'bty mu_tpexpr) 
-                        (typ : RT.t) : (L.t fallible, type_error) m =
-      let local = delta ++ marked ++ local in 
-      let@? local = check_tpexpr local pe typ in
-      let@ local = pop_empty loc [] local in
-      return (Normal local)
-
-
+         let@ () = all_empty loc [] local in
+         return (Normal ())
 
 
     (*** memory related logic *****************************************************)
@@ -1703,29 +1552,6 @@ module Make (G : sig val global : Global.t end) = struct
             let block = RE.Point point in
             let rt = Resource (block, LRT.I) in
             return rt
-
-
-
-    (* (\* not used right now *\)
-     * (\* todo: right access kind *\)
-     * let pack_stored_struct loc local (pointer: IT.t) (tag: BT.tag) =
-     *   let size = Memory.size_of_struct tag in
-     *   let v = Sym.fresh () in
-     *   let bt = Struct tag in
-     *   let@ constraints = load loc local (Struct tag) pointer size (sym_ (Struct tag, v)) None in
-     *   let@ local = ownership_request loc (Access (Load None)) local pointer (num_ size) in
-     *   let rt = 
-     *     LRT.Logical ((v, Base bt), 
-     *     LRT.Resource (Point {pointer; content = Value v; size},
-     *     LRT.Constraint (constraints, LRT.I)))
-     *   in
-     *   return rt *)
-
-
-    let ensure_aligned loc local access pointer ctype = 
-      if S.holds local (aligned_ (ctype, pointer))
-      then return () 
-      else fail loc (Misaligned access)
 
 
 
@@ -1999,7 +1825,7 @@ module Make (G : sig val global : Global.t end) = struct
        against `typ`, which is either a return type or `False`; returns
        either an updated environment, or `False` in case of Goto *)
     let rec check_texpr (local, labels) (e : 'bty mu_texpr) (typ : RT.t fallible) 
-            : (L.t fallible, type_error) m = 
+            : (unit fallible, type_error) m = 
       let (M_TExpr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "checking expression"));
       debug 3 (lazy (item "expr" (group (pp_texpr e))));
@@ -2012,15 +1838,13 @@ module Make (G : sig val global : Global.t end) = struct
            let@ paths =
              ListM.mapM (fun (lc, e) ->
                  debug 6 (lazy (!^"checking branch under assumption" ^^^ LC.pp lc));
-                 let delta = add_uc lc L.empty in
-                 let@? () = 
-                   false_if_unreachable loc (delta ++ local)
-                 in
-                 check_texpr_pop delta (local, labels) e typ 
+                 let local = add_uc lc local in
+                 let@? () = false_if_unreachable loc local in
+                 check_texpr (local, labels) e typ 
                ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
                   (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
            in
-           return (merge_paths loc paths)
+           return (Normal ())
         | M_Ebound (_, e) ->
            check_texpr (local, labels) e typ 
         | M_End _ ->
@@ -2032,38 +1856,37 @@ module Make (G : sig val global : Global.t end) = struct
                  (* TODO: make pattern matching return (in delta)
                     constraints corresponding to the pattern *)
                  let@ delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
-                 let@? () = 
-                   false_if_unreachable loc (delta ++ local)
-                 in
-                 check_texpr_pop delta (local, labels) e typ
+                 let local = delta ++ local in
+                 let@? () = false_if_unreachable loc local in
+                 check_texpr (local, labels) e typ
                ) pats_es
            in
-           return (merge_paths loc paths)
+           return (Normal ())
         | M_Elet (p, e1, e2) ->
            let@? (rt, local) = infer_pexpr local e1 in
            let@ delta = match p with 
              | M_Symbol sym -> return (bind sym rt)
              | M_Pat pat -> pattern_match_rt pat rt
            in
-           check_texpr_pop delta (local, labels) e2 typ
+           check_texpr (delta ++ local, labels) e2 typ
         | M_Ewseq (pat, e1, e2) ->         
            let@? (rt, local) = infer_expr (local, labels) e1 in
            let@ delta = pattern_match_rt pat rt in
-           check_texpr_pop delta (local, labels) e2 typ
+           check_texpr (delta ++ local, labels) e2 typ
         | M_Esseq (pat, e1, e2) ->
            let@? (rt, local) = infer_expr (local, labels) e1 in
            let@ delta = match pat with
              | M_Symbol sym -> return (bind sym rt)
              | M_Pat pat -> pattern_match_rt pat rt
            in
-           check_texpr_pop ~print:true delta (local, labels) e2 typ
+           check_texpr (delta ++ local, labels) e2 typ
         | M_Edone asym ->
            match typ with
            | Normal typ ->
               let@ arg = arg_of_asym local asym in
               let@ local = subtype loc local arg typ in
-              let@ local = pop_empty loc [] local in
-              return (Normal local)
+              let@ () = all_empty loc [] local in
+              return (Normal ())
            | False ->
               let err = 
                 !^("This expression returns but is expected "^
@@ -2072,20 +1895,6 @@ module Make (G : sig val global : Global.t end) = struct
               fail loc (Generic err)
       in
       return result
-
-
-    and check_texpr_pop ?(print=false) delta (local, labels) (e : 'bty mu_texpr) (typ : RT.t fallible)
-        : (L.t fallible, type_error) m =
-      let (M_TExpr (loc, _, _)) = e in    
-      let local = delta ++ marked ++ local in 
-      let () = print_json (lazy (json_local loc names local)) in
-      let@ result = check_texpr (local, labels) e typ in
-      match result with
-      | False -> 
-         return False
-      | Normal local -> 
-         let@ local = pop_empty loc [] local in
-         return (Normal local)
 
 
   end (* Checker *)
@@ -2177,10 +1986,11 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let@ local_or_false =
       let names = 
-        Explain.naming_substs substs (Explain.naming_of_mapping mapping)  
+        Explain.naming_substs substs 
+          (Explain.naming_of_mapping mapping)
       in
       let module C = Checker(struct let names = names end) in
-      C.check_tpexpr_pop loc delta L.empty body rt 
+      C.check_tpexpr delta body rt 
     in
     return ()
 
@@ -2252,8 +2062,7 @@ module Make (G : sig val global : Global.t end) = struct
                (Explain.naming_of_mapping mapping)  
            in
            let module C = Checker(struct let names = names end) in
-           C.check_texpr_pop ~print:true (delta_label ++ pure_delta) 
-             (L.empty, labels) body False
+           C.check_texpr (delta_label ++ pure_delta, labels) body False
          in
          return ()
     in
@@ -2261,7 +2070,7 @@ module Make (G : sig val global : Global.t end) = struct
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let@ local_or_false = 
       let module C = Checker(struct let names = fnames end) in
-      C.check_texpr_pop ~print:true delta (L.empty, labels) body (Normal rt)
+      C.check_texpr (delta, labels) body (Normal rt)
     in
     return ()
 
@@ -2318,7 +2127,7 @@ let record_funinfo global funinfo =
         let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
         let lc = representable_ (voidstar, sym_ (Loc, fsym)) in
         let sc = SolverConstraints.of_index_term global lc in
-        (Sym.fresh (), VB.Constraint (LC.LC lc, sc)) :: global.bindings 
+        SymMap.add (Sym.fresh ()) (VB.Constraint (LC.LC lc, sc)) global.bindings 
       in
       return {global with fun_decls; bindings}
     ) funinfo global
@@ -2388,22 +2197,18 @@ let check_and_record_impls global impls =
 let record_globals global globs = 
   let open Global in
   ListM.fold_leftM (fun global (sym, def) ->
-      let new_bindings ct lsym = 
-        let it = IT.good_pointer lsym ct in
-        let sc = SolverConstraints.of_index_term global it in
-        let new_bindings = 
-          [(Sym.fresh (), VB.Constraint (LC.LC it, sc));
-           (sym, VB.Computational (lsym, Loc));
-           (lsym, VB.Logical (Base Loc));
-          ]
-        in
-        List.rev new_bindings
-      in
       match def with
-      | M_GlobalDef (lsym, (_, ct), e) ->
-         return {global with bindings = new_bindings ct lsym @ global.bindings }
+      | M_GlobalDef (lsym, (_, ct), _)
       | M_GlobalDecl (lsym, (_, ct)) ->
-         return {global with bindings = new_bindings ct lsym @ global.bindings }
+         let bindings = 
+           let it = IT.good_pointer lsym ct in
+           let sc = SolverConstraints.of_index_term global it in
+           SymMap.add (Sym.fresh ()) (VB.Constraint (LC.LC it, sc)) 
+             (SymMap.add sym (VB.Computational (lsym, Loc))
+                (SymMap.add lsym (VB.Logical (Base Loc))
+                   global.bindings))
+         in
+         return {global with bindings = bindings }
     ) global globs
 
 

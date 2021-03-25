@@ -26,6 +26,22 @@ let kind = function
   | Constraint _ -> KConstraint
 
 
+let is_computational = function
+  | Computational (sym,bt) -> Some (sym, bt)
+  | _ -> None
+
+let is_logical = function
+  | Logical ls -> Some ls
+  | _ -> None
+
+let is_resource = function
+  | Resource re -> Some re
+  | _ -> None
+
+let is_constraint = function
+  | Constraint (lc, sc) -> Some (lc, sc)
+  | _ -> None
+
 
 
 let pp ?(print_all_names = false) (sym,binding) =
