@@ -877,9 +877,7 @@ let pointer_ n = IT (Lit (Pointer n), BT.Loc)
 let bool_ b = IT (Lit (Bool b), BT.Bool)
 let unit_ = IT (Lit Unit, BT.Unit)
 let default_ bt = IT (Lit (Default bt), bt)
-
 let int_ n = z_ (Z.of_int n)
-
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
@@ -903,13 +901,13 @@ let and_ its = IT (Bool_op (And its), BT.Bool)
 let or_ its = IT (Bool_op (Or its), BT.Bool)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
 let not_ it = IT (Bool_op (Not it), BT.Bool)
-let ite_ bt (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt)
+let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = IT (Bool_op (NE (it, it')), BT.Bool)
 
 (* tuple_op *)
-let tuple_ ~item_bts its = IT (Tuple_op (Tuple its), BT.Tuple item_bts)
+let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))
 let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
 
 (* struct_op *)
@@ -971,6 +969,7 @@ let alignedI_ (it, it') =
   IT (CT_pred (AlignedI (it, it')), BT.Bool)
 
 
+let def_ sym e = eq_ (sym_ (bt e, sym), e)
 
 let in_range within (min, max) = 
   and_ [le_ (min, within); le_ (within, max)]

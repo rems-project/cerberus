@@ -153,7 +153,7 @@ module Make (G : sig val global : Global.t end) = struct
            | Some s -> return (add_a s (has_bt, s') local')
            | None -> return local'
          in
-         let local' = add_c (LC (eq_ (this, sym_ (has_bt, s')))) local' in
+         let local' = add_c (LC (def_ s' this)) local' in
          return local'
       | M_Pattern (loc, annots, M_CaseCtor (constructor, pats)) ->
          match expect, constructor, pats with
@@ -572,10 +572,9 @@ module Make (G : sig val global : Global.t end) = struct
                   let needed = simplify (sub_ (needed, can_take)) in
                   let permission' =
                     simplify (
-                        ite_ BT.Real
-                          (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
-                           sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
-                           p'.permission)
+                        ite_ (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
+                              sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
+                              p'.permission)
                       )
                   in
                   (IteratedStar {p' with permission = permission'}, needed)
@@ -597,12 +596,7 @@ module Make (G : sig val global : Global.t end) = struct
                          Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
                   let can_take = simplify (min_ (p'.permission, needed)) in
                   let content = 
-                    simplify 
-                      (ite_ bt 
-                         (gt_ (can_take, q_ (0, 1)), 
-                          v', 
-                          content) 
-                      )
+                    simplify (ite_ (gt_ (can_take, q_ (0, 1)), v', content))
                   in
                   let needed = simplify (sub_ (needed, can_take)) in
                   let permission' = simplify (sub_ (p'.permission, can_take)) in
@@ -617,20 +611,16 @@ module Make (G : sig val global : Global.t end) = struct
                        in
                   let content = 
                     simplify 
-                      (ite_ bt 
-                         (gt_ (can_take, q_ (0, 1)), 
-                          IT.subst_it {before=p'.qpointer; after = requested.pointer} v', 
-                          content)
-                      )
+                      (ite_ (gt_ (can_take, q_ (0, 1)), 
+                             IT.subst_it {before=p'.qpointer; after = requested.pointer} v', 
+                             content))
                   in
                   let needed = simplify (sub_ (needed, can_take)) in
                   let permission' =
                     simplify 
-                      (ite_ BT.Real
-                         (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
-                          sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
-                          p'.permission)
-                      )
+                      (ite_ (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
+                             sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
+                             p'.permission))
                   in
                   (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->
@@ -659,11 +649,9 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   let needed =
                     simplify (
-                        ite_ BT.Real
-                          (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
-                           sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
-                           needed)
-                      )
+                        ite_ (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
+                              sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
+                              needed))
                   in
                   let permission' = simplify (sub_ (p'.permission, can_take)) in
                   (Point {p' with permission = permission'}, needed)
@@ -710,18 +698,16 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   let needed =
                     simplify (
-                        ite_ BT.Real
-                          (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
-                           sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
-                           needed)
+                        ite_ (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
+                              sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
+                              needed)
                       )
                   in
                   let content = 
                     simplify (
-                        ite_ bt 
-                          (and_ [eq_ (sym_ (BT.Loc, qp), p'.pointer); gt_ (p'.permission, q_ (0, 1))], 
-                           v', 
-                           content)
+                        ite_ (and_ [eq_ (sym_ (BT.Loc, qp), p'.pointer); gt_ (p'.permission, q_ (0, 1))], 
+                              v', 
+                              content)
                       )
                   in
                   let permission' = 
@@ -740,10 +726,9 @@ module Make (G : sig val global : Global.t end) = struct
                     simplify (sub_ (needed, can_take)) in
                   let content = 
                     simplify (
-                        ite_ bt 
-                          (gt_ (can_take, q_ (0, 1)), 
-                           IT.subst_var {before=p'.qpointer; after = qp} v', 
-                           content)
+                        ite_ (gt_ (can_take, q_ (0, 1)), 
+                              IT.subst_var {before=p'.qpointer; after = qp} v', 
+                              content)
                       )
                   in
                   let permission' = 
@@ -918,14 +903,14 @@ module Make (G : sig val global : Global.t end) = struct
     let rt_of_vt (bt,it) = 
       let ret = Sym.fresh () in
       RT.Computational ((ret, bt), 
-      LRT.Constraint (LC (eq_ (sym_ (bt, ret), it)), 
+      LRT.Constraint (LC (def_ ret it),
       LRT.I))
 
 
     let infer_tuple (loc : loc) (args : args) : (vt, type_error) m = 
       let bts = List.map (fun arg -> arg.bt) args in
       let bt = Tuple bts in
-      let tuple_it = IT.tuple_ ~item_bts:bts (List.map (fun arg -> sym_ (arg.bt, arg.lname)) args) in
+      let tuple_it = IT.tuple_ (List.map (fun arg -> sym_ (arg.bt, arg.lname)) args) in
       return (bt, tuple_it)
 
     let infer_constructor (loc : loc) local (constructor : mu_ctor) 
@@ -1073,7 +1058,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ vts = ListM.mapM (infer_value loc) vals in
          let bts = List.map fst vts in
          let its = List.map snd vts in
-         return (Tuple bts, IT.tuple_ ~item_bts:bts its)
+         return (Tuple bts, IT.tuple_ its)
 
 
 
@@ -1096,7 +1081,8 @@ module Make (G : sig val global : Global.t end) = struct
       let constr = 
         let base = sym_ (BT.Loc, arg1.lname) in
         let offset = mulPointer_ (z_ element_size, sym_ (BT.Integer, arg2.lname)) in
-        eq_ (sym_ (Loc, ret), addPointer_ (base, offset)) in
+        def_ ret (addPointer_ (base, offset)) 
+      in
       let rt = RT.Computational ((ret, Loc), Constraint (LC.LC constr, I)) in
       return (rt, local)
 
@@ -1110,13 +1096,8 @@ module Make (G : sig val global : Global.t end) = struct
          (* try to follow wrapI from runtime/libcore/std.core *)
          let dlt = add_ (sub_ (maxInteger_ ty, minInteger_ ty), int_ 1) in
          let r = rem_f_ (arg_it, dlt) in
-         let result_it = 
-           ite_ BT.Integer
-             (le_ (r, maxInteger_ ty), 
-              r,
-              sub_ (r, dlt))
-         in
-         let constr = eq_ (sym_ (Integer,ret), result_it) in
+         let result_it = ite_  (le_ (r, maxInteger_ ty), r,sub_ (r, dlt)) in
+         let constr = def_ ret result_it in
          let rt = RT.Computational ((ret, BT.Integer), 
                   LRT.Constraint (LC.LC constr, LRT.I)) in
          return (rt, local)
@@ -1134,7 +1115,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEsym sym ->
            let ret = Sym.fresh () in
            let@ arg = arg_of_sym loc local sym in
-           let constr = LC (eq_ (sym_ (arg.bt, ret), sym_ (arg.bt, arg.lname))) in
+           let constr = LC (def_ ret (sym_ (arg.bt, arg.lname))) in
            let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
            return ((rt, local))
         | M_PEimpl i ->
@@ -1164,14 +1145,14 @@ module Make (G : sig val global : Global.t end) = struct
            let@ decl = get_struct_decl loc tag in
            let@ _member_bt = get_member_type loc tag member decl in
            let shifted_pointer = IT.structMemberOffset_ (tag, sym_ (arg.bt, arg.lname), member) in
-           let constr = LC (eq_ (sym_ (BT.Loc, ret), shifted_pointer)) in
+           let constr = LC (def_ ret shifted_pointer) in
            let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
            return (rt, local)
         | M_PEnot asym ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
            let ret = Sym.fresh () in 
-           let constr = (LC (eq_ (sym_ (Bool, ret), not_ (sym_ (arg.bt, arg.lname))))) in
+           let constr = (LC (def_ ret (not_ (sym_ (arg.bt, arg.lname))))) in
            let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
            return (rt, local)
         | M_PEop (op, asym1, asym2) ->
@@ -1202,7 +1183,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
            let@ () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
            let ret = Sym.fresh () in
-           let constr = LC (eq_ (sym_ (rbt, ret), result_it)) in
+           let constr = LC (def_ ret result_it) in
            let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
            return (rt, local)
         | M_PEstruct _ ->
@@ -1239,9 +1220,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
            let constr = 
-             eq_ (sym_ (BT.Integer, ret),
-                  ite_ BT.Integer (sym_ (BT.Bool, arg.lname), int_ 1, int_ 0))
-           in
+             def_ ret (ite_ (sym_ (BT.Bool, arg.lname), int_ 1, int_ 0)) in
            let rt = RT.Computational ((ret, BT.Integer), 
                     LRT.Constraint (LC.LC constr, LRT.I)) in
            return (rt, local)
@@ -1253,15 +1232,14 @@ module Make (G : sig val global : Global.t end) = struct
            let arg_it = sym_ (Integer,arg.lname) in
            begin match act.ct with
            | Sctype (_, Integer Bool) ->
-              let result_it = 
-                ite_ BT.Integer (eq_ (arg_it, int_ 0), int_ 0, int_ 1) in
-              let constr = eq_ (sym_ (Integer,ret), result_it) in
+              let constr = 
+                def_ ret (ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
               let rt = RT.Computational ((ret, BT.Integer), 
                        LRT.Constraint (LC.LC constr, LRT.I)) in
               return (rt, local)
            | _ 
                 when Solver.holds local (representable_ (act.ct, arg_it)) ->
-              let constr = eq_ (sym_ (Integer,ret), arg_it) in
+              let constr = def_ ret arg_it in
               let rt = RT.Computational ((ret, BT.Integer), 
                        LRT.Constraint (LC.LC constr, LRT.I)) in
               return (rt, local)
@@ -1333,31 +1311,25 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let load (loc: loc)  local (bt: BT.t) (pointer: IT.t)
-             (size: Z.t) (return_it: IT.t) (is_member: BT.member option) =
-      let original_local = local in
-      let rec aux local bt pointer size path is_member = 
+    let load (loc: loc) local (bt: BT.t) (pointer: IT.t) (size: Z.t) =
+      let open Global in
+      let rec aux bt pointer size : (IT.t, type_error) m = 
         match bt with
-        | Struct tag ->
+        | BT.Struct tag ->
            let@ decl = get_struct_decl loc tag in
-           let rec aux_members = function
-             | Global.{size; member = (member, member_sct); _} :: members ->
+           let@ member_its = 
+             ListM.mapM (fun {size; member = (member, member_sct); _} ->
                 let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
-                let member_path = IT.structMember_ ~member_bt:(BT.of_sct member_sct) (tag, path, member) in
-                let@ constraints = aux_members members in
-                let@ constraints2 = 
-                  aux local (BT.of_sct member_sct) member_pointer 
-                    size member_path (Some member) 
-                in
-                return (constraints2 @ constraints)
-             | [] -> return []
-           in  
-           aux_members (Global.members decl.layout)
+                let@ it = aux (BT.of_sct member_sct) member_pointer size in
+                return (member, it)
+               ) (Global.members decl.layout)
+           in
+           return (struct_ (tag, member_its))
         | _ ->
            (* todo: can maybe optimise this to maybe request all
               resources at the same time? *)
            let@ (resource, _)  = 
-             resource_request loc original_local (Access (Load None)) local
+             resource_request loc local (Access (Load None)) local
                (Point {pointer; 
                        size; 
                        content = Value (sym_ (bt, Sym.fresh ()));
@@ -1365,12 +1337,11 @@ module Make (G : sig val global : Global.t end) = struct
                })
            in
            begin match resource with
-           | Point {content = Value pointee; _} -> return [IT.eq_ (path, pointee)]
+           | Point {content = Value pointee; _} -> return pointee
            | _ -> Debug_ocaml.error "points-to request did not return points-to"
            end
       in
-      let@ constraints = aux local bt pointer size return_it is_member in
-      return (LC (and_ constraints))
+      aux bt pointer size
 
 
 
@@ -1530,14 +1501,14 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = LC (eq_ (sym_ (Loc, ret), pointerToIntegerCast_ (sym_ (Loc, arg.lname)))) in
+              let constr = LC (def_ ret (pointerToIntegerCast_ (sym_ (Loc, arg.lname)))) in
               let rt = RT.Computational ((ret, Integer), Constraint (constr, I)) in
               return (Normal (rt, local))            
            | M_PtrFromInt (act_from, act2_to, asym) ->
               let ret = Sym.fresh () in 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-              let constr = LC (eq_ (sym_ (Loc, ret), integerToPointerCast_ (sym_ (Integer, arg.lname)))) in
+              let constr = LC (def_ ret (integerToPointerCast_ (sym_ (Integer, arg.lname)))) in
               let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
               return (Normal (rt, local))            
            | M_PtrValidForDeref (act, asym) ->
@@ -1561,14 +1532,14 @@ module Make (G : sig val global : Global.t end) = struct
                 let alignment_lc = aligned_ (act.ct, sym_ (arg.bt, arg.lname)) in
                 return (Solver.holds local alignment_lc)
               in
-              let constr = LC (eq_ (sym_ (Bool, ret), bool_ ok)) in
+              let constr = LC (def_ ret (bool_ ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
               return (Normal (rt, local))
            | M_PtrWellAligned (act, asym) ->
               let ret = Sym.fresh () in
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = eq_ (sym_ (Bool, ret), aligned_ (act.ct, sym_ (BT.Loc, arg.lname))) in
+              let constr = def_ ret (aligned_ (act.ct, sym_ (BT.Loc, arg.lname))) in
               let rt = RT.Computational ((ret, Bool), Constraint (LC.LC constr, I)) in
               return (Normal (rt, local))
            | M_PtrArrayShift (asym1, act, asym2) ->
@@ -1664,11 +1635,9 @@ module Make (G : sig val global : Global.t end) = struct
               let@ () = ensure_base_type loc ~expect:Loc parg.bt in
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.ct in
-              let@ constraints = 
-                load loc local bt (sym_ (parg.bt, parg.lname)) 
-                  size (sym_ (bt, ret)) None 
-              in
-              let rt = RT.Computational ((ret, bt), Constraint (constraints, LRT.I)) in
+              let@ it = load loc local bt (sym_ (parg.bt, parg.lname)) size in
+              let constr = def_ ret it in
+              let rt = RT.Computational ((ret, bt), Constraint (LC constr, LRT.I)) in
               return (Normal (rt, local))
            | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
               Debug_ocaml.error "todo: RMW"

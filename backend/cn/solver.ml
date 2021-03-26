@@ -156,9 +156,9 @@ module Make (G : sig val global : Global.t end) = struct
       | Rem_f (t1, t2) ->
          Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
       | Min (t1, t2) ->
-         term (ite_ bt (le_ (t1, t2), t1, t2))
+         term (ite_ (le_ (t1, t2), t1, t2))
       | Max (t1, t2) ->
-         term (ite_ bt (ge_ (t1, t2), t1, t2))
+         term (ite_ (ge_ (t1, t2), t1, t2))
 
     and cmp_op it bt =
       match it with

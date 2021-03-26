@@ -357,7 +357,7 @@ let region pointer size permission =
       qpointer = q;
       size = Z.of_int 1;
       content = Block Nothing;
-      permission = ite_ BT.Real (condition, permission, q_ (0,1))
+      permission = ite_ (condition, permission, q_ (0,1))
     }
   in
   IteratedStar point
@@ -382,7 +382,7 @@ let array pointer length element_size content permission =
       qpointer = q;
       size = element_size;
       content = Value (content it);
-      permission = ite_ BT.Real (condition, permission, q_ (0,1))
+      permission = ite_ (condition, permission, q_ (0,1))
     }
   in
   IteratedStar point
