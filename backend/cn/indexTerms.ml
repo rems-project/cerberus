@@ -1253,17 +1253,26 @@ let simplify equalities term =
 
 
 (* rubbish hash function *)
-let hash (IT (it, _)) : int =
-    match it with
-    | Lit it -> 0
-    | Arith_op it -> 1
-    | Cmp_op it -> 2
-    | Bool_op it -> 3
-    | Tuple_op it -> 4
-    | Struct_op it -> 5
-    | Pointer_op it -> 6
-    | CT_pred it -> 7
-    | List_op it -> 8
-    | Set_op it -> 9
-    | Array_op it -> 10
+let hash (IT (it, _bt)) =
+  match it with
+  | Arith_op it -> 1
+  | Cmp_op it -> 2
+  | Bool_op it -> 3
+  | Tuple_op it -> 4
+  | Struct_op it -> 5
+  | Pointer_op it -> 6
+  | CT_pred it -> 7
+  | List_op it -> 8
+  | Set_op it -> 9
+  | Array_op it -> 10
+  | Lit lit ->
+     begin match lit with
+     | Z z -> 11
+     | Q (i, j) -> 12
+     | Pointer p -> 13
+     | Bool b -> 14
+     | Unit -> 15
+     | Default bt -> 16
+     | Sym (Symbol (_,i, _)) -> 100 + i
+     end
 

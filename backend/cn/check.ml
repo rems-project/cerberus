@@ -59,7 +59,7 @@ let pp_texpr e = PP_MUCORE.pp_texpr (pp_budget ()) e
 
 
 module Make (G : sig val global : Global.t end) = struct
-  module S = Solver.Make(G)
+  module Solver = Solver.Make(G)
   module WT = WellTyped.Make(G)
   module Explain = Explain.Make(G)
   open L
@@ -421,11 +421,16 @@ module Make (G : sig val global : Global.t end) = struct
                       List.equal IT.equal (RE.inputs resource) (RE.inputs resource') 
                     in
                     let outputs_ok () = 
-                      S.holds_forall local (RE.quantified resource) 
-                        (IT.impl_
-                           (gt_ (RE.permission resource', q_ (0, 1)),
-                            IT.and_ (List.map2 eq__ (RE.outputs resource)
-                                       (RE.outputs resource'))))
+                      let () = Debug_ocaml.begin_csv_timing "spine calling solver" in
+                      let result = 
+                        Solver.holds_forall local (RE.quantified resource) 
+                          (IT.impl_
+                             (gt_ (RE.permission resource', q_ (0, 1)),
+                              IT.and_ (List.map2 eq__ (RE.outputs resource)
+                                         (RE.outputs resource'))))
+                      in
+                      let () = Debug_ocaml.end_csv_timing () in
+                      result
                     in
                     if inputs_ok () && quantifiers_ok () && outputs_ok ()
                     then return unis else mismatch ()
@@ -460,20 +465,22 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let@ rt = 
-          let rec check_constraints = function
-            | Constraint (LC c, ftyp) ->
-               debug 6 (lazy (item "local" (L.pp local)));
-               debug 6 (lazy (item "lc" (LC.pp (LC c))));
-               debug 6 (lazy (item "spec" (NFT.pp_c ftyp)));
-               if S.holds local c then check_constraints ftyp else 
-                 let (constr,state) = 
-                   Explain.unsatisfied_constraint names original_local (LC c)
-                 in
-                 fail loc (Unsat_constraint {constr; hint = None; state})
-            | I rt -> 
-               return rt
+          let rec aux = function
+            | Constraint (LC c, ftyp) -> 
+               let lcs, rt = aux ftyp in
+               (c :: lcs, rt)
+            | I rt ->
+               ([], rt)
           in
-          check_constraints ftyp_c
+          let lcs, rt = aux ftyp_c in
+
+          if Solver.holds local (and_ lcs) then return rt 
+          else
+            let c = List.find (fun lc -> not (Solver.holds local lc)) lcs in
+            let (constr,state) = 
+              Explain.unsatisfied_constraint names original_local (LC c)
+            in
+            fail loc (Unsat_constraint {constr; hint = None; state})
         in
 
         return (rt, local)
@@ -538,7 +545,7 @@ module Make (G : sig val global : Global.t end) = struct
       let names = names @ ui_info.extra_names in
       let simplify = IT.simplify [] in
       let missing () = 
-        let (resource, state) = Explain.resource names original_local request (S.get_model ()) in
+        let (resource, state) = Explain.resource names original_local request (Solver.get_model ()) in
         fail loc (Missing_resource {resource; used = None; state; situation})
       in
       match request with
@@ -549,7 +556,7 @@ module Make (G : sig val global : Global.t end) = struct
                match re with
                | Point p' 
                     when Z.equal requested.size p'.size &&
-                         S.holds local (eq_ (requested.pointer, p'.pointer)) ->
+                         Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
                   let can_take = simplify (min_ (p'.permission, needed)) in
                   let needed = simplify (sub_ (needed, can_take)) in
                   let permission' = simplify (sub_ (p'.permission, can_take)) in
@@ -576,7 +583,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (re, needed)
              ) local needed
          in
-         if S.holds local (eq_ (needed, q_ (0, 1))) 
+         if Solver.holds local (eq_ (needed, q_ (0, 1))) 
          then return (request, updated_local)
          else missing ()
       | Point ({content = Value (IT (_, bt)); _} as requested) ->
@@ -587,7 +594,7 @@ module Make (G : sig val global : Global.t end) = struct
                | Point ({content = Value v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') &&
-                         S.holds local (eq_ (requested.pointer, p'.pointer)) ->
+                         Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
                   let can_take = simplify (min_ (p'.permission, needed)) in
                   let content = 
                     simplify 
@@ -630,7 +637,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (re, (needed, content))
              ) local (needed, default_ bt)
          in
-         if S.holds local (eq_ (needed, q_ (0, 1))) 
+         if Solver.holds local (eq_ (needed, q_ (0, 1))) 
          then return (Point {requested with content = Value content}, updated_local)
          else missing ()
       | IteratedStar ({content = Block block_type; _} as requested) ->
@@ -680,7 +687,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (re, needed)
              ) local needed
          in
-         if S.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
+         if Solver.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
          then return (IteratedStar requested, updated_local)
          else missing ()
       | IteratedStar ({content = Value (IT (_, bt)); _} as requested) ->
@@ -750,7 +757,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (re, (needed, content))
              ) local (needed, default_ bt)
          in
-         if S.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
+         if Solver.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
          then 
            let resource = 
              IteratedStar {requested with 
@@ -766,7 +773,7 @@ module Make (G : sig val global : Global.t end) = struct
                match found, re with
                | None, Predicate p' when 
                       p'.unused && predicate_name_equal p'.name p.name  ->
-                  if S.holds local (IT.and_ (List.map2 IT.eq__ p.iargs p'.iargs))
+                  if Solver.holds local (IT.and_ (List.map2 IT.eq__ p.iargs p'.iargs))
                   then (Predicate {p' with unused = false}, Some p')
                   else (re, None)
                | _ ->
@@ -878,7 +885,7 @@ module Make (G : sig val global : Global.t end) = struct
                        let prompt = Spine_LFT.spine ui_info local [] clause in
                        let@ (lrt, test_local) = handle_prompt prompt in
                        let test_local = bind_logical test_local lrt in
-                       return (if not (S.is_inconsistent test_local)
+                       return (if not (Solver.is_inconsistent test_local)
                                then Some test_local else None)
                      ) (predicate_unpack_functions p def)
                  in
@@ -1221,7 +1228,7 @@ module Make (G : sig val global : Global.t end) = struct
            let ret = Sym.fresh () in
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-           if S.holds local (sym_ (BT.Bool, arg.lname)) then
+           if Solver.holds local (sym_ (BT.Bool, arg.lname)) then
              let rt = RT.Computational ((ret, BT.Unit), LRT.I) in
              return (rt, local)
            else
@@ -1253,7 +1260,7 @@ module Make (G : sig val global : Global.t end) = struct
                        LRT.Constraint (LC.LC constr, LRT.I)) in
               return (rt, local)
            | _ 
-                when S.holds local (representable_ (act.ct, arg_it)) ->
+                when Solver.holds local (representable_ (act.ct, arg_it)) ->
               let constr = eq_ (sym_ (Integer,ret), arg_it) in
               let rt = RT.Computational ((ret, BT.Integer), 
                        LRT.Constraint (LC.LC constr, LRT.I)) in
@@ -1295,7 +1302,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          ListM.iterM (fun (lc, e) ->
              let local = add_c lc local in
-             if S.is_inconsistent local then return ()
+             if Solver.is_inconsistent local then return ()
              else check_tpexpr local e typ
            ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
               (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
@@ -1306,7 +1313,7 @@ module Make (G : sig val global : Global.t end) = struct
                 constraints corresponding to the pattern *)
              let@ delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
              let local = delta ++ local in
-             if S.is_inconsistent local then return ()
+             if Solver.is_inconsistent local then return ()
              else check_tpexpr local e typ
            ) pats_es
       | M_PElet (p, e1, e2) ->
@@ -1467,23 +1474,25 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let all_empty loc extra_names local = 
+      let () = Debug_ocaml.begin_csv_timing "all_empty" in
       let bad = 
         List.find_opt (fun resource ->
             match resource with
             | Point p ->
-               not (S.holds local (le_ (p.permission, q_ (0, 1))))
+               not (Solver.holds local (le_ (p.permission, q_ (0, 1))))
             | IteratedStar p ->
-               not (S.holds_forall local [(p.qpointer, BT.Loc)]
+               not (Solver.holds_forall local [(p.qpointer, BT.Loc)]
                       (le_ (p.permission, q_ (0, 1))))
             | Predicate p ->
                p.unused
           ) local.resources
       in
+      let () = Debug_ocaml.end_csv_timing () in
       match bad with
       | None -> return ()
       | Some resource ->
          let names = names @ extra_names in
-         let (resource, state) = Explain.resource names local resource (S.get_model ()) in
+         let (resource, state) = Explain.resource names local resource (Solver.get_model ()) in
          fail loc (Unused_resource {resource; state})
 
 
@@ -1550,7 +1559,7 @@ module Make (G : sig val global : Global.t end) = struct
                 (* let fps = List.filter_map RE.footprint (L.all_resources local) in *)
                 (* let in_some_fp = or_ (List.map (IT.in_footprint (sym_ (Loc, arg.lname))) fps) in *)
                 let alignment_lc = aligned_ (act.ct, sym_ (arg.bt, arg.lname)) in
-                return (S.holds local alignment_lc)
+                return (Solver.holds local alignment_lc)
               in
               let constr = LC (eq_ (sym_ (Bool, ret), bool_ ok)) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
@@ -1629,7 +1638,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ () = 
                 let in_range_lc = 
                   representable_ (act.ct, sym_ (varg.bt, varg.lname)) in
-                if S.holds local in_range_lc then return () else 
+                if Solver.holds local in_range_lc then return () else 
                  let (constr,state) = 
                    Explain.unsatisfied_constraint names local (LC in_range_lc)
                  in
@@ -1737,7 +1746,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
            ListM.iterM (fun (lc, e) ->
                let local = add_c lc local in
-               if S.is_inconsistent local then return ()
+               if Solver.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ 
              ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
                 (LC (not_ (sym_ (carg.bt, carg.lname))), e2)]
@@ -1752,7 +1761,7 @@ module Make (G : sig val global : Global.t end) = struct
                   constraints corresponding to the pattern *)
                let@ delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
                let local = delta ++ local in
-               if S.is_inconsistent local then return ()
+               if Solver.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ
              ) pats_es
         | M_Elet (p, e1, e2) ->
@@ -1861,7 +1870,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   
   let check_initial_environment_consistent loc info local =
-    match S.is_inconsistent local, info with
+    match Solver.is_inconsistent local, info with
     | true, `Label -> 
        fail loc (Generic (!^"this label makes inconsistent assumptions"))
     | true, `Fun -> 
