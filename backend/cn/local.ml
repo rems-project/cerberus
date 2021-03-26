@@ -146,20 +146,10 @@ let add_r r (local : t) =
 
 
 let concat (local' : t) (local : t) = 
-  let local = 
-    SymMap.fold (fun sym (bt, lsym) local -> 
-        add_a sym (bt,lsym) local
-      ) local'.computational local
-  in
-  let local = 
-    SymMap.fold (fun sym ls local -> 
-        add_l sym ls local
-      ) local'.logical local
-  in
-  let local = 
-    {local with resources = local'.resources @ local.resources} in
-  let local = 
-    {local with constraints = local'.constraints @ local.constraints} in
+  let local = SymMap.fold add_a local'.computational local in
+  let local = SymMap.fold add_l local'.logical local in
+  let local = List.fold_right add_r local'.resources local in
+  let local = List.fold_right add_c local'.constraints local in
   local
 
 
