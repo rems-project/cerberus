@@ -202,8 +202,6 @@ let of_index_term_aux =
     match it with
     | Null ->
        term (int_ 0)
-    | AllocationSize t ->
-       Debug_ocaml.error "todo: SMT mapping for AllocationSize"
     | AddPointer (t1, t2) ->
        Z3.Arithmetic.mk_add context [term t1; term t2]
     | SubPointer (t1, t2) ->

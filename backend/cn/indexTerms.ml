@@ -56,13 +56,11 @@ and 'bt struct_op =
 
 and 'bt pointer_op = 
   | Null
-  | AllocationSize of 'bt term
   | AddPointer of 'bt term * 'bt term
   | SubPointer of 'bt term * 'bt term
   | MulPointer of 'bt term * 'bt term
   | LTPointer of 'bt term * 'bt term
   | LEPointer of 'bt term * 'bt term
-  (* | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term) *)
   | IntegerToPointerCast of 'bt term
   | PointerToIntegerCast of 'bt term
 
@@ -237,8 +235,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     match it, it' with
     | Null, Null -> 
        true
-    | AllocationSize t1, AllocationSize t1' -> 
-       equal t1 t1'
     | AddPointer (t1, t2), AddPointer (t1', t2') -> 
        equal t1 t1' && equal t2 t2'
     | SubPointer (t1, t2), SubPointer (t1', t2') -> 
@@ -249,21 +245,16 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t1 t1' && equal t2 t2'
     | LEPointer (t1, t2), LEPointer (t1', t2') -> 
        equal t1 t1' && equal t2 t2'
-    (* | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
-     *    equal t1 t1' && equal t2 t2' && 
-     *      equal s1 s1' && equal s2 s2' *)
     | IntegerToPointerCast t1, IntegerToPointerCast t2 -> 
        equal t1 t2
     | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
        equal t1 t2
     | Null, _ -> false
-    | AllocationSize _, _ -> false
     | AddPointer _, _ -> false
     | SubPointer _, _ -> false
     | MulPointer _, _ -> false
     | LTPointer _, _ -> false
     | LEPointer _, _ -> false
-    (* | Disjoint _, _ -> false *)
     | IntegerToPointerCast _, _ -> false
     | PointerToIntegerCast _, _ -> false
   in
@@ -466,8 +457,6 @@ let pp ?(print_symbol_type=(None : (Sym.t -> 'bt -> doc) option))
     let pointer_op = function    
       | Null -> 
          !^"null"
-      | AllocationSize t1 ->
-         c_app !^"allocationSize" [aux false t1]
       | AddPointer (t1, t2) ->
          mparens (flow (break 1) [aux true t1; plus ^^ dot; aux true t2])
       | SubPointer (t1, t2) ->
@@ -478,8 +467,6 @@ let pp ?(print_symbol_type=(None : (Sym.t -> 'bt -> doc) option))
          mparens (flow (break 1) [aux true o1; langle; aux true o2])
       | LEPointer (o1,o2) -> 
          mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
-      (* | Disjoint ((o1,s1),(o2,s2)) ->
-       *    c_app !^"disj" [aux false o1; aux false s1; aux false o2; aux false s2] *)
       | IntegerToPointerCast t ->
          mparens (parens(!^"pointer") ^^ aux true t)
       | PointerToIntegerCast t ->
@@ -615,8 +602,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | MulPointer (it, it') -> free_vars_list [it; it']
     | LTPointer (it, it')  -> free_vars_list [it; it']
     | LEPointer (it, it') -> free_vars_list [it; it']
-    (* | Disjoint ((it,_), (it',_)) -> free_vars_list [it; it'] *)
-    | AllocationSize it -> free_vars it
     | IntegerToPointerCast t -> free_vars t
     | PointerToIntegerCast t -> free_vars t
   in
@@ -753,8 +738,6 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
       let it = match it with
         | Null -> 
            Null
-        | AllocationSize it -> 
-           AllocationSize (aux it)
         | AddPointer (it, it') -> 
            AddPointer (aux it, aux it')
         | SubPointer (it, it') -> 
@@ -765,8 +748,6 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
            LTPointer (aux it, aux it')
         | LEPointer (it, it') -> 
            LEPointer (aux it, aux it')
-        (* | Disjoint ((it1,it2), (it1',it2')) -> 
-         *    Disjoint ((aux it1, aux it2), (aux it1', aux it2')) *)
         | IntegerToPointerCast t -> 
            IntegerToPointerCast (aux t)
         | PointerToIntegerCast t -> 
@@ -941,7 +922,6 @@ let structMemberOffset_ (tag, it, member) =
 
 (* pointer_op *)
 let null_ = IT (Pointer_op Null, BT.Loc)
-let allocationSize_ it = IT (Pointer_op (AllocationSize it), BT.Integer)
 let addPointer_ (it, it') = IT (Pointer_op (AddPointer (it, it')), BT.Loc)
 let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)
 let mulPointer_ (it, it') = IT (Pointer_op (MulPointer (it, it')), BT.Loc)
@@ -1034,6 +1014,16 @@ let good_value v sct =
 
 let simplify equalities term = 
 
+  let is_true = function
+    | IT (Lit (Bool true), _) -> true
+    | _ -> false
+  in
+
+  let is_false = function
+    | IT (Lit (Bool false), _) -> true
+    | _ -> false
+  in
+
   let rec aux (IT (it, bt)) =
     match it with
     | Lit it -> lit it bt
@@ -1042,7 +1032,7 @@ let simplify equalities term =
     | Cmp_op it -> cmp_op it bt
     | Tuple_op it -> IT (Tuple_op it, bt)
     | Struct_op it -> IT (Struct_op it, bt)
-    | Pointer_op it -> IT (Pointer_op it, bt)
+    | Pointer_op it -> pointer_op it bt
     | List_op it -> IT (List_op it, bt)
     | Set_op it -> IT (Set_op it, bt)
     | Array_op it -> IT (Array_op it, bt)
@@ -1149,9 +1139,21 @@ let simplify equalities term =
   and bool_op it bt = 
     match it with
     | And its ->
-       IT (Bool_op (And (List.map aux its)), bt)
+       let its = List.map aux its in
+       if List.exists is_false its then 
+         IT (Lit (Bool false), bt)
+       else if List.for_all is_true its then
+         IT (Lit (Bool true), bt)
+       else
+         IT (Bool_op (And its), bt)
     | Or its ->
-       IT (Bool_op (Or (List.map aux its)), bt)
+       let its = List.map aux its in
+       if List.exists is_true its then
+         IT (Lit (Bool true), bt)
+       else if List.for_all is_false its then
+         IT (Lit (Bool false), bt)
+       else
+         IT (Bool_op (Or its), bt)
     | Impl (a, b) ->
        let a = aux a in
        let b = aux b in
@@ -1201,6 +1203,48 @@ let simplify equalities term =
     | GT (a, b) -> cmp_rule (fun (a, b) -> GT (a, b)) Z.gt_big_int (>) a b
     | LE (a, b) -> cmp_rule (fun (a, b) -> LE (a, b)) Z.le_big_int (<=) a b
     | GE (a, b) -> cmp_rule (fun (a, b) -> GE (a, b)) Z.ge_big_int (>=) a b
+
+  (* revisit when memory model changes *)
+  and pointer_op it bt = 
+    match it with
+    | Null -> 
+       IT (Pointer_op Null, bt)
+    | AddPointer (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Pointer_op (AddPointer (aa, IT (Lit (Z i), _))), _), 
+         IT (Lit (Z j), _) ->
+          IT (Pointer_op (AddPointer (aa, IT (Lit (Z (Z.add_big_int i j)), Integer))), bt)
+       | _ ->
+          IT (Pointer_op (AddPointer (a, b)), bt)
+       end
+    | SubPointer (a, b) ->
+       IT (Pointer_op (SubPointer (aux a, aux b)), bt)
+    | MulPointer (a, b) ->
+       IT (Pointer_op (MulPointer (aux a, aux b)), bt)
+    | LTPointer (a, b) ->
+       IT (Pointer_op (LTPointer (aux a, aux b)), bt)
+    | LEPointer (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Pointer_op (AddPointer (base1, IT (Lit (Z offset1), _))), _),  
+         IT (Pointer_op (AddPointer (base2, IT (Lit (Z offset2), _))), _) when
+              equal base1 base2 ->
+          if Z.le_big_int offset1 offset2 then 
+            IT (Lit (Bool true), bt)
+          else if Z.gt_big_int offset1 offset2 then
+            IT (Lit (Bool false), bt)
+          else
+            IT (Pointer_op (LEPointer (a, b)), bt)
+       | _ -> 
+          IT (Pointer_op (LEPointer (a, b)), bt)
+       end
+    | IntegerToPointerCast a ->
+       IT (Pointer_op (IntegerToPointerCast (aux a)), bt)
+    | PointerToIntegerCast a ->
+       IT (Pointer_op (PointerToIntegerCast (aux a)), bt)       
   in
   
 
