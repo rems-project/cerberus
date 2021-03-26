@@ -1,6 +1,5 @@
 module Make (G : sig val global : Global.t end) = struct
 
-  module L = Local.Make(G)
   open IndexTerms
 
   let context = SolverConstraints.context
@@ -10,7 +9,8 @@ module Make (G : sig val global : Global.t end) = struct
     let () = Debug_ocaml.begin_csv_timing "solver" in
     let constraints = 
       Z3.Boolean.mk_not context expr ::
-        L.all_solver_constraints local
+        List.map (fun (LogicalConstraints.LC lc) -> SolverConstraints.of_index_term G.global lc)
+          (Local.all_constraints local)
     in
     let result = Z3.Solver.check solver constraints in
     let () = Debug_ocaml.end_csv_timing () in

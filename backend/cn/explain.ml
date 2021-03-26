@@ -6,13 +6,12 @@ module LS = LogicalSorts
 module SymSet = Set.Make(Sym)
 module StringMap = Map.Make(String)
 module SymPairMap = Map.Make(SymRel.SymPair)
+module L = Local
 
 open Resources
 open Pp
 
 module Make (G : sig val global : Global.t end) = struct 
-
-  module L = Local.Make(G)
   module S = Solver.Make(G)
 
 
@@ -253,7 +252,7 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let veclasses = 
       let with_some =
-        List.fold_left (fun veclasses (c, (l, bt)) ->
+        List.fold_left (fun veclasses (c, (bt, l)) ->
             if SymSet.mem c relevant || SymSet.mem l relevant then
               let veclasses = classify local veclasses (l, bt) in
               List.map (fun veclass ->
@@ -341,7 +340,6 @@ module Make (G : sig val global : Global.t end) = struct
 
     let (resource_lines, reported_pointees) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
-          let (entry, reported) = 
           match resource with
           | Point {pointer; size; content = Block block_type; permission} ->
              let state = match block_type with
@@ -362,7 +360,7 @@ module Make (G : sig val global : Global.t end) = struct
                 None
                )
              in
-             (entry, symbol_it pointer)
+             (entry :: acc_table, SymSet.union (symbol_it pointer) acc_reported)
           | Point {pointer; size; content = Value pointee; permission} ->
              let state = match o_evaluate o_model permission with
                | Some permission -> !^"owned" ^^^ parens (!^"permission:" ^^^ permission)
@@ -377,7 +375,7 @@ module Make (G : sig val global : Global.t end) = struct
                 o_evaluate o_model pointee
                )
              in
-             (entry, SymSet.union (symbol_it pointer) (symbol_it pointee))
+             (entry :: acc_table, SymSet.union (SymSet.union (symbol_it pointer) (symbol_it pointee)) acc_reported)
           | IteratedStar p ->
              let entry =
                (None,
@@ -388,8 +386,8 @@ module Make (G : sig val global : Global.t end) = struct
                 None
                )
              in
-             (entry, SymSet.singleton p.qpointer)             
-          | Predicate p ->
+             (entry :: acc_table, SymSet.add p.qpointer acc_reported)
+          | Predicate p when p.unused ->
              let entry =
                (None,
                 None, 
@@ -399,9 +397,9 @@ module Make (G : sig val global : Global.t end) = struct
                 None
                )
              in
-             (entry, SymSet.empty)
-          in
-          (entry :: acc_table, SymSet.union reported acc_reported)
+             (entry :: acc_table, SymSet.empty)
+          | Predicate _ ->
+             (acc_table, acc_reported)
         ) (L.all_resources local) ([], SymSet.empty)
     in
     let var_lines = 

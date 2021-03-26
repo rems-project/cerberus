@@ -1,6 +1,6 @@
 open IndexTerms
 open BaseTypes
-open LogicalSorts
+(* open LogicalSorts *)
 module IT = IndexTerms
 module SymMap=Map.Make(Sym)
 
@@ -16,7 +16,16 @@ let context =
 
 
 
-let of_index_term_unsafe global (it: IT.t) =
+module ITtbl = Hashtbl.Make(IT)
+
+
+let of_index_term_aux =
+
+  let tbl = ITtbl.create 2000 in
+
+
+  fun global (it: IT.t) ->
+
 
   let open Global in
 
@@ -79,9 +88,6 @@ let of_index_term_unsafe global (it: IT.t) =
 
 
 
-  let _sort_of_ls (Base bt) = sort_of_bt bt in
-
-
   let rec term (IT (it, bt)) : Z3.Expr.expr = 
     match it with
     | Lit t -> lit t bt
@@ -115,8 +121,6 @@ let of_index_term_unsafe global (it: IT.t) =
        Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
     | Default bt ->
        Z3.Expr.mk_const_s context (default_name bt) (sort_of_bt bt)
-       
-       
 
 
   (* fix rem_t vs rem_f *)
@@ -287,13 +291,17 @@ let of_index_term_unsafe global (it: IT.t) =
        term (eq_ (rem_t_ (t, z_ (Memory.align_of_ctype ct)), int_ 0))
   in
 
-  let () = Debug_ocaml.begin_csv_timing "of_index_term" in
-  let result = term it in
-  let () = Debug_ocaml.end_csv_timing () in
-  result
+
+  (* memoization *)
+  match ITtbl.find_opt tbl it with
+  | Some sc -> sc
+  | None ->
+     let sc = term it in
+     let () = ITtbl.add tbl it sc in
+     sc
 
 
 let of_index_term global it = 
-  try of_index_term_unsafe global it with
+  try of_index_term_aux global it with
   | Z3.Error err -> 
      Debug_ocaml.error ("Z3 error: " ^ err)

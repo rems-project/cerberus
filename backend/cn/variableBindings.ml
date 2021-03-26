@@ -8,13 +8,11 @@ open Pp
 
 open Kind
 
-type solver_constraint = Z3.Expr.expr
-
 type bound =
   | Computational of Sym.t * BT.t
   | Logical of LS.t
   | Resource of RE.t
-  | Constraint of LC.t * solver_constraint
+  | Constraint of LC.t
 
 type binding = Sym.t * bound
 
@@ -39,7 +37,7 @@ let is_resource = function
   | _ -> None
 
 let is_constraint = function
-  | Constraint (lc, sc) -> Some (lc, sc)
+  | Constraint lc -> Some lc
   | _ -> None
 
 
@@ -55,32 +53,14 @@ let pp ?(print_all_names = false) (sym,binding) =
      if print_all_names 
      then btyp sym (squotes (RE.pp re))
      else squotes (RE.pp re)
-  | Constraint (lc, _) -> 
+  | Constraint lc -> 
      if print_all_names 
      then btyp sym (LC.pp lc)
      else LC.pp lc
 
 
 
-let agree vb1 vb2 = 
-  match vb1, vb2 with
-  | Computational (l1,bt1), Computational (l2,bt2)
-       when Sym.equal l1 l2 && BT.equal bt1 bt2 -> 
-     Some (Computational (l1,bt1))
-  | Logical ls1, Logical ls2 
-       when LS.equal ls1 ls2 -> 
-     Some (Logical ls1)
-  | Constraint (lc1,sc), Constraint (lc2, _)
-         when LC.equal lc1 lc2 ->
-     Some (Constraint (lc1, sc))
-  | Resource re1, Resource re2 
-       when RE.equal re1 re2 ->
-     Some (Resource re1)
-  (* | UsedResource (re1,locs1), UsedResource (re2,locs2)
-   *        when RE.equal re1 re2 ->
-   *    Some (UsedResource (re1, locs1 @ locs2)) *)
-  | _, _ ->
-     None
+
 
 
 

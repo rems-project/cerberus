@@ -111,3 +111,17 @@ let of_sct (Sctype (_, sct_)) =
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"
+
+
+
+let hash = function
+  | Unit -> 0
+  | Bool -> 1
+  | Integer -> 2
+  | Real -> 3
+  | Loc -> 4
+  | List _ -> 4
+  | Tuple _ -> 5
+  | Struct _ -> 6
+  | Set _ -> 7
+  | Map _ -> 8

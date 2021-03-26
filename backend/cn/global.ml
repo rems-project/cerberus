@@ -217,7 +217,6 @@ type t =
     impl_constants : RT.t ImplMap.t;
     (* stdlib_funs : FT.t SymMap.t; *)
     resource_predicates : predicate_definition StringMap.t;
-    bindings: VariableBindings.bound SymMap.t;
   } 
 
 let empty = 
@@ -227,7 +226,6 @@ let empty =
     impl_constants = ImplMap.empty;
     (* stdlib_funs = SymMap.empty; *)
     resource_predicates = builtin_predicates;
-    bindings = SymMap.empty;
   }
 
 

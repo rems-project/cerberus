@@ -13,10 +13,9 @@ module LT = ArgumentTypes.Make(False)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
-module VB = VariableBindings
+module L = Local
 
 open Subst
-open VB
 open IT
 open Locations
 open TypeErrors
@@ -60,8 +59,6 @@ let pp_texpr e = PP_MUCORE.pp_texpr (pp_budget ()) e
 
 
 module Make (G : sig val global : Global.t end) = struct
-
-  module L = Local.Make(G)
   module S = Solver.Make(G)
   module WT = WellTyped.Make(G)
   module Explain = Explain.Make(G)
@@ -83,8 +80,8 @@ module Make (G : sig val global : Global.t end) = struct
        let s' = Sym.fresh () in
        let rt' = LRT.subst_var {before=s; after=s'} rt in
        bind_logical (add_l s' ls delta) rt'
-    | Resource (re, rt) -> bind_logical (add_ur re delta) rt
-    | Constraint (lc, rt) -> bind_logical (add_uc lc delta) rt
+    | Resource (re, rt) -> bind_logical (add_r re delta) rt
+    | Constraint (lc, rt) -> bind_logical (add_c lc delta) rt
     | I -> delta
 
   let bind_computational (delta : L.t) (name : Sym.t) (rt : RT.t) : L.t =
@@ -119,13 +116,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let check_computational_bound loc s local = 
-    match kind s local with
-    | None -> 
-       fail loc (Unbound_name (Sym s))
-    | Some KComputational -> 
-       return ()
-    | Some kind -> 
-       fail loc (Kind_mismatch {expect = KComputational; has = kind})
+    if L.bound s KComputational local then return ()
+    else fail loc (Unbound_name (Sym s))
 
   let get_struct_decl loc tag = 
     let open Global in
@@ -156,11 +148,12 @@ module Make (G : sig val global : Global.t end) = struct
          let s' = Sym.fresh () in 
          let local' = add_l s' (Base has_bt) local' in
          let@ local' = match o_s with
-           | Some s when L.bound s local' -> fail loc (Name_bound_twice (Sym s))
+           | Some s when L.bound s KComputational local' -> 
+              fail loc (Name_bound_twice (Sym s))
            | Some s -> return (add_a s (has_bt, s') local')
            | None -> return local'
          in
-         let local' = add_uc (LC (eq_ (this, sym_ (has_bt, s')))) local' in
+         let local' = add_c (LC (eq_ (this, sym_ (has_bt, s')))) local' in
          return local'
       | M_Pattern (loc, annots, M_CaseCtor (constructor, pats)) ->
          match expect, constructor, pats with
@@ -519,18 +512,19 @@ module Make (G : sig val global : Global.t end) = struct
             ) clause substs
         ) def.unpack_functions
 
-    let is_global local it =
-      SymMap.exists (fun s bound ->
-          match bound with
-          | VB.Computational (l, bt) ->
-             BT.equal Loc bt && 
-               S.holds local 
-                 (or_ [eq_ (it, IT.sym_ (bt, s)); 
-                       eq_ (it, IT.sym_ (bt, l))])
-          | VB.Logical (Base bt) ->
-             BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
-          | _ -> false          
-      ) G.global.bindings
+    (* todo *)
+    let is_global local it = false
+      (* SymMap.exists (fun s bound ->
+       *     match bound with
+       *     | VB.Computational (l, bt) ->
+       *        BT.equal Loc bt && 
+       *          S.holds local 
+       *            (or_ [eq_ (it, IT.sym_ (bt, s)); 
+       *                  eq_ (it, IT.sym_ (bt, l))])
+       *     | VB.Logical (Base bt) ->
+       *        BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
+       *     | _ -> false          
+       * ) G.global.bindings *)
 
 
 
@@ -1300,7 +1294,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ carg = arg_of_asym local casym in
          let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          ListM.iterM (fun (lc, e) ->
-             let local = add_uc lc local in
+             let local = add_c lc local in
              if S.is_inconsistent local then return ()
              else check_tpexpr local e typ
            ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
@@ -1472,31 +1466,22 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-
-
     let all_empty loc extra_names local = 
       let bad = 
-        SymMap.filter_map (fun name bound ->
-            match bound with
-            | VB.Resource resource ->
-               begin match resource with
-               | Point p when 
-                      not (S.holds local (le_ (p.permission, q_ (0, 1)))) ->
-                  Some resource
-               | IteratedStar p when 
-                      not (S.holds_forall local [(p.qpointer, BT.Loc)]
-                             (le_ (p.permission, q_ (0, 1)))) ->
-                  Some resource
-               | Predicate p when p.unused ->
-                  Some resource
-               | (IteratedStar _ | Point _ | Predicate _) -> None
-               end
-            | _ -> None
-          ) local
+        List.find_opt (fun resource ->
+            match resource with
+            | Point p ->
+               not (S.holds local (le_ (p.permission, q_ (0, 1))))
+            | IteratedStar p ->
+               not (S.holds_forall local [(p.qpointer, BT.Loc)]
+                      (le_ (p.permission, q_ (0, 1))))
+            | Predicate p ->
+               p.unused
+          ) local.resources
       in
-      match SymMap.choose_opt bad with
+      match bad with
       | None -> return ()
-      | Some (_, resource) ->
+      | Some resource ->
          let names = names @ extra_names in
          let (resource, state) = Explain.resource names local resource (S.get_model ()) in
          fail loc (Unused_resource {resource; state})
@@ -1751,7 +1736,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ carg = arg_of_asym local casym in
            let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
            ListM.iterM (fun (lc, e) ->
-               let local = add_uc lc local in
+               let local = add_c lc local in
                if S.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ 
              ) [(LC (sym_ (carg.bt, carg.lname)), e1); 
@@ -1860,10 +1845,10 @@ module Make (G : sig val global : Global.t end) = struct
            let pure_local = add_l new_lname sls pure_local in
            check (acc_substs@[subst]) local pure_local args ftyp'
         | args, (T.Resource (re, ftyp)) ->
-           check acc_substs (add_ur re local) pure_local args ftyp
+           check acc_substs (add_r re local) pure_local args ftyp
         | args, (T.Constraint (lc, ftyp)) ->
-           let local = add_uc lc local in
-           let pure_local = add_uc lc pure_local in
+           let local = add_c lc local in
+           let pure_local = add_c lc pure_local in
            check acc_substs local pure_local args ftyp
         | [], (T.I rt) ->
            return (rt, local, pure_local, acc_substs)
@@ -1886,14 +1871,18 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   (* check_function: type check a (pure) function *)
-  let check_function (loc : loc) mapping (info : string) 
-                     (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-                     (body : 'bty mu_tpexpr) (function_typ : FT.t) : (unit, type_error) m =
+  let check_function 
+        (loc : loc) 
+        (local : Local.t)
+        mapping (info : string) 
+        (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
+        (body : 'bty mu_tpexpr) (function_typ : FT.t) : (unit, type_error) m =
     debug 2 (lazy (headline ("checking function " ^ info)));
     let@ (rt, delta, _, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in
-    let@ () = check_initial_environment_consistent loc `Fun delta in
+    let local = delta ++ local in
+    let@ () = check_initial_environment_consistent loc `Fun local in
     (* rbt consistency *)
     let@ () = 
       let Computational ((sname, sbt), t) = rt in
@@ -1905,50 +1894,56 @@ module Make (G : sig val global : Global.t end) = struct
           (Explain.naming_of_mapping mapping)
       in
       let module C = Checker(struct let names = names end) in
-      C.check_tpexpr delta body rt 
+      C.check_tpexpr local body rt 
     in
     return ()
 
 
   (* check_procedure: type check an (impure) procedure *)
-  let check_procedure (loc : loc) mapping (fsym : Sym.t)
-                      (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-                      (body : 'bty mu_texpr) (function_typ : FT.t) 
-                      (label_defs : 'bty mu_label_defs) : (unit, type_error) m =
+  let check_procedure 
+        (loc : loc) (local : Local.t)
+        mapping (fsym : Sym.t)
+        (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
+        (body : 'bty mu_texpr) (function_typ : FT.t) 
+        (label_defs : 'bty mu_label_defs) : (unit, type_error) m =
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
     debug 2 (lazy (item "type" (FT.pp function_typ)));
 
+    (* check and bind the function arguments *)
     let@ (rt, delta, pure_delta, substs) = 
       CBF_FT.check_and_bind_arguments loc arguments function_typ 
     in
+    (* prepare name mapping *)
     let fnames = 
-      Explain.naming_substs substs
-        (Explain.naming_of_mapping mapping) 
+      Explain.naming_substs substs (Explain.naming_of_mapping mapping) 
     in
-    let@ () = check_initial_environment_consistent loc `Fun delta in
+
+    (* check that the function does not make inconsistent assumptions *)
+    let@ () = check_initial_environment_consistent loc `Fun (delta ++ local) in
+
     (* rbt consistency *)
     let@ () = 
       let Computational ((sname, sbt), t) = rt in
       ensure_base_type loc ~expect:sbt rbt
     in
+
+    (* apply argument substitutions to label types *)
     let label_defs = 
-      Pmap.mapi (fun lsym def ->
+      Pmap.map (fun def ->
           match def with
           | M_Return (loc, lt) -> 
-             let lt = LT.subst_vars substs lt in
-             let () = debug 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
-             M_Return (loc, lt)
+             M_Return (loc, LT.subst_vars substs lt)
           | M_Label (loc, lt, args, body, annots, mapping) -> 
-             let lt = LT.subst_vars substs lt in
-             let () = debug 3 (lazy (item (plain (Sym.pp lsym)) (LT.pp lt))) in
-             M_Label (loc, lt, args, body, annots, mapping)
+             M_Label (loc, LT.subst_vars substs lt, args, body, annots, mapping)
         ) label_defs 
     in
+
+    (* check well-typedness of labels and record their types *)
     let@ labels = 
       PmapM.foldM (fun sym def acc ->
           match def with
           | M_Return (loc, lt) ->
-             let@ () = WT.WLT.welltyped loc fnames pure_delta lt in
+             let@ () = WT.WLT.welltyped loc fnames (pure_delta ++ local) lt in
              return (SymMap.add sym (lt, Return) acc)
           | M_Label (loc, lt, _, _, annots, mapping) -> 
              let label_kind = match CF.Annot.get_label_annot annots with
@@ -1956,10 +1951,12 @@ module Make (G : sig val global : Global.t end) = struct
                | Some (LAloop_continue loop_id) -> Loop
                | _ -> Other
              in
-             let@ () = WT.WLT.welltyped loc fnames pure_delta lt in
+             let@ () = WT.WLT.welltyped loc fnames (pure_delta ++ local) lt in
              return (SymMap.add sym (lt, label_kind) acc)
         ) label_defs SymMap.empty 
     in
+
+    (* check each label *)
     let check_label lsym def () = 
       match def with
       | M_Return (loc, lt) ->
@@ -1970,22 +1967,25 @@ module Make (G : sig val global : Global.t end) = struct
          let@ (rt, delta_label, _, lsubsts) = 
            CBF_LT.check_and_bind_arguments loc args lt 
          in
-         let@ () = check_initial_environment_consistent loc `Label delta in
+         let@ () = check_initial_environment_consistent loc 
+                     `Label (delta_label ++ pure_delta ++ local) in
          let@ local_or_false = 
            let names = 
              Explain.naming_substs (lsubsts @ substs)
                (Explain.naming_of_mapping mapping)  
            in
            let module C = Checker(struct let names = names end) in
-           C.check_texpr (delta_label ++ pure_delta, labels) body False
+           C.check_texpr (delta_label ++ pure_delta ++ local, labels) body False
          in
          return ()
     in
     let@ () = PmapM.foldM check_label label_defs () in
+
+    (* check the function body *)
     debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
     let@ local_or_false = 
       let module C = Checker(struct let names = fnames end) in
-      C.check_texpr (delta, labels) body (Normal rt)
+      C.check_texpr (delta ++ local, labels) body (Normal rt)
     in
     return ()
 
@@ -2028,24 +2028,24 @@ let check_and_record_tagDefs (global: Global.t) tagDefs =
 
 
 
-let record_funinfo global funinfo =
+let record_funinfo (global, local) funinfo =
   let module WT = WellTyped.Make(struct let global = global end) in
   let module Explain = Explain.Make(struct let global = global end) in
   PmapM.foldM
-    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, has_proto, mapping)) global ->
+    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, has_proto, mapping)) 
+         (global, local) ->
       let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
       let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
       let names = Explain.naming_of_mapping mapping in
-      let@ () = WT.WFT.welltyped loc names WT.L.empty ftyp in
+      let@ () = WT.WFT.welltyped loc names local ftyp in
       let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
-      let bindings = 
+      let local = 
         let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
         let lc = representable_ (voidstar, sym_ (Loc, fsym)) in
-        let sc = SolverConstraints.of_index_term global lc in
-        SymMap.add (Sym.fresh ()) (VB.Constraint (LC.LC lc, sc)) global.bindings 
+        Local.add_c (LC lc) local
       in
-      return {global with fun_decls; bindings}
-    ) funinfo global
+      return ({global with fun_decls}, local)
+    ) funinfo (global, local)
 
 
 let print_initial_environment genv = 
@@ -2054,22 +2054,24 @@ let print_initial_environment genv =
   return ()
 
 
-let check_functions genv fns =
-  let module C = Make(struct let global = genv end) in
+let check_functions (global, local) fns =
+  let module C = Make(struct let global = global end) in
   PmapM.iterM (fun fsym fn -> 
       match fn with
       | M_Fun (rbt, args, body) ->
-         let@ (loc, ftyp) = match Global.get_fun_decl genv fsym with
+         let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
            | Some t -> return t
            | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
          in
-         C.check_function loc Mapping.empty (Sym.pp_string fsym) args rbt body ftyp
+         C.check_function loc local Mapping.empty 
+           (Sym.pp_string fsym) args rbt body ftyp
       | M_Proc (loc, rbt, args, body, labels, mapping) ->
-         let@ (loc', ftyp) = match Global.get_fun_decl genv fsym with
+         let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
            | Some t -> return t
            | None -> fail loc (TypeErrors.Missing_function fsym)
          in
-         C.check_procedure loc' mapping fsym args rbt body ftyp labels
+         C.check_procedure loc' local mapping 
+           fsym args rbt body ftyp labels
       | M_ProcDecl _
       | M_BuiltinDecl _ -> 
          return ()
@@ -2077,7 +2079,7 @@ let check_functions genv fns =
 
 
 
-let check_and_record_impls global impls = 
+let check_and_record_impls (global, local) impls = 
   let open Global in
   PmapM.foldM (fun impl impl_decl global ->
       let module G = struct let global = global end in
@@ -2086,18 +2088,19 @@ let check_and_record_impls global impls =
       let descr = CF.Implementation.string_of_implementation_constant impl in
       match impl_decl with
       | M_Def (rt, rbt, pexpr) -> 
-         let@ () = WT.WRT.welltyped Loc.unknown [] WT.L.empty rt in
+         let@ () = WT.WRT.welltyped Loc.unknown [] local rt in
          let@ () = 
-           C.check_function Loc.unknown [] descr [] rbt pexpr (FT.I rt) in
+           C.check_function Loc.unknown local
+             [] descr [] rbt pexpr (FT.I rt) in
          let global = 
            { global with impl_constants = 
                            ImplMap.add impl rt global.impl_constants}
          in
          return global
       | M_IFun (ft, rbt, args, pexpr) ->
-         let@ () = WT.WFT.welltyped Loc.unknown [] WT.L.empty ft in
+         let@ () = WT.WFT.welltyped Loc.unknown [] local ft in
          let@ () = 
-           C.check_function Loc.unknown [] 
+           C.check_function Loc.unknown local [] 
              (CF.Implementation.string_of_implementation_constant impl)
              args rbt pexpr ft
          in
@@ -2109,35 +2112,32 @@ let check_and_record_impls global impls =
 
 
 (* TODO: check the expressions *)
-let record_globals global globs = 
+let record_globals local globs = 
   let open Global in
-  ListM.fold_leftM (fun global (sym, def) ->
+  ListM.fold_leftM (fun local (sym, def) ->
       match def with
       | M_GlobalDef (lsym, (_, ct), _)
       | M_GlobalDecl (lsym, (_, ct)) ->
-         let bindings = 
-           let it = IT.good_pointer lsym ct in
-           let sc = SolverConstraints.of_index_term global it in
-           SymMap.add (Sym.fresh ()) (VB.Constraint (LC.LC it, sc)) 
-             (SymMap.add sym (VB.Computational (lsym, Loc))
-                (SymMap.add lsym (VB.Logical (Base Loc))
-                   global.bindings))
-         in
-         return {global with bindings = bindings }
-    ) global globs
+         let local = Local.add_l lsym (Base Loc) local in
+         let local = Local.add_a sym (Loc, lsym) local in
+         let local = Local.add_c (LC (IT.good_pointer lsym ct)) local in
+         return local
+    ) local globs
 
 
 
 let check mu_file = 
   let () = Debug_ocaml.begin_csv_timing "total" in
   let global = Global.empty in
-  let@ global = check_and_record_impls global mu_file.mu_impl in
+  let local = Local.empty in
+  let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
   let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in
-  let@ global = record_globals global mu_file.mu_globs in
-  let@ global = record_funinfo global mu_file.mu_funinfo in
+  let@ local = record_globals local mu_file.mu_globs in
+  (* has to be after globals: the functions can refer to globals *)
+  let@ (global, local) = record_funinfo (global, local) mu_file.mu_funinfo in
   let@ () = print_initial_environment global in
-  let@ result = check_functions global mu_file.mu_stdlib in
-  let@ result = check_functions global mu_file.mu_funs in
+  let@ result = check_functions (global, local) mu_file.mu_stdlib in
+  let@ result = check_functions (global, local) mu_file.mu_funs in
   let () = Debug_ocaml.end_csv_timing () in
   return result
 
@@ -2146,6 +2146,7 @@ let check mu_file =
 
 
 (* TODO: 
+   - fix is_global
    - get rid of default index term
    - when resources are missing because of BT mismatches, report that correctly
    - be more careful about which counter-model to use in Explain

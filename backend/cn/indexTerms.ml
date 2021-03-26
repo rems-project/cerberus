@@ -454,7 +454,7 @@ let pp ?(print_symbol_type=(None : (Sym.t -> 'bt -> doc) option))
 
     let struct_op = function
       | Struct (_tag, members) ->
-         braces (separate_map (comma ^^ space) (fun (member,it) -> 
+         braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
                      Id.pp member ^^^ equals ^^^ aux false it 
                    ) members)
       | StructMember (_tag, t, member) ->
@@ -1202,3 +1202,21 @@ let simplify equalities term =
   in
   
   aux term
+
+
+
+(* rubbish hash function *)
+let hash (IT (it, _)) : int =
+    match it with
+    | Lit it -> 0
+    | Arith_op it -> 1
+    | Cmp_op it -> 2
+    | Bool_op it -> 3
+    | Tuple_op it -> 4
+    | Struct_op it -> 5
+    | Pointer_op it -> 6
+    | CT_pred it -> 7
+    | List_op it -> 8
+    | Set_op it -> 9
+    | Array_op it -> 10
+

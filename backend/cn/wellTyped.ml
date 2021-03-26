@@ -3,24 +3,19 @@ module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make(Sym)
 module TE = TypeErrors
+module L = Local
 
 open Global
 open TE
 
 
-module Make (G : sig val global : Global.t end) = struct
 
-  module L = Local.Make(G)
+module Make (G : sig val global : Global.t end) = struct
   module Explain = Explain.Make(G)
 
   let check_bound loc (names : Explain.naming) local kind s = 
-    match L.kind s local with
-    | Some kind' when kind' = kind -> 
-       return ()
-    | Some kind' -> 
-       fail loc (TE.Kind_mismatch {expect = KResource; has = kind'})
-    | None ->  
-       fail loc (TE.Unbound_name (Sym s))
+    if L.bound s kind local then return ()
+    else fail loc (TE.Unbound_name (Sym s))
 
 
   module WIT = struct
@@ -619,11 +614,11 @@ module Make (G : sig val global : Global.t end) = struct
          check loc names local lrt
       | Resource (re, lrt) -> 
          let@ () = WRE.welltyped loc names local re in
-         let local = L.add_ur re local in
+         let local = L.add_r re local in
          check loc names local lrt
       | Constraint (lc, lrt) ->
          let@ () = WLC.welltyped loc names local lc in
-         let local = L.add_uc lc local in
+         let local = L.add_c lc local in
          check loc names local lrt
       | I -> 
          return ()
@@ -724,11 +719,11 @@ module Make (G : sig val global : Global.t end) = struct
          check loc names local at
       | T.Resource (re, at) -> 
          let@ () = WRE.welltyped loc names local re in
-         let local = L.add_ur re local in
+         let local = L.add_r re local in
          check loc names local at
       | T.Constraint (lc, at) ->
          let@ () = WLC.welltyped loc names local lc in
-         let local = L.add_uc lc local in
+         let local = L.add_c lc local in
          check loc names local at
       | T.I i -> 
          WI.check loc names local i
