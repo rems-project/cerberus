@@ -62,7 +62,7 @@ and 'bt pointer_op =
   | MulPointer of 'bt term * 'bt term
   | LTPointer of 'bt term * 'bt term
   | LEPointer of 'bt term * 'bt term
-  | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term)
+  (* | Disjoint of ('bt term * 'bt term) * ('bt term * 'bt term) *)
   | IntegerToPointerCast of 'bt term
   | PointerToIntegerCast of 'bt term
 
@@ -249,9 +249,9 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t1 t1' && equal t2 t2'
     | LEPointer (t1, t2), LEPointer (t1', t2') -> 
        equal t1 t1' && equal t2 t2'
-    | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
-       equal t1 t1' && equal t2 t2' && 
-         equal s1 s1' && equal s2 s2'
+    (* | Disjoint ((t1, s1), (t2, s2)), Disjoint ((t1', s1'), (t2', s2')) -> 
+     *    equal t1 t1' && equal t2 t2' && 
+     *      equal s1 s1' && equal s2 s2' *)
     | IntegerToPointerCast t1, IntegerToPointerCast t2 -> 
        equal t1 t2
     | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
@@ -263,7 +263,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | MulPointer _, _ -> false
     | LTPointer _, _ -> false
     | LEPointer _, _ -> false
-    | Disjoint _, _ -> false
+    (* | Disjoint _, _ -> false *)
     | IntegerToPointerCast _, _ -> false
     | PointerToIntegerCast _, _ -> false
   in
@@ -478,8 +478,8 @@ let pp ?(print_symbol_type=(None : (Sym.t -> 'bt -> doc) option))
          mparens (flow (break 1) [aux true o1; langle; aux true o2])
       | LEPointer (o1,o2) -> 
          mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
-      | Disjoint ((o1,s1),(o2,s2)) ->
-         c_app !^"disj" [aux false o1; aux false s1; aux false o2; aux false s2]
+      (* | Disjoint ((o1,s1),(o2,s2)) ->
+       *    c_app !^"disj" [aux false o1; aux false s1; aux false o2; aux false s2] *)
       | IntegerToPointerCast t ->
          mparens (parens(!^"pointer") ^^ aux true t)
       | PointerToIntegerCast t ->
@@ -615,7 +615,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | MulPointer (it, it') -> free_vars_list [it; it']
     | LTPointer (it, it')  -> free_vars_list [it; it']
     | LEPointer (it, it') -> free_vars_list [it; it']
-    | Disjoint ((it,_), (it',_)) -> free_vars_list [it; it']
+    (* | Disjoint ((it,_), (it',_)) -> free_vars_list [it; it'] *)
     | AllocationSize it -> free_vars it
     | IntegerToPointerCast t -> free_vars t
     | PointerToIntegerCast t -> free_vars t
@@ -765,8 +765,8 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
            LTPointer (aux it, aux it')
         | LEPointer (it, it') -> 
            LEPointer (aux it, aux it')
-        | Disjoint ((it1,it2), (it1',it2')) -> 
-           Disjoint ((aux it1, aux it2), (aux it1', aux it2'))
+        (* | Disjoint ((it1,it2), (it1',it2')) -> 
+         *    Disjoint ((aux it1, aux it2), (aux it1', aux it2')) *)
         | IntegerToPointerCast t -> 
            IntegerToPointerCast (aux t)
         | PointerToIntegerCast t -> 
@@ -947,7 +947,9 @@ let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)
 let mulPointer_ (it, it') = IT (Pointer_op (MulPointer (it, it')), BT.Loc)
 let ltPointer_ (it, it') = IT (Pointer_op (LTPointer (it, it')), BT.Bool)
 let lePointer_ (it, it') = IT (Pointer_op (LEPointer (it, it')), BT.Bool)
-let disjoint_ (fp, fp') = IT (Pointer_op (Disjoint (fp, fp')), BT.Bool)
+let disjoint_ ((p1, s1), (p2, s2)) = 
+  or_ [lePointer_ (addPointer_ (p1, s1), p2); 
+       lePointer_ (addPointer_ (p2, s2), p1)] 
 let integerToPointerCast_ it = IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
 let pointerToIntegerCast_ it = IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
 
@@ -1069,9 +1071,9 @@ let simplify equalities term =
        let a = aux a in
        let b = aux b in
        begin match a, b with
-       | IT (Lit (Q (ad, ad')), _), IT (Lit (Q (bd, bd')), _) 
-            when ad' = bd' ->
-          IT (Lit (Q (ad + bd, ad')), bt)
+       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) 
+            when j1 = j2 ->
+          IT (Lit (Q (i1 + i2, j1)), bt)
        | _, IT (Lit (Q (0, _)), _) ->
           a
        | IT (Lit (Q (0, _)), _), _ ->
@@ -1149,7 +1151,7 @@ let simplify equalities term =
     | And its ->
        IT (Bool_op (And (List.map aux its)), bt)
     | Or its ->
-       IT (Bool_op (And (List.map aux its)), bt)
+       IT (Bool_op (Or (List.map aux its)), bt)
     | Impl (a, b) ->
        let a = aux a in
        let b = aux b in
@@ -1159,7 +1161,7 @@ let simplify equalities term =
        | IT (Lit (Bool false), _) ->
           IT (Lit (Bool true), bt) 
        | _ ->
-          IT (Bool_op (Impl (aux a, aux b)), bt)
+          IT (Bool_op (Impl (a, b)), bt)
        end
     | Not a ->
        IT (Bool_op (Not (aux a)), bt)
@@ -1201,6 +1203,7 @@ let simplify equalities term =
     | GE (a, b) -> cmp_rule (fun (a, b) -> GE (a, b)) Z.ge_big_int (>=) a b
   in
   
+
   aux term
 
 

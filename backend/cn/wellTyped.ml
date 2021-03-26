@@ -253,12 +253,12 @@ module Make (G : sig val global : Global.t end) = struct
              let@ t = check loc (Base Loc) t in
              let@ t' = check loc (Base Loc) t' in
              return (Base Bool, LEPointer (t, t'))
-          | Disjoint ((t,s), (t',s')) ->
-             let@ t = check loc (Base Loc) t in
-             let@ t' = check loc (Base Loc) t' in
-             let@ s = check loc (Base Integer) s in
-             let@ s' = check loc (Base Integer) s' in
-             return (Base Bool, Disjoint ((t,s), (t',s')))
+          (* | Disjoint ((t,s), (t',s')) ->
+           *    let@ t = check loc (Base Loc) t in
+           *    let@ t' = check loc (Base Loc) t' in
+           *    let@ s = check loc (Base Integer) s in
+           *    let@ s' = check loc (Base Integer) s' in
+           *    return (Base Bool, Disjoint ((t,s), (t',s'))) *)
           | IntegerToPointerCast t ->
              let@ t = check loc (Base Integer) t in
              return (Base Loc, IntegerToPointerCast t)

@@ -214,12 +214,12 @@ let of_index_term_aux =
        Z3.Arithmetic.mk_lt context (term t1) (term t2)
     | LEPointer (t1, t2) ->
        Z3.Arithmetic.mk_le context (term t1) (term t2)
-    | Disjoint ((p1, s1), (p2, s2)) ->
-       let disjoint = 
-         or_ [lePointer_ (addPointer_ (p1, s1), p2); 
-              lePointer_ (addPointer_ (p2, s2), p1)] 
-       in
-       term disjoint
+    (* | Disjoint ((p1, s1), (p2, s2)) ->
+     *    let disjoint = 
+     *      or_ [lePointer_ (addPointer_ (p1, s1), p2); 
+     *           lePointer_ (addPointer_ (p2, s2), p1)] 
+     *    in
+     *    term disjoint *)
     | IntegerToPointerCast t ->
        term t
     | PointerToIntegerCast t ->
