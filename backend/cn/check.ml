@@ -2125,7 +2125,6 @@ let check mu_file =
 
 (* TODO: 
    - fix is_global
-   - get rid of default index term
    - when resources are missing because of BT mismatches, report that correctly
    - be more careful about which counter-model to use in Explain
    - forbid specifications with completely ownership-empty resources

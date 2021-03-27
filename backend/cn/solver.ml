@@ -38,7 +38,6 @@ module Make (G : sig val global : Global.t end) = struct
     | Map bt -> "map("^bt_name bt^")"
 
   let bt_symbol bt = Z3.Symbol.mk_string context (bt_name bt)
-  let default_name (bt : BT.t) = "default" ^ bt_name bt
   let tuple_field_name i = "comp" ^ string_of_int i
   let tuple_field_symbol i = Z3.Symbol.mk_string context (tuple_field_name i)
   let member_name id = Id.s id
@@ -135,7 +134,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Unit ->
          Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
       | Default bt ->
-         Z3.Expr.mk_const_s context (default_name bt) (sort_of_bt bt)
+         Z3.Expr.mk_fresh_const context "default" (sort_of_bt bt)
 
 
     (* fix rem_t vs rem_f *)
