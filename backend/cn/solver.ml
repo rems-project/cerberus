@@ -25,18 +25,7 @@ module ITtbl = Hashtbl.Make(IndexTerms)
 
 module Make (G : sig val global : Global.t end) = struct
 
-  let rec bt_name = function
-    | Unit -> "void"
-    | Bool -> "bool"
-    | Integer -> "integer"
-    | Real -> "real"
-    | Loc -> "pointer"
-    | List bt -> "list("^bt_name bt^")"
-    | Tuple bts -> "list("^String.concat "," (List.map bt_name bts)^")"
-    | Struct sym -> "struct "^Sym.pp_string sym
-    | Set bt -> "set("^bt_name bt^")"
-    | Map bt -> "map("^bt_name bt^")"
-
+  let bt_name bt = Pp.plain (BT.pp bt)
   let bt_symbol bt = Z3.Symbol.mk_string context (bt_name bt)
   let tuple_field_name i = "comp" ^ string_of_int i
   let tuple_field_symbol i = Z3.Symbol.mk_string context (tuple_field_name i)
@@ -78,7 +67,7 @@ module Make (G : sig val global : Global.t end) = struct
            member_symbols member_sorts
       | Set bt ->
          Z3.Set.mk_sort context (aux bt)
-      | Map bt ->
+      | Array bt ->
          Z3.Z3Array.mk_sort context (aux Integer) (aux bt)
     in    
     fun bt ->
@@ -257,7 +246,7 @@ module Make (G : sig val global : Global.t end) = struct
       match it with
       | ConstArray t ->
          let item_bt = match bt with
-           | Map bt -> bt
+           | Array bt -> bt
            | _ -> Debug_ocaml.error "illtyped_index term"
          in
          Z3.Z3Array.mk_const_array context (sort_of_bt item_bt) (term t)

@@ -333,20 +333,20 @@ module Make (G : sig val global : Global.t end) = struct
         let array_op = function
           | ConstArray it ->
              let@ (Base bt, it) = infer loc it in
-             let mbt = BT.Map bt in
+             let mbt = BT.Array bt in
              return (Base mbt, ConstArray it)
           | ArrayGet (it,it') ->
-             let@ (bt, it) = infer_integer_map_type loc it in
+             let@ (bt, it) = infer_array_type loc it in
              let@ it' = check loc (Base Integer) it' in
              return (Base bt, ArrayGet (it, it'))
           | ArraySet (it,it',it'') ->
-             let@ (bt, it) = infer_integer_map_type loc it in
+             let@ (bt, it) = infer_array_type loc it in
              let@ it' = check loc (Base Integer) it' in
              let@ it'' = check loc (Base bt) it'' in
-             return (Base (Map bt), ArraySet (it, it', it''))
+             return (Base (Array bt), ArraySet (it, it', it''))
           | ArrayEqualOnRange (it,it',it'',it''') ->
-             let@ (bt, it) = infer_integer_map_type loc it in
-             let@ it' = check loc (Base (Map bt)) it' in
+             let@ (bt, it) = infer_array_type loc it in
+             let@ it' = check loc (Base (Array bt)) it' in
              let@ it'' = check loc (Base Integer) it'' in
              let@ it''' = check loc (Base Integer) it''' in
              return (Base Bool, ArrayEqualOnRange (it, it', it'', it'''))
@@ -453,11 +453,11 @@ module Make (G : sig val global : Global.t end) = struct
         in
         return (bt, t)
 
-      and infer_integer_map_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
+      and infer_array_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc it ->
         let@ (ls, it) = infer loc it in
         let@ bt = match ls with
-          | Base (Map bt) -> return bt
+          | Base (Array bt) -> return bt
           | _ -> 
              let (context, it) = Explain.index_terms names local (context, it) in
              let err = 

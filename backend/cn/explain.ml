@@ -85,6 +85,7 @@ module Make (G : sig val global : Global.t end) = struct
       let tuple_counter = ref 0 in
       let struct_counter = ref 0 in
       let set_counter = ref 0 in
+      let array_counter = ref 0 in
       fun veclass ->
       let (Base bt) = veclass.sort in
       sym_prefixed_int
@@ -98,7 +99,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Tuple _ ->  ("t", faa tuple_counter)
         | Struct _ -> ("s", faa struct_counter)
         | Set _ -> ("set", faa set_counter)
-        | Map _ -> ("map", faa set_counter)
+        | Array _ -> ("array", faa array_counter)
         end
 
     let compare veclass1 veclass2 = 

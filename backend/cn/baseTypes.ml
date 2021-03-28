@@ -14,7 +14,7 @@ type t =
   | Tuple of t list
   | Struct of tag
   | Set of t
-  | Map of t
+  | Array of t
 
 let is_struct = function
   | Struct tag -> Some tag
@@ -31,7 +31,7 @@ let rec equal t t' =
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
   | Struct t, Struct t' -> Sym.equal t t'
   | Set t, Set t' -> equal t t'
-  | Map t, Map t' -> equal t t'
+  | Array t, Array t' -> equal t t'
 
   | Unit, _
   | Bool, _
@@ -42,7 +42,7 @@ let rec equal t t' =
   | Tuple _, _
   | Struct _, _
   | Set _, _
-  | Map _, _ ->
+  | Array _, _ ->
      false
 
 
@@ -76,8 +76,8 @@ let compare bt bt' =
   | Set t, Set t' -> compare t t'
   | Set _, _ -> -1
 
-  | Map t, Map t' -> compare t t'
-  | Map _, _ -> -1
+  | Array t, Array t' -> compare t t'
+  | Array _, _ -> -1
 
 
 
@@ -94,7 +94,7 @@ let pp bt =
     | Tuple nbts -> parens (flow_map (comma) (aux false) nbts)
     | Struct sym -> mparens (!^"struct" ^^^ Sym.pp sym)
     | Set t -> mparens (!^"set" ^^^ parens (aux false t))
-    | Map t -> mparens (!^"map" ^^ langle ^^ aux false t ^^ rangle)
+    | Array t -> mparens (aux false t ^^ brackets empty)
   in
   aux false bt
 
@@ -120,8 +120,8 @@ let hash = function
   | Integer -> 2
   | Real -> 3
   | Loc -> 4
-  | List _ -> 4
-  | Tuple _ -> 5
-  | Struct _ -> 6
-  | Set _ -> 7
-  | Map _ -> 8
+  | List _ -> 5
+  | Tuple _ -> 6
+  | Struct _ -> 7
+  | Set _ -> 8
+  | Array _ -> 9
