@@ -18,6 +18,9 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
+    (* a subset of the logical symbols, just for error reporting, all
+       pointer-typed *)
+    global : SymSet.t;
   }
 
 
@@ -26,6 +29,7 @@ let empty = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
+    global = SymSet.empty;
   }
 
 

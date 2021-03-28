@@ -15,7 +15,7 @@ let context =
 
 let solver = Z3.Solver.mk_simple_solver context
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "random_seed") 1
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 5
 let () = Z3.Solver.set_parameters solver params
 
 

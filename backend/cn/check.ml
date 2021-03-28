@@ -138,76 +138,70 @@ module Make (G : sig val global : Global.t end) = struct
 
   (*** pattern matching *********************************************************)
 
-  let pattern_match (this : IT.t) (pat : mu_pattern) 
-                    (expect : BT.t) : (L.t, type_error) m =
-    let rec aux (local' : L.t) (this : IT.t) (pat : mu_pattern) 
-                (expect : BT.t) : (L.t, type_error) m = 
-      match pat with
-      | M_Pattern (loc, annots, M_CaseBase (o_s, has_bt)) ->
-         let@ () = ensure_base_type loc ~expect has_bt in
-         let s' = Sym.fresh () in 
-         let local' = add_l s' (Base has_bt) local' in
-         let@ local' = match o_s with
-           | Some s when L.bound s KComputational local' -> 
-              fail loc (Name_bound_twice (Sym s))
-           | Some s -> return (add_a s (has_bt, s') local')
-           | None -> return local'
-         in
-         let local' = add_c (LC (def_ s' this)) local' in
-         return local'
-      | M_Pattern (loc, annots, M_CaseCtor (constructor, pats)) ->
-         match expect, constructor, pats with
-         | expect, (M_Cnil item_bt), [] ->
-            let@ () = ensure_base_type loc ~expect (List item_bt) in
-            return local'
-         | _, (M_Cnil item_bt), _ ->
+
+  let pattern_match = 
+
+    let rec aux (local' : L.t) pat : (L.t * IT.t, type_error) m = 
+      let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
+      match pattern with
+      | M_CaseBase (o_s, has_bt) ->
+         let lsym = Sym.fresh () in 
+         let local' = add_l lsym (Base has_bt) local' in
+         begin match o_s with
+         | Some s when L.bound s KComputational local' -> 
+            fail loc (Name_bound_twice (Sym s))
+         | Some s -> 
+            let local' = add_a s (has_bt, lsym) local' in
+            return (local', sym_ (has_bt, lsym))
+         | None -> 
+            return (local', sym_ (has_bt, lsym))
+         end
+      | M_CaseCtor (constructor, pats) ->
+         match constructor, pats with
+         | M_Cnil item_bt, [] ->
+            return (local', IT.nil_ ~item_bt)
+         | M_Cnil item_bt, _ ->
             fail loc (Number_arguments {has = List.length pats; expect = 0})
-         | (List item_bt), M_Ccons, [p1; p2] ->
-            let@ local' = aux local' (head_ ~item_bt this) p1 item_bt in
-            let@ local' = aux local' (tail_ this) p2 expect in
-            return local'
-         | _, M_Ccons, [p1; p2] ->
-            let err = 
-              !^"cons pattern incompatible with expect type" ^/^ BT.pp expect 
-            in
-            fail loc (Generic err)
-         | _, M_Ccons, _ -> 
+         | M_Ccons, [p1; p2] ->
+            let@ (local', it1) = aux local' p1 in
+            let@ (local', it2) = aux local' p2 in
+            let@ () = ensure_base_type loc ~expect:(List (IT.bt it1)) (IT.bt it2) in
+            return (local', cons_ (it1, it2))
+         | M_Ccons, _ -> 
             fail loc (Number_arguments {has = List.length pats; expect = 2})
-         | (Tuple bts), M_Ctuple, pats ->
-            let rec components local' i pats bts =
-              match pats, bts with
-              | pat :: pats', bt :: bts' ->
-                 let@ local' = aux local' (nthTuple_ ~item_bt:bt (i, this)) pat bt in
-                 components local' (i+1) pats' bts'
-              | [], [] -> 
-                 return local'
-              | _, _ ->
-                 let expect = i + List.length bts in
-                 let has = i + List.length pats in
-                 fail loc (Number_arguments {expect; has})
+         | M_Ctuple, pats ->
+            let@ (local', its) = 
+              ListM.fold_rightM (fun pat (local', its) ->
+                  let@ (local', it) = aux local' pat in
+                  return (local', it :: its)
+                ) pats (local', [])
             in
-            components local' 0 pats bts
-         | _, M_Ctuple, _ ->
-            let err = 
-              !^"tuple pattern incompatible with expect type" ^/^ BT.pp expect
-            in
-            fail loc (Generic err)
-         | _, M_Cspecified, [pat] ->
-            aux local' this pat expect
-         | _, M_Cspecified, _ ->
+            return (local', tuple_ its)
+         | M_Cspecified, [pat] ->
+            aux local' pat
+         | M_Cspecified, _ ->
             fail loc (Number_arguments {expect = 1; has = List.length pats})
-         | _, M_Carray, _ ->
+         | M_Carray, _ ->
             Debug_ocaml.error "todo: array types"
-         | _, M_CivCOMPL, _
-         | _, M_CivAND, _
-         | _, M_CivOR, _
-         | _, M_CivXOR, _
-         | _, M_Cfvfromint, _
-         | _, M_Civfromfloat, _
+         | M_CivCOMPL, _
+         | M_CivAND, _
+         | M_CivOR, _
+         | M_CivXOR, _
+         | M_Cfvfromint, _
+         | M_Civfromfloat, _
            ->
             Debug_ocaml.error "todo: Civ.."
     in
-    aux L.empty this pat expect
+    
+    fun sym (expect : BT.t) (pat : mu_pattern) ->
+    let@ (local, it) = aux L.empty pat in
+    let@ () = 
+      let (M_Pattern (loc, _, _) : mu_pattern) = pat in
+      ensure_base_type loc ~expect (IT.bt it) 
+    in
+    let local' = add_c (LC (def_ sym it)) local in
+    return local'
+    
 
 
   (* The pattern-matching might de-struct 'bt'. For easily making
@@ -216,7 +210,7 @@ module Make (G : sig val global : Global.t end) = struct
      introduced in the pattern-matching relate to (name,bound). *)
   let pattern_match_rt (pat : mu_pattern) (rt : RT.t) : (L.t, type_error) m =
     let ((bt, s'), delta) = bind_logically rt in
-    let@ delta' = pattern_match (sym_ (bt, s')) pat bt in
+    let@ delta' = pattern_match s' bt pat in
     return (delta' ++ delta)
 
 
@@ -519,19 +513,10 @@ module Make (G : sig val global : Global.t end) = struct
             ) clause substs
         ) def.unpack_functions
 
-    (* todo *)
-    let is_global local it = false
-      (* SymMap.exists (fun s bound ->
-       *     match bound with
-       *     | VB.Computational (l, bt) ->
-       *        BT.equal Loc bt && 
-       *          S.holds local 
-       *            (or_ [eq_ (it, IT.sym_ (bt, s)); 
-       *                  eq_ (it, IT.sym_ (bt, l))])
-       *     | VB.Logical (Base bt) ->
-       *        BT.equal Loc bt && S.holds local (eq_ (it, IT.sym_ (bt, s)))
-       *     | _ -> false          
-       * ) G.global.bindings *)
+    let is_global local it = 
+      SymSet.exists (fun s ->
+        Solver.holds local (eq_ (it, IT.sym_ (BT.Loc, s)))
+      ) local.global
 
 
 
@@ -1287,9 +1272,7 @@ module Make (G : sig val global : Global.t end) = struct
       | M_PEcase (asym, pats_es) ->
          let@ arg = arg_of_asym local asym in
          ListM.iterM (fun (pat, pe) ->
-             (* TODO: make pattern matching return (in delta)
-                constraints corresponding to the pattern *)
-             let@ delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
+             let@ delta = pattern_match arg.lname arg.bt pat in
              let local = delta ++ local in
              if Solver.is_inconsistent local then return ()
              else check_tpexpr local e typ
@@ -1726,9 +1709,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_Ecase (asym, pats_es) ->
            let@ arg = arg_of_asym local asym in
            ListM.iterM (fun (pat, pe) ->
-               (* TODO: make pattern matching return (in delta)
-                  constraints corresponding to the pattern *)
-               let@ delta = pattern_match (sym_ (arg.bt, arg.lname)) pat arg.bt in
+               let@ delta = pattern_match arg.lname arg.bt pat in
                let local = delta ++ local in
                if Solver.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ
@@ -2099,7 +2080,8 @@ let record_globals local globs =
          let local = Local.add_l lsym (Base Loc) local in
          let local = Local.add_a sym (Loc, lsym) local in
          let local = Local.add_c (LC (IT.good_pointer lsym ct)) local in
-         return local
+         let global = SymSet.add lsym local.global in
+         return {local with global}
     ) local globs
 
 
@@ -2124,13 +2106,10 @@ let check mu_file =
 
 
 (* TODO: 
-   - fix is_global
    - when resources are missing because of BT mismatches, report that correctly
    - be more careful about which counter-model to use in Explain
    - forbid specifications with completely ownership-empty resources
    - rem_t vs rem_f
    - check resource definition well-formedness
    - check globals with expressions
-   - give types for standard library functions
-   - fix Ecase "LC (Bool true)"
  *)
