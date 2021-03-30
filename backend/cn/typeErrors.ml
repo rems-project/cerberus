@@ -25,7 +25,6 @@ type situation =
   | FunctionCall
   | LabelCall of label_kind
   | Subtyping
-  | Unpacking
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -43,7 +42,6 @@ let checking_situation = function
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
   | Subtyping -> !^"checking subtyping"
-  | Unpacking -> !^"checking unpacking"
 
 let for_situation = function
   | Access access -> for_access access
@@ -52,7 +50,6 @@ let for_situation = function
   | LabelCall Loop -> !^"for loop"
   | LabelCall Other -> !^"for calling label"
   | Subtyping -> !^"for subtyping"
-  | Unpacking -> !^"for unpacking"
 
 
 

@@ -19,6 +19,7 @@ open Sctypes
 open Mapping
 open Path.LabeledName
 open Ast
+open Predicates
 
 
 module StringMap = Map.Make(String)
@@ -124,10 +125,9 @@ let struct_decl loc fields (tag : BT.tag) =
   let@ stored_struct_predicate = 
     let open RT in
     let open LRT in
-    let struct_pointer_s = Sym.fresh () in
+    let struct_pointer_s = Sym.fresh_named "p" in
     let struct_pointer_t = sym_ (Loc, struct_pointer_s) in
-    let struct_value_s = Sym.fresh () in
-    let struct_value_t = sym_ (BT.Struct tag, struct_value_s) in
+    let struct_value_s = Sym.fresh_named "v" in
     (* let size = Memory.size_of_struct loc tag in *)
     let clause = 
       let (lrt, values) = 
@@ -156,9 +156,8 @@ let struct_decl loc fields (tag : BT.tag) =
                       }
                in
                let lrt = 
-                 LRT.Logical ((member_v, LS.Base bt), 
-                 LRT.Resource (resource, lrt))
-               in
+                 LRT.Logical ((member_v, Base bt),
+                 LRT.Resource (resource, lrt)) in
                let value = (member, sym_ (bt, member_v)) :: values in
                (lrt, value)
             | None ->
@@ -177,36 +176,12 @@ let struct_decl loc fields (tag : BT.tag) =
       let value = IT.struct_ (tag, values) in
       let ct = Sctypes.Sctype ([], Sctypes.Struct tag) in
       let lrt = lrt @@ Constraint (LC (IT.representable_ (ct, value)), LRT.I) in
-      let constr = LC (IT.eq_ (sym_ (BT.Struct tag, struct_value_s), value)) in
-      (lrt, constr)
-    in
-    let predicate = 
-      Predicate {
-          name = Tag tag; 
-          iargs = [struct_pointer_t];
-          oargs = [struct_value_t];
-          unused = (* bool_ *) true;
-        } 
-    in
-    let unpack_function = 
-      let (lrt, constr) = clause in
-      LFT.Logical ((struct_value_s, LS.Base (Struct tag)), 
-      LFT.Resource (predicate,
-      LFT.I (LRT.concat lrt (LRT.Constraint (constr, LRT.I)))))
-    in
-    let pack_function = 
-      let (arg_lrt, constr) = clause in
-      LFT.of_lrt arg_lrt
-      (LFT.I
-        (LRT.Logical ((struct_value_s, LS.Base (Struct tag)), 
-         LRT.Resource (predicate,
-         LRT.Constraint (constr, LRT.I)))))
+      (lrt, value)
     in
     let def = 
-      {pack_function; 
-       unpack_function;
-       pointer = struct_pointer_s;
-       value = struct_value_s
+      {pointer = struct_pointer_s;
+       value = struct_value_s;
+       clause;
       }
     in
     return def
@@ -310,7 +285,7 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
           | None -> []
         in
         return (mapping, l)
-      ) def.Global.oargs ([], [])
+      ) def.oargs ([], [])
   in
   let oargs = 
     List.map (fun (s, LS.Base bt) ->

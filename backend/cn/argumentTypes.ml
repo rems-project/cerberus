@@ -12,7 +12,6 @@ module type I_Sig = sig
   type t
   val subst_var : (Sym.t, Sym.t) Subst.t -> t -> t
   val subst_it : (Sym.t, IndexTerms.t) Subst.t -> t -> t
-  val free_vars : t -> SymSet.t
   val pp : t -> Pp.document
 end
 
@@ -109,13 +108,6 @@ module Make (I: I_Sig) = struct
     | I i -> 
        let i = I.subst_it substitution i in
        I i
-
-  let rec free_vars = function
-    | Computational ((sym,_),t) -> SymSet.remove sym (free_vars t)
-    | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
-    | Resource (r,t) -> SymSet.union (RE.free_vars r) (free_vars t)
-    | Constraint (c,t) -> SymSet.union (LC.free_vars c) (free_vars t)
-    | I i -> I.free_vars i
 
 
   let pp ft = 

@@ -10,6 +10,7 @@ module AT = ArgumentTypes
 module LFT = ArgumentTypes.Make(LogicalReturnTypes)
 module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
+module PackingFT = ArgumentTypes.Make(Assignment)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -28,6 +29,7 @@ open Mu
 open Pp
 open BT
 open Resources
+open Predicates
 
 
 
@@ -273,7 +275,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       type packing_request = { 
           local : L.t;
-          lft : LFT.t;
+          packing_function : PackingFT.t;
           ui_info : request_ui_info;
         }
 
@@ -285,7 +287,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       and 'r prompt = 
         | R_Resource : resource_request -> (RE.t * L.t) prompt
-        | R_Packing : packing_request -> (LRT.t * L.t) prompt
+        | R_Packing : packing_request -> (Assignment.t * L.t) prompt
         | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
         | R_Error : err -> 'r prompt
 
@@ -346,7 +348,8 @@ module Make (G : sig val global : Global.t end) = struct
        let@ (res, constrs) = aux_content b.content b'.content (res, []) in
        if Solver.holds local (and_ (List.map IT.eq_ constrs))
        then return res
-       else fail loc (error ())
+       else 
+         fail loc (error ())
     | IteratedStar b, IteratedStar b' when
            Z.equal b.size b'.size ->
        let b = 
@@ -370,12 +373,12 @@ module Make (G : sig val global : Global.t end) = struct
               List.length p.oargs = List.length p'.oargs &&
               (* IT.equal *) p.unused = p'.unused ->
        let@ (res, constrs) = 
-         List.fold_left (fun acc (it1,it2) ->
+         List.fold_left2 (fun acc it1 it2 ->
              let@ (res,constrs) = acc in
              match IT.unify it1 it2 res with
              | Some res -> return (res, constrs)
              | None -> return (res, (it1,it2) :: constrs)
-           ) (return (res, [])) (List.combine p.oargs p'.oargs)
+           ) (return (res, [])) p.oargs p'.oargs
        in
        if Solver.holds local (and_ (List.map IT.eq_ constrs))
        then return res 
@@ -517,6 +520,7 @@ module Make (G : sig val global : Global.t end) = struct
     module Spine_FT = Spine(ReturnTypes)
     module Spine_LFT = Spine(LogicalReturnTypes)
     module Spine_LT = Spine(False)
+    module Spine_Packing = Spine(Assignment)
 
 
 
@@ -524,27 +528,29 @@ module Make (G : sig val global : Global.t end) = struct
     (*** resource inference *******************************************************)
 
 
-    let predicate_substs pred (def : Global.predicate_definition) = 
-      let open Resources in
-      List.map (fun ((before, _), after) -> 
-          {before; after}
-        ) (List.combine def.iargs pred.iargs)
+    (* let predicate_pack_functions pred def =
+     *   let substs = 
+     *     List.map (fun ((before, _), after) -> 
+     *         {before; after}
+     *       ) (List.combine def.iargs pred.iargs)
+     *   in
+     *   List.map (fun clause ->
+     *     List.fold_left (fun lft subst ->
+     *         LFT.subst_it subst lft
+     *       ) clause substs
+     *     ) def.pack_functions *)
 
-    let predicate_pack_functions pred def =
-      let substs = predicate_substs pred def in
-      List.map (fun clause ->
-        List.fold_left (fun lft subst ->
-            LFT.subst_it subst lft
-          ) clause substs
-        ) def.pack_functions
-
-    let predicate_unpack_functions pred def =
-      let substs = predicate_substs pred def in
-      List.map (fun clause ->
-          List.fold_left (fun lft subst ->
-              LFT.subst_it subst lft
-            ) clause substs
-        ) def.unpack_functions
+    (* let predicate_unpack_functions pred def =
+     *   let substs = 
+     *     List.map (fun ((before, _), after) -> 
+     *         {before; after}
+     *       ) (List.combine def.iargs pred.iargs)
+     *   in
+     *   List.map (fun clause ->
+     *       List.fold_left (fun lft subst ->
+     *           LFT.subst_it subst lft
+     *         ) clause substs
+     *     ) def.unpack_functions *)
 
     let is_global local it = 
       SymSet.exists (fun s ->
@@ -553,7 +559,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec resource_request_prompt ui_info local request = 
+    let resource_request_prompt ui_info local request = 
       let open Prompt in
       let open Prompt.Operators in
       let open Resources in
@@ -792,16 +798,27 @@ module Make (G : sig val global : Global.t end) = struct
          | _ ->
             let def = Option.get (Global.get_predicate_def G.global p.name) in
             let else_prompt = lazy (missing ()) in
+            let substs = 
+              List.map2 (fun (before, _) after -> {before; after}) 
+                def.iargs p.iargs 
+                (* outputs are not referred to in the clause *)
+            in
             let attempt_prompts = 
-              List.map (fun lft ->
-                  lazy (prompt (R_Packing {ui_info; local; lft}))
-                ) (predicate_pack_functions p def)
+              List.map (fun clause ->
+                  lazy begin
+                      let (Clause {condition; outputs}) = 
+                        subst_its_clause substs clause in
+                      let packing_function = 
+                        PackingFT.of_lrt condition (PackingFT.I outputs) in
+                      prompt (R_Packing {ui_info; local; packing_function})
+                    end
+                ) def.clauses
             in
             let choices = attempt_prompts @ [else_prompt] in
             let choices1 = List1.make (List.hd choices, List.tl choices) in
-            let@ (lrt, local) = try_choices choices1 in
-            let local = bind_logical local lrt in
-            resource_request_prompt ui_info local request
+            let@ (assignment, local) = try_choices choices1 in
+            let p' = {p with oargs = assignment} in
+            return (Predicate p', local)
          end
       | Predicate p ->
          Debug_ocaml.error "request for used predicate"
@@ -822,10 +839,10 @@ module Make (G : sig val global : Global.t end) = struct
               resource_request_prompt ui_info local resource in
             let@ (unis, local) = handle_prompt prompt in
             handle_prompt (c (unis, local))
-         | R_Packing {ui_info; local; lft} ->
-            let prompt = Spine_LFT.spine ui_info local [] lft in
-            let@ (lrt, local) = handle_prompt prompt in
-            handle_prompt (c (lrt, local))
+         | R_Packing {ui_info; local; packing_function} ->
+            let prompt = Spine_Packing.spine ui_info local [] packing_function in
+            let@ (assignment, local) = handle_prompt prompt in
+            handle_prompt (c (assignment, local))
          | R_Try choices ->
             let rec first_success list1 =
                let (hd, tl) = List1.dest list1 in
@@ -876,29 +893,46 @@ module Make (G : sig val global : Global.t end) = struct
 
     let unpack_resources loc local = 
       let rec aux local = 
-        let@ (local, changed) = 
-          ListM.fold_leftM (fun (local, changed) resource ->
+        let (local, changed) = 
+          List.fold_left (fun (local, changed) resource ->
               match resource with
               | RE.Predicate p when p.unused ->
                  let def = Option.get (Global.get_predicate_def G.global p.name) in
-                 let@ possible_unpackings = 
-                   ListM.filter_mapM (fun clause ->
-                       let open Prompt in
-                       let ui_info = { loc; situation = Unpacking; extra_names = []; original_local = local } in
-                       let prompt = Spine_LFT.spine ui_info local [] clause in
-                       let@ (lrt, test_local) = handle_prompt prompt in
-                       let test_local = bind_logical test_local lrt in
-                       return (if not (Solver.is_inconsistent test_local)
-                               then Some test_local else None)
-                     ) (predicate_unpack_functions p def)
+                 let substs = 
+                   List.map2 (fun (before, _) after -> 
+                       {before; after}
+                     ) def.iargs p.iargs
+                 in
+                 let possible_unpackings = 
+                   List.filter_map (fun (Clause {condition; outputs}) ->
+                       let condition = LRT.subst_its substs condition in
+                       let outputs = Assignment.subst_its substs outputs in
+                       let lcs = 
+                         List.map2 (fun (oarg,_) v -> 
+                             LC (def_ oarg (IT.subst_its substs v))
+                           ) def.oargs outputs
+                       in
+                       let test_local = 
+                         let resources' = 
+                           List.filter (fun r -> 
+                               not (RE.equal r (Predicate p))
+                             ) local.resources
+                         in
+                         {local with resources = resources'} 
+                       in
+                       let test_local = 
+                         add_cs lcs (bind_logical test_local condition) in
+                       if not (Solver.is_inconsistent test_local)
+                       then Some test_local else None
+                     ) def.clauses
                  in
                  begin match possible_unpackings with
                  | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
-                 | [new_local] -> return (new_local, true)
-                 | _ -> return (local, changed)
+                 | [new_local] -> (new_local, true)
+                 | _ -> (local, changed)
                  end
               | _ ->
-                 return (local, changed)
+                 (local, changed)
             ) (local, false) (L.all_resources local)
         in
         if changed then aux local else return local
@@ -2011,7 +2045,8 @@ let check_and_record_tagDefs (global: Global.t) tagDefs =
                | _ -> return ()
              ) decl.layout
          in
-         let predicate_def = Global.struct_decl_to_predicate_def tag decl in
+         let predicate_def = Predicates.stored_struct_predicate_to_predicate tag 
+                               decl.stored_struct_predicate in
          let@ () = check_predicate_definition predicate_def in
          let struct_decls = SymMap.add tag decl global.struct_decls in
          return { global with struct_decls }

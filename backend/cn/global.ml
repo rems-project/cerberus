@@ -12,19 +12,12 @@ module RE = Resources
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
-module LRT = LogicalReturnTypes
 module RT = ReturnTypes
-module LFT = ArgumentTypes.Make(LRT)
 module FT = ArgumentTypes.Make(RT)
 
 
 
-type predicate_definition = 
-  { iargs : (Sym.t * LS.t) list;
-    oargs : (Sym.t * LS.t) list;
-    pack_functions : LFT.t list;
-    unpack_functions : LFT.t list;
-  }
+open Predicates
 
 
 
@@ -39,41 +32,22 @@ let early =
   let end_t = sym_ (Integer, end_s) in
   let iargs = [(start_s, LS.Base Integer); (end_s, LS.Base Integer)] in
   let oargs = [] in
-  let pred = 
-    Predicate {
-        name = Id id; 
-        iargs = [start_t; end_t];
-        oargs = [];
-        unused = (* bool_ *) true;
-      } 
-  in
   let block = 
     Resources.region 
       (integerToPointerCast_ start_t)
       (add_ (sub_ (end_t, start_t), int_ 1))
       (q_ (1, 1))
   in
-  let pack_functions =
-    [LFT.Resource (block, 
-     LFT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void))),
-     LFT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void))),
-     LFT.I (
-     LRT.Resource (pred,
-     LRT.I)))))] 
-  in
-  let unpack_functions =
-    [LFT.Resource (pred,
-     LFT.I (
-     LRT.Resource (block,
-     LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void))),
-     LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void))),
-     LRT.I)))))]
+  let lrt =
+    LRT.Resource (block, 
+    LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void))),
+    LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void))),
+     LRT.I)))
   in
   let predicate = {
       iargs; 
       oargs; 
-      pack_functions; 
-      unpack_functions
+      clauses = [Clause {condition = lrt; outputs = []}]; 
     } 
   in
   (id, predicate)
@@ -91,37 +65,19 @@ let zero_region =
   let length_t = sym_ (Integer, length_s) in
   let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
   let oargs = [] in
-  let pred = 
-    Predicate {
-        name = Id id; 
-        iargs = [pointer_t; length_t];
-        oargs = [];
-        unused = (* bool_ *) true;
-      } 
-  in
   let array = 
     RE.array pointer_t length_t (Z.of_int 1)
       (fun q -> int_ 0) (q_ (1,1))
   in
-  let pack_functions =
-    [LFT.Resource (array, 
-     LFT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
-     LFT.I (
-     LRT.Resource (pred,
-     LRT.I))))] 
-  in
-  let unpack_functions =
-    [LFT.Resource (pred,
-     LFT.I (
-     LRT.Resource (array,
-     LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
-     LRT.I))))]
+  let lrt =
+    LRT.Resource (array, 
+    LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
+    LRT.I))
   in
   let predicate = {
       iargs; 
       oargs; 
-      pack_functions; 
-      unpack_functions
+      clauses = [(Clause {condition=lrt; outputs=[]})]; 
     } 
   in
   (id, predicate)
@@ -166,12 +122,7 @@ let impl_lookup (e: 'v ImplMap.t) i =
   | Some v -> v
 
 
-type stored_struct_predicate =
-  { pointer : Sym.t;
-    value : Sym.t;
-    pack_function: LFT.t; 
-    unpack_function: LFT.t; 
-  }
+
 
 
 type struct_piece = 
@@ -229,13 +180,7 @@ let empty =
   }
 
 
-let struct_decl_to_predicate_def tag decl = 
-  let pred = decl.stored_struct_predicate in
-  let iargs = [(pred.pointer, LS.Base Loc)] in
-  let oargs = [(pred.value, LS.Base (Struct tag))] in
-  let pack_functions = [(pred.pack_function)] in
-  let unpack_functions = [(pred.unpack_function)] in
-  {iargs; oargs; pack_functions; unpack_functions}
+
 
 
 let get_predicate_def global predicate_name = 
@@ -246,7 +191,9 @@ let get_predicate_def global predicate_name =
   | Tag tag ->
      match SymMap.find_opt tag global.struct_decls with
      | None -> None
-     | Some decl -> Some (struct_decl_to_predicate_def tag decl)
+     | Some decl -> 
+        let pred = decl.stored_struct_predicate in
+        Some (stored_struct_predicate_to_predicate tag pred)
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i
@@ -269,14 +216,13 @@ let pp_struct_decl (tag,decl) =
           ) decl.layout
        )
   ^/^
+  let pred = stored_struct_predicate_to_predicate tag 
+               decl.stored_struct_predicate in
   (* item ("struct " ^ plain (Sym.pp tag) ^ " (closed stored)") 
    *      (RT.pp decl.closed_stored)
    * ^/^ *)
-  item ("struct " ^ plain (Sym.pp tag) ^ " (packing function) at P") 
-    (LFT.pp (decl.stored_struct_predicate.pack_function))
-  ^/^
-  item ("struct " ^ plain (Sym.pp tag) ^ " (unpacking function) at P") 
-    (LFT.pp (decl.stored_struct_predicate.unpack_function))
+  item ("StoredStruct(" ^ plain (Sym.pp tag) ^ ")(p,v)") 
+    (Pp.list Predicates.pp_clause pred.clauses)
 
 let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
 

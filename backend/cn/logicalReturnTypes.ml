@@ -80,7 +80,7 @@ let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt =
   in
   aux substitution lrt
 
-let subst_its = Subst.make_substs subst_var
+let subst_its = Subst.make_substs subst_it
 
 
 
