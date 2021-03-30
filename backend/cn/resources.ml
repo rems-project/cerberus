@@ -210,47 +210,9 @@ let equal t1 t2 =
 
 
 
-(* Block unifies with Blocks of other block type *)
-let unify_content c c' res = 
-  let open Option in
-  match c, c' with
-  | Block _, Block _ -> return res
-  | Value v, Value v' -> IT.unify v v' res
-  | _, _ -> fail
 
 
-(* requires equality on inputs, unifies outputs *)
-let unify r1 r2 res = 
-  let open Option in
-  match r1, r2 with
-  | Point b, Point b' 
-       when IT.equal b.pointer b'.pointer &&
-            Z.equal b.size b'.size &&
-            IT.equal b.permission b'.permission ->
-     (* Block unifies with Blocks of other block type *)
-     unify_content b.content b'.content res
-  | IteratedStar b, IteratedStar b' when
-         Z.equal b.size b'.size ->
-     let b = 
-       let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
-       let content = subst_var_content subst b.content in
-       let permission = IT.subst_var subst b.permission in
-       {b with qpointer = b'.qpointer; content; permission}
-     in
-     if IT.equal b.permission b'.permission 
-     then unify_content b.content b'.content res
-     else fail
-  | Predicate p, Predicate p' 
-       when predicate_name_equal p.name p'.name &&
-            List.equal IT.equal p.iargs p'.iargs &&
-            List.length p.oargs = List.length p'.oargs &&
-            (* IT.equal *) p.unused = p'.unused ->
-     List.fold_left (fun ores (sym1,sym2) ->
-         let@ res = ores in
-         IT.unify sym1 sym2 res
-       ) (Some res) (List.combine p.oargs p'.oargs)
-  | _ -> 
-     fail
+
 
 
 let free_vars = function

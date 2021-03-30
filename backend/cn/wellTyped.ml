@@ -559,36 +559,35 @@ module Make (G : sig val global : Global.t end) = struct
   end
 
 
-  let resource_inputs_ok loc resource determined = 
+  let resource_inputs_outputs_ok loc resource determined = 
     let bound = SymSet.of_list (List.map fst (RE.quantified resource)) in
     let free = IT.free_vars_list (RE.inputs resource) in
     let undetermined = SymSet.diff free (SymSet.union determined bound) in
-    match SymSet.elements undetermined with
-    | [] -> return ()
-    | s :: _ -> fail loc (Unconstrained_logical_variable s)
-
-  let resource_outputs_ok loc resource determined =
-    let bound = SymSet.of_list (List.map fst (RE.quantified resource)) in
-    let rec aux fixed = function
-      | [] -> return fixed
-      | output :: outputs -> 
+    let@ () = match SymSet.is_empty undetermined with
+      | true -> return ()
+      | false ->
+         let bad = List.hd (SymSet.elements undetermined) in
+         fail loc (Unconstrained_logical_variable bad)
+    in
+    let@ fixed = 
+      ListM.fold_leftM (fun fixed output ->
          let undetermined = 
            SymSet.diff (IT.free_vars output) 
              (SymSet.union determined bound) 
          in
-         match SymSet.elements undetermined, IT.is_sym output with
+         match SymSet.is_empty undetermined, IT.is_sym output with
          (* if the logical variables in tht outputs are already determined, ok *)
-         | [], _ -> 
-            aux fixed outputs
+         | true, _ -> return fixed
          (* if the output is an (unresolved) logical variable, then it can be
             resolved by unification *)       
-         | _ :: _, Some (sym, _) -> 
-            aux (SymSet.add sym fixed) outputs
+         | false, Some (sym, _) -> return (SymSet.add sym fixed)
          (* otherwise, fail *)
-         | lvar :: _, _ ->
-            fail loc (Logical_variable_not_good_for_unification lvar)
+         | false, _ ->
+            let bad = List.hd (SymSet.elements undetermined) in
+            fail loc (Logical_variable_not_good_for_unification bad)
+        ) SymSet.empty (RE.outputs resource)
     in
-    aux SymSet.empty (RE.outputs resource)
+    return fixed
 
   module WLC = struct
     open LogicalConstraints
@@ -627,8 +626,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Logical ((s, _), lrt) ->
          aux determined (SymSet.add s undetermined) lrt
       | Resource (re, lrt) ->
-         let@ () = resource_inputs_ok loc re determined in
-         let@ fixed = resource_outputs_ok loc re determined in
+         let@ fixed = resource_inputs_outputs_ok loc re determined in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined lrt
@@ -735,8 +733,7 @@ module Make (G : sig val global : Global.t end) = struct
       | T.Logical ((s, _), ft) ->
          aux determined (SymSet.add s undetermined) ft
       | T.Resource (re, ft) ->
-         let@ () = resource_inputs_ok loc re determined in
-         let@ fixed = resource_outputs_ok loc re determined in
+         let@ fixed = resource_inputs_outputs_ok loc re determined in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined ft

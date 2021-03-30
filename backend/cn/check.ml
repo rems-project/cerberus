@@ -248,6 +248,9 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
+
+
+
   module type Naming = sig val names : Explain.naming end
   module Checker (Names : Naming) = struct
 
@@ -315,6 +318,70 @@ module Make (G : sig val global : Global.t end) = struct
 
     end
 
+
+
+
+  (* requires equality on inputs *)
+  let match_resources loc local error r1 r2 res =
+    let open Prompt.Operators in
+
+    (* Block unifies with Blocks of other block type *)
+    let aux_content c c' (res, constrs) = 
+      match c, c' with
+      | Block _, Block _ -> return (res, constrs)
+      | Value v, Value v' -> 
+         begin match IT.unify v v' res with
+         | Some res -> return (res, constrs)
+         | None -> return (res, (v, v') :: constrs)
+         end
+      | _, _ -> fail loc (error ())
+    in
+
+    match r1, r2 with
+    | Point b, Point b' 
+         when IT.equal b.pointer b'.pointer &&
+              Z.equal b.size b'.size &&
+              IT.equal b.permission b'.permission ->
+       (* Block unifies with Blocks of other block type *)
+       let@ (res, constrs) = aux_content b.content b'.content (res, []) in
+       if Solver.holds local (and_ (List.map IT.eq_ constrs))
+       then return res
+       else fail loc (error ())
+    | IteratedStar b, IteratedStar b' when
+           Z.equal b.size b'.size ->
+       let b = 
+         let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
+         let content = RE.subst_var_content subst b.content in
+         let permission = IT.subst_var subst b.permission in
+         {b with qpointer = b'.qpointer; content; permission}
+       in
+       let@ () = 
+         if IT.equal b.permission b'.permission then return () 
+         else fail loc (error ())
+       in
+       let@ (res,constrs) = aux_content b.content b'.content (res, []) in
+       if Solver.holds_forall local [(b'.qpointer, BaseTypes.Loc)] 
+            (impl_ (gt_ (b'.permission, q_ (0, 1)), and_ (List.map IT.eq_ constrs)))
+       then return res 
+       else fail loc (error ())
+    | Predicate p, Predicate p' 
+         when predicate_name_equal p.name p'.name &&
+              List.equal IT.equal p.iargs p'.iargs &&
+              List.length p.oargs = List.length p'.oargs &&
+              (* IT.equal *) p.unused = p'.unused ->
+       let@ (res, constrs) = 
+         List.fold_left (fun acc (it1,it2) ->
+             let@ (res,constrs) = acc in
+             match IT.unify it1 it2 res with
+             | Some res -> return (res, constrs)
+             | None -> return (res, (it1,it2) :: constrs)
+           ) (return (res, [])) (List.combine p.oargs p'.oargs)
+       in
+       if Solver.holds local (and_ (List.map IT.eq_ constrs))
+       then return res 
+       else fail loc (error ())
+    | _ -> 
+       fail loc (error ())
 
 
     module Spine (I : AT.I_Sig) = struct
@@ -396,43 +463,9 @@ module Make (G : sig val global : Global.t end) = struct
                let mismatch () = 
                  let ((expect,has), state) = 
                    Explain.resources names original_local (resource, resource') in
-                 fail loc (Resource_mismatch {expect; has; state; situation})
+                 (Resource_mismatch {expect; has; state; situation})
                in
-               let all_outputs_resolved = 
-                 let quantified_vars = 
-                   SymSet.of_list (List.map fst (RE.quantified resource)) in
-                 Uni.all_resolved unis 
-                   (SymSet.diff (IT.free_vars_list (RE.outputs resource))
-                      quantified_vars)
-               in
-               let@ unis = match all_outputs_resolved with
-                 | true ->
-                    let quantifiers_ok () = 
-                      List.equal (Tools.pair_equal Sym.equal BT.equal)
-                        (RE.quantified resource) (RE.quantified resource') 
-                    in
-                    let inputs_ok () = 
-                      List.equal IT.equal (RE.inputs resource) (RE.inputs resource') 
-                    in
-                    let outputs_ok () = 
-                      let () = Debug_ocaml.begin_csv_timing "spine calling solver" in
-                      let result = 
-                        Solver.holds_forall local (RE.quantified resource) 
-                          (IT.impl_
-                             (gt_ (RE.permission resource', q_ (0, 1)),
-                              IT.and_ (List.map2 eq__ (RE.outputs resource)
-                                         (RE.outputs resource'))))
-                      in
-                      let () = Debug_ocaml.end_csv_timing () in
-                      result
-                    in
-                    if inputs_ok () && quantifiers_ok () && outputs_ok ()
-                    then return unis else mismatch ()
-                 | false -> 
-                    match RE.unify resource resource' unis with
-                    | Some unis -> return unis
-                    | None -> mismatch ()
-               in
+               let@ unis = match_resources loc local mismatch resource resource' unis in
                let new_substs = Uni.find_resolved local unis in
                let ftyp' = NFT.subst_its_r new_substs ftyp in
                infer_resources local unis ftyp'
