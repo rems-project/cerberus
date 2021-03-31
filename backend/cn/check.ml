@@ -879,27 +879,13 @@ module Make (G : sig val global : Global.t end) = struct
                  in
                  let possible_unpackings = 
                    List.filter_map (fun (Clause {condition; outputs}) ->
-                       let () = print stderr (item "************* resource" (RE.pp (Predicate p))) in
-                       let condition = LRT.subst_its substs condition in
-                       let outputs = Assignment.subst_its substs outputs in
-                       let lcs = 
-                         List.map2 (fun oarg v -> eq_ (oarg, IT.subst_its substs v))
-                           p.oargs outputs
-                       in
-                       let lrt = LRT.concat condition (Constraint (LC (and_ lcs), LRT.I)) in
-                       let () = print stderr (item "************* condition" (LRT.pp condition)) in
-                       let () = print stderr (item "************* outputs" (Assignment.pp outputs)) in
-                       let () = print stderr (item "************* lrt" (LRT.pp lrt)) in
-
-                       (* do this before binding the return type 'condition' *)
-                       let test_local = 
-                         let resources' = 
-                           List.filter (fun r -> 
-                               not (RE.equal r (Predicate p))
-                             ) local.resources
-                         in
-                         {local with resources = resources'} 
-                       in
+                       let lc = LC (and_ (List.map2 eq__ p.oargs outputs)) in
+                       let spec = LRT.concat condition (Constraint (lc, I)) in
+                       let lrt = LRT.subst_its substs spec in
+                       (* remove resource before binding the return
+                          type 'condition', so as not to unsoundly
+                          introduce extra disjointness constraints *)
+                       let test_local = L.remove_resource (Predicate p) local in
                        let test_local = bind_logical test_local lrt in
                        if not (Solver.is_inconsistent test_local)
                        then Some test_local else None

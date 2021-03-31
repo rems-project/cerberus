@@ -116,6 +116,15 @@ let add_r r (local : t) =
   add_cs (List.map LC.pack lcs) local
 
 
+let remove_resource resource local = 
+  let resources = 
+    List.filter (fun r -> 
+        not (RE.equal r resource)
+      ) local.resources
+  in
+  { local with resources }
+
+
 
 
 (* let equalities local = 
