@@ -128,7 +128,6 @@ let struct_decl loc fields (tag : BT.tag) =
     let struct_pointer_s = Sym.fresh_named "p" in
     let struct_pointer_t = sym_ (Loc, struct_pointer_s) in
     let struct_value_s = Sym.fresh_named "v" in
-    (* let size = Memory.size_of_struct loc tag in *)
     let clause = 
       let (lrt, values) = 
         List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
@@ -140,20 +139,8 @@ let struct_decl loc fields (tag : BT.tag) =
                let member_t = sym_ (bt, member_v) in
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
-                 | Sctypes.Struct tag ->
-                    RE.Predicate {
-                        name = Tag tag; 
-                        iargs = [member_p]; 
-                        oargs = [member_t];
-                        unused = (* bool_ *) true;
-                      }
-                 | _ -> 
-                    RE.Point {
-                        pointer = member_p; 
-                        content = Value member_t; 
-                        size;
-                        permission = q_ (1, 1);
-                      }
+                 | Sctypes.Struct tag -> predicate (Tag tag) [member_p] [member_t]
+                 | _ -> points_to (member_p, size) (q_ (1, 1)) member_t
                in
                let lrt = 
                  LRT.Logical ((member_v, Base bt),
@@ -161,14 +148,7 @@ let struct_decl loc fields (tag : BT.tag) =
                let value = (member, sym_ (bt, member_v)) :: values in
                (lrt, value)
             | None ->
-               let resource = 
-                 RE.Point {
-                     pointer = member_p; 
-                     size; 
-                     content = Block Padding;
-                     permission = q_ (1, 1);
-                   }
-               in
+               let resource = padding (member_p, size) (q_ (1,1)) in
                let lrt = LRT.Resource (resource, lrt) in
                (lrt, values)
           ) layout (LRT.I, [])
@@ -178,13 +158,7 @@ let struct_decl loc fields (tag : BT.tag) =
       let lrt = lrt @@ Constraint (LC (IT.representable_ (ct, value)), LRT.I) in
       (lrt, value)
     in
-    let def = 
-      {pointer = struct_pointer_s;
-       value = struct_value_s;
-       clause;
-      }
-    in
-    return def
+    return { pointer = struct_pointer_s; value = struct_value_s; clause }
   in
 
   let decl = { layout; stored_struct_predicate } in
@@ -199,53 +173,32 @@ let struct_decl loc fields (tag : BT.tag) =
 
 let make_owned loc label pointer path sct =
   let open Sctypes in
+  let pointee = Sym.fresh () in
+  let pointee_bt = BT.of_sct sct in
+  let l = [(pointee, LS.Base pointee_bt)] in
+  let mapping = 
+    [{path = Path.pointee (Some label) path; 
+      sym = pointee; bt = pointee_bt}] 
+  in
   match sct with
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
-     (* let size = Sym.fresh () in
-      * let r = 
-      *   [RE.Block {pointer = pointer_it; 
-      *              size;
-      *              block_type = Nothing}]
-      * in
-      * let l = [(size, LS.Base Integer)] in
-      * let mapping = 
-      *   [{path = Path.predarg Block path "size"; sym = size; bt = Integer}] in
-      * return (l, r, [], mapping) *)
   | Sctype (_, Struct tag) ->
-     let pointee = Sym.fresh () in
      let r = 
-       [RE.Predicate {
-            name = Tag tag; 
-            iargs = [sym_ (BT.Loc, pointer)];
-            oargs = [sym_ (BT.Struct tag, pointee)];
-            unused = (* bool_ *) true;
-       }]
+       predicate (Tag tag) [sym_ (BT.Loc, pointer)] 
+         [sym_ (BT.Struct tag, pointee)]
      in
-     let l = [(pointee, LS.Base (Struct tag))] in
-     let mapping = 
-       [{path = Path.pointee (Some label) path; sym = pointee; bt = Struct tag}] in
-     return (l, r, [], mapping)
+     return (l, [r], [], mapping)
   | sct -> 
-     let pointee = Sym.fresh () in
-     let bt = BT.of_sct sct in
      let r = 
-       [RE.Point {
-            pointer = sym_ (BT.Loc, pointer); 
-            content = Value (sym_ (bt, pointee)); 
-            size = Memory.size_of_ctype sct;
-            permission = q_ (1, 1);
-       }]
+       points_to (sym_ (BT.Loc, pointer), Memory.size_of_ctype sct)
+         (q_ (1, 1)) (sym_ (pointee_bt, pointee))
      in
-     let l = [(pointee, LS.Base bt)] in
      let c = [LC (good_value pointee sct)] in
-     let mapping = 
-       [{path = Path.pointee (Some label) path; sym = pointee; bt}] in
-     return(l, r, c, mapping)
+     return(l, [r], c, mapping)
 
 
 let make_region loc pointer size =
-  (* let open Sctypes in *)
   let resource = Resources.region pointer size (q_ (1, 1)) in
   return ([], [resource], [], [])
 
@@ -257,14 +210,10 @@ let make_block loc pointer path sct =
      fail loc (Generic !^"cannot make void* pointer a block")
   | _ -> 
      let r = 
-       [RE.Point {
-            pointer = sym_ (BT.Loc, pointer); 
-            size = Memory.size_of_ctype sct;
-            content = Block Nothing;
-            permission = q_ (1, 1);
-       }]
+       block (sym_ (BT.Loc, pointer), Memory.size_of_ctype sct)
+         (q_ (1, 1)) Nothing
      in
-     return ([], r, [], [])
+     return ([], [r], [], [])
 
 let make_pred loc pred (predargs : Path.predarg list) iargs = 
   let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with

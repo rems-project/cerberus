@@ -301,8 +301,20 @@ let derived_constraints resource resource' =
 
 
 
+let block (pointer, size) permission block_type =
+  Point {pointer; size; content = Block block_type; permission}
 
+let points_to (pointer, size) permission value =
+  Point {pointer; size; content = Value value; permission}
 
+let uninit (pointer, size) permission = 
+  block (pointer, size) permission Uninit
+
+let padding (pointer, size) permission = 
+  block (pointer, size) permission Padding
+
+let predicate predicate_name iargs oargs =
+  Predicate {name = predicate_name; iargs; oargs; unused = true}
 
 
 let region pointer size permission =

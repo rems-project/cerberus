@@ -326,7 +326,6 @@ module Make (G : sig val global : Global.t end) = struct
   (* requires equality on inputs *)
   let match_resources loc local error r1 r2 res =
     let open Prompt.Operators in
-
     (* Block unifies with Blocks of other block type *)
     let aux_content c c' (res, constrs) = 
       match c, c' with
@@ -338,7 +337,6 @@ module Make (G : sig val global : Global.t end) = struct
          end
       | _, _ -> fail loc (error ())
     in
-
     match r1, r2 with
     | Point b, Point b' 
          when IT.equal b.pointer b'.pointer &&
@@ -528,29 +526,6 @@ module Make (G : sig val global : Global.t end) = struct
     (*** resource inference *******************************************************)
 
 
-    (* let predicate_pack_functions pred def =
-     *   let substs = 
-     *     List.map (fun ((before, _), after) -> 
-     *         {before; after}
-     *       ) (List.combine def.iargs pred.iargs)
-     *   in
-     *   List.map (fun clause ->
-     *     List.fold_left (fun lft subst ->
-     *         LFT.subst_it subst lft
-     *       ) clause substs
-     *     ) def.pack_functions *)
-
-    (* let predicate_unpack_functions pred def =
-     *   let substs = 
-     *     List.map (fun ((before, _), after) -> 
-     *         {before; after}
-     *       ) (List.combine def.iargs pred.iargs)
-     *   in
-     *   List.map (fun clause ->
-     *       List.fold_left (fun lft subst ->
-     *           LFT.subst_it subst lft
-     *         ) clause substs
-     *     ) def.unpack_functions *)
 
     let is_global local it = 
       SymSet.exists (fun s ->
@@ -899,19 +874,24 @@ module Make (G : sig val global : Global.t end) = struct
               | RE.Predicate p when p.unused ->
                  let def = Option.get (Global.get_predicate_def G.global p.name) in
                  let substs = 
-                   List.map2 (fun (before, _) after -> 
-                       {before; after}
-                     ) def.iargs p.iargs
+                   List.map2 (fun (before, _) after -> {before; after}) 
+                     def.iargs p.iargs
                  in
                  let possible_unpackings = 
                    List.filter_map (fun (Clause {condition; outputs}) ->
+                       let () = print stderr (item "************* resource" (RE.pp (Predicate p))) in
                        let condition = LRT.subst_its substs condition in
                        let outputs = Assignment.subst_its substs outputs in
                        let lcs = 
-                         List.map2 (fun (oarg,_) v -> 
-                             LC (def_ oarg (IT.subst_its substs v))
-                           ) def.oargs outputs
+                         List.map2 (fun oarg v -> eq_ (oarg, IT.subst_its substs v))
+                           p.oargs outputs
                        in
+                       let lrt = LRT.concat condition (Constraint (LC (and_ lcs), LRT.I)) in
+                       let () = print stderr (item "************* condition" (LRT.pp condition)) in
+                       let () = print stderr (item "************* outputs" (Assignment.pp outputs)) in
+                       let () = print stderr (item "************* lrt" (LRT.pp lrt)) in
+
+                       (* do this before binding the return type 'condition' *)
                        let test_local = 
                          let resources' = 
                            List.filter (fun r -> 
@@ -920,8 +900,7 @@ module Make (G : sig val global : Global.t end) = struct
                          in
                          {local with resources = resources'} 
                        in
-                       let test_local = 
-                         add_cs lcs (bind_logical test_local condition) in
+                       let test_local = bind_logical test_local lrt in
                        if not (Solver.is_inconsistent test_local)
                        then Some test_local else None
                      ) def.clauses
@@ -940,7 +919,7 @@ module Make (G : sig val global : Global.t end) = struct
       aux local
 
 
-    let resource_request (loc: loc) original_local situation local request : (RE.t * L.t, type_error) m = 
+    let resource_request (loc: loc) situation local request : (RE.t * L.t, type_error) m = 
       let open Prompt in
       let ui_info = { loc; extra_names = []; situation; original_local = local } in
       let prompt = resource_request_prompt ui_info local request in
@@ -1363,90 +1342,112 @@ module Make (G : sig val global : Global.t end) = struct
 
     let load (loc: loc) local (bt: BT.t) (pointer: IT.t) (size: Z.t) =
       let open Global in
-      let rec aux bt pointer size : (IT.t, type_error) m = 
+      let rec aux bt pointer size is_member : (IT.t, type_error) m = 
         match bt with
         | BT.Struct tag ->
            let@ decl = get_struct_decl loc tag in
            let@ member_its = 
              ListM.mapM (fun {size; member = (member, member_sct); _} ->
                 let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
-                let@ it = aux (BT.of_sct member_sct) member_pointer size in
+                let@ it = aux (BT.of_sct member_sct) member_pointer size (Some member) in
                 return (member, it)
                ) (Global.members decl.layout)
            in
            return (struct_ (tag, member_its))
         | _ ->
-           (* todo: can maybe optimise this to maybe request all
-              resources at the same time? *)
+           (* have to fix this: any non-zero permission is ok *)
            let@ (resource, _)  = 
-             resource_request loc local (Access (Load None)) local
-               (Point {pointer; 
-                       size; 
-                       content = Value (sym_ (bt, Sym.fresh ()));
-                       permission = q_ (1, 2)
-               })
+             resource_request loc (Access (Load is_member)) local
+               (points_to (pointer, size) (q_ (1, 2)) (sym_ (bt, Sym.fresh ())))
            in
            begin match resource with
            | Point {content = Value pointee; _} -> return pointee
            | _ -> Debug_ocaml.error "points-to request did not return points-to"
            end
       in
-      aux bt pointer size
+      aux bt pointer size None
 
 
-
-    (* does not check for the right to write, this is done elsewhere *)
-    let rec store (loc: loc)
-                  local
-                  (bt: BT.t)
-                  (pointer: IT.t)
-                  (size: Z.t)
-                  (o_value: IT.t option) 
-      =
-      let open LRT in
+    let rec destroy (loc: loc) access local (pointer: IT.t) (size: Z.t) bt =
+      let open Global in
       match bt with
       | Struct tag ->
          let@ decl = get_struct_decl loc tag in
-         let rec aux = function
-           | [] -> return I
-           | Global.{offset; size; member_or_padding} :: members ->
-              match member_or_padding with
-              | Some (member,member_sct) ->
-                 let member_bt = BT.of_sct member_sct in
-                 let o_member_value = 
-                   Option.map (fun v -> IT.structMember_ ~member_bt (tag, v, member)) o_value 
-                 in
-                 let member_offset = IT.addPointer_ (pointer, z_ offset) in
-                 let@ rt = store loc local member_bt member_offset
-                             size o_member_value in
-                 let@ rt2 = aux members in
-                 return (rt@@rt2)
-              | None ->
-                 let block = 
-                   RE.Point {
-                       pointer = IT.addPointer_ (pointer, z_ offset); 
-                       size; 
-                       content = Block Padding;
-                       permission = q_ (1, 1);
-                     } 
-                 in
-                 let rt = LRT.Resource (block, LRT.I) in
-                 let@ rt2 = aux members in
-                 return (rt@@rt2)
-         in  
-         aux decl.layout
+         ListM.fold_leftM (fun local member ->
+             let {offset; size; member_or_padding} = member in
+                let member_pointer = IT.addPointer_ (pointer, z_ offset) in
+             match member_or_padding with
+             | Some (member,member_sct) ->
+                let member_bt = BT.of_sct member_sct in
+                let@ local = destroy loc access local member_pointer size member_bt in
+                return local
+             | None ->
+                let@ (_, local) = 
+                  resource_request loc (Access access) local
+                    (block (member_pointer, size) (q_ (1, 1)) Nothing) 
+                in
+                return local
+           ) local decl.layout
       | _ -> 
-         match o_value with
-         | Some v -> 
-            let point = {pointer; content = Value v; size; permission = q_ (1,1)} in
-            return (Resource (Point point, I))
-         | None -> 
-            let point = {pointer; size; content = Block Uninit; permission = q_ (1,1)} in
-            let block = RE.Point point in
-            let rt = Resource (block, LRT.I) in
-            return rt
+         let@ (_, local) = 
+           resource_request loc (Access access) local
+             (block (pointer, size) (q_ (1, 1)) Nothing) 
+         in
+         return local
 
 
+    let rec store (loc: loc) local (pointer: IT.t) (size: Z.t) (value: IT.t) =
+      let open LRT in
+      let open Global in
+      match IT.bt value with
+      | Struct tag ->
+         let@ decl = get_struct_decl loc tag in
+         ListM.fold_leftM (fun (acc_rt, local) member ->
+             let {offset; size; member_or_padding} = member in
+             let member_pointer = IT.addPointer_ (pointer, z_ offset) in
+             match member_or_padding with
+             | Some (member,member_sct) ->
+                let member_bt = BT.of_sct member_sct in
+                let member_value = IT.structMember_ ~member_bt (tag, value, member) in
+                let@ (rt, local) = store loc local member_pointer size member_value in
+                return (acc_rt @@ rt, local)
+             | None ->
+                let@ (_, local) = 
+                  resource_request loc (Access (Store None)) local 
+                    (padding (member_pointer, size) (q_ (1,1))) 
+                in
+                let resource = padding (pointer, size) (q_ (1,1)) in
+                return ((acc_rt @@ LRT.Resource (resource, I)), local)
+           ) (LRT.I, local) decl.layout
+      | _ -> 
+         let@ (_, local) = 
+           resource_request loc (Access (Store None)) local 
+             (padding (pointer, size) (q_ (1,1))) 
+         in
+         let point = points_to (pointer, size) (q_ (1,1)) value in
+         return (LRT.Resource (point, I), local)
+
+    let rec create (loc: loc) local (pointer: IT.t) bt (size: Z.t) = 
+      let open LRT in
+      let open Global in
+      match bt with
+      | Struct tag ->
+         let@ decl = get_struct_decl loc tag in
+         ListM.fold_leftM (fun acc_rt member ->
+             let {offset; size; member_or_padding} = member in
+             let member_pointer = IT.addPointer_ (pointer, z_ offset) in
+             match member_or_padding with
+             | Some (member,member_sct) ->
+                let member_bt = BT.of_sct member_sct in
+                let@ rt = create loc local member_pointer member_bt size in
+                return (acc_rt @@ rt)
+             | None ->
+                let resource = uninit (member_pointer, size) (q_ (1,1)) in
+                return (acc_rt @@ Resource (resource, I))
+           ) LRT.I decl.layout
+      | _ -> 
+         let resource = uninit (pointer, size) (q_ (1,1)) in
+         return (LRT.Resource (resource, I))
 
 
 
@@ -1570,12 +1571,8 @@ module Make (G : sig val global : Global.t end) = struct
               let@ ok = 
                 let size = Memory.size_of_ctype act.ct in
                 let@ _ = 
-                  resource_request loc local (Access Deref) local
-                    (Point {pointer = sym_ (Loc, arg.lname); 
-                            size; 
-                            content = Block Nothing;
-                            permission = q_ (1, 2);
-                    })
+                  resource_request loc (Access Deref) local
+                    (block (sym_ (Loc, arg.lname), size) (q_ (1, 2)) Nothing)
                 in
                 (* let fps = List.filter_map RE.footprint (L.all_resources local) in *)
                 (* let in_some_fp = or_ (List.map (IT.in_footprint (sym_ (Loc, arg.lname))) fps) in *)
@@ -1618,7 +1615,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
               let ret = Sym.fresh () in
               let size = Memory.size_of_ctype act.ct in
-              let@ lrt = store loc local (BT.of_sct act.ct) (sym_ (Loc, ret)) size None in
+              let@ lrt = create loc local (sym_ (Loc, ret)) (BT.of_sct act.ct) size in
               let rt = 
                 RT.Computational ((ret, Loc), 
                 LRT.Constraint (LC.LC (representable_ (Sctypes.pointer_sct act.ct, sym_ (Loc, ret))), 
@@ -1637,13 +1634,9 @@ module Make (G : sig val global : Global.t end) = struct
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
               let size = Memory.size_of_ctype ct in
-              let@ (_, local) = 
-                resource_request loc local (Access Kill) local
-                  (Point {pointer = sym_ (arg.bt, arg.lname); 
-                          size; 
-                          content = Block Nothing;
-                          permission = q_ (1, 1);
-                  })
+              let@ local = 
+                destroy loc Kill local (sym_ (arg.bt, arg.lname)) 
+                  size (BT.of_sct ct)
               in
               let rt = RT.Computational ((Sym.fresh (), Unit), I) in
               return (Normal (rt, local))
@@ -1666,17 +1659,10 @@ module Make (G : sig val global : Global.t end) = struct
                  fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
               let size = Memory.size_of_ctype act.ct in
-              let@ (_, local) = 
-                resource_request loc local (Access (Store None)) local
-                  (Point {pointer = sym_ (parg.bt, parg.lname); 
-                          size; 
-                          content = Block Nothing;
-                          permission = q_ (1, 1);
-                  })
+              let@ (bindings, local) = 
+                store loc local (sym_ (parg.bt, parg.lname))
+                  size (sym_ (varg.bt, varg.lname))
               in
-              let@ bindings = 
-                store loc local varg.bt (sym_ (parg.bt, parg.lname))
-                  size (Some (sym_ (varg.bt, varg.lname))) in
               let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
               return (Normal (rt, local))
            | M_Load (act, pasym, _mo) -> 
