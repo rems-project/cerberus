@@ -30,7 +30,7 @@ let early =
   let start_t = sym_ (Integer, start_s) in
   let end_s = Sym.fresh () in
   let end_t = sym_ (Integer, end_s) in
-  let iargs = [(start_s, LS.Base Integer); (end_s, LS.Base Integer)] in
+  let iargs = [(start_s, BT.Integer); (end_s, BT.Integer)] in
   let oargs = [] in
   let block = 
     Resources.region 
@@ -40,8 +40,8 @@ let early =
   in
   let lrt =
     LRT.Resource (block, 
-    LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void))),
-    LRT.Constraint (LC (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void))),
+    LRT.Constraint (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void)),
+    LRT.Constraint (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void)),
      LRT.I)))
   in
   let predicate = {
@@ -63,7 +63,7 @@ let zero_region =
   let pointer_t = sym_ (Loc, pointer_s) in
   let length_s = Sym.fresh () in
   let length_t = sym_ (Integer, length_s) in
-  let iargs = [(pointer_s, LS.Base Loc); (length_s, LS.Base Integer)] in
+  let iargs = [(pointer_s, BT.Loc); (length_s, BT.Integer)] in
   let oargs = [] in
   let array = 
     RE.array pointer_t length_t (Z.of_int 1)
@@ -71,7 +71,7 @@ let zero_region =
   in
   let lrt =
     LRT.Resource (array, 
-    LRT.Constraint (LC (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void))),
+    LRT.Constraint (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void)),
     LRT.I))
   in
   let predicate = {

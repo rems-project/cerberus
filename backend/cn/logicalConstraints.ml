@@ -1,30 +1,27 @@
-type t = LC of IndexTerms.t
+type t = IndexTerms.t
 
-let pp (LC c) = Pp.dquotes (IndexTerms.pp c)
+let pp c = Pp.dquotes (IndexTerms.pp c)
 
-let json (LC c) : Yojson.Safe.t = 
+let json c : Yojson.Safe.t = 
   IndexTerms.json c
 
 
-let subst_var substitution (LC c) = 
-  LC (IndexTerms.subst_var substitution c)
+let subst_var substitution c = 
+  IndexTerms.subst_var substitution c
 
-let subst_it substitution (LC c) = 
-  LC (IndexTerms.subst_it substitution c)
-
-
-let subst_vars = Subst.make_substs subst_var
-let subst_its = Subst.make_substs subst_it
-
-let free_vars (LC c) = IndexTerms.free_vars c
-
-let equal (LC c) (LC c') = IndexTerms.equal c c'
-
-let negate (LC c) = LC (IndexTerms.not_ c)
+let subst_it substitution c = 
+  IndexTerms.subst_it substitution c
 
 
-let pack c = LC c
-let unpack (LC c) = c
+let subst_vars c = Subst.make_substs subst_var c
+let subst_its c = Subst.make_substs subst_it c
+
+let free_vars c = IndexTerms.free_vars c
+
+let equal c c' = IndexTerms.equal c c'
+
+
+
 
 
 

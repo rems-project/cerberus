@@ -10,7 +10,7 @@ let lrt (Computational (_, lrt)) = lrt
 
 let to_logical = function
   | Computational ((name, bt), lrt) ->
-     LRT.Logical ((name, Base bt), lrt)
+     LRT.Logical ((name, bt), lrt)
 
 
 let mComputational (name,bound) t = 

@@ -113,7 +113,7 @@ let add_r r (local : t) =
       (all_resources local)
   in
   let local = {local with resources} in
-  add_cs (List.map LC.pack lcs) local
+  add_cs lcs local
 
 
 let remove_resource resource local = 

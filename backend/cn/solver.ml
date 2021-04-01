@@ -284,8 +284,7 @@ module Make (G : sig val global : Global.t end) = struct
       | MaxInteger it ->
          term (z_ (Memory.max_integer_type it))
       | Representable (ct, t) ->
-         let (LC it) = Memory.representable_ctype G.global.struct_decls ct t in
-         term it
+         term (Memory.representable_ctype G.global.struct_decls ct t)
       | AlignedI (t1, t2) ->
          term (eq_ (rem_t_ (t2, t1), int_ 0))
       | Aligned (ct, t) ->
@@ -308,8 +307,7 @@ module Make (G : sig val global : Global.t end) = struct
     let () = Debug_ocaml.begin_csv_timing "solver_constraints" in
     let constraints = 
       Z3.Boolean.mk_not context expr ::
-        List.map (fun (LogicalConstraints.LC lc) -> of_index_term lc)
-          (Local.all_constraints local)
+        List.map of_index_term (Local.all_constraints local)
     in
     let () = Debug_ocaml.end_csv_timing () in
     let () = Debug_ocaml.begin_csv_timing "check" in

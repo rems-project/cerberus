@@ -55,121 +55,115 @@ module Make (G : sig val global : Global.t end) = struct
         let lit = function
           | Sym s ->
              let@ () = check_bound loc names local KLogical s in
-             let (Base bt) = L.get_l s local in
-             return (Base bt, Sym s)
+             return (L.get_l s local, Sym s)
           | Z z -> 
-             return (Base Integer, Z z)
+             return (Integer, Z z)
           | Q (n,n') -> 
-             return (Base Real, Q (n,n'))
+             return (Real, Q (n,n'))
           | Pointer p -> 
-             return (Base Loc, Pointer p)
+             return (Loc, Pointer p)
           | Bool b -> 
-             return (Base Bool, Bool b)
+             return (BT.Bool, Bool b)
           | Unit -> 
-             return (Base Unit, Unit)
+             return (BT.Unit, Unit)
           | Default bt -> 
-             return (Base bt, Default bt)
+             return (bt, Default bt)
         in
 
         let arith_op = function
           | Add (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Add (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Add (t, t'))
           | Sub (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Sub (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Sub (t, t'))
           | Mul (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Mul (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Mul (t, t'))
           | Div (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Div (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Div (t, t'))
           | Exp (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Exp (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Exp (t, t'))
           | Rem_t (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Rem_t (t, t'))
+             let@ t = check loc Integer t in
+             let@ t' = check loc Integer t' in
+             return (Integer, Rem_t (t, t'))
           | Rem_f (t,t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Integer, Rem_f (t, t'))
+             let@ t = check loc Integer t in
+             let@ t' = check loc Integer t' in
+             return (Integer, Rem_f (t, t'))
           | Min (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Min (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Min (t, t'))
           | Max (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base bt, Max (t, t'))
+             let@ t' = check loc bt t' in
+             return (bt, Max (t, t'))
         in
 
         let cmp_op = function
           | LT (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base Bool, LT (t, t'))
+             let@ t' = check loc bt t' in
+             return (BT.Bool, LT (t, t'))
           | GT (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base Bool, GT (t, t'))
+             let@ t' = check loc bt t' in
+             return (BT.Bool, GT (t, t'))
           | LE (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base Bool, LE (t, t'))
+             let@ t' = check loc bt t' in
+             return (BT.Bool, LE (t, t'))
           | GE (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc (Base bt) t' in
-             return (Base Bool, GE (t, t'))
+             let@ t' = check loc bt t' in
+             return (BT.Bool, GE (t, t'))
         in
 
         let bool_op = function
           | And ts ->
-             let@ ts = ListM.mapM (check loc (Base Bool)) ts in
-             return (Base Bool, And ts)
+             let@ ts = ListM.mapM (check loc Bool) ts in
+             return (BT.Bool, And ts)
           | Or ts ->
-             let@ ts = ListM.mapM (check loc (Base Bool)) ts in
-             return (Base Bool, Or ts)
+             let@ ts = ListM.mapM (check loc Bool) ts in
+             return (BT.Bool, Or ts)
           | Impl (t,t') ->
-             let@ t = check loc (Base Bool) t in
-             let@ t' = check loc (Base Bool) t' in
-             return (Base Bool, Impl (t, t'))
+             let@ t = check loc Bool t in
+             let@ t' = check loc Bool t' in
+             return (BT.Bool, Impl (t, t'))
           | Not t ->
-             let@ t = check loc (Base Bool) t in
-             return (Base Bool, Not t)
+             let@ t = check loc Bool t in
+             return (BT.Bool, Not t)
           | ITE (t,t',t'') ->
-             let@ t = check loc (Base Bool) t in
+             let@ t = check loc Bool t in
              let@ (ls, t') = infer loc t' in
              let@ t'' = check loc ls t'' in
              return (ls, ITE (t, t', t''))
           | EQ (t,t') ->
              let@ (ls,t) = infer loc t in
              let@ t' = check loc ls t' in
-             return (Base Bool, EQ (t,t')) 
+             return (BT.Bool, EQ (t,t')) 
           | NE (t,t') ->
              let@ (ls,t) = infer loc t in
              let@ t' = check loc ls t' in
-             return (Base Bool, NE (t,t'))
+             return (BT.Bool, NE (t,t'))
         in
 
         let tuple_op = function
           | Tuple ts ->
-             let@ bts_ts = 
-               ListM.mapM (fun it -> 
-                   let@ (Base bt, t) = infer loc it in
-                   return (bt, t)
-                 ) ts 
-             in
+             let@ bts_ts = ListM.mapM (infer loc) ts in
              let (bts,ts) = List.split bts_ts in
-             return (Base (BT.Tuple bts), Tuple ts)
+             return (BT.Tuple bts, Tuple ts)
           | NthTuple (n, t') ->
-             let@ (Base tuple_bt,t') = infer loc t' in
+             let@ (tuple_bt,t') = infer loc t' in
              let@ item_bt = match tuple_bt with
                | Tuple bts ->
                   begin match List.nth_opt bts n with
@@ -192,7 +186,7 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   fail loc (Generic err)
              in
-             return (Base item_bt, NthTuple (n, t'))
+             return (item_bt, NthTuple (n, t'))
         in
         
         let struct_op = function
@@ -208,48 +202,48 @@ module Make (G : sig val global : Global.t end) = struct
              let@ members = 
                ListM.mapM (fun (member,t) ->
                    let@ bt = get_member_type decl_members member it in
-                   let@ t = check loc (Base bt) t in
+                   let@ t = check loc bt t in
                    return (member, t)
                  ) members
              in
-             return (Base (Struct tag), Struct (tag, members))
+             return (BT.Struct tag, Struct (tag, members))
           | StructMember (tag, t, member) ->
-             let@ t = check loc (Base (Struct tag)) t in
+             let@ t = check loc (Struct tag) t in
              let@ decl = get_struct_decl tag in
              let decl_members = Global.member_types decl.layout in
              let@ bt = get_member_type decl_members member t in
-             return (Base bt, StructMember (tag, t, member))
+             return (bt, StructMember (tag, t, member))
           | StructMemberOffset (tag, t, member) ->
-             let@ t = check loc (Base Loc) t in
+             let@ t = check loc Loc t in
              let@ decl = get_struct_decl tag in
              let decl_members = Global.member_types decl.layout in
              let@ _ = get_member_type decl_members member t in
-             return (Base Loc, StructMemberOffset (tag, t, member))
+             return (Loc, StructMemberOffset (tag, t, member))
         in
 
         let pointer_op = function
           | Null ->
-             return (Base BT.Loc, Null)
+             return (BT.Loc, Null)
           | AddPointer (t, t') ->
-             let@ t = check loc (Base Loc) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Loc, AddPointer (t, t'))
+             let@ t = check loc Loc t in
+             let@ t' = check loc Integer t' in
+             return (Loc, AddPointer (t, t'))
           | SubPointer (t, t') ->
-             let@ t = check loc (Base Loc) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Loc, SubPointer (t, t'))
+             let@ t = check loc Loc t in
+             let@ t' = check loc Integer t' in
+             return (Loc, SubPointer (t, t'))
           | MulPointer (t, t') ->
-             let@ t = check loc (Base Loc) t in
-             let@ t' = check loc (Base Integer) t' in
-             return (Base Loc, MulPointer (t, t'))
+             let@ t = check loc Loc t in
+             let@ t' = check loc Integer t' in
+             return (Loc, MulPointer (t, t'))
           | LTPointer (t, t') ->
-             let@ t = check loc (Base Loc) t in
-             let@ t' = check loc (Base Loc) t' in
-             return (Base Bool, LTPointer (t, t'))
+             let@ t = check loc Loc t in
+             let@ t' = check loc Loc t' in
+             return (BT.Bool, LTPointer (t, t'))
           | LEPointer (t, t') ->
-             let@ t = check loc (Base Loc) t in
-             let@ t' = check loc (Base Loc) t' in
-             return (Base Bool, LEPointer (t, t'))
+             let@ t = check loc Loc t in
+             let@ t' = check loc Loc t' in
+             return (BT.Bool, LEPointer (t, t'))
           (* | Disjoint ((t,s), (t',s')) ->
            *    let@ t = check loc (Base Loc) t in
            *    let@ t' = check loc (Base Loc) t' in
@@ -257,147 +251,146 @@ module Make (G : sig val global : Global.t end) = struct
            *    let@ s' = check loc (Base Integer) s' in
            *    return (Base Bool, Disjoint ((t,s), (t',s'))) *)
           | IntegerToPointerCast t ->
-             let@ t = check loc (Base Integer) t in
-             return (Base Loc, IntegerToPointerCast t)
+             let@ t = check loc Integer t in
+             return (Loc, IntegerToPointerCast t)
           | PointerToIntegerCast t ->
-             let@ t = check loc (Base Loc) t in
-             return (Base Integer, PointerToIntegerCast t)
+             let@ t = check loc Loc t in
+             return (Integer, PointerToIntegerCast t)
         in
 
         let ct_pred = function
           | AlignedI (t, t') ->
-             let@ t = check loc (Base Integer) t in
-             let@ t' = check loc (Base Loc) t' in
-             return (Base Bool, AlignedI (t, t'))
+             let@ t = check loc Integer t in
+             let@ t' = check loc Loc t' in
+             return (BT.Bool, AlignedI (t, t'))
           | Aligned (st, t) ->
-             let@ t = check loc (Base Loc) t in
-             return (Base Bool, Aligned (st, t))
+             let@ t = check loc Loc t in
+             return (BT.Bool, Aligned (st, t))
           | MinInteger it ->
-             return (Base BT.Integer, MinInteger it)
+             return (BT.Integer, MinInteger it)
           | MaxInteger it ->
-             return (Base BT.Integer, MaxInteger it)
+             return (BT.Integer, MaxInteger it)
           | Representable (ct, t) ->
-             let@ t = check loc (Base (BT.of_sct ct)) t in
-             return (Base BT.Bool, Representable (ct, t))
+             let@ t = check loc (BT.of_sct ct) t in
+             return (BT.Bool, Representable (ct, t))
         in
 
         let list_op = function
           | Nil -> 
              fail loc (Polymorphic_it context)
           | Cons (t1,t2) ->
-             let@ (Base item_bt, t1) = infer loc t1 in
-             let@ t2 = check loc (Base (List item_bt)) t2 in
-             return (Base (List item_bt), Cons (t1, t2))
+             let@ (item_bt, t1) = infer loc t1 in
+             let@ t2 = check loc (List item_bt) t2 in
+             return (BT.List item_bt, Cons (t1, t2))
           | List [] ->
              fail loc (Polymorphic_it context)
           | List (t :: ts) ->
-             let@ (Base bt, t) = infer loc t in
-             let@ ts = ListM.mapM (check loc (Base bt)) ts in
-             return (Base (List bt), List (t :: ts))
+             let@ (bt, t) = infer loc t in
+             let@ ts = ListM.mapM (check loc bt) ts in
+             return (BT.List bt, List (t :: ts))
           | Head t ->
              let@ (bt,t) = infer_list_type loc t in
-             return (Base bt, Head t)
+             return (bt, Head t)
           | Tail t ->
              let@ (bt,t) = infer_list_type loc t in
-             return (Base (List bt), Tail t)
+             return (BT.List bt, Tail t)
           | NthList (i, t) ->
              let@ (bt,t) = infer_list_type loc t in
-             return (Base bt, NthList (i, t))
+             return (bt, NthList (i, t))
         in
 
         let set_op = function
           | SetMember (t,t') ->
-             let@ (Base bt, t) = infer loc t in
-             let@ t' = check loc (Base (Set bt)) t' in
-             return (Base BT.Bool, SetMember (t, t'))
+             let@ (bt, t) = infer loc t in
+             let@ t' = check loc (Set bt) t' in
+             return (BT.Bool, SetMember (t, t'))
           | SetUnion its ->
              let (t, ts) = List1.dest its in
              let@ (itembt, t) = infer_set_type loc t in
-             let@ ts = ListM.mapM (check loc (Base (Set itembt))) ts in
-             return (Base (Set itembt), SetUnion (List1.make (t, ts)))
+             let@ ts = ListM.mapM (check loc (Set itembt)) ts in
+             return (Set itembt, SetUnion (List1.make (t, ts)))
           | SetIntersection its ->
              let (t, ts) = List1.dest its in
              let@ (itembt, t) = infer_set_type loc t in
-             let@ ts = ListM.mapM (check loc (Base (Set itembt))) ts in
-             return (Base (Set itembt), SetIntersection (List1.make (t, ts)))
+             let@ ts = ListM.mapM (check loc (Set itembt)) ts in
+             return (Set itembt, SetIntersection (List1.make (t, ts)))
           | SetDifference (t, t') ->
              let@ (itembt, t)  = infer_set_type loc t in
-             let@ t' = check loc (Base (Set itembt)) t' in
-             return (Base (Set itembt), SetDifference (t, t'))
+             let@ t' = check loc (Set itembt) t' in
+             return (Set itembt, SetDifference (t, t'))
           | Subset (t, t') ->
              let@ (bt, t) = infer_set_type loc t in
-             let@ t' = check loc (Base (Set bt)) t' in
-             return (Base Bool, Subset (t,t'))
+             let@ t' = check loc (Set bt) t' in
+             return (BT.Bool, Subset (t,t'))
         in
 
         let array_op = function
           | ConstArray it ->
-             let@ (Base bt, it) = infer loc it in
+             let@ (bt, it) = infer loc it in
              let mbt = BT.Array bt in
-             return (Base mbt, ConstArray it)
+             return (mbt, ConstArray it)
           | ArrayGet (it,it') ->
              let@ (bt, it) = infer_array_type loc it in
-             let@ it' = check loc (Base Integer) it' in
-             return (Base bt, ArrayGet (it, it'))
+             let@ it' = check loc Integer it' in
+             return (bt, ArrayGet (it, it'))
           | ArraySet (it,it',it'') ->
              let@ (bt, it) = infer_array_type loc it in
-             let@ it' = check loc (Base Integer) it' in
-             let@ it'' = check loc (Base bt) it'' in
-             return (Base (Array bt), ArraySet (it, it', it''))
+             let@ it' = check loc Integer it' in
+             let@ it'' = check loc bt it'' in
+             return (Array bt, ArraySet (it, it', it''))
           | ArrayEqualOnRange (it,it',it'',it''') ->
              let@ (bt, it) = infer_array_type loc it in
-             let@ it' = check loc (Base (Array bt)) it' in
-             let@ it'' = check loc (Base Integer) it'' in
-             let@ it''' = check loc (Base Integer) it''' in
-             return (Base Bool, ArrayEqualOnRange (it, it', it'', it'''))
+             let@ it' = check loc (Array bt) it' in
+             let@ it'' = check loc Integer it'' in
+             let@ it''' = check loc Integer it''' in
+             return (BT.Bool, ArrayEqualOnRange (it, it', it'', it'''))
         in
 
         fun loc (IT (it, _)) ->
         match it with
         | Lit it ->
-           let@ (Base bt, it) = lit it in
-           return (Base bt, IT (Lit it, bt))
+           let@ (bt, it) = lit it in
+           return (bt, IT (Lit it, bt))
         | Arith_op it ->
-           let@ (Base bt, it) = arith_op it in
-           return (Base bt, IT (Arith_op it, bt))
+           let@ (bt, it) = arith_op it in
+           return (bt, IT (Arith_op it, bt))
         | Cmp_op it ->
-           let@ (Base bt, it) = cmp_op it in
-           return (Base bt, IT (Cmp_op it, bt))
+           let@ (bt, it) = cmp_op it in
+           return (bt, IT (Cmp_op it, bt))
         | Bool_op it ->
-           let@ (Base bt, it) = bool_op it in
-           return (Base bt, IT (Bool_op it, bt))
+           let@ (bt, it) = bool_op it in
+           return (bt, IT (Bool_op it, bt))
         | Tuple_op it ->
-           let@ (Base bt, it) = tuple_op it in
-           return (Base bt, IT (Tuple_op it, bt))
+           let@ (bt, it) = tuple_op it in
+           return (bt, IT (Tuple_op it, bt))
         | Struct_op it ->
-           let@ (Base bt, it) = struct_op it in
-           return (Base bt, IT (Struct_op it, bt))
+           let@ (bt, it) = struct_op it in
+           return (bt, IT (Struct_op it, bt))
         | Pointer_op it ->
-           let@ (Base bt, it) = pointer_op it  in
-           return (Base bt, IT (Pointer_op it, bt))
+           let@ (bt, it) = pointer_op it  in
+           return (bt, IT (Pointer_op it, bt))
         | CT_pred it ->
-           let@ (Base bt, it) = ct_pred it in
-           return (Base bt, IT (CT_pred it, bt))
+           let@ (bt, it) = ct_pred it in
+           return (bt, IT (CT_pred it, bt))
         | List_op it ->
-           let@ (Base bt, it) = list_op it in
-           return (Base bt, IT (List_op it, bt))
+           let@ (bt, it) = list_op it in
+           return (bt, IT (List_op it, bt))
         | Set_op it ->
-           let@ (Base bt, it) = set_op it in
-           return (Base bt, IT (Set_op it, bt))
+           let@ (bt, it) = set_op it in
+           return (bt, IT (Set_op it, bt))
         | Array_op it ->
-           let@ (Base bt, array_op) = array_op it in
-           return (Base bt, IT (Array_op array_op, bt))
+           let@ (bt, array_op) = array_op it in
+           return (bt, IT (Array_op array_op, bt))
 
 
       and check : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
         fun loc ls it ->
         match it, ls with
-        | IT (List_op Nil, _), Base (List bt) ->
+        | IT (List_op Nil, _), List bt ->
            return (IT (List_op Nil, BT.List bt))
         | _, _ ->
            let@ (ls',it) = infer loc it in
            if LS.equal ls ls' then
-             let (Base bt) = ls in
              return it
            else
              let (context, it) = Explain.index_terms names local (context, it) in
@@ -407,7 +400,7 @@ module Make (G : sig val global : Global.t end) = struct
         fun loc it ->
         let@ (ls,it) = infer loc it in
         let@ bt = match ls with
-          | Base (List bt) -> return bt
+          | List bt -> return bt
           | ls -> 
              let (context, it) = Explain.index_terms names local (context, it) in
              let err = 
@@ -423,8 +416,8 @@ module Make (G : sig val global : Global.t end) = struct
         fun loc it ->
         let@ (ls,it) = infer loc it in
         let@ bt = match ls with
-          | Base Integer -> return Integer
-          | Base Real -> return Real
+          | Integer -> return Integer
+          | Real -> return Real
           | ls -> 
              let (context, it) = Explain.index_terms names local (context, it) in
              let err = 
@@ -441,7 +434,7 @@ module Make (G : sig val global : Global.t end) = struct
         fun loc it ->
         let@ (ls, t) = infer loc it in
         let@ bt = match ls with
-          | Base (Set bt) -> return bt
+          | Set bt -> return bt
           | _ -> 
              let (context, it) = Explain.index_terms names local (context, it) in
              let err = 
@@ -457,7 +450,7 @@ module Make (G : sig val global : Global.t end) = struct
         fun loc it ->
         let@ (ls, it) = infer loc it in
         let@ bt = match ls with
-          | Base (Array bt) -> return bt
+          | Array bt -> return bt
           | _ -> 
              let (context, it) = Explain.index_terms names local (context, it) in
              let err = 
@@ -494,8 +487,8 @@ module Make (G : sig val global : Global.t end) = struct
     type t = Resources.t
     let welltyped loc (names : Explain.naming) local = function
       | Point b -> 
-         let@ () = WIT.welltyped loc names local (LS.Base BT.Loc) b.pointer in
-         let@ _ = WIT.check_or_infer loc names local (Some (LS.Base BT.Real)) b.permission in
+         let@ () = WIT.welltyped loc names local BT.Loc b.pointer in
+         let@ _ = WIT.check_or_infer loc names local (Some BT.Real) b.permission in
          begin match b.content with
          | Block _ -> return ()
          | Value v -> 
@@ -504,8 +497,8 @@ module Make (G : sig val global : Global.t end) = struct
             return ()
          end
       | IteratedStar b -> 
-         let local' = L.add_l b.qpointer (LS.Base Loc) local in
-         let@ _ = WIT.check_or_infer loc names local' (Some (LS.Base BT.Real)) b.permission in
+         let local' = L.add_l b.qpointer Loc local in
+         let@ _ = WIT.check_or_infer loc names local' (Some BT.Real) b.permission in
          begin match b.content with
          | Block _ -> return ()
          | Value v -> 
@@ -590,10 +583,9 @@ module Make (G : sig val global : Global.t end) = struct
     return fixed
 
   module WLC = struct
-    open LogicalConstraints
     type t = LogicalConstraints.t
-    let welltyped loc names env = function
-      | LC it -> WIT.welltyped loc names env (LS.Base BT.Bool) it
+    let welltyped loc names env lc =
+      WIT.welltyped loc names env BT.Bool lc
   end
 
   module WLRT = struct
@@ -656,7 +648,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Computational ((name,bt), lrt) ->
          let name' = Sym.fresh_same name in
          let lname = Sym.fresh () in
-         let local = L.add_l lname (LS.Base bt) local in
+         let local = L.add_l lname bt local in
          let local = L.add_a name' (bt, lname) local in
          let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
          WLRT.check loc names local lrt
@@ -703,7 +695,7 @@ module Make (G : sig val global : Global.t end) = struct
       | T.Computational ((name,bt), at) ->
          let name' = Sym.fresh_same name in
          let lname = Sym.fresh () in
-         let local = L.add_l lname (LS.Base bt) local in
+         let local = L.add_l lname bt local in
          let local = L.add_a name' (bt, lname) local in
          let at = T.subst_var Subst.{before = name; after = lname} at in
          check loc names local at

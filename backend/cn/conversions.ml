@@ -13,7 +13,6 @@ module LT = ArgumentTypes.Make(False)
 open TypeErrors
 open IndexTerms
 open BaseTypes
-open LogicalConstraints
 open Resources
 open Sctypes
 open Mapping
@@ -143,7 +142,7 @@ let struct_decl loc fields (tag : BT.tag) =
                  | _ -> points_to (member_p, size) (q_ (1, 1)) member_t
                in
                let lrt = 
-                 LRT.Logical ((member_v, Base bt),
+                 LRT.Logical ((member_v, bt),
                  LRT.Resource (resource, lrt)) in
                let value = (member, sym_ (bt, member_v)) :: values in
                (lrt, value)
@@ -155,7 +154,7 @@ let struct_decl loc fields (tag : BT.tag) =
       in
       let value = IT.struct_ (tag, values) in
       let ct = Sctypes.Sctype ([], Sctypes.Struct tag) in
-      let lrt = lrt @@ Constraint (LC (IT.representable_ (ct, value)), LRT.I) in
+      let lrt = lrt @@ Constraint (IT.representable_ (ct, value), LRT.I) in
       (lrt, value)
     in
     return { pointer = struct_pointer_s; value = struct_value_s; clause }
@@ -175,7 +174,7 @@ let make_owned loc label pointer path sct =
   let open Sctypes in
   let pointee = Sym.fresh () in
   let pointee_bt = BT.of_sct sct in
-  let l = [(pointee, LS.Base pointee_bt)] in
+  let l = [(pointee, pointee_bt)] in
   let mapping = 
     [{path = Path.pointee (Some label) path; 
       sym = pointee; bt = pointee_bt}] 
@@ -194,7 +193,7 @@ let make_owned loc label pointer path sct =
        points_to (sym_ (BT.Loc, pointer), Memory.size_of_ctype sct)
          (q_ (1, 1)) (sym_ (pointee_bt, pointee))
      in
-     let c = [LC (good_value pointee sct)] in
+     let c = [good_value pointee sct] in
      return(l, [r], c, mapping)
 
 
@@ -221,9 +220,9 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
     | None -> fail loc (Missing_predicate pred)
   in
   let@ (mapping, l) = 
-    ListM.fold_rightM (fun (oarg, LS.Base bt) (mapping, l) ->
+    ListM.fold_rightM (fun (oarg, bt) (mapping, l) ->
         let s = Sym.fresh () in
-        let l = (s, LS.Base bt) :: l in
+        let l = (s, bt) :: l in
         let mapping = match Sym.name oarg with
           | Some name -> 
              let item = 
@@ -237,7 +236,7 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
       ) def.oargs ([], [])
   in
   let oargs = 
-    List.map (fun (s, LS.Base bt) ->
+    List.map (fun (s, bt) ->
         sym_ (bt, s)
       )l
   in
@@ -377,9 +376,8 @@ let rec resolve_predarg loc mapping = function
 
 
 
-let resolve_constraint loc mapping lc =
-  let@ lc = resolve_index_term loc mapping lc in
-  return (LogicalConstraints.LC lc)
+let resolve_constraint loc mapping lc = 
+  resolve_index_term loc mapping lc
 
 
 
@@ -481,7 +479,7 @@ let make_fun_spec loc fsym (fspec : function_spec)
         let a = [(aarg.asym, BT.Loc)] in
         let item = aarg_item "start" aarg in
         let@ (l, r, c, mapping') = make_owned loc "start" aarg.asym item.path aarg.typ in
-        let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
+        let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
         return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
       (iA, iL, iR, iC, mapping) fspec.function_arguments
@@ -507,7 +505,7 @@ let make_fun_spec loc fsym (fspec : function_spec)
   let (oA, oC, mapping) = 
     let ret = fspec.function_return in
     let item = varg_item "end" ret in
-    let c = [LC (good_value ret.vsym ret.typ)] in
+    let c = [good_value ret.vsym ret.typ] in
     ((ret.vsym, item.bt), c, item :: mapping)
   in
 
@@ -530,7 +528,7 @@ let make_fun_spec loc fsym (fspec : function_spec)
     ListM.fold_leftM (fun (oL, oR, oC, mapping) aarg ->
         let item = aarg_item "end" aarg in
         let@ (l, r, c, mapping') = make_owned loc "end" aarg.asym item.path aarg.typ in
-        let c = LC (good_value aarg.asym (pointer_sct aarg.typ) ):: c in
+        let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
       (oL, oR, oC, mapping) fspec.function_arguments
@@ -608,7 +606,7 @@ let make_label_spec
           let a = [(aarg.asym, BT.Loc)] in
           let item = aarg_item lname aarg in
           let@ (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
-          let c = LC (good_value aarg.asym (pointer_sct aarg.typ)) :: c in
+          let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
           return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
         )
         (iA, iL, iR, iC, []) lspec.label_arguments

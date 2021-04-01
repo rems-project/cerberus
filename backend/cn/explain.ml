@@ -42,7 +42,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let should_be_in_veclass local veclass it = 
       let bt = IT.bt it in
-      if not (LS.equal veclass.sort (Base bt)) then false 
+      if not (LS.equal veclass.sort bt) then false 
       else S.holds local (IT.eq_ (IT.sym_ (bt,veclass.repr), it))
 
     let is_in_veclass veclass sym = 
@@ -57,7 +57,7 @@ module Make (G : sig val global : Global.t end) = struct
            then (add_l l veclass :: veclasses)
            else (veclass :: aux veclasses)
         | [] -> 
-           [new_veclass l (Base bt)]
+           [new_veclass l bt]
       in
       aux veclasses
 
@@ -87,7 +87,7 @@ module Make (G : sig val global : Global.t end) = struct
       let set_counter = ref 0 in
       let array_counter = ref 0 in
       fun veclass ->
-      let (Base bt) = veclass.sort in
+      let bt = veclass.sort in
       sym_prefixed_int
         begin match bt with
         | Unit -> ("u", faa unit_counter)
@@ -265,7 +265,7 @@ module Make (G : sig val global : Global.t end) = struct
           ) [] (L.all_computational local)
       in
       let with_all = 
-        List.fold_left (fun veclasses (l, LS.Base bt) ->
+        List.fold_left (fun veclasses (l, bt) ->
             if SymSet.mem l relevant 
             then classify local veclasses (l, bt)
             else veclasses
@@ -405,7 +405,7 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let var_lines = 
       List.filter_map (fun c ->
-          let (Base bt) = c.veclass.sort in
+          let bt = c.veclass.sort in
           let relevant = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements relevant)) in
           let reported = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements reported_pointees)) in
           if (not reported) && relevant then
@@ -490,10 +490,10 @@ module Make (G : sig val global : Global.t end) = struct
     let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
     (it_pp, it_pp')
 
-  let unsatisfied_constraint names local (LC.LC lc) = 
+  let unsatisfied_constraint names local lc = 
     let model = let _ = S.holds local lc in S.get_model () in
-    let (explanation, local) = explanation names local (LC.free_vars (LC lc)) in
-    let lc_pp = LC.pp (LC.subst_vars explanation.substitutions (LC lc)) in
+    let (explanation, local) = explanation names local (LC.free_vars lc) in
+    let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
   let resource names local re omodel = 
