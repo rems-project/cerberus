@@ -10,6 +10,7 @@ type t =
 and t_ =
   | Void
   | Integer of Ctype.integerType
+  | Array of t * int option
   | Pointer of Ctype.qualifiers * t
   | Struct of Sym.t
   | Function of (* has_proto *)bool * (Ctype.qualifiers * t)
@@ -35,6 +36,8 @@ let rec to_ctype (Sctype (annots, ct_)) =
        Ctype.Void
     | Integer it -> 
        Basic (Integer it)
+    | Array (t, oi) ->
+       Array (to_ctype t, Option.map Z.of_int oi)
     | Pointer (q,t) -> 
        Pointer (q, to_ctype t)
     | Struct t -> 
@@ -91,6 +94,8 @@ let rec equal (Sctype (_, ct1_)) (Sctype (_, ct2_)) =
      true
   | Integer it1, Integer it2 -> 
      Ctype.integerTypeEqual it1 it2
+  | Array (t1, oi1), Array (t2, oi2) ->
+     equal t1 t2 && Option.equal (=) oi1 oi2
   | Pointer (qs1, ct1), Pointer (qs2, ct2) ->
      equal ct1 ct2 &&
      Ctype.qualifiersEqual qs1 qs2
@@ -110,6 +115,7 @@ let rec equal (Sctype (_, ct1_)) (Sctype (_, ct2_)) =
 
   | Void, _
   | Integer _, _
+  | Array _, _
   | Pointer _, _
   | Struct _, _
   | Function _, _ 

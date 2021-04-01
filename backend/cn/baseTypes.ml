@@ -104,10 +104,11 @@ let json bt : Yojson.Safe.t =
 
 open Sctypes
 
-let of_sct (Sctype (_, sct_)) = 
+let rec of_sct (Sctype (_, sct_)) = 
   match sct_ with
   | Void -> Unit
   | Integer _ -> Integer
+  | Array (sct, _) -> Array (of_sct sct)
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"

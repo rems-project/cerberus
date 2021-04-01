@@ -104,6 +104,7 @@ let rec representable_ctype struct_decls (Sctype (_, ct) : Sctypes.t) about =
   match ct with
   | Void -> LC.LC (bool_ true)
   | Integer it -> representable_integer_type it about
+  | Array _ -> Debug_ocaml.error "todo: arrays"
   | Pointer _ -> representable_pointer about
   | Struct tag -> representable_struct struct_decls tag about
   | Function _ -> Debug_ocaml.error "todo: function types"
