@@ -158,9 +158,6 @@ type struct_decls = struct_decl SymMap.t
 
 
 
-module BTMap = Map.Make(BT)
-
-
 type t = 
   { struct_decls : struct_decls; 
     fun_decls : (Locations.t * FT.t) SymMap.t;

@@ -123,7 +123,8 @@ module Make (G : sig val global : Global.t end) = struct
       | Unit ->
          Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
       | Default bt ->
-         Z3.Expr.mk_fresh_const context "default" (sort_of_bt bt)
+         let sym = Z3.Symbol.mk_string context ("default_"^bt_name bt) in
+         Z3.Expr.mk_const context sym (sort_of_bt bt)
 
 
     (* fix rem_t vs rem_f *)

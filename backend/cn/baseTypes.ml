@@ -46,40 +46,6 @@ let rec equal t t' =
      false
 
 
-let compare bt bt' =
-  match bt, bt' with
-  | Unit, Unit -> 0
-  | Unit, _ -> -1
-
-  | Bool, Bool -> 0
-  | Bool, _ -> -1
-
-  | Integer, Integer -> 0
-  | Integer, _ -> -1
-
-  | Real, Real -> 0
-  | Real, _ -> -1
-
-  | Loc, Loc -> 0
-  | Loc, _ -> -1
-
-  | List bt, List bt' -> compare bt bt'
-  | List _, _ -> -1
-
-  | Tuple ts, Tuple ts' ->
-     List.compare compare ts ts'
-  | Tuple _, _ -> -1
-
-  | Struct t, Struct t' -> Sym.compare t t'
-  | Struct _, _ -> -1
-
-  | Set t, Set t' -> compare t t'
-  | Set _, _ -> -1
-
-  | Array t, Array t' -> compare t t'
-  | Array _, _ -> -1
-
-
 
 let pp bt = 
   let rec aux atomic bt = 
