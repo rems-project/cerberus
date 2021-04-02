@@ -128,6 +128,13 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
   | IteratedStar {qpointer; size; content; permission} ->
      if Sym.equal subst.before qpointer then 
        IteratedStar {qpointer; size; content; permission}
+     else if Sym.equal qpointer subst.after then
+       let qpointer' = Sym.fresh () in
+       let content = subst_var_content {before=qpointer;after=qpointer'} content in
+       let permission = IT.subst_var {before=qpointer;after=qpointer'} permission in
+       let content = subst_var_content subst content in
+       let permission = IT.subst_var subst permission in
+       IteratedStar {qpointer = qpointer'; size; content; permission}       
      else
        let content = subst_var_content subst content in
        let permission = IT.subst_var subst permission in
@@ -154,6 +161,13 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
   | IteratedStar {qpointer; size; content; permission} ->
      if Sym.equal subst.before qpointer then 
        IteratedStar {qpointer; size; content; permission}
+     else if SymSet.mem qpointer (IT.free_vars subst.after) then
+       let qpointer' = Sym.fresh () in
+       let content = subst_var_content {before=qpointer;after=qpointer'} content in
+       let permission = IT.subst_var {before=qpointer;after=qpointer'} permission in
+       let content = subst_it_content subst content in
+       let permission = IT.subst_it subst permission in
+       IteratedStar {qpointer = qpointer'; size; content; permission}
      else
        let content = subst_it_content subst content in
        let permission = IT.subst_it subst permission in
@@ -237,15 +251,46 @@ let free_vars_list l =
     ) SymSet.empty l
 
 
-let quantified = function
-  | Point p -> []
-  | IteratedStar p -> [(p.qpointer, BaseTypes.Loc)]
-  | Predicate p -> []
 
 
-(* the quantifier in IteratedStar is neither input nor output *)
+
+
+let simp_content lcs content =
+  match content with
+  | Block block_type -> Block block_type
+  | Value v -> Value (IT.simp lcs v)
+
+let simp lcs = function
+  | Point {pointer; size; content; permission} ->
+     let pointer = IT.simp lcs pointer in
+     let content = simp_content lcs content in
+     let permission = IT.simp lcs permission in
+     Point {pointer; size; content; permission}
+  | IteratedStar {qpointer; size; content; permission} ->
+     let qpointer' = Sym.fresh () in
+     let subst = Subst.{before=qpointer;after=qpointer'} in
+     let content = simp_content lcs (subst_var_content subst content) in
+     let permission = IT.simp lcs (IT.subst_var subst permission) in
+     IteratedStar {qpointer = qpointer'; size; content; permission}
+  | Predicate {name; iargs; oargs; unused} -> 
+     let iargs = List.map (IT.simp lcs) iargs in
+     let oargs = List.map (IT.simp lcs) oargs in
+     (* let unused = IT.subst_var subst unused in *)
+     Predicate {name; iargs; oargs; unused}
+
+
+
+
+
+
+
+
+(* auxiliary functions *)
+
+(* derived information *)
 let inputs = function
   | Point p -> [p.pointer; p.permission]
+  (* the quantifier in IteratedStar is neither input nor output *)
   | IteratedStar p -> [p.permission]
   | Predicate p -> p.iargs
 
@@ -263,44 +308,44 @@ let permission = function
   | Predicate p when p.unused -> IT.q_ (1, 1)
   | Predicate p -> IT.q_ (0, 1)
 
-
+let quantified = function
+  | Point p -> []
+  | IteratedStar p -> [(p.qpointer, BaseTypes.Loc)]
+  | Predicate p -> []
 
 (* assumption: resource is owned *)
 let derived_constraint resource = 
   let open IT in
-  simplify []
-    begin match resource with
-    | Point p -> 
-       impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
-    | IteratedStar p ->
-       (* todo *)
-       bool_ true
-    | Predicate _ ->
-       bool_ true
-    end
+  match resource with
+  | Point p -> 
+     impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
+  | IteratedStar p ->
+     (* todo *)
+     bool_ true
+  | Predicate _ ->
+     bool_ true
 
 
 (* assumption: resource owned at the same time as resources' *)
 (* todo, depending on how much we need *)
 let derived_constraints resource resource' =
   let open IT in
-  simplify [] 
-    begin match resource, resource' with
-    | Point p, Point p' -> 
-       and_ [impl_ (
-                 gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
-                 disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
-         )]
-    | Predicate _, _
-      | _, Predicate _ -> 
-       bool_ true
-    | _ ->
-       (* todo *)
-       bool_ true
-    end
+  match resource, resource' with
+  | Point p, Point p' -> 
+     and_ [impl_ (
+               gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+               disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
+       )]
+  | Predicate _, _
+    | _, Predicate _ -> 
+     bool_ true
+  | _ ->
+     (* todo *)
+     bool_ true
 
 
 
+(* construction *)
 let block (pointer, size) permission block_type =
   Point {pointer; size; content = Block block_type; permission}
 

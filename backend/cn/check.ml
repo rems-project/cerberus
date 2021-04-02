@@ -540,7 +540,6 @@ module Make (G : sig val global : Global.t end) = struct
       let original_local = ui_info.original_local in
       let situation = ui_info.situation in
       let names = names @ ui_info.extra_names in
-      let simplify = IT.simplify [] in
       let missing () = 
         let (resource, state) = Explain.resource names original_local request (Solver.get_model ()) in
         fail loc (Missing_resource {resource; used = None; state; situation})
@@ -554,25 +553,21 @@ module Make (G : sig val global : Global.t end) = struct
                | Point p' 
                     when Z.equal requested.size p'.size &&
                          Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
-                  let can_take = simplify (min_ (p'.permission, needed)) in
-                  let needed = simplify (sub_ (needed, can_take)) in
-                  let permission' = simplify (sub_ (p'.permission, can_take)) in
+                  let can_take = min_ (p'.permission, needed) in
+                  let needed = sub_ (needed, can_take) in
+                  let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, needed)
                | IteratedStar p' 
                     when Z.equal requested.size p'.size ->
                   let can_take = 
-                    simplify (
-                        min_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, 
-                              needed) 
-                      )
+                    min_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, 
+                          needed) 
                   in
-                  let needed = simplify (sub_ (needed, can_take)) in
+                  let needed = sub_ (needed, can_take) in
                   let permission' =
-                    simplify (
-                        ite_ (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
-                              sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
-                              p'.permission)
-                      )
+                    ite_ (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
+                          sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
+                          p'.permission)
                   in
                   (IteratedStar {p' with permission = permission'}, needed)
                | re ->
@@ -591,33 +586,28 @@ module Make (G : sig val global : Global.t end) = struct
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') &&
                          Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
-                  let can_take = simplify (min_ (p'.permission, needed)) in
-                  let content = 
-                    simplify (ite_ (gt_ (can_take, q_ (0, 1)), v', content))
-                  in
-                  let needed = simplify (sub_ (needed, can_take)) in
-                  let permission' = simplify (sub_ (p'.permission, can_take)) in
+                  let can_take = min_ (p'.permission, needed) in
+                  let content = ite_ (gt_ (can_take, q_ (0, 1)), v', content) in
+                  let needed = sub_ (needed, can_take) in
+                  let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, (needed, content))
                | IteratedStar ({content = Value v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
-                    simplify 
-                      (min_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, 
-                             needed))
-                       in
-                  let content = 
-                    simplify 
-                      (ite_ (gt_ (can_take, q_ (0, 1)), 
-                             IT.subst_it {before=p'.qpointer; after = requested.pointer} v', 
-                             content))
+                    min_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, 
+                          needed)
                   in
-                  let needed = simplify (sub_ (needed, can_take)) in
+                  let content = 
+                    ite_ (gt_ (can_take, q_ (0, 1)), 
+                          IT.subst_it {before=p'.qpointer; after = requested.pointer} v', 
+                          content)
+                  in
+                  let needed = sub_ (needed, can_take) in
                   let permission' =
-                    simplify 
-                      (ite_ (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
-                             sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
-                             p'.permission))
+                    ite_ (eq_ (sym_ (BT.Loc, p'.qpointer), requested.pointer),
+                          sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
+                          p'.permission)
                   in
                   (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->
@@ -639,33 +629,26 @@ module Make (G : sig val global : Global.t end) = struct
                | Point p'
                     when Z.equal requested.size p'.size ->
                   let can_take = 
-                    simplify (
-                        min_ (p'.permission, 
-                              IT.subst_it {before=qp; after = p'.pointer} needed) 
-                    )
+                    min_ (p'.permission, 
+                          IT.subst_it {before=qp; after = p'.pointer} needed) 
                   in
                   let needed =
-                    simplify (
-                        ite_ (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
-                              sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
-                              needed))
+                    ite_ (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
+                          sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
+                          needed)
                   in
-                  let permission' = simplify (sub_ (p'.permission, can_take)) in
+                  let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, needed)
                | IteratedStar p' 
                     when Z.equal requested.size p'.size ->
                   let can_take = 
-                    simplify (
-                        min_ (IT.subst_var {before=p'.qpointer; after = qp} p'.permission, 
-                              needed) 
-                      )
+                    min_ (IT.subst_var {before=p'.qpointer; after = qp} p'.permission, 
+                          needed)
                   in
-                  let needed = simplify (sub_ (needed, can_take)) in
+                  let needed = sub_ (needed, can_take) in
                   let permission' = 
-                    simplify (
-                        sub_ (p'.permission, 
-                              IT.subst_var {before=qp; after = p'.qpointer} can_take)
-                      )
+                    sub_ (p'.permission, 
+                          IT.subst_var {before=qp; after = p'.qpointer} can_take)
                   in
                   (IteratedStar {p' with permission = permission'}, needed)
                | re ->
@@ -688,51 +671,37 @@ module Make (G : sig val global : Global.t end) = struct
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
-                    simplify (
-                        min_ (p'.permission, 
-                              IT.subst_it {before=qp; after = p'.pointer} needed) 
-                      )
+                    min_ (p'.permission, 
+                          IT.subst_it {before=qp; after = p'.pointer} needed) 
                   in
                   let needed =
-                    simplify (
-                        ite_ (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
-                              sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
-                              needed)
-                      )
+                    ite_ (eq_ (sym_ (BT.Loc, qp), p'.pointer), 
+                          sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
+                          needed)
                   in
                   let content = 
-                    simplify (
-                        ite_ (and_ [eq_ (sym_ (BT.Loc, qp), p'.pointer); gt_ (p'.permission, q_ (0, 1))], 
-                              v', 
-                              content)
-                      )
+                    ite_ (and_ [eq_ (sym_ (BT.Loc, qp), p'.pointer); gt_ (p'.permission, q_ (0, 1))], 
+                          v', 
+                          content)
                   in
-                  let permission' = 
-                    simplify (sub_ (p'.permission, can_take)) in
+                  let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, (needed, content))
                | IteratedStar ({content = Value v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
-                    simplify (
-                        min_ (IT.subst_var {before=p'.qpointer; after = qp} p'.permission, 
-                              needed) 
-                      )
+                    min_ (IT.subst_var {before=p'.qpointer; after = qp} p'.permission, 
+                          needed) 
                   in
-                  let needed = 
-                    simplify (sub_ (needed, can_take)) in
+                  let needed = sub_ (needed, can_take) in
                   let content = 
-                    simplify (
-                        ite_ (gt_ (can_take, q_ (0, 1)), 
-                              IT.subst_var {before=p'.qpointer; after = qp} v', 
-                              content)
-                      )
+                    ite_ (gt_ (can_take, q_ (0, 1)), 
+                          IT.subst_var {before=p'.qpointer; after = qp} v', 
+                          content)
                   in
                   let permission' = 
-                    simplify (
-                        sub_ (p'.permission, 
-                              IT.subst_var {before=qp; after = p'.qpointer} can_take)
-                      )
+                    sub_ (p'.permission, 
+                          IT.subst_var {before=qp; after = p'.qpointer} can_take)
                   in
                   (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->

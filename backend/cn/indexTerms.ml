@@ -1006,7 +1006,19 @@ let good_value v sct =
 
 
 
-let simplify equalities term = 
+let simp (lcs : t list) term = 
+
+  let values = 
+    List.fold_right (fun (IT (it, bt)) values ->
+        match it with
+        | Bool_op (EQ (it, it')) ->
+           begin match is_sym it with
+           | Some (sym, _) -> SymMap.add sym it' values
+           | None -> values
+           end
+        | _ -> values
+      ) lcs SymMap.empty
+  in
 
   let is_true = function
     | IT (Lit (Bool true), _) -> true
@@ -1035,7 +1047,10 @@ let simplify equalities term =
   and lit it bt = 
     match it with
     | Sym sym ->
-       IT (Lit (Sym sym), bt)
+       begin match SymMap.find_opt sym values with
+       | Some it -> it
+       | None -> IT (Lit (Sym sym), bt)
+       end
     | Z z ->
        IT (Lit (Z z), bt)
     | Q (i1, i2) ->

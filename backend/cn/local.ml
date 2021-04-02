@@ -99,6 +99,7 @@ let add_l lname ls (local : t) =
   {local with logical = SymMap.add lname ls local.logical}
 
 let add_c lc (local : t) = 
+  let lc = IT.simp local.constraints lc in
   {local with constraints = lc :: local.constraints}
 
 let add_cs lcs (local : t) = 
@@ -106,6 +107,7 @@ let add_cs lcs (local : t) =
 
 
 let add_r r (local : t) = 
+  let r = RE.simp local.constraints r in
   let resources = r :: local.resources in
   let lcs = 
     RE.derived_constraint r ::
