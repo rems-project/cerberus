@@ -63,8 +63,9 @@ let rec of_ctype (Ctype.Ctype (annots,ct_)) =
      return (Integer it)
   | Ctype.Basic (Floating it) -> 
      fail
-  | Ctype.Array _ -> 
-     fail
+  | Ctype.Array (ct,nopt) -> 
+     let@ ct = of_ctype ct in
+     return (Array (ct, Option.map Z.int_of_big_int nopt))
   | Ctype.Function (has_proto, (ret_q,ret_ct), args, variadic) ->
      let@ args = 
        ListM.mapM (fun (arg_q, arg_ct, is_reg) -> 

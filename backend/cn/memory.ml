@@ -35,14 +35,6 @@ let max_integer_type it =
 let min_integer_type it = 
   integer_value_to_num (CF.Impl_mem.min_ival it)
 
-let representable_integer_type it about =
-  let (min,max) = match it with
-    | CF.Ctype.Bool -> (Z.of_int 0, Z.of_int 1)
-    | _ -> (min_integer_type it, max_integer_type it)
-  in
-  IT.in_range about (z_ min, z_ max)
-
-
 
 
 (* adapting from impl_mem *)
@@ -59,26 +51,6 @@ let align_of_pointer =
   | Some n -> Z.of_int n
   | None -> Debug_ocaml.error "alignof_pointer returned None"
 
-
-let representable_pointer about = 
-  let pointer_byte_size = size_of_pointer in
-  let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
-  let max = Z.power_int_positive_big_int 2 pointer_size in
-  IT.and_ [IT.lePointer_ (pointer_ Z.zero, about); 
-           IT.ltPointer_ (about, pointer_ max)]
-  
-
-
-
-
-
-(* let lookup_struct_in_tagDefs loc tag =
- *   match Pmap.lookup tag (CF.Tags.tagDefs ()) with
- *   | Some (CF.Ctype.StructDef (fields,flexible_array_member)) -> 
- *      (fields,flexible_array_member)
- *   | Some (UnionDef _) -> Debug_ocaml.error "lookup_struct_in_tagDefs: union"
- *   | None -> 
- *      Debug_ocaml.error "lookup_struct_in_tagDefs: struct not found" *)
 
 
 let size_of_ctype (ct : Sctypes.t) = 
@@ -102,24 +74,39 @@ let align_of_ctype (ct : Sctypes.t) =
 let rec representable_ctype struct_decls (Sctype (_, ct) : Sctypes.t) about =
   let open Sctypes in
   match ct with
-  | Void -> bool_ true
-  | Integer it -> representable_integer_type it about
-  | Array _ -> Debug_ocaml.error "todo: arrays"
-  | Pointer _ -> representable_pointer about
-  | Struct tag -> representable_struct struct_decls tag about
-  | Function _ -> Debug_ocaml.error "todo: function types"
-
-and representable_struct struct_decls tag about =
-  let decl = SymMap.find tag struct_decls in
-  and_ begin
-    List.filter_map (fun Global.{member = (member, sct); _} ->
-            let rangef = representable_ctype struct_decls sct in
-            let bt = BT.of_sct sct in
-            let member_it = 
-              IT.structMember_ ~member_bt:bt (tag, about, member) in
-            Some (rangef member_it)
-      ) (Global.members decl.Global.layout)
-  end
+  | Void -> 
+     bool_ true
+  | Integer it -> 
+     IT.in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
+  | Array (it, None) -> 
+     Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
+  | Array (ct, Some n) -> 
+     let lcs = 
+       List.init n (fun i ->
+           representable_ctype struct_decls ct
+             (arrayGet_ ~item_bt:(BT.of_sct ct) (about, int_ i))
+         )
+     in
+     and_ lcs
+  | Pointer _ -> 
+     let pointer_byte_size = size_of_pointer in
+     let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
+     let max = Z.power_int_positive_big_int 2 pointer_size in
+     IT.and_ [IT.lePointer_ (pointer_ Z.zero, about); 
+              IT.ltPointer_ (about, pointer_ max)]
+  | Struct tag -> 
+     let decl = SymMap.find tag struct_decls in
+     and_ begin
+         List.filter_map (fun Global.{member = (member, sct); _} ->
+             let rangef = representable_ctype struct_decls sct in
+             let bt = BT.of_sct sct in
+             let member_it = 
+               IT.structMember_ ~member_bt:bt (tag, about, member) in
+             Some (rangef member_it)
+           ) (Global.members decl.Global.layout)
+       end
+  | Function _ -> 
+     Debug_ocaml.error "todo: function types"
 
 let size_of_struct tag =
   size_of_ctype (Sctype ([], Struct tag))

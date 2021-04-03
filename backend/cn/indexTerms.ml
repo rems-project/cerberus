@@ -942,12 +942,12 @@ let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
 let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
 (* array_op *)
-let constArray_ ~item_bt it = 
-  IT (Array_op (ConstArray it), BT.Array item_bt)
+let constArray_ it = 
+  IT (Array_op (ConstArray it), bt it)
 let arrayGet_ ~item_bt (it, it') = 
   IT (Array_op (ArrayGet (it, it')), item_bt)
-let arraySet_ ~item_bt (it, it', it'') = 
-  IT (Array_op (ArraySet (it, it', it'')), BT.Array item_bt)
+let arraySet_ (it, it', it'') = 
+  IT (Array_op (ArraySet (it, it', it'')), BT.Array (bt it''))
 let arrayEqualOnRange_ (it, it', it'', it''') = 
   IT (Array_op (ArrayEqualOnRange (it, it', it'', it''')), BT.Bool)
 

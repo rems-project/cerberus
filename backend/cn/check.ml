@@ -902,8 +902,16 @@ module Make (G : sig val global : Global.t end) = struct
       match constructor, args with
       | M_Ctuple, _ -> 
          infer_tuple loc args
-      | M_Carray, _ -> 
-         Debug_ocaml.error "todo: array types"
+      | M_Carray, [] -> 
+         Debug_ocaml.error "todo: empty arrays"
+      | M_Carray, first_arg :: _ -> 
+         let@ (_, it) = 
+           ListM.fold_leftM (fun (index,it) arg -> 
+               let@ () = ensure_base_type loc ~expect:first_arg.bt arg.bt in
+               return (index + 1, arraySet_ (it, int_ index, sym_ (arg.bt, arg.lname)))
+             ) (0, constArray_ (default_ first_arg.bt)) args 
+         in
+         return (BT.Array first_arg.bt, it)
       | M_CivCOMPL, _
       | M_CivAND, _
       | M_CivOR, _
@@ -1001,7 +1009,7 @@ module Make (G : sig val global : Global.t end) = struct
     and infer_array (loc : loc) (mem_values : mem_value list) = 
       Debug_ocaml.error "todo: arrays"
 
-    let infer_object_value (loc : loc)
+    let rec infer_object_value (loc : loc)
                            (ov : 'bty mu_object_value) : (vt, type_error) m =
       match ov with
       | M_OVinteger iv ->
@@ -1010,7 +1018,18 @@ module Make (G : sig val global : Global.t end) = struct
       | M_OVpointer p -> 
          infer_ptrval loc p
       | M_OVarray items ->
-         Debug_ocaml.error "todo: arrays"
+         let@ vts = ListM.mapM (infer_loaded_value loc) items in
+         begin match vts with
+         | [] -> Debug_ocaml.error "todo: empty arrays"
+         | (bt, _) :: _ ->
+            let@ (_, it) = 
+              ListM.fold_leftM (fun (index,a_it) (i_bt, i_it) -> 
+                  let@ () = ensure_base_type loc ~expect:bt i_bt in
+                  return (index + 1, arraySet_ (a_it, int_ index, i_it))
+                ) (0, constArray_ (default_ bt)) vts
+            in
+            return (BT.Array bt, it)
+         end
       | M_OVstruct (tag, fields) -> 
          let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
          infer_struct loc tag mvals       
@@ -1019,12 +1038,15 @@ module Make (G : sig val global : Global.t end) = struct
       | M_OVfloating iv ->
          fail loc (Unsupported !^"floats")
 
+    and infer_loaded_value loc (M_LVspecified ov) =
+      infer_object_value loc ov
+
     let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m = 
       match v with
-      | M_Vobject ov
-      | M_Vloaded (M_LVspecified ov) 
-        ->
+      | M_Vobject ov ->
          infer_object_value loc ov
+      | M_Vloaded lv ->
+         infer_loaded_value loc lv
       | M_Vunit ->
          return (Unit, IT.unit_)
       | M_Vtrue ->
@@ -1293,46 +1315,46 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let load (loc: loc) local (bt: BT.t) (pointer: IT.t) (size: Z.t) =
+    let load (loc: loc) local (pointer: IT.t) (ct: Sctypes.t) =
       let open Global in
-      let rec aux bt pointer size is_member : (IT.t, type_error) m = 
-        match bt with
-        | BT.Struct tag ->
+      let rec aux (ct : Sctypes.t) pointer is_member : (IT.t, type_error) m = 
+        match ct with
+        | Sctypes.Sctype (_, Struct tag) ->
            let@ decl = get_struct_decl loc tag in
            let@ member_its = 
              ListM.mapM (fun {size; member = (member, member_sct); _} ->
                 let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
-                let@ it = aux (BT.of_sct member_sct) member_pointer size (Some member) in
+                let@ it = aux member_sct member_pointer (Some member) in
                 return (member, it)
                ) (Global.members decl.layout)
            in
            return (struct_ (tag, member_its))
         | _ ->
            (* have to fix this: any non-zero permission is ok *)
+           let size = Memory.size_of_ctype ct in
            let@ (resource, _)  = 
              resource_request loc (Access (Load is_member)) local
-               (points_to (pointer, size) (q_ (1, 2)) (sym_ (bt, Sym.fresh ())))
+               (points_to (pointer, size) (q_ (1, 2)) (sym_ (BT.of_sct ct, Sym.fresh ())))
            in
            begin match resource with
            | Point {content = Value pointee; _} -> return pointee
            | _ -> Debug_ocaml.error "points-to request did not return points-to"
            end
       in
-      aux bt pointer size None
+      aux ct pointer None
 
 
-    let rec destroy (loc: loc) access local (pointer: IT.t) (size: Z.t) bt =
+    let rec destroy (loc: loc) access local (pointer: IT.t) (ct : Sctypes.t) =
       let open Global in
-      match bt with
-      | Struct tag ->
+      match ct with
+      | Sctypes.Sctype (_, Struct tag) ->
          let@ decl = get_struct_decl loc tag in
          ListM.fold_leftM (fun local member ->
              let {offset; size; member_or_padding} = member in
                 let member_pointer = IT.addPointer_ (pointer, z_ offset) in
              match member_or_padding with
              | Some (member,member_sct) ->
-                let member_bt = BT.of_sct member_sct in
-                let@ local = destroy loc access local member_pointer size member_bt in
+                let@ local = destroy loc access local member_pointer member_sct in
                 return local
              | None ->
                 let@ (_, local) = 
@@ -1344,16 +1366,23 @@ module Make (G : sig val global : Global.t end) = struct
       | _ -> 
          let@ (_, local) = 
            resource_request loc (Access access) local
-             (block (pointer, size) (q_ (1, 1)) Nothing) 
+             (block (pointer, Memory.size_of_ctype ct) (q_ (1, 1)) Nothing) 
          in
          return local
 
 
-    let rec store (loc: loc) local (pointer: IT.t) (size: Z.t) (value: IT.t) =
+    let rec store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
       let open LRT in
       let open Global in
-      match IT.bt value with
-      | Struct tag ->
+      match ct with
+      (* | Sctypes.Sctype (_, Array (array_bt, nopt)) ->
+       *    begin match nopt with
+       *    | None -> Debug_ocaml.error "todo: arrays with unknown length"
+       *    | Some n -> 
+       *       ListM.fold_leftM (fun (acc_rt, local) i ->
+       *         ) (LRT.I, local) decl.layout
+       *    end *)
+      | Sctypes.Sctype (_, Struct tag) ->
          let@ decl = get_struct_decl loc tag in
          ListM.fold_leftM (fun (acc_rt, local) member ->
              let {offset; size; member_or_padding} = member in
@@ -1362,7 +1391,7 @@ module Make (G : sig val global : Global.t end) = struct
              | Some (member,member_sct) ->
                 let member_bt = BT.of_sct member_sct in
                 let member_value = IT.structMember_ ~member_bt (tag, value, member) in
-                let@ (rt, local) = store loc local member_pointer size member_value in
+                let@ (rt, local) = store loc local member_pointer member_value member_sct in
                 return (acc_rt @@ rt, local)
              | None ->
                 let@ (_, local) = 
@@ -1373,6 +1402,7 @@ module Make (G : sig val global : Global.t end) = struct
                 return ((acc_rt @@ LRT.Resource (resource, I)), local)
            ) (LRT.I, local) decl.layout
       | _ -> 
+         let size = Memory.size_of_ctype ct in
          let@ (_, local) = 
            resource_request loc (Access (Store None)) local 
              (padding (pointer, size) (q_ (1,1))) 
@@ -1585,11 +1615,7 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Kill (M_Static ct, asym) -> 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let size = Memory.size_of_ctype ct in
-              let@ local = 
-                destroy loc Kill local (sym_ (arg.bt, arg.lname)) 
-                  size (BT.of_sct ct)
-              in
+              let@ local = destroy loc Kill local (sym_ (arg.bt, arg.lname)) ct in
               let rt = RT.Computational ((Sym.fresh (), Unit), I) in
               return (Normal (rt, local))
            | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1610,10 +1636,9 @@ module Make (G : sig val global : Global.t end) = struct
                  in
                  fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
-              let size = Memory.size_of_ctype act.ct in
               let@ (bindings, local) = 
                 store loc local (sym_ (parg.bt, parg.lname))
-                  size (sym_ (varg.bt, varg.lname))
+                  (sym_ (varg.bt, varg.lname)) act.ct
               in
               let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
               return (Normal (rt, local))
@@ -1622,8 +1647,7 @@ module Make (G : sig val global : Global.t end) = struct
               let bt = BT.of_sct act.ct in
               let@ () = ensure_base_type loc ~expect:Loc parg.bt in
               let ret = Sym.fresh () in
-              let size = Memory.size_of_ctype act.ct in
-              let@ it = load loc local bt (sym_ (parg.bt, parg.lname)) size in
+              let@ it = load loc local (sym_ (parg.bt, parg.lname)) act.ct in
               let constr = def_ ret it in
               let rt = RT.Computational ((ret, bt), Constraint (constr, LRT.I)) in
               return (Normal (rt, local))

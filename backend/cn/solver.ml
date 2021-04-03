@@ -246,11 +246,7 @@ module Make (G : sig val global : Global.t end) = struct
     and array_op it bt =
       match it with
       | ConstArray t ->
-         let item_bt = match bt with
-           | Array bt -> bt
-           | _ -> Debug_ocaml.error "illtyped_index term"
-         in
-         Z3.Z3Array.mk_const_array context (sort_of_bt item_bt) (term t)
+         Z3.Z3Array.mk_const_array context (sort_of_bt bt) (term t)
       | ArrayGet (t1, t2) ->
          Z3.Z3Array.mk_select context (term t1) (term t2)
       | ArraySet (t1, t2, t3) ->
