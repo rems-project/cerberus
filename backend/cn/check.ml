@@ -127,7 +127,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let get_member_type loc tag member decl = 
     let open Global in
-    match List.assoc_opt Id.equal member (Global.member_types decl.layout) with
+    match List.assoc_opt Id.equal member (Memory.member_types decl.layout) with
     | Some membertyp -> return membertyp
     | None -> fail loc (Missing_member (tag, member))
 
@@ -999,7 +999,7 @@ module Make (G : sig val global : Global.t end) = struct
         | ((member,_) :: _), [] ->
            fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
       in
-      let@ members = check member_values (Global.member_types spec.layout) in
+      let@ members = check member_values (Memory.member_types spec.layout) in
       return (BT.Struct tag, IT.struct_ (tag, members))
 
     and infer_union (loc : loc) (tag : tag) (id : Id.t) 
@@ -1316,7 +1316,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let load (loc: loc) local (pointer: IT.t) (ct: Sctypes.t) =
-      let open Global in
+      let open Memory in
       let rec aux (ct : Sctypes.t) pointer is_member : (IT.t, type_error) m = 
         match ct with
         | Sctypes.Sctype (_, Struct tag) ->
@@ -1326,7 +1326,7 @@ module Make (G : sig val global : Global.t end) = struct
                 let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
                 let@ it = aux member_sct member_pointer (Some member) in
                 return (member, it)
-               ) (Global.members decl.layout)
+               ) (members decl.layout)
            in
            return (struct_ (tag, member_its))
         | _ ->
@@ -1345,7 +1345,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let rec destroy (loc: loc) access local (pointer: IT.t) (ct : Sctypes.t) =
-      let open Global in
+      let open Memory in
       match ct with
       | Sctypes.Sctype (_, Struct tag) ->
          let@ decl = get_struct_decl loc tag in
@@ -1373,7 +1373,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let rec store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
       let open LRT in
-      let open Global in
+      let open Memory in
       match ct with
       (* | Sctypes.Sctype (_, Array (array_bt, nopt)) ->
        *    begin match nopt with
@@ -1412,7 +1412,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let rec create (loc: loc) local (pointer: IT.t) bt (size: Z.t) = 
       let open LRT in
-      let open Global in
+      let open Memory in
       match bt with
       | Struct tag ->
          let@ decl = get_struct_decl loc tag in
@@ -1990,7 +1990,7 @@ let check_predicate_definition def = return ()
 
 
 let check_and_record_tagDefs (global: Global.t) tagDefs = 
-  let open Global in
+  let open Memory in
   PmapM.foldM (fun tag def (global: Global.t) ->
       match def with
       | M_UnionDef _ -> 

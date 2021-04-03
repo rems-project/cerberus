@@ -192,7 +192,7 @@ module Make (G : sig val global : Global.t end) = struct
         let struct_op = function
           | Struct (tag, members) ->
              let@ decl = get_struct_decl tag in
-             let decl_members = Global.member_types decl.layout in
+             let decl_members = Memory.member_types decl.layout in
              let@ () = 
                let has = List.length members in
                let expect = List.length decl_members in
@@ -210,13 +210,13 @@ module Make (G : sig val global : Global.t end) = struct
           | StructMember (tag, t, member) ->
              let@ t = check loc (Struct tag) t in
              let@ decl = get_struct_decl tag in
-             let decl_members = Global.member_types decl.layout in
+             let decl_members = Memory.member_types decl.layout in
              let@ bt = get_member_type decl_members member t in
              return (bt, StructMember (tag, t, member))
           | StructMemberOffset (tag, t, member) ->
              let@ t = check loc Loc t in
              let@ decl = get_struct_decl tag in
-             let decl_members = Global.member_types decl.layout in
+             let decl_members = Memory.member_types decl.layout in
              let@ _ = get_member_type decl_members member t in
              return (Loc, StructMemberOffset (tag, t, member))
         in

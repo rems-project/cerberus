@@ -1285,3 +1285,48 @@ let hash (IT (it, _bt)) =
      | Sym (Symbol (_,i, _)) -> 100 + i
      end
 
+
+
+
+
+
+let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
+  let open Sctypes in
+  let open Memory in
+  match ct with
+  | Void -> 
+     bool_ true
+  | Integer it -> 
+     in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
+  | Array (it, None) -> 
+     Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
+  | Array (ct, Some n) -> 
+     let lcs = 
+       List.init n (fun i ->
+           representable_ctype struct_layouts ct
+             (arrayGet_ ~item_bt:(BT.of_sct ct) (about, int_ i))
+         )
+     in
+     and_ lcs
+  | Pointer _ -> 
+     let pointer_byte_size = size_of_pointer in
+     let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
+     let max = Z.power_int_positive_big_int 2 pointer_size in
+     and_ [lePointer_ (pointer_ Z.zero, about); 
+           ltPointer_ (about, pointer_ max)]
+  | Struct tag -> 
+     let layout = struct_layouts tag in
+     and_ begin
+         List.filter_map (fun piece ->
+             match piece.member_or_padding with
+             | Some (member, sct) ->
+                let rangef = representable_ctype struct_layouts sct in
+                let bt = BT.of_sct sct in
+                let member_it = structMember_ ~member_bt:bt (tag, about, member) in
+                Some (rangef member_it)
+             | None -> 
+                None
+           ) layout
+       end
+  | Function _ -> 
+     Debug_ocaml.error "todo: function types"

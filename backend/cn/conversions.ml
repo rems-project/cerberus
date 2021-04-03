@@ -19,6 +19,7 @@ open Mapping
 open Path.LabeledName
 open Ast
 open Predicates
+open Memory
 
 
 module StringMap = Map.Make(String)
@@ -108,10 +109,10 @@ let struct_decl loc fields (tag : BT.tag) =
          let to_pad = Z.sub offset position in
          let padding = 
            if Z.gt_big_int to_pad Z.zero 
-           then [Global.{offset = position; size = to_pad; member_or_padding = None}] 
+           then [{offset = position; size = to_pad; member_or_padding = None}] 
            else [] 
          in
-         let member = [Global.{offset; size; member_or_padding = Some (member, sct)}] in
+         let member = [{offset; size; member_or_padding = Some (member, sct)}] in
          let@ rest = aux members (Z.add_big_int offset size) in
          return (padding @ member @ rest)
     in

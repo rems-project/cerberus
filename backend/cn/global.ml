@@ -14,6 +14,7 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module RT = ReturnTypes
 module FT = ArgumentTypes.Make(RT)
+open Memory
 
 
 
@@ -125,34 +126,14 @@ let impl_lookup (e: 'v ImplMap.t) i =
 
 
 
-type struct_piece = 
-  { offset: Z.t;
-    size: Z.t;
-    member_or_padding: (BT.member * Sctypes.t) option }
 
-type struct_member = 
-  { offset: Z.t;
-    size: Z.t;
-    member: BT.member * Sctypes.t }
 
 type struct_decl = 
   { layout: struct_piece list;
     stored_struct_predicate: stored_struct_predicate
   }
 
-let members = 
-  List.filter_map (fun {member_or_padding; offset; size} ->
-      Option.bind member_or_padding (fun (member, sctype) ->
-          Some {offset; size; member = (member, sctype)}
-        )
-    )
 
-let member_types =
-  List.filter_map (fun {member_or_padding; _} ->
-      Option.bind member_or_padding (fun (member, sctype) ->
-          Some (member, sctype)
-        )
-    )
 
 type struct_decls = struct_decl SymMap.t
 
