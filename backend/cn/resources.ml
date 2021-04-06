@@ -1,4 +1,5 @@
 open Pp
+open Simplify
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -255,29 +256,6 @@ let free_vars_list l =
 
 
 
-let simp_content lcs content =
-  match content with
-  | Block block_type -> Block block_type
-  | Value v -> Value (IT.simp lcs v)
-
-let simp lcs = function
-  | Point {pointer; size; content; permission} ->
-     let pointer = IT.simp lcs pointer in
-     let content = simp_content lcs content in
-     let permission = IT.simp lcs permission in
-     Point {pointer; size; content; permission}
-  | IteratedStar {qpointer; size; content; permission} ->
-     let qpointer' = Sym.fresh () in
-     let subst = Subst.{before=qpointer;after=qpointer'} in
-     let content = simp_content lcs (subst_var_content subst content) in
-     let permission = IT.simp lcs (IT.subst_var subst permission) in
-     IteratedStar {qpointer = qpointer'; size; content; permission}
-  | Predicate {name; iargs; oargs; unused} -> 
-     let iargs = List.map (IT.simp lcs) iargs in
-     let oargs = List.map (IT.simp lcs) oargs in
-     (* let unused = IT.subst_var subst unused in *)
-     Predicate {name; iargs; oargs; unused}
-
 
 
 
@@ -332,16 +310,22 @@ let derived_constraints resource resource' =
   let open IT in
   match resource, resource' with
   | Point p, Point p' -> 
-     and_ [impl_ (
-               gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
-               disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
-       )]
+     (* [impl_ (
+      *      gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+      *      disjoint_ ((p.pointer, z_ p.size), (p'.pointer, z_ p'.size))
+      * ); *)
+      (* for now *)
+      [impl_ (
+          gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+          ne_ (p.pointer, p'.pointer)
+        )
+     ]
   | Predicate _, _
     | _, Predicate _ -> 
-     bool_ true
+     []
   | _ ->
      (* todo *)
-     bool_ true
+     []
 
 
 
@@ -405,3 +389,41 @@ let array pointer length element_size content permission =
     }
   in
   IteratedStar point
+
+
+
+
+
+
+
+
+
+let simp_content lcs content =
+  match content with
+  | Block block_type -> Block block_type
+  | Value v -> Value (simp lcs v)
+
+let if_non_zero_frac resource = 
+  if not (IT.zero_frac (permission resource))
+  then Some resource else None
+
+let simp lcs resource = 
+  match resource with
+  | Point {pointer; size; content; permission} ->
+     let pointer = simp lcs pointer in
+     let content = simp_content lcs content in
+     let permission = simp lcs permission in
+     if_non_zero_frac (Point {pointer; size; content; permission})
+  | IteratedStar {qpointer; size; content; permission} ->
+     let qpointer' = Sym.fresh () in
+     let subst = Subst.{before=qpointer;after=qpointer'} in
+     let content = simp_content lcs (subst_var_content subst content) in
+     let permission = simp lcs (IT.subst_var subst permission) in
+     if_non_zero_frac (IteratedStar {qpointer = qpointer'; size; content; permission})
+  | Predicate {name; iargs; oargs; unused} -> 
+     let iargs = List.map (simp lcs) iargs in
+     let oargs = List.map (simp lcs) oargs in
+     (* let unused = IT.subst_var subst unused in *)
+     if unused 
+     then Some (Predicate {name; iargs; oargs; unused})
+     else None

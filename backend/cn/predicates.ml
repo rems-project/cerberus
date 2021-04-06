@@ -3,6 +3,7 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
+module RE = Resources
 open Pp
 
 
@@ -58,3 +59,11 @@ let stored_struct_predicate_to_predicate tag pred =
   let condition = fst pred.clause in
   let outputs = [snd pred.clause] in
   {iargs; oargs; clauses = [Clause {condition; outputs}]}
+
+
+
+
+
+
+
+

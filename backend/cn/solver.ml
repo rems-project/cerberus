@@ -15,7 +15,7 @@ let context =
 
 let solver = Z3.Solver.mk_simple_solver context
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 5
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "random_seed") 2
 let () = Z3.Solver.set_parameters solver params
 
 
@@ -143,21 +143,13 @@ module Make (G : sig val global : Global.t end) = struct
          Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
       | Rem_f (t1, t2) ->
          Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
-      | Min (t1, t2) ->
-         term (ite_ (le_ (t1, t2), t1, t2))
-      | Max (t1, t2) ->
-         term (ite_ (ge_ (t1, t2), t1, t2))
 
     and cmp_op it bt =
       match it with
       | LT (t1, t2) ->
          Z3.Arithmetic.mk_lt context (term t1) (term t2)
-      | GT (t1, t2) ->
-         Z3.Arithmetic.mk_gt context (term t1) (term t2)
       | LE (t1, t2) ->
          Z3.Arithmetic.mk_le context (term t1) (term t2)
-      | GE (t1, t2) ->
-         Z3.Arithmetic.mk_ge context (term t1) (term t2)
 
     and bool_op it bt =
       match it with
@@ -173,8 +165,6 @@ module Make (G : sig val global : Global.t end) = struct
          Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EQ (t1, t2) ->
          Z3.Boolean.mk_eq context (term t1) (term t2)
-      | NE (t1, t2) ->
-         Z3.Boolean.mk_distinct context [term t1; term t2]
 
     and tuple_op it bt =
       match it with
@@ -197,10 +187,6 @@ module Make (G : sig val global : Global.t end) = struct
          let member_destructors = List.combine members destructors in
          let destructor = List.assoc Id.equal member member_destructors in
          Z3.Expr.mk_app context destructor [term t]       
-      | StructMemberOffset (tag, t, member) ->
-         let decl = SymMap.find tag G.global.struct_decls in
-         let offset = Memory.member_offset decl.layout member in
-         Z3.Arithmetic.mk_add context [term t; term (z_ offset)]
 
     and pointer_op it bt =
       match it with
@@ -276,10 +262,6 @@ module Make (G : sig val global : Global.t end) = struct
 
     and ct_pred it bt =
       match it with
-      | MinInteger it ->
-         term (z_ (Memory.min_integer_type it))
-      | MaxInteger it ->
-         term (z_ (Memory.max_integer_type it))
       | Representable (ct, t) ->
          term (representable_ctype 
                  (fun tag -> (SymMap.find tag G.global.struct_decls).layout)

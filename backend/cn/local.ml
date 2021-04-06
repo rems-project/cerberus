@@ -69,7 +69,9 @@ let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc)
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
         let (re, acc) = f re acc in
-        (re :: resources, acc)
+        match RE.simp local.constraints re with
+        | Some re -> (re :: resources, acc)
+        | None -> (resources, acc)
       ) local.resources ([], acc)
   in
   ({local with resources}, acc)
@@ -99,7 +101,7 @@ let add_l lname ls (local : t) =
   {local with logical = SymMap.add lname ls local.logical}
 
 let add_c lc (local : t) = 
-  let lc = IT.simp local.constraints lc in
+  let lc = Simplify.simp local.constraints lc in
   {local with constraints = lc :: local.constraints}
 
 let add_cs lcs (local : t) = 
@@ -107,15 +109,18 @@ let add_cs lcs (local : t) =
 
 
 let add_r r (local : t) = 
-  let r = RE.simp local.constraints r in
-  let resources = r :: local.resources in
-  let lcs = 
-    RE.derived_constraint r ::
-    List.map (fun r' -> RE.derived_constraints r r') 
-      (all_resources local)
-  in
-  let local = {local with resources} in
-  add_cs lcs local
+  match RE.simp local.constraints r with
+  | Some r -> 
+     let resources = r :: local.resources in
+     let lcs = 
+       RE.derived_constraint r ::
+         List.concat_map (fun r' -> RE.derived_constraints r r') 
+           (all_resources local)
+     in
+     let local = {local with resources} in
+     add_cs lcs local
+  | None ->
+     local
 
 
 let remove_resource resource local = 
@@ -127,35 +132,6 @@ let remove_resource resource local =
   { local with resources }
 
 
-
-
-(* let equalities local = 
- *   let pairs = 
- *     List.filter_map (fun (LC.LC it) ->
- *         match it with
- *         | IT (Bool_op (EQ (IT (Lit (Sym s1), _), IT (Lit (Sym s2), _))), _) ->
- *            if Sym.compare s1 s2 <= 0 then Some (s1, s2) else Some (s2, s1)
- *         |  _ -> 
- *             None
- *       ) (all_constraints local)
- *   in *)
-  (* let pairs_sorted =
-   *   List.sort (fun (a1, a2) (b1, b2) ->
-   *       let cmp1 = Sym.compare a1 b1 in
-   *       if cmp1 = 0 then Sym.compare a2 b2 else cmp1
-   *     ) pairs
-   * in
-   * List.fold_left (fun classes (a1, b1) ->
-   *     let rec aux = function
-   *       | clss :: classes when SymSet.elem a1 clss ->
-   *          SymSet.add b1 clss :: classes
-   *       | clss :: classes ->
-   *          clss :: aux classes
-   *       | [] -> 
-   *          [SymSet.of_list [a1; b1]]         1,5  2,3  3,4  4,5
-   *     in
-   *     aux classes
-   *   ) [] pairs_sorted *)
 
 
 

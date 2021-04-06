@@ -99,14 +99,6 @@ module Make (G : sig val global : Global.t end) = struct
              let@ t = check loc Integer t in
              let@ t' = check loc Integer t' in
              return (Integer, Rem_f (t, t'))
-          | Min (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc bt t' in
-             return (bt, Min (t, t'))
-          | Max (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc bt t' in
-             return (bt, Max (t, t'))
         in
 
         let cmp_op = function
@@ -114,18 +106,10 @@ module Make (G : sig val global : Global.t end) = struct
              let@ (bt, t) = infer_integer_or_real_type loc t in
              let@ t' = check loc bt t' in
              return (BT.Bool, LT (t, t'))
-          | GT (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc bt t' in
-             return (BT.Bool, GT (t, t'))
           | LE (t,t') ->
              let@ (bt, t) = infer_integer_or_real_type loc t in
              let@ t' = check loc bt t' in
              return (BT.Bool, LE (t, t'))
-          | GE (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc t in
-             let@ t' = check loc bt t' in
-             return (BT.Bool, GE (t, t'))
         in
 
         let bool_op = function
@@ -151,10 +135,6 @@ module Make (G : sig val global : Global.t end) = struct
              let@ (ls,t) = infer loc t in
              let@ t' = check loc ls t' in
              return (BT.Bool, EQ (t,t')) 
-          | NE (t,t') ->
-             let@ (ls,t) = infer loc t in
-             let@ t' = check loc ls t' in
-             return (BT.Bool, NE (t,t'))
         in
 
         let tuple_op = function
@@ -213,12 +193,6 @@ module Make (G : sig val global : Global.t end) = struct
              let decl_members = Memory.member_types decl.layout in
              let@ bt = get_member_type decl_members member t in
              return (bt, StructMember (tag, t, member))
-          | StructMemberOffset (tag, t, member) ->
-             let@ t = check loc Loc t in
-             let@ decl = get_struct_decl tag in
-             let decl_members = Memory.member_types decl.layout in
-             let@ _ = get_member_type decl_members member t in
-             return (Loc, StructMemberOffset (tag, t, member))
         in
 
         let pointer_op = function
@@ -266,10 +240,6 @@ module Make (G : sig val global : Global.t end) = struct
           | Aligned (st, t) ->
              let@ t = check loc Loc t in
              return (BT.Bool, Aligned (st, t))
-          | MinInteger it ->
-             return (BT.Integer, MinInteger it)
-          | MaxInteger it ->
-             return (BT.Integer, MaxInteger it)
           | Representable (ct, t) ->
              let@ t = check loc (BT.of_sct ct) t in
              return (BT.Bool, Representable (ct, t))

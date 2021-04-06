@@ -193,13 +193,13 @@ module Make (G : sig val global : Global.t end) = struct
             Debug_ocaml.error "todo: Civ.."
     in
     
-    fun sym (expect : BT.t) (pat : mu_pattern) ->
+    fun (sym, bt) (pat : mu_pattern) ->
     let@ (local, it) = aux L.empty pat in
     let@ () = 
       let (M_Pattern (loc, _, _) : mu_pattern) = pat in
-      ensure_base_type loc ~expect (IT.bt it) 
+      ensure_base_type loc ~expect:bt (IT.bt it) 
     in
-    let local' = add_c (def_ sym it) local in
+    let local' = add_c (eq_ (it, sym_ (bt, sym))) local in
     return local'
     
 
@@ -210,7 +210,7 @@ module Make (G : sig val global : Global.t end) = struct
      introduced in the pattern-matching relate to (name,bound). *)
   let pattern_match_rt (pat : mu_pattern) (rt : RT.t) : (L.t, type_error) m =
     let ((bt, s'), delta) = bind_logically rt in
-    let@ delta' = pattern_match s' bt pat in
+    let@ delta' = pattern_match (s', bt) pat in
     return (delta' ++ delta)
 
 
@@ -1150,7 +1150,8 @@ module Make (G : sig val global : Global.t end) = struct
            let ret = Sym.fresh () in
            let@ decl = get_struct_decl loc tag in
            let@ _member_bt = get_member_type loc tag member decl in
-           let shifted_pointer = IT.structMemberOffset_ (tag, sym_ (arg.bt, arg.lname), member) in
+           let offset = Memory.member_offset decl.layout member in
+           let shifted_pointer = IT.addPointer_ (sym_ (arg.bt, arg.lname), z_ offset) in
            let constr = def_ ret shifted_pointer in
            let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
            return (rt, local)
@@ -1293,7 +1294,7 @@ module Make (G : sig val global : Global.t end) = struct
       | M_PEcase (asym, pats_es) ->
          let@ arg = arg_of_asym local asym in
          ListM.iterM (fun (pat, pe) ->
-             let@ delta = pattern_match arg.lname arg.bt pat in
+             let@ delta = pattern_match (arg.lname, arg.bt) pat in
              let local = delta ++ local in
              if Solver.is_inconsistent local then return ()
              else check_tpexpr local e typ
@@ -1322,8 +1323,8 @@ module Make (G : sig val global : Global.t end) = struct
         | Sctypes.Sctype (_, Struct tag) ->
            let@ decl = get_struct_decl loc tag in
            let@ member_its = 
-             ListM.mapM (fun {size; member = (member, member_sct); _} ->
-                let member_pointer = IT.structMemberOffset_ (tag,pointer,member) in
+             ListM.mapM (fun {size; member = (member, member_sct); offset} ->
+                let member_pointer = IT.addPointer_ (pointer,z_ offset) in
                 let@ it = aux member_sct member_pointer (Some member) in
                 return (member, it)
                ) (members decl.layout)
@@ -1738,7 +1739,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_Ecase (asym, pats_es) ->
            let@ arg = arg_of_asym local asym in
            ListM.iterM (fun (pat, pe) ->
-               let@ delta = pattern_match arg.lname arg.bt pat in
+               let@ delta = pattern_match (arg.lname, arg.bt) pat in
                let local = delta ++ local in
                if Solver.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ
@@ -2113,6 +2114,10 @@ let record_globals local globs =
          let global = SymSet.add lsym local.global in
          return {local with global}
     ) local globs
+
+
+
+
 
 
 
