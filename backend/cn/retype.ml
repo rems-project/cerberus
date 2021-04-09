@@ -422,6 +422,14 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
     PmapM.mapM retype_tagDef file.mu_tagDefs Sym.compare
   in
 
+  let get_layout sym = 
+    match Pmap.find sym tagDefs with
+    | M_StructDef decl ->
+       decl.layout
+    | _ -> 
+       Debug_ocaml.error (Sym.pp_string sym ^ " not a struct")
+  in
+
 
   let@ (globs, glob_typs) = 
     let retype_globs (sym, glob) (globs, glob_typs) =
@@ -499,7 +507,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
             ) args
         in
         let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
-        let@ (ftyp, init_mapping) = Conversions.make_fun_spec loc fsym fspec in
+        let@ (ftyp, init_mapping) = Conversions.make_fun_spec loc get_layout fsym fspec in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto, init_mapping) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
         let funinfo_extra = Pmap.add fsym (fspec, init_mapping) funinfo_extra in
@@ -547,7 +555,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           in
           let@ lspec = Parse.parse_label lname argtyps fspec this_attrs in
           let@ (lt,mapping) = 
-            Conversions.make_label_spec loc lname init_mapping lspec
+            Conversions.make_label_spec loc get_layout lname init_mapping lspec
           in
           let@ e = retype_texpr e in
           return (New.M_Label (loc, lt,args,e,annots,mapping))

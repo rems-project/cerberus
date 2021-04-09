@@ -118,6 +118,10 @@ let simp (lcs : t list) term =
        let a = aux a in
        let b = aux b in
        begin match a, b, bt with
+       | _, _, BT.Integer when IT.equal a b ->
+          int_ 0
+       | _, _, BT.Real when IT.equal a b ->
+          q_ (0, 1)
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _), _ ->
           IT (Lit (Z (Z.sub_big_int i1 i2)), bt)
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _), _ ->
@@ -128,7 +132,16 @@ let simp (lcs : t list) term =
           IT (Arith_op (Sub (a, b)), bt) 
        end
     | Mul (a, b) ->
-       IT (Arith_op (Mul (aux a, aux b)), bt) 
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | _, IT (Lit (Z i2), _) when Z.equal i2 Z.zero ->
+          int_ 0
+       | _, IT (Lit (Z i2), _) when Z.equal i2 (Z.of_int 1) ->
+          a
+       | _ ->
+          IT (Arith_op (Mul (a, b)), bt)
+       end
     | Div (a, b) ->
        let a = aux a in
        let b = aux b in 
@@ -277,18 +290,27 @@ let simp (lcs : t list) term =
        let a = aux a in
        let b = aux b in
        begin match a, b with
+       | _, IT (Lit (Z offset), _) when Z.equal Z.zero offset ->
+          a
        | IT (Pointer_op (AddPointer (aa, IT (Lit (Z i), _))), _), 
          IT (Lit (Pointer j), _) ->
           IT (Pointer_op (AddPointer (aa, IT (Lit (Pointer (Z.add_big_int i j)), Integer))), bt)
-       | _, IT (Lit (Z offset), _) when Z.equal Z.zero offset ->
-          a
        | _ ->
           IT (Pointer_op (AddPointer (a, b)), bt)
        end
     | SubPointer (a, b) ->
        IT (Pointer_op (SubPointer (aux a, aux b)), bt)
     | MulPointer (a, b) ->
-       IT (Pointer_op (MulPointer (aux a, aux b)), bt)
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | _, IT (Lit (Z i2), _) when Z.equal i2 Z.zero ->
+          pointer_ (Z.of_int 0)
+       | _, IT (Lit (Z i2), _) when Z.equal i2 (Z.of_int 1) ->
+          a
+       | _ ->
+          IT (Pointer_op (MulPointer (a, b)), bt)
+       end
     | LTPointer (a, b) ->
        IT (Pointer_op (LTPointer (aux a, aux b)), bt)
     | LEPointer (a, b) ->

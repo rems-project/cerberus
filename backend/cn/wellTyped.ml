@@ -582,6 +582,10 @@ module Make (G : sig val global : Global.t end) = struct
          return ()
 
     let wellpolarised loc determined lrt = 
+      let () = 
+        let open Pp in 
+        print stderr (item "lrt" (LogicalReturnTypes.pp lrt)) 
+      in
       let open Resultat in
       let rec aux determined undetermined lrt = 
       match lrt with
@@ -688,6 +692,10 @@ module Make (G : sig val global : Global.t end) = struct
 
     let wellpolarised loc determined ft = 
       let open Resultat in
+      let () = 
+        let open Pp in 
+        print stderr (item "ft" (T.pp ft)) 
+      in
       let rec aux determined undetermined ft = 
       match ft with
       | T.Computational ((s, _), ft) ->

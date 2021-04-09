@@ -4,6 +4,7 @@ module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IT = IndexTerms
+open IT
 
 type size = Z.t
 
@@ -151,6 +152,9 @@ let subst_it_content subst content =
   match content with
   | Block block_type -> Block block_type
   | Value v -> Value (IT.subst_it subst v)
+
+let subst_its_content subst content = 
+  Subst.make_substs subst_it_content subst content
 
 let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
   match resource with
@@ -366,6 +370,19 @@ let region pointer size permission =
   IteratedStar point
 
 
+let array_index_to_pointer base element_size index =
+  addPointer_ (base, mul_ (element_size, index))
+
+let array_pointer_to_index base element_size pointer =
+  div_ (sub_ (pointerToIntegerCast_ pointer, 
+              pointerToIntegerCast_ base), element_size)
+
+let array_is_at_valid_index base element_size pointer =
+  eq_ (rem_f_ (sub_ (pointerToIntegerCast_ pointer, 
+                     pointerToIntegerCast_ base), element_size),
+       int_ 0)
+
+
 (* check this *)
 let array pointer length element_size content permission =
   let open IT in
@@ -389,9 +406,6 @@ let array pointer length element_size content permission =
     }
   in
   IteratedStar point
-
-
-
 
 
 
@@ -427,3 +441,182 @@ let simp lcs resource =
      if unused 
      then Some (Predicate {name; iargs; oargs; unused})
      else None
+
+
+
+
+
+
+module External = struct
+
+  type t = 
+    | E_Point of {
+        pointer : IT.t;
+        size: Z.t;
+        content: point_content;
+        permission: IT.t;
+      }
+    | E_Iterated of {
+        pointer: IT.t;               (* not a function of 'index' *)
+        index: Sym.t;
+        element_size: Z.t;
+        length: IT.t;                (* not a function of 'index' *)
+        content: point_content;      (* function of 'index' *)
+        permission: IT.t             (* function of 'index' *)
+      }
+    (* | E_Predicate of predicate *)
+
+  let subst_it subst resource = 
+    match resource with
+    | E_Point {pointer; size; content; permission} ->
+       let pointer = IT.subst_it subst pointer in
+       let content = subst_it_content subst content in
+       let permission = IT.subst_it subst permission in
+       E_Point {pointer; size; content; permission}
+    | E_Iterated {pointer; index; length; element_size; content; permission} ->
+       if Sym.equal subst.before index then 
+         E_Iterated {pointer; index; length; element_size; content; permission}
+       else if SymSet.mem index (IT.free_vars subst.after) then
+         let index' = Sym.fresh () in
+         let first_subst = Subst.{before=index;after=IT.sym_ (BT.Integer, index')} in
+         let pointer = 
+           IT.subst_it subst (IT.subst_it first_subst pointer) 
+         in
+         let content = 
+           subst_it_content subst
+             (subst_it_content first_subst content) 
+         in
+         let permission = 
+           IT.subst_it subst (IT.subst_it first_subst permission) 
+         in
+         let length = 
+           IT.subst_it subst (IT.subst_it first_subst length) 
+         in
+         E_Iterated {index = index'; pointer; length; element_size; content; permission}
+       else
+         let pointer = IT.subst_it subst pointer in
+         let content = subst_it_content subst content in
+         let permission = IT.subst_it subst permission in
+         let length = IT.subst_it subst length in
+         E_Iterated {index; pointer; length; element_size; content; permission}
+    (* | E_Predicate {name; iargs; oargs; unused} -> 
+     *    let iargs = List.map (IT.subst_it subst) iargs in
+     *    let oargs = List.map (IT.subst_it subst) oargs in
+     *    (\* let unused = IT.subst_it subst unused in *\)
+     *    E_Predicate {name; iargs; oargs; unused} *)
+
+  let subst_its subst resource = Subst.make_substs subst_it subst resource
+
+
+
+  let to_internal = 
+    let open IT in
+    let open Subst in
+    function
+    | E_Point {pointer; size; content; permission} ->
+       Point {pointer; size; content; permission}
+    | E_Iterated {pointer; index; length; element_size; content; permission} ->
+       let qpointer = Sym.fresh () in 
+       let qpointer_t = sym_ (BT.Loc, qpointer) in
+       let subst = {before = index; 
+                    after = array_pointer_to_index pointer (z_ element_size) qpointer_t} in
+       let permission = 
+         ite_ (
+             and_ [
+                 le_ (int_ 0, array_pointer_to_index pointer (z_ element_size) qpointer_t);
+                 lt_ (array_pointer_to_index pointer (z_ element_size) qpointer_t, length);
+                 array_is_at_valid_index pointer (z_ element_size) qpointer_t
+               ],
+             IT.subst_it subst permission,
+             q_ (0, 1)
+           )
+       in
+       let content = subst_it_content subst content in
+       IteratedStar {qpointer; size = element_size; content; permission}
+
+
+
+  let representation (layouts : Sym.t -> Memory.struct_layout) typ pointer (ovalue : IT.t option) permission =
+    let open Memory in
+    let open IT in
+    let rec aux (Sctypes.Sctype (_, t_)) pointer ovalue =
+      match t_ with
+      | Void -> 
+         Debug_ocaml.error "representation: Void"
+      | Integer it ->
+         [E_Point {
+              pointer;
+              size = Memory.size_of_integer_type it; 
+              content = 
+                begin match ovalue with
+                | Some value -> Value value
+                | None -> Block Nothing
+                end; 
+              permission
+            }]
+      | Pointer (_qualifiers, _t) ->
+         [E_Point {
+              pointer;
+              size = Memory.size_of_pointer; 
+              content =
+                begin match ovalue with
+                | Some value -> Value value
+                | None -> Block Nothing
+                end; 
+              permission
+            }]
+      | Array (t, None) ->
+         Debug_ocaml.error "representation: array of unknown length"
+      | Array (t, Some n) ->
+         let index = Sym.fresh () in 
+         let index_t = sym_ (BT.Integer, index) in
+         let representation' = 
+           aux t pointer 
+             (Option.map (fun value ->
+                  arrayGet_ ~item_bt:(BT.of_sct t) (value, index_t))
+                ovalue)
+         in
+         let length = int_ n in
+         List.map (function
+             | E_Point {pointer; size; content; permission} -> 
+                E_Iterated {pointer; index; length; element_size = size; 
+                            content; permission}
+             | E_Iterated arr ->
+                let substs = 
+                  let open Subst in
+                  [{before = arr.index; after = rem_f_ (index_t, arr.length)};
+                   {before = index; after = rem_f_ (index_t, length)}]
+                in
+                let content = subst_its_content substs arr.content in
+                let length = mul_ (int_ n, arr.length) in
+                let element_size = arr.element_size in
+                let permission = IT.subst_its substs arr.permission in
+                E_Iterated {pointer = arr.pointer; index; length; element_size; content; permission}
+           ) representation'
+      | Struct tag -> 
+         List.concat_map (fun {offset;size;member_or_padding}  ->
+             let member_pointer = addPointer_ (pointer, z_ offset) in
+             begin match member_or_padding with
+             | None -> 
+                [E_Point {pointer = member_pointer; size; permission; content = Block Padding}]
+             | Some (member, ct) ->
+                aux ct member_pointer 
+                  (Option.map (fun value ->
+                       (structMember_ ~member_bt:(BT.of_sct ct) 
+                          (tag, value, member))
+                     ) ovalue)
+             end
+           ) (layouts tag)
+      | Function _ ->
+         Debug_ocaml.error "representation: Function"
+    in
+    aux typ pointer ovalue
+
+end
+
+
+
+
+let representation layouts typ pointer ovalue permission =
+  List.map External.to_internal
+    (External.representation layouts typ pointer ovalue permission)

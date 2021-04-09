@@ -1086,7 +1086,7 @@ module Make (G : sig val global : Global.t end) = struct
       let element_size = Memory.size_of_ctype ct in
       let constr = 
         let base = sym_ (BT.Loc, arg1.lname) in
-        let offset = mulPointer_ (z_ element_size, sym_ (BT.Integer, arg2.lname)) in
+        let offset = mul_ (z_ element_size, sym_ (BT.Integer, arg2.lname)) in
         def_ ret (addPointer_ (base, offset)) 
       in
       let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
@@ -1345,93 +1345,30 @@ module Make (G : sig val global : Global.t end) = struct
       aux ct pointer None
 
 
-    let rec destroy (loc: loc) access local (pointer: IT.t) (ct : Sctypes.t) =
-      let open Memory in
-      match ct with
-      | Sctypes.Sctype (_, Struct tag) ->
-         let@ decl = get_struct_decl loc tag in
-         ListM.fold_leftM (fun local member ->
-             let {offset; size; member_or_padding} = member in
-                let member_pointer = IT.addPointer_ (pointer, z_ offset) in
-             match member_or_padding with
-             | Some (member,member_sct) ->
-                let@ local = destroy loc access local member_pointer member_sct in
-                return local
-             | None ->
-                let@ (_, local) = 
-                  resource_request loc (Access access) local
-                    (block (member_pointer, size) (q_ (1, 1)) Nothing) 
-                in
-                return local
-           ) local decl.layout
-      | _ -> 
-         let@ (_, local) = 
-           resource_request loc (Access access) local
-             (block (pointer, Memory.size_of_ctype ct) (q_ (1, 1)) Nothing) 
-         in
-         return local
+
+    let destroy (loc: loc) access local (pointer: IT.t) (ct : Sctypes.t) =
+      let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
+      ListM.fold_leftM (fun local request ->
+          let@ (_, local) = resource_request loc (Access (Store None)) local request in
+          return local
+        ) local (RE.representation layouts ct pointer None (q_ (1, 1)))
 
 
-    let rec store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
-      let open LRT in
-      let open Memory in
-      match ct with
-      (* | Sctypes.Sctype (_, Array (array_bt, nopt)) ->
-       *    begin match nopt with
-       *    | None -> Debug_ocaml.error "todo: arrays with unknown length"
-       *    | Some n -> 
-       *       ListM.fold_leftM (fun (acc_rt, local) i ->
-       *         ) (LRT.I, local) decl.layout
-       *    end *)
-      | Sctypes.Sctype (_, Struct tag) ->
-         let@ decl = get_struct_decl loc tag in
-         ListM.fold_leftM (fun (acc_rt, local) member ->
-             let {offset; size; member_or_padding} = member in
-             let member_pointer = IT.addPointer_ (pointer, z_ offset) in
-             match member_or_padding with
-             | Some (member,member_sct) ->
-                let member_bt = BT.of_sct member_sct in
-                let member_value = IT.structMember_ ~member_bt (tag, value, member) in
-                let@ (rt, local) = store loc local member_pointer member_value member_sct in
-                return (acc_rt @@ rt, local)
-             | None ->
-                let@ (_, local) = 
-                  resource_request loc (Access (Store None)) local 
-                    (padding (member_pointer, size) (q_ (1,1))) 
-                in
-                let resource = padding (pointer, size) (q_ (1,1)) in
-                return ((acc_rt @@ LRT.Resource (resource, I)), local)
-           ) (LRT.I, local) decl.layout
-      | _ -> 
-         let size = Memory.size_of_ctype ct in
-         let@ (_, local) = 
-           resource_request loc (Access (Store None)) local 
-             (padding (pointer, size) (q_ (1,1))) 
-         in
-         let point = points_to (pointer, size) (q_ (1,1)) value in
-         return (LRT.Resource (point, I), local)
-
-    let rec create (loc: loc) local (pointer: IT.t) bt (size: Z.t) = 
-      let open LRT in
-      let open Memory in
-      match bt with
-      | Struct tag ->
-         let@ decl = get_struct_decl loc tag in
-         ListM.fold_leftM (fun acc_rt member ->
-             let {offset; size; member_or_padding} = member in
-             let member_pointer = IT.addPointer_ (pointer, z_ offset) in
-             match member_or_padding with
-             | Some (member,member_sct) ->
-                let member_bt = BT.of_sct member_sct in
-                let@ rt = create loc local member_pointer member_bt size in
-                return (acc_rt @@ rt)
-             | None ->
-                let resource = uninit (member_pointer, size) (q_ (1,1)) in
-                return (acc_rt @@ Resource (resource, I))
-           ) LRT.I decl.layout
-      | _ -> 
-         let resource = uninit (pointer, size) (q_ (1,1)) in
-         return (LRT.Resource (resource, I))
+    let store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
+      let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
+      let@ local = 
+        ListM.fold_leftM (fun local request ->
+            let@ (_, local) = resource_request loc (Access (Store None)) local request in
+            return local
+          ) local (RE.representation layouts ct pointer None (q_ (1, 1)))
+      in
+      let resources = RE.representation layouts ct pointer (Some value) (q_ (1, 1)) in
+      return (LRT.mResources resources LRT.I, local)
+      
+    let create (loc: loc) local (pointer: IT.t) ct = 
+      let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
+      let resources = RE.representation layouts ct pointer None (q_ (1, 1)) in
+      return (LRT.mResources resources LRT.I)
 
 
 
@@ -1598,8 +1535,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
               let ret = Sym.fresh () in
-              let size = Memory.size_of_ctype act.ct in
-              let@ lrt = create loc local (sym_ (Loc, ret)) (BT.of_sct act.ct) size in
+              let@ lrt = create loc local (sym_ (Loc, ret)) act.ct in
               let rt = 
                 RT.Computational ((ret, Loc), 
                 LRT.Constraint (representable_ (Sctypes.pointer_sct act.ct, sym_ (Loc, ret)), 

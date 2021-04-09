@@ -171,7 +171,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
 
 
-let make_owned loc label pointer path sct =
+let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label pointer path sct =
   let open Sctypes in
   let pointee = Sym.fresh () in
   let pointee_bt = BT.of_sct sct in
@@ -183,19 +183,13 @@ let make_owned loc label pointer path sct =
   match sct with
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
-  | Sctype (_, Struct tag) ->
-     let r = 
-       predicate (Tag tag) [sym_ (BT.Loc, pointer)] 
-         [sym_ (BT.Struct tag, pointee)]
-     in
-     return (l, [r], [], mapping)
   | sct -> 
      let r = 
-       points_to (sym_ (BT.Loc, pointer), Memory.size_of_ctype sct)
-         (q_ (1, 1)) (sym_ (pointee_bt, pointee))
+       RE.representation layouts sct (sym_ (BT.Loc, pointer))
+         (Some (sym_ (pointee_bt, pointee))) (q_ (1, 1))
      in
      let c = [good_value pointee sct] in
-     return(l, [r], c, mapping)
+     return(l, r, c, mapping)
 
 
 let make_region loc pointer size =
@@ -383,7 +377,7 @@ let resolve_constraint loc mapping lc =
 
 
 
-let apply_ownership_spec label var_typs mapping (loc, {predicate;arguments}) =
+let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;arguments}) =
   let open Path in
   match predicate, arguments with
   | "Owned", [PathArg path] ->
@@ -394,7 +388,7 @@ let apply_ownership_spec label var_typs mapping (loc, {predicate;arguments}) =
         let@ (_, sym) = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
-           make_owned loc label sym (Path.var bn) sct2
+           make_owned loc layouts label sym (Path.var bn) sct2
         | _ ->
           fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
      end
@@ -445,7 +439,7 @@ let garg_item l (garg : garg) =
   {path; sym = garg.lsym; bt = BT.of_sct garg.typ} 
 
 
-let make_fun_spec loc fsym (fspec : function_spec)
+let make_fun_spec loc layouts fsym (fspec : function_spec)
     : (FT.t * Mapping.t, type_error) m = 
   let open FT in
   let open RT in
@@ -466,7 +460,8 @@ let make_fun_spec loc fsym (fspec : function_spec)
         let item = garg_item "start" garg in
         let@ (l, r, c, mapping') = 
           match garg.accessed with
-          | Some loc -> make_owned loc "start" garg.lsym item.path garg.typ 
+          | Some loc -> 
+             make_owned loc layouts "start" garg.lsym item.path garg.typ 
           | None -> return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
@@ -479,7 +474,8 @@ let make_fun_spec loc fsym (fspec : function_spec)
     ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
         let a = [(aarg.asym, BT.Loc)] in
         let item = aarg_item "start" aarg in
-        let@ (l, r, c, mapping') = make_owned loc "start" aarg.asym item.path aarg.typ in
+        let@ (l, r, c, mapping') = 
+          make_owned loc layouts "start" aarg.asym item.path aarg.typ in
         let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
         return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
@@ -491,7 +487,7 @@ let make_fun_spec loc fsym (fspec : function_spec)
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec "start" var_typs mapping (loc, cond) in
+             apply_ownership_spec layouts "start" var_typs mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc mapping cond in
@@ -516,7 +512,8 @@ let make_fun_spec loc fsym (fspec : function_spec)
         let item = garg_item "end" garg in
         let@ (l, r, c, mapping') = 
           match garg.accessed with
-          | Some loc -> make_owned loc "end" garg.lsym item.path garg.typ 
+          | Some loc -> 
+             make_owned loc layouts "end" garg.lsym item.path garg.typ 
           | None -> return ([], [], [], [])
         in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
@@ -528,7 +525,8 @@ let make_fun_spec loc fsym (fspec : function_spec)
   let@ (oL, oR, oC, mapping) = 
     ListM.fold_leftM (fun (oL, oR, oC, mapping) aarg ->
         let item = aarg_item "end" aarg in
-        let@ (l, r, c, mapping') = make_owned loc "end" aarg.asym item.path aarg.typ in
+        let@ (l, r, c, mapping') = 
+          make_owned loc layouts "end" aarg.asym item.path aarg.typ in
         let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
@@ -540,7 +538,7 @@ let make_fun_spec loc fsym (fspec : function_spec)
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec "end" var_typs mapping (loc, cond) in
+             apply_ownership_spec layouts "end" var_typs mapping (loc, cond) in
            return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc mapping cond in
@@ -558,7 +556,8 @@ let make_fun_spec loc fsym (fspec : function_spec)
 
   
 let make_label_spec
-      (loc : Loc.t) 
+      (loc : Loc.t)
+      layouts
       (lname : string)
       init_mapping
       (lspec: Ast.label_spec)
@@ -579,7 +578,8 @@ let make_label_spec
         let item = garg_item lname garg in
         let@ (l, r, c, mapping') = 
           match garg.accessed with
-          | Some loc -> make_owned loc lname garg.lsym item.path garg.typ 
+          | Some loc -> 
+             make_owned loc layouts lname garg.lsym item.path garg.typ 
           | None ->  return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
@@ -591,7 +591,8 @@ let make_label_spec
   let@ (iL, iR, iC, mapping) = 
     ListM.fold_leftM (fun (iL, iR, iC, mapping) aarg ->
         let item = aarg_item lname aarg in
-        let@ (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
+        let@ (l, r, c, mapping') = 
+          make_owned loc layouts lname aarg.asym item.path aarg.typ in
         return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
       (iL, iR, iC, mapping) lspec.function_arguments
@@ -606,7 +607,8 @@ let make_label_spec
       ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
           let a = [(aarg.asym, BT.Loc)] in
           let item = aarg_item lname aarg in
-          let@ (l, r, c, mapping') = make_owned loc lname aarg.asym item.path aarg.typ in
+          let@ (l, r, c, mapping') = 
+            make_owned loc layouts lname aarg.asym item.path aarg.typ in
           let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
           return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
         )
@@ -621,7 +623,7 @@ let make_label_spec
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec lname var_typs mapping (loc, cond) in
+             apply_ownership_spec layouts lname var_typs mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc mapping cond in
