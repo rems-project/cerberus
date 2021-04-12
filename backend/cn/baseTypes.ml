@@ -15,6 +15,7 @@ type t =
   | Struct of tag
   | Set of t
   | Array of t
+  | Option of t
 
 let is_struct = function
   | Struct tag -> Some tag
@@ -32,6 +33,7 @@ let rec equal t t' =
   | Struct t, Struct t' -> Sym.equal t t'
   | Set t, Set t' -> equal t t'
   | Array t, Array t' -> equal t t'
+  | Option t, Option t' -> equal t t'
 
   | Unit, _
   | Bool, _
@@ -42,27 +44,26 @@ let rec equal t t' =
   | Tuple _, _
   | Struct _, _
   | Set _, _
-  | Array _, _ ->
+  | Array _, _
+  | Option _, _ ->
      false
 
 
 
-let pp bt = 
-  let rec aux atomic bt = 
-    let mparens pped = if atomic then parens pped else pped in
-    match bt with
-    | Unit -> !^"void"
-    | Bool -> !^"bool"
-    | Integer -> !^"integer"
-    | Real -> !^"real"
-    | Loc -> !^"pointer"
-    | List bt -> mparens ((!^ "list") ^^^ aux true bt)
-    | Tuple nbts -> parens (flow_map (comma) (aux false) nbts)
-    | Struct sym -> mparens (!^"struct" ^^^ Sym.pp sym)
-    | Set t -> mparens (!^"set" ^^^ parens (aux false t))
-    | Array t -> mparens (aux false t ^^ brackets empty)
-  in
-  aux false bt
+let rec pp bt = 
+  match bt with
+  | Unit -> !^"void"
+  | Bool -> !^"bool"
+  | Integer -> !^"integer"
+  | Real -> !^"real"
+  | Loc -> !^"pointer"
+  | List bt -> !^"list" ^^ angles (pp bt)
+  | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
+  | Struct sym -> !^"struct" ^^^ Sym.pp sym
+  | Set t -> !^"set" ^^ angles (pp t)
+  | Array t -> pp t ^^ brackets empty
+  | Option t -> !^"option" ^^ angles (pp t)
+
 
 
 let json bt : Yojson.Safe.t =
@@ -92,3 +93,4 @@ let hash = function
   | Struct _ -> 7
   | Set _ -> 8
   | Array _ -> 9
+  | Option _ -> 10

@@ -78,6 +78,7 @@ let simp (lcs : t list) term =
     | Set_op it -> IT (Set_op it, bt)
     | Array_op it -> IT (Array_op it, bt)
     | CT_pred it -> IT (CT_pred it, bt)
+    | Option_op it -> option_op it bt
 
   and lit it bt = 
     match it with
@@ -333,8 +334,15 @@ let simp (lcs : t list) term =
        IT (Pointer_op (IntegerToPointerCast (aux a)), bt)
     | PointerToIntegerCast a ->
        IT (Pointer_op (PointerToIntegerCast (aux a)), bt)       
+
+
+  and option_op it bt =
+    match it with
+    | Something it -> IT (Option_op (Something (aux it)), bt)
+    | Nothing bt' -> IT (Option_op (Nothing bt'), bt)
+    | Is_some it -> IT (Option_op (Is_some (aux it)), bt)
+    | Value_of_some it -> IT (Option_op (Value_of_some (aux it)), bt)
   in
-  
 
 
   aux term

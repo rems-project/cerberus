@@ -88,6 +88,12 @@ and 'bt ct_pred =
   | AlignedI of 'bt term * 'bt term
   | Aligned of CT.t * 'bt term
 
+and 'bt option_op = 
+  | Something of 'bt term
+  | Nothing of BT.t
+  | Is_some of 'bt term
+  | Value_of_some of 'bt term
+
 and 'bt term_ =
   | Lit of lit
   | Arith_op of 'bt arith_op
@@ -100,6 +106,7 @@ and 'bt term_ =
   | Set_op of 'bt set_op
   | Array_op of 'bt array_op
   | CT_pred of 'bt ct_pred
+  | Option_op of 'bt option_op
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -321,6 +328,17 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      * | MaxInteger _, _ -> false *)
   in
 
+  let option_op it it' = 
+    match it, it' with
+    | Something it, Something it' -> equal it it'
+    | Nothing bt, Nothing bt' -> BT.equal bt bt'
+    | Is_some it, Is_some it' -> equal it it'
+    | Value_of_some it, Value_of_some it' -> equal it it'
+    | Something _, _ -> false
+    | Nothing _, _ -> false
+    | Is_some _, _ -> false
+    | Value_of_some _, _ ->false
+  in
 
   match it, it' with
   | Lit it, Lit it' -> lit it it'
@@ -334,6 +352,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Set_op it, Set_op it' -> set_op it it'
   | Array_op it, Array_op it' -> array_op it it'
   | CT_pred it, CT_pred it' -> ct_pred it it'
+  | Option_op it, Option_op it' -> option_op it it'
   | Lit _, _ -> false
   | Arith_op _, _ -> false
   | Bool_op _, _ -> false
@@ -345,6 +364,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Set_op _, _ -> false
   | Array_op _, _ -> false
   | CT_pred _, _ -> false
+  | Option_op _, _ -> false
 
 
 
@@ -497,6 +517,17 @@ let pp (it : 'bt term) : PPrint.document =
          c_app !^"equalOnRange" [aux false t1; aux false t2; aux false t3; aux false t4]
     in
 
+    let option_op = function
+      | Something it -> 
+         c_app !^"something" [aux atomic it]
+      | Nothing _ ->
+         c_app !^"nothing" []
+      | Is_some it ->
+         c_app !^"is_some" [aux false it]
+      | Value_of_some it ->
+         c_app !^"value_of_some" [aux false it]
+    in
+
     match it with
     | Lit it -> lit it
     | Arith_op it -> arith_op it
@@ -509,6 +540,7 @@ let pp (it : 'bt term) : PPrint.document =
     | List_op it -> list_op it
     | Set_op it -> set_op it
     | Array_op it -> array_op it
+    | Option_op it -> option_op it
 
   in
 
@@ -606,6 +638,13 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | ArrayEqualOnRange (t1,t2,t3,t4) -> free_vars_list [t1;t2;t3; t4]
   in
   
+  let option_op = function
+    | Something it -> free_vars it
+    | Nothing _ -> SymSet.empty
+    | Is_some it -> free_vars it
+    | Value_of_some it -> free_vars it
+  in
+
   fun (IT (it, _)) ->
   match it with
   | Lit it -> lit it
@@ -619,6 +658,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | List_op it -> list_op it
   | Set_op it -> set_op it
   | Array_op it -> array_op it
+  | Option_op it -> option_op it
 
 
 and free_vars_list l = 
@@ -767,6 +807,17 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
       IT (Array_op it, bt)
     in
 
+    let option_op it bt = 
+      let it = match it with
+        | Something it -> Something (aux it)
+        | Nothing bt' -> Nothing bt'
+        | Is_some it -> Is_some (aux it)
+        | Value_of_some it -> Value_of_some (aux it)
+      in
+      IT (Option_op it, bt)
+    in
+
+
     fun (IT (it, bt)) ->
     match it with
     | Lit it -> lit it bt
@@ -780,6 +831,7 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
     | List_op it -> list_op it bt
     | Set_op it -> set_op it bt
     | Array_op it -> array_op it bt
+    | Option_op it -> option_op it bt
 
   in
 
@@ -932,6 +984,19 @@ let aligned_ (t, it) =
 let alignedI_ (it, it') = 
   IT (CT_pred (AlignedI (it, it')), BT.Bool)
 
+(* point_value *)
+let something_ v = 
+  IT (Option_op (Something v), BT.Option (bt v))
+let nothing_ bt = 
+  IT (Option_op (Nothing bt), BT.Option bt)
+let is_some_ v = 
+  IT (Option_op (Is_some v), BT.Bool)
+let value_of_some_ v = 
+  match bt v with
+  | BT.Option bt -> 
+     IT (Option_op (Value_of_some v), bt)
+  | _ -> Debug_ocaml.error "illtyped index term"
+
 
 let def_ sym e = eq_ (sym_ (bt e, sym), e)
 
@@ -992,14 +1057,15 @@ let hash (IT (it, _bt)) =
   | List_op it -> 8
   | Set_op it -> 9
   | Array_op it -> 10
+  | Option_op it -> 11
   | Lit lit ->
      begin match lit with
-     | Z z -> 11
-     | Q (i, j) -> 12
-     | Pointer p -> 13
-     | Bool b -> 14
-     | Unit -> 15
-     | Default bt -> 16
+     | Z z -> 12
+     | Q (i, j) -> 13
+     | Pointer p -> 14
+     | Bool b -> 15
+     | Unit -> 16
+     | Default bt -> 17
      | Sym (Symbol (_,i, _)) -> 100 + i
      end
 

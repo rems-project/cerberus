@@ -316,6 +316,22 @@ module Make (G : sig val global : Global.t end) = struct
              return (BT.Bool, ArrayEqualOnRange (it, it', it'', it'''))
         in
 
+        let option_op = function
+          | Something it ->
+             let@ (bt, it) = infer loc it in
+             let mbt = BT.Option bt in
+             return (mbt, Something it)
+          | Nothing bt ->
+             let mbt = BT.Option bt in
+             return (mbt, Nothing bt)
+          | Is_some it ->
+             let@ (_, it) = infer_option_type loc it in
+             return (BT.Bool, Is_some it)
+          | Value_of_some it ->
+             let@ (bt, it) = infer_option_type loc it in
+             return (bt, Value_of_some it)
+        in
+
         fun loc (IT (it, _)) ->
         match it with
         | Lit it ->
@@ -351,6 +367,10 @@ module Make (G : sig val global : Global.t end) = struct
         | Array_op it ->
            let@ (bt, array_op) = array_op it in
            return (bt, IT (Array_op array_op, bt))
+        | Option_op it ->
+           let@ (bt, option_op) = option_op it in
+           return (bt, IT (Option_op option_op, bt))
+           
 
 
       and check : 'bt. Loc.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
@@ -429,7 +449,22 @@ module Make (G : sig val global : Global.t end) = struct
                    !^"but has type" ^^^ LS.pp ls
              in
              fail loc (Generic err)
+        in
+        return (bt, it)
 
+      and infer_option_type : 'bt. Loc.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
+        fun loc it ->
+        let@ (ls, it) = infer loc it in
+        let@ bt = match ls with
+          | Option bt -> return bt
+          | _ -> 
+             let (context, it) = Explain.index_terms names local (context, it) in
+             let err = 
+               !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                 !^"Expected" ^^^ it ^^^ !^"to have option type" ^^ comma ^^^
+                   !^"but has type" ^^^ LS.pp ls
+             in
+             fail loc (Generic err)
         in
         return (bt, it)
     

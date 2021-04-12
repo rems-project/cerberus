@@ -68,6 +68,20 @@ module Make (G : sig val global : Global.t end) = struct
          Z3.Set.mk_sort context (aux bt)
       | Array bt ->
          Z3.Z3Array.mk_sort context (aux Integer) (aux bt)
+      | Option bt ->
+         let a_sort = aux bt in
+         let some_c = 
+           let recognizer = Z3.Symbol.mk_string context ("some_" ^ bt_name bt ^ "_recognizer") in
+           let value_field = Z3.Symbol.mk_string context ("some_" ^ bt_name bt ^ "_value") in
+           Z3.Datatype.mk_constructor_s context ("some_" ^ bt_name bt) 
+             recognizer [value_field] [Some a_sort] []
+         in
+         let none_c = 
+           let recognizer = Z3.Symbol.mk_string context ("none_" ^ bt_name bt ^ "_recognizer") in
+           Z3.Datatype.mk_constructor_s context ("none_" ^ bt_name bt) 
+             recognizer [] [] []
+         in
+         Z3.Datatype.mk_sort_s context (bt_name (BT.Option bt)) [some_c; none_c]
     in    
     fun bt ->
     match BTtbl.find_opt tbl bt with
@@ -100,6 +114,7 @@ module Make (G : sig val global : Global.t end) = struct
            | Set_op t -> set_op t bt
            | Array_op t -> array_op t bt
            | CT_pred t -> ct_pred t bt
+           | Option_op t -> option_op t bt
          in
          let () = ITtbl.add tbl it sc in
          sc
@@ -271,6 +286,20 @@ module Make (G : sig val global : Global.t end) = struct
       | Aligned (ct, t) ->
          term (eq_ (rem_t_ (t, z_ (Memory.align_of_ctype ct)), int_ 0))
 
+    and option_op it bt = 
+      let sort = sort_of_bt bt in
+      let recognisers = Z3.Datatype.get_recognizers sort in
+      let constructors = Z3.Datatype.get_constructors sort in
+      let accessors = Z3.Datatype.get_accessors sort in
+      match it with
+      | Something it ->
+         Z3.Expr.mk_app context (List.hd constructors) [term it]
+      | Nothing _ ->
+         Z3.Expr.mk_app context (List.hd (List.tl constructors)) []
+      | Is_some it -> 
+         Z3.Expr.mk_app context (List.hd recognisers) [term it]
+      | Value_of_some it -> 
+         Z3.Expr.mk_app context (List.hd (List.hd accessors)) [term it]
     in
 
     term
