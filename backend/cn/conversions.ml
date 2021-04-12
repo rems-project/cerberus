@@ -126,7 +126,7 @@ let struct_decl loc fields (tag : BT.tag) =
     let open RT in
     let open LRT in
     let struct_pointer_s = Sym.fresh_named "p" in
-    let struct_pointer_t = sym_ (Loc, struct_pointer_s) in
+    let struct_pointer_t = sym_ (struct_pointer_s, Loc) in
     let struct_value_s = Sym.fresh_named "v" in
     let clause = 
       let (lrt, values) = 
@@ -136,7 +136,7 @@ let struct_decl loc fields (tag : BT.tag) =
             | Some (member, sct) ->
                let bt = BT.of_sct sct in
                let member_v = Sym.fresh () in
-               let member_t = sym_ (bt, member_v) in
+               let member_t = sym_ (member_v, bt) in
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
                  | Sctypes.Struct tag -> predicate (Tag tag) [member_p] [member_t]
@@ -145,7 +145,7 @@ let struct_decl loc fields (tag : BT.tag) =
                let lrt = 
                  LRT.Logical ((member_v, bt),
                  LRT.Resource (resource, lrt)) in
-               let value = (member, sym_ (bt, member_v)) :: values in
+               let value = (member, sym_ (member_v, bt)) :: values in
                (lrt, value)
             | None ->
                let resource = padding (member_p, size) (q_ (1,1)) in
@@ -171,7 +171,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
 
 
-let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label pointer path sct =
+let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : Sym.t) path sct =
   let open Sctypes in
   let pointee = Sym.fresh () in
   let pointee_bt = BT.of_sct sct in
@@ -185,8 +185,8 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label pointer path 
      fail loc (Generic !^"cannot make owned void* pointer")
   | sct -> 
      let r = 
-       RE.representation layouts sct (sym_ (BT.Loc, pointer))
-         (Some (sym_ (pointee_bt, pointee))) (q_ (1, 1))
+       RE.representation layouts sct (sym_ (pointer, BT.Loc))
+         (Some (sym_ (pointee, pointee_bt))) (q_ (1, 1))
      in
      let c = [good_value pointee sct] in
      return(l, r, c, mapping)
@@ -204,7 +204,7 @@ let make_block loc pointer path sct =
      fail loc (Generic !^"cannot make void* pointer a block")
   | _ -> 
      let r = 
-       block (sym_ (BT.Loc, pointer), Memory.size_of_ctype sct)
+       block (sym_ (pointer, BT.Loc), Memory.size_of_ctype sct)
          (q_ (1, 1)) Nothing
      in
      return ([], [r], [], [])
@@ -230,11 +230,7 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
         return (mapping, l)
       ) def.oargs ([], [])
   in
-  let oargs = 
-    List.map (fun (s, bt) ->
-        sym_ (bt, s)
-      )l
-  in
+  let oargs = List.map sym_ l in
   let r = 
     RE.Predicate {
         name = Id pred; 
@@ -273,14 +269,14 @@ let type_of__vars loc var_typs name derefs =
 
 
 
-let resolve_path loc (mapping : mapping) (o : Path.t) : (BT.t * Sym.t, type_error) m = 
+let resolve_path loc (mapping : mapping) (o : Path.t) : (Sym.t * BT.t, type_error) m = 
   let open Mapping in
   (* let () = print stderr (item "o" (Path.pp o)) in
    * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
   let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
   match found with
   | Some {sym; bt; _} -> 
-     return (bt, sym)
+     return (sym, bt)
   | None -> 
      fail loc (Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
 
@@ -294,8 +290,8 @@ let rec resolve_index_term loc mapping (it: Ast.term)
   | Lit (Integer i) -> 
      return (IT.z_ i)
   | Path o -> 
-     let@ (bt,s) = resolve_path loc mapping o in
-     return (IT.sym_ (bt, s))
+     let@ (s, bt) = resolve_path loc mapping o in
+     return (IT.sym_ (s, bt))
   | ArithOp (Addition (it, it')) -> 
      let@ it = aux it in
      let@ it' = aux it' in
@@ -385,7 +381,7 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
      | Some (bn, derefs) -> 
         let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ (_, sym) = resolve_path loc mapping path in
+        let@ (sym, _) = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
            make_owned loc layouts label sym (Path.var bn) sct2
@@ -400,7 +396,7 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
      | Some (bn, derefs) -> 
         let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ (_, sym) = resolve_path loc mapping path in
+        let@ (sym, _) = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
            make_block loc sym (Path.var bn) sct2

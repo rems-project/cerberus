@@ -43,7 +43,7 @@ module Make (G : sig val global : Global.t end) = struct
     let should_be_in_veclass local veclass it = 
       let bt = IT.bt it in
       if not (LS.equal veclass.sort bt) then false 
-      else S.holds local (IT.eq_ (IT.sym_ (bt,veclass.repr), it))
+      else S.holds local (IT.eq_ (IT.sym_ (veclass.repr, bt), it))
 
     let is_in_veclass veclass sym = 
       SymSet.mem sym veclass.c_elements ||
@@ -53,7 +53,7 @@ module Make (G : sig val global : Global.t end) = struct
       let rec aux = function
         | veclass :: veclasses ->
            if is_in_veclass veclass l ||
-             should_be_in_veclass local veclass (IT.sym_ (bt, l)) 
+             should_be_in_veclass local veclass (IT.sym_ (l, bt)) 
            then (add_l l veclass :: veclasses)
            else (veclass :: aux veclasses)
         | [] -> 
@@ -414,7 +414,7 @@ module Make (G : sig val global : Global.t end) = struct
             match bt with
             | BT.Loc -> 
                Some (Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)),
+                     o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)),
                      None, 
                      None, 
                      None, 
@@ -425,7 +425,7 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      Some (Path.pp c.path), 
-                     o_evaluate o_model (IT.sym_ (bt, c.veclass.repr)))
+                     o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)))
           else
             None)
         veclasses

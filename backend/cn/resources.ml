@@ -353,7 +353,7 @@ let predicate predicate_name iargs oargs =
 let region pointer size permission =
   let open IT in
   let q = Sym.fresh () in
-  let qt = sym_ (BT.Loc, q) in
+  let qt = sym_ (q, BT.Loc) in
   let condition = 
     and_ [
         lePointer_ (pointer, qt);
@@ -387,7 +387,7 @@ let array_is_at_valid_index base element_size pointer =
 let array pointer length element_size content permission =
   let open IT in
   let q = Sym.fresh () in
-  let qt = sym_ (BT.Loc, q) in
+  let qt = sym_ (q, BT.Loc) in
   let qt_int = pointerToIntegerCast_ qt in
   let pointer_int = pointerToIntegerCast_ pointer in
   let it = div_ (sub_ (qt_int, pointer_int), z_ element_size) in
@@ -478,7 +478,7 @@ module External = struct
          E_Iterated {pointer; index; length; element_size; content; permission}
        else if SymSet.mem index (IT.free_vars subst.after) then
          let index' = Sym.fresh () in
-         let first_subst = Subst.{before=index;after=IT.sym_ (BT.Integer, index')} in
+         let first_subst = Subst.{before=index;after=IT.sym_ (index', BT.Integer)} in
          let pointer = 
            IT.subst_it subst (IT.subst_it first_subst pointer) 
          in
@@ -517,7 +517,7 @@ module External = struct
        Point {pointer; size; content; permission}
     | E_Iterated {pointer; index; length; element_size; content; permission} ->
        let qpointer = Sym.fresh () in 
-       let qpointer_t = sym_ (BT.Loc, qpointer) in
+       let qpointer_t = sym_ (qpointer, BT.Loc) in
        let subst = {before = index; 
                     after = array_pointer_to_index pointer (z_ element_size) qpointer_t} in
        let permission = 
@@ -569,7 +569,7 @@ module External = struct
          Debug_ocaml.error "representation: array of unknown length"
       | Array (t, Some n) ->
          let index = Sym.fresh () in 
-         let index_t = sym_ (BT.Integer, index) in
+         let index_t = sym_ (index, BT.Integer) in
          let representation' = 
            aux t pointer 
              (Option.map (fun value ->

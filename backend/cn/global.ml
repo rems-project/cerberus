@@ -30,9 +30,9 @@ let early =
   let open IT in
   let id = "EarlyAlloc" in
   let start_s = Sym.fresh () in
-  let start_t = sym_ (Integer, start_s) in
+  let start_t = sym_ (start_s, Integer) in
   let end_s = Sym.fresh () in
-  let end_t = sym_ (Integer, end_s) in
+  let end_t = sym_ (end_s, Integer) in
   let iargs = [(start_s, BT.Integer); (end_s, BT.Integer)] in
   let oargs = [] in
   let block = 
@@ -63,9 +63,9 @@ let zero_region =
   let open IT in
   let id = "ZeroRegion" in
   let pointer_s = Sym.fresh () in
-  let pointer_t = sym_ (Loc, pointer_s) in
+  let pointer_t = sym_ (pointer_s, Loc) in
   let length_s = Sym.fresh () in
-  let length_t = sym_ (Integer, length_s) in
+  let length_t = sym_ (length_s, Integer) in
   let iargs = [(pointer_s, BT.Loc); (length_s, BT.Integer)] in
   let oargs = [] in
   let array = 

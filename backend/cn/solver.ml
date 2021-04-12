@@ -339,7 +339,7 @@ module Make (G : sig val global : Global.t end) = struct
     try 
       let expr = 
         List.fold_right (fun (sym,bt) expr ->
-            let q = of_index_term (sym_ (bt, sym)) in
+            let q = of_index_term (sym_ (sym, bt)) in
             let q = 
               Z3.Quantifier.mk_forall_const context [q] 
                 expr None [] [] None None 

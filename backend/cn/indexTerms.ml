@@ -888,7 +888,7 @@ let zero_frac = function
 
 
 (* lit *)
-let sym_ (bt, sym) = IT (Lit (Sym sym), bt)
+let sym_ (sym, bt) = IT (Lit (Sym sym), bt)
 let z_ n = IT (Lit (Z n), BT.Integer)
 let q_ (n,n') = IT (Lit (Q (n,n')), BT.Real)
 let pointer_ n = IT (Lit (Pointer n), BT.Loc)
@@ -998,7 +998,7 @@ let value_of_some_ v =
   | _ -> Debug_ocaml.error "illtyped index term"
 
 
-let def_ sym e = eq_ (sym_ (bt e, sym), e)
+let def_ sym e = eq_ (sym_ (sym, bt e), e)
 
 let in_range within (min, max) = 
   and_ [le_ (min, within); le_ (within, max)]
@@ -1026,12 +1026,12 @@ let good_pointer_it pointer_it pointee_sct =
        ]
 
 let good_pointer pointer pointee_sct = 
-  let pointer_it = sym_ (BT.Loc, pointer) in
+  let pointer_it = sym_ (pointer, BT.Loc) in
   good_pointer_it pointer_it pointee_sct
 
 
 let good_value v sct =
-  let v_it = sym_ (BT.of_sct sct, v) in
+  let v_it = sym_ (v, BT.of_sct sct) in
   match sct with
   | Sctype (_, Pointer (qualifiers, pointee_sct)) ->
      good_pointer v pointee_sct
