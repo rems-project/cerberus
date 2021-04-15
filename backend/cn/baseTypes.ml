@@ -16,6 +16,7 @@ type t =
   | Set of t
   | Array of t
   | Option of t
+  | Param of t list * t
 
 let is_struct = function
   | Struct tag -> Some tag
@@ -34,6 +35,8 @@ let rec equal t t' =
   | Set t, Set t' -> equal t t'
   | Array t, Array t' -> equal t t'
   | Option t, Option t' -> equal t t'
+  | Param (ts,t), Param (ts',t') -> 
+     List.equal equal ts ts' && equal t t'
 
   | Unit, _
   | Bool, _
@@ -45,7 +48,9 @@ let rec equal t t' =
   | Struct _, _
   | Set _, _
   | Array _, _
-  | Option _, _ ->
+  | Option _, _ 
+  | Param _, _
+    ->
      false
 
 
@@ -63,6 +68,7 @@ let rec pp bt =
   | Set t -> !^"set" ^^ angles (pp t)
   | Array t -> pp t ^^ brackets empty
   | Option t -> !^"option" ^^ angles (pp t)
+  | Param (ts,t) -> !^"param" ^^ angles (separate comma (List.map pp ts)) ^^ angles (pp t)
 
 
 
@@ -94,3 +100,4 @@ let hash = function
   | Set _ -> 8
   | Array _ -> 9
   | Option _ -> 10
+  | Param _ -> 11

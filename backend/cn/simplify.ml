@@ -79,6 +79,7 @@ let simp (lcs : t list) term =
     | Array_op it -> IT (Array_op it, bt)
     | CT_pred it -> IT (CT_pred it, bt)
     | Option_op it -> option_op it bt
+    | Param_op it -> param_op it bt
 
   and lit it bt = 
     match it with
@@ -342,6 +343,24 @@ let simp (lcs : t list) term =
     | Nothing bt' -> IT (Option_op (Nothing bt'), bt)
     | Is_some it -> IT (Option_op (Is_some (aux it)), bt)
     | Value_of_some it -> IT (Option_op (Value_of_some (aux it)), bt)
+
+  and param_op it bt = 
+    match it with
+    | Param (args, it) ->
+       IT (Param_op (Param (args, aux it)), bt)
+    | App (it, args) ->
+       let it = aux it in
+       let args = List.map aux args in
+       match it with
+       | IT (Param_op (Param (t_args, body)), _) ->
+          let substs =
+            List.map2 (fun (s, _) t ->
+                Subst.{before = s; after = t}
+              ) t_args args 
+          in
+          aux (IT.subst_its substs body)
+       | _ ->
+          IT (Param_op (App (it, args)), bt)
   in
 
 

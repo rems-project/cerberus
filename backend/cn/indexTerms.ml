@@ -94,6 +94,10 @@ and 'bt option_op =
   | Is_some of 'bt term
   | Value_of_some of 'bt term
 
+and 'bt param_op = 
+  | Param of (Sym.t * BT.t) list * 'bt term
+  | App of 'bt term * ('bt term list)
+
 and 'bt term_ =
   | Lit of lit
   | Arith_op of 'bt arith_op
@@ -107,6 +111,7 @@ and 'bt term_ =
   | Array_op of 'bt array_op
   | CT_pred of 'bt ct_pred
   | Option_op of 'bt option_op
+  | Param_op of 'bt param_op
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -340,6 +345,17 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Value_of_some _, _ ->false
   in
 
+  let param_op it it' = 
+    match it, it' with
+    | Param (args,t), Param (args',t') -> 
+       List.equal (fun (s,bt) (s',bt') -> Sym.equal s s' && BT.equal bt bt') args args' &&
+         equal t t'
+    | App (t, args), App (t', args') ->
+       equal t t' && List.equal equal args args'
+    | Param _, _ -> false
+    | App _, _ -> false
+  in
+
   match it, it' with
   | Lit it, Lit it' -> lit it it'
   | Arith_op it, Arith_op it' -> arith_op it it'
@@ -353,6 +369,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Array_op it, Array_op it' -> array_op it it'
   | CT_pred it, CT_pred it' -> ct_pred it it'
   | Option_op it, Option_op it' -> option_op it it'
+  | Param_op it, Param_op it' -> param_op it it'
   | Lit _, _ -> false
   | Arith_op _, _ -> false
   | Bool_op _, _ -> false
@@ -365,6 +382,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Array_op _, _ -> false
   | CT_pred _, _ -> false
   | Option_op _, _ -> false
+  | Param_op _, _ -> false
 
 
 
@@ -528,6 +546,17 @@ let pp (it : 'bt term) : PPrint.document =
          c_app !^"value_of_some" [aux false it]
     in
 
+    let param_op = function
+      | Param (args, t) -> 
+         !^"\\" ^^^ 
+           separate_map comma (fun (s, bt) -> 
+               typ (Sym.pp s) (BT.pp bt)
+             ) args ^^ dot ^^^
+           aux false t
+      | App (t, args) ->
+         aux true t ^^^ parens (separate_map comma (aux false) args)
+    in
+
     match it with
     | Lit it -> lit it
     | Arith_op it -> arith_op it
@@ -541,6 +570,7 @@ let pp (it : 'bt term) : PPrint.document =
     | Set_op it -> set_op it
     | Array_op it -> array_op it
     | Option_op it -> option_op it
+    | Param_op it -> param_op it
 
   in
 
@@ -645,6 +675,11 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Value_of_some it -> free_vars it
   in
 
+  let param_op = function
+    | Param (args, t) -> SymSet.diff (free_vars t) (SymSet.of_list (List.map fst args))
+    | App (t, args) -> free_vars_list (t :: args)
+  in
+
   fun (IT (it, _)) ->
   match it with
   | Lit it -> lit it
@@ -659,6 +694,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | Set_op it -> set_op it
   | Array_op it -> array_op it
   | Option_op it -> option_op it
+  | Param_op it -> param_op it
 
 
 and free_vars_list l = 
@@ -817,6 +853,10 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
       IT (Option_op it, bt)
     in
 
+    let param_op it bt =
+      failwith "asd"
+    in
+
 
     fun (IT (it, bt)) ->
     match it with
@@ -832,6 +872,7 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
     | Set_op it -> set_op it bt
     | Array_op it -> array_op it bt
     | Option_op it -> option_op it bt
+    | Param_op it -> param_op it bt
 
   in
 
@@ -882,6 +923,7 @@ let is_sym = function
 let zero_frac = function
   | IT (Lit (Q (i,j)), _) when i = 0 -> true
   | _ -> false
+
 
 
 (* shorthands *)
@@ -1058,16 +1100,18 @@ let hash (IT (it, _bt)) =
   | Set_op it -> 9
   | Array_op it -> 10
   | Option_op it -> 11
+  | Param_op it -> 12
   | Lit lit ->
      begin match lit with
-     | Z z -> 12
-     | Q (i, j) -> 13
-     | Pointer p -> 14
-     | Bool b -> 15
-     | Unit -> 16
-     | Default bt -> 17
+     | Z z -> 20
+     | Q (i, j) -> 21
+     | Pointer p -> 22
+     | Bool b -> 23
+     | Unit -> 24
+     | Default bt -> 25
      | Sym (Symbol (_,i, _)) -> 100 + i
      end
+
 
 
 

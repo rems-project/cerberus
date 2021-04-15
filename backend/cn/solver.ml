@@ -82,7 +82,10 @@ module Make (G : sig val global : Global.t end) = struct
              recognizer [] [] []
          in
          Z3.Datatype.mk_sort_s context (bt_name (BT.Option bt)) [some_c; none_c]
+      | Param _ ->
+         Debug_ocaml.error "SMT solver applied to parameterised term"
     in    
+
     fun bt ->
     match BTtbl.find_opt tbl bt with
     | Some sort -> sort
@@ -115,6 +118,7 @@ module Make (G : sig val global : Global.t end) = struct
            | Array_op t -> array_op t bt
            | CT_pred t -> ct_pred t bt
            | Option_op t -> option_op t bt
+           | Param_op t -> param_op t bt
          in
          let () = ITtbl.add tbl it sc in
          sc
@@ -300,6 +304,21 @@ module Make (G : sig val global : Global.t end) = struct
          Z3.Expr.mk_app context (List.hd recognisers) [term it]
       | Value_of_some it -> 
          Z3.Expr.mk_app context (List.hd (List.hd accessors)) [term it]
+
+    and param_op it bt = 
+      match it with
+      | Param _ ->
+         Debug_ocaml.error "SMT solver applied to parameterised expression"
+      | App (IT (Param_op (Param (t_args, body)),_), args) ->
+          let substs =
+            List.map2 (fun (s, _) t ->
+                Subst.{before = s; after = t}
+              ) t_args args 
+          in
+          term (IT.subst_its substs body)
+      | App _ ->
+         Debug_ocaml.error "SMT solver applied to application of non-param expression"
+
     in
 
     term

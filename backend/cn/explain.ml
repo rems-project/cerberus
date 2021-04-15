@@ -102,6 +102,7 @@ module Make (G : sig val global : Global.t end) = struct
         | Set _ -> ("set", faa set_counter)
         | Array _ -> ("array", faa array_counter)
         | Option _ -> ("option", faa option_counter)
+        | Param _ -> ("a", faa array_counter)
         end
 
     let compare veclass1 veclass2 = 
