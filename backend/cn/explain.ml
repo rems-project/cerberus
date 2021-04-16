@@ -85,8 +85,9 @@ module Make (G : sig val global : Global.t end) = struct
       let tuple_counter = ref 0 in
       let struct_counter = ref 0 in
       let set_counter = ref 0 in
-      let array_counter = ref 0 in
+      (* let array_counter = ref 0 in *)
       let option_counter = ref 0 in
+      let param_counter = ref 0 in
       fun veclass ->
       let bt = veclass.sort in
       sym_prefixed_int
@@ -100,9 +101,9 @@ module Make (G : sig val global : Global.t end) = struct
         | Tuple _ ->  ("t", faa tuple_counter)
         | Struct _ -> ("s", faa struct_counter)
         | Set _ -> ("set", faa set_counter)
-        | Array _ -> ("array", faa array_counter)
+        (* | Array _ -> ("array", faa array_counter) *)
         | Option _ -> ("option", faa option_counter)
-        | Param _ -> ("a", faa array_counter)
+        | Param _ -> ("p", faa param_counter)
         end
 
     let compare veclass1 veclass2 = 
@@ -319,19 +320,22 @@ module Make (G : sig val global : Global.t end) = struct
   let o_evaluate o_model expr = 
     let open Option in
     let@ model = o_model in
-    match Z3.Model.evaluate model (S.of_index_term expr) true with
-    | None -> Debug_ocaml.error "failure constructing counter model"
-    | Some evaluated_expr -> 
-       match IT.bt expr with
-       | BT.Integer -> 
-          return (Pp.string (Z3.Expr.to_string evaluated_expr))
-       | BT.Real -> 
-          return (Pp.string (Z3.Expr.to_string evaluated_expr))
-       | BT.Loc ->
-          Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
-       | BT.Unit ->
-          Some (BT.pp BT.Unit)
-       | _ -> None
+    match IT.bt expr with
+    | Param _ -> None
+    | _ ->
+      match Z3.Model.evaluate model (S.of_index_term expr) true with
+      | None -> Debug_ocaml.error "failure constructing counter model"
+      | Some evaluated_expr -> 
+         match IT.bt expr with
+         | BT.Integer -> 
+            return (Pp.string (Z3.Expr.to_string evaluated_expr))
+         | BT.Real -> 
+            return (Pp.string (Z3.Expr.to_string evaluated_expr))
+         | BT.Loc ->
+            Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
+         | BT.Unit ->
+            Some (BT.pp BT.Unit)
+         | _ -> None
 
 
   let symbol_it = function

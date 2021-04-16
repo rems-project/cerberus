@@ -12,7 +12,7 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let simp (lcs : t list) term = 
+let rec simp (lcs : t list) term = 
 
   let values = 
     List.fold_right (fun (IT (it, bt)) values ->
@@ -76,7 +76,7 @@ let simp (lcs : t list) term =
     | Pointer_op it -> pointer_op it bt
     | List_op it -> IT (List_op it, bt)
     | Set_op it -> IT (Set_op it, bt)
-    | Array_op it -> IT (Array_op it, bt)
+    (* | Array_op it -> IT (Array_op it, bt) *)
     | CT_pred it -> IT (CT_pred it, bt)
     | Option_op it -> option_op it bt
     | Param_op it -> param_op it bt
@@ -148,6 +148,8 @@ let simp (lcs : t list) term =
        let a = aux a in
        let b = aux b in 
        begin match a, b with
+       | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
+          int_ 0
        | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
           a
        | _ ->
@@ -159,6 +161,8 @@ let simp (lcs : t list) term =
        let a = aux a in
        let b = aux b in 
        begin match a, b with
+       | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
+          int_ 0
        | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
           IT (Lit (Z Z.zero), bt)
        | _ ->
@@ -168,6 +172,8 @@ let simp (lcs : t list) term =
        let a = aux a in
        let b = aux b in 
        begin match a, b with
+       | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
+          int_ 0
        | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
           IT (Lit (Z Z.zero), bt)
        | _ ->
@@ -215,8 +221,8 @@ let simp (lcs : t list) term =
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = aux b in
-       let c = aux c in
+       let b = simp (a :: lcs) b in
+       let c = simp (not_ a :: lcs) c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -226,22 +232,28 @@ let simp (lcs : t list) term =
     | EQ (a, b) ->
        let a = aux a in
        let b = aux b in
-       match a, b with
+       begin match a, b with
        | _ when equal a b ->
          IT (Lit (Bool true), bt) 
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
           bool_ (Z.equal i1 i2)
-       | IT (Pointer_op (AddPointer (b1,o1)), _), 
-         IT (Pointer_op (AddPointer (b2,o2)), _) 
-            when equal b1 b2 ->
-          aux (eq_ (o1, o2))
        | IT (Lit (Sym s), _), IT (Lit (Sym s'), _) ->
           begin match SymPairMap.find_opt (s,s') equalities with
           | Some bool -> bool_ bool
           | _ -> eq_ (a, b)
           end
+       | IT (Pointer_op (AddPointer (b1,o1)), _), 
+         IT (Pointer_op (AddPointer (b2,o2)), _) 
+            when equal b1 b2 ->
+          aux (eq_ (o1, o2))
        | _, _ ->
           eq_ (a, b)
+       end
+    | Forall ((s, bt), it) -> 
+       let s' = Sym.fresh () in 
+       let it = aux (IT.subst_var {before=s; after=s'} it) in
+       IT (Bool_op (Forall ((s', bt), it)), bt)
+
         
 
   and cmp_op it bt = 
@@ -362,6 +374,5 @@ let simp (lcs : t list) term =
        | _ ->
           IT (Param_op (App (it, args)), bt)
   in
-
 
   aux term

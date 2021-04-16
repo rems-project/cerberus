@@ -135,6 +135,10 @@ module Make (G : sig val global : Global.t end) = struct
              let@ (ls,t) = infer loc local t in
              let@ t' = check loc local ls t' in
              return (BT.Bool, EQ (t,t')) 
+          | Forall ((s,bt), it) ->
+             let local = L.add_l s bt local in
+             let@ it = check loc local Bool it in
+             return (BT.Bool, Forall ((s, bt), it))
         in
 
         let tuple_op local = function
@@ -294,27 +298,31 @@ module Make (G : sig val global : Global.t end) = struct
              return (BT.Bool, Subset (t,t'))
         in
 
-        let array_op local = function
-          | ConstArray it ->
-             let@ (bt, it) = infer loc local it in
-             let mbt = BT.Array bt in
-             return (mbt, ConstArray it)
-          | ArrayGet (it,it') ->
-             let@ (bt, it) = infer_array_type loc local it in
-             let@ it' = check loc local Integer it' in
-             return (bt, ArrayGet (it, it'))
-          | ArraySet (it,it',it'') ->
-             let@ (bt, it) = infer_array_type loc local it in
-             let@ it' = check loc local Integer it' in
-             let@ it'' = check loc local bt it'' in
-             return (Array bt, ArraySet (it, it', it''))
-          | ArrayEqualOnRange (it,it',it'',it''') ->
-             let@ (bt, it) = infer_array_type loc local it in
-             let@ it' = check loc local (Array bt) it' in
-             let@ it'' = check loc local Integer it'' in
-             let@ it''' = check loc local Integer it''' in
-             return (BT.Bool, ArrayEqualOnRange (it, it', it'', it'''))
-        in
+        (* let array_op local = function
+         *   | ConstArray it ->
+         *      let@ (bt, it) = infer loc local it in
+         *      let mbt = BT.Array bt in
+         *      return (mbt, ConstArray it)
+         *   | ArrayGet (it,it') ->
+         *      let@ (bt, it) = infer_array_type loc local it in
+         *      let@ it' = check loc local Integer it' in
+         *      return (bt, ArrayGet (it, it'))
+         *   | ArraySet (it,it',it'') ->
+         *      let@ (bt, it) = infer_array_type loc local it in
+         *      let@ it' = check loc local Integer it' in
+         *      let@ it'' = check loc local bt it'' in
+         *      return (Array bt, ArraySet (it, it', it''))
+         *   | ArrayEqualOnRange (it,it',it'',it''') ->
+         *      let@ (bt, it) = infer_array_type loc local it in
+         *      let@ it' = check loc local (Array bt) it' in
+         *      let@ it'' = check loc local Integer it'' in
+         *      let@ it''' = check loc local Integer it''' in
+         *      return (BT.Bool, ArrayEqualOnRange (it, it', it'', it'''))
+         *   | ArrayDef (s, it) -> 
+         *      let local = L.add_l s BT.Integer local in
+         *      let@ (bt, it) = infer loc local it in
+         *      return (BT.Array bt, ArrayDef (s, it))
+         * in *)
 
         let option_op local = function
           | Something it ->
@@ -357,7 +365,7 @@ module Make (G : sig val global : Global.t end) = struct
                 let (context, it) = Explain.index_terms names local (context, it) in
                 let err = 
                   !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                    !^"Expected" ^^^ it ^^^ !^"to have parametereised type" ^^^ 
+                    !^"Expected" ^^^ it ^^^ !^"to have parameterised type" ^^^ 
                       !^"but has type" ^^^ BT.pp bt
                 in
                 fail loc (Generic err)
@@ -396,9 +404,9 @@ module Make (G : sig val global : Global.t end) = struct
         | Set_op it ->
            let@ (bt, it) = set_op local it in
            return (bt, IT (Set_op it, bt))
-        | Array_op it ->
-           let@ (bt, array_op) = array_op local it in
-           return (bt, IT (Array_op array_op, bt))
+        (* | Array_op it ->
+         *    let@ (bt, array_op) = array_op local it in
+         *    return (bt, IT (Array_op array_op, bt)) *)
         | Option_op it ->
            let@ (bt, option_op) = option_op local it in
            return (bt, IT (Option_op option_op, bt))
@@ -458,7 +466,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       and infer_set_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
-        let@ (ls, t) = infer loc local it in
+        let@ (ls, it) = infer loc local it in
         let@ bt = match ls with
           | Set bt -> return bt
           | _ -> 
@@ -470,23 +478,23 @@ module Make (G : sig val global : Global.t end) = struct
              in
              fail loc (Generic err)
         in
-        return (bt, t)
-
-      and infer_array_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
-        fun loc local it ->
-        let@ (ls, it) = infer loc local it in
-        let@ bt = match ls with
-          | Array bt -> return bt
-          | _ -> 
-             let (context, it) = Explain.index_terms names local (context, it) in
-             let err = 
-               !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                 !^"Expected" ^^^ it ^^^ !^"to have integer map type" ^^ comma ^^^
-                   !^"but has type" ^^^ LS.pp ls
-             in
-             fail loc (Generic err)
-        in
         return (bt, it)
+
+      (* and infer_array_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
+       *   fun loc local it ->
+       *   let@ (ls, it) = infer loc local it in
+       *   let@ bt = match ls with
+       *     | Array bt -> return bt
+       *     | _ -> 
+       *        let (context, it) = Explain.index_terms names local (context, it) in
+       *        let err = 
+       *          !^"Illtyped index term" ^^^ context ^^ dot ^^^
+       *            !^"Expected" ^^^ it ^^^ !^"to have integer map type" ^^ comma ^^^
+       *              !^"but has type" ^^^ LS.pp ls
+       *        in
+       *        fail loc (Generic err)
+       *   in
+       *   return (bt, it) *)
 
       and infer_option_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
@@ -609,12 +617,12 @@ module Make (G : sig val global : Global.t end) = struct
            SymSet.diff (IT.free_vars output) 
              (SymSet.union determined bound) 
          in
-         match SymSet.is_empty undetermined, IT.is_sym output with
+         match SymSet.is_empty undetermined, IT.unifiable output with
          (* if the logical variables in tht outputs are already determined, ok *)
          | true, _ -> return fixed
          (* if the output is an (unresolved) logical variable, then it can be
             resolved by unification *)       
-         | false, Some (sym, _) -> return (SymSet.add sym fixed)
+         | false, Some sym -> return (SymSet.add sym fixed)
          (* otherwise, fail *)
          | false, _ ->
             let bad = List.hd (SymSet.elements undetermined) in

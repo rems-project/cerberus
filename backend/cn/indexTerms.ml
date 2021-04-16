@@ -41,6 +41,7 @@ and 'bt bool_op =
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EQ of 'bt term * 'bt term
+  | Forall of (Sym.t * BT.t) * 'bt term
 
 and 'bt tuple_op = 
   | Tuple of 'bt term list
@@ -75,11 +76,12 @@ and 'bt set_op =
   | SetDifference of 'bt term * 'bt term
   | Subset of 'bt term * 'bt term
 
-and 'bt array_op = 
-  | ConstArray of 'bt term
-  | ArrayGet of 'bt term * 'bt term
-  | ArraySet of 'bt term * 'bt term * 'bt term
-  | ArrayEqualOnRange of 'bt term * 'bt term * 'bt term * 'bt term
+(* and 'bt array_op = 
+ *   | ConstArray of 'bt term
+ *   | ArrayGet of 'bt term * 'bt term
+ *   | ArraySet of 'bt term * 'bt term * 'bt term
+ *   | ArrayEqualOnRange of 'bt term * 'bt term * 'bt term * 'bt term
+ *   | ArrayDef of Sym.t * 'bt term *)
 
 and 'bt ct_pred = 
   (* | MinInteger of CF.Ctype.integerType
@@ -108,7 +110,7 @@ and 'bt term_ =
   | Pointer_op of 'bt pointer_op
   | List_op of 'bt list_op
   | Set_op of 'bt set_op
-  | Array_op of 'bt array_op
+  (* | Array_op of 'bt array_op *)
   | CT_pred of 'bt ct_pred
   | Option_op of 'bt option_op
   | Param_op of 'bt param_op
@@ -192,6 +194,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t1 t1' && equal t2 t2' && equal t3 t3'
     | EQ (t1,t2), EQ (t1',t2') -> 
        equal t1 t1' && equal t2 t2' 
+    | Forall ((s,bt), it), Forall ((s',bt'), it') ->
+      Sym.equal s s' && BT.equal bt bt' && equal it it'
     | And _, _ -> 
        false
     | Or _, _ -> 
@@ -203,6 +207,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | ITE _, _ ->
        false
     | EQ _, _ -> 
+       false
+    | Forall _, _ ->
        false
   in
 
@@ -298,21 +304,24 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Subset _, _ -> false
   in
 
-  let array_op it it' =
-    match it, it' with
-    | ConstArray t, ConstArray t' ->
-       equal t t'
-    | ArrayGet (t1,t2), ArrayGet (t1',t2') ->
-       equal t1 t1' && equal t2 t2'
-    | ArraySet (t1,t2,t3), ArraySet (t1',t2',t3') ->
-       equal t1 t1' && equal t2 t2' && equal t3 t3'
-    | ArrayEqualOnRange (t1,t2,t3,t4), ArrayEqualOnRange (t1',t2',t3',t4') ->
-       equal t1 t1' && equal t2 t2' && equal t3 t3' && equal t4 t4'
-    | ConstArray _, _ -> false
-    | ArrayGet _, _ -> false
-    | ArraySet _, _ -> false
-    | ArrayEqualOnRange _, _ -> false
-  in
+  (* let array_op it it' =
+   *   match it, it' with
+   *   | ConstArray t, ConstArray t' ->
+   *      equal t t'
+   *   | ArrayGet (t1,t2), ArrayGet (t1',t2') ->
+   *      equal t1 t1' && equal t2 t2'
+   *   | ArraySet (t1,t2,t3), ArraySet (t1',t2',t3') ->
+   *      equal t1 t1' && equal t2 t2' && equal t3 t3'
+   *   | ArrayEqualOnRange (t1,t2,t3,t4), ArrayEqualOnRange (t1',t2',t3',t4') ->
+   *      equal t1 t1' && equal t2 t2' && equal t3 t3' && equal t4 t4'
+   *   | ArrayDef (s,t), ArrayDef (s',t') -> 
+   *      Sym.equal s s' && equal t t'
+   *   | ConstArray _, _ -> false
+   *   | ArrayGet _, _ -> false
+   *   | ArraySet _, _ -> false
+   *   | ArrayEqualOnRange _, _ -> false
+   *   | ArrayDef _, _ -> false
+   * in *)
 
   let ct_pred it it' = 
     match it, it' with
@@ -366,7 +375,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Pointer_op it, Pointer_op it' -> pointer_op it it'
   | List_op it, List_op it' -> list_op it it'
   | Set_op it, Set_op it' -> set_op it it'
-  | Array_op it, Array_op it' -> array_op it it'
+  (* | Array_op it, Array_op it' -> array_op it it' *)
   | CT_pred it, CT_pred it' -> ct_pred it it'
   | Option_op it, Option_op it' -> option_op it it'
   | Param_op it, Param_op it' -> param_op it it'
@@ -379,7 +388,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Pointer_op _, _ -> false
   | List_op _, _ -> false
   | Set_op _, _ -> false
-  | Array_op _, _ -> false
+  (* | Array_op _, _ -> false *)
   | CT_pred _, _ -> false
   | Option_op _, _ -> false
   | Param_op _, _ -> false
@@ -446,6 +455,8 @@ let pp (it : 'bt term) : PPrint.document =
          mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
       | EQ (o1,o2) -> 
          mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
+      | Forall ((s, bt), it) ->
+         c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ aux atomic it
     in
 
     let tuple_op = function
@@ -524,16 +535,18 @@ let pp (it : 'bt term) : PPrint.document =
          c_app !^"subset" [aux false t1; aux false t2]
     in
 
-    let array_op = function    
-      | ConstArray t ->
-         c_app !^"all" [aux false t]
-      | ArrayGet (t1,t2) ->
-         aux true t1 ^^ lbracket ^^ aux false t2 ^^ rbracket
-      | ArraySet (t1,t2,t3) ->
-         aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
-      | ArrayEqualOnRange (t1,t2,t3,t4) ->
-         c_app !^"equalOnRange" [aux false t1; aux false t2; aux false t3; aux false t4]
-    in
+    (* let array_op = function    
+     *   | ConstArray t ->
+     *      c_app !^"all" [aux false t]
+     *   | ArrayGet (t1,t2) ->
+     *      aux true t1 ^^ lbracket ^^ aux false t2 ^^ rbracket
+     *   | ArraySet (t1,t2,t3) ->
+     *      aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
+     *   | ArrayEqualOnRange (t1,t2,t3,t4) ->
+     *      c_app !^"equalOnRange" [aux false t1; aux false t2; aux false t3; aux false t4]
+     *   | ArrayDef (s, t) ->
+     *      braces (Sym.pp s ^^ dot ^^^ aux false t)
+     * in *)
 
     let option_op = function
       | Something it -> 
@@ -554,7 +567,7 @@ let pp (it : 'bt term) : PPrint.document =
              ) args ^^ dot ^^^
            aux false t
       | App (t, args) ->
-         aux true t ^^^ parens (separate_map comma (aux false) args)
+         c_app (aux true t) (List.map (aux false) args)
     in
 
     match it with
@@ -568,7 +581,7 @@ let pp (it : 'bt term) : PPrint.document =
     | CT_pred it -> ct_pred it
     | List_op it -> list_op it
     | Set_op it -> set_op it
-    | Array_op it -> array_op it
+    (* | Array_op it -> array_op it *)
     | Option_op it -> option_op it
     | Param_op it -> param_op it
 
@@ -613,6 +626,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Not it -> free_vars it
     | ITE (it,it',it'') -> free_vars_list [it;it';it'']
     | EQ (it, it') -> free_vars_list [it; it']
+    | Forall ((s,_), it) -> SymSet.remove s (free_vars it)
   in
 
   let tuple_op : 'bt tuple_op -> SymSet.t = function
@@ -661,12 +675,13 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Subset (t1, t2) -> free_vars_list [t1;t2]
   in
 
-  let array_op : 'bt array_op -> SymSet.t = function
-    | ConstArray t -> free_vars t
-    | ArrayGet (t1,t2) -> free_vars_list [t1;t2]
-    | ArraySet (t1,t2,t3) -> free_vars_list [t1;t2;t3]
-    | ArrayEqualOnRange (t1,t2,t3,t4) -> free_vars_list [t1;t2;t3; t4]
-  in
+  (* let array_op : 'bt array_op -> SymSet.t = function
+   *   | ConstArray t -> free_vars t
+   *   | ArrayGet (t1,t2) -> free_vars_list [t1;t2]
+   *   | ArraySet (t1,t2,t3) -> free_vars_list [t1;t2;t3]
+   *   | ArrayEqualOnRange (t1,t2,t3,t4) -> free_vars_list [t1;t2;t3; t4]
+   *   | ArrayDef (s, t) -> SymSet.remove s (free_vars t)
+   * in *)
   
   let option_op = function
     | Something it -> free_vars it
@@ -692,7 +707,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | CT_pred it -> ct_pred it
   | List_op it -> list_op it
   | Set_op it -> set_op it
-  | Array_op it -> array_op it
+  (* | Array_op it -> array_op it *)
   | Option_op it -> option_op it
   | Param_op it -> param_op it
 
@@ -707,13 +722,14 @@ let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 
 
-let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
+let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
 
   let rec aux = 
 
     let lit it bt = 
       match it with
-      | Sym symbol -> f symbol bt
+      | Sym symbol when Sym.equal symbol substitution.before ->
+         substitution.after bt
       | it -> IT (Lit it, bt)
     in
 
@@ -748,6 +764,16 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
         | Not it -> Not (aux it)
         | ITE (it,it',it'') -> ITE (aux it, aux it', aux it'')
         | EQ (it, it') -> EQ (aux it, aux it')
+        | Forall ((s, bt), it) ->
+           let s' = Sym.fresh () in 
+           let substitution =
+             {before = s; 
+              after = 
+                fun bt -> 
+                IT (Lit (Sym s'), bt)}
+           in
+           let it = subst substitution it in
+           Forall ((s', bt), aux it)
       in
       IT (Bool_op it, bt)
     in
@@ -829,19 +855,29 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
       IT (Set_op it, bt)
     in
 
-    let array_op it bt = 
-      let it = match it with
-        | ConstArray t ->
-           ConstArray (aux t)
-        | ArrayGet (t1, t2) ->
-           ArrayGet (aux t1, aux t2)
-        | ArraySet (t1, t2, t3) ->
-           ArraySet (aux t1, aux t2, aux t3)
-        | ArrayEqualOnRange (t1, t2, t3, t4) ->
-           ArrayEqualOnRange (aux t1, aux t2, aux t3, aux t4)
-      in
-      IT (Array_op it, bt)
-    in
+    (* let array_op it bt = 
+     *   let it = match it with
+     *     | ConstArray t ->
+     *        ConstArray (aux t)
+     *     | ArrayGet (t1, t2) ->
+     *        ArrayGet (aux t1, aux t2)
+     *     | ArraySet (t1, t2, t3) ->
+     *        ArraySet (aux t1, aux t2, aux t3)
+     *     | ArrayEqualOnRange (t1, t2, t3, t4) ->
+     *        ArrayEqualOnRange (aux t1, aux t2, aux t3, aux t4)
+     *     | ArrayDef (s, t) ->
+     *        let s' = Sym.fresh () in 
+     *        let substitution =
+     *          {before = s; 
+     *           after = 
+     *             fun _ -> 
+     *             IT (Lit (Sym s'), BT.Integer)}
+     *        in
+     *        let t = subst substitution t in
+     *        ArrayDef (s', aux t)
+     *   in
+     *   IT (Array_op it, bt)
+     * in *)
 
     let option_op it bt = 
       let it = match it with
@@ -854,7 +890,26 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
     in
 
     let param_op it bt =
-      failwith "asd"
+      let it = match it with
+        | App (it, args) ->
+           App (aux it, List.map aux args)
+        | Param (args, body) ->
+           let (args, body) = 
+             List.fold_right (fun (sym,bt) (args, body) ->
+                 let sym' = Sym.fresh () in 
+                 let substitution =
+                   {before = sym; 
+                    after = 
+                      fun bt -> 
+                      IT (Lit (Sym sym'), bt)}
+                 in
+                 let body = subst substitution body in
+                 ((sym,bt) :: args, body)
+               ) args ([], body)
+           in
+           Param (args, aux body)
+      in
+      IT (Param_op it, bt)
     in
 
 
@@ -870,47 +925,74 @@ let map_sym (type bt) (f : Sym.t -> bt -> bt term) =
     | CT_pred it -> ct_pred it bt
     | List_op it -> list_op it bt
     | Set_op it -> set_op it bt
-    | Array_op it -> array_op it bt
+    (* | Array_op it -> array_op it bt *)
     | Option_op it -> option_op it bt
     | Param_op it -> param_op it bt
-
   in
 
   fun it -> aux it
 
 
-let subst_var (subst : (Sym.t, Sym.t) Subst.t) it =
-  map_sym (fun s bt ->
-      IT (Lit (Sym (Sym.subst subst s)), bt)
-    ) it
+let subst_var (substitution : (Sym.t, Sym.t) Subst.t) it =
+  let substitution = 
+    {before = substitution.before;
+     after = 
+       fun bt ->
+       IT (Lit (Sym (substitution.after)), bt)}
+  in
+  subst substitution it
+
+
+let subst_it (substitution : (Sym.t, 'bt term) Subst.t) it =
+  let substitution = 
+    {before = substitution.before;
+     after = fun bt -> substitution.after}
+  in
+  subst substitution it
+
 
 let subst_vars it = make_substs subst_var it
-
-
-let subst_it (subst : (Sym.t, 'bt term) Subst.t) it =
-  map_sym (fun s bt ->
-      if Sym.equal s subst.before 
-      then subst.after
-      else IT (Lit (Sym s), bt)
-    ) it
 
 let subst_its it = make_substs subst_it it
 
 
-let unify it it' res = 
+let rec unify it it' res = 
   let equal_it = equal in
   let open Option in
   let open Uni in
   if equal_it it it' then return res else
-    match it with
-    | IT (Lit (Sym s), _) ->
+    match it, it' with
+    | IT (Lit (Sym s), _), _ ->
        let@ uni = SymMap.find_opt s res in
        begin match uni.resolved with
        | Some it_res when equal_it it_res it' -> return res 
        | Some s -> fail
        | None -> return (SymMap.add s {resolved = Some it'} res)
        end
+    | IT (Param_op (App (f_it, args)), _), 
+      IT (Param_op (App (f_it', args')), _) ->
+       let@ res = unify f_it f_it' res in
+       unify_list args args' res
+    (* | IT (Param_op (App (f_it, args)), _), 
+     *   IT (Param_op (App (f_it', args')), _) ->
+     *    let@ res = unify f_it f_it' res in
+     *    unify_list args args' res *)
     | _ -> fail
+
+and unify_list its its' res = 
+  let open Option in
+  match its, its' with
+  | [], [] -> return res
+  | it :: its, it' :: its' -> 
+     let@ res = unify it it' res in
+     unify_list its its res 
+  | _, _ -> fail
+
+
+let rec unifiable = function
+  | IT (Lit (Sym s), _) -> Some s
+  | IT (Param_op (App (it, args)), _) -> unifiable it
+  | _ -> None
 
 
 
@@ -954,6 +1036,7 @@ let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
+let forall_ (s,bt) it = IT (Bool_op (Forall ((s, bt), it)), BT.Bool)
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
@@ -1004,15 +1087,22 @@ let setIntersection_ its = IT (Set_op (SetIntersection its), bt (List1.head its)
 let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
 let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
-(* array_op *)
-let constArray_ it = 
-  IT (Array_op (ConstArray it), bt it)
-let arrayGet_ ~item_bt (it, it') = 
-  IT (Array_op (ArrayGet (it, it')), item_bt)
-let arraySet_ (it, it', it'') = 
-  IT (Array_op (ArraySet (it, it', it'')), BT.Array (bt it''))
-let arrayEqualOnRange_ (it, it', it'', it''') = 
-  IT (Array_op (ArrayEqualOnRange (it, it', it'', it''')), BT.Bool)
+(* (\* array_op *\)
+ * let constArray_ it = 
+ *   IT (Array_op (ConstArray it), bt it)
+ * let arrayGet_ (it, it') = 
+ *   match bt it with
+ *   | Array item_bt -> 
+ *      IT (Array_op (ArrayGet (it, it')), item_bt)
+ *   | _ -> Debug_ocaml.error "illtyped index term"
+ * let arraySet_ (it, it', it'') = 
+ *   IT (Array_op (ArraySet (it, it', it'')), BT.Array (bt it''))
+ * let arrayEqualOnRange_ (it, it', it'', it''') = 
+ *   IT (Array_op (ArrayEqualOnRange (it, it', it'', it''')), BT.Bool)
+ * let arrayDef_ s v = 
+ *   IT (Array_op (ArrayDef (s, v)), BT.Array (bt v)) *)
+
+
 
 (* ct_pred *)
 let minInteger_ t = 
@@ -1037,6 +1127,15 @@ let value_of_some_ v =
   match bt v with
   | BT.Option bt -> 
      IT (Option_op (Value_of_some v), bt)
+  | _ -> Debug_ocaml.error "illtyped index term"
+
+let param_ args v = 
+  let arg_bts = List.map snd args in
+  IT (Param_op (Param (args, v)), BT.Param (arg_bts, bt v))
+let app_ v args = 
+  match bt v with
+  | BT.Param (_, bt) ->
+     IT (Param_op (App (v, args)), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
 
 
@@ -1098,7 +1197,7 @@ let hash (IT (it, _bt)) =
   | CT_pred it -> 7
   | List_op it -> 8
   | Set_op it -> 9
-  | Array_op it -> 10
+  (* | Array_op it -> 10 *)
   | Option_op it -> 11
   | Param_op it -> 12
   | Lit lit ->
@@ -1132,7 +1231,7 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
      let lcs = 
        List.init n (fun i ->
            representable_ctype struct_layouts ct
-             (arrayGet_ ~item_bt:(BT.of_sct ct) (about, int_ i))
+             (app_ about [int_ i])
          )
      in
      and_ lcs

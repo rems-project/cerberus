@@ -14,7 +14,7 @@ type t =
   | Tuple of t list
   | Struct of tag
   | Set of t
-  | Array of t
+  (* | Array of t *)
   | Option of t
   | Param of t list * t
 
@@ -33,7 +33,7 @@ let rec equal t t' =
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
   | Struct t, Struct t' -> Sym.equal t t'
   | Set t, Set t' -> equal t t'
-  | Array t, Array t' -> equal t t'
+  (* | Array t, Array t' -> equal t t' *)
   | Option t, Option t' -> equal t t'
   | Param (ts,t), Param (ts',t') -> 
      List.equal equal ts ts' && equal t t'
@@ -47,7 +47,7 @@ let rec equal t t' =
   | Tuple _, _
   | Struct _, _
   | Set _, _
-  | Array _, _
+  (* | Array _, _ *)
   | Option _, _ 
   | Param _, _
     ->
@@ -66,9 +66,9 @@ let rec pp bt =
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Set t -> !^"set" ^^ angles (pp t)
-  | Array t -> pp t ^^ brackets empty
+  (* | Array t -> pp t ^^ brackets empty *)
   | Option t -> !^"option" ^^ angles (pp t)
-  | Param (ts,t) -> !^"param" ^^ angles (separate comma (List.map pp ts)) ^^ angles (pp t)
+  | Param (ts,t) -> pp t ^^ parens (separate_map comma pp ts)
 
 
 
@@ -81,7 +81,7 @@ let rec of_sct (Sctype (_, sct_)) =
   match sct_ with
   | Void -> Unit
   | Integer _ -> Integer
-  | Array (sct, _) -> Array (of_sct sct)
+  | Array (sct, _) -> Param ([Integer], of_sct sct)
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"
@@ -98,6 +98,6 @@ let hash = function
   | Tuple _ -> 6
   | Struct _ -> 7
   | Set _ -> 8
-  | Array _ -> 9
+  (* | Array _ -> 9 *)
   | Option _ -> 10
   | Param _ -> 11

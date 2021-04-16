@@ -573,7 +573,7 @@ module External = struct
          let representation' = 
            aux t pointer 
              (Option.map (fun value ->
-                  arrayGet_ ~item_bt:(BT.of_sct t) (value, index_t))
+                  app_ value [index_t])
                 ovalue)
          in
          let length = int_ n in
