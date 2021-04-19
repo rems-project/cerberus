@@ -6,7 +6,6 @@ module SymMap = Map.Make(Sym)
 module IT = IndexTerms
 open IT
 
-type size = Z.t
 
 
 type predicate_name = 
@@ -32,27 +31,19 @@ type predicate = {
     unused: bool;
   }
 
-(* for error reporting only *)
-type block_type = 
-  | Nothing
-  | Uninit
-  | Padding
 
-type point_content = 
-  | Block of block_type
-  | Value of IT.t
 
 type point = {
     pointer: IT.t; 
     size: Z.t; 
-    content: point_content; 
-    permission: IT.t
+    content: IT.t; 
+    permission: IT.t;
   }
 
 type qpoint = {
     qpointer: Sym.t; 
     size: Z.t; 
-    content: point_content; 
+    content: IT.t; 
     permission: IT.t
   }
 
@@ -77,35 +68,12 @@ let pp_predicate {name; iargs; oargs; unused} =
 
 let pp = function
   | Point {pointer; size; content; permission} ->
-     begin match content with
-     | Block block_type ->
-        let rname = match block_type with
-          | Nothing -> !^"Block"
-          | Uninit -> !^"Uninit"
-          | Padding -> !^"Padding"
-        in
-        group (c_app rname [IT.pp pointer; Z.pp size; IT.pp permission])
-     | Value v ->
-        group (c_app !^"Points" [IT.pp pointer; IT.pp v; Z.pp size; IT.pp permission])
-     end
+     group (c_app !^"Points" [IT.pp pointer; IT.pp content; Z.pp size; IT.pp permission])
   | IteratedStar {qpointer; size; content; permission} ->
-     begin match content with
-     | Block block_type ->
-        let rname = match block_type with
-          | Nothing -> !^"Block"
-          | Uninit -> !^"Uninit"
-          | Padding -> !^"Padding"
-        in
-        group 
-          (flow (break 1) 
-             [!^"forall" ^^^ Sym.pp qpointer ^^ dot;
-              c_app rname [Sym.pp qpointer; Z.pp size; IT.pp permission]])
-     | Value v ->
-        group 
-          (flow (break 1)
-             [!^"forall" ^^^ Sym.pp qpointer ^^ dot;
-              c_app !^"Points" [Sym.pp qpointer; IT.pp v; Z.pp size; IT.pp permission]])
-     end
+     group 
+       (flow (break 1)
+          [!^"forall" ^^^ Sym.pp qpointer ^^ dot;
+           c_app !^"Points" [Sym.pp qpointer; IT.pp content; Z.pp size; IT.pp permission]])
   | Predicate p ->
      pp_predicate p
           
@@ -116,15 +84,11 @@ let pp = function
 let json re : Yojson.Safe.t = 
   `String (Pp.plain (pp re))
 
-let subst_var_content subst content =
-  match content with
-  | Block block_type -> Block block_type
-  | Value v -> Value (IT.subst_var subst v)
 
 let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
   | Point {pointer; size; content; permission} ->
      let pointer = IT.subst_var subst pointer in
-     let content = subst_var_content subst content in
+     let content = IT.subst_var subst content in
      let permission = IT.subst_var subst permission in
      Point {pointer; size; content; permission}
   | IteratedStar {qpointer; size; content; permission} ->
@@ -132,13 +96,13 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
        IteratedStar {qpointer; size; content; permission}
      else if Sym.equal qpointer subst.after then
        let qpointer' = Sym.fresh () in
-       let content = subst_var_content {before=qpointer;after=qpointer'} content in
+       let content = IT.subst_var {before=qpointer;after=qpointer'} content in
        let permission = IT.subst_var {before=qpointer;after=qpointer'} permission in
-       let content = subst_var_content subst content in
+       let content = IT.subst_var subst content in
        let permission = IT.subst_var subst permission in
        IteratedStar {qpointer = qpointer'; size; content; permission}       
      else
-       let content = subst_var_content subst content in
+       let content = IT.subst_var subst content in
        let permission = IT.subst_var subst permission in
        IteratedStar {qpointer; size; content; permission}
   | Predicate {name; iargs; oargs; unused} -> 
@@ -148,19 +112,12 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
      Predicate {name; iargs; oargs; unused}
 
 
-let subst_it_content subst content =
-  match content with
-  | Block block_type -> Block block_type
-  | Value v -> Value (IT.subst_it subst v)
-
-let subst_its_content subst content = 
-  Subst.make_substs subst_it_content subst content
 
 let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
   match resource with
   | Point {pointer; size; content; permission} ->
      let pointer = IT.subst_it subst pointer in
-     let content = subst_it_content subst content in
+     let content = IT.subst_it subst content in
      let permission = IT.subst_it subst permission in
      Point {pointer; size; content; permission}
   | IteratedStar {qpointer; size; content; permission} ->
@@ -168,13 +125,13 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
        IteratedStar {qpointer; size; content; permission}
      else if SymSet.mem qpointer (IT.free_vars subst.after) then
        let qpointer' = Sym.fresh () in
-       let content = subst_var_content {before=qpointer;after=qpointer'} content in
+       let content = IT.subst_var {before=qpointer;after=qpointer'} content in
        let permission = IT.subst_var {before=qpointer;after=qpointer'} permission in
-       let content = subst_it_content subst content in
+       let content = IT.subst_it subst content in
        let permission = IT.subst_it subst permission in
        IteratedStar {qpointer = qpointer'; size; content; permission}
      else
-       let content = subst_it_content subst content in
+       let content = IT.subst_it subst content in
        let permission = IT.subst_it subst permission in
        IteratedStar {qpointer; size; content; permission}
   | Predicate {name; iargs; oargs; unused} -> 
@@ -187,14 +144,7 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
 
 let subst_vars = Subst.make_substs subst_var
 
-let block_type_equal b1 b2 = 
-  match b1, b2 with
-  | Nothing, Nothing -> true
-  | Uninit, Uninit -> true
-  | Padding, Padding -> true
-  | Nothing, _ -> false
-  | Uninit, _ -> false
-  | Padding, _ -> false
+
 
 (* at the moment literal equality, no alpha renaming of IteratedStar
    quantifier *)
@@ -203,20 +153,12 @@ let equal t1 t2 =
   | Point b1, Point b2 ->
      IT.equal b1.pointer b2.pointer &&
      Z.equal b1.size b2.size &&
-     begin match b1.content, b2. content with
-     | Block bt1, Block bt2 -> block_type_equal bt1 bt2 
-     | Value v1, Value v2 -> IT.equal v1 v2
-     | _, _ -> false
-     end &&
+     IT.equal b1.content b2.content &&
      IT.equal b1.permission b2.permission
   | IteratedStar b1, IteratedStar b2 ->
      Sym.equal b1.qpointer b2.qpointer &&
      Z.equal b1.size b2.size &&
-     begin match b1.content, b2. content with
-     | Block bt1, Block bt2 -> block_type_equal bt1 bt2 
-     | Value v1, Value v2 -> IT.equal v1 v2
-     | _, _ -> false
-     end &&
+     IT.equal b1.content b2.content &&
      IT.equal b1.permission b2.permission
   | Predicate p1, Predicate p2 ->
      predicate_name_equal p1.name p2.name && 
@@ -236,17 +178,10 @@ let equal t1 t2 =
 
 let free_vars = function
   | Point b -> 
-     let itlist = match b.content with
-       | Block _ -> [b.pointer; b.permission]
-       | Value v -> [b.pointer; b.permission; v]
-     in
-     IT.free_vars_list itlist
+     IT.free_vars_list [b.pointer; b.permission; b.content]
   | IteratedStar b -> 
-     let itlist = match b.content with
-       | Block _ -> [b.permission]
-       | Value v -> [b.permission; v]
-     in
-     SymSet.remove b.qpointer (IT.free_vars_list itlist)
+     SymSet.remove b.qpointer 
+       (IT.free_vars_list [b.permission; b.content])
   | Predicate p -> 
      IT.free_vars_list ((* p.unused :: *) (p.iargs @ p.oargs))
 
@@ -254,10 +189,6 @@ let free_vars_list l =
   List.fold_left (fun acc sym -> 
       SymSet.union acc (free_vars sym)
     ) SymSet.empty l
-
-
-
-
 
 
 
@@ -277,10 +208,8 @@ let inputs = function
   | Predicate p -> p.iargs
 
 let outputs = function
-  | Point {content = Block _; _} -> []
-  | Point {content = Value v; _} -> [v]
-  | IteratedStar {content = Block _; _} -> []
-  | IteratedStar {content = Value v; _} -> [v]
+  | Point b -> [b.content]
+  | IteratedStar b -> [b.content]
   | Predicate p -> p.oargs
 
 
@@ -334,23 +263,15 @@ let derived_constraints resource resource' =
 
 
 (* construction *)
-let block (pointer, size) permission block_type =
-  Point {pointer; size; content = Block block_type; permission}
 
-let points_to (pointer, size) permission value =
-  Point {pointer; size; content = Value value; permission}
-
-let uninit (pointer, size) permission = 
-  block (pointer, size) permission Uninit
-
-let padding (pointer, size) permission = 
-  block (pointer, size) permission Padding
+let point (pointer, size) permission value =
+  Point {pointer; size; content = value; permission}
 
 let predicate predicate_name iargs oargs =
   Predicate {name = predicate_name; iargs; oargs; unused = true}
 
 
-let region pointer size permission =
+let char_region pointer size permission =
   let open IT in
   let q = Sym.fresh () in
   let qt = sym_ (q, BT.Loc) in
@@ -363,7 +284,7 @@ let region pointer size permission =
   let point = {
       qpointer = q;
       size = Z.of_int 1;
-      content = Block Nothing;
+      content = nothing_ BT.Integer;
       permission = ite_ (condition, permission, q_ (0,1))
     }
   in
@@ -401,7 +322,7 @@ let array pointer length element_size content permission =
   let point = {
       qpointer = q;
       size = element_size;
-      content = Value (content it);
+      content = something_ (content it);
       permission = ite_ (condition, permission, q_ (0,1))
     }
   in
@@ -412,11 +333,6 @@ let array pointer length element_size content permission =
 
 
 
-let simp_content lcs content =
-  match content with
-  | Block block_type -> Block block_type
-  | Value v -> Value (simp lcs v)
-
 let if_non_zero_frac resource = 
   if not (IT.zero_frac (permission resource))
   then Some resource else None
@@ -425,13 +341,13 @@ let simp lcs resource =
   match resource with
   | Point {pointer; size; content; permission} ->
      let pointer = simp lcs pointer in
-     let content = simp_content lcs content in
+     let content = simp lcs content in
      let permission = simp lcs permission in
      if_non_zero_frac (Point {pointer; size; content; permission})
   | IteratedStar {qpointer; size; content; permission} ->
      let qpointer' = Sym.fresh () in
      let subst = Subst.{before=qpointer;after=qpointer'} in
-     let content = simp_content lcs (subst_var_content subst content) in
+     let content = simp lcs (IT.subst_var subst content) in
      let permission = simp lcs (IT.subst_var subst permission) in
      if_non_zero_frac (IteratedStar {qpointer = qpointer'; size; content; permission})
   | Predicate {name; iargs; oargs; unused} -> 
@@ -449,11 +365,14 @@ let simp lcs resource =
 
 module External = struct
 
+  open Memory
+  open IT
+
   type t = 
     | E_Point of {
         pointer : IT.t;
         size: Z.t;
-        content: point_content;
+        content: IT.t;
         permission: IT.t;
       }
     | E_Iterated of {
@@ -461,7 +380,7 @@ module External = struct
         index: Sym.t;
         element_size: Z.t;
         length: IT.t;                (* not a function of 'index' *)
-        content: point_content;      (* function of 'index' *)
+        content: IT.t;               (* function of 'index' *)
         permission: IT.t             (* function of 'index' *)
       }
     (* | E_Predicate of predicate *)
@@ -470,7 +389,7 @@ module External = struct
     match resource with
     | E_Point {pointer; size; content; permission} ->
        let pointer = IT.subst_it subst pointer in
-       let content = subst_it_content subst content in
+       let content = IT.subst_it subst content in
        let permission = IT.subst_it subst permission in
        E_Point {pointer; size; content; permission}
     | E_Iterated {pointer; index; length; element_size; content; permission} ->
@@ -482,20 +401,13 @@ module External = struct
          let pointer = 
            IT.subst_it subst (IT.subst_it first_subst pointer) 
          in
-         let content = 
-           subst_it_content subst
-             (subst_it_content first_subst content) 
-         in
-         let permission = 
-           IT.subst_it subst (IT.subst_it first_subst permission) 
-         in
-         let length = 
-           IT.subst_it subst (IT.subst_it first_subst length) 
-         in
+         let content = IT.subst_it subst (IT.subst_it first_subst content) in
+         let permission = IT.subst_it subst (IT.subst_it first_subst permission) in
+         let length = IT.subst_it subst (IT.subst_it first_subst length) in
          E_Iterated {index = index'; pointer; length; element_size; content; permission}
        else
          let pointer = IT.subst_it subst pointer in
-         let content = subst_it_content subst content in
+         let content = IT.subst_it subst content in
          let permission = IT.subst_it subst permission in
          let length = IT.subst_it subst length in
          E_Iterated {index; pointer; length; element_size; content; permission}
@@ -510,7 +422,6 @@ module External = struct
 
 
   let to_internal = 
-    let open IT in
     let open Subst in
     function
     | E_Point {pointer; size; content; permission} ->
@@ -531,15 +442,13 @@ module External = struct
              q_ (0, 1)
            )
        in
-       let content = subst_it_content subst content in
+       let content = IT.subst_it subst content in
        IteratedStar {qpointer; size = element_size; content; permission}
 
 
 
-  let representation (layouts : Sym.t -> Memory.struct_layout) typ pointer (ovalue : IT.t option) permission =
-    let open Memory in
-    let open IT in
-    let rec aux (Sctypes.Sctype (_, t_)) pointer ovalue =
+  let represents (layouts : Sym.t -> Memory.struct_layout) typ pointer ((ovalue : IT.t option), bt) permission =
+    let rec aux (Sctypes.Sctype (_, t_)) pointer (ovalue, bt) =
       match t_ with
       | Void -> 
          Debug_ocaml.error "representation: Void"
@@ -549,8 +458,8 @@ module External = struct
               size = Memory.size_of_integer_type it; 
               content = 
                 begin match ovalue with
-                | Some value -> Value value
-                | None -> Block Nothing
+                | Some value -> something_ value
+                | None -> nothing_ bt
                 end; 
               permission
             }]
@@ -560,8 +469,8 @@ module External = struct
               size = Memory.size_of_pointer; 
               content =
                 begin match ovalue with
-                | Some value -> Value value
-                | None -> Block Nothing
+                | Some value -> something_ value
+                | None -> nothing_ bt
                 end; 
               permission
             }]
@@ -574,7 +483,8 @@ module External = struct
            aux t pointer 
              (Option.map (fun value ->
                   app_ value [index_t])
-                ovalue)
+                ovalue, 
+              BT.of_sct t)
          in
          let length = int_ n in
          List.map (function
@@ -587,7 +497,7 @@ module External = struct
                   [{before = arr.index; after = rem_f_ (index_t, arr.length)};
                    {before = index; after = rem_f_ (index_t, length)}]
                 in
-                let content = subst_its_content substs arr.content in
+                let content = IT.subst_its substs arr.content in
                 let length = mul_ (int_ n, arr.length) in
                 let element_size = arr.element_size in
                 let permission = IT.subst_its substs arr.permission in
@@ -598,25 +508,26 @@ module External = struct
              let member_pointer = addPointer_ (pointer, z_ offset) in
              begin match member_or_padding with
              | None -> 
-                [E_Point {pointer = member_pointer; size; permission; content = Block Padding}]
+                [E_Point {pointer = member_pointer; size; permission; content = nothing_ BT.Integer}]
              | Some (member, ct) ->
                 aux ct member_pointer 
                   (Option.map (fun value ->
                        (structMember_ ~member_bt:(BT.of_sct ct) 
                           (tag, value, member))
-                     ) ovalue)
+                     ) ovalue,
+                  BT.of_sct ct)
              end
            ) (layouts tag)
       | Function _ ->
          Debug_ocaml.error "representation: Function"
     in
-    aux typ pointer ovalue
+    aux typ pointer (ovalue, bt)
 
 end
 
 
 
 
-let representation layouts typ pointer ovalue permission =
+let represent layouts typ pointer ovalue permission =
   List.map External.to_internal
-    (External.representation layouts typ pointer ovalue permission)
+    (External.represents layouts typ pointer ovalue permission)

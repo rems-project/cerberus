@@ -22,6 +22,10 @@ let is_struct = function
   | Struct tag -> Some tag
   | _ -> None
 
+let get_option_type = function
+  | Option bt -> bt
+  | _ -> Debug_ocaml.error "not an option type"
+
 let rec equal t t' = 
   match t, t' with
   | Unit, Unit -> true

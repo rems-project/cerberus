@@ -66,8 +66,6 @@ module Make (G : sig val global : Global.t end) = struct
              return (BT.Bool, Bool b)
           | Unit -> 
              return (BT.Unit, Unit)
-          | Default bt -> 
-             return (bt, Default bt)
         in
 
         let arith_op local = function
@@ -534,27 +532,36 @@ module Make (G : sig val global : Global.t end) = struct
   module WRE = struct
     open Resources
     type t = Resources.t
-    let welltyped loc (names : Explain.naming) local = function
+
+    let welltyped loc (names : Explain.naming) local = 
+
+      let ensure_option_type bt it =
+        let open Pp in
+        match bt with
+        | BT.Option _ -> return ()
+        | _ -> 
+           let it = Explain.index_term names local it in
+           let err = 
+             !^"Illtyped index term" ^^^ it ^^ dot ^^^
+               !^"Expected" ^^^ it ^^^ !^"to have option type, " ^^^
+                 !^"but has type" ^^^ BT.pp bt
+           in
+           fail loc (Generic err)
+      in
+
+      function
       | Point b -> 
          let@ () = WIT.welltyped loc names local BT.Loc b.pointer in
          let@ _ = WIT.check_or_infer loc names local (Some BT.Real) b.permission in
-         begin match b.content with
-         | Block _ -> return ()
-         | Value v -> 
-            (* points is "polymorphic" in the pointee *)
-            let@ _ = WIT.check_or_infer loc names local None v in
-            return ()
-         end
+         let@ (content_bt, _) = WIT.check_or_infer loc names local None b.content in
+         let@ () = ensure_option_type content_bt b.content in
+         return ()
       | IteratedStar b -> 
          let local' = L.add_l b.qpointer Loc local in
          let@ _ = WIT.check_or_infer loc names local' (Some BT.Real) b.permission in
-         begin match b.content with
-         | Block _ -> return ()
-         | Value v -> 
-            (* iterated star is "polymorphic" in the pointee *)
-            let@ _ = WIT.check_or_infer loc names local' None v in
-            return ()
-         end
+         let@ (content_bt, _) = WIT.check_or_infer loc names local None b.content in
+         let@ () = ensure_option_type content_bt b.content in
+         return ()
       | Predicate p -> 
          let@ def = match Global.get_predicate_def G.global p.name, p.name with
            | Some def, _ -> return def
@@ -661,10 +668,6 @@ module Make (G : sig val global : Global.t end) = struct
          return ()
 
     let wellpolarised loc determined lrt = 
-      let () = 
-        let open Pp in 
-        print stderr (item "lrt" (LogicalReturnTypes.pp lrt)) 
-      in
       let open Resultat in
       let rec aux determined undetermined lrt = 
       match lrt with
@@ -771,10 +774,6 @@ module Make (G : sig val global : Global.t end) = struct
 
     let wellpolarised loc determined ft = 
       let open Resultat in
-      let () = 
-        let open Pp in 
-        print stderr (item "ft" (T.pp ft)) 
-      in
       let rec aux determined undetermined ft = 
       match ft with
       | T.Computational ((s, _), ft) ->

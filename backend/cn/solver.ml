@@ -74,7 +74,7 @@ module Make (G : sig val global : Global.t end) = struct
            let recognizer = Z3.Symbol.mk_string context ("some_" ^ bt_name bt ^ "_recognizer") in
            let value_field = Z3.Symbol.mk_string context ("some_" ^ bt_name bt ^ "_value") in
            Z3.Datatype.mk_constructor_s context ("some_" ^ bt_name bt) 
-             recognizer [value_field] [Some a_sort] []
+             recognizer [value_field] [Some a_sort] [1 (*?*)]
          in
          let none_c = 
            let recognizer = Z3.Symbol.mk_string context ("none_" ^ bt_name bt ^ "_recognizer") in
@@ -101,10 +101,13 @@ module Make (G : sig val global : Global.t end) = struct
     let rec term =
       let tbl = ITtbl.create 5000 in
       fun it ->
+      Pp.debug 9 (lazy (Pp.item "translating term" (IT.pp it)));
+      Pp.debug 9 (lazy (Pp.item "bt" (BT.pp (IT.bt it))));
       match ITtbl.find_opt tbl it with
       | Some sc -> sc
       | None ->
          let (IT (it_, bt)) = it in
+         Pp.debug 9 (lazy (Pp.item "still translating term" (IT.pp it)));
          let sc = match it_ with
            | Lit t -> lit t bt
            | Arith_op t -> arith_op t bt
@@ -140,9 +143,6 @@ module Make (G : sig val global : Global.t end) = struct
          Z3.Boolean.mk_false context
       | Unit ->
          Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
-      | Default bt ->
-         let sym = Z3.Symbol.mk_string context ("default_"^bt_name bt) in
-         Z3.Expr.mk_const context sym (sort_of_bt bt)
 
 
     (* fix rem_t vs rem_f *)
@@ -228,13 +228,10 @@ module Make (G : sig val global : Global.t end) = struct
       | LTPointer (t1, t2) ->
          Z3.Arithmetic.mk_lt context (term t1) (term t2)
       | LEPointer (t1, t2) ->
-         Z3.Arithmetic.mk_le context (term t1) (term t2)
-      (* | Disjoint ((p1, s1), (p2, s2)) ->
-       *    let disjoint = 
-       *      or_ [lePointer_ (addPointer_ (p1, s1), p2); 
-       *           lePointer_ (addPointer_ (p2, s2), p1)] 
-       *    in
-       *    term disjoint *)
+         Pp.debug 9 (lazy (Pp.string "here"));
+         let e = Z3.Arithmetic.mk_le context (term t1) (term t2) in
+         Pp.debug 9 (lazy (Pp.string "here2"));
+         e
       | IntegerToPointerCast t ->
          term t
       | PointerToIntegerCast t ->
@@ -309,18 +306,22 @@ module Make (G : sig val global : Global.t end) = struct
          term (eq_ (rem_t_ (t, z_ (Memory.align_of_ctype ct)), int_ 0))
 
     and option_op it bt = 
-      let sort = sort_of_bt bt in
-      let recognisers = Z3.Datatype.get_recognizers sort in
-      let constructors = Z3.Datatype.get_constructors sort in
-      let accessors = Z3.Datatype.get_accessors sort in
       match it with
       | Something it ->
+         let option_sort = sort_of_bt bt in
+         let constructors = Z3.Datatype.get_constructors option_sort in
          Z3.Expr.mk_app context (List.hd constructors) [term it]
       | Nothing _ ->
+         let option_sort = sort_of_bt bt in
+         let constructors = Z3.Datatype.get_constructors option_sort in
          Z3.Expr.mk_app context (List.hd (List.tl constructors)) []
       | Is_some it -> 
+         let option_sort = sort_of_bt (IT.bt it) in
+         let recognisers = Z3.Datatype.get_recognizers option_sort in
          Z3.Expr.mk_app context (List.hd recognisers) [term it]
       | Value_of_some it -> 
+         let option_sort = sort_of_bt (IT.bt it) in
+         let accessors = Z3.Datatype.get_accessors option_sort in
          Z3.Expr.mk_app context (List.hd (List.hd accessors)) [term it]
 
     and param_op it bt = 
@@ -357,7 +358,7 @@ module Make (G : sig val global : Global.t end) = struct
     in
 
     fun it ->
-    (* Pp.print stderr (Pp.item "translating" (IT.pp it)); *)
+    Pp.debug 8 (lazy (Pp.item "translating" (IT.pp it)));
     term it
 
 

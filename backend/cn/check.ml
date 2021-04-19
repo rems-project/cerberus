@@ -326,14 +326,9 @@ module Make (G : sig val global : Global.t end) = struct
     let open Prompt.Operators in
     (* Block unifies with Blocks of other block type *)
     let aux_content c c' (res, constrs) = 
-      match c, c' with
-      | Block _, Block _ -> return (res, constrs)
-      | Value v, Value v' -> 
-         begin match IT.unify v v' res with
-         | Some res -> return (res, constrs)
-         | None -> return (res, (v, v') :: constrs)
-         end
-      | _, _ -> fail loc (error ())
+      match IT.unify c c' res with
+      | Some res -> return (res, constrs)
+      | None -> return (res, (c, c') :: constrs)
     in
     match r1, r2 with
     | Point b, Point b' 
@@ -350,7 +345,7 @@ module Make (G : sig val global : Global.t end) = struct
            Z.equal b.size b'.size ->
        let b = 
          let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
-         let content = RE.subst_var_content subst b.content in
+         let content = IT.subst_var subst b.content in
          let permission = IT.subst_var subst b.permission in
          {b with qpointer = b'.qpointer; content; permission}
        in
@@ -545,44 +540,12 @@ module Make (G : sig val global : Global.t end) = struct
         fail loc (Missing_resource {resource; used = None; state; situation})
       in
       match request with
-      | Point ({content = Block _; _} as requested) ->
-         let needed = requested.permission in
-         let updated_local, needed =
-           L.map_and_fold_resources (fun re needed ->
-               match re with
-               | Point p' 
-                    when Z.equal requested.size p'.size &&
-                         Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
-                  let can_take = min_ (p'.permission, needed) in
-                  let needed = sub_ (needed, can_take) in
-                  let permission' = sub_ (p'.permission, can_take) in
-                  (Point {p' with permission = permission'}, needed)
-               | IteratedStar p' 
-                    when Z.equal requested.size p'.size ->
-                  let can_take = 
-                    min_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, 
-                          needed) 
-                  in
-                  let needed = sub_ (needed, can_take) in
-                  let permission' =
-                    ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                          sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
-                          p'.permission)
-                  in
-                  (IteratedStar {p' with permission = permission'}, needed)
-               | re ->
-                  (re, needed)
-             ) local needed
-         in
-         if Solver.holds local (eq_ (needed, q_ (0, 1))) 
-         then return (request, updated_local)
-         else missing ()
-      | Point ({content = Value (IT (_, bt)); _} as requested) ->
+      | Point ({content = IT (_, bt); _} as requested) ->
          let needed = requested.permission in 
          let updated_local, (needed, content) =
            L.map_and_fold_resources (fun re (needed, content) ->
                match re with
-               | Point ({content = Value v'; _} as p') 
+               | Point ({content = v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') &&
                          Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
@@ -591,7 +554,7 @@ module Make (G : sig val global : Global.t end) = struct
                   let needed = sub_ (needed, can_take) in
                   let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, (needed, content))
-               | IteratedStar ({content = Value v'; _} as p') 
+               | IteratedStar ({content = v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -612,53 +575,12 @@ module Make (G : sig val global : Global.t end) = struct
                   (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->
                   (re, (needed, content))
-             ) local (needed, default_ bt)
+             ) local (needed, nothing_ (get_option_type bt))
          in
          if Solver.holds local (eq_ (needed, q_ (0, 1))) 
-         then return (Point {requested with content = Value content}, updated_local)
+         then return (Point {requested with content}, updated_local)
          else missing ()
-      | IteratedStar ({content = Block block_type; _} as requested) ->
-         let qp = Sym.fresh () in 
-         let needed = 
-           IT.subst_var {before = requested.qpointer; after = qp} 
-             requested.permission 
-         in
-         let updated_local, needed =
-           L.map_and_fold_resources (fun re needed ->
-               match re with
-               | Point p'
-                    when Z.equal requested.size p'.size ->
-                  let can_take = 
-                    min_ (p'.permission, 
-                          IT.subst_it {before=qp; after = p'.pointer} needed) 
-                  in
-                  let needed =
-                    ite_ (eq_ (sym_ (qp, BT.Loc), p'.pointer), 
-                          sub_ (IT.subst_it {before=qp; after = p'.pointer} needed, can_take),
-                          needed)
-                  in
-                  let permission' = sub_ (p'.permission, can_take) in
-                  (Point {p' with permission = permission'}, needed)
-               | IteratedStar p' 
-                    when Z.equal requested.size p'.size ->
-                  let can_take = 
-                    min_ (IT.subst_var {before=p'.qpointer; after = qp} p'.permission, 
-                          needed)
-                  in
-                  let needed = sub_ (needed, can_take) in
-                  let permission' = 
-                    sub_ (p'.permission, 
-                          IT.subst_var {before=qp; after = p'.qpointer} can_take)
-                  in
-                  (IteratedStar {p' with permission = permission'}, needed)
-               | re ->
-                  (re, needed)
-             ) local needed
-         in
-         if Solver.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
-         then return (IteratedStar requested, updated_local)
-         else missing ()
-      | IteratedStar ({content = Value (IT (_, bt)); _} as requested) ->
+      | IteratedStar ({content = IT (_, bt); _} as requested) ->
          let qp = Sym.fresh () in
          let needed = 
            IT.subst_var {before = requested.qpointer; after = qp}
@@ -667,7 +589,7 @@ module Make (G : sig val global : Global.t end) = struct
          let updated_local, (needed, content) =
            L.map_and_fold_resources (fun re (needed, content) ->
                match re with
-               | Point ({content = Value v'; _} as p') 
+               | Point ({content = v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -686,7 +608,7 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, (needed, content))
-               | IteratedStar ({content = Value v'; _} as p') 
+               | IteratedStar ({content = v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -706,13 +628,13 @@ module Make (G : sig val global : Global.t end) = struct
                   (IteratedStar {p' with permission = permission'}, (needed, content))
                | re ->
                   (re, (needed, content))
-             ) local (needed, default_ bt)
+             ) local (needed, nothing_ (get_option_type bt))
          in
          if Solver.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
          then 
            let resource = 
              IteratedStar {requested with 
-                 content = Value (IT.subst_var {before = qp; after = requested.qpointer} content)
+                 content = IT.subst_var {before = qp; after = requested.qpointer} content
                } 
            in
            return (resource, updated_local)
@@ -1356,11 +1278,16 @@ module Make (G : sig val global : Global.t end) = struct
            let size = Memory.size_of_ctype ct in
            let@ (resource, _)  = 
              resource_request loc (Access (Load is_member)) local
-               (points_to (pointer, size) (q_ (1, 2)) (sym_ (Sym.fresh (), BT.of_sct ct)))
+               (point (pointer, size) (q_ (1, 2)) (nothing_ (BT.of_sct ct)))
            in
            begin match resource with
-           | Point {content = Value pointee; _} -> return pointee
-           | _ -> Debug_ocaml.error "points-to request did not return points-to"
+           | Point {content; _} when Solver.holds local (is_some_ content) -> 
+              return (value_of_some_ content)
+           | Point {content; _} ->
+              let state = Explain.state names local in
+              fail loc (Uninitialised_read {is_member = None; state})
+           | _ -> 
+              Debug_ocaml.error "points-to request did not return points-to"
            end
       in
       aux ct pointer None
@@ -1372,7 +1299,7 @@ module Make (G : sig val global : Global.t end) = struct
       ListM.fold_leftM (fun local request ->
           let@ (_, local) = resource_request loc (Access (Store None)) local request in
           return local
-        ) local (RE.representation layouts ct pointer None (q_ (1, 1)))
+        ) local (RE.represent layouts ct pointer (None, BT.of_sct ct) (q_ (1, 1)))
 
 
     let store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
@@ -1381,14 +1308,14 @@ module Make (G : sig val global : Global.t end) = struct
         ListM.fold_leftM (fun local request ->
             let@ (_, local) = resource_request loc (Access (Store None)) local request in
             return local
-          ) local (RE.representation layouts ct pointer None (q_ (1, 1)))
+          ) local (RE.represent layouts ct pointer (None, BT.of_sct ct) (q_ (1, 1)))
       in
-      let resources = RE.representation layouts ct pointer (Some value) (q_ (1, 1)) in
+      let resources = RE.represent layouts ct pointer (Some value, BT.of_sct ct) (q_ (1, 1)) in
       return (LRT.mResources resources LRT.I, local)
       
     let create (loc: loc) local (pointer: IT.t) ct = 
       let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
-      let resources = RE.representation layouts ct pointer None (q_ (1, 1)) in
+      let resources = RE.represent layouts ct pointer (None, BT.of_sct ct) (q_ (1, 1)) in
       return (LRT.mResources resources LRT.I)
 
 
@@ -1514,7 +1441,8 @@ module Make (G : sig val global : Global.t end) = struct
                 let size = Memory.size_of_ctype act.ct in
                 let@ _ = 
                   resource_request loc (Access Deref) local
-                    (block (sym_ (arg.lname, Loc), size) (q_ (1, 2)) Nothing)
+                    (point (sym_ (arg.lname, Loc), size) (q_ (1, 2)) 
+                       (nothing_ (BT.of_sct act.ct)))
                 in
                 (* let fps = List.filter_map RE.footprint (L.all_resources local) in *)
                 (* let in_some_fp = or_ (List.map (IT.in_footprint (sym_ (Loc, arg.lname))) fps) in *)
@@ -2065,9 +1993,10 @@ let record_globals local globs =
       match def with
       | M_GlobalDef (lsym, (_, ct), _)
       | M_GlobalDecl (lsym, (_, ct)) ->
-         let local = Local.add_l lsym Loc local in
-         let local = Local.add_a sym (Loc, lsym) local in
-         let local = Local.add_c (IT.good_pointer lsym ct) local in
+         let bt = Loc in
+         let local = Local.add_l lsym bt local in
+         let local = Local.add_a sym (bt, lsym) local in
+         let local = Local.add_c (IT.good_pointer (sym_ (lsym, bt)) ct) local in
          let global = SymSet.add lsym local.global in
          return {local with global}
     ) local globs

@@ -151,8 +151,11 @@ module Make (G : sig val global : Global.t end) = struct
     Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Path.pp p))
 
   let naming_of_mapping mapping = 
-    List.map (fun i ->
-        Mapping.(i.sym, i.path)
+    let open Mapping in
+    List.filter_map (fun i ->
+        match IT.is_sym i.it with
+        | Some (sym, _) -> Some (sym, i.path)
+        | None -> None
       ) mapping
 
 
@@ -183,7 +186,7 @@ module Make (G : sig val global : Global.t end) = struct
   let veclasses_partial_order local veclasses =
     List.fold_right (fun resource (graph, rels) ->
         match resource with
-        | RE.Point {pointer; size; content = Value pointee; permission} ->
+        | RE.Point {pointer; size; content = IT (Option_op (Something pointee), _); permission} ->
            let found1 = 
              List.find_opt (fun veclass ->
                  should_be_in_veclass local veclass pointer
@@ -342,6 +345,11 @@ module Make (G : sig val global : Global.t end) = struct
     | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
     | _ -> SymSet.empty
 
+  let something_symbol_it = function
+    | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
+    | IT.IT (Option_op (Something (IT.IT (Lit (Sym s), _))), _) -> SymSet.singleton s
+    | _ -> SymSet.empty
+
 
   let pp_state_aux local {substitutions; veclasses; relevant} o_model =
     (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
@@ -349,27 +357,7 @@ module Make (G : sig val global : Global.t end) = struct
     let (resource_lines, reported_pointees) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           match resource with
-          | Point {pointer; size; content = Block block_type; permission} ->
-             let state = match block_type with
-               | Nothing -> "block"
-               | Uninit -> "uninit"
-               | Padding -> "padding"
-             in
-             let state = match o_evaluate o_model permission with
-               | Some permission -> !^state ^^^ parens (!^"permission:" ^^^ permission)
-               | None -> !^state
-             in
-             let entry =
-               (Some (IT.pp (IT.subst_vars substitutions pointer)), 
-                o_evaluate o_model pointer,
-                Some (Z.pp size), 
-                Some state,
-                None,
-                None
-               )
-             in
-             (entry :: acc_table, SymSet.union (symbol_it pointer) acc_reported)
-          | Point {pointer; size; content = Value pointee; permission} ->
+          | Point {pointer; size; content = value; permission} ->
              let state = match o_evaluate o_model permission with
                | Some permission -> !^"owned" ^^^ parens (!^"permission:" ^^^ permission)
                | None -> !^"owned"
@@ -379,11 +367,11 @@ module Make (G : sig val global : Global.t end) = struct
                 o_evaluate o_model pointer,
                 Some (Z.pp size),
                 Some state,
-                Some (IT.pp (IT.subst_vars substitutions pointee)),
-                o_evaluate o_model pointee
+                Some (IT.pp (IT.subst_vars substitutions value)),
+                o_evaluate o_model value
                )
              in
-             (entry :: acc_table, SymSet.union (SymSet.union (symbol_it pointer) (symbol_it pointee)) acc_reported)
+             (entry :: acc_table, SymSet.union (SymSet.union (symbol_it pointer) (something_symbol_it value)) acc_reported)
           | IteratedStar p ->
              let entry =
                (None,
@@ -487,6 +475,14 @@ module Make (G : sig val global : Global.t end) = struct
     let (explanation, local) = explanation names local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation (counter_model local))
+
+  let index_term names local it = 
+    let (explanation, local) = 
+      explanation names local 
+        (SymSet.union (IT.free_vars it))
+    in
+    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
+    it_pp
 
   let index_terms names local (it,it') = 
     let (explanation, local) = 

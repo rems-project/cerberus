@@ -15,7 +15,6 @@ type lit =
   | Pointer of Z.t
   | Bool of bool
   | Unit
-  | Default of BT.t
 
 (* over integers and reals *)
 type 'bt arith_op =
@@ -140,14 +139,12 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Pointer p, Pointer p' -> Z.equal p p'
     | Bool b, Bool b' -> b = b'
     | Unit, Unit -> true
-    | Default bt, Default bt' -> BT.equal bt bt'
     | Sym _, _ -> false
     | Z _, _ -> false
     | Q _, _ -> false
     | Pointer _, _ -> false
     | Bool _, _ -> false
     | Unit, _ -> false
-    | Default _, _ -> false
   in
 
   let arith_op it it' =
@@ -411,7 +408,6 @@ let pp (it : 'bt term) : PPrint.document =
       | Bool true -> !^"true"
       | Bool false -> !^"false"
       | Unit -> !^"void"
-      | Default bt -> parens (!^("default") ^^^ colon ^^^ BT.pp bt)
     in
 
     let arith_op = function
@@ -485,9 +481,9 @@ let pp (it : 'bt term) : PPrint.document =
       | MulPointer (t1, t2) ->
          mparens (flow (break 1) [aux true t1; star ^^ dot; aux true t2])
       | LTPointer (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle; aux true o2])
+         mparens (flow (break 1) [aux true o1; langle ^^ dot; aux true o2])
       | LEPointer (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
+         mparens (flow (break 1) [aux true o1; langle ^^ equals ^^ dot; aux true o2])
       | IntegerToPointerCast t ->
          mparens (parens(!^"pointer") ^^ aux true t)
       | PointerToIntegerCast t ->
@@ -551,8 +547,8 @@ let pp (it : 'bt term) : PPrint.document =
     let option_op = function
       | Something it -> 
          c_app !^"something" [aux atomic it]
-      | Nothing _ ->
-         c_app !^"nothing" []
+      | Nothing bt ->
+         c_app !^"nothing" [BT.pp bt]
       | Is_some it ->
          c_app !^"is_some" [aux false it]
       | Value_of_some it ->
@@ -599,7 +595,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Pointer _ -> SymSet.empty
     | Bool _ -> SymSet.empty
     | Unit -> SymSet.empty
-    | Default _ -> SymSet.empty
   in
 
   let arith_op : 'bt arith_op -> SymSet.t = function
@@ -1018,7 +1013,6 @@ let q_ (n,n') = IT (Lit (Q (n,n')), BT.Real)
 let pointer_ n = IT (Lit (Pointer n), BT.Loc)
 let bool_ b = IT (Lit (Bool b), BT.Bool)
 let unit_ = IT (Lit Unit, BT.Unit)
-let default_ bt = IT (Lit (Default bt), bt)
 let int_ n = z_ (Z.of_int n)
 
 (* cmp_op *)
@@ -1156,7 +1150,7 @@ let disjoint_from fp fps =
 
 
 
-let good_pointer_it pointer_it pointee_sct = 
+let good_pointer pointer_it pointee_sct = 
   match pointee_sct with
   | CT.Sctype (_, Void) ->
      representable_ (CT.pointer_sct pointee_sct, pointer_it);
@@ -1166,16 +1160,10 @@ let good_pointer_it pointer_it pointee_sct =
          aligned_ (pointee_sct, pointer_it);
        ]
 
-let good_pointer pointer pointee_sct = 
-  let pointer_it = sym_ (pointer, BT.Loc) in
-  good_pointer_it pointer_it pointee_sct
-
-
-let good_value v sct =
-  let v_it = sym_ (v, BT.of_sct sct) in
+let good_value v_it sct =
   match sct with
-  | Sctype (_, Pointer (qualifiers, pointee_sct)) ->
-     good_pointer v pointee_sct
+  | Sctypes.Sctype (_, Pointer (qualifiers, pointee_sct)) ->
+     good_pointer v_it pointee_sct
   | _ ->
      representable_ (sct, v_it)
 
@@ -1207,7 +1195,6 @@ let hash (IT (it, _bt)) =
      | Pointer p -> 22
      | Bool b -> 23
      | Unit -> 24
-     | Default bt -> 25
      | Sym (Symbol (_,i, _)) -> 100 + i
      end
 

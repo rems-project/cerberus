@@ -36,15 +36,15 @@ let early =
   let iargs = [(start_s, BT.Integer); (end_s, BT.Integer)] in
   let oargs = [] in
   let block = 
-    Resources.region 
+    Resources.char_region 
       (integerToPointerCast_ start_t)
       (add_ (sub_ (end_t, start_t), int_ 1))
       (q_ (1, 1))
   in
   let lrt =
     LRT.Resource (block, 
-    LRT.Constraint (IT.good_pointer_it (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void)),
-    LRT.Constraint (IT.good_pointer_it (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void)),
+    LRT.Constraint (IT.good_pointer (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void)),
+    LRT.Constraint (IT.good_pointer (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void)),
      LRT.I)))
   in
   let predicate = {
@@ -74,7 +74,7 @@ let zero_region =
   in
   let lrt =
     LRT.Resource (array, 
-    LRT.Constraint (IT.good_pointer_it pointer_t (Sctypes.Sctype ([], Void)),
+    LRT.Constraint (IT.good_pointer pointer_t (Sctypes.Sctype ([], Void)),
     LRT.I))
   in
   let predicate = {

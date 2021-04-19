@@ -55,7 +55,7 @@ type stored_struct_predicate =
 
 let stored_struct_predicate_to_predicate tag pred = 
   let iargs = [(pred.pointer, BT.Loc)] in
-  let oargs = [(pred.value, BT.Struct tag)] in
+  let oargs = [(pred.value, BT.Option (BT.Struct tag))] in
   let condition = fst pred.clause in
   let outputs = [snd pred.clause] in
   {iargs; oargs; clauses = [Clause {condition; outputs}]}

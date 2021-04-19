@@ -98,8 +98,6 @@ let rec simp (lcs : t list) term =
        IT (Lit (Bool b), bt)
     | Unit ->
        IT (Lit Unit, bt)
-    | Default bt' ->
-       IT (Lit (Default bt'), bt)
 
   and arith_op it bt = 
     match it with
@@ -235,8 +233,6 @@ let rec simp (lcs : t list) term =
        begin match a, b with
        | _ when equal a b ->
          IT (Lit (Bool true), bt) 
-       | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
-          bool_ (Z.equal i1 i2)
        | IT (Lit (Sym s), _), IT (Lit (Sym s'), _) ->
           begin match SymPairMap.find_opt (s,s') equalities with
           | Some bool -> bool_ bool
@@ -257,20 +253,30 @@ let rec simp (lcs : t list) term =
         
 
   and cmp_op it bt = 
-    let cmp_rule mk z_op int_op a b =
+    match it with
+    | LT (a, b) -> 
+      let a = aux a in
+      let b = aux b in
+      begin match a, b with
+      | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+         IT (Lit (Bool (Z.lt_big_int z1 z2)), bt)
+      | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
+         IT (Lit (Bool ((i1*j2) < (i2*j1))), bt)
+      | _, _ ->
+         IT (Cmp_op (LT (a, b)), bt)
+      end
+    | LE (a, b) -> 
       let a = aux a in
       let b = aux b in
        match a, b with
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-          IT (Lit (Bool (z_op z1 z2)), bt)
+          IT (Lit (Bool (Z.le_big_int z1 z2)), bt)
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
-          IT (Lit (Bool (int_op (i1*j2) (i2*j1))), bt)
+          IT (Lit (Bool ((i1*j2) <= (i2*j1))), bt)
+       | _, _ when equal a b ->
+          bool_ true
        | _, _ ->
-          IT (Cmp_op (mk (a, b)), bt)
-    in
-    match it with
-    | LT (a, b) -> cmp_rule (fun (a, b) -> LT (a, b)) Z.lt_big_int (<) a b
-    | LE (a, b) -> cmp_rule (fun (a, b) -> LE (a, b)) Z.le_big_int (<=) a b
+          IT (Cmp_op (LE (a, b)), bt)
 
   and tuple_op it bt = 
     match it with

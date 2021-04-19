@@ -2,18 +2,16 @@ open Pp
 
 type item = {
     path : Path.t; 
-    sym : Sym.t; 
-    bt : BaseTypes.t
+    it : IndexTerms.t; 
   }
 
 type t = item list
 
 
-let pp_item {path; sym; bt} = 
+let pp_item {path; it} = 
   Pp.parens (
       Path.pp path ^^ comma ^^ 
-      Sym.pp sym ^^ comma ^^ 
-      BaseTypes.pp bt
+      IndexTerms.pp it
     )
 
 let pp = Pp.list pp_item

@@ -127,38 +127,38 @@ let struct_decl loc fields (tag : BT.tag) =
     let open LRT in
     let struct_pointer_s = Sym.fresh_named "p" in
     let struct_pointer_t = sym_ (struct_pointer_s, Loc) in
-    let struct_value_s = Sym.fresh_named "v" in
+    let ostruct_value_s = Sym.fresh_named "v" in
     let clause = 
-      let (lrt, values) = 
-        List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
+      let (lrt, lcs, values) = 
+        List.fold_right (fun {offset; size; member_or_padding} (lrt, lcs, values) ->
             let member_p = addPointer_ (struct_pointer_t, z_ offset) in
             match member_or_padding with
             | Some (member, sct) ->
-               let bt = BT.of_sct sct in
-               let member_v = Sym.fresh () in
-               let member_t = sym_ (member_v, bt) in
+               let omember_v = Sym.fresh () in
+               let omember_t = sym_ (omember_v, BT.Option (BT.of_sct sct)) in
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
-                 | Sctypes.Struct tag -> predicate (Tag tag) [member_p] [member_t]
-                 | _ -> points_to (member_p, size) (q_ (1, 1)) member_t
+                 | Sctypes.Struct tag -> predicate (Tag tag) [member_p] [omember_t]
+                 | _ -> point (member_p, size) (q_ (1, 1)) omember_t
                in
                let lrt = 
-                 LRT.Logical ((member_v, bt),
+                 LRT.Logical ((omember_v, BT.Option (BT.of_sct sct)),
                  LRT.Resource (resource, lrt)) in
-               let value = (member, sym_ (member_v, bt)) :: values in
-               (lrt, value)
+               let lcs = is_some_ omember_t :: lcs in
+               let value = (member, value_of_some_ omember_t) :: values in
+               (lrt, lcs, value)
             | None ->
-               let resource = padding (member_p, size) (q_ (1,1)) in
+               let resource = point (member_p, size) (q_ (1,1)) (nothing_ BT.Integer) in
                let lrt = LRT.Resource (resource, lrt) in
-               (lrt, values)
-          ) layout (LRT.I, [])
+               (lrt, lcs, values)
+          ) layout (LRT.I, [], [])
       in
-      let value = IT.struct_ (tag, values) in
+      let value = ite_ (and_ lcs, something_ (IT.struct_ (tag, values)), nothing_ (BT.Struct tag)) in
       let ct = Sctypes.Sctype ([], Sctypes.Struct tag) in
-      let lrt = lrt @@ Constraint (IT.representable_ (ct, value), LRT.I) in
+      let lrt = lrt @@ Constraint (impl_ (and_ lcs, IT.representable_ (ct, value_of_some_ value)), LRT.I) in
       (lrt, value)
     in
-    return { pointer = struct_pointer_s; value = struct_value_s; clause }
+    return { pointer = struct_pointer_s; value = ostruct_value_s; clause }
   in
 
   let decl = { layout; stored_struct_predicate } in
@@ -171,29 +171,36 @@ let struct_decl loc fields (tag : BT.tag) =
 
 
 
-let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : Sym.t) path sct =
+let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT.t) path sct =
   let open Sctypes in
-  let pointee = Sym.fresh () in
-  let pointee_bt = BT.of_sct sct in
-  let l = [(pointee, pointee_bt)] in
+  let opointee = Sym.fresh () in
+  let opointee_bt = BT.Option (BT.of_sct sct) in
+  let opointee_t = sym_ (opointee, opointee_bt) in
+  let l = [(opointee, opointee_bt)] in
   let mapping = 
     [{path = Path.pointee (Some label) path; 
-      sym = pointee; bt = pointee_bt}] 
+      it = value_of_some_ opointee_t}] 
   in
   match sct with
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
+  | Sctype (_, Struct tag) ->
+      let r = [predicate (Tag tag) [pointer] [opointee_t]] in
+      let c = [is_some_ opointee_t] in
+      return (l, r, c, mapping)
   | sct -> 
      let r = 
-       RE.representation layouts sct (sym_ (pointer, BT.Loc))
-         (Some (sym_ (pointee, pointee_bt))) (q_ (1, 1))
+       [point (pointer, Memory.size_of_ctype sct)
+          (q_ (1, 1)) (sym_ (opointee, opointee_bt))]
+       (* RE.representation layouts sct (sym_ (pointer, BT.Loc))
+        *   (Some (sym_ (pointee, pointee_bt))) (q_ (1, 1)) *)
      in
-     let c = [good_value pointee sct] in
+     let c = [is_some_ opointee_t; good_value (value_of_some_ opointee_t) sct] in
      return(l, r, c, mapping)
 
 
-let make_region loc pointer size =
-  let resource = Resources.region pointer size (q_ (1, 1)) in
+let make_char_region loc pointer size =
+  let resource = Resources.char_region pointer size (q_ (1, 1)) in
   return ([], [resource], [], [])
 
 
@@ -204,10 +211,10 @@ let make_block loc pointer path sct =
      fail loc (Generic !^"cannot make void* pointer a block")
   | _ -> 
      let r = 
-       block (sym_ (pointer, BT.Loc), Memory.size_of_ctype sct)
-         (q_ (1, 1)) Nothing
+       [point (pointer, Memory.size_of_ctype sct)
+          (q_ (1, 1)) (nothing_ BT.Integer)]
      in
-     return ([], [r], [], [])
+     return ([], r, [], [])
 
 let make_pred loc pred (predargs : Path.predarg list) iargs = 
   let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with
@@ -222,7 +229,7 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
           | Some name -> 
              let item = 
                {path = Path.predarg pred predargs name; 
-                sym = s; bt = bt} 
+                it = sym_ (s, bt)} 
              in
              item :: mapping 
           | None -> []
@@ -269,14 +276,14 @@ let type_of__vars loc var_typs name derefs =
 
 
 
-let resolve_path loc (mapping : mapping) (o : Path.t) : (Sym.t * BT.t, type_error) m = 
+let resolve_path loc (mapping : mapping) (o : Path.t) : (IT.t, type_error) m = 
   let open Mapping in
   (* let () = print stderr (item "o" (Path.pp o)) in
    * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
   let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
   match found with
-  | Some {sym; bt; _} -> 
-     return (sym, bt)
+  | Some {it; _} -> 
+     return it
   | None -> 
      fail loc (Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
 
@@ -290,8 +297,7 @@ let rec resolve_index_term loc mapping (it: Ast.term)
   | Lit (Integer i) -> 
      return (IT.z_ i)
   | Path o -> 
-     let@ (s, bt) = resolve_path loc mapping o in
-     return (IT.sym_ (s, bt))
+     resolve_path loc mapping o
   | ArithOp (Addition (it, it')) -> 
      let@ it = aux it in
      let@ it' = aux it' in
@@ -362,8 +368,7 @@ let rec resolve_predarg loc mapping = function
      let@ it' = resolve_predarg loc mapping a in
      return (IT.mulPointer_ (it, it'))
   | PathArg p ->
-     let@ (ls, s) = resolve_path loc mapping p in
-     return (IT.sym_ (ls, s))
+     resolve_path loc mapping p
 
 
 
@@ -381,10 +386,10 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
      | Some (bn, derefs) -> 
         let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ (sym, _) = resolve_path loc mapping path in
+        let@ it = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
-           make_owned loc layouts label sym (Path.var bn) sct2
+           make_owned loc layouts label it (Path.var bn) sct2
         | _ ->
           fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
      end
@@ -396,10 +401,10 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
      | Some (bn, derefs) -> 
         let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ (sym, _) = resolve_path loc mapping path in
+        let@ it = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
-           make_block loc sym (Path.var bn) sct2
+           make_block loc it (Path.var bn) sct2
         | _ ->
           fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
      end
@@ -409,7 +414,7 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
   | "Region", [pointer_arg; size_arg] ->
      let@ pointer_it = resolve_predarg loc mapping pointer_arg in
      let@ size_it = resolve_predarg loc mapping size_arg in
-     make_region loc pointer_it size_it
+     make_char_region loc pointer_it size_it
   | "Region", _ ->
      fail loc (Generic !^"Region predicate takes 2 arguments, a path and a size")
 
@@ -423,16 +428,16 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
 
 let aarg_item l (aarg : aarg) =
   let path = Path.addr aarg.name in
-  {path; sym = aarg.asym; bt = BT.Loc}
+  {path; it = sym_ (aarg.asym, BT.Loc)}
 
 let varg_item l (varg : varg) =
   let bn = {v = varg.name; label = Some l} in
   let path = Path.var bn in
-  {path; sym = varg.vsym; bt = BT.of_sct varg.typ} 
+  {path; it = sym_ (varg.vsym, BT.of_sct varg.typ)} 
 
 let garg_item l (garg : garg) =
   let path = Path.addr garg.name in
-  {path; sym = garg.lsym; bt = BT.of_sct garg.typ} 
+  {path; it = sym_ (garg.lsym, BT.Loc) } 
 
 
 let make_fun_spec loc layouts fsym (fspec : function_spec)
@@ -457,7 +462,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         let@ (l, r, c, mapping') = 
           match garg.accessed with
           | Some loc -> 
-             make_owned loc layouts "start" garg.lsym item.path garg.typ 
+             make_owned loc layouts "start" item.it item.path garg.typ 
           | None -> return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
@@ -471,8 +476,8 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         let a = [(aarg.asym, BT.Loc)] in
         let item = aarg_item "start" aarg in
         let@ (l, r, c, mapping') = 
-          make_owned loc layouts "start" aarg.asym item.path aarg.typ in
-        let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
+          make_owned loc layouts "start" item.it item.path aarg.typ in
+        let c = good_value item.it (pointer_sct aarg.typ) :: c in
         return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
       (iA, iL, iR, iC, mapping) fspec.function_arguments
@@ -498,8 +503,8 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
   let (oA, oC, mapping) = 
     let ret = fspec.function_return in
     let item = varg_item "end" ret in
-    let c = [good_value ret.vsym ret.typ] in
-    ((ret.vsym, item.bt), c, item :: mapping)
+    let c = [good_value item.it ret.typ] in
+    ((ret.vsym, IT.bt item.it), c, item :: mapping)
   in
 
   (* globs *)
@@ -509,7 +514,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         let@ (l, r, c, mapping') = 
           match garg.accessed with
           | Some loc -> 
-             make_owned loc layouts "end" garg.lsym item.path garg.typ 
+             make_owned loc layouts "end" item.it item.path garg.typ 
           | None -> return ([], [], [], [])
         in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
@@ -522,8 +527,8 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
     ListM.fold_leftM (fun (oL, oR, oC, mapping) aarg ->
         let item = aarg_item "end" aarg in
         let@ (l, r, c, mapping') = 
-          make_owned loc layouts "end" aarg.asym item.path aarg.typ in
-        let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
+          make_owned loc layouts "end" item.it item.path aarg.typ in
+        let c = good_value item.it (pointer_sct aarg.typ) :: c in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
       (oL, oR, oC, mapping) fspec.function_arguments
@@ -575,7 +580,7 @@ let make_label_spec
         let@ (l, r, c, mapping') = 
           match garg.accessed with
           | Some loc -> 
-             make_owned loc layouts lname garg.lsym item.path garg.typ 
+             make_owned loc layouts lname item.it item.path garg.typ 
           | None ->  return ([], [], [], [])
         in
         return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
@@ -588,7 +593,7 @@ let make_label_spec
     ListM.fold_leftM (fun (iL, iR, iC, mapping) aarg ->
         let item = aarg_item lname aarg in
         let@ (l, r, c, mapping') = 
-          make_owned loc layouts lname aarg.asym item.path aarg.typ in
+          make_owned loc layouts lname item.it item.path aarg.typ in
         return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
       )
       (iL, iR, iC, mapping) lspec.function_arguments
@@ -604,8 +609,8 @@ let make_label_spec
           let a = [(aarg.asym, BT.Loc)] in
           let item = aarg_item lname aarg in
           let@ (l, r, c, mapping') = 
-            make_owned loc layouts lname aarg.asym item.path aarg.typ in
-          let c = good_value aarg.asym (pointer_sct aarg.typ) :: c in
+            make_owned loc layouts lname item.it item.path aarg.typ in
+          let c = good_value item.it (pointer_sct aarg.typ) :: c in
           return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
         )
         (iA, iL, iR, iC, []) lspec.label_arguments
