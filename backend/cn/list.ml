@@ -12,6 +12,11 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | None -> filter_map f xs
      | Some y -> y :: filter_map f xs
 
+let rec find_map f = function
+  | [] -> None
+  |  x :: xs -> match f x with
+    | None -> find_map f xs
+    | Some x -> Some x
 
 let rec equal (equality : 'a -> 'a -> bool) (xs : 'a list) (xs' : 'a list) : bool = 
   match xs, xs' with
