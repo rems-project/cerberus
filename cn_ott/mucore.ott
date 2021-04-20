@@ -371,8 +371,8 @@ grammar
   
   generic_paction :: '' ::= {{ auxparam 'a 'bty 'sym }} {{ com memory actions with polarity }}
     |  polarity generic_action :: X :: Paction
-    |  generic_action          :: M :: Positive {{ com positive, sequenced by both \ottkw{let\ weak} and \ottkw{let\ strong} }} {{ lem Paction Pos [[generic_action]] }}
-    |  neg ( generic_action )  :: M :: Negative {{ com negative, only sequenced by \ottkw{let\ strong} }} {{ lem Paction Neg [[generic_action]] }}
+    |  generic_action          :: M :: Positive {{ com positive, sequenced by both \ottkw{let\ weak} and \ottkw{let\ strong} }} {{ ocaml Paction Pos [[generic_action]] }}
+    |  neg ( generic_action )  :: M :: Negative {{ com negative, only sequenced by \ottkw{let\ strong} }} {{ ocaml Paction Neg [[generic_action]] }}
 
 
 %metavar Mem_memop {{ lem Mem.memop }} {{ tex memop }} ::= {{ phantom }}  
