@@ -310,31 +310,33 @@ grammar
     | tyvarsym                                                                         ::   :: sym
     | Implementation__implementation_constant                                          ::   :: impl {{ com implementation-defined constant }} 
     | generic_value                                                                    ::   :: val
-    | constrained ( </ Mem_mem_iv_constrainti , generic_pexpri // , // i /> )          :: X :: constrained {{ com constrained value }} % TODO: hide from tex
+    | constrained ( </ Mem_mem_iv_constrainti , tyvarsymi // , // i /> )               :: X :: constrained {{ com constrained value }} % TODO: hide from tex
     | undef Loc_t ( Undefined_undefined_behaviour )                                    ::   :: undef {{ com undefined behaviour }}
-    | error ( string , generic_pexpr )                                                 ::   :: error {{ com impl-defined static error }}
-    | generic_ctor ( </ generic_pexpri // , // i /> )                                  ::   :: ctor {{ com data constructor application }}
-    | case generic_pexpr of </ | generic_patterni => generic_pexpri // i /> end        ::   :: case {{ com pattern matching }}
-    | array_shift ( generic_pexpr1 , ty , generic_pexpr2 )                          ::   :: array_shift {{ com pointer array shift }}
-    | member_shift ( generic_pexpr , tyvarsym , Cabs_cabs_identifier )                 ::   :: member_shift {{ com pointer struct/union member shift }}
-    | not ( generic_pexpr )                                                            ::   :: not {{ com boolean not }}
-    | generic_pexpr1 binop generic_pexpr2                                              ::   :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }}
-    | ( struct tyvarsym ) { </ . Cabs_cabs_identifieri = generic_pexpri // , // i /> } ::   :: struct {{ com C struct expression }}
-    | ( union tyvarsym ) { . Cabs_cabs_identifier = generic_pexpr }                    ::   :: union {{ com C union expression }}
-    | cfunction ( generic_pexpr )                                                      ::   :: cfunction {{ com C function pointer expression }}
-    | memberof  ( tyvarsym , Cabs_cabs_identifier , generic_pexpr )                    ::   :: memberof {{ com C struct/union member access }}
-    | generic_name ( generic_pexpr1 , .. , generic_pexprn )                            ::   :: call {{ com pure function call }}
-    | let generic_pattern = generic_pexpr1 in generic_pexpr2                           ::   :: let {{ com pure let }} % TODO: binders
-    | if generic_pexpr then generic_pexpr1 else generic_pexpr2                         ::   :: if {{ com pure if }}
-    | is_scalar ( generic_pexpr )                                                      ::   :: is_scalar
-    | is_integer ( generic_pexpr )                                                     ::   :: is_integer
-    | is_signed ( generic_pexpr )                                                      ::   :: is_signed
-    | is_unsigned ( generic_pexpr )                                                    ::   :: is_unsigned
-    | bmc_assume ( generic_pexpr )                                                     ::   :: bmc_assume
-    | are_compatible ( generic_pexpr1 , generic_pexpr2 )                               ::   :: are_compatible
-  
+    | error ( string , tyvarsym )                                                      ::   :: error {{ com impl-defined static error }}
+    | generic_ctor ( </ tyvarsymi // , // i /> )                                       ::   :: ctor {{ com data constructor application }}
+    | array_shift ( tyvarsym1 , ty , tyvarsym2 )                                       ::   :: array_shift {{ com pointer array shift }}
+    | member_shift ( tyvarsym1 , tyvarsym2 , Cabs_cabs_identifier )                    ::   :: member_shift {{ com pointer struct/union member shift }}
+    | not ( tyvarsym )                                                                 ::   :: not {{ com boolean not }}
+    | tyvarsym1 binop tyvarsym2                                                        ::   :: op {{ order [[binop]] [[tyvarsym1]] [[tyvarsym2]] }}
+    | ( struct tyvarsym ) { </ . Cabs_cabs_identifieri = tyvarsymi // , // i /> }      ::   :: struct {{ com C struct expression }}
+    | ( union tyvarsym1 ) { . Cabs_cabs_identifier = tyvarsym2 }                       ::   :: union {{ com C union expression }}
+    | memberof  ( tyvarsym1 , Cabs_cabs_identifier , tyvarsym2 )                       ::   :: memberof {{ com C struct/union member access }}
+    | generic_name ( tyvarsym1 , .. , tyvarsymn )                                      ::   :: call {{ com pure function call }}
+
+    | assert_undef ( tyvarsym , Undefined_undefined_behaviour )                        ::   :: assert_undef
+    | bool_to_integer ( tyvarsym )                                                     ::   :: bool_to_integer
+    | conv_int ( ty , tyvarsym )                                                       ::   :: conv_int
+    | wrapI ( ty , tyvarsym )                                                          ::   :: wrapI
+ 
   generic_pexpr {{ tex e }} :: '' ::= {{ auxparam 'bty 'sym }}
     | annots bty generic_pexpr_aux :: :: Pexpr
+
+  generic_tpexpr {{ lem generic_tpexpr_ }} :: 'PE' ::= {{ auxparam 'bty 'sym }} {{ com Core top-level pure expressions }}
+    | case tyvarsym of </ | generic_patterni => generic_tpexpri // i /> end            ::   :: case {{ com pattern matching }}
+    | let generic_pattern = generic_tpexpr1 in generic_tpexpr2                         ::   :: let {{ com pure let }} % TODO: binders
+    | if tyvarsym then generic_tpexpr1 else generic_tpexpr2                            ::   :: if {{ com pure if }}
+    | done tyvarsym                                                                    ::   :: done {{ com pure done }}
+
 
 
 metavar a {{ tex }} {{ lem 'a }} ::= {{ phantom }}
@@ -634,11 +636,11 @@ grammar
         {{ coq G_nil }}
         {{ hol [] }}
         {{ lem [] }}
-    | G , x : T           ::   :: vn 
-        {{ isa ([[x]],[[T]])#[[G]] }}
-        {{ coq (cons ([[x]],[[T]]) [[G]]) }}
-        {{ hol (([[x]],[[T]])::[[G]]) }}
-        {{ lem (([[x]],[[T]])::[[G]]) }}
+    | G , x : core_base_type           ::   :: vn 
+        {{ isa ([[x]],[[core_base_type]])#[[G]] }}
+        {{ coq (cons ([[x]],[[core_base_type]]) [[G]]) }}
+        {{ hol (([[x]],[[core_base_type]])::[[G]]) }}
+        {{ lem (([[x]],[[core_base_type]])::[[G]]) }}
 
   terminals :: 'terminals_' ::=
     | \                   ::   :: lambda     {{ tex \lambda }}
@@ -654,19 +656,19 @@ grammar
        {{ coq (not [[formula]]) }}
        {{ hol (~[[formula]]) }}
        {{ lem (not [[formula]]) }}
-    | tyvarsym : T in G          ::   :: xTG 
-       {{ isa ? G1 G2. [[G]] = G1 @ ([[tyvarsym]],[[T]])#[[G2]] & [[tyvarsym]]~:fst ` set G1 }}
-       {{ coq (bound [[tyvarsym]] [[T]] [[G]])  }}
-       {{ lem (bound [[tyvarsym]] [[T]] [[G]])  }}
-       {{ hol ? G1 G2. ([[G]] = G1 ++ ([[tyvarsym]],[[T]])::[[G2]]) /\ ~(MEM [[tyvarsym]] (MAP FST G1)) }}
+    | tyvarsym : core_base_type in G          ::   :: xTG 
+       {{ isa ? G1 G2. [[G]] = G1 @ ([[tyvarsym]],[[core_base_type]])#[[G2]] & [[tyvarsym]]~:fst ` set G1 }}
+       {{ coq (bound [[tyvarsym]] [[core_base_type]] [[G]])  }}
+       {{ lem (bound [[tyvarsym]] [[core_base_type]] [[G]])  }}
+       {{ hol ? G1 G2. ([[G]] = G1 ++ ([[tyvarsym]],[[core_base_type]])::[[G2]]) /\ ~(MEM [[tyvarsym]] (MAP FST G1)) }}
 
 defns
   Jtype :: '' ::= 
 
 defn
-    G |- tyvarsym : T :: :: GtT :: GtT_ by
-        
-    tyvarsym:T in G
+    G |- generic_pexpr_aux : core_base_type :: :: GtT :: GtT_ by
+
+    tyvarsym : boolean in G
     -------- :: value_name
-    G |- tyvarsym:T
+    G |- not ( tyvarsym ) : boolean
 
