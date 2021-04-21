@@ -644,6 +644,7 @@ grammar
     | * :: :: star {{ tex \star }}
     | /\ :: :: and {{ tex \wedge }}
     | neg :: :: neg {{ tex \neg }}
+    | = :: :: eq {{ tex = }}
 
 
   bt :: '' ::=           {{ ocaml 'bt }}
@@ -654,11 +655,14 @@ grammar
 
 
   lit :: 'Lit_' ::=
-  | tyvarsym :: :: Sym
+    | tyvarsym :: :: Sym
+    | Unit :: :: Unit
+  
 
 
   bool_op :: '' ::=      {{ auxparam 'bt }}
     | neg index_term :: :: Not
+    | index_term1 = index_term2 :: :: Eq
 
 
   index_term_aux :: '' ::= {{ auxparam 'bt }}
@@ -668,6 +672,7 @@ grammar
   index_term :: '' ::= {{ auxparam 'bt }}
     | lit :: :: Lit
     | index_term_aux bt :: :: IT
+    | ( index_term ) :: S :: Paren {{ com parentheses }} {{ ocaml [[index_term]] }}
 
 
   arg :: ArgTy_ ::= {{ com argument types }}
@@ -720,5 +725,11 @@ defn
 
     x : bool in C
     -------------------------------------------------------- :: not
-    C ; L ; N |- not ( x ) : sigma y : bool . neg y _bt /\ I
+    C ; L ; N |- not ( x ) : sigma y : bool . y = (neg x _bt) _bt /\ I
+    % udpate the grammar so that y = not x
+    % defer globals - resources  if touched
+
+
+    ------------- :: value_unit
+    C ; L ; N |- Unit : sigma y : unit . y = Unit _bt /\ I
 

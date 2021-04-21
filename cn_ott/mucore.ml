@@ -208,11 +208,13 @@ and ('a, 'bty, 'sym) mu_expr =
 type 
 lit = 
    Lit_Sym of x
+ | Lit_Unit
 
 
 type 
 'bt bool_op = 
    Not of 'bt index_term
+ | Eq of 'bt index_term * 'bt index_term
 
 and 'bt index_term_aux = 
    Bool_op of 'bt bool_op
