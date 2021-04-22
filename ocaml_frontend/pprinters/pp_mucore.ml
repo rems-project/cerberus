@@ -103,7 +103,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
     | M_PEop (OpOr,  _, _) -> Some 7
 
-    | M_PEundef _
     | M_PEerror _
     | M_PEval _
     | M_PEconstrained _
@@ -125,6 +124,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEcase _ -> None
     | M_PElet _ -> None
     | M_PEif _ -> None
+    | M_PEundef _ -> None
 
   let precedence_expr = function
     | M_Epure _
@@ -137,7 +137,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
     (* | M_Ewait _ -> *)
-    | M_Erun _
       -> 
         None
 
@@ -158,6 +157,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Ewseq _ ->
         Some 4
     | M_Edone _ -> 
+       None
+    | M_Eundef _ ->
+       None
+    | M_Erun _ ->
        None
     (* | M_Esave _ ->
      *     Some 5 *)
@@ -392,8 +395,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     (maybe_print_location loc) ^^
       begin
         match pe with
-          | M_PEundef (_, ub) ->
-              pp_keyword "undef" ^^ P.parens (pp_undef ub)
           | M_PEerror (str, pe) ->
               pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_asym pe)
           | M_PEval cval ->
@@ -495,6 +496,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               )
           | M_PEdone asym ->
               pp_control "done" ^^^ pp_asym asym
+          | M_PEundef (_, ub) ->
+              pp_keyword "undef" ^^ P.parens (pp_undef ub)
       end
     in pp budget None pe
 
@@ -667,8 +670,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]") *)
           (* | M_Eunseq es ->
            *     pp_control "unseq" ^^ P.parens (comma_list pp es) *)
-          | M_Erun (sym, pes) ->
-              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
         end
       end
 
@@ -765,6 +766,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               P.parens (pp e)
           | M_Edone asym ->
               pp_control "done" ^^^ pp_asym asym
+          | M_Erun (sym, pes) ->
+              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
+          | M_Eundef (_, ub) ->
+              pp_keyword "undef" ^^ P.parens (pp_undef ub)        
         end
       end
       in pp budget None expr

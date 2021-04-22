@@ -127,7 +127,6 @@ module Make(T : TYPES) = struct
    | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
    | M_PEval of 'TY mu_value
    | M_PEconstrained of (Mem.mem_iv_constraint * 'TY asym) list (* constrained value *)
-   | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
    | M_PEerror of string * 'TY asym (* impl-defined static error *)
    | M_PEctor of mu_ctor * ('TY asym) list (* data constructor application *)
    | M_PEarray_shift of ('TY asym) * T.ct * ('TY asym) (* pointer array shift *)
@@ -150,6 +149,7 @@ module Make(T : TYPES) = struct
 
 
   type 'TY mu_tpexpr_ = 
+   | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
    | M_PEcase of ('TY asym) * (mu_pattern * 'TY mu_tpexpr) list (* pattern matching *)
    | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_tpexpr) (* pure let *)
    | M_PEif of 'TY asym * ('TY mu_tpexpr) * ('TY mu_tpexpr) (* pure if *)
@@ -216,7 +216,6 @@ module Make(T : TYPES) = struct
    | M_Eskip
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
-   | M_Erun of symbol * ('TY asym) list (* run from label *)
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
@@ -231,6 +230,8 @@ module Make(T : TYPES) = struct
    | M_Ebound of int * ('TY mu_texpr) (* $\ldots$and boundary *)
    | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
    | M_Edone of 'TY asym
+   | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+   | M_Erun of symbol * ('TY asym) list (* run from label *)
 
   and 'TY mu_texpr = 
    | M_TExpr of loc * annot list * ('TY mu_texpr_)

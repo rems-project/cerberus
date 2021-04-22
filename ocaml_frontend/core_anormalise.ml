@@ -139,6 +139,7 @@ type 'd n_pexpr_domain =
   { d_let : (mu_pexpr, 'd) letbinder;
     d_case: Loc.t -> Annot.annot list -> asym -> (mu_pattern * 'd) list -> 'd;
     d_if: Loc.t -> Annot.annot list -> asym -> 'd -> 'd -> 'd;
+    d_undef : Loc.t -> Annot.annot list -> (Loc.t * Undefined.undefined_behaviour) -> 'd
   }
 
 
@@ -152,6 +153,8 @@ let case_switch_pexpr_in_pexpr loc annots asym cases : mu_tpexpr =
 let if_pexpr_in_pexpr loc annots asym pte1 pte2 : mu_tpexpr = 
   M_TPexpr (loc, annots, (), M_PEif (asym, pte1, pte2))
 
+let undef_pexpr_in_pexpr loc annots (uloc, undef) : mu_tpexpr =
+  M_TPexpr (loc, annots, (), M_PEundef (uloc, undef))
 
 
 let letbinder_pexpr_in_expr loc annots pat pexpr body : mu_texpr = 
@@ -163,17 +166,22 @@ let case_switch_pexpr_in_expr loc annots asym cases : mu_texpr =
 let if_pexpr_in_expr loc annots asym pte1 pte2 : mu_texpr = 
   M_TExpr (loc, annots, M_Eif (asym, pte1, pte2))
 
+let undef_pexpr_in_expr loc annots (uloc, undef) : mu_texpr =
+  M_TExpr (loc, annots, M_Eundef (uloc, undef))
+
 
 let pexpr_n_pexpr_domain = { 
     d_let = letbinder_pexpr_in_pexpr;
     d_case = case_switch_pexpr_in_pexpr;
     d_if = if_pexpr_in_pexpr;
+    d_undef = undef_pexpr_in_pexpr;
   }
 
 let expr_n_pexpr_domain = { 
     d_let = letbinder_pexpr_in_expr;
     d_case = case_switch_pexpr_in_expr;
     d_if = if_pexpr_in_expr;
+    d_undef = undef_pexpr_in_expr;
   }
 
 
@@ -279,8 +287,9 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
      n_pexpr_names loc domain exprs (fun exprs ->
      let l = (list_combine constraints exprs) in
      k (annotate (M_PEconstrained l)))
+  (* DISCARDS CONTINUATION *)
   | PEundef(l, u) -> 
-     k (annotate (M_PEundef(l, u)))
+     domain.d_undef loc annots (l, u)
   | PEerror(err, e') ->
      n_pexpr_name loc domain e' (fun e' -> 
      k (annotate (M_PEerror(err, e'))))
@@ -719,10 +728,11 @@ let rec n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr =
      let (_,typs_pes) = (List.split syms_typs_pes) in
      let (_,pes) = (List.split typs_pes) in
      n_pexpr_in_expr_names pes (fun pes ->
-     k (wrap (M_Erun(sym1, pes))))
+     twrap (M_Erun(sym1, pes)))
+  (* DISCARDS CONTINUATION *)
   | Erun(_a, sym1, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
-     k (wrap (M_Erun(sym1, pes))))
+     twrap (M_Erun(sym1, pes)))
   | Epar es -> 
      error "core_anormalisation: Epar"
   | Ewait tid1 ->

@@ -14,37 +14,6 @@ open Mu
 
 let rec ib_texpr label e = 
 
-
-  let aux (e : unit mu_expr) =
-    let (M_Expr(loc, oannots, e_)) = e in
-    let wrap e_= M_Expr(loc, oannots, e_) in
-    match e_ with
-    | M_Epure _ -> `Expr (wrap e_)
-    | M_Ememop _ -> `Expr (wrap e_)
-    | M_Eaction _ -> `Expr (wrap e_)
-    | M_Eskip -> `Expr (wrap e_)
-    | M_Eccall( _, _, _) -> `Expr (wrap e_)
-    | M_Eproc( _, _) -> `Expr (wrap e_)
-    | M_Erun(l, args) -> 
-       let (label_sym, label_arg_syms, label_body) = label in
-       if not (Symbol.symbolEquality l label_sym) then 
-         `Expr e
-       else if not ((List.length label_arg_syms) = (List.length args)) then
-         failwith "M_Erun supplied wrong number of arguments"
-       else
-         let () = (Debug_ocaml.print_debug 1 [] (fun () -> ("REPLACING LABEL " ^ (let Symbol.Symbol( d, n, str_opt) = l in
-                                                                                  "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))))) in
-         let arguments = (Lem_list.list_combine label_arg_syms args) in
-         let (M_TExpr(_, annots2, e_)) = 
-           (List.fold_right (fun (spec_arg, (asym : 'TY asym)) body ->
-                let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
-                M_TExpr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
-              ) arguments label_body)
-         in
-         (* this combines annotations *)
-         `TExpr (M_TExpr (loc, annots2 @ oannots, e_))
-  in
-
   let (M_TExpr(loc, oannots, e_)) = e in
   let wrap e_= M_TExpr(loc, oannots, e_) in
   let taux = ib_texpr label in
@@ -61,22 +30,39 @@ let rec ib_texpr label e =
   | M_Eif( asym2, e1, e2) ->
      wrap (M_Eif( asym2, taux e1, taux e2))
   | M_Ewseq( pat, e1, e2) -> 
-     begin match aux e1 with
-     | `TExpr te -> te
-     | `Expr e1 -> wrap (M_Ewseq( pat, e1, taux e2))
-     end
+     wrap (M_Ewseq( pat, e1, taux e2))
   | M_Esseq( pat, e1, e2) ->
-     begin match aux e1 with
-     | `TExpr te -> te
-     | `Expr e1 -> wrap (M_Esseq( pat, e1, taux e2))
-     end
+     wrap (M_Esseq( pat, e1, taux e2))
   | M_Ebound( n, e) ->
      wrap (M_Ebound( n, taux e))
   | M_End es ->
      wrap (M_End (map taux es))
   | M_Edone asym ->
      wrap (M_Edone asym)
-
+  | M_Erun(l, args) -> 
+     let (label_sym, label_arg_syms, label_body) = label in
+     if not (Symbol.symbolEquality l label_sym) then 
+       e
+     else if not ((List.length label_arg_syms) = (List.length args)) then
+       failwith "M_Erun supplied wrong number of arguments"
+     else
+       let () = 
+         Debug_ocaml.print_debug 1 [] 
+           begin fun () -> 
+           let Symbol.Symbol( d, n, str_opt) = l in
+             ("REPLACING LABEL " ^ 
+                "Symbol" ^ stringFromPair string_of_int (fun x_opt-> stringFromMaybe (fun s-> "\"" ^ (s ^ "\"")) x_opt) (n, str_opt))
+           end 
+       in
+       let arguments = (Lem_list.list_combine label_arg_syms args) in
+       let (M_TExpr(_, annots2, e_)) = 
+         (List.fold_right (fun (spec_arg, (asym : 'TY asym)) body ->
+              let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
+              M_TExpr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
+            ) arguments label_body)
+       in
+       (* this combines annotations *)
+       M_TExpr (loc, annots2 @ oannots, e_)
 
 
     

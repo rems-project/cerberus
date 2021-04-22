@@ -1075,9 +1075,6 @@ module Make (G : sig val global : Global.t end) = struct
            return (rt_of_vt vt, local)
         | M_PEconstrained _ ->
            Debug_ocaml.error "todo: PEconstrained"
-        | M_PEundef (_loc, undef) ->
-           let expl = Explain.undefined_behaviour names local in
-           fail loc (Undefined_behaviour (undef, expl))
         | M_PEerror (err, asym) ->
            let@ arg = arg_of_asym local asym in
            fail arg.loc (StaticError err)
@@ -1253,6 +1250,9 @@ module Make (G : sig val global : Global.t end) = struct
          let@ arg = arg_of_asym local asym in
          let@ local = subtype loc local arg typ in
          return ()
+      | M_PEundef (_loc, undef) ->
+         let expl = Explain.undefined_behaviour names local in
+         fail loc (Undefined_behaviour (undef, expl))
 
 
     (*** memory related logic *****************************************************)
@@ -1391,15 +1391,14 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let infer_expr (local, labels) (e : 'bty mu_expr) 
-            : ((RT.t * L.t) orFalse, type_error) m = 
+            : ((RT.t * L.t), type_error) m = 
       let (M_Expr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "inferring expression"));
       debug 3 (lazy (item "expr" (group (pp_expr e))));
       debug 3 (lazy (item "ctxt" (L.pp local)));
       let@ result = match e_ with
         | M_Epure pe -> 
-           let@ (rt, local) = infer_pexpr local pe in
-           return (Normal (rt, local))
+           infer_pexpr local pe
         | M_Ememop memop ->
            let@ local = unpack_resources loc local in
            begin match memop with
@@ -1423,14 +1422,14 @@ module Make (G : sig val global : Global.t end) = struct
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
               let constr = def_ ret (pointerToIntegerCast_ (sym_ (arg.lname, Loc))) in
               let rt = RT.Computational ((ret, Integer), Constraint (constr, I)) in
-              return (Normal (rt, local))            
+              return (rt, local)            
            | M_PtrFromInt (act_from, act2_to, asym) ->
               let ret = Sym.fresh () in 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
               let constr = def_ ret (integerToPointerCast_ (sym_ (arg.lname, Integer))) in
               let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
-              return (Normal (rt, local))            
+              return (rt, local)            
            | M_PtrValidForDeref (act, asym) ->
               (* check *)
               let@ arg = arg_of_asym local asym in
@@ -1451,17 +1450,17 @@ module Make (G : sig val global : Global.t end) = struct
               in
               let constr = def_ ret (bool_ ok) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_PtrWellAligned (act, asym) ->
               let ret = Sym.fresh () in
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
               let constr = def_ ret (aligned_ (act.ct, sym_ (arg.lname, BT.Loc))) in
               let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_PtrArrayShift (asym1, act, asym2) ->
               let@ (rt, local) = infer_array_shift local asym1 act.ct asym2 in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
               Debug_ocaml.error "todo: M_Memcpy"
            | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1491,7 +1490,7 @@ module Make (G : sig val global : Global.t end) = struct
                 LRT.Constraint (alignedI_ (sym_ (arg.lname, arg.bt), sym_ (ret, Loc)), 
                 lrt)))
               in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
               Debug_ocaml.error "todo: CreateReadOnly"
            | M_Alloc (ct, sym, _prefix) -> 
@@ -1503,7 +1502,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
               let@ local = destroy loc Kill local (sym_ (arg.lname, arg.bt)) ct in
               let rt = RT.Computational ((Sym.fresh (), Unit), I) in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_Store (_is_locking, act, pasym, vasym, mo) -> 
               let@ parg = arg_of_asym local pasym in
               let@ varg = arg_of_asym local vasym in
@@ -1527,7 +1526,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (sym_ (varg.lname, varg.bt)) act.ct
               in
               let rt = RT.Computational ((Sym.fresh (), Unit), bindings) in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_Load (act, pasym, _mo) -> 
               let@ parg = arg_of_asym local pasym in
               let bt = BT.of_sct act.ct in
@@ -1536,7 +1535,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ it = load loc local (sym_ (parg.lname, parg.bt)) act.ct in
               let constr = def_ ret it in
               let rt = RT.Computational ((ret, bt), Constraint (constr, LRT.I)) in
-              return (Normal (rt, local))
+              return (rt, local)
            | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
               Debug_ocaml.error "todo: RMW"
            | M_Fence mo -> 
@@ -1556,7 +1555,7 @@ module Make (G : sig val global : Global.t end) = struct
            end
         | M_Eskip -> 
            let rt = RT.Computational ((Sym.fresh (), Unit), I) in
-           return (Normal (rt, local))
+           return (rt, local)
         | M_Eccall (_ctype, afsym, asyms) ->
            let@ local = unpack_resources loc local in
            let@ args = args_of_asyms local asyms in
@@ -1564,8 +1563,7 @@ module Make (G : sig val global : Global.t end) = struct
              | Some (loc, ft) -> return (loc, ft)
              | None -> fail loc (Missing_function afsym.sym)
            in
-           let@ (rt, local) = calltype_ft loc local args ft in
-           return (Normal (rt, local))
+           calltype_ft loc local args ft
         | M_Eproc (fname, asyms) ->
            let@ local = unpack_resources loc local in
            let@ decl_typ = match fname with
@@ -1577,24 +1575,9 @@ module Make (G : sig val global : Global.t end) = struct
                 | None -> fail loc (Missing_function sym)
            in
            let@ args = args_of_asyms local asyms in
-           let@ (rt, local) = calltype_ft loc local args decl_typ in
-           return (Normal (rt, local))
-        | M_Erun (label_sym, asyms) ->
-           let@ local = unpack_resources loc local in
-           let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
-             | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
-             | Some (lt,lkind) -> return (lt,lkind)
-           in
-           let@ args = args_of_asyms local asyms in
-           let extra_names = match args, lkind with
-             | [arg], Return -> [arg.lname, Path.Var {label = None; v = "return"}]
-             | _ -> []
-           in
-           let@ (False, local) = calltype_lt loc extra_names local args (lt,lkind) in
-           let@ () = all_empty loc extra_names local in
-           return False
+           calltype_ft loc local args decl_typ
       in
-      debug 3 (lazy (pp_or_false (fun (rt, _) -> item "type" (RT.pp rt)) result));
+      debug 3 (lazy (RT.pp (fst result)));
       return result
 
     (* check_expr: type checking for impure epressions; type checks `e`
@@ -1637,26 +1620,18 @@ module Make (G : sig val global : Global.t end) = struct
            in
            check_texpr (delta ++ local, labels) e2 typ
         | M_Ewseq (pat, e1, e2) ->
-           let@ inferred = infer_expr (local, labels) e1 in
-           begin match inferred with
-           | False -> return ()
-           | Normal (rt, local) ->
-              let@ delta = pattern_match_rt pat rt in
-              check_texpr (delta ++ local, labels) e2 typ
-           end
+           let@ (rt, local) = infer_expr (local, labels) e1 in
+           let@ delta = pattern_match_rt pat rt in
+           check_texpr (delta ++ local, labels) e2 typ
         | M_Esseq (pat, e1, e2) ->
-           let@ inferred = infer_expr (local, labels) e1 in
-           begin match inferred with
-           | False -> return ()
-           | Normal (rt, local) ->
-              let@ delta = match pat with
-                | M_Symbol sym -> return (bind sym rt)
-                | M_Pat pat -> pattern_match_rt pat rt
-              in
-              check_texpr (delta ++ local, labels) e2 typ
-           end
+           let@ (rt, local) = infer_expr (local, labels) e1 in
+           let@ delta = match pat with
+             | M_Symbol sym -> return (bind sym rt)
+             | M_Pat pat -> pattern_match_rt pat rt
+           in
+           check_texpr (delta ++ local, labels) e2 typ
         | M_Edone asym ->
-           match typ with
+           begin match typ with
            | Normal typ ->
               let@ arg = arg_of_asym local asym in
               let@ local = subtype loc local arg typ in
@@ -1667,6 +1642,25 @@ module Make (G : sig val global : Global.t end) = struct
                   "to have non-return type."
               in
               fail loc (Generic !^err)
+           end
+        | M_Eundef (_loc, undef) ->
+           let expl = Explain.undefined_behaviour names local in
+           fail loc (Undefined_behaviour (undef, expl))
+        | M_Erun (label_sym, asyms) ->
+           let@ local = unpack_resources loc local in
+           let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
+             | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
+             | Some (lt,lkind) -> return (lt,lkind)
+           in
+           let@ args = args_of_asyms local asyms in
+           let extra_names = match args, lkind with
+             | [arg], Return -> [arg.lname, Path.Var {label = None; v = "return"}]
+             | _ -> []
+           in
+           let@ (False, local) = calltype_lt loc extra_names local args (lt,lkind) in
+           let@ () = all_empty loc extra_names local in
+           return ()
+
       in
       return result
 
@@ -2029,7 +2023,6 @@ let check mu_file =
 (* TODO: 
    - when resources are missing because of BT mismatches, report that correctly
    - be more careful about which counter-model to use in Explain
-   - forbid specifications with completely ownership-empty resources
    - rem_t vs rem_f
    - check resource definition well-formedness
    - check globals with expressions

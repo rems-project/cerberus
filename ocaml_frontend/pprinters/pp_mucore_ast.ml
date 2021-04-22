@@ -125,8 +125,6 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
             Dnode (pp_ctor "PEval", [dtree_of_value cval])
         | M_PEconstrained xs ->
             Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
-        | M_PEundef (loc, ub) ->
-            Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEerror (str, pe) ->
             Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
                   , [dtree_of_asym pe] )
@@ -164,7 +162,9 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_PEif (pe1, pe2, pe3) ->
             Dnode ( pp_ctor "PEif"
                   , [ dtree_of_asym pe1; self pe2; self pe3 ] )
-        (* | _ ->
+        | M_PEundef (loc, ub) ->
+            Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
+    (* | _ ->
             Dleaf (pp_ctor ("Pexpr(TODO): " ^ Pp_utils.to_plain_pretty_string (Pp_core.WithLocations.pp_pexpr pexpr))) *)
     in
     self pexpr
@@ -269,9 +269,6 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
              Dleaf (pp_ctor "Eskip")
         | M_Eaction (M_Paction (p, M_Action (act_loc, act))) ->
             dtree_of_action act
-        | M_Erun (l, asyms) ->
-           Dnode ( pp_pure_ctor "Erun"
-                 , List.map dtree_of_asym asyms)
 
   (*
       | Eccall of 'a * ('bty, 'sym) generic_pexpr *
@@ -307,7 +304,11 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
                                     ; self e2 ] )
-
+      | M_Eundef (loc, ub) ->
+         Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
+      | M_Erun (l, asyms) ->
+         Dnode ( pp_pure_ctor "Erun"
+               , List.map dtree_of_asym asyms)
 
   (*
       | Easeq of ('sym * core_base_type) * ('a, 'bty, 'sym) generic_action *

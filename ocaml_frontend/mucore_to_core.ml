@@ -146,8 +146,6 @@ let mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
   | M_PEconstrained l -> 
      let l = (mapsnd (get_pexpr "PEconstrained" env1) l) in
      wrap (Core.PEconstrained l)
-  | M_PEundef( loc, undef1) ->
-     wrap (Core.PEundef( loc, undef1))
   | M_PEerror( err, p) -> 
      wrap (Core.PEerror( err, (get_pexpr "PEerror" env1 p)))
   | M_PEctor( ctor1, pes) -> 
@@ -224,6 +222,9 @@ let rec mu_to_core__tpexpr (env1 : 'bty env) (pexpr2 : 'bty mu_tpexpr)
                 (mu_to_core__tpexpr env1 p21)))
   | M_PEdone asym ->
      (get_pexpr "PEdone" env1 asym)
+  | M_PEundef( loc, undef1) ->
+     wrap (Core.PEundef( loc, undef1))
+
 
 
 
@@ -438,8 +439,6 @@ let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
      *    Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa) *)
     (* | M_Eindet n e ->
      *    Core.Eindet n (mu_to_core__expr env e) *)
-    | M_Erun( sym1, pes) ->
-       wrap (Core.Erun( (), sym1, (map (get_pexpr "Erun" env1) pes)))
        (* wrap (Core.Erun () sym (map (get_pexpr "Ereturn" env) [pe])) *)
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)
@@ -493,6 +492,10 @@ let rec mu_to_core__texpr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap (Core.End (map (mu_to_core__texpr env1) es))
     | M_Edone asym ->
        failwith "todo: M_Edone"
+    | M_Erun( sym1, pes) ->
+       wrap (Core.Erun( (), sym1, (map (get_pexpr "Erun" env1) pes)))
+    | M_Eundef( loc, undef1) ->
+       wrap (Core.Epure (Core.Pexpr ([], (), Core.PEundef( loc, undef1))))
 
 
 
