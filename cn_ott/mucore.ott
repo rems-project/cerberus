@@ -653,26 +653,43 @@ grammar
     | _bt :: :: BaseType {{ ocaml bt  }}
                          {{ tex       }}
 
+  ocaml_bool :: '' ::=  {{ ocaml bool }}
+       	                {{ phantom    }}
+    | true  :: :: True  {{ ocaml true }}
+    | false :: :: False {{ ocaml false }}
+
+
+  ocaml_int :: '' ::= {{ ocaml int }} {{ phantom }}
+    | _int  :: :: Int {{ tex k^{ \textrm{ th } } }}
+
 
   lit :: 'Lit_' ::=
     | tyvarsym :: :: Sym
     | Unit :: :: Unit
+    | ocaml_bool :: :: Bool
   
-
 
   bool_op :: '' ::=      {{ auxparam 'bt }}
     | neg index_term :: :: Not
     | index_term1 = index_term2 :: :: Eq
+    | /\ ( index_term1 , .. , index_termn ) :: :: And
+
+
+  list_op :: '' ::= {{ auxparam 'bt }}
+    | [ index_term1 , .. , index_termn ] :: :: List
+    | ocaml_int index_term :: :: NthList
 
 
   index_term_aux :: '' ::= {{ auxparam 'bt }}
     | bool_op :: :: Bool_op
+    | list_op :: :: List_op
 
 
   index_term :: '' ::= {{ auxparam 'bt }}
     | lit :: :: Lit
     | index_term_aux bt :: :: IT
     | ( index_term ) :: S :: Paren {{ com parentheses }} {{ ocaml [[index_term]] }}
+    | index_term [ index_term1 / tyvarsym1 , .. , index_termn / tyvarsymn ] :: M :: Subs {{ ocaml TODO }}
 
 
   arg :: ArgTy_ ::= {{ com argument types }}
@@ -690,7 +707,6 @@ grammar
     | index_term /\ ret :: :: Constraint
     | I :: :: I
 
-
 grammar
   C {{ tex \Gamma }} :: Comp_ ::= {{ com computational var env }}
     | empty                  :: :: empty
@@ -706,10 +722,13 @@ grammar
     | empty :: :: empty
     | N , phi :: :: cons
 
+
   formula :: 'formula_' ::=          
     | judgement           ::   :: judgement
-    | not ( formula )     ::   :: not  
-    | tyvarsym : base_type in C ::   :: xTC
+    | not ( formula )     ::   ::  not  
+    | tyvarsym : base_type in C ::   :: xInC
+    | formula1 .. formulan ::  :: dots
+
 
 defns
   Jtype :: '' ::= 
@@ -726,10 +745,23 @@ defn
     x : bool in C
     -------------------------------------------------------- :: not
     C ; L ; N |- not ( x ) : sigma y : bool . y = (neg x _bt) _bt /\ I
-    % udpate the grammar so that y = not x
+
+
     % defer globals - resources  if touched
 
 
-    ------------- :: value_unit
+    ------------------------------------------------------ :: value_unit
     C ; L ; N |- Unit : sigma y : unit . y = Unit _bt /\ I
 
+
+    ------------------------------------------------------ :: value_true
+    C ; L ; N |- True : sigma y : bool . y = true _bt /\ I
+
+
+    -------------------------------------------------------- :: value_false
+    C ; L ; N |- False : sigma y : bool . y = false _bt /\ I
+
+
+    C ; L ; N |- mu_value1 : sigma y1 : base_type . ret1 .. C ; L ; N |- mu_valuen : sigma yn : base_type . retn
+    ------------------------------------------------------------------------------------ :: value_list
+    C ; L ; N |- base_type [ mu_value1 , .. , mu_valuen ] : sigma y : [ base_type ] . /\ ( y1 , .. , yn ) _bt [ ] /\ I
