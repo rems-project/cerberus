@@ -220,7 +220,7 @@ type
 
 and 'bt list_op = 
    List of ('bt index_term) list
- | NthList of int * 'bt index_term
+ | NthList of 'bt index_term * int
 
 and 'bt index_term_aux = 
    Bool_op of 'bt bool_op
@@ -229,15 +229,6 @@ and 'bt index_term_aux =
 and 'bt index_term = 
    Lit of lit
  | IT of 'bt index_term_aux * 'bt
-
-
-type 
-ret =  (* return types *)
-   RetTy_Computational of x * base_type * ret
- | RetTy_Logical of x * ret
- | RetTy_Resource of ret
- | RetTy_Constraint of 'bt index_term * ret
- | RetTy_I
 
 
 type 
@@ -256,6 +247,21 @@ type
 l =  (* logical var env *)
    Log_empty
  | Log_cons of l * x
+
+
+type 
+ret =  (* return types *)
+   RetTy_Computational of x * base_type * ret
+ | RetTy_Logical of x * ret
+ | RetTy_Resource of ret
+ | RetTy_Constraint of 'bt index_term * ret
+ | RetTy_I
+
+
+type 
+'bt tuple_op = 
+   Tuple of ('bt index_term) list
+ | NthTuple of 'bt index_term * int
 
 
 type 
