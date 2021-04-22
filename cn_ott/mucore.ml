@@ -209,25 +209,26 @@ type
 lit = 
    Lit_Sym of x
  | Lit_Unit
+ | Lit_Bool of bool
 
 
 type 
 'bt bool_op = 
    Not of 'bt index_term
  | Eq of 'bt index_term * 'bt index_term
+ | And of ('bt index_term) list
+
+and 'bt list_op = 
+   List of ('bt index_term) list
+ | NthList of int * 'bt index_term
 
 and 'bt index_term_aux = 
    Bool_op of 'bt bool_op
+ | List_op of 'bt list_op
 
 and 'bt index_term = 
    Lit of lit
  | IT of 'bt index_term_aux * 'bt
-
-
-type 
-c =  (* computational var env *)
-   Comp_empty
- | Comp_cons of c * x * base_type
 
 
 type 
@@ -240,15 +241,21 @@ ret =  (* return types *)
 
 
 type 
-l =  (* logical var env *)
-   Log_empty
- | Log_cons of l * x
-
-
-type 
 n =  (* constraints env *)
    Con_empty
  | Con_cons of n
+
+
+type 
+c =  (* computational var env *)
+   Comp_empty
+ | Comp_cons of c * x * base_type
+
+
+type 
+l =  (* logical var env *)
+   Log_empty
+ | Log_cons of l * x
 
 
 type 
