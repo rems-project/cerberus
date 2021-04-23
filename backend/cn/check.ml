@@ -360,6 +360,7 @@ module Make (G : sig val global : Global.t end) = struct
        else fail loc (error ())
     | Predicate p, Predicate p' 
          when predicate_name_equal p.name p'.name &&
+              IT.equal p.pointer p'.pointer &&
               List.equal IT.equal p.iargs p'.iargs &&
               List.length p.oargs = List.length p'.oargs &&
               (* IT.equal *) p.unused = p'.unused ->
@@ -647,7 +648,7 @@ module Make (G : sig val global : Global.t end) = struct
                match found, re with
                | None, Predicate p' when 
                       p'.unused && predicate_name_equal p'.name p.name  ->
-                  if Solver.holds local (IT.and_ (List.map2 IT.eq__ p.iargs p'.iargs))
+                  if Solver.holds local (IT.eq__ p.pointer p'.pointer)
                   then (Predicate {p' with unused = false}, Some p')
                   else (re, None)
                | _ ->
@@ -664,6 +665,7 @@ module Make (G : sig val global : Global.t end) = struct
             let def = Option.get (Global.get_predicate_def G.global p.name) in
             let else_prompt = lazy (missing ()) in
             let substs = 
+              {before = def.pointer; after= p.pointer} ::
               List.map2 (fun (before, _) after -> {before; after}) 
                 def.iargs p.iargs 
                 (* outputs are not referred to in the clause *)
@@ -764,6 +766,7 @@ module Make (G : sig val global : Global.t end) = struct
               | RE.Predicate p when p.unused ->
                  let def = Option.get (Global.get_predicate_def G.global p.name) in
                  let substs = 
+                   {before = def.pointer; after= p.pointer} ::
                    List.map2 (fun (before, _) after -> {before; after}) 
                      def.iargs p.iargs
                  in
@@ -1377,8 +1380,8 @@ module Make (G : sig val global : Global.t end) = struct
                       (le_ (p.permission, q_ (0, 1))))
             | Predicate p ->
                p.unused
-            | QPredicate (sym, p) ->
-               not (Solver.holds_forall local [(sym, BT.Integer)]
+            | QPredicate p ->
+               not (Solver.holds_forall local [(p.pointer, BT.Loc)]
                       p.unused)
           ) local.resources
       in

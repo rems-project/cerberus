@@ -138,7 +138,7 @@ let struct_decl loc fields (tag : BT.tag) =
                let omember_t = sym_ (omember_v, BT.Option (BT.of_sct sct)) in
                let (Sctypes.Sctype (annots, sct_)) = sct in
                let resource = match sct_ with
-                 | Sctypes.Struct tag -> predicate (Tag tag) [member_p] [omember_t]
+                 | Sctypes.Struct tag -> predicate (Tag tag) member_p [] [omember_t]
                  | _ -> point (member_p, size) (q_ (1, 1)) omember_t
                in
                let lrt = 
@@ -185,7 +185,7 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
   | Sctype (_, Struct tag) ->
-      let r = [predicate (Tag tag) [pointer] [opointee_t]] in
+      let r = [predicate (Tag tag) pointer [] [opointee_t]] in
       let c = [is_some_ opointee_t] in
       return (l, r, c, mapping)
   | sct -> 
@@ -216,7 +216,7 @@ let make_block loc pointer path sct =
      in
      return ([], r, [], [])
 
-let make_pred loc pred (predargs : Path.predarg list) iargs = 
+let make_pred loc pred (predargs : Path.predarg list) pointer iargs = 
   let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
@@ -241,6 +241,7 @@ let make_pred loc pred (predargs : Path.predarg list) iargs =
   let r = 
     RE.Predicate {
         name = Id pred; 
+        pointer = pointer;
         iargs; 
         oargs;
         unused = (* bool_ *) true;
@@ -367,6 +368,9 @@ let rec resolve_predarg loc mapping = function
      let@ it = resolve_predarg loc mapping p in
      let@ it' = resolve_predarg loc mapping a in
      return (IT.mulPointer_ (it, it'))
+  | IntegerToPointerCast p ->
+     let@ it = resolve_predarg loc mapping p in
+     return (IT.integerToPointerCast_ it)
   | PathArg p ->
      resolve_path loc mapping p
 
@@ -418,12 +422,16 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
   | "Region", _ ->
      fail loc (Generic !^"Region predicate takes 2 arguments, a path and a size")
 
-  | _, _ ->
+  | _, pointer :: arguments ->
+     let@ pointer_resolved = resolve_predarg loc mapping pointer in
      let@ iargs_resolved = 
        ListM.mapM (resolve_predarg loc mapping) arguments
      in
-     let@ result = make_pred loc predicate arguments iargs_resolved in
+     let@ result = make_pred loc predicate arguments pointer_resolved iargs_resolved in
      return result
+  | pred, _ ->
+     fail loc (Generic !^("predicates take at least one (pointer) argument"))
+
 
 
 let aarg_item l (aarg : aarg) =

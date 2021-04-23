@@ -598,6 +598,7 @@ module Make (G : sig val global : Global.t end) = struct
          let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
          let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
          let@ () = ensure_same_argument_number `Output has_oargs ~expect:expect_oargs in
+         let@ () = WIT.welltyped loc names local BT.Loc p.pointer in
          let@ () = 
            ListM.iterM (fun (arg, expected_sort) ->
                WIT.welltyped loc names local expected_sort arg
@@ -605,8 +606,8 @@ module Make (G : sig val global : Global.t end) = struct
                (List.map snd (def.iargs @ def.oargs)))
          in
          ensure_all_symbols (Predicate p) p.oargs
-      | QPredicate (sym, p) -> 
-         let local = L.add_l sym Integer local in
+      | QPredicate p -> 
+         let local = L.add_l p.pointer BT.Loc local in
          let@ def = get_predicate_def p.name in
          let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
          let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
@@ -618,7 +619,7 @@ module Make (G : sig val global : Global.t end) = struct
              ) (List.combine (p.iargs @ p.oargs) 
                (List.map snd (def.iargs @ def.oargs)))
          in
-         ensure_all_symbols (QPredicate (sym, p)) p.oargs
+         ensure_all_symbols (QPredicate p) p.oargs
   end
 
 

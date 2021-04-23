@@ -24,6 +24,7 @@ type token =
   | LPAREN
   | RPAREN
   | COMMA
+  | POINTERCAST
 
   | AMPERSAND
   | AT

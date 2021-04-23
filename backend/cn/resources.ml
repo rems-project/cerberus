@@ -26,13 +26,15 @@ let predicate_name_equal pn1 pn2 =
 
 type predicate = {
     name : predicate_name; 
-    iargs: IT.t list;         (* first is key *)
+    pointer: IT.t;
+    iargs: IT.t list;
     oargs: IT.t list;
     unused: bool;
   }
 
 type qpredicate = {
     name : predicate_name; 
+    pointer: Sym.t;
     iargs: IT.t list;
     oargs: IT.t list;
     unused: IT.t;
@@ -57,7 +59,7 @@ type t =
   | Point of point
   | QPoint of qpoint
   | Predicate of predicate
-  | QPredicate of Sym.t * qpredicate
+  | QPredicate of qpredicate
 
 
 
@@ -68,12 +70,12 @@ let pp_predicate_name = function
   | Id id -> !^id
   | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
 
-let pp_predicate ({name; iargs; oargs; unused} : predicate) =
-  let args = List.map IT.pp (iargs @ oargs) @ [IT.pp (IT.bool_ unused)] in
+let pp_predicate ({name; pointer; iargs; oargs; unused} : predicate) =
+  let args = List.map IT.pp (pointer :: iargs @ oargs) @ [IT.pp (IT.bool_ unused)] in
   c_app (pp_predicate_name name) args
 
-let pp_qpredicate ({name; iargs; oargs; unused} : qpredicate) =
-  let args = List.map IT.pp (iargs @ oargs) @ [IT.pp unused] in
+let pp_qpredicate ({name; pointer; iargs; oargs; unused} : qpredicate) =
+  let args = Sym.pp pointer :: List.map IT.pp (iargs @ oargs) @ [IT.pp unused] in
   c_app (pp_predicate_name name) args
 
 let pp = function
@@ -86,8 +88,8 @@ let pp = function
            c_app !^"Points" [Sym.pp qpointer; IT.pp content; Z.pp size; IT.pp permission]])
   | Predicate p ->
      pp_predicate p
-  | QPredicate (sym, p) ->
-     !^"forall" ^^^ Sym.pp sym ^^ dot ^^^ pp_qpredicate p
+  | QPredicate p ->
+     !^"forall" ^^^ Sym.pp p.pointer ^^ dot ^^^ pp_qpredicate p
 
 
 
@@ -115,28 +117,29 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
        let content = IT.subst_var subst content in
        let permission = IT.subst_var subst permission in
        QPoint {qpointer; size; content; permission}
-  | Predicate {name; iargs; oargs; unused} -> 
+  | Predicate {name; pointer; iargs; oargs; unused} -> 
+     let pointer = IT.subst_var subst pointer in
      let iargs = List.map (IT.subst_var subst) iargs in
      let oargs = List.map (IT.subst_var subst) oargs in
      (* let unused = IT.subst_var subst unused in *)
-     Predicate {name; iargs; oargs; unused}
-  | QPredicate (sym, {name; iargs; oargs; unused}) ->
-     if Sym.equal subst.before sym then 
-       QPredicate (sym, {name; iargs; oargs; unused})
-     else if Sym.equal sym subst.after then
+     Predicate {name; pointer; iargs; oargs; unused}
+  | QPredicate {name; pointer; iargs; oargs; unused} ->
+     if Sym.equal subst.before pointer then 
+       QPredicate {name; pointer; iargs; oargs; unused}
+     else if Sym.equal pointer subst.after then
        let sym' = Sym.fresh () in
-       let iargs = List.map (IT.subst_var {before=sym;after=sym'}) iargs in
-       let oargs = List.map (IT.subst_var {before=sym;after=sym'}) oargs in
-       let unused = IT.subst_var {before=sym;after=sym'} unused in
+       let iargs = List.map (IT.subst_var {before=pointer;after=sym'}) iargs in
+       let oargs = List.map (IT.subst_var {before=pointer;after=sym'}) oargs in
+       let unused = IT.subst_var {before=pointer;after=sym'} unused in
        let iargs = List.map (IT.subst_var subst) iargs in
        let oargs = List.map (IT.subst_var subst) oargs in
        let unused = IT.subst_var subst unused in
-       QPredicate (sym', {name; iargs; oargs; unused})       
+       QPredicate {name; pointer=sym'; iargs; oargs; unused}
      else
        let iargs = List.map (IT.subst_var subst) iargs in
        let oargs = List.map (IT.subst_var subst) oargs in
        let unused = IT.subst_var subst unused in
-       QPredicate (sym, {name; iargs; oargs; unused})       
+       QPredicate {name; pointer; iargs; oargs; unused}
 
 
 
@@ -162,28 +165,29 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
        let content = IT.subst_it subst content in
        let permission = IT.subst_it subst permission in
        QPoint {qpointer; size; content; permission}
-  | Predicate {name; iargs; oargs; unused} -> 
+  | Predicate {name; pointer; iargs; oargs; unused} -> 
+     let pointer = IT.subst_it subst pointer in 
      let iargs = List.map (IT.subst_it subst) iargs in
      let oargs = List.map (IT.subst_it subst) oargs in
      (* let unused = IT.subst_it subst unused in *)
-     Predicate {name; iargs; oargs; unused}
-  | QPredicate (sym, {name; iargs; oargs; unused}) ->
-     if Sym.equal subst.before sym then 
-       QPredicate (sym, {name; iargs; oargs; unused})
-     else if SymSet.mem sym (IT.free_vars subst.after) then
+     Predicate {name; pointer; iargs; oargs; unused}
+  | QPredicate {name; pointer; iargs; oargs; unused} ->
+     if Sym.equal subst.before pointer then 
+       QPredicate {name; pointer; iargs; oargs; unused}
+     else if SymSet.mem pointer (IT.free_vars subst.after) then
        let sym' = Sym.fresh () in
-       let iargs = List.map (IT.subst_var {before=sym;after=sym'}) iargs in
-       let oargs = List.map (IT.subst_var {before=sym;after=sym'}) oargs in
-       let unused = IT.subst_var {before=sym;after=sym'} unused in
+       let iargs = List.map (IT.subst_var {before=pointer;after=sym'}) iargs in
+       let oargs = List.map (IT.subst_var {before=pointer;after=sym'}) oargs in
+       let unused = IT.subst_var {before=pointer;after=sym'} unused in
        let iargs = List.map (IT.subst_it subst) iargs in
        let oargs = List.map (IT.subst_it subst) oargs in
        let unused = IT.subst_it subst unused in
-       QPredicate (sym', {name; iargs; oargs; unused})       
+       QPredicate {name; pointer = sym'; iargs; oargs; unused}
      else
        let iargs = List.map (IT.subst_it subst) iargs in
        let oargs = List.map (IT.subst_it subst) oargs in
        let unused = IT.subst_it subst unused in
-       QPredicate (sym, {name; iargs; oargs; unused})       
+       QPredicate {name; pointer; iargs; oargs; unused}
 
 
 
@@ -207,11 +211,12 @@ let equal t1 t2 =
      IT.equal b1.permission b2.permission
   | Predicate p1, Predicate p2 ->
      predicate_name_equal p1.name p2.name && 
+     IT.equal p1.pointer p2.pointer && 
      List.equal IT.equal p1.iargs p2.iargs && 
      List.equal IT.equal p1.oargs p2.oargs &&
      (* IT.equal *) p1.unused = p2.unused
-  | QPredicate (s1, p1), QPredicate (s2, p2) ->
-     Sym.equal s1 s2 &&
+  | QPredicate p1, QPredicate p2 ->
+     Sym.equal p1.pointer p2.pointer &&
      predicate_name_equal p1.name p2.name && 
      List.equal IT.equal p1.iargs p2.iargs && 
      List.equal IT.equal p1.oargs p2.oargs &&
@@ -236,8 +241,8 @@ let free_vars = function
        (IT.free_vars_list [b.permission; b.content])
   | Predicate p -> 
      IT.free_vars_list ((* p.unused :: *) (p.iargs @ p.oargs))
-  | QPredicate (sym, p) -> 
-     SymSet.remove sym
+  | QPredicate p -> 
+     SymSet.remove p.pointer
        (IT.free_vars_list (p.unused :: (p.iargs @ p.oargs)))
 
 let free_vars_list l = 
@@ -261,27 +266,20 @@ let inputs = function
   (* the quantifier in IteratedStar is neither input nor output *)
   | QPoint p -> [p.permission]
   | Predicate p -> p.iargs
-  | QPredicate (sym, p) -> p.iargs
+  | QPredicate p -> p.iargs
 
 let outputs = function
   | Point b -> [b.content]
   | QPoint b -> [b.content]
   | Predicate p -> p.oargs
-  | QPredicate (sym, p) -> p.oargs
-
-(* only used for predicates *)
-let key = function
-  | Point p -> p.pointer
-  | QPoint q -> sym_ (q.qpointer, BT.Loc)
-  | Predicate p -> List.hd p.iargs
-  | QPredicate (_, p) -> List.hd p.iargs
+  | QPredicate p -> p.oargs
 
 
 let quantified = function
   | Point p -> []
   | QPoint p -> [(p.qpointer, BaseTypes.Loc)]
   | Predicate p -> []
-  | QPredicate (sym, p) -> [(sym, BaseTypes.Integer)]
+  | QPredicate p -> [(p.pointer, BaseTypes.Loc)]
 
 (* assumption: resource is owned *)
 let derived_constraint resource = 
@@ -336,8 +334,8 @@ let derived_constraints resource resource' =
 let point (pointer, size) permission value =
   Point {pointer; size; content = value; permission}
 
-let predicate predicate_name iargs oargs =
-  Predicate {name = predicate_name; iargs; oargs; unused = true}
+let predicate predicate_name pointer iargs oargs =
+  Predicate {name = predicate_name; pointer; iargs; oargs; unused = true}
 
 
 let char_region pointer size permission =
@@ -418,22 +416,23 @@ let simp lcs resource =
      let permission = simp lcs (IT.subst_var subst permission) in
      if IT.zero_frac permission
      then None else Some (QPoint {qpointer = qpointer'; size; content; permission})
-  | Predicate {name; iargs; oargs; unused} -> 
+  | Predicate {name; pointer; iargs; oargs; unused} -> 
+     let pointer = simp lcs pointer in
      let iargs = List.map (simp lcs) iargs in
      let oargs = List.map (simp lcs) oargs in
      (* let unused = IT.subst_var subst unused in *)
      if not unused then None
-     else Some (Predicate {name; iargs; oargs; unused})
-  | QPredicate (sym, {name; iargs; oargs; unused}) -> 
+     else Some (Predicate {name; pointer; iargs; oargs; unused})
+  | QPredicate {name; pointer; iargs; oargs; unused} -> 
      let sym' = Sym.fresh () in
-     let iargs = List.map (IT.subst_var {before=sym;after=sym'}) iargs in
-     let oargs = List.map (IT.subst_var {before=sym;after=sym'}) oargs in
-     let unused = IT.subst_var {before=sym;after=sym'} unused in
+     let iargs = List.map (IT.subst_var {before=pointer;after=sym'}) iargs in
+     let oargs = List.map (IT.subst_var {before=pointer;after=sym'}) oargs in
+     let unused = IT.subst_var {before=pointer;after=sym'} unused in
      let iargs = List.map (simp lcs) iargs in
      let oargs = List.map (simp lcs) oargs in
      let unused = simp lcs unused in
      if IT.is_false unused then None
-     else Some (QPredicate (sym, {name; iargs; oargs; unused}))
+     else Some (QPredicate {name; pointer; iargs; oargs; unused})
 
 
 

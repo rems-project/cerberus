@@ -394,12 +394,12 @@ module Make (G : sig val global : Global.t end) = struct
                )
              in
              (entry :: acc_table, SymSet.empty)
-          | QPredicate (sym, p) ->
+          | QPredicate p ->
              let entry =
                (None,
                 None, 
                 None, 
-                Some (RE.pp (QPredicate (sym, p))),
+                Some (RE.pp (QPredicate p)),
                 None,
                 None
                )

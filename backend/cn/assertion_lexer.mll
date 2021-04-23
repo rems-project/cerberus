@@ -34,6 +34,8 @@ rule main = parse
   | ')'   { T.RPAREN }
   | ','   { T.COMMA }
 
+  | "(pointer)"   { T.POINTERCAST }
+
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }
   

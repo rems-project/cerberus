@@ -30,24 +30,25 @@ let early =
   let open IT in
   let id = "EarlyAlloc" in
   let start_s = Sym.fresh () in
-  let start_t = sym_ (start_s, Integer) in
+  let start_t = sym_ (start_s, Loc) in
   let end_s = Sym.fresh () in
-  let end_t = sym_ (end_s, Integer) in
-  let iargs = [(start_s, BT.Integer); (end_s, BT.Integer)] in
+  let end_t = sym_ (end_s, Loc) in
+  let iargs = [(end_s, BT.Loc)] in
   let oargs = [] in
   let block = 
     Resources.char_region 
-      (integerToPointerCast_ start_t)
-      (add_ (sub_ (end_t, start_t), int_ 1))
+      (start_t)
+      (add_ (sub_ (pointerToIntegerCast_ end_t, pointerToIntegerCast_ start_t), int_ 1))
       (q_ (1, 1))
   in
   let lrt =
     LRT.Resource (block, 
-    LRT.Constraint (IT.good_pointer (integerToPointerCast_ start_t) (Sctypes.Sctype ([], Void)),
-    LRT.Constraint (IT.good_pointer (integerToPointerCast_ end_t) (Sctypes.Sctype ([], Void)),
-     LRT.I)))
+    LRT.Constraint (IT.good_pointer start_t (Sctypes.Sctype ([], Void)),
+    LRT.Constraint (IT.good_pointer end_t (Sctypes.Sctype ([], Void)),
+    LRT.I)))
   in
   let predicate = {
+      pointer = start_s;
       iargs; 
       oargs; 
       clauses = [Clause {condition = lrt; outputs = []}]; 
@@ -66,7 +67,7 @@ let zero_region =
   let pointer_t = sym_ (pointer_s, Loc) in
   let length_s = Sym.fresh () in
   let length_t = sym_ (length_s, Integer) in
-  let iargs = [(pointer_s, BT.Loc); (length_s, BT.Integer)] in
+  let iargs = [(length_s, BT.Integer)] in
   let oargs = [] in
   let array = 
     RE.array pointer_t length_t (Z.of_int 1)
@@ -78,6 +79,7 @@ let zero_region =
     LRT.I))
   in
   let predicate = {
+      pointer = pointer_s;
       iargs; 
       oargs; 
       clauses = [(Clause {condition=lrt; outputs=[]})]; 

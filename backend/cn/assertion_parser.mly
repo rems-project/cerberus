@@ -28,6 +28,8 @@ open Assertion_parser_util
 %token RPAREN
 %token COMMA
 
+%token POINTERCAST
+
 %token AMPERSAND
 %token AT
 
@@ -81,6 +83,8 @@ predarg:
       { Path.SubPointer (a1, a2) }
   | a1=predarg STARDOT a2=predarg
       { Path.MulPointer (a1, a2) }
+  | POINTERCAST a1 = predarg
+      { Path.IntegerToPointerCast a1 }
   | z=Z
       { Path.NumArg z }
 

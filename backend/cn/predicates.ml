@@ -16,7 +16,8 @@ type clause =
     }
 
 type predicate_definition = 
-  { iargs : (Sym.t * LS.t) list;
+  { pointer: Sym.t;
+    iargs : (Sym.t * LS.t) list;
     oargs : (Sym.t * LS.t) list;
     clauses : clause list;
   }
@@ -54,11 +55,14 @@ type stored_struct_predicate =
 
 
 let stored_struct_predicate_to_predicate tag pred = 
-  let iargs = [(pred.pointer, BT.Loc)] in
+  let iargs = [] in
   let oargs = [(pred.value, BT.Option (BT.Struct tag))] in
   let condition = fst pred.clause in
   let outputs = [snd pred.clause] in
-  {iargs; oargs; clauses = [Clause {condition; outputs}]}
+  {pointer = pred.pointer; 
+   iargs; 
+   oargs; 
+   clauses = [Clause {condition; outputs}]}
 
 
 
