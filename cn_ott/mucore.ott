@@ -3,128 +3,50 @@
 
 embed {{ tex-preamble
 %\usepackage[scaled=0.82]{beramono}
-\renewcommand{\ottkw}[1]{\texttt{#1}%
-}
+\renewcommand{\ottkw}[1]{ \texttt{#1} }
 }}
 
+metavar x , y , tyvar_sym {{ ocaml 'sym }} {{tex \mathit{ident} }} ::=
+  {{ phantom }} {{ com OCaml type variable for symbols }}
 
-embed {{ lem
-open import Core_ctype Annot Loc
-import Symbol Implementation_ Undefined Cmm_csem
-import Mem Mem_common
-import Linux
-}}
+metavar tyvar_TY {{ ocaml 'TY }} ::=
+  {{ phantom }} {{ com OCaml type variable for types }}
 
-
-metavar Symbol_sym {{ tex ident }} {{ lem Symbol.sym }} ::=
-  {{ phantom }} {{ com Core identifier }}
-metavar tag {{ lem Symbol.sym }} ::=
+metavar ty_act {{ ocaml 'TY act }} ::=
+  {{ phantom }} {{ com annotated C type }}
+  
+metavar tag ::=
   {{ phantom }} {{ com struct/union tag }}
 
+metavar code_int {{ tex k }} {{ ocaml int }} ::=
+  {{ phantom }} {{ com OCaml fixed-width integer }}
 
+metavar code_nat {{ tex natval }} {{ ocaml Nat_big_num.num }} ::=
+  {{ phantom }} {{ com OCaml arbitrary-width natural number }}
+
+metavar ty_loc {{ tex }} {{ ocaml Location_ocaml.t }} ::=
+  {{ phantom }} {{ com OCaml C source location type }}
 
 indexvar n, i ::= {{ phantom }}
 
 grammar
-  % Inhabitant of these types may be read and stored from the memory (hence they match C types)
-  object_type {{ tex \textit{oTy} }} :: 'OTy_' ::= {{ com types for C objects}}
-    | integer                                                            :: ::  integer
-    | floating                                                           :: ::  floating
-    | pointer                                                            :: ::  pointer
-    | array ( object_type )                                         :: ::  array
-    | struct tag                                                         :: ::  struct
-    | union tag                                                          :: ::  union
 
-embed {{ lem
-let rec eq_object_type oTy1 oTy2 =
-  let ord = function
-    | OTy_integer ->
-        (0: nat)
-    | OTy_floating ->
-        1
-    | OTy_pointer ->
-        2
-    | OTy_array _ ->
-        3
-    | OTy_struct _ ->
-        4
-    | OTy_union _ ->
-        5
-  end in
-  match (oTy1, oTy2) with
-    | (OTy_array oTy1, OTy_array oTy2) ->
-        eq_object_type oTy1 oTy2
-    | (OTy_struct sym1, OTy_struct sym2) ->
-        sym1 = sym2
-    | (OTy_union sym1, OTy_union sym2) ->
-        sym1 = sym2
-    | _ ->
-        ord oTy1 = ord oTy2
-  end
-instance (Eq object_type)
-  let (=) = eq_object_type
-  let (<>) = fun x y -> not (eq_object_type x y)
-end
-}}
-
-grammar
   base_type {{ tex \textit{bTy} }} :: 'BTy_' ::= {{ com Core base types }}
-    | unit                           ::   :: Unit {{ com unit }}
-    | bool                           ::   :: Bool {{ com boolean }}
-    | ctype                          ::   :: ctype    {{ com Core type of C type exprs}} {{ tex \ottkw{ctype} }}
-    | [ base_type ]                  ::   :: list     {{ com list }}
-    | ( base_type1 , .. , base_typen ) ::   :: tuple    {{ com tuple }}
-    | object_type                    ::   :: object   {{ com C object value }}
-    | loaded object_type             ::   :: loaded   {{ com [[object_type]] or unspecified }} {{ tex [[loaded]]\ [[object_type]] }}
-    | storable                            :: X :: storable {{ com top type for integer/float/pointer/structs (maybe union?). This is only used in the type system }}
+    | unit                                      :: :: Unit {{ com unit }}
+    | bool                                      :: :: Bool {{ com boolean }}
+    | integer 			                :: :: Integer {{ com integer }}
+    | real 			                :: :: Read {{ com rational numbers? }}
+    | loc 			                :: :: Loc {{ com location }}
+    | [ base_type ]                             :: :: List     {{ com list }}
+    | ( base_type1 , .. , base_typen )          :: :: Tuple    {{ com tuple }}
+    | struct tag                                :: :: Struct
+    | { base_type }  	  	                :: :: Set {{ com set }}
+    | opt ( base_type ) 	                :: :: Option {{ com option }}
+    | base_type1 , .. , base_typen -> base_type :: :: Param {{ com parameter types }}
 
-embed {{ lem
-let rec eq_base_type bTy1 bTy2 =
-  let ord = function
-    | BTy_unit ->
-        (0: nat)
-    | BTy_boolean ->
-        1
-    | BTy_ctype ->
-        2
-    | BTy_list _ ->
-        3
-    | BTy_tuple _ ->
-        4
-    | BTy_object _ ->
-        5
-    | BTy_loaded _ ->
-        6
-    | BTy_storable ->
-        7
-  end in
-  match (bTy1, bTy2) with
-    | (BTy_list bTy1', BTy_list bTy2') ->
-        eq_base_type bTy1' bTy2'
-    | (BTy_tuple bTys1, BTy_tuple bTys2) ->
-        listEqualBy eq_base_type bTys1 bTys2
-    | (BTy_object oTy1, BTy_object oTy2) ->
-        oTy1 = oTy2
-    | (BTy_loaded oTy1, BTy_loaded oTy2) ->
-        oTy1 = oTy2
-    | _ ->
-        ord bTy1 = ord bTy2
-  end
-instance (Eq base_type)
-  let (=) = eq_base_type
-  let (<>) = fun x y -> not (eq_base_type x y)
-end
-}}
-
-
-grammar
-  % TODO: this isn't really used...
-  type {{ tex \textit{coreTy} }} :: 'Ty' ::= {{ com Core types }}
-    | base_type     :: :: Base   {{ com pure base type }}
-    | eff base_type :: :: Effect {{ com effectful base type }}
 
   % Binary operators
-  binop :: 'Op' ::= {{ com binary operators }}
+  binop :: 'Op' ::= {{ ocaml Core.binop }} {{ phantom }} {{ com binary operators }}
     % arithmetic operators (integer -> integer -> integer)
     | +     :: :: Add {{ tex \texttt{+} }}
     | -     :: :: Sub {{ tex \texttt{-} }}
@@ -143,128 +65,78 @@ grammar
     | /\    :: :: And {{ tex \texttt{/\char`\\} }}
     | \/    :: :: Or  {{ tex \texttt{\char`\\/} }}
 
-embed {{ lem
-instance (Eq binop)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
 
-instance (Show binop)
-  let show op = 
-    match op with
-      | OpAdd   -> "OpAdd"
-      | OpSub   -> "OpSub"
-      | OpMul   -> "OpMul"
-      | OpDiv   -> "OpDiv"
-      | OpRem_t -> "OpRem_t"
-      | OpRem_f -> "OpRem_f"
-      | OpExp   -> "OpExp"
-      | OpEq    -> "OpEq"
-      | OpGt    -> "OpGt"
-      | OpLt    -> "OpLt"
-      | OpGe    -> "OpGe"
-      | OpLe    -> "OpLe"
-      | OpAnd   -> "OpAnd"
-      | OpOr    -> "OpOr"
-    end
-  end
-}}
-
-
-grammar
-  polarity :: '' ::= {{ com memory action polarities }}
+  polarity :: '' ::= {{ ocaml Core.polarity }} {{ phantom }} {{ com memory action polarities }}
     | Pos :: :: Pos {{ com sequenced by \ottkw{let\ weak} and \ottkw{let\ strong} }}
     | Neg :: :: Neg {{ com only sequenced by \ottkw{let\ strong} }}
 
 
-metavar
-  Implementation__implementation_constant
-  {{ lem Implementation_.implementation_constant }}
+metavar code_impl_const
+  {{ ocaml Implementation.implementation_constant }}
   {{ tex \ottnt{\texttt{<}impl\textit{-}const\texttt{>} } }} ::=
-    {{ phantom }}
-
-metavar x, y, tyvarsym {{ lem 'sym }} {{tex \mathit{ident} }} ::=
   {{ phantom }}
 
 grammar
-  mu_name {{ tex name }} :: '' ::= {{ auxparam 'sym }}
-    | tyvarsym                                :: :: Sym   {{ com Core identifier }} 
-    | Implementation__implementation_constant :: :: Impl  {{ com implementation-defined constant }}
 
-embed {{ lem
-instance forall 'sym. MapKeyType 'sym => (MapKeyType (mu_name 'sym))
-  let mapKeyCompare nm1 nm2 =
-    match (nm1, nm2) with
-      | (Sym sym1, Sym sym2) ->
-          mapKeyCompare sym1 sym2
-      | (Impl iCst1, Impl iCst2) ->
-          mapKeyCompare iCst1 iCst2
-      | (Sym _, Impl _) ->
-          LT
-      | (Impl _, Sym _) ->
-          GT
-    end
-end
-}}
+  Symbol_sym {{ tex ident }} :: '' ::= {{ ocaml Symbol.sym }} {{ phantom }} {{ com Core identifier }}
+    | tyvar_sym :: :: Tyvar_Sym
+    
+  mu_name {{ tex name }} :: '' ::= {{ ocaml Symbol.sym Core.generic_name }} {{ phantom }}
+    | Symbol_sym      :: :: Sym  {{ com Core identifier }} 
+    | code_impl_const :: :: Impl {{ com implementation-defined constant }}
 
+metavar intval {{ ocaml Cerb_frontend.Impl_mem.integer_value }} ::=
+    {{ phantom }}  {{ com memory integer value }}
 
-metavar Mem_integer_value
-  {{ tex intval }}
-  {{ lem Mem.integer_value }} ::=
-    {{ phantom }}  {{ com integer value }}
-metavar Mem_floating_value
-  {{ tex floatval }}
-  {{ lem Mem.floating_value }} ::=
-    {{ phantom }}  {{ com floating value }}
-%metavar Mem_pointer_value
-%  {{ lem Mem.pointer_value }} ::=
-%    {{ phantom }}  
-metavar Mem_mem_value
-  {{ lem Mem.mem_value }}
-  {{ tex memval }} ::=
-    {{ phantom }}  
-metavar Cabs_cabs_identifier
-  {{ tex member }}
-  {{ lem Cabs.cabs_identifier }} ::=
+metavar mem_value {{ ocaml Impl_mem.mem_value }} {{ tex memval }} ::=
     {{ phantom }}
-    {{ com C struct/union member name }}
-metavar ty
-  {{ lem ctype }}
-  {{ tex \tau }} ::=
-    {{ phantom }}
+
+metavar Symbol_identifier {{ tex member }} {{ ocaml Symbol.identifier }} ::=
+   {{ phantom }} {{ com C struct/union member name }}
+
+metavar T_ct {{ tex \tau }} {{ ocaml T.ct }} ::=
+    {{ phantom }} {{ com C type }}
+
+% TODO hide from Tex
+metavar annots {{ ocaml annot list }} ::= {{ phantom }}
 
 grammar
-  Mem_pointer_value {{ tex ptrval }} :: '' ::= {{ phantom }} {{ lem Mem.pointer_value }}
-    | nullptr ( ty ) :: :: nullptr
+
+  ptrval :: 'PV' ::= {{ phantom }} {{ ocaml Cerb_frontend.Impl_mem.pointer_value }} {{ com pointers }}
+    | nullptr 	         :: :: null
+    | funcptr Symbol_sym :: :: function
+    | concptr code_nat   :: :: concrete
+
 
 % (* Object values (inhabitants of object types, hence values that can be read/stored) *)
-  mu_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object values }} 
-    | Mem_integer_value :: :: integer  {{ com integer value }}
-    | Mem_floating_value :: :: floating {{ com floating-point value }}
-    | Mem_pointer_value :: :: pointer {{ com pointer value }}
-    | array ( </ mu_loaded_valuei // , // i /> ) :: :: array {{ com C array value }}
-    | ( struct tag ) { </ . Cabs_cabs_identifieri : tyi = Mem_mem_valuei // , // i /> } :: :: struct {{ com C struct value }}
-    | ( union tag ) { . Cabs_cabs_identifier = Mem_mem_value } :: :: union {{ com C union value }}
+  mu_object_value {{ tex object\_value }}:: 'M_OV' ::=  {{ auxparam 'TY }} {{ com C object values }} 
+    | intval :: :: integer  {{ com integer value }}
+    | ptrval :: :: pointer {{ com pointer value }}
+    | array ( mu_loaded_value1 , .. , mu_loaded_valuen ) :: :: array {{ com C array value }}
+    | ( struct tag ) { </ . Symbol_identifieri : T_cti = mem_valuei // , // i /> } :: :: struct {{ com C struct value }}
+    | ( union tag ) { . Symbol_identifier = mem_value } :: :: union {{ com C union value }}
   
-  mu_loaded_value {{ tex loaded\_value }} :: 'LV' ::= {{ auxparam 'sym }} {{ com potentially unspecified C object values }}
-    | Specified ( mu_object_value ) :: :: specified {{ com non-unspecified loaded value }}
-    | Unspecified ( ty ) :: :: unspecified {{ com unspecified loaded value }}
+
+  mu_loaded_value {{ tex loaded\_value }} :: 'M_LV' ::= {{ auxparam 'TY }} {{ com potentially unspecified C object values }}
+    | specified ( mu_object_value ) :: :: specified {{ com non-unspecified loaded value }}
   
-  mu_value {{ tex value }} :: 'V' ::= {{ auxparam 'sym }} {{ com Core values }}
-    | mu_object_value                                    :: :: object {{ com C object value }} 
-    | mu_loaded_value                                    :: :: loaded {{ com loaded C object value }}
-    | Unit                                                    :: :: unit
-    | True                                                    :: :: true
-    | False                                                   :: :: false
-    | ' ty '                                                  :: :: ctype {{ com C type as value }}
-    | base_type [ mu_value1 , .. , mu_valuei ] :: :: list {{ tex [ value_1 , .. , value_i ] }}
-    | ( mu_value1 , .. , mu_valuei )                :: :: tuple {{ com tuple }}
+
+  T_bt {{ tex \tau }} :: 'T_bt_' ::= {{ ocaml T.bt }} {{ phantom }} {{ com base type }}
+    | base_type :: :: BaseType
 
 
-metavar bty {{ lem 'bty }} ::= {{ phantom }}
-grammar
-  mu_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'bty }} {{ com data constructors }}
-    | Nil bty     :: :: nil         {{ com empty list }}                     % : [bTy] 
+  mu_value {{ tex value }} :: 'M_V' ::= {{ auxparam 'TY }} {{ com Core values }}
+    | mu_object_value                          :: :: object {{ com C object value }} 
+    | mu_loaded_value                          :: :: loaded {{ com loaded C object value }}
+    | Unit                                     :: :: unit
+    | True                                     :: :: true
+    | False                                    :: :: false
+    | T_bt [ mu_value1 , .. , mu_valuei ] :: :: list {{ tex [ value_1 , .. , value_i ] }}
+    | ( mu_value1 , .. , mu_valuei )           :: :: tuple {{ com tuple }}
+
+
+  mu_ctor {{ tex ctor }} :: 'M_C' ::= {{ auxparam 'bty }} {{ com data constructors }}
+    | Nil T_bt    :: :: nil         {{ com empty list }}                     % : [bTy] 
     | Cons        :: :: cons        {{ com list cons }}                      % : bTy -> [bTy] -> [bTy] 
     | Tuple       :: :: tuple       {{ com tuple }}                          % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
     | Array       :: :: array       {{ com C array }}                        % : bTy -> ... -> bTy -> array bTy 
@@ -281,68 +153,79 @@ grammar
     | Fvfromint   :: :: fvfromint   {{ com cast integer to floating value }} % : integer -> floating
     | Ivfromfloat :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
 
-% TODO: hide from the tex
-metavar annots {{ lem list annot }} ::= {{ phantom }}
-
 grammar
-  maybesym_base_type :: '' ::= {{ lem (maybe 'sym * base_type) }} {{ phantom }}
-    | _ : base_type        :: :: Nothing (+ binders = {} +)
-    | tyvarsym : base_type :: :: Just    (+ binders = tyvarsym +)
+
+  maybesym_base_type :: '' ::= {{ phantom }} {{ ocaml ( Symbol.sym option * T.bt ) }}
+    | _ : base_type          :: :: Nothing (+ binders = {} +)
+    | Symbol_sym : base_type :: :: Just    (+ binders = Symbol_sym +)
   
-  mu_pattern_aux {{ lem mu_pattern_ }} :: 'Case' ::= {{ auxparam ('bty, 'sym) }}
-    | maybesym_base_type                           :: X :: Base % (+ binders = binders(maybesym) +)
+
+  mu_pattern_aux {{ lem mu_pattern_ }} :: 'M_Case' ::=
+    | maybesym_base_type                      :: X :: Base % (+ binders = binders(maybesym) +)
     | mu_ctor ( </ mu_patterni // , // i /> ) ::   :: Ctor % (+ b = b( </ mu_pattern_auxi // , // i /> ) +)
   
-  mu_pattern :: '' ::= {{ auxparam ('bty, 'sym) }}
-    | annots mu_pattern_aux :: :: Pattern % (+ binders = binders(mu_pattern_aux) +)
 
-metavar Mem_mem_iv_constraint
-  {{ lem Mem.mem_iv_constraint }} ::=
-    {{ phantom }}
+  mu_pattern :: 'M_' ::=
+    | ty_loc annots mu_pattern_aux :: :: Pattern % (+ binders = binders(mu_pattern_aux) +)
+
+
+  mu_sym_or_pattern :: 'M_' ::= {{ auxparam 'TY }}
+    | Symbol_sym :: :: Symbol
+    | mu_pattern :: :: Pat % (+ binders = binders(mu_pattern_aux) +)
+
+metavar Mem_mem_iv_constraint {{ ocaml Mem.mem_iv_constraint }} ::=
+  {{ phantom }}
+
 metavar Undefined_undefined_behaviour
   {{ tex \ottnt{ub\textit{-}name} }}
-  {{ lem Undefined.undefined_behaviour }} ::=
-    {{ phantom }} 
-metavar string {{ lem string }} ::= {{ phantom }} 
+  {{ ocaml Undefined.undefined_behaviour }} ::=
+  {{ phantom }} 
+
+metavar string {{ ocaml string }} ::=
+  {{ phantom }}
 
 grammar
-  mu_pexpr_aux {{ lem mu_pexpr_ }} :: 'PE' ::= {{ auxparam ('bty,'sym) }} {{ com Core pure expressions }}
-    | tyvarsym                                                                         ::   :: sym
-    | Implementation__implementation_constant                                          ::   :: impl {{ com implementation-defined constant }} 
+  code_asym :: 'code_asym_' ::= {{ ocaml 'TY asym }} {{ phantom }} {{ com annotated symbol }}
+    | Symbol_sym :: :: Symbol_sym
+
+  mu_pexpr_aux :: 'M_PE' ::= {{ auxparam 'TY }} {{ com Core pure expressions }}
+    | Symbol_sym                                                                  ::   :: sym
+    | impl_const                                     				  ::   :: impl {{ com implementation-defined constant }} 
     | mu_value                                                                    ::   :: val
-    | constrained ( </ Mem_mem_iv_constrainti , tyvarsymi // , // i /> )               :: X :: constrained {{ com constrained value }} % TODO: hide from tex
-    | undef Loc_t ( Undefined_undefined_behaviour )                                    ::   :: undef {{ com undefined behaviour }}
-    | error ( string , tyvarsym )                                                      ::   :: error {{ com impl-defined static error }}
-    | mu_ctor ( </ tyvarsymi // , // i /> )                                       ::   :: ctor {{ com data constructor application }}
-    | array_shift ( tyvarsym1 , ty , tyvarsym2 )                                       ::   :: array_shift {{ com pointer array shift }}
-    | member_shift ( tyvarsym1 , tyvarsym2 , Cabs_cabs_identifier )                    ::   :: member_shift {{ com pointer struct/union member shift }}
-    | not ( tyvarsym )                                                                 ::   :: not {{ com boolean not }}
-    | tyvarsym1 binop tyvarsym2                                                        ::   :: op {{ order [[binop]] [[tyvarsym1]] [[tyvarsym2]] }}
-    | ( struct tyvarsym ) { </ . Cabs_cabs_identifieri = tyvarsymi // , // i /> }      ::   :: struct {{ com C struct expression }}
-    | ( union tyvarsym1 ) { . Cabs_cabs_identifier = tyvarsym2 }                       ::   :: union {{ com C union expression }}
-    | memberof  ( tyvarsym1 , Cabs_cabs_identifier , tyvarsym2 )                       ::   :: memberof {{ com C struct/union member access }}
-    | mu_name ( tyvarsym1 , .. , tyvarsymn )                                      ::   :: call {{ com pure function call }}
+    | constrained ( </ Mem_mem_iv_constrainti , code_asymi // , // i /> )         :: X :: constrained {{ com constrained value }} % TODO: hide from tex
+    | undef ty_loc ( Undefined_undefined_behaviour )                               ::   :: undef {{ com undefined behaviour }}
+    | error ( string , code_asym )                                                ::   :: error {{ com impl-defined static error }}
+    | mu_ctor ( </ code_asymi // , // i /> )                                      ::   :: ctor {{ com data constructor application }}
+    | array_shift ( code_asym1 , T_ct , code_asym2 )                                  ::   :: array_shift {{ com pointer array shift }}
+    | member_shift ( code_asym , Symbol_sym , Symbol_identifier )               ::   :: member_shift {{ com pointer struct/union member shift }}
+    | not ( code_asym )                                                            ::   :: not {{ com boolean not }}
+    | code_asym1 binop code_asym2                                                   ::   :: op {{ order [[binop]] [[code_asym1]] [[code_asym2]] }}
+    | ( struct Symbol_sym ) { </ . Symbol_identifieri = code_asymi // , // i /> } ::   :: struct {{ com C struct expression }}
+    | ( union Symbol_sym ) { . Symbol_identifier = code_asym }                  ::   :: union {{ com C union expression }}
+    | memberof  ( Symbol_sym , Symbol_identifier , code_asym )                  ::   :: memberof {{ com C struct/union member access }}
+    | mu_name ( code_asym1 , .. , code_asymn )                                      ::   :: call {{ com pure function call }}
 
-    | assert_undef ( tyvarsym , Undefined_undefined_behaviour )                        ::   :: assert_undef
-    | bool_to_integer ( tyvarsym )                                                     ::   :: bool_to_integer
-    | conv_int ( ty , tyvarsym )                                                       ::   :: conv_int
-    | wrapI ( ty , tyvarsym )                                                          ::   :: wrapI
+    | assert_undef ( code_asym , ty_loc , Undefined_undefined_behaviour )                   ::   :: assert_undef
+    | bool_to_integer ( code_asym )                                                ::   :: bool_to_integer
+    | conv_int ( T_ct , code_asym )                                                  ::   :: conv_int
+    | wrapI ( T_ct , code_asym )                                                     ::   :: wrapI
  
-  mu_pexpr {{ tex e }} :: '' ::= {{ auxparam ('bty, 'sym) }}
-    | annots bty mu_pexpr_aux :: :: Pexpr
 
-  mu_tpexpr {{ lem mu_tpexpr_ }} :: 'PE' ::= {{ auxparam ('bty, 'sym) }} {{ com Core top-level pure expressions }}
-    | case tyvarsym of </ | mu_patterni => mu_tpexpri // i /> end            ::   :: case {{ com pattern matching }}
-    | let mu_pattern = mu_tpexpr1 in mu_tpexpr2                         ::   :: let {{ com pure let }} % TODO: binders
-    | if tyvarsym then mu_tpexpr1 else mu_tpexpr2                            ::   :: if {{ com pure if }}
-    | done tyvarsym                                                                    ::   :: done {{ com pure done }}
+  mu_pexpr {{ tex e }} :: '' ::= {{ auxparam 'TY }}
+    | ty_loc code_annots tyvar_TY mu_pexpr_aux1 , .., mu_pexpr_auxn :: :: Pexpr
+
+
+  mu_tpexpr_aux {{ lem mu_tpexpr_ }} :: 'PE' ::= {{ auxparam ('bty, 'sym) }} {{ com Core top-level pure expressions }}
+    | case code_asym of </ | mu_patterni => mu_tpexpri // i /> end            ::   :: case {{ com pattern matching }}
+    | let mu_sym_or_pattern = mu_tpexpr1 in mu_tpexpr2                         ::   :: let {{ com pure let }} % TODO: binders
+    | if code_asym then mu_tpexpr1 else mu_tpexpr2                            ::   :: if {{ com pure if }}
+    | done code_asym                                                                    ::   :: done {{ com pure done }}
 
 
 
 metavar a {{ tex }} {{ lem 'a }} ::= {{ phantom }}
 metavar nat {{ tex n }} {{ lem nat }} ::= {{ phantom }}
 metavar bool {{ lem bool }} ::= {{ phantom }}
-metavar Loc_t {{ lem Loc.t }} ::= {{ phantom }}
 metavar Symbol_prefix {{ tex }} {{ lem Symbol.prefix }} ::= {{ phantom }}
 metavar Cmm_memory_order {{ tex \ottnt{memory\textit{-}order} }} {{ lem Cmm_csem.memory_order }} ::= {{ phantom }}
 metavar Linux_linux_memory_order {{ tex \ottnt{linux\textit{-}memory\textit{-}order} }} {{ lem Linux.linux_memory_order }} ::= {{ phantom }}
@@ -367,7 +250,7 @@ grammar
     | linux_rmw ( mu_pexpr1 , mu_pexpr2 , mu_pexpr3 , Linux_linux_memory_order )                                             :: :: LinuxRMW
   
   mu_action :: '' ::= {{ auxparam ('a, 'bty, 'sym) }}
-    | Loc_t a mu_action_aux :: :: Action
+    | ty_loc a mu_action_aux :: :: Action
   
   mu_paction :: '' ::= {{ auxparam ('a, 'bty, 'sym) }} {{ com memory actions with polarity }}
     |  polarity mu_action :: X :: Paction
@@ -394,8 +277,8 @@ grammar
     | va_arg                      :: :: Va_arg
     | va_end                      :: :: Va_end
   
-  tyvarsym_base_type_pair :: '' ::= {{ lem ('sym * base_type) }} {{ phantom }} % TODO: check with P
-    | tyvarsym : base_type :: :: Pair
+  code_sym_base_type_pair :: '' ::= {{ lem ('sym * base_type) }} {{ phantom }} % TODO: check with P
+    | code_sym : base_type :: :: Pair
   
   base_type_pexpr_pair :: '' ::= {{ lem (base_type * ('bty, 'sym) mu_pexpr }}  {{ phantom }} % TODO: check with P
     | base_type := mu_pexpr :: :: FOO
@@ -414,12 +297,12 @@ grammar
     | unseq ( mu_expr1 , .. , mu_exprn ) :: :: unseq {{ com unsequenced expressions }}
     | let weak mu_pattern = mu_expr1 in mu_expr2 :: :: wseq {{ com weak sequencing }} % TODO: bindings
     | let strong mu_pattern = mu_expr1 in mu_expr2 :: :: sseq {{ com strong sequencing }} % TODO: bindings
-    | let atomic tyvarsym_base_type_pair = mu_action1 in mu_paction2 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
+    | let atomic code_sym_base_type_pair = mu_action1 in mu_paction2 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
     | indet [ nat ] ( mu_expr ) :: :: indet  {{ com indeterminately sequenced expr }} % (* this ctor doesn't exist at runtine *)
     | bound [ nat ] ( mu_expr ) :: :: bound  {{ com $\ldots$and boundary }} %(* this ctor doesn't exist at runtine *)
     | nd ( mu_expr1 , .. , mu_exprn ) :: ::  nd {{ com nondeterministic sequencing }}
-    | save tyvarsym_base_type_pair ( </ tyvarsymi : base_type_pexpr_pairi // , // i /> ) in mu_expr :: :: save  {{ com save label }}
-    | run a tyvarsym ( </ mu_pexpri // , // i /> ) :: :: run  {{ com run from label }}
+    | save code_sym_base_type_pair ( </ code_symi : base_type_pexpr_pairi // , // i /> ) in mu_expr :: :: save  {{ com save label }}
+    | run a code_sym ( </ mu_pexpri // , // i /> ) :: :: run  {{ com run from label }}
     | par ( mu_expr1 , .. , mu_exprn ) :: :: par  {{ com cppmem-like thread creation }}
     | wait ( Thread_thread_id ) :: :: wait {{ com wait for thread termination }} %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
   
@@ -476,8 +359,8 @@ grammar
 
 % substitutions
 
-% % single pexpr_ tyvarsym :: subst
-% % multiple pexpr_ tyvarsym :: msubst
+% % single pexpr_ code_sym :: subst
+% % multiple pexpr_ code_sym :: msubst
 
 embed {{ lem
 (* TODO: don't we need any impl proc? *)
@@ -626,7 +509,6 @@ type stack 'a =
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % the following is some placeholder setup for type judgements, just to set up the Ott basics; it's not adapted to Core
-
 grammar
 
   terminals :: 'terminals_' ::=
@@ -654,21 +536,23 @@ grammar
     | _bt :: :: BaseType {{ ocaml bt  }}
                          {{ tex       }}
 
-  ocaml_bool :: '' ::=  {{ ocaml bool }}
-       	                {{ phantom    }}
+  code_bool :: '' ::=  {{ ocaml bool }} {{ phantom }} {{ tex bool }}
     | true  :: :: True  {{ ocaml true }}
     | false :: :: False {{ ocaml false }}
 
 
-  ocaml_int :: 'Ocaml_int_' ::= {{ ocaml int }} {{ phantom }}
-    | num :: :: Num {{ tex \textrm{num} }} 
+  code_z :: 'Z_' ::= {{ ocaml Z.t }} {{ phantom }} {{ com OCaml arbitrary-width integer }} {{ tex z }}
+    | of_intval intval :: M :: of_IntVal {{ ocaml Memory.integer_value_to_num }}
+    | of_nat code_nat :: M :: of_Nat {{ ocaml }}
 
 
   lit :: 'Lit_' ::=
-    | tyvarsym :: :: Sym
-    | Unit :: :: Unit
-    | ocaml_bool :: :: Bool
-  
+    | tyvar_sym :: :: Sym
+    | ( ) :: :: Unit
+    | code_bool :: :: Bool
+    | int code_z :: :: Z
+    | ptr code_z :: :: Pointer
+
 
   bool_op :: '' ::=      {{ auxparam 'bt }}
     | neg index_term :: :: Not
@@ -678,37 +562,51 @@ grammar
 
   list_op :: '' ::= {{ auxparam 'bt }}
     | [ index_term1 , .. , index_termn ] :: :: List
-    | index_term ^ ocaml_int :: :: NthList {{ tex [[index_term]]^{([[ocaml_int]])} }}
+    | index_term ^ code_int :: :: NthList {{ tex [[index_term]]^{([[code_int]])} }}
+
 
   tuple_op :: '' ::= {{ auxparam 'bt }}
     | ( index_term1 , .. , index_termn ) :: :: Tuple
-    | index_term ^ ocaml_int :: :: NthTuple {{ tex [[index_term]]^{([[ocaml_int]])} }}
+    | index_term ^ code_int :: :: NthTuple {{ tex [[index_term]]^{([[code_int]])} }}
+
+
+  pointer_op :: '' ::= {{ auxparam 'bt }}
+    | nullop :: :: Null
+
+
+  param_op :: '' ::= {{ auxparam 'bt }}
+    | index_term ( index_term1 , .. , index_termn ) :: :: App
+
 
   index_term_aux :: '' ::= {{ auxparam 'bt }}
     | bool_op :: :: Bool_op
     | list_op :: :: List_op
+    | pointer_op :: :: Pointer_op
+    | param_op :: :: Param_op
 
 
   index_term :: '' ::= {{ auxparam 'bt }}
     | lit :: :: Lit
     | index_term_aux bt :: :: IT
     | ( index_term ) :: S :: Paren {{ com parentheses }} {{ ocaml [[index_term]] }}
-    | index_term [ index_term1 / tyvarsym1 , .. , index_termn / tyvarsymn ] :: M :: Subs {{ ocaml INDEX_TERM_SUB }}
+    | index_term [ index_term1 / tyvar_sym1 , .. , index_termn / tyvar_symn ] :: M :: Subs {{ ocaml INDEX_TERM_SUB }}
+
 
   arg :: ArgTy_ ::= {{ com argument types }}
-    | pi tyvarsym : base_type . arg :: :: Computational
-    | forall tyvarsym : logSort . arg :: :: Logical
+    | pi tyvar_sym : base_type . arg :: :: Computational
+    | forall tyvar_sym : logSort . arg :: :: Logical
     | resource --o arg :: :: Resource
     | index_term -) arg :: :: Constraint
     | I :: :: I
 
 
   ret :: RetTy_ ::= {{ com return types }}
-    | sigma tyvarsym : base_type . ret :: :: Computational
-    | exists tyvarsym : logSort . ret :: :: Logical
+    | sigma tyvar_sym : base_type . ret :: :: Computational
+    | exists tyvar_sym : logSort . ret :: :: Logical
     | resource * ret :: :: Resource
     | index_term /\ ret :: :: Constraint
     | I :: :: I
+
 
 grammar
   C {{ tex \Gamma }} :: Comp_ ::= {{ com computational var env }}
@@ -729,7 +627,7 @@ grammar
   formula :: 'formula_' ::=          
     | judgement           ::   :: judgement
     | not ( formula )     ::   ::  not  
-    | tyvarsym : base_type in C ::   :: xInC
+    | tyvar_sym : base_type in C ::   :: xInC
     | formula1 .. formulan ::  :: dots
 
 
@@ -738,11 +636,36 @@ defns
 
 
 defn
-    C ; L ; N |- mu_value : tyvarsym , base_type , index_term :: :: Val :: Val_ by
+    C ; L ; N |- mu_value : tyvar_sym , base_type , index_term :: :: Val :: Val_ by
+
+
+    ----------------------------------------------------------- :: Obj_Int
+    C ; L ; N |- intval : y , integer , y = int of_intval intval _bt
+
+
+    ----------------------------------------------- :: Obj_Ptr_Null
+    C ; L ; N |- nullptr : y , loc , y = nullop _bt _bt
+
+
+    --------------------------------------------------------- :: Obj_Ptr_Func
+    C ; L ; N |- funcptr tyvar_sym : y , loc , y = tyvar_sym _bt
+
+
+    ----------------------------------------------------------- :: Obj_Ptr_Conc
+    C ; L ; N |- concptr code_nat : y , loc , y = ptr of_nat code_nat _bt
+
+
+    % ASK: Should arrays be typed as functions (in the formalisation)?
+    C ; L ; N |- mu_loaded_value1 : y1 , base_type , index_term1 .. C ; L ; N |- mu_loaded_valuen : yn , base_type , index_termn
+    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- :: Obj_Arr
+    C ; L ; N |- array ( mu_loaded_value1 , .. , mu_loaded_valuen ) : y , integer -> base_type , /\\ ( index_term1 , .. , index_termn ) _bt [ y ( int code_z ) _bt / y1 , .. , y ( int code_z ) _bt / yn ]
+
+
+    % ASK: Typing structs and unions, floats (unsupported?)
 
 
     ------------------------------------------- :: Unit
-    C ; L ; N |- Unit : y , unit , y = Unit _bt
+    C ; L ; N |- Unit : y , unit , y = ( ) _bt
 
 
     ------------------------------------------- :: True
@@ -754,14 +677,13 @@ defn
 
 
     C ; L ; N |- mu_value1 :  y1 , base_type , index_term1 .. C ; L ; N |- mu_valuen : yn , base_type , index_termn
-    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- :: List
-    C ; L ; N |- base_type [ mu_value1 , .. , mu_valuen ] : y , [ base_type ] , ( /\\ ( index_term1 , .. , index_termn ) _bt ) [ y ^ num _bt / y1 , .. , y ^ num _bt / yn ]
+    --------------------------------------------------------------------------------------------------------------- :: List
+    C ; L ; N |- base_type [ mu_value1 , .. , mu_valuen ] : y , [ base_type ] , ( /\\ ( index_term1 , .. , index_termn ) _bt ) [ y ^ code_int _bt / y1 , .. , y ^ code_int _bt / yn ]
 
 
     C ; L ; N |- mu_value1 :  y1 , base_type1 , index_term1 .. C ; L ; N |- mu_valuen : yn , base_typen , index_termn
-    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- :: Tuple
-    C ; L ; N |- ( mu_value1 , .. , mu_valuen ) : y , ( base_type1 , .. , base_typen ) , ( /\\ ( index_term1 , .. , index_termn ) _bt ) [ y ^ num _bt / y1 , .. , y ^ num _bt / yn ]
-
+    ----------------------------------------------------------------------------------------------------------------- :: Tuple
+    C ; L ; N |- ( mu_value1 , .. , mu_valuen ) : y , ( base_type1 , .. , base_typen ) , /\\ ( index_term1 , .. , index_termn ) _bt [ y ^ code_int _bt / y1 , .. , y ^ code_int _bt / yn ]
 
 defn
     C ; L ; N |- mu_pexpr_aux : ret :: :: PExpr :: PExpr_ by
@@ -772,12 +694,7 @@ defn
     C ; L ; N |- x : sigma y  : base_type . I
 
 
-    x : bool in C
-    -------------------------------------------------------- :: Not
-    C ; L ; N |- not ( x ) : sigma y : bool . y = (neg x _bt) _bt /\ I
-
-
-    % defer globals - resources  if touched
+    % DEFER: globals (needs resources)
 
 
     C ; L ; N |- mu_value : y , base_type , index_term
@@ -785,3 +702,26 @@ defn
     C ; L ; N |- mu_value : sigma y : base_type . index_term /\ I
 
 
+    % NOT IMPLEMENTED: constrained, undefined
+
+    % ASK: error, ctor, array_shift, member_shift
+
+
+    x : bool in C
+    ------------------------------------------------------------------ :: Not
+    C ; L ; N |- not ( x ) : sigma y : bool . y = (neg x _bt) _bt /\ I
+
+
+    % TODO: op
+
+    % NOT IMPLEMENTED: struct, union, memberof
+
+    % ASK: call
+
+    % TODO: assert_under, bool_to_integer, conv_int
+
+    % ASK: wrapI
+
+    % ASK: if, case, let (pattern-matching)
+
+    % TODO: let, done
