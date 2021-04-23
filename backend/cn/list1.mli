@@ -20,3 +20,6 @@ val (@) : 'a t -> 'a t -> 'a t
 
 
 val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+
+val length : 'a t -> int
+val combine : 'a t -> 'b t -> ('a * 'b) t

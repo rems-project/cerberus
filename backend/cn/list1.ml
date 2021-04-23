@@ -31,3 +31,10 @@ let (@) = concat
 
 let equal equality l1 l2 = 
   List.equal equality (to_list l1) (to_list l2)
+
+
+let length (hd, tl) = 1 + List.length tl
+
+
+let combine (hd, tl) (hd', tl') = 
+  make ((hd, hd'), List.combine tl tl')

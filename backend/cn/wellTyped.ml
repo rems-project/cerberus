@@ -549,6 +549,36 @@ module Make (G : sig val global : Global.t end) = struct
            fail loc (Generic err)
       in
 
+      let get_predicate_def name = 
+        match Global.get_predicate_def G.global name, name with
+        | Some def, _ -> return def
+        | None, Tag tag -> fail loc (Missing_struct tag)
+        | None, Id id -> fail loc (Missing_predicate id)
+      in
+      
+      let ensure_same_argument_number input_output has ~expect =
+        if has = expect then return () else 
+          match input_output with
+          | `Input -> fail loc (Number_input_arguments {has; expect})
+          | `Output -> fail loc (Number_input_arguments {has; expect})
+      in
+
+      let ensure_all_symbols re args =
+        let@ _ = 
+          ListM.mapiM (fun i arg ->
+              if Option.is_some (IT.is_sym arg) then return () else
+                let (resource, _) = Explain.resource names local re None in
+                let open Pp in
+                let err = 
+                  !^("output argument " ^ string_of_int i ^ " of resource") ^^^ resource ^^^
+                    !^"not a symbol"
+                in
+                fail loc (Generic err)
+            ) args
+        in
+        return ()
+      in
+
       function
       | Point b -> 
          let@ () = WIT.welltyped loc names local BT.Loc b.pointer in
@@ -556,55 +586,39 @@ module Make (G : sig val global : Global.t end) = struct
          let@ (content_bt, _) = WIT.check_or_infer loc names local None b.content in
          let@ () = ensure_option_type content_bt b.content in
          return ()
-      | IteratedStar b -> 
+      | QPoint b -> 
          let local' = L.add_l b.qpointer Loc local in
          let@ _ = WIT.check_or_infer loc names local' (Some BT.Real) b.permission in
          let@ (content_bt, _) = WIT.check_or_infer loc names local None b.content in
          let@ () = ensure_option_type content_bt b.content in
          return ()
       | Predicate p -> 
-         let@ def = match Global.get_predicate_def G.global p.name, p.name with
-           | Some def, _ -> return def
-           | None, Tag tag -> fail loc (Missing_struct tag)
-           | None, Id id -> fail loc (Missing_predicate id)
-         in
-         let@ () = 
-           let has = List.length def.iargs in
-           let expect = List.length p.iargs in
-           if has = expect then return ()
-           else fail loc (Number_arguments {has; expect})
-         in
+         let@ def = get_predicate_def p.name in
+         let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
+         let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+         let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
+         let@ () = ensure_same_argument_number `Output has_oargs ~expect:expect_oargs in
          let@ () = 
            ListM.iterM (fun (arg, expected_sort) ->
                WIT.welltyped loc names local expected_sort arg
-             ) (List.combine p.iargs (List.map snd def.iargs))
+             ) (List.combine (p.iargs @ p.oargs) 
+               (List.map snd (def.iargs @ def.oargs)))
          in
-         let@ () = 
-           let has = List.length def.oargs in
-           let expect = List.length p.oargs in
-           if has = expect then return ()
-           else fail loc (Number_arguments {has; expect})
-         in
+         ensure_all_symbols (Predicate p) p.oargs
+      | QPredicate (sym, p) -> 
+         let local = L.add_l sym Integer local in
+         let@ def = get_predicate_def p.name in
+         let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
+         let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+         let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
+         let@ () = ensure_same_argument_number `Output has_oargs ~expect:expect_oargs in
          let@ () = 
            ListM.iterM (fun (arg, expected_sort) ->
                WIT.welltyped loc names local expected_sort arg
-             ) (List.combine p.oargs (List.map snd def.oargs))
+             ) (List.combine (p.iargs @ p.oargs) 
+               (List.map snd (def.iargs @ def.oargs)))
          in
-         let@ _ = 
-           ListM.fold_leftM (fun i arg ->
-               match arg with
-               | IT.IT (Lit (Sym _), _) -> return (i + 1)
-               | _ ->
-                  let (resource, _) = Explain.resource names local (Predicate p) None in
-                  let open Pp in
-                  let err = 
-                    !^("output argument " ^ string_of_int i ^ " of resource") ^^^ resource ^^^
-                      !^"not a symbol"
-                  in
-                  fail loc (Generic err)
-             ) 0 p.oargs
-         in
-         return ()
+         ensure_all_symbols (QPredicate (sym, p)) p.oargs
   end
 
 

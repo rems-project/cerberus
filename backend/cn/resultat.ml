@@ -88,7 +88,21 @@ module ListM = struct
 
 end
 
+module List1M = struct
 
+  open List1
+
+  let mapM (f : 'a -> ('b,'e) result) (l : 'a list1) : ('b list1, 'e) result = 
+    let (hd, tl) = dest l in
+    let@ hd = f hd in
+    let@ tl = ListM.mapM f tl in
+    return (List1.make (hd, tl))
+
+  let iterM (f : ('a -> (unit,'e) result)) (l : 'a list1) : (unit, 'e) result = 
+    let@ _ = mapM f l in 
+    return ()  
+
+end
 
 
 module PmapM = struct
@@ -114,3 +128,5 @@ module PmapM = struct
       ) m (Pmap.empty cmp)
 
 end
+
+

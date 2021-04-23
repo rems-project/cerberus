@@ -341,7 +341,7 @@ module Make (G : sig val global : Global.t end) = struct
        then return res
        else 
          fail loc (error ())
-    | IteratedStar b, IteratedStar b' when
+    | QPoint b, QPoint b' when
            Z.equal b.size b'.size ->
        let b = 
          let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
@@ -554,7 +554,7 @@ module Make (G : sig val global : Global.t end) = struct
                   let needed = sub_ (needed, can_take) in
                   let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, (needed, content))
-               | IteratedStar ({content = v'; _} as p') 
+               | QPoint ({content = v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -572,7 +572,7 @@ module Make (G : sig val global : Global.t end) = struct
                           sub_ (IT.subst_it {before=p'.qpointer; after = requested.pointer} p'.permission, can_take),
                           p'.permission)
                   in
-                  (IteratedStar {p' with permission = permission'}, (needed, content))
+                  (QPoint {p' with permission = permission'}, (needed, content))
                | re ->
                   (re, (needed, content))
              ) local (needed, nothing_ (get_option_type bt))
@@ -580,7 +580,7 @@ module Make (G : sig val global : Global.t end) = struct
          if Solver.holds local (eq_ (needed, q_ (0, 1))) 
          then return (Point {requested with content}, updated_local)
          else missing ()
-      | IteratedStar ({content = IT (_, bt); _} as requested) ->
+      | QPoint ({content = IT (_, bt); _} as requested) ->
          let qp = Sym.fresh () in
          let needed = 
            IT.subst_var {before = requested.qpointer; after = qp}
@@ -608,7 +608,7 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   let permission' = sub_ (p'.permission, can_take) in
                   (Point {p' with permission = permission'}, (needed, content))
-               | IteratedStar ({content = v'; _} as p') 
+               | QPoint ({content = v'; _} as p') 
                     when Z.equal requested.size p'.size &&
                          BT.equal bt (IT.bt v') ->
                   let can_take = 
@@ -625,7 +625,7 @@ module Make (G : sig val global : Global.t end) = struct
                     sub_ (p'.permission, 
                           IT.subst_var {before=qp; after = p'.qpointer} can_take)
                   in
-                  (IteratedStar {p' with permission = permission'}, (needed, content))
+                  (QPoint {p' with permission = permission'}, (needed, content))
                | re ->
                   (re, (needed, content))
              ) local (needed, nothing_ (get_option_type bt))
@@ -633,14 +633,15 @@ module Make (G : sig val global : Global.t end) = struct
          if Solver.holds_forall local [(qp, BT.Loc)] (eq_ (needed, q_ (0, 1)))
          then 
            let resource = 
-             IteratedStar {requested with 
+             QPoint {requested with 
                  content = IT.subst_var {before = qp; after = requested.qpointer} content
                } 
            in
            return (resource, updated_local)
          else 
            missing ()
-      | Predicate p when p.unused ->
+      | Predicate p ->
+         assert p.unused;
          let updated_local, found =
            L.map_and_fold_resources (fun re found ->
                match found, re with
@@ -684,8 +685,8 @@ module Make (G : sig val global : Global.t end) = struct
             let p' = {p with oargs = assignment} in
             return (Predicate p', local)
          end
-      | Predicate p ->
-         Debug_ocaml.error "request for used predicate"
+      | QPredicate _ ->
+         Debug_ocaml.error "request for used iterated predicate"
 
 
 
@@ -1371,11 +1372,14 @@ module Make (G : sig val global : Global.t end) = struct
             match resource with
             | Point p ->
                not (Solver.holds local (le_ (p.permission, q_ (0, 1))))
-            | IteratedStar p ->
+            | QPoint p ->
                not (Solver.holds_forall local [(p.qpointer, BT.Loc)]
                       (le_ (p.permission, q_ (0, 1))))
             | Predicate p ->
                p.unused
+            | QPredicate (sym, p) ->
+               not (Solver.holds_forall local [(sym, BT.Integer)]
+                      p.unused)
           ) local.resources
       in
       let () = Debug_ocaml.end_csv_timing () in

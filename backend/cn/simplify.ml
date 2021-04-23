@@ -45,16 +45,6 @@ let rec simp (lcs : t list) term =
       ) lcs SymPairMap.empty
   in
 
-  let is_true = function
-    | IT (Lit (Bool true), _) -> true
-    | _ -> false
-  in
-
-  let is_false = function
-    | IT (Lit (Bool false), _) -> true
-    | _ -> false
-  in
-
   (* fix later *)
   let rec simp_q (i,j) = 
     if i = 0 then 

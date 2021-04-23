@@ -1001,6 +1001,13 @@ let zero_frac = function
   | IT (Lit (Q (i,j)), _) when i = 0 -> true
   | _ -> false
 
+let is_true = function
+  | IT (Lit (Bool true), _) -> true
+  | _ -> false
+
+let is_false = function
+  | IT (Lit (Bool false), _) -> true
+  | _ -> false
 
 
 (* shorthands *)

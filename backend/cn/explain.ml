@@ -372,7 +372,7 @@ module Make (G : sig val global : Global.t end) = struct
                )
              in
              (entry :: acc_table, SymSet.union (SymSet.union (symbol_it pointer) (something_symbol_it value)) acc_reported)
-          | IteratedStar p ->
+          | QPoint p ->
              let entry =
                (None,
                 None, 
@@ -383,19 +383,28 @@ module Make (G : sig val global : Global.t end) = struct
                )
              in
              (entry :: acc_table, SymSet.add p.qpointer acc_reported)
-          | Predicate p when p.unused ->
+          | Predicate p ->
              let entry =
                (None,
                 None, 
                 None, 
-                Some (pp_predicate p),
+                Some (RE.pp (Predicate p)),
                 None,
                 None
                )
              in
              (entry :: acc_table, SymSet.empty)
-          | Predicate _ ->
-             (acc_table, acc_reported)
+          | QPredicate (sym, p) ->
+             let entry =
+               (None,
+                None, 
+                None, 
+                Some (RE.pp (QPredicate (sym, p))),
+                None,
+                None
+               )
+             in
+             (entry :: acc_table, SymSet.empty)
         ) (L.all_resources local) ([], SymSet.empty)
     in
     let var_lines = 

@@ -26,12 +26,17 @@ let predicate_name_equal pn1 pn2 =
 
 type predicate = {
     name : predicate_name; 
-    iargs: IT.t list;
+    iargs: IT.t list;         (* first is key *)
     oargs: IT.t list;
     unused: bool;
   }
 
-
+type qpredicate = {
+    name : predicate_name; 
+    iargs: IT.t list;
+    oargs: IT.t list;
+    unused: IT.t;
+  }
 
 type point = {
     pointer: IT.t; 
@@ -41,7 +46,7 @@ type point = {
   }
 
 type qpoint = {
-    qpointer: Sym.t; 
+    qpointer: Sym.t;          (* first is key *)
     size: Z.t; 
     content: IT.t; 
     permission: IT.t
@@ -50,8 +55,9 @@ type qpoint = {
 
 type t = 
   | Point of point
-  | IteratedStar of qpoint
+  | QPoint of qpoint
   | Predicate of predicate
+  | QPredicate of Sym.t * qpredicate
 
 
 
@@ -62,22 +68,26 @@ let pp_predicate_name = function
   | Id id -> !^id
   | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
 
-let pp_predicate {name; iargs; oargs; unused} =
+let pp_predicate ({name; iargs; oargs; unused} : predicate) =
   let args = List.map IT.pp (iargs @ oargs) @ [IT.pp (IT.bool_ unused)] in
+  c_app (pp_predicate_name name) args
+
+let pp_qpredicate ({name; iargs; oargs; unused} : qpredicate) =
+  let args = List.map IT.pp (iargs @ oargs) @ [IT.pp unused] in
   c_app (pp_predicate_name name) args
 
 let pp = function
   | Point {pointer; size; content; permission} ->
      group (c_app !^"Points" [IT.pp pointer; IT.pp content; Z.pp size; IT.pp permission])
-  | IteratedStar {qpointer; size; content; permission} ->
+  | QPoint {qpointer; size; content; permission} ->
      group 
        (flow (break 1)
           [!^"forall" ^^^ Sym.pp qpointer ^^ dot;
            c_app !^"Points" [Sym.pp qpointer; IT.pp content; Z.pp size; IT.pp permission]])
   | Predicate p ->
      pp_predicate p
-          
-        
+  | QPredicate (sym, p) ->
+     !^"forall" ^^^ Sym.pp sym ^^ dot ^^^ pp_qpredicate p
 
 
 
@@ -91,25 +101,43 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) = function
      let content = IT.subst_var subst content in
      let permission = IT.subst_var subst permission in
      Point {pointer; size; content; permission}
-  | IteratedStar {qpointer; size; content; permission} ->
+  | QPoint {qpointer; size; content; permission} ->
      if Sym.equal subst.before qpointer then 
-       IteratedStar {qpointer; size; content; permission}
+       QPoint {qpointer; size; content; permission}
      else if Sym.equal qpointer subst.after then
        let qpointer' = Sym.fresh () in
        let content = IT.subst_var {before=qpointer;after=qpointer'} content in
        let permission = IT.subst_var {before=qpointer;after=qpointer'} permission in
        let content = IT.subst_var subst content in
        let permission = IT.subst_var subst permission in
-       IteratedStar {qpointer = qpointer'; size; content; permission}       
+       QPoint {qpointer = qpointer'; size; content; permission}       
      else
        let content = IT.subst_var subst content in
        let permission = IT.subst_var subst permission in
-       IteratedStar {qpointer; size; content; permission}
+       QPoint {qpointer; size; content; permission}
   | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (IT.subst_var subst) iargs in
      let oargs = List.map (IT.subst_var subst) oargs in
      (* let unused = IT.subst_var subst unused in *)
      Predicate {name; iargs; oargs; unused}
+  | QPredicate (sym, {name; iargs; oargs; unused}) ->
+     if Sym.equal subst.before sym then 
+       QPredicate (sym, {name; iargs; oargs; unused})
+     else if Sym.equal sym subst.after then
+       let sym' = Sym.fresh () in
+       let iargs = List.map (IT.subst_var {before=sym;after=sym'}) iargs in
+       let oargs = List.map (IT.subst_var {before=sym;after=sym'}) oargs in
+       let unused = IT.subst_var {before=sym;after=sym'} unused in
+       let iargs = List.map (IT.subst_var subst) iargs in
+       let oargs = List.map (IT.subst_var subst) oargs in
+       let unused = IT.subst_var subst unused in
+       QPredicate (sym', {name; iargs; oargs; unused})       
+     else
+       let iargs = List.map (IT.subst_var subst) iargs in
+       let oargs = List.map (IT.subst_var subst) oargs in
+       let unused = IT.subst_var subst unused in
+       QPredicate (sym, {name; iargs; oargs; unused})       
+
 
 
 
@@ -120,25 +148,42 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
      let content = IT.subst_it subst content in
      let permission = IT.subst_it subst permission in
      Point {pointer; size; content; permission}
-  | IteratedStar {qpointer; size; content; permission} ->
+  | QPoint {qpointer; size; content; permission} ->
      if Sym.equal subst.before qpointer then 
-       IteratedStar {qpointer; size; content; permission}
+       QPoint {qpointer; size; content; permission}
      else if SymSet.mem qpointer (IT.free_vars subst.after) then
        let qpointer' = Sym.fresh () in
        let content = IT.subst_var {before=qpointer;after=qpointer'} content in
        let permission = IT.subst_var {before=qpointer;after=qpointer'} permission in
        let content = IT.subst_it subst content in
        let permission = IT.subst_it subst permission in
-       IteratedStar {qpointer = qpointer'; size; content; permission}
+       QPoint {qpointer = qpointer'; size; content; permission}
      else
        let content = IT.subst_it subst content in
        let permission = IT.subst_it subst permission in
-       IteratedStar {qpointer; size; content; permission}
+       QPoint {qpointer; size; content; permission}
   | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (IT.subst_it subst) iargs in
      let oargs = List.map (IT.subst_it subst) oargs in
      (* let unused = IT.subst_it subst unused in *)
      Predicate {name; iargs; oargs; unused}
+  | QPredicate (sym, {name; iargs; oargs; unused}) ->
+     if Sym.equal subst.before sym then 
+       QPredicate (sym, {name; iargs; oargs; unused})
+     else if SymSet.mem sym (IT.free_vars subst.after) then
+       let sym' = Sym.fresh () in
+       let iargs = List.map (IT.subst_var {before=sym;after=sym'}) iargs in
+       let oargs = List.map (IT.subst_var {before=sym;after=sym'}) oargs in
+       let unused = IT.subst_var {before=sym;after=sym'} unused in
+       let iargs = List.map (IT.subst_it subst) iargs in
+       let oargs = List.map (IT.subst_it subst) oargs in
+       let unused = IT.subst_it subst unused in
+       QPredicate (sym', {name; iargs; oargs; unused})       
+     else
+       let iargs = List.map (IT.subst_it subst) iargs in
+       let oargs = List.map (IT.subst_it subst) oargs in
+       let unused = IT.subst_it subst unused in
+       QPredicate (sym, {name; iargs; oargs; unused})       
 
 
 
@@ -155,7 +200,7 @@ let equal t1 t2 =
      Z.equal b1.size b2.size &&
      IT.equal b1.content b2.content &&
      IT.equal b1.permission b2.permission
-  | IteratedStar b1, IteratedStar b2 ->
+  | QPoint b1, QPoint b2 ->
      Sym.equal b1.qpointer b2.qpointer &&
      Z.equal b1.size b2.size &&
      IT.equal b1.content b2.content &&
@@ -165,9 +210,16 @@ let equal t1 t2 =
      List.equal IT.equal p1.iargs p2.iargs && 
      List.equal IT.equal p1.oargs p2.oargs &&
      (* IT.equal *) p1.unused = p2.unused
+  | QPredicate (s1, p1), QPredicate (s2, p2) ->
+     Sym.equal s1 s2 &&
+     predicate_name_equal p1.name p2.name && 
+     List.equal IT.equal p1.iargs p2.iargs && 
+     List.equal IT.equal p1.oargs p2.oargs &&
+     IT.equal p1.unused p2.unused
   | Point _, _ -> false
-  | IteratedStar _, _ -> false
+  | QPoint _, _ -> false
   | Predicate _, _ -> false
+  | QPredicate _, _ -> false
 
 
 
@@ -179,11 +231,14 @@ let equal t1 t2 =
 let free_vars = function
   | Point b -> 
      IT.free_vars_list [b.pointer; b.permission; b.content]
-  | IteratedStar b -> 
+  | QPoint b -> 
      SymSet.remove b.qpointer 
        (IT.free_vars_list [b.permission; b.content])
   | Predicate p -> 
      IT.free_vars_list ((* p.unused :: *) (p.iargs @ p.oargs))
+  | QPredicate (sym, p) -> 
+     SymSet.remove sym
+       (IT.free_vars_list (p.unused :: (p.iargs @ p.oargs)))
 
 let free_vars_list l = 
   List.fold_left (fun acc sym -> 
@@ -204,25 +259,29 @@ let free_vars_list l =
 let inputs = function
   | Point p -> [p.pointer; p.permission]
   (* the quantifier in IteratedStar is neither input nor output *)
-  | IteratedStar p -> [p.permission]
+  | QPoint p -> [p.permission]
   | Predicate p -> p.iargs
+  | QPredicate (sym, p) -> p.iargs
 
 let outputs = function
   | Point b -> [b.content]
-  | IteratedStar b -> [b.content]
+  | QPoint b -> [b.content]
   | Predicate p -> p.oargs
+  | QPredicate (sym, p) -> p.oargs
 
+(* only used for predicates *)
+let key = function
+  | Point p -> p.pointer
+  | QPoint q -> sym_ (q.qpointer, BT.Loc)
+  | Predicate p -> List.hd p.iargs
+  | QPredicate (_, p) -> List.hd p.iargs
 
-let permission = function
-  | Point p -> p.permission
-  | IteratedStar s -> s.permission
-  | Predicate p when p.unused -> IT.q_ (1, 1)
-  | Predicate p -> IT.q_ (0, 1)
 
 let quantified = function
   | Point p -> []
-  | IteratedStar p -> [(p.qpointer, BaseTypes.Loc)]
+  | QPoint p -> [(p.qpointer, BaseTypes.Loc)]
   | Predicate p -> []
+  | QPredicate (sym, p) -> [(sym, BaseTypes.Integer)]
 
 (* assumption: resource is owned *)
 let derived_constraint resource = 
@@ -230,10 +289,12 @@ let derived_constraint resource =
   match resource with
   | Point p -> 
      impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
-  | IteratedStar p ->
+  | QPoint p ->
      (* todo *)
      bool_ true
   | Predicate _ ->
+     bool_ true
+  | QPredicate _ ->
      bool_ true
 
 
@@ -259,6 +320,14 @@ let derived_constraints resource resource' =
   | _ ->
      (* todo *)
      []
+
+
+
+
+
+
+
+
 
 
 
@@ -288,7 +357,7 @@ let char_region pointer size permission =
       permission = ite_ (condition, permission, q_ (0,1))
     }
   in
-  IteratedStar point
+  QPoint point
 
 
 let array_index_to_pointer base element_size index =
@@ -326,37 +395,46 @@ let array pointer length element_size content permission =
       permission = ite_ (condition, permission, q_ (0,1))
     }
   in
-  IteratedStar point
+  QPoint point
 
 
 
 
 
-
-let if_non_zero_frac resource = 
-  if not (IT.zero_frac (permission resource))
-  then Some resource else None
 
 let simp lcs resource = 
+  let open Subst in
   match resource with
   | Point {pointer; size; content; permission} ->
      let pointer = simp lcs pointer in
      let content = simp lcs content in
      let permission = simp lcs permission in
-     if_non_zero_frac (Point {pointer; size; content; permission})
-  | IteratedStar {qpointer; size; content; permission} ->
+     if IT.zero_frac permission
+     then None else Some (Point {pointer; size; content; permission})
+  | QPoint {qpointer; size; content; permission} ->
      let qpointer' = Sym.fresh () in
-     let subst = Subst.{before=qpointer;after=qpointer'} in
+     let subst = {before=qpointer;after=qpointer'} in
      let content = simp lcs (IT.subst_var subst content) in
      let permission = simp lcs (IT.subst_var subst permission) in
-     if_non_zero_frac (IteratedStar {qpointer = qpointer'; size; content; permission})
+     if IT.zero_frac permission
+     then None else Some (QPoint {qpointer = qpointer'; size; content; permission})
   | Predicate {name; iargs; oargs; unused} -> 
      let iargs = List.map (simp lcs) iargs in
      let oargs = List.map (simp lcs) oargs in
      (* let unused = IT.subst_var subst unused in *)
-     if unused 
-     then Some (Predicate {name; iargs; oargs; unused})
-     else None
+     if not unused then None
+     else Some (Predicate {name; iargs; oargs; unused})
+  | QPredicate (sym, {name; iargs; oargs; unused}) -> 
+     let sym' = Sym.fresh () in
+     let iargs = List.map (IT.subst_var {before=sym;after=sym'}) iargs in
+     let oargs = List.map (IT.subst_var {before=sym;after=sym'}) oargs in
+     let unused = IT.subst_var {before=sym;after=sym'} unused in
+     let iargs = List.map (simp lcs) iargs in
+     let oargs = List.map (simp lcs) oargs in
+     let unused = simp lcs unused in
+     if IT.is_false unused then None
+     else Some (QPredicate (sym, {name; iargs; oargs; unused}))
+
 
 
 
@@ -443,7 +521,7 @@ module External = struct
            )
        in
        let content = IT.subst_it subst content in
-       IteratedStar {qpointer; size = element_size; content; permission}
+       QPoint {qpointer; size = element_size; content; permission}
 
 
 

@@ -83,6 +83,8 @@ type type_error =
 
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
+  | Number_input_arguments of {has: int; expect: int}
+  | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: LS.t}
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
@@ -198,6 +200,14 @@ let pp_type_error te =
           !^"has" ^^^ !^(string_of_int has), [])
   | Number_arguments {has;expect} ->
      (!^"Wrong number of arguments:" ^^^
+        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+          !^"has" ^^^ !^(string_of_int has), [])
+  | Number_input_arguments {has;expect} ->
+     (!^"Wrong number of input arguments:" ^^^
+        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+          !^"has" ^^^ !^(string_of_int has), [])
+  | Number_output_arguments {has;expect} ->
+     (!^"Wrong number of output arguments:" ^^^
         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
           !^"has" ^^^ !^(string_of_int has), [])
   | Mismatch {has; expect} ->
