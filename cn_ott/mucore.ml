@@ -3,17 +3,17 @@
 
 type 
 base_type =  (* Core base types *)
-   BTy_Unit (* unit *)
- | BTy_Bool of bool (* boolean *)
- | BTy_Integer (* integer *)
- | BTy_Read (* rational numbers? *)
- | BTy_Loc (* location *)
- | BTy_List of base_type (* list *)
- | BTy_Tuple of (base_type) list (* tuple *)
- | BTy_Struct of tag
- | BTy_Set of base_type (* set *)
- | BTy_Option of base_type (* option *)
- | BTy_Param of (base_type) list * base_type (* parameter types *)
+   Unit (* unit *)
+ | Bool of bool (* boolean *)
+ | Integer (* integer *)
+ | Read (* rational numbers? *)
+ | Loc (* location *)
+ | ListTy of base_type (* list *)
+ | TupleTy of (base_type) list (* tuple *)
+ | Struct of tag
+ | Set of base_type (* set *)
+ | Option of base_type (* option *)
+ | Param of (base_type) list * base_type (* parameter types *)
 
 
 type 
@@ -111,6 +111,44 @@ type
 
 
 type 
+'bt pointer_op = 
+   Null
+
+
+type 
+lit = 
+   Lit_Sym of x
+ | Lit_Unit
+ | Lit_Bool of bool
+ | Lit_Z of Z.t
+ | Lit_Pointer of Z.t
+
+
+type 
+'bt bool_op = 
+   Not of 'bt index_term
+ | Eq of 'bt index_term * 'bt index_term
+ | And of ('bt index_term) list
+
+and 'bt list_op = 
+   List of ('bt index_term) list
+ | NthList of int * 'bt index_term
+
+and 'bt param_op = 
+   App of 'bt index_term * ('bt index_term) list
+
+and 'bt index_term_aux = 
+   Bool_op of 'bt bool_op
+ | List_op of 'bt list_op
+ | Pointer_op of 'bt pointer_op
+ | Param_op of 'bt param_op
+
+and 'bt index_term = 
+   Lit of lit
+ | IT of 'bt index_term_aux * 'bt
+
+
+type 
 ('bty, 'sym) mu_action_aux =  (* memory actions *)
    Create of 'TY mu_pexpr * 'TY mu_pexpr * symbol_prefix
  | CreateReadOnly of 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * symbol_prefix
@@ -126,6 +164,33 @@ type
  | LinuxLoad of 'TY mu_pexpr * 'TY mu_pexpr * linux_linux_memory_order
  | LinuxStore of 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * linux_linux_memory_order
  | LinuxRMW of 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * linux_linux_memory_order
+
+
+type 
+n =  (* constraints env *)
+   Con_empty
+ | Con_cons of n
+
+
+type 
+ret =  (* return types *)
+   RetTy_Computational of x * base_type * ret
+ | RetTy_Logical of x * ret
+ | RetTy_Resource of ret
+ | RetTy_Constraint of 'bt index_term * ret
+ | RetTy_I
+
+
+type 
+l =  (* logical var env *)
+   Log_empty
+ | Log_cons of l * x
+
+
+type 
+c =  (* computational var env *)
+   Comp_empty
+ | Comp_cons of c * x * base_type
 
 
 type 
@@ -163,71 +228,6 @@ type
 
 and ('a, 'bty, 'sym) mu_expr = 
    Expr of annot list * ('a, 'bty, 'sym) mu_expr_aux
-
-
-type 
-'bt pointer_op = 
-   Null
-
-
-type 
-lit = 
-   Lit_Sym of x
- | Lit_Unit
- | Lit_Bool of bool
- | Lit_Z of Z.t
- | Lit_Pointer of Z.t
-
-
-type 
-'bt bool_op = 
-   Not of 'bt index_term
- | Eq of 'bt index_term * 'bt index_term
- | And of ('bt index_term) list
-
-and 'bt list_op = 
-   List of ('bt index_term) list
- | NthList of 'bt index_term * int
-
-and 'bt param_op = 
-   App of 'bt index_term * ('bt index_term) list
-
-and 'bt index_term_aux = 
-   Bool_op of 'bt bool_op
- | List_op of 'bt list_op
- | Pointer_op of 'bt pointer_op
- | Param_op of 'bt param_op
-
-and 'bt index_term = 
-   Lit of lit
- | IT of 'bt index_term_aux * 'bt
-
-
-type 
-n =  (* constraints env *)
-   Con_empty
- | Con_cons of n
-
-
-type 
-ret =  (* return types *)
-   RetTy_Computational of x * base_type * ret
- | RetTy_Logical of x * ret
- | RetTy_Resource of ret
- | RetTy_Constraint of 'bt index_term * ret
- | RetTy_I
-
-
-type 
-l =  (* logical var env *)
-   Log_empty
- | Log_cons of l * x
-
-
-type 
-c =  (* computational var env *)
-   Comp_empty
- | Comp_cons of c * x * base_type
 
 
 type 
