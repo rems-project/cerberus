@@ -592,6 +592,7 @@ defn
 % In what way is that supposed to be the start of an index term?
 
      Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv C 
+%PS: what is y here?  Really supposed to be un-indexed? the y1..yn in the conclusion are unconstrained...?
      </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />
      ---------------------------------------------------------------------------------------------------------------------------- :: Struct
      C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_tag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ]
