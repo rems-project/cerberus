@@ -102,7 +102,10 @@ grammar
 
 grammar
 
-  ty_mem_value :: 'MV' ::= {{ phantom }} {{ ocaml Impl_mem.mem_value }} {{ tex mem\_val }} {{ com memory value }}
+% PS: a tex hom on a nonterminal or metavar root should normally be attached to the root, otherwise (e.g.) it won't be subscripted properly if indexed
+% you likely want to fix that throughout
+%  ty_mem_value :: 'MV' ::= {{ phantom }} {{ ocaml Impl_mem.mem_value }} {{ tex mem\_val }} {{ com memory value }}
+  ty_mem_value {{ tex mem\_val }} :: 'MV' ::= {{ phantom }} {{ ocaml Impl_mem.mem_value }} {{ com memory value }}
     | int ty_mem_int :: :: integer
     | ptr ty_mem_ptr :: :: pointer
     | array ty_mem_value1 .. ty_mem_valuen :: :: array
@@ -425,6 +428,8 @@ grammar
 
 grammar
 
+%PS: just as a style point, it seems a bit strange to break up the index_term grammar into separate grammars like this. Is that to match CP's existing OCaml, or for some other reason?
+
   bool_op :: '' ::=      {{ auxparam 'bt }}
     | neg index_term                         :: :: Not
     | index_term1 = index_term2              :: :: Eq
@@ -473,6 +478,7 @@ grammar
     | lit                                                                     ::   :: Lit
     | index_term_aux ty_bt                                                    ::   :: IT
     | ( index_term )                                                          :: S :: Paren {{ ocaml [[index_term]] }} {{ com parentheses }}
+%PS: style: it might be clearer to have prefix substitution
     | index_term [ index_term1 / tyvar_sym1 , .. , index_termn / tyvar_symn ] :: M :: Subs  {{ ocaml INDEX_TERM_SUB }}
 
 
@@ -522,7 +528,11 @@ grammar
     | inconsistent ( C ; L ; N )                                                      :: :: inconsistent  
     | tyvar_sym : base_type inEnv C                                                   :: :: xInC
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // , // i /> inEnv C :: :: structInC
-    % HELP | </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />      :: :: indexed_infer_mu_value
+% PS Here your grammar production is trying to enforce that certain elements in the list (C, L, N, y) are constant along the list.
+%  I don't recall for sure, but I think Ott just doesn't support that in the grammar.  You can presumably still have occurrences
+%  in rules in which they happen to be constant.
+%    | </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />      :: :: indexed_infer_mu_value
+    | </ Ci ; Li ; Ni |- ty_mem_valuei => mem yi , base_typei , index_termi  // i />      :: :: indexed_infer_mu_value
     | formula1 .. formulan                                                            :: :: dots
 
 defns
@@ -568,11 +578,25 @@ defn
     C ; L ; N |- array ( mu_loaded_value1 , .. , mu_loaded_valuen ) => obj y , array base_type , /\\ ( index_term1 , .. , index_termn ) _bt [ y [ int z1 ] _bt / y1 , .. , y [ int zn ] _bt / yn ]
 
 
+%PS: if you look at the "no parses" line of output, there's a "***" at the furthest point that the parser got to - that's usually a good clue what's going wrong
+% PS: this first line just has bogus ":: :: structInC" and " , //" pasted from your formula production. The latter is just to define the concatenator for lists, but here you're not actually concatenating any lists.
     % HELP Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // , // i /> inEnv C :: :: structInC
     % HELP </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />
     % HELP ---------------------------------------------------------------------------------------------------------------------------- :: Struct
-    % HELP C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_tag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ]
-    
+% PS: another ", //" 
+% HELP C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_tag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ]
+
+% PS: now it's complaining at the ty_t***ag: 
+%no parses (char 170):
+%    C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_t***ag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ] 
+% In what way is that supposed to be the start of an index term?
+
+     Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv C 
+     </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />
+     ---------------------------------------------------------------------------------------------------------------------------- :: Struct
+     C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_tag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ]
+
+
     % NOT IMPLEMENTED: union
     % UNSUPPORTED: floats
 
