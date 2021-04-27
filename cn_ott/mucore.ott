@@ -65,7 +65,6 @@ metavar x , y , tyvar_sym {{ ocaml 'sym }} {{tex ident }} ::=
 
 grammar
 
-  % TODO binders
   Symbol_sym {{ tex ident }} :: '' ::= {{ ocaml Symbol.sym }} {{ phantom }} {{ com Ott-hack, ignore }}
     | tyvar_sym :: X :: Tyvar_Sym
     | ty_tag    :: X :: Tag
@@ -80,16 +79,12 @@ grammar
 metavar ty_mem_int {{ ocaml Impl_mem.integer_value }} ::=
     {{ phantom }}  {{ com memory integer value }}
 
-metavar ty_mem_value {{ ocaml Impl_mem.mem_value }} {{ tex mem\_val }} ::=
-    {{ phantom }} {{ com memory value }}
-
 metavar Symbol_identifier {{ tex member }} {{ ocaml Symbol.identifier }} ::=
    {{ phantom }} {{ com C struct/union member name }}
 
 metavar T_ct {{ tex \tau }} {{ ocaml T.ct }} ::=
     {{ phantom }} {{ com C type }}
 
-% TODO hide from Tex
 metavar annots {{ ocaml annot list }} ::=
   {{ phantom }} {{ com annotations }}
 
@@ -100,24 +95,32 @@ indexvar n, i ::= {{ phantom }} {{ com index variables }}
 
 grammar
 
-  ptrval :: 'PV' ::= {{ phantom }} {{ ocaml Impl_mem.pointer_value }} {{ com pointer values }}
+  ty_mem_ptr :: 'PV' ::= {{ phantom }} {{ ocaml Impl_mem.pointer_value }} {{ com pointer values }}
     | nullptr            :: :: null       {{ com null pointer }}
     | funcptr Symbol_sym :: :: function   {{ com function pointer }}
     | concptr ty_nat     :: :: concrete   {{ com concrete pointer }}
 
 grammar
 
-% (* Object values (inhabitants of object types, hence values that can be read/stored) *)
-  mu_object_value {{ tex object\_value }} :: 'M_OV' ::=  {{ auxparam 'TY }} {{ com C object values }} 
+  ty_mem_value :: 'MV' ::= {{ phantom }} {{ ocaml Impl_mem.mem_value }} {{ tex mem\_val }} {{ com memory value }}
+    | int ty_mem_int :: :: integer
+    | ptr ty_mem_ptr :: :: pointer
+    | array ty_mem_value1 .. ty_mem_valuen :: :: array
+    | struct Symbol_sym Symbol_identifier1 ty_mem_value1 .. Symbol_identifiern ty_mem_valuen :: :: struct
+    | union Symbol_sym Symbol_identifier :: :: union
+
+grammar
+
+  mu_object_value {{ tex object\_value }} :: 'M_OV' ::=  {{ auxparam 'TY }} {{ com C object values (inhabitants of object types), which can be read/stored }} 
     | ty_mem_int                                                                                :: :: integer {{ com integer value  }}
-    | ptrval                                                                                    :: :: pointer {{ com pointer value  }}
+    | ty_mem_ptr                                                                                :: :: pointer {{ com pointer value  }}
     | array ( mu_loaded_value1 , .. , mu_loaded_valuen )                                        :: :: array   {{ com C array value  }}
     | ( struct Symbol_sym ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> }    :: :: struct  {{ com C struct value }}
     | ( union Symbol_sym ) { . Symbol_identifier = ty_mem_value }                               :: :: union   {{ com C union value  }}
   
 
   mu_loaded_value {{ tex loaded\_value }} :: 'M_LV' ::= {{ auxparam 'TY }} {{ com potentially unspecified C object values }}
-    | specified ( mu_object_value ) :: :: specified {{ com specified loaded value }}
+    | specified mu_object_value :: :: specified {{ com specified loaded value }}
   
 
 grammar
@@ -241,10 +244,10 @@ grammar
  % TODO: binders
   mu_tpexpr_aux {{ tex tpexpr\_aux }} :: 'M_TP' ::= {{ auxparam 'TY }} {{ com top-level pure expressions }}
     | undef ty_loc UB_name                                       ::   :: undef {{ com undefined behaviour }}
-    | case ty_asym of </ | mu_patterni => mu_tpexpri // i /> end ::   :: case {{ com pattern matching }}
-    | let mu_sym_or_pattern = mu_tpexpr1 in mu_tpexpr2             ::   :: let  {{ com pure let         }}
-    | if ty_asym then mu_tpexpr1 else mu_tpexpr2                 ::   :: if   {{ com pure if          }}
-    | done ty_asym                                               ::   :: done {{ com pure done        }}
+    | case ty_asym of </ | mu_patterni => mu_tpexpri // i /> end ::   :: case  {{ com pattern matching }} % TODO: binding
+    | let mu_sym_or_pattern = mu_tpexpr1 in mu_tpexpr2           ::   :: let   {{ com pure let         }} % TODO: binding
+    | if ty_asym then mu_tpexpr1 else mu_tpexpr2                 ::   :: if    {{ com pure if          }}
+    | done ty_asym                                               ::   :: done  {{ com pure done        }}
 
   mu_tpexpr {{ tex tpexpr }} :: 'M_TP' ::= {{ auxparam 'TY }} {{ com pure top-level pure expressions with location and annotations }}
     | ty_loc annots tyvar_TY mu_tpexpr_aux :: :: expr
@@ -323,7 +326,7 @@ grammar
     | ptrArrayShift ( ty_asym1 ,  ty_act , ty_asym2 ) :: :: PtrArrayShift
     | memcpy ( ty_asym1 , ty_asym2 , ty_asym3 )       :: :: Memcpy
     | memcmp ( ty_asym1 , ty_asym2 , ty_asym3 )       :: :: Memcmp
-    | realloc ( ty_asym1 , ty_asym2 , ty_asym3 )      :: :: Realloc          {{ com TODO: not sure about this }}
+    | realloc ( ty_asym1 , ty_asym2 , ty_asym3 )      :: :: Realloc
     | va_start ( ty_asym1 , ty_asym2 )                :: :: Va_start
     | va_copy ( ty_asym )                             :: :: Va_copy
     | va_arg ( ty_asym , ty_act )                     :: :: Va_arg
@@ -515,49 +518,76 @@ grammar
 grammar
 
   formula :: 'formula_' ::=          
-    | judgement                  :: :: judgement
-    | not ( formula )            :: ::  not  
-    | tyvar_sym : base_type inEnv C :: :: xInC
+    | judgement                                                                       :: :: judgement
+    | inconsistent ( C ; L ; N )                                                      :: :: inconsistent  
+    | tyvar_sym : base_type inEnv C                                                   :: :: xInC
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // , // i /> inEnv C :: :: structInC
-    % HELP | </ C ; L ; N |- ty_mem_valuei => y , base_typei , index_termi  // i /> :: :: indexed_infer_mu_value
-    | formula1 .. formulan       :: :: dots
+    % HELP | </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />      :: :: indexed_infer_mu_value
+    | formula1 .. formulan                                                            :: :: dots
 
 defns
-  Jtype :: '' ::= 
+  mem_value_jtypes :: '' ::=
 
+defn
+    C ; L ; N |- ty_mem_value => mem y , base_type , index_term :: :: Val_Obj_Mem :: Val_Obj_Mem_ by
+
+    % TODO
+    % int ty_mem_int
+    % ptr ty_mem_ptr
+    % array ty_mem_value1 .. ty_mem_valuen
+    % struct Symbol_sym Symbol_identifier1 ty_mem_value1 .. Symbol_identifiern ty_mem_valuen
+
+    % NOT IMPLEMENTED: union Symbol_sym Symbol_identifier
+
+defns
+  value_jtypes :: '' ::=
+
+defn
+    C ; L ; N |- mu_object_value => obj tyvar_sym , base_type , index_term :: :: Val_Obj :: Val_Obj_ by
+
+
+    ---------------------------------------------------------------- :: Int
+    C ; L ; N |- ty_mem_int => obj y , integer , y = int of_mem_int ty_mem_int _bt
+
+
+    --------------------------------------------------- :: Ptr_Null
+    C ; L ; N |- nullptr => obj y , loc , y = nullop _bt _bt
+
+
+    ------------------------------------------------------------ :: Ptr_Func
+    C ; L ; N |- funcptr tyvar_sym => obj y , loc , y = tyvar_sym _bt
+
+
+    --------------------------------------------------------------------- :: Ptr_Conc
+    C ; L ; N |- concptr ty_nat => obj y , loc , y = ptr of_nat ty_nat _bt
+
+
+    % only instance of mutually recursive call to mu_value_judgement, can be inlined away
+    C ; L ; N |- mu_object_value1 => y1 , base_type , index_term1 .. C ; L ; N |- mu_object_valuen => yn , base_type , index_termn
+    ------------------------------------------------------------------------------------------------------------------------------ :: Arr
+    C ; L ; N |- array ( mu_loaded_value1 , .. , mu_loaded_valuen ) => obj y , array base_type , /\\ ( index_term1 , .. , index_termn ) _bt [ y [ int z1 ] _bt / y1 , .. , y [ int zn ] _bt / yn ]
+
+
+    % HELP Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // , // i /> inEnv C :: :: structInC
+    % HELP </ C ; L ; N |- ty_mem_valuei => mem y , base_typei , index_termi  // i />
+    % HELP ---------------------------------------------------------------------------------------------------------------------------- :: Struct
+    % HELP C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_tag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ]
+    
+    % NOT IMPLEMENTED: union
+    % UNSUPPORTED: floats
 
 defn
     C ; L ; N |- mu_value => tyvar_sym , base_type , index_term :: :: Val :: Val_ by
 
 
-    ---------------------------------------------------------------- :: Obj_Int
-    C ; L ; N |- ty_mem_int => y , integer , y = int of_mem_int ty_mem_int _bt
+    C ; L ; N |- mu_object_value => obj y , base_type , index_term
+    ------------------------------------------------------------- :: Obj
+    C ; L ; N |- mu_object_value => y , base_type , index_term
 
 
-    --------------------------------------------------- :: Obj_Ptr_Null
-    C ; L ; N |- nullptr => y , loc , y = nullop _bt _bt
-
-
-    ------------------------------------------------------------ :: Obj_Ptr_Func
-    C ; L ; N |- funcptr tyvar_sym => y , loc , y = tyvar_sym _bt
-
-
-    --------------------------------------------------------------------- :: Obj_Ptr_Conc
-    C ; L ; N |- concptr ty_nat => y , loc , y = ptr of_nat ty_nat _bt
-
-
-    C ; L ; N |- mu_loaded_value1 => y1 , base_type , index_term1 .. C ; L ; N |- mu_loaded_valuen => yn , base_type , index_termn
-    ---------------------------------------------------------------------------------------------------------------------------- :: Obj_Arr
-    C ; L ; N |- array ( mu_loaded_value1 , .. , mu_loaded_valuen ) => y , array base_type , /\\ ( index_term1 , .. , index_termn ) _bt [ y [ int z1 ] _bt / y1 , .. , y [ int zn ] _bt / yn ]
-
-
-    % HELP Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // , // i /> inEnv C :: :: structInC
-    % HELP </ C ; L ; N |- ty_mem_valuei => y , base_typei , index_termi  // i />
-    % HELP ---------------------------------------------------------------------------------------------------------------------------- :: Obj_Struct
-    % HELP C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> } => y , struct ty_tag ,  /\\ ( index_term1 , .. , index_termn ) _bt [ ty_tag y . Symbol_identifier1 _bt / y1 , .. , ty_tag y . Symbol_identifiern _bt / yn ]
-    
-    % Ask: Typing structs and unions, floats (unsupported?)
-    % ANS: like arrays/lists, but with names
+    C ; L ; N |- mu_object_value => obj y , base_type , index_term
+    ------------------------------------------------------------- :: Loaded
+    C ; L ; N |- specified mu_object_value => y , base_type , index_term
 
 
     ------------------------------------------- :: Unit
@@ -581,6 +611,10 @@ defn
     ------------------------------------------------------------------------------------------------------------------- :: Tuple
     C ; L ; N |- ( mu_value1 , .. , mu_valuen ) => y , ( base_type1 , .. , base_typen ) , /\\ ( index_term1 , .. , index_termn ) _bt [ y ^ ty_int1 _bt / y1 , .. , y ^ ty_intn _bt / yn ]
 
+
+defns
+  pexpr_jtypes :: '' ::=
+
 defn
     C ; L ; N |- mu_pexpr_aux => ret :: :: PExpr :: PExpr_ by
 
@@ -598,9 +632,13 @@ defn
     C ; L ; N |- mu_value => sigma y : base_type . index_term /\ I
 
 
-    % NOT IMPLEMENTED: constrained, undefined
-    % ANS: undef, error - check if context inconsistent
-    % ASK: error, ctor, array_shift, member_shift
+    % NOT IMPLEMENTED: constrained
+
+    inconsistent ( C ; L ; N )
+    ----------------------------------------------------------------------------------- :: Error
+    C ; L ; N |- error ( ty_string , ty_asym ) => sigma y : base_type . index_term /\ I
+
+    % ASK: ctor, array_shift, member_shift
     % ANS: not spine, see as simple function applications
 
     x : bool inEnv C

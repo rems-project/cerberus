@@ -18,7 +18,7 @@ base_type =  (* Core base types *)
 
 
 type 
-'TY mu_object_value =  (* C object values *)
+'TY mu_object_value =  (* C object values (inhabitants of object types), which can be read/stored *)
    M_OVinteger of Impl_mem.integer_value (* integer value *)
  | M_OVpointer of Impl_mem.pointer_value (* pointer value *)
  | M_OVarray of ('TY mu_loaded_value) list (* C array value *)
@@ -178,7 +178,7 @@ type
  | M_PtrArrayShift of 'TY asym * 'TY act * 'TY asym
  | M_Memcpy of 'TY asym * 'TY asym * 'TY asym
  | M_Memcmp of 'TY asym * 'TY asym * 'TY asym
- | M_Realloc of 'TY asym * 'TY asym * 'TY asym (* TODO: not sure about this *)
+ | M_Realloc of 'TY asym * 'TY asym * 'TY asym
  | M_Va_start of 'TY asym * 'TY asym
  | M_Va_copy of 'TY asym
  | M_Va_arg of 'TY asym * 'TY act
@@ -202,18 +202,18 @@ n =  (* constraints env *)
 
 
 type 
+l =  (* logical var env *)
+   Log_empty
+ | Log_cons of l * x
+
+
+type 
 ret =  (* return types *)
    RetTy_Computational of x * base_type * ret
  | RetTy_Logical of x * ret
  | RetTy_Resource of ret
  | RetTy_Constraint of 'bt index_term * ret
  | RetTy_I
-
-
-type 
-l =  (* logical var env *)
-   Log_empty
- | Log_cons of l * x
 
 
 type 
@@ -291,6 +291,8 @@ type
 'bt struct_op = 
    StructMember of tag * 'bt index_term * Symbol.identifier
 
+(** definitions *)
+(** definitions *)
 (** definitions *)
 
 
