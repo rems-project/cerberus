@@ -10,18 +10,18 @@ open Subst
 
 
 type predicate_name = 
-  | Tag of BaseTypes.tag
+  | Ctype of Sctypes.t
   | Id of String.t
 
 let predicate_name_pp = function
-  | Tag tag -> Sym.pp tag
+  | Ctype ct -> Sctypes.pp ct
   | Id id -> !^id
 
 let predicate_name_equal pn1 pn2 =
   match pn1, pn2 with
-  | Tag t1, Tag t2 -> Sym.equal t1 t2
+  | Ctype t1, Ctype t2 -> Sctypes.equal t1 t2
   | Id id1, Id id2 -> String.equal id1 id2
-  | Tag _, _ -> false
+  | Ctype _, _ -> false
   | Id _, _ -> false
 
 
@@ -73,7 +73,7 @@ type resource = t
 
 let pp_predicate_name = function
   | Id id -> !^id
-  | Tag tag -> !^"StoredStruct" ^^ parens (Sym.pp tag)
+  | Ctype ct -> parens (Sctypes.pp ct)
 
 let pp_predicate (p : predicate) =
   if p.unused then 
@@ -370,8 +370,12 @@ let derived_constraints resource resource' =
 let point (pointer, size) permission value =
   Point {pointer; size; content = value; permission}
 
+
+let predicateP predicate_name pointer iargs oargs =
+  {name = predicate_name; pointer; iargs; oargs; unused = true}
+
 let predicate predicate_name pointer iargs oargs =
-  Predicate {name = predicate_name; pointer; iargs; oargs; unused = true}
+  Predicate (predicateP predicate_name pointer iargs oargs)
 
 
 let char_region pointer size permission =

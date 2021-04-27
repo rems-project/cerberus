@@ -54,8 +54,8 @@ module Make (G : sig val global : Global.t end) = struct
          let sorts = List.map aux bts in
          Z3.Tuple.mk_sort context (bt_symbol (Tuple bts)) field_symbols sorts
       | Struct tag ->
-         let decl = SymMap.find tag G.global.struct_decls in
-         let members = Memory.member_types decl.layout in
+         let layout = SymMap.find tag G.global.struct_decls in
+         let members = Memory.member_types layout in
          let member_symbols = List.map (fun (id,_) -> member_symbol id) members in
          let member_sorts = 
            List.map (fun (_, sct) -> 
@@ -212,8 +212,8 @@ module Make (G : sig val global : Global.t end) = struct
          let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
          Z3.Expr.mk_app context constructor (List.map (fun (_, t) -> term t) mts)
       | StructMember (tag, t, member) ->
-         let decl = SymMap.find tag G.global.struct_decls in
-         let members = List.map fst (Memory.member_types decl.layout) in
+         let layout = SymMap.find tag G.global.struct_decls in
+         let members = List.map fst (Memory.member_types layout) in
          let destructors = Z3.Tuple.get_field_decls (sort_of_bt (Struct tag)) in
          let member_destructors = List.combine members destructors in
          let destructor = List.assoc Id.equal member member_destructors in
@@ -302,7 +302,7 @@ module Make (G : sig val global : Global.t end) = struct
       match it with
       | Representable (ct, t) ->
          term (representable_ctype 
-                 (fun tag -> (SymMap.find tag G.global.struct_decls).layout)
+                 (fun tag -> (SymMap.find tag G.global.struct_decls))
                  ct t)
       | AlignedI (t1, t2) ->
          term (eq_ (rem_t_ (t2, t1), int_ 0))

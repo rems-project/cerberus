@@ -69,6 +69,7 @@ type type_error =
   | Missing_function of Sym.t
   | Missing_struct of BT.tag
   | Missing_predicate of string
+  | Missing_ctype_predicate of Sctypes.t
   | Missing_member of BT.tag * BT.member
 
   | Missing_global_ownership of {addr : doc; used : (loc list) option; situation : situation}   
@@ -142,6 +143,8 @@ let pp_type_error te =
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"not defined", [])
   | Missing_predicate id ->
      (!^"predicate" ^^^ !^id ^^^ !^"not defined", [])
+  | Missing_ctype_predicate ct ->
+     (!^"predicate for ctype" ^^^ Sctypes.pp ct ^^^ !^"not defined", [])
   | Missing_member (tag, member) ->
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])

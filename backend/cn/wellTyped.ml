@@ -175,8 +175,8 @@ module Make (G : sig val global : Global.t end) = struct
         
         let struct_op local = function
           | Struct (tag, members) ->
-             let@ decl = get_struct_decl tag in
-             let decl_members = Memory.member_types decl.layout in
+             let@ layout = get_struct_decl tag in
+             let decl_members = Memory.member_types layout in
              let@ () = 
                let has = List.length members in
                let expect = List.length decl_members in
@@ -193,8 +193,8 @@ module Make (G : sig val global : Global.t end) = struct
              return (BT.Struct tag, Struct (tag, members))
           | StructMember (tag, t, member) ->
              let@ t = check loc local (Struct tag) t in
-             let@ decl = get_struct_decl tag in
-             let decl_members = Memory.member_types decl.layout in
+             let@ layout = get_struct_decl tag in
+             let decl_members = Memory.member_types layout in
              let@ bt = get_member_type decl_members member t in
              return (bt, StructMember (tag, t, member))
         in
@@ -554,7 +554,7 @@ module Make (G : sig val global : Global.t end) = struct
       let get_predicate_def name = 
         match Global.get_predicate_def G.global name, name with
         | Some def, _ -> return def
-        | None, Tag tag -> fail loc (Missing_struct tag)
+        | None, Ctype ct -> fail loc (Missing_ctype_predicate ct)
         | None, Id id -> fail loc (Missing_predicate id)
       in
       

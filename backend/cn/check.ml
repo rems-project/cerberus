@@ -125,9 +125,8 @@ module Make (G : sig val global : Global.t end) = struct
       | Some decl -> return decl
       | None -> fail loc (Missing_struct tag)
 
-  let get_member_type loc tag member decl = 
-    let open Global in
-    match List.assoc_opt Id.equal member (Memory.member_types decl.layout) with
+  let get_member_type loc tag member layout = 
+    match List.assoc_opt Id.equal member (Memory.member_types layout) with
     | Some membertyp -> return membertyp
     | None -> fail loc (Missing_member (tag, member))
 
@@ -1017,7 +1016,7 @@ module Make (G : sig val global : Global.t end) = struct
          in the struct declaration *)
       let s = Sym.fresh () in
       let s_t = sym_ (s, BT.Struct tag) in
-      let@ spec = get_struct_decl loc tag in
+      let@ layout = get_struct_decl loc tag in
       let rec check fields spec =
         match fields, spec with
         | ((member, mv) :: fields), ((smember, sct) :: spec) 
@@ -1037,7 +1036,7 @@ module Make (G : sig val global : Global.t end) = struct
         | ((member,_) :: _), [] ->
            fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
       in
-      let@ lcs = check member_values (Memory.member_types spec.layout) in
+      let@ lcs = check member_values (Memory.member_types layout) in
       return (s, BT.Struct tag, and_ lcs)
 
     and infer_union (loc : loc) (tag : tag) (id : Id.t) 
@@ -1197,9 +1196,9 @@ module Make (G : sig val global : Global.t end) = struct
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
            let ret = Sym.fresh () in
-           let@ decl = get_struct_decl loc tag in
-           let@ _member_bt = get_member_type loc tag member decl in
-           let offset = Memory.member_offset decl.layout member in
+           let@ layout = get_struct_decl loc tag in
+           let@ _member_bt = get_member_type loc tag member layout in
+           let offset = Memory.member_offset layout member in
            let shifted_pointer = IT.addPointer_ (sym_ (arg.lname, arg.bt), z_ offset) in
            let constr = def_ ret shifted_pointer in
            let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
@@ -1373,13 +1372,13 @@ module Make (G : sig val global : Global.t end) = struct
       let rec aux (ct : Sctypes.t) pointer is_member : (IT.t, type_error) m = 
         match ct with
         | Sctypes.Sctype (_, Struct tag) ->
-           let@ decl = get_struct_decl loc tag in
+           let@ layout = get_struct_decl loc tag in
            let@ member_its = 
              ListM.mapM (fun {size; member = (member, member_sct); offset} ->
                 let member_pointer = IT.addPointer_ (pointer,z_ offset) in
                 let@ it = aux member_sct member_pointer (Some member) in
                 return (member, it)
-               ) (members decl.layout)
+               ) (members layout)
            in
            return (struct_ (tag, member_its))
         | _ ->
@@ -1404,7 +1403,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let destroy (loc: loc) access local (pointer: IT.t) (ct : Sctypes.t) =
-      let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
+      let layouts tag = SymMap.find tag G.global.struct_decls in
       ListM.fold_leftM (fun local request ->
           let@ (_, local) = resource_request loc (Access (Store None)) local request in
           return local
@@ -1412,7 +1411,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
-      let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
+      let layouts tag = SymMap.find tag G.global.struct_decls in
       let@ local = 
         ListM.fold_leftM (fun local request ->
             let@ (_, local) = resource_request loc (Access (Store None)) local request in
@@ -1423,7 +1422,7 @@ module Make (G : sig val global : Global.t end) = struct
       return (LRT.mResources resources LRT.I, local)
       
     let create (loc: loc) local (pointer: IT.t) ct = 
-      let layouts tag = (SymMap.find tag G.global.struct_decls).layout in
+      let layouts tag = SymMap.find tag G.global.struct_decls in
       let resources = RE.represent layouts ct pointer (None, BT.of_sct ct) (q_ (1, 1)) in
       return (LRT.mResources resources LRT.I)
 
@@ -1986,7 +1985,7 @@ let check_and_record_tagDefs (global: Global.t) tagDefs =
       match def with
       | M_UnionDef _ -> 
          fail Loc.unknown (TypeErrors.Unsupported !^"todo: union types")
-      | M_StructDef decl -> 
+      | M_StructDef layout -> 
          let@ () =
            ListM.iterM (fun piece ->
                match piece.member_or_padding with
@@ -1996,12 +1995,9 @@ let check_and_record_tagDefs (global: Global.t) tagDefs =
                   | None -> fail Loc.unknown (Missing_struct sym2)
                   end
                | _ -> return ()
-             ) decl.layout
+             ) layout
          in
-         let predicate_def = Predicates.stored_struct_predicate_to_predicate tag 
-                               decl.stored_struct_predicate in
-         let@ () = check_predicate_definition predicate_def in
-         let struct_decls = SymMap.add tag decl global.struct_decls in
+         let struct_decls = SymMap.add tag layout global.struct_decls in
          return { global with struct_decls }
     ) tagDefs global
 

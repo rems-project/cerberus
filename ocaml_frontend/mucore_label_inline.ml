@@ -39,6 +39,8 @@ let rec ib_texpr label e =
      wrap (M_End (map taux es))
   | M_Edone asym ->
      wrap (M_Edone asym)
+  | M_Eundef (uloc, undef) ->
+     wrap (M_Eundef (uloc, undef))
   | M_Erun(l, args) -> 
      let (label_sym, label_arg_syms, label_body) = label in
      if not (Symbol.symbolEquality l label_sym) then 

@@ -29,7 +29,7 @@ module SR_Types = struct
   type ict = RT.t
   type ft = FT.t
   type lt = LT.t
-  type st = Global.struct_decl
+  type st = Memory.struct_layout
   type gt = ct
   type ut = unit
   type mapping = Mapping.t
@@ -426,10 +426,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
 
   let get_layout sym = 
     match Pmap.find sym tagDefs with
-    | M_StructDef decl ->
-       decl.layout
-    | _ -> 
-       Debug_ocaml.error (Sym.pp_string sym ^ " not a struct")
+    | M_StructDef layout -> layout
+    | _ -> Debug_ocaml.error (Sym.pp_string sym ^ " not a struct")
   in
 
 

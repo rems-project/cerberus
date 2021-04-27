@@ -132,15 +132,7 @@ let impl_lookup (e: 'v ImplMap.t) i =
 
 
 
-type struct_decl = 
-  { layout: struct_piece list;
-    stored_struct_predicate: stored_struct_predicate
-  }
-
-
-
-type struct_decls = struct_decl SymMap.t
-
+type struct_decls = struct_layout SymMap.t
 
 
 type t = 
@@ -170,12 +162,10 @@ let get_predicate_def global predicate_name =
   match predicate_name with
   | Id id -> 
      StringMap.find_opt id global.resource_predicates
-  | Tag tag ->
-     match SymMap.find_opt tag global.struct_decls with
-     | None -> None
-     | Some decl -> 
-        let pred = decl.stored_struct_predicate in
-        Some (stored_struct_predicate_to_predicate tag pred)
+  | Ctype ct ->
+     let layouts tag = SymMap.find_opt tag global.struct_decls in
+     let opred = ctype_predicate layouts ct in
+     Option.map (ctype_predicate_to_predicate ct) opred
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i
@@ -183,30 +173,24 @@ let get_impl_constant global i = impl_lookup global.impl_constants i
 
 
 
-let pp_struct_decl (tag,decl) = 
+let pp_struct_layout (tag,layout) = 
   item ("struct " ^ plain (Sym.pp tag) ^ " (raw)") 
-       (separate_map hardline (fun {offset; size; member_or_padding} -> 
-            item "offset" (Z.pp offset) ^^ comma ^^^
-            item "size" (Z.pp size) ^^ comma ^^^
-            item "content" 
-              begin match member_or_padding with 
-              | Some (member, sct) -> 
-                 typ (Id.pp member) (Sctypes.pp sct)
-              | None ->
-                 parens (!^"padding" ^^^ Z.pp size)
-              end
-          ) decl.layout
-       )
-  ^/^
-  let pred = stored_struct_predicate_to_predicate tag 
-               decl.stored_struct_predicate in
-  (* item ("struct " ^ plain (Sym.pp tag) ^ " (closed stored)") 
-   *      (RT.pp decl.closed_stored)
-   * ^/^ *)
-  item ("StoredStruct(" ^ plain (Sym.pp tag) ^ ")(p,v)") 
-    (Pp.list Predicates.pp_clause pred.clauses)
+    (separate_map hardline (fun {offset; size; member_or_padding} -> 
+         item "offset" (Z.pp offset) ^^ comma ^^^
+           item "size" (Z.pp size) ^^ comma ^^^
+             item "content" 
+               begin match member_or_padding with 
+               | Some (member, sct) -> 
+                  typ (Id.pp member) (Sctypes.pp sct)
+               | None ->
+                  parens (!^"padding" ^^^ Z.pp size)
+               end
+       ) layout
+    )
 
-let pp_struct_decls decls = Pp.list pp_struct_decl (SymMap.bindings decls) 
+
+let pp_struct_decls decls = 
+  Pp.list pp_struct_layout (SymMap.bindings decls) 
 
 let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (FT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)

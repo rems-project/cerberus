@@ -12,7 +12,6 @@ module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
 open TypeErrors
 open IndexTerms
-open BaseTypes
 open Resources
 open Sctypes
 open Mapping
@@ -119,50 +118,9 @@ let struct_decl loc fields (tag : BT.tag) =
     (aux members Z.zero)
   in
 
-
   let@ layout = struct_layout loc fields tag in
 
-  let@ stored_struct_predicate = 
-    let open RT in
-    let open LRT in
-    let struct_pointer_s = Sym.fresh_named "p" in
-    let struct_pointer_t = sym_ (struct_pointer_s, Loc) in
-    let ostruct_value_s = Sym.fresh_named "v" in
-    let clause = 
-      let (lrt, lcs, values) = 
-        List.fold_right (fun {offset; size; member_or_padding} (lrt, lcs, values) ->
-            let member_p = addPointer_ (struct_pointer_t, z_ offset) in
-            match member_or_padding with
-            | Some (member, sct) ->
-               let omember_v = Sym.fresh () in
-               let omember_t = sym_ (omember_v, BT.Option (BT.of_sct sct)) in
-               let (Sctypes.Sctype (annots, sct_)) = sct in
-               let resource = match sct_ with
-                 | Sctypes.Struct tag -> predicate (Tag tag) member_p [] [omember_t]
-                 | _ -> point (member_p, size) (q_ (1, 1)) omember_t
-               in
-               let lrt = 
-                 LRT.Logical ((omember_v, BT.Option (BT.of_sct sct)),
-                 LRT.Resource (resource, lrt)) in
-               let lcs = is_some_ omember_t :: lcs in
-               let value = (member, value_of_some_ omember_t) :: values in
-               (lrt, lcs, value)
-            | None ->
-               let resource = point (member_p, size) (q_ (1,1)) (nothing_ BT.Integer) in
-               let lrt = LRT.Resource (resource, lrt) in
-               (lrt, lcs, values)
-          ) layout (LRT.I, [], [])
-      in
-      let value = ite_ (and_ lcs, something_ (IT.struct_ (tag, values)), nothing_ (BT.Struct tag)) in
-      let ct = Sctypes.Sctype ([], Sctypes.Struct tag) in
-      let lrt = lrt @@ Constraint (impl_ (and_ lcs, IT.representable_ (ct, value_of_some_ value)), LRT.I) in
-      (lrt, value)
-    in
-    return { pointer = struct_pointer_s; value = ostruct_value_s; clause }
-  in
-
-  let decl = { layout; stored_struct_predicate } in
-  return decl
+  return layout
 
 
 
@@ -184,19 +142,10 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
   match sct with
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
-  | Sctype (_, Struct tag) ->
-      let r = [predicate (Tag tag) pointer [] [opointee_t]] in
+  | _ ->
+      let r = [predicate (Ctype sct) pointer [] [opointee_t]] in
       let c = [is_some_ opointee_t] in
       return (l, r, c, mapping)
-  | sct -> 
-     let r = 
-       [point (pointer, Memory.size_of_ctype sct)
-          (q_ (1, 1)) (sym_ (opointee, opointee_bt))]
-       (* RE.representation layouts sct (sym_ (pointer, BT.Loc))
-        *   (Some (sym_ (pointee, pointee_bt))) (q_ (1, 1)) *)
-     in
-     let c = [is_some_ opointee_t; good_value (value_of_some_ opointee_t) sct] in
-     return(l, r, c, mapping)
 
 
 let make_char_region loc pointer size =
