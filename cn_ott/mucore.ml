@@ -8,6 +8,7 @@ base_type =  (* Core base types *)
  | Integer (* integer *)
  | Read (* rational numbers? *)
  | Loc (* location *)
+ | Array of base_type (* array *)
  | ListTy of base_type (* list *)
  | TupleTy of (base_type) list (* tuple *)
  | Struct of tag (* struct *)
@@ -75,12 +76,6 @@ type
 
 
 type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
-
-
-type 
 'TY mu_pexpr_aux =  (* pure expressions *)
    M_PEsym of Symbol.sym
  | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
@@ -108,6 +103,12 @@ type
 
 
 type 
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
+
+
+type 
 'TY mu_tpexpr_aux =  (* top-level pure expressions *)
    M_TPundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_TPcase of 'TY asym * ((mu_pattern * 'TY mu_tpexpr)) list (* pattern matching *)
@@ -117,24 +118,6 @@ type
 
 and 'TY mu_tpexpr =  (* pure top-level pure expressions with location and annotations *)
    M_TPexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_tpexpr_aux
-
-
-type 
-'TY mu_action_aux =  (* memory actions *)
-   M_Create of 'TY asym * 'TY act * Symbol.prefix
- | M_CreateReadOnly of 'TY asym * 'TY act * 'TY asym * Symbol.prefix
- | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
- | M_Kill of m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
- | M_Store of bool * 'TY act * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
- | M_Load of 'TY act * 'TY asym * Cmm_csem.memory_order
- | M_RMW of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of 'TY act * 'TY asym * Linux.linux_memory_order
- | M_LinuxStore of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
- | M_LinuxRMW of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
 
 
 type 
@@ -152,11 +135,6 @@ type
 
 
 type 
-'TY mu_action = 
-   M_Action of Location_ocaml.t * 'TY mu_action_aux
-
-
-type 
 'bt bool_op = 
    Not of 'bt index_term
  | Eq of 'bt index_term * 'bt index_term
@@ -166,6 +144,9 @@ and 'bt list_op =
    List of ('bt index_term) list
  | NthList of int * 'bt index_term
 
+and 'bt array_op = 
+   ArrayGet of 'bt index_term * Z.t
+
 and 'bt param_op = 
    App of 'bt index_term * ('bt index_term) list
 
@@ -173,6 +154,7 @@ and 'bt index_term_aux =
    Bool_op of 'bt bool_op
  | List_op of 'bt list_op
  | Pointer_op of 'bt pointer_op
+ | Array_op of 'bt array_op
  | Param_op of 'bt param_op
 
 and 'bt index_term = 
@@ -205,7 +187,18 @@ type
 
 type 
 'TY mu_paction =  (* memory actions with polarity *)
-   M_Paction of Core.polarity * 'TY mu_action
+   
+
+type 
+c =  (* computational var env *)
+   Comp_empty
+ | Comp_cons of c * x * base_type
+
+
+type 
+n =  (* constraints env *)
+   Con_empty
+ | Con_cons of n
 
 
 type 
@@ -224,18 +217,6 @@ l =  (* logical var env *)
 
 
 type 
-c =  (* computational var env *)
-   Comp_empty
- | Comp_cons of c * x * base_type
-
-
-type 
-n =  (* constraints env *)
-   Con_empty
- | Con_cons of n
-
-
-type 
 'TY mu_expr_aux =  (* (effectful) expressions *)
    M_Epure of 'TY mu_pexpr
  | M_Ememop of 'TY mu_memop (* pointer op involving memory *)
@@ -248,6 +229,24 @@ type
 type 
 'TY mu_expr =  (* (effectful) expressions with location and annotations *)
    M_EExpr of Location_ocaml.t * annot list * 'TY mu_expr_aux
+
+
+type 
+'TY mu_action_aux =  (* memory actions *)
+   M_Create of 'TY asym * 'TY act * Symbol.prefix
+ | M_CreateReadOnly of 'TY asym * 'TY act * 'TY asym * Symbol.prefix
+ | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
+ | M_Kill of m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
+ | M_Store of bool * 'TY act * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+ | M_Load of 'TY act * 'TY asym * Cmm_csem.memory_order
+ | M_RMW of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Fence of Cmm_csem.memory_order
+ | M_CompareExchangeStrong of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_LinuxFence of Linux.linux_memory_order
+ | M_LinuxLoad of 'TY act * 'TY asym * Linux.linux_memory_order
+ | M_LinuxStore of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
+ | M_LinuxRMW of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
 
 
 type 
@@ -269,18 +268,28 @@ and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
 
 
 type 
-'bt tuple_op = 
-   Tuple of ('bt index_term) list
- | NthTuple of 'bt index_term * int
-
-
-type 
 arg =  (* argument types *)
    ArgTy_Computational of x * base_type * arg
  | ArgTy_Logical of x * arg
  | ArgTy_Resource of arg
  | ArgTy_Constraint of 'bt index_term * arg
  | ArgTy_I
+
+
+type 
+'TY mu_action = 
+   M_Action of Location_ocaml.t * 'TY mu_action_aux
+
+
+type 
+'bt tuple_op = 
+   Tuple of ('bt index_term) list
+ | NthTuple of 'bt index_term * int
+
+
+type 
+'bt struct_op = 
+   StructMember of tag * 'bt index_term * Symbol.identifier
 
 (** definitions *)
 
