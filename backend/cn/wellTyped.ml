@@ -66,6 +66,8 @@ module Make (G : sig val global : Global.t end) = struct
              return (BT.Bool, Bool b)
           | Unit -> 
              return (BT.Unit, Unit)
+          | Default bt -> 
+             return (bt, Default bt)
         in
 
         let arith_op local = function
@@ -607,17 +609,29 @@ module Make (G : sig val global : Global.t end) = struct
          in
          ensure_all_symbols (Predicate p) p.oargs
       | QPredicate p -> 
-         let local = L.add_l p.pointer BT.Loc local in
+         let@ () = WIT.welltyped loc names local BT.Loc p.start in
+         let@ () = WIT.welltyped loc names local BT.Loc p.stop in
+         let@ () = WIT.welltyped loc names local BT.Integer p.step in
+         let@ () = 
+           ListM.iterM (fun it ->
+               WIT.welltyped loc names local BT.Loc it
+             ) p.moved
+         in
          let@ def = get_predicate_def p.name in
+         let local = L.add_l p.pointer BT.Loc local in
          let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
          let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
          let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
          let@ () = ensure_same_argument_number `Output has_oargs ~expect:expect_oargs in
          let@ () = 
-           ListM.iterM (fun (arg, expected_sort) ->
+           ListM.iterM (fun (arg, (_, expected_sort)) ->
                WIT.welltyped loc names local expected_sort arg
-             ) (List.combine (p.iargs @ p.oargs) 
-               (List.map snd (def.iargs @ def.oargs)))
+             ) (List.combine p.iargs def.iargs)
+         in
+         let@ () = 
+           ListM.iterM (fun (arg, (_, expected_sort)) ->
+               WIT.welltyped loc names local expected_sort arg
+             ) (List.combine p.oargs def.oargs)
          in
          ensure_all_symbols (QPredicate p) p.oargs
   end

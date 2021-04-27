@@ -314,6 +314,16 @@ module Make (G : sig val global : Global.t end) = struct
 
         let (let@) = bind
 
+        module ListM = struct  
+          let fold_leftM (f : 'a -> 'b -> 'c m) (a : 'a) (bs : 'b list) =
+            Stdlib.List.fold_left (fun aM b -> let@ a = aM in f a b) (return a) bs
+
+          (* maybe from Exception.lem *)
+          let fold_rightM (f : 'b -> 'a -> 'c m) (bs : 'b list) (a : 'a) =
+            Stdlib.List.fold_right (fun b aM -> let@ a = aM in f b a) bs (return a)
+
+        end
+
       end
 
     end
@@ -325,10 +335,10 @@ module Make (G : sig val global : Global.t end) = struct
   let match_resources loc local error r1 r2 res =
     let open Prompt.Operators in
     (* Block unifies with Blocks of other block type *)
-    let aux_content c c' (res, constrs) = 
+    let aux (res, constrs) (c, c') = 
       match IT.unify c c' res with
       | Some res -> return (res, constrs)
-      | None -> return (res, (c, c') :: constrs)
+      | None -> return (res, eq_ (c, c') :: constrs)
     in
     match r1, r2 with
     | Point b, Point b' 
@@ -336,43 +346,54 @@ module Make (G : sig val global : Global.t end) = struct
               Z.equal b.size b'.size &&
               IT.equal b.permission b'.permission ->
        (* Block unifies with Blocks of other block type *)
-       let@ (res, constrs) = aux_content b.content b'.content (res, []) in
-       if Solver.holds local (and_ (List.map IT.eq_ constrs))
+       let@ (res, constrs) = aux (res, []) (b.content, b'.content) in
+       if Solver.holds local (and_ constrs)
        then return res
-       else 
-         fail loc (error ())
-    | QPoint b, QPoint b' when
-           Z.equal b.size b'.size ->
+       else fail loc (error ())
+    | QPoint b, QPoint b' 
+         when Z.equal b.size b'.size ->
        let b = 
          let subst = Subst.{before = b.qpointer; after = b'.qpointer} in
          let content = IT.subst_var subst b.content in
          let permission = IT.subst_var subst b.permission in
          {b with qpointer = b'.qpointer; content; permission}
        in
-       let@ () = 
-         if IT.equal b.permission b'.permission then return () 
-         else fail loc (error ())
-       in
-       let@ (res,constrs) = aux_content b.content b'.content (res, []) in
-       if Solver.holds_forall local [(b'.qpointer, BaseTypes.Loc)] 
-            (impl_ (gt_ (b'.permission, q_ (0, 1)), and_ (List.map IT.eq_ constrs)))
+       let@ (res,constrs) = aux (res, []) (b.content, b'.content) in
+       if IT.equal b.permission b'.permission &&
+          Solver.holds_forall local [(b'.qpointer, BaseTypes.Loc)] 
+            (impl_ (gt_ (b'.permission, q_ (0, 1)), and_ constrs))
        then return res 
        else fail loc (error ())
     | Predicate p, Predicate p' 
          when predicate_name_equal p.name p'.name &&
               IT.equal p.pointer p'.pointer &&
               List.equal IT.equal p.iargs p'.iargs &&
-              List.length p.oargs = List.length p'.oargs &&
-              (* IT.equal *) p.unused = p'.unused ->
+              p.unused = p'.unused ->
        let@ (res, constrs) = 
-         List.fold_left2 (fun acc it1 it2 ->
-             let@ (res,constrs) = acc in
-             match IT.unify it1 it2 res with
-             | Some res -> return (res, constrs)
-             | None -> return (res, (it1,it2) :: constrs)
-           ) (return (res, [])) p.oargs p'.oargs
+         ListM.fold_leftM aux (res, []) (List.combine p.oargs p'.oargs)
        in
-       if Solver.holds local (and_ (List.map IT.eq_ constrs))
+       if Solver.holds local 
+            (impl_ (bool_ p'.unused, and_ constrs))
+       then return res 
+       else fail loc (error ())
+    | QPredicate p, QPredicate p' 
+         when predicate_name_equal p.name p'.name &&
+              IT.equal p.start p'.start &&
+              IT.equal p.stop p'.stop &&
+              IT.equal p.step p'.step &&
+              List.equal IT.equal p.moved p'.moved &&
+              p.unused = p'.unused ->
+       let p = 
+         let subst = Subst.{before = p.pointer; after = p'.pointer} in
+         let iargs = List.map (IT.subst_var subst) p.iargs in
+         let oargs = List.map (IT.subst_var subst) p.oargs in
+         {p with pointer = p'.pointer; iargs; oargs}
+       in
+       let@ (res, constrs) = 
+         ListM.fold_leftM aux (res, []) (List.combine p.oargs p'.oargs)
+       in
+       if Solver.holds_forall local [(p'.pointer, BaseTypes.Loc)] 
+            (impl_ (bool_ p'.unused, and_ constrs))
        then return res 
        else fail loc (error ())
     | _ -> 
@@ -528,7 +549,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let resource_request_prompt ui_info local request = 
+    let rec resource_request_prompt ui_info local request = 
       let open Prompt in
       let open Prompt.Operators in
       let open Resources in
@@ -642,53 +663,137 @@ module Make (G : sig val global : Global.t end) = struct
          else 
            missing ()
       | Predicate p ->
-         assert p.unused;
-         let updated_local, found =
-           L.map_and_fold_resources (fun re found ->
-               match found, re with
-               | None, Predicate p' when 
-                      p'.unused && predicate_name_equal p'.name p.name  ->
-                  if Solver.holds local (IT.eq__ p.pointer p'.pointer)
-                  then (Predicate {p' with unused = false}, Some p')
-                  else (re, None)
-               | _ ->
-                  (re, found)
-             ) local None
-         in
-         begin match found with
-         (* we've already got the right resource *)
-         | Some p' -> 
-            return (Predicate p', updated_local)
-         (* we haven't and will try to get it by packing *)
-         (* (we've eagerly unpacked, so no need to try to get it by unpacking) *)
-         | _ ->
-            let def = Option.get (Global.get_predicate_def G.global p.name) in
-            let else_prompt = lazy (missing ()) in
-            let substs = 
-              {before = def.pointer; after= p.pointer} ::
-              List.map2 (fun (before, _) after -> {before; after}) 
-                def.iargs p.iargs 
-                (* outputs are not referred to in the clause *)
-            in
-            let attempt_prompts = 
-              List.map (fun clause ->
-                  lazy begin
-                      let (Clause {condition; outputs}) = 
-                        subst_its_clause substs clause in
-                      let packing_function = 
-                        PackingFT.of_lrt condition (PackingFT.I outputs) in
-                      prompt (R_Packing {ui_info; local; packing_function})
-                    end
-                ) def.clauses
-            in
-            let choices = attempt_prompts @ [else_prompt] in
-            let choices1 = List1.make (List.hd choices, List.tl choices) in
-            let@ (assignment, local) = try_choices choices1 in
-            let p' = {p with oargs = assignment} in
-            return (Predicate p', local)
-         end
-      | QPredicate _ ->
-         Debug_ocaml.error "request for used iterated predicate"
+         if p.unused = false then
+           let oargs = List.map (fun oa -> default_ (IT.bt oa)) p.oargs in
+           return (Predicate {p with oargs}, local)
+         else
+           let local, found =
+             L.map_and_fold_resources (fun re found ->
+                 match re, found with
+                 | Predicate p', None ->
+                    if predicate_name_equal p.name p'.name &&
+                       p'.unused && 
+                       Solver.holds local (
+                           and_ (IT.eq__ p.pointer p'.pointer ::
+                                 List.map2 eq__ p.iargs p'.iargs)
+                         )
+                    then (Predicate {p' with unused = false}, Some p'.oargs)
+                    else (re, found)
+                 | QPredicate p', None ->
+                    let subst = {before = p'.pointer; after = p.pointer} in
+                    if predicate_name_equal p.name p'.name &&
+                       p'.unused && 
+                       Solver.holds local (
+                           and_ (is_qpredicate_instance p' p.pointer ::
+                                 List.map2 (fun ia ia' -> eq_ (ia, IT.subst_it subst ia')) p.iargs p'.iargs)
+                         ) 
+                    then
+                      let oargs = List.map (IT.subst_it subst) p'.oargs in
+                      let moved = p.pointer :: p'.moved in
+                      (QPredicate {p' with moved}, Some oargs)
+                    else (re, None)
+                 | _ ->
+                    (re, found)
+               ) local None
+           in
+           begin match found with
+           (* we've already got the right resource *)
+           | Some oargs ->
+              let p' : predicate = { p with oargs } in
+              return (Predicate p', local)
+           | None ->
+              (* we haven't and will try to get it by packing *)
+              (* (we've eagerly unpacked, so no need to try to get it by unpacking) *)
+              let def = Option.get (Global.get_predicate_def G.global p.name) in
+              let substs = 
+                {before = def.pointer; after = p.pointer} ::
+                  List.map2 (fun (before, _) after -> {before; after}) 
+                    def.iargs p.iargs 
+                    (* outputs are not referred to in the clause *)
+              in
+              let attempt_prompts = 
+                List.map (fun clause ->
+                    lazy begin
+                        let (Clause {condition; outputs}) = 
+                          subst_its_clause substs clause in
+                        let packing_function = 
+                          PackingFT.of_lrt condition (PackingFT.I outputs) in
+                        prompt (R_Packing {ui_info; local; packing_function})
+                      end
+                  ) def.clauses
+              in
+              let choices = attempt_prompts @ [lazy (missing ())] in
+              let choices1 = List1.make (List.hd choices, List.tl choices) in
+              let@ (assignment, local) = try_choices choices1 in
+              return (Predicate {p with oargs = assignment}, local)
+           end
+      | QPredicate p ->
+         assert ([] = p.moved); (* todo? *)
+         if p.unused = false then
+           let oargs = List.map (fun oa -> default_ (IT.bt oa)) p.oargs in
+           return (QPredicate {p with oargs}, local)
+         else
+           let local, found =
+             L.map_and_fold_resources (fun re found ->
+                 match re, found with
+                 | QPredicate p', None ->
+                    let subst = {before = p'.pointer; after = p.pointer} in
+                    if predicate_name_equal p'.name p.name &&
+                       p'.unused &&
+                       Solver.holds local (
+                           and_ [eq_ (p.start, p'.start);
+                                 eq_ (p.stop, p'.stop);
+                                 eq_ (p.step, p'.step);
+                                 forall_ (p.pointer, BT.Loc)
+                                   (impl_ 
+                                      (is_qpredicate_instance p (sym_ (p.pointer, BT.Loc)),
+                                       and_ (List.map2 (fun ia ia' -> eq_ (ia, IT.subst_var subst ia')) p.iargs p'.iargs)))]
+                             )
+                    then
+                      let oargs = List.map (IT.subst_var subst) p'.oargs in
+                      let moved = List.map (IT.subst_var subst) p'.moved in
+                      (QPredicate {p' with unused = false}, Some (oargs, moved))
+                    else 
+                      (re, None)
+                 | _ ->
+                    (re, None)
+               ) local None
+           in
+           match found with
+           | Some (oargs, moved) ->
+              (* fill in moved ownership *)
+              let@ (oargs, local) = 
+                ListM.fold_leftM (fun (oargs, local) moved_pointer ->
+                    (* moved_pointer assumed to satisfy
+                       start-stop-step condition *)
+                    let subst = {before = p.pointer; after = moved_pointer} in
+                    let request = {
+                        name = p.name; 
+                        pointer = moved_pointer;
+                        iargs = List.map (IT.subst_it subst) p.iargs;
+                        oargs = List.map (fun oa -> default_ (IT.bt oa)) p.oargs; 
+                        unused = true
+                      }
+                    in
+                    let@ (resource, local) = 
+                      resource_request_prompt ui_info local (Predicate request)
+                    in
+                    match resource with
+                    | Predicate packed ->
+                       let oargs = 
+                         List.map2 (fun oa oa' ->
+                             ite_ (eq_ (sym_ (p.pointer, BT.Loc), moved_pointer), oa', oa)
+                           ) oargs packed.oargs
+                       in
+                       return (oargs, local)
+                    | _ -> Debug_ocaml.error "request for predicate did not return predicate"
+                  ) (oargs, local) moved
+              in            
+              let p'' : qpredicate = { p with moved = []; oargs = oargs } in
+              return (QPredicate p'', local)
+           | None ->
+              missing ()
+
 
 
 
@@ -1379,10 +1484,9 @@ module Make (G : sig val global : Global.t end) = struct
                not (Solver.holds_forall local [(p.qpointer, BT.Loc)]
                       (le_ (p.permission, q_ (0, 1))))
             | Predicate p ->
-               p.unused
+               not p.unused
             | QPredicate p ->
-               not (Solver.holds_forall local [(p.pointer, BT.Loc)]
-                      p.unused)
+               not p.unused
           ) local.resources
       in
       let () = Debug_ocaml.end_csv_timing () in

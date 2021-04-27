@@ -88,6 +88,8 @@ let rec simp (lcs : t list) term =
        IT (Lit (Bool b), bt)
     | Unit ->
        IT (Lit Unit, bt)
+    | Default bt' -> 
+       IT (Lit (Default bt'), bt)
 
   and arith_op it bt = 
     match it with

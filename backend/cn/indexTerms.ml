@@ -15,6 +15,9 @@ type lit =
   | Pointer of Z.t
   | Bool of bool
   | Unit
+  | Default of BT.t
+(* Default bt: equivalent to a unique variable of base type bt, that
+   we know nothing about other than Default bt = Default bt *)
 
 (* over integers and reals *)
 type 'bt arith_op =
@@ -139,12 +142,14 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Pointer p, Pointer p' -> Z.equal p p'
     | Bool b, Bool b' -> b = b'
     | Unit, Unit -> true
+    | Default bt, Default bt' -> BT.equal bt bt'
     | Sym _, _ -> false
     | Z _, _ -> false
     | Q _, _ -> false
     | Pointer _, _ -> false
     | Bool _, _ -> false
     | Unit, _ -> false
+    | Default _, _ -> false
   in
 
   let arith_op it it' =
@@ -408,6 +413,7 @@ let pp (it : 'bt term) : PPrint.document =
       | Bool true -> !^"true"
       | Bool false -> !^"false"
       | Unit -> !^"void"
+      | Default bt -> c_app !^"default" [BT.pp bt]
     in
 
     let arith_op = function
@@ -595,6 +601,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Pointer _ -> SymSet.empty
     | Bool _ -> SymSet.empty
     | Unit -> SymSet.empty
+    | Default _ -> SymSet.empty
   in
 
   let arith_op : 'bt arith_op -> SymSet.t = function
@@ -1021,6 +1028,7 @@ let pointer_ n = IT (Lit (Pointer n), BT.Loc)
 let bool_ b = IT (Lit (Bool b), BT.Bool)
 let unit_ = IT (Lit Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
+let default_ bt = IT (Lit (Default bt), bt)
 
 (* cmp_op *)
 let lt_ (it, it') = IT (Cmp_op (LT (it, it')), BT.Bool)
@@ -1037,6 +1045,7 @@ let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
+let ne__ it it' = ne_ (it, it')
 let forall_ (s,bt) it = IT (Bool_op (Forall ((s, bt), it)), BT.Bool)
 
 (* arith_op *)
@@ -1202,6 +1211,7 @@ let hash (IT (it, _bt)) =
      | Pointer p -> 22
      | Bool b -> 23
      | Unit -> 24
+     | Default _ -> 25
      | Sym (Symbol (_,i, _)) -> 100 + i
      end
 
