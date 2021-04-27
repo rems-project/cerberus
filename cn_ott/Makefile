@@ -1,6 +1,6 @@
 all:
-	ott -o mucore.ml -o mucore.tex mucore.ott
-	ott -o mucore-inc.tex -tex_wrap false mucore.ott
+	ott -o mucore.ml mucore.ott
+	ott -tex_suppress_category X -o mucore.tex mucore.ott 2>&1 > /dev/null
 	pdflatex mucore.tex
 
 clean:
