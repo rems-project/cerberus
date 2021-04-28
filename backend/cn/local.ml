@@ -101,8 +101,8 @@ let add_l lname ls (local : t) =
   {local with logical = SymMap.add lname ls local.logical}
 
 let add_c lc (local : t) = 
-  let lc = Simplify.simp local.constraints lc in
-  {local with constraints = lc :: local.constraints}
+  let lcs = Simplify.simp_flatten local.constraints lc in
+  {local with constraints = lcs @ local.constraints}
 
 let add_cs lcs (local : t) = 
   List.fold_left (fun local lc -> add_c lc local) local lcs

@@ -186,7 +186,7 @@ module Make (G : sig val global : Global.t end) = struct
   let veclasses_partial_order local veclasses =
     List.fold_right (fun resource (graph, rels) ->
         match resource with
-        | RE.Point {pointer; size; content = IT (Option_op (Something pointee), _); permission} ->
+        | RE.Point {pointer; size; value; init; permission} ->
            let found1 = 
              List.find_opt (fun veclass ->
                  should_be_in_veclass local veclass pointer
@@ -194,7 +194,7 @@ module Make (G : sig val global : Global.t end) = struct
            in
            let found2 = 
              List.find_opt (fun veclass ->
-                 should_be_in_veclass local veclass pointee
+                 should_be_in_veclass local veclass value
                ) veclasses
            in
            begin match found1, found2 with
@@ -357,10 +357,19 @@ module Make (G : sig val global : Global.t end) = struct
     let (resource_lines, reported_pointees) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           match resource with
-          | Point {pointer; size; content = value; permission} ->
-             let state = match o_evaluate o_model permission with
-               | Some permission -> !^"owned" ^^^ parens (!^"permission:" ^^^ permission)
-               | None -> !^"owned"
+          | Point {pointer; size; value; init; permission} ->
+             let permission = 
+               Option.bind (o_evaluate o_model permission)
+                 (fun p -> Some (!^"permission:" ^^^ p))
+             in
+             let init = 
+               Option.bind (o_evaluate o_model init)
+                 (fun p -> Some (!^"init:" ^^^ p))
+             in
+             let state = 
+               !^"owned" ^^^ 
+                 separate comma 
+                   (List.filter_map (fun p -> p) [permission; init]) 
              in
              let entry = 
                (Some (IT.pp (IT.subst_vars substitutions pointer)), 
@@ -377,7 +386,7 @@ module Make (G : sig val global : Global.t end) = struct
                (None,
                 None, 
                 None, 
-                Some (RE.pp resource),
+                Some (RE.pp (RE.subst_vars substitutions resource)),
                 None,
                 None
                )
@@ -388,7 +397,7 @@ module Make (G : sig val global : Global.t end) = struct
                (None,
                 None, 
                 None, 
-                Some (RE.pp (Predicate p)),
+                Some (RE.pp (RE.subst_vars substitutions (Predicate p))),
                 None,
                 None
                )
@@ -399,7 +408,7 @@ module Make (G : sig val global : Global.t end) = struct
                (None,
                 None, 
                 None, 
-                Some (RE.pp (QPredicate p)),
+                Some (RE.pp (RE.subst_vars substitutions (QPredicate p))),
                 None,
                 None
                )

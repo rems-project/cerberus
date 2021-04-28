@@ -109,6 +109,8 @@ module Make (I: I_Sig) = struct
        let i = I.subst_it substitution i in
        I i
 
+  let subst_its subst at = Subst.make_substs subst_it subst at
+
 
   let pp ft = 
     let open Pp in
@@ -159,6 +161,23 @@ module Make (I: I_Sig) = struct
     | LRT.Resource (t, args) -> Resource (t, of_lrt args rest)
     | LRT.Constraint (t, args) -> Constraint (t, of_lrt args rest)
 
+
+  let rec logical_arguments_and_return (at : t) : LRT.t * I.t =
+    match at with
+    | I r -> (LRT.I, r)
+    | Logical ((name, t), args) -> 
+       let (lrt, r) = logical_arguments_and_return args in
+       (LRT.Logical ((name, t), lrt), r)
+    | Resource (t, args) -> 
+       let (lrt, r) = logical_arguments_and_return args in
+       (LRT.Resource (t, lrt), r)
+    | Constraint (t, args) -> 
+       let (lrt, r) = logical_arguments_and_return args in
+       (LRT.Constraint (t, lrt), r)
+    | Computational (_, args) ->
+       let (lrt, r) = logical_arguments_and_return args in
+       (lrt, r)
+       
 
   let of_rt (rt : RT.t) (rest : t) : t = 
     let (RT.Computational ((name, t), lrt)) = rt in

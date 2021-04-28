@@ -234,6 +234,9 @@ let rec simp (lcs : t list) term =
          IT (Pointer_op (AddPointer (b2,o2)), _) 
             when equal b1 b2 ->
           aux (eq_ (o1, o2))
+       | IT (Tuple_op (Tuple items1), _), 
+         IT (Tuple_op (Tuple items2), _)  ->
+          and_ (List.map2 eq__ items1 items2)
        | _, _ ->
           eq_ (a, b)
        end
@@ -356,21 +359,29 @@ let rec simp (lcs : t list) term =
 
   and param_op it bt = 
     match it with
-    | Param (args, it) ->
-       IT (Param_op (Param (args, aux it)), bt)
-    | App (it, args) ->
+    | Param ((s,abt), it) ->
+       let s' = Sym.fresh () in 
+       let it = aux (IT.subst_var {before=s; after=s'} it) in
+       IT (Param_op (Param ((s',abt), aux it)), bt)
+    | App (it, arg) ->
        let it = aux it in
-       let args = List.map aux args in
+       let arg = aux arg in
        match it with
-       | IT (Param_op (Param (t_args, body)), _) ->
-          let substs =
-            List.map2 (fun (s, _) t ->
+       | IT (Param_op (Param (t_arg, body)), _) ->
+          let subst =
+            (* List.map2 *) (fun (s, _) t ->
                 Subst.{before = s; after = t}
-              ) t_args args 
+              ) t_arg arg
           in
-          aux (IT.subst_its substs body)
+          aux (IT.subst_it subst body)
        | _ ->
-          IT (Param_op (App (it, args)), bt)
+          IT (Param_op (App (it, arg)), bt)
   in
 
   aux term
+
+
+let simp_flatten lcs term = 
+  match simp lcs term with
+  | IT (Bool_op (And lcs), _) -> lcs
+  | lc -> [lc]

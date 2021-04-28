@@ -131,39 +131,40 @@ let struct_decl loc fields (tag : BT.tag) =
 
 let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT.t) path sct =
   let open Sctypes in
-  let opointee = Sym.fresh () in
-  let opointee_bt = BT.Option (BT.of_sct sct) in
-  let opointee_t = sym_ (opointee, opointee_bt) in
-  let l = [(opointee, opointee_bt)] in
-  let mapping = 
-    [{path = Path.pointee (Some label) path; 
-      it = value_of_some_ opointee_t}] 
-  in
   match sct with
   | Sctype (_, Void) ->
      fail loc (Generic !^"cannot make owned void* pointer")
   | _ ->
-      let r = [predicate (Ctype sct) pointer [] [opointee_t]] in
-      let c = [is_some_ opointee_t] in
-      return (l, r, c, mapping)
+     let pointee = Sym.fresh () in
+     let pointee_bt = BT.of_sct sct in
+     let pointee_t = sym_ (pointee, pointee_bt) in
+     let l = [(pointee, pointee_bt)] in
+     let mapping = [{path = Path.pointee (Some label) path; it = pointee_t}] in
+     let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
+     return (l, r, [], mapping)
 
 
 let make_char_region loc pointer size =
-  let resource = Resources.char_region pointer size (q_ (1, 1)) in
-  return ([], [resource], [], [])
+  let v_s = Sym.fresh () in
+  let v_t = sym_ (v_s, BT.Integer) in
+  let resource = Resources.array pointer size (Z.of_int 1) 
+                   v_t (bool_ false) (q_ (1, 1)) in
+  return ([(v_s, BT.Integer)], [resource], [], [])
 
 
-let make_block loc pointer path sct =
+let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
-     fail loc (Generic !^"cannot make void* pointer a block")
-  | _ -> 
-     let r = 
-       [point (pointer, Memory.size_of_ctype sct)
-          (q_ (1, 1)) (nothing_ BT.Integer)]
-     in
-     return ([], r, [], [])
+     fail loc (Generic !^"cannot make owned void* pointer")
+  | _ ->
+     let pointee = Sym.fresh () in
+     let pointee_bt = BT.of_sct sct in
+     let pointee_t = sym_ (pointee, pointee_bt) in
+     let l = [(pointee, pointee_bt)] in
+     let mapping = [] in
+     let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
+     return (l, r, [], mapping)
 
 let make_pred loc pred (predargs : Path.predarg list) pointer iargs = 
   let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with
@@ -357,7 +358,7 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
         let@ it = resolve_path loc mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
-           make_block loc it (Path.var bn) sct2
+           make_block loc layouts it (Path.var bn) sct2
         | _ ->
           fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
      end

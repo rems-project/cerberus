@@ -341,26 +341,18 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let param_op local = function
-          | Param (args, it) -> 
-             let (local, bts) = 
-               List.fold_right (fun (sym, bt) (local, bts) ->
-                   (L.add_l sym bt local, bt :: bts)
-                 ) args (local, [])
-             in
+          | Param ((sym, abt), it) -> 
+             let local = L.add_l sym abt local in
              let@ (bt, it) = infer loc local it in
-             return (BT.Param (bts, bt), Param (args, it))
-          | App (it, args) -> 
+             return (BT.Param (abt, bt), Param ((sym, abt), it))
+          | App (it, arg) -> 
              let@ (fbt, it) = infer loc local it in
              begin match fbt with
-             | BT.Param (bts, bt) when List.length bts = List.length args -> 
-                let@ args = 
-                  ListM.mapM (fun (arg, bt) ->
-                      check loc local bt arg
-                    ) (List.combine args bts)
-                in
-                return (bt, App (it, args))
-             | BT.Param (bts, bt)  -> 
-                fail loc (Number_arguments {has = List.length args; expect = List.length bts})
+             | BT.Param (abt, bt) (* when List.length bts = List.length args *) -> 
+                let@ arg = check loc local abt arg in
+                return (bt, App (it, arg))
+             (* | BT.Param (bts, bt)  -> 
+              *    fail loc (Number_arguments {has = List.length args; expect = List.length bts}) *)
              | bt -> 
                 let (context, it) = Explain.index_terms names local (context, it) in
                 let err = 
@@ -537,20 +529,6 @@ module Make (G : sig val global : Global.t end) = struct
 
     let welltyped loc (names : Explain.naming) local = 
 
-      let ensure_option_type bt it =
-        let open Pp in
-        match bt with
-        | BT.Option _ -> return ()
-        | _ -> 
-           let it = Explain.index_term names local it in
-           let err = 
-             !^"Illtyped index term" ^^^ it ^^ dot ^^^
-               !^"Expected" ^^^ it ^^^ !^"to have option type, " ^^^
-                 !^"but has type" ^^^ BT.pp bt
-           in
-           fail loc (Generic err)
-      in
-
       let get_predicate_def name = 
         match Global.get_predicate_def G.global name, name with
         | Some def, _ -> return def
@@ -565,34 +543,18 @@ module Make (G : sig val global : Global.t end) = struct
           | `Output -> fail loc (Number_input_arguments {has; expect})
       in
 
-      let ensure_all_symbols re args =
-        let@ _ = 
-          ListM.mapiM (fun i arg ->
-              if Option.is_some (IT.is_sym arg) then return () else
-                let (resource, _) = Explain.resource names local re None in
-                let open Pp in
-                let err = 
-                  !^("output argument " ^ string_of_int i ^ " of resource") ^^^ resource ^^^
-                    !^"not a symbol"
-                in
-                fail loc (Generic err)
-            ) args
-        in
-        return ()
-      in
-
       function
       | Point b -> 
          let@ () = WIT.welltyped loc names local BT.Loc b.pointer in
+         let@ _ = WIT.check_or_infer loc names local None b.value in
+         let@ _ = WIT.check_or_infer loc names local (Some BT.Bool) b.init in
          let@ _ = WIT.check_or_infer loc names local (Some BT.Real) b.permission in
-         let@ (content_bt, _) = WIT.check_or_infer loc names local None b.content in
-         let@ () = ensure_option_type content_bt b.content in
          return ()
       | QPoint b -> 
          let local' = L.add_l b.qpointer Loc local in
+         let@ _ = WIT.check_or_infer loc names local None b.value in
+         let@ _ = WIT.check_or_infer loc names local (Some BT.Bool) b.init in
          let@ _ = WIT.check_or_infer loc names local' (Some BT.Real) b.permission in
-         let@ (content_bt, _) = WIT.check_or_infer loc names local None b.content in
-         let@ () = ensure_option_type content_bt b.content in
          return ()
       | Predicate p -> 
          let@ def = get_predicate_def p.name in
@@ -607,7 +569,7 @@ module Make (G : sig val global : Global.t end) = struct
              ) (List.combine (p.iargs @ p.oargs) 
                (List.map snd (def.iargs @ def.oargs)))
          in
-         ensure_all_symbols (Predicate p) p.oargs
+         return ()
       | QPredicate p -> 
          let@ () = WIT.welltyped loc names local BT.Loc p.start in
          let@ () = WIT.welltyped loc names local BT.Loc p.stop in
@@ -618,7 +580,6 @@ module Make (G : sig val global : Global.t end) = struct
              ) p.moved
          in
          let@ def = get_predicate_def p.name in
-         let local = L.add_l p.pointer BT.Loc local in
          let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
          let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
          let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
@@ -633,7 +594,7 @@ module Make (G : sig val global : Global.t end) = struct
                WIT.welltyped loc names local expected_sort arg
              ) (List.combine p.oargs def.oargs)
          in
-         ensure_all_symbols (QPredicate p) p.oargs
+         return ()
   end
 
 

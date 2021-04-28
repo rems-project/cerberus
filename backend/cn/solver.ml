@@ -15,7 +15,7 @@ let context =
 
 let solver = Z3.Solver.mk_simple_solver context
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "random_seed") 2
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 5
 let () = Z3.Solver.set_parameters solver params
 
 
@@ -101,13 +101,13 @@ module Make (G : sig val global : Global.t end) = struct
     let rec term =
       let tbl = ITtbl.create 5000 in
       fun it ->
-      Pp.debug 9 (lazy (Pp.item "translating term" (IT.pp it)));
-      Pp.debug 9 (lazy (Pp.item "bt" (BT.pp (IT.bt it))));
+      (* Pp.debug 10 (lazy (Pp.item "translating term" (IT.pp it)));
+       * Pp.debug 10 (lazy (Pp.item "bt" (BT.pp (IT.bt it)))); *)
       match ITtbl.find_opt tbl it with
       | Some sc -> sc
       | None ->
          let (IT (it_, bt)) = it in
-         Pp.debug 9 (lazy (Pp.item "still translating term" (IT.pp it)));
+         (* Pp.debug 10 (lazy (Pp.item "still translating term" (IT.pp it))); *)
          let sc = match it_ with
            | Lit t -> lit t bt
            | Arith_op t -> arith_op t bt
@@ -187,7 +187,14 @@ module Make (G : sig val global : Global.t end) = struct
       | ITE (t1, t2, t3) ->
          Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EQ (t1, t2) ->
-         Z3.Boolean.mk_eq context (term t1) (term t2)
+         begin match IT.bt t1 with
+         | BT.Param (abt, bt) ->
+            let s = Sym.fresh () in
+            let s_t = sym_ (s, abt) in
+            term (forall_ (s, bt) (eq_ (app_ t1 s_t, app_ t2 s_t)))
+         | _ ->
+            Z3.Boolean.mk_eq context (term t1) (term t2)
+         end
       | Forall ((s, bt), it) ->
          let q = term (sym_ (s, bt)) in
          let q = 
@@ -232,10 +239,7 @@ module Make (G : sig val global : Global.t end) = struct
       | LTPointer (t1, t2) ->
          Z3.Arithmetic.mk_lt context (term t1) (term t2)
       | LEPointer (t1, t2) ->
-         Pp.debug 9 (lazy (Pp.string "here"));
-         let e = Z3.Arithmetic.mk_le context (term t1) (term t2) in
-         Pp.debug 9 (lazy (Pp.string "here2"));
-         e
+         Z3.Arithmetic.mk_le context (term t1) (term t2)
       | IntegerToPointerCast t ->
          term t
       | PointerToIntegerCast t ->
@@ -336,22 +340,22 @@ module Make (G : sig val global : Global.t end) = struct
              Pp.plain (IT.pp (IT (Param_op it, bt)))
          in
          Debug_ocaml.error err
-      | App (IT (Param_op (Param (t_args, body)),_), args) ->
-          let substs =
-            List.map2 (fun (s, _) t ->
+      | App (IT (Param_op (Param (t_arg, body)),_), arg) ->
+          let subst =
+            (* List.map2 *) (fun (s, _) t ->
                 Subst.{before = s; after = t}
-              ) t_args args 
+              ) t_arg arg 
           in
-          term (IT.subst_its substs body)
-      | App (IT (Lit (Sym s),fbt), args) ->
+          term (IT.subst_it subst body)
+      | App (IT (Lit (Sym s),fbt), arg) ->
          let sym = Z3.Symbol.mk_string context (Sym.pp_string s) in
-         let args = List.map term args in
+         let arg = (* List.map *) term arg in
          let fn = match fbt with
-           | BT.Param (bts, bt) ->
-              Z3.FuncDecl.mk_func_decl context sym (List.map sort_of_bt bts) (sort_of_bt bt)
+           | BT.Param (abt, bt) ->
+              Z3.FuncDecl.mk_func_decl context sym [sort_of_bt abt] (sort_of_bt bt)
            | _ -> Debug_ocaml.error "illtyped index term"
          in
-         Z3.Expr.mk_app context fn args
+         Z3.Expr.mk_app context fn [arg]
       | App _ ->
          let err = 
            "SMT solver applied to parameterised expression (of_index_term): " ^
@@ -362,7 +366,8 @@ module Make (G : sig val global : Global.t end) = struct
     in
 
     fun it ->
-    Pp.debug 8 (lazy (Pp.item "translating" (IT.pp it)));
+    Pp.debug 10 (lazy (Pp.item "translating" (IT.pp it)));
+    Pp.debug 10 (lazy (Pp.item "bt" (BT.pp (IT.bt it))));
     term it
 
 
@@ -391,6 +396,8 @@ module Make (G : sig val global : Global.t end) = struct
     | Z3.Solver.UNKNOWN -> Debug_ocaml.error "SMT solver returned 'unknown'"
   
   let holds local it = 
+    let open Pp in
+    Pp.debug 9 (lazy (item "checking constraint" (LogicalConstraints.pp it)));
     try check local (of_index_term it) with
     | Z3.Error err -> 
        Debug_ocaml.error ("Z3 error: " ^ err)

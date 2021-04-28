@@ -24,68 +24,7 @@ open Predicates
 
 
 
-let early = 
-  let open Resources in
-  let open BT in
-  let open IT in
-  let id = "EarlyAlloc" in
-  let start_s = Sym.fresh () in
-  let start_t = sym_ (start_s, Loc) in
-  let end_s = Sym.fresh () in
-  let end_t = sym_ (end_s, Loc) in
-  let iargs = [(end_s, BT.Loc)] in
-  let oargs = [] in
-  let block = 
-    Resources.char_region 
-      (start_t)
-      (add_ (sub_ (pointerToIntegerCast_ end_t, pointerToIntegerCast_ start_t), int_ 1))
-      (q_ (1, 1))
-  in
-  let lrt =
-    LRT.Resource (block, 
-    LRT.Constraint (IT.good_pointer start_t (Sctypes.Sctype ([], Void)),
-    LRT.Constraint (IT.good_pointer end_t (Sctypes.Sctype ([], Void)),
-    LRT.I)))
-  in
-  let predicate = {
-      pointer = start_s;
-      iargs; 
-      oargs; 
-      clauses = [Clause {condition = lrt; outputs = []}]; 
-    } 
-  in
-  (id, predicate)
 
-
-
-let zero_region = 
-  let open Resources in
-  let open BT in
-  let open IT in
-  let id = "ZeroRegion" in
-  let pointer_s = Sym.fresh () in
-  let pointer_t = sym_ (pointer_s, Loc) in
-  let length_s = Sym.fresh () in
-  let length_t = sym_ (length_s, Integer) in
-  let iargs = [(length_s, BT.Integer)] in
-  let oargs = [] in
-  let array = 
-    RE.array pointer_t length_t (Z.of_int 1)
-      (fun q -> int_ 0) (q_ (1,1))
-  in
-  let lrt =
-    LRT.Resource (array, 
-    LRT.Constraint (IT.good_pointer pointer_t (Sctypes.Sctype ([], Void)),
-    LRT.I))
-  in
-  let predicate = {
-      pointer = pointer_s;
-      iargs; 
-      oargs; 
-      clauses = [(Clause {condition=lrt; outputs=[]})]; 
-    } 
-  in
-  (id, predicate)
 
 
 

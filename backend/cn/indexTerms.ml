@@ -99,8 +99,8 @@ and 'bt option_op =
   | Value_of_some of 'bt term
 
 and 'bt param_op = 
-  | Param of (Sym.t * BT.t) list * 'bt term
-  | App of 'bt term * ('bt term list)
+  | Param of (Sym.t * BT.t) * 'bt term
+  | App of 'bt term * 'bt term
 
 and 'bt term_ =
   | Lit of lit
@@ -359,10 +359,10 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   let param_op it it' = 
     match it, it' with
     | Param (args,t), Param (args',t') -> 
-       List.equal (fun (s,bt) (s',bt') -> Sym.equal s s' && BT.equal bt bt') args args' &&
+       (fun (s,bt) (s',bt') -> Sym.equal s s' && BT.equal bt bt') args args' &&
          equal t t'
     | App (t, args), App (t', args') ->
-       equal t t' && List.equal equal args args'
+       equal t t' && (* List.equal *) equal args args'
     | Param _, _ -> false
     | App _, _ -> false
   in
@@ -562,14 +562,13 @@ let pp (it : 'bt term) : PPrint.document =
     in
 
     let param_op = function
-      | Param (args, t) -> 
-         !^"\\" ^^^ 
-           separate_map comma (fun (s, bt) -> 
-               typ (Sym.pp s) (BT.pp bt)
-             ) args ^^ dot ^^^
-           aux false t
+      | Param ((sym, bt), t) -> 
+         parens (
+             parens (typ (Sym.pp sym) (BT.pp bt)) ^^^ !^"->" ^^^
+             aux false t
+           )
       | App (t, args) ->
-         c_app (aux true t) (List.map (aux false) args)
+         c_app (aux true t) [aux false args]
     in
 
     match it with
@@ -693,8 +692,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   in
 
   let param_op = function
-    | Param (args, t) -> SymSet.diff (free_vars t) (SymSet.of_list (List.map fst args))
-    | App (t, args) -> free_vars_list (t :: args)
+    | Param (arg, t) -> SymSet.remove (fst arg) (free_vars t)
+    | App (t, arg) -> free_vars_list ([t; arg])
   in
 
   fun (IT (it, _)) ->
@@ -893,23 +892,17 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
 
     let param_op it bt =
       let it = match it with
-        | App (it, args) ->
-           App (aux it, List.map aux args)
-        | Param (args, body) ->
-           let (args, body) = 
-             List.fold_right (fun (sym,bt) (args, body) ->
-                 let sym' = Sym.fresh () in 
-                 let substitution =
-                   {before = sym; 
-                    after = 
-                      fun bt -> 
-                      IT (Lit (Sym sym'), bt)}
-                 in
-                 let body = subst substitution body in
-                 ((sym,bt) :: args, body)
-               ) args ([], body)
+        | App (it, arg) ->
+           App (aux it, aux arg)
+        | Param ((sym, bt), body) ->
+           let sym' = Sym.fresh () in 
+           let substitution =
+             {before = sym; 
+              after = fun bt -> IT (Lit (Sym sym'), bt)}
            in
-           Param (args, aux body)
+           let body = subst substitution body in
+           let body = aux body in
+           Param ((sym', bt), body)
       in
       IT (Param_op it, bt)
     in
@@ -971,14 +964,10 @@ let rec unify it it' res =
        | Some s -> fail
        | None -> return (SymMap.add s {resolved = Some it'} res)
        end
-    | IT (Param_op (App (f_it, args)), _), 
-      IT (Param_op (App (f_it', args')), _) ->
-       let@ res = unify f_it f_it' res in
-       unify_list args args' res
-    (* | IT (Param_op (App (f_it, args)), _), 
-     *   IT (Param_op (App (f_it', args')), _) ->
-     *    let@ res = unify f_it f_it' res in
-     *    unify_list args args' res *)
+    | IT (Param_op (App (IT (Lit (Sym f), fbt), arg)), _), 
+      IT (Param_op (App (f_it', arg')), _) ->
+       let@ res = unify (IT (Lit (Sym f), fbt)) f_it' res in
+       unify arg arg' res
     | _ -> fail
 
 and unify_list its its' res = 
@@ -1139,14 +1128,18 @@ let value_of_some_ v =
      IT (Option_op (Value_of_some v), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
 
-let param_ args v = 
-  let arg_bts = List.map snd args in
-  IT (Param_op (Param (args, v)), BT.Param (arg_bts, bt v))
+let param_ (sym, abt) v = 
+  IT (Param_op (Param ((sym, abt), v)), BT.Param (abt, bt v))
 let app_ v args = 
   match bt v with
   | BT.Param (_, bt) ->
      IT (Param_op (App (v, args)), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
+
+
+let eta_expand (sym, bt) body = 
+  app_ (param_ (sym, bt) body) (sym_ (sym, bt))
+
 
 
 let def_ sym e = eq_ (sym_ (sym, bt e), e)
@@ -1157,7 +1150,6 @@ let in_range within (min, max) =
 let in_footprint within (pointer, size) = 
   and_ [lePointer_ (pointer, within); 
         ltPointer_ (within, addPointer_ (pointer, size))]
-
 
 
 
@@ -1182,6 +1174,15 @@ let good_value v_it sct =
      good_pointer v_it pointee_sct
   | _ ->
      representable_ (sct, v_it)
+
+
+(* let rec all_init b (Sctypes.Sctype (_, ct)) = 
+ *   let open Sctypes in
+ *   match ct with
+ *   | Array (t, _) ->
+ *      param_ (Sym.fresh (), BT.Integer) (all_init b t)
+ *   | _ ->
+ *      bool_ true *)
 
 
 
@@ -1217,10 +1218,6 @@ let hash (IT (it, _bt)) =
 
 
 
-
-
-
-
 let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
   let open Sctypes in
   let open Memory in
@@ -1235,7 +1232,7 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
      let lcs = 
        List.init n (fun i ->
            representable_ctype struct_layouts ct
-             (app_ about [int_ i])
+             (app_ about (int_ i))
          )
      in
      and_ lcs
@@ -1261,8 +1258,6 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
        end
   | Function _ -> 
      Debug_ocaml.error "todo: function types"
-
-
 
 
 

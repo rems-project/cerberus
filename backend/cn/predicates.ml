@@ -4,65 +4,71 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RE = Resources
+module PackingFT = ArgumentTypes.Make(Assignment)
 open Pp
 
 
 
+type clause = PackingFT.t
 
-type clause = 
-  Clause of {
-      condition: LRT.t;
-      outputs: Assignment.t;
-    }
+let pp_clause c = PackingFT.pp c
 
-type predicate_definition = 
-  { pointer: Sym.t;
-    iargs : (Sym.t * LS.t) list;
-    oargs : (Sym.t * LS.t) list;
-    clauses : clause list;
-  }
-  
-
-let pp_clause (Clause {condition; outputs}) =
-  item "condition" (LRT.pp condition) ^/^
-  item "fixes" (Assignment.pp outputs)
-     
-
-let subst_it_clause subst (Clause {condition; outputs}) =
-  let condition = LRT.subst_it subst condition in
-  let outputs = Assignment.subst_it subst outputs in
-  Clause {condition; outputs}
-
-let subst_var_clause subst (Clause {condition; outputs}) =
-  let condition = LRT.subst_var subst condition in
-  let outputs = Assignment.subst_var subst outputs in
-  Clause {condition; outputs}
+let subst_it_clause subst c = PackingFT.subst_it subst c
+let subst_var_clause subst c = PackingFT.subst_var subst c
 
 let subst_its_clause substs = 
   Subst.make_substs subst_it_clause substs
 
 let subst_vars_clause substs = 
   Subst.make_substs subst_var_clause substs
+
+
+
+type predicate_definition = {
+    pointer: Sym.t;
+    iargs : (Sym.t * LS.t) list;
+    oargs : (Sym.t * LS.t) list;
+    clauses : clause list;
+  }
+  
+let pp_predicate_definition def = 
+  item "pointer" (Sym.pp def.pointer) ^/^
+  item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
+  item "oargs" (Pp.list (fun (s,_) -> Sym.pp s) def.oargs) ^/^
+  item "clauses" (Pp.list pp_clause def.clauses)
   
 
 
 
+(* let rec init_bt (Sctype (_, ct_)) =
+ *   match ct_ with
+ *   | Array (t, _) -> BT.Param (Integer, init_bt t)
+ *   | t -> Bool *)
+
+
+
+
 type ctype_predicate =
-  { pointer : Sym.t;
-    value : Sym.t;
-    clause: LRT.t * IT.t; 
+  { pointer_arg : Sym.t;
+    value_arg : Sym.t;
+    init_arg : Sym.t;
+    lrt: LRT.t;
+    value_def: IT.t; 
+    init_def: IT.t; 
   }
 
 
 let ctype_predicate_to_predicate ct pred = 
-  let iargs = [] in
-  let oargs = [(pred.value, BT.Option (BT.of_sct ct))] in
-  let condition = fst pred.clause in
-  let outputs = [snd pred.clause] in
-  {pointer = pred.pointer; 
-   iargs; 
-   oargs; 
-   clauses = [Clause {condition; outputs}]}
+  let clause = 
+    PackingFT.of_lrt pred.lrt 
+      (PackingFT.I [pred.value_def; pred.init_def]) in
+  {
+    pointer = pred.pointer_arg; 
+    iargs = []; 
+    oargs = [(pred.value_arg, BT.of_sct ct);
+             (pred.init_arg, BT.Bool)];
+    clauses = [clause]
+  }
 
 
 
@@ -80,34 +86,33 @@ let ctype_predicate struct_layouts ct =
   let open Sctypes in
   let pointer_s = Sym.fresh_named "p" in
   let pointer_t = sym_ (pointer_s, Loc) in
+  let init_s = Sym.fresh_named "init" in
+  let init_bt = BT.Bool in
+  let init_t = sym_ (init_s, init_bt) in
+  let v_s = Sym.fresh_named "v" in
+  let v_bt = BT.of_sct ct in
+  let v_t = sym_ (v_s, v_bt) in
+  let size = size_of_ctype ct in
   let (Sctypes.Sctype (_, ct_)) = ct in
-  match ct_ with
+  let@ lrt, value_def = match ct_ with
   | Void ->
      Debug_ocaml.error "ctype_predicate void"
   | Integer it ->
-     let size = size_of_ctype ct in
-     let ovalue_s = Sym.fresh_named "v" in
-     let ovalue_t = sym_ (ovalue_s, BT.Option BT.Integer) in
-     let is_some = is_some_ ovalue_t in
      let lrt = 
-       Logical ((ovalue_s, BT.Option BT.Integer), 
-       Resource (point (pointer_t, size) (q_ (1,1)) ovalue_t, 
-       Constraint (impl_ (is_some, IT.representable_ (ct, value_of_some_ ovalue_t)), LRT.I)))
+       Logical ((v_s, v_bt), 
+       Logical ((init_s, init_bt), 
+       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, 
+       Constraint (IT.good_value v_t ct, LRT.I))))
      in
-     let clause = (lrt, ovalue_t) in
-     return { pointer = pointer_s; value = ovalue_s; clause }
+     return (lrt, v_t)
   | Pointer (_, ct') ->
-     let size = size_of_ctype ct in
-     let ovalue_s = Sym.fresh_named "v" in
-     let ovalue_t = sym_ (ovalue_s, BT.Option BT.Loc) in
-     let is_some = is_some_ ovalue_t in
      let lrt = 
-       Logical ((ovalue_s, BT.Option BT.Loc), 
-       Resource (point (pointer_t, size) (q_ (1,1)) ovalue_t, 
-       Constraint (impl_ (is_some, IT.good_pointer (value_of_some_ ovalue_t) ct'), LRT.I)))
+       Logical ((v_s, v_bt), 
+       Logical ((init_s, init_bt), 
+       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, 
+       Constraint (IT.good_value v_t ct, LRT.I))))
      in
-     let clause = (lrt, ovalue_t) in
-     return { pointer = pointer_s; value = ovalue_s; clause }     
+     return (lrt, v_t)
   | Array (t, None) ->
      (* todo: connect with user-annotation *)
      Debug_ocaml.error "representation: array of unknown length"
@@ -115,81 +120,155 @@ let ctype_predicate struct_layouts ct =
      let start = pointer_t in
      let step = z_ (size_of_ctype ct') in
      let stop = addPointer_ (start, mul_ (step, int_ length)) in
-     let qp_s = Sym.fresh () in 
-     let qp_t = sym_ (qp_s, BT.Loc) in
-     let ovalue_s = Sym.fresh_named "v" in
-     let ov'_s = Sym.fresh_named "v'" in
-     let ov'_bt = BT.Param ([BT.Integer], BT.Option (BT.of_sct ct')) in
-     let ov'_t = sym_ (ov'_s, ov'_bt) in
-     let i = 
-       div_ (sub_ (pointerToIntegerCast_ qp_t ,
-                   pointerToIntegerCast_ start),
-             step)
-     in
-     let pred = predicateP (Ctype ct') qp_t [] [app_ ov'_t [i]] in
+     let i = Sym.fresh () in
+     let i_t = sym_ (i, BT.Integer) in
      let qpredicate = {
-         start;
-         step;
-         stop;
-         moved = [];
+         start; 
+         step; 
+         stop; 
+         moved = []; 
          unused = true;
-         name = pred.name;
-         pointer = qp_s;
-         iargs = pred.iargs;
-         oargs = pred.oargs;
+         name = Ctype ct';
+         i;
+         iargs = [];
+         oargs = [app_ v_t i_t; init_t];
        }
      in
      let lrt = 
-       Logical ((ov'_s, ov'_bt), 
-       Resource (QPredicate qpredicate, LRT.I))
+       Logical ((v_s, v_bt), 
+       Logical ((init_s, init_bt), 
+       Resource (QPredicate qpredicate, LRT.I)))
      in
-     let ovalue_t = 
-       let j = Sym.fresh () in
-       let all_init = 
-         forall_ (qp_s, BT.Loc) 
-           (impl_ (is_qpredicate_instance qpredicate qp_t,
-                   is_some_ (app_ ov'_t [i])))
-       in
-       let init_case_map = 
-         param_ [(j, BT.Integer)]
-           (value_of_some_ (app_ ov'_t [sym_ (j, BT.Integer)]))
-       in
-       ite_ (all_init,
-             init_case_map,
-             nothing_ (BT.of_sct ct))
-     in
-     let clause = (lrt, ovalue_t) in
-     return { pointer = pointer_s; value = ovalue_s; clause }
+     return (lrt, v_t)
   | Struct tag ->
-     let ostruct_value_s = Sym.fresh_named "v" in
      let@ layout = struct_layouts tag in
-     let clause = 
-       let (lrt, lcs, values) = 
-         List.fold_right (fun {offset; size; member_or_padding} (lrt, lcs, values) ->
-             let member_p = addPointer_ (pointer_t, z_ offset) in
-             match member_or_padding with
-             | Some (member, sct) ->
-                let omember_v = Sym.fresh () in
-                let omember_t = sym_ (omember_v, BT.Option (BT.of_sct sct)) in
-                let (Sctypes.Sctype (annots, sct_)) = sct in
-                let resource = predicate (Ctype sct) member_p [] [omember_t] in
-                let lrt = 
-                  LRT.Logical ((omember_v, BT.Option (BT.of_sct sct)),
-                               LRT.Resource (resource, lrt)) in
-                let lcs = is_some_ omember_t :: lcs in
-                let value = (member, value_of_some_ omember_t) :: values in
-                (lrt, lcs, value)
-             | None ->
-                let resource = point (member_p, size) (q_ (1,1)) (nothing_ BT.Integer) in
-                let lrt = LRT.Resource (resource, lrt) in
-                (lrt, lcs, values)
-           ) layout (LRT.I, [], [])
-       in
-       let ovalue_t = ite_ (and_ lcs, something_ (IT.struct_ (tag, values)), nothing_ (BT.Struct tag)) in
-       let lrt = lrt @@ Constraint (impl_ (and_ lcs, IT.representable_ (ct, value_of_some_ ovalue_t)), LRT.I) in
-       (lrt, ovalue_t)
-    in
-    return { pointer = pointer_s; value = ostruct_value_s; clause }
+     let (lrt, values) = 
+       List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
+           let member_p = addPointer_ (pointer_t, z_ offset) in
+           match member_or_padding with
+           | Some (member, sct) ->
+              let member_v = Sym.fresh () in
+              let member_t = sym_ (member_v, BT.of_sct sct) in
+              let resource = predicate (Ctype sct) member_p [] [member_t; init_t] in
+              let lrt = 
+                LRT.Logical ((member_v, BT.of_sct sct),
+                LRT.Resource (resource, lrt))
+              in
+              let values = (member, member_t) :: values in
+              (lrt, values)
+           | None ->
+              let padding_s = Sym.fresh () in
+              let padding_t = sym_ (padding_s, BT.Integer) in
+              let resource = point (member_p, size) (q_ (1,1)) padding_t init_t in
+              let lrt = 
+                LRT.Logical ((padding_s, BT.Integer),
+                LRT.Resource (resource, lrt)) 
+              in
+              (lrt, values)
+         ) layout (LRT.I, [])
+     in
+     let value_t = IT.struct_ (tag, values) in
+     let lrt = 
+       Logical ((init_s, BT.Bool), lrt) @@ 
+       Constraint (IT.good_value value_t ct, LRT.I) 
+     in
+    return (lrt, value_t)
   | Function _ -> 
      Debug_ocaml.error "todo: function ctype predicate"
+  in
+  let def = { 
+      pointer_arg = pointer_s; 
+      value_arg = v_s; 
+      init_arg = init_s;
+      lrt; 
+      value_def = v_t; 
+      init_def = init_t 
+    }
+  in
+  print stderr (item "ctype" (Sctypes.pp ct));
+  print stderr (item "def" (pp_predicate_definition 
+                              (ctype_predicate_to_predicate ct def)));
+  return def
 
+
+
+
+
+
+
+
+
+
+let early = 
+  let open Resources in
+  let open BT in
+  let open IT in
+  let id = "EarlyAlloc" in
+  let start_s = Sym.fresh () in
+  let start_t = sym_ (start_s, Loc) in
+  let end_s = Sym.fresh () in
+  let end_t = sym_ (end_s, Loc) in
+  let v_s = Sym.fresh () in
+  let v_bt = BT.Param (Integer, Integer) in
+  let v_t = sym_ (v_s, v_bt) in
+  let iargs = [(end_s, BT.Loc)] in
+  let oargs = [] in
+  let block = 
+    Resources.array
+      (start_t)
+      (add_ (sub_ (pointerToIntegerCast_ end_t, pointerToIntegerCast_ start_t), int_ 1))
+      (Z.of_int 1)
+      v_t
+      (bool_ false)
+      (q_ (1, 1))
+  in
+  let lrt =
+    LRT.Logical ((v_s, v_bt),
+    LRT.Resource (block, 
+    LRT.Constraint (IT.good_pointer start_t (Sctypes.Sctype ([], Void)),
+    LRT.Constraint (IT.good_pointer end_t (Sctypes.Sctype ([], Void)),
+    LRT.I))))
+  in
+  let outputs = [] in
+  let predicate = {
+      pointer = start_s;
+      iargs; 
+      oargs; 
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I outputs)]; 
+    } 
+  in
+  (id, predicate)
+
+
+
+let zero_region = 
+  let open Resources in
+  let open BT in
+  let open IT in
+  let id = "ZeroRegion" in
+  let pointer_s = Sym.fresh () in
+  let pointer_t = sym_ (pointer_s, Loc) in
+  let length_s = Sym.fresh () in
+  let length_t = sym_ (length_s, Integer) in
+  let iargs = [(length_s, BT.Integer)] in
+  let oargs = [] in
+  let array = 
+    RE.array pointer_t length_t (Z.of_int 1)
+      (int_ 0) 
+      (IT.param_ (Sym.fresh (), BT.Integer) (bool_ true))
+      (q_ (1,1))
+  in
+  let lrt =
+    LRT.Resource (array, 
+    LRT.Constraint (IT.good_pointer pointer_t (Sctypes.Sctype ([], Void)),
+    LRT.I))
+  in
+  let outputs = [] in
+  let predicate = {
+      pointer = pointer_s;
+      iargs; 
+      oargs; 
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I outputs)]; 
+    } 
+  in
+  (id, predicate)
