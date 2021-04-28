@@ -2,7 +2,7 @@
 
 
 type 
-base_type =  (* Core base types *)
+base_type =  (* base types *)
    Unit (* unit *)
  | Bool (* boolean *)
  | Integer (* integer *)
@@ -44,7 +44,6 @@ mu_ctor =  (* data constructors *)
  | M_CivOR (* bitwise OR *)
  | M_CivXOR (* bitwise XOR *)
  | M_Cspecified (* non-unspecified loaded value *)
- | M_Cunspecified (* unspecified loaded value *)
  | M_Cfvfromint (* cast integer to floating value *)
  | M_Civfromfloat (* cast floating to integer value *)
 
@@ -122,7 +121,7 @@ and 'TY mu_tpexpr =  (* pure top-level pure expressions with location and annota
 
 type 
 lit = 
-   Lit_Sym of x
+   Lit_Sym of 'sym
  | Lit_Unit
  | Lit_Bool of bool
  | Lit_Z of Z.t
@@ -138,7 +137,7 @@ type
 'bt bool_op = 
    Not of 'bt index_term
  | Eq of 'bt index_term * 'bt index_term
- | And of ('bt index_term) list
+ | AndI of ('bt index_term) list
 
 and 'bt list_op = 
    List of ('bt index_term) list
@@ -150,12 +149,16 @@ and 'bt array_op =
 and 'bt param_op = 
    App of 'bt index_term * ('bt index_term) list
 
+and 'bt struct_op = 
+   StructMember of tag * 'bt index_term * Symbol.identifier
+
 and 'bt index_term_aux = 
    Bool_op of 'bt bool_op
  | List_op of 'bt list_op
  | Pointer_op of 'bt pointer_op
  | Array_op of 'bt array_op
  | Param_op of 'bt param_op
+ | Struct_op of 'bt struct_op
 
 and 'bt index_term = 
    Lit of lit
@@ -190,9 +193,15 @@ type
    
 
 type 
+l =  (* logical var env *)
+   Log_empty
+ | Log_cons of l * 'sym
+
+
+type 
 c =  (* computational var env *)
    Comp_empty
- | Comp_cons of c * x * base_type
+ | Comp_cons of c * 'sym * base_type
 
 
 type 
@@ -202,15 +211,9 @@ n =  (* constraints env *)
 
 
 type 
-l =  (* logical var env *)
-   Log_empty
- | Log_cons of l * x
-
-
-type 
 ret =  (* return types *)
-   RetTy_Computational of x * base_type * ret
- | RetTy_Logical of x * ret
+   RetTy_Computational of 'sym * base_type * ret
+ | RetTy_Logical of 'sym * ret
  | RetTy_Resource of ret
  | RetTy_Constraint of 'bt index_term * ret
  | RetTy_I
@@ -218,12 +221,12 @@ ret =  (* return types *)
 
 type 
 'TY mu_expr_aux =  (* (effectful) expressions *)
-   M_Epure of 'TY mu_pexpr
+   M_Epure of 'TY mu_pexpr (* pure expression *)
  | M_Ememop of 'TY mu_memop (* pointer op involving memory *)
  | M_Eaction of 'TY mu_paction (* memory action *)
- | M_Eskip
+ | M_Eskip (* skip *)
  | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
- | M_Eproc of Symbol.sym Core.generic_name * ('TY asym) list (* Core procedure call *)
+ | M_Eproc of Symbol.sym Core.generic_name * ('TY asym) list (* procedure call *)
 
 
 type 
@@ -255,25 +258,16 @@ type
  | M_Ewseq of mu_pattern * 'TY mu_expr * 'TY mu_texpr (* weak sequencing *)
  | M_Esseq of 'TY mu_sym_or_pattern * 'TY mu_expr * 'TY mu_texpr (* strong sequencing *)
  | M_Ecase of 'TY asym * ((mu_pattern * 'TY mu_texpr)) list (* pattern matching *)
- | M_Eif of 'TY asym * 'TY mu_texpr * 'TY mu_texpr
- | M_Ebound of int * 'TY mu_texpr (* $\ldots$and boundary *)
+ | M_Eif of 'TY asym * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
+ | M_Ebound of int * 'TY mu_texpr (* ??, doesn't exist at runtime *)
  | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)
  | M_End of ('TY mu_texpr) list (* nondeterministic sequencing *)
- | M_Edone of 'TY asym
- | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour
+ | M_Edone of 'TY asym (* end of top-level expression *)
+ | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_Erun of Symbol.sym * ('TY asym) list (* run from label *)
 
 and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
    M_TExpr of Location_ocaml.t * annot list * 'TY mu_texpr_aux
-
-
-type 
-arg =  (* argument types *)
-   ArgTy_Computational of x * base_type * arg
- | ArgTy_Logical of x * arg
- | ArgTy_Resource of arg
- | ArgTy_Constraint of 'bt index_term * arg
- | ArgTy_I
 
 
 type 
@@ -288,8 +282,12 @@ type
 
 
 type 
-'bt struct_op = 
-   StructMember of tag * 'bt index_term * Symbol.identifier
+arg =  (* argument types *)
+   ArgTy_Computational of 'sym * base_type * arg
+ | ArgTy_Logical of 'sym * arg
+ | ArgTy_Resource of arg
+ | ArgTy_Constraint of 'bt index_term * arg
+ | ArgTy_I
 
 (** definitions *)
 (** definitions *)
