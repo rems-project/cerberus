@@ -522,8 +522,8 @@ grammar
 
   formula :: 'formula_' ::=          
     | judgement                                                                        :: :: judgement
-    | smt ( N /\ ret' => ret )                                                         :: :: smt
-        {{ com theorem to be proved: $[[ret']]$ and $[[ret]]$ always quantifier-free }}
+    | smt ( N => ret )                                                                 :: :: smt
+        {{ com theorem to be proved: $[[ret]]$ only consists of logical constraints }}
     | Symbol_sym : base_type inEnv C                                                   :: :: xInC
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals :: :: structInGlobals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem yi , base_typei , index_termi  // i />   :: :: indexed_infer_mem_value
@@ -534,6 +534,7 @@ grammar
 defns
   mem_value_jtype :: '' ::=
 
+% serious duplication going on here (could factor out int, ptr, arr, and struct rules)
 defn
     C ; L ; N |- ty_mem_value => mem y , base_type , index_term :: :: Val_Obj_Mem :: Val_Obj_Mem_ by
 
@@ -661,7 +662,7 @@ defn
 
     % NOT IMPLEMENTED: constrained
 
-    smt ( N /\ I => false /\ I )
+    smt ( N => false /\ I )
     ------------------------------------------------- :: Error
     C ; L ; N |- error ( ty_string , ty_asym ) => ret
 
@@ -716,7 +717,9 @@ defn
 
     % ASK: call spine
 
-    % TODO: assert_undef, bool_to_integer, conv_int
+    % DEFER conv_int
+
+    % TODO: assert_undef, bool_to_integer
 
     % ASK: wrapI
 
@@ -758,22 +761,23 @@ defn
   C ; L ; N |- mu_tpexpr_aux <= ret :: :: TPExpr_Aux :: TPExpr_Aux_ by
 
 
-  smt ( N /\ I => false /\ I )
+  smt ( N => false /\ I )
   ---------------------------------------- :: Undef
   C ; L ; N |- undef ty_loc UB_name <= ret
 
 
-  C ; L ; N |- x => ret'
+  x : bool inEnv C
   C ; L ; N , x = true  _bt |- mu_tpexpr1 <= ret
   C ; L ; N , x = false _bt |- mu_tpexpr2 <= ret
-  ----------------------------------------------------------------- :: If
+  -------------------------------------------------------- :: If
   C ; L ; N |- if x then mu_tpexpr1 else mu_tpexpr2 <= ret
 
 
-  C ; L ; N |- x => ret'
-  smt ( N /\ ret' => ret )
-  --------------------------- :: Done
-  C ; L ; N |- done x <= ret'
+  % this relies on a theorem that ret consists only of logical constraints
+  x : base_type inEnv C
+  smt ( N => ret )
+  ------------------------------------------------ :: Done
+  C ; L ; N |- done x <= sigma y : base_type . ret
 
 
   C ; L ; N |- mu_pexpr => sigma y : base_type . ret'
@@ -783,7 +787,7 @@ defn
   C ; L ; N |- let mu_sym_or_pattern = mu_pexpr in mu_tpexpr <= ret
 
 
-  C ; L ; N |- x => sigma y : base_type . ret'
+  x : base_type inEnv C
   </ mu_patterni : base_type ~> Ci // i />
   </ C , fresh ( Ci ) ; L ; N |- [ fresh ( Ci ) / Ci ] mu_tpexpri <= ret // i />
   ------------------------------------------------------------------------------ :: Case
