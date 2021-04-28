@@ -102,21 +102,21 @@ type
 
 
 type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
-
-
-type 
 'TY mu_tpexpr_aux =  (* top-level pure expressions *)
-   M_TPundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
- | M_TPcase of 'TY asym * ((mu_pattern * 'TY mu_tpexpr)) list (* pattern matching *)
- | M_TPlet of 'TY mu_sym_or_pattern * 'TY mu_tpexpr * 'TY mu_tpexpr (* pure let *)
- | M_TPif of 'TY asym * 'TY mu_tpexpr * 'TY mu_tpexpr (* pure if *)
- | M_TPdone of 'TY asym (* pure done *)
+   M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+ | M_PEcase of 'TY asym * ((mu_pattern * 'TY mu_tpexpr)) list (* pattern matching *)
+ | M_PElet of 'TY mu_sym_or_pattern * 'TY mu_pexpr * 'TY mu_tpexpr (* pure let *)
+ | M_PEif of 'TY asym * 'TY mu_tpexpr * 'TY mu_tpexpr (* pure if *)
+ | M_PEdone of 'TY asym (* pure done *)
 
 and 'TY mu_tpexpr =  (* pure top-level pure expressions with location and annotations *)
    M_TPexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_tpexpr_aux
+
+
+type 
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
 
 
 type 
@@ -137,7 +137,7 @@ type
 'bt bool_op = 
    Not of 'bt index_term
  | Eq of 'bt index_term * 'bt index_term
- | AndI of ('bt index_term) list
+ | And of ('bt index_term) list
 
 and 'bt list_op = 
    List of ('bt index_term) list
@@ -191,24 +191,6 @@ type
 type 
 'TY mu_paction =  (* memory actions with polarity *)
    
-
-type 
-l =  (* logical var env *)
-   Log_empty
- | Log_cons of l * 'sym
-
-
-type 
-c =  (* computational var env *)
-   Comp_empty
- | Comp_cons of c * 'sym * base_type
-
-
-type 
-n =  (* constraints env *)
-   Con_empty
- | Con_cons of n
-
 
 type 
 ret =  (* return types *)
@@ -289,6 +271,8 @@ arg =  (* argument types *)
  | ArgTy_Constraint of 'bt index_term * arg
  | ArgTy_I
 
+(** definitions *)
+(** definitions *)
 (** definitions *)
 (** definitions *)
 (** definitions *)
