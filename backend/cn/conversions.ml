@@ -140,16 +140,23 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
      let pointee_t = sym_ (pointee, pointee_bt) in
      let l = [(pointee, pointee_bt)] in
      let mapping = [{path = Path.pointee (Some label) path; it = pointee_t}] in
+     let c = [good_value pointee_t sct] in
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
-     return (l, r, [], mapping)
+     return (l, r, c, mapping)
 
 
 let make_char_region loc pointer size =
+  let qp = Sym.fresh () in
+  let qp_t = sym_ (qp, BT.Loc) in
   let v_s = Sym.fresh () in
-  let v_t = sym_ (v_s, BT.Integer) in
-  let resource = Resources.array pointer size (Z.of_int 1) 
-                   v_t (bool_ false) (q_ (1, 1)) in
-  return ([(v_s, BT.Integer)], [resource], [], [])
+  let v_bt = BT.Param (Loc, Integer) in
+  let v_t = sym_ (v_s, v_bt) in
+  let init_s = Sym.fresh () in
+  let init_bt = BT.Param (Loc, Bool) in
+  let init_t = sym_ (init_s, init_bt) in
+  let resource = Resources.array qp pointer size (Z.of_int 1) 
+                   (app_ v_t qp_t) (app_ init_t qp_t) (q_ (1, 1)) in
+  return ([(v_s, v_bt); (init_s, init_bt)], [resource], [], [])
 
 
 let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) path sct =

@@ -354,6 +354,8 @@ module Make (G : sig val global : Global.t end) = struct
          when Sym.equal b.qpointer b'.qpointer &&
               Z.equal b.size b'.size &&
               IT.equal b.permission b'.permission ->
+       let b' = { b' with value = eta_expand (b.qpointer, Loc) b'.value;
+                          init = eta_expand (b.qpointer, Loc) b'.init; } in
        let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
        if Solver.holds_forall local [(b.qpointer, BT.Loc)] 
             (impl_ (gt_ (b.permission, q_ (0, 1)), 
@@ -848,7 +850,6 @@ module Make (G : sig val global : Global.t end) = struct
             (* remove resource before binding the return
                type 'condition', so as not to unsoundly
                introduce extra disjointness constraints *)
-            print stderr (item "lrt" (LRT.pp lrt));
             let test_local = L.remove_resource (Predicate p) local in
             let test_local = bind_logical test_local lrt in
             if not (Solver.is_inconsistent test_local)

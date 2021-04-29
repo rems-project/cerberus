@@ -551,10 +551,10 @@ module Make (G : sig val global : Global.t end) = struct
          let@ _ = WIT.check_or_infer loc names local (Some BT.Real) b.permission in
          return ()
       | QPoint b -> 
-         let local' = L.add_l b.qpointer Loc local in
+         let local = L.add_l b.qpointer Loc local in
          let@ _ = WIT.check_or_infer loc names local None b.value in
          let@ _ = WIT.check_or_infer loc names local (Some BT.Bool) b.init in
-         let@ _ = WIT.check_or_infer loc names local' (Some BT.Real) b.permission in
+         let@ _ = WIT.check_or_infer loc names local (Some BT.Real) b.permission in
          return ()
       | Predicate p -> 
          let@ def = get_predicate_def p.name in
@@ -580,6 +580,7 @@ module Make (G : sig val global : Global.t end) = struct
              ) p.moved
          in
          let@ def = get_predicate_def p.name in
+         let local = L.add_l p.i Integer local in
          let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
          let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
          let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in

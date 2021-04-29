@@ -101,16 +101,14 @@ let ctype_predicate struct_layouts ct =
      let lrt = 
        Logical ((v_s, v_bt), 
        Logical ((init_s, init_bt), 
-       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, 
-       Constraint (IT.good_value v_t ct, LRT.I))))
+       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, LRT.I)))
      in
      return (lrt, v_t)
   | Pointer (_, ct') ->
      let lrt = 
        Logical ((v_s, v_bt), 
        Logical ((init_s, init_bt), 
-       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, 
-       Constraint (IT.good_value v_t ct, LRT.I))))
+       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, LRT.I)))
      in
      return (lrt, v_t)
   | Array (t, None) ->
@@ -169,8 +167,7 @@ let ctype_predicate struct_layouts ct =
      in
      let value_t = IT.struct_ (tag, values) in
      let lrt = 
-       Logical ((init_s, BT.Bool), lrt) @@ 
-       Constraint (IT.good_value value_t ct, LRT.I) 
+       Logical ((init_s, BT.Bool), lrt) @@ LRT.I
      in
     return (lrt, value_t)
   | Function _ -> 
@@ -185,9 +182,6 @@ let ctype_predicate struct_layouts ct =
       init_def = init_t 
     }
   in
-  print stderr (item "ctype" (Sctypes.pp ct));
-  print stderr (item "def" (pp_predicate_definition 
-                              (ctype_predicate_to_predicate ct def)));
   return def
 
 
@@ -209,25 +203,31 @@ let early =
   let end_s = Sym.fresh () in
   let end_t = sym_ (end_s, Loc) in
   let v_s = Sym.fresh () in
-  let v_bt = BT.Param (Integer, Integer) in
+  let v_bt = BT.Param (Loc, Integer) in
   let v_t = sym_ (v_s, v_bt) in
+  let init_s = Sym.fresh () in
+  let init_bt = BT.Param (Loc, Bool) in
+  let init_t = sym_ (init_s, init_bt) in
   let iargs = [(end_s, BT.Loc)] in
   let oargs = [] in
+  let q = Sym.fresh () in 
   let block = 
     Resources.array
+      q
       (start_t)
       (add_ (sub_ (pointerToIntegerCast_ end_t, pointerToIntegerCast_ start_t), int_ 1))
       (Z.of_int 1)
-      v_t
-      (bool_ false)
+      (app_ v_t (sym_ (q, Loc)))
+      (app_ init_t (sym_ (q, Loc)))
       (q_ (1, 1))
   in
   let lrt =
     LRT.Logical ((v_s, v_bt),
+    LRT.Logical ((init_s, init_bt),
     LRT.Resource (block, 
     LRT.Constraint (IT.good_pointer start_t (Sctypes.Sctype ([], Void)),
     LRT.Constraint (IT.good_pointer end_t (Sctypes.Sctype ([], Void)),
-    LRT.I))))
+    LRT.I)))))
   in
   let outputs = [] in
   let predicate = {
@@ -253,9 +253,9 @@ let zero_region =
   let iargs = [(length_s, BT.Integer)] in
   let oargs = [] in
   let array = 
-    RE.array pointer_t length_t (Z.of_int 1)
+    RE.array (Sym.fresh ()) pointer_t length_t (Z.of_int 1)
       (int_ 0) 
-      (IT.param_ (Sym.fresh (), BT.Integer) (bool_ true))
+      (bool_ true)
       (q_ (1,1))
   in
   let lrt =

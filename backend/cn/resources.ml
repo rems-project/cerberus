@@ -86,10 +86,9 @@ let pp_qpredicate (qp : qpredicate) =
   if qp.unused then
     let args = List.map IT.pp (qp.iargs @ qp.oargs) in
     parens (separate (semi ^^ space) 
-              ([Sym.pp qp.i;
-                IT.pp qp.start;
-                IT.pp qp.stop;
-                IT.pp qp.step;
+              ([Sym.pp qp.i ^^^ equals ^^^ IT.pp qp.start;
+                Sym.pp qp.i ^^^ !^"<=" ^^^ IT.pp qp.stop;
+                Sym.pp qp.i ^^^ plus ^^^ IT.pp qp.step;
                 brackets (separate comma (List.map IT.pp qp.moved))])) ^^^
       braces (c_app (pp_predicate_name qp.name) args)
   else
@@ -424,18 +423,17 @@ let array_is_at_valid_index base element_size pointer =
 
 
 (* check this *)
-let array pointer length element_size value init permission =
+let array q start length element_size value init permission =
   let open IT in
-  let q = Sym.fresh () in
   let qt = sym_ (q, BT.Loc) in
   let qt_int = pointerToIntegerCast_ qt in
-  let pointer_int = pointerToIntegerCast_ pointer in
-  let it = div_ (sub_ (qt_int, pointer_int), z_ element_size) in
+  let start_int = pointerToIntegerCast_ start in
+  let it = div_ (sub_ (qt_int, start_int), z_ element_size) in
   let condition = 
     and_ [
         le_ (int_ 0, it);
         lt_ (it, length);
-        eq_ (rem_f_ (sub_ (qt_int, pointer_int), z_ element_size), int_ 0);
+        eq_ (rem_f_ (sub_ (qt_int, start_int), z_ element_size), int_ 0);
       ]
   in
   let point = {
