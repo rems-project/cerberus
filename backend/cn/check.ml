@@ -1356,14 +1356,16 @@ module Make (G : sig val global : Global.t end) = struct
         resource_request loc (Access (Load None)) local request
       in
       match resource with
-      | Predicate {oargs = [value; init]; _} 
-           when Solver.holds local init -> 
+      | Predicate {name = Ctype ct'; oargs = [value; init]; _} 
+           when Sctypes.equal ct ct' &&
+                Solver.holds local init -> 
          return value
-      | Predicate _ ->
+      | Predicate {name = Ctype ct'; oargs = [value; init]; _} 
+           when Sctypes.equal ct ct' -> 
          let state = Explain.state names local in
          fail loc (Uninitialised_read {is_member = None; state})
       | _ -> 
-         Debug_ocaml.error "load request did not return predicate"
+         Debug_ocaml.error "load request did not return a ctype predicate"
 
 
 
