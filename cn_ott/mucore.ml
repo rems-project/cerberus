@@ -129,19 +129,27 @@ lit =
 
 
 type 
-'bt pointer_op = 
-   Null
-
-
-type 
 'bt bool_op = 
    Not of 'bt index_term
  | Eq of 'bt index_term * 'bt index_term
  | And of ('bt index_term) list
 
+and 'bt arith_op = 
+   Mul of 'bt index_term * 'bt index_term
+
 and 'bt list_op = 
-   List of ('bt index_term) list
+   Nil
+ | Cons of 'bt index_term * 'bt index_term
+ | List of ('bt index_term) list
  | NthList of int * 'bt index_term
+
+and 'bt tuple_op = 
+   Tuple of ('bt index_term) list
+ | NthTuple of 'bt index_term * int
+
+and 'bt pointer_op = 
+   Null
+ | AddPointer of 'bt index_term * 'bt index_term
 
 and 'bt array_op = 
    ArrayGet of 'bt index_term * Z.t
@@ -153,8 +161,10 @@ and 'bt struct_op =
    StructMember of tag * 'bt index_term * Symbol.identifier
 
 and 'bt index_term_aux = 
-   Bool_op of 'bt bool_op
+   Arith_op of 'bt arith_op
+ | Bool_op of 'bt bool_op
  | List_op of 'bt list_op
+ | Tuple_op of 'bt tuple_op
  | Pointer_op of 'bt pointer_op
  | Array_op of 'bt array_op
  | Param_op of 'bt param_op
@@ -255,12 +265,6 @@ and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
 type 
 'TY mu_action = 
    M_Action of Location_ocaml.t * 'TY mu_action_aux
-
-
-type 
-'bt tuple_op = 
-   Tuple of ('bt index_term) list
- | NthTuple of 'bt index_term * int
 
 
 type 

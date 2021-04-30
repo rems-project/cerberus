@@ -33,7 +33,7 @@ grammar
     % arithmetic operators (integer -> integer -> integer)
     | +     :: :: Add   {{ tex \texttt{+}         }} {{ com addition       }}
     | -     :: :: Sub   {{ tex \texttt{-}         }} {{ com subtraction    }}
-    | *     :: :: Mul   {{ tex \texttt{*}         }} {{ com multiplication }} 
+    | *     :: :: Mul   {{ tex \texttt{*}         }} {{ com multiplication }}
     | /     :: :: Div   {{ tex \texttt{/}         }} {{ com division       }}
     | rem_t :: :: Rem_t                              {{ com modulus        }}
     | rem_f :: :: Rem_f                              {{ com remainder      }}
@@ -72,7 +72,7 @@ grammar
 grammar
 
   mu_name {{ tex name }} :: '' ::= {{ ocaml Symbol.sym Core.generic_name }} {{ phantom }}
-    | Symbol_sym :: :: Sym  {{ com Core identifier                 }} 
+    | Symbol_sym :: :: Sym  {{ com Core identifier                 }}
     | impl_const :: :: Impl {{ com implementation-defined constant }}
 
 metavar ty_mem_int {{ tex mem\_int }} ::= {{ ocaml Impl_mem.integer_value }} {{ phantom }}
@@ -110,17 +110,17 @@ grammar
 
 grammar
 
-  mu_object_value {{ tex object\_value }} :: 'M_OV' ::=  {{ auxparam 'TY }} {{ com C object values (inhabitants of object types), which can be read/stored }} 
+  mu_object_value {{ tex object\_value }} :: 'M_OV' ::=  {{ auxparam 'TY }} {{ com C object values (inhabitants of object types), which can be read/stored }}
     | ty_mem_int                                                                                :: :: integer {{ com integer value  }}
     | ty_mem_ptr                                                                                :: :: pointer {{ com pointer value  }}
     | array ( </ mu_loaded_valuei // , // i /> )                                                :: :: array   {{ com C array value  }}
     | ( struct Symbol_sym ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> }    :: :: struct  {{ com C struct value }}
     | ( union Symbol_sym ) { . Symbol_identifier = ty_mem_value }                               :: :: union   {{ com C union value  }}
-  
+
 
   mu_loaded_value {{ tex loaded\_value }} :: 'M_LV' ::= {{ auxparam 'TY }} {{ com potentially unspecified C object values }}
     | specified mu_object_value :: :: specified {{ com specified loaded value }}
-  
+
 
 grammar
 
@@ -131,7 +131,7 @@ grammar
 grammar
 
   mu_value {{ tex value }} :: 'M_V' ::= {{ auxparam 'TY }} {{ com Core values }}
-    | mu_object_value                     :: :: object {{ com C object value        }} 
+    | mu_object_value                     :: :: object {{ com C object value        }}
     | mu_loaded_value                     :: :: loaded {{ com loaded C object value }}
     | Unit                                :: :: unit   {{ com unit                  }}
     | True                                :: :: true   {{ com boolean true          }}
@@ -142,19 +142,19 @@ grammar
 grammar
 
   mu_ctor {{ tex ctor }} :: 'M_C' ::= {{ com data constructors }}
-    | Nil T_bt    :: :: nil         {{ com empty list                     }} % : [bTy] 
-    | Cons        :: :: cons        {{ com list cons                      }} % : bTy -> [bTy] -> [bTy] 
-    | Tuple       :: :: tuple       {{ com tuple                          }} % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
-    | Array       :: :: array       {{ com C array                        }} % : bTy -> ... -> bTy -> array bTy 
-    | Ivmax       :: :: ivmax       {{ com max integer value              }} % : ctype -> integer 
-    | Ivmin       :: :: ivmin       {{ com min integer value              }} % : ctype -> integer 
-    | Ivsizeof    :: :: ivsizeof    {{ com sizeof value                   }} % : ctype -> integer 
-    | Ivalignof   :: :: ivalignof   {{ com alignof value                  }} % : ctype -> integer 
+    | Nil T_bt    :: :: nil         {{ com empty list                     }} % : [bTy]
+    | Cons        :: :: cons        {{ com list cons                      }} % : bTy -> [bTy] -> [bTy]
+    | Tuple       :: :: tuple       {{ com tuple                          }} % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN)
+    | Array       :: :: array       {{ com C array                        }} % : bTy -> ... -> bTy -> array bTy
+    | Ivmax       :: :: ivmax       {{ com max integer value              }} % : ctype -> integer
+    | Ivmin       :: :: ivmin       {{ com min integer value              }} % : ctype -> integer
+    | Ivsizeof    :: :: ivsizeof    {{ com sizeof value                   }} % : ctype -> integer
+    | Ivalignof   :: :: ivalignof   {{ com alignof value                  }} % : ctype -> integer
     | IvCOMPL     :: :: ivCOMPL     {{ com bitwise complement             }} % : ctype -> integer -> integer
     | IvAND       :: :: ivAND       {{ com bitwise AND                    }} % : ctype -> integer -> integer -> integer
     | IvOR        :: :: ivOR        {{ com bitwise OR                     }} % : ctype -> integer -> integer -> integer
     | IvXOR       :: :: ivXOR       {{ com bitwise XOR                    }} % : ctype -> integer -> integer -> integer
-    | Specified   :: :: specified   {{ com non-unspecified loaded value   }} % : objTy -> loaded objTy 
+    | Specified   :: :: specified   {{ com non-unspecified loaded value   }} % : objTy -> loaded objTy
     | Fvfromint   :: :: fvfromint   {{ com cast integer to floating value }} % : integer -> floating
     | Ivfromfloat :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
 
@@ -167,7 +167,7 @@ grammar
                                                         {{ com type annotated optional identifier }}
     | _ : T_bt          :: :: Nothing % (+ binders = {} +)
     | Symbol_sym : T_bt :: :: Just    % (+ binders = Symbol_sym +)
-  
+
 
 grammar
 
@@ -193,7 +193,7 @@ metavar Mem_mem_iv_constraint {{ tex mem\_iv\_c }} ::= {{ ocaml Mem.mem_iv_const
 metavar UB_name ::= {{ ocaml Undefined.undefined_behaviour }} {{ phantom }}
  {{ com undefined behaviour }}
 
-metavar ty_string {{ tex string }} ::= {{ ocaml string }} {{ phantom }} 
+metavar ty_string {{ tex string }} ::= {{ ocaml string }} {{ phantom }}
   {{ com OCaml string }}
 
 metavar tyvar_TY ::= {{ ocaml 'TY }} {{ phantom }}
@@ -201,7 +201,7 @@ metavar tyvar_TY ::= {{ ocaml 'TY }} {{ phantom }}
 
 metavar ty_act {{ tex \tau }} ::= {{ ocaml 'TY act }} {{ phantom }}
   {{ com OCaml type for an annotated C type }}
-  
+
 grammar
 
   ty_asym {{ tex ident }} :: 'ty_asym_' ::= {{ ocaml 'TY asym }} {{ phantom }} {{ com Ott-hack, ignore }}
@@ -212,7 +212,7 @@ grammar
 
   mu_pexpr_aux {{ tex pexpr\_aux }} :: 'M_PE' ::= {{ auxparam 'TY }} {{ com pure expressions }}
     | Symbol_sym                                                                :: :: sym
-    | impl_const                                                                :: :: impl         {{ com implementation-defined constant           }} 
+    | impl_const                                                                :: :: impl         {{ com implementation-defined constant           }}
     | mu_value                                                                  :: :: val
     | constrained ( </ Mem_mem_iv_constrainti , ty_asymi // , // i /> )         :: :: constrained  {{ com constrained value                         }}
     | error ( ty_string , ty_asym )                                             :: :: error        {{ com impl-defined static error                 }}
@@ -230,7 +230,7 @@ grammar
     | bool_to_integer ( ty_asym )                                               :: :: bool_to_integer
     | conv_int ( ty_act , ty_asym )                                             :: :: conv_int
     | wrapI ( ty_act , ty_asym )                                                :: :: wrapI
- 
+
 
   mu_pexpr {{ tex pexpr }} :: 'M_P' ::= {{ auxparam 'TY }} {{ com pure expressions with location and annotations }}
     | ty_loc annots tyvar_TY mu_pexpr_aux :: :: expr
@@ -238,13 +238,13 @@ grammar
 
 grammar
 
- % TODO: binders
+  % TODO: binders
   mu_tpexpr_aux {{ tex tpexpr\_aux }} :: 'M_PE' ::= {{ auxparam 'TY }} {{ com top-level pure expressions }}
     | undef ty_loc UB_name                                       ::   :: undef {{ com undefined behaviour }}
-    | case ty_asym of </ | mu_patterni => mu_tpexpri // i /> end ::   :: case  {{ com pattern matching }} % TODO: binding
-    | let mu_sym_or_pattern = mu_pexpr in mu_tpexpr              ::   :: let   {{ com pure let         }} % TODO: binding
-    | if ty_asym then mu_tpexpr1 else mu_tpexpr2                 ::   :: if    {{ com pure if          }}
-    | done ty_asym                                               ::   :: done  {{ com pure done        }}
+    | case ty_asym of </ | mu_patterni => mu_tpexpri // i /> end ::   :: case  {{ com pattern matching    }} % TODO: binding
+    | let mu_sym_or_pattern = mu_pexpr in mu_tpexpr              ::   :: let   {{ com pure let            }} % TODO: binding
+    | if ty_asym then mu_tpexpr1 else mu_tpexpr2                 ::   :: if    {{ com pure if             }}
+    | done ty_asym                                               ::   :: done  {{ com pure done           }}
 
   mu_tpexpr {{ tex tpexpr }} :: 'M_TP' ::= {{ auxparam 'TY }} {{ com pure top-level pure expressions with location and annotations }}
     | ty_loc annots tyvar_TY mu_tpexpr_aux ::   :: expr
@@ -294,25 +294,25 @@ grammar
     | linux_load ( ty_act , ty_asym , Linux_linux_memory_order )                                          :: :: LinuxLoad
     | linux_store ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                             :: :: LinuxStore
     | linux_rmw ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                               :: :: LinuxRMW
-  
+
 
   mu_action {{ tex action }} :: 'M_' ::= {{ auxparam 'TY }}
     | ty_loc mu_action_aux :: :: Action
-  
+
 
 grammar
 
   mu_memop {{ tex memop }} :: 'M_' ::=  {{ auxparam 'TY }} {{ com operations involving the memory state}}
-    | ty_asym1 == ty_asym2                            :: :: PtrEq            {{ com pointer equality comparison}}
-    | ty_asym1 <> ty_asym2                            :: :: PtrNe            {{ com pointer inequality comparison}}
+    | ty_asym1 == ty_asym2                            :: :: PtrEq            {{ com pointer equality comparison }}
+    | ty_asym1 <> ty_asym2                            :: :: PtrNe            {{ com pointer inequality comparison }}
     | ty_asym1 < ty_asym2                             :: :: PtrLt            {{ com pointer less-than comparison }}
     | ty_asym1 > ty_asym2                             :: :: PtrGt            {{ com pointer greater-than comparison }}
     | ty_asym1 =< ty_asym2                            :: :: PtrLe            {{ com pointer less-than comparison }}
     | ty_asym1 >= ty_asym2                            :: :: PtrGe            {{ com pointer greater-than comparison }}
     | ty_asym1 - ty_act - ty_asym2                    :: :: Ptrdiff          {{ order [[ty_act]] [[ty_asym1]] [[ty_asym2]] }} {{ com pointer subtraction }}
                                                                              {{ tex [[ty_asym1]] -_{ [[ty_act]] } [[ty_asym2]] }}
-    | intFromPtr ( ty_act1 , ty_act2 , ty_asym )      :: :: IntFromPtr       {{ com cast of pointer value to integer value }} 
-    | ptrFromInt ( ty_act1 , ty_act2 , ty_asym )      :: :: PtrFromInt       {{ com cast of integer value to pointer value }} 
+    | intFromPtr ( ty_act1 , ty_act2 , ty_asym )      :: :: IntFromPtr       {{ com cast of pointer value to integer value }}
+    | ptrFromInt ( ty_act1 , ty_act2 , ty_asym )      :: :: PtrFromInt       {{ com cast of integer value to pointer value }}
     | ptrValidForDeref ( ty_act , ty_asym )           :: :: PtrValidForDeref {{ com dereferencing validity predicate }}
     | ptrWellAligned ( ty_act , ty_asym )             :: :: PtrWellAligned
     | ptrArrayShift ( ty_asym1 ,  ty_act , ty_asym2 ) :: :: PtrArrayShift
@@ -323,7 +323,7 @@ grammar
     | va_copy ( ty_asym )                             :: :: Va_copy
     | va_arg ( ty_asym , ty_act )                     :: :: Va_arg
     | va_end ( ty_asym )                              :: :: Va_end
-  
+
 grammar
 
   mu_paction {{ tex paction }} :: 'M_' ::= {{ auxparam 'TY }} {{ com memory actions with polarity }}
@@ -373,31 +373,33 @@ grammar
 grammar
 
   terminals :: 'terminals_' ::=
-    | \      :: :: lambda    {{ tex \lambda         }}
-    | -->    :: :: red       {{ tex \longrightarrow }}
-    |  ->    :: :: arrow     {{ tex \rightarrow     }}
-    |  ~>    :: :: leadsto   {{ tex \leadsto        }}
-    |  =>    :: :: synths    {{ tex \Rightarrow     }}
-    |  <=    :: :: checks    {{ tex \Leftarrow      }}
-    | |-     :: :: turnstile {{ tex \vdash          }}
-    | inEnv  :: :: inEnv     {{ tex \in             }}
-    | pi     :: :: pi        {{ tex \Pi             }}
-    | forall :: :: forall    {{ tex \forall         }}
-    | --o    :: :: lollipop  {{ tex \multimap       }}
-    | -)     :: :: implies   {{ tex \supset         }}
-    | sigma  :: :: sigma     {{ tex \Sigma          }}
-    | exists :: :: exists    {{ tex \exists         }}
-    | *      :: :: star      {{ tex \star           }}
-    | /\     :: :: and       {{ tex \wedge          }}
-    | /\\    :: :: big_and   {{ tex \bigwedge       }}
-    | neg    :: :: neg       {{ tex \neg            }}
-    | =      :: :: eq        {{ tex =               }}
-    | <>     :: :: neq       {{ tex \neq            }}
-    | =<     :: :: lte       {{ tex \leq            }}
-    | >=     :: :: gte       {{ tex \geq            }}
-    | &      :: :: ampersand {{ tex \ \&            }}
-    | cdot   :: :: cdot      {{ tex \cdot           }}
-    | |      :: :: bar       {{ tex \mid            }}
+    | \      :: :: lambda    {{ tex \lambda                }}
+    | -->    :: :: red       {{ tex \longrightarrow        }}
+    |  ->    :: :: arrow     {{ tex \rightarrow            }}
+    |  ~>    :: :: leadsto   {{ tex \leadsto               }}
+    |  =>    :: :: synths    {{ tex \Rightarrow            }}
+    |  <=    :: :: checks    {{ tex \Leftarrow             }}
+    | |-     :: :: turnstile {{ tex \vdash                 }}
+    | inEnv  :: :: inEnv     {{ tex \in                    }}
+    | pi     :: :: pi        {{ tex \Pi                    }}
+    | forall :: :: forall    {{ tex \forall                }}
+    | --o    :: :: lollipop  {{ tex \multimap              }}
+    | -)     :: :: implies   {{ tex \supset                }}
+    | sigma  :: :: sigma     {{ tex \Sigma                 }}
+    | exists :: :: exists    {{ tex \exists                }}
+    | *s     :: :: star      {{ tex \star                  }}
+    | *      :: :: times     {{ tex \times                 }}
+    | /\     :: :: and       {{ tex \wedge                 }}
+    | /\\    :: :: big_and   {{ tex \bigwedge              }}
+    | neg    :: :: neg       {{ tex \neg                   }}
+    | =      :: :: eq        {{ tex =                      }}
+    | <>     :: :: neq       {{ tex \neq                   }}
+    | =<     :: :: lte       {{ tex \leq                   }}
+    | >=     :: :: gte       {{ tex \geq                   }}
+    | &      :: :: ampersand {{ tex \ \&                   }}
+    | cdot   :: :: cdot      {{ tex \cdot                  }}
+    | |      :: :: bar       {{ tex \mid                   }}
+    | +ptr   :: :: addptr    {{ tex { +_{ \mathrm{ptr} } } }}
 
 
 grammar
@@ -405,8 +407,11 @@ grammar
   Z_t {{ tex z }} :: 'Z_' ::= {{ ocaml Z.t }} {{ phantom }} {{ com OCaml arbitrary-width integer }}
     | of_mem_int ty_mem_int :: M :: of_MemInt {{ ocaml Memory.integer_value_to_num           }}
                                               {{ tex \mathrm{of\_mem\_int}( [[ty_mem_int]] ) }}
-    | of_nat ty_nat         :: M :: of_Nat    {{ ocaml                                       }}
+    | of_nat ty_nat         :: M :: of_Nat    {{ ocaml (* Z.t = Nat_big_num.num *)           }}
                                               {{ tex \mathrm{of\_nat}( [[ty_nat]] )          }}
+    | of_ctype T_ct         :: M :: of_Ctype  {{ ocaml Memory.size_of_ctype ( z_ [[T_ct]] )  }}
+                                              {{ tex \mathrm{of\_ctype}( [[T_ct]] )          }}
+                                              {{ com size of a C type                        }}
 
 grammar
 
@@ -428,10 +433,15 @@ grammar
     | /\\ ( </ index_termi // , // i />    ) :: :: And
 
 
+  arith_op :: '' ::= {{ auxparam 'bt }}
+    | index_term1 * index_term2 :: :: Mul
+
   list_op :: '' ::= {{ auxparam 'bt }}
+    | nil                                :: :: Nil
+    | cons index_term1 index_term2       :: :: Cons    {{ tex [[index_term1]] :: [[index_term2]] }}
     | [ index_term1 , .. , index_termn ] :: :: List
-    | index_term ^ ty_int              :: :: NthList {{ order [[ty_int]] [[index_term]] }}
-                                                     {{ tex [[index_term]]^{([[ty_int]])} }}
+    | index_term ^ ty_int                :: :: NthList {{ order [[ty_int]] [[index_term]] }}
+                                                       {{ tex [[index_term]]^{([[ty_int]])} }}
 
   tuple_op :: '' ::= {{ auxparam 'bt }}
     | ( index_term1 , .. , index_termn ) :: :: Tuple
@@ -439,7 +449,8 @@ grammar
 
 
   pointer_op :: '' ::= {{ auxparam 'bt }}
-    | nullop :: :: Null
+    | nullop                        :: :: Null
+    | index_term1 +ptr index_term2  :: :: AddPointer
 
 
   array_op :: '' ::= {{ auxparam 'bt }}
@@ -455,8 +466,10 @@ grammar
 
 
   index_term_aux :: '' ::= {{ auxparam 'bt }}
+    | arith_op   :: :: Arith_op
     | bool_op    :: :: Bool_op
     | list_op    :: :: List_op
+    | tuple_op   :: :: Tuple_op
     | pointer_op :: :: Pointer_op
     | array_op   :: :: Array_op
     | param_op   :: :: Param_op
@@ -487,7 +500,7 @@ grammar
   ret :: RetTy_ ::= {{ com return types }}
     | sigma tyvar_sym : base_type . ret :: :: Computational
     | exists tyvar_sym : logSort . ret  :: :: Logical
-    | resource * ret                    :: :: Resource
+    | resource *s ret                   :: :: Resource
     | index_term /\ ret                 :: :: Constraint
     | I                                 :: :: I
 
@@ -520,11 +533,11 @@ grammar
 
 grammar
 
-  formula :: 'formula_' ::=          
+  formula :: 'formula_' ::=
     | judgement                                                                        :: :: judgement
     | smt ( N => ret )                                                                 :: :: smt
         {{ com theorem to be proved: $[[ret]]$ only consists of logical constraints }}
-    | Symbol_sym : base_type inEnv C                                                   :: :: xInC
+    | </ Symbol_symi : base_typei inEnv Ci // i />                                     :: :: xInC
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals :: :: structInGlobals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem yi , base_typei , index_termi  // i />   :: :: indexed_infer_mem_value
     | </ Ci ; Li ; Ni |- mu_valuei => yi , base_typei , index_termi  // i />           :: :: indexed_infer_mu_value
@@ -534,7 +547,7 @@ grammar
 defns
   mem_value_jtype :: '' ::=
 
-% serious duplication going on here (could factor out int, ptr, arr, and struct rules)
+% duplication going on here (could factor out int, ptr, arr, and struct rules)
 defn
     C ; L ; N |- ty_mem_value => mem y , base_type , index_term :: :: Val_Obj_Mem :: Val_Obj_Mem_ by
 
@@ -562,7 +575,7 @@ defn
 
     </ C ; L ; N |- ty_mem_valuei => mem yi , base_typei , index_termi  // i />
     --------------------------------------------------------------------------- :: Struct
-    C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri = ty_mem_valuei // i /> } => mem y , struct ty_tag ,  /\\ ( </ [ ty_tag y . Symbol_identifieri _bt / yi ] index_termi // i /> ) _bt 
+    C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri = ty_mem_valuei // i /> } => mem y , struct ty_tag ,  /\\ ( </ [ ty_tag y . Symbol_identifieri _bt / yi ] index_termi // i /> ) _bt
 
     % NOT IMPLEMENTED: union Symbol_sym Symbol_identifier
 
@@ -598,7 +611,7 @@ defn
     Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
     </ C ; L ; N |- ty_mem_valuei => mem yi , base_typei , index_termi  // i />
     ---------------------------------------------------------------------------------------------------------------------------- :: Struct
-    C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => obj y , struct ty_tag ,  /\\ ( </ [ ty_tag y . Symbol_identifieri _bt / yi ] index_termi // i /> ) _bt 
+    C ; L ; N |- ( struct ty_tag ) { </ . Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => obj y , struct ty_tag ,  /\\ ( </ [ ty_tag y . Symbol_identifieri _bt / yi ] index_termi // i /> ) _bt
 
 
     % NOT IMPLEMENTED: union
@@ -666,18 +679,39 @@ defn
     ------------------------------------------------- :: Error
     C ; L ; N |- error ( ty_string , ty_asym ) => ret
 
-    % TODO ctor - not spine, type as simple function applications
-    % Nil T_bt    :: :: nil         {{ com empty list                     }} % : [bTy] 
-    % Cons        :: :: cons        {{ com list cons                      }} % : bTy -> [bTy] -> [bTy] 
-    % Tuple       :: :: tuple       {{ com tuple                          }} % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
-    % Array       :: :: array       {{ com C array                        }} % : bTy -> ... -> bTy -> array bTy 
-    % Specified   :: :: specified   {{ com non-unspecified loaded value   }} % : objTy -> loaded objTy 
+
+    ---------------------------------------------------------------------------- :: Ctor_Nil
+    C ; L ; N |- Nil base_type ( ) => sigma y : [ base_type ] . y = nil _bt _bt /\ I
+
+
+    x1 : base_type inEnv C
+    x2 : [ base_type ] inEnv C
+    --------------------------------------------------------------------------------- :: Ctor_Cons
+    C ; L ; N |- Cons ( x1, x2 ) => sigma y : [ base_type ] . y = cons x1 x2 _bt _bt /\ I
+
+
+    x1 : base_type1 inEnv C .. xn : base_typen inEnv C
+    --------------------------------------------------------------------------------------------------------------------- :: Ctor_Tuple
+    C ; L ; N |- Tuple ( x1 , .. , xn ) => sigma y : ( base_type1 , .. , base_typen ) . y = ( x1 , .. , xn ) _bt _bt /\ I
+
+
+    % TODO - empty arrays
+
+    x1 : base_type inEnv C .. xn : base_type inEnv C
+    ------------------------------------------------------------------------------------------------------------------------------------------------- :: Ctor_Array
+    C ; L ; N |- Array ( x1, .. , xn ) => sigma y : array base_type . /\\ ( y [ int Z_t1 ] _bt = x1 _bt , .. , y [ int Z_tn ] _bt = xn _bt ) _bt /\ I
+
+
+    x : base_type inEnv C
+    -------------------------------------------------------------------- :: Ctor_Specified
+    C ; L ; N |- Specified ( x ) => sigma y : base_type . y = x _bt /\ I
+
 
     % Unimplemented:
-    % Ivmax       :: :: ivmax       {{ com max integer value              }} % : ctype -> integer 
-    % Ivmin       :: :: ivmin       {{ com min integer value              }} % : ctype -> integer 
-    % Ivsizeof    :: :: ivsizeof    {{ com sizeof value                   }} % : ctype -> integer 
-    % Ivalignof   :: :: ivalignof   {{ com alignof value                  }} % : ctype -> integer 
+    % Ivmax       :: :: ivmax       {{ com max integer value              }} % : ctype -> integer
+    % Ivmin       :: :: ivmin       {{ com min integer value              }} % : ctype -> integer
+    % Ivsizeof    :: :: ivsizeof    {{ com sizeof value                   }} % : ctype -> integer
+    % Ivalignof   :: :: ivalignof   {{ com alignof value                  }} % : ctype -> integer
     % IvCOMPL     :: :: ivCOMPL     {{ com bitwise complement             }} % : ctype -> integer -> integer
     % IvAND       :: :: ivAND       {{ com bitwise AND                    }} % : ctype -> integer -> integer -> integer
     % IvOR        :: :: ivOR        {{ com bitwise OR                     }} % : ctype -> integer -> integer -> integer
@@ -687,7 +721,13 @@ defn
     % Fvfromint   :: :: fvfromint   {{ com cast integer to floating value }} % : integer -> floating
     % Ivfromfloat :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
 
-    % TODO array_shift, member_shift - not spine, type as simple function applications
+
+    x1 : loc inEnv C
+    x2 : integer inEnv C
+    ------------------------------------------------------------------------------------------------------------------- :: Array_Shift
+    C ; L ; N |- array_shift ( x1 , T_ct , x2 ) => sigma y : loc . y = x1 +ptr x2 * int of_ctype T_ct _bt  _bt _bt /\ I
+
+    % TODO member_shift
 
     x : bool inEnv C
     ------------------------------------------------------------------ :: Not
@@ -698,7 +738,7 @@ defn
     % arithmetic operators (integer -> integer -> integer)
     % +     :: :: Add   {{ tex \texttt{+}         }} {{ com addition       }}
     % -     :: :: Sub   {{ tex \texttt{-}         }} {{ com subtraction    }}
-    % *     :: :: Mul   {{ tex \texttt{*}         }} {{ com multiplication }} 
+    % *     :: :: Mul   {{ tex \texttt{*}         }} {{ com multiplication }}
     % /     :: :: Div   {{ tex \texttt{/}         }} {{ com division       }}
     % rem_t :: :: Rem_t                              {{ com modulus        }}
     % rem_f :: :: Rem_f                              {{ com remainder      }}
@@ -742,7 +782,7 @@ defns
 defn
   C ; L ; N |- mu_pexpr => ret :: :: PExpr_ :: PExpr_ by
 
-  
+
   C ; L ; N |- mu_pexpr_aux => ret
   ------------------------------------------------------- :: Aux
   C ; L ; N |- ty_loc annots tyvar_TY mu_pexpr_aux => ret
