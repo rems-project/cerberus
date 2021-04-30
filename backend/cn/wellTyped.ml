@@ -571,9 +571,9 @@ module Make (G : sig val global : Global.t end) = struct
          in
          return ()
       | QPredicate p -> 
-         let@ () = WIT.welltyped loc names local BT.Loc p.start in
-         let@ () = WIT.welltyped loc names local BT.Loc p.stop in
-         let@ () = WIT.welltyped loc names local BT.Integer p.step in
+         let@ () = WIT.welltyped loc names local BT.Loc p.pointer in
+         let@ () = WIT.welltyped loc names local BT.Integer p.element_size in
+         let@ () = WIT.welltyped loc names local BT.Integer p.length in
          let@ () = 
            ListM.iterM (fun it ->
                WIT.welltyped loc names local BT.Loc it

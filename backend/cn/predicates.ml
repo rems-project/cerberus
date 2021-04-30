@@ -115,15 +115,12 @@ let ctype_predicate struct_layouts ct =
      (* todo: connect with user-annotation *)
      Debug_ocaml.error "representation: array of unknown length"
   | Array (ct', Some length) ->
-     let start = pointer_t in
-     let step = z_ (size_of_ctype ct') in
-     let stop = addPointer_ (start, mul_ (step, int_ length)) in
      let i = Sym.fresh () in
      let i_t = sym_ (i, BT.Integer) in
      let qpredicate = {
-         start; 
-         step; 
-         stop; 
+         pointer = pointer_t; 
+         element_size = z_ (size_of_ctype ct'); 
+         length = int_ length;
          moved = []; 
          unused = true;
          name = Ctype ct';

@@ -374,9 +374,9 @@ module Make (G : sig val global : Global.t end) = struct
        then return res 
        else fail loc (error ())
     | QPredicate p, QPredicate p' 
-         when IT.equal p.start p'.start &&
-              IT.equal p.step p'.step &&
-              IT.equal p.stop p'.stop &&
+         when IT.equal p.pointer p'.pointer &&
+              IT.equal p.element_size p'.element_size &&
+              IT.equal p.length p'.length &&
               List.equal IT.equal p.moved p'.moved &&
               p.unused = p'.unused &&
               predicate_name_equal p.name p'.name &&
@@ -386,8 +386,7 @@ module Make (G : sig val global : Global.t end) = struct
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
        if Solver.holds_forall local [(p.i, BT.Integer)] 
             (impl_ (and_ [bool_ p.unused; 
-                          is_qpredicate_instance p 
-                            (qpredicate_index_to_pointer p (sym_ (p.i, Integer)))], 
+                          is_qpredicate_instance_index p (sym_ (p.i, Integer))],
                     and_ (List.map eq_ constrs)))
        then return res 
        else fail loc (error ())
@@ -661,7 +660,7 @@ module Make (G : sig val global : Global.t end) = struct
                        p'.unused && 
                        Solver.holds local (
                            let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
-                           and_ (is_qpredicate_instance p' p.pointer ::
+                           and_ (is_qpredicate_instance_pointer p' p.pointer ::
                                  List.map2 eq__ p.iargs iargs')
                          )
                     then
@@ -711,14 +710,14 @@ module Make (G : sig val global : Global.t end) = struct
                  match re, found with
                  | QPredicate p', None ->
                     if predicate_name_equal p.name p'.name &&
-                       p'.unused &&
+                       p.unused = p'.unused &&
                        Solver.holds local (
-                           and_ [eq_ (p.start, p'.start);
-                                 eq_ (p.step, p'.step);
-                                 eq_ (p.stop, p'.stop);
+                           and_ [eq_ (p.pointer, p'.pointer);
+                                 eq_ (p.element_size, p'.element_size);
+                                 eq_ (p.length, p'.length);
                                  forall_ (p.i, BT.Integer)
                                    (impl_ 
-                                      (is_qpredicate_instance p (sym_ (p.i, Integer)),
+                                      (is_qpredicate_instance_index p' (sym_ (p.i, Integer)),
                                        let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
                                        and_ (List.map2 eq__ p.iargs iargs')))]
                              )
@@ -736,7 +735,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ (oargs, local) = 
                 ListM.fold_leftM (fun (oargs, local) moved_pointer ->
                     (* moved_pointer assumed to satisfy
-                       start-stop-step condition *)
+                       pointer-element_size-length condition *)
                     let index = qpredicate_pointer_to_index p moved_pointer in
                     let request = {
                         name = p.name; 
