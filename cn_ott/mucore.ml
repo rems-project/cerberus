@@ -102,6 +102,12 @@ type
 
 
 type 
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
+
+
+type 
 'TY mu_tpexpr_aux =  (* top-level pure expressions *)
    M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEcase of 'TY asym * ((mu_pattern * 'TY mu_tpexpr)) list (* pattern matching *)
@@ -114,66 +120,75 @@ and 'TY mu_tpexpr =  (* pure top-level pure expressions with location and annota
 
 
 type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
-
-
-type 
 lit = 
    Lit_Sym of 'sym
  | Lit_Unit
  | Lit_Bool of bool
  | Lit_Z of Z.t
+ | Lit_Q of ( int * int )
  | Lit_Pointer of Z.t
 
 
 type 
 'bt bool_op = 
-   Not of 'bt index_term
- | Eq of 'bt index_term * 'bt index_term
- | And of ('bt index_term) list
+   Not of 'bt term
+ | Eq of 'bt term * 'bt term
+ | And of ('bt term) list
 
 and 'bt arith_op = 
-   Mul of 'bt index_term * 'bt index_term
+   Mul of 'bt term * 'bt term
 
 and 'bt list_op = 
    Nil
- | Cons of 'bt index_term * 'bt index_term
- | List of ('bt index_term) list
- | NthList of int * 'bt index_term
+ | Cons of 'bt term * 'bt term
+ | List of ('bt term) list
+ | NthList of int * 'bt term
 
 and 'bt tuple_op = 
-   Tuple of ('bt index_term) list
- | NthTuple of 'bt index_term * int
+   Tuple of ('bt term) list
+ | NthTuple of 'bt term * int
 
 and 'bt pointer_op = 
    Null
- | AddPointer of 'bt index_term * 'bt index_term
+ | AddPointer of 'bt term * 'bt term
+
+and 'bt option_op = 
+   Nothing of BT.t
+ | Something of 'bt term
 
 and 'bt array_op = 
-   ArrayGet of 'bt index_term * Z.t
+   ArrayGet of 'bt term * Z.t
 
 and 'bt param_op = 
-   App of 'bt index_term * ('bt index_term) list
+   App of 'bt term * ('bt term) list
 
 and 'bt struct_op = 
-   StructMember of tag * 'bt index_term * Symbol.identifier
+   StructMember of tag * 'bt term * Symbol.identifier
 
-and 'bt index_term_aux = 
+and 'bt term_aux = 
    Arith_op of 'bt arith_op
  | Bool_op of 'bt bool_op
  | List_op of 'bt list_op
  | Tuple_op of 'bt tuple_op
  | Pointer_op of 'bt pointer_op
  | Array_op of 'bt array_op
+ | Option_op of 'bt option_op
  | Param_op of 'bt param_op
  | Struct_op of 'bt struct_op
 
-and 'bt index_term = 
+and 'bt term = 
    Lit of lit
- | IT of 'bt index_term_aux * 'bt
+ | IT of 'bt term_aux * 'bt
 
+
+type 
+resource = 
+   Point of type point = { pointer: IT.t; size: Z.t; content: IT.t; permission: IT.t; }
+
+
+type 
+'TY mu_paction =  (* memory actions with polarity *)
+   
 
 type 
 'TY mu_memop =  (* operations involving the memory state *)
@@ -199,15 +214,11 @@ type
 
 
 type 
-'TY mu_paction =  (* memory actions with polarity *)
-   
-
-type 
 ret =  (* return types *)
    RetTy_Computational of 'sym * base_type * ret
- | RetTy_Logical of 'sym * ret
- | RetTy_Resource of ret
- | RetTy_Constraint of 'bt index_term * ret
+ | RetTy_Logical of 'sym * base_type * ret
+ | RetTy_Resource of resource * ret
+ | RetTy_Constraint of 'bt term * ret
  | RetTy_I
 
 
@@ -219,11 +230,6 @@ type
  | M_Eskip (* skip *)
  | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
  | M_Eproc of Symbol.sym Core.generic_name * ('TY asym) list (* procedure call *)
-
-
-type 
-'TY mu_expr =  (* (effectful) expressions with location and annotations *)
-   M_EExpr of Location_ocaml.t * annot list * 'TY mu_expr_aux
 
 
 type 
@@ -245,6 +251,16 @@ type
 
 
 type 
+'TY mu_expr =  (* (effectful) expressions with location and annotations *)
+   M_EExpr of Location_ocaml.t * annot list * 'TY mu_expr_aux
+
+
+type 
+'TY mu_action = 
+   M_Action of Location_ocaml.t * 'TY mu_action_aux
+
+
+type 
 'TY mu_texpr_aux =  (* top-level expressions *)
    M_Elet of 'TY mu_sym_or_pattern * 'TY mu_pexpr * 'TY mu_texpr
  | M_Ewseq of mu_pattern * 'TY mu_expr * 'TY mu_texpr (* weak sequencing *)
@@ -263,18 +279,14 @@ and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
 
 
 type 
-'TY mu_action = 
-   M_Action of Location_ocaml.t * 'TY mu_action_aux
-
-
-type 
 arg =  (* argument types *)
    ArgTy_Computational of 'sym * base_type * arg
- | ArgTy_Logical of 'sym * arg
- | ArgTy_Resource of arg
- | ArgTy_Constraint of 'bt index_term * arg
+ | ArgTy_Logical of 'sym * base_type * arg
+ | ArgTy_Resource of resource * arg
+ | ArgTy_Constraint of 'bt term * arg
  | ArgTy_I
 
+(** definitions *)
 (** definitions *)
 (** definitions *)
 (** definitions *)
