@@ -165,16 +165,21 @@ and 'bt param_op =
 and 'bt struct_op = 
    StructMember of tag * 'bt term * Symbol.identifier
 
+and 'bt ct_pred = 
+   Representable of Sctypes.t * 'bt term
+ | AlignedI of 'bt term * 'bt term
+
 and 'bt term_aux = 
    Arith_op of 'bt arith_op
  | Bool_op of 'bt bool_op
- | List_op of 'bt list_op
  | Tuple_op of 'bt tuple_op
+ | Struct_op of 'bt struct_op
  | Pointer_op of 'bt pointer_op
+ | List_op of 'bt list_op
  | Array_op of 'bt array_op
+ | CT_pred of 'bt ct_pred
  | Option_op of 'bt option_op
  | Param_op of 'bt param_op
- | Struct_op of 'bt struct_op
 
 and 'bt term = 
    Lit of lit
@@ -182,8 +187,15 @@ and 'bt term =
 
 
 type 
+predicate_name =  (* names of predicates *)
+   Ctype of Sctypes.t
+ | Id of string
+
+
+type 
 resource = 
    Point of type point = { pointer: IT.t; size: Z.t; content: IT.t; permission: IT.t; }
+ | Predicate of type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; unused: bool; }
 
 
 type 
@@ -256,8 +268,12 @@ type
 
 
 type 
-'TY mu_action = 
-   M_Action of Location_ocaml.t * 'TY mu_action_aux
+arg =  (* argument types *)
+   ArgTy_Computational of 'sym * base_type * arg
+ | ArgTy_Logical of 'sym * base_type * arg
+ | ArgTy_Resource of resource * arg
+ | ArgTy_Constraint of 'bt term * arg
+ | ArgTy_I
 
 
 type 
@@ -279,12 +295,8 @@ and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
 
 
 type 
-arg =  (* argument types *)
-   ArgTy_Computational of 'sym * base_type * arg
- | ArgTy_Logical of 'sym * base_type * arg
- | ArgTy_Resource of resource * arg
- | ArgTy_Constraint of 'bt term * arg
- | ArgTy_I
+'TY mu_action = 
+   M_Action of Location_ocaml.t * 'TY mu_action_aux
 
 (** definitions *)
 (** definitions *)
