@@ -18,7 +18,7 @@ let parse_condition default_label (loc, string) =
   let lexbuf = Lexing.from_string string in
   let () = 
     let open Location_ocaml in
-    lexbuf.lex_curr_p <-
+    Lexing.set_position lexbuf
       (* revisit *)
       begin match Location_ocaml.to_raw loc with
       | Loc_unknown -> lexbuf.lex_curr_p

@@ -10,10 +10,14 @@ embed {{ tex-preamble
 metavar ty_tag {{ tex tag }} ::= {{ ocaml tag }} {{ phantom }}
   {{ com OCaml type for struct/union tag }}
 
-metavar ty_act {{ tex \tau }} ::= {{ ocaml 'TY act }} {{ phantom }}
-  {{ com OCaml type for an annotated C type }}
-
 grammar
+
+  Sctypes_t , ct {{ tex \tau }} :: '' ::= {{ ocaml Sctypes.t }} {{ phantom }} {{ com C type }}
+    | ct ast :: X :: Pointer
+
+  ty_act {{ tex \tau }} :: 'Ty_act_of' ::= {{ ocaml 'TY act }} {{ phantom }} {{ com OCaml type for an annotated C type }}
+    | ct :: X :: ct
+
 
   base_type {{ tex \beta }} :: '' ::= {{ com base types }}
     | unit                                      ::   :: Unit    {{ com unit              }}
@@ -72,7 +76,7 @@ grammar
 
   Symbol_sym {{ tex ident }} :: '' ::= {{ ocaml Symbol.sym }} {{ phantom }} {{ com Ott-hack, ignore }}
     | tyvar_sym :: X :: Tyvar_Sym
-    | ty_tag    :: X :: Tag
+    | ty_tag    :: X :: Ty_Tag
 
 
 grammar
@@ -87,9 +91,6 @@ metavar ty_mem_int {{ tex mem\_int }} ::= {{ ocaml Impl_mem.integer_value }} {{ 
 metavar Symbol_identifier {{ tex member }} ::= {{ ocaml Symbol.identifier }} {{ phantom }}
   {{ com C struct/union member name }}
 
-metavar T_ct {{ tex \tau }} ::= {{ ocaml T.ct }} {{ phantom }}
-  {{ com C type }}
-
 metavar annots ::= {{ ocaml annot list }} {{ phantom }}
   {{ com annotations }}
 
@@ -99,6 +100,9 @@ metavar ty_nat {{ tex nat }} ::= {{ ocaml Nat_big_num.num }} {{ phantom }}
 indexvar n, i ::= {{ phantom }} {{ com index variables }}
 
 grammar
+
+  T_ct {{ tex \tau }} :: 'T_ct_of_' ::= {{ ocaml T.ct }} {{ phantom }} {{ com Ott-hack, ignore }}
+    | ct :: X :: ct
 
   ty_mem_ptr {{ tex mem\_ptr }} :: 'PV' ::= {{ ocaml Impl_mem.pointer_value }} {{ phantom }} {{ com pointer values }}
     | nullptr            :: :: null       {{ com null pointer }}
@@ -241,7 +245,6 @@ grammar
 
 grammar
 
-  % TODO: binders
   mu_tpexpr_aux {{ tex tpexpr\_aux }} :: 'M_PE' ::= {{ auxparam 'TY }} {{ com top-level pure expressions }}
     | undef ty_loc UB_name                                       ::   :: undef {{ com undefined behaviour }}
     | case ty_asym of </ | mu_patterni => mu_tpexpri // i /> end ::   :: case  {{ com pattern matching    }} % TODO: binding
@@ -352,7 +355,7 @@ grammar
 grammar
 
    mu_texpr_aux {{ tex texpr\_aux }} :: 'M_E' ::= {{ auxparam 'TY }} {{ com top-level expressions }}
-    | let mu_sym_or_pattern = mu_pexpr in mu_texpr                :: :: let % TODO: bindings
+    | let mu_sym_or_pattern = mu_pexpr in mu_texpr                :: :: let                                          % TODO: bindings
     | let weak mu_pattern = mu_expr in mu_texpr                   :: :: wseq  {{ com weak sequencing              }} % TODO: bindings
     | let strong mu_sym_or_pattern = mu_expr in mu_texpr          :: :: sseq  {{ com strong sequencing            }} % TODO: bindings
     | case ty_asym with </ | mu_patterni => mu_texpri // i /> end :: :: case  {{ com pattern matching             }} % TODO: bindings
@@ -404,20 +407,21 @@ grammar
     | |      :: :: bar       {{ tex \mid                             }}
     | +ptr   :: :: addptr    {{ tex \mathbin{ {+}_{ \mathrm{ptr} } } }}
     | |->    :: :: mapsto    {{ tex \mapsto                          }}
+    | ast  :: :: ast         {{ tex \ast                             }}
 
 
 grammar
 
   Z_t {{ tex z }} :: 'Z_' ::= {{ ocaml Z.t }} {{ phantom }} {{ com OCaml arbitrary-width integer }}
-    | of_mem_int ty_mem_int :: M :: of_MemInt {{ ocaml Memory.integer_value_to_num           }}
-                                              {{ tex \mathrm{of\_mem\_int}( [[ty_mem_int]] ) }}
-    | of_nat ty_nat         :: M :: of_Nat    {{ ocaml (* Z.t = Nat_big_num.num *)           }}
-                                              {{ tex \mathrm{of\_nat}( [[ty_nat]] )          }}
-    | of_ctype T_ct         :: M :: of_Ctype  {{ ocaml Memory.size_of_ctype ( z_ [[T_ct]] )  }}
-                                              {{ tex \mathrm{of\_ctype}( [[T_ct]] )          }}
-                                              {{ com size of a C type                        }}
-    | ptr_size              :: M :: Ptr_size  {{ ocaml Memory.size_of_pointer                }}
-                                              {{ com size of a pointer                       }}
+    | of_mem_int ty_mem_int :: M :: of_MemInt {{ ocaml Memory.integer_value_to_num            }}
+                                              {{ tex \mathrm{of\_mem\_int}( [[ty_mem_int]] )  }}
+    | of_nat ty_nat         :: M :: of_Nat    {{ ocaml (* Z.t = Nat_big_num.num *)            }}
+                                              {{ tex \mathrm{of\_nat}( [[ty_nat]] )           }}
+    | of_ctype ct           :: M :: of_Ctype  {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
+                                              {{ tex \mathrm{of\_ctype}( [[ct]] )             }}
+                                              {{ com size of a C type                         }}
+    | ptr_size              :: M :: Ptr_size  {{ ocaml Memory.size_of_pointer                 }}
+                                              {{ com size of a pointer                        }}
 
 grammar
 
@@ -481,16 +485,22 @@ grammar
     | ty_tag term . Symbol_identifier :: :: StructMember {{ tex [[term]] . [[Symbol_identifier]] }}
 
 
+  ct_pred :: '' ::= {{ auxparam 'bt }}
+    | representable ( ct , term ) :: :: Representable
+    | alignedI ( term1 , term2 )  :: :: AlignedI
+
+
   term_aux :: '' ::= {{ auxparam 'bt }}
     | arith_op   :: :: Arith_op
     | bool_op    :: :: Bool_op
-    | list_op    :: :: List_op
     | tuple_op   :: :: Tuple_op
+    | struct_op  :: :: Struct_op
     | pointer_op :: :: Pointer_op
+    | list_op    :: :: List_op
     | array_op   :: :: Array_op
+    | ct_pred    :: :: CT_pred
     | option_op  :: :: Option_op
     | param_op   :: :: Param_op
-    | struct_op  :: :: Struct_op
 
 
   ty_bt {{ tex bt }} :: '' ::= {{ ocaml 'bt }} {{ phantom }} {{ com Ott-hack, ignore }}
@@ -502,7 +512,7 @@ grammar
 
 
   term :: '' ::= {{ auxparam 'bt }}
-    | lit                          ::   :: Lit
+    | lit                          ::   :: Lit % TODO: move this into term_aux
     | term_aux ty_bt               ::   :: IT
     | ( term )                     :: S :: Paren {{ ocaml [[term]] }} {{ com parentheses }}
     | [  term1 / tyvar_sym ] term2 :: M :: Subs  {{ ocaml INDEX_TERM_SUB }}
@@ -513,13 +523,32 @@ grammar
   IT_t :: '' ::= {{ ocaml IT.t }} {{ phantom }} {{ com Ott-hack, ignore }}
     | term :: X :: term
 
+
+  IT_t_list :: '' ::= {{ auxparam 'bt }} {{ ocaml IT.t list }} {{ phantom }} {{ com Ott-hack, ignore }}
+    | [ </ IT_ti // , // i /> ] :: X :: Term_list
+  
+
   point :: '' ::= {{ ocaml type point = { pointer: IT.t; size: Z.t; content: IT.t; permission: IT.t; } }} {{ phantom }} {{ com points-to predicate }}
     | IT_t1 |-> ( Z_t , IT_t2 ) IT_t3 :: :: Points_to
       {{ tex [[IT_t1]] \mathrel{ {[[|->]]}_{[[Z_t]], [[IT_t2]]} } [[IT_t3]] }}
       {{ ocaml { pointer = [[IT_t1]] ; size = [[Z_t]] ; content = [[IT_t3]] ; permission = [[IT_t2]] } }}
 
+
+  predicate_name :: '' ::= {{ com names of predicates }}
+    | Sctypes_t :: :: Ctype
+    | ty_string :: :: Id
+
+
+  predicate :: '' ::= {{ ocaml type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; unused: bool; } }} {{ phantom }} {{ com arbitrary predicate }}
+    | predicate_name ( ty_bool ) ( IT_t1 , IT_t_list1 |-> IT_t_list2 ) :: :: Predicate_def
+      {{ tex [[predicate_name]] ( [[IT_t1]] , [[IT_t_list1]] \mapsto [[IT_t_list2]] ) }}
+      {{ ocaml { name = [[predicate_name]] ; pointer = [[IT_t1]] ; iargs = [[IT_t_list1]] ; oargs = [[IT_t_list2]] ; unsued = [[ty_bool]] } }}
+
+
   resource :: '' ::=
     | point     :: :: Point
+    | predicate :: :: Predicate
+
 
 grammar
 
@@ -764,10 +793,13 @@ defn
 
     x1 : loc inEnv C
     x2 : integer inEnv C
-    ------------------------------------------------------------------------------------------------------------------- :: Array_Shift
-    C ; L ; N |- array_shift ( x1 , T_ct , x2 ) => sigma y : loc . y = x1 +ptr x2 * int of_ctype T_ct _bt  _bt _bt /\ I
+    --------------------------------------------------------------------------------------------------------------- :: Array_Shift
+    C ; L ; N |- array_shift ( x1 , ct , x2 ) => sigma y : loc . y = x1 +ptr x2 * int of_ctype ct _bt  _bt _bt /\ I
+
 
     % TODO member_shift
+
+
     --------------------------------------------------------------------- :: Not
     C ; L ; N |- not ( x ) => sigma y : bool . y = ( neg x _bt ) _bt /\ I
 
@@ -878,18 +910,21 @@ defns
 defn
   C ; L ; N ; R |- mu_action_aux => ret :: :: Action :: Action_ by
 
+  % TODO: update to have values
   x : integer inEnv C
-  ------------------------------------------------------------------------------------------------------------------------------------- :: Create
-  C ; L ; N ; cdot |- create ( x , ty_act ) Symbol_prefix => sigma y : loc . y |-> ( ptr_size , one ) none of_ctype ( ty_act ) _bt *s I
+  ---------------------------------------------------------------------------------------------------------------------------------------------------------------- :: Create
+  C ; L ; N ; cdot |- create ( x , ct ) Symbol_prefix => sigma y : loc . exists y' : of_ctype ( ct ) . representable ( ct ast , y ) _bt /\ alignedI ( x , y ) _bt /\ ct ( true ) ( y , [ ] |-> [ y' , false ] ) *s I
 
-  % NOT IMPLEMENTED
-  x : integer inEnv C
-  ------------------------------------------------------------------------------------------------------------------------------------- :: Create
-  C ; L ; N ; cdot |- create_readonly ( x , ty_act ) Symbol_prefix => sigma y : loc . y |-> ( ptr_size , one ) none of_ctype ( ty_act ) _bt *s I
+  % NOT IMPLEMENTED:
+  % C ; L ; N ; cdot |-> create_readonly ( x1 , ty_act , x2 ) Symbol_prefix => ??
+
+  % TODO: update for implementation - storing values has booleans, not none/some
+  % x1 : loc inEnv C
+  % x2 : of_ctype ( ty_act ) inEnv C
+  % ------------------------------------------------------------------------------------------------------------------------------------------------------------------ :: Store
+  % C ; L ; N ; cdot , x1 |-> ( ptr_size , one ) term |- store ( ty_bool , ty_act , x1 , x2 , Cmm_memory_order ) => sigma y : unit . x1 |-> ( ptr_size , one ) x2 *s I
 
 % mu_action_aux {{ tex action\_aux }} :: 'M_' ::= {{ auxparam 'TY }} {{ com memory actions }}
-%   | create ( ty_asym , ty_act ) Symbol_prefix                                                           :: :: Create
-%   | create_readonly ( ty_asym1 , ty_act , ty_asym2 ) Symbol_prefix                                      :: :: CreateReadOnly
 %   | alloc ( ty_asym1 , ty_asym2 ) Symbol_prefix                                                         :: :: Alloc
 %   | kill ( m_kill_kind , ty_asym )                                                                      :: :: Kill {{ com the boolean indicates whether the action is dynamic (i.e. free()) }}
 %   | store ( ty_bool , ty_act , ty_asym1 , ty_asym2 , Cmm_memory_order )                                 :: :: Store {{ com the boolean indicates whether the store is locking }}
@@ -904,27 +939,24 @@ defn
 %   | linux_rmw ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                               :: :: LinuxRMW
 
 defn
-  C ; L ; N ; R |- mu_expr_aux <= ret :: :: Expr_Aux :: Expr_Aux_ by
+  C ; L ; N ; R |- mu_expr_aux => ret :: :: Expr_Aux :: Expr_Aux_ by
 
 
-  C ; L ; N |- mu_pexpr => ret'
-  smt ( N , ret' => ret )
+  C ; L ; N |- mu_pexpr => ret
   -------------------------------------------- :: Pure
-  C ; L ; N ; cdot |- pure ( mu_pexpr ) <= ret
+  C ; L ; N ; cdot |- pure ( mu_pexpr ) => ret
 
 
-  C ; L ; N ; R |- mu_action_aux => ret'
-  smt ( N , ret' => ret )
+  C ; L ; N ; R |- mu_action_aux => ret
   -------------------------------------------- :: Action
-  C ; L ; N ; R |- ty_loc mu_action_aux <= ret
+  C ; L ; N ; R |- ty_loc mu_action_aux => ret
 
 
-  C ; L ; N ; R |- mu_action_aux => ret'
-  smt ( N , ret => ret )
-  ------------------------------------------------------------------ :: Neg_Action
-  C ; L ; N ; cdot , resource |- neg ( ty_loc mu_action_aux ) <= ret
+  C ; L ; N ; R |- mu_action_aux => ret
+  ---------------------------------------------------- :: Neg_Action
+  C ; L ; N ; R |- neg ( ty_loc mu_action_aux ) => ret
 
   % memop ( mu_memop )                                    :: :: memop  {{ com pointer op involving memory }}
   % skip                                                  :: :: skip   {{ com skip                        }}
   % ccall ( ty_act , ty_asym , </ ty_asymi // , // i /> ) :: :: ccall  {{ com C function call             }}
-  % pcall ( mu_name , </ ty_asymi // , // i /> )          :: :: proc   {{ com procedure call              }}        
+  % pcall ( mu_name , </ ty_asymi // , // i /> )          :: :: proc   {{ com procedure call              }}

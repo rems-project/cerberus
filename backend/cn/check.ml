@@ -1133,7 +1133,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ vts = ListM.mapM (infer_loaded_value loc) items in
          infer_array loc vts
       | M_OVstruct (tag, fields) -> 
-         let mvals : ( member * _ ) list = List.map (fun (member,(_ : CT.t) ,mv) -> (member, mv)) fields in
+         let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
          infer_struct loc tag mvals       
       | M_OVunion (tag, id, mv) -> 
          infer_union loc tag id mv
