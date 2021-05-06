@@ -107,7 +107,7 @@ Install the common dependencies and the following extra ones:
 * z3        (4.8.6)
 * angstrom  (4.06.0)
 * lwt       (3.3.0)
-* cohttp    (1.1.0)
+* cohttp    (2.5.5)
 * base64    (2.2.0)
 * cohttp-lwt-unix (1.0.3)
 * ezgzip    (0.2.0)

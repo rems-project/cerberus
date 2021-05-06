@@ -1,6 +1,6 @@
 opam-version: "2.0"
-synopsis: "The Cerberus C semantics (pre-release snapshot, not to be used for development)"
-description: "The Cerberus C semantics and related tools (pre-release snapshot, not to be used for development)."
+synopsis: "The Cerberus C semantics"
+description: "The Cerberus C semantics and related tools."
 maintainer: ["Kayvan Memarian <kayvan.memarian@cl.cam.ac.uk>"]
 authors: [
   "Kayvan Memarian"

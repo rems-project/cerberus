@@ -669,6 +669,9 @@ let cerberus ~rheader ~conf ~flow content =
 (* GET and POST *)
 
 let head uri path =
+  (* without this `resolve_local_file` doesn't catch .. followed by the / in hexa (%2f),
+     resulting in a full filesytem disclosure vulnerability *)
+  let uri = Uri.(of_string (pct_decode (to_string uri))) in
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -676,7 +679,7 @@ let head uri path =
   in
   let check_local_file () =
     let docroot = (!webconf()).docroot in
-    let filename = Server.resolve_local_file ~docroot ~uri in
+    let filename = Cohttp.Path.resolve_local_file ~docroot ~uri in
     if is_regular filename && Sys.file_exists filename then
         Server.respond ~status:`OK ~body:`Empty ()
     else forbidden path
@@ -693,6 +696,9 @@ let head uri path =
 
 
 let get ~rheader ~flow uri path =
+  (* without this `resolve_local_file` doesn't catch .. followed by the / in hexa (%2f),
+     resulting in a full filesytem disclosure vulnerability *)
+     let uri = Uri.(of_string (pct_decode (to_string uri))) in
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -700,7 +706,7 @@ let get ~rheader ~flow uri path =
   in
   let docroot = (!webconf()).docroot in
   let get_local_file () =
-    let filename = Server.resolve_local_file ~docroot ~uri in
+    let filename = Cohttp.Path.resolve_local_file ~docroot ~uri in
     if is_regular filename then
       respond_file ~rheader filename
     else forbidden path
