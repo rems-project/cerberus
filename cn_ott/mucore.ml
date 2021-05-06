@@ -30,6 +30,17 @@ and 'TY mu_loaded_value =  (* potentially unspecified C object values *)
 
 
 type 
+'TY mu_value =  (* Core values *)
+   M_Vobject of 'TY mu_object_value (* C object value *)
+ | M_Vloaded of 'TY mu_loaded_value (* loaded C object value *)
+ | M_Vunit (* unit *)
+ | M_Vtrue (* boolean true *)
+ | M_Vfalse (* boolean false *)
+ | M_Vlist of T.bt * ('TY mu_value) list (* list *)
+ | M_Vtuple of ('TY mu_value) list (* tuple *)
+
+
+type 
 mu_ctor =  (* data constructors *)
    M_Cnil of T.bt (* empty list *)
  | M_Ccons (* list cons *)
@@ -46,17 +57,6 @@ mu_ctor =  (* data constructors *)
  | M_Cspecified (* non-unspecified loaded value *)
  | M_Cfvfromint (* cast integer to floating value *)
  | M_Civfromfloat (* cast floating to integer value *)
-
-
-type 
-'TY mu_value =  (* Core values *)
-   M_Vobject of 'TY mu_object_value (* C object value *)
- | M_Vloaded of 'TY mu_loaded_value (* loaded C object value *)
- | M_Vunit (* unit *)
- | M_Vtrue (* boolean true *)
- | M_Vfalse (* boolean false *)
- | M_Vlist of T.bt * ('TY mu_value) list (* list *)
- | M_Vtuple of ('TY mu_value) list (* tuple *)
 
 
 type 
@@ -130,7 +130,116 @@ lit =
 
 
 type 
-'bt bool_op = 
+'TY mu_paction =  (* memory actions with polarity *)
+   
+
+type 
+'TY mu_memop =  (* operations involving the memory state *)
+   M_PtrEq of 'TY asym * 'TY asym (* pointer equality comparison *)
+ | M_PtrNe of 'TY asym * 'TY asym (* pointer inequality comparison *)
+ | M_PtrLt of 'TY asym * 'TY asym (* pointer less-than comparison *)
+ | M_PtrGt of 'TY asym * 'TY asym (* pointer greater-than comparison *)
+ | M_PtrLe of 'TY asym * 'TY asym (* pointer less-than comparison *)
+ | M_PtrGe of 'TY asym * 'TY asym (* pointer greater-than comparison *)
+ | M_Ptrdiff of 'TY act * 'TY asym * 'TY asym (* pointer subtraction *)
+ | M_IntFromPtr of 'TY act * 'TY act * 'TY asym (* cast of pointer value to integer value *)
+ | M_PtrFromInt of 'TY act * 'TY act * 'TY asym (* cast of integer value to pointer value *)
+ | M_PtrValidForDeref of 'TY act * 'TY asym (* dereferencing validity predicate *)
+ | M_PtrWellAligned of 'TY act * 'TY asym
+ | M_PtrArrayShift of 'TY asym * 'TY act * 'TY asym
+ | M_Memcpy of 'TY asym * 'TY asym * 'TY asym
+ | M_Memcmp of 'TY asym * 'TY asym * 'TY asym
+ | M_Realloc of 'TY asym * 'TY asym * 'TY asym
+ | M_Va_start of 'TY asym * 'TY asym
+ | M_Va_copy of 'TY asym
+ | M_Va_arg of 'TY asym * 'TY act
+ | M_Va_end of 'TY asym
+
+
+type 
+'TY mu_expr_aux =  (* (effectful) expressions *)
+   M_Epure of 'TY mu_pexpr (* pure expression *)
+ | M_Ememop of 'TY mu_memop (* pointer op involving memory *)
+ | M_Eaction of 'TY mu_paction (* memory action *)
+ | M_Eskip (* skip *)
+ | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
+ | M_Eproc of Symbol.sym Core.generic_name * ('TY asym) list (* procedure call *)
+
+
+type 
+'TY mu_action_aux =  (* memory actions *)
+   M_Create of 'TY asym * 'TY act * Symbol.prefix
+ | M_CreateReadOnly of 'TY asym * 'TY act * 'TY asym * Symbol.prefix
+ | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
+ | M_Kill of m_kill_kind * 'TY asym
+ | M_Store of bool * 'TY act * 'TY asym * 'TY asym * Cmm_csem.memory_order (* true means store is locking *)
+ | M_Load of 'TY act * 'TY asym * Cmm_csem.memory_order
+ | M_RMW of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Fence of Cmm_csem.memory_order
+ | M_CompareExchangeStrong of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_LinuxFence of Linux.linux_memory_order
+ | M_LinuxLoad of 'TY act * 'TY asym * Linux.linux_memory_order
+ | M_LinuxStore of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
+ | M_LinuxRMW of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
+
+
+type 
+'TY mu_expr =  (* (effectful) expressions with location and annotations *)
+   M_EExpr of Location_ocaml.t * annot list * 'TY mu_expr_aux
+
+
+type 
+'TY mu_texpr_aux =  (* top-level expressions *)
+   M_Elet of 'TY mu_sym_or_pattern * 'TY mu_pexpr * 'TY mu_texpr
+ | M_Ewseq of mu_pattern * 'TY mu_expr * 'TY mu_texpr (* weak sequencing *)
+ | M_Esseq of 'TY mu_sym_or_pattern * 'TY mu_expr * 'TY mu_texpr (* strong sequencing *)
+ | M_Ecase of 'TY asym * ((mu_pattern * 'TY mu_texpr)) list (* pattern matching *)
+ | M_Eif of 'TY asym * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
+ | M_Ebound of int * 'TY mu_texpr (* boundary of a elab of an outermost (ISO: `full') C expr, absent at runtime *)
+ | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)
+ | M_End of ('TY mu_texpr) list (* nondeterministic sequencing *)
+ | M_Edone of 'TY asym (* end of top-level expression *)
+ | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+ | M_Erun of Symbol.sym * ('TY asym) list (* run from label *)
+
+and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
+   M_TExpr of Location_ocaml.t * annot list * 'TY mu_texpr_aux
+
+
+type 
+'TY mu_action = 
+   M_Action of Location_ocaml.t * 'TY mu_action_aux
+
+
+type 
+'bt param_op = 
+   App of 'bt term * ('bt term) list
+
+and 'bt struct_op = 
+   StructMember of tag * 'bt term * Symbol.identifier
+
+and 'bt ct_pred = 
+   Representable of Sctypes.t * 'bt term
+ | AlignedI of 'bt term * 'bt term
+
+and 'bt term_aux = 
+   Arith_op of 'bt arith_op
+ | Bool_op of 'bt bool_op
+ | Tuple_op of 'bt tuple_op
+ | Struct_op of 'bt struct_op
+ | Pointer_op of 'bt pointer_op
+ | List_op of 'bt list_op
+ | Array_op of 'bt array_op
+ | CT_pred of 'bt ct_pred
+ | Option_op of 'bt option_op
+ | Param_op of 'bt param_op
+
+and 'bt term = 
+   Lit of lit
+ | IT of 'bt term_aux * 'bt
+
+and 'bt bool_op = 
    Not of 'bt term
  | Eq of 'bt term * 'bt term
  | And of ('bt term) list
@@ -159,32 +268,6 @@ and 'bt option_op =
 and 'bt array_op = 
    ArrayGet of 'bt term * Z.t
 
-and 'bt param_op = 
-   App of 'bt term * ('bt term) list
-
-and 'bt struct_op = 
-   StructMember of tag * 'bt term * Symbol.identifier
-
-and 'bt ct_pred = 
-   Representable of Sctypes.t * 'bt term
- | AlignedI of 'bt term * 'bt term
-
-and 'bt term_aux = 
-   Arith_op of 'bt arith_op
- | Bool_op of 'bt bool_op
- | Tuple_op of 'bt tuple_op
- | Struct_op of 'bt struct_op
- | Pointer_op of 'bt pointer_op
- | List_op of 'bt list_op
- | Array_op of 'bt array_op
- | CT_pred of 'bt ct_pred
- | Option_op of 'bt option_op
- | Param_op of 'bt param_op
-
-and 'bt term = 
-   Lit of lit
- | IT of 'bt term_aux * 'bt
-
 
 type 
 predicate_name =  (* names of predicates *)
@@ -199,33 +282,6 @@ resource =
 
 
 type 
-'TY mu_paction =  (* memory actions with polarity *)
-   
-
-type 
-'TY mu_memop =  (* operations involving the memory state *)
-   M_PtrEq of 'TY asym * 'TY asym (* pointer equality comparison *)
- | M_PtrNe of 'TY asym * 'TY asym (* pointer inequality comparison *)
- | M_PtrLt of 'TY asym * 'TY asym (* pointer less-than comparison *)
- | M_PtrGt of 'TY asym * 'TY asym (* pointer greater-than comparison *)
- | M_PtrLe of 'TY asym * 'TY asym (* pointer less-than comparison *)
- | M_PtrGe of 'TY asym * 'TY asym (* pointer greater-than comparison *)
- | M_Ptrdiff of 'TY act * 'TY asym * 'TY asym (* pointer subtraction *)
- | M_IntFromPtr of 'TY act * 'TY act * 'TY asym (* cast of pointer value to integer value *)
- | M_PtrFromInt of 'TY act * 'TY act * 'TY asym (* cast of integer value to pointer value *)
- | M_PtrValidForDeref of 'TY act * 'TY asym (* dereferencing validity predicate *)
- | M_PtrWellAligned of 'TY act * 'TY asym
- | M_PtrArrayShift of 'TY asym * 'TY act * 'TY asym
- | M_Memcpy of 'TY asym * 'TY asym * 'TY asym
- | M_Memcmp of 'TY asym * 'TY asym * 'TY asym
- | M_Realloc of 'TY asym * 'TY asym * 'TY asym
- | M_Va_start of 'TY asym * 'TY asym
- | M_Va_copy of 'TY asym
- | M_Va_arg of 'TY asym * 'TY act
- | M_Va_end of 'TY asym
-
-
-type 
 ret =  (* return types *)
    RetTy_Computational of 'sym * base_type * ret
  | RetTy_Logical of 'sym * base_type * ret
@@ -235,68 +291,12 @@ ret =  (* return types *)
 
 
 type 
-'TY mu_expr_aux =  (* (effectful) expressions *)
-   M_Epure of 'TY mu_pexpr (* pure expression *)
- | M_Ememop of 'TY mu_memop (* pointer op involving memory *)
- | M_Eaction of 'TY mu_paction (* memory action *)
- | M_Eskip (* skip *)
- | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
- | M_Eproc of Symbol.sym Core.generic_name * ('TY asym) list (* procedure call *)
-
-
-type 
-'TY mu_action_aux =  (* memory actions *)
-   M_Create of 'TY asym * 'TY act * Symbol.prefix
- | M_CreateReadOnly of 'TY asym * 'TY act * 'TY asym * Symbol.prefix
- | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
- | M_Kill of m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
- | M_Store of bool * 'TY act * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
- | M_Load of 'TY act * 'TY asym * Cmm_csem.memory_order
- | M_RMW of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of 'TY act * 'TY asym * Linux.linux_memory_order
- | M_LinuxStore of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
- | M_LinuxRMW of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
-
-
-type 
-'TY mu_expr =  (* (effectful) expressions with location and annotations *)
-   M_EExpr of Location_ocaml.t * annot list * 'TY mu_expr_aux
-
-
-type 
 arg =  (* argument types *)
    ArgTy_Computational of 'sym * base_type * arg
  | ArgTy_Logical of 'sym * base_type * arg
  | ArgTy_Resource of resource * arg
  | ArgTy_Constraint of 'bt term * arg
  | ArgTy_I
-
-
-type 
-'TY mu_texpr_aux =  (* top-level expressions *)
-   M_Elet of 'TY mu_sym_or_pattern * 'TY mu_pexpr * 'TY mu_texpr
- | M_Ewseq of mu_pattern * 'TY mu_expr * 'TY mu_texpr (* weak sequencing *)
- | M_Esseq of 'TY mu_sym_or_pattern * 'TY mu_expr * 'TY mu_texpr (* strong sequencing *)
- | M_Ecase of 'TY asym * ((mu_pattern * 'TY mu_texpr)) list (* pattern matching *)
- | M_Eif of 'TY asym * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
- | M_Ebound of int * 'TY mu_texpr (* ??, doesn't exist at runtime *)
- | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)
- | M_End of ('TY mu_texpr) list (* nondeterministic sequencing *)
- | M_Edone of 'TY asym (* end of top-level expression *)
- | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
- | M_Erun of Symbol.sym * ('TY asym) list (* run from label *)
-
-and 'TY mu_texpr =  (* top-level expressions with location and annotations *)
-   M_TExpr of Location_ocaml.t * annot list * 'TY mu_texpr_aux
-
-
-type 
-'TY mu_action = 
-   M_Action of Location_ocaml.t * 'TY mu_action_aux
 
 (** definitions *)
 (** definitions *)
