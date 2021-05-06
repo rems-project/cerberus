@@ -766,7 +766,7 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
         | ITE (it,it',it'') -> ITE (aux it, aux it', aux it'')
         | EQ (it, it') -> EQ (aux it, aux it')
         | Forall ((s, bt), it) ->
-           let s' = Sym.fresh () in 
+           let s' = Sym.fresh_same s in 
            let substitution =
              {before = s; 
               after = 
@@ -895,7 +895,7 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
         | App (it, arg) ->
            App (aux it, aux arg)
         | Param ((sym, bt), body) ->
-           let sym' = Sym.fresh () in 
+           let sym' = Sym.fresh_same sym in 
            let substitution =
              {before = sym; 
               after = fun bt -> IT (Lit (Sym sym'), bt)}
@@ -1086,21 +1086,6 @@ let setIntersection_ its = IT (Set_op (SetIntersection its), bt (List1.head its)
 let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
 let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
-(* (\* array_op *\)
- * let constArray_ it = 
- *   IT (Array_op (ConstArray it), bt it)
- * let arrayGet_ (it, it') = 
- *   match bt it with
- *   | Array item_bt -> 
- *      IT (Array_op (ArrayGet (it, it')), item_bt)
- *   | _ -> Debug_ocaml.error "illtyped index term"
- * let arraySet_ (it, it', it'') = 
- *   IT (Array_op (ArraySet (it, it', it'')), BT.Array (bt it''))
- * let arrayEqualOnRange_ (it, it', it'', it''') = 
- *   IT (Array_op (ArrayEqualOnRange (it, it', it'', it''')), BT.Bool)
- * let arrayDef_ s v = 
- *   IT (Array_op (ArrayDef (s, v)), BT.Array (bt v)) *)
-
 
 
 (* ct_pred *)
@@ -1139,6 +1124,22 @@ let app_ v args =
 
 let eta_expand (sym, bt) body = 
   app_ (param_ (sym, bt) body) (sym_ (sym, bt))
+
+
+
+
+
+let fresh bt = 
+  let symbol = Sym.fresh () in
+  (symbol, sym_ (symbol, bt))
+
+let fresh_named bt name = 
+  let symbol = Sym.fresh_named name in
+  (symbol, sym_ (symbol, bt))
+
+
+
+
 
 
 

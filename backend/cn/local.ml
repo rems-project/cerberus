@@ -69,7 +69,7 @@ let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc)
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
         let (re, acc) = f re acc in
-        match RE.simp local.constraints re with
+        match RE.simp_or_empty local.constraints re with
         | Some re -> (re :: resources, acc)
         | None -> (resources, acc)
       ) local.resources ([], acc)
@@ -109,7 +109,7 @@ let add_cs lcs (local : t) =
 
 
 let add_r r (local : t) = 
-  match RE.simp local.constraints r with
+  match RE.simp_or_empty local.constraints r with
   | Some r -> 
      let resources = r :: local.resources in
      let lcs = 

@@ -145,18 +145,7 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
      return (l, r, c, mapping)
 
 
-let make_char_region loc pointer size =
-  let qp = Sym.fresh () in
-  let qp_t = sym_ (qp, BT.Loc) in
-  let v_s = Sym.fresh () in
-  let v_bt = BT.Param (Loc, Integer) in
-  let v_t = sym_ (v_s, v_bt) in
-  let init_s = Sym.fresh () in
-  let init_bt = BT.Param (Loc, Bool) in
-  let init_t = sym_ (init_s, init_bt) in
-  let resource = Resources.array qp pointer size (Z.of_int 1) 
-                   (app_ v_t qp_t) (app_ init_t qp_t) (q_ (1, 1)) in
-  return ([(v_s, v_bt); (init_s, init_bt)], [resource], [], [])
+
 
 
 let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) path sct =
@@ -372,12 +361,6 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
   | "Block", _ ->
      fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
 
-  | "Region", [pointer_arg; size_arg] ->
-     let@ pointer_it = resolve_predarg loc mapping pointer_arg in
-     let@ size_it = resolve_predarg loc mapping size_arg in
-     make_char_region loc pointer_it size_it
-  | "Region", _ ->
-     fail loc (Generic !^"Region predicate takes 2 arguments, a path and a size")
 
   | _, pointer :: arguments ->
      let@ pointer_resolved = resolve_predarg loc mapping pointer in

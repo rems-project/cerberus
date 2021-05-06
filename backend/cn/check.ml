@@ -332,6 +332,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   (* requires equality on inputs *)
   let match_resources loc local error r1 r2 res =
+    print stderr !^"HERE2 ***********************************************************";
     let open Prompt.Operators in
     let aux (res, constrs) (c, c') = 
       match IT.unify c c' res with
@@ -357,9 +358,10 @@ module Make (G : sig val global : Global.t end) = struct
        let b' = { b' with value = eta_expand (b.qpointer, Loc) b'.value;
                           init = eta_expand (b.qpointer, Loc) b'.init; } in
        let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
-       if Solver.holds_forall local [(b.qpointer, BT.Loc)] 
-            (impl_ (gt_ (b.permission, q_ (0, 1)), 
-                    and_ (List.map eq_ constrs)))
+       if Solver.holds local 
+            (forall_ (b.qpointer, BT.Loc)
+               (impl_ (gt_ (b.permission, q_ (0, 1)), 
+                       and_ (List.map eq_ constrs))))
        then return res 
        else fail loc (error ())
     | Predicate p, Predicate p' 
@@ -384,10 +386,14 @@ module Make (G : sig val global : Global.t end) = struct
               List.equal IT.equal p.iargs p'.iargs ->
        let p' = { p' with oargs = List.map (eta_expand (p.i, Integer)) p'.oargs } in
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-       if Solver.holds_forall local [(p.i, BT.Integer)] 
-            (impl_ (and_ [bool_ p.unused; 
-                          is_qpredicate_instance_index p (sym_ (p.i, Integer))],
-                    and_ (List.map eq_ constrs)))
+       List.iter (fun (c, c') ->
+           print stderr (item "constr" (IT.pp (eq__ c c')));
+         ) constrs;
+       if Solver.holds local 
+            (forall_ (p.i, BT.Integer)
+               (impl_ (and_ [bool_ p.unused; 
+                             is_qpredicate_instance_index p (sym_ (p.i, Integer))],
+                       and_ (List.map eq_ constrs))))
        then return res 
        else fail loc (error ())
     | _ -> 
@@ -494,7 +500,11 @@ module Make (G : sig val global : Global.t end) = struct
                | Some solution ->
                   if LS.equal (IT.bt solution) expect 
                   then check_logical_variables lspec
-                  else fail loc (Mismatch { has = IT.bt solution; expect })
+                  else 
+                    let () = print stderr (item "doesn't hold" (Sym.pp s)) in
+                    let () = print stderr (item "expect" (LS.pp expect)) in
+                    let () = print stderr (item "has" (LS.pp (IT.bt solution))) in
+                  fail loc (Mismatch { has = IT.bt solution; expect })
                | None -> 
                   Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
           in
@@ -517,6 +527,7 @@ module Make (G : sig val global : Global.t end) = struct
               Explain.unsatisfied_constraint names original_local 
                 (List.find (fun lc -> not (Solver.holds local lc)) lcs)
             in
+            print stderr !^"constraints don't hold ***********************************************************";
             fail loc (Unsat_constraint {constr; hint = None; state})
         in
 
@@ -552,9 +563,10 @@ module Make (G : sig val global : Global.t end) = struct
       let situation = ui_info.situation in
       let names = names @ ui_info.extra_names in
       let missing () = 
-        let (resource, state) = Explain.resource names original_local request (Solver.get_model ()) in
+        let (resource, state) = Explain.resource names original_local request in
         fail loc (Missing_resource {resource; used = None; state; situation})
       in
+      let simp = Simplify.simp local.constraints in
       match request with
       | Point requested ->
          let needed = requested.permission in 
@@ -592,7 +604,7 @@ module Make (G : sig val global : Global.t end) = struct
              ) local (needed, default_ (IT.bt requested.value), default_ BT.Bool)
          in
          if Solver.holds local (eq_ (needed, q_ (0, 1))) 
-         then return (Point {requested with value; init}, local)
+         then return (Point {requested with value = simp value; init = simp init}, local)
          else missing ()
       | QPoint requested ->
          let needed = requested.permission in
@@ -630,10 +642,11 @@ module Make (G : sig val global : Global.t end) = struct
                   (re, (needed, value, init))
              ) local (needed, default_ (IT.bt requested.value), default_ BT.Bool)
          in
-         if Solver.holds_forall local [(requested.qpointer, BT.Loc)] 
-              (eq_ (needed, q_ (0, 1)))
+         if Solver.holds local 
+              (forall_ (requested.qpointer, BT.Loc)
+                 (eq_ (needed, q_ (0, 1))))
          then 
-           let resource = QPoint {requested with value; init} in
+           let resource = QPoint {requested with value = simp value; init = simp init} in
            return (resource, local)
          else 
            missing ()
@@ -717,13 +730,43 @@ module Make (G : sig val global : Global.t end) = struct
                                  eq_ (p.length, p'.length);
                                  forall_ (p.i, BT.Integer)
                                    (impl_ 
-                                      (is_qpredicate_instance_index p' (sym_ (p.i, Integer)),
+                                      (is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
                                        let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
                                        and_ (List.map2 eq__ p.iargs iargs')))]
-                             )
+                         )
                     then 
                       let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
                       (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
+                    else if predicate_name_equal p.name p'.name &&
+                       p.unused = p'.unused &&
+                       Solver.holds local (
+                           and_ [eq_ (p.pointer, p'.pointer);
+                                 eq_ (p.element_size, p'.element_size);
+                                 lt_ (p.length, p'.length);
+                                 forall_ (p.i, BT.Integer)
+                                   (impl_ 
+                                      (is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                                       let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
+                                       and_ (List.map2 eq__ p.iargs iargs')))]
+                         )
+                    then 
+                      let p_moved, p'_moved = 
+                        List.partition (fun moved_pointer ->
+                            Solver.holds local (is_pointer_within_qpredicate_range p moved_pointer)
+                          ) p'.moved in
+                      let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
+                      let p' = 
+                        let diff_length = sub_ (p'.length, p.length) in
+                        {p' with 
+                          pointer = addPointer_ (p'.pointer, mul_ (diff_length, p'.element_size));
+                          length = diff_length;
+                          moved = p'_moved;
+                          unused = p'.unused;
+                          iargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), diff_length)}) p'.iargs;
+                          oargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), diff_length)}) p'.oargs;
+                        }
+                      in
+                      (QPredicate p', Some (oargs', p_moved))
                     else (re, found)
                  | _ ->
                     (re, found)
@@ -736,6 +779,7 @@ module Make (G : sig val global : Global.t end) = struct
                 ListM.fold_leftM (fun (oargs, local) moved_pointer ->
                     (* moved_pointer assumed to satisfy
                        pointer-element_size-length condition *)
+                    print stderr !^"HERE ***********************************************************";
                     let index = qpredicate_pointer_to_index p moved_pointer in
                     let request = {
                         name = p.name; 
@@ -839,6 +883,7 @@ module Make (G : sig val global : Global.t end) = struct
         List.map2 (fun (before, _) after -> {before; after}) 
           def.iargs p.iargs
       in
+      print stderr (item "unpacking" (RE.pp_predicate p));
       let possible_unpackings = 
         List.filter_map (fun clause ->
             let clause = PackingFT.subst_its substs clause in 
@@ -846,6 +891,7 @@ module Make (G : sig val global : Global.t end) = struct
             let lc = and_ (List.map2 eq__ p.oargs outputs) in
             let spec = LRT.concat condition (Constraint (lc, I)) in
             let lrt = LRT.subst_its substs spec in
+            print stderr (item "clause" (pp_clause clause));
             (* remove resource before binding the return
                type 'condition', so as not to unsoundly
                introduce extra disjointness constraints *)
@@ -1453,8 +1499,9 @@ module Make (G : sig val global : Global.t end) = struct
             | Point p ->
                not (Solver.holds local (le_ (p.permission, q_ (0, 1))))
             | QPoint p ->
-               not (Solver.holds_forall local [(p.qpointer, BT.Loc)]
-                      (le_ (p.permission, q_ (0, 1))))
+               not (Solver.holds local 
+                      (forall_ (p.qpointer, BT.Loc)
+                         (le_ (p.permission, q_ (0, 1)))))
             | Predicate p ->
                not p.unused
             | QPredicate p ->
@@ -1466,7 +1513,7 @@ module Make (G : sig val global : Global.t end) = struct
       | None -> return ()
       | Some resource ->
          let names = names @ extra_names in
-         let (resource, state) = Explain.resource names local resource (Solver.get_model ()) in
+         let (resource, state) = Explain.resource names local resource in
          fail loc (Unused_resource {resource; state})
 
 
@@ -2079,8 +2126,9 @@ let record_globals local globs =
 
 
 let check mu_file = 
+  let open Global in
   let () = Debug_ocaml.begin_csv_timing "total" in
-  let global = Global.empty in
+  let global = {Global.empty with resource_predicates = builtin_predicates } in
   let local = Local.empty in
   let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
   let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in

@@ -252,6 +252,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let explanation names local relevant =
+
     let relevant =
       let names_syms = SymSet.of_list (List.map fst names) in
       let named_syms = SymSet.of_list (List.filter Sym.named (L.all_names local)) in
@@ -323,22 +324,23 @@ module Make (G : sig val global : Global.t end) = struct
   let o_evaluate o_model expr = 
     let open Option in
     let@ model = o_model in
-    match IT.bt expr with
-    | Param _ -> None
-    | _ ->
-      match Z3.Model.evaluate model (S.of_index_term expr) true with
-      | None -> Debug_ocaml.error "failure constructing counter model"
-      | Some evaluated_expr -> 
-         match IT.bt expr with
-         | BT.Integer -> 
-            return (Pp.string (Z3.Expr.to_string evaluated_expr))
-         | BT.Real -> 
-            return (Pp.string (Z3.Expr.to_string evaluated_expr))
-         | BT.Loc ->
-            Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
-         | BT.Unit ->
-            Some (BT.pp BT.Unit)
-         | _ -> None
+    match Z3.Model.evaluate model (S.of_index_term expr) true with
+    | None -> Debug_ocaml.error "failure constructing counter model"
+    | Some evaluated_expr -> 
+       match IT.bt expr with
+       | BT.Integer -> 
+          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+       | BT.Real -> 
+          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+       | BT.Loc ->
+          Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
+       | BT.Bool ->
+          Some (Pp.string (Z3.Expr.to_string evaluated_expr))
+       | BT.Param _ ->
+          Some (Pp.string (Z3.Expr.to_string evaluated_expr))
+       | BT.Unit ->
+          Some (BT.pp BT.Unit)
+       | _ -> None
 
 
   let symbol_it = function
@@ -394,7 +396,7 @@ module Make (G : sig val global : Global.t end) = struct
              (entry :: acc_table, SymSet.add p.qpointer acc_reported)
           | Predicate p ->
              let entry =
-               (None,
+               (Some (IT.pp (IT.subst_vars substitutions p.pointer)),
                 None, 
                 None, 
                 Some (RE.pp (RE.subst_vars substitutions (Predicate p))),
@@ -405,7 +407,7 @@ module Make (G : sig val global : Global.t end) = struct
              (entry :: acc_table, SymSet.empty)
           | QPredicate p ->
              let entry =
-               (None,
+               (Some (IT.pp (IT.subst_vars substitutions p.pointer)),
                 None, 
                 None, 
                 Some (RE.pp (RE.subst_vars substitutions (QPredicate p))),
@@ -517,10 +519,10 @@ module Make (G : sig val global : Global.t end) = struct
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
-  let resource names local re omodel = 
+  let resource names local re = 
     let (explanation, local) = explanation names local (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state_with_model local explanation omodel)
+    (re_pp, pp_state_with_model local explanation (counter_model local))
 
   let resources names local (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in

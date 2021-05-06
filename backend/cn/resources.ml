@@ -1,5 +1,4 @@
 open Pp
-open Simplify
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -63,8 +62,6 @@ type qpredicate = {
   }
 
 
-
-
 type t = 
   | Point of point
   | QPoint of qpoint
@@ -86,11 +83,13 @@ let pp_qpredicate (qp: qpredicate) =
   if not qp.unused then
     parens (Pp.string "used iterated predicate")
   else
+    !^"for" ^^
     parens (separate (semi ^^ space) 
               ([Sym.pp qp.i ^^^ equals ^^^ !^"0";
                 Sym.pp qp.i ^^^ langle ^^^ IT.pp qp.length;
                 Sym.pp qp.i ^^^ plus ^^^ !^"1"])) ^^^
-      let args = List.map IT.pp (qp.iargs @ qp.oargs) in
+      let args = List.map IT.pp (addPointer_ (qp.pointer, sym_ (qp.i, BT.Integer)) :: 
+                                   qp.iargs @ qp.oargs) in
       braces (c_app (pp_predicate_name qp.name) args) ^^^
       c_comment (!^"moved" ^^ colon ^^ 
                    brackets (separate_map comma IT.pp qp.moved) )
@@ -124,7 +123,7 @@ let json re : Yojson.Safe.t =
 
 
 let alpha_rename_qpoint qp = 
-  let qpointer' = Sym.fresh () in
+  let qpointer' = Sym.fresh_same qp.qpointer in
   let subst = {before=qp.qpointer;after=qpointer'} in
   { qpointer = qpointer';
     size = qp.size;
@@ -134,7 +133,7 @@ let alpha_rename_qpoint qp =
 
 
 let alpha_rename_qpredicate qp = 
-  let i' = Sym.fresh () in
+  let i' = Sym.fresh_same qp.i in
   let subst = {before=qp.i;after=i'} in
   { pointer = qp.pointer;
     element_size = qp.element_size;
@@ -160,7 +159,7 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) resource =
      if Sym.equal subst.before qpointer then 
        QPoint {qpointer; size; value; init; permission}
      else if Sym.equal qpointer subst.after then
-       let qpointer' = Sym.fresh () in
+       let qpointer' = Sym.fresh_same qpointer in
        let subst' = {before=qpointer;after=qpointer'} in
        let value = IT.subst_var subst' value in
        let init = IT.subst_var subst' init in
@@ -188,7 +187,7 @@ let subst_var (subst: (Sym.t,Sym.t) Subst.t) resource =
      if Sym.equal i subst.before then
        QPredicate {pointer; element_size; length; moved; unused; i; name; iargs; oargs}
      else if Sym.equal i subst.after then
-       let i' = Sym.fresh () in
+       let i' = Sym.fresh_same i in
        let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
        let oargs = List.map (IT.subst_var {before=i;after=i'}) oargs in
        let iargs = List.map (IT.subst_var subst) iargs in
@@ -212,7 +211,7 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
      if Sym.equal subst.before qpointer then 
        QPoint {qpointer; size; value; init; permission}
      else if SymSet.mem qpointer (IT.free_vars subst.after) then
-       let qpointer' = Sym.fresh () in
+       let qpointer' = Sym.fresh_same qpointer in
        let subst' = {before=qpointer;after=qpointer'} in
        let value = IT.subst_var subst' value in
        let init = IT.subst_var subst' init in
@@ -240,7 +239,7 @@ let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
      if Sym.equal i subst.before then
        QPredicate {pointer; element_size; length; moved; unused; name; i; iargs; oargs}
      else if SymSet.mem i (IT.free_vars subst.after) then
-       let i' = Sym.fresh () in
+       let i' = Sym.fresh_same i in
        let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
        let oargs = List.map (IT.subst_var {before=i;after=i'}) oargs in
        let iargs = List.map (IT.subst_it subst) iargs in
@@ -461,12 +460,16 @@ let qpredicate_offset_of_pointer qp pointer =
 let qpredicate_pointer_to_index qp pointer = 
   div_ (qpredicate_offset_of_pointer qp pointer, qp.element_size)
 
-let is_qpredicate_instance_pointer qp pointer = 
+let is_pointer_within_qpredicate_range qp pointer = 
   let offset = qpredicate_offset_of_pointer qp pointer in
   let index = div_ (offset, qp.element_size) in
-  and_ (le_ (int_ 0, index) ::
-        lt_ (index, qp.length) ::
-        eq_ (rem_f_ (offset, qp.element_size), int_ 0) ::
+  and_ [le_ (int_ 0, index);
+        lt_ (index, qp.length);
+        eq_ (rem_f_ (offset, qp.element_size), int_ 0)]
+
+
+let is_qpredicate_instance_pointer qp pointer = 
+  and_ (is_pointer_within_qpredicate_range qp pointer ::
         List.map (ne__ pointer) qp.moved)
 
 let is_qpredicate_instance_index qp index = 
@@ -480,34 +483,30 @@ let is_qpredicate_instance_index qp index =
 
 
 
-let simp lcs resource = 
+let simp lcs resource =
+  let open Simplify in
   match resource with
   | Point {pointer; size; value; init; permission} ->
      let pointer = simp lcs pointer in
      let value = simp lcs value in
      let init = simp lcs init in
      let permission = simp lcs permission in
-     if IT.zero_frac permission
-     then None 
-     else Some (Point {pointer; size; value; init; permission})
+     Point {pointer; size; value; init; permission}
   | QPoint {qpointer; size; value; init; permission} ->
-     let qpointer' = Sym.fresh () in
+     let qpointer' = Sym.fresh_same qpointer in
      let subst = {before=qpointer;after=qpointer'} in
      let value = simp lcs (IT.subst_var subst value) in
      let init = simp lcs (IT.subst_var subst init) in
      let permission = simp lcs (IT.subst_var subst permission) in
-     if IT.zero_frac permission
-     then None 
-     else Some (QPoint {qpointer = qpointer'; size; value; init; permission})
+     QPoint {qpointer = qpointer'; size; value; init; permission}
   | Predicate {name; pointer; iargs; oargs; unused} -> 
      let pointer = simp lcs pointer in
      let iargs = List.map (simp lcs) iargs in
      let oargs = List.map (simp lcs) oargs in
      (* let unused = IT.subst_var subst unused in *)
-     if not unused then None
-     else Some (Predicate {name; pointer; iargs; oargs; unused})
+     Predicate {name; pointer; iargs; oargs; unused}
   | QPredicate {pointer; element_size; length; name; iargs; oargs; i; unused; moved} -> 
-     let i' = Sym.fresh () in
+     let i' = Sym.fresh_same i in
      let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
      let oargs = List.map (IT.subst_var {before=i;after=i'}) oargs in
      let pointer = simp lcs pointer in
@@ -516,10 +515,17 @@ let simp lcs resource =
      let iargs = List.map (simp lcs) iargs in
      let oargs = List.map (simp lcs) oargs in
      let moved = List.map (simp lcs) moved in
-     if not unused then None
-     else Some (QPredicate {pointer; element_size; length; name; iargs; oargs; i = i'; unused; moved})
+     QPredicate {pointer; element_size; length; name; iargs; oargs; i = i'; unused; moved}
 
 
+
+let simp_or_empty lcs resource = 
+  match simp lcs resource with
+  | Point p when IT.zero_frac p.permission -> None
+  | QPoint p when IT.zero_frac p.permission -> None
+  | Predicate p when not p.unused -> None
+  | QPredicate p when not p.unused -> None
+  | re -> Some re
 
 
 

@@ -241,7 +241,7 @@ let rec simp (lcs : t list) term =
           eq_ (a, b)
        end
     | Forall ((s, bt), it) -> 
-       let s' = Sym.fresh () in 
+       let s' = Sym.fresh_same s in 
        let it = aux (IT.subst_var {before=s; after=s'} it) in
        IT (Bool_op (Forall ((s', bt), it)), bt)
 
@@ -360,7 +360,7 @@ let rec simp (lcs : t list) term =
   and param_op it bt = 
     match it with
     | Param ((s,abt), it) ->
-       let s' = Sym.fresh () in 
+       let s' = Sym.fresh_same s in 
        let it = aux (IT.subst_var {before=s; after=s'} it) in
        IT (Param_op (Param ((s',abt), aux it)), bt)
     | App (it, arg) ->

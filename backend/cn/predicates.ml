@@ -8,6 +8,9 @@ module PackingFT = ArgumentTypes.Make(Assignment)
 open Pp
 
 
+open Resources
+open BT
+open IT
 
 type clause = PackingFT.t
 
@@ -62,13 +65,15 @@ let ctype_predicate_to_predicate ct pred =
   let clause = 
     PackingFT.of_lrt pred.lrt 
       (PackingFT.I [pred.value_def; pred.init_def]) in
-  {
-    pointer = pred.pointer_arg; 
-    iargs = []; 
-    oargs = [(pred.value_arg, BT.of_sct ct);
-             (pred.init_arg, BT.Bool)];
-    clauses = [clause]
-  }
+  let def = {
+      pointer = pred.pointer_arg; 
+      iargs = []; 
+      oargs = [(pred.value_arg, IT.bt pred.value_def);
+               (pred.init_arg, IT.bt pred.init_def)];
+      clauses = [clause]
+    }
+  in
+  def
 
 
 
@@ -78,20 +83,13 @@ let ctype_predicate_to_predicate ct pred =
 let ctype_predicate struct_layouts ct = 
   let open ReturnTypes in
   let open LRT in
-  let open IndexTerms in
-  let open BaseTypes in
   let open Memory in
   let open Resources in
   let open Option in
   let open Sctypes in
-  let pointer_s = Sym.fresh_named "p" in
-  let pointer_t = sym_ (pointer_s, Loc) in
-  let init_s = Sym.fresh_named "init" in
-  let init_bt = BT.Bool in
-  let init_t = sym_ (init_s, init_bt) in
-  let v_s = Sym.fresh_named "v" in
-  let v_bt = BT.of_sct ct in
-  let v_t = sym_ (v_s, v_bt) in
+  let pointer_s, pointer_t = IT.fresh BT.Loc in
+  let init_s, init_t = IT.fresh BT.Bool in
+  let v_s, v_t = IT.fresh (BT.of_sct ct) in
   let size = size_of_ctype ct in
   let (Sctypes.Sctype (_, ct_)) = ct in
   let@ lrt, value_def = match ct_ with
@@ -99,15 +97,15 @@ let ctype_predicate struct_layouts ct =
      Debug_ocaml.error "ctype_predicate void"
   | Integer it ->
      let lrt = 
-       Logical ((v_s, v_bt), 
-       Logical ((init_s, init_bt), 
+       Logical ((v_s, IT.bt v_t), 
+       Logical ((init_s, IT.bt init_t), 
        Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, LRT.I)))
      in
      return (lrt, v_t)
   | Pointer (_, ct') ->
      let lrt = 
-       Logical ((v_s, v_bt), 
-       Logical ((init_s, init_bt), 
+       Logical ((v_s, IT.bt v_t), 
+       Logical ((init_s, IT.bt init_t), 
        Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, LRT.I)))
      in
      return (lrt, v_t)
@@ -115,8 +113,7 @@ let ctype_predicate struct_layouts ct =
      (* todo: connect with user-annotation *)
      Debug_ocaml.error "representation: array of unknown length"
   | Array (ct', Some length) ->
-     let i = Sym.fresh () in
-     let i_t = sym_ (i, BT.Integer) in
+     let i_s, i_t = IT.fresh_named BT.Integer "?i" in
      let qpredicate = {
          pointer = pointer_t; 
          element_size = z_ (size_of_ctype ct'); 
@@ -124,14 +121,14 @@ let ctype_predicate struct_layouts ct =
          moved = []; 
          unused = true;
          name = Ctype ct';
-         i;
+         i = i_s;
          iargs = [];
          oargs = [app_ v_t i_t; init_t];
        }
      in
      let lrt = 
-       Logical ((v_s, v_bt), 
-       Logical ((init_s, init_bt), 
+       Logical ((v_s, IT.bt v_t), 
+       Logical ((init_s, IT.bt init_t), 
        Resource (QPredicate qpredicate, LRT.I)))
      in
      return (lrt, v_t)
@@ -142,21 +139,19 @@ let ctype_predicate struct_layouts ct =
            let member_p = addPointer_ (pointer_t, z_ offset) in
            match member_or_padding with
            | Some (member, sct) ->
-              let member_v = Sym.fresh () in
-              let member_t = sym_ (member_v, BT.of_sct sct) in
+              let member_v, member_t = IT.fresh (BT.of_sct sct) in
               let resource = predicate (Ctype sct) member_p [] [member_t; init_t] in
               let lrt = 
-                LRT.Logical ((member_v, BT.of_sct sct),
+                LRT.Logical ((member_v, IT.bt member_t),
                 LRT.Resource (resource, lrt))
               in
               let values = (member, member_t) :: values in
               (lrt, values)
            | None ->
-              let padding_s = Sym.fresh () in
-              let padding_t = sym_ (padding_s, BT.Integer) in
-              let resource = point (member_p, size) (q_ (1,1)) padding_t init_t in
+              let padding_s, padding_t = IT.fresh BT.Integer in
+              let resource = point (member_p, size) (q_ (1,1)) padding_t (bool_ false) in
               let lrt = 
-                LRT.Logical ((padding_s, BT.Integer),
+                LRT.Logical ((padding_s, IT.bt padding_t),
                 LRT.Resource (resource, lrt)) 
               in
               (lrt, values)
@@ -164,7 +159,7 @@ let ctype_predicate struct_layouts ct =
      in
      let value_t = IT.struct_ (tag, values) in
      let lrt = 
-       Logical ((init_s, BT.Bool), lrt) @@ LRT.I
+       Logical ((init_s, IT.bt init_t), lrt) @@ LRT.I
      in
     return (lrt, value_t)
   | Function _ -> 
@@ -175,7 +170,7 @@ let ctype_predicate struct_layouts ct =
       value_arg = v_s; 
       init_arg = init_s;
       lrt; 
-      value_def = v_t; 
+      value_def = value_def; 
       init_def = init_t 
     }
   in
@@ -189,83 +184,154 @@ let ctype_predicate struct_layouts ct =
 
 
 
+let char_ct = Sctypes.Sctype ([], Integer Char)
 
-let early = 
-  let open Resources in
-  let open BT in
-  let open IT in
-  let id = "EarlyAlloc" in
-  let start_s = Sym.fresh () in
-  let start_t = sym_ (start_s, Loc) in
-  let end_s = Sym.fresh () in
-  let end_t = sym_ (end_s, Loc) in
-  let v_s = Sym.fresh () in
-  let v_bt = BT.Param (Loc, Integer) in
-  let v_t = sym_ (v_s, v_bt) in
-  let init_s = Sym.fresh () in
-  let init_bt = BT.Param (Loc, Bool) in
-  let init_t = sym_ (init_s, init_bt) in
-  let iargs = [(end_s, BT.Loc)] in
-  let oargs = [] in
-  let q = Sym.fresh () in 
-  let block = 
-    Resources.array
-      q
-      (start_t)
-      (add_ (sub_ (pointerToIntegerCast_ end_t, pointerToIntegerCast_ start_t), int_ 1))
-      (Z.of_int 1)
-      (app_ v_t (sym_ (q, Loc)))
-      (app_ init_t (sym_ (q, Loc)))
-      (q_ (1, 1))
+
+let region = 
+  let id = "Region" in
+  let pointer_s, pointer_t = IT.fresh Loc in
+  let length_s, length_t = IT.fresh Integer in
+  let v_s, v_t = IT.fresh (BT.Param (Integer, Integer)) in
+  let init_s, init_t = IT.fresh (BT.Param (Integer, Bool)) in
+  let i_s, i_t = IT.fresh_named Integer "?i" in
+  let qpredicate = {
+      name = Ctype char_ct;
+      element_size = int_ 1; 
+      pointer = pointer_t; 
+      length = length_t;
+      moved = []; 
+      unused = true;
+      i = i_s;
+      iargs = [];
+      oargs = [app_ v_t i_t; app_ init_t i_t];
+    }
   in
   let lrt =
-    LRT.Logical ((v_s, v_bt),
-    LRT.Logical ((init_s, init_bt),
-    LRT.Resource (block, 
-    LRT.Constraint (IT.good_pointer start_t (Sctypes.Sctype ([], Void)),
-    LRT.Constraint (IT.good_pointer end_t (Sctypes.Sctype ([], Void)),
-    LRT.I)))))
+    LRT.Logical ((v_s, IT.bt v_t),
+    LRT.Logical ((init_s, IT.bt init_t),
+    LRT.Resource (QPredicate qpredicate, 
+    LRT.Constraint (IT.good_pointer pointer_t char_ct,
+    LRT.I))))
   in
-  let outputs = [] in
   let predicate = {
-      pointer = start_s;
-      iargs; 
-      oargs; 
-      clauses = [PackingFT.of_lrt lrt (PackingFT.I outputs)]; 
+      pointer = pointer_s;
+      iargs = [(length_s, IT.bt length_t)]; 
+      oargs = [(v_s, IT.bt v_t); (init_s, IT.bt init_t)]; 
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I [v_t; init_t])]; 
     } 
   in
   (id, predicate)
+
+
+
+let early = 
+  let id = "EarlyAlloc" in
+  let start_s, start_t = IT.fresh Loc in
+  let end_s, end_t = IT.fresh Loc in
+  let length_t = 
+    add_ (sub_ (pointerToIntegerCast_ end_t,
+                pointerToIntegerCast_ start_t), 
+          int_ 1)
+  in
+  let v_s, v_t = IT.fresh (BT.Param (Integer, Integer)) in
+  let init_s, init_t = IT.fresh (BT.Param (Integer, Bool)) in
+  let region = {
+      name = Id "Region";
+      pointer = start_t; 
+      unused = true;
+      iargs = [length_t];
+      oargs = [v_t; init_t];
+    }
+  in
+  let lrt =
+    LRT.Logical ((v_s, IT.bt v_t),
+    LRT.Logical ((init_s, IT.bt init_t),
+    LRT.Resource (Predicate region, 
+    LRT.Constraint (IT.good_pointer start_t char_ct,
+    LRT.Constraint (IT.good_pointer end_t char_ct,
+    LRT.I)))))
+  in
+  let predicate = {
+      pointer = start_s;
+      iargs = [(end_s, IT.bt end_t)]; 
+      oargs = []; 
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I [])]; 
+    } 
+  in
+  (id, predicate)
+
+
+
+
+let part_zero_region = 
+  let id = "PartZeroRegion" in
+  let pointer_s, pointer_t = IT.fresh Loc in
+  let length_s, length_t = IT.fresh Integer in
+  let v_s, v_t = IT.fresh (BT.Param (Integer, Integer)) in
+  let init_s, init_t = IT.fresh (BT.Param (Integer, Bool)) in
+  let j_s, j_t = IT.fresh Integer in
+  let i_s, i_t = IT.fresh_named Integer "?i" in
+  let region = {
+      name = Id "Region";
+      pointer = pointer_t; 
+      unused = true;
+      iargs = [length_t];
+      oargs = [v_t; init_t];
+    }
+  in
+  let v_constr = 
+    forall_ (i_s, IT.bt i_t)
+      (impl_ (and_ [le_ (int_ 0, i_t); lt_ (i_t, j_t)], 
+              eq_ (app_ v_t i_t, int_ 0)))
+  in
+  let init_constr = 
+    forall_ (i_s, IT.bt i_t)
+      (impl_ (and_ [le_ (int_ 0, i_t); lt_ (i_t, j_t)], 
+              app_ init_t i_t))
+  in
+  let lrt =
+    LRT.Logical ((v_s, IT.bt v_t),
+    LRT.Logical ((init_s, IT.bt init_t),
+    LRT.Resource (Predicate region, 
+    LRT.Constraint (v_constr,
+    LRT.Constraint (init_constr,
+    LRT.I)))))
+  in
+  let predicate = {
+      pointer = pointer_s;
+      iargs = [(length_s, IT.bt length_t); (j_s, IT.bt j_t)];
+      oargs = [];
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I [])]; 
+    } 
+  in
+  (id, predicate)
+
 
 
 
 let zero_region = 
-  let open Resources in
-  let open BT in
-  let open IT in
   let id = "ZeroRegion" in
-  let pointer_s = Sym.fresh () in
-  let pointer_t = sym_ (pointer_s, Loc) in
-  let length_s = Sym.fresh () in
-  let length_t = sym_ (length_s, Integer) in
-  let iargs = [(length_s, BT.Integer)] in
-  let oargs = [] in
-  let array = 
-    RE.array (Sym.fresh ()) pointer_t length_t (Z.of_int 1)
-      (int_ 0) 
-      (bool_ true)
-      (q_ (1,1))
+  let pointer_s, pointer_t = IT.fresh Loc in
+  let length_s, length_t = IT.fresh Integer in
+  let predicate = {
+      name = Id "PartZeroRegion";
+      pointer = pointer_t; 
+      unused = true;
+      iargs = [length_t; length_t];
+      oargs = [];
+    }
   in
-  let lrt =
-    LRT.Resource (array, 
-    LRT.Constraint (IT.good_pointer pointer_t (Sctypes.Sctype ([], Void)),
-    LRT.I))
-  in
-  let outputs = [] in
+  let lrt = LRT.Resource (Predicate predicate, LRT.I) in
   let predicate = {
       pointer = pointer_s;
-      iargs; 
-      oargs; 
-      clauses = [PackingFT.of_lrt lrt (PackingFT.I outputs)]; 
+      iargs = [(length_s, IT.bt length_t)];
+      oargs = [];
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I [])]; 
     } 
   in
   (id, predicate)
+
+
+
+
+

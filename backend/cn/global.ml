@@ -33,9 +33,14 @@ open Predicates
 
 
 let builtin_predicates_list = [
+    region;
     early;
     zero_region;
+    part_zero_region;
   ]
+
+
+
 
 let builtin_predicates =
   List.fold_left (fun acc (name,def) -> StringMap.add name def acc) 
@@ -134,9 +139,16 @@ let pp_struct_decls decls =
 let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (FT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
+let pp_predicate_definitions defs =
+  separate_map hardline (fun (name, def) ->
+      item name
+        (pp_predicate_definition def))
+    (StringMap.bindings defs)
+
 let pp global = 
   pp_struct_decls global.struct_decls ^^ hardline ^^
-  pp_fun_decls global.fun_decls
+  pp_fun_decls global.fun_decls ^^ hardline ^^
+  pp_predicate_definitions global.resource_predicates
 
 
 

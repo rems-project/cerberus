@@ -8,14 +8,14 @@ let context =
   Z3.mk_context [
       ("model", "true");
       ("well_sorted_check","true");
-      ("unsat_core", "true");
+      (* ("unsat_core", "true"); *)
     ] 
 
 
 
 let solver = Z3.Solver.mk_simple_solver context
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 5
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 7
 let () = Z3.Solver.set_parameters solver params
 
 
@@ -82,8 +82,8 @@ module Make (G : sig val global : Global.t end) = struct
              recognizer [] [] []
          in
          Z3.Datatype.mk_sort_s context (bt_name (BT.Option bt)) [some_c; none_c]
-      | Param _ ->
-         Debug_ocaml.error "SMT solver applied to parameterised expression (sort_of_bt)"
+      | Param (abt, rbt) ->
+         Z3.Z3Array.mk_sort context (aux abt) (aux rbt)
     in    
 
     fun bt ->
@@ -187,19 +187,13 @@ module Make (G : sig val global : Global.t end) = struct
       | ITE (t1, t2, t3) ->
          Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EQ (t1, t2) ->
-         begin match IT.bt t1 with
-         | BT.Param (abt, bt) ->
-            let s = Sym.fresh () in
-            let s_t = sym_ (s, abt) in
-            term (forall_ (s, bt) (eq_ (app_ t1 s_t, app_ t2 s_t)))
-         | _ ->
-            Z3.Boolean.mk_eq context (term t1) (term t2)
-         end
+         Z3.Boolean.mk_eq context (term t1) (term t2)
       | Forall ((s, bt), it) ->
          let q = term (sym_ (s, bt)) in
+         let body = (term it) in
          let q = 
            Z3.Quantifier.mk_forall_const context [q] 
-             (term it) None [] [] None None 
+             body None [] [] None None 
          in
          Z3.Quantifier.expr_of_quantifier q
 
@@ -334,35 +328,17 @@ module Make (G : sig val global : Global.t end) = struct
 
     and param_op it bt = 
       match it with
-      | Param _ ->
-         let err = 
-           "SMT solver applied to parameterised expression (of_index_term): " ^
-             Pp.plain (IT.pp (IT (Param_op it, bt)))
-         in
-         Debug_ocaml.error err
       | App (IT (Param_op (Param (t_arg, body)),_), arg) ->
-          let subst =
-            (* List.map2 *) (fun (s, _) t ->
-                Subst.{before = s; after = t}
-              ) t_arg arg 
-          in
-          term (IT.subst_it subst body)
-      | App (IT (Lit (Sym s),fbt), arg) ->
-         let sym = Z3.Symbol.mk_string context (Sym.pp_string s) in
-         let arg = (* List.map *) term arg in
-         let fn = match fbt with
-           | BT.Param (abt, bt) ->
-              Z3.FuncDecl.mk_func_decl context sym [sort_of_bt abt] (sort_of_bt bt)
-           | _ -> Debug_ocaml.error "illtyped index term"
-         in
-         Z3.Expr.mk_app context fn [arg]
-      | App _ ->
+         let subst = Subst.{before = (fst t_arg); after = arg} in
+         term (IT.subst_it subst body)
+      | Param ((sym, abt), body) ->
          let err = 
            "SMT solver applied to parameterised expression (of_index_term): " ^
              Pp.plain (IT.pp (IT (Param_op it, bt)))
          in
          Debug_ocaml.error err
-
+      | App (f, arg) ->
+         Z3.Z3Array.mk_select context (term f) (term arg)
     in
 
     fun it ->
@@ -393,21 +369,14 @@ module Make (G : sig val global : Global.t end) = struct
     match result with
     | Z3.Solver.UNSATISFIABLE -> true
     | Z3.Solver.SATISFIABLE -> false
-    | Z3.Solver.UNKNOWN -> Debug_ocaml.error "SMT solver returned 'unknown'"
+    | Z3.Solver.UNKNOWN -> 
+       let reason = Z3.Solver.get_reason_unknown solver in
+       Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
   
   let holds local it = 
     let open Pp in
     Pp.debug 9 (lazy (item "checking constraint" (LogicalConstraints.pp it)));
     try check local (of_index_term it) with
-    | Z3.Error err -> 
-       Debug_ocaml.error ("Z3 error: " ^ err)
-
-
-  let holds_forall local quantifiers body = 
-    try 
-      let expr = List.fold_right forall_ quantifiers body in
-      check local (of_index_term expr)
-    with
     | Z3.Error err -> 
        Debug_ocaml.error ("Z3 error: " ^ err)
 
