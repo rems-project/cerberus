@@ -10,6 +10,9 @@ sibylfs/lem.log
 ocaml_frontend/generated
 sibylfs/generated
 
+public/node_modules/
+
+
 *~
 cerberus-webserver
 config.json
