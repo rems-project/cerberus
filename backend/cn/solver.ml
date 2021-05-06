@@ -15,7 +15,7 @@ let context =
 
 let solver = Z3.Solver.mk_simple_solver context
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 7
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 10000
 let () = Z3.Solver.set_parameters solver params
 
 
@@ -342,8 +342,8 @@ module Make (G : sig val global : Global.t end) = struct
     in
 
     fun it ->
-    Pp.debug 10 (lazy (Pp.item "translating" (IT.pp it)));
-    Pp.debug 10 (lazy (Pp.item "bt" (BT.pp (IT.bt it))));
+    (* Pp.debug 10 (lazy (Pp.item "translating" (IT.pp it)));
+     * Pp.debug 10 (lazy (Pp.item "bt" (BT.pp (IT.bt it)))); *)
     term it
 
 
@@ -354,7 +354,7 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error ("Z3 error: " ^ err)
 
 
-  let check local (expr : Z3.Expr.expr) = 
+  let check ?(ignore_unknown=false) local (expr : Z3.Expr.expr) = 
     let () = Debug_ocaml.begin_csv_timing "solver" in
     let () = Debug_ocaml.begin_csv_timing "solver_constraints" in
     let constraints = 
@@ -370,13 +370,14 @@ module Make (G : sig val global : Global.t end) = struct
     | Z3.Solver.UNSATISFIABLE -> true
     | Z3.Solver.SATISFIABLE -> false
     | Z3.Solver.UNKNOWN -> 
-       let reason = Z3.Solver.get_reason_unknown solver in
-       Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
+       if ignore_unknown then false else
+         let reason = Z3.Solver.get_reason_unknown solver in
+         Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
   
-  let holds local it = 
-    let open Pp in
-    Pp.debug 9 (lazy (item "checking constraint" (LogicalConstraints.pp it)));
-    try check local (of_index_term it) with
+  let holds ?(ignore_unknown=false) local it = 
+    (* let open Pp in
+     * Pp.debug 9 (lazy (item "checking constraint" (LogicalConstraints.pp it))); *)
+    try check ~ignore_unknown local (of_index_term it) with
     | Z3.Error err -> 
        Debug_ocaml.error ("Z3 error: " ^ err)
 

@@ -276,7 +276,7 @@ module Make (G : sig val global : Global.t end) = struct
           ui_info : request_ui_info;
         }
 
-      type err = loc * Tools.stacktrace option * type_error
+      type err = loc * Tools.stacktrace option * type_error Lazy.t
 
       type 'a m = 
         | Done : 'a -> 'a m
@@ -332,7 +332,6 @@ module Make (G : sig val global : Global.t end) = struct
 
   (* requires equality on inputs *)
   let match_resources loc local error r1 r2 res =
-    print stderr !^"HERE2 ***********************************************************";
     let open Prompt.Operators in
     let aux (res, constrs) (c, c') = 
       match IT.unify c c' res with
@@ -350,7 +349,7 @@ module Make (G : sig val global : Global.t end) = struct
        let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
        if Solver.holds local (and_ (List.map eq_ constrs))
        then return res
-       else fail loc (error ())
+       else fail loc error
     | QPoint b, QPoint b' 
          when Sym.equal b.qpointer b'.qpointer &&
               Z.equal b.size b'.size &&
@@ -363,7 +362,7 @@ module Make (G : sig val global : Global.t end) = struct
                (impl_ (gt_ (b.permission, q_ (0, 1)), 
                        and_ (List.map eq_ constrs))))
        then return res 
-       else fail loc (error ())
+       else fail loc error
     | Predicate p, Predicate p' 
          when predicate_name_equal p.name p'.name &&
               IT.equal p.pointer p'.pointer &&
@@ -374,7 +373,7 @@ module Make (G : sig val global : Global.t end) = struct
             (impl_ (bool_ p'.unused, 
                     and_ (List.map eq_ constrs)))
        then return res 
-       else fail loc (error ())
+       else fail loc error
     | QPredicate p, QPredicate p' 
          when IT.equal p.pointer p'.pointer &&
               IT.equal p.element_size p'.element_size &&
@@ -386,18 +385,15 @@ module Make (G : sig val global : Global.t end) = struct
               List.equal IT.equal p.iargs p'.iargs ->
        let p' = { p' with oargs = List.map (eta_expand (p.i, Integer)) p'.oargs } in
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-       List.iter (fun (c, c') ->
-           print stderr (item "constr" (IT.pp (eq__ c c')));
-         ) constrs;
        if Solver.holds local 
             (forall_ (p.i, BT.Integer)
                (impl_ (and_ [bool_ p.unused; 
                              is_qpredicate_instance_index p (sym_ (p.i, Integer))],
                        and_ (List.map eq_ constrs))))
        then return res 
-       else fail loc (error ())
+       else fail loc error
     | _ -> 
-       fail loc (error ())
+       fail loc error
 
 
     module Spine (I : AT.I_Sig) = struct
@@ -440,13 +436,13 @@ module Make (G : sig val global : Global.t end) = struct
                let ftyp' = NFT.subst_var {before = s; after = arg.lname} ftyp in
                check_computational args ftyp'
             | (arg :: _), (Computational ((_, bt), _))  ->
-               fail arg.loc (Mismatch {has = arg.bt; expect = bt})
+               fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
             | [], (L ftyp) -> 
                return ftyp
             | _ -> 
                let expect = NFT.count_computational ftyp in
                let has = List.length arguments in
-               fail loc (Number_arguments {expect; has})
+               fail loc (lazy (Number_arguments {expect; has}))
           in
           check_computational arguments ftyp 
         in
@@ -476,10 +472,12 @@ module Make (G : sig val global : Global.t end) = struct
             | Resource (resource, ftyp) -> 
                let rr = { ui_info; local; resource; } in
                let@ (resource', local) = prompt (R_Resource rr) in
-               let mismatch () = 
-                 let ((expect,has), state) = 
-                   Explain.resources names original_local (resource, resource') in
-                 (Resource_mismatch {expect; has; state; situation})
+               let mismatch = 
+                 lazy begin
+                     let ((expect,has), state) = 
+                       Explain.resources names original_local (resource, resource') in
+                     (Resource_mismatch {expect; has; state; situation})
+                   end
                in
                let@ unis = match_resources loc local mismatch resource resource' unis in
                let new_substs = Uni.find_resolved local unis in
@@ -500,11 +498,7 @@ module Make (G : sig val global : Global.t end) = struct
                | Some solution ->
                   if LS.equal (IT.bt solution) expect 
                   then check_logical_variables lspec
-                  else 
-                    let () = print stderr (item "doesn't hold" (Sym.pp s)) in
-                    let () = print stderr (item "expect" (LS.pp expect)) in
-                    let () = print stderr (item "has" (LS.pp (IT.bt solution))) in
-                  fail loc (Mismatch { has = IT.bt solution; expect })
+                  else fail loc (lazy (Mismatch { has = IT.bt solution; expect }))
                | None -> 
                   Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
           in
@@ -527,8 +521,7 @@ module Make (G : sig val global : Global.t end) = struct
               Explain.unsatisfied_constraint names original_local 
                 (List.find (fun lc -> not (Solver.holds local lc)) lcs)
             in
-            print stderr !^"constraints don't hold ***********************************************************";
-            fail loc (Unsat_constraint {constr; hint = None; state})
+            fail loc (lazy (Unsat_constraint {constr; hint = None; state}))
         in
 
         return (rt, local)
@@ -564,7 +557,7 @@ module Make (G : sig val global : Global.t end) = struct
       let names = names @ ui_info.extra_names in
       let missing () = 
         let (resource, state) = Explain.resource names original_local request in
-        fail loc (Missing_resource {resource; used = None; state; situation})
+        fail loc (lazy (Missing_resource {resource; used = None; state; situation}))
       in
       let simp = Simplify.simp local.constraints in
       match request with
@@ -756,14 +749,13 @@ module Make (G : sig val global : Global.t end) = struct
                           ) p'.moved in
                       let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
                       let p' = 
-                        let diff_length = sub_ (p'.length, p.length) in
                         {p' with 
-                          pointer = addPointer_ (p'.pointer, mul_ (diff_length, p'.element_size));
-                          length = diff_length;
+                          pointer = addPointer_ (p'.pointer, mul_ (p.length, p'.element_size));
+                          length = sub_ (p'.length, p.length);
                           moved = p'_moved;
                           unused = p'.unused;
-                          iargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), diff_length)}) p'.iargs;
-                          oargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), diff_length)}) p'.oargs;
+                          iargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), p.length)}) p'.iargs;
+                          oargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), p.length)}) p'.oargs;
                         }
                       in
                       (QPredicate p', Some (oargs', p_moved))
@@ -779,7 +771,6 @@ module Make (G : sig val global : Global.t end) = struct
                 ListM.fold_leftM (fun (oargs, local) moved_pointer ->
                     (* moved_pointer assumed to satisfy
                        pointer-element_size-length condition *)
-                    print stderr !^"HERE ***********************************************************";
                     let index = qpredicate_pointer_to_index p moved_pointer in
                     let request = {
                         name = p.name; 
@@ -818,7 +809,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Prompt.Prompt (r, c) ->
          begin match r with
          | Prompt.R_Error (loc,tr,error) -> 
-            Error (loc,tr,error)
+            Error (loc,tr,Lazy.force error)
          | R_Resource {ui_info; local; resource} ->
             let prompt = 
               resource_request_prompt ui_info local resource in
@@ -883,7 +874,6 @@ module Make (G : sig val global : Global.t end) = struct
         List.map2 (fun (before, _) after -> {before; after}) 
           def.iargs p.iargs
       in
-      print stderr (item "unpacking" (RE.pp_predicate p));
       let possible_unpackings = 
         List.filter_map (fun clause ->
             let clause = PackingFT.subst_its substs clause in 
@@ -891,7 +881,6 @@ module Make (G : sig val global : Global.t end) = struct
             let lc = and_ (List.map2 eq__ p.oargs outputs) in
             let spec = LRT.concat condition (Constraint (lc, I)) in
             let lrt = LRT.subst_its substs spec in
-            print stderr (item "clause" (pp_clause clause));
             (* remove resource before binding the return
                type 'condition', so as not to unsoundly
                introduce extra disjointness constraints *)

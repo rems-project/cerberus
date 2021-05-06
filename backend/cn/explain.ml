@@ -43,7 +43,7 @@ module Make (G : sig val global : Global.t end) = struct
     let should_be_in_veclass local veclass it = 
       let bt = IT.bt it in
       if not (LS.equal veclass.sort bt) then false 
-      else S.holds local (IT.eq_ (IT.sym_ (veclass.repr, bt), it))
+      else S.holds ~ignore_unknown:true local (IT.eq_ (IT.sym_ (veclass.repr, bt), it))
 
     let is_in_veclass veclass sym = 
       SymSet.mem sym veclass.c_elements ||
@@ -314,6 +314,7 @@ module Make (G : sig val global : Global.t end) = struct
             ) to_substitute substs 
         ) veclasses []
     in
+
     ({substitutions; veclasses; relevant}, local)
 
 

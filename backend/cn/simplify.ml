@@ -345,9 +345,16 @@ let rec simp (lcs : t list) term =
           IT (Pointer_op (LEPointer (a, b)), bt)
        end
     | IntegerToPointerCast a ->
-       IT (Pointer_op (IntegerToPointerCast (aux a)), bt)
+       let a = aux a in
+       IT (Pointer_op (IntegerToPointerCast a), bt)
     | PointerToIntegerCast a ->
-       IT (Pointer_op (PointerToIntegerCast (aux a)), bt)       
+       let a = aux a in
+       begin match a with
+       | IT (Pointer_op (IntegerToPointerCast b), _) ->
+          b
+       | _ ->
+          IT (Pointer_op (PointerToIntegerCast a), bt)
+       end
 
 
   and option_op it bt =
