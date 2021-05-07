@@ -6,11 +6,7 @@ open Util
 (* Web server configuration *)
 
 type webconf =
-  { tls_cert: string;
-    tls_key: string;
-    tls_port: int;
-    tcp_port: int;
-    tcp_redirect: bool;
+  { tcp_port: int;
     docroot: string;
     timeout: int;
     log_file: string;
@@ -29,11 +25,7 @@ let webconf =
 let print_webconf () =
   let w = !webconf() in
   Printf.printf "[1]: Web server configuration:
-    TLS certificate: %s
-    TLS key: %s
-    TLS port: %d
     TCP port: %d
-    TCP redirect: %b
     Public folder: %s
     Executions timeout: %ds
     Log file: %s
@@ -43,8 +35,7 @@ let print_webconf () =
     Core implementation file: %s
     Z3 path: %s
     TMP path: %s\n"
-    w.tls_cert w.tls_key w.tls_port
-    w.tcp_port w.tcp_redirect
+    w.tcp_port
     w.docroot
     w.timeout
     w.log_file
@@ -74,11 +65,7 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
     Printf.sprintf "%s_%s.log" name time
   in
   let default =
-    { tls_cert= cerb_path ^ "/tools/server.cert";
-      tls_key= cerb_path ^ "/tools/server.key";
-      tls_port= 443;
-      tcp_port= tcp_port;
-      tcp_redirect= false;
+    { tcp_port= tcp_port;
       docroot= docroot;
       timeout= timeout;
       cerb_path= cerb_path;
@@ -92,20 +79,9 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
     }
   in
   let parse cfg = function
-    | ("tls", `Assoc tls) ->
-      let parse_tls cfg = function
-        | ("cert", `String cert) -> { cfg with tls_cert = cert }
-        | ("key", `String key) -> { cfg with tls_key = key }
-        | ("port", `Int port) -> { cfg with tls_port = port }
-        | (k, _) ->
-          Debug.warn @@ "Unknown TLS configuration key: " ^ k;
-          cfg
-      in
-      List.fold_left parse_tls cfg tls
     | ("tcp", `Assoc tcp) ->
       let parse_tcp cfg = function
         | ("port", `Int port) -> { cfg with tcp_port = port }
-        | ("redirect", `Bool b) -> { cfg with tcp_redirect = b }
         | (k, _) ->
           Debug.warn @@ "Unknown TCP configuration key: " ^ k;
           cfg
@@ -669,6 +645,9 @@ let cerberus ~rheader ~conf ~flow content =
 (* GET and POST *)
 
 let head uri path =
+  (* without this `resolve_local_file` doesn't catch .. followed by the / in hexa (%2f),
+     resulting in a full filesytem disclosure vulnerability *)
+  let uri = Uri.(of_string (pct_decode (to_string uri))) in
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -676,7 +655,7 @@ let head uri path =
   in
   let check_local_file () =
     let docroot = (!webconf()).docroot in
-    let filename = Server.resolve_local_file ~docroot ~uri in
+    let filename = Cohttp.Path.resolve_local_file ~docroot ~uri in
     if is_regular filename && Sys.file_exists filename then
         Server.respond ~status:`OK ~body:`Empty ()
     else forbidden path
@@ -693,6 +672,9 @@ let head uri path =
 
 
 let get ~rheader ~flow uri path =
+  (* without this `resolve_local_file` doesn't catch .. followed by the / in hexa (%2f),
+     resulting in a full filesytem disclosure vulnerability *)
+     let uri = Uri.(of_string (pct_decode (to_string uri))) in
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -700,7 +682,7 @@ let get ~rheader ~flow uri path =
   in
   let docroot = (!webconf()).docroot in
   let get_local_file () =
-    let filename = Server.resolve_local_file ~docroot ~uri in
+    let filename = Cohttp.Path.resolve_local_file ~docroot ~uri in
     if is_regular filename then
       respond_file ~rheader filename
     else forbidden path
@@ -807,15 +789,9 @@ let initialise () =
     Filename.set_temp_dir_name webconf.tmp_path;
     let conf    = create_conf webconf in
     let http_server = Server.make
-        ~callback: (if webconf.tcp_redirect then redirect ~conf
-                    else request ~conf) () in
-    let https_server = Server.make ~callback: (request ~conf) () in
+        ~callback: (request ~conf) () in
     Lwt_main.run @@ Lwt.join
-      [ Server.create ~mode:(`TCP (`Port webconf.tcp_port)) http_server
-      ; Server.create ~mode:(`TLS_native (`Crt_file_path webconf.tls_cert,
-                                   `Key_file_path webconf.tls_key,
-                                   `No_password,
-                                   `Port webconf.tls_port)) https_server]
+      [ Server.create ~mode:(`TCP (`Port webconf.tcp_port)) http_server ]
   with
   | e ->
     Debug.error_exception "Fatal error:" e
