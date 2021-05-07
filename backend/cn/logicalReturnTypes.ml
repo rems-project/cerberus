@@ -1,5 +1,7 @@
 open Subst
 module SymSet = Set.Make(Sym)
+module Resources = Resources.RE
+
 
 type t = 
   | Logical of (Sym.t * LogicalSorts.t) * t

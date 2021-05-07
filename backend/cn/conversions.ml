@@ -12,7 +12,7 @@ module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
 open TypeErrors
 open IndexTerms
-open Resources
+open Resources.RE
 open Sctypes
 open Mapping
 open Path.LabeledName

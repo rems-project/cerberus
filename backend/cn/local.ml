@@ -3,7 +3,7 @@ open List
 
 module BT = BaseTypes
 module LS = LogicalSorts
-module RE = Resources
+module RE = Resources.RE
 module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend

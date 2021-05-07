@@ -3,7 +3,7 @@ open Subst
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
-module RE = Resources
+module RE = Resources.RE
 module LC = LogicalConstraints
 module AT = ArgumentTypes
 module SymSet = Set.Make(Sym)

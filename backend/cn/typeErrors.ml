@@ -4,7 +4,6 @@ module BT=BaseTypes
 module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
-module RE=Resources
 module Loc = Locations
 
 type label_kind = 

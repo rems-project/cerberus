@@ -1,5 +1,6 @@
 module CF=Cerb_frontend
-module RE = Resources
+module RE = Resources.RE
+module RER = Resources.Requests
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
@@ -27,6 +28,7 @@ open Mu
 open Pp
 open BT
 open Resources
+open Resources.RE
 open Predicates
 
 
@@ -266,7 +268,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       type resource_request = { 
           local : L.t;
-          resource : RE.t;
+          resource : RER.t;
           ui_info : request_ui_info;
         }
 
@@ -470,7 +472,7 @@ module Make (G : sig val global : Global.t end) = struct
             debug 6 (lazy (item "unis" (pp_unis unis)));
             match ftyp with
             | Resource (resource, ftyp) -> 
-               let rr = { ui_info; local; resource; } in
+               let rr = { ui_info; local; resource = RE.request resource; } in
                let@ (resource', local) = prompt (R_Resource rr) in
                let mismatch = 
                  lazy begin
@@ -547,7 +549,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-    let rec resource_request_prompt ui_info local request = 
+    let rec resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
       let open Prompt in
       let open Prompt.Operators in
       let open Resources in
@@ -556,7 +558,7 @@ module Make (G : sig val global : Global.t end) = struct
       let situation = ui_info.situation in
       let names = names @ ui_info.extra_names in
       let missing () = 
-        let (resource, state) = Explain.resource names original_local request in
+        let (resource, state) = Explain.resource_request names original_local request in
         fail loc (lazy (Missing_resource {resource; used = None; state; situation}))
       in
       let simp = Simplify.simp local.constraints in
@@ -568,7 +570,7 @@ module Make (G : sig val global : Global.t end) = struct
                match re with
                | Point p' 
                     when Z.equal requested.size p'.size &&
-                         BT.equal (IT.bt requested.value) (IT.bt p'.value) &&
+                         BT.equal requested.value (IT.bt p'.value) &&
                          Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
                   let can_take = min_ (p'.permission, needed) in
                   let took = gt_ (can_take, q_ (0, 1)) in
@@ -579,7 +581,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (Point {p' with permission = permission'}, (needed, value, init))
                | QPoint p' 
                     when Z.equal requested.size p'.size &&
-                         BT.equal (IT.bt requested.value) (IT.bt p'.value) ->
+                         BT.equal requested.value (IT.bt p'.value) ->
                   let subst = {before=p'.qpointer; after = requested.pointer} in
                   let can_take = min_ (IT.subst_it subst p'.permission, needed) in
                   let took = gt_ (can_take, q_ (0, 1)) in
@@ -594,10 +596,18 @@ module Make (G : sig val global : Global.t end) = struct
                   (QPoint {p' with permission = permission'}, (needed, value, init))
                | re ->
                   (re, (needed, value, init))
-             ) local (needed, default_ (IT.bt requested.value), default_ BT.Bool)
+             ) local (needed, default_ requested.value, default_ BT.Bool)
          in
          if Solver.holds local (eq_ (needed, q_ (0, 1))) 
-         then return (Point {requested with value = simp value; init = simp init}, local)
+         then 
+           let r = 
+             { pointer = requested.pointer;
+               size = requested.size;
+               value = simp value;
+               init = simp init;
+               permission = requested.permission }
+           in
+           return (Point r, local)
          else missing ()
       | QPoint requested ->
          let needed = requested.permission in
@@ -606,7 +616,7 @@ module Make (G : sig val global : Global.t end) = struct
                match re with
                | Point p' 
                     when Z.equal requested.size p'.size &&
-                         BT.equal (IT.bt requested.value) (IT.bt p'.value) ->
+                         BT.equal requested.value (IT.bt p'.value) ->
                   let subst = {before=requested.qpointer; after = p'.pointer} in
                   let can_take = min_ (p'.permission, IT.subst_it subst needed) in
                   let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
@@ -618,7 +628,7 @@ module Make (G : sig val global : Global.t end) = struct
                   (Point {p' with permission = permission'}, (needed, value, init))
                | QPoint p' 
                     when Z.equal requested.size p'.size &&
-                         BT.equal (IT.bt requested.value) (IT.bt p'.value) ->
+                         BT.equal requested.value (IT.bt p'.value) ->
                   let subst = {before=p'.qpointer; after = requested.qpointer} in
                   let can_take = min_ (IT.subst_var subst p'.permission, needed) in
                   let took = gt_ (can_take, q_ (0, 1)) in
@@ -633,20 +643,35 @@ module Make (G : sig val global : Global.t end) = struct
                   (QPoint {p' with permission = permission'}, (needed, value, init))
                | re ->
                   (re, (needed, value, init))
-             ) local (needed, default_ (IT.bt requested.value), default_ BT.Bool)
+             ) local (needed, default_ requested.value, default_ BT.Bool)
          in
          if Solver.holds local 
               (forall_ (requested.qpointer, BT.Loc)
                  (eq_ (needed, q_ (0, 1))))
          then 
-           let resource = QPoint {requested with value = simp value; init = simp init} in
-           return (resource, local)
+           let r = 
+             { qpointer = requested.qpointer;
+               size = requested.size;
+               value = simp value; 
+               init = simp init;
+               permission = requested.permission;
+             } 
+           in
+           return (QPoint r, local)
          else 
            missing ()
       | Predicate p ->
          if p.unused = false then
-           let oargs = List.map (fun oa -> default_ (IT.bt oa)) p.oargs in
-           return (Predicate {p with oargs}, local)
+           let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
+           let r = 
+             { name = p.name;
+               pointer = p.pointer;
+               iargs = p.iargs;
+               oargs = oargs;
+               unused = p.unused;
+             }
+           in
+           return (Predicate r, local)
          else
            let local, found =
              L.map_and_fold_resources (fun re found ->
@@ -681,7 +706,15 @@ module Make (G : sig val global : Global.t end) = struct
            begin match found with
            (* we've already got the right resource *)
            | Some oargs ->
-              return (Predicate { p with oargs }, local)
+              let r = 
+                { name = p.name;
+                  pointer = p.pointer;
+                  iargs = p.iargs;
+                  oargs = oargs;
+                  unused = p.unused;
+                }
+              in
+              return (Predicate r, local)
            | None ->
               (* we haven't and will try to get it by packing *)
               (* (we've eagerly unpacked, so no need to try to get it by unpacking) *)
@@ -703,13 +736,33 @@ module Make (G : sig val global : Global.t end) = struct
               let choices = attempt_prompts @ [lazy (missing ())] in
               let choices1 = List1.make (List.hd choices, List.tl choices) in
               let@ (assignment, local) = try_choices choices1 in
-              return (Predicate {p with oargs = assignment}, local)
+              let r = 
+                { pointer = p.pointer;
+                  name = p.name;
+                  iargs = p.iargs;
+                  oargs = assignment;
+                  unused = p.unused;
+                }
+              in
+              return (Predicate r, local)
            end
       | QPredicate p ->
          assert ([] = p.moved); (* todo? *)
          if p.unused = false then
-           let oargs = List.map (fun oa -> default_ (IT.bt oa)) p.oargs in
-           return (QPredicate {p with oargs}, local)
+           let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
+           let r = 
+             { name = p.name;
+               element_size = p.element_size;
+               length = p.length;
+               i = p.i;
+               pointer = p.pointer;
+               iargs = p.iargs;
+               oargs = oargs;
+               unused = p.unused;
+               moved = p.moved;
+             }
+           in
+           return (QPredicate r, local)
          else
            let local, found =
              L.map_and_fold_resources (fun re found ->
@@ -723,7 +776,7 @@ module Make (G : sig val global : Global.t end) = struct
                                  eq_ (p.length, p'.length);
                                  forall_ (p.i, BT.Integer)
                                    (impl_ 
-                                      (is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                                      (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
                                        let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
                                        and_ (List.map2 eq__ p.iargs iargs')))]
                          )
@@ -738,14 +791,14 @@ module Make (G : sig val global : Global.t end) = struct
                                  lt_ (p.length, p'.length);
                                  forall_ (p.i, BT.Integer)
                                    (impl_ 
-                                      (is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                                      (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
                                        let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
                                        and_ (List.map2 eq__ p.iargs iargs')))]
                          )
                     then 
                       let p_moved, p'_moved = 
                         List.partition (fun moved_pointer ->
-                            Solver.holds local (is_pointer_within_qpredicate_range p moved_pointer)
+                            Solver.holds local (RER.is_pointer_within_qpredicate_range p moved_pointer)
                           ) p'.moved in
                       let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
                       let p' = 
@@ -771,12 +824,12 @@ module Make (G : sig val global : Global.t end) = struct
                 ListM.fold_leftM (fun (oargs, local) moved_pointer ->
                     (* moved_pointer assumed to satisfy
                        pointer-element_size-length condition *)
-                    let index = qpredicate_pointer_to_index p moved_pointer in
-                    let request = {
+                    let index = RER.qpredicate_pointer_to_index p moved_pointer in
+                    let request = RER.{
                         name = p.name; 
                         pointer = moved_pointer;
                         iargs = List.map (IT.subst_it{before=p.i;after=index}) p.iargs;
-                        oargs = List.map (fun oa -> default_ (IT.bt oa)) p.oargs; 
+                        oargs = p.oargs; 
                         unused = true
                       }
                     in
@@ -794,7 +847,19 @@ module Make (G : sig val global : Global.t end) = struct
                     | _ -> Debug_ocaml.error "request for predicate did not return predicate"
                   ) (oargs, local) moved
               in
-              return (QPredicate { p with moved = []; oargs = oargs }, local)
+              let r = 
+                { pointer = p.pointer;
+                  element_size = p.element_size;
+                  length = p.length;
+                  moved = []; 
+                  unused = p.unused;
+                  name = p.name;
+                  i = p.i;
+                  iargs = p.iargs;
+                  oargs = oargs 
+                }
+              in
+              return (QPredicate r, local)
            | None ->
               missing ()
 
@@ -914,7 +979,7 @@ module Make (G : sig val global : Global.t end) = struct
       aux local
 
 
-    let resource_request (loc: loc) situation local request : (RE.t * L.t, type_error) m = 
+    let resource_request (loc: loc) situation local (request : RER.t) : (RE.t * L.t, type_error) m = 
       let open Prompt in
       let ui_info = { loc; extra_names = []; situation; original_local = local } in
       let prompt = resource_request_prompt ui_info local request in
@@ -1376,68 +1441,6 @@ module Make (G : sig val global : Global.t end) = struct
          fail loc (Undefined_behaviour (undef, expl))
 
 
-    (*** memory related logic *****************************************************)
-
-
-
-    let load (loc: loc) local (pointer: IT.t) (ct: Sctypes.t) =
-      let open Memory in
-      let request = 
-        RE.predicate (Ctype ct) pointer [] 
-          [default_ (BT.of_sct ct); bool_ true] 
-      in
-      let@ (resource, _)  = 
-        resource_request loc (Access (Load None)) local request
-      in
-      match resource with
-      | Predicate {name = Ctype ct'; oargs = [value; init]; _} 
-           when Sctypes.equal ct ct' &&
-                Solver.holds local init -> 
-         return value
-      | Predicate {name = Ctype ct'; oargs = [value; init]; _} 
-           when Sctypes.equal ct ct' -> 
-         let state = Explain.state names local in
-         fail loc (Uninitialised_read {is_member = None; state})
-      | _ -> 
-         Debug_ocaml.error "load request did not return a ctype predicate"
-
-
-
-
-    let destroy (loc: loc) access local (pointer: IT.t) (ct : Sctypes.t) =
-      let request = 
-        RE.predicate (Ctype ct) pointer [] 
-          [default_ (BT.of_sct ct); bool_ false] 
-      in
-      let@ (_, local) = resource_request loc (Access Kill) local request in
-      return local
-
-
-
-    let store (loc: loc) local (pointer: IT.t) (value: IT.t) (ct : Sctypes.t) =
-      let request = 
-        RE.predicate (Ctype ct) pointer [] 
-          [default_ (BT.of_sct ct); bool_ false] 
-      in
-      let@ (_, local) = resource_request loc (Access (Store None)) local request in
-      let resource = RE.predicate (Ctype ct) pointer [] [value; (bool_ true)] in
-      return (resource, local)
-
-      
-    let create (loc: loc) local (pointer: IT.t) ct = 
-      let value_s = Sym.fresh () in
-      let value_t = sym_ (value_s, BT.of_sct ct) in
-      let resource = RE.predicate (Ctype ct) pointer [] [value_t; (bool_ false)] in
-      let lrt = 
-        LRT.Logical ((value_s, BT.of_sct ct),
-        LRT.Resource (resource, LRT.I))
-      in
-      return lrt
-
-
-
-
-
     (*** impure expression inference **********************************************)
 
 
@@ -1557,8 +1560,13 @@ module Make (G : sig val global : Global.t end) = struct
               let ret = Sym.fresh () in
               let@ ok = 
                 let request = 
-                  RE.predicate (Ctype act.ct) (sym_ (arg.lname, BT.Loc)) [] 
-                    [default_ (BT.of_sct act.ct); (bool_ false)] 
+                  RER.Predicate {
+                      name = Ctype act.ct; 
+                      pointer = sym_ (arg.lname, BT.Loc);
+                      iargs = [];
+                      oargs = [BT.of_sct act.ct; BT.Bool];
+                      unused = true;
+                    }
                 in
                 let@ _ = resource_request loc (Access Deref) local request in
                 let alignment_lc = aligned_ (act.ct, sym_ (arg.lname, arg.bt)) in
@@ -1599,12 +1607,22 @@ module Make (G : sig val global : Global.t end) = struct
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
               let ret = Sym.fresh () in
-              let@ lrt = create loc local (sym_ (ret, Loc)) act.ct in
+              let value_s, value_t = IT.fresh (BT.of_sct act.ct) in
+              let resource = 
+                RE.Predicate {
+                    name = Ctype act.ct; 
+                    pointer = sym_ (ret, Loc);
+                    iargs = [];
+                    oargs = [value_t; (bool_ false)];
+                    unused = true;
+                  }
+              in
               let rt = 
                 RT.Computational ((ret, Loc), 
                 LRT.Constraint (representable_ (Sctypes.pointer_sct act.ct, sym_ (ret, Loc)), 
                 LRT.Constraint (alignedI_ (sym_ (arg.lname, arg.bt), sym_ (ret, Loc)), 
-                lrt)))
+                LRT.Logical ((value_s, BT.of_sct act.ct),
+                LRT.Resource (resource, LRT.I)))))
               in
               return (rt, local)
            | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
@@ -1616,7 +1634,17 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Kill (M_Static ct, asym) -> 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let@ local = destroy loc Kill local (sym_ (arg.lname, arg.bt)) ct in
+              let@ (_, local) = 
+                resource_request loc (Access Kill) local 
+                  (RER.Predicate {
+                       name = Ctype ct;
+                       pointer = sym_ (arg.lname, arg.bt);
+                       iargs = [];
+                       oargs = [BT.of_sct ct; BT.Bool];
+                       unused = true;
+                     }
+                  )
+              in
               let rt = RT.Computational ((Sym.fresh (), Unit), I) in
               return (rt, local)
            | M_Store (_is_locking, act, pasym, vasym, mo) -> 
@@ -1632,25 +1660,62 @@ module Make (G : sig val global : Global.t end) = struct
                 let in_range_lc = 
                   representable_ (act.ct, sym_ (varg.lname, varg.bt)) in
                 if Solver.holds local in_range_lc then return () else 
-                 let (constr,state) = 
-                   Explain.unsatisfied_constraint names local in_range_lc
-                 in
-                 fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
+                  let (constr,state) = 
+                    Explain.unsatisfied_constraint names local in_range_lc
+                  in
+                  fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
-              let@ (resource, local) = 
-                store loc local (sym_ (parg.lname, parg.bt))
-                  (sym_ (varg.lname, varg.bt)) act.ct
+              let@ (_, local) = 
+                resource_request loc (Access (Store None)) local 
+                  (RER.Predicate {
+                       name = Ctype act.ct; 
+                       pointer = sym_ (parg.lname, parg.bt);
+                       iargs = [];
+                       oargs = [BT.of_sct act.ct; BT.Bool];
+                       unused = true;
+                  })
+              in
+              let resource = 
+                RE.Predicate {
+                    name = Ctype act.ct;
+                    pointer = sym_ (parg.lname, parg.bt);
+                    iargs = [];
+                    oargs = [(sym_ (varg.lname, varg.bt)); (bool_ true)];
+                    unused = true;
+                  }
               in
               let rt = RT.Computational ((Sym.fresh (), Unit), Resource (resource, LRT.I)) in
               return (rt, local)
            | M_Load (act, pasym, _mo) -> 
               let@ parg = arg_of_asym local pasym in
-              let bt = BT.of_sct act.ct in
-              let@ () = ensure_base_type loc ~expect:Loc parg.bt in
+              let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
+              let@ (resource, _) = 
+                resource_request loc (Access (Load None)) local 
+                  (RER.Predicate { 
+                       name = Ctype act.ct ;
+                       pointer = sym_ (parg.lname, parg.bt);
+                       iargs = [];
+                       oargs = [BT.of_sct act.ct ; BT.Bool];
+                       unused = true;
+                     })
+              in
+              let@ value = match resource with
+              | Predicate {name = Ctype ct'; oargs = [value; init]; _} 
+                   when Sctypes.equal act.ct ct' &&
+                          Solver.holds local init -> 
+                 return value
+              | Predicate {name = Ctype ct'; oargs = [value; init]; _} 
+                   when Sctypes.equal act.ct ct' -> 
+                 let state = Explain.state names local in
+                 fail loc (Uninitialised_read {is_member = None; state})
+              | _ -> 
+                 Debug_ocaml.error "load request did not return a ctype predicate"
+              in
               let ret = Sym.fresh () in
-              let@ it = load loc local (sym_ (parg.lname, parg.bt)) act.ct in
-              let constr = def_ ret it in
-              let rt = RT.Computational ((ret, bt), Constraint (constr, LRT.I)) in
+              let constr = def_ ret value in
+              let rt = RT.Computational ((ret, IT.bt value), 
+                       Constraint (constr, LRT.I)) 
+              in
               return (rt, local)
            | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
               Debug_ocaml.error "todo: RMW"

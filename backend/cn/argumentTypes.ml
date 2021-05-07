@@ -3,7 +3,7 @@ open Subst
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
-module RE = Resources
+module RE = Resources.RE
 module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 
@@ -61,7 +61,7 @@ module Make (I: I_Sig) = struct
          let t' = subst_var substitution t in
          Logical ((name,ls),t')
     | Resource (re,t) -> 
-       let re = Resources.subst_var substitution re in
+       let re = RE.subst_var substitution re in
        let t = subst_var substitution t in
        Resource (re,t)
     | Constraint (lc,t) -> 
@@ -98,7 +98,7 @@ module Make (I: I_Sig) = struct
          let t' = subst_it substitution t in
          Logical ((name,ls),t')
     | Resource (re,t) -> 
-       let re = Resources.subst_it substitution re in
+       let re = RE.subst_it substitution re in
        let t = subst_it substitution t in
        Resource (re,t)
     | Constraint (lc,t) -> 

@@ -3,12 +3,12 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
-module RE = Resources
+module RE = Resources.RE
 module PackingFT = ArgumentTypes.Make(Assignment)
 open Pp
 
 
-open Resources
+open Resources.RE
 open BT
 open IT
 

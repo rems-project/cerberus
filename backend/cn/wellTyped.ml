@@ -4,6 +4,7 @@ module BT = BaseTypes
 module SymSet = Set.Make(Sym)
 module TE = TypeErrors
 module L = Local
+module RE = Resources.RE
 
 open Global
 open TE
@@ -524,8 +525,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   module WRE = struct
-    open Resources
-    type t = Resources.t
+
+    open Resources.RE
 
     let welltyped loc (names : Explain.naming) local = 
 

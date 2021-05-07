@@ -1,6 +1,7 @@
 module IT = IndexTerms
 module BT = BaseTypes
-module RE = Resources
+module RE = Resources.RE
+module RER = Resources.Requests
 module LC = LogicalConstraints
 module LS = LogicalSorts
 module SymSet = Set.Make(Sym)
@@ -8,7 +9,7 @@ module StringMap = Map.Make(String)
 module SymPairMap = Map.Make(SymRel.SymPair)
 module L = Local
 
-open Resources
+open Resources.RE
 open Pp
 
 module Make (G : sig val global : Global.t end) = struct 
@@ -523,6 +524,11 @@ module Make (G : sig val global : Global.t end) = struct
   let resource names local re = 
     let (explanation, local) = explanation names local (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
+    (re_pp, pp_state_with_model local explanation (counter_model local))
+
+  let resource_request names local re = 
+    let (explanation, local) = explanation names local (RER.free_vars re) in
+    let re_pp = RER.pp (RER.subst_vars explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation (counter_model local))
 
   let resources names local (re1, re2) = 
