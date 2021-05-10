@@ -521,10 +521,10 @@ metavar ty_bt {{ tex }} ::= {{ ocaml 'bt }} {{ phantom }}
 grammar
 
   bool_op :: '' ::= {{ auxparam 'bt }}
-    | neg term_aux                         ::   :: Not
-    | term_aux1 = term_aux2                ::   :: Eq
-    | /\\ ( </ term_auxi // , // i />    ) ::   :: And
-    | term_aux1 /\ term_aux2               :: M :: And_Binary {{ ocaml And ( [ [[term_aux1]] , [[term_aux2]] ] ) }}
+    | neg term_aux                         ::     :: Not
+    | term_aux1 = term_aux2                ::     :: Eq
+    | /\\ ( </ term_auxi // , // i />    ) ::     :: And
+    | term_aux1 /\ term_aux2               :: X M :: And_Binary {{ ocaml And ( [ [[term_aux1]] , [[term_aux2]] ] ) }}
 
 
   arith_op :: '' ::= {{ auxparam 'bt }}
