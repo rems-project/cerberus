@@ -36,7 +36,7 @@ grammar
     | opt ( base_type )                         ::   :: Option  {{ com option            }}
     % ASK Delete this type? Would complicate spine judgement if remains
     | base_type1 , .. , base_typen -> base_type ::   :: Param   {{ com parameter types   }}
-    | of_ctype ( ct )                           :: M :: Of_Ctype {{ com of a C type      }}
+    | to_base ( ct )                            :: M :: Of_Ctype {{ com of a C type      }}
                                                                  {{ tex \mathrm{of\_ctype}( [[ct]] ) }} 
                                                                  {{ ocaml (BT.of_sct ( [[ct]] ) ) }}
 
@@ -562,7 +562,7 @@ grammar
                                                {{ com literal integer                          }}
     | of_mem_int ty_mem_int :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
                                                {{ tex \mathrm{of\_mem\_int}( [[ty_mem_int]] )  }}
-    | of_ctype ct           :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
+    | to_int ct             :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
                                                {{ tex \mathrm{of\_ctype}( [[ct]] )             }}
                                                {{ com size of a C type                         }}
     | ptr_size              :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
@@ -1001,7 +1001,7 @@ defns
     C ; L ; N |- smt_pval_aux1 => _' : loc . _t'
     C ; L ; N |- smt_pval_aux2 => _'' : integer . _t''
     -------------------------------------------------------- :: Array_Shift
-    C ; L ; N |- array_shift ( smt_pval_aux1 , ct , smt_pval_aux2 ) => y : loc . y = embed smt_pval_aux1 +ptr embed smt_pval_aux2 * of_ctype ct
+    C ; L ; N |- array_shift ( smt_pval_aux1 , ct , smt_pval_aux2 ) => y : loc . y = embed smt_pval_aux1 +ptr embed smt_pval_aux2 * to_int ct
 
 
     % TODO member_shift
@@ -1114,7 +1114,7 @@ defns
     
     C ; L ; N |- smt_pval_aux => _ : integer . _t
     -------------------------------------------- :: Create
-    C ; L ; N ; cdot |- create ( smt_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : of_ctype ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed smt_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
+    C ; L ; N ; cdot |- create ( smt_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed smt_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
 
 
     % NOT IMPLEMENTED:
@@ -1122,7 +1122,7 @@ defns
 
 
     C ; L ; N |- smt_pval_aux1 => _ : loc . _t
-    C ; L ; N |- smt_pval_aux' => _' : of_ctype ( ct ) . _t'
+    C ; L ; N |- smt_pval_aux' => _' : to_base ( ct ) . _t'
     % ASK can we store things of type (or types containing) arrays? If so, this rule is a problem
     % NOT IMPLEMENTED: locking boolean
     smt ( N => representable ( ct , embed smt_pval_aux' ) )
@@ -1166,7 +1166,7 @@ defns
     % pcall ( mu_name , </ ty_asymi // , // i /> )          :: :: proc   {{ com procedure call              }}
 
   defn
-    C ; L ; N ; R |- mu_is_expr_aux => ret :: :: IS_Expr :: IS_Expr by
+    C ; L ; N ; R |- mu_is_expr_aux => ret :: :: IS_Expr :: IS_Expr_ by
   
   
     C ; L ; N ; R |- mu_action => ret
