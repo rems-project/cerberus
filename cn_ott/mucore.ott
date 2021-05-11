@@ -558,15 +558,15 @@ grammar
 grammar
 
   Z_t {{ tex z }} :: 'Z_' ::= {{ ocaml Z.t }} {{ phantom }} {{ com OCaml arbitrary-width integer }}
-    | i                     :: M :: of_index   {{ ocaml OF_INDEX [[i]]                         }}
-                                               {{ com literal integer                          }}
-    | of_mem_int ty_mem_int :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
-                                               {{ tex \mathrm{of\_mem\_int}( [[ty_mem_int]] )  }}
-    | to_int ct             :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
-                                               {{ tex \mathrm{to\_int}( [[ct]] )               }}
-                                               {{ com size of a C type                         }}
-    | ptr_size              :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
-                                               {{ com size of a pointer                        }}
+    | i                 :: M :: of_index   {{ ocaml OF_INDEX [[i]]                         }}
+                                           {{ com literal integer                          }}
+    | to_int ty_mem_int :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
+                                           {{ tex \mathrm{to\_int}( [[ty_mem_int]] )       }}
+    | to_int ct         :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
+                                           {{ tex \mathrm{size\_of}( [[ct]] )              }}
+                                           {{ com size of a C type                         }}
+    | ptr_size          :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
+                                           {{ com size of a pointer                        }}
 
 grammar
 
@@ -778,8 +778,8 @@ grammar
 %
 % Duplication going on here (could factor out int, ptr, arr, and struct rules)
 %
-%    ---------------------------------------------------------------------------------- :: Int
-%    C ; L ; N |- int ty_mem_int => mem y , integer , y = of_mem_int ty_mem_int
+%    ---------------------------------------------------------------------- :: Int
+%    C ; L ; N |- int ty_mem_int => mem y , integer , y = to_int ty_mem_int
 %
 %
 %    -------------------------------------------------------- :: Ptr_Null
@@ -812,8 +812,8 @@ defns
     C ; L ; N |- mu_object_value => obj tyvar_sym : base_type . term_aux :: :: Pval_Obj_ :: Pval_Obj_ by
 
 
-    -------------------------------------------------------------------------- :: Int
-    C ; L ; N |- ty_mem_int => obj y : integer . y = of_mem_int ty_mem_int
+    ------------------------------------------------------------------ :: Int
+    C ; L ; N |- ty_mem_int => obj y : integer . y = to_int ty_mem_int
 
 
     ------------------------------------------------------------------ :: Ptr
