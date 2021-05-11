@@ -37,8 +37,8 @@ grammar
     % ASK Delete this type? Would complicate spine judgement if remains
     | base_type1 , .. , base_typen -> base_type ::   :: Param   {{ com parameter types   }}
     | to_base ( ct )                            :: M :: Of_Ctype {{ com of a C type      }}
-                                                                 {{ tex \mathrm{of\_ctype}( [[ct]] ) }} 
-                                                                 {{ ocaml (BT.of_sct ( [[ct]] ) ) }}
+                                                                 {{ tex \mathrm{to\_base}( [[ct]] ) }} 
+                                                                 {{ ocaml (BT.of_sct ( [[ct]] ) )   }}
 
 grammar
 
@@ -563,7 +563,7 @@ grammar
     | of_mem_int ty_mem_int :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
                                                {{ tex \mathrm{of\_mem\_int}( [[ty_mem_int]] )  }}
     | to_int ct             :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
-                                               {{ tex \mathrm{of\_ctype}( [[ct]] )             }}
+                                               {{ tex \mathrm{to\_int}( [[ct]] )               }}
                                                {{ com size of a C type                         }}
     | ptr_size              :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
                                                {{ com size of a pointer                        }}
