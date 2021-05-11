@@ -29,23 +29,20 @@ and 'TY mu_loaded_value =  (* potentially unspecified C object values *)
    M_LVspecified of 'TY mu_object_value (* specified loaded value *)
 
 
-type 
-mu_ctor =  (* data constructors *)
-   M_Cnil of T.bt (* empty list *)
- | M_Ccons (* list cons *)
- | M_Ctuple (* tuple *)
- | M_Carray (* C array *)
- | M_Civmax (* max integer value *)
- | M_Civmin (* min integer value *)
- | M_Civsizeof (* sizeof value *)
- | M_Civalignof (* alignof value *)
- | M_CivCOMPL (* bitwise complement *)
- | M_CivAND (* bitwise AND *)
- | M_CivOR (* bitwise OR *)
- | M_CivXOR (* bitwise XOR *)
- | M_Cspecified (* non-unspecified loaded value *)
- | M_Cfvfromint (* cast integer to floating value *)
- | M_Civfromfloat (* cast floating to integer value *)
+(** subrules *)
+let is_smt_object_value_of_mu_object_value (mu_object_value5:'TY mu_object_value) : bool =
+  match mu_object_value5 with
+  | (M_OVinteger ty_mem_int) -> (true)
+  | (M_OVpointer ty_mem_ptr) -> (true)
+  | (M_OVarray (mu_loaded_value_list)) -> false
+  | (M_OVstruct (symbol_sym,(symbol_identifier_t_ct_ty_mem_value_list))) -> ((List.for_all (fun (symbol_identifier_,t_ct_,ty_mem_value_) -> true) symbol_identifier_t_ct_ty_mem_value_list))
+  | (M_OVunion (symbol_sym,symbol_identifier,ty_mem_value)) -> (true)
+
+
+let is_smt_loaded_value_of_mu_loaded_value (mu_loaded_value5:'TY mu_loaded_value) : bool =
+  match mu_loaded_value5 with
+  | (M_LVspecified mu_object_value) -> ((is_smt_object_value_of_mu_object_value mu_object_value))
+
 
 
 type 
@@ -59,6 +56,53 @@ type
  | M_Vtuple of ('TY mu_value) list (* tuple *)
 
 
+(** subrules *)
+let rec is_smt_value_of_mu_value (mu_value_5:'TY mu_value) : bool =
+  match mu_value_5 with
+  | (M_Vobject mu_object_value) -> (true)
+  | (M_Vloaded mu_loaded_value) -> (true)
+  | M_Vunit -> (true)
+  | M_Vtrue -> (true)
+  | M_Vfalse -> (true)
+  | (M_Vlist (t_bt,(mu_value_list))) -> ((List.for_all (fun mu_value_ -> (is_smt_value_of_mu_value mu_value_)) mu_value_list))
+  | (M_Vtuple (mu_value_list)) -> ((List.for_all (fun mu_value_ -> (is_smt_value_of_mu_value mu_value_)) mu_value_list))
+
+
+
+type 
+mu_ctor_val =  (* data constructors *)
+   M_Cnil of T.bt (* empty list *)
+ | M_Ccons (* list cons *)
+ | M_Ctuple (* tuple *)
+ | M_Carray (* C array *)
+ | M_Cspecified (* non-unspecified loaded value *)
+
+
+type 
+mu_ctor_expr =  (* data constructors *)
+   M_Civmax (* max integer value *)
+ | M_Civmin (* min integer value *)
+ | M_Civsizeof (* sizeof value *)
+ | M_Civalignof (* alignof value *)
+ | M_CivCOMPL (* bitwise complement *)
+ | M_CivAND (* bitwise AND *)
+ | M_CivOR (* bitwise OR *)
+ | M_CivXOR (* bitwise XOR *)
+ | M_Cfvfromint (* cast integer to floating value *)
+ | M_Civfromfloat (* cast floating to integer value *)
+
+
+(** subrules *)
+let is_smt_ctor_val_of_mu_ctor_val (mu_ctor_val5:mu_ctor_val) : bool =
+  match mu_ctor_val5 with
+  | (M_Cnil t_bt) -> (true)
+  | M_Ccons -> (true)
+  | M_Ctuple -> (true)
+  | M_Carray -> false
+  | M_Cspecified -> (true)
+
+
+
 type 
 'TY mu_pval =  (* pure values *)
    M_PVsym of Symbol.sym (* Core identifier *)
@@ -66,13 +110,95 @@ type
  | M_PVmu_val of 'TY mu_value (* Core values *)
  | M_PVconstrained of ((Mem.mem_iv_constraint * 'TY mu_pval_aux)) list (* constrained value *)
  | M_PVerror of string * 'TY mu_pval_aux (* impl-defined static error *)
- | M_PVctor of mu_ctor * ('TY mu_pval_aux) list (* data constructor application *)
+ | M_PVctor of mu_ctor_val * ('TY mu_pval_aux) list (* data constructor application *)
  | M_PVstruct of Symbol.sym * ((Symbol.identifier * 'TY mu_pval_aux)) list (* C struct expression *)
  | M_PVunion of Symbol.sym * Symbol.identifier * 'TY mu_pval_aux (* C union expression *)
 
 and 'TY mu_pval_aux =  (* pure values with auxiliary info *)
    M_Pval of Location_ocaml.t * annot list * 'TY * 'TY mu_pval
  | M_Pval_no_aux of 'TY mu_pval (* Ott-hack for simpler typing rules *)
+
+
+(** subrules *)
+let is_mu_name_of_mu_pval (mu_pval5:'TY mu_pval) : bool =
+  match mu_pval5 with
+  | (M_PVsym symbol_sym) -> (true)
+  | (M_PVimpl impl_const) -> (true)
+  | (M_PVmu_val mu_value) -> false
+  | (M_PVconstrained (mem_mem_iv_constraint_mu_pval_aux_list)) -> false
+  | (M_PVerror (ty_string,mu_pval_aux)) -> false
+  | (M_PVctor (mu_ctor_val,(mu_pval_aux_list))) -> false
+  | (M_PVstruct (symbol_sym,(symbol_identifier_mu_pval_aux_list))) -> false
+  | (M_PVunion (symbol_sym,symbol_identifier,mu_pval_aux)) -> false
+
+
+let is_mu_seq_expr_of_mu_seq_expr (mu_seq_expr5:'TY mu_seq_expr) : bool =
+  match mu_seq_expr5 with
+  | (M_Seq_Epval mu_pval_aux) -> (true)
+  | (M_Seq_Eccall (ty_act,mu_pval_aux,(mu_pval_aux_list))) -> ((List.for_all (fun mu_pval_aux_ -> true) mu_pval_aux_list))
+  | (M_Seq_Eproc (mu_name,(mu_pval_aux_list))) -> ((is_mu_name_of_mu_pval mu_name) && (List.for_all (fun mu_pval_aux_ -> true) mu_pval_aux_list))
+
+
+let is_mu_pexpr_of_mu_pexpr (mu_pexpr5:'TY mu_pexpr) : bool =
+  match mu_pexpr5 with
+  | (M_PEpval mu_pval_aux) -> (true)
+  | (M_PEctor (mu_ctor_expr,(mu_pval_aux_list))) -> ((List.for_all (fun mu_pval_aux_ -> true) mu_pval_aux_list))
+  | (M_PEarray_shift (mu_pval_aux1,t_ct,mu_pval_aux2)) -> (true)
+  | (M_PEmember_shift (mu_pval_aux,symbol_sym,symbol_identifier)) -> (true)
+  | (M_PEnot mu_pval_aux) -> (true)
+  |  (M_PEop ( binop , mu_pval_aux1 , mu_pval_aux2 ) )  -> (true)
+  | (M_PEmemberof (symbol_sym,symbol_identifier,mu_pval_aux)) -> (true)
+  | (M_PEcall (mu_name,(mu_pval_aux_list))) -> ((is_mu_name_of_mu_pval mu_name) && (List.for_all (fun mu_pval_aux_ -> true) mu_pval_aux_list))
+  | (M_PEassert_undef (mu_pval_aux,ty_loc,uB_name)) -> (true)
+  | (M_PEbool_to_integer mu_pval_aux) -> (true)
+  | (M_PEconv_int (ty_act,mu_pval_aux)) -> (true)
+  | (M_PEwrapI (ty_act,mu_pval_aux)) -> (true)
+
+
+let is_mu_seq_expr_aux_of_mu_seq_expr_aux (mu_seq_expr_aux5:'TY mu_seq_expr_aux) : bool =
+  match mu_seq_expr_aux5 with
+  | (M_Seq_expr (ty_loc,annots,mu_seq_expr)) -> ((is_mu_seq_expr_of_mu_seq_expr mu_seq_expr))
+  | (M_Seq_no_aux mu_seq_expr) -> ((is_mu_seq_expr_of_mu_seq_expr mu_seq_expr))
+
+
+let is_mu_pexpr_aux_of_mu_pexpr_aux (mu_pexpr_aux5:'TY mu_pexpr_aux) : bool =
+  match mu_pexpr_aux5 with
+  | (M_Pexpr (ty_loc,annots,tyvar_TY,mu_pexpr)) -> ((is_mu_pexpr_of_mu_pexpr mu_pexpr))
+  | (M_Pexpr_no_aux mu_pexpr) -> ((is_mu_pexpr_of_mu_pexpr mu_pexpr))
+
+
+let rec is_smt_pval_aux_of_mu_pval_aux (mu_pval_aux5:'TY mu_pval_aux) : bool =
+  match mu_pval_aux5 with
+  | (M_Pval (ty_loc,annots,tyvar_TY,mu_pval)) -> false
+  | (M_Pval_no_aux mu_pval) -> ((is_smt_pval_of_mu_pval mu_pval))
+and
+is_smt_pval_of_mu_pval (mu_pval5:'TY mu_pval) : bool =
+  match mu_pval5 with
+  | (M_PVsym symbol_sym) -> (true)
+  | (M_PVimpl impl_const) -> (true)
+  | (M_PVmu_val mu_value) -> (true)
+  | (M_PVconstrained (mem_mem_iv_constraint_mu_pval_aux_list)) -> ((List.for_all (fun (mem_mem_iv_constraint_,mu_pval_aux_) -> (is_smt_pval_aux_of_mu_pval_aux mu_pval_aux_)) mem_mem_iv_constraint_mu_pval_aux_list))
+  | (M_PVerror (ty_string,mu_pval_aux)) -> ((is_smt_pval_aux_of_mu_pval_aux mu_pval_aux))
+  | (M_PVctor (mu_ctor_val,(mu_pval_aux_list))) -> ((List.for_all (fun mu_pval_aux_ -> (is_smt_pval_aux_of_mu_pval_aux mu_pval_aux_)) mu_pval_aux_list))
+  | (M_PVstruct (symbol_sym,(symbol_identifier_mu_pval_aux_list))) -> ((List.for_all (fun (symbol_identifier_,mu_pval_aux_) -> (is_smt_pval_aux_of_mu_pval_aux mu_pval_aux_)) symbol_identifier_mu_pval_aux_list))
+  | (M_PVunion (symbol_sym,symbol_identifier,mu_pval_aux)) -> ((is_smt_pval_aux_of_mu_pval_aux mu_pval_aux))
+
+
+
+type 
+'TY mu_pexpr =  (* pure expressions *)
+   M_PEpval of 'TY mu_pval_aux (* pure values *)
+ | M_PEctor of mu_ctor_expr * ('TY mu_pval_aux) list (* data constructor application *)
+ | M_PEarray_shift of 'TY mu_pval_aux * T.ct * 'TY mu_pval_aux (* pointer array shift *)
+ | M_PEmember_shift of 'TY mu_pval_aux * Symbol.sym * Symbol.identifier (* pointer struct/union member shift *)
+ | M_PEnot of 'TY mu_pval_aux (* boolean not *)
+ | M_PEop of Core.binop * 'TY mu_pval_aux * 'TY mu_pval_aux (* binary operations *)
+ | M_PEmemberof of Symbol.sym * Symbol.identifier * 'TY mu_pval_aux (* C struct/union member access *)
+ | M_PEcall of 'TY mu_pval * ('TY mu_pval_aux) list (* pure function call *)
+ | M_PEassert_undef of 'TY mu_pval_aux * Location_ocaml.t * Undefined.undefined_behaviour
+ | M_PEbool_to_integer of 'TY mu_pval_aux
+ | M_PEconv_int of 'TY act * 'TY mu_pval_aux
+ | M_PEwrapI of 'TY act * 'TY mu_pval_aux
 
 
 type 
@@ -82,24 +208,9 @@ type
 
 
 type 
-'TY mu_pexpr =  (* pure expressions *)
-   M_PEpval of 'TY mu_pval_aux (* pure values *)
- | M_PEarray_shift of 'TY mu_pval_aux * T.ct * 'TY mu_pval_aux (* pointer array shift *)
- | M_PEmember_shift of 'TY mu_pval_aux * Symbol.sym * Symbol.identifier (* pointer struct/union member shift *)
- | M_PEnot of 'TY mu_pval_aux (* boolean not *)
- | M_PEop of Core.binop * 'TY mu_pval_aux * 'TY mu_pval_aux (* binary operations *)
- | M_PEmemberof of Symbol.sym * Symbol.identifier * 'TY mu_pval_aux (* C struct/union member access *)
- | M_PEcall of Symbol.sym Core.generic_name * ('TY mu_pval_aux) list (* pure function call *)
- | M_PEassert_undef of 'TY mu_pval_aux * Location_ocaml.t * Undefined.undefined_behaviour
- | M_PEbool_to_integer of 'TY mu_pval_aux
- | M_PEconv_int of 'TY act * 'TY mu_pval_aux
- | M_PEwrapI of 'TY act * 'TY mu_pval_aux
-
-
-type 
 mu_pattern = 
    M_CaseBase of ( Symbol.sym option * T.bt )
- | M_CaseCtor of mu_ctor * (mu_pattern_aux) list
+ | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
 
 and mu_pattern_aux = 
    M_Pattern of Location_ocaml.t * annot list * mu_pattern
@@ -113,15 +224,15 @@ m_kill_kind =
 
 
 type 
-'TY mu_tpval_aux =  (* top-level pure values with location and annotations *)
-   M_TPval of Location_ocaml.t * annot list * 'TY * 'TY mu_tpval
- | M_TPval_no_aux of 'TY mu_tpval (* Ott-hack for simpler typing rules *)
-
-
-type 
 'TY mu_pexpr_aux =  (* pure expressions with location and annotations *)
    M_Pexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_pexpr
  | M_Pexpr_no_aux of 'TY mu_pexpr (* Ott-hack for simpler typing rules *)
+
+
+type 
+'TY mu_tpval_aux =  (* top-level pure values with location and annotations *)
+   M_TPval of Location_ocaml.t * annot list * 'TY * 'TY mu_tpval
+ | M_TPval_no_aux of 'TY mu_tpval (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -149,7 +260,6 @@ lit =
  | Lit_Bool of bool
  | Lit_Z of Z.t
  | Lit_Q of ( int * int )
- | Lit_Pointer of Z.t
 
 
 type 
@@ -180,19 +290,24 @@ type
 'TY mu_seq_expr =  (* sequential (effectful) expressions *)
    M_Seq_Epval of 'TY mu_pval_aux (* pure values *)
  | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * ('TY mu_pval_aux) list (* C function call *)
- | M_Seq_Eproc of Symbol.sym Core.generic_name * ('TY mu_pval_aux) list (* procedure call *)
+ | M_Seq_Eproc of 'TY mu_pval * ('TY mu_pval_aux) list (* procedure call *)
 
 
 type 
-'TY mu_tval =  (* (effectful) top-level values *)
-   M_TVdone of 'TY mu_pval_aux (* end of top-level expression *)
- | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+'TY mu_paction =  (* memory actions with polarity *)
+   M_Paction of Core.polarity * 'TY mu_action_aux
 
 
 type 
 'TY mu_seq_expr_aux =  (* sequential (effectful) expressions with auxiliary info *)
    M_Seq_expr of Location_ocaml.t * annot list * 'TY mu_seq_expr
  | M_Seq_no_aux of 'TY mu_seq_expr (* Ott-hack for simpler typing rules *)
+
+
+type 
+'TY mu_tval =  (* (effectful) top-level values *)
+   M_TVdone of 'TY mu_pval_aux (* end of top-level expression *)
+ | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
 
 
 type 
@@ -216,17 +331,6 @@ type
  | M_Va_copy of 'TY mu_pval_aux
  | M_Va_arg of 'TY mu_pval_aux * 'TY act
  | M_Va_end of 'TY mu_pval_aux
-
-
-type 
-'TY mu_paction =  (* memory actions with polarity *)
-   M_Paction of Core.polarity * 'TY mu_action_aux
-
-
-type 
-'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
-   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
- | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -266,6 +370,18 @@ and 'TY mu_texpr =  (* top-level (effectful) expressions *)
 
 
 type 
+'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
+   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
+ | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
+
+
+type 
+predicate_name =  (* names of predicates *)
+   Ctype of Sctypes.t (* C type *)
+ | Id of string (* arbitrary *)
+
+
+type 
 'bt bool_op = 
    Not of 'bt term_aux
  | Eq of 'bt term_aux * 'bt term_aux
@@ -276,9 +392,7 @@ and 'bt arith_op =
 
 and 'bt list_op = 
    Nil
- | Cons of 'bt term_aux * 'bt term_aux
  | Tail of 'bt term_aux
- | List of ('bt term_aux) list
  | NthList of int * 'bt term_aux
 
 and 'bt tuple_op = 
@@ -318,20 +432,13 @@ and 'bt term =
  | CT_pred of 'bt ct_pred
  | Option_op of 'bt option_op
  | Param_op of 'bt param_op
+ | Of_res of resource
 
 and 'bt term_aux =  (* terms with auxiliary info *)
    IT of 'bt term * 'bt
  | IT_no_aux of 'bt term (* Ott-hack for simpler typing rules *)
 
-
-type 
-predicate_name =  (* names of predicates *)
-   Ctype of Sctypes.t (* C type *)
- | Id of string (* arbitrary *)
-
-
-type 
-resource = 
+and resource = 
    Predicate of type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; init: bool; perm : int * int; }
 
 
@@ -345,13 +452,21 @@ ret =  (* return types *)
 
 
 type 
+spine_elem =  (* spine element *)
+   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
+ | Spine_Elem_logical_val of logical_val (* logical variable *)
+ | Spine_Elem_resource of resource (* resource *)
+
+
+type 
 arg =  (* argument types *)
    ArgTy_Computational of 'sym * base_type * arg
  | ArgTy_Logical of 'sym * base_type * arg
  | ArgTy_Resource of resource * arg
  | ArgTy_Constraint of 'bt term_aux * arg
- | ArgTy_I
+ | ArgTy_Ret of ret
 
+(** definitions *)
 (** definitions *)
 (** definitions *)
 (** definitions *)
