@@ -186,6 +186,12 @@ is_smt_pval_of_mu_pval (mu_pval5:'TY mu_pval) : bool =
 
 
 type 
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
+
+
+type 
 'TY mu_pexpr =  (* pure expressions *)
    M_PEpval of 'TY mu_pval_aux (* pure values *)
  | M_PEctor of mu_ctor_expr * ('TY mu_pval_aux) list (* data constructor application *)
@@ -215,12 +221,6 @@ mu_pattern =
 and mu_pattern_aux = 
    M_Pattern of Location_ocaml.t * annot list * mu_pattern
  | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
-
-
-type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
 
 
 type 
