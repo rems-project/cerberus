@@ -10,6 +10,9 @@ sibylfs/lem.log
 ocaml_frontend/generated
 sibylfs/generated
 
+# Elaboration PP tex generation
+generated_tex/
+
 public/node_modules/
 
 
