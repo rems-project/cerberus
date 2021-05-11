@@ -941,34 +941,34 @@ defns
   spine_jtype :: '' ::=
 
 defn
-    C ; L ; N ; R |- spine_elem1 , .. , spine_elemn :; arg >> ret :: :: Spine :: Spine_ by
+    C ; L ; N ; R |- </ spine_elemi // , // i /> :; arg >> ret :: :: Spine :: Spine_ by
 
     --------------------------------- :: Empty
     C ; L ; N ; cdot |- :; ret >> ret
 
 
     C ; L ; N |- mu_pval_aux => _ : base_type . _
-    C ; L ; N ; R |- spine_elem1 , .. , spine_elemn :; [ mu_pval_aux / x ] arg >> ret
-    ---------------------------------------------------------------------------------------------- :: Computational
-    C ; L ; N ; R |- mu_pval_aux , spine_elem1 , .. , spine_elemn :; pi x : base_type . arg >> ret
+    C ; L ; N ; R |- </ spine_elemi // i /> :; [ mu_pval_aux / x ] arg >> ret
+    -------------------------------------------------------------------------------------- :: Computational
+    C ; L ; N ; R |- mu_pval_aux , </ spine_elemi // i /> :; pi x : base_type . arg >> ret
 
 
     L |- logical_val : base_type
-    C ; L ; N ; R |- spine_elem1 , .. , spine_elemn :; [ logical_val / x ] arg >> ret
-    ---------------------------------------------------------------------------------------------------- :: Logical
-    C ; L ; N ; R |- logical_val , spine_elem1 , .. , spine_elemn :;  forall x : base_type . arg >> ret
+    C ; L ; N ; R |- </ spine_elemi // i /> :; [ logical_val / x ] arg >> ret
+    ------------------------------------------------------------------------------------------- :: Logical
+    C ; L ; N ; R |- logical_val , </ spine_elemi // i /> :;  forall x : base_type . arg >> ret
 
 
     smt ( N => resource = resource' )
-    C ; L ; N ; R |- spine_elem1 , .. , spine_elemn :; arg >> ret
-    ---------------------------------------------------------------------------------------------------- :: Resource
-    C ; L ; N ; R , resource |- resource' , spine_elem1 , .. , spine_elemn :;  resource' --o arg >> ret
+    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
+    ------------------------------------------------------------------------------------------- :: Resource
+    C ; L ; N ; R , resource |- resource' , </ spine_elemi // i /> :;  resource' --o arg >> ret
 
 
     smt ( N => term_aux )
-    C ; L ; N ; R |- spine_elem1 , .. , spine_elemn :; arg >> ret
-    ------------------------------------------------------------------------------------- :: Constraint
-    C ; L ; N ; R |- spine_elem1 , .. , spine_elemn :;  term_aux -) arg >> ret
+    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
+    ------------------------------------------------------------------ :: Constraint
+    C ; L ; N ; R |- </ spine_elemi // i /> :;  term_aux -) arg >> ret
 
 
 defns
