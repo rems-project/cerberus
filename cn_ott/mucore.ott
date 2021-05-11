@@ -808,7 +808,7 @@ grammar
 defns
   object_value_jtype :: '' ::=
 
-defn
+  defn
     C ; L ; N |- mu_object_value => obj tyvar_sym : base_type . term_aux :: :: Pval_Obj_ :: Pval_Obj_ by
 
 
@@ -850,7 +850,7 @@ defn
 defns
   pval_jtype :: '' ::=
 
-defn
+  defn
     C ; L ; N |- mu_pval_aux => tyvar_sym : base_type . term_aux :: :: Pval :: Pval_ by
 
 
@@ -940,7 +940,7 @@ defn
 defns
   spine_jtype :: '' ::=
 
-defn
+  defn
     C ; L ; N ; R |- </ spine_elemi // , // i /> :; arg >> ret :: :: Spine :: Spine_ by
 
     --------------------------------- :: Empty
@@ -974,7 +974,7 @@ defn
 defns
   pexpr_jtype :: '' ::=
 
-defn
+  defn
     C ; L ; N |- mu_pexpr_aux => ident : base_type . term_aux :: :: PExpr :: PExpr_ by
 
 
@@ -1045,134 +1045,140 @@ defn
 defns
   pattern_jtype :: '' ::=
 
-defn
-  mu_pattern_aux : base_type ~> C :: :: Pattern_ :: Pattern_ by
-
-  % TODO
-
-defn
-  mu_sym_or_pattern : base_type ~> C :: :: Sym_Or_Pattern :: Sym_Or_Pattern by
-
-  % TODO
+  defn
+    mu_pattern_aux : base_type ~> C :: :: Pattern_ :: Pattern_ by
+  
+    % TODO
+  
+  defn
+    mu_sym_or_pattern : base_type ~> C :: :: Sym_Or_Pattern :: Sym_Or_Pattern by
+  
+    % TODO
 
 defns
   tpval_jtype :: '' ::=
 
-defn
-  C ; L ; N |- mu_tpval_aux <= ident : base_type . term_aux :: :: TPVal :: TPVal_ by
-
-
-  smt ( N => false )
-  ------------------------------------------------------------- :: Undef
-  C ; L ; N |- undef ty_loc UB_name <= y : base_type . term_aux
-
-
-  C ; L ; N |- mu_pval_aux => y : base_type . term'
-  smt ( N , term'  => term )
-  ----------------------------------------------------- :: Done
-  C ; L ; N |- done mu_pval_aux <= y : base_type . term
+  defn
+    C ; L ; N |- mu_tpval_aux <= ident : base_type . term_aux :: :: TPVal :: TPVal_ by
+  
+  
+    smt ( N => false )
+    ------------------------------------------------------------- :: Undef
+    C ; L ; N |- undef ty_loc UB_name <= y : base_type . term_aux
+  
+  
+    C ; L ; N |- mu_pval_aux => y : base_type . term'
+    smt ( N , term'  => term )
+    ----------------------------------------------------- :: Done
+    C ; L ; N |- done mu_pval_aux <= y : base_type . term
 
 
 defns
   tpexpr_jtype :: '' ::=
 
-defn
-  C ; L ; N |- mu_tpexpr_aux <= ident : base_type . term_aux :: :: TPExpr :: TPExpr_ by
+  defn
+    C ; L ; N |- mu_tpexpr_aux <= ident : base_type . term_aux :: :: TPExpr :: TPExpr_ by
+  
+    % ASK boundary between inference/checking, should there be an SMT here?
+    C ; L ; N |- smt_pval_aux => _ : bool . _t
+    C ; L , y' ; N , embed smt_pval_aux = true  |- mu_tpexpr_aux1 <= y : base_type . term
+    C ; L , y' ; N , embed smt_pval_aux = false |- mu_tpexpr_aux2 <= y : base_type . term
+    -------------------------------------------------------------------------------------------- :: If
+    C ; L ; N |- if smt_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2 <= y : base_type . term
+  
+  
+    % ASK boundary between inference/checking, should there be an SMT here?
+    % ASK should the constraints be propogated?
+    C ; L ; N |- mu_pexpr_aux => _ : base_type . _t
+    mu_sym_or_pattern : base_type ~> C'
+    C , fresh ( C' ) ; L ; N |- [ fresh ( C' ) / C' ] mu_tpexpr <= y : base_type . term
+    -------------------------------------------------------------------------------------- :: Let
+    C ; L ; N |- let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr <= y : base_type . term
+  
+  
+    % ASK boundary between inference/checking, should there be an SMT here?
+    % ASK should the constraints be propogated?
+    C ; L ; N |- mu_pval_aux => _ : base_type . _t
+    </ mu_patterni : base_type ~> Ci // i />
+    </ C , fresh ( Ci ) ; L ; N |- [ fresh ( Ci ) / Ci ] mu_tpexpri <= y : base_type . term // i />
+    --------------------------------------------------------------------------------------------------- :: Case
+    C ; L ; N |- case mu_pval_aux of </ | mu_patterni => mu_tpexpri // i /> end <= y : base_type . term
 
-  % ASK boundary between inference/checking, should there be an SMT here?
-  C ; L ; N |- smt_pval_aux => _ : bool . _t
-  C ; L , y' ; N , embed smt_pval_aux = true  |- mu_tpexpr_aux1 <= y : base_type . term
-  C ; L , y' ; N , embed smt_pval_aux = false |- mu_tpexpr_aux2 <= y : base_type . term
-  -------------------------------------------------------------------------------------------- :: If
-  C ; L ; N |- if smt_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2 <= y : base_type . term
 
-
-  % ASK boundary between inference/checking, should there be an SMT here?
-  % ASK should the constraints be propogated?
-  C ; L ; N |- mu_pexpr_aux => _ : base_type . _t
-  mu_sym_or_pattern : base_type ~> C'
-  C , fresh ( C' ) ; L ; N |- [ fresh ( C' ) / C' ] mu_tpexpr <= y : base_type . term
-  -------------------------------------------------------------------------------------- :: Let
-  C ; L ; N |- let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr <= y : base_type . term
-
-
-  % ASK boundary between inference/checking, should there be an SMT here?
-  % ASK should the constraints be propogated?
-  C ; L ; N |- mu_pval_aux => _ : base_type . _t
-  </ mu_patterni : base_type ~> Ci // i />
-  </ C , fresh ( Ci ) ; L ; N |- [ fresh ( Ci ) / Ci ] mu_tpexpri <= y : base_type . term // i />
-  --------------------------------------------------------------------------------------------------- :: Case
-  C ; L ; N |- case mu_pval_aux of </ | mu_patterni => mu_tpexpri // i /> end <= y : base_type . term
-
-
- defns
-   action_jtype :: '' ::=
+defns
+  action_jtype :: '' ::=
  
- defn
-   C ; L ; N ; R |- mu_action_aux => ret :: :: Action :: Action_ by
- 
- 
-   C ; L ; N |- smt_pval_aux => _ : integer . _t
-   -------------------------------------------- :: Create
-   C ; L ; N ; cdot |- create ( smt_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : of_ctype ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed smt_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
+  defn
+    C ; L ; N ; R |- mu_action_aux => ret :: :: Action :: Action_ by
+    
+    
+    C ; L ; N |- smt_pval_aux => _ : integer . _t
+    -------------------------------------------- :: Create
+    C ; L ; N ; cdot |- create ( smt_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : of_ctype ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed smt_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
 
 
-  % NOT IMPLEMENTED:
-  % C ; L ; N ; cdot |-> create_readonly ( vp , ct , v ) Symbol_prefix => ??
+    % NOT IMPLEMENTED:
+    % C ; L ; N ; cdot |-> create_readonly ( vp , ct , v ) Symbol_prefix => ??
 
 
-  C ; L ; N |- smt_pval_aux1 => _ : loc . _t
-  C ; L ; N |- smt_pval_aux' => _' : of_ctype ( ct ) . _t'
-  % ASK can we store things of type (or types containing) arrays? If so, this rule is a problem
-  smt ( N => representable ( ct , embed smt_pval_aux' ) )
-  smt ( N => embed smt_pval_aux0 = embed smt_pval_aux1 )
-  -------------------------------------------------------- :: Store
-  C ; L ; N ; cdot , [ embed smt_pval_aux0 ] ( one )|- _i - ct -> [ _t'' ] |- store ( _b , ct , smt_pval_aux1 , smt_pval_aux' , _mem_order ) => sigma _ : unit . [ embed smt_pval_aux0 ] ( one )|- tick - ct -> [ embed smt_pval_aux' ] *s I
+    C ; L ; N |- smt_pval_aux1 => _ : loc . _t
+    C ; L ; N |- smt_pval_aux' => _' : of_ctype ( ct ) . _t'
+    % ASK can we store things of type (or types containing) arrays? If so, this rule is a problem
+    % NOT IMPLEMENTED: locking boolean
+    smt ( N => representable ( ct , embed smt_pval_aux' ) )
+    smt ( N => embed smt_pval_aux0 = embed smt_pval_aux1 )
+    -------------------------------------------------------- :: Store
+    C ; L ; N ; cdot , [ embed smt_pval_aux0 ] ( one )|- _i - ct -> [ _t'' ] |- store ( _b , ct , smt_pval_aux1 , smt_pval_aux' , _mem_order ) => sigma _ : unit . [ embed smt_pval_aux0 ] ( one )|- tick - ct -> [ embed smt_pval_aux' ] *s I
 
 
-  C ; L ; N |- smt_pval_aux1 => _ : loc . _t
-  smt ( N => embed smt_pval_aux0 = embed smt_pval_aux1 )
-  ---------------------------------------------------------------------------------------------------------------------------------- :: Kill_Static
-  C ; L ; N ; cdot , [ embed smt_pval_aux0 ] ( one )|- _i - ct -> [ _t' ] |-  kill ( static ct , smt_pval_aux1 ) => sigma _ : unit . I
+    C ; L ; N |- smt_pval_aux1 => _ : loc . _t
+    smt ( N => embed smt_pval_aux0 = embed smt_pval_aux1 )
+    ---------------------------------------------------------------------------------------------------------------------------------- :: Kill_Static
+    C ; L ; N ; cdot , [ embed smt_pval_aux0 ] ( one )|- _i - ct -> [ _t' ] |-  kill ( static ct , smt_pval_aux1 ) => sigma _ : unit . I
 
 
-  % NOT IMPLEMENTED:
-  % C ; L ; N ; ?? |- kill ( dynamic , v ) => ??
+    % NOT IMPLEMENTED:
+    % C ; L ; N ; ?? |- kill ( dynamic , v ) => ??
 
 
-% mu_action_aux {{ tex action\_aux }} :: 'M_' ::= {{ auxparam 'TY }} {{ com memory actions }}
-%   | alloc ( ty_asym1 , ty_asym2 ) Symbol_prefix                                                         :: :: Alloc
-%   | kill ( m_kill_kind , ty_asym )                                                                      :: :: Kill {{ com the boolean indicates whether the action is dynamic (i.e. free()) }}
-%   | store ( ty_bool , ty_act , ty_asym1 , ty_asym2 , Cmm_memory_order )                                 :: :: Store {{ com the boolean indicates whether the store is locking }}
-%   | load ( ty_act , ty_asym , Cmm_memory_order )                                                        :: :: Load
-%   | rmw ( ty_act ,  ty_asym1 , ty_asym2 , ty_asym3 , Cmm_memory_order1 , Cmm_memory_order2 )            :: :: RMW
-%   | fence ( Cmm_memory_order )                                                                          :: :: Fence
-%   | cmp_exch_strong ( ty_act , ty_asym1 , ty_asym2 , ty_asym3 , Cmm_memory_order1 , Cmm_memory_order2 ) :: :: CompareExchangeStrong
-%   | cmp_exch_weak ( ty_act , ty_asym1 , ty_asym2 , ty_asym3 , Cmm_memory_order1 , Cmm_memory_order2 )   :: :: CompareExchangeWeak
-%   | linux_fence ( Linux_linux_memory_order )                                                            :: :: LinuxFence
-%   | linux_load ( ty_act , ty_asym , Linux_linux_memory_order )                                          :: :: LinuxLoad
-%   | linux_store ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                             :: :: LinuxStore
-%   | linux_rmw ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                               :: :: LinuxRMW
+    % mu_action_aux {{ tex action\_aux }} :: 'M_' ::= {{ auxparam 'TY }} {{ com memory actions }}
+    %   | alloc ( ty_asym1 , ty_asym2 ) Symbol_prefix                                                         :: :: Alloc
+    %   | load ( ty_act , ty_asym , Cmm_memory_order )                                                        :: :: Load
+    %   | rmw ( ty_act ,  ty_asym1 , ty_asym2 , ty_asym3 , Cmm_memory_order1 , Cmm_memory_order2 )            :: :: RMW
+    %   | fence ( Cmm_memory_order )                                                                          :: :: Fence
+    %   | cmp_exch_strong ( ty_act , ty_asym1 , ty_asym2 , ty_asym3 , Cmm_memory_order1 , Cmm_memory_order2 ) :: :: CompareExchangeStrong
+    %   | cmp_exch_weak ( ty_act , ty_asym1 , ty_asym2 , ty_asym3 , Cmm_memory_order1 , Cmm_memory_order2 )   :: :: CompareExchangeWeak
+    %   | linux_fence ( Linux_linux_memory_order )                                                            :: :: LinuxFence
+    %   | linux_load ( ty_act , ty_asym , Linux_linux_memory_order )                                          :: :: LinuxLoad
+    %   | linux_store ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                             :: :: LinuxStore
+    %   | linux_rmw ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                               :: :: LinuxRMW
 
-% defn
-%   C ; L ; N ; R |- mu_expr_aux => ret :: :: Expr_Aux :: Expr_Aux_ by
-% 
-% 
-%   C ; L ; N |- mu_pexpr => y : base_type . term
-%   ------------------------------------------------------------------------ :: Pure
-%   C ; L ; N ; cdot |- pure ( mu_pexpr ) => sigma y : base_type . term /\ I
-% 
-% 
-%   C ; L ; N ; R |- mu_action_aux => ret
-%   -------------------------------------------- :: Action
-%   C ; L ; N ; R |- ty_loc mu_action_aux => ret
-% 
-% 
-%   C ; L ; N ; R |- mu_action_aux => ret
-%   ---------------------------------------------------- :: Neg_Action
-%   C ; L ; N ; R |- neg ( ty_loc mu_action_aux ) => ret
-% 
-%   % memop ( mu_memop )                                    :: :: memop  {{ com pointer op involving memory }}
-%   % skip                                                  :: :: skip   {{ com skip                        }}
-%   % ccall ( ty_act , ty_asym , </ ty_asymi // , // i /> ) :: :: ccall  {{ com C function call             }}
-%   % pcall ( mu_name , </ ty_asymi // , // i /> )          :: :: proc   {{ com procedure call     
+  defn
+    C ; L ; N ; R |- mu_seq_expr_aux => ret :: :: Seq_Expr :: Seq_Expr_ by
+
+    C ; L ; N |- mu_pval_aux => y : base_type . term
+    ------------------------------------------------------------------ :: Pure
+    C ; L ; N ; cdot |- mu_pval_aux => sigma y : base_type . term /\ I
+  
+
+    % TODO
+    % ccall ( ty_act , ty_asym , </ ty_asymi // , // i /> ) :: :: ccall  {{ com C function call             }}
+    % pcall ( mu_name , </ ty_asymi // , // i /> )          :: :: proc   {{ com procedure call              }}
+
+  defn
+    C ; L ; N ; R |- mu_is_expr_aux => ret :: :: IS_Expr :: IS_Expr by
+  
+  
+    C ; L ; N ; R |- mu_action => ret
+    --------------------------------- :: Action
+    C ; L ; N ; R |- Pos mu_action => ret
+  
+  
+    C ; L ; N ; R |- mu_action => ret
+    ----------------------------------------- :: Neg_Action
+    C ; L ; N ; R |- Neg mu_action => ret
+
+    % TODO
+    % memop ( mu_memop )                                    :: :: memop  {{ com pointer op involving memory }}
+    % skip                                                  :: :: skip   {{ com skip                        }}
+
