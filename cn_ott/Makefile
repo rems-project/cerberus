@@ -6,7 +6,6 @@ all:
 	    -tex_suppress_ntr ty_loc \
 	    -tex_suppress_ntr tyvar_TY \
 	    -tex_suppress_ntr mu_pval_aux \
-	    -tex_suppress_ntr smt_pval_aux \
 	    -tex_suppress_ntr mu_pexpr_aux \
 	    -tex_suppress_ntr mu_tpval_aux \
 	    -tex_suppress_ntr mu_pattern_aux \

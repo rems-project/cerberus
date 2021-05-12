@@ -11,6 +11,8 @@ embed {{ tex-preamble
 metavar ident , x , y , yp {{ tex y_p }} , _ ::= {{ phantom }}
   {{ com subscript p is for pointers }}
 
+indexvar n , i , j ::= {{ phantom }} {{ com index variables }}
+
 grammar
 
   Sctypes_t , ct {{ tex \tau }} :: '' ::= {{ ocaml Sctypes.t }} {{ phantom }} {{ com C type }}
@@ -23,44 +25,72 @@ grammar
     | ident :: :: ident
 
   base_type {{ tex \beta }} , _bt {{ tex \_ }} :: '' ::= {{ com base types }}
-    | unit                                      ::   :: Unit    {{ com unit              }}
-    | bool                                      ::   :: Bool    {{ com boolean           }}
-    | integer                                   ::   :: Integer {{ com integer           }}
-    | real                                      ::   :: Read    {{ com rational numbers? }}
-    | loc                                       ::   :: Loc     {{ com location          }}
-    | array base_type                           ::   :: Array   {{ com array             }}
-    | [ base_type ]                             ::   :: ListTy  {{ com list              }}
-    | base_type1 * .. * base_typen              ::   :: TupleTy {{ com tuple             }}
-    | struct ty_tag                             ::   :: Struct  {{ com struct            }}
-    | { base_type }                             ::   :: Set     {{ com set               }}
-    | opt ( base_type )                         ::   :: Option  {{ com option            }}
-    % ASK Delete this type? Would complicate spine judgement if remains
-    | base_type1 , .. , base_typen -> base_type ::   :: Param   {{ com parameter types   }}
-    | to_base ( ct )                            :: M :: Of_Ctype {{ com of a C type      }}
-                                                                 {{ tex \mathrm{to\_base}( [[ct]] ) }} 
+    | unit                                       ::   :: Unit    {{ com unit              }}
+    | bool                                       ::   :: Bool    {{ com boolean           }}
+    | integer                                    ::   :: Integer {{ com integer           }}
+    | real                                       ::   :: Read    {{ com rational numbers? }}
+    | loc                                        ::   :: Loc     {{ com location          }}
+    | array base_type                            ::   :: Array   {{ com array             }}
+    | [ base_type ]                              ::   :: ListTy  {{ com list              }}
+    | </ base_typei // * // i />                 ::   :: TupleTy {{ com tuple             }}
+    | struct ty_tag                              ::   :: Struct  {{ com struct            }}
+    | { base_type }                              ::   :: Set     {{ com set               }}
+    | opt ( base_type )                          ::   :: Option  {{ com option            }}
+    | base_type1 , ... , base_typen -> base_type ::   :: Param   {{ com parameter types   }}
+    | to_base ( ct )                             :: M :: Of_Ctype {{ com of a C type      }}
+                                                                 {{ tex \beta_{ [[ct]] } }} 
                                                                  {{ ocaml (BT.of_sct ( [[ct]] ) )   }}
 
 grammar
 
   % Binary operators
-  binop :: 'Op' ::= {{ ocaml Core.binop }} {{ phantom }} {{ com binary operators }}
+  binop {{ tex \mathbin{ binop } }}:: 'Op' ::= {{ ocaml Core.binop }} {{ phantom }} {{ com binary operators }}
     % arithmetic operators (integer -> integer -> integer)
-    | +     :: :: Add   {{ tex \texttt{+}         }} {{ com addition       }}
-    | -     :: :: Sub   {{ tex \texttt{-}         }} {{ com subtraction    }}
-    | *     :: :: Mul   {{ tex \texttt{*}         }} {{ com multiplication }}
-    | /     :: :: Div   {{ tex \texttt{/}         }} {{ com division       }}
-    | rem_t :: :: Rem_t                              {{ com modulus        }}
-    | rem_f :: :: Rem_f                              {{ com remainder      }}
-    | ^     :: :: Exp   {{ tex \texttt{\char`^}   }} {{ com exponentiation }}
+    | +     :: :: Add   {{ tex \mathbin{ \texttt{+} } }} {{ com addition       }}
+    | -     :: :: Sub   {{ tex \mathbin{ \texttt{-} } }} {{ com subtraction    }}
+    | *     :: :: Mul   {{ tex \mathbin{ \texttt{*} } }} {{ com multiplication }}
+    | /     :: :: Div   {{ tex \mathbin{ \texttt{/} } }} {{ com division       }}
+    | rem_t :: :: Rem_t {{ tex \mathbin{ [[rem_t]] }  }} {{ com modulus        }}
+    | rem_f :: :: Rem_f {{ tex \mathbin{ [[rem_f]] }  }} {{ com remainder      }}
+    | ^     :: :: Exp                                    {{ com exponentiation }}
     % relational operators ( integer -> integer -> bool)
-    | =     :: :: Eq    {{ tex \texttt{=}         }} {{ com equality, defined both for integer and C types }}
-    | >     :: :: Gt    {{ tex \texttt{>}         }} {{ com greater than                                   }}
-    | <     :: :: Lt    {{ tex \texttt{<}         }} {{ com less than                                      }}
-    | >=    :: :: Ge    {{ tex \texttt{>=}        }} {{ com greater than or equal to                       }}
-    | <=    :: :: Le    {{ tex \texttt{<=}        }} {{ com less than or equal to                          }}
+    | =     :: :: Eq    {{ tex \mathbin{ \texttt{=}  } }} {{ com equality, defined both for integer and C types }}
+    | >     :: :: Gt    {{ tex \mathbin{ \texttt{>}  } }} {{ com greater than                                   }}
+    | <     :: :: Lt    {{ tex \mathbin{ \texttt{<}  } }} {{ com less than                                      }}
+    | >=    :: :: Ge    {{ tex \mathbin{ \texttt{>=} } }} {{ com greater than or equal to                       }}
+    | <=    :: :: Le    {{ tex \mathbin{ \texttt{<=} } }} {{ com less than or equal to                          }}
     % logical connectives ( bool -> bool -> bool)
-    | /\    :: :: And   {{ tex \texttt{/\char`\\} }} {{ com conjucntion }}
-    | \/    :: :: Or    {{ tex \texttt{\char`\\/} }} {{ com disjunction }}
+    | /\    :: :: And   {{ tex \mathbin{ \texttt{/\char`\\} } }} {{ com conjucntion }}
+    | \/    :: :: Or    {{ tex \mathbin{ \texttt{\char`\\/} } }} {{ com disjunction }}
+
+
+  arith_binop {{ tex \mathbin{ binop_{arith} } }} :: 'Arith_Op' ::= {{ phantom }} {{ com arithmentic binary operators }}
+    | +     :: :: Add  
+    | -     :: :: Sub  
+    | *     :: :: Mul  
+    | /     :: :: Div  
+    | rem_t :: :: Rem_t
+    | rem_f :: :: Rem_f
+    | ^     :: :: Exp  
+
+
+  rel_binop {{ tex \mathbin{ binop_{rel} } }} :: 'Rel_Op' ::= {{ phantom }} {{ com relational binary operators }}
+    | =     :: :: Eq
+    | >     :: :: Gt
+    | <     :: :: Lt
+    | >=    :: :: Ge
+    | <=    :: :: Le
+
+
+  bool_binop {{ tex \mathbin{ binop_{bool} } }} :: 'Bool_Op' ::= {{ phantom }} {{ com boolean binary operators }}
+    | /\    :: :: And
+    | \/    :: :: Or 
+
+
+  subrules
+    arith_binop <:: binop
+    rel_binop   <:: binop
+    bool_binop  <:: binop
 
 
 metavar impl_const ::= {{ ocaml Implementation.implementation_constant }} {{ phantom }}
@@ -82,8 +112,6 @@ metavar annots {{ tex }} ::= {{ ocaml annot list }} {{ phantom }}
 
 metavar ty_nat {{ tex nat }} ::= {{ ocaml Nat_big_num.num }} {{ phantom }}
   {{ com OCaml arbitrary-width natural number }}
-
-indexvar n, i ::= {{ phantom }} {{ com index variables }}
 
 metavar ty_mem_ptr {{ tex mem\_ptr }} ::= {{ ocaml Impl_mem.pointer_value }} {{ phantom }}
     {{ com abstract pointer value }}
@@ -126,24 +154,8 @@ grammar
     | ( union Symbol_sym ) { dot Symbol_identifier = ty_mem_value }                             :: :: union   {{ com C union value  }}
 
 
-  smt_object_value :: 'SMT_OV' ::=  {{ auxparam 'TY }} {{ com like above, but can be embeded into the SMT value grammar }}
-    | ty_mem_int                                                                                :: :: integer {{ com integer value  }}
-    | ty_mem_ptr                                                                                :: :: pointer {{ com pointer value  }}
-    | ( struct Symbol_sym ) { </ dot Symbol_identifieri : T_cti = ty_mem_valuei // , // i /> }  :: :: struct  {{ com C struct value }}
-    | ( union Symbol_sym ) { dot Symbol_identifier = ty_mem_value }                             :: :: union   {{ com C union value  }}
-
-
   mu_loaded_value {{ tex loaded\_value }} :: 'M_LV' ::= {{ auxparam 'TY }} {{ com potentially unspecified C object values }}
     | specified mu_object_value :: :: specified {{ com specified loaded value }}
-
-
-  smt_loaded_value :: 'SMT_LV' ::= {{ auxparam 'TY }} {{ com like above, but can be embeded into SMT value grammar }}
-    | specified smt_object_value :: :: specified {{ com specified loaded value }}
-
-
-  subrules
-    smt_object_value <:: mu_object_value
-    smt_loaded_value <:: mu_loaded_value
 
 
 grammar
@@ -164,20 +176,6 @@ grammar
     | ( </ mu_valuei // , // i /> )      :: :: tuple  {{ com tuple                 }}
 
 
-  smt_value :: 'SMT_V' ::= {{ auxparam 'TY }} {{ com like above, but can be embeded into SMT value grammar }}
-    | smt_object_value                    :: :: object {{ com C object value        }}
-    | smt_loaded_value                    :: :: loaded {{ com loaded C object value }}
-    | Unit                                      :: :: unit   {{ com unit                  }}
-    | True                                      :: :: true   {{ com boolean true          }}
-    | False                                     :: :: false  {{ com boolean false         }}
-    | T_bt [ </ smt_valuei // , // i /> ] :: :: list   {{ com list                  }}
-    | ( </ smt_valuei // , // i /> )      :: :: tuple  {{ com tuple                 }}
-
-
-  subrules
-    smt_value <:: mu_value
-
-
 grammar
 
   mu_ctor_val {{ tex ctor\_val }} :: 'M_C' ::= {{ com data constructors }}
@@ -185,13 +183,6 @@ grammar
     | Cons        :: :: cons        {{ com list cons                      }} % : bTy -> [bTy] -> [bTy]
     | Tuple       :: :: tuple       {{ com tuple                          }} % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN)
     | Array       :: :: array       {{ com C array                        }} % : bTy -> ... -> bTy -> array bTy
-    | Specified   :: :: specified   {{ com non-unspecified loaded value   }} % : objTy -> loaded objTy
-
-
-  smt_ctor_val :: 'SMT_C' ::= {{ com like above, but can be embeded into SMT value grammar }}
-    | Nil T_bt    :: :: nil         {{ com empty list                     }} % : [bTy]
-    | Cons        :: :: cons        {{ com list cons                      }} % : bTy -> [bTy] -> [bTy]
-    | Tuple       :: :: tuple       {{ com tuple                          }} % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN)
     | Specified   :: :: specified   {{ com non-unspecified loaded value   }} % : objTy -> loaded objTy
 
 
@@ -206,10 +197,6 @@ grammar
     | IvXOR       :: :: ivXOR       {{ com bitwise XOR                    }} % : ctype -> integer -> integer -> integer
     | Fvfromint   :: :: fvfromint   {{ com cast integer to floating value }} % : integer -> floating
     | Ivfromfloat :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
-
-
-  subrules
-    smt_ctor_val <:: mu_ctor_val
 
 
 metavar ty_loc {{ tex }} ::= {{ ocaml Location_ocaml.t }} {{ phantom }}
@@ -254,30 +241,13 @@ grammar
     | ( union Symbol_sym ) { dot Symbol_identifier = mu_pval_aux }                    :: :: union        {{ com C union expression                        }}
 
 
-  smt_pval :: 'SMT_PV' ::= {{ auxparam 'TY }} {{ com like above, but can be embeded into SMT value grammar }}
-    | Symbol_sym                                                                       :: :: sym          {{ com Core identifier                           }}
-    | impl_const                                                                       :: :: impl         {{ com implementation-defined constant           }}
-    | smt_value                                                                        :: :: em_val       {{ com Core values                               }}
-    | constrained ( </ Mem_mem_iv_constrainti , smt_pval_auxi // , // i /> )           :: :: constrained  {{ com constrained value                         }}
-    | error ( ty_string , smt_pval_aux )                                               :: :: error        {{ com impl-defined static error                 }}
-    | smt_ctor_val ( </ smt_pval_auxi // , // i /> )                                   :: :: ctor         {{ com data constructor application              }}
-    | ( struct Symbol_sym ) { </ dot Symbol_identifieri = smt_pval_auxi // , // i /> } :: :: struct       {{ com C struct expression                       }}
-    | ( union Symbol_sym ) { dot Symbol_identifier = smt_pval_aux }                    :: :: union        {{ com C union expression                        }}
-
-
   mu_pval_aux {{ tex pval }} :: 'M_P' ::= {{ auxparam 'TY }} {{ com pure values with auxiliary info }}
     | ty_loc annots tyvar_TY mu_pval :: X :: val
     |                        mu_pval :: O :: val_no_aux {{ com Ott-hack for simpler typing rules }}
 
 
-  smt_pval_aux {{ tex smt\_pval }} :: 'SMT_P' ::= {{ auxparam 'TY }} {{ com like above, but can be embeded into SMT value grammar }}
-    | smt_pval :: O :: val_no_aux {{ com Ott-hack for simpler typing rules }}
-
-
   subrules
     mu_name <:: mu_pval
-    smt_pval <:: mu_pval
-    smt_pval_aux <:: mu_pval_aux
 
 
 grammar
@@ -290,7 +260,7 @@ grammar
     | not ( mu_pval_aux )                                           :: :: not          {{ com boolean not                               }}
     | mu_pval_aux1 binop mu_pval_aux2                               :: :: op           {{ order [[binop]] [[mu_pval_aux1]] [[mu_pval_aux2]] }} {{ com binary operations }}
     | memberof  ( Symbol_sym , Symbol_identifier , mu_pval_aux )    :: :: memberof     {{ com C struct/union member access              }}
-    | mu_name ( mu_pval_aux1 , .. , mu_pval_auxn )                  :: :: call         {{ com pure function call                        }}
+    | mu_name ( mu_pval_aux1 , ... , mu_pval_auxn )                 :: :: call         {{ com pure function call                        }}
 
     | assert_undef ( mu_pval_aux , ty_loc UB_name )                 :: :: assert_undef
     | bool_to_integer ( mu_pval_aux )                               :: :: bool_to_integer
@@ -349,7 +319,7 @@ grammar
     | case mu_pval_aux of </ | mu_pattern_auxi => mu_tpexpr_auxi // i /> end ::   :: case  {{ com pattern matching      }} % TODO: binding
     | let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux                  ::   :: let   {{ com pure let              }} % TODO: binding
     | if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2                 ::   :: if    {{ com pure if               }}
-    | [ C / C' ] mu_tpexpr                                                   :: M :: contextSub {{ ocaml MU_TPEXPR_CONTEXT_SUB }}
+    | [ C / C' ] mu_tpexpr                                                   :: M :: contextSub {{ ocaml MU_TPEXPR_CONTEXT_SUB [[C]] [[C']] [[mu_tpexpr]] }}
                                                                                      {{ com simul-sub all vars in $[[C]]$ for all vars in $[[C']]$ in $[[mu_tpexpr]]$ }}
 
 
@@ -553,20 +523,26 @@ grammar
     | dot    :: :: dot       {{ tex .                                }}
     | >>     :: :: chevron   {{ tex \mathbin{ {>} \! \! {>} }        }}
     | :;     :: :: doublecol {{ tex \mathbin{ {:} {:} }              }}
+    | ^      :: :: caret     {{ tex \mathbin { \texttt{\char`\^} }   }}
+    | \//    :: :: big_or    {{ tex \bigvee                          }}
 
 
 grammar
 
   Z_t {{ tex z }} :: 'Z_' ::= {{ ocaml Z.t }} {{ phantom }} {{ com OCaml arbitrary-width integer }}
-    | i                 :: M :: of_index   {{ ocaml OF_INDEX [[i]]                         }}
-                                           {{ com literal integer                          }}
-    | to_int ty_mem_int :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
-                                           {{ tex \mathrm{to\_int}( [[ty_mem_int]] )       }}
-    | to_int ct         :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
-                                           {{ tex \mathrm{size\_of}( [[ct]] )              }}
-                                           {{ com size of a C type                         }}
-    | ptr_size          :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
-                                           {{ com size of a pointer                        }}
+    | i                           :: M :: of_index   {{ ocaml OF_INDEX [[i]]                         }}
+                                                     {{ com literal integer                          }}
+    | to_int ty_mem_int           :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
+                                                     {{ tex \mathrm{to\_int}( [[ty_mem_int]] )       }}
+    | size_of ct                  :: M :: of_Ctype   {{ ocaml z_ ( Memory.size_of_ctype ( [[ct]] ) ) }}
+                                                     {{ tex \mathrm{size\_of}( [[ct]] )              }}
+                                                     {{ com size of a C type                         }}
+    | offset_of ty_tag Symbol_identifier :: M :: of_Member 
+      {{ ocaml z_ ( Memory.member_offset ( ?? [[ty_tag]] ) ( [[Symbol_identifier]] ) ) }}
+      {{ tex \mathrm{offset\_of}_{ [[ty_tag]] }( [[Symbol_identifier]] )               }}
+      {{ com offset of a struct member                                                 }}
+    | ptr_size                    :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
+                                                     {{ com size of a pointer                        }}
 
 grammar
 
@@ -594,21 +570,44 @@ grammar
     | neg term_aux                         ::     :: Not
     | term_aux1 = term_aux2                ::     :: Eq
     | /\\ ( </ term_auxi // , // i />    ) ::     :: And
+    | \// ( </ term_auxi // , // i />    ) ::     :: Or
     | term_aux1 /\ term_aux2               :: X M :: And_Binary {{ ocaml And ( [ [[term_aux1]] , [[term_aux2]] ] ) }}
+    | term_aux1 \/ term_aux2               :: X M :: Or_Binary {{ ocaml Or ( [ [[term_aux1]] , [[term_aux2]] ] ) }}
+    | term_aux1 ' bool_binop ' term_aux2   ::   M :: Bool_binop
+      {{ tex [[term_aux1]] [[bool_binop]] [[term_aux2]] }}
+      {{ ocaml BOOL_BINOP_TO_BOOL_OP [[term_aux1]] [[bool_binop]] [[term_aux2]] }}
 
 
   arith_op :: '' ::= {{ auxparam 'bt }}
-    | term_aux1 * term_aux2 :: :: Mul
+    | term_aux1 +     term_aux2            ::   :: Add   
+    | term_aux1 -     term_aux2            ::   :: Sub   
+    | term_aux1 *     term_aux2            ::   :: Mul   
+    | term_aux1 /     term_aux2            ::   :: Div   
+    | term_aux1 rem_t term_aux2            ::   :: Rem_t 
+    | term_aux1 rem_f term_aux2            ::   :: Rem_f 
+    | term_aux1 ^     term_aux2            ::   :: Exp   
+    | term_aux1 ' arith_binop ' term_aux2  :: M :: Arith_binop
+      {{ tex [[term_aux1]] [[arith_binop]] [[term_aux2]] }}
+      {{ ocaml ARITH_BINOP_TO_ARITH_OP [[term_aux1]] [[arith_binop]] [[term_aux2]] }}
+
+
+  cmp_op :: '' ::= {{ auxparam 'bt }}
+    | term_aux1 <  term_aux2            ::   :: LT {{ com less than          }}
+    | term_aux1 =< term_aux2            ::   :: LE {{ com less than or equal }}
+    | term_aux1 ' rel_binop ' term_aux2 :: M :: Rel_binop
+      {{ tex [[term_aux1]] [[rel_binop]] [[term_aux2]] }}
+      {{ ocaml REL_BINOP_TO_CMP_OP [[term_aux1]] [[rel_binop]] [[term_aux2]] }}
+
 
   list_op :: '' ::= {{ auxparam 'bt }}
-    | nil                            :: :: Nil
-    | tl term_aux                    :: :: Tail
-    | term_aux ^ ty_int              :: :: NthList {{ order [[ty_int]] [[term_aux]]   }}
-                                                   {{ tex [[term_aux]]^{([[ty_int]])} }}
+    | nil                   :: :: Nil
+    | tl term_aux           :: :: Tail
+    | ty_int th_l term_aux :: :: NthList {{ order [[ty_int]] [[term_aux]]   }}
+                                       {{ tex [[term_aux]]^{([[ty_int]])} }}
 
   tuple_op :: '' ::= {{ auxparam 'bt }}
     | ( </ term_auxi // , // i /> ) :: :: Tuple
-    | term_aux ^ ty_int             :: :: NthTuple {{ tex [[term_aux]]^{([[ty_int]])} }}
+    | ty_int th_t term_aux          :: :: NthTuple {{ tex [[term_aux]]^{([[ty_int]])} }}
 
 
   pointer_op :: '' ::= {{ auxparam 'bt }}
@@ -646,6 +645,7 @@ grammar
     | lit        :: :: Lit
     | arith_op   :: :: Arith_op
     | bool_op    :: :: Bool_op
+    | cmp_op     :: :: Cmp_op
     | tuple_op   :: :: Tuple_op
     | struct_op  :: :: Struct_op
     | pointer_op :: :: Pointer_op
@@ -656,8 +656,9 @@ grammar
     | param_op   :: :: Param_op
 
     | ( term )                     :: S :: Paren   {{ ocaml [[term]] }} {{ com parentheses }}
-    | [  term1 / tyvar_sym ] term2 :: M :: Subs    {{ ocaml INDEX_TERM_SUB }} {{ com substitute $[[term1]]$ for $[[tyvar_sym]]$ in $[[term2]]$ }}
-    | embed smt_pval_aux           :: M :: Of_pval {{ tex [[smt_pval_aux]] }} {{ ocaml TERM_OF_PVAL_AUX }} {{ com can be embeded into the SMT value grammar }}
+    | [  term1 / tyvar_sym ] term2 :: M :: Subs    {{ ocaml INDEX_TERM_SUB [[term1]] [[tyvar_sym]] [[term2]] }} {{ com substitute $[[term1]]$ for $[[tyvar_sym]]$ in $[[term2]]$ }}
+    | embed mu_pval_aux            :: M :: Of_pval {{ tex [[mu_pval_aux]] }} {{ ocaml TERM_OF_PVAL_AUX [[mu_pval_aux]] }}
+                                                   {{ com only the ones which can be embeded into the SMT value grammar, so no array literals }}
     | resource                     ::   :: Of_res  % WARNING: Different from current implementation
 
 
@@ -714,7 +715,7 @@ grammar
     | resource --o arg                   :: :: Resource
     | term_aux -) arg                    :: :: Constraint
     | ret                                :: :: Ret
-    | [ spine_elem / tyvar_sym ] arg     :: M :: Substitution {{ ocaml ARG_SPINE_ELEM_SUB }}
+    | [ spine_elem / tyvar_sym ] arg     :: M :: Substitution {{ ocaml ARG_SPINE_ELEM_SUB [[spine_elem]] [[tyvar_sym]] [[arg]] }}
 
 
   ret , _r {{ tex \_ }} :: RetTy_ ::= {{ com return types }}
@@ -731,9 +732,9 @@ grammar
     | cdot                  ::   :: empty
     | C , Symbol_sym : BT_t ::   :: cons
     | C , C'                ::   :: concat
-    | fresh ( C )           :: M :: fresh {{ tex \mathrm{fresh}( [[C]] ) }}
-                                               {{ ocaml FRESH_COMP_CONTEXT    }}
-                                               {{ com identical context except with fresh variable names }}
+    | fresh ( C )           :: M :: fresh {{ tex \mathrm{fresh}( [[C]] )                            }}
+                                          {{ ocaml FRESH_COMP_CONTEXT [[C]]                         }}
+                                          {{ com identical context except with fresh variable names }}
 
 
 grammar
@@ -886,12 +887,12 @@ defns
 
     </ C ; L ; N |- mu_valuei =>  yi : base_type . termi // i />
     --------------------------------------------------------------------------------------------------------------- :: List
-    C ; L ; N |- base_type [ </ mu_valuei // i /> ] => y : [ base_type ] .  /\\ ( </ [ y ^ i / yi ] termi // i /> )
+    C ; L ; N |- base_type [ </ mu_valuei // i /> ] => y : [ base_type ] .  /\\ ( </ [ i th_l y / yi ] termi // i /> )
 
 
     </ C ; L ; N |- mu_valuei =>  yi : base_typei . termi // i />
     ------------------------------------------------------------------------------------------------------------- :: Tuple
-    C ; L ; N |- ( </ mu_valuei // i /> ) => y : </ base_typei // i /> .  /\\ ( </ [ y ^ i / yi ] termi // i /> )
+    C ; L ; N |- ( </ mu_valuei // i /> ) => y : </ base_typei // i /> .  /\\ ( </ [ i th_t y / yi ] termi // i /> )
 
 
     % NOT IMPLEMENTED: constrained
@@ -909,12 +910,12 @@ defns
     C ; L ; N |- mu_pval1 => y1 : base_type . term1
     C ; L ; N |- mu_pval2 => y2 : [ base_type ] . term2
     --------------------------------------------------- :: Ctor_Cons
-    C ; L ; N |- Cons ( mu_pval1, mu_pval2 ) => y : [ base_type ] . [ y ^ one / y1 ] term1 /\ [ tl y / y2 ] term2
+    C ; L ; N |- Cons ( mu_pval1, mu_pval2 ) => y : [ base_type ] . [ one th_l y / y1 ] term1 /\ [ tl y / y2 ] term2
 
 
     </ C ; L ; N |- mu_pvali => yi : base_typei . termi // i />
-    ----------------------------------------------------------------------------------------------------------------- :: Ctor_Tuple
-    C ; L ; N |- Tuple ( </ mu_pvali // i /> ) => y : </ base_typei // i /> . /\\ ( </ [ y ^ i / yi ] termi // i /> )
+    -------------------------------------------------------------------------------------------------------------------- :: Ctor_Tuple
+    C ; L ; N |- Tuple ( </ mu_pvali // i /> ) => y : </ base_typei // i /> . /\\ ( </ [ i th_t y / yi ] termi // i /> )
 
 
     % NOT IMPLEMENTED - empty arrays
@@ -998,45 +999,49 @@ defns
    % Ivfromfloat :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
 
 
-    C ; L ; N |- smt_pval_aux1 => _' : loc . _t'
-    C ; L ; N |- smt_pval_aux2 => _'' : integer . _t''
-    -------------------------------------------------------- :: Array_Shift
-    C ; L ; N |- array_shift ( smt_pval_aux1 , ct , smt_pval_aux2 ) => y : loc . y = embed smt_pval_aux1 +ptr embed smt_pval_aux2 * to_int ct
+    C ; L ; N |- mu_pval_aux1 => _' : loc . _t'
+    C ; L ; N |- mu_pval_aux2 => _'' : integer . _t''
+    ------------------------------------------------- :: Array_Shift
+    C ; L ; N |- array_shift ( mu_pval_aux1 , ct , mu_pval_aux2 ) => y : loc . y = embed mu_pval_aux1 +ptr ( embed mu_pval_aux2 * size_of ct )
 
 
-    % TODO member_shift
+    C ; L ; N |- mu_pval_aux => _ : loc . _t
+    _' : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
+    ------------------------------------------------------------------------ :: Member_Shift
+    C ; L ; N |- member_shift ( mu_pval_aux , ty_tag , Symbol_identifierj ) => y : loc . y = embed mu_pval_aux +ptr offset_of ty_tag Symbol_identifierj
 
 
-    C ; L ; N |- smt_pval_aux => _' : bool . _t'
+    C ; L ; N |- mu_pval_aux => _' : bool . _t'
     -------------------------------------------------------------------------------- :: Not
-    C ; L ; N |- not ( smt_pval_aux ) => y : bool . y = neg embed smt_pval_aux
+    C ; L ; N |- not ( mu_pval_aux ) => y : bool . y = neg embed mu_pval_aux
 
 
-    % TODO: op
-    % arithmetic operators (integer -> integer -> integer)
-    % +     :: :: Add   {{ tex \texttt{+}         }} {{ com addition       }}
-    % -     :: :: Sub   {{ tex \texttt{-}         }} {{ com subtraction    }}
-    % *     :: :: Mul   {{ tex \texttt{*}         }} {{ com multiplication }}
-    % /     :: :: Div   {{ tex \texttt{/}         }} {{ com division       }}
-    % rem_t :: :: Rem_t                              {{ com modulus        }}
-    % rem_f :: :: Rem_f                              {{ com remainder      }}
-    % ^     :: :: Exp   {{ tex \texttt{\char`^}   }} {{ com exponentiation }}
-    % relational operators ( integer -> integer -> bool)
-    % =     :: :: Eq    {{ tex \texttt{=}         }} {{ com equality, defined both for integer and C types }}
-    % >     :: :: Gt    {{ tex \texttt{>}         }} {{ com greater than                                   }}
-    % <     :: :: Lt    {{ tex \texttt{<}         }} {{ com less than                                      }}
-    % >=    :: :: Ge    {{ tex \texttt{>=}        }} {{ com greater than or equal to                       }}
-    % <=    :: :: Le    {{ tex \texttt{<=}        }} {{ com less than or equal to                          }}
-    % logical connectives ( bool -> bool -> bool)
-    % /\    :: :: And   {{ tex \texttt{/\char`\\} }} {{ com conjucntion }}
-    % \/    :: :: Or    {{ tex \texttt{\char`\\/} }} {{ com disjunction }}
+    C ; L ; N |- mu_pval_aux1 => _1 : integer . _t1
+    C ; L ; N |- mu_pval_aux2 => _2 : integer . _t2
+    ----------------------------------------------- :: Arith_Binop
+    C ; L ; N |- mu_pval_aux1 arith_binop mu_pval_aux2 => y : integer . y = ( embed mu_pval_aux1 ' arith_binop ' embed mu_pval_aux2 )
+
+
+    C ; L ; N |- mu_pval_aux1 => _1 : integer . _t1
+    C ; L ; N |- mu_pval_aux2 => _2 : integer . _t2
+    ----------------------------------------------- :: Rel_Binop
+    C ; L ; N |- mu_pval_aux1 rel_binop mu_pval_aux2 => y : bool . y = ( embed mu_pval_aux1 ' rel_binop ' embed mu_pval_aux2 )
+
+
+    C ; L ; N |- mu_pval_aux1 => _1 : bool . _t1
+    C ; L ; N |- mu_pval_aux2 => _2 : bool . _t2
+    ------------------------------------------------ :: Bool_Binop
+    C ; L ; N |- mu_pval_aux1 bool_binop mu_pval_aux2 => y : bool . y = ( embed mu_pval_aux1 ' bool_binop ' embed mu_pval_aux2 )
+
 
     % NOT IMPLEMENTED: op ~ memberof
 
-    C ; L ; N |- mu_name => _ : base_type . _t
-    C ; L ; N ; cdot |- mu_pval_aux1 , .. , mu_pval_auxn :; forall _ : base_type . I >> sigma y : base_type' . term' /\ I
-    -------------------------------------------------------------------------------------------------------------------- :: Call
-    C ; L ; N |- mu_name ( mu_pval_aux1 , .. , mu_pval_auxn ) => y : base_type' . term'
+
+    C ; L ; N |- mu_name => _ : base_type1 , ... , base_typen -> base_type' . _t
+    C ; L ; N |- mu_pval_aux1 => _1 : base_type1 . _t1 ... C ; L ; N |- mu_pval_auxn => _n : base_typen . _tn
+    --------------------------------------------------------------------------------------------------------- :: Call
+    C ; L ; N |- mu_name ( mu_pval_aux1 , ... , mu_pval_auxn ) => y : base_type' . term'
+
 
     % DEFER conv_int
 
@@ -1044,6 +1049,7 @@ defns
 
 defns
   pattern_jtype :: '' ::=
+  % for 2021-05-13: assert_undef, bool_to_integer, wrapI, computational patterns, return patterns, resources, resources patterns
 
   defn
     mu_pattern_aux : base_type ~> C :: :: Pattern_ :: Pattern_ by
@@ -1080,13 +1086,14 @@ defns
     C ; L ; N |- mu_tpexpr_aux <= ident : base_type . term_aux :: :: TPExpr :: TPExpr_ by
   
     % ASK boundary between inference/checking, should there be an SMT here?
-    C ; L ; N |- smt_pval_aux => _ : bool . _t
-    C ; L , y' ; N , embed smt_pval_aux = true  |- mu_tpexpr_aux1 <= y : base_type . term
-    C ; L , y' ; N , embed smt_pval_aux = false |- mu_tpexpr_aux2 <= y : base_type . term
+    C ; L ; N |- mu_pval_aux => _ : bool . _t
+    C ; L , y' ; N , embed mu_pval_aux = true  |- mu_tpexpr_aux1 <= y : base_type . term
+    C ; L , y' ; N , embed mu_pval_aux = false |- mu_tpexpr_aux2 <= y : base_type . term
     -------------------------------------------------------------------------------------------- :: If
-    C ; L ; N |- if smt_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2 <= y : base_type . term
+    C ; L ; N |- if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2 <= y : base_type . term
   
   
+    % TODO add/replace-with return patterns
     % ASK boundary between inference/checking, should there be an SMT here?
     % ASK should the constraints be propogated?
     C ; L ; N |- mu_pexpr_aux => _ : base_type . _t
@@ -1112,29 +1119,28 @@ defns
     C ; L ; N ; R |- mu_action_aux => ret :: :: Action :: Action_ by
     
     
-    C ; L ; N |- smt_pval_aux => _ : integer . _t
+    C ; L ; N |- mu_pval_aux => _ : integer . _t
     -------------------------------------------- :: Create
-    C ; L ; N ; cdot |- create ( smt_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed smt_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
+    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed mu_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
 
 
     % NOT IMPLEMENTED:
     % C ; L ; N ; cdot |-> create_readonly ( vp , ct , v ) Symbol_prefix => ??
 
 
-    C ; L ; N |- smt_pval_aux1 => _ : loc . _t
-    C ; L ; N |- smt_pval_aux' => _' : to_base ( ct ) . _t'
-    % ASK can we store things of type (or types containing) arrays? If so, this rule is a problem
+    C ; L ; N |- mu_pval_aux1 => _ : loc . _t
+    C ; L ; N |- mu_pval_aux' => y' : to_base ( ct ) . term'
     % NOT IMPLEMENTED: locking boolean
-    smt ( N => representable ( ct , embed smt_pval_aux' ) )
-    smt ( N => embed smt_pval_aux0 = embed smt_pval_aux1 )
+    smt ( N , term' => representable ( ct , y' ) )
+    smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     -------------------------------------------------------- :: Store
-    C ; L ; N ; cdot , [ embed smt_pval_aux0 ] ( one )|- _i - ct -> [ _t'' ] |- store ( _b , ct , smt_pval_aux1 , smt_pval_aux' , _mem_order ) => sigma _ : unit . [ embed smt_pval_aux0 ] ( one )|- tick - ct -> [ embed smt_pval_aux' ] *s I
+    C ; L ; N ; cdot , [ embed mu_pval_aux0 ] ( one )|- _i - ct -> [ _t'' ] |- store ( _b , ct , mu_pval_aux1 , mu_pval_aux' , _mem_order ) => sigma _ : unit . exists y' : to_base ( ct ) . term' /\ [ embed mu_pval_aux0 ] ( one )|- tick - ct -> [ y' ] *s I
 
 
-    C ; L ; N |- smt_pval_aux1 => _ : loc . _t
-    smt ( N => embed smt_pval_aux0 = embed smt_pval_aux1 )
+    C ; L ; N |- mu_pval_aux1 => _ : loc . _t
+    smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     ---------------------------------------------------------------------------------------------------------------------------------- :: Kill_Static
-    C ; L ; N ; cdot , [ embed smt_pval_aux0 ] ( one )|- _i - ct -> [ _t' ] |-  kill ( static ct , smt_pval_aux1 ) => sigma _ : unit . I
+    C ; L ; N ; cdot , [ embed mu_pval_aux0 ] ( one )|- _i - ct -> [ _t' ] |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
 
 
     % NOT IMPLEMENTED:
@@ -1181,4 +1187,3 @@ defns
     % TODO
     % memop ( mu_memop )                                    :: :: memop  {{ com pointer op involving memory }}
     % skip                                                  :: :: skip   {{ com skip                        }}
-
