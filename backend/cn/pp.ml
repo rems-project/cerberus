@@ -12,6 +12,10 @@ let term_col = match get_terminal_size () with
   | Some (_, col) -> col - 1
   | _ -> 80 - 1
 
+let max_table_column_width = 40
+
+
+
 let unicode = ref true
 let print_level = ref 0
 
@@ -54,6 +58,18 @@ let pad_ alignment should_width has_width pp =
 let pad alignment width pp = 
   pad_ alignment width (requirement pp) pp
 
+
+let pad_string_ alignment should_width has_width pp = 
+  let diff = should_width - has_width in
+  if diff < 0 then pp else 
+    match alignment with
+    | L -> pp ^ String.make diff ' '
+    | R -> String.make diff ' ' ^ pp
+
+
+let pad_string alignment width pp = 
+  pad_string_ alignment width (String.length pp) pp
+
 let list f l = 
   match l with
   | [] -> !^"(empty)"
@@ -82,8 +98,44 @@ let box_cross_vb_hb = utf8string "\u{254B}"
 
 
 let (table2, table3, table4, table5, table6) = 
-  let table (n_rows : int) (headers: string list) (lines : ((alignment * doc option) list) list) =
-    let placeholder = minus ^^ minus in
+
+  let table (n_rows : int) (headers: string list) (lines : ((alignment * document option) list) list) =
+
+    let lines = 
+      List.map (fun line ->
+          List.map (function
+              | (a, Some c) -> (a, Some (plain c))
+              | (a, None) -> (a, None)
+            ) line
+        ) lines
+    in
+
+
+    let rec wrap_line line = 
+      let (wrapped, still_todo, todo) = 
+        List.fold_right (fun (align, column) (wrapped_columns, still_todo, todo) ->
+            match column with
+            | Some column ->
+               let length = String.length column in
+               if length <= max_table_column_width then 
+                 ((align, Some column) :: wrapped_columns, still_todo, (align, None) :: todo)
+               else 
+                 let () = print stderr !^"asd" in
+                 let diff = length - max_table_column_width in
+                 let prefix_column = String.sub column 0 max_table_column_width in
+                 let suffix_column = String.sub column max_table_column_width diff in
+                 ((align, Some prefix_column) :: wrapped_columns, true, (align, Some suffix_column) :: todo)
+            | None ->
+               ((align, None) :: wrapped_columns, still_todo, (align, None) :: todo)               
+          ) line ([], false, [])
+      in
+      if still_todo then wrapped :: wrap_line todo
+      else [wrapped]
+    in
+
+    let lines = List.concat_map wrap_line lines in
+
+    let placeholder = "--" in
     let maxes = 
       List.fold_left (fun maxes line ->
           let (_, maxes) = 
@@ -93,15 +145,15 @@ let (table2, table3, table4, table5, table6) =
                   | None -> 0
                 in
                 let req = match o_cell with
-                  | Some cell -> requirement cell
-                  | None -> requirement placeholder
+                  | Some cell -> String.length cell
+                  | None -> String.length placeholder
                 in
                 let maxes = IntMap.add j (max j_max req) maxes in
                 (j + 1, maxes)
               ) (0, maxes) line
           in
           maxes
-        ) IntMap.empty (List.map (fun s -> (L, Some (string s))) headers :: lines) 
+        ) IntMap.empty (List.map (fun s -> (L, Some s)) headers :: lines) 
     in
     let oline =
       List.mapi (fun j _ ->
@@ -123,9 +175,9 @@ let (table2, table3, table4, table5, table6) =
           List.mapi (fun j (alignment,o_cell) -> 
               match o_cell with
               | Some cell ->
-                 pad alignment (IntMap.find j maxes) cell
+                 pad_string alignment (IntMap.find j maxes) cell
               | None ->
-                 pad alignment (IntMap.find j maxes) placeholder
+                 pad_string alignment (IntMap.find j maxes) placeholder
             ) line
         ) lines
     in
@@ -135,7 +187,7 @@ let (table2, table3, table4, table5, table6) =
         (utf8string "\u{250F}" ^^ separate (utf8string "\u{252F}") oline ^^ utf8string "\u{2513}") ::
         (box_vline_b ^^ separate (box_vline_n) headers ^^ box_vline_b) ::
         (box_vline_b ^^ separate (box_vline_n) sepline ^^ box_vline_b) ::
-        (List.map (fun line -> box_vline_b ^^ separate (box_vline_n) line  ^^ box_vline_b) padded_lines) @
+        (List.map (fun line -> box_vline_b ^^ separate_map (box_vline_n) string line  ^^ box_vline_b) padded_lines) @
         [utf8string "\u{2517}" ^^ separate (utf8string "\u{2537}") oline ^^ utf8string "\u{251B}"]
       end
   in
