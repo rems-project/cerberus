@@ -157,12 +157,22 @@ $(OCAML_SRC)&: $(LEM_SRC)
 	$(Q)mkdir -p $(PRELUDE_SRC_DIR)
 	@echo "[LEM] generating files in [$(PRELUDE_SRC_DIR)] (log in [ocaml_frontend/lem.log])"
 	$(Q)lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
-    -outdir $(PRELUDE_SRC_DIR) -ocaml \
+    -outdir $(PRELUDE_SRC_DIR) -cerberus_pp -ocaml \
     $(LEM_SRC) 2> ocaml_frontend/lem.log || (>&2 cat ocaml_frontend/lem.log; exit 1)
 	@echo "[SED] patching things up in [$(PRELUDE_SRC_DIR)]"
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
 	$(Q)$(SEDI) -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
+
+# Elaboration PP stuff
+elab_pp:
+	@echo "[MKDIR] $(PRELUDE_SRC_DIR)"
+	$(Q)mkdir -p generated_tex
+	$(Q)lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
+	-outdir generated_tex -cerberus_pp -tex \
+	$(addprefix -i ,$(filter-out frontend/model/translation.lem,$(LEM_SRC))) frontend/model/translation.lem
+	cd generated_tex; lualatex Translation.tex
+
 
 #### LEM sources for sibylfs
 SIBYLFS_LEM = dir_heap.lem fs_prelude.lem fs_spec.lem list_array.lem \
