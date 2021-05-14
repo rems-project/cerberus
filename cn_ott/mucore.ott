@@ -8,8 +8,8 @@ embed {{ tex-preamble
 \renewcommand{\[[TEX_NAME_PREFIX]]drule}[4][]{ {\displaystyle\frac{\begin{array}{l}#2\end{array} }{#3}\quad\[[TEX_NAME_PREFIX]]drulename{#4} }\\[\baselineskip] }
 }}
 
-metavar ident , x , y , yp {{ tex y_p }} , _ ::= {{ phantom }}
-  {{ com subscript p is for pointers }}
+metavar ident , x , y , yp {{ tex { y_p } }} , yf {{ tex { y_f } }} , _ , abbrev ::= {{ phantom }}
+  {{ com subscripts: p for pointers, f for functions }}
 
 indexvar n , i , j ::= {{ phantom }} {{ com index variables }}
 
@@ -36,7 +36,7 @@ grammar
     | struct ty_tag                              ::   :: Struct  {{ com struct            }}
     | { base_type }                              ::   :: Set     {{ com set               }}
     | opt ( base_type )                          ::   :: Option  {{ com option            }}
-    | base_type1 , ... , base_typen -> base_type ::   :: Param   {{ com parameter types   }}
+    | base_type -> base_type'                    ::   :: ParamTy {{ com parameter types   }}
     | to_base ( ct )                             :: M :: Of_Ctype {{ com of a C type      }}
                                                                  {{ tex \beta_{ [[ct]] } }} 
                                                                  {{ ocaml (BT.of_sct ( [[ct]] ) )   }}
@@ -260,7 +260,7 @@ grammar
     | not ( mu_pval_aux )                                           :: :: not          {{ com boolean not                               }}
     | mu_pval_aux1 binop mu_pval_aux2                               :: :: op           {{ order [[binop]] [[mu_pval_aux1]] [[mu_pval_aux2]] }} {{ com binary operations }}
     | memberof  ( Symbol_sym , Symbol_identifier , mu_pval_aux )    :: :: memberof     {{ com C struct/union member access              }}
-    | mu_name ( mu_pval_aux1 , ... , mu_pval_auxn )                 :: :: call         {{ com pure function call                        }}
+    | mu_name ( </ mu_pval_auxi // , // i /> )                      :: :: call         {{ com pure function call                        }}
 
     | assert_undef ( mu_pval_aux , ty_loc UB_name )                 :: :: assert_undef
     | bool_to_integer ( mu_pval_aux )                               :: :: bool_to_integer
@@ -343,7 +343,7 @@ grammar
 
   ty_int {{ tex int }} , _int {{ tex \_ }} :: 'Int_' ::=   {{ ocaml int  }} {{ phantom }} {{ com OCaml fixed-width integer }}
     | i     ::   :: IndexVar {{ com literal integer }}
-    | one   :: X :: One      {{ tex 1               }}
+    | i_one :: X :: One      {{ tex 1               }}
 
 
 metavar Symbol_prefix {{ tex }} ::= {{ ocaml Symbol.prefix }} {{ phantom }}
@@ -525,11 +525,14 @@ grammar
     | :;     :: :: doublecol {{ tex \mathbin{ {:} {:} }              }}
     | ^      :: :: caret     {{ tex \mathbin { \texttt{\char`\^} }   }}
     | \//    :: :: big_or    {{ tex \bigvee                          }}
+    | ==     :: :: equiv     {{ tex \equiv                           }}
 
 
 grammar
 
   Z_t {{ tex z }} :: 'Z_' ::= {{ ocaml Z.t }} {{ phantom }} {{ com OCaml arbitrary-width integer }}
+    | z_one                       :: M :: One        {{ ocaml Z.one  }} {{ tex 1                     }}
+    | z_zero                      :: M :: Zero       {{ ocaml Z.zero }} {{ tex 0                     }}
     | i                           :: M :: of_index   {{ ocaml OF_INDEX [[i]]                         }}
                                                      {{ com literal integer                          }}
     | to_int ty_mem_int           :: M :: of_mem_ptr {{ ocaml Memory.integer_value_to_num            }}
@@ -543,11 +546,18 @@ grammar
       {{ com offset of a struct member                                                 }}
     | ptr_size                    :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
                                                      {{ com size of a pointer                        }}
+    | max_int ct                  :: M :: of_Max_Int {{ ocaml z_ ( Memory.max_integer_type ( [[ct]] ) ) }}
+                                                     {{ tex \mathrm{max\_int}_{ [[ct]] }                }}
+                                                     {{ com maximum value of int of type $[[ct]]$       }}
+    | min_int ct                  :: M :: of_Min_Int {{ ocaml z_ ( Memory.min_integer_type ( [[ct]] ) ) }}
+                                                     {{ tex \mathrm{min\_int}_{ [[ct]] }                }}
+                                                     {{ com minimum value of int of type $[[ct]]$       }}
+
 
 grammar
 
   rational {{ tex \mathbb{Q} }} :: 'Q_' ::= {{ ocaml ( int * int ) }} {{ phantom }} {{ com OCaml type for rational numbers }}
-    | one               :: X :: One {{ ocaml (1, 1) }} {{ tex 1 }}
+    | q_one             :: X :: One {{ ocaml (1, 1) }} {{ tex 1 }}
     | ty_int1 / ty_int2 ::   :: Frac {{ ocaml ( [[ty_int1]], [[ty_int2]] ) }} {{ tex \frac{[[ty_int1]]}{[[ty_int2]]} }}
 
 grammar
@@ -576,6 +586,7 @@ grammar
     | term_aux1 ' bool_binop ' term_aux2   ::   M :: Bool_binop
       {{ tex [[term_aux1]] [[bool_binop]] [[term_aux2]] }}
       {{ ocaml BOOL_BINOP_TO_BOOL_OP [[term_aux1]] [[bool_binop]] [[term_aux2]] }}
+    | if term_aux1 then term_aux2 else term_aux3  :: :: ITE
 
 
   arith_op :: '' ::= {{ auxparam 'bt }}
@@ -629,6 +640,7 @@ grammar
 
 
   param_op :: '' ::= {{ auxparam 'bt }}
+    | Symbol_sym : base_type . term_aux       :: :: Param
     | term_aux ( term_aux1 , .. , term_auxn ) :: :: App
 
 
@@ -731,7 +743,7 @@ grammar
   C {{ tex \mathcal{C} }} :: Comp_ ::= {{ phantom }} {{ com computational var env }}
     | cdot                  ::   :: empty
     | C , Symbol_sym : BT_t ::   :: cons
-    | C , C'                ::   :: concat
+    | </ Ci // , // i />    ::   :: concat
     | fresh ( C )           :: M :: fresh {{ tex \mathrm{fresh}( [[C]] )                            }}
                                           {{ ocaml FRESH_COMP_CONTEXT [[C]]                         }}
                                           {{ com identical context except with fresh variable names }}
@@ -740,8 +752,8 @@ grammar
 grammar
 
   L {{ tex \mathcal{L} }} :: Log_ ::= {{ phantom }} {{ com logical var env }}
-    | cdot           :: :: empty
-    | L , Symbol_sym :: :: cons
+    | cdot                  :: :: empty
+    | L , Symbol_sym : BT_t :: :: cons
 
 
 grammar
@@ -762,11 +774,12 @@ grammar
 
   formula :: 'formula_' ::=
     | judgement                                                                        :: :: judgement
+    | abbrev == term_aux                                                               :: :: abbreviations
     | smt ( N => term_aux )                                                            :: :: smt
     | Symbol_sym : base_type inEnv C                                                   :: :: xInC
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals :: :: structInGlobals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem yi : base_typei . term_auxi  // i />     :: :: indexed_infer_mem_value       {{ com dependent on memory object model }}
-    | </ Ci ; Li ; Ni |- mu_pval_auxi => tyvar_symi : base_typei . term_auxi // i />       :: :: index_infer_mu_pval
+    | </ Ci ; Li ; Ni |- mu_pval_auxi => tyvar_symi : base_typei . term_auxi // i />   :: :: index_infer_mu_pval
     | </ mu_pattern_auxi : base_typei ~> Ci  // i />                                   :: :: indexed_pattern
     | </ Ci ; Li ; Ni |- mu_tpexpri <= yi : base_typei . termi // i />                 :: :: indexed_check_mu_tpexpr
     | L |- logical_val : base_type                                                     :: :: check_logical_value
@@ -910,7 +923,7 @@ defns
     C ; L ; N |- mu_pval1 => y1 : base_type . term1
     C ; L ; N |- mu_pval2 => y2 : [ base_type ] . term2
     --------------------------------------------------- :: Ctor_Cons
-    C ; L ; N |- Cons ( mu_pval1, mu_pval2 ) => y : [ base_type ] . [ one th_l y / y1 ] term1 /\ [ tl y / y2 ] term2
+    C ; L ; N |- Cons ( mu_pval1, mu_pval2 ) => y : [ base_type ] . [ i_one th_l y / y1 ] term1 /\ [ tl y / y2 ] term2
 
 
     </ C ; L ; N |- mu_pvali => yi : base_typei . termi // i />
@@ -940,6 +953,20 @@ defns
 
 defns
   spine_jtype :: '' ::=
+
+  % defn
+  %   C ; L ; N |- </ mu_pval_auxi // , // i /> :; ident : base_type . term >> base_type' . term' :: :: Pure_Spine :: Pure_Spine_ by
+
+
+  %   --------------------------------------------------------- :: Empty
+  %   C ; L ; N |- :; y : base_type . term >> base_type . term
+
+
+  %   C ; L ; N |- mu_pval_aux => y : base_type . term
+  %   C ; L ; N |- </ mu_pval_auxi // i /> :; base_type' . [ y / x ] term' >> base_type'' . term''
+  %   ----------------------------------------------------------------------------------------------------------------------------------------------------------------- :: Param
+  %   C ; L ; N |- mu_pval_aux , </ mu_pval_auxi // i /> :; yf : base_type -> base_type' . x : base_type . term' >> base_type'' . exists y : base_type . term /\ term''
+
 
   defn
     C ; L ; N ; R |- </ spine_elemi // , // i /> :; arg >> ret :: :: Spine :: Spine_ by
@@ -1037,29 +1064,87 @@ defns
     % NOT IMPLEMENTED: op ~ memberof
 
 
-    C ; L ; N |- mu_name => _ : base_type1 , ... , base_typen -> base_type' . _t
-    C ; L ; N |- mu_pval_aux1 => _1 : base_type1 . _t1 ... C ; L ; N |- mu_pval_auxn => _n : base_typen . _tn
-    --------------------------------------------------------------------------------------------------------- :: Call
-    C ; L ; N |- mu_name ( mu_pval_aux1 , ... , mu_pval_auxn ) => y : base_type' . term'
+    % C ; L ; N |- mu_name => yf : base_type . term
+    % C ; L ; N |- </ mu_pval_auxi // i /> :; yf : base_type . term >> y' : base_type' . term'
+    % ---------------------------------------------------------------------------------------- :: Call
+    % C ; L ; N |- mu_name ( </ mu_pval_auxi // i /> ) => y' : base_type' . term'
 
 
     % DEFER conv_int
+    % conv_int ( ty_act , mu_pval_aux )
 
-    % TODO: assert_undef, bool_to_integer, wrapI
+    C ; L ; N |- mu_pval_aux => _ : bool . _t
+    smt ( N => embed mu_pval_aux )
+    --------------------------------------------------------------------------------- :: Assert_Undef
+    C ; L ; N |- assert_undef ( mu_pval_aux , ty_loc UB_name ) => y : unit . y = unit
+
+
+    C ; L ; N |- mu_pval_aux => _  : bool . _t
+    ------------------------------------------------------------------------------------------------------------- :: Bool_To_Integer
+    C ; L ; N |- bool_to_integer ( mu_pval_aux ) => y : integer . y = if embed mu_pval_aux then z_one else z_zero
+
+
+    C ; L ; N |- mu_pval_aux => _ : integer . _t
+    abbrev1 == max_int ct - min_int ct + z_one
+    abbrev2 == embed mu_pval_aux rem_f abbrev1
+    ----------------------------------------------------------------------------------------------------------------------------- :: WrapI
+    C ; L ; N |- wrapI ( ct , mu_pval_aux ) => y' : base_type . y = if abbrev2 =< max_int ct then abbrev2 else abbrev2 - abbrev1
+
 
 defns
   pattern_jtype :: '' ::=
-  % for 2021-05-13: assert_undef, bool_to_integer, wrapI, computational patterns, return patterns, resources, resources patterns
+
+  % for 2021-05-13: return patterns, resources, resources patterns
 
   defn
     mu_pattern_aux : base_type ~> C :: :: Pattern_ :: Pattern_ by
   
-    % TODO
+
+    --------------------------------- :: No_Sym_Annot
+    _ : base_type : base_type ~> cdot
+    
+
+    ------------------------------------------------- :: Sym_Annot
+    x : base_type : base_type ~> cdot , x : base_type
   
+
+    ----------------------------------------- :: Nil
+    Nil base_type ( ) : [ base_type ] ~> cdot
+
+
+    mu_pattern_aux1 : base_type ~> C1
+    mu_pattern_aux2 : [ base_type ] ~> C2
+    --------------------------------------------------------------------- :: Cons 
+    Cons ( mu_pattern_aux1 , mu_pattern_aux2 ) : [ base_type ] ~> C1 , C2
+
+
+    </ mu_pattern_auxi : base_typei ~> Ci // i />
+    ----------------------------------------------------------------------------- :: Tuple
+    Tuple ( </ mu_pattern_auxi // i /> ) : </ base_typei // i /> ~> </ Ci // i />
+
+
+    </ mu_pattern_auxi : base_type ~> Ci // i />
+    ----------------------------------------------------------------------------- :: Array
+    Array ( </ mu_pattern_auxi // i /> ) : array base_type ~> </ Ci // i />
+
+
+    mu_pattern_aux : base_type ~> C
+    --------------------------------------------- :: Specified 
+    Specified ( mu_pattern_aux ) : base_type ~> C
+
+
   defn
     mu_sym_or_pattern : base_type ~> C :: :: Sym_Or_Pattern :: Sym_Or_Pattern by
   
-    % TODO
+
+    ------------------------------------- :: Sym
+    x : base_type ~> cdot , x : base_type
+
+
+    mu_pattern_aux : base_type ~> C
+    ------------------------------- :: Pattern
+    mu_pattern_aux : base_type ~> C
+
 
 defns
   tpval_jtype :: '' ::=
@@ -1087,8 +1172,8 @@ defns
   
     % ASK boundary between inference/checking, should there be an SMT here?
     C ; L ; N |- mu_pval_aux => _ : bool . _t
-    C ; L , y' ; N , embed mu_pval_aux = true  |- mu_tpexpr_aux1 <= y : base_type . term
-    C ; L , y' ; N , embed mu_pval_aux = false |- mu_tpexpr_aux2 <= y : base_type . term
+    C ; L ; N , embed mu_pval_aux = true  |- mu_tpexpr_aux1 <= y : base_type . term
+    C ; L ; N , embed mu_pval_aux = false |- mu_tpexpr_aux2 <= y : base_type . term
     -------------------------------------------------------------------------------------------- :: If
     C ; L ; N |- if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2 <= y : base_type . term
   
@@ -1121,7 +1206,7 @@ defns
     
     C ; L ; N |- mu_pval_aux => _ : integer . _t
     -------------------------------------------- :: Create
-    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed mu_pval_aux , yp ) /\ [ yp ] ( one )|- * - ct -> [ y ] *s I
+    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed mu_pval_aux , yp ) /\ [ yp ] ( q_one )|- * - ct -> [ y ] *s I
 
 
     % NOT IMPLEMENTED:
@@ -1134,13 +1219,13 @@ defns
     smt ( N , term' => representable ( ct , y' ) )
     smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     -------------------------------------------------------- :: Store
-    C ; L ; N ; cdot , [ embed mu_pval_aux0 ] ( one )|- _i - ct -> [ _t'' ] |- store ( _b , ct , mu_pval_aux1 , mu_pval_aux' , _mem_order ) => sigma _ : unit . exists y' : to_base ( ct ) . term' /\ [ embed mu_pval_aux0 ] ( one )|- tick - ct -> [ y' ] *s I
+    C ; L ; N ; cdot , [ embed mu_pval_aux0 ] ( q_one )|- _i - ct -> [ _t'' ] |- store ( _b , ct , mu_pval_aux1 , mu_pval_aux' , _mem_order ) => sigma _ : unit . exists y' : to_base ( ct ) . term' /\ [ embed mu_pval_aux0 ] ( q_one )|- tick - ct -> [ y' ] *s I
 
 
     C ; L ; N |- mu_pval_aux1 => _ : loc . _t
     smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     ---------------------------------------------------------------------------------------------------------------------------------- :: Kill_Static
-    C ; L ; N ; cdot , [ embed mu_pval_aux0 ] ( one )|- _i - ct -> [ _t' ] |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
+    C ; L ; N ; cdot , [ embed mu_pval_aux0 ] ( q_one )|- _i - ct -> [ _t' ] |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
 
 
     % NOT IMPLEMENTED:

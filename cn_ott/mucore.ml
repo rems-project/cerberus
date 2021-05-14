@@ -14,28 +14,10 @@ base_type =  (* base types *)
  | Struct of tag (* struct *)
  | Set of base_type (* set *)
  | Option of base_type (* option *)
- | Param of (base_type) list * base_type (* parameter types *)
+ | ParamTy of base_type * base_type (* parameter types *)
 
 
 (** subrules *)
-let is_rel_binop_of_binop (binop5:Core.binop) : bool =
-  match binop5 with
-  | OpAdd -> false
-  | OpSub -> false
-  | OpMul -> false
-  | OpDiv -> false
-  | OpRem_t -> false
-  | OpRem_f -> false
-  | OpExp -> false
-  | OpEq -> (true)
-  | OpGt -> (true)
-  | OpLt -> (true)
-  | OpGe -> (true)
-  | OpLe -> (true)
-  | OpAnd -> false
-  | OpOr -> false
-
-
 let is_bool_binop_of_binop (binop5:Core.binop) : bool =
   match binop5 with
   | OpAdd -> false
@@ -68,6 +50,24 @@ let is_arith_binop_of_binop (binop5:Core.binop) : bool =
   | OpLt -> false
   | OpGe -> false
   | OpLe -> false
+  | OpAnd -> false
+  | OpOr -> false
+
+
+let is_rel_binop_of_binop (binop5:Core.binop) : bool =
+  match binop5 with
+  | OpAdd -> false
+  | OpSub -> false
+  | OpMul -> false
+  | OpDiv -> false
+  | OpRem_t -> false
+  | OpRem_f -> false
+  | OpExp -> false
+  | OpEq -> (true)
+  | OpGt -> (true)
+  | OpLt -> (true)
+  | OpGe -> (true)
+  | OpLe -> (true)
   | OpAnd -> false
   | OpOr -> false
 
@@ -386,6 +386,7 @@ type
  | Eq of 'bt term_aux * 'bt term_aux
  | And of ('bt term_aux) list
  | Or of ('bt term_aux) list
+ | ITE of 'bt term_aux * 'bt term_aux * 'bt term_aux
 
 and 'bt arith_op = 
    Add of 'bt term_aux * 'bt term_aux
@@ -421,7 +422,8 @@ and 'bt array_op =
    ArrayGet of 'bt term_aux * 'bt term_aux
 
 and 'bt param_op = 
-   App of 'bt term_aux * ('bt term_aux) list
+   Param of Symbol.sym * base_type * 'bt term_aux
+ | App of 'bt term_aux * ('bt term_aux) list
 
 and 'bt struct_op = 
    StructMember of tag * 'bt term_aux * Symbol.identifier
