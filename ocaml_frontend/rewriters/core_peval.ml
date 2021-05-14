@@ -628,7 +628,8 @@ let core_peval file : 'bty RW.rewriter =
           | Esseq (pat, e1, e2) -> (* TODO !!! *)
               begin match match_pattern_expr pat e1 with
                 | `MISMATCHED ->
-                    error ("mismatched Ewseq/Esseq ==> " ^ String_core.string_of_expr (Core_aux.(mk_wseq_e pat e1 (mk_pure_e (mk_value_pe Vunit)))))
+                    Traverse
+(*                    error ("mismatched Ewseq/Esseq ==> " ^ String_core.string_of_expr (Core_aux.(mk_wseq_e pat e1 (mk_pure_e (mk_value_pe Vunit))))) *)
                 | `MATCHED (None, xs) ->
                     let add_loc =
                       match Annot.get_loc annots with
