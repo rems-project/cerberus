@@ -191,16 +191,6 @@ m_kill_kind =
 
 
 type 
-mu_pattern = 
-   M_CaseBase of ( Symbol.sym option * T.bt )
- | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
-
-and mu_pattern_aux = 
-   M_Pattern of Location_ocaml.t * annot list * mu_pattern
- | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
-
-
-type 
 'TY mu_tpval =  (* top-level pure values *)
    M_TPVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_TPVdone of 'TY mu_pval_aux (* pure done *)
@@ -223,9 +213,13 @@ type
 
 
 type 
-'TY mu_sym_or_pattern = 
-   M_Symbol of Symbol.sym
- | M_Pat of mu_pattern_aux
+mu_pattern = 
+   M_CaseBase of ( Symbol.sym option * T.bt )
+ | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
+
+and mu_pattern_aux = 
+   M_Pattern of Location_ocaml.t * annot list * mu_pattern
+ | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -241,6 +235,12 @@ type
 
 
 type 
+'TY mu_sym_or_pattern = 
+   M_Symbol of Symbol.sym
+ | M_Pat of mu_pattern_aux
+
+
+type 
 'TY mu_tpexpr =  (* top-level pure expressions *)
    M_TPEtpval of 'TY mu_tpval_aux (* top-level pure values *)
  | M_TPEcase of 'TY mu_pval_aux * ((mu_pattern_aux * 'TY mu_tpexpr_aux)) list (* pattern matching *)
@@ -250,15 +250,6 @@ type
 and 'TY mu_tpexpr_aux =  (* pure top-level pure expressions with auxiliary info *)
    M_TPexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_tpexpr
  | M_TPexpr_no_aux of 'TY mu_tpexpr (* Ott-hack for simpler typing rules *)
-
-
-type 
-lit = 
-   Lit_Sym of 'sym
- | Lit_Unit
- | Lit_Bool of bool
- | Lit_Z of Z.t
- | Lit_Q of ( int * int )
 
 
 type 
@@ -280,28 +271,9 @@ type
 
 
 type 
-'TY mu_seq_expr =  (* sequential (effectful) expressions *)
-   M_Seq_Epval of 'TY mu_pval_aux (* pure values *)
- | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * ('TY mu_pval_aux) list (* C function call *)
- | M_Seq_Eproc of 'TY mu_pval * ('TY mu_pval_aux) list (* procedure call *)
-
-
-type 
 'TY mu_action_aux =  (* memory actions with auxiliary info *)
    M_Action of Location_ocaml.t * 'TY mu_action
  | M_no_aux of 'TY mu_action (* Ott-hack for simpler typing rules *)
-
-
-type 
-'TY mu_tval =  (* (effectful) top-level values *)
-   M_TVdone of 'TY mu_pval_aux (* end of top-level expression *)
- | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
-
-
-type 
-'TY mu_seq_expr_aux =  (* sequential (effectful) expressions with auxiliary info *)
-   M_Seq_expr of Location_ocaml.t * annot list * 'TY mu_seq_expr
- | M_Seq_no_aux of 'TY mu_seq_expr (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -333,51 +305,12 @@ type
 
 
 type 
-'TY mu_seq_texpr =  (* sequential top-level (effectful) expressions *)
-   M_Seq_TEtval of 'TY mu_tval (* (effectful) top-level values *)
- | M_Seq_TErun of Symbol.sym * ('TY mu_pval_aux) list (* run from label *)
- | M_Seq_TEnd of ('TY mu_pval_aux) list (* nondeterministic choice *)
- | M_Seq_TElet of 'TY mu_sym_or_pattern * 'TY mu_seq_expr_aux * 'TY mu_texpr (* pure sequencing *)
- | M_Seq_TEcase of 'TY mu_pval_aux * ((mu_pattern_aux * 'TY mu_texpr)) list (* pattern matching *)
- | M_Seq_TEif of 'TY mu_pval_aux * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
- | M_Seq_TEbound of int * 'TY mu_is_texpr_aux (* limit scope of indet seq behaviour, absent at runtime *)
-
-and 'TY mu_seq_texpr_aux =  (* sequential top-level (effectful) expressions with auxiliary info *)
-   M_Seq_Texpr of Location_ocaml.t * annot list * 'TY mu_seq_texpr
- | M_Seq_Tseq_no_aux of 'TY mu_seq_texpr (* Ott-hack for simpler typing rules *)
-
-and 'TY mu_is_expr =  (* indet seq (effectful) expressions *)
-   M_Is_Ememop of 'TY mu_memop (* pointer op involving memory *)
- | M_Is_Eaction of 'TY mu_paction (* memory action *)
- | M_Is_Eunseq of ('TY mu_texpr) list (* unsequenced expressions *)
-
-and 'TY mu_is_expr_aux =  (* indet seq (effectful) expressions with auxiliary info *)
-   M_Is_expr of Location_ocaml.t * annot list * 'TY mu_is_expr
- | M_Is_no_aux of 'TY mu_is_expr (* Ott-hack for simpler typing rules *)
-
-and 'TY mu_is_texpr =  (* indet seq top-level (effectful) expressions *)
-   M_is_TEwseq of mu_pattern_aux * 'TY mu_is_expr_aux (* weak sequencing *)
- | M_is_TEsseq of 'TY mu_sym_or_pattern * 'TY mu_is_expr_aux (* strong sequencing *)
-
-and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with auxiliary info *)
-   M_Is_Texpr of Location_ocaml.t * annot list * 'TY mu_is_texpr
- | M_Is_Tno_aux of 'TY mu_is_texpr (* Ott-hack for simpler typing rules *)
-
-and 'TY mu_texpr =  (* top-level (effectful) expressions *)
-   M_TESeq of 'TY mu_seq_texpr_aux (* sequential (effectful) expressions *)
- | M_TENs of 'TY mu_is_texpr_aux (* indet seq (effectful) expressions *)
-
-
-type 
-'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
-   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
- | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
-
-
-type 
-predicate_name =  (* names of predicates *)
-   Ctype of Sctypes.t (* C type *)
- | Id of string (* arbitrary *)
+lit = 
+   Lit_Sym of Symbol.sym
+ | Lit_Unit
+ | Lit_Bool of bool
+ | Lit_Z of Z.t
+ | Lit_Q of ( int * int )
 
 
 type 
@@ -445,14 +378,112 @@ and 'bt term =
  | CT_pred of 'bt ct_pred
  | Option_op of 'bt option_op
  | Param_op of 'bt param_op
- | Of_res of resource
 
 and 'bt term_aux =  (* terms with auxiliary info *)
    IT of 'bt term * 'bt
  | IT_no_aux of 'bt term (* Ott-hack for simpler typing rules *)
 
-and resource = 
-   Predicate of type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; init: bool; perm : int * int; }
+
+type 
+predicate_name =  (* names of predicates *)
+   Ctype of Sctypes.t (* C type *)
+ | Id of string (* arbitrary *)
+
+
+type 
+res_term =  (* resource terms *)
+   ResT_Empty (* empty heap *)
+ | ResT_Var of Symbol.sym (* variable *)
+ | ResT_SepPair of res_term * res_term (* seperating-conjunction pair *)
+ | ResT_Pack of 'TY mu_pval_aux * res_term (* packing for existentials *)
+ | ResT_Pair of res_term * res_term (* logical-conjunction pair *)
+
+
+type 
+resource =  (* resources *)
+   Res_Empty (* empty heap *)
+ | Res_Predicate of type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; init: bool; perm : int * int; } (* heap predicate *)
+ | Res_Term of 'bt term_aux (* logical term *)
+ | Res_SepConj of resource * resource (* seperating conjunction *)
+ | Res_Exists of Symbol.sym * base_type * resource (* existential *)
+ | Res_Conj of resource * resource (* logical conjuction *)
+
+
+type 
+'TY mu_seq_expr =  (* sequential (effectful) expressions *)
+   M_Seq_Epval of 'TY mu_pval_aux (* pure values *)
+ | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * ('TY mu_pval_aux) list (* C function call *)
+ | M_Seq_Eproc of 'TY mu_pval * ('TY mu_pval_aux) list (* procedure call *)
+
+
+type 
+spine_elem =  (* spine element *)
+   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
+ | Spine_Elem_logical_val of logical_val (* logical variable *)
+ | Spine_Elem_res_val of res_term (* resource valuel *)
+
+
+type 
+'TY mu_seq_expr_aux =  (* sequential (effectful) expressions with auxiliary info *)
+   M_Seq_expr of Location_ocaml.t * annot list * 'TY mu_seq_expr
+ | M_Seq_no_aux of 'TY mu_seq_expr (* Ott-hack for simpler typing rules *)
+
+
+type 
+ret_pattern =  (* return pattern *)
+   Return_Pattern_computational of Symbol.sym (* computational variable *)
+ | Return_Pattern_logical of Symbol.sym (* logical variable *)
+ | Return_Pattern_resource of Symbol.sym (* resource variable *)
+ | Return_Pattern_constraint of 'bt term_aux (* constraint variable *)
+
+
+type 
+'TY mu_tval =  (* (effectful) top-level values *)
+   M_TVdone of (spine_elem) list (* end of top-level expression *)
+ | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+
+
+type 
+'TY mu_seq_texpr =  (* sequential top-level (effectful) expressions *)
+   M_Seq_TEtval of 'TY mu_tval (* (effectful) top-level values *)
+ | M_Seq_TErun of Symbol.sym * ('TY mu_pval_aux) list (* run from label *)
+ | M_Seq_TEnd of ('TY mu_pval_aux) list (* nondeterministic choice *)
+ | M_Seq_TElet of ret_pattern * 'TY mu_seq_expr_aux * 'TY mu_texpr (* bind return patterns *)
+ | M_Seq_TEletC of 'TY mu_sym_or_pattern * 'TY mu_seq_expr_aux * 'TY mu_texpr (* bind computational patterns *)
+ | M_Seq_TEcase of 'TY mu_pval_aux * ((mu_pattern_aux * 'TY mu_texpr)) list (* pattern matching *)
+ | M_Seq_TEif of 'TY mu_pval_aux * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
+ | M_Seq_TEbound of int * 'TY mu_is_texpr_aux (* limit scope of indet seq behaviour, absent at runtime *)
+
+and 'TY mu_seq_texpr_aux =  (* sequential top-level (effectful) expressions with auxiliary info *)
+   M_Seq_Texpr of Location_ocaml.t * annot list * 'TY mu_seq_texpr
+ | M_Seq_Tseq_no_aux of 'TY mu_seq_texpr (* Ott-hack for simpler typing rules *)
+
+and 'TY mu_is_expr =  (* indet seq (effectful) expressions *)
+   M_Is_Ememop of 'TY mu_memop (* pointer op involving memory *)
+ | M_Is_Eaction of 'TY mu_paction (* memory action *)
+ | M_Is_Eunseq of ('TY mu_texpr) list (* unsequenced expressions *)
+
+and 'TY mu_is_expr_aux =  (* indet seq (effectful) expressions with auxiliary info *)
+   M_Is_expr of Location_ocaml.t * annot list * 'TY mu_is_expr
+ | M_Is_no_aux of 'TY mu_is_expr (* Ott-hack for simpler typing rules *)
+
+and 'TY mu_is_texpr =  (* indet seq top-level (effectful) expressions *)
+   M_is_TEwseq of mu_pattern_aux * 'TY mu_is_expr_aux (* weak sequencing *)
+ | M_is_TEsseq of 'TY mu_sym_or_pattern * 'TY mu_is_expr_aux (* strong sequencing *)
+
+and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with auxiliary info *)
+   M_Is_Texpr of Location_ocaml.t * annot list * 'TY mu_is_texpr
+ | M_Is_Tno_aux of 'TY mu_is_texpr (* Ott-hack for simpler typing rules *)
+
+and 'TY mu_texpr =  (* top-level (effectful) expressions *)
+   M_TESeq of 'TY mu_seq_texpr_aux (* sequential (effectful) expressions *)
+ | M_TENs of 'TY mu_is_texpr_aux (* indet seq (effectful) expressions *)
+
+
+type 
+'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
+   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
+ | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -465,13 +496,6 @@ ret =  (* return types *)
 
 
 type 
-spine_elem =  (* spine element *)
-   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
- | Spine_Elem_logical_val of logical_val (* logical variable *)
- | Spine_Elem_resource of resource (* resource *)
-
-
-type 
 arg =  (* argument types *)
    ArgTy_Computational of 'sym * base_type * arg
  | ArgTy_Logical of 'sym * base_type * arg
@@ -479,6 +503,7 @@ arg =  (* argument types *)
  | ArgTy_Constraint of 'bt term_aux * arg
  | ArgTy_Ret of ret
 
+(** definitions *)
 (** definitions *)
 (** definitions *)
 (** definitions *)
