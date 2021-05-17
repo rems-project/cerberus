@@ -342,6 +342,15 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let param_op local = function
+          | Const it ->
+             let@ (bt, it) = infer loc local it in
+             return (BT.Param (BT.Integer, bt), Const it)
+          | Mod (it1, it2, it3) ->
+             let@ (bt2, it2) = infer loc local it2 in
+             let@ (bt3, it3) = infer loc local it3 in
+             let bt = BT.Param (bt2, bt3) in
+             let@ it1 = check loc local bt it1 in
+             return (bt, Mod (it1, it2, it3))
           | Param ((sym, abt), it) -> 
              let local = L.add_l sym abt local in
              let@ (bt, it) = infer loc local it in

@@ -66,7 +66,6 @@ let rec simp (lcs : t list) term =
     | Pointer_op it -> pointer_op it bt
     | List_op it -> IT (List_op it, bt)
     | Set_op it -> IT (Set_op it, bt)
-    (* | Array_op it -> IT (Array_op it, bt) *)
     | CT_pred it -> IT (CT_pred it, bt)
     | Option_op it -> option_op it bt
     | Param_op it -> param_op it bt
@@ -366,20 +365,24 @@ let rec simp (lcs : t list) term =
 
   and param_op it bt = 
     match it with
+    | Const t ->
+       let t = aux t in
+       IT (Param_op (Const t), bt)
+    | Mod (t1, t2, t3) ->
+       let t1 = aux t1 in
+       let t2 = aux t2 in
+       let t3 = aux t3 in
+       IT (Param_op (Mod (t1, t2, t3)), bt)
     | Param ((s,abt), it) ->
        let s' = Sym.fresh_same s in 
        let it = aux (IT.subst_var {before=s; after=s'} it) in
-       IT (Param_op (Param ((s',abt), aux it)), bt)
+       IT (Param_op (Param ((s',abt), it)), bt)
     | App (it, arg) ->
        let it = aux it in
        let arg = aux arg in
        match it with
        | IT (Param_op (Param (t_arg, body)), _) ->
-          let subst =
-            (* List.map2 *) (fun (s, _) t ->
-                Subst.{before = s; after = t}
-              ) t_arg arg
-          in
+          let subst = Subst.{before = (fst t_arg); after = arg} in
           aux (IT.subst_it subst body)
        | _ ->
           IT (Param_op (App (it, arg)), bt)

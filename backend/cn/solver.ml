@@ -15,7 +15,7 @@ let context =
 
 let solver = Z3.Solver.mk_simple_solver context
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 7
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 12
 let () = Z3.Solver.set_parameters solver params
 
 
@@ -66,8 +66,6 @@ module Make (G : sig val global : Global.t end) = struct
            member_symbols member_sorts
       | Set bt ->
          Z3.Set.mk_sort context (aux bt)
-      (* | Array bt ->
-       *    Z3.Z3Array.mk_sort context (aux Integer) (aux bt) *)
       | Option bt ->
          let a_sort = aux bt in
          let some_c = 
@@ -118,7 +116,6 @@ module Make (G : sig val global : Global.t end) = struct
            | Pointer_op t -> pointer_op t bt
            | List_op t -> list_op t bt
            | Set_op t -> set_op t bt
-           (* | Array_op t -> array_op t bt *)
            | CT_pred t -> ct_pred t bt
            | Option_op t -> option_op t bt
            | Param_op t -> param_op t bt
@@ -255,47 +252,6 @@ module Make (G : sig val global : Global.t end) = struct
       | Subset (t1, t2) ->
          Z3.Set.mk_subset context (term t1) (term t2)
 
-    (* and array_op it bt =
-     *   match it with
-     *   | ArrayGet (IT (Array_op (ArrayDef (s, body)),_), index) ->
-     *      let subst = Subst.{before = s; after = index} in
-     *      term (IT.subst_it subst body)
-     *   | ConstArray t ->
-     *      Z3.Z3Array.mk_const_array context (sort_of_bt bt) (term t)
-     *   | ArrayGet (t1, t2) ->
-     *      Z3.Z3Array.mk_select context (term t1) (term t2)
-     *   | ArraySet (t1, t2, t3) ->
-     *      Z3.Z3Array.mk_store context (term t1) (term t2) (term t3)
-     *   | ArrayEqualOnRange (at1, at2, it1, it2) ->
-     *      let a1, a2 = term at1, term at2 in
-     *      let i1, i2 = term it1, term it2 in
-     *      let straight_equality = Z3.Boolean.mk_eq context a1 a2 in
-     *      let restricted_equality = 
-     *        let i = Z3.Expr.mk_fresh_const context "i" (sort_of_bt Integer) in
-     *        let body = 
-     *          let in_range = 
-     *            Z3.Boolean.mk_and context [
-     *                Z3.Arithmetic.mk_le context i1 i;
-     *                Z3.Arithmetic.mk_le context i i2;
-     *              ] 
-     *          in
-     *          let select_a1 = Z3.Z3Array.mk_select context a1 i in
-     *          let select_a2 = Z3.Z3Array.mk_select context a2 i in
-     *          let select_equal = Z3.Boolean.mk_eq context select_a1 select_a2 in
-     *          Z3.Boolean.mk_implies context in_range select_equal 
-     *        in
-     *        let q = Z3.Quantifier.mk_forall_const context [i] body None [] [] None None in
-     *        Z3.Quantifier.expr_of_quantifier q
-     *      in
-     *      Z3.Boolean.mk_or context [straight_equality; restricted_equality]
-     *   | ArrayDef _ ->
-     *      let err = 
-     *        "SMT solver applied to array definition (of_index_term): " ^
-     *          Pp.plain (IT.pp (IT (Array_op it, bt)))
-     *      in
-     *      Debug_ocaml.error err *)
-  
-
     and ct_pred it bt =
       match it with
       | Representable (ct, t) ->
@@ -328,17 +284,24 @@ module Make (G : sig val global : Global.t end) = struct
 
     and param_op it bt = 
       match it with
-      | App (IT (Param_op (Param (t_arg, body)),_), arg) ->
-         let subst = Subst.{before = (fst t_arg); after = arg} in
-         term (IT.subst_it subst body)
+      | Const t ->
+         Z3.Z3Array.mk_const_array context (sort_of_bt bt) (term t)
+      | Mod (t1, t2, t3) ->
+         Z3.Z3Array.mk_store context (term t1) (term t2) (term t3)  
+      | App (f, arg) ->
+         begin match f with
+         | IT (Param_op (Param (t_arg, body)),_) ->
+            let subst = Subst.{before = (fst t_arg); after = arg} in
+            term (IT.subst_it subst body)
+         | _ ->
+            Z3.Z3Array.mk_select context (term f) (term arg)
+         end
       | Param ((sym, abt), body) ->
          let err = 
            "SMT solver applied to parameterised expression (of_index_term): " ^
              Pp.plain (IT.pp (IT (Param_op it, bt)))
          in
          Debug_ocaml.error err
-      | App (f, arg) ->
-         Z3.Z3Array.mk_select context (term f) (term arg)
     in
 
     fun it ->

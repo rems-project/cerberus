@@ -78,12 +78,7 @@ and 'bt set_op =
   | SetDifference of 'bt term * 'bt term
   | Subset of 'bt term * 'bt term
 
-(* and 'bt array_op = 
- *   | ConstArray of 'bt term
- *   | ArrayGet of 'bt term * 'bt term
- *   | ArraySet of 'bt term * 'bt term * 'bt term
- *   | ArrayEqualOnRange of 'bt term * 'bt term * 'bt term * 'bt term
- *   | ArrayDef of Sym.t * 'bt term *)
+
 
 and 'bt ct_pred = 
   (* | MinInteger of CF.Ctype.integerType
@@ -99,7 +94,9 @@ and 'bt option_op =
   | Value_of_some of 'bt term
 
 and 'bt param_op = 
+  | Const of 'bt term
   | Param of (Sym.t * BT.t) * 'bt term
+  | Mod of 'bt term * 'bt term * 'bt term
   | App of 'bt term * 'bt term
 
 and 'bt term_ =
@@ -112,7 +109,6 @@ and 'bt term_ =
   | Pointer_op of 'bt pointer_op
   | List_op of 'bt list_op
   | Set_op of 'bt set_op
-  (* | Array_op of 'bt array_op *)
   | CT_pred of 'bt ct_pred
   | Option_op of 'bt option_op
   | Param_op of 'bt param_op
@@ -306,24 +302,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Subset _, _ -> false
   in
 
-  (* let array_op it it' =
-   *   match it, it' with
-   *   | ConstArray t, ConstArray t' ->
-   *      equal t t'
-   *   | ArrayGet (t1,t2), ArrayGet (t1',t2') ->
-   *      equal t1 t1' && equal t2 t2'
-   *   | ArraySet (t1,t2,t3), ArraySet (t1',t2',t3') ->
-   *      equal t1 t1' && equal t2 t2' && equal t3 t3'
-   *   | ArrayEqualOnRange (t1,t2,t3,t4), ArrayEqualOnRange (t1',t2',t3',t4') ->
-   *      equal t1 t1' && equal t2 t2' && equal t3 t3' && equal t4 t4'
-   *   | ArrayDef (s,t), ArrayDef (s',t') -> 
-   *      Sym.equal s s' && equal t t'
-   *   | ConstArray _, _ -> false
-   *   | ArrayGet _, _ -> false
-   *   | ArraySet _, _ -> false
-   *   | ArrayEqualOnRange _, _ -> false
-   *   | ArrayDef _, _ -> false
-   * in *)
+
 
   let ct_pred it it' = 
     match it, it' with
@@ -358,11 +337,17 @@ let rec equal (IT (it, _)) (IT (it', _)) =
 
   let param_op it it' = 
     match it, it' with
+    | Const t, Const t' ->
+       equal t t'
+    | Mod (t1,t2,t3), Mod (t1',t2',t3') ->
+       equal t1 t1' && equal t2 t2' && equal t3 t3'
     | Param (args,t), Param (args',t') -> 
        (fun (s,bt) (s',bt') -> Sym.equal s s' && BT.equal bt bt') args args' &&
          equal t t'
     | App (t, args), App (t', args') ->
        equal t t' && (* List.equal *) equal args args'
+    | Const _, _ -> false
+    | Mod _, _ -> false
     | Param _, _ -> false
     | App _, _ -> false
   in
@@ -377,7 +362,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Pointer_op it, Pointer_op it' -> pointer_op it it'
   | List_op it, List_op it' -> list_op it it'
   | Set_op it, Set_op it' -> set_op it it'
-  (* | Array_op it, Array_op it' -> array_op it it' *)
   | CT_pred it, CT_pred it' -> ct_pred it it'
   | Option_op it, Option_op it' -> option_op it it'
   | Param_op it, Param_op it' -> param_op it it'
@@ -390,7 +374,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Pointer_op _, _ -> false
   | List_op _, _ -> false
   | Set_op _, _ -> false
-  (* | Array_op _, _ -> false *)
   | CT_pred _, _ -> false
   | Option_op _, _ -> false
   | Param_op _, _ -> false
@@ -537,19 +520,6 @@ let pp (it : 'bt term) : PPrint.document =
          c_app !^"subset" [aux false t1; aux false t2]
     in
 
-    (* let array_op = function    
-     *   | ConstArray t ->
-     *      c_app !^"all" [aux false t]
-     *   | ArrayGet (t1,t2) ->
-     *      aux true t1 ^^ lbracket ^^ aux false t2 ^^ rbracket
-     *   | ArraySet (t1,t2,t3) ->
-     *      aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
-     *   | ArrayEqualOnRange (t1,t2,t3,t4) ->
-     *      c_app !^"equalOnRange" [aux false t1; aux false t2; aux false t3; aux false t4]
-     *   | ArrayDef (s, t) ->
-     *      braces (Sym.pp s ^^ dot ^^^ aux false t)
-     * in *)
-
     let option_op = function
       | Something it -> 
          c_app !^"something" [aux atomic it]
@@ -562,6 +532,10 @@ let pp (it : 'bt term) : PPrint.document =
     in
 
     let param_op = function
+      | Const t ->
+         c_app !^"const" [aux false t]
+      | Mod (t1,t2,t3) ->
+         aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
       | Param ((sym, bt), t) -> 
          parens (
              parens (typ (Sym.pp sym) (BT.pp bt)) ^^^ !^"->" ^^^
@@ -582,7 +556,6 @@ let pp (it : 'bt term) : PPrint.document =
     | CT_pred it -> ct_pred it
     | List_op it -> list_op it
     | Set_op it -> set_op it
-    (* | Array_op it -> array_op it *)
     | Option_op it -> option_op it
     | Param_op it -> param_op it
 
@@ -675,14 +648,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | SetDifference (t1, t2) -> free_vars_list [t1;t2]
     | Subset (t1, t2) -> free_vars_list [t1;t2]
   in
-
-  (* let array_op : 'bt array_op -> SymSet.t = function
-   *   | ConstArray t -> free_vars t
-   *   | ArrayGet (t1,t2) -> free_vars_list [t1;t2]
-   *   | ArraySet (t1,t2,t3) -> free_vars_list [t1;t2;t3]
-   *   | ArrayEqualOnRange (t1,t2,t3,t4) -> free_vars_list [t1;t2;t3; t4]
-   *   | ArrayDef (s, t) -> SymSet.remove s (free_vars t)
-   * in *)
   
   let option_op = function
     | Something it -> free_vars it
@@ -692,6 +657,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   in
 
   let param_op = function
+    | Const t -> free_vars t
+    | Mod (t1,t2,t3) -> free_vars_list [t1;t2;t3]
     | Param (arg, t) -> SymSet.remove (fst arg) (free_vars t)
     | App (t, arg) -> free_vars_list ([t; arg])
   in
@@ -708,7 +675,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | CT_pred it -> ct_pred it
   | List_op it -> list_op it
   | Set_op it -> set_op it
-  (* | Array_op it -> array_op it *)
   | Option_op it -> option_op it
   | Param_op it -> param_op it
 
@@ -856,30 +822,6 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
       IT (Set_op it, bt)
     in
 
-    (* let array_op it bt = 
-     *   let it = match it with
-     *     | ConstArray t ->
-     *        ConstArray (aux t)
-     *     | ArrayGet (t1, t2) ->
-     *        ArrayGet (aux t1, aux t2)
-     *     | ArraySet (t1, t2, t3) ->
-     *        ArraySet (aux t1, aux t2, aux t3)
-     *     | ArrayEqualOnRange (t1, t2, t3, t4) ->
-     *        ArrayEqualOnRange (aux t1, aux t2, aux t3, aux t4)
-     *     | ArrayDef (s, t) ->
-     *        let s' = Sym.fresh () in 
-     *        let substitution =
-     *          {before = s; 
-     *           after = 
-     *             fun _ -> 
-     *             IT (Lit (Sym s'), BT.Integer)}
-     *        in
-     *        let t = subst substitution t in
-     *        ArrayDef (s', aux t)
-     *   in
-     *   IT (Array_op it, bt)
-     * in *)
-
     let option_op it bt = 
       let it = match it with
         | Something it -> Something (aux it)
@@ -892,6 +834,10 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
 
     let param_op it bt =
       let it = match it with
+        | Const t ->
+           Const (aux t)
+        | Mod (t1, t2, t3) ->
+           Mod (aux t1, aux t2, aux t3)
         | App (it, arg) ->
            App (aux it, aux arg)
         | Param ((sym, bt), body) ->
@@ -920,7 +866,6 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
     | CT_pred it -> ct_pred it bt
     | List_op it -> list_op it bt
     | Set_op it -> set_op it bt
-    (* | Array_op it -> array_op it bt *)
     | Option_op it -> option_op it bt
     | Param_op it -> param_op it bt
   in
@@ -1113,6 +1058,10 @@ let value_of_some_ v =
      IT (Option_op (Value_of_some v), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
 
+let const_ t = 
+  IT (Param_op (Const t), BT.Param (Integer, bt t))
+let mod_ (t1, t2, t3) = 
+  IT (Param_op (Mod (t1, t2, t3)), bt t1)
 let param_ (sym, abt) v = 
   IT (Param_op (Param ((sym, abt), v)), BT.Param (abt, bt v))
 let app_ v args = 
@@ -1177,13 +1126,7 @@ let good_value v_it sct =
      representable_ (sct, v_it)
 
 
-(* let rec all_init b (Sctypes.Sctype (_, ct)) = 
- *   let open Sctypes in
- *   match ct with
- *   | Array (t, _) ->
- *      param_ (Sym.fresh (), BT.Integer) (all_init b t)
- *   | _ ->
- *      bool_ true *)
+
 
 
 
