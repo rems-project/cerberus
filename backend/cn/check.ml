@@ -1016,6 +1016,8 @@ module Make (G : sig val global : Global.t end) = struct
     (*** pure value inference *****************************************************)
 
     type vt = BT.t * IT.t
+    let it_of_arg arg = sym_ (arg.lname, arg.bt)
+    let vt_of_arg arg = (arg.bt, it_of_arg arg)
 
     let rt_of_vt (bt,it) = 
       let s = Sym.fresh () in 
@@ -1024,11 +1026,9 @@ module Make (G : sig val global : Global.t end) = struct
       LRT.I))
 
 
-    let infer_tuple (loc : loc) (args : args) : (vt, type_error) m = 
-      let bts = List.map (fun arg -> arg.bt) args in
-      let tuple_it = IT.tuple_ (List.map (fun arg -> sym_ (arg.lname, arg.bt)) args) in
-      let bt = Tuple bts in
-      return (bt, tuple_it)
+    let infer_tuple (loc : loc) (vts : vt list) : (vt, type_error) m = 
+      let bts, its = List.split vts in
+      return (Tuple bts, IT.tuple_ its)
 
     let infer_array (loc : loc) (vts : vt list) = 
       let item_bt = match vts with
@@ -1045,13 +1045,12 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let infer_constructor (loc : loc) local (constructor : mu_ctor) 
-                          (args : args) : (vt, type_error) m = 
+                          (args : arg list) : (vt, type_error) m = 
       match constructor, args with
       | M_Ctuple, _ -> 
-         infer_tuple loc args
+         infer_tuple loc (List.map vt_of_arg args)
       | M_Carray, args -> 
-         let vts = List.map (fun arg -> (arg.bt, sym_ (arg.lname, arg.bt))) args in
-         infer_array loc vts
+         infer_array loc (List.map vt_of_arg args)
       | M_CivCOMPL, _
       | M_CivAND, _
       | M_CivOR, _
@@ -1059,7 +1058,7 @@ module Make (G : sig val global : Global.t end) = struct
         -> 
          Debug_ocaml.error "todo: Civ..."
       | M_Cspecified, [arg] ->
-         return (arg.bt, sym_ (arg.lname, arg.bt))
+         return (vt_of_arg arg)
       | M_Cspecified, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 1})
       | M_Cnil item_bt, [] -> 
@@ -1070,7 +1069,7 @@ module Make (G : sig val global : Global.t end) = struct
       | M_Ccons, [arg1; arg2] -> 
          let bt = List arg1.bt in
          let@ () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
-         let list_it = cons_ (sym_ (arg1.lname, arg1.bt), sym_ (arg2.lname, arg2.bt)) in
+         let list_it = cons_ (it_of_arg arg1, it_of_arg arg2) in
          return (arg2.bt, list_it)
       | M_Ccons, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 2})
@@ -1203,35 +1202,27 @@ module Make (G : sig val global : Global.t end) = struct
        constraints) in the local environment *)
 
     let infer_array_shift local asym1 ct asym2 =
-      let ret = Sym.fresh () in
       let@ arg1 = arg_of_asym local asym1 in
       let@ arg2 = arg_of_asym local asym2 in
       let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
       let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
       let element_size = Memory.size_of_ctype ct in
       let v = 
-        let base = sym_ (arg1.lname, BT.Loc) in
-        let offset = mul_ (z_ element_size, sym_ (arg2.lname, BT.Integer)) in
-        addPointer_ (base, offset)
+        addPointer_ (it_of_arg arg1, 
+                     mul_ (z_ element_size, it_of_arg arg2))
       in
-      let rt = RT.Computational ((ret, Loc), Constraint (def_ ret v, I)) in
-      return (rt, local)
+      return (Loc, v)
 
     let infer_wrapI local ct asym =
       match ct with
       | Sctypes.Sctype (_, Integer ty) ->
-         let ret = Sym.fresh () in
          let@ arg = arg_of_asym local asym in
          let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-         let arg_it = sym_ (arg.lname, Integer) in
          (* try to follow wrapI from runtime/libcore/std.core *)
          let dlt = add_ (sub_ (maxInteger_ ty, minInteger_ ty), int_ 1) in
-         let r = rem_f_ (arg_it, dlt) in
+         let r = rem_f_ (it_of_arg arg, dlt) in
          let result_it = ite_  (le_ (r, maxInteger_ ty), r,sub_ (r, dlt)) in
-         let constr = def_ ret result_it in
-         let rt = RT.Computational ((ret, BT.Integer), 
-                  LRT.Constraint (constr, LRT.I)) in
-         return (rt, local)
+         return (rt_of_vt (Integer, result_it), local)
       | _ ->
          Debug_ocaml.error "wrapI applied to non-integer type"
 
@@ -1244,11 +1235,8 @@ module Make (G : sig val global : Global.t end) = struct
       debug 3 (lazy (item "ctxt" (L.pp local)));
       let@ (rt, local) = match pe_ with
         | M_PEsym sym ->
-           let ret = Sym.fresh () in
            let@ arg = arg_of_sym loc local sym in
-           let constr = def_ ret (sym_ (arg.lname, arg.bt)) in
-           let rt = RT.Computational ((ret, arg.bt), Constraint (constr, I)) in
-           return ((rt, local))
+           return ((rt_of_vt (vt_of_arg arg), local))
         | M_PEimpl i ->
            let rt = Global.get_impl_constant G.global i in
            return (rt, local)
@@ -1265,32 +1253,27 @@ module Make (G : sig val global : Global.t end) = struct
            let@ vt = infer_constructor loc (local, G.global) ctor args in
            return (rt_of_vt vt, local)
         | M_PEarray_shift (asym1, ct, asym2) ->
-           let@ (rt, local) = infer_array_shift local asym1 ct asym2 in
-           return (rt, local)
+           let@ vt = infer_array_shift local asym1 ct asym2 in
+           return (rt_of_vt vt, local)
         | M_PEmember_shift (asym, tag, member) ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-           let ret = Sym.fresh () in
            let@ layout = get_struct_decl loc tag in
            let@ _member_bt = get_member_type loc tag member layout in
            let offset = Memory.member_offset layout member in
-           let shifted_pointer = IT.addPointer_ (sym_ (arg.lname, arg.bt), z_ offset) in
-           let constr = def_ ret shifted_pointer in
-           let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
-           return (rt, local)
+           let vt = (Loc, IT.addPointer_ (it_of_arg arg, z_ offset)) in
+           return (rt_of_vt vt, local)
         | M_PEnot asym ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-           let ret = Sym.fresh () in 
-           let constr = def_ ret (not_ (sym_ (arg.lname, arg.bt))) in
-           let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-           return (rt, local)
+           let vt = (Bool, not_ (it_of_arg arg)) in
+           return (rt_of_vt vt, local)
         | M_PEop (op, asym1, asym2) ->
            let@ arg1 = arg_of_asym local asym1 in
            let@ arg2 = arg_of_asym local asym2 in
-           let open CF.Core in
-           let binop_typ (op : CF.Core.binop) (v1 : IT.t) (v2 : IT.t) =
-             let open BT in
+           let v1 = it_of_arg arg1 in
+           let v2 = it_of_arg arg2 in
+           let (((ebt1, ebt2), rbt), result_it) =
              match op with
              | OpAdd ->   (((Integer, Integer), Integer), IT.add_ (v1, v2))
              | OpSub ->   (((Integer, Integer), Integer), IT.sub_ (v1, v2))
@@ -1307,15 +1290,9 @@ module Make (G : sig val global : Global.t end) = struct
              | OpAnd ->   (((Bool, Bool), Bool), IT.and_ [v1; v2])
              | OpOr ->    (((Bool, Bool), Bool), IT.or_ [v1; v2])
            in
-           let (((ebt1, ebt2), rbt), result_it) = 
-             binop_typ op (sym_ (arg1.lname, arg1.bt)) (sym_ (arg2.lname, arg2.bt))
-           in
            let@ () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
            let@ () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
-           let ret = Sym.fresh () in
-           let constr = def_ ret result_it in
-           let rt = RT.Computational ((ret, rbt), Constraint (constr, I)) in
-           return (rt, local)
+           return (rt_of_vt (rbt, result_it), local)
         | M_PEstruct _ ->
            Debug_ocaml.error "todo: PEstruct"
         | M_PEunion _ ->
@@ -1336,51 +1313,37 @@ module Make (G : sig val global : Global.t end) = struct
            let@ args = args_of_asyms local asyms in
            calltype_ft loc local args decl_typ
         | M_PEassert_undef (asym, _uloc, undef) ->
-           let ret = Sym.fresh () in
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-           if Solver.holds local (sym_ (arg.lname, BT.Bool)) then
-             let rt = RT.Computational ((ret, BT.Unit), LRT.I) in
-             return (rt, local)
+           if Solver.holds local (it_of_arg arg) then
+             return (rt_of_vt (Unit, unit_), local)
            else
              let expl = Explain.undefined_behaviour names local in
              fail loc (Undefined_behaviour (undef, expl))
         | M_PEbool_to_integer asym ->
-           let ret = Sym.fresh () in
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-           let constr = 
-             def_ ret (ite_ (sym_ (arg.lname, BT.Bool), int_ 1, int_ 0)) in
-           let rt = RT.Computational ((ret, BT.Integer), 
-                    LRT.Constraint (constr, LRT.I)) in
-           return (rt, local)
+           let vt = (Integer, (ite_ (it_of_arg arg, int_ 1, int_ 0))) in
+           return (rt_of_vt vt, local)
         | M_PEconv_int (act, asym) ->
-           let ret = Sym.fresh () in
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
            (* try to follow conv_int from runtime/libcore/std.core *)
-           let arg_it = sym_ (arg.lname, Integer) in
+           let arg_it = it_of_arg arg in
            begin match act.ct with
            | Sctype (_, Integer Bool) ->
-              let constr = 
-                def_ ret (ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
-              let rt = RT.Computational ((ret, BT.Integer), 
-                       LRT.Constraint (constr, LRT.I)) in
-              return (rt, local)
+              let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
+              return (rt_of_vt vt, local)
            | _ 
                 when Solver.holds local (representable_ (act.ct, arg_it)) ->
-              let constr = def_ ret arg_it in
-              let rt = RT.Computational ((ret, BT.Integer), 
-                       LRT.Constraint (constr, LRT.I)) in
-              return (rt, local)
+              return (rt_of_vt (Integer, arg_it), local)
            | Sctype (_, Integer ty) 
                 when Sctypes.is_unsigned_integer_type act.ct ->
               infer_wrapI local act.ct asym
            | _ ->
               let ftyp = 
                 Global.get_impl_fun_decl G.global                
-                    Integer__conv_nonrepresentable_signed_integer
-              in
+                    Integer__conv_nonrepresentable_signed_integer in
               calltype_ft loc local [arg] ftyp
            end
         | M_PEwrapI (act, asym) ->
@@ -1412,8 +1375,7 @@ module Make (G : sig val global : Global.t end) = struct
              let local = add_c lc local in
              if Solver.is_inconsistent local then return ()
              else check_tpexpr local e typ
-           ) [(sym_ (carg.lname, carg.bt), e1); 
-              (not_ (sym_ (carg.lname, carg.bt)), e2)]
+           ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
       | M_PEcase (asym, pats_es) ->
          let@ arg = arg_of_asym local asym in
          ListM.iterM (fun (pat, pe) ->
@@ -1534,52 +1496,40 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Ptrdiff _ ->
               Debug_ocaml.error "todo: M_Ptrdiff"
            | M_IntFromPtr (act_from, act2_to, asym) ->
-              let ret = Sym.fresh () in 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = def_ ret (pointerToIntegerCast_ (sym_ (arg.lname, Loc))) in
-              let rt = RT.Computational ((ret, Integer), Constraint (constr, I)) in
-              return (rt, local)            
+              let vt = (Integer, pointerToIntegerCast_ (it_of_arg arg)) in
+              return (rt_of_vt vt, local)            
            | M_PtrFromInt (act_from, act2_to, asym) ->
-              let ret = Sym.fresh () in 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-              let constr = def_ ret (integerToPointerCast_ (sym_ (arg.lname, Integer))) in
-              let rt = RT.Computational ((ret, Loc), Constraint (constr, I)) in
-              return (rt, local)            
+              let vt = (Loc, integerToPointerCast_ (it_of_arg arg)) in
+              return (rt_of_vt vt, local)            
            | M_PtrValidForDeref (act, asym) ->
               (* check *)
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
               let local = unpack_resources local in
-              let ret = Sym.fresh () in
-              let@ ok = 
-                let request = 
-                  RER.Predicate {
-                      name = Ctype act.ct; 
-                      pointer = sym_ (arg.lname, BT.Loc);
-                      iargs = [];
-                      oargs = [BT.of_sct act.ct; BT.Bool];
-                      unused = true;
-                    }
-                in
-                let@ _ = resource_request loc (Access Deref) local request in
-                let alignment_lc = aligned_ (act.ct, sym_ (arg.lname, arg.bt)) in
-                return (Solver.holds local alignment_lc)
+              let request = 
+                RER.Predicate {
+                    name = Ctype act.ct; 
+                    pointer = it_of_arg arg;
+                    iargs = [];
+                    oargs = [BT.of_sct act.ct; BT.Bool];
+                    unused = true;
+                  }
               in
-              let constr = def_ ret (bool_ ok) in
-              let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-              return (rt, local)
+              let@ _ = resource_request loc (Access Deref) local request in
+              let vt = (Bool, aligned_ (act.ct, it_of_arg arg)) in
+              return (rt_of_vt vt, local)
            | M_PtrWellAligned (act, asym) ->
-              let ret = Sym.fresh () in
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let constr = def_ ret (aligned_ (act.ct, sym_ (arg.lname, BT.Loc))) in
-              let rt = RT.Computational ((ret, Bool), Constraint (constr, I)) in
-              return (rt, local)
+              let vt = (Bool, aligned_ (act.ct, it_of_arg arg)) in
+              return (rt_of_vt vt, local)
            | M_PtrArrayShift (asym1, act, asym2) ->
-              let@ (rt, local) = infer_array_shift local asym1 act.ct asym2 in
-              return (rt, local)
+              let@ vt = infer_array_shift local asym1 act.ct asym2 in
+              return (rt_of_vt vt, local)
            | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
               Debug_ocaml.error "todo: M_Memcpy"
            | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1615,7 +1565,7 @@ module Make (G : sig val global : Global.t end) = struct
               let rt = 
                 RT.Computational ((ret, Loc), 
                 LRT.Constraint (representable_ (Sctypes.pointer_sct act.ct, sym_ (ret, Loc)), 
-                LRT.Constraint (alignedI_ (sym_ (arg.lname, arg.bt), sym_ (ret, Loc)), 
+                LRT.Constraint (alignedI_ (it_of_arg arg, sym_ (ret, Loc)), 
                 LRT.Logical ((value_s, BT.of_sct act.ct),
                 LRT.Resource (resource, LRT.I)))))
               in
@@ -1633,7 +1583,7 @@ module Make (G : sig val global : Global.t end) = struct
                 resource_request loc (Access Kill) local 
                   (RER.Predicate {
                        name = Ctype ct;
-                       pointer = sym_ (arg.lname, arg.bt);
+                       pointer = it_of_arg arg;
                        iargs = [];
                        oargs = [BT.of_sct ct; BT.Bool];
                        unused = true;
@@ -1652,8 +1602,7 @@ module Make (G : sig val global : Global.t end) = struct
                  representable and done the right thing. Pointers, as I
                  understand, are an exception. *)
               let@ () = 
-                let in_range_lc = 
-                  representable_ (act.ct, sym_ (varg.lname, varg.bt)) in
+                let in_range_lc = representable_ (act.ct, it_of_arg varg) in
                 if Solver.holds local in_range_lc then return () else 
                   let (constr,state) = 
                     Explain.unsatisfied_constraint names local in_range_lc
@@ -1664,7 +1613,7 @@ module Make (G : sig val global : Global.t end) = struct
                 resource_request loc (Access (Store None)) local 
                   (RER.Predicate {
                        name = Ctype act.ct; 
-                       pointer = sym_ (parg.lname, parg.bt);
+                       pointer = it_of_arg parg;
                        iargs = [];
                        oargs = [BT.of_sct act.ct; BT.Bool];
                        unused = true;
@@ -1673,9 +1622,9 @@ module Make (G : sig val global : Global.t end) = struct
               let resource = 
                 RE.Predicate {
                     name = Ctype act.ct;
-                    pointer = sym_ (parg.lname, parg.bt);
+                    pointer = it_of_arg parg;
                     iargs = [];
-                    oargs = [(sym_ (varg.lname, varg.bt)); (bool_ true)];
+                    oargs = [(it_of_arg varg); (bool_ true)];
                     unused = true;
                   }
               in
@@ -1687,7 +1636,7 @@ module Make (G : sig val global : Global.t end) = struct
               let@ (predicate, _) = 
                 predicate_request loc (Access (Load None)) local 
                   { name = Ctype act.ct ;
-                    pointer = sym_ (parg.lname, parg.bt);
+                    pointer = it_of_arg parg;
                     iargs = [];
                     oargs = [BT.of_sct act.ct ; BT.Bool];
                     unused = true;
@@ -1767,8 +1716,7 @@ module Make (G : sig val global : Global.t end) = struct
                let local = add_c lc local in
                if Solver.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ 
-             ) [(sym_ (carg.lname, carg.bt), e1); 
-                (not_ (sym_ (carg.lname, carg.bt)), e2)]
+             ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
         | M_Ebound (_, e) ->
            check_texpr (local, labels) e typ 
         | M_End _ ->
