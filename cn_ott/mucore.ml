@@ -191,9 +191,13 @@ m_kill_kind =
 
 
 type 
-'TY mu_tpval =  (* top-level pure values *)
-   M_TPVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
- | M_TPVdone of 'TY mu_pval_aux (* pure done *)
+mu_pattern = 
+   M_CaseBase of ( Symbol.sym option * T.bt )
+ | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
+
+and mu_pattern_aux = 
+   M_Pattern of Location_ocaml.t * annot list * mu_pattern
+ | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -213,19 +217,15 @@ type
 
 
 type 
-mu_pattern = 
-   M_CaseBase of ( Symbol.sym option * T.bt )
- | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
-
-and mu_pattern_aux = 
-   M_Pattern of Location_ocaml.t * annot list * mu_pattern
- | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
+'TY mu_tpval =  (* top-level pure values *)
+   M_TPVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+ | M_TPVdone of 'TY mu_pval_aux (* pure done *)
 
 
 type 
-'TY mu_tpval_aux =  (* top-level pure values with location and annotations *)
-   M_TPval of Location_ocaml.t * annot list * 'TY * 'TY mu_tpval
- | M_TPval_no_aux of 'TY mu_tpval (* Ott-hack for simpler typing rules *)
+'TY mu_sym_or_pattern = 
+   M_Symbol of Symbol.sym
+ | M_Pat of mu_pattern_aux
 
 
 type 
@@ -235,9 +235,9 @@ type
 
 
 type 
-'TY mu_sym_or_pattern = 
-   M_Symbol of Symbol.sym
- | M_Pat of mu_pattern_aux
+'TY mu_tpval_aux =  (* top-level pure values with location and annotations *)
+   M_TPval of Location_ocaml.t * annot list * 'TY * 'TY mu_tpval
+ | M_TPval_no_aux of 'TY mu_tpval (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -410,6 +410,13 @@ resource =  (* resources *)
 
 
 type 
+spine_elem =  (* spine element *)
+   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
+ | Spine_Elem_logical_val of logical_val (* logical variable *)
+ | Spine_Elem_res_val of res_term (* resource valuel *)
+
+
+type 
 'TY mu_seq_expr =  (* sequential (effectful) expressions *)
    M_Seq_Epval of 'TY mu_pval_aux (* pure values *)
  | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * ('TY mu_pval_aux) list (* C function call *)
@@ -417,10 +424,9 @@ type
 
 
 type 
-spine_elem =  (* spine element *)
-   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
- | Spine_Elem_logical_val of logical_val (* logical variable *)
- | Spine_Elem_res_val of res_term (* resource valuel *)
+'TY mu_tval =  (* (effectful) top-level values *)
+   M_TVdone of (spine_elem) list (* end of top-level expression *)
+ | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
 
 
 type 
@@ -434,13 +440,6 @@ ret_pattern =  (* return pattern *)
    Return_Pattern_computational of Symbol.sym (* computational variable *)
  | Return_Pattern_logical of Symbol.sym (* logical variable *)
  | Return_Pattern_resource of Symbol.sym (* resource variable *)
- | Return_Pattern_constraint of 'bt term_aux (* constraint variable *)
-
-
-type 
-'TY mu_tval =  (* (effectful) top-level values *)
-   M_TVdone of (spine_elem) list (* end of top-level expression *)
- | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
 
 
 type 
@@ -496,12 +495,32 @@ ret =  (* return types *)
 
 
 type 
-arg =  (* argument types *)
+arg =  (* argument/function types *)
    ArgTy_Computational of 'sym * base_type * arg
  | ArgTy_Logical of 'sym * base_type * arg
  | ArgTy_Resource of resource * arg
  | ArgTy_Constraint of 'bt term_aux * arg
  | ArgTy_Ret of ret
+
+
+(** subrules *)
+let rec is_pure_ret_of_ret (_r5:ret) : bool =
+  match _r5 with
+  | (RetTy_Computational (tyvar_sym,base_type,ret)) -> ((is_pure_ret_of_ret ret))
+  | (RetTy_Logical (tyvar_sym,base_type,ret)) -> false
+  | (RetTy_Resource (resource,ret)) -> false
+  | (RetTy_Constraint (term_aux,ret)) -> ((is_pure_ret_of_ret ret))
+  | RetTy_I -> (true)
+
+
+let rec is_pure_arg_of_arg (arg5:arg) : bool =
+  match arg5 with
+  | (ArgTy_Computational (tyvar_sym,base_type,arg)) -> ((is_pure_arg_of_arg arg))
+  | (ArgTy_Logical (tyvar_sym,base_type,arg)) -> false
+  | (ArgTy_Resource (resource,arg)) -> false
+  | (ArgTy_Constraint (term_aux,arg)) -> ((is_pure_arg_of_arg arg))
+  | (ArgTy_Ret ret) -> ((is_pure_ret_of_ret ret))
+
 
 (** definitions *)
 (** definitions *)
