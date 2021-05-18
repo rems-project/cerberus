@@ -84,7 +84,12 @@ end = struct
     if !Debug_ocaml.debug_level > 0 then 
       begin
         let count = !print_count in
-        print_file ("/tmp/" ^ string_of_int count ^ "__" ^ filename) file;
+        let file_path = 
+          (Filename.get_temp_dir_name ()) ^ 
+            Filename.dir_sep ^
+            (string_of_int count ^ "__" ^ filename)
+        in
+        print_file file_path file;
         print_count := 1 + !print_count;
       end
 end
@@ -167,6 +172,13 @@ let frontend filename =
 
 
 
+let z3_log_file_path = 
+  Filename.get_temp_dir_name () ^
+    Filename.dir_sep ^
+      "z3.log"
+
+
+
 let main filename mjsonfile debug_level print_level =
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
@@ -184,7 +196,7 @@ let main filename mjsonfile debug_level print_level =
        try
          let open Resultat in
          Pp.maybe_open_json_output mjsonfile;
-         assert (Z3.Log.open_ "/tmp/z3.log");
+         assert (Z3.Log.open_ z3_log_file_path);
          Debug_ocaml.maybe_open_csv_timing_file ();
          let result = 
            let@ file = Retype.retype_file file in
