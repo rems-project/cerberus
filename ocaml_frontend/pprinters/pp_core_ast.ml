@@ -19,6 +19,12 @@ let pp_pure_ctor w =
 let pp_eff_ctor w =
   !^ (ansi_format [Bold; Magenta] w)
 
+let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_implementation_constant i)))
+
+let pp_name = function
+  | Sym a  -> pp_symbol a
+  | Impl i -> pp_impl i
+
 
   (* type 'sym generic_object_value =  (* C object values *)
   | OVinteger of Impl_mem.integer_value (* integer value *)
@@ -131,7 +137,8 @@ let dtree_of_pexpr pexpr =
           Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
                 , [self pe] )
       | PEctor (ctor, pes) ->
-          Dleaf (pp_ctor "PEctor" ^^^ !^ (ansi_format [Red] "TODO"))
+          Dnode (pp_ctor "PEctor" ^^^ Pp_core.Basic.pp_ctor ctor,
+                 List.map self pes)
       | PEcase (pe, xs) ->
           Dleaf (pp_ctor "PEcase" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEarray_shift (pe1, ty, pe2) ->
@@ -152,7 +159,8 @@ let dtree_of_pexpr pexpr =
       | PEmemberof (tag_sym, memb_ident, pe) ->
           assert false
       | PEcall (nm, pes) ->
-          assert false
+          Dnode (pp_ctor "PEcall" ^^^ pp_name nm,
+                 List.map self pes)
       | PElet (pat, pe1, pe2) ->
           Dnode ( pp_ctor "PElet" (* ^^^ Pp_core.Basic.pp_pattern pat *)
                 , [ self pe1; self pe2] )
