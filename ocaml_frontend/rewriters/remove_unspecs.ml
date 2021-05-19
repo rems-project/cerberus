@@ -57,17 +57,19 @@ let rec select_case = function
 let rewriter : 'bty RW.rewriter =
   let open RW in {
     rw_pexpr=
-      RW.RW begin fun (Pexpr (annots, bTy, pexpr_)) ->
-        match pexpr_ with
-          | PEcase (pe, xs) ->
-              begin match select_case xs with
-                | None ->
-                    Traverse
-                | Some (pat, pe2) ->
-                    Update (Pexpr (annots, bTy, PElet (pat, pe, pe2)))
-              end
-          | _ ->
-              Traverse
+      RW.RW begin fun _ ->
+        DoChildrenPost begin fun (Pexpr (annots, bTy, pexpr_) as pexpr) ->
+          match pexpr_ with
+            | PEcase (pe, xs) ->
+                begin match select_case xs with
+                  | None ->
+                      pexpr
+                  | Some (pat, pe2) ->
+                      Pexpr (annots, bTy, PElet (pat, pe, pe2))
+                end
+            | _ ->
+                pexpr
+        end
       end;
     rw_action=
       RW.RW begin fun act ->
@@ -75,18 +77,20 @@ let rewriter : 'bty RW.rewriter =
       end;
     
     rw_expr=
-      RW.RW begin fun (Expr (annots, expr_)) ->
-        match expr_ with
-          | Ecase (pe, xs) ->
-              begin match select_case xs with
-                | None ->
-                    Traverse
-                | Some (pat, e2) ->
-                    Update (Expr (annots, Elet (pat, pe, e2)))
-              end
-          | _ ->
-              Traverse
-      end;
+      RW.(RW begin fun _ ->
+        DoChildrenPost begin fun (Expr (annots, expr_) as expr) ->
+          match expr_ with
+            | Ecase (pe, xs) ->
+                begin match select_case xs with
+                  | None ->
+                      expr
+                  | Some (pat, e2) ->
+                      Expr (annots, Elet (pat, pe, e2))
+                end
+            | _ ->
+                expr
+        end
+      end)
    }
 
 let rewrite_pexpr pexpr =
