@@ -348,7 +348,7 @@ grammar
 
 
 metavar Symbol_prefix {{ tex }} ::= {{ ocaml Symbol.prefix }} {{ phantom }}
-  {{ com Ott-hack, ignore (Symbol.prefix) }}
+  {{ com Ott-hack, ignore (OCaml Symbol.prefix) }}
 
 metavar Cmm_memory_order {{ tex mem\_order }} , _mem_order {{ tex \_ }} ::= {{ ocaml Cmm_csem.memory_order }} {{ phantom }}
   {{ com OCaml type for memory order }}
@@ -572,7 +572,7 @@ grammar
 
 
   resource :: 'Res_' ::= {{ com resources }}
-    % TODO make emp a meta production because predicate can express an empty heap
+    % TODO/ASK make emp a meta production because predicate can express an empty heap
     | emp                                      :: :: Empty      {{ com empty heap             }}
     | predicate                                :: :: Predicate  {{ com heap predicate         }}
     | term_aux                                 :: :: Term       {{ com logical term           }}
@@ -584,7 +584,7 @@ grammar
 
 
   res_term :: 'ResT_' ::= {{ com resource terms }}
-    % TODO make emp a meta production because predicate can express an empty heap
+    % TODO/ASK make emp a meta production because predicate can express an empty heap
     | emp                              :: :: Empty    {{ com empty heap }}
     | Symbol_sym                       :: :: Var      {{ com variable }}
     | <( res_term1 , res_term2 )>      :: :: SepPair  {{ com seperating-conjunction pair }}
@@ -592,7 +592,16 @@ grammar
     | ( res_term1 , res_term2 )        :: :: Pair     {{ com logical-conjunction pair }}
 
 
-  ret_pattern :: Return_Pattern_ ::= {{ com return pattern }}
+  res_pattern :: 'ResP_' ::= {{ com resource terms }}
+    % TODO make emp a meta production because predicate can express an empty heap
+    | emp                               :: :: Empty    {{ com empty heap }}
+    | Symbol_sym                        :: :: Var      {{ com variable }}
+    | <( res_pattern1 , res_pattern2 )> :: :: SepPair  {{ com seperating-conjunction pair }}
+    | pack ( Symbol_sym , res_pattern ) :: :: Pack     {{ com packing for existentials }}
+    | ( res_pattern1 , res_pattern2 )   :: :: Pair     {{ com logical-conjunction pair }}
+
+
+  ret_pattern :: RetP_ ::= {{ com return pattern }}
     | comp Symbol_sym :: :: computational {{ com computational variable }}
     | log  Symbol_sym :: :: logical       {{ com logical variable       }}
     | res  Symbol_sym :: :: resource      {{ com resource variable      }}
@@ -602,9 +611,9 @@ grammar
 
   % There used to be an effectful value (mu_val) `skip' - I (dcm41) removed it because it seemed redundant.
   mu_seq_expr {{ tex seq\_expr }} :: 'M_Seq_E' ::= {{ auxparam 'TY }} {{ com sequential (effectful) expressions }}
-    | mu_pval_aux                                                   :: :: pval   {{ com pure values                 }}
-    | ccall ( ty_act , mu_pval_aux , </ mu_pval_auxi // , // i /> ) :: :: ccall  {{ com C function call             }}
-    | pcall ( mu_name , </ mu_pval_auxi // , // i /> )              :: :: proc   {{ com procedure call              }}
+    | mu_pexpr_aux                                                 :: :: pexpr  {{ com pure expressions }}
+    | ccall ( ty_act , mu_pval_aux , </ spine_elemi // , // i /> ) :: :: ccall  {{ com C function call  }}
+    | pcall ( mu_name , </ spine_elemi // , // i /> )              :: :: proc   {{ com procedure call   }}
 
 
   mu_seq_expr_aux {{ tex seq\_expr }} :: 'M_Seq_' ::= {{ auxparam 'TY }} {{ com sequential (effectful) expressions with auxiliary info }}
@@ -613,14 +622,15 @@ grammar
 
 
   mu_seq_texpr {{ tex seq\_texpr }} :: 'M_Seq_TE' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions }}
-    | mu_tval                                                             :: :: tval  {{ com (effectful) top-level values }}
-    | run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn                     :: :: run   {{ com run from label               }}
-    | nd ( mu_pval_aux1 , .. , mu_pval_auxn )                             :: :: nd    {{ com nondeterministic choice      }}
-    | let ret_pattern = mu_seq_expr_aux in mu_texpr                       :: :: let   {{ com bind return patterns         }} % TODO: bindings
-    | letC mu_sym_or_pattern = mu_seq_expr_aux in mu_texpr                :: :: letC  {{ com bind computational patterns  }} % TODO: bindings
-    | case mu_pval_aux with </ | mu_pattern_auxi => mu_texpri // i /> end :: :: case  {{ com pattern matching             }} % TODO: bindings
-    | if mu_pval_aux then mu_texpr1 else mu_texpr2                        :: :: if    {{ com conditional                  }}
-    | bound [ ty_int ] ( mu_is_texpr_aux )                                :: :: bound {{ com limit scope of indet seq behaviour, absent at runtime }}
+    | mu_tval                                                           :: :: tval  {{ com (effectful) top-level values }}
+    | run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn                   :: :: run   {{ com run from label               }}
+    | nd ( mu_pval_aux1 , .. , mu_pval_auxn )                           :: :: nd    {{ com nondeterministic choice      }}
+    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   {{ com bind return patterns         }} % TODO: bindings
+    | letC mu_sym_or_pattern = mu_pval_aux in mu_texpr                  :: :: letC  {{ com bind computational patterns  }} % TODO: bindings
+    | letR res_pattern = res_term in mu_texpr                           :: :: letR  {{ com bind resource patterns       }} % TODO: bindings
+    | case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end :: :: case  {{ com pattern matching             }} % TODO: bindings
+    | if mu_pval_aux then mu_texpr1 else mu_texpr2                      :: :: if    {{ com conditional                  }}
+    | bound [ ty_int ] ( mu_is_texpr_aux )                              :: :: bound {{ com limit scope of indet seq behaviour, absent at runtime }}
 
 
   mu_seq_texpr_aux {{ tex seq\_texpr }} :: 'M_Seq_T' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions with auxiliary info }}
@@ -651,8 +661,10 @@ grammar
 
 
   mu_texpr {{ tex texpr }} :: 'M_TE' ::= {{ auxparam 'TY }} {{ com top-level (effectful) expressions }}
-    | mu_seq_texpr_aux :: :: Seq {{ com sequential (effectful) expressions     }}
-    | mu_is_texpr_aux  :: :: Ns  {{ com indet seq (effectful) expressions }}
+    | mu_seq_texpr_aux    ::   :: Seq {{ com sequential (effectful) expressions }}
+    | mu_is_texpr_aux     ::   :: IS  {{ com indet seq (effectful) expressions  }}
+    | [ C / C' ] mu_texpr :: M :: contextSub {{ ocaml MU_TPEXPR_CONTEXT_SUB [[C]] [[C']] [[mu_texpr]] }}
+                                             {{ com simul-sub all vars in $[[C]]$ for all vars in $[[C']]$ in $[[mu_texpr]]$ }}
 
 % TODO substitutions
 
@@ -799,8 +811,10 @@ grammar
 grammar
 
   L {{ tex \mathcal{L} }} :: Log_ ::= {{ phantom }} {{ com logical var env }}
-    | cdot                  :: :: empty
-    | L , Symbol_sym : BT_t :: :: cons
+    | cdot                  ::   :: empty
+    | </ Li // , // i />    ::   :: concat
+    | L , Symbol_sym : BT_t ::   :: cons
+    | [ C / C' ] L          :: M :: contextSub {{ ocaml LOG_ENV_CONTEXT_SUB [[C]] [[C']] [[L]] }}
 
 
 grammar
@@ -815,9 +829,10 @@ grammar
 grammar
 
   R {{ tex \mathcal{R} }} :: Res_ ::= {{ phantom }} {{ com resources env }}
-    | cdot                      :: :: empty
-    | R , Symbol_sym : resource :: :: cons
-    | R1 , R2                   :: :: concat
+    | cdot                      ::   :: empty
+    | R , Symbol_sym : resource ::   :: cons
+    | R1 , R2                   ::   :: concat
+    | [ C / C' ] R              :: M :: contextSub {{ ocaml RES_ENV_CONTEXT_SUB [[C]] [[C']] [[R]] }}
 
 
 grammar
@@ -826,16 +841,18 @@ grammar
     | judgement                                                                        :: :: judgement
     | abbrev == term_aux                                                               :: :: abbreviations
     | smt ( N => term_aux )                                                            :: :: smt
-    % ASK ensure/supply existentials?
-    | smt ( N => resource1 = resource2 )                                               :: :: smtResource
-    | Symbol_sym : base_type inEnv C                                                   :: :: xInC
-    | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals :: :: structInGlobals
+    % ASK how to deal with existentials?
+    | smt ( N => resource1 = resource2 )                                               :: :: smt_resource
+    | Symbol_sym : base_type inEnv C                                                   :: :: x_in_C
+    | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals :: :: struct_in_globals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />                       :: :: indexed_infer_mem_value       {{ com dependent on memory object model }}
     | </ Ci ; Li ; Ni |- mu_pval_auxi => base_typei // i />                            :: :: index_infer_mu_pval
-    | C |- mu_name => pure_arg                                                         :: :: infer_mu_name
+    | mu_name : arg inEnv Globals                                                      :: :: mu_name_in_globals
     | </ term_auxi as mu_pattern_auxi : base_typei ~> Ci ; Ni // i />                  :: :: indexed_pattern
     | </ Ci ; Li ; Ni |- mu_tpexpri <= yi : base_typei . termi // i />                 :: :: indexed_check_mu_tpexpr
+    | </ Ci ; Li ; Ni ; Ri |- mu_texpri <= reti // i />                                :: :: indexed_check_mu_texpr
     | L |- logical_val : base_type                                                     :: :: check_logical_value
+    | mu_pval_aux : arg inEnv Globals                                                  :: :: mu_pval_aux_in_globals
 
 defns
   object_value_jtype :: '' ::=
@@ -960,36 +977,37 @@ defns
 defns
   resource_jtype :: '' ::=
 
+    % ASK should this be checking? If so, how do I handle letR?
   defn
-    C ; L ; N ; R |- res_term <= resource :: :: Resource :: Resource_ by
+    C ; L ; N ; R |- res_term => resource :: :: Resource :: Resource_ by
 
 
     ------------------------------ :: Emp
-    C ; L ; N ; cdot |- emp <= emp
+    C ; L ; N ; cdot |- emp => emp
 
 
-    % ASK how to avoid existentials?
+    % ASK how to deal with existentials?
     smt ( N => resource = resource' )
     ------------------------------------------------- :: Var
-    C ; L ; N ; cdot , r : resource |- r <= resource'
+    C ; L ; N ; cdot , r : resource |- r => resource'
 
 
-    C ; L ; N ; R1 |- res_term1 <= resource1
-    C ; L ; N ; R2 |- res_term2 <= resource2
+    C ; L ; N ; R1 |- res_term1 => resource1
+    C ; L ; N ; R2 |- res_term2 => resource2
     ---------------------------------------------------------------------------- :: SepConj
-    C ; L ; N ; R1 , R2 |- <( res_term1 , res_term2 )> <= resource1 *s resource2
+    C ; L ; N ; R1 , R2 |- <( res_term1 , res_term2 )> => resource1 *s resource2
 
 
-    C ; L ; N ; R |- res_term1 <= resource1
-    C ; L ; N ; R |- res_term2 <= resource2
+    C ; L ; N ; R |- res_term1 => resource1
+    C ; L ; N ; R |- res_term2 => resource2
     -------------------------------------------------------------------- :: Conj
-    C ; L ; N ; R |- ( res_term1 , res_term2 ) <= resource1 /\ resource2
+    C ; L ; N ; R |- ( res_term1 , res_term2 ) => resource1 /\ resource2
 
 
     C ; L ; N |- mu_pval_aux => base_type
-    C ; L ; N ; R |- res_term2 <= [ mu_pval_aux / y ] resource
+    C ; L ; N ; R |- res_term2 => [ mu_pval_aux / y ] resource
     ------------------------------------------------------------------------------------- :: Pack
-    C ; L ; N ; R |- pack ( mu_pval_aux , res_term2 ) <= exists y : base_type . resource
+    C ; L ; N ; R |- pack ( mu_pval_aux , res_term2 ) => exists y : base_type . resource
 
 
 defns
@@ -1014,8 +1032,8 @@ defns
     C ; L ; N ; R |- logical_val , </ spine_elemi // i /> :;  forall x : base_type . arg >> ret
 
 
-    C ; L ; N ; R1 |- res_term <= resource
-    % ASK ensure/supply existentials?
+    C ; L ; N ; R1 |- res_term => resource
+    % ASK how to deal with existentials?
     smt ( N => resource = resource' )
     C ; L ; N ; R2 |- </ spine_elemi // i /> :; arg >> ret
     ------------------------------------------------------------------------------------- :: Resource
@@ -1061,8 +1079,8 @@ defns
     C ; L ; N |- array_shift ( mu_pval_aux1 , ct , mu_pval_aux2 ) => y : loc . y = embed mu_pval_aux1 +ptr ( embed mu_pval_aux2 * size_of ct )
 
 
-    C ; L ; N |- mu_pval_aux =>
-    _' : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
+    C ; L ; N |- mu_pval_aux => loc
+    _ : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
     ------------------------------------------------------------------------ :: Member_Shift
     C ; L ; N |- member_shift ( mu_pval_aux , ty_tag , Symbol_identifierj ) => y : loc . y = embed mu_pval_aux +ptr offset_of ty_tag Symbol_identifierj
 
@@ -1090,7 +1108,7 @@ defns
     C ; L ; N |- mu_pval_aux1 bool_binop mu_pval_aux2 => y : bool . y = ( embed mu_pval_aux1 ' bool_binop ' embed mu_pval_aux2 )
 
 
-    C |- mu_name => pure_arg
+    mu_name : pure_arg inEnv Globals
     C ; L ; N ; cdot |- </ mu_pval_auxi // i /> :; pure_arg >> sigma y' : base_type' . term' /\ I
     --------------------------------------------------------------------------------------------- :: Call
     C ; L ; N |- mu_name ( </ mu_pval_auxi // i /> ) => y' : base_type' . term'
@@ -1171,34 +1189,70 @@ defns
 
 
   defn
-    C ; L ; N ; R |- </ ret_patterni // , // i /> : ret ~> C' ; L' ; N' ; R' :: :: Ret_Pattern :: Ret_Pattern_ by
+    </ ret_patterni // , // i /> : ret ~> C ; L ; N ; R :: :: Ret_Pattern :: Ret_Pattern_ by
 
 
     ------------------------------------------------- :: Empty
-    C ; L ; N ; R |- : I ~> cdot ; cdot ; cdot ; cdot
+     : I ~> cdot ; cdot ; cdot ; cdot
 
 
-    C , y : base_type ; L ; N ; R |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
-    ----------------------------------------------------------------------------------------------------------------- :: Computational
-    C ; L ; N ; R |- comp y , </ ret_patterni // i /> : sigma y : base_type . ret ~> C , y : base_type ; L' ; N' ; R'
+    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
+    ---------------------------------------------------------------------------------------------- :: Computational
+    comp y , </ ret_patterni // i /> : sigma y : base_type . ret ~> C , y : base_type ; L ; N ; R
 
 
-    C ; L , y : base_type ; N ; R |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
-    ----------------------------------------------------------------------------------------------------------------- :: Logical
-    C ; L ; N ; R |- log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C ; L' , y : base_type ; N' ; R'
+    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
+    ---------------------------------------------------------------------------------------------- :: Logical
+    log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C ; L , y : base_type ; N ; R
 
 
-    C ; L ; N ; R , y : resource |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
-    ----------------------------------------------------------------------------------------------------- :: Resource
-    C ; L ; N ; R |- res y , </ ret_patterni // i /> : resource *s ret ~> C ; L' ; N' ; R' , y : resource
+    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
+    ------------------------------------------------------------------------------------ :: Resource
+    res y , </ ret_patterni // i /> : resource *s ret ~> C ; L ; N ; R , y : resource
 
 
-    C ; L ; N , term_aux ; R |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
-    ------------------------------------------------------------------------------------------------------- :: Constraint
-    C ; L ; N ; R |- </ ret_patterni // i /> : term_aux /\ ret ~> C ; L' ; N' , term_aux ; R'
+    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
+    ------------------------------------------------------------------------ :: Constraint
+    </ ret_patterni // i /> : term_aux /\ ret ~> C ; L ; N , term_aux ; R
 
 
-  % TODO resource patterns
+  defn
+    res_pattern : resource ~> L ; N ;  R :: :: Res_Pattern :: Res_Pattern_ by
+
+    -------------------------------- :: Empty
+    emp : emp ~> cdot ; cdot ; cdot
+
+
+    ---------------------------------------------------- :: Var_Predicate
+    r : predicate ~> cdot ; cdot ; cdot , r : predicate
+
+
+    --------------------------------------------- :: Var_Term
+    _ : term_aux ~> cdot ; cdot , term_aux ; cdot
+
+
+    ------------------------------------------------- :: Var
+    r : resource ~> cdot ; cdot ; cdot , r : resource
+
+
+    res_pattern1 : resource1 ~> L1 ; N1 ; R1
+    res_pattern2 : resource2 ~> L2 ; N2 ; R2
+    ----------------------------------------------------------------------------------------- :: SepConj
+    <( res_pattern1 , res_pattern2 )> : resource1 *s resource2 ~> L1 , L2 ; N1 , N2 ; R1 , R2
+
+
+    % ASK - logical or computational?
+    res_pattern : [ x / y ] resource ~> L ; N ; R
+    --------------------------------------------------------------------------------------- :: Pack
+    pack ( x , res_pattern ) : exists y : base_type . resource ~> L , x : base_type ; N ; R
+
+
+    % ASK - is this right?
+    res_pattern1 : resource1 ~> L1 ; N1 ; R1
+    res_pattern2 : resource2 ~> L2 ; N2 ; R2
+    --------------------------------------------------------------------------------------- :: Conj
+    ( res_pattern1 , res_pattern2 ) : resource1 /\ resource2 ~> L1 , L2 ; N1 , N2 ; R1 , R2
+
 
 defns
   tpval_jtype :: '' ::=
@@ -1238,7 +1292,7 @@ defns
     % e.g. let x = 2 + 2 in let x = 3 in x
     % C ; L ; N |- mu_pexpr_aux => y1 : base_type1 . term1
     % C , x1 : base_type1 ; L , y1 : base_type1 ; N , term1 , y1 = x1 |- [ x1 / x ] mu_tpexpr <= y2 : base_type2 . term2
-    % ------------------------------------------------------------------------------------------------------------------------------------------- :: Let
+    % ------------------------------------------------------------------------------------------------------------------ :: Let
     % C ; L ; N |- let x = mu_pexpr_aux in mu_tpexpr <= y2 : base_type2 . term2
 
 
@@ -1304,8 +1358,11 @@ defns
     %   | linux_rmw ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                               :: :: LinuxRMW
 
 
+defns
+  tval_jtype :: '' ::=
+
   defn
-    C ; L ; N ; R |- mu_tval <= ret :: :: TVal :: TVal_ by
+    C ; L ; N ; R |- mu_tval_aux <= ret :: :: TVal :: TVal_ by
 
     -------------------------- :: I
     C ; L ; N ; R |- done <= I
@@ -1329,7 +1386,7 @@ defns
     C ; L ; N ; R |- done </ spine_elemi // i /> <= term_aux /\ ret
 
 
-    C ; L ; N ; R1 |- res_term <= resource
+    C ; L ; N ; R1 |- res_term => resource
     C ; L ; N ; R2 |- done </ spine_elemi // i /> <= ret
     -------------------------------------------------------------------------------- :: Resource
     C ; L ; N ; R1 , R2 |- done res_term , </ spine_elemi // i /> <= resource *s ret
@@ -1340,22 +1397,36 @@ defns
     C ; L ; N ; cdot |- undef ty_loc UB_name <= ret
 
 
+defns
+  texpr_jtype :: '' ::=
+
   defn
     C ; L ; N ; R |- mu_seq_expr_aux => ret :: :: Seq_Expr :: Seq_Expr_ by
 
 
-    C ; L ; N |- mu_pval_aux => base_type
-    ----------------------------------------------------------------------------------- :: Pure
-    C ; L ; N ; cdot |- mu_pval_aux => sigma y : base_type . y = embed mu_pval_aux /\ I
+    C ; L ; N |- mu_pexpr_aux => y : base_type . term
+    ------------------------------------------------------------------ :: Pure
+    C ; L ; N ; cdot |- mu_pval_aux => sigma y : base_type . term /\ I
 
 
-    % TODO
-    % ccall ( ty_act , ty_asym , </ ty_asymi // , // i /> ) :: :: ccall  {{ com C function call             }}
-    % pcall ( mu_name , </ ty_asymi // , // i /> )          :: :: proc   {{ com procedure call              }}
+    C ; L ; N |- mu_pval_aux => loc
+    mu_pval_aux : arg inEnv Globals
+    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
+    ------------------------------------------------------------------------------- :: CCall
+    C ; L ; N ; R |- ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) => ret
+
+
+    mu_name : arg inEnv Globals
+    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
+    ------------------------------------------------------------------ :: Proc
+    C ; L ; N ; R |- pcall ( mu_name , </ spine_elemi // i /> ) => ret
 
 
   defn
     C ; L ; N ; R |- mu_is_expr_aux => ret :: :: IS_Expr :: IS_Expr_ by
+
+    % TODO
+    % memop ( mu_memop )
 
 
     C ; L ; N ; R |- mu_action => ret
@@ -1367,6 +1438,68 @@ defns
     ------------------------------------- :: Neg_Action
     C ; L ; N ; R |- Neg mu_action => ret
 
+    % TODO unseq ( mu_texpr1 , .. , mu_texprn )
+
+  defn
+    C ; L ; N ; R |- mu_seq_texpr_aux <= ret :: :: Seq_TExpr :: Seq_TExpr_ by
+
+
+    C ; L ; N ; R |- mu_tval <= ret
+    -------------------------------- :: TVal
+    C ; L ; N ; R |- mu_tval <= ret
+
+
+    C ; L ; N ; R' |- mu_seq_expr => ret1
+    </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret
+    -------------------------------------------------------------------------------------------------------------------------------- :: Let
+    C ; L ; N ; R' , R |- let </ ret_patterni // i /> = mu_seq_expr in mu_texpr <= ret
+
+
+    C ; L ; N |- mu_pval_aux => base_type1
+    y1 as mu_sym_or_pattern : base_type1 ~> C1 ; N1
+    C , fresh ( C1 ) ; L , y1 : base_type1 ; N , y1 = embed mu_pval_aux , [ fresh ( C1 ) / C1 ] N1 ; R |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret
+    ------------------------------------------------------------------------------------------------------------------------------------------- :: Let_Comp
+    C ; L ; N ; R |- letC mu_sym_or_pattern = mu_pval_aux in mu_texpr <= ret
+
+
+    % ASK Do I need to the [ fresh ( _ ) / _ ] here?
+    C ; L ; N ; R' |- res_term => resource1
+    res_pattern : resource1 ~> L1 ; N1 ; R1
+    C ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret
+    -------------------------------------------------------------------- :: Let_Res
+    C ; L ; N ; R' , R |- letR res_pattern = res_term in mu_texpr <= ret
+
+
+    C ; L ; N |- mu_pval_aux => base_type1
+    </ y1 as mu_patterni : base_type1 ~> Ci ; Ni // i />
+    </ C , fresh ( Ci ) ; L , y1 : base_type1 ; N , y1 = embed mu_pval_aux , [ fresh ( Ci ) / Ci ] Ni ; R |- [ fresh ( Ci ) / Ci ] mu_texpri <= ret // i />
+    ------------------------------------------------------------------------------------------------------------------------------------------------------- :: Case
+    C ; L ; N ; R |- case mu_pval_aux of </ | mu_patterni => mu_texpri // i /> end <= ret
+
+
+    C ; L ; N |- mu_pval_aux => bool
+    C ; L ; N , embed mu_pval_aux = true  ; R1 |- mu_texpr1 <= ret
+    C ; L ; N , embed mu_pval_aux = false ; R2 |- mu_texpr2 <= ret
+    -------------------------------------------------------------------------- :: If
+    C ; L ; N ; R1 , R2 |- if mu_pval_aux then mu_texpr1 else mu_texpr2 <= ret
+
+
     % TODO
-    % memop ( mu_memop )                                    :: :: memop  {{ com pointer op involving memory }}
-    % skip                                                  :: :: skip   {{ com skip                        }}
+    % run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn
+    % nd ( mu_pval_aux1 , .. , mu_pval_auxn )
+    % bound [ ty_int ] ( mu_is_texpr_aux )
+
+
+  defn
+    C ; L ; N ; R |- mu_is_texpr_aux <= ret :: :: IS_TExpr :: IS_TExpr_  by
+
+
+    % TODO
+    % let weak mu_pattern_aux = mu_is_expr_aux in mu_texpr_aux
+    % let strong mu_sym_or_pattern = mu_is_expr_aux in mu_texpr_aux
+
+
+  defn
+    C ; L ; N ; R |- mu_texpr <= ret :: :: TExpr :: TExpr_ by
+
