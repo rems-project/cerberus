@@ -184,6 +184,7 @@ module Make (G : sig val global : Global.t end) = struct
       | ITE (t1, t2, t3) ->
          Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EQ (t1, t2) ->
+         let () = let open Pp in print stderr !^"HERE3" in
          Z3.Boolean.mk_eq context (term t1) (term t2)
       | Forall ((s, bt), it) ->
          let q = term (sym_ (s, bt)) in
@@ -285,8 +286,15 @@ module Make (G : sig val global : Global.t end) = struct
     and param_op it bt = 
       match it with
       | Const t ->
-         Z3.Z3Array.mk_const_array context (sort_of_bt bt) (term t)
+         Z3.Z3Array.mk_const_array context (sort_of_bt Integer) (term t)
       | Mod (t1, t2, t3) ->
+         let () = 
+           let open Pp in 
+           print stderr !^"HERE2" ;
+           print stderr (Pp.item "t1" (IT.pp t1));
+           print stderr (Pp.item "t2" (IT.pp t2));
+           print stderr (Pp.item "t3" (IT.pp t3));
+         in
          Z3.Z3Array.mk_store context (term t1) (term t2) (term t3)  
       | App (f, arg) ->
          begin match f with
@@ -305,8 +313,11 @@ module Make (G : sig val global : Global.t end) = struct
     in
 
     fun it ->
-    (* Pp.debug 10 (lazy (Pp.item "translating" (IT.pp it)));
-     * Pp.debug 10 (lazy (Pp.item "bt" (BT.pp (IT.bt it)))); *)
+    let () = 
+      let open Pp in
+      print stderr (Pp.item "translating" (IT.pp it));
+      print stderr (Pp.item "bt" (BT.pp (IT.bt it)))
+    in
     term it
 
 
