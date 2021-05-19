@@ -1,0 +1,7 @@
+(library
+ (name mem_caesium)
+ (public_name cerberus.mem.caesium)
+ (flags (:standard -w -27-32))
+ (implements cerb_frontend)
+ (private_modules caesium)
+ (libraries zarith))
