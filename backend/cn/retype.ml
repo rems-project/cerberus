@@ -66,7 +66,7 @@ type ctype_information = {
 let ct_of_ct loc ct = 
   match Sctypes.of_ctype ct with
   | Some ct -> return ct
-  | None -> fail loc (TypeErrors.Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+  | None -> return (unsupported loc (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
 
 
 (* for convenience *)
@@ -497,7 +497,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       let loc = Loc.update Loc.unknown floc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
-        fail loc (TypeErrors.Unsupported err) 
+        unsupported loc err
       else
         let@ ret_ctype = ct_of_ct loc ret_ctype in
         let@ args = 

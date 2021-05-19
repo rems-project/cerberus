@@ -1,5 +1,5 @@
 include Result
-
+module Loc = Locations
 
 
 let return (a: 'a) : ('a,'e) t = 
@@ -19,6 +19,14 @@ let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t =
   | Error e -> Error e
 
 let (let@) = bind
+
+
+
+
+let unsupported (loc : Loc.t) (err : Pp.document) : 'a = 
+  let trace = Option.map Pp.string (Tools.do_stack_trace ()) in
+  Pp.error loc err (Option.to_list trace);
+  exit 2
 
 
 

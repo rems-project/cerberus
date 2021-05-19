@@ -98,7 +98,6 @@ type type_error =
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
-  | Unsupported of Pp.document
   | Generic of Pp.document
 
 
@@ -243,8 +242,6 @@ let pp_type_error te =
   | StaticError err ->
      (!^("Static error: " ^ err), [])
 
-  | Unsupported unsupported ->
-     (!^"Unsupported feature" ^^ colon ^^^ unsupported, [])
   | Generic err ->
      (err, [])
 
@@ -253,7 +250,7 @@ let pp_type_error te =
 let report (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
   let (msg, extras) = pp_type_error err in
   let extras = match ostacktrace with
-    | Some stacktrace -> extras @ [item "stacktrace" !^stacktrace]
+    | Some stacktrace -> extras @ [Pp.item "stacktrace" (Pp.string stacktrace)]
     | None -> extras
   in
   Pp.error loc msg extras

@@ -1074,9 +1074,9 @@ module Make (G : sig val global : Global.t end) = struct
       | M_Ccons, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 2})
       | M_Cfvfromint, _ -> 
-         fail loc (Unsupported !^"floats")
+         unsupported loc !^"floats"
       | M_Civfromfloat, _ -> 
-         fail loc (Unsupported !^"floats")
+         unsupported loc !^"floats"
 
 
 
@@ -1097,11 +1097,11 @@ module Make (G : sig val global : Global.t end) = struct
         ( fun ct -> 
           fail loc (Unspecified ct) )
         ( fun _ _ -> 
-          fail loc (Unsupported !^"infer_mem_value: concurrent read case") )
+          unsupported loc !^"infer_mem_value: concurrent read case" )
         ( fun it iv -> 
           return (Integer, z_ (Memory.integer_value_to_num iv)) )
         ( fun ft fv -> 
-          fail loc (Unsupported !^"floats") )
+          unsupported loc !^"floats" )
         ( fun _ ptrval -> 
           infer_ptrval loc ptrval  )
         ( fun mem_values -> 
@@ -1159,7 +1159,7 @@ module Make (G : sig val global : Global.t end) = struct
       | M_OVunion (tag, id, mv) -> 
          infer_union loc tag id mv
       | M_OVfloating iv ->
-         fail loc (Unsupported !^"floats")
+         unsupported loc !^"floats"
 
     and infer_loaded_value loc (M_LVspecified ov) =
       infer_object_value loc ov
@@ -1991,7 +1991,7 @@ let check_and_record_tagDefs (global: Global.t) tagDefs =
   PmapM.foldM (fun tag def (global: Global.t) ->
       match def with
       | M_UnionDef _ -> 
-         fail Loc.unknown (TypeErrors.Unsupported !^"todo: union types")
+         unsupported Loc.unknown !^"todo: union types"
       | M_StructDef layout -> 
          let@ () =
            ListM.iterM (fun piece ->

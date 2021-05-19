@@ -39,8 +39,8 @@ let annot_of_ct (CF.Ctype.Ctype (annot,_)) = annot
 
 let sct_of_ct loc ct = 
   match Sctypes.of_ctype ct with
-  | Some ct -> return ct
-  | None -> fail loc (Unsupported (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+  | Some ct -> ct
+  | None -> unsupported loc (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct)
 
 
 
@@ -56,7 +56,7 @@ let bt_of_core_object_type loc ot =
   | OTy_array cbt -> Debug_ocaml.error "arrays"
   | OTy_struct tag -> return (BT.Struct tag)
   | OTy_union _tag -> Debug_ocaml.error "union types"
-  | OTy_floating -> fail loc (Unsupported !^"floats")
+  | OTy_floating -> unsupported loc !^"floats"
 
 let rec bt_of_core_base_type loc cbt =
   let open CF.Core in
@@ -102,7 +102,7 @@ let struct_decl loc fields (tag : BT.tag) =
       | [] -> 
          return []
       | (member, (attrs, qualifiers, ct)) :: members ->
-         let@ sct = sct_of_ct loc ct in
+         let sct = sct_of_ct loc ct in
          let offset = member_offset tag member in
          let size = Memory.size_of_ctype sct in
          let to_pad = Z.sub offset position in

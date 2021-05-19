@@ -209,13 +209,19 @@ and n_lv loc v =
 
 
 and n_val loc v =
+  (* print_endline ("\n\n\n*******************************************************\nnormalising value\n");
+   * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr (Expr ([], (Epure (Pexpr ([], (), PEval v))))));
+   * print_endline "\n";
+   * flush stdout; *)
   match v with
   | Vobject ov -> M_Vobject (n_ov loc ov)
   | Vloaded lv -> M_Vloaded (n_lv loc lv)
   | Vunit -> M_Vunit
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
-  | Vctype ct1 -> error "core_anormalisation: Vctype"
+  | Vctype ct1 -> 
+     let err = "core_anormalisation: Vctype" in
+     error (err ^ " (" ^ Loc.location_to_string loc ^ ")")
   | Vlist (cbt, vs) -> M_Vlist (cbt, (List.map (n_val loc) vs))
   | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
 
@@ -224,13 +230,6 @@ let unit_pat loc annots =
   M_Pattern (loc, annots, M_CaseBase (None, BTy_unit))
 
 
-(* This code now twice, once for m_pexpr, once for embedding into
-   expr. This could be done parameterically with letbinder as before,
-   but that probably needs polymorphic recursion that Lem doesn't seem
-   to have. *)
-
-
-(* 1 begin *)
 
 let rec n_pexpr_name : 'a. Loc.t -> 'a n_pexpr_domain ->
                      unit pexpr -> (asym -> 'a) -> 'a = 
@@ -607,6 +606,10 @@ let n_memop loc memop pexprs k: mu_texpr =
 
 
 let rec n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr = 
+  (* print_endline ("\n\n\n*******************************************************\nnormalising ");
+   * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr e);
+   * print_endline "\n";
+   * flush stdout; *)
   let (Expr (annots, pe)) = e in
   let loc = update_loc loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
