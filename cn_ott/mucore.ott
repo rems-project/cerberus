@@ -418,6 +418,15 @@ grammar
 
 metavar logical_val ::= {{ phantom }} {{ com logical values (to be specified) }}
 
+grammar
+
+  res_term :: 'ResT_' ::= {{ com resource terms }}
+    | emp                              :: :: Empty    {{ com empty heap }}
+    | pt                               :: :: PointsTo {{ com single-cell heap }}
+    | Symbol_sym                       :: :: Var      {{ com variable }}
+    | <( res_term1 , res_term2 )>      :: :: SepPair  {{ com seperating-conjunction pair }}
+    | pack ( mu_pval_aux , res_term2 ) :: :: Pack     {{ com packing for existentials }}
+
 
 grammar
 
@@ -437,6 +446,24 @@ grammar
    mu_tval_aux {{ tex tval }} :: 'M_T' ::= {{ auxparam 'TY }} {{ com (effectful) top-level values with auxiliary info }}
      | ty_loc annots mu_tval :: X :: val
      |               mu_tval :: O :: no_aux   {{ com Ott-hack for simpler typing rules }}
+
+
+grammar
+
+  res_pattern :: 'ResP_' ::= {{ com resource terms }}
+    | emp                               :: :: Empty    {{ com empty heap }}
+    | pt                                :: :: PointsTo {{ com single-cell heap }}
+    | Symbol_sym                        :: :: Var      {{ com variable }}
+    | <( res_pattern1 , res_pattern2 )> :: :: SepPair  {{ com seperating-conjunction pair }}
+    | pack ( Symbol_sym , res_pattern ) :: :: Pack     {{ com packing for existentials }}
+
+
+grammar
+
+  ret_pattern :: RetP_ ::= {{ com return pattern }}
+    | comp mu_sym_or_pattern :: :: computational {{ com computational variable }}
+    | log  Symbol_sym        :: :: logical       {{ com logical variable       }}
+    | res  res_pattern       :: :: resource      {{ com resource variable      }}
 
 
 grammar
@@ -542,69 +569,42 @@ grammar
     | term ty_bt :: X :: IT
     | term       :: O :: IT_no_aux {{ com Ott-hack for simpler typing rules }}
 
-
-  IT_t {{ tex term }}:: '' ::= {{ ocaml IT.t }} {{ phantom }} {{ com Ott-hack, ignore }}
-    | term_aux :: :: term_aux
-
-
-  IT_ts_ne {{ tex terms }}:: '' ::= {{ auxparam 'bt }} {{ ocaml IT.t list }} {{ phantom }} {{ com non-empty list of terms }}
-    | [ IT_t1 , ... , IT_tn ] :: :: Term_list
-
-  predicate_name :: '' ::= {{ com names of predicates }}
-    | Sctypes_t :: :: Ctype {{ com C type    }}
-    | ty_string :: :: Id    {{ com arbitrary }}
-
+grammar
 
   init_t {{ tex init }} , _i {{ tex }} :: '' ::= {{ ocaml bool }} {{ phantom }} {{ com initialisation status }}
     | tick :: :: init   {{ ocaml true  }}                     {{ com initialised  }}
     |  *   :: :: uninit {{ ocaml false }} {{ tex { [[*]] } }} {{ com uninitalised }}
 
+grammar
 
-  % WARNING: Different from current type system in two ways
-  % 1. It omits { unused : bool }
-  % 2. It includes { init : bool }
-  % 3. It includes { perm : rational }
-  predicate :: '' ::= {{ ocaml type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; init: bool; perm : int * int; } }}
+  points_to :: '' ::= {{ ocaml type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } }}
                       {{ phantom }} {{ com arbitrary predicate }}
-    | IT_ts_ne1 ( rational )|- init_t - predicate_name -> IT_ts_ne2 :: :: Predicate_def
-      {{ tex [[IT_ts_ne1]] \mathbin{ [[rational]] { \overset{ [[init_t]] }{ \mapsto } }_{ [[predicate_name]] } } [[IT_ts_ne2]] }}
-      {{ ocaml { name = [[predicate_name]] ; pointer = List.hd [[IT_ts_ne1]] ; iargs = List.tl [[IT_ts_ne1]] ; oargs = [[IT_ts_ne2]] ; init = [[init_t]] ; perm = [[rational]] } }}
+    | term_aux1 ( rational )|- init_t - ct -> term_aux2 :: :: Points_to
+      {{ tex [[term_aux1]] \mathbin{ [[rational]] { \overset{ [[init_t]] }{ \mapsto } }_{ [[ct]] } } [[term_aux2]] }}
+      {{ ocaml { pointer = [[term_aux1]] ; perm = [[rational]] ; init = [[init_t]] ; ct = [[ct]] ; pointee = [[term_aux2]] ; } }}
 
+grammar
 
   resource :: 'Res_' ::= {{ com resources }}
-    % TODO/ASK make emp a meta production because predicate can express an empty heap
-    | emp                                      :: :: Empty      {{ com empty heap             }}
-    | predicate                                :: :: Predicate  {{ com heap predicate         }}
-    | term_aux                                 :: :: Term       {{ com logical term           }}
-    | resource1 *s resource2                   :: :: SepConj    {{ com seperating conjunction }}
-    | exists Symbol_sym : base_type . resource :: :: Exists     {{ com existential            }}
-    | resource1 /\ resource2                   :: :: Conj       {{ com logical conjuction     }}
+    | emp                                      ::   :: Empty        {{ com empty heap             }}
+    | points_to                                ::   :: Points_to    {{ com points-top heap pred.  }}
+    | resource1 *s resource2                   ::   :: SepConj      {{ com seperating conjunction }}
+    | exists Symbol_sym : base_type . resource ::   :: Exists       {{ com existential            }}
+    | term_aux /\ resource                     ::   :: Term         {{ com logical conjuction     }}
+    | <( resource )>                           :: S :: Paren        {{ com parentheses            }} {{ ocaml [[resource]] }}
     | [ mu_pval_aux / Symbol_sym ] resource    :: M :: Substitution {{ ocaml RESOURCE_SUB [[mu_pval_aux]] [[Symbol_sym]] [[resource]] }}
                                                                     {{ com substitute $[[mu_pval_aux]]$ for $[[Symbol_sym]]$ in $[[resource]]$ }}
 
 
-  res_term :: 'ResT_' ::= {{ com resource terms }}
-    % TODO/ASK make emp a meta production because predicate can express an empty heap
-    | emp                              :: :: Empty    {{ com empty heap }}
-    | Symbol_sym                       :: :: Var      {{ com variable }}
-    | <( res_term1 , res_term2 )>      :: :: SepPair  {{ com seperating-conjunction pair }}
-    | pack ( mu_pval_aux , res_term2 ) :: :: Pack     {{ com packing for existentials }}
-    | ( res_term1 , res_term2 )        :: :: Pair     {{ com logical-conjunction pair }}
-
-
-  res_pattern :: 'ResP_' ::= {{ com resource terms }}
-    % TODO make emp a meta production because predicate can express an empty heap
-    | emp                               :: :: Empty    {{ com empty heap }}
-    | Symbol_sym                        :: :: Var      {{ com variable }}
-    | <( res_pattern1 , res_pattern2 )> :: :: SepPair  {{ com seperating-conjunction pair }}
-    | pack ( Symbol_sym , res_pattern ) :: :: Pack     {{ com packing for existentials }}
-    | ( res_pattern1 , res_pattern2 )   :: :: Pair     {{ com logical-conjunction pair }}
-
-
-  ret_pattern :: RetP_ ::= {{ com return pattern }}
-    | comp Symbol_sym :: :: computational {{ com computational variable }}
-    | log  Symbol_sym :: :: logical       {{ com logical variable       }}
-    | res  Symbol_sym :: :: resource      {{ com resource variable      }}
+grammar
+ 
+   ret , _r {{ tex \_ }} :: RetTy_ ::= {{ com return types }}
+    | sigma tyvar_sym : base_type . ret  :: :: Computational
+    | exists tyvar_sym : base_type . ret :: :: Logical
+    | resource *s ret                    :: :: Resource
+    | term_aux /\ ret                    :: :: Constraint
+    | I                                  :: :: I
+    | [ spine_elem / tyvar_sym ] ret     :: M :: Substitution {{ ocaml RET_SPINE_ELEM_SUB [[spine_elem]] [[tyvar_sym]] [[ret]] }}
 
 
 grammar
@@ -622,14 +622,13 @@ grammar
 
 
   mu_seq_texpr {{ tex seq\_texpr }} :: 'M_Seq_TE' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions }}
-    | mu_tval                                                           :: :: tval  {{ com (effectful) top-level values }}
-    | run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn                   :: :: run   {{ com run from label               }}
-    | nd ( mu_pval_aux1 , .. , mu_pval_auxn )                           :: :: nd    {{ com nondeterministic choice      }}
-    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   {{ com bind return patterns         }} % TODO: bindings
-    | letC mu_sym_or_pattern = mu_pval_aux in mu_texpr                  :: :: letC  {{ com bind computational patterns  }} % TODO: bindings
-    | letR res_pattern = res_term in mu_texpr                           :: :: letR  {{ com bind resource patterns       }} % TODO: bindings
-    | case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end :: :: case  {{ com pattern matching             }} % TODO: bindings
-    | if mu_pval_aux then mu_texpr1 else mu_texpr2                      :: :: if    {{ com conditional                  }}
+    | mu_tval                                                           :: :: tval  {{ com (effectful) top-level values   }}
+    | run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn                   :: :: run   {{ com run from label                 }}
+    | nd ( mu_pval_aux1 , .. , mu_pval_auxn )                           :: :: nd    {{ com nondeterministic choice        }}
+    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   {{ com bind return patterns           }} % TODO: bindings
+    | let </ ret_patterni // , // i /> : ret = mu_texpr1 in mu_texpr2   :: :: letT  {{ com annotated bind return patterns }} % TODO: bindings
+    | case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end :: :: case  {{ com pattern matching               }} % TODO: bindings
+    | if mu_pval_aux then mu_texpr1 else mu_texpr2                      :: :: if    {{ com conditional                    }}
     | bound [ ty_int ] ( mu_is_texpr_aux )                              :: :: bound {{ com limit scope of indet seq behaviour, absent at runtime }}
 
 
@@ -759,7 +758,6 @@ grammar
 metavar ty_bt {{ tex }} ::= {{ ocaml 'bt }} {{ phantom }}
   {{ com Ott-hack, ignore (OCaml type variable bt) }}
 
-
 grammar
 
   arg :: ArgTy_ ::= {{ com argument/function types }}
@@ -775,15 +773,6 @@ grammar
     | pi tyvar_sym : base_type . pure_arg  :: :: Computational
     | term_aux -) pure_arg                 :: :: Constraint
     | pure_ret                             :: :: Ret
-
-
-  ret , _r {{ tex \_ }} :: RetTy_ ::= {{ com return types }}
-    | sigma tyvar_sym : base_type . ret  :: :: Computational
-    | exists tyvar_sym : base_type . ret :: :: Logical
-    | resource *s ret                    :: :: Resource
-    | term_aux /\ ret                    :: :: Constraint
-    | I                                  :: :: I
-    | [ spine_elem / tyvar_sym ] ret     :: M :: Substitution {{ ocaml RET_SPINE_ELEM_SUB [[spine_elem]] [[tyvar_sym]] [[ret]] }}
 
 
   pure_ret :: Pure_RetTy_ ::= {{ com pure return types }}
@@ -841,8 +830,6 @@ grammar
     | judgement                                                                        :: :: judgement
     | abbrev == term_aux                                                               :: :: abbreviations
     | smt ( N => term_aux )                                                            :: :: smt
-    % ASK how to deal with existentials?
-    | smt ( N => resource1 = resource2 )                                               :: :: smt_resource
     | Symbol_sym : base_type inEnv C                                                   :: :: x_in_C
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals :: :: struct_in_globals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />                       :: :: indexed_infer_mem_value       {{ com dependent on memory object model }}
@@ -977,37 +964,67 @@ defns
 defns
   resource_jtype :: '' ::=
 
-    % ASK should this be checking? If so, how do I handle letR?
   defn
-    C ; L ; N ; R |- res_term => resource :: :: Resource :: Resource_ by
+    resource == resource' :: :: Resource_Eq :: Resource_Eq_ by
+    
+    -------------------- :: Emp
+    emp == emp
+
+
+    % ASK does this need a context?
+    smt ( cdot => ( term_aux1 = term_aux'1 ) /\ ( term_aux2 = term_aux'2 ) )
+    -------------------------------------------------------------------------------------------------------- :: PointsTo
+    term_aux1 ( rational )|- init_t - ct -> term_aux2 == term_aux'1 ( rational )|- init_t - ct -> term_aux'2
+
+
+    resource1 == resource'1
+    resource2 == resource'2
+    -------------------------------------------------- :: SepConj
+    resource1 *s resource2 == resource'1 *s resource'2
+
+
+    resource == resource'
+    ------------------------------------------------------------------------------------- :: Exists
+    exists Symbol_sym : base_type . resource == exists Symbol_sym : base_type . resource'
+
+
+    % ASK does this need a context?
+    smt ( cdot , term_aux  => term_aux' )
+    smt ( cdot , term_aux' => term_aux  )
+    resource == resource'
+    ---------------------------------------------- :: Term
+    term_aux /\ resource == term_aux' /\ resource'
+
+
+  defn
+    C ; L ; N ; R |- res_term <= resource :: :: Resource :: Resource_ by
 
 
     ------------------------------ :: Emp
-    C ; L ; N ; cdot |- emp => emp
+    C ; L ; N ; cdot |- emp <= emp
 
 
-    % ASK how to deal with existentials?
-    smt ( N => resource = resource' )
+    ----------------------------------- :: PointsTo
+    C ; L ; N ; cdot |- pt <= points_to
+
+
+    resource == resource'
     ------------------------------------------------- :: Var
-    C ; L ; N ; cdot , r : resource |- r => resource'
+    C ; L ; N ; cdot , r : resource |- r <= resource'
 
 
-    C ; L ; N ; R1 |- res_term1 => resource1
-    C ; L ; N ; R2 |- res_term2 => resource2
+    C ; L ; N ; R1 |- res_term1 <= resource1
+    C ; L ; N ; R2 |- res_term2 <= resource2
     ---------------------------------------------------------------------------- :: SepConj
-    C ; L ; N ; R1 , R2 |- <( res_term1 , res_term2 )> => resource1 *s resource2
+    C ; L ; N ; R1 , R2 |- <( res_term1 , res_term2 )> <= resource1 *s resource2
 
 
-    C ; L ; N ; R |- res_term1 => resource1
-    C ; L ; N ; R |- res_term2 => resource2
-    -------------------------------------------------------------------- :: Conj
-    C ; L ; N ; R |- ( res_term1 , res_term2 ) => resource1 /\ resource2
-
-
+    % Has to be checking. Consider type of pack (1 , l |-> 1 , 1)
+    % exists y : integer . l |-> (y,y or y,1 or 1,y or 1,1)
     C ; L ; N |- mu_pval_aux => base_type
-    C ; L ; N ; R |- res_term2 => [ mu_pval_aux / y ] resource
-    ------------------------------------------------------------------------------------- :: Pack
-    C ; L ; N ; R |- pack ( mu_pval_aux , res_term2 ) => exists y : base_type . resource
+    C ; L ; N ; R |- res_term2 <= [ mu_pval_aux / y ] resource
+    --------------------------------------------------------------------------------------- :: Pack
+    C ; L ; N ; R |- pack ( mu_pval_aux , res_term2 ) <= exists y : base_type . resource
 
 
 defns
@@ -1032,12 +1049,10 @@ defns
     C ; L ; N ; R |- logical_val , </ spine_elemi // i /> :;  forall x : base_type . arg >> ret
 
 
-    C ; L ; N ; R1 |- res_term => resource
-    % ASK how to deal with existentials?
-    smt ( N => resource = resource' )
+    C ; L ; N ; R1 |- res_term <= resource
     C ; L ; N ; R2 |- </ spine_elemi // i /> :; arg >> ret
-    ------------------------------------------------------------------------------------- :: Resource
-    C ; L ; N ; R1 , R2 |- res_term , </ spine_elemi // i /> :;  resource' --o arg >> ret
+    ------------------------------------------------------------------------------------ :: Resource
+    C ; L ; N ; R1 , R2 |- res_term , </ spine_elemi // i /> :;  resource --o arg >> ret
 
 
     smt ( N => term_aux )
@@ -1176,7 +1191,7 @@ defns
 
 
   defn
-    term_aux as mu_sym_or_pattern : base_type ~> C ; N :: :: Sym_Or_Pattern :: Sym_Or_Pattern by
+    term_aux as mu_sym_or_pattern : base_type ~> C ; N :: :: Sym_Or_Pattern :: Sym_Or_Pattern_ by
 
 
     ------------------------------------------------------------------------ :: Sym
@@ -1196,9 +1211,10 @@ defns
      : I ~> cdot ; cdot ; cdot ; cdot
 
 
-    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
-    ---------------------------------------------------------------------------------------------- :: Computational
-    comp y , </ ret_patterni // i /> : sigma y : base_type . ret ~> C , y : base_type ; L ; N ; R
+    y as mu_sym_or_pattern : base_type ~> C1 ; N1
+    </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
+    ----------------------------------------------------------------------------------------------------- :: Computational
+    comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
 
 
     </ ret_patterni // i /> : ret ~> C ; L ; N ; R
@@ -1206,29 +1222,27 @@ defns
     log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C ; L , y : base_type ; N ; R
 
 
-    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
-    ------------------------------------------------------------------------------------ :: Resource
-    res y , </ ret_patterni // i /> : resource *s ret ~> C ; L ; N ; R , y : resource
+    res_pattern : resource ~> L1 ; N1 ; R1
+    </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
+    -------------------------------------------------------------------------------------------- :: Resource
+    res res_pattern , </ ret_patterni // i /> : resource *s ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
 
 
     </ ret_patterni // i /> : ret ~> C ; L ; N ; R
-    ------------------------------------------------------------------------ :: Constraint
+    --------------------------------------------------------------------- :: Constraint
     </ ret_patterni // i /> : term_aux /\ ret ~> C ; L ; N , term_aux ; R
 
 
   defn
     res_pattern : resource ~> L ; N ;  R :: :: Res_Pattern :: Res_Pattern_ by
 
+
     -------------------------------- :: Empty
     emp : emp ~> cdot ; cdot ; cdot
 
 
-    ---------------------------------------------------- :: Var_Predicate
-    r : predicate ~> cdot ; cdot ; cdot , r : predicate
-
-
-    --------------------------------------------- :: Var_Term
-    _ : term_aux ~> cdot ; cdot , term_aux ; cdot
+    ---------------------------------------------------- :: PointsTo
+    pt : points_to ~> cdot ; cdot ; cdot , r : points_to
 
 
     ------------------------------------------------- :: Var
@@ -1241,17 +1255,14 @@ defns
     <( res_pattern1 , res_pattern2 )> : resource1 *s resource2 ~> L1 , L2 ; N1 , N2 ; R1 , R2
 
 
-    % ASK - logical or computational?
+    res_pattern : resource ~> L ; N ; R
+    ---------------------------------------------------------- :: Conj
+    res_pattern : term_aux /\ resource ~> L ; N , term_aux ; R
+
+
     res_pattern : [ x / y ] resource ~> L ; N ; R
     --------------------------------------------------------------------------------------- :: Pack
     pack ( x , res_pattern ) : exists y : base_type . resource ~> L , x : base_type ; N ; R
-
-
-    % ASK - is this right?
-    res_pattern1 : resource1 ~> L1 ; N1 ; R1
-    res_pattern2 : resource2 ~> L2 ; N2 ; R2
-    --------------------------------------------------------------------------------------- :: Conj
-    ( res_pattern1 , res_pattern2 ) : resource1 /\ resource2 ~> L1 , L2 ; N1 , N2 ; R1 , R2
 
 
 defns
@@ -1319,7 +1330,7 @@ defns
 
     C ; L ; N |- mu_pval_aux => integer
     ----------------------------------- :: Create
-    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed mu_pval_aux , yp ) /\ [ yp ] ( q_one )|- * - ct -> [ y ] *s I
+    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed mu_pval_aux , yp ) /\ <( yp ( q_one )|- * - ct -> y )> *s I
 
 
     % NOT IMPLEMENTED:
@@ -1332,13 +1343,13 @@ defns
     smt ( N => representable ( ct , embed mu_pval_aux2 ) )
     smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     -------------------------------------------------------- :: Store
-    C ; L ; N ; cdot , r : [ embed mu_pval_aux0 ] ( q_one )|- _i - ct -> [ _t ] |- store ( _b , ct , mu_pval_aux1 , mu_pval_aux2 , _mem_order ) => sigma _ : unit . [ embed mu_pval_aux0 ] ( q_one )|- tick - ct -> [ embed mu_pval_aux2 ] *s I
+    C ; L ; N ; cdot , r : <( embed mu_pval_aux0 ( q_one )|- _i - ct -> _t )> |- store ( _b , ct , mu_pval_aux1 , mu_pval_aux2 , _mem_order ) => sigma _ : unit . embed mu_pval_aux0 ( q_one )|- tick - ct -> embed mu_pval_aux2 *s I
 
 
     C ; L ; N |- mu_pval_aux1 => loc
     smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     ---------------------------------------------------- :: Kill_Static
-    C ; L ; N ; cdot , r : [ embed mu_pval_aux0 ] ( q_one )|- _i - ct -> [ _t ] |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
+    C ; L ; N ; cdot , r : <( embed mu_pval_aux0 ( q_one )|- _i - ct -> _t )> |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
 
 
     % NOT IMPLEMENTED:
@@ -1386,7 +1397,7 @@ defns
     C ; L ; N ; R |- done </ spine_elemi // i /> <= term_aux /\ ret
 
 
-    C ; L ; N ; R1 |- res_term => resource
+    C ; L ; N ; R1 |- res_term <= resource
     C ; L ; N ; R2 |- done </ spine_elemi // i /> <= ret
     -------------------------------------------------------------------------------- :: Resource
     C ; L ; N ; R1 , R2 |- done res_term , </ spine_elemi // i /> <= resource *s ret
@@ -1456,19 +1467,11 @@ defns
     C ; L ; N ; R' , R |- let </ ret_patterni // i /> = mu_seq_expr in mu_texpr <= ret
 
 
-    C ; L ; N |- mu_pval_aux => base_type1
-    y1 as mu_sym_or_pattern : base_type1 ~> C1 ; N1
-    C , fresh ( C1 ) ; L , y1 : base_type1 ; N , y1 = embed mu_pval_aux , [ fresh ( C1 ) / C1 ] N1 ; R |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret
-    ------------------------------------------------------------------------------------------------------------------------------------------- :: Let_Comp
-    C ; L ; N ; R |- letC mu_sym_or_pattern = mu_pval_aux in mu_texpr <= ret
-
-
-    % ASK Do I need to the [ fresh ( _ ) / _ ] here?
-    C ; L ; N ; R' |- res_term => resource1
-    res_pattern : resource1 ~> L1 ; N1 ; R1
-    C ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret
-    -------------------------------------------------------------------- :: Let_Res
-    C ; L ; N ; R' , R |- letR res_pattern = res_term in mu_texpr <= ret
+    C ; L ; N ; R' |- mu_texpr1 <= ret1
+    </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr2 <= ret2
+    ---------------------------------------------------------------------------------------------------------------------------------- :: LetT
+    C ; L ; N ; R' , R |- let </ ret_patterni // i /> : ret1 = mu_texpr1 in mu_texpr <= ret2
 
 
     C ; L ; N |- mu_pval_aux => base_type1

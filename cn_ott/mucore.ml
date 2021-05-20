@@ -185,12 +185,6 @@ let is_mu_seq_expr_aux_of_mu_seq_expr_aux (mu_seq_expr_aux5:'TY mu_seq_expr_aux)
 
 
 type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
-
-
-type 
 'TY mu_pexpr =  (* pure expressions *)
    M_PEpval of 'TY mu_pval_aux (* pure values *)
  | M_PEctor of mu_ctor_expr * ('TY mu_pval_aux) list (* data constructor application *)
@@ -207,15 +201,15 @@ type
 
 
 type 
-'TY mu_pexpr_aux =  (* pure expressions with location and annotations *)
-   M_Pexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_pexpr
- | M_Pexpr_no_aux of 'TY mu_pexpr (* Ott-hack for simpler typing rules *)
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
 
 
 type 
-'TY mu_tpval =  (* top-level pure values *)
-   M_TPVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
- | M_TPVdone of 'TY mu_pval_aux (* pure done *)
+'TY mu_pexpr_aux =  (* pure expressions with location and annotations *)
+   M_Pexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_pexpr
+ | M_Pexpr_no_aux of 'TY mu_pexpr (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -229,15 +223,21 @@ and mu_pattern_aux =
 
 
 type 
-'TY mu_tpval_aux =  (* top-level pure values with location and annotations *)
-   M_TPval of Location_ocaml.t * annot list * 'TY * 'TY mu_tpval
- | M_TPval_no_aux of 'TY mu_tpval (* Ott-hack for simpler typing rules *)
-
-
-type 
 'TY mu_sym_or_pattern = 
    M_Symbol of Symbol.sym
  | M_Pat of mu_pattern_aux
+
+
+type 
+'TY mu_tpval =  (* top-level pure values *)
+   M_TPVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+ | M_TPVdone of 'TY mu_pval_aux (* pure done *)
+
+
+type 
+'TY mu_tpval_aux =  (* top-level pure values with location and annotations *)
+   M_TPval of Location_ocaml.t * annot list * 'TY * 'TY mu_tpval
+ | M_TPval_no_aux of 'TY mu_tpval (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -387,16 +387,10 @@ and 'bt term_aux =  (* terms with auxiliary info *)
 type 
 res_term =  (* resource terms *)
    ResT_Empty (* empty heap *)
+ | ResT_PointsTo (* single-cell heap *)
  | ResT_Var of Symbol.sym (* variable *)
  | ResT_SepPair of res_term * res_term (* seperating-conjunction pair *)
  | ResT_Pack of 'TY mu_pval_aux * res_term (* packing for existentials *)
- | ResT_Pair of res_term * res_term (* logical-conjunction pair *)
-
-
-type 
-predicate_name =  (* names of predicates *)
-   Ctype of Sctypes.t (* C type *)
- | Id of string (* arbitrary *)
 
 
 type 
@@ -407,6 +401,15 @@ spine_elem =  (* spine element *)
 
 
 type 
+resource =  (* resources *)
+   Res_Empty (* empty heap *)
+ | Res_Points_to of type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } (* points-top heap pred. *)
+ | Res_SepConj of resource * resource (* seperating conjunction *)
+ | Res_Exists of Symbol.sym * base_type * resource (* existential *)
+ | Res_Term of 'bt term_aux * resource (* logical conjuction *)
+
+
+type 
 'TY mu_seq_expr =  (* sequential (effectful) expressions *)
    M_Seq_Epexpr of 'TY mu_pexpr_aux (* pure expressions *)
  | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * (spine_elem) list (* C function call *)
@@ -414,19 +417,27 @@ type
 
 
 type 
-resource =  (* resources *)
-   Res_Empty (* empty heap *)
- | Res_Predicate of type predicate = { name : predicate_name; pointer: IT.t; iargs: IT.t list; oargs: IT.t list; init: bool; perm : int * int; } (* heap predicate *)
- | Res_Term of 'bt term_aux (* logical term *)
- | Res_SepConj of resource * resource (* seperating conjunction *)
- | Res_Exists of Symbol.sym * base_type * resource (* existential *)
- | Res_Conj of resource * resource (* logical conjuction *)
+res_pattern =  (* resource terms *)
+   ResP_Empty (* empty heap *)
+ | ResP_PointsTo (* single-cell heap *)
+ | ResP_Var of Symbol.sym (* variable *)
+ | ResP_SepPair of res_pattern * res_pattern (* seperating-conjunction pair *)
+ | ResP_Pack of Symbol.sym * res_pattern (* packing for existentials *)
 
 
 type 
 'TY mu_tval =  (* (effectful) top-level values *)
    M_TVdone of (spine_elem) list (* end of top-level expression *)
  | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+
+
+type 
+ret =  (* return types *)
+   RetTy_Computational of 'sym * base_type * ret
+ | RetTy_Logical of 'sym * base_type * ret
+ | RetTy_Resource of resource * ret
+ | RetTy_Constraint of 'bt term_aux * ret
+ | RetTy_I
 
 
 type 
@@ -437,18 +448,9 @@ type
 
 type 
 ret_pattern =  (* return pattern *)
-   RetP_computational of Symbol.sym (* computational variable *)
+   RetP_computational of 'TY mu_sym_or_pattern (* computational variable *)
  | RetP_logical of Symbol.sym (* logical variable *)
- | RetP_resource of Symbol.sym (* resource variable *)
-
-
-type 
-res_pattern =  (* resource terms *)
-   ResP_Empty (* empty heap *)
- | ResP_Var of Symbol.sym (* variable *)
- | ResP_SepPair of res_pattern * res_pattern (* seperating-conjunction pair *)
- | ResP_Pack of Symbol.sym * res_pattern (* packing for existentials *)
- | ResP_Pair of res_pattern * res_pattern (* logical-conjunction pair *)
+ | RetP_resource of res_pattern (* resource variable *)
 
 
 type 
@@ -463,8 +465,7 @@ type
  | M_Seq_TErun of Symbol.sym * ('TY mu_pval_aux) list (* run from label *)
  | M_Seq_TEnd of ('TY mu_pval_aux) list (* nondeterministic choice *)
  | M_Seq_TElet of (ret_pattern) list * 'TY mu_seq_expr_aux * 'TY mu_texpr (* bind return patterns *)
- | M_Seq_TEletC of 'TY mu_sym_or_pattern * 'TY mu_pval_aux * 'TY mu_texpr (* bind computational patterns *)
- | M_Seq_TEletR of res_pattern * res_term * 'TY mu_texpr (* bind resource patterns *)
+ | M_Seq_TEletT of (ret_pattern) list * ret * 'TY mu_texpr * 'TY mu_texpr (* annotated bind return patterns *)
  | M_Seq_TEcase of 'TY mu_pval_aux * ((mu_pattern_aux * 'TY mu_texpr)) list (* pattern matching *)
  | M_Seq_TEif of 'TY mu_pval_aux * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
  | M_Seq_TEbound of int * 'TY mu_is_texpr_aux (* limit scope of indet seq behaviour, absent at runtime *)
@@ -493,15 +494,6 @@ and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with a
 and 'TY mu_texpr =  (* top-level (effectful) expressions *)
    M_TESeq of 'TY mu_seq_texpr_aux (* sequential (effectful) expressions *)
  | M_TEIS of 'TY mu_is_texpr_aux (* indet seq (effectful) expressions *)
-
-
-type 
-ret =  (* return types *)
-   RetTy_Computational of 'sym * base_type * ret
- | RetTy_Logical of 'sym * base_type * ret
- | RetTy_Resource of resource * ret
- | RetTy_Constraint of 'bt term_aux * ret
- | RetTy_I
 
 
 type 
