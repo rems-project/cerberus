@@ -162,7 +162,7 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
      return (l, r, [], mapping)
 
-let make_pred loc pred (predargs : Ast.pred_arg list) pointer iargs = 
+let make_pred loc pred (predargs : Ast.term list) pointer iargs = 
   let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
@@ -328,13 +328,6 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      return (IT (Pointer_op (IntegerToPointerCast t), Loc))
      
 
-let resolve_predarg loc layouts mapping p = 
-  match p with
-  | PathArg p -> resolve_path loc layouts mapping p
-  | Term t -> resolve_index_term loc layouts mapping t
-
-
-
 
 let resolve_constraint loc mapping lc = 
   resolve_index_term loc mapping lc
@@ -344,7 +337,7 @@ let resolve_constraint loc mapping lc =
 
 let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;arguments}) =
   match predicate, arguments with
-  | "Owned", [PathArg path] ->
+  | "Owned", [Path path] ->
      begin match Ast.deref_path path with
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
      | Some (bn, derefs) -> 
@@ -359,7 +352,7 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
   | "Owned", _ ->
      fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
 
-  | "Block", [PathArg path] ->
+  | "Block", [Path path] ->
      begin match Ast.deref_path path with
      | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
      | Some (bn, derefs) -> 
@@ -376,9 +369,9 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
 
 
   | _, pointer :: arguments ->
-     let@ pointer_resolved = resolve_predarg loc layouts mapping pointer in
+     let@ pointer_resolved = resolve_index_term loc layouts mapping pointer in
      let@ iargs_resolved = 
-       ListM.mapM (resolve_predarg loc layouts mapping) arguments
+       ListM.mapM (resolve_index_term loc layouts mapping) arguments
      in
      let@ result = make_pred loc predicate arguments pointer_resolved iargs_resolved in
      return result

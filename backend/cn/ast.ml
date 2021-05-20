@@ -31,11 +31,7 @@ module Terms = struct
     | Addr of string
     | Var of LabeledName.t
     | Pointee of path
-    | PredArg of string * pred_arg list * string
-
-  and pred_arg = 
-    | PathArg of path
-    | Term of term
+    | PredArg of string * term list * string
 
   and term = 
     | Integer of Z.t
@@ -66,7 +62,7 @@ module Terms = struct
     | Pointee p1, Pointee p2 ->
        path_equal p1 p2
     | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
-       String.equal p1 p2 && List.equal pred_arg_equal t1 t2 && String.equal a1 a2
+       String.equal p1 p2 && List.equal term_equal t1 t2 && String.equal a1 a2
     | Addr _, _ -> 
        false
     | Var _, _ ->
@@ -75,13 +71,6 @@ module Terms = struct
        false
     | PredArg _, _ ->
        false
-
-  and pred_arg_equal a1 a2 =
-    match a1, a2 with
-    | PathArg p1, PathArg p2 -> path_equal p1 p2
-    | Term t1, Term t2 -> term_equal t1 t2
-    | PathArg _, _ -> false
-    | Term _, _ -> false
   
 
   and term_equal t1 t2 =
@@ -157,11 +146,7 @@ module Terms = struct
     | Addr b -> ampersand ^^ !^b
     | Var b -> LabeledName.pp b
     | Pointee p -> star ^^ (pp_path true p)
-    | PredArg (p,t,a) -> !^p ^^ parens (separate_map comma (pp_pred_arg false) t) ^^ dot ^^ !^a
-
-  and pp_pred_arg atomic = function
-    | PathArg p -> pp_path atomic p
-    | Term t  -> pp_term atomic t
+    | PredArg (p,t,a) -> !^p ^^ parens (separate_map comma (pp_term false) t) ^^ dot ^^ !^a
 
 
   and pp_term atomic = function
@@ -213,7 +198,7 @@ module Terms = struct
     | Pointee p -> Pointee (Pointee p)
     | PredArg (pr,p,a) -> Pointee (PredArg (pr,p,a))
 
-  let predarg pr (ps : pred_arg list) a =
+  let predarg pr (ps : term list) a =
     PredArg (pr,ps,a)
 
   let rec deref_path = function
@@ -233,12 +218,7 @@ module Terms = struct
     | Addr bn -> Addr bn
     | Var bn -> Var (LabeledName.map_label f bn)
     | Pointee p -> Pointee (map_labels_path f p)
-    | PredArg (pr,p,a) -> PredArg (pr, List.map (map_labels_pred_arg f) p, a)
-
-  and map_labels_pred_arg f t = 
-    match t with
-    | PathArg p -> PathArg (map_labels_path f p)
-    | Term t -> Term (map_labels_term f t)
+    | PredArg (pr,p,a) -> PredArg (pr, List.map (map_labels_term f) p, a)
 
   and map_labels_term f t = 
     let rec aux = function
@@ -291,7 +271,7 @@ include Terms
 
 type resource_condition = {
     predicate : string;
-    arguments : pred_arg list;
+    arguments : term list;
   }
 
 type logical_condition = term
@@ -306,7 +286,7 @@ let map_labels f = function
      Logical (map_labels_term f cond)
   | Resource resource ->
      let arguments = 
-       List.map (map_labels_pred_arg f) 
+       List.map (map_labels_term f) 
          resource.arguments 
      in
      Resource { resource with arguments }

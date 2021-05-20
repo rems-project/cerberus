@@ -76,17 +76,8 @@ path:
 
 
 resource_condition:
-  | id=NAME args=delimited(LPAREN, separated_list(COMMA, pred_arg), RPAREN)
+  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
       { Ast.{predicate=id; arguments = args} }
-
-pred_arg:
-  | t=term
-      { Ast.Term t }
-  | p=path
-      { Ast.PathArg p }
-
-
-
 
 
 atomic_term:
