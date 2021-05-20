@@ -15,7 +15,7 @@ open IndexTerms
 open Resources.RE
 open Sctypes
 open Mapping
-open Path.LabeledName
+open Ast.LabeledName
 open Ast
 open Predicates
 open Memory
@@ -139,7 +139,7 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
      let pointee_bt = BT.of_sct sct in
      let pointee_t = sym_ (pointee, pointee_bt) in
      let l = [(pointee, pointee_bt)] in
-     let mapping = [{path = Path.pointee (Some label) path; it = pointee_t}] in
+     let mapping = [{path = Ast.pointee (Some label) path; it = pointee_t}] in
      let c = [good_value pointee_t sct] in
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
      return (l, r, c, mapping)
@@ -162,7 +162,7 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
      return (l, r, [], mapping)
 
-let make_pred loc pred (predargs : Path.predarg list) pointer iargs = 
+let make_pred loc pred (predargs : Ast.pred_arg list) pointer iargs = 
   let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
@@ -174,7 +174,7 @@ let make_pred loc pred (predargs : Path.predarg list) pointer iargs =
         let mapping = match Sym.name oarg with
           | Some name -> 
              let item = 
-               {path = Path.predarg pred predargs name; 
+               {path = Ast.predarg pred predargs name; 
                 it = sym_ (s, bt)} 
              in
              item :: mapping 
@@ -223,102 +223,116 @@ let type_of__vars loc var_typs name derefs =
 
 
 
-let resolve_path loc (mapping : mapping) (o : Path.t) : (IT.t, type_error) m = 
+let resolve_path loc layouts (mapping : mapping) (o : Ast.path) : (IT.typed, type_error) m = 
   let open Mapping in
-  (* let () = print stderr (item "o" (Path.pp o)) in
+  (* let () = print stderr (item "o" (Ast.pp_path false o)) in
    * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
-  let found = List.find_opt (fun {path;_} -> Path.equal path o) mapping in
+  let found = List.find_opt (fun {path;_} -> Ast.path_equal path o) mapping in
   match found with
   | Some {it; _} -> 
      return it
   | None -> 
-     fail loc (Generic (!^"term" ^^^ Path.pp o ^^^ !^"does not apply"))
+     fail loc (Generic (!^"term" ^^^ Ast.pp_path false o ^^^ !^"does not apply"))
+
 
 
 (* change this to return unit IT.term, then apply index term type
    checker *)
-let rec resolve_index_term loc mapping (it: Ast.term) 
-        : (BT.t IT.term, type_error) m =
-  let aux = resolve_index_term loc mapping in
-  match it with
-  | Lit (Integer i) -> 
-     return (IT.z_ i)
+let rec resolve_index_term loc layouts mapping (term: Ast.term) 
+        : (IT.typed, type_error) m =
+  let aux = resolve_index_term loc layouts mapping in
+  match term with
+  | Integer i -> 
+     return (IT (Lit (IT.Z i), BT.Integer))
   | Path o -> 
-     resolve_path loc mapping o
-  | ArithOp (Addition (it, it')) -> 
+     resolve_path loc layouts mapping o
+  | Addition (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.add_ (it, it'))
-  | ArithOp (Subtraction (it, it')) -> 
+     begin match IT.bt it with
+     | Loc -> return (IT (Pointer_op (AddPointer (it, it')), Loc))
+     | _ -> return (IT (Arith_op (Add (it, it')), IT.bt it))
+     end
+  | Subtraction (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.sub_ (it, it'))
-  | ArithOp (Multiplication (it, it')) -> 
+     begin match IT.bt it with
+     | Loc -> return (IT (Pointer_op (SubPointer (it, it')), Loc))
+     | _ -> return (IT (Arith_op (Sub (it, it')), IT.bt it))
+     end
+  | Multiplication (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.mul_ (it, it'))
-  | ArithOp (Division (it, it')) -> 
+     begin match IT.bt it with
+     | Loc -> return (IT (Pointer_op (MulPointer (it, it')), Loc))
+     | _ -> return (IT (Arith_op (Mul (it, it')), IT.bt it))
+     end
+  | Division (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.div_ (it, it'))
-  | ArithOp (Exponentiation (it, it')) -> 
+     return (IT (Arith_op (Div (it, it')), IT.bt it))
+  | Exponentiation (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.exp_ (it, it'))
-  | CmpOp (Equality (it, it')) -> 
+     return (IT (Arith_op (Exp (it, it')), IT.bt it))
+  | Equality (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.eq_ (it, it'))
-  | CmpOp (Inequality (it, it')) -> 
+     return (IT (Bool_op (EQ (it, it')), Bool))
+  | Inequality (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.ne_ (it, it'))
-  | CmpOp (LessThan (it, it')) -> 
+     return (IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), Bool))), Bool))
+  | ITE (it', it'', it''') ->
+     let@ it' = aux it' in
+     let@ it'' = aux it'' in
+     let@ it''' = aux it''' in
+     return (IT (Bool_op (ITE (it', it'', it''')), IT.bt it''))
+  | LessThan (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.lt_ (it, it'))
-  | CmpOp (GreaterThan (it, it')) -> 
+     return (IT (Cmp_op (LT (it, it')), Bool))
+  | GreaterThan (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.gt_ (it, it'))
-  | CmpOp (LessOrEqual (it, it')) -> 
+     return (IT (Cmp_op (LT (it', it)), Bool))
+  | LessOrEqual (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.le_ (it, it'))
-  | CmpOp (GreaterOrEqual (it, it')) -> 
+     return (IT (Cmp_op (LE (it, it')), Bool))
+  | GreaterOrEqual (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT.ge_ (it, it'))
+     return (IT (Cmp_op (LE (it', it)), Bool))
+  | StructMember (t, member) ->
+     let@ st = aux t in
+     let@ tag = match IT.bt st with
+       | Struct tag -> return tag
+       | _ -> fail loc (Generic (Ast.pp_term false term ^^^ !^"is not a struct"))
+     in
+     let layout = layouts tag in
+     let decl_members = Memory.member_types layout in
+     let@ bt = match List.assoc_opt Id.equal member decl_members with
+       | Some sct -> 
+          return (BT.of_sct sct)
+       | None -> 
+          let err = 
+            !^"Illtyped index term" ^^^ pp_term false term ^^ dot ^^^
+              pp_term false t ^^^ !^"does not have member" ^^^ Id.pp member
+          in
+          fail loc (Generic err)
+     in
+     return (IT (Struct_op (StructMember (tag, st, member)), bt))
+  | IntegerToPointerCast t ->
+     let@ t = aux t in
+     return (IT (Pointer_op (IntegerToPointerCast t), Loc))
+     
 
+let resolve_predarg loc layouts mapping p = 
+  match p with
+  | PathArg p -> resolve_path loc layouts mapping p
+  | Term t -> resolve_index_term loc layouts mapping t
 
-let rec resolve_predarg loc mapping = function
-  | Path.NumArg z -> 
-     return (IT.z_ z)
-  | Add (p,a) -> 
-     let@ it = resolve_predarg loc mapping p in
-     let@ it' = resolve_predarg loc mapping a in
-     return (IT.add_ (it, it'))
-  | Sub (p,a) -> 
-     let@ it = resolve_predarg loc mapping p in
-     let@ it' = resolve_predarg loc mapping a in
-     return (IT.sub_ (it, it'))
-  | AddPointer (p,a) -> 
-     let@ it = resolve_predarg loc mapping p in
-     let@ it' = resolve_predarg loc mapping a in
-     return (IT.addPointer_ (it, it'))
-  | SubPointer (p,a) -> 
-     let@ it = resolve_predarg loc mapping p in
-     let@ it' = resolve_predarg loc mapping a in
-     return (IT.subPointer_ (it, it'))
-  | MulPointer (p,a) -> 
-     let@ it = resolve_predarg loc mapping p in
-     let@ it' = resolve_predarg loc mapping a in
-     return (IT.mulPointer_ (it, it'))
-  | IntegerToPointerCast p ->
-     let@ it = resolve_predarg loc mapping p in
-     return (IT.integerToPointerCast_ it)
-  | PathArg p ->
-     resolve_path loc mapping p
 
 
 
@@ -329,43 +343,42 @@ let resolve_constraint loc mapping lc =
 
 
 let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;arguments}) =
-  let open Path in
   match predicate, arguments with
   | "Owned", [PathArg path] ->
-     begin match Path.deref_path path with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+     begin match Ast.deref_path path with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
      | Some (bn, derefs) -> 
         let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ it = resolve_path loc mapping path in
+        let@ it = resolve_path loc layouts mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
-           make_owned loc layouts label it (Path.var bn) sct2
+           make_owned loc layouts label it (Ast.var bn) sct2
         | _ ->
-          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
+          fail loc (Generic (Ast.pp_path false path ^^^ !^"is not a pointer"))       
      end
   | "Owned", _ ->
      fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
 
   | "Block", [PathArg path] ->
-     begin match Path.deref_path path with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Path.pp path)))
+     begin match Ast.deref_path path with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
      | Some (bn, derefs) -> 
         let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ it = resolve_path loc mapping path in
+        let@ it = resolve_path loc layouts mapping path in
         match sct with
         | Sctype (_, Pointer (_, sct2)) ->
-           make_block loc layouts it (Path.var bn) sct2
+           make_block loc layouts it (Ast.var bn) sct2
         | _ ->
-          fail loc (Generic (Path.pp path ^^^ !^"is not a pointer"))       
+          fail loc (Generic (Ast.pp_path false path ^^^ !^"is not a pointer"))       
      end
   | "Block", _ ->
      fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
 
 
   | _, pointer :: arguments ->
-     let@ pointer_resolved = resolve_predarg loc mapping pointer in
+     let@ pointer_resolved = resolve_predarg loc layouts mapping pointer in
      let@ iargs_resolved = 
-       ListM.mapM (resolve_predarg loc mapping) arguments
+       ListM.mapM (resolve_predarg loc layouts mapping) arguments
      in
      let@ result = make_pred loc predicate arguments pointer_resolved iargs_resolved in
      return result
@@ -375,16 +388,16 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
 
 
 let aarg_item l (aarg : aarg) =
-  let path = Path.addr aarg.name in
+  let path = Ast.addr aarg.name in
   {path; it = sym_ (aarg.asym, BT.Loc)}
 
 let varg_item l (varg : varg) =
   let bn = {v = varg.name; label = Some l} in
-  let path = Path.var bn in
+  let path = Ast.var bn in
   {path; it = sym_ (varg.vsym, BT.of_sct varg.typ)} 
 
 let garg_item l (garg : garg) =
-  let path = Path.addr garg.name in
+  let path = Ast.addr garg.name in
   {path; it = sym_ (garg.lsym, BT.Loc) } 
 
 
@@ -439,7 +452,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
              apply_ownership_spec layouts "start" var_typs mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
-           let@ c = resolve_constraint loc mapping cond in
+           let@ c = resolve_constraint loc layouts mapping cond in
            return (iL, iR, iC @ [c], mapping)
       )
       (iL, iR, iC, mapping) fspec.pre_condition
@@ -490,7 +503,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
              apply_ownership_spec layouts "end" var_typs mapping (loc, cond) in
            return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
-           let@ c = resolve_constraint loc mapping cond in
+           let@ c = resolve_constraint loc layouts mapping cond in
            return (oL, oR, oC @ [c], mapping)
       )
       (oL, oR, oC, mapping) fspec.post_condition
@@ -575,7 +588,7 @@ let make_label_spec
              apply_ownership_spec layouts lname var_typs mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
-           let@ c = resolve_constraint loc mapping cond in
+           let@ c = resolve_constraint loc layouts mapping cond in
            return (iL, iR, iC @ [c], mapping)
       )
       (iL, iR, iC, mapping) lspec.invariant

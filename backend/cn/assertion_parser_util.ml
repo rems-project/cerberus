@@ -10,10 +10,6 @@ type token =
   | SLASH
   | POWER
 
-  | PLUSDOT
-  | MINUSDOT
-  | STARDOT
-
   | EQ
   | NE
   | LT
@@ -24,6 +20,13 @@ type token =
   | LPAREN
   | RPAREN
   | COMMA
+
+  | QUESTION
+  | COLON
+
+
+  | MEMBER of string
+
   | POINTERCAST
 
   | AMPERSAND

@@ -66,7 +66,7 @@ module Make (G : sig val global : Global.t end) = struct
     (* think about whether the 'Addr' part is always safe' *)
     let has_symbol_name veclass = 
       let all = SymSet.elements (SymSet.union veclass.c_elements veclass.l_elements) in
-      Option.map (fun s -> Path.Addr s) (List.find_map Sym.name all)
+      Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
 
     let make_name = 
       let faa counter = 
@@ -135,10 +135,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   open VEClass
 
-  open Path
-
-
-  type naming = (Sym.t * Path.t) list
+  type naming = (Sym.t * Ast.path) list
 
   let naming_subst subst names = 
     List.map (fun (sym,p) ->
@@ -149,7 +146,7 @@ module Make (G : sig val global : Global.t end) = struct
     Subst.make_substs naming_subst substs names
 
   let pp_naming = 
-    Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Path.pp p))
+    Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Ast.pp_path true p))
 
   let naming_of_mapping mapping = 
     let open Mapping in
@@ -170,7 +167,7 @@ module Make (G : sig val global : Global.t end) = struct
     | Default
 
   type veclass_explanation = {
-      path : Path.t;
+      path : Ast.path;
       name_kind : name_kind;
       veclass : veclass;
     }
@@ -241,7 +238,7 @@ module Make (G : sig val global : Global.t end) = struct
     let rec aux = function
       | {veclass = named_veclass; path;_} :: named_veclasses ->
          begin match VEClassRelMap.find_opt (named_veclass, veclass) rels with
-         | Some Pointee -> Some (pointee None path)
+         | Some Pointee -> Some (Ast.pointee None path)
          | None -> aux named_veclasses
          end
       | [] -> None         
@@ -287,10 +284,10 @@ module Make (G : sig val global : Global.t end) = struct
                   has_symbol_name veclass,
                   has_derived_name (veclasses_explanation, rels) veclass with
             | Some given_name, o_symbol_name, o_derived_name ->
-               let without_labels = Path.remove_labels given_name in
+               let without_labels = Ast.remove_labels_path given_name in
                let path = 
-                 if Option.equal Path.equal (Some without_labels) (o_symbol_name) ||
-                      Option.equal Path.equal (Some without_labels) (o_derived_name) 
+                 if Option.equal Ast.path_equal (Some without_labels) (o_symbol_name) ||
+                      Option.equal Ast.path_equal (Some without_labels) (o_derived_name) 
                  then without_labels
                  else given_name
                in
@@ -300,7 +297,7 @@ module Make (G : sig val global : Global.t end) = struct
             | None, None, Some derived_name ->
                veclasses_explanation @ [{veclass; path = derived_name; name_kind = Symbol}]
             | None, None, None ->
-               let name = LabeledName.{label = None; v = make_name veclass} in
+               let name = Ast.LabeledName.{label = None; v = make_name veclass} in
                veclasses_explanation @ [{veclass; path = Var name; name_kind = Default}]
           ) [] sorted
       in
@@ -309,7 +306,7 @@ module Make (G : sig val global : Global.t end) = struct
     let substitutions = 
       List.fold_right (fun {veclass;path;_} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
-          let named_symbol = Sym.fresh_named (Pp.plain (Path.pp path)) in
+          let named_symbol = Sym.fresh_named (Pp.plain (Ast.pp_path false path)) in
           SymSet.fold (fun sym substs ->
               Subst.{ before = sym; after = named_symbol } :: substs
             ) to_substitute substs 
@@ -428,7 +425,7 @@ module Make (G : sig val global : Global.t end) = struct
           if (not reported) && relevant then
             match bt with
             | BT.Loc -> 
-               Some (Some (Path.pp c.path), 
+               Some (Some (Ast.pp_path false c.path), 
                      o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)),
                      None, 
                      None, 
@@ -439,7 +436,7 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      None, 
-                     Some (Path.pp c.path), 
+                     Some (Ast.pp_path false c.path), 
                      o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)))
           else
             None)

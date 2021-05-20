@@ -19,22 +19,21 @@ rule main = parse
   | '/'   { T.SLASH }
   | "power"   { T.POWER }
 
-  | "+."   { T.PLUSDOT }
-  | "-."   { T.MINUSDOT }
-  | "*."   { T.STARDOT }
-
   | "=="  { T.EQ }
   | "!="  { T.NE }
   | '<'   { T.LT }
   | '>'   { T.GT }
   | "<="  { T.LE }
   | ">="  { T.GE }
+
+  | "(pointer)"   { T.POINTERCAST }
   
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
   | ','   { T.COMMA }
 
-  | "(pointer)"   { T.POINTERCAST }
+  | '?'   { T.QUESTION }
+  | ':'   { T.COLON }
 
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }
@@ -45,6 +44,8 @@ rule main = parse
   (* names *)
   | ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
       { T.NAME name }
+  | '.' (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as member)
+      { T.MEMBER member }
 
 
   | eof  { T.EOF }

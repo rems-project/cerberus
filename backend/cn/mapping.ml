@@ -1,8 +1,8 @@
 open Pp
 
 type item = {
-    path : Path.t; 
-    it : IndexTerms.t; 
+    path : Ast.Terms.path; 
+    it : IndexTerms.typed; 
   }
 
 type t = item list
@@ -10,7 +10,7 @@ type t = item list
 
 let pp_item {path; it} = 
   Pp.parens (
-      Path.pp path ^^ comma ^^ 
+      Ast.Terms.pp_path true path ^^ comma ^^ 
       IndexTerms.pp it
     )
 

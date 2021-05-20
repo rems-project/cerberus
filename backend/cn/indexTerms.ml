@@ -464,15 +464,15 @@ let pp (it : 'bt term) : PPrint.document =
       | Null -> 
          !^"null"
       | AddPointer (t1, t2) ->
-         mparens (flow (break 1) [aux true t1; plus ^^ dot; aux true t2])
+         mparens (flow (break 1) [aux true t1; plus; aux true t2])
       | SubPointer (t1, t2) ->
-         mparens (flow (break 1) [aux true t1; minus ^^ dot; aux true t2])
+         mparens (flow (break 1) [aux true t1; minus; aux true t2])
       | MulPointer (t1, t2) ->
-         mparens (flow (break 1) [aux true t1; star ^^ dot; aux true t2])
+         mparens (flow (break 1) [aux true t1; star; aux true t2])
       | LTPointer (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle ^^ dot; aux true o2])
+         mparens (flow (break 1) [aux true o1; langle; aux true o2])
       | LEPointer (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle ^^ equals ^^ dot; aux true o2])
+         mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
       | IntegerToPointerCast t ->
          mparens (parens(!^"pointer") ^^ aux true t)
       | PointerToIntegerCast t ->

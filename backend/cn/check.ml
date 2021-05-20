@@ -915,7 +915,7 @@ module Make (G : sig val global : Global.t end) = struct
       let extra_names = 
         List.mapi (fun i arg ->
             let v = "ARG" ^ string_of_int i in
-            (arg.lname, Path.Addr v)
+            (arg.lname, Ast.Addr v)
           ) args
       in
       let open Prompt in
@@ -935,7 +935,7 @@ module Make (G : sig val global : Global.t end) = struct
        inference as the spine judgment. So implement the subtyping
        judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
     let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
-      let extra_names = [(arg.lname, Path.Addr "return")] in
+      let extra_names = [(arg.lname, Ast.Addr "return")] in
       let open Prompt in
       let ui_info = { loc; extra_names; situation = Subtyping; original_local = local } in
       let lt = LT.of_rt rtyp (LT.I False.False) in
@@ -1763,7 +1763,7 @@ module Make (G : sig val global : Global.t end) = struct
            in
            let@ args = args_of_asyms local asyms in
            let extra_names = match args, lkind with
-             | [arg], Return -> [arg.lname, Path.Var {label = None; v = "return"}]
+             | [arg], Return -> [arg.lname, Ast.Var {label = None; v = "return"}]
              | _ -> []
            in
            let@ (False, local) = calltype_lt loc extra_names local args (lt,lkind) in
