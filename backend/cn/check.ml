@@ -184,14 +184,6 @@ module Make (G : sig val global : Global.t end) = struct
             fail loc (Number_arguments {expect = 1; has = List.length pats})
          | M_Carray, _ ->
             Debug_ocaml.error "todo: array types"
-         | M_CivCOMPL, _
-         | M_CivAND, _
-         | M_CivOR, _
-         | M_CivXOR, _
-         | M_Cfvfromint, _
-         | M_Civfromfloat, _
-           ->
-            Debug_ocaml.error "todo: Civ.."
     in
     
     fun (sym, bt) (pat : mu_pattern) ->
@@ -1051,12 +1043,6 @@ module Make (G : sig val global : Global.t end) = struct
          infer_tuple loc (List.map vt_of_arg args)
       | M_Carray, args -> 
          infer_array loc (List.map vt_of_arg args)
-      | M_CivCOMPL, _
-      | M_CivAND, _
-      | M_CivOR, _
-      | M_CivXOR, _ 
-        -> 
-         Debug_ocaml.error "todo: Civ..."
       | M_Cspecified, [arg] ->
          return (vt_of_arg arg)
       | M_Cspecified, _ ->
@@ -1073,10 +1059,6 @@ module Make (G : sig val global : Global.t end) = struct
          return (arg2.bt, list_it)
       | M_Ccons, _ ->
          fail loc (Number_arguments {has = List.length args; expect = 2})
-      | M_Cfvfromint, _ -> 
-         unsupported loc !^"floats"
-      | M_Civfromfloat, _ -> 
-         unsupported loc !^"floats"
 
 
 
@@ -1252,6 +1234,16 @@ module Make (G : sig val global : Global.t end) = struct
            let@ args = args_of_asyms local asyms in
            let@ vt = infer_constructor loc (local, G.global) ctor args in
            return (rt_of_vt vt, local)
+        | M_CivCOMPL _
+          | M_CivAND _
+          | M_CivOR _
+          | M_CivXOR _ 
+          -> 
+           Debug_ocaml.error "todo: Civ..."
+        | M_Cfvfromint _ -> 
+           unsupported loc !^"floats"
+        | M_Civfromfloat _ -> 
+           unsupported loc !^"floats"
         | M_PEarray_shift (asym1, ct, asym2) ->
            let@ vt = infer_array_shift local asym1 ct asym2 in
            return (rt_of_vt vt, local)

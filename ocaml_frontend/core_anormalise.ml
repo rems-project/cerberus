@@ -105,13 +105,13 @@ let core_to_mu__ctor loc ctor : mu_ctor =
   | Core.Ccons -> M_Ccons
   | Core.Ctuple -> M_Ctuple
   | Core.Carray -> M_Carray
-  | Core.CivCOMPL -> M_CivCOMPL
-  | Core.CivAND-> M_CivAND
-  | Core.CivOR -> M_CivOR
-  | Core.CivXOR -> M_CivXOR
   | Core.Cspecified -> M_Cspecified
-  | Core.Cfvfromint-> M_Cfvfromint
-  | Core.Civfromfloat -> M_Civfromfloat
+  | Core.CivCOMPL -> error ("core_anormalisation: CivCOMPL")
+  | Core.CivAND-> error ("core_anormalisation: CivAND")
+  | Core.CivOR -> error ("core_anormalisation: CivOR")
+  | Core.CivXOR -> error ("core_anormalisation: CivXOR")
+  | Core.Cfvfromint-> error ("core_anormalisation: Cfvfromint")
+  | Core.Civfromfloat -> error ("core_anormalisation: Civfromfloat")
   | Core.Civmax -> error ("core_anormalisation: Civmax")
   | Core.Civmin -> error ("core_anormalisation: Civmin")
   | Core.Civsizeof -> error ("core_anormalisation: Civsizeof")
@@ -292,9 +292,50 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
   | PEerror(err, e') ->
      n_pexpr_name loc domain e' (fun e' -> 
      k (annotate (M_PEerror(err, e'))))
-  | PEctor(ctor1, args) ->
-     n_pexpr_names loc domain args (fun args -> 
-     k (annotate (M_PEctor((core_to_mu__ctor loc ctor1), args))))
+  | PEctor(ctor, args) ->
+     begin match ctor, args with
+     | Core.CivCOMPL, [ct; arg1] -> 
+        let ct = fensure_ctype__pexpr loc "CivCOMPL: first argument not a ctype" ct in
+        n_pexpr_name loc domain arg1 (fun arg1 -> 
+        k (annotate (M_CivCOMPL (ct, arg1))))
+     | Core.CivCOMPL, _ -> 
+        error "CivCOMPL applied to wrong number of arguments"
+     | Core.CivAND, [ct; arg1; arg2] -> 
+        let ct = fensure_ctype__pexpr loc "CivAND: first argument not a ctype" ct in
+        n_pexpr_name loc domain arg1 (fun arg1 -> 
+        n_pexpr_name loc domain arg2 (fun arg2 -> 
+        k (annotate (M_CivAND (ct, arg1, arg2)))))
+     | Core.CivAND, _ ->
+        error "CivAND applied to wrong number of arguments"
+     | Core.CivOR, [ct; arg1; arg2] -> 
+        let ct = fensure_ctype__pexpr loc "CivOR: first argument not a ctype" ct in
+        n_pexpr_name loc domain arg1 (fun arg1 -> 
+        n_pexpr_name loc domain arg2 (fun arg2 -> 
+        k (annotate (M_CivOR (ct, arg1, arg2)))))
+     | Core.CivOR, _ ->
+        error "CivOR applied to wrong number of arguments"
+     | Core.CivXOR, [ct; arg1; arg2] -> 
+        let ct = fensure_ctype__pexpr loc "CivXOR: first argument not a ctype" ct in
+        n_pexpr_name loc domain arg1 (fun arg1 -> 
+        n_pexpr_name loc domain arg2 (fun arg2 -> 
+        k (annotate (M_CivXOR (ct, arg1, arg2)))))
+     | Core.CivXOR, _ ->
+        error "CivXOR applied to wrong number of arguments"
+     | Core.Cfvfromint, [arg1] -> 
+        n_pexpr_name loc domain arg1 (fun arg1 -> 
+        k (annotate (M_Cfvfromint arg1)))
+     | Core.Cfvfromint, _ ->
+        error "Cfvfromint applied to wrong number of arguments"
+     | Core.Civfromfloat, [ct; arg1] -> 
+        let ct = fensure_ctype__pexpr loc "Civfromfloat: first argument not a ctype" ct in
+        n_pexpr_name loc domain arg1 (fun arg1 -> 
+        k (annotate (M_Civfromfloat(ct, arg1))))
+     | Core.Civfromfloat, _ ->
+        error "Civfromfloat applied to wrong number of arguments"
+     | _ ->
+        n_pexpr_names loc domain args (fun args -> 
+        k (annotate (M_PEctor((core_to_mu__ctor loc ctor), args))))
+     end
   | PEcase(e', pats_pes) ->
      n_pexpr_name loc domain e' (fun e' -> 
         let pats_es = 

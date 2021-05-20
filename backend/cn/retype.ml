@@ -91,13 +91,7 @@ let retype_ctor (loc : Loc.t) (ctor : Old.mu_ctor) : (New.mu_ctor, type_error) m
   | Old.M_Ccons -> return New.M_Ccons
   | Old.M_Ctuple -> return New.M_Ctuple
   | Old.M_Carray -> return New.M_Carray
-  | Old.M_CivCOMPL -> return New.M_CivCOMPL
-  | Old.M_CivAND -> return New.M_CivAND
-  | Old.M_CivOR -> return New.M_CivOR
-  | Old.M_CivXOR -> return New.M_CivXOR
   | Old.M_Cspecified -> return New.M_Cspecified
-  | Old.M_Cfvfromint -> return New.M_Cfvfromint
-  | Old.M_Civfromfloat -> return New.M_Civfromfloat
 
 
 let rec retype_pattern (pattern : Old.mu_pattern) : (New.mu_pattern, type_error) m =
@@ -178,6 +172,23 @@ let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEctor (ctor,asyms) -> 
        let@ ctor = retype_ctor loc ctor in
        return (New.M_PEctor (ctor,asyms))
+    | M_CivCOMPL (act, asym) -> 
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_CivCOMPL (act, asym))
+    | M_CivAND (act, asym1, asym2) -> 
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_CivAND (act, asym1, asym2))
+    | M_CivOR (act, asym1, asym2) -> 
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_CivOR (act, asym1, asym2))
+    | M_CivXOR (act, asym1, asym2) -> 
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_CivXOR (act, asym1, asym2))
+    | M_Cfvfromint asym -> 
+       return (New.M_Cfvfromint asym)
+    | M_Civfromfloat (act, asym) -> 
+       let@ act = mapM_act (ct_of_ct loc) act in
+       return (New.M_Civfromfloat (act, asym))
     | M_PEarray_shift (asym,ct,asym') ->
        let@ ict = ct_of_ct loc ct in
        return (New.M_PEarray_shift (asym,ict,asym'))

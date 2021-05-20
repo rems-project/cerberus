@@ -355,20 +355,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         !^ "Tuple"
     | M_Carray ->
         !^ "Array"
-    | M_CivCOMPL ->
-        !^ "IvCOMPL"
-    | M_CivAND ->
-        !^ "IvAND"
-    | M_CivOR ->
-        !^ "IvOR"
-    | M_CivXOR ->
-        !^ "IvXOR"
     | M_Cspecified ->
         !^ "Specified"
-    | M_Cfvfromint ->
-        !^ "Cfvfromint"
-    | M_Civfromfloat ->
-        !^ "Civfromfloat"
+
 
 
   let rec pp_pattern (M_Pattern (_, _, pat)) =
@@ -392,6 +381,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
   let pp_pexpr (M_Pexpr (loc, annot, _, pe)) =
+    let open PPrint in
     (maybe_print_location loc) ^^
       begin
         match pe with
@@ -416,6 +406,18 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               P.parens (comma_list pp_asym pes)
           | M_PEctor (ctor, pes) ->
               pp_ctor ctor ^^ P.parens (comma_list pp_asym pes)
+          | M_CivCOMPL (ct, p1) ->
+              !^"IvCOMPL" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1])
+          | M_CivAND (ct, p1, p2) ->
+              !^"IvAND" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1; pp_asym p2])
+          | M_CivOR (ct, p1, p2) ->
+              !^"IvOR" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1; pp_asym p2])
+          | M_CivXOR (ct, p1, p2) ->
+              !^"IvXOR" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1; pp_asym p2])
+          | M_Cfvfromint p1 ->
+              !^"Cfvfromint" ^^ P.parens (pp_asym p1)
+          | M_Civfromfloat (ct, p1) ->
+              !^"Civfromfloat" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1])
           | M_PEarray_shift (pe1, ty, pe2) ->
               pp_keyword "array_shift" ^^ P.parens (
                 pp_asym pe1 ^^ P.comma ^^^ pp_ct ty ^^ P.comma ^^^ pp_asym pe2

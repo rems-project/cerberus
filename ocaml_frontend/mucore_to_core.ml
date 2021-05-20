@@ -66,8 +66,8 @@ let make_symbol_pexpr asym : ('bty, symbol) Core.generic_pexpr=
   let (_loc, annots, bty, sym) = asym_unpack asym in
    (Core.Pexpr( annots, bty, (Core.PEsym sym)))
 
-let make_ctype_pexpr asym : ('bty, symbol) Core.generic_pexpr=
-  let (_, annots, bty, ctype) = act_unpack asym in
+let make_ctype_pexpr act : ('bty, symbol) Core.generic_pexpr=
+  let (_, annots, bty, ctype) = act_unpack act in
    (Core.Pexpr (annots, bty, (Core.PEval (Core.Vctype ctype))))
 
 
@@ -111,13 +111,7 @@ let mu_to_core__ctor:mu_ctor ->Core.generic_ctor=  ((function
  | M_Ccons -> Core.Ccons
  | M_Ctuple -> Core.Ctuple
  | M_Carray -> Core.Carray
- | M_CivCOMPL -> Core.CivCOMPL
- | M_CivAND-> Core.CivAND
- | M_CivOR -> Core.CivOR
- | M_CivXOR -> Core.CivXOR
  | M_Cspecified -> Core.Cspecified
- | M_Cfvfromint-> Core.Cfvfromint
- | M_Civfromfloat -> Core.Civfromfloat
 ))
 
 
@@ -152,6 +146,32 @@ let mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
      wrap (Core.PEctor( 
              (mu_to_core__ctor ctor1),
              (map (get_pexpr "PEctor" env1) pes)))
+  | M_CivCOMPL (act, p1) -> 
+     let ct = make_ctype_pexpr act in
+     let p1 = get_pexpr "M_CivCOMPL" env1 p1 in
+     wrap (Core.PEctor(Core.CivCOMPL, [ct; p1]))
+  | M_CivAND (act, p1, p2) -> 
+     let ct = make_ctype_pexpr act in
+     let p1 = get_pexpr "M_CivAND" env1 p1 in
+     let p2 = get_pexpr "M_CivAND" env1 p2 in
+     wrap (Core.PEctor(Core.CivAND, [ct; p1; p2]))
+  | M_CivOR (act, p1, p2) -> 
+     let ct = make_ctype_pexpr act in
+     let p1 = get_pexpr "M_CivOR" env1 p1 in
+     let p2 = get_pexpr "M_CivOR" env1 p2 in
+     wrap (Core.PEctor(Core.CivOR, [ct; p1; p2]))
+  | M_CivXOR (act, p1, p2) -> 
+     let ct = make_ctype_pexpr act in
+     let p1 = get_pexpr "M_CivXOR" env1 p1 in
+     let p2 = get_pexpr "M_CivXOR" env1 p2 in
+     wrap (Core.PEctor(Core.CivXOR, [ct; p1; p2]))
+  | M_Cfvfromint p1 -> 
+     let p1 = get_pexpr "M_Cfvfromint" env1 p1 in
+     wrap (Core.PEctor(Core.CivXOR, [p1]))
+  | M_Civfromfloat (act, p1) -> 
+     let ct = make_ctype_pexpr act in
+     let p1 = get_pexpr "M_Civfromfloat" env1 p1 in
+     wrap (Core.PEctor(Core.CivXOR, [ct; p1]))
   | M_PEarray_shift( pe1, ctype1, pe2) ->
      wrap (Core.PEarray_shift( 
              (get_pexpr "PEarray_shift" env1 pe1), 
