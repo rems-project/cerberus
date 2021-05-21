@@ -8,8 +8,8 @@ open Assertion_parser_util
 %token <string> NAME
 %token <string> MEMBER
 
-%token OWNED
-%token BLOCK
+/* %token OWNED */
+/* %token BLOCK */
 
 %token PLUS
 %token MINUS
@@ -43,7 +43,7 @@ open Assertion_parser_util
 %left STAR SLASH
 /* %nonassoc POWER */
 /* %nonassoc POINTERCAST */
-/* %left MEMBER */
+%nonassoc MEMBER
 
 %type <Ast.term>term
 %type <Ast.condition>cond
@@ -66,31 +66,20 @@ labeled_name:
 
 
 
-path:
+atomic_term:
+  | LPAREN t= term RPAREN
+      { t }
+  | z=Z
+      { Ast.Integer z }
+  | a1=atomic_term member=MEMBER
+/* taking the location-handling aspect from c_parser.mly */
+      { Ast.Member (a1, Id.parse (Location_ocaml.region ($startpos, $endpos) (Some $startpos(member))) member) }
   | AMPERSAND id=NAME
       { Ast.Addr id }
   | ln=labeled_name
       { Ast.Var ln }
-  | STAR p=path
+  | STAR p=atomic_term
       { Ast.Pointee p }
-  | LPAREN a1=path RPAREN member=MEMBER
-      /* taking the location-handling aspect from c_parser.mly */
-      { Ast.Member (a1, Id.parse (Location_ocaml.region ($startpos, $endpos) (Some $startpos(member))) member) }
-
-
-
-
-
-atomic_term:
-  | p=path
-      { Ast.Path p }
-  | z=Z
-      { Ast.Integer z }
-  | t=delimited(LPAREN, term, RPAREN)
-      { t }
-  | a1=atomic_term member=MEMBER
-/* taking the location-handling aspect from c_parser.mly */
-      { Ast.StructMember (a1, Id.parse (Location_ocaml.region ($startpos, $endpos) (Some $startpos(member))) member) }
 
 arith_term:
   | a1=arith_or_atomic_term PLUS a2=arith_or_atomic_term
@@ -105,10 +94,10 @@ arith_term:
       { Ast.Exponentiation (a1, a2) }
 
 arith_or_atomic_term:
-  | a1=arith_term
-      { a1 }
-  | a1=atomic_term
-      { a1 }
+  | a=arith_term
+      { a }
+  | a=atomic_term
+      { a }
 
 term:
   | t=arith_or_atomic_term
@@ -131,12 +120,8 @@ term:
       { Ast.IntegerToPointerCast a1 }
 
 resource_condition:
-  | OWNED LPAREN p=path RPAREN
-      { Ast.Owned p }
-  | BLOCK LPAREN p=path RPAREN
-      { Ast.Block p }
   | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
-      { Ast.Predicate {predicate=id; arguments = args} }
+      { Ast.{predicate=id; arguments = args} }
 
 
 cond:

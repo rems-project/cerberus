@@ -27,16 +27,13 @@ end
 
 module Terms = struct
 
-  type path = 
+  type term = 
     | Addr of string
     | Var of LabeledName.t
-    | Pointee of path
+    | Pointee of term
     | PredArg of string * term list * string
-    | Member of path * Id.t
-
-  and term = 
+    | Member of term * Id.t
     | Integer of Z.t
-    | Path of path
     | Addition of term * term
     | Subtraction of term * term
     | Multiplication of term * term
@@ -49,39 +46,24 @@ module Terms = struct
     | LessOrEqual of term * term
     | GreaterThan of term * term
     | GreaterOrEqual of term * term
-    | StructMember of term * Id.t
     | IntegerToPointerCast of term
 
 
 
-  let rec path_equal p1 p2 =
-    match p1, p2 with
+  let rec term_equal t1 t2 =
+    match t1, t2 with
     | Addr b1, Addr b2 ->
        String.equal b1 b2
     | Var b1, Var b2 -> 
        LabeledName.equal b1 b2
     | Pointee p1, Pointee p2 ->
-       path_equal p1 p2
+       term_equal p1 p2
     | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
        String.equal p1 p2 && List.equal term_equal t1 t2 && String.equal a1 a2
     | Member (t1, m1), Member (t2, m2) ->
-       path_equal t1 t2 && Id.equal m1 m2
-    | Addr _, _ -> 
-       false
-    | Var _, _ ->
-       false
-    | Pointee _, _ ->
-       false
-    | PredArg _, _ ->
-       false
-    | Member _, _ ->
-       false
-  
-
-  and term_equal t1 t2 =
-    match t1, t2 with
-    | Integer i1, Integer i2 -> Z.equal i1 i2
-    | Path p1, Path p2 -> path_equal p1 p2
+       term_equal t1 t2 && Id.equal m1 m2
+    | Integer i1, Integer i2 -> 
+       Z.equal i1 i2
     | Addition (a11,a12), Addition (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
     | Subtraction (a11,a12), Subtraction (a21,a22) ->
@@ -106,13 +88,19 @@ module Terms = struct
        term_equal a11 a21 && term_equal a12 a22
     | GreaterOrEqual (a11,a12), GreaterOrEqual (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
-    | StructMember (t1, m1), StructMember (t2, m2) ->
-       term_equal t1 t2 && Id.equal m1 m2
     | IntegerToPointerCast t1, IntegerToPointerCast t2 ->
        term_equal t1 t2
-    | Integer _, _ -> 
+    | Addr _, _ -> 
        false
-    | Path _, _ -> 
+    | Var _, _ ->
+       false
+    | Pointee _, _ ->
+       false
+    | PredArg _, _ ->
+       false
+    | Member _, _ ->
+       false
+    | Integer _, _ -> 
        false
     | Addition _, _ -> 
        false
@@ -138,8 +126,6 @@ module Terms = struct
        false
     | GreaterOrEqual _, _ ->
        false
-    | StructMember _, _ -> 
-       false
     | IntegerToPointerCast _, _ ->
        false
 
@@ -147,19 +133,19 @@ module Terms = struct
   let mparens atomic pp = 
     if atomic then parens pp else pp
 
-  let rec pp_path _atomic = function
-    | Addr b -> ampersand ^^ !^b
-    | Var b -> LabeledName.pp b
-    | Pointee p -> star ^^ (pp_path true p)
-    | PredArg (p,t,a) -> !^p ^^ parens (separate_map comma (pp_term false) t) ^^ dot ^^ !^a
-    | Member (p, m) -> pp_path true p ^^ dot ^^ Id.pp m
-
-
-  and pp_term atomic = function
+  let rec pp_term atomic = function
+    | Addr b -> 
+       ampersand ^^ !^b
+    | Var b -> 
+       LabeledName.pp b
+    | Pointee p -> 
+       star ^^ (pp_term true p)
+    | PredArg (p,t,a) -> 
+       !^p ^^ parens (separate_map comma (pp_term false) t) ^^ dot ^^ !^a
+    | Member (p, m) -> 
+       pp_term true p ^^ dot ^^ Id.pp m
     | Integer z -> 
        Z.pp z
-    | Path p -> 
-       pp_path atomic p
     | Addition (t1, t2) -> 
        mparens atomic (pp_term true t1 ^^^ plus ^^^ pp_term true t2)
     | Subtraction (t1, t2) -> 
@@ -185,8 +171,6 @@ module Terms = struct
           mparens atomic (pp_term true t1 ^^^ !^">" ^^^ pp_term true t2)
     | GreaterOrEqual (t1, t2) -> 
        mparens atomic (pp_term true t1 ^^^ !^">=" ^^^ pp_term true t2)
-    | StructMember (t1, m1) -> 
-       pp_term true t1 ^^ dot ^^ Id.pp m1
     | IntegerToPointerCast t1 ->
        mparens atomic (parens !^"pointer" ^^ (pp_term true t1))
 
@@ -200,27 +184,25 @@ module Terms = struct
 
   let pointee olabel = function
     | Addr bn -> Var {label = olabel; v = bn}
-    | Var bn -> Pointee (Var bn)
-    | Pointee p -> Pointee (Pointee p)
-    | PredArg (pr,p,a) -> Pointee (PredArg (pr,p,a))
-    | Member (t, m) -> Pointee (Member (t, m))
+    | t -> Pointee t
 
   let predarg pr (ps : term list) a =
     PredArg (pr,ps,a)
 
-  let rec map_labels_path f = function
-    | Addr bn -> Addr bn
-    | Var bn -> Var (LabeledName.map_label f bn)
-    | Pointee p -> Pointee (map_labels_path f p)
-    | PredArg (pr,p,a) -> PredArg (pr, List.map (map_labels_term f) p, a)
-    | Member (p, m) -> Member (map_labels_path f p, m)
-
-  and map_labels_term f t = 
+  let rec map_labels_term f t = 
     let rec aux = function
+      | Addr bn -> 
+         Addr bn
+      | Var bn -> 
+         Var (LabeledName.map_label f bn)
+      | Pointee p -> 
+         Pointee (map_labels_term f p)
+      | PredArg (pr,p,a) -> 
+         PredArg (pr, List.map (map_labels_term f) p, a)
+      | Member (p, m) -> 
+         Member (map_labels_term f p, m)
       | Integer i -> 
          Integer i
-      | Path path -> 
-         Path (map_labels_path f path)
       | Addition (t1, t2) -> 
          Addition (aux t1, aux t2)
       | Subtraction (t1, t2) -> 
@@ -245,15 +227,13 @@ module Terms = struct
          GreaterThan (aux t1, aux t2)
       | GreaterOrEqual (t1, t2) -> 
          GreaterOrEqual (aux t1, aux t2)
-      | StructMember (t, member) ->
-         StructMember (aux t, member)
       | IntegerToPointerCast t ->
          IntegerToPointerCast (aux t)
     in
     aux t
   
 
-  let remove_labels_path = map_labels_path (fun _ -> None)
+  let remove_labels_term = map_labels_term (fun _ -> None)
 
 
 
@@ -264,15 +244,12 @@ include Terms
 
 
 
-type predicate = {
+
+
+type resource_condition = {
     predicate : string;
     arguments : term list;
   }
-
-type resource_condition = 
-  | Predicate of predicate
-  | Owned of path
-  | Block of path
 
 type logical_condition = term
 
@@ -284,18 +261,9 @@ type condition =
 let map_labels f = function
   | Logical cond -> 
      Logical (map_labels_term f cond)
-  | Resource resource_condition ->
-     let resource_condition = 
-       match resource_condition with
-       | Predicate {predicate; arguments} ->
-          let arguments = List.map (map_labels_term f) arguments in
-          Predicate { predicate; arguments }
-       | Owned path ->
-          Owned (map_labels_path f path)
-       | Block path ->
-          Block (map_labels_path f path)
-     in
-     Resource resource_condition
+  | Resource {predicate; arguments} ->
+     let arguments = List.map (map_labels_term f) arguments in
+     Resource { predicate; arguments }
     
 
 type varg = { name : string; vsym : Sym.t; typ : Sctypes.t }
