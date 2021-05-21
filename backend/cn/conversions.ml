@@ -139,10 +139,15 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
      let pointee_bt = BT.of_sct sct in
      let pointee_t = sym_ (pointee, pointee_bt) in
      let l = [(pointee, pointee_bt)] in
-     let mapping = [{path = Ast.pointee (Some label) path; it = pointee_t}] in
+     let mapping = {
+         path = Ast.pointee (Some label) path; 
+         it = pointee_t;
+         o_sct = Some sct;
+       } 
+     in
      let c = [good_value pointee_t sct] in
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
-     return (l, r, c, mapping)
+     return (l, r, c, [mapping])
 
 
 
@@ -175,7 +180,9 @@ let make_pred loc pred (predargs : Ast.term list) pointer iargs =
           | Some name -> 
              let item = 
                {path = Ast.predarg pred predargs name; 
-                it = sym_ (s, bt)} 
+                it = sym_ (s, bt);
+                o_sct = None;
+               } 
              in
              item :: mapping 
           | None -> []
@@ -200,178 +207,203 @@ let make_pred loc pred (predargs : Ast.term list) pointer iargs =
 
 
 
-let rec deref_path_pp name deref = 
-  match deref with
-  | 0 -> !^name
-  | n -> star ^^ deref_path_pp name (n - 1)
-
-let rec type_of__var loc typ name derefs = 
-  match derefs with
-  | 0 -> return typ
-  | n ->
-     let@ (Sctype (_, typ2_)) = type_of__var loc typ name (n - 1) in
-     match typ2_ with
-     | Pointer (_qualifiers, typ3) -> return typ3
-     | _ -> fail loc (Generic (deref_path_pp name n ^^^ !^"is not a pointer"))
-
-let type_of__vars loc var_typs name derefs = 
-  match List.assoc_opt String.equal name var_typs with
-  | None -> fail loc (Unbound_name (String name))
-  | Some typ -> type_of__var loc typ name derefs
+(* let rec deref_path = function
+ *     | Addr _ -> 
+ *        None
+ *     | Var bn -> 
+ *        Some (bn, 0)
+ *     | Pointee p -> 
+ *        Option.bind (deref_path p) (fun (bn, pp) -> Some (bn, pp+1))
+ *     | PredArg _ -> 
+ *        None
+ * 
+ * 
+ * 
+ * let rec deref_path_pp name deref = 
+ *   match deref with
+ *   | 0 -> !^name
+ *   | n -> star ^^ deref_path_pp name (n - 1)
+ * 
+ * let rec type_of__var loc typ name derefs = 
+ *   match derefs with
+ *   | 0 -> return typ
+ *   | n ->
+ *      let@ (Sctype (_, typ2_)) = type_of__var loc typ name (n - 1) in
+ *      match typ2_ with
+ *      | Pointer (_qualifiers, typ3) -> return typ3
+ *      | _ -> fail loc (Generic (deref_path_pp name n ^^^ !^"is not a pointer"))
+ * 
+ * let type_of__vars loc var_typs name derefs = 
+ *   match List.assoc_opt String.equal name var_typs with
+ *   | None -> fail loc (Unbound_name (String name))
+ *   | Some typ -> type_of__var loc typ name derefs *)
   
 
 
 
 
-let resolve_path loc layouts (mapping : mapping) (o : Ast.path) : (IT.typed, type_error) m = 
+let resolve_member loc layouts mapping ppf (st : BT.t IT.term) member =
+  let@ tag = match IT.bt st with
+    | Struct tag -> return tag
+    | _ -> fail loc (Generic (ppf () ^^^ !^"is not a struct"))
+  in
+  let layout = layouts tag in
+  let decl_members = Memory.member_types layout in
+  let@ sct = match List.assoc_opt Id.equal member decl_members with
+    | Some sct -> 
+       return sct
+    | None -> 
+       let err = 
+         !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+           ppf () ^^^ !^"does not have member" ^^^ Id.pp member
+       in
+       fail loc (Generic err)
+  in
+  return (IT (Struct_op (StructMember (tag, st, member)), BT.of_sct sct), Some sct)
+
+
+let rec resolve_path loc layouts (mapping : mapping) (o : Ast.path) : (IT.typed * Sctypes.t option, type_error) m = 
   let open Mapping in
   (* let () = print stderr (item "o" (Ast.pp_path false o)) in
    * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
-  let found = List.find_opt (fun {path;_} -> Ast.path_equal path o) mapping in
-  match found with
-  | Some {it; _} -> 
-     return it
-  | None -> 
-     fail loc (Generic (!^"term" ^^^ Ast.pp_path false o ^^^ !^"does not apply"))
-
+  match o with
+    | Member (p, m) ->
+       let@ (pr,_) = resolve_path loc layouts mapping p in
+       resolve_member loc layouts mapping (fun () -> pp_path false p) pr m
+    | _ ->
+       let found = List.find_opt (fun {path;_} -> Ast.path_equal path o) mapping  in
+       match found with
+       | Some {it; o_sct; _} -> 
+          return (it, o_sct)
+       | None -> 
+          fail loc (Generic (!^"term" ^^^ Ast.pp_path false o ^^^ !^"does not apply"))
 
 
 (* change this to return unit IT.term, then apply index term type
    checker *)
 let rec resolve_index_term loc layouts mapping (term: Ast.term) 
-        : (IT.typed, type_error) m =
-  let aux = resolve_index_term loc layouts mapping in
+        : (IT.typed * Sctypes.t option, type_error) m =
+  let aux it = 
+    let@ (it, _) = resolve_index_term loc layouts mapping it in
+    return it
+  in
   match term with
   | Integer i -> 
-     return (IT (Lit (IT.Z i), BT.Integer))
+     return (IT (Lit (IT.Z i), BT.Integer), None)
   | Path o -> 
      resolve_path loc layouts mapping o
   | Addition (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     begin match IT.bt it with
-     | Loc -> return (IT (Pointer_op (AddPointer (it, it')), Loc))
-     | _ -> return (IT (Arith_op (Add (it, it')), IT.bt it))
-     end
+     let t = match IT.bt it with
+       | Loc -> IT (Pointer_op (AddPointer (it, it')), Loc)
+       | _ -> IT (Arith_op (Add (it, it')), IT.bt it)
+     in
+     return (t, None)
   | Subtraction (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     begin match IT.bt it with
-     | Loc -> return (IT (Pointer_op (SubPointer (it, it')), Loc))
-     | _ -> return (IT (Arith_op (Sub (it, it')), IT.bt it))
-     end
+     let t = match IT.bt it with
+       | Loc -> IT (Pointer_op (SubPointer (it, it')), Loc)
+       | _ -> IT (Arith_op (Sub (it, it')), IT.bt it)
+     in
+     return (t, None)
   | Multiplication (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     begin match IT.bt it with
-     | Loc -> return (IT (Pointer_op (MulPointer (it, it')), Loc))
-     | _ -> return (IT (Arith_op (Mul (it, it')), IT.bt it))
-     end
+     let t = match IT.bt it with
+     | Loc -> IT (Pointer_op (MulPointer (it, it')), Loc)
+     | _ -> IT (Arith_op (Mul (it, it')), IT.bt it)
+     in
+     return (t, None)
   | Division (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Arith_op (Div (it, it')), IT.bt it))
+     return (IT (Arith_op (Div (it, it')), IT.bt it), None)
   | Exponentiation (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Arith_op (Exp (it, it')), IT.bt it))
+     return (IT (Arith_op (Exp (it, it')), IT.bt it), None)
   | Equality (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Bool_op (EQ (it, it')), Bool))
+     return (IT (Bool_op (EQ (it, it')), Bool), None)
   | Inequality (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), Bool))), Bool))
+     return (IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), Bool))), Bool), None)
   | ITE (it', it'', it''') ->
      let@ it' = aux it' in
      let@ it'' = aux it'' in
      let@ it''' = aux it''' in
-     return (IT (Bool_op (ITE (it', it'', it''')), IT.bt it''))
+     return (IT (Bool_op (ITE (it', it'', it''')), IT.bt it''), None)
   | LessThan (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Cmp_op (LT (it, it')), Bool))
+     return (IT (Cmp_op (LT (it, it')), Bool), None)
   | GreaterThan (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Cmp_op (LT (it', it)), Bool))
+     return (IT (Cmp_op (LT (it', it)), Bool), None)
   | LessOrEqual (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Cmp_op (LE (it, it')), Bool))
+     return (IT (Cmp_op (LE (it, it')), Bool), None)
   | GreaterOrEqual (it, it') -> 
      let@ it = aux it in
      let@ it' = aux it' in
-     return (IT (Cmp_op (LE (it', it)), Bool))
+     return (IT (Cmp_op (LE (it', it)), Bool), None)
   | StructMember (t, member) ->
      let@ st = aux t in
-     let@ tag = match IT.bt st with
-       | Struct tag -> return tag
-       | _ -> fail loc (Generic (Ast.pp_term false term ^^^ !^"is not a struct"))
-     in
-     let layout = layouts tag in
-     let decl_members = Memory.member_types layout in
-     let@ bt = match List.assoc_opt Id.equal member decl_members with
-       | Some sct -> 
-          return (BT.of_sct sct)
-       | None -> 
-          let err = 
-            !^"Illtyped index term" ^^^ pp_term false term ^^ dot ^^^
-              pp_term false t ^^^ !^"does not have member" ^^^ Id.pp member
-          in
-          fail loc (Generic err)
-     in
-     return (IT (Struct_op (StructMember (tag, st, member)), bt))
+     resolve_member loc layouts mapping 
+       (fun () -> Ast.pp_term false term) st member
   | IntegerToPointerCast t ->
      let@ t = aux t in
-     return (IT (Pointer_op (IntegerToPointerCast t), Loc))
+     return (IT (Pointer_op (IntegerToPointerCast t), Loc), None)
      
 
 
-let resolve_constraint loc mapping lc = 
-  resolve_index_term loc mapping lc
+let resolve_constraint loc layouts mapping lc = 
+  let@ (lc, _) = resolve_index_term loc layouts mapping lc in
+  return lc
 
 
 
 
-let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;arguments}) =
+let apply_ownership_spec layouts label var_typs mapping (loc, spec) =
+  match spec with
+  | Owned path ->
+     let@ (it, sct) = resolve_path loc layouts mapping path in
+     begin match sct with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
+     | Some Sctype (_, Pointer (_, sct2)) ->
+        make_owned loc layouts label it path sct2
+     | Some _ ->
+        fail loc (Generic (Ast.pp_path false path ^^^ !^"is not a pointer"))       
+     end
+  | Block path ->
+     let@ (it, sct) = resolve_path loc layouts mapping path in
+     begin match sct with
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
+     | Some (Sctype (_, Pointer (_, sct2))) -> 
+        make_block loc layouts it path sct2
+     | Some _ ->
+        fail loc (Generic (Ast.pp_path false path ^^^ !^"is not a pointer"))       
+     end
+  | Predicate {predicate;arguments} ->
   match predicate, arguments with
-  | "Owned", [Path path] ->
-     begin match Ast.deref_path path with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
-     | Some (bn, derefs) -> 
-        let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ it = resolve_path loc layouts mapping path in
-        match sct with
-        | Sctype (_, Pointer (_, sct2)) ->
-           make_owned loc layouts label it (Ast.var bn) sct2
-        | _ ->
-          fail loc (Generic (Ast.pp_path false path ^^^ !^"is not a pointer"))       
-     end
-  | "Owned", _ ->
-     fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
-
-  | "Block", [Path path] ->
-     begin match Ast.deref_path path with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_path false path)))
-     | Some (bn, derefs) -> 
-        let@ sct = type_of__vars loc var_typs bn.v derefs in
-        let@ it = resolve_path loc layouts mapping path in
-        match sct with
-        | Sctype (_, Pointer (_, sct2)) ->
-           make_block loc layouts it (Ast.var bn) sct2
-        | _ ->
-          fail loc (Generic (Ast.pp_path false path ^^^ !^"is not a pointer"))       
-     end
-  | "Block", _ ->
-     fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
-
-
+  (* | "Owned", [path] ->
+   * | "Owned", _ ->
+   *    fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
+   * | "Block", _ ->
+   *    fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path") *)
   | _, pointer :: arguments ->
-     let@ pointer_resolved = resolve_index_term loc layouts mapping pointer in
+     let@ (pointer_resolved, _) = resolve_index_term loc layouts mapping pointer in
      let@ iargs_resolved = 
-       ListM.mapM (resolve_index_term loc layouts mapping) arguments
+       ListM.mapM (fun arg ->
+           let@ (t, _) = resolve_index_term loc layouts mapping arg in
+           return t
+         ) arguments
      in
      let@ result = make_pred loc predicate arguments pointer_resolved iargs_resolved in
      return result
@@ -382,16 +414,21 @@ let apply_ownership_spec layouts label var_typs mapping (loc, {predicate;argumen
 
 let aarg_item l (aarg : aarg) =
   let path = Ast.addr aarg.name in
-  {path; it = sym_ (aarg.asym, BT.Loc)}
+  {path; 
+   it = sym_ (aarg.asym, BT.Loc); 
+   o_sct = Some (Sctypes.pointer_sct aarg.typ) }
 
 let varg_item l (varg : varg) =
   let bn = {v = varg.name; label = Some l} in
   let path = Ast.var bn in
-  {path; it = sym_ (varg.vsym, BT.of_sct varg.typ)} 
+  {path; 
+   it = sym_ (varg.vsym, BT.of_sct varg.typ);
+   o_sct = Some varg.typ} 
 
 let garg_item l (garg : garg) =
   let path = Ast.addr garg.name in
-  {path; it = sym_ (garg.lsym, BT.Loc) } 
+  {path; it = sym_ (garg.lsym, BT.Loc);
+   o_sct = Some (Sctypes.pointer_sct garg.typ) } 
 
 
 let make_fun_spec loc layouts fsym (fspec : function_spec)

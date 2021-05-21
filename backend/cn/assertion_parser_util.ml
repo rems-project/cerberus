@@ -3,6 +3,8 @@
 type token =
   | Z of Z.t
   | NAME of string
+  | OWNED
+  | BLOCK
 
   | PLUS
   | MINUS

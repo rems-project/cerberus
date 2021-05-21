@@ -8,6 +8,9 @@ open Assertion_parser_util
 %token <string> NAME
 %token <string> MEMBER
 
+%token OWNED
+%token BLOCK
+
 %token PLUS
 %token MINUS
 %token STAR
@@ -70,14 +73,12 @@ path:
       { Ast.Var ln }
   | STAR p=path
       { Ast.Pointee p }
+  | LPAREN a1=path RPAREN member=MEMBER
+      /* taking the location-handling aspect from c_parser.mly */
+      { Ast.Member (a1, Id.parse (Location_ocaml.region ($startpos, $endpos) (Some $startpos(member))) member) }
 
 
 
-
-
-resource_condition:
-  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
-      { Ast.{predicate=id; arguments = args} }
 
 
 atomic_term:
@@ -128,6 +129,15 @@ term:
       { Ast.ITE (a1, a2, a3) }
   | POINTERCAST a1=atomic_term
       { Ast.IntegerToPointerCast a1 }
+
+resource_condition:
+  | OWNED LPAREN p=path RPAREN
+      { Ast.Owned p }
+  | BLOCK LPAREN p=path RPAREN
+      { Ast.Block p }
+  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
+      { Ast.Predicate {predicate=id; arguments = args} }
+
 
 cond:
   | c=term

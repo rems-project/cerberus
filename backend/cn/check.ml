@@ -1472,20 +1472,28 @@ module Make (G : sig val global : Global.t end) = struct
            infer_pexpr local pe
         | M_Ememop memop ->
            let local = unpack_resources local in
+           let pointer_op op asym1 asym2 = 
+             let@ arg1 = arg_of_asym local asym1 in
+             let@ arg2 = arg_of_asym local asym2 in
+             let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
+             let@ () = ensure_base_type arg2.loc ~expect:Loc arg2.bt in
+             let vt = (Bool, op (it_of_arg arg1, it_of_arg arg2)) in
+             return (rt_of_vt vt, local)
+           in
            begin match memop with
-           | M_PtrEq _ ->
-              Debug_ocaml.error "todo: M_PtrEq"
-           | M_PtrNe _ ->
-              Debug_ocaml.error "todo: M_PtrNe"
-           | M_PtrLt _ ->
-              Debug_ocaml.error "todo: M_PtrLt"
-           | M_PtrGt _ ->
-              Debug_ocaml.error "todo: M_PtrGt"
-           | M_PtrLe _ ->
-              Debug_ocaml.error "todo: M_PtrLe"
-           | M_PtrGe _ ->
-              Debug_ocaml.error "todo: M_PtrGe"
-           | M_Ptrdiff _ ->
+           | M_PtrEq (asym1, asym2) -> 
+              pointer_op eq_ asym1 asym2
+           | M_PtrNe (asym1, asym2) -> 
+              pointer_op ne_ asym1 asym2
+           | M_PtrLt (asym1, asym2) -> 
+              pointer_op ltPointer_ asym1 asym2
+           | M_PtrGt (asym1, asym2) -> 
+              pointer_op gtPointer_ asym1 asym2
+           | M_PtrLe (asym1, asym2) -> 
+              pointer_op lePointer_ asym1 asym2
+           | M_PtrGe (asym1, asym2) -> 
+              pointer_op gePointer_ asym1 asym2
+           | M_Ptrdiff (act, asym1, asym2) -> 
               Debug_ocaml.error "todo: M_Ptrdiff"
            | M_IntFromPtr (act_from, act2_to, asym) ->
               let@ arg = arg_of_asym local asym in

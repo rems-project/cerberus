@@ -41,6 +41,9 @@ rule main = parse
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 
 
+  | "Owned" { T.OWNED }
+  | "Block" { T.BLOCK }
+
   (* names *)
   | ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
       { T.NAME name }

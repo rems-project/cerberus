@@ -32,6 +32,7 @@ module Terms = struct
     | Var of LabeledName.t
     | Pointee of path
     | PredArg of string * term list * string
+    | Member of path * Id.t
 
   and term = 
     | Integer of Z.t
@@ -63,6 +64,8 @@ module Terms = struct
        path_equal p1 p2
     | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
        String.equal p1 p2 && List.equal term_equal t1 t2 && String.equal a1 a2
+    | Member (t1, m1), Member (t2, m2) ->
+       path_equal t1 t2 && Id.equal m1 m2
     | Addr _, _ -> 
        false
     | Var _, _ ->
@@ -70,6 +73,8 @@ module Terms = struct
     | Pointee _, _ ->
        false
     | PredArg _, _ ->
+       false
+    | Member _, _ ->
        false
   
 
@@ -147,6 +152,7 @@ module Terms = struct
     | Var b -> LabeledName.pp b
     | Pointee p -> star ^^ (pp_path true p)
     | PredArg (p,t,a) -> !^p ^^ parens (separate_map comma (pp_term false) t) ^^ dot ^^ !^a
+    | Member (p, m) -> pp_path true p ^^ dot ^^ Id.pp m
 
 
   and pp_term atomic = function
@@ -197,28 +203,17 @@ module Terms = struct
     | Var bn -> Pointee (Var bn)
     | Pointee p -> Pointee (Pointee p)
     | PredArg (pr,p,a) -> Pointee (PredArg (pr,p,a))
+    | Member (t, m) -> Pointee (Member (t, m))
 
   let predarg pr (ps : term list) a =
     PredArg (pr,ps,a)
-
-  let rec deref_path = function
-    | Addr _ -> 
-       None
-    | Var bn -> 
-       Some (bn, 0)
-    | Pointee p -> 
-       Option.bind (deref_path p) (fun (bn, pp) -> Some (bn, pp+1))
-    | PredArg _ -> 
-       None
-
-
-
 
   let rec map_labels_path f = function
     | Addr bn -> Addr bn
     | Var bn -> Var (LabeledName.map_label f bn)
     | Pointee p -> Pointee (map_labels_path f p)
     | PredArg (pr,p,a) -> PredArg (pr, List.map (map_labels_term f) p, a)
+    | Member (p, m) -> Member (map_labels_path f p, m)
 
   and map_labels_term f t = 
     let rec aux = function
@@ -269,10 +264,15 @@ include Terms
 
 
 
-type resource_condition = {
+type predicate = {
     predicate : string;
     arguments : term list;
   }
+
+type resource_condition = 
+  | Predicate of predicate
+  | Owned of path
+  | Block of path
 
 type logical_condition = term
 
@@ -284,12 +284,18 @@ type condition =
 let map_labels f = function
   | Logical cond -> 
      Logical (map_labels_term f cond)
-  | Resource resource ->
-     let arguments = 
-       List.map (map_labels_term f) 
-         resource.arguments 
+  | Resource resource_condition ->
+     let resource_condition = 
+       match resource_condition with
+       | Predicate {predicate; arguments} ->
+          let arguments = List.map (map_labels_term f) arguments in
+          Predicate { predicate; arguments }
+       | Owned path ->
+          Owned (map_labels_path f path)
+       | Block path ->
+          Block (map_labels_path f path)
      in
-     Resource { resource with arguments }
+     Resource resource_condition
     
 
 type varg = { name : string; vsym : Sym.t; typ : Sctypes.t }

@@ -1010,6 +1010,8 @@ let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)
 let mulPointer_ (it, it') = IT (Pointer_op (MulPointer (it, it')), BT.Loc)
 let ltPointer_ (it, it') = IT (Pointer_op (LTPointer (it, it')), BT.Bool)
 let lePointer_ (it, it') = IT (Pointer_op (LEPointer (it, it')), BT.Bool)
+let gtPointer_ (it, it') = ltPointer_ (it', it)
+let gePointer_ (it, it') = lePointer_ (it', it)
 let disjoint_ ((p1, s1), (p2, s2)) = 
   or_ [lePointer_ (addPointer_ (p1, s1), p2); 
        lePointer_ (addPointer_ (p2, s2), p1)] 

@@ -3,12 +3,13 @@ open Pp
 type item = {
     path : Ast.Terms.path; 
     it : IndexTerms.typed; 
+    o_sct: Sctypes.t option;
   }
 
 type t = item list
 
 
-let pp_item {path; it} = 
+let pp_item {path; it; o_sct} = 
   Pp.parens (
       Ast.Terms.pp_path true path ^^ comma ^^ 
       IndexTerms.pp it
