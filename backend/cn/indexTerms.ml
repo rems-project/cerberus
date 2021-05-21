@@ -1212,8 +1212,8 @@ let rec good_value struct_layouts ct about =
          )
      in
      and_ lcs
-  | Pointer _ -> 
-     good_pointer about ct
+  | Pointer (_, pointee_ct) -> 
+     good_pointer about pointee_ct
   | Struct tag -> 
      let layout = struct_layouts tag in
      and_ begin

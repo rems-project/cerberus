@@ -207,40 +207,6 @@ let make_pred loc pred (predargs : Ast.term list) pointer iargs =
 
 
 
-(* let rec deref_path = function
- *     | Addr _ -> 
- *        None
- *     | Var bn -> 
- *        Some (bn, 0)
- *     | Pointee p -> 
- *        Option.bind (deref_path p) (fun (bn, pp) -> Some (bn, pp+1))
- *     | PredArg _ -> 
- *        None
- * 
- * 
- * 
- * let rec deref_path_pp name deref = 
- *   match deref with
- *   | 0 -> !^name
- *   | n -> star ^^ deref_path_pp name (n - 1)
- * 
- * let rec type_of__var loc typ name derefs = 
- *   match derefs with
- *   | 0 -> return typ
- *   | n ->
- *      let@ (Sctype (_, typ2_)) = type_of__var loc typ name (n - 1) in
- *      match typ2_ with
- *      | Pointer (_qualifiers, typ3) -> return typ3
- *      | _ -> fail loc (Generic (deref_path_pp name n ^^^ !^"is not a pointer"))
- * 
- * let type_of__vars loc var_typs name derefs = 
- *   match List.assoc_opt String.equal name var_typs with
- *   | None -> fail loc (Unbound_name (String name))
- *   | Some typ -> type_of__var loc typ name derefs *)
-  
-
-
-
 
 
 
@@ -368,7 +334,7 @@ let resolve_constraint loc layouts mapping lc =
 
 
 
-let apply_ownership_spec layouts label var_typs mapping (loc, {predicate; arguments}) =
+let apply_ownership_spec layouts label mapping (loc, {predicate; arguments}) =
   match predicate, arguments with
   | "Owned", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts mapping path in
@@ -430,12 +396,6 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
     : (FT.t * Mapping.t, type_error) m = 
   let open FT in
   let open RT in
-  let var_typs = 
-    List.map (fun (garg : garg) -> (garg.name, garg.typ)) fspec.global_arguments @
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) fspec.function_arguments @
-    [(fspec.function_return.name, 
-      fspec.function_return.typ)]
-  in
 
   let iA, iL, iR, iC = [], [], [], [] in
   let oL, oR, oC = [], [], [] in
@@ -474,7 +434,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts "start" var_typs mapping (loc, cond) in
+             apply_ownership_spec layouts "start" mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts mapping cond in
@@ -525,7 +485,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts "end" var_typs mapping (loc, cond) in
+             apply_ownership_spec layouts "end" mapping (loc, cond) in
            return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts mapping cond in
@@ -550,12 +510,6 @@ let make_label_spec
       (lspec: Ast.label_spec)
   =
   (* let largs = List.map (fun (os, t) -> (Option.value (Sym.fresh ()) os, t)) largs in *)
-  let var_typs = 
-    List.map (fun (garg : garg) -> (garg.name, garg.typ)) lspec.global_arguments @
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) lspec.function_arguments @
-    List.map (fun (aarg : aarg) -> (aarg.name, aarg.typ)) lspec.label_arguments
-  in
-
   let iA, iL, iR, iC = [], [], [], [] in
   let mapping = init_mapping in
 
@@ -610,7 +564,7 @@ let make_label_spec
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts lname var_typs mapping (loc, cond) in
+             apply_ownership_spec layouts lname mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts mapping cond in
