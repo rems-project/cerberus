@@ -145,7 +145,7 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
          o_sct = Some sct;
        } 
      in
-     let c = [good_value pointee_t sct] in
+     let c = [good_value layouts sct pointee_t] in
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
      return (l, r, c, [mapping])
 
@@ -463,7 +463,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         let item = aarg_item "start" aarg in
         let@ (l, r, c, mapping') = 
           make_owned loc layouts "start" item.it item.path aarg.typ in
-        let c = good_value item.it (pointer_sct aarg.typ) :: c in
+        let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
         return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
       )
       (iA, iL, iR, iC, mapping) fspec.function_arguments
@@ -489,7 +489,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
   let (oA, oC, mapping) = 
     let ret = fspec.function_return in
     let item = varg_item "end" ret in
-    let c = [good_value item.it ret.typ] in
+    let c = [good_value layouts ret.typ item.it] in
     ((ret.vsym, IT.bt item.it), c, item :: mapping)
   in
 
@@ -514,7 +514,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         let item = aarg_item "end" aarg in
         let@ (l, r, c, mapping') = 
           make_owned loc layouts "end" item.it item.path aarg.typ in
-        let c = good_value item.it (pointer_sct aarg.typ) :: c in
+        let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
         return (oL @ l, oR @ r, oC @ c, (item :: mapping') @ mapping)
       )
       (oL, oR, oC, mapping) fspec.function_arguments
@@ -596,7 +596,7 @@ let make_label_spec
           let item = aarg_item lname aarg in
           let@ (l, r, c, mapping') = 
             make_owned loc layouts lname item.it item.path aarg.typ in
-          let c = good_value item.it (pointer_sct aarg.typ) :: c in
+          let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
           return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
         )
         (iA, iL, iR, iC, []) lspec.label_arguments

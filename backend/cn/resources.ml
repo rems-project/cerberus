@@ -392,7 +392,7 @@ end
 module Requests = 
   Make (struct
       type t = BT.t
-      let pp _ = parens !^"output"
+      let pp _ = underscore
       let subst_var _ o = o
       let subst_it _ o = o
       let equal = BT.equal

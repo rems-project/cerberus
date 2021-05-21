@@ -293,7 +293,11 @@ let rec simp (lcs : t list) term =
        IT (Struct_op (IT.Struct (tag, members)), bt)
     | IT.StructMember (tag, it, member) ->
        let it = aux it in
-       IT (Struct_op (IT.StructMember (tag, it, member)), bt)
+       match it with
+       | IT (Struct_op (Struct (_, members)), _) ->
+          List.assoc Id.equal member members
+       | _ ->
+          IT (Struct_op (IT.StructMember (tag, it, member)), bt)
 
   (* revisit when memory model changes *)
   and pointer_op it bt = 

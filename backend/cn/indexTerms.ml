@@ -1110,29 +1110,6 @@ let disjoint_from fp fps =
 
 
 
-let good_pointer pointer_it pointee_sct = 
-  match pointee_sct with
-  | CT.Sctype (_, Void) ->
-     representable_ (CT.pointer_sct pointee_sct, pointer_it);
-  | _ -> 
-     and_ [
-         representable_ (CT.pointer_sct pointee_sct, pointer_it);
-         aligned_ (pointee_sct, pointer_it);
-       ]
-
-let good_value v_it sct =
-  match sct with
-  | Sctypes.Sctype (_, Pointer (qualifiers, pointee_sct)) ->
-     good_pointer v_it pointee_sct
-  | _ ->
-     representable_ (sct, v_it)
-
-
-
-
-
-
-
 
 
 
@@ -1198,6 +1175,54 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
                 let bt = BT.of_sct sct in
                 let member_it = structMember_ ~member_bt:bt (tag, about, member) in
                 Some (rangef member_it)
+             | None -> 
+                None
+           ) layout
+       end
+  | Function _ -> 
+     Debug_ocaml.error "todo: function types"
+
+
+let good_pointer pointer_it pointee_sct = 
+  match pointee_sct with
+  | CT.Sctype (_, Void) ->
+     representable_ (CT.pointer_sct pointee_sct, pointer_it);
+  | _ -> 
+     and_ [
+         representable_ (CT.pointer_sct pointee_sct, pointer_it);
+         aligned_ (pointee_sct, pointer_it);
+       ]
+
+let rec good_value struct_layouts ct about =
+  let open Sctypes in
+  let open Memory in
+  let (Sctype (_, ct_)) = ct in
+  match ct_ with
+  | Void -> 
+     representable_ctype struct_layouts ct about
+  | Integer it -> 
+     representable_ctype struct_layouts ct about
+  | Array (it, None) -> 
+     Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
+  | Array (ct, Some n) -> 
+     let lcs = 
+       List.init n (fun i ->
+           good_value struct_layouts ct
+             (app_ about (int_ i))
+         )
+     in
+     and_ lcs
+  | Pointer _ -> 
+     good_pointer about ct
+  | Struct tag -> 
+     let layout = struct_layouts tag in
+     and_ begin
+         List.filter_map (fun piece ->
+             match piece.member_or_padding with
+             | Some (member, sct) ->
+                let bt = BT.of_sct sct in
+                let member_it = structMember_ ~member_bt:bt (tag, about, member) in
+                Some (good_value struct_layouts sct member_it)
              | None -> 
                 None
            ) layout
