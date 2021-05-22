@@ -18,3 +18,16 @@
  (target main_symbolic.ml)
  (deps main.ml)
  (action (copy main.ml main_symbolic.ml)))
+
+(executable
+ (name main_caesium)
+ (public_name cerberus-caesium)
+ (package cerberus)
+ (modules main_caesium)
+ (libraries result cmdliner str unix
+  cerb_frontend cerb_backend mem_caesium util))
+
+(rule
+ (target main_caesium.ml)
+ (deps main.ml)
+ (action (copy main.ml main_caesium.ml)))
