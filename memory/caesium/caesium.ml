@@ -133,11 +133,12 @@ let rec val_to_Z_aux : value -> Z.t option = fun v ->
 let val_to_Z : value -> int_type -> Z.t option = fun v it ->
   if List.length v = bytes_per_int it then
     match val_to_Z_aux v with
-    | None         -> None
-    | Some(z) as i ->
-    match it.it_signed with false -> i | true ->
-    if Z.leq (int_half_modulus it) z then Some(Z.(z - int_modulus it))
-    else None
+    | None    -> None
+    | Some(z) ->
+    if it.it_signed && Z.leq (int_half_modulus it) z then
+      Some(Z.(z - int_modulus it))
+    else
+      Some(z)
   else None
 
 let rec val_of_Z_aux : Z.t -> int -> value = fun z n ->
