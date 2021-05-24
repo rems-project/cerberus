@@ -86,15 +86,6 @@ and 'TY mu_loaded_value =  (* potentially unspecified C object values *)
 
 
 type 
-mu_ctor_val =  (* data constructors *)
-   M_Cnil of T.bt (* empty list *)
- | M_Ccons (* list cons *)
- | M_Ctuple (* tuple *)
- | M_Carray (* C array *)
- | M_Cspecified (* non-unspecified loaded value *)
-
-
-type 
 'TY mu_value =  (* Core values *)
    M_Vobject of 'TY mu_object_value (* C object value *)
  | M_Vloaded of 'TY mu_loaded_value (* loaded C object value *)
@@ -103,6 +94,15 @@ type
  | M_Vfalse (* boolean false *)
  | M_Vlist of T.bt * ('TY mu_value) list (* list *)
  | M_Vtuple of ('TY mu_value) list (* tuple *)
+
+
+type 
+mu_ctor_val =  (* data constructors *)
+   M_Cnil of T.bt (* empty list *)
+ | M_Ccons (* list cons *)
+ | M_Ctuple (* tuple *)
+ | M_Carray (* C array *)
+ | M_Cspecified (* non-unspecified loaded value *)
 
 
 type 
@@ -185,6 +185,12 @@ let is_mu_seq_expr_aux_of_mu_seq_expr_aux (mu_seq_expr_aux5:'TY mu_seq_expr_aux)
 
 
 type 
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
+
+
+type 
 'TY mu_pexpr =  (* pure expressions *)
    M_PEpval of 'TY mu_pval_aux (* pure values *)
  | M_PEctor of mu_ctor_expr * ('TY mu_pval_aux) list (* data constructor application *)
@@ -198,12 +204,6 @@ type
  | M_PEbool_to_integer of 'TY mu_pval_aux
  | M_PEconv_int of 'TY act * 'TY mu_pval_aux
  | M_PEwrapI of 'TY act * 'TY mu_pval_aux
-
-
-type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
 
 
 type 
@@ -250,58 +250,6 @@ type
 and 'TY mu_tpexpr_aux =  (* pure top-level pure expressions with auxiliary info *)
    M_TPexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_tpexpr
  | M_TPexpr_no_aux of 'TY mu_tpexpr (* Ott-hack for simpler typing rules *)
-
-
-type 
-'TY mu_action =  (* memory actions *)
-   M_Create of 'TY mu_pval_aux * 'TY act * Symbol.prefix
- | M_CreateReadOnly of 'TY mu_pval_aux * 'TY act * 'TY mu_pval_aux * Symbol.prefix
- | M_Alloc of 'TY mu_pval_aux * 'TY mu_pval_aux * Symbol.prefix
- | M_Kill of m_kill_kind * 'TY mu_pval_aux
- | M_Store of bool * 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order (* true means store is locking *)
- | M_Load of 'TY act * 'TY mu_pval_aux * Cmm_csem.memory_order
- | M_RMW of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of 'TY act * 'TY mu_pval_aux * Linux.linux_memory_order
- | M_LinuxStore of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * Linux.linux_memory_order
- | M_LinuxRMW of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * Linux.linux_memory_order
-
-
-type 
-'TY mu_action_aux =  (* memory actions with auxiliary info *)
-   M_Action of Location_ocaml.t * 'TY mu_action
- | M_no_aux of 'TY mu_action (* Ott-hack for simpler typing rules *)
-
-
-type 
-'TY mu_paction =  (* memory actions with polarity *)
-   M_Paction of Core.polarity * 'TY mu_action_aux
-
-
-type 
-'TY mu_memop =  (* operations involving the memory state *)
-   M_PtrEq of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer equality comparison *)
- | M_PtrNe of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer inequality comparison *)
- | M_PtrLt of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer less-than comparison *)
- | M_PtrGt of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer greater-than comparison *)
- | M_PtrLe of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer less-than comparison *)
- | M_PtrGe of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer greater-than comparison *)
- | M_Ptrdiff of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer subtraction *)
- | M_IntFromPtr of 'TY act * 'TY act * 'TY mu_pval_aux (* cast of pointer value to integer value *)
- | M_PtrFromInt of 'TY act * 'TY act * 'TY mu_pval_aux (* cast of integer value to pointer value *)
- | M_PtrValidForDeref of 'TY act * 'TY mu_pval_aux (* dereferencing validity predicate *)
- | M_PtrWellAligned of 'TY act * 'TY mu_pval_aux
- | M_PtrArrayShift of 'TY mu_pval_aux * 'TY act * 'TY mu_pval_aux
- | M_Memcpy of 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux
- | M_Memcmp of 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux
- | M_Realloc of 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux
- | M_Va_start of 'TY mu_pval_aux * 'TY mu_pval_aux
- | M_Va_copy of 'TY mu_pval_aux
- | M_Va_arg of 'TY mu_pval_aux * 'TY act
- | M_Va_end of 'TY mu_pval_aux
 
 
 type 
@@ -394,10 +342,28 @@ res_term =  (* resource terms *)
 
 
 type 
+'TY mu_action =  (* memory actions *)
+   M_Create of 'TY mu_pval_aux * 'TY act * Symbol.prefix
+ | M_CreateReadOnly of 'TY mu_pval_aux * 'TY act * 'TY mu_pval_aux * Symbol.prefix
+ | M_Alloc of 'TY mu_pval_aux * 'TY mu_pval_aux * Symbol.prefix
+ | M_Kill of m_kill_kind * 'TY mu_pval_aux
+ | M_Store of bool * 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order (* true means store is locking *)
+ | M_Load of 'TY act * 'TY mu_pval_aux * Cmm_csem.memory_order
+ | M_RMW of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Fence of Cmm_csem.memory_order
+ | M_CompareExchangeStrong of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_LinuxFence of Linux.linux_memory_order
+ | M_LinuxLoad of 'TY act * 'TY mu_pval_aux * Linux.linux_memory_order
+ | M_LinuxStore of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * Linux.linux_memory_order
+ | M_LinuxRMW of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux * Linux.linux_memory_order
+
+
+type 
 spine_elem =  (* spine element *)
    Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
- | Spine_Elem_logical_val of logical_val (* logical variable *)
- | Spine_Elem_res_val of res_term (* resource valuel *)
+ | Spine_Elem_logical_val of 'bt term_aux (* logical value *)
+ | Spine_Elem_res_val of res_term (* resource value *)
 
 
 type 
@@ -407,6 +373,12 @@ resource =  (* resources *)
  | Res_SepConj of resource * resource (* seperating conjunction *)
  | Res_Exists of Symbol.sym * base_type * resource (* existential *)
  | Res_Term of 'bt term_aux * resource (* logical conjuction *)
+
+
+type 
+'TY mu_action_aux =  (* memory actions with auxiliary info *)
+   M_Action of Location_ocaml.t * 'TY mu_action
+ | M_no_aux of 'TY mu_action (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -426,18 +398,46 @@ res_pattern =  (* resource terms *)
 
 
 type 
-'TY mu_tval =  (* (effectful) top-level values *)
-   M_TVdone of (spine_elem) list (* end of top-level expression *)
- | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
-
-
-type 
 ret =  (* return types *)
    RetTy_Computational of 'sym * base_type * ret
  | RetTy_Logical of 'sym * base_type * ret
  | RetTy_Resource of resource * ret
  | RetTy_Constraint of 'bt term_aux * ret
  | RetTy_I
+
+
+type 
+'TY mu_memop =  (* operations involving the memory state *)
+   M_PtrEq of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer equality comparison *)
+ | M_PtrNe of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer inequality comparison *)
+ | M_PtrLt of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer less-than comparison *)
+ | M_PtrGt of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer greater-than comparison *)
+ | M_PtrLe of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer less-than comparison *)
+ | M_PtrGe of 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer greater-than comparison *)
+ | M_Ptrdiff of 'TY act * 'TY mu_pval_aux * 'TY mu_pval_aux (* pointer subtraction *)
+ | M_IntFromPtr of 'TY act * 'TY act * 'TY mu_pval_aux (* cast of pointer value to integer value *)
+ | M_PtrFromInt of 'TY act * 'TY act * 'TY mu_pval_aux (* cast of integer value to pointer value *)
+ | M_PtrValidForDeref of 'TY act * 'TY mu_pval_aux (* dereferencing validity predicate *)
+ | M_PtrWellAligned of 'TY act * 'TY mu_pval_aux
+ | M_PtrArrayShift of 'TY mu_pval_aux * 'TY act * 'TY mu_pval_aux
+ | M_Memcpy of 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux
+ | M_Memcmp of 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux
+ | M_Realloc of 'TY mu_pval_aux * 'TY mu_pval_aux * 'TY mu_pval_aux
+ | M_Va_start of 'TY mu_pval_aux * 'TY mu_pval_aux
+ | M_Va_copy of 'TY mu_pval_aux
+ | M_Va_arg of 'TY mu_pval_aux * 'TY act
+ | M_Va_end of 'TY mu_pval_aux
+
+
+type 
+'TY mu_tval =  (* (effectful) top-level values *)
+   M_TVdone of (spine_elem) list (* end of top-level expression *)
+ | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+
+
+type 
+'TY mu_paction =  (* memory actions with polarity *)
+   M_Paction of Core.polarity * 'TY mu_action_aux
 
 
 type 
@@ -451,12 +451,6 @@ ret_pattern =  (* return pattern *)
    RetP_computational of 'TY mu_sym_or_pattern (* computational variable *)
  | RetP_logical of Symbol.sym (* logical variable *)
  | RetP_resource of res_pattern (* resource variable *)
-
-
-type 
-'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
-   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
- | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -484,8 +478,8 @@ and 'TY mu_is_expr_aux =  (* indet seq (effectful) expressions with auxiliary in
  | M_Is_no_aux of 'TY mu_is_expr (* Ott-hack for simpler typing rules *)
 
 and 'TY mu_is_texpr =  (* indet seq top-level (effectful) expressions *)
-   M_is_TEwseq of mu_pattern_aux * 'TY mu_is_expr_aux (* weak sequencing *)
- | M_is_TEsseq of 'TY mu_sym_or_pattern * 'TY mu_is_expr_aux (* strong sequencing *)
+   M_is_TEwseq of mu_pattern_aux * 'TY mu_is_expr_aux * 'TY mu_texpr (* weak sequencing *)
+ | M_is_TEsseq of 'TY mu_sym_or_pattern * 'TY mu_is_expr_aux * 'TY mu_texpr (* strong sequencing *)
 
 and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with auxiliary info *)
    M_Is_Texpr of Location_ocaml.t * annot list * 'TY mu_is_texpr
@@ -494,6 +488,12 @@ and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with a
 and 'TY mu_texpr =  (* top-level (effectful) expressions *)
    M_TESeq of 'TY mu_seq_texpr_aux (* sequential (effectful) expressions *)
  | M_TEIS of 'TY mu_is_texpr_aux (* indet seq (effectful) expressions *)
+
+
+type 
+'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
+   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
+ | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
 
 
 type 
