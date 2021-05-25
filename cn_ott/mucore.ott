@@ -401,7 +401,7 @@ grammar
     | mu_pval_aux1 =< mu_pval_aux2                            :: :: PtrLe            {{ com pointer less-than comparison }}
     | mu_pval_aux1 >= mu_pval_aux2                            :: :: PtrGe            {{ com pointer greater-than comparison }}
     | mu_pval_aux1 - ty_act - mu_pval_aux2                    :: :: Ptrdiff          {{ order [[ty_act]] [[mu_pval_aux1]] [[mu_pval_aux2]] }} {{ com pointer subtraction }}
-                                                                               {{ tex [[mu_pval_aux1]] -_{ [[ty_act]] } [[mu_pval_aux2]] }}
+                                                                                     {{ tex [[mu_pval_aux1]] -_{ [[ty_act]] } [[mu_pval_aux2]] }}
     | intFromPtr ( ty_act1 , ty_act2 , mu_pval_aux )          :: :: IntFromPtr       {{ com cast of pointer value to integer value }}
     | ptrFromInt ( ty_act1 , ty_act2 , mu_pval_aux )          :: :: PtrFromInt       {{ com cast of integer value to pointer value }}
     | ptrValidForDeref ( ty_act , mu_pval_aux )               :: :: PtrValidForDeref {{ com dereferencing validity predicate }}
@@ -512,8 +512,10 @@ grammar
 
 
   pointer_op :: '' ::= {{ auxparam 'bt }}
-    | ty_mem_ptr                :: :: Null
-    | term_aux1 +ptr term_aux2  :: :: AddPointer
+    | ty_mem_ptr               :: :: Null
+    | term_aux1 +ptr term_aux2 :: :: AddPointer
+    | cast_int_to_ptr term_aux :: :: IntegerToPointerCast
+    | cast_ptr_to_int term_aux :: :: PointerToIntegerCast
 
 
   BT_t {{ tex \beta }} :: '' ::= {{ ocaml BT.t }} {{ phantom }} {{ com Ott-hack, ignore }}
@@ -540,6 +542,7 @@ grammar
 
   ct_pred :: '' ::= {{ auxparam 'bt }}
     | representable ( ct , term_aux )    :: :: Representable
+    | aligned ( ct , term_aux )          :: :: Aligned
     | alignedI ( term_aux1 , term_aux2 ) :: :: AlignedI
 
 
@@ -576,7 +579,7 @@ grammar
 grammar
 
   points_to :: '' ::= {{ ocaml type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } }}
-                      {{ phantom }} {{ com arbitrary predicate }}
+                      {{ phantom }} {{ com points-to separation logic predicate }}
     | term_aux1 ( rational )|- init_t - ct -> term_aux2 :: :: Points_to
       {{ tex [[term_aux1]] \mathbin{ [[rational]] { \overset{ [[init_t]] }{ \mapsto } }_{ [[ct]] } } [[term_aux2]] }}
       {{ ocaml { pointer = [[term_aux1]] ; perm = [[rational]] ; init = [[init_t]] ; ct = [[ct]] ; pointee = [[term_aux2]] ; } }}
@@ -603,7 +606,12 @@ grammar
     | term_aux /\ ret                    :: :: Constraint
     | I                                  :: :: I
     | [ spine_elem / tyvar_sym ] ret     :: M :: Substitution {{ ocaml RET_SPINE_ELEM_SUB [[spine_elem]] [[tyvar_sym]] [[ret]] }}
-    | concat </ reti // i />             :: M :: Concat       {{ ocaml RET_CONCAT }} {{ tex ret }}
+    | concat rets                        :: M :: Concat       {{ tex [[rets]] }} {{ ocaml [[rets]] }} {{ com concatenation of return types }}
+
+
+  rets :: RetTys_ ::= {{ com concatenation of return types }}
+    | </ reti // i /> :: :: Concat
+
 
 grammar
 
@@ -619,10 +627,11 @@ grammar
     |               mu_seq_expr :: O :: no_aux   {{ com Ott-hack for simpler typing rules }}
 
 
+  % nd() is only used in the elab of if/loops for the case where the condiditional expression evaluates to unspecified()
+  % We don't have unspecified() so we won't have nd()
   mu_seq_texpr {{ tex seq\_texpr }} :: 'M_Seq_TE' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions }}
     | mu_tval                                                           :: :: tval  {{ com (effectful) top-level values   }}
-    | run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn                   :: :: run   {{ com run from label                 }}
-    | nd ( mu_pval_aux1 , .. , mu_pval_auxn )                           :: :: nd    {{ com nondeterministic choice        }}
+    | run Symbol_sym </ mu_pval_auxi // , // i />                       :: :: run   {{ com run from label                 }}
     | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   {{ com bind return patterns           }} % TODO: bindings
     | let </ ret_patterni // , // i /> : ret = mu_texpr1 in mu_texpr2   :: :: letT  {{ com annotated bind return patterns }} % TODO: bindings
     | case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end :: :: case  {{ com pattern matching               }} % TODO: bindings
@@ -636,9 +645,9 @@ grammar
 
 
   mu_is_expr {{ tex is\_expr }} :: 'M_Is_E' ::= {{ auxparam 'TY }} {{ com indet seq (effectful) expressions }}
-    | memop ( mu_memop )             :: :: memop  {{ com pointer op involving memory }}
-    | mu_paction                     :: :: action {{ com memory action               }}
-    | unseq ( </ mu_texpri // i /> ) :: :: unseq  {{ com unsequenced expressions     }}
+    | memop ( mu_memop )                    :: :: memop  {{ com pointer op involving memory }}
+    | mu_paction                            :: :: action {{ com memory action               }}
+    | unseq ( </ mu_texpri : reti // i /> ) :: :: unseq  {{ com unsequenced expressions     }}
 
 
   mu_is_expr_aux {{ tex is\_expr }} :: 'M_Is_' ::= {{ auxparam 'TY }} {{ com indet seq (effectful) expressions with auxiliary info }}
@@ -738,8 +747,8 @@ grammar
 
 grammar
 
-  rational {{ tex \mathbb{Q} }} :: 'Q_' ::= {{ ocaml ( int * int ) }} {{ phantom }} {{ com OCaml type for rational numbers }}
-    | q_one             :: X :: One {{ ocaml (1, 1) }} {{ tex 1 }}
+  rational {{ tex \mathbb{Q} }} , q , _q {{ tex \_ }} :: 'Q_' ::= {{ ocaml ( int * int ) }} {{ phantom }} {{ com OCaml type for rational numbers }}
+    | q_one             :: X :: One  {{ ocaml (1, 1) }} {{ tex 1 }}
     | ty_int1 / ty_int2 ::   :: Frac {{ ocaml ( [[ty_int1]], [[ty_int2]] ) }} {{ tex \frac{[[ty_int1]]}{[[ty_int2]]} }}
 
 grammar
@@ -838,6 +847,7 @@ grammar
     | L |- term_aux : base_type                                                        :: :: check_logical_value
     | mu_pval_aux : arg inEnv Globals                                                  :: :: mu_pval_aux_in_globals
 
+
 defns
   object_value_jtype :: '' ::=
 
@@ -915,7 +925,7 @@ defns
     C ; L ; N |- ( </ mu_valuei // i /> ) => </ base_typei // i />
 
 
-    % NOT IMPLEMENTED: constrained
+    % NOT IMPLEMENTED - constrained
 
 
     smt ( N => false )
@@ -956,7 +966,7 @@ defns
     C ; L ; N |- ( struct ty_tag ) { </ dot Symbol_identifieri = mu_pvali // i /> } => struct ty_tag
 
 
-   % NOT IMPLEMENTED: union
+   % NOT IMPLEMENTED - union
 
 defns
   resource_jtype :: '' ::=
@@ -969,8 +979,8 @@ defns
 
 
     smt ( N => ( term_aux1 = term_aux'1 ) /\ ( term_aux2 = term_aux'2 ) )
-    ------------------------------------------------------------------------------------------------------------- :: PointsTo
-    N |- term_aux1 ( rational )|- init_t - ct -> term_aux2 == term_aux'1 ( rational )|- init_t - ct -> term_aux'2
+    ----------------------------------------------------------------------------------------------- :: PointsTo
+    N |- term_aux1 ( q )|- init_t - ct -> term_aux2 == term_aux'1 ( q )|- init_t - ct -> term_aux'2
 
 
     N |- resource1 == resource'1
@@ -1328,13 +1338,13 @@ defns
     C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . exists y : to_base ( ct ) . representable ( ct ast , yp ) /\ alignedI ( embed mu_pval_aux , yp ) /\ <( yp ( q_one )|- * - ct -> y )> *s I
 
 
-    % NOT IMPLEMENTED:
+    % NOT IMPLEMENTED
     % C ; L ; N ; cdot |-> create_readonly ( vp , ct , v ) Symbol_prefix => ??
 
 
     C ; L ; N |- mu_pval_aux1 => loc
     C ; L ; N |- mu_pval_aux2 => to_base ( ct )
-    % NOT IMPLEMENTED: locking boolean
+    % NOT IMPLEMENTED - locking boolean
     smt ( N => representable ( ct , embed mu_pval_aux2 ) )
     smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
     -------------------------------------------------------- :: Store
@@ -1347,7 +1357,7 @@ defns
     C ; L ; N ; cdot , r : <( embed mu_pval_aux0 ( q_one )|- _i - ct -> _t )> |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
 
 
-    % NOT IMPLEMENTED:
+    % NOT IMPLEMENTED
     % C ; L ; N ; ?? |- kill ( dynamic , v ) => ??
 
 
@@ -1429,28 +1439,69 @@ defns
 
 
   defn
-    C ; L ; N ; R |- mu_is_expr_aux <= ret :: :: IS_Expr :: IS_Expr_ by
-
-    % TODO
-    % memop ( mu_memop )
+    C ; L ; N ; R |- mu_is_expr_aux => ret :: :: IS_Expr :: IS_Expr_ by
 
 
-    % ASK about this rule - inference/checking boundary
+    % NOT IMPLEMENTED
+    % mu_pval_aux1 == mu_pval_aux2
+    % mu_pval_aux1 <> mu_pval_aux2
+    % mu_pval_aux1 < mu_pval_aux2
+    % mu_pval_aux1 > mu_pval_aux2
+    % mu_pval_aux1 =< mu_pval_aux2
+    % mu_pval_aux1 >= mu_pval_aux2
+    % mu_pval_aux1 - ty_act - mu_pval_aux2
+
+
+    C ; L ; N |- mu_pval_aux => loc
+    ------------------------------- :: Memop_IntFromPtr
+    C ; L ; N ; cdot |- memop ( intFromPtr ( ct1 , ct2 , mu_pval_aux ) ) => sigma y : integer . y = cast_ptr_to_int embed mu_pval_aux /\ I
+
+
+    C ; L ; N |- mu_pval_aux => integer
+    ----------------------------------- :: Memop_PtrFromInt
+    C ; L ; N ; cdot |- memop ( ptrFromInt ( ct1 , ct2 , mu_pval_aux ) ) => sigma y : integer . y = cast_ptr_to_int embed mu_pval_aux /\ I
+
+
+    C ; L ; N |- mu_pval_aux1 => loc
+    smt ( N => embed mu_pval_aux0 = embed mu_pval_aux1 )
+    ---------------------------------------------------- :: Memop_PtrValidForDeref
+    C ; L ; N ; cdot , r : <( embed mu_pval_aux0 ( _q )|- tick - ct -> _t )> |- memop ( ptrValidForDeref ( ct , mu_pval_aux1 ) ) => sigma y : bool . y = aligned ( ct , embed mu_pval_aux0 ) /\ I
+
+
+    C ; L ; N |- mu_pval_aux1 => loc
+    ---------------------------------------------------- :: Memop_PtrWellAligned
+    C ; L ; N ; cdot |- memop ( ptrWellAligned ( ct , mu_pval_aux ) ) => sigma y : bool . y = aligned ( ct , embed mu_pval_aux ) /\ I
+
+
+    C ; L ; N |- mu_pval_aux1 => loc
+    C ; L ; N |- mu_pval_aux2 => integer
+    ------------------------------------ :: Memop_PtrArrayShift
+    C ; L ; N ; cdot |- memop ( ptrArrayShift ( mu_pval_aux1 ,  ct , mu_pval_aux2 ) ) => sigma y : loc . y = embed mu_pval_aux1 +ptr ( embed mu_pval_aux2 * size_of ct ) /\ I
+
+    % NOT IMPLEMENTED
+    % memcpy ( mu_pval_aux1 , mu_pval_aux2 , mu_pval_aux3 )
+    % memcmp ( mu_pval_aux1 , mu_pval_aux2 , mu_pval_aux3 )
+    % realloc ( mu_pval_aux1 , mu_pval_aux2 , mu_pval_aux3 )
+    % va_start ( mu_pval_aux1 , mu_pval_aux2 )
+    % va_copy ( mu_pval_aux )
+    % va_arg ( mu_pval_aux , ty_act )
+    % va_end ( mu_pval_aux )
+
+
     C ; L ; N ; R |- mu_action => ret
     ------------------------------------- :: Action
-    C ; L ; N ; R |- Pos mu_action <= ret
+    C ; L ; N ; R |- Pos mu_action => ret
 
 
-    % ASK about this rule - inference/checking boundary
     C ; L ; N ; R |- mu_action => ret
     ------------------------------------- :: Neg_Action
-    C ; L ; N ; R |- Neg mu_action <= ret
+    C ; L ; N ; R |- Neg mu_action => ret
 
 
-    % ASK about this rule - how to split up a ret-tuple?
     </ C ; L ; N ; Ri |- mu_texpri <= sigma yi : base_typei . reti // i />
     ---------------------------------------------------------------------- :: Unseq
-    C ; L ; N ; </ Ri // i /> |- unseq ( </ mu_texpri // i /> ) <= sigma y : </ base_typei // i /> . concat </ [ i th_t y / yi ] reti // i />
+    C ; L ; N ; </ Ri // i /> |- unseq ( </ mu_texpri : sigma yi : base_typei . reti // i /> ) => sigma y : </ base_typei // i /> . concat </ [ i th_t y / yi ] reti // i />
+
 
   defn
     C ; L ; N ; R |- mu_seq_texpr_aux <= ret :: :: Seq_TExpr :: Seq_TExpr_ by
@@ -1463,16 +1514,16 @@ defns
 
     C ; L ; N ; R' |- mu_seq_expr => ret1
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
-    C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret
-    -------------------------------------------------------------------------------------------------------------------------------- :: Let
-    C ; L ; N ; R' , R |- let </ ret_patterni // i /> = mu_seq_expr in mu_texpr <= ret
+    C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret2
+    --------------------------------------------------------------------------------------------------------------------------------- :: Let
+    C ; L ; N ; R' , R |- let </ ret_patterni // i /> = mu_seq_expr in mu_texpr <= ret2
 
 
     C ; L ; N ; R' |- mu_texpr1 <= ret1
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr2 <= ret2
     ---------------------------------------------------------------------------------------------------------------------------------- :: LetT
-    C ; L ; N ; R' , R |- let </ ret_patterni // i /> : ret1 = mu_texpr1 in mu_texpr <= ret2
+    C ; L ; N ; R' , R |- let </ ret_patterni // i /> : ret1 = mu_texpr1 in mu_texpr2 <= ret2
 
 
     C ; L ; N |- mu_pval_aux => base_type1
@@ -1489,16 +1540,10 @@ defns
     C ; L ; N ; R1 , R2 |- if mu_pval_aux then mu_texpr1 else mu_texpr2 <= ret
 
 
-    % ASK how to type labeled continuations?
-    -------------------------------------------------------------------------- :: Run
-    C ; L ; N ; cdot |- run Symbol_sym mu_pval_aux1 , .. , mu_pval_auxn <= ret
-
-
-    % ASK does this seem right?
-    C ; L ; N |- mu_pval_aux1 => base_type .. C ; L ; N |- mu_pval_auxn => base_type
-    smt ( N , \// ( y = embed mu_pval_aux1 , .. , y = embed mu_pval_auxn ) => term )
-    ---------------------------------------------------------------------------------------------- :: NonDet
-    C ; L ; N ; cdot |- nd ( mu_pval_aux1 , .. , mu_pval_auxn ) <= sigma y : base_type . term /\ I
+    Symbol_sym : arg inEnv Globals
+    C ; L ; N ; cdot |- </ mu_pval_auxi // i /> :; arg >> false /\ I
+    ------------------------------------------------------------------------ :: Run
+    C ; L ; N ; cdot |- run Symbol_sym </ mu_pval_auxi // i /> <= false /\ I
 
 
     % ASK
@@ -1511,22 +1556,23 @@ defns
     C ; L ; N ; R |- mu_is_texpr_aux <= ret :: :: IS_TExpr :: IS_TExpr_  by
 
 
-    % ASK about this rule - ignores sequencing of memory actions
-    C ; L ; N ; R |- mu_is_expr_aux <= ret1
+    % NOT IMPLEMENTED - memory events
+    C ; L ; N ; R |- mu_is_expr_aux => ret1
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret2
     ----------------------------------------------------------------------------- :: LetWeak
     C ; L ; N ; R |- let weak mu_pattern_aux = mu_is_expr_aux in mu_texpr <= ret2
 
 
-    % ASK about this rule
-    C ; L ; N ; R |- mu_is_expr_aux <= ret1
+    % NOT IMPLEMENTED - memory events
+    C ; L ; N ; R |- mu_is_expr_aux => ret1
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret2
     ----------------------------------------------------------------------------------- :: LetStrong
     C ; L ; N ; R |- let strong mu_sym_or_pattern = mu_is_expr_aux in mu_texpr <= ret2
 
 
+    % impl does Ret orFalse, for checking the body of a label (to ensure it doesn't return)
   defn
     C ; L ; N ; R |- mu_texpr <= ret :: :: TExpr :: TExpr_ by
 
