@@ -294,9 +294,12 @@ let update_prefix: (Symbol.prefix * mem_value) -> unit memM =
 let prefix_of_pointer: pointer_value -> string option memM =
   fun _ -> return None (* TODO *)
 
-let validForDeref_ptrval ref_ty ptrval =
-  print_endline "TODO: validForDeref_ptrval";
-  return true
+let validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM =
+  fun _ v ->
+  match v with
+  | PVnull _
+  | PVfun _ -> return false
+  | PVptr l  -> return true (* FIXME *)
 
 let isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM =
   fun _ _ -> assert false (* TODO *)
@@ -312,6 +315,7 @@ let intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer
   match pv with
   | PVptr l  -> return (IRLoc l)
   | PVnull _ -> assert false (* TODO *)
+  | PVfun _ -> assert false (* TODO should be UB I think *)
 
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival =
