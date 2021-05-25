@@ -106,7 +106,7 @@ let begin_csv_timing (fun_name: string) =
   if !debug_level >= 1 then
     csv_timing_stack := (fun_name, Unix.gettimeofday ()) :: !csv_timing_stack
 
-let end_csv_timing () =
+let end_csv_timing (fun_name: string) =
   match !csv_timing_stack_file with
   | None ->
      ()
@@ -115,8 +115,10 @@ let end_csv_timing () =
      match !csv_timing_stack with
      | [] ->
         error "empty timing stack when ending timing"
-     | (str, t) :: xs ->
+     | (str, t) :: xs when String.equal str fun_name ->
         Printf.fprintf oc "%s,%f\n" str (t' -. t);
         csv_timing_stack := xs
+     | _ ->
+        error "incorrect use of timing stack"
 
 

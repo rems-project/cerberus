@@ -199,12 +199,14 @@ let main filename mjsonfile debug_level print_level =
          Pp.maybe_open_json_output mjsonfile;
          assert (Z3.Log.open_ z3_log_file_path);
          Debug_ocaml.maybe_open_csv_timing_file ();
+         let () = Debug_ocaml.begin_csv_timing "total" in
          let result = 
            let@ file = Retype.retype_file file in
            Check.check file 
          in
          Pp.maybe_close_json_output ();
          Z3.Log.close ();
+         let () = Debug_ocaml.end_csv_timing "total" in
          Debug_ocaml.maybe_close_csv_timing_file ();
          match result with
          | Ok () -> 

@@ -1891,6 +1891,7 @@ module Make (G : sig val global : Global.t end) = struct
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
         (body : 'bty mu_texpr) (function_typ : FT.t) 
         (label_defs : 'bty mu_label_defs) : (unit, type_error) m =
+    print stdout (!^("checking function " ^ Sym.pp_string fsym));
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
     debug 2 (lazy (item "type" (FT.pp function_typ)));
 
@@ -2117,7 +2118,6 @@ let record_globals local globs =
 
 let check mu_file = 
   let open Global in
-  let () = Debug_ocaml.begin_csv_timing "total" in
   let global = {Global.empty with resource_predicates = builtin_predicates } in
   let local = Local.empty in
   let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
@@ -2128,7 +2128,6 @@ let check mu_file =
   let@ () = print_initial_environment global in
   let@ result = check_functions (global, local) mu_file.mu_stdlib in
   let@ result = check_functions (global, local) mu_file.mu_funs in
-  let () = Debug_ocaml.end_csv_timing () in
   return result
 
 

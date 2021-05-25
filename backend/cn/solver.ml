@@ -319,38 +319,28 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error ("Z3 error: " ^ err)
 
 
-  let check ?(ignore_unknown=false) local (expr : Z3.Expr.expr) = 
+  let check ?(ignore_unknown=false) local (lc : IT.t) = 
     let solver = Z3.Solver.mk_simple_solver context in
-    let neg_expr = Z3.Boolean.mk_not context expr in
+    let neg_expr = Z3.Boolean.mk_not context (of_index_term lc) in
     let assumptions = List.map of_index_term (Local.all_constraints local) in
     let constraints = neg_expr :: assumptions in
-    Z3.Solver.add solver constraints;
+    Z3.Solver.add solver [Z3.Boolean.mk_and context constraints];
     let result = Z3.Solver.check solver [] in
-    (* let () =
-     *   if !Pp.print_level >= 3 then
-     *     let oc = open_out "smt.smt" in
-     *     (\* output_string oc (Z3.SMT.benchmark_to_smtstring context 
-     *      *                     "experiment" "" "unknown" "" assumptions neg_expr); *\)
-     *     output_string oc (Z3.Solver.to_string solver);
-     *     close_out oc
-     * in *)
     match result with
     | Z3.Solver.UNSATISFIABLE -> (true, solver)
     | Z3.Solver.SATISFIABLE -> (false, solver)
-    | Z3.Solver.UNKNOWN -> 
-       if ignore_unknown then 
-         (false, solver) 
-       else
-         let reason = Z3.Solver.get_reason_unknown solver in
-         Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
+    | Z3.Solver.UNKNOWN when ignore_unknown -> (false, solver)
+    | Z3.Solver.UNKNOWN ->
+       let reason = Z3.Solver.get_reason_unknown solver in
+       Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
   
   let holds ?(ignore_unknown=false) local it = 
-    try fst (check ~ignore_unknown local (of_index_term it)) with
+    try fst (check ~ignore_unknown local it) with
     | Z3.Error err -> 
        Debug_ocaml.error ("Z3 error: " ^ err)
 
   let holds_and_solver ?(ignore_unknown=false) local it = 
-    try check ~ignore_unknown local (of_index_term it) with
+    try check ~ignore_unknown local it with
     | Z3.Error err -> 
        Debug_ocaml.error ("Z3 error: " ^ err)
 
