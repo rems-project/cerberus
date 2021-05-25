@@ -11,10 +11,11 @@ let name : string = "RefinedC's Caesium memory model"
 type pointer_value =
   | PVnull of Ctype.ctype
   | PVptr of Caesium.loc
+  | PVfun of Symbol.sym
 
 type integer_value = Caesium.int_repr
 
-type floating_value = Caesium.value
+type floating_value = float
 
 type mem_value =
   Ctype.ctype * Caesium.value
@@ -129,7 +130,7 @@ let pick_location size align : Caesium.loc memM =
       return z'
   end >>= fun addr ->
     ND.nd_put { st with
-      next_alloc_id= Z.succ alloc_id;
+      next_alloc_id= Nat_big_num.succ alloc_id;
       last_address= addr
     } >>= fun () ->
     return (Some alloc_id, addr)
@@ -170,8 +171,8 @@ let allocate_region:
     return (failwith "WIP: allocate_region")
     (* return (PVnull (Ctype ([], Void))) (* TODO *) *)
 
-let kill: Location_ocaml.t -> bool -> pointer_value -> unit memM =
-  fun _ _ _ -> return () (* TODO *)
+let kill loc is_dyn ptrval =
+  return () (* TODO *)
 
 let update_heap f error =
   ND.nd_get >>= fun st ->
@@ -195,9 +196,10 @@ let load loc ty  ptrval =
   let sz = Common.sizeof ty in
   match ptrval with
     | PVnull _ ->
-      fail (MC.MerrAccess (loc, MC.StoreAccess, MC.NullPtr))
+      fail (MC.MerrAccess (loc, MC.LoadAccess, MC.NullPtr))
+    | PVfun _ ->
+      fail (MC.MerrAccess (loc, MC.LoadAccess, MC.FunctionPtr))
     | PVptr loc ->
-        ND.nd_get >>= fun st ->
         update_heap
           (Caesium.na_prepare_read loc sz)
           (fail (MC.MerrOther "in load(), na_prepare_read failed")) >>= fun () ->
@@ -211,12 +213,13 @@ let store loc ty is_locking ptrval mval =
   match ptrval with
     | PVnull _ ->
       fail (MC.MerrAccess (loc, MC.StoreAccess, MC.NullPtr))
+    | PVfun _ ->
+      fail (MC.MerrAccess (loc, MC.StoreAccess, MC.FunctionPtr))  
     | PVptr loc ->
         let (val_ty, bs) = mval in
         assert (AilTypesAux.are_compatible
                  (Ctype.no_qualifiers, ty)
                  (Ctype.no_qualifiers, val_ty) );
-        ND.nd_get >>= fun st ->
         update_heap
           (Caesium.na_prepare_write loc bs)
           (fail (MC.MerrOther "in store(), na_prepare_write failed")) >>= fun () ->
@@ -235,10 +238,8 @@ let null_ptrval ty =
     | None ->
         failwith "the Caesium memory model requires a complete implementation sizeof POINTER" *)
 
-let fun_ptrval: Symbol.sym -> pointer_value =
-  fun sym ->
-  Printf.printf "MEM fun_ptrval ==> %s\n" (Symbol.show_raw sym);
-  assert false (* TODO *)
+let fun_ptrval sym =
+  PVfun sym
 
 (*TODO: revise that, just a hack for codegen*)
 let concrete_ptrval i addr =
@@ -269,6 +270,11 @@ let eq_ptrval ptrval1 ptrval2 : bool memM =
         return false
     | PVptr loc1, PVptr loc2 ->
         failwith "TODO: Caesium loc equality"
+    | PVfun sym1, PVfun sym2 ->
+        return (Symbol.symbolEquality sym1 sym2)
+    | PVfun _, PVptr _
+    | PVptr _, PVfun _ ->
+        return false
   
 let ne_ptrval: pointer_value -> pointer_value -> bool memM =
   fun _ _ -> assert false (* TODO *)
@@ -288,8 +294,9 @@ let update_prefix: (Symbol.prefix * mem_value) -> unit memM =
 let prefix_of_pointer: pointer_value -> string option memM =
   fun _ -> return None (* TODO *)
 
-let validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+let validForDeref_ptrval ref_ty ptrval =
+  print_endline "TODO: validForDeref_ptrval";
+  return true
 let isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM =
   fun _ _ -> assert false (* TODO *)
 
@@ -312,6 +319,8 @@ let array_shift_ptrval ptrval ty ival =
         (* NOTE Rodolphe: here we don't have any overflow check here
            (eff_array_shift_ptrval is the one doing it, when using the strict ISO switch) *)
         PVptr (alloc_id_opt, addr')
+    | PVfun _ ->
+        assert false
 
 let member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value =
   fun _ _ _ -> assert false (* TODO *)
@@ -347,9 +356,9 @@ let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
   let ret =
     { it_bytes_per_int_log= Z.(log2 (of_int sz))
     ; it_signed= impl.is_signed_ity ity } in
-  Printf.printf "to_int_type ==> { it_bytes_per_int_log= %d, it_signed= %s }\n"
+  (* Printf.printf "to_int_type ==> { it_bytes_per_int_log= %d, it_signed= %s }\n"
     ret.it_bytes_per_int_log
-    (if ret.it_signed then "true" else "false");
+    (if ret.it_signed then "true" else "false"); *)
   ret
 
 let concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value =
@@ -463,8 +472,8 @@ let is_specified_ival: integer_value -> bool =
   fun _ -> assert false (* TODO *)
 
 (* Predicats on integer values *)
-let eq_ival: mem_state option -> integer_value -> integer_value -> bool option =
-  fun _ _ _ -> assert false (* TODO *)
+let eq_ival st_opt ival1 ival2 =
+  Some (Z.equal (Caesium.int_repr_to_Z ival1) (Caesium.int_repr_to_Z ival2))
 let lt_ival: mem_state option -> integer_value -> integer_value -> bool option =
   fun _ _ _ -> assert false (* TODO *)
 let le_ival: mem_state option -> integer_value -> integer_value -> bool option =
@@ -476,11 +485,12 @@ let eval_integer_value ival =
 
 (* Floating value constructors *)
 let zero_fval: floating_value =
-  [] (* TODO *)
+  0.0
 let one_fval: floating_value =
-  [] (* TODO *)
-let str_fval: string -> floating_value =
-  fun _ -> assert false (* TODO *)
+  1.0
+let str_fval str =
+  Stdlib.Float.of_string str
+
 
 (* Floating value destructors *)
 let case_fval: floating_value -> (unit -> 'a) -> (float -> 'a) -> 'a =
@@ -531,6 +541,13 @@ let pointer_mval ref_ty ptrval =
         end
     | PVptr loc ->
         val_of_loc loc
+    | PVfun (Symbol.Symbol (_, n, _)) ->
+        begin match Caesium.(val_of_Z (Z.of_int n) uintptr_t) with
+          | None ->
+              failwith "Caesium.pointer_mval PVfun"
+          | Some z ->
+               z
+        end 
   )
 
 let array_mval mvals =
@@ -610,6 +627,8 @@ let pp_pointer_value = function
       | Some alloc_id ->
           "@" ^ Z.to_string alloc_id in
     parens (!^ str_alloc_id ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string addr))))
+  | PVfun sym ->
+      !^ "funptr" ^^ parens (!^ (Pp_symbol.to_string sym))
 
 let pp_integer_value = function
   | Caesium.IRInt n ->
