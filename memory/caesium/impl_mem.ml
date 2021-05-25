@@ -297,16 +297,21 @@ let prefix_of_pointer: pointer_value -> string option memM =
 let validForDeref_ptrval ref_ty ptrval =
   print_endline "TODO: validForDeref_ptrval";
   return true
+
 let isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM =
   fun _ _ -> assert false (* TODO *)
 
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
 let ptrcast_ival: Ctype.ctype -> Ctype.ctype -> integer_value -> pointer_value memM =
-  fun _ _ _ -> assert false (* TODO *)
+  fun _ _ i -> return (PVptr(Caesium.int_repr_to_loc i))
+
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
 let intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM =
-  fun _ _ _ -> assert false (* TODO *)
+  fun _ _ pv ->
+  match pv with
+  | PVptr l  -> return (IRLoc l)
+  | PVnull _ -> assert false (* TODO *)
 
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival =
@@ -588,6 +593,14 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
               failwith "case_mem_value, integer, None"
           | Some ival ->
               f_int ity ival
+        end
+    | Ctype.(Ctype (_, Pointer(_,ty))) ->
+        begin match Caesium.val_to_loc bs with
+          | None ->
+              Printf.printf "==> %s\n" (string_of_mbytes bs);
+              failwith "case_mem_value, pointer, None"
+          | Some l ->
+              f_ptr ty (PVptr l)
         end
     | _ ->
         failwith ("case_mem_value ==> " ^ String_core_ctype.string_of_ctype ty)
