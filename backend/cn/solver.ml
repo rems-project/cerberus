@@ -8,16 +8,17 @@ let context =
   Z3.mk_context [
       ("model", "true");
       ("well_sorted_check","true");
-      (* ("unsat_core", "true"); *)
+      (* ("auto_config", "false"); *)
+      (* ("trace", "true");
+       * ("trace_file_name", "trace.smt") *)
     ] 
 
 
 
-let solver = Z3.Solver.mk_simple_solver context
+(* let tactic = Z3.Tactic.mk_tactic context "default" *)
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 1
-let () = Z3.Solver.set_parameters solver params
-
+let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234
+let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt2"
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
@@ -99,8 +100,7 @@ module Make (G : sig val global : Global.t end) = struct
     let rec term =
       let tbl = ITtbl.create 5000 in
       fun it ->
-      (* Pp.debug 10 (lazy (Pp.item "translating term" (IT.pp it)));
-       * Pp.debug 10 (lazy (Pp.item "bt" (BT.pp (IT.bt it)))); *)
+      Pp.debug 10 (lazy (Pp.item "translating term" (IT.pp it)));
       match ITtbl.find_opt tbl it with
       | Some sc -> sc
       | None ->
@@ -261,7 +261,11 @@ module Make (G : sig val global : Global.t end) = struct
       | AlignedI (t1, t2) ->
          term (eq_ (rem_t_ (t2, t1), int_ 0))
       | Aligned (ct, t) ->
-         term (eq_ (rem_t_ (t, z_ (Memory.align_of_ctype ct)), int_ 0))
+         let alignment = match ct with
+           | Sctype (_, Function _) -> int_ 1
+           | _ -> z_ (Memory.align_of_ctype ct)
+         in
+         term (eq_ (rem_t_ (t, alignment), int_ 0))
 
     and option_op it bt = 
       match it with
@@ -316,28 +320,36 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let check ?(ignore_unknown=false) local (expr : Z3.Expr.expr) = 
-    let () = Debug_ocaml.begin_csv_timing "solver" in
-    let () = Debug_ocaml.begin_csv_timing "solver_constraints" in
-    let constraints = 
-      Z3.Boolean.mk_not context expr ::
-        List.map of_index_term (Local.all_constraints local)
-    in
-    let () = Debug_ocaml.end_csv_timing () in
-    let () = Debug_ocaml.begin_csv_timing "check" in
-    let result = Z3.Solver.check solver constraints in
-    let () = Debug_ocaml.end_csv_timing () in
-    let () = Debug_ocaml.end_csv_timing () in
+    let solver = Z3.Solver.mk_simple_solver context in
+    let neg_expr = Z3.Boolean.mk_not context expr in
+    let assumptions = List.map of_index_term (Local.all_constraints local) in
+    let constraints = neg_expr :: assumptions in
+    Z3.Solver.add solver constraints;
+    let result = Z3.Solver.check solver [] in
+    (* let () =
+     *   if !Pp.print_level >= 3 then
+     *     let oc = open_out "smt.smt" in
+     *     (\* output_string oc (Z3.SMT.benchmark_to_smtstring context 
+     *      *                     "experiment" "" "unknown" "" assumptions neg_expr); *\)
+     *     output_string oc (Z3.Solver.to_string solver);
+     *     close_out oc
+     * in *)
     match result with
-    | Z3.Solver.UNSATISFIABLE -> true
-    | Z3.Solver.SATISFIABLE -> false
+    | Z3.Solver.UNSATISFIABLE -> (true, solver)
+    | Z3.Solver.SATISFIABLE -> (false, solver)
     | Z3.Solver.UNKNOWN -> 
-       if ignore_unknown then false else
+       if ignore_unknown then 
+         (false, solver) 
+       else
          let reason = Z3.Solver.get_reason_unknown solver in
          Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
   
   let holds ?(ignore_unknown=false) local it = 
-    (* let open Pp in
-     * Pp.debug 9 (lazy (item "checking constraint" (LogicalConstraints.pp it))); *)
+    try fst (check ~ignore_unknown local (of_index_term it)) with
+    | Z3.Error err -> 
+       Debug_ocaml.error ("Z3 error: " ^ err)
+
+  let holds_and_solver ?(ignore_unknown=false) local it = 
     try check ~ignore_unknown local (of_index_term it) with
     | Z3.Error err -> 
        Debug_ocaml.error ("Z3 error: " ^ err)
@@ -345,8 +357,10 @@ module Make (G : sig val global : Global.t end) = struct
 
   let is_inconsistent local = holds local (bool_ false)
 
-  let get_model () = Z3.Solver.get_model solver
+  let get_model solver = Z3.Solver.get_model solver
 
-  
 
 end
+
+
+

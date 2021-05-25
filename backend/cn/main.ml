@@ -180,6 +180,7 @@ let z3_log_file_path =
 
 
 let main filename mjsonfile debug_level print_level =
+  (* let module S = Solver.Make(struct let global = Global.empty end) in *)
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
   if debug_level > 0 then Printexc.record_backtrace true else ();

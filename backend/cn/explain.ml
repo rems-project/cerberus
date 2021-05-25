@@ -477,8 +477,8 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let counter_model local = 
-    let _ = S.is_inconsistent local in
-    S.get_model ()
+    let (_, solver) = S.holds_and_solver local (IT.bool_ false) in
+    S.get_model solver
 
 
 
@@ -513,7 +513,7 @@ module Make (G : sig val global : Global.t end) = struct
     (it_pp, it_pp')
 
   let unsatisfied_constraint names local lc = 
-    let model = let _ = S.holds local lc in S.get_model () in
+    let model = let (_,solver) = S.holds_and_solver local lc in S.get_model solver in
     let (explanation, local) = explanation names local (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)
