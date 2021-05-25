@@ -297,7 +297,8 @@ let prefix_of_pointer: pointer_value -> string option memM =
 let validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM =
   fun _ v ->
   match v with
-  | PVnull _ -> return false
+  | PVnull _
+  | PVfun _ -> return false
   | PVptr l  -> return true (* FIXME *)
 
 let isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM =
@@ -314,6 +315,7 @@ let intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer
   match pv with
   | PVptr l  -> return (IRLoc l)
   | PVnull _ -> assert false (* TODO *)
+  | PVfun _ -> assert false (* TODO should be UB I think *)
 
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival =
