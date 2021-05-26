@@ -47,10 +47,14 @@ function report {
   echo -e "Test $1: $res"
 }
 
+# Use the provided path to cerberus, otherwise default to the driver backend build
+# CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
+CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+
 # Running ci tests
 for file in "${citests[@]}"
 do
-  ../_build/default/backend/driver/main.exe --exec --batch ci/$file > tmp/result 2> tmp/stderr
+  $CERB --exec --batch ci/$file > tmp/result 2> tmp/stderr
   if [ -f ./ci/expected/$file.expected ]; then
     if [[ $file == *.error.c ]]; then 
       cmp --silent tmp/stderr ci/expected/$file.expected
