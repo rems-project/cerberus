@@ -317,6 +317,16 @@ let intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer
   | PVnull _ -> assert false (* TODO *)
   | PVfun _ -> assert false (* TODO should be UB I think *)
 
+let offsetof_ival tagDefs tag_sym memb_ident =
+  let (xs, _) = Common.offsetsof tagDefs tag_sym in
+  let pred (ident, _, _) =
+    Common.ident_equal ident memb_ident in
+  match List.find_opt pred xs with
+    | Some (_, _, offset) ->
+        IRInt (Z.of_int offset)
+    | None ->
+        failwith "Caesium.offsetof_ival: invalid memb_ident"
+
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival =
   match ptrval with
@@ -334,8 +344,19 @@ let array_shift_ptrval ptrval ty ival =
     | PVfun _ ->
         assert false
 
-let member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value =
-  fun _ _ _ -> assert false (* TODO *)
+let member_shift_ptrval ptrval tag_sym memb_ident =
+  let offset = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
+  match ptrval with
+    | PVnull ty ->
+        (* NOTE: see the concrete model, gcc-torture accepts this behaviour*)
+        if Nat_big_num.(equal zero (Caesium.int_repr_to_Z offset)) then
+          PVnull ty
+        else
+          PVptr (Caesium.int_repr_to_loc offset)
+    | PVfun _ ->
+        failwith "Caesium.member_shift_ptrval, PVfun"
+    | PVptr (alloc_id_opt, addr) ->
+        PVptr (alloc_id_opt, Z.add addr (Caesium.int_repr_to_Z offset))
 
 let eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM =
   fun _ _ _ -> assert false (* TODO *)
@@ -453,9 +474,6 @@ let min_ival ity =
     | IntExp   -> fun x y -> Nat_big_num.pow_int x (Nat_big_num.to_int y) in
   IRInt (op (int_repr_to_Z ival1) (int_repr_to_Z ival2))
 
-let offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value =
-  fun _ _ _ -> assert false (* TODO *)
-
 let sizeof_ival ty =
   IRInt (Z.of_int (Common.sizeof ty))
 
@@ -570,8 +588,17 @@ let array_mval mvals =
         assert (List.for_all (fun z -> Ctype.ctypeEqual elem_ty (fst z)) xs);
         (Ctype ([], Array (elem_ty, None)), List.fold_left (fun acc (_, z) -> acc @ z) [] mvals)
 
-let struct_mval: Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> mem_value =
-  fun _ _ -> assert false (* TODO *)
+let struct_mval tag_sym (membs: (Symbol.identifier * Ctype.ctype * mem_value) list) : mem_value =
+  let struct_ty = Ctype ([], Struct tag_sym) in
+  let (offs, last_off) = Common.offsetsof (Tags.tagDefs ()) tag_sym in
+  let final_pad = Common.sizeof struct_ty - last_off in
+  let (_, bs) =
+    List.fold_left2 begin fun (last_off, acc) (ident, ty, off) (_, _, (membs_ty, membs_bs)) ->
+      let pad = off - last_off in
+      (off + Common.sizeof membs_ty, acc @ List.init pad (fun _ -> Caesium.MPoison) @ membs_bs)
+    end (0, []) offs membs in
+  (struct_ty, bs @ List.init final_pad (fun _ -> Caesium.MPoison))
+
 let union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value =
   fun _ _ _ -> assert false (* TODO *)
 
