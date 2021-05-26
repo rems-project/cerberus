@@ -324,9 +324,12 @@ let array_shift_ptrval ptrval ty ival =
         failwith "TODO: array_shift_ptrval"
     | PVptr (alloc_id_opt, addr) ->
         let sz = Z.of_int (Common.sizeof ty) in
-        let addr' = Z.mul sz (Caesium.int_repr_to_Z ival) in
+        let addr' = Z.add addr (Z.mul sz (Caesium.int_repr_to_Z ival)) in
         (* NOTE Rodolphe: here we don't have any overflow check here
            (eff_array_shift_ptrval is the one doing it, when using the strict ISO switch) *)
+        Printf.printf "Shifting %a to %a\n%!"
+          Caesium.pp_loc (alloc_id_opt, addr)
+          Caesium.pp_loc (alloc_id_opt, addr');
         PVptr (alloc_id_opt, addr')
     | PVfun _ ->
         assert false
