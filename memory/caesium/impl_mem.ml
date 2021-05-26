@@ -176,7 +176,8 @@ let kill loc is_dyn = function
         (* begin match Caesium.free_block loc with
         |
       end *)
-      failwith "WIP: Caesium.kill"
+      prerr_endline "TODO: kill() isn't doing anything!";
+      return ()
 
 let update_heap f error =
   ND.nd_get >>= fun st ->
@@ -308,8 +309,20 @@ let validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM =
   | PVfun _ -> return false
   | PVptr l  -> return true (* FIXME *)
 
-let isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+let isWellAligned_ptrval ref_ty ptrval =
+  match unatomic_ ref_ty with
+    | Void
+    | Function _ ->
+        fail (MerrOther "called isWellAligned_ptrval on void or a function type")
+    | _ ->
+        begin match ptrval with
+          | PVnull _ ->
+              return true
+          | PVfun _ ->
+              fail (MerrOther "called isWellAligned_ptrval on function pointer")
+          | PVptr (_, addr) ->
+              return (Nat_big_num.(equal (modulus addr (of_int (Common.alignof ref_ty))) zero))
+        end
 
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
