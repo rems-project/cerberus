@@ -120,15 +120,28 @@ type int_type = {
   it_signed            : bool;
 }
 
-let uintptr_t : int_type = {
-  it_bytes_per_int_log = 8;
-  it_signed            = false;
-}
+let mk_int_type : int -> bool -> int_type = fun log signed ->
+  { it_bytes_per_int_log = log; it_signed = signed; }
 
-let bool_it : int_type = {
-  it_bytes_per_int_log = 0;
-  it_signed            = false;
-}
+let i8  = mk_int_type 0 true
+let u8  = mk_int_type 0 false
+let i16 = mk_int_type 1 true
+let u16 = mk_int_type 1 false
+let i32 = mk_int_type 2 true
+let u32 = mk_int_type 2 false
+let i64 = mk_int_type 3 true
+let u64 = mk_int_type 3 false
+
+let bytes_per_addr_log : int = 3
+let bytes_per_addr : int = 1 lsl bytes_per_addr_log
+
+let intptr_t  : int_type = mk_int_type bytes_per_addr_log true
+let uintptr_t : int_type = mk_int_type bytes_per_addr_log false
+
+let size_t    : int_type = uintptr_t
+let ssize_t   : int_type = intptr_t
+let ptrdiff_t : int_type = intptr_t
+let bool_it   : int_type = u8
 
 let bytes_per_int : int_type -> int = fun it ->
   1 lsl it.it_bytes_per_int_log
@@ -265,6 +278,22 @@ let arith_binop : op_Z -> int_type -> value -> value -> value option =
 let add : int_type -> value -> value -> value option = arith_binop Z.add
 let sub : int_type -> value -> value -> value option = arith_binop Z.sub
 let mul : int_type -> value -> value -> value option = arith_binop Z.mul
+
+(** Relational operators. *)
+
+type op_bool = Z.t -> Z.t -> bool
+
+let arith_rel : op_bool -> int_type -> value -> value -> value option =
+  fun op it v1 v2 ->
+  match val_to_Z_weak v1 it with None -> None | Some(z1) ->
+  match val_to_Z_weak v2 it with None -> None | Some(z2) ->
+  Some(val_of_bool (op z1 z2) i32)
+
+let eq  : int_type -> value -> value -> value option = arith_rel Z.equal
+let lt  : int_type -> value -> value -> value option = arith_rel Z.lt
+let gt  : int_type -> value -> value -> value option = arith_rel Z.gt
+let leq : int_type -> value -> value -> value option = arith_rel Z.leq
+let geq : int_type -> value -> value -> value option = arith_rel Z.geq
 
 (** Operation to copy the provenance. *)
 
