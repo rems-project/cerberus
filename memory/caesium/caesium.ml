@@ -332,27 +332,27 @@ let same_alloc_id : loc -> loc -> bool = fun (id1,_) (id2,_) ->
   | (_        , None     ) -> false
   | (Some(id1), Some(id2)) -> Z.equal id1 id2
 
-let pointer_rel : bool -> op_bool -> heap_state -> value -> value
-                  -> value option = fun is_eq op hs v1 v2 ->
-  match val_to_loc v1 with None -> None | Some(l1) ->
-  match val_to_loc v2 with None -> None | Some(l2) ->
+let ptr_rel : bool -> op_bool -> heap_state -> loc -> loc -> bool option =
+  fun is_eq op hs l1 l2 ->
   if not (valid_ptr hs l1) then None else
   if not (valid_ptr hs l2) then None else
   if not (is_eq || same_alloc_id l1 l2) then None else
-  Some(val_of_bool (op (snd l1) (snd l2)) i32)
+  Some(op (snd l1) (snd l2))
 
-let ptr_eq  : heap_state -> value -> value -> value option =
-  pointer_rel true Z.eq
-let ptr_ne  : heap_state -> value -> value -> value option =
-  pointer_rel true Z.ne
-let ptr_lt  : heap_state -> value -> value -> value option =
-  pointer_rel false Z.lt
-let ptr_gt  : heap_state -> value -> value -> value option =
-  pointer_rel false Z.gt
-let ptr_leq : heap_state -> value -> value -> value option =
-  pointer_rel false Z.leq
-let ptr_geq : heap_state -> value -> value -> value option =
-  pointer_rel false Z.geq
+let ptr_eq  : heap_state -> loc -> loc -> bool option = ptr_rel true Z.eq
+let ptr_ne  : heap_state -> loc -> loc -> bool option = ptr_rel true Z.ne
+let ptr_lt  : heap_state -> loc -> loc -> bool option = ptr_rel false Z.lt
+let ptr_gt  : heap_state -> loc -> loc -> bool option = ptr_rel false Z.gt
+let ptr_leq : heap_state -> loc -> loc -> bool option = ptr_rel false Z.leq
+let ptr_geq : heap_state -> loc -> loc -> bool option = ptr_rel false Z.geq
+
+let wrap_ptr_rel : (heap_state -> loc -> loc -> bool option)
+                   -> heap_state -> value -> value -> value option =
+  fun f hs v1 v2 ->
+  match val_to_loc v1 with None -> None | Some(l1) ->
+  match val_to_loc v2 with None -> None | Some(l2) ->
+  match f hs l1 l2 with None -> None | Some(b) ->
+  Some(val_of_bool b i32)
 
 (** Operation to copy the provenance. *)
 

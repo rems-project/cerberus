@@ -264,6 +264,7 @@ let case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option =
 
 (* Operations on pointer values *)
 let eq_ptrval ptrval1 ptrval2 : bool memM =
+  ND.nd_get >>= fun st ->
   match ptrval1, ptrval2 with
     | PVnull _, PVnull _ ->
       return true
@@ -271,7 +272,11 @@ let eq_ptrval ptrval1 ptrval2 : bool memM =
     | _, PVnull _ ->
         return false
     | PVptr loc1, PVptr loc2 ->
-        failwith "TODO: Caesium loc equality"
+        begin
+          match Caesium.(ptr_eq st.state.st_heap loc1 loc2) with
+          | None    -> assert false (* TODO *)
+          | Some(b) -> return b
+        end
     | PVfun sym1, PVfun sym2 ->
         return (Symbol.symbolEquality sym1 sym2)
     | PVfun _, PVptr _
