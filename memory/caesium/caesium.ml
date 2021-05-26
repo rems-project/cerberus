@@ -1,3 +1,10 @@
+module Z = struct
+  include Z
+
+  let eq : t -> t -> bool = equal
+  let ne : t -> t -> bool = fun z1 z2 -> not (eq z1 z2)
+end
+
 (** Representation of addresses and maps over addresses. *)
 
 type addr = Z.t
@@ -279,7 +286,7 @@ let add : int_type -> value -> value -> value option = arith_binop Z.add
 let sub : int_type -> value -> value -> value option = arith_binop Z.sub
 let mul : int_type -> value -> value -> value option = arith_binop Z.mul
 
-(** Relational operators. *)
+(** Relational operators on integers. *)
 
 type op_bool = Z.t -> Z.t -> bool
 
@@ -289,11 +296,63 @@ let arith_rel : op_bool -> int_type -> value -> value -> value option =
   match val_to_Z_weak v2 it with None -> None | Some(z2) ->
   Some(val_of_bool (op z1 z2) i32)
 
-let eq  : int_type -> value -> value -> value option = arith_rel Z.equal
+let eq  : int_type -> value -> value -> value option = arith_rel Z.eq
+let ne  : int_type -> value -> value -> value option = arith_rel Z.ne
 let lt  : int_type -> value -> value -> value option = arith_rel Z.lt
 let gt  : int_type -> value -> value -> value option = arith_rel Z.gt
 let leq : int_type -> value -> value -> value option = arith_rel Z.leq
 let geq : int_type -> value -> value -> value option = arith_rel Z.geq
+
+(** Relational operators on (non-NULL) pointers. *)
+
+let block_alive : heap_state -> loc -> bool = fun hs (id,_) ->
+  match id with
+  | None     -> false
+  | Some(id) -> try (AllocM.find id hs.hs_allocs).al_alive
+                with Not_found -> false
+
+let heap_state_loc_in_bounds : heap_state -> loc -> int -> bool =
+  fun hs (id,a) n ->
+  match id with
+  | None     -> false
+  | Some(id) ->
+  try
+    let al = AllocM.find id hs.hs_allocs in
+    let n = Z.of_int n in
+    Z.leq al.al_start a && Z.leq (Z.add a n) (al_end al)
+  with Not_found -> false
+
+let valid_ptr : heap_state -> loc -> bool = fun hs l ->
+  block_alive hs l && heap_state_loc_in_bounds hs l 0
+
+let same_alloc_id : loc -> loc -> bool = fun (id1,_) (id2,_) ->
+  match (id1, id2) with
+  | (None     , None     ) -> true
+  | (None     , _        ) -> false
+  | (_        , None     ) -> false
+  | (Some(id1), Some(id2)) -> Z.equal id1 id2
+
+let pointer_rel : bool -> op_bool -> heap_state -> value -> value
+                  -> value option = fun is_eq op hs v1 v2 ->
+  match val_to_loc v1 with None -> None | Some(l1) ->
+  match val_to_loc v2 with None -> None | Some(l2) ->
+  if not (valid_ptr hs l1) then None else
+  if not (valid_ptr hs l2) then None else
+  if not (is_eq || same_alloc_id l1 l2) then None else
+  Some(val_of_bool (op (snd l1) (snd l2)) i32)
+
+let ptr_eq  : heap_state -> value -> value -> value option =
+  pointer_rel true Z.eq
+let ptr_ne  : heap_state -> value -> value -> value option =
+  pointer_rel true Z.ne
+let ptr_lt  : heap_state -> value -> value -> value option =
+  pointer_rel false Z.lt
+let ptr_gt  : heap_state -> value -> value -> value option =
+  pointer_rel false Z.gt
+let ptr_leq : heap_state -> value -> value -> value option =
+  pointer_rel false Z.leq
+let ptr_geq : heap_state -> value -> value -> value option =
+  pointer_rel false Z.geq
 
 (** Operation to copy the provenance. *)
 
