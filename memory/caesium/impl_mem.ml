@@ -245,7 +245,7 @@ let fun_ptrval sym =
 
 (*TODO: revise that, just a hack for codegen*)
 let concrete_ptrval i addr =
-  assert false (* TODO *)
+  failwith "TODO: concrete_ptrval" (* TODO *)
 let case_ptrval (* ptrval f_null f_fptr f_ptr f_unspec =
   match ptrval with
     | PVnull ty ->
@@ -257,10 +257,10 @@ let case_ptrval (* ptrval f_null f_fptr f_ptr f_unspec =
  (* concrete pointer *) (Nat_big_num.num option -> Nat_big_num.num -> 'a) ->
  (* unspecified value *) (unit -> 'a) -> 'a =
    (* TODO *)
-  fun _ _ _ _ _ -> assert false
+  fun _ _ _ _ _ -> failwith "TODO: case_ptrval"
 
 let case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option =
-  fun _ _ -> assert false (* TODO *)
+  fun _ _ -> failwith "TODO: case_funsym_opt" (* TODO *)
 
 (* Operations on pointer values *)
 let eq_ptrval ptrval1 ptrval2 : bool memM =
@@ -287,18 +287,19 @@ let ne_ptrval ptrval1 ptrval2 =
   eq_ptrval ptrval1 ptrval2 >>= fun b ->
   return (not b)
 let lt_ptrval: pointer_value -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+  fun _ _ -> failwith "TODO: lt_ptrval"
 let gt_ptrval: pointer_value -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+  fun _ _ -> failwith "TODO: gt_ptrval"
 let le_ptrval: pointer_value -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+  fun _ _ -> failwith "TODO: le_ptrval"
 let ge_ptrval: pointer_value -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+  fun _ _ -> failwith "TODO: ge_ptrval"
 let diff_ptrval: Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM =
-fun _ _ _ -> assert false (* TODO *)
+fun _ _ _ -> failwith "TODO: diff_ptrval"
 
-let update_prefix: (Symbol.prefix * mem_value) -> unit memM =
-  fun _ -> assert false (* TODO *)
+let update_prefix (_ : (Symbol.prefix * mem_value)) =
+  prerr_endline "TODO: Caesium.update_prefix isn't doing anything";
+  return ()
 let prefix_of_pointer: pointer_value -> string option memM =
   fun _ -> return None (* TODO *)
 
@@ -406,13 +407,8 @@ let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
   let sz = match impl.sizeof_ity ity with
     | Some z -> z
     | None   -> failwith "the Caesium memory model requires a complete implementation (to_int_type)" in
-  let ret =
-    { it_bytes_per_int_log= Z.(log2 (of_int sz))
-    ; it_signed= impl.is_signed_ity ity } in
-  (* Printf.printf "to_int_type ==> { it_bytes_per_int_log= %d, it_signed= %s }\n"
-    ret.it_bytes_per_int_log
-    (if ret.it_signed then "true" else "false"); *)
-  ret
+  { it_bytes_per_int_log= Z.(log2 (of_int sz))
+  ; it_signed= impl.is_signed_ity ity }
 
 let concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value =
   fun _ _ -> assert false (* TODO *)
@@ -661,7 +657,7 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
               f_ptr ty (PVptr l)
         end
     | _ ->
-        failwith ("case_mem_value ==> " ^ String_core_ctype.string_of_ctype ty)
+        failwith ("TODO: case_mem_value ==> " ^ String_core_ctype.string_of_ctype ty)
 
 (*
   Ctype.ctype * Caesium.value
