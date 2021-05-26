@@ -43,7 +43,6 @@ let check_sat =
   Eff (fun b -> ((if b then `SAT else `UNSAT), b))
 
 let with_constraints _ cs (Eff ma) =
-  Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
   let rec eval_cs = function
     | MC_empty ->
         true
@@ -54,7 +53,7 @@ let with_constraints _ cs (Eff ma) =
     | MC_lt (ival1, ival2) ->
         Nat_big_num.less (int_repr_to_Z ival1) (int_repr_to_Z ival2)
     | MC_in_device _ ->
-        failwith "TODO: Concrete, with_constraints: MC_in_device"
+        failwith "TODO: Caesium, with_constraints: MC_in_device"
     | MC_or (cs1, cs2) ->
         eval_cs cs1 || eval_cs cs2
     | MC_conj css ->
@@ -66,8 +65,9 @@ let with_constraints _ cs (Eff ma) =
 end : Constraints with type t = mem_iv_constraint)
 
 type footprint = FOOTPRINT
-let do_overlap: footprint -> footprint -> bool =
-  fun _ _ -> failwith "TODO: do_overlap"
+let do_overlap _ _ =
+  (* TODO: no unseq-race detection for now *)
+  false
 
 type mem_state = {
   next_alloc_id: Caesium.alloc_id;
@@ -151,15 +151,6 @@ let allocate_object tid pref align_ival ty init_opt =
         ND.nd_put { st with state = { st.state with st_heap = heap_st' } } >>= fun () ->
         return (PVptr loc)
 
-
-
-     (* MC.thread_id      (* the allocating thread *)
-  -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
-  -> integer_value  (* alignment constraint *)
-  -> Ctype.ctype    (* type of the allocation *)
-  -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
-  -> pointer_value memM = *)
-  (* fun _ _ _ _ _ -> return (PVnull (Ctype ([], Void))) TODO *)
 
 let allocate_region:
      MC.thread_id      (* the allocating thread *)
@@ -247,11 +238,6 @@ let store loc ty is_locking ptrval mval =
 (* Pointer value constructors *)
 let null_ptrval ty =
   PVnull ty
-  (* match (Ocaml_implementation.get ()).sizeof_pointer with
-    | Some sz ->
-        List.init sz (fun _ -> Caesium.MByte 0)
-    | None ->
-        failwith "the Caesium memory model requires a complete implementation sizeof POINTER" *)
 
 let fun_ptrval sym =
   PVfun sym
@@ -296,8 +282,9 @@ let eq_ptrval ptrval1 ptrval2 : bool memM =
     | PVptr _, PVfun _ ->
         return false
   
-let ne_ptrval: pointer_value -> pointer_value -> bool memM =
-  fun _ _ -> assert false (* TODO *)
+let ne_ptrval ptrval1 ptrval2 =
+  eq_ptrval ptrval1 ptrval2 >>= fun b ->
+  return (not b)
 let lt_ptrval: pointer_value -> pointer_value -> bool memM =
   fun _ _ -> assert false (* TODO *)
 let gt_ptrval: pointer_value -> pointer_value -> bool memM =
