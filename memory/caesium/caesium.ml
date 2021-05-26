@@ -66,6 +66,34 @@ let initial_heap_state : heap_state = {
   hs_allocs = AllocM.empty;
 }
 
+(** Full program state. *)
+
+module LocM = Map.Make(
+  struct
+    type t = loc
+    let compare (id1, a1) (id2, a2) =
+      let i1 =
+        match (id1, id2) with
+        | (None     , None     ) -> 0
+        | (None     , _        ) -> -1
+        | (_        , None     ) -> 1
+        | (Some(id1), Some(id2)) -> Z.compare id1 id2
+      in
+      if i1 <> 0 then i1 else Z.compare a1 a2
+  end)
+
+type func = Symbol.sym
+
+type state = {
+  st_heap  : heap_state;
+  st_fntbl : func LocM.t;
+}
+
+let initial_state : state = {
+  st_heap  = initial_heap_state;
+  st_fntbl = LocM.empty;
+}
+
 (** Conversion betweem values and locations. *)
 
 let val_of_loc_n : int -> loc -> value = fun n l ->
