@@ -72,13 +72,13 @@ let do_overlap: footprint -> footprint -> bool =
 type mem_state = {
   next_alloc_id: Caesium.alloc_id;
   last_address: Caesium.addr;
-  heap_state: Caesium.heap_state;
+  state: Caesium.state;
 }
 
 let initial_mem_state: mem_state =
   { next_alloc_id= Z.zero
   ; last_address= Z.of_int 0xFFFFFFFF
-  ; heap_state= Caesium.initial_heap_state }
+  ; state= Caesium.initial_state }
 
 type 'a memM =
   ('a, string, MC.mem_error, integer_value MC.mem_constraint, mem_state) ND.ndM
@@ -144,11 +144,11 @@ let allocate_object tid pref align_ival ty init_opt =
   let v  = snd (Option.value init_opt ~default:(mk_unspecified ty)) in
   pick_location sz al >>= fun loc ->
   ND.nd_get >>= fun st ->
-  match Caesium.alloc_new_block loc v st.heap_state with
+  match Caesium.alloc_new_block loc v st.state.st_heap with
     | None ->
         assert false
     | Some heap_st' ->
-        ND.nd_put { st with heap_state= heap_st' } >>= fun () ->
+        ND.nd_put { st with state = { st.state with st_heap = heap_st' } } >>= fun () ->
         return (PVptr loc)
 
 
@@ -176,19 +176,21 @@ let kill loc is_dyn ptrval =
 
 let update_heap f error =
   ND.nd_get >>= fun st ->
-  match f st.heap_state.hs_heap with
+  match f st.state.st_heap.hs_heap with
     | None ->
         error
     | Some heap' ->
-      ND.nd_put { st with heap_state= { st.heap_state with hs_heap= heap' } }
+        let st_heap = { st.state.st_heap with hs_heap = heap' } in
+        ND.nd_put { st with state = { st.state with st_heap }}
 
 let read_heap f error =
   ND.nd_get >>= fun st ->
-  match f st.heap_state.hs_heap with
+  match f st.state.st_heap.hs_heap with
     | None ->
         error
     | Some (z, heap') ->
-        ND.nd_put { st with heap_state= { st.heap_state with hs_heap= heap' } } >>= fun () ->
+        let st_heap = { st.state.st_heap with hs_heap = heap' } in
+        ND.nd_put { st with state = { st.state with st_heap }} >>= fun () ->
         return z
 
 let load loc ty  ptrval =
