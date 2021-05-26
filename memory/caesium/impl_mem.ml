@@ -339,7 +339,7 @@ let array_shift_ptrval ptrval ty ival =
         let addr' = Z.add addr (Z.mul sz (Caesium.int_repr_to_Z ival)) in
         (* NOTE Rodolphe: here we don't have any overflow check here
            (eff_array_shift_ptrval is the one doing it, when using the strict ISO switch) *)
-        Printf.printf "Shifting %a to %a\n%!"
+        Printf.fprintf stderr "Shifting %a to %a\n%!"
           Caesium.pp_loc (alloc_id_opt, addr)
           Caesium.pp_loc (alloc_id_opt, addr');
         PVptr (alloc_id_opt, addr')
@@ -482,16 +482,21 @@ let sizeof_ival ty =
 let alignof_ival ty =
   IRInt (Z.of_int (Common.alignof ty))
 
-let bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value =
-  fun _ _ -> assert false (* TODO *)
-let bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value =
-  fun _ _ _ -> failwith "bitwise_and_ival" (* TODO *)
+let bitwise_complement_ival _ ival =
+  let n = Caesium.int_repr_to_Z ival in
+  IRInt (Nat_big_num.(sub (negate n) (of_int 1)))
+  let bitwise_and_ival _ ival1 ival2 =
+  let n1 = Caesium.int_repr_to_Z ival1 in
+  let n2 = Caesium.int_repr_to_Z ival2 in
+  IRInt (Nat_big_num.bitwise_and n1 n2)
 let bitwise_or_ival _ ival1 ival2 =
   let n1 = Caesium.int_repr_to_Z ival1 in
   let n2 = Caesium.int_repr_to_Z ival2 in
   IRInt (Nat_big_num.bitwise_or n1 n2)
-let bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value =
-  fun _ _ _ -> failwith "bitwise_xor_ival" (* TODO *)
+let bitwise_xor_ival _ ival1 ival2 =
+  let n1 = Caesium.int_repr_to_Z ival1 in
+  let n2 = Caesium.int_repr_to_Z ival2 in
+  IRInt (Nat_big_num.bitwise_xor n1 n2)
 
 let case_integer_value: (* TODO: expose more ctors *)
   integer_value ->
@@ -504,13 +509,12 @@ let is_specified_ival: integer_value -> bool =
   fun _ -> assert false (* TODO *)
 
 (* Predicats on integer values *)
-let eq_ival st_opt ival1 ival2 =
+let eq_ival _ ival1 ival2 =
   Some (Z.equal (Caesium.int_repr_to_Z ival1) (Caesium.int_repr_to_Z ival2))
-let lt_ival: mem_state option -> integer_value -> integer_value -> bool option =
-  fun _ _ _ -> assert false (* TODO *)
-let le_ival: mem_state option -> integer_value -> integer_value -> bool option =
-  fun _ ival1 ival2 ->
-    Some (Nat_big_num.less_equal (int_repr_to_Z ival1) (int_repr_to_Z ival2))
+let lt_ival _ ival1 ival2 =
+  Some (Z.lt (Caesium.int_repr_to_Z ival1) (Caesium.int_repr_to_Z ival2))
+let le_ival _ ival1 ival2 =
+  Some (Z.leq (Caesium.int_repr_to_Z ival1) (Caesium.int_repr_to_Z ival2))
 
 let eval_integer_value ival =
   Some (int_repr_to_Z ival)

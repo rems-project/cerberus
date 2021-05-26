@@ -380,7 +380,7 @@ let heap_read : addr -> int -> (hcell -> bool) -> heap -> value option =
       if pred hc then loop (hc.hc_value :: acc) (Z.succ a) (n - 1) else None
     with Not_found -> None
   in
-  Printf.printf "heap_read %a %d\n%!" Z.output a n;
+  Printf.fprintf stderr "heap_read %a %d\n%!" Z.output a n;
   loop [] a n
 
 let heap_write : addr -> value -> (hcell option -> mbyte -> hcell)
@@ -424,7 +424,7 @@ let heap_alloc : addr -> value -> alloc_id -> heap -> heap = fun a v id h ->
 (** Non atomic read/writes. *)
 
 let na_prepare_read : loc -> int -> heap -> heap option = fun l n h ->
-  Printf.printf "na_prepare_read %a %d _\n%!" pp_loc l n;
+  Printf.fprintf stderr "na_prepare_read %a %d _\n%!" pp_loc l n;
   let pred hc =
     match (fst l, hc.hc_lock_state) with
     | (Some(id), RSt(_)) -> id = hc.hc_alloc_id
@@ -443,7 +443,7 @@ let na_prepare_read : loc -> int -> heap -> heap option = fun l n h ->
   heap_write (snd l) v fn h
 
 let na_read : loc -> int -> heap -> (value * heap) option = fun l n h ->
-  Printf.printf "na_read %a %d _\n%!" pp_loc l n;
+  Printf.fprintf stderr "na_read %a %d _\n%!" pp_loc l n;
   let pred hc =
     match (fst l, hc.hc_lock_state) with
     | (Some(id), RSt(n)) -> n > 0 && id = hc.hc_alloc_id
@@ -464,7 +464,7 @@ let na_read : loc -> int -> heap -> (value * heap) option = fun l n h ->
   | Some(h) -> Some(v, h)
 
 let na_prepare_write : loc -> value -> heap -> heap option = fun l v h ->
-  Printf.printf "na_prepare_write %a _ _\n%!" pp_loc l;
+  Printf.fprintf stderr "na_prepare_write %a _ _\n%!" pp_loc l;
   let n = List.length v in
   let pred hc =
     match (fst l, hc.hc_lock_state) with
@@ -484,7 +484,7 @@ let na_prepare_write : loc -> value -> heap -> heap option = fun l v h ->
   heap_write (snd l) v fn h
 
 let na_write : loc -> value -> heap -> heap option = fun l v h ->
-  Printf.printf "na_write %a _ _\n%!" pp_loc l;
+  Printf.fprintf stderr "na_write %a _ _\n%!" pp_loc l;
   let n = List.length v in
   let pred hc =
     match (fst l, hc.hc_lock_state) with
@@ -613,7 +613,7 @@ let free_block : loc -> int -> heap_state -> heap_state option =
 let alloc_new_block : loc -> value -> heap_state -> heap_state option =
   fun (ido, a) v {hs_heap = h; hs_allocs = m} ->
   (* Check that the allocation identifier is free, create allocation. *)
-  Printf.printf "alloc_new_block %a\n%!" Z.output a;
+  Printf.fprintf stderr "alloc_new_block %a\n%!" Z.output a;
   match ido with None -> None | Some(id) ->
   match AllocM.find_opt id m with Some(_) -> None | _ ->
   let al =
