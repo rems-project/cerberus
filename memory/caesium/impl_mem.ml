@@ -171,8 +171,21 @@ let allocate_region:
     return (failwith "WIP: allocate_region")
     (* return (PVnull (Ctype ([], Void))) (* TODO *) *)
 
-let kill loc is_dyn ptrval =
-  return () (* TODO *)
+let kill loc is_dyn = function
+  | PVnull _ ->
+      if Switches.(has_switch SW_forbid_nullptr_free) then
+        fail (MerrOther "attempted to kill with a null pointer")
+      else
+        return ()
+  | PVfun _ ->
+      fail (MerrOther "attempted to kill with a function pointer")
+  | PVptr loc ->
+      (* TODO: if [is_dym], we must fail if the alloc is not dynamics *)
+      (* TODO: if [is_dym] and the alloc is dead, we raise UB *)
+        (* begin match Caesium.free_block loc with
+        |
+      end *)
+      failwith "WIP: Caesium.kill"
 
 let update_heap f error =
   ND.nd_get >>= fun st ->
