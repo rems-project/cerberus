@@ -49,12 +49,12 @@ type heap = hcell AddrM.t
 
 type allocation = {
   al_start : addr;
-  al_len   : Z.t;
+  al_len   : int;
   al_alive : bool;
 }
 
 let al_end : allocation -> addr = fun al ->
-  Z.(al.al_start + al.al_len)
+  Z.(al.al_start + of_int al.al_len)
 
 let allocation_in_range : allocation -> bool = fun al ->
   let min_alloc_start = Z.one in
@@ -609,6 +609,11 @@ let free_block : loc -> int -> heap_state -> heap_state option =
     hs_allocs = AllocM.add id {al with al_alive = false} m;
   })
 
+let free_block_wrapper : loc -> heap_state -> heap_state option = fun l hs ->
+  match fst l with None -> None | Some(id) ->
+  match AllocM.find_opt id hs.hs_allocs with None -> None | Some(al) ->
+  free_block l al.al_len hs
+
 (* FIXME find a valid address? *)
 let alloc_new_block : loc -> value -> heap_state -> heap_state option =
   fun (ido, a) v {hs_heap = h; hs_allocs = m} ->
@@ -616,9 +621,7 @@ let alloc_new_block : loc -> value -> heap_state -> heap_state option =
   Printf.fprintf stderr "alloc_new_block %a\n%!" Z.output a;
   match ido with None -> None | Some(id) ->
   match AllocM.find_opt id m with Some(_) -> None | _ ->
-  let al =
-    {al_start = a; al_len   = Z.of_int (List.length v); al_alive = true;}
-  in
+  let al = {al_start = a; al_len = List.length v; al_alive = true;} in
   if not (allocation_in_range al) then None else
   (* Check that the heap region is not mapped. *)
   if not (heap_region_is_free a (List.length v) h) then None else

@@ -173,11 +173,14 @@ let kill loc is_dyn = function
   | PVptr loc ->
       (* TODO: if [is_dym], we must fail if the alloc is not dynamics *)
       (* TODO: if [is_dym] and the alloc is dead, we raise UB *)
-        (* begin match Caesium.free_block loc with
-        |
-      end *)
-      prerr_endline "TODO: kill() isn't doing anything!";
-      return ()
+      begin
+        ND.nd_get >>= fun st ->
+        match Caesium.free_block_wrapper loc st.state.st_heap with
+        | None           -> assert false (* TODO *)
+        | Some(heap_st') ->
+        ND.nd_put { st with state = { st.state with st_heap = heap_st' } } >>= fun () ->
+        return ()
+      end
 
 let update_heap f error =
   ND.nd_get >>= fun st ->
