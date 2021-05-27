@@ -224,9 +224,17 @@ let store loc ty is_locking ptrval mval =
       fail (MC.MerrAccess (loc, MC.StoreAccess, MC.FunctionPtr))  
     | PVptr loc ->
         let (val_ty, bs) = mval in
-        assert (AilTypesAux.are_compatible
+        (* TODO: bring back this check, not need to unqualify referenced types in pointers *)
+(*
+        if not (AilTypesAux.are_compatible
                  (Ctype.no_qualifiers, ty)
-                 (Ctype.no_qualifiers, val_ty) );
+                 (Ctype.no_qualifiers, val_ty) ) then begin
+          Printf.printf "in Caesium.store(), are_compatible failed ==> lvalue_ty: %s <--> val_ty: %s\n"
+            (String_core_ctype.string_of_ctype ty)
+            (String_core_ctype.string_of_ctype val_ty);
+          assert false
+        end;
+*)
         update_heap
           (Caesium.na_prepare_write loc bs)
           (fail (MC.MerrOther "in store(), na_prepare_write failed")) >>= fun () ->
@@ -235,6 +243,17 @@ let store loc ty is_locking ptrval mval =
           (fail (MC.MerrOther "in store(), na_write failed")) >>= fun () ->
         return FOOTPRINT
 
+
+
+let string_of_mbytes xs =
+  let aux = function
+    | MByte n ->
+        "mbyte(" ^ string_of_int n ^ ")"
+    | MPtrFrag ((_, addr), i) ->
+        "mptrfrag(" ^ Z.to_string addr ^ ", " ^ string_of_int i ^ ")"
+    | MPoison ->
+        "mpoison" in
+  "[" ^ String.concat "; " (List.map aux xs) ^ "]"
 
 (* Pointer value constructors *)
 let null_ptrval ty =
@@ -246,18 +265,17 @@ let fun_ptrval sym =
 (*TODO: revise that, just a hack for codegen*)
 let concrete_ptrval i addr =
   failwith "TODO: concrete_ptrval" (* TODO *)
-let case_ptrval (* ptrval f_null f_fptr f_ptr f_unspec =
+let case_ptrval ptrval fnull ffun fptr _ =
   match ptrval with
     | PVnull ty ->
-        f_null ty
-        *)
-  : pointer_value ->
- (* null pointer *) (Ctype.ctype -> 'a) ->
- (* function pointer *) (Symbol.sym -> 'a) ->
- (* concrete pointer *) (Nat_big_num.num option -> Nat_big_num.num -> 'a) ->
- (* unspecified value *) (unit -> 'a) -> 'a =
-   (* TODO *)
-  fun _ _ _ _ _ -> failwith "TODO: case_ptrval"
+        fnull ty
+    | PVfun sym ->
+        ffun sym
+    | PVptr _ ->
+        (* TODO: this case breaks the mem interface because of
+        the web interface, we don't care here *)
+        prerr_endline "TODO: Caesium.case_ptrval ==> making up stuff";
+        fptr None Z.zero
 
 let case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option =
   fun _ _ -> failwith "TODO: case_funsym_opt" (* TODO *)
@@ -382,10 +400,43 @@ let member_shift_ptrval ptrval tag_sym memb_ident =
 let eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM =
   fun _ _ _ -> assert false (* TODO *)
 
+let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
+  let impl = Ocaml_implementation.get () in
+  let sz = match impl.sizeof_ity ity with
+    | Some z -> z
+    | None   -> failwith "the Caesium memory model requires a complete implementation (to_int_type)" in
+  { it_bytes_per_int_log= Z.(log2 (of_int sz))
+  ; it_signed= impl.is_signed_ity ity }
+
 let memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM =
   fun _ _ _ -> assert false (* TODO *)
-let memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM =
-  fun _ _ _ -> assert false (* TODO *)
+let memcmp ptrval1 ptrval2 size_ival =
+  let size_n = Caesium.int_repr_to_Z size_ival in
+  let rec get_bytes ptrval acc = function
+    | 0 ->
+        return (List.rev acc)
+    | size ->
+        load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= fun (_, (_, bs)) ->
+          (* TODO: use the effectful one instead *)
+          let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IRInt (Nat_big_num.(succ zero))) in
+          match Caesium.val_to_int_repr bs (to_int_type Ctype.(Unsigned Ichar)) with
+            | None ->
+                Printf.printf "bs: %s\n" (string_of_mbytes bs);
+                failwith "TODO: val_to_int_repr failed in memcmp()"
+            | Some byte ->
+            get_bytes ptr' (byte :: acc) (size-1) in
+  get_bytes ptrval1 [] (Nat_big_num.to_int size_n) >>= fun bytes1 ->
+  get_bytes ptrval2 [] (Nat_big_num.to_int size_n) >>= fun bytes2 ->
+  
+  let open Nat_big_num in
+  return (IRInt (
+    List.fold_left (fun acc (ival1, ival2) ->
+      if equal acc zero then
+        Z.(of_int (compare (Caesium.int_repr_to_Z ival1) (Caesium.int_repr_to_Z ival2)))
+      else
+        acc
+ ) zero (List.combine bytes1 bytes2)))
+
 let realloc: MC.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM =
   fun _ _ _ _ -> assert false (* TODO *)
 
@@ -402,14 +453,6 @@ let va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM =
 
 
 (* Integer value constructors *)
-let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
-  let impl = Ocaml_implementation.get () in
-  let sz = match impl.sizeof_ity ity with
-    | Some z -> z
-    | None   -> failwith "the Caesium memory model requires a complete implementation (to_int_type)" in
-  { it_bytes_per_int_log= Z.(log2 (of_int sz))
-  ; it_signed= impl.is_signed_ity ity }
-
 let concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value =
   fun _ _ -> assert false (* TODO *)
 let integer_ival n =
@@ -623,16 +666,6 @@ let union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value =
   fun _ _ _ -> assert false (* TODO *)
 
 (* Memory value destructor *)
-let string_of_mbytes xs =
-  let aux = function
-    | MByte n ->
-        "mbyte(" ^ string_of_int n ^ ")"
-    | MPtrFrag ((_, addr), i) ->
-        "mptrfrag(" ^ Z.to_string addr ^ ", " ^ string_of_int i ^ ")"
-    | MPoison ->
-        "mpoison" in
-  "[" ^ String.concat "; " (List.map aux xs) ^ "]"
-
 let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_union =
   if List.exists (function MPoison -> true | _ -> false) bs then
     (* NOTE Rodolphe: making the value unspecified if one byte is poison,
@@ -643,6 +676,8 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
         let int_ty = to_int_type ity in
         begin match Caesium.val_to_int_repr bs int_ty with
           | None ->
+              Printf.printf "ty ==> %s\n" (String_core_ctype.string_of_ctype ty);
+              Printf.printf "bytes_per_int ==> %d\n" (Caesium.bytes_per_int int_ty);
               Printf.printf "==> %s\n" (string_of_mbytes bs);
               failwith "case_mem_value, integer, None"
           | Some ival ->
