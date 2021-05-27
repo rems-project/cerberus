@@ -30,6 +30,8 @@ let rec offsetsof tagDefs tag_sym =
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
     | Void | Array (_, None) | Function _ ->
+        Printf.fprintf stderr "Common.sizeof ==> ty: %s\n"
+          (String_core_ctype.string_of_ctype cty);
         assert false
     | Basic (Integer ity) ->
         begin match (Ocaml_implementation.get ()).sizeof_ity ity with
