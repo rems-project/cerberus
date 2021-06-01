@@ -86,15 +86,6 @@ and 'TY mu_loaded_value =  (* potentially unspecified C object values *)
 
 
 type 
-mu_ctor_val =  (* data constructors *)
-   M_Cnil of T.bt (* empty list *)
- | M_Ccons (* list cons *)
- | M_Ctuple (* tuple *)
- | M_Carray (* C array *)
- | M_Cspecified (* non-unspecified loaded value *)
-
-
-type 
 'TY mu_value =  (* Core values *)
    M_Vobject of 'TY mu_object_value (* C object value *)
  | M_Vloaded of 'TY mu_loaded_value (* loaded C object value *)
@@ -103,6 +94,28 @@ type
  | M_Vfalse (* boolean false *)
  | M_Vlist of T.bt * ('TY mu_value) list (* list *)
  | M_Vtuple of ('TY mu_value) list (* tuple *)
+
+
+(** subrules *)
+let is_mu_bool_value_of_mu_value (mu_value_5:'TY mu_value) : bool =
+  match mu_value_5 with
+  | (M_Vobject mu_object_value) -> false
+  | (M_Vloaded mu_loaded_value) -> false
+  | M_Vunit -> false
+  | M_Vtrue -> (true)
+  | M_Vfalse -> (true)
+  | (M_Vlist (t_bt,(mu_value_list))) -> false
+  | (M_Vtuple (mu_value_list)) -> false
+
+
+
+type 
+mu_ctor_val =  (* data constructors *)
+   M_Cnil of T.bt (* empty list *)
+ | M_Ccons (* list cons *)
+ | M_Ctuple (* tuple *)
+ | M_Carray (* C array *)
+ | M_Cspecified (* non-unspecified loaded value *)
 
 
 type 
@@ -185,6 +198,16 @@ let is_mu_seq_expr_aux_of_mu_seq_expr_aux (mu_seq_expr_aux5:'TY mu_seq_expr_aux)
 
 
 type 
+m_kill_kind = 
+   M_Dynamic
+ | M_Static of T.ct
+
+
+type
+ty_sym_opt_T_bt = ( Symbol.sym option * T.bt )
+
+
+type 
 'TY mu_pexpr =  (* pure expressions *)
    M_PEpval of 'TY mu_pval_aux (* pure values *)
  | M_PEctor of mu_ctor_expr * ('TY mu_pval_aux) list (* data constructor application *)
@@ -201,9 +224,13 @@ type
 
 
 type 
-m_kill_kind = 
-   M_Dynamic
- | M_Static of T.ct
+mu_pattern = 
+   M_CaseBase of ty_sym_opt_T_bt
+ | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
+
+and mu_pattern_aux = 
+   M_Pattern of Location_ocaml.t * annot list * mu_pattern
+ | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
 
 
 type 
@@ -213,25 +240,15 @@ type
 
 
 type 
-mu_pattern = 
-   M_CaseBase of ( Symbol.sym option * T.bt )
- | M_CaseCtor of mu_ctor_val * (mu_pattern_aux) list
-
-and mu_pattern_aux = 
-   M_Pattern of Location_ocaml.t * annot list * mu_pattern
- | M_Pat_no_aux of mu_pattern (* Ott-hack for simpler typing rules *)
+'TY mu_sym_or_pattern = 
+   M_Symbol of Symbol.sym
+ | M_Pat of mu_pattern_aux
 
 
 type 
 'TY mu_tpval =  (* top-level pure values *)
    M_TPVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_TPVdone of 'TY mu_pval_aux (* pure done *)
-
-
-type 
-'TY mu_sym_or_pattern = 
-   M_Symbol of Symbol.sym
- | M_Pat of mu_pattern_aux
 
 
 type 
@@ -243,9 +260,12 @@ type
 type 
 'TY mu_tpexpr =  (* top-level pure expressions *)
    M_TPEtpval of 'TY mu_tpval_aux (* top-level pure values *)
- | M_TPEcase of 'TY mu_pval_aux * ((mu_pattern_aux * 'TY mu_tpexpr_aux)) list (* pattern matching *)
+ | M_TPEcase of 'TY mu_pval_aux * ('TY mu_tpexpr_case_branch) list (* pattern matching *)
  | M_TPElet of 'TY mu_sym_or_pattern * 'TY mu_pexpr_aux * 'TY mu_tpexpr_aux (* pure let *)
  | M_TPEif of 'TY mu_pval_aux * 'TY mu_tpexpr_aux * 'TY mu_tpexpr_aux (* pure if *)
+
+and 'TY mu_tpexpr_case_branch =  (* pure top-level case expression branch *)
+   M_TPE_Case_branch of mu_pattern_aux * 'TY mu_tpexpr_aux (* top-level case expression branch *)
 
 and 'TY mu_tpexpr_aux =  (* pure top-level pure expressions with auxiliary info *)
    M_TPexpr of Location_ocaml.t * annot list * 'TY * 'TY mu_tpexpr
@@ -345,13 +365,6 @@ res_term =  (* resource terms *)
 
 
 type 
-spine_elem =  (* spine element *)
-   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
- | Spine_Elem_logical_val of 'bt term_aux (* logical value *)
- | Spine_Elem_res_val of res_term (* resource value *)
-
-
-type 
 'TY mu_action =  (* memory actions *)
    M_Create of 'TY mu_pval_aux * 'TY act * Symbol.prefix
  | M_CreateReadOnly of 'TY mu_pval_aux * 'TY act * 'TY mu_pval_aux * Symbol.prefix
@@ -370,19 +383,19 @@ type
 
 
 type 
+spine_elem =  (* spine element *)
+   Spine_Elem_pure_val of 'TY mu_pval_aux (* pure value *)
+ | Spine_Elem_logical_val of 'bt term_aux (* logical value *)
+ | Spine_Elem_res_val of res_term (* resource value *)
+
+
+type 
 resource =  (* resources *)
    Res_Empty (* empty heap *)
  | Res_Points_to of type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } (* points-top heap pred. *)
  | Res_SepConj of resource * resource (* seperating conjunction *)
  | Res_Exists of Symbol.sym * base_type * resource (* existential *)
  | Res_Term of 'bt term_aux * resource (* logical conjuction *)
-
-
-type 
-'TY mu_seq_expr =  (* sequential (effectful) expressions *)
-   M_Seq_Epexpr of 'TY mu_pexpr_aux (* pure expressions *)
- | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * (spine_elem) list (* C function call *)
- | M_Seq_Eproc of 'TY mu_pval * (spine_elem) list (* procedure call *)
 
 
 type 
@@ -401,6 +414,13 @@ res_pattern =  (* resource terms *)
 
 
 type 
+'TY mu_seq_expr =  (* sequential (effectful) expressions *)
+   M_Seq_Epexpr of 'TY mu_pexpr_aux (* pure expressions *)
+ | M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * (spine_elem) list (* C function call *)
+ | M_Seq_Eproc of 'TY mu_pval * (spine_elem) list (* procedure call *)
+
+
+type 
 ret =  (* return types *)
    RetTy_Computational of 'sym * base_type * ret
  | RetTy_Logical of 'sym * base_type * ret
@@ -413,6 +433,18 @@ type
 'TY mu_tval =  (* (effectful) top-level values *)
    M_TVdone of (spine_elem) list (* end of top-level expression *)
  | M_TVundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+
+
+type 
+'TY mu_paction =  (* memory actions with polarity *)
+   M_Paction of Core.polarity * 'TY mu_action_aux
+
+
+type 
+ret_pattern =  (* return pattern *)
+   RetP_computational of 'TY mu_sym_or_pattern (* computational variable *)
+ | RetP_logical of Symbol.sym (* logical variable *)
+ | RetP_resource of res_pattern (* resource variable *)
 
 
 type 
@@ -445,32 +477,17 @@ type
 
 
 type 
-'TY mu_paction =  (* memory actions with polarity *)
-   M_Paction of Core.polarity * 'TY mu_action_aux
-
-
-type 
-ret_pattern =  (* return pattern *)
-   RetP_computational of 'TY mu_sym_or_pattern (* computational variable *)
- | RetP_logical of Symbol.sym (* logical variable *)
- | RetP_resource of res_pattern (* resource variable *)
-
-
-type 
-'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
-   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
- | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
-
-
-type 
 'TY mu_seq_texpr =  (* sequential top-level (effectful) expressions *)
    M_Seq_TEtval of 'TY mu_tval (* (effectful) top-level values *)
  | M_Seq_TErun of Symbol.sym * ('TY mu_pval_aux) list (* run from label *)
  | M_Seq_TElet of (ret_pattern) list * 'TY mu_seq_expr_aux * 'TY mu_texpr (* bind return patterns *)
  | M_Seq_TEletT of (ret_pattern) list * ret * 'TY mu_texpr * 'TY mu_texpr (* annotated bind return patterns *)
- | M_Seq_TEcase of 'TY mu_pval_aux * ((mu_pattern_aux * 'TY mu_texpr)) list (* pattern matching *)
+ | M_Seq_TEcase of 'TY mu_pval_aux * ('TY mu_texpr_case_branch) list (* pattern matching *)
  | M_Seq_TEif of 'TY mu_pval_aux * 'TY mu_texpr * 'TY mu_texpr (* conditional *)
  | M_Seq_TEbound of int * 'TY mu_is_texpr_aux (* limit scope of indet seq behaviour, absent at runtime *)
+
+and 'TY mu_texpr_case_branch =  (* top-level case expression branch *)
+   M_Seq_TE_Case_branch of mu_pattern_aux * 'TY mu_texpr (* top-level case expression branch *)
 
 and 'TY mu_seq_texpr_aux =  (* sequential top-level (effectful) expressions with auxiliary info *)
    M_Seq_Texpr of Location_ocaml.t * annot list * 'TY mu_seq_texpr
@@ -486,8 +503,8 @@ and 'TY mu_is_expr_aux =  (* indet seq (effectful) expressions with auxiliary in
  | M_Is_no_aux of 'TY mu_is_expr (* Ott-hack for simpler typing rules *)
 
 and 'TY mu_is_texpr =  (* indet seq top-level (effectful) expressions *)
-   M_is_TEwseq of mu_pattern_aux * 'TY mu_is_expr_aux * 'TY mu_texpr (* weak sequencing *)
- | M_is_TEsseq of 'TY mu_sym_or_pattern * 'TY mu_is_expr_aux * 'TY mu_texpr (* strong sequencing *)
+   M_is_TEwseq of (ret_pattern) list * 'TY mu_is_expr_aux * 'TY mu_texpr (* weak sequencing *)
+ | M_is_TEsseq of (ret_pattern) list * 'TY mu_is_expr_aux * 'TY mu_texpr (* strong sequencing *)
 
 and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with auxiliary info *)
    M_Is_Texpr of Location_ocaml.t * annot list * 'TY mu_is_texpr
@@ -499,8 +516,53 @@ and 'TY mu_texpr =  (* top-level (effectful) expressions *)
 
 
 type 
+'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
+   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
+ | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
+
+
+type 
 rets =  (* concatenation of return types *)
    RetTys_Concat of (ret) list
+
+let aux_binders_ty_sym_opt_T_bt_of_ty_sym_opt_T_bt (ty_sym_opt_T_bt5:ty_sym_opt_T_bt) : Symbol.sym list =
+  match ty_sym_opt_T_bt5 with
+  |  ( None ,  t_bt  )  -> []
+  |  ( Some  symbol_sym  ,  t_bt  )  -> [symbol_sym]
+
+
+let rec aux_binders_mu_pattern_aux_of_mu_pattern_aux (mu_pattern_aux5:mu_pattern_aux) : Symbol.sym list =
+  match mu_pattern_aux5 with
+  | (M_Pattern (ty_loc,annots,mu_pattern)) -> (aux_binders_mu_pattern_of_mu_pattern mu_pattern)
+  | (M_Pat_no_aux mu_pattern) -> (aux_binders_mu_pattern_of_mu_pattern mu_pattern)
+and
+aux_binders_mu_pattern_of_mu_pattern (mu_pattern5:mu_pattern) : Symbol.sym list =
+  match mu_pattern5 with
+  | (M_CaseBase ty_sym_opt_T_bt) -> (aux_binders_ty_sym_opt_T_bt_of_ty_sym_opt_T_bt ty_sym_opt_T_bt)
+  | (M_CaseCtor (mu_ctor_val,(mu_pattern_aux_list))) -> (List.flatten (List.map aux_binders_mu_pattern_aux_of_mu_pattern_aux (mu_pattern_aux_list)))
+
+
+let rec aux_binders_res_pattern_of_res_pattern (res_pattern_5:res_pattern) : Symbol.sym list =
+  match res_pattern_5 with
+  | ResP_Empty -> []
+  | ResP_PointsTo -> []
+  | (ResP_Var symbol_sym) -> [symbol_sym]
+  | (ResP_SepPair (res_pattern1,res_pattern2)) -> (aux_binders_res_pattern_of_res_pattern res_pattern1) @ (aux_binders_res_pattern_of_res_pattern res_pattern2)
+  | (ResP_Pack (symbol_sym,res_pattern)) -> [symbol_sym] @ (aux_binders_res_pattern_of_res_pattern res_pattern)
+
+
+let aux_binders_'TY mu_sym_or_pattern_of_'TY mu_sym_or_pattern (mu_sym_or_pattern5:'TY mu_sym_or_pattern) : Symbol.sym list =
+  match mu_sym_or_pattern5 with
+  | (M_Symbol symbol_sym) -> [symbol_sym]
+  | (M_Pat mu_pattern_aux) -> (aux_binders_mu_pattern_aux_of_mu_pattern_aux mu_pattern_aux)
+
+
+let aux_binders_ret_pattern_of_ret_pattern (ret_pattern5:ret_pattern) : Symbol.sym list =
+  match ret_pattern5 with
+  | (RetP_computational mu_sym_or_pattern) -> (aux_binders_'TY mu_sym_or_pattern_of_'TY mu_sym_or_pattern mu_sym_or_pattern)
+  | (RetP_logical symbol_sym) -> [symbol_sym]
+  | (RetP_resource res_pattern) -> (aux_binders_res_pattern_of_res_pattern res_pattern)
+
 
 
 type 
@@ -531,6 +593,7 @@ let rec is_pure_arg_of_arg (arg5:arg) : bool =
   | (ArgTy_Ret ret) -> ((is_pure_ret_of_ret ret))
 
 
+(** definitions *)
 (** definitions *)
 (** definitions *)
 (** definitions *)
