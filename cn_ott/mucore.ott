@@ -24,6 +24,7 @@ grammar
   ty_tag {{ tex tag }} :: 'Ty_tag' ::= {{ ocaml tag }} {{ phantom }} {{ com OCaml type for struct/union tag }}
     | ident :: :: ident
 
+
   base_type {{ tex \beta }} , _bt {{ tex \_ }} :: '' ::= {{ com base types }}
     | unit                                       ::   :: Unit    {{ com unit              }}
     | bool                                       ::   :: Bool    {{ com boolean           }}
@@ -176,6 +177,15 @@ grammar
     | ( </ mu_valuei // , // i /> )      :: :: tuple  {{ com tuple                 }}
 
 
+  mu_bool_value {{ tex bool\_value }} :: 'M_VB' ::= {{ auxparam 'TY }} {{ com Core booleans }}
+    | True                               :: :: true   {{ com boolean true          }}
+    | False                              :: :: false  {{ com boolean false         }}
+
+
+ subrules
+   mu_bool_value <:: mu_value
+
+
 grammar
 
   mu_ctor_val {{ tex ctor\_val }} :: 'M_C' ::= {{ com data constructors }}
@@ -287,40 +297,46 @@ grammar
 
 grammar
 
-  ty_sym_opt_T_bt {{ tex ident\_opt\_\beta }} :: '' ::= {{ ocaml ( Symbol.sym option * T.bt ) }} {{ phantom }}
-                                                        {{ com type annotated optional identifier }}
-    | _ : T_bt          :: :: No_sym % (+ binders = {} +)
-    | Symbol_sym : T_bt :: :: Just   % (+ binders = Symbol_sym +)
-
+  ty_sym_opt_T_bt {{ tex ident\_opt\_\beta }} :: '' ::= {{ ocaml ( Symbol.sym option * T.bt ) }} {{ com type annotated optional identifier }}
+    | _ : T_bt          :: :: No_sym (+ binders = {}         +) {{ ocaml ( None , [[T_bt]] ) }}
+    | Symbol_sym : T_bt :: :: Just   (+ binders = Symbol_sym +) {{ ocaml ( Some [[Symbol_sym]] , [[T_bt]] ) }}
 
 grammar
 
   mu_pattern {{ tex pattern }} :: 'M_Case' ::=
-    | ty_sym_opt_T_bt                                 :: :: Base % (+ binders = binders( maybesym_base_type ) +)
-    | mu_ctor_val ( </ mu_pattern_auxi // , // i /> ) :: :: Ctor % (+ binders = binders( </ mu_pattern_auxi // , // i /> ) +)
+    | ty_sym_opt_T_bt                                 :: :: Base (+ binders = binders( ty_sym_opt_T_bt ) +)
+    | mu_ctor_val ( </ mu_pattern_auxi // , // i /> ) :: :: Ctor (+ binders = binders( </ mu_pattern_auxi // i /> ) +)
 
 
   mu_pattern_aux {{ tex pattern }} :: 'M_' ::=
-    | ty_loc annots mu_pattern :: X :: Pattern                                                % (+ binders = binders(mu_pattern) +)
-    |               mu_pattern :: O :: Pat_no_aux {{ com Ott-hack for simpler typing rules }} % (+ binders = binders(mu_pattern) +)
+    | ty_loc annots mu_pattern :: X :: Pattern     (+ binders = binders(mu_pattern) +)
+    |               mu_pattern :: O :: Pat_no_aux  (+ binders = binders(mu_pattern) +) {{ com Ott-hack for simpler typing rules }} 
 
 
 grammar
 
   mu_sym_or_pattern {{ tex ident\_or\_pattern }} :: 'M_' ::= {{ auxparam 'TY }}
-    | Symbol_sym     :: :: Symbol % (+ binders = Symbol_sym +)
-    | mu_pattern_aux :: :: Pat    % (+ binders = binders(mu_pattern_aux) +)
+    | Symbol_sym     :: :: Symbol (+ binders = Symbol_sym +)
+    | mu_pattern_aux :: :: Pat    (+ binders = binders(mu_pattern_aux) +)
 
 
 grammar
 
   mu_tpexpr {{ tex tpexpr }} :: 'M_TPE' ::= {{ auxparam 'TY }} {{ com top-level pure expressions }}
-    | mu_tpval_aux                                                           ::   :: tpval {{ com top-level pure values }}
-    | case mu_pval_aux of </ | mu_pattern_auxi => mu_tpexpr_auxi // i /> end ::   :: case  {{ com pattern matching      }} % TODO: binding
-    | let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux                  ::   :: let   {{ com pure let              }} % TODO: binding
-    | if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2                 ::   :: if    {{ com pure if               }}
-    | [ C / C' ] mu_tpexpr                                                   :: M :: contextSub {{ ocaml MU_TPEXPR_CONTEXT_SUB [[C]] [[C']] [[mu_tpexpr]] }}
+    | mu_tpval_aux                                                ::   :: tpval {{ com top-level pure values }}
+    | case mu_pval_aux of </ | mu_tpexpr_case_branchi // i /> end ::   :: case {{ com pattern matching       }} 
+    | let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux       ::   :: let   (+ bind binders( mu_sym_or_pattern ) in mu_tpexpr_aux +) 
+                                                                                {{ com pure let              }}
+    | if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2      ::   :: if    {{ com pure if               }}
+    | [ C / C' ] mu_tpexpr                                        :: M :: contextSub {{ ocaml MU_TPEXPR_CONTEXT_SUB [[C]] [[C']] [[mu_tpexpr]] }}
                                                                                      {{ com simul-sub all vars in $[[C]]$ for all vars in $[[C']]$ in $[[mu_tpexpr]]$ }}
+
+
+  mu_tpexpr_case_branch {{ tex tpexpr\_case\_branch }} :: 'M_TPE_Case_' ::= {{ auxparam 'TY }} {{ com pure top-level case expression branch }}
+                                                                             {{ ocaml ( mu_pattern_aux * 'TY mu_tpexpr_aux ) }}
+    | mu_pattern_aux => mu_tpexpr_aux :: :: branch (+ bind binders( mu_pattern_aux ) in mu_tpexpr_aux  +)
+                                                   {{ com top-level case expression branch             }}
+                                                   {{ ocaml ( [[mu_pattern_aux]] , [[mu_tpexpr_aux]] ) }}
 
 
   mu_tpexpr_aux {{ tex tpexpr }} :: 'M_TP' ::= {{ auxparam 'TY }} {{ com pure top-level pure expressions with auxiliary info }}
@@ -449,19 +465,21 @@ grammar
 grammar
 
   res_pattern :: 'ResP_' ::= {{ com resource terms }}
-    | emp                               :: :: Empty    {{ com empty heap }}
-    | pt                                :: :: PointsTo {{ com single-cell heap }}
-    | Symbol_sym                        :: :: Var      {{ com variable }}
-    | <( res_pattern1 , res_pattern2 )> :: :: SepPair  {{ com seperating-conjunction pair }}
-    | pack ( Symbol_sym , res_pattern ) :: :: Pack     {{ com packing for existentials }}
+    | emp                               :: :: Empty    (+ binders = {}         +) {{ com empty heap }}
+    | pt                                :: :: PointsTo (+ binders = {}         +) {{ com single-cell heap }}
+    | Symbol_sym                        :: :: Var      (+ binders = Symbol_sym +) {{ com variable }}
+    | <( res_pattern1 , res_pattern2 )> :: :: SepPair  (+ binders = binders( res_pattern1 ) union binders( res_pattern2 ) +)
+                                                       {{ com seperating-conjunction pair }}
+    | pack ( Symbol_sym , res_pattern ) :: :: Pack     (+ binders = Symbol_sym union binders( res_pattern ) +)
+                                                       {{ com packing for existentials }}
 
 
 grammar
 
   ret_pattern :: RetP_ ::= {{ com return pattern }}
-    | comp mu_sym_or_pattern :: :: computational {{ com computational variable }}
-    | log  Symbol_sym        :: :: logical       {{ com logical variable       }}
-    | res  res_pattern       :: :: resource      {{ com resource variable      }}
+    | comp mu_sym_or_pattern :: :: computational (+ binders = binders( mu_sym_or_pattern ) +) {{ com computational variable }}
+    | log  Symbol_sym        :: :: logical       (+ binders = Symbol_sym                   +) {{ com logical variable       }}
+    | res  res_pattern       :: :: resource      (+ binders = binders( res_pattern )       +) {{ com resource variable      }}
 
 
 grammar
@@ -632,11 +650,20 @@ grammar
   mu_seq_texpr {{ tex seq\_texpr }} :: 'M_Seq_TE' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions }}
     | mu_tval                                                           :: :: tval  {{ com (effectful) top-level values   }}
     | run Symbol_sym </ mu_pval_auxi // , // i />                       :: :: run   {{ com run from label                 }}
-    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   {{ com bind return patterns           }} % TODO: bindings
-    | let </ ret_patterni // , // i /> : ret = mu_texpr1 in mu_texpr2   :: :: letT  {{ com annotated bind return patterns }} % TODO: bindings
-    | case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end :: :: case  {{ com pattern matching               }} % TODO: bindings
+    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   (+ bind binders( </ ret_patterni // i /> ) in mu_texpr  +) 
+                                                                                    {{ com bind return patterns           }}
+    | let </ ret_patterni // , // i /> : ret = mu_texpr1 in mu_texpr2   :: :: letT  (+ bind binders( </ ret_patterni // i /> ) in mu_texpr2 +)
+                                                                                    {{ com annotated bind return patterns }}
+    | case mu_pval_aux of </ | mu_texpr_case_branchi // i /> end        :: :: case  {{ com pattern matching               }}
     | if mu_pval_aux then mu_texpr1 else mu_texpr2                      :: :: if    {{ com conditional                    }}
     | bound [ ty_int ] ( mu_is_texpr_aux )                              :: :: bound {{ com limit scope of indet seq behaviour, absent at runtime }}
+
+
+  mu_texpr_case_branch {{ tex texpr\_case\_branch }} :: 'M_Seq_TE_Case_' ::= {{ auxparam 'TY }} {{ com top-level case expression branch }}
+                                                                             {{ ocaml ( mu_pattern_aux * 'TY mu_texpr ) }}
+    | mu_pattern_aux => mu_texpr :: :: branch (+ bind binders( mu_pattern_aux ) in mu_texpr +)
+                                              {{ com top-level case expression branch        }}
+                                              {{ ocaml ( [[mu_pattern_aux]] , [[mu_texpr]] ) }}
 
 
   mu_seq_texpr_aux {{ tex seq\_texpr }} :: 'M_Seq_T' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions with auxiliary info }}
@@ -656,8 +683,10 @@ grammar
 
 
   mu_is_texpr {{ tex is\_texpr }} :: 'M_is_TE' ::= {{ auxparam 'TY }} {{ com indet seq top-level (effectful) expressions }}
-    | let weak mu_pattern_aux = mu_is_expr_aux in mu_texpr       :: :: wseq  {{ com weak sequencing   }} % TODO: bindings
-    | let strong mu_sym_or_pattern = mu_is_expr_aux in mu_texpr  :: :: sseq  {{ com strong sequencing }} % TODO: bindings
+    | let weak   </ ret_patterni // , // i /> = mu_is_expr_aux in mu_texpr  :: :: wseq (+ bind binders( </ ret_patterni // i /> ) in mu_texpr +)
+                                                                                       {{ com weak sequencing   }}
+    | let strong </ ret_patterni // , // i /> = mu_is_expr_aux in mu_texpr  :: :: sseq (+ bind binders( </ ret_patterni // i /> ) in mu_texpr +)
+                                                                                       {{ com strong sequencing }}
 
 
   mu_is_texpr_aux {{ tex is\_texpr }} :: 'M_Is_T' ::= {{ auxparam 'TY }} {{ com indet seq top-level (effectful) expressions with auxiliary info }}
@@ -717,6 +746,7 @@ grammar
     | ==     :: :: equiv     {{ tex \equiv                           }}
     | <(     :: :: langle    {{ tex \langle                          }}
     | )>     :: :: rangle    {{ tex \rangle                          }}
+    | down   :: :: downarr   {{ tex \Downarrow                       }}
 
 
 grammar
@@ -1134,6 +1164,9 @@ defns
     C ; L ; N |- mu_name ( </ mu_pval_auxi // i /> ) => y' : base_type' . term'
 
 
+    % NOT IMPLEMENTED: memberof ( Symbol_sym , Symbol_identifier , mu_pval_aux )
+
+
     % DEFER conv_int
     % conv_int ( ty_act , mu_pval_aux )
 
@@ -1546,7 +1579,6 @@ defns
     C ; L ; N ; cdot |- run Symbol_sym </ mu_pval_auxi // i /> <= false /\ I
 
 
-    % ASK
     C ; L ; N ; R |- mu_is_texpr_aux <= ret
     ------------------------------------------------------------ :: Bound
     C ; L ; N ; R |- bound [ ty_int ] ( mu_is_texpr_aux ) <= ret
@@ -1561,7 +1593,7 @@ defns
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret2
     ----------------------------------------------------------------------------- :: LetWeak
-    C ; L ; N ; R |- let weak mu_pattern_aux = mu_is_expr_aux in mu_texpr <= ret2
+    C ; L ; N ; R |- let weak </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr <= ret2
 
 
     % NOT IMPLEMENTED - memory events
@@ -1569,7 +1601,7 @@ defns
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , fresh ( C1 ) ; L , L1 ; N , [ fresh ( C1 ) / C1 ] N1 ; R , [ fresh ( C1 ) / C1 ] R1 |- [ fresh ( C1 ) / C1 ] mu_texpr <= ret2
     ----------------------------------------------------------------------------------- :: LetStrong
-    C ; L ; N ; R |- let strong mu_sym_or_pattern = mu_is_expr_aux in mu_texpr <= ret2
+    C ; L ; N ; R |- let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr <= ret2
 
 
     % impl does Ret orFalse, for checking the body of a label (to ensure it doesn't return)
@@ -1585,3 +1617,100 @@ defns
     C ; L ; N ; R |- mu_seq_texpr_aux <= ret
     ---------------------------------------- :: Seq
     C ; L ; N ; R |- mu_seq_texpr_aux <= ret
+
+
+defns
+  opsem_jtype :: '' ::=
+
+  defn
+    <( mu_pexpr_aux )> down <( mu_pval_aux )> :: :: PExpr_Big :: PExpr_Big_ by
+
+    % TODO
+    % mu_ctor_expr ( </ mu_pval_auxi // , // i /> )
+
+
+    % TODO add side condition ty_mem_ptr' == ty_mem_ptr +ptr ty_mem_int * size_of ct
+    --------------------------------------------------------------------------- :: ArrayShift
+    <( array_shift ( ty_mem_ptr , T_ct , ty_mem_int ) )> down <( ty_mem_ptr' )>
+
+
+    % TODO add side conditions
+    % struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Env
+    % ty_mem_ptr' == ty_mem_ptr +ptr offset_off ty_tag Symbol_identifier
+    ------------------------------------------------------------------------------------- :: MemberShift
+    <( member_shift ( ty_mem_ptr , ty_tag , Symbol_identifier ) )> down <( ty_mem_ptr' )>
+
+
+    ------------------------------------ :: NotTrue
+    <( not ( True ) )> down <( False )>
+
+
+    ------------------------------------ :: NotFalse
+    <( not ( False ) )> down <( True )>
+
+
+    % TODO ty_mem_int == ty_mem_int1 arith_binop ty_mem_int2
+    --------------------------------------------------------------- :: Arith_Binop
+    <( ty_mem_int1 arith_binop ty_mem_int2 )> down <( ty_mem_int )>
+
+
+    % TODO mu_bool_value == ty_mem_int1 rel_binop ty_mem_int2
+    ----------------------------------------------------------------- :: Rel_Binop
+    <( ty_mem_int1 rel_binop ty_mem_int2 )> down <( mu_bool_value )>
+
+
+    % TODO mu_bool_value == mu_bool_value1 bool_binop mu_bool_value2
+    ------------------------------------------------------------------------ :: Bool_Binop
+    <( mu_bool_value1 bool_binop mu_bool_value2 )> down <( mu_bool_value )>
+
+
+    % NOT IMPLEMENTED memberof ( Symbol_sym , Symbol_identifier , mu_pval_aux )
+
+    
+    % TODO mu_name == mu_tpexpr' inEnv Env
+    % TODO mu_tpexpr == </ [ mu_pval_auxi / xi ] // i /> mu_tpexpr'
+    <( mu_tpexpr )> down <( done mu_pval_aux )>
+    --------------------------------------------------------------------- :: Call
+    <( mu_name ( </ mu_pval_auxi // i /> ) )> down <( mu_pval_aux )>
+
+
+    ------------------------------------------------------------------- :: Assert_Undef
+    <( assert_undef ( True , ty_loc UB_name ) )> down <( Unit )>
+
+
+    % TODO ty_mem_int one constructor
+    ---------------------------------------------------- :: Bool_To_Integer_True
+    <( bool_to_integer ( True ) )> down <( ty_mem_int )>
+
+
+    % TODO ty_mem_int zero constructor
+    ---------------------------------------------------- :: Bool_To_Integer_False
+    <( bool_to_integer ( False ) )> down <( ty_mem_int )>
+
+
+    % DEFER conv_int ( ty_act , mu_pval_aux )
+
+
+    % TODO abbrev1 == max_int ct - min_int ct + z_one
+    % TODO abbrev2 == embed mu_pval_aux rem_f abbrev1
+    % ty_mem_int' == if abbrev2 =< max_int ct then abbrev2 else abbrev2 - abbrev1
+    ---------------------------------------------------------- :: WrapI
+    <( wrapI ( ty_act , ty_mem_int ) )> down <( ty_mem_int' )>
+
+  defn
+    <( mu_tpexpr_aux )> down <( mu_tpval_aux )> :: :: TPExpr_Big :: TPExpr_Big_ by
+
+
+    % ASK case mu_pval_aux of </ | mu_tpexpr_case_branchi // i /> end
+
+    % let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux
+
+
+    <( mu_tpexpr_aux1 )> down <( mu_tpval_aux1 )>
+   -------------------------------------------------------------------------------- :: If_True 
+    <( if True then mu_tpexpr_aux1 else mu_tpexpr_aux2 )> down <( mu_tpval_aux1 )> 
+
+
+    <( mu_tpexpr_aux2 )> down <( mu_tpval_aux2 )>
+   --------------------------------------------------------------------------------- :: If_False
+    <( if False then mu_tpexpr_aux1 else mu_tpexpr_aux2 )> down <( mu_tpval_aux2 )> 
