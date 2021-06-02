@@ -7,8 +7,9 @@ open Tokens
 exception Error of Errors.cparser_cause
 
 let offset_location lexbuf pos_fname pos_lnum =
-  let pos_lnum = pos_lnum - 1 in
-  lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname; pos_lnum};
+  if pos_lnum > 0 then
+    let pos_lnum = pos_lnum - 1 in
+    lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname; pos_lnum};
   new_line lexbuf
 
 (* STD §6.4.1#1 *)
