@@ -32,24 +32,6 @@ open Predicates
 
 
 
-let builtin_predicates_list = [
-    region;
-    early;
-    zero_region;
-    part_zero_region;
-  ]
-
-
-
-
-let builtin_predicates =
-  List.fold_left (fun acc (name,def) -> StringMap.add name def acc) 
-    StringMap.empty builtin_predicates_list
-  
-
-
-
-
 (* Auxiliaries *)
 
 module ImplMap = 
@@ -76,8 +58,6 @@ let impl_lookup (e: 'v ImplMap.t) i =
 
 
 
-type struct_decls = struct_layout SymMap.t
-
 
 type t = 
   { struct_decls : struct_decls; 
@@ -94,7 +74,7 @@ let empty =
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
     (* stdlib_funs = SymMap.empty; *)
-    resource_predicates = builtin_predicates;
+    resource_predicates = StringMap.empty;
   }
 
 

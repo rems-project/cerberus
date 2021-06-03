@@ -209,7 +209,11 @@ module Make (G : sig val global : Global.t end) = struct
       | Struct (tag, mts) ->
          let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
          Z3.Expr.mk_app context constructor (List.map (fun (_, t) -> term t) mts)
-      | StructMember (tag, t, member) ->
+      | StructMember (t, member) ->
+         let tag = match IT.bt t with
+           | Struct tag -> tag
+           | _ -> Debug_ocaml.error "illtyped index term: not a struct"
+         in
          let layout = SymMap.find tag G.global.struct_decls in
          let members = List.map fst (Memory.member_types layout) in
          let destructors = Z3.Tuple.get_field_decls (sort_of_bt (Struct tag)) in
@@ -235,6 +239,19 @@ module Make (G : sig val global : Global.t end) = struct
          term t
       | PointerToIntegerCast t ->
          term t
+      | MemberOffset (tag, member) ->
+         let o_offset = 
+           Memory.member_offset
+             (SymMap.find tag G.global.struct_decls) member
+         in
+         let offset = match o_offset with
+           | Some offset -> offset 
+           | None -> Debug_ocaml.error "illtyped index term: member offset does not apply"
+         in
+         term (z_ offset)
+      | ArrayOffset (ct, t) ->
+         term (mul_ (z_ (Memory.size_of_ctype ct), t))
+  
 
     and list_op _ _ =
       Debug_ocaml.error "todo: SMT mapping for list operations"

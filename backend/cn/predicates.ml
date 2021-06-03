@@ -1,3 +1,4 @@
+open Sctypes
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
@@ -5,6 +6,7 @@ module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RE = Resources.RE
 module PackingFT = ArgumentTypes.Make(Assignment)
+module StringMap = Map.Make(String)
 open Pp
 
 
@@ -280,14 +282,14 @@ let part_zero_region =
     }
   in
   let v_constr = 
-    forall_ (i_s, IT.bt i_t)
-      (impl_ (and_ [le_ (int_ 0, i_t); lt_ (i_t, j_t)], 
-              eq_ (app_ v_t i_t, int_ 0)))
+    forall_sth_ (i_s, IT.bt i_t) 
+      (and_ [le_ (int_ 0, i_t); lt_ (i_t, j_t)])
+      (and_ [eq_ (app_ v_t i_t, int_ 0)])
   in
   let init_constr = 
-    forall_ (i_s, IT.bt i_t)
-      (impl_ (and_ [le_ (int_ 0, i_t); lt_ (i_t, j_t)], 
-              app_ init_t i_t))
+    forall_sth_ (i_s, IT.bt i_t)
+      (and_ [le_ (int_ 0, i_t); lt_ (i_t, j_t)])
+      (and_ [app_ init_t i_t])
   in
   let lrt =
     LRT.Logical ((v_s, IT.bt v_t),
@@ -333,5 +335,296 @@ let zero_region =
 
 
 
+let hyp_pool (struct_decls : Memory.struct_decls) =
 
 
+  let list_head_tag, _ = 
+    SymMap.find_first (fun tag ->
+        Option.equal String.equal (Sym.name tag) (Some "list_head")
+      ) struct_decls
+  in
+
+  let hyp_pool_tag, _ = 
+    SymMap.find_first (fun tag ->
+        Option.equal String.equal (Sym.name tag) (Some "hyp_pool")
+      ) struct_decls
+  in
+
+  let hyp_page_tag, _ = 
+    SymMap.find_first (fun tag ->
+        Option.equal String.equal (Sym.name tag) (Some "hyp_page")
+      ) struct_decls
+  in
+
+  let id = "Hyp_pool" in
+  let p_s, p_t = IT.fresh Loc in
+  let hyp_vmemmap_s, hyp_vmemmap_t = IT.fresh Loc in
+  let pPAGE_SHIFT_s, pPAGE_SHIFT_t = IT.fresh Integer in
+  let mMAX_ORDER_s, mMAX_ORDER_t = IT.fresh Integer in
+  let hHYP_NO_ORDER_s, hHYP_NO_ORDER_t = IT.fresh Integer in
+  let pool_s, pool_t = IT.fresh (BT.Struct hyp_pool_tag) in
+  let poolmap_s, poolmap_t = 
+    IT.fresh (BT.Param (Integer, BT.Struct hyp_page_tag)) in
+  let poolmap_i_s, poolmap_i_t = 
+    IT.fresh (BT.Param (Integer, Bool)) in
+
+  
+  let (%.) t member = 
+    let tag = match IT.bt t with
+      | Struct tag -> tag
+      | _ -> Debug_ocaml.error "illtyped index term. not a struct"
+    in
+    let member = Id.id member in
+    let member_bt = 
+      BT.of_sct
+        (List.assoc Id.equal member 
+           (Memory.member_types (SymMap.find tag struct_decls)))
+    in
+    member_ ~member_bt (tag, t, member)
+  in
+
+
+  let hyp_vmemmap_offset_of_node_pointer pointer = 
+    container_of_ (pointer, hyp_page_tag, Id.id "node") %-
+      pointerToIntegerCast_ hyp_vmemmap_t
+  in
+
+  let hyp_vmemmap_good_node_pointer pointer = 
+    rem_t_ (hyp_vmemmap_offset_of_node_pointer pointer, 
+            z_ (Memory.size_of_struct hyp_page_tag))
+  in
+  
+  let hyp_vmemmap_node_pointer_to_index pointer = 
+    hyp_vmemmap_offset_of_node_pointer pointer %/
+      z_ (Memory.size_of_struct hyp_page_tag)
+  in
+
+
+  let hyp_pool_metadata_owned =
+    let points = 
+      point (p_t, Memory.size_of_struct hyp_pool_tag) 
+        (q_ (1, 1)) pool_t (bool_ true)
+    in
+    LRT.Logical ((pool_s, IT.bt pool_t),
+    LRT.Resource (points,
+    LRT.I))
+  in
+  
+  let pPAGE_SIZE_t = exp_ (int_ 2, pPAGE_SHIFT_t) in
+
+  let hyp_pool_metadata_well_formedness =
+    let constr = 
+      and_ [
+          int_ 0 %<= (pool_t %. "range_start");
+          (pool_t %. "range_start") %< (pool_t %. "range_end");
+          nat_divides_ (pool_t %. "range_start", pPAGE_SIZE_t);
+          nat_divides_ (pool_t %. "range_end", pPAGE_SIZE_t);
+          (pool_t %. "max_order") %<= mMAX_ORDER_t;
+        ]
+    in
+    LRT.Constraint (constr, LRT.I)
+  in
+
+  let start_t = (pool_t %. "range_start") %/ pPAGE_SIZE_t in
+  let end_t = (pool_t %. "range_end") %/ pPAGE_SIZE_t in
+
+  let vmmemmap_metadata_owned =
+    let element_size = Memory.size_of_struct hyp_page_tag in
+    let i_s, i_t = IT.fresh Integer in
+    let qpredicate = 
+      QPredicate {
+          pointer = hyp_vmemmap_t %+. (start_t %* z_ element_size);
+          element_size = z_ element_size;
+          length = sub_ (end_t, start_t);
+          name = Ctype (Sctypes.Sctype ([], Struct hyp_page_tag));
+          i = i_s;
+          iargs = [];
+          oargs = [app_ poolmap_t i_t; app_ poolmap_i_t i_t];
+          moved = [];
+          unused = true;
+        }
+    in
+    LRT.Logical ((poolmap_s, IT.bt poolmap_t),
+    LRT.Logical ((poolmap_i_s, IT.bt poolmap_i_t),
+    LRT.Resource (qpredicate, LRT.I)))
+  in
+
+  let vmemmap_cell_address i_t =
+    arrayShift_ (hyp_vmemmap_t, 
+                 Sctype ([], Struct hyp_page_tag), 
+                 i_t)
+  in
+
+  let vmemmap_cell_node_address i_t =
+    memberShift_ (vmemmap_cell_address i_t,
+                  hyp_page_tag,
+                  Id.id "node")
+  in
+
+  let free_list_well_formedness = 
+    let o_s, o_t = IT.fresh Integer in
+    let constr = 
+      forall_ (o_s, IT.bt o_t) 
+        (and_ (
+          let condition prev_next = 
+            let prev_next_t = ((pool_t %. "free_area") %@ o_t) %. prev_next in
+            hyp_vmemmap_good_node_pointer prev_next_t ::
+              (let i_t = hyp_vmemmap_node_pointer_to_index prev_next_t in
+               [start_t %<= i_t; i_t %< end_t;
+                ((poolmap_t %@ (i_t %- start_t)) %. "order") %== o_t;
+                ((poolmap_t %@ (i_t %- start_t)) %. "refcount") %== int_ 0
+              ])
+          in
+          condition "prev" @ condition "next"
+        ))
+    in
+    LRT.Constraint (constr, LRT.I)
+  in
+
+  let hyp_page_well_formedness = 
+    let constr =  
+      let i_s, i_t = IT.fresh Integer in
+      let first = 
+        forall_sth_ (i_s, IT.bt i_t) 
+          (and_ [start_t %<= i_t; i_t %< end_t]) 
+          (and_ [
+              (* initialised *)
+              poolmap_i_t %@ (i_t %- start_t);
+              (* refcount is natural number *)
+              ((poolmap_t %@ (i_t %- start_t)) %. "refcount") %>= int_ 0;
+              (* order is HYP_NO_ORDER or between 0 and MAX_ORDER *)
+              (let order = (poolmap_t %@ (i_t %- start_t)) %. "order" in
+               impl_ (order %!= hHYP_NO_ORDER_t,
+                      and_ [int_ 0 %<= order; order %<= mMAX_ORDER_t]));
+              (* points back to the pool *)
+              ((poolmap_t %@ (i_t %- start_t)) %. "pool") %== p_t;
+              (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
+              eq_ ((((poolmap_t %@ (i_t %- start_t)) %. "node") %. "next") %== vmemmap_cell_node_address i_t,
+                   (((poolmap_t %@ (i_t %- start_t)) %. "node") %. "prev") %== vmemmap_cell_node_address i_t);
+              (* list empty in the above sense if and only if refcount 0 and order != NYP_NO_ORDER *)
+              eq_ (
+                  (((poolmap_t %@ (i_t %- start_t)) %. "node") %. "next") %!= vmemmap_cell_node_address i_t,
+                  and_ [((poolmap_t %@ (sub_ (i_t, start_t))) %. "refcount") %== int_ 0;
+                        ((poolmap_t %@ (sub_ (i_t, start_t))) %. "order") %!= hHYP_NO_ORDER_t;
+                     ]
+                )
+          ])
+      in
+      let linked_list_well_formed prev_next = 
+        forall_sth_ (i_s, IT.bt i_t) 
+          (and_ [start_t %<= i_t; i_t %< end_t]) 
+          (let prev_next_t = ((poolmap_t %@ (i_t %- start_t)) %. "node") %.prev_next in
+           or_ [
+               
+               prev_next_t %== vmemmap_cell_node_address i_t; (* points to itself *)
+               
+               prev_next_t %==
+                 arrayShift_
+                   (memberShift_ (pool_t, hyp_pool_tag, Id.id "free_area"),
+                    Sctype ([], Struct list_head_tag),
+                    (poolmap_t %@ (i_t %- start_t)) %. "order");
+               
+               and_ (
+                   hyp_vmemmap_good_node_pointer prev_next_t ::
+                   let j_t = hyp_vmemmap_node_pointer_to_index prev_next_t in
+                   let k_s, k_t = IT.fresh Integer in
+                   [start_t %<= j_t; j_t %< end_t;
+                    (((poolmap_t %@ (j_t %- start_t)) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== vmemmap_cell_node_address i_t;
+                    ((poolmap_t %@ (i_t %- start_t)) %. "order") %== ((poolmap_t %@ (j_t %- start_t)) %. "order");
+                    forall_sth_ (k_s, IT.bt k_t)
+                      (and_ [(i_t %+ int_ 1) %<= k_t; 
+                             k_t %< i_t %+ (exp_ (int_ 2, (poolmap_t %@ (i_t %- start_t)) %. "order"))])
+                      (and_ [
+                          ((poolmap_t %@ (k_t %- start_t)) %. "order") %== hHYP_NO_ORDER_t;
+                          ((poolmap_t %@ (k_t %- start_t)) %. "refcount") %== int_ 0;
+                        ])
+                   ]);
+               
+          ])
+      in
+      and_ [first; linked_list_well_formed "prev"; linked_list_well_formed "next"]
+    in
+    LRT.Constraint (constr, LRT.I)
+  in
+
+  let page_group_ownership = 
+    let qp_s, qp_t = IT.fresh Loc in
+    let bytes_s, bytes_t = IT.fresh (BT.Param (Loc, Integer)) in
+    let condition = 
+      let i_s, i_t = IT.fresh Integer in
+      and_ [
+          gtPointer_ (qp_t, int_ 0);
+          exists_ (i_s, IT.bt i_t)
+            (and_ (
+               [start_t %<= i_t; i_t %< end_t;
+                ((poolmap_t %@ (i_t %- start_t)) %. "order") %!= hHYP_NO_ORDER_t;
+                ((poolmap_t %@ (i_t %- start_t)) %. "refcount") %== int_ 0] @
+                 let page_group_start_addr = mul_ (i_t, pPAGE_SIZE_t) in
+                 let number_pages = exp_ (int_ 2, (poolmap_t %@ (i_t %- start_t)) %. "order") in
+                 let page_group_end_addr = 
+                   addPointer_ (page_group_start_addr, 
+                                mul_ (number_pages, pPAGE_SIZE_t))
+                 in
+                 [lePointer_ (page_group_start_addr, qp_t);
+                  ltPointer_ (qp_t, page_group_end_addr);]
+            ))
+        ]
+    in
+    let qpoint = 
+      QPoint {
+          qpointer = qp_s;
+          size = Z.of_int 1;
+          permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
+          value = app_ bytes_t qp_t;
+          init = bool_ false;
+        }
+    in
+    LRT.Logical ((bytes_s, IT.bt bytes_t),
+    LRT.Resource (qpoint, LRT.I))
+  in
+
+  
+  let lrt = 
+    let open LRT in
+    hyp_pool_metadata_owned 
+    @@ hyp_pool_metadata_well_formedness
+    @@ vmmemmap_metadata_owned
+    @@ free_list_well_formedness
+    @@ hyp_page_well_formedness
+    @@ page_group_ownership
+  in
+
+  let predicate = {
+      pointer = 
+        p_s;
+      iargs = [
+          (hyp_vmemmap_s, IT.bt hyp_vmemmap_t);
+          (pPAGE_SHIFT_s, IT.bt pPAGE_SHIFT_t);
+          (mMAX_ORDER_s, IT.bt mMAX_ORDER_t);
+          (hHYP_NO_ORDER_s, IT.bt hHYP_NO_ORDER_t);
+        ];
+      oargs = [
+          (pool_s, IT.bt pool_t);
+        ];
+      clauses = 
+        [PackingFT.of_lrt lrt (PackingFT.I [pool_t;])]; 
+    } 
+  in
+  (id, predicate)
+
+
+
+let predicate_list struct_decls = 
+  region ::
+  early ::
+  zero_region ::
+  part_zero_region ::
+  (* for now: *)
+  try [hyp_pool struct_decls] with
+  | Not_found -> []
+
+let predicates struct_decls = 
+  List.fold_left (fun acc (name,def) -> 
+      StringMap.add name def acc
+    ) StringMap.empty (predicate_list struct_decls)
+    

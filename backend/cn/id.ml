@@ -14,6 +14,8 @@ let compare id id' = String.compare (s id) (s id')
 
 let parse loc id = CF.Symbol.Identifier (loc,id)
 
+let id id = CF.Symbol.Identifier (Locations.unknown,id)
+
 
 let subst _ id = id
 

@@ -13,9 +13,6 @@ module Loc = Location_ocaml
 type loc = Loc.t
 
 
-
-
-
 type 'TY asym = { 
     loc: loc;
     annot: Annot.annot list;
@@ -38,6 +35,8 @@ module type TYPES = sig
   type lt
   type gt
   type mapping
+
+  type predicates
 
 end
 
@@ -312,6 +311,7 @@ module Make(T : TYPES) = struct
     mu_extern  : mu_extern_map;
     mu_funinfo :  mu_funinfos;
     mu_loop_attributes : Annot.loop_attributes;
+    mu_predicates : T.predicates
   }
 
 
@@ -334,6 +334,7 @@ module SimpleTypes : TYPES
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
        with type gt = Ctype.ctype
        with type mapping = unit
+       with type predicates = unit
   = 
 struct
 
@@ -348,5 +349,6 @@ struct
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
   type gt = ct
   type mapping = unit
+  type predicates = unit
 
 end

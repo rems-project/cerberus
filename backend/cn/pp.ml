@@ -120,7 +120,6 @@ let (table2, table3, table4, table5, table6) =
                if length <= max_table_column_width then 
                  ((align, Some column) :: wrapped_columns, still_todo, (align, None) :: todo)
                else 
-                 let () = print stderr !^"asd" in
                  let diff = length - max_table_column_width in
                  let prefix_column = String.sub column 0 max_table_column_width in
                  let suffix_column = String.sub column max_table_column_width diff in

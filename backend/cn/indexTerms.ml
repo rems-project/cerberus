@@ -51,7 +51,7 @@ and 'bt tuple_op =
 
 and 'bt struct_op =
   | Struct of BT.tag * (BT.member * 'bt term) list
-  | StructMember of BT.tag * 'bt term * BT.member
+  | StructMember of 'bt term * BT.member
 
 and 'bt pointer_op = 
   | Null
@@ -62,6 +62,8 @@ and 'bt pointer_op =
   | LEPointer of 'bt term * 'bt term
   | IntegerToPointerCast of 'bt term
   | PointerToIntegerCast of 'bt term
+  | MemberOffset of BT.tag * Id.t
+  | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
 
 and 'bt list_op = 
   | Nil
@@ -226,8 +228,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        Sym.equal tag tag2 && 
          List.equal (fun (m,t) (m',t') -> Id.equal m m' && equal t t') 
            members members2
-    | StructMember (tag,t,member), StructMember (tag',t',member') ->
-       Sym.equal tag tag' && equal t t' && Id.equal member member'
+    | StructMember (t,member), StructMember (t',member') ->
+       equal t t' && Id.equal member member'
     | Struct _, _ -> false
     | StructMember _, _ -> false
   in
@@ -250,6 +252,10 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t1 t2
     | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
        equal t1 t2
+    | MemberOffset (s, m), MemberOffset (s', m') ->
+       Sym.equal s s' && Id.equal m m'
+    | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
+       Sctypes.equal ct ct' && equal t t'
     | Null, _ -> false
     | AddPointer _, _ -> false
     | SubPointer _, _ -> false
@@ -258,6 +264,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | LEPointer _, _ -> false
     | IntegerToPointerCast _, _ -> false
     | PointerToIntegerCast _, _ -> false
+    | MemberOffset _, _ -> false
+    | ArrayOffset _, _ -> false
   in
 
   let list_op it it' = 
@@ -456,7 +464,7 @@ let pp (it : 'bt term) : PPrint.document =
          braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
                      Id.pp member ^^^ equals ^^^ aux false it 
                    ) members)
-      | StructMember (_tag, t, member) ->
+      | StructMember (t, member) ->
          aux true t ^^ dot ^^ Id.pp member
     in
 
@@ -477,6 +485,11 @@ let pp (it : 'bt term) : PPrint.document =
          mparens (parens(!^"pointer") ^^ aux true t)
       | PointerToIntegerCast t ->
          mparens (parens(!^"integer") ^^ aux true t)
+      | MemberOffset (tag, member) ->
+         mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
+      | ArrayOffset (ct, t) ->
+         mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+         
     in
 
     let ct_pred = function
@@ -610,7 +623,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   
   let struct_op : 'bt struct_op -> SymSet.t = function
     | Struct (_tag, members) -> free_vars_list (map snd members)
-    | StructMember (_tag, it, s) -> free_vars_list [it;it]
+    | StructMember (it, s) -> free_vars_list [it;it]
   in
 
   let pointer_op : 'bt pointer_op -> SymSet.t = function
@@ -622,6 +635,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | LEPointer (it, it') -> free_vars_list [it; it']
     | IntegerToPointerCast t -> free_vars t
     | PointerToIntegerCast t -> free_vars t
+    | MemberOffset (_, _) -> SymSet.empty
+    | ArrayOffset (_, t) -> free_vars t
   in
 
   let ct_pred : 'bt ct_pred -> SymSet.t = function
@@ -760,8 +775,8 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
         | Struct (tag, members) ->
            let members = map (fun (member,it) -> (member,aux it)) members in
            Struct (tag, members)
-        | StructMember (tag, t, f) ->
-           StructMember (tag, aux t, f)
+        | StructMember (t, f) ->
+           StructMember (aux t, f)
       in
       IT (Struct_op it, bt)
     in
@@ -784,6 +799,10 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
            IntegerToPointerCast (aux t)
         | PointerToIntegerCast t -> 
            PointerToIntegerCast (aux t)
+        | MemberOffset (tag, member) ->
+           MemberOffset (tag, member)
+        | ArrayOffset (tag, t) ->
+           ArrayOffset (tag, aux t)
       in
       IT (Pointer_op it, bt)
     in
@@ -981,6 +1000,9 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 let forall_ (s,bt) it = IT (Bool_op (Forall ((s, bt), it)), BT.Bool)
+let forall_sth_ (s, bt) cond it = 
+  IT (Bool_op (Forall ((s, bt), impl_ (cond, it))), BT.Bool)
+let exists_ (s, bt) it = not_ (forall_ (s, bt) (not_ it))
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
@@ -993,6 +1015,22 @@ let rem_f_ (it, it') = IT (Arith_op (Rem_f (it, it')), BT.Integer)
 let min_ (it, it') = ite_ (le_ (it, it'), it, it')
 let max_ (it, it') = ite_ (ge_ (it, it'), it, it')
 
+let (%+) t t' = add_ (t, t')
+let (%-) t t' = sub_ (t, t')
+let (%*) t t' = mul_ (t, t')
+let (%/) t t' = div_ (t, t')
+
+let (%==) t t' = eq_ (t, t')
+let (%!=) t t' = ne_ (t, t')
+let (%<) t t' = lt_ (t, t')
+let (%<=) t t' = le_ (t, t')
+let (%>) t t' = gt_ (t, t')
+let (%>=) t t' = ge_ (t, t')
+
+
+let nat_divides_ (it, it') = 
+  eq_ (rem_t_ (it, it'), int_ 0)
+
 (* tuple_op *)
 let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))
 let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
@@ -1000,8 +1038,8 @@ let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
 (* struct_op *)
 let struct_ (tag, members) = 
   IT (Struct_op (Struct (tag, members)), BT.Struct tag) 
-let structMember_ ~member_bt (tag, it, member) = 
-  IT (Struct_op (StructMember (tag, it, member)), member_bt)
+let member_ ~member_bt (tag, it, member) = 
+  IT (Struct_op (StructMember (it, member)), member_bt)
 
 (* pointer_op *)
 let null_ = IT (Pointer_op Null, BT.Loc)
@@ -1015,8 +1053,23 @@ let gePointer_ (it, it') = lePointer_ (it', it)
 let disjoint_ ((p1, s1), (p2, s2)) = 
   or_ [lePointer_ (addPointer_ (p1, s1), p2); 
        lePointer_ (addPointer_ (p2, s2), p1)] 
-let integerToPointerCast_ it = IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
-let pointerToIntegerCast_ it = IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
+let integerToPointerCast_ it = 
+  IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
+let pointerToIntegerCast_ it = 
+  IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
+let memberOffset_ (tag, member) = 
+  IT (Pointer_op (MemberOffset (tag, member)), BT.Integer)
+let arrayOffset_ (ct, t) = 
+  IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
+let memberShift_ (t, tag, member) = 
+  addPointer_ (t, memberOffset_ (tag, member))
+let arrayShift_ (t1, ct, t2) = 
+  addPointer_ (t1, arrayOffset_ (ct, t2))
+
+let (%+.) it it' = addPointer_ (it, it')
+
+let container_of_ (t, tag, member) =
+  subPointer_ (t, memberOffset_ (tag, member))
 
 (* list_op *)
 let nil_ ~item_bt = IT (List_op Nil, BT.List item_bt)
@@ -1066,15 +1119,18 @@ let mod_ (t1, t2, t3) =
   IT (Param_op (Mod (t1, t2, t3)), bt t1)
 let param_ (sym, abt) v = 
   IT (Param_op (Param ((sym, abt), v)), BT.Param (abt, bt v))
-let app_ v args = 
+let app_ v arg = 
   match bt v with
   | BT.Param (_, bt) ->
-     IT (Param_op (App (v, args)), bt)
+     IT (Param_op (App (v, arg)), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
+
+let (%@) it it' = app_ it it'
 
 
 let eta_expand (sym, bt) body = 
   app_ (param_ (sym, bt) body) (sym_ (sym, bt))
+
 
 
 
@@ -1173,7 +1229,7 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
              | Some (member, sct) ->
                 let rangef = representable_ctype struct_layouts sct in
                 let bt = BT.of_sct sct in
-                let member_it = structMember_ ~member_bt:bt (tag, about, member) in
+                let member_it = member_ ~member_bt:bt (tag, about, member) in
                 Some (rangef member_it)
              | None -> 
                 None
@@ -1221,7 +1277,7 @@ let rec good_value struct_layouts ct about =
              match piece.member_or_padding with
              | Some (member, sct) ->
                 let bt = BT.of_sct sct in
-                let member_it = structMember_ ~member_bt:bt (tag, about, member) in
+                let member_it = member_ ~member_bt:bt (tag, about, member) in
                 Some (good_value struct_layouts sct member_it)
              | None -> 
                 None

@@ -1252,7 +1252,10 @@ module Make (G : sig val global : Global.t end) = struct
            let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
            let@ layout = get_struct_decl loc tag in
            let@ _member_bt = get_member_type loc tag member layout in
-           let offset = Memory.member_offset layout member in
+           let@ offset = match Memory.member_offset layout member with
+             | Some offset -> return offset
+             | None -> fail loc (Missing_member (tag, member))
+           in
            let vt = (Loc, IT.addPointer_ (it_of_arg arg, z_ offset)) in
            return (rt_of_vt vt, local)
         | M_PEnot asym ->
@@ -2118,10 +2121,12 @@ let record_globals local globs =
 
 let check mu_file = 
   let open Global in
-  let global = {Global.empty with resource_predicates = builtin_predicates } in
+  let global = Global.empty in
   let local = Local.empty in
   let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
   let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in
+  let global = { global with resource_predicates = mu_file.mu_predicates } in
+
   let@ local = record_globals local mu_file.mu_globs in
   (* has to be after globals: the functions can refer to globals *)
   let@ (global, local) = record_funinfo (global, local) mu_file.mu_funinfo in

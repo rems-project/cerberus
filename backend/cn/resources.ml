@@ -523,37 +523,37 @@ module RE = struct
 
 
   let simp lcs resource =
-    let open Simplify in
+    let simp_it = Simplify.simp lcs in
     match resource with
     | Point {pointer; size; value; init; permission} ->
-       let pointer = simp lcs pointer in
-       let value = simp lcs value in
-       let init = simp lcs init in
-       let permission = simp lcs permission in
+       let pointer = simp_it pointer in
+       let value = simp_it value in
+       let init = simp_it init in
+       let permission = simp_it permission in
        Point {pointer; size; value; init; permission}
     | QPoint {qpointer; size; value; init; permission} ->
        let qpointer' = Sym.fresh_same qpointer in
        let subst = {before=qpointer;after=qpointer'} in
-       let value = simp lcs (IT.subst_var subst value) in
-       let init = simp lcs (IT.subst_var subst init) in
-       let permission = simp lcs (IT.subst_var subst permission) in
+       let value = simp_it (IT.subst_var subst value) in
+       let init = simp_it (IT.subst_var subst init) in
+       let permission = simp_it (IT.subst_var subst permission) in
        QPoint {qpointer = qpointer'; size; value; init; permission}
     | Predicate {name; pointer; iargs; oargs; unused} -> 
-       let pointer = simp lcs pointer in
-       let iargs = List.map (simp lcs) iargs in
-       let oargs = List.map (simp lcs) oargs in
+       let pointer = simp_it pointer in
+       let iargs = List.map simp_it iargs in
+       let oargs = List.map simp_it oargs in
        (* let unused = IT.subst_var subst unused in *)
        Predicate {name; pointer; iargs; oargs; unused}
     | QPredicate {pointer; element_size; length; name; iargs; oargs; i; unused; moved} -> 
        let i' = Sym.fresh_same i in
        let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
        let oargs = List.map (IT.subst_var {before=i;after=i'}) oargs in
-       let pointer = simp lcs pointer in
-       let element_size = simp lcs element_size in
-       let length = simp lcs length in
-       let iargs = List.map (simp lcs) iargs in
-       let oargs = List.map (simp lcs) oargs in
-       let moved = List.map (simp lcs) moved in
+       let pointer = simp_it pointer in
+       let element_size = simp_it element_size in
+       let length = simp_it length in
+       let iargs = List.map simp_it iargs in
+       let oargs = List.map simp_it oargs in
+       let moved = List.map simp_it moved in
        QPredicate {pointer; element_size; length; name; iargs; oargs; i = i'; unused; moved}
 
 

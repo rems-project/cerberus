@@ -1,5 +1,6 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
+module SymMap = Map.Make(Sym)
 
 
 let integer_value_to_num iv = 
@@ -85,6 +86,10 @@ type struct_member =
     member: BT.member * Sctypes.t }
 
 
+type struct_decls = struct_layout SymMap.t
+
+
+
 let members = 
   List.filter_map (fun {member_or_padding; offset; size} ->
       Option.bind member_or_padding (fun (member, sctype) ->
@@ -104,7 +109,9 @@ let member_types =
 
 let member_offset (layout : struct_layout) member = 
   let members = members layout in
-  (List.find (fun piece -> Id.equal (fst piece.member) member) members).offset
+  Option.map 
+    (fun struct_member -> struct_member.offset)
+    (List.find_opt (fun piece -> Id.equal (fst piece.member) member) members)
 
 
 

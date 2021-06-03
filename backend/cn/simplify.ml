@@ -291,13 +291,13 @@ let rec simp (lcs : t list) term =
            ) members
        in
        IT (Struct_op (IT.Struct (tag, members)), bt)
-    | IT.StructMember (tag, it, member) ->
+    | IT.StructMember (it, member) ->
        let it = aux it in
        match it with
        | IT (Struct_op (Struct (_, members)), _) ->
           List.assoc Id.equal member members
        | _ ->
-          IT (Struct_op (IT.StructMember (tag, it, member)), bt)
+          IT (Struct_op (IT.StructMember (it, member)), bt)
 
   (* revisit when memory model changes *)
   and pointer_op it bt = 
@@ -358,6 +358,10 @@ let rec simp (lcs : t list) term =
        | _ ->
           IT (Pointer_op (PointerToIntegerCast a), bt)
        end
+    | MemberOffset (tag, member) ->
+       IT (Pointer_op (MemberOffset (tag, member)), bt)
+    | ArrayOffset (ct, t) ->
+       aux (mul_ (z_ (Memory.size_of_ctype ct), t))
 
 
   and option_op it bt =

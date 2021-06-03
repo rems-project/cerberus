@@ -192,12 +192,23 @@ module Make (G : sig val global : Global.t end) = struct
                  ) members
              in
              return (BT.Struct tag, Struct (tag, members))
-          | StructMember (tag, t, member) ->
-             let@ t = check loc local (Struct tag) t in
+          | StructMember (t, member) ->
+             let@ (bt, t) = infer loc local t in
+             let@ tag = match bt with
+               | Struct tag -> return tag
+               | _ -> 
+                  let (context, t) = Explain.index_terms names local (context, t) in
+                  let err = 
+                    !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                      !^"Expected" ^^^ t ^^^ !^"to have struct type" ^^^ 
+                        !^"but has type" ^^^ BT.pp bt
+                  in
+                  fail loc (Generic err)
+             in
              let@ layout = get_struct_decl tag in
              let decl_members = Memory.member_types layout in
              let@ bt = get_member_type decl_members member t in
-             return (bt, StructMember (tag, t, member))
+             return (bt, StructMember (t, member))
         in
 
         let pointer_op local = function
@@ -235,6 +246,11 @@ module Make (G : sig val global : Global.t end) = struct
           | PointerToIntegerCast t ->
              let@ t = check loc local Loc t in
              return (Integer, PointerToIntegerCast t)
+          | MemberOffset (tag, member) ->
+             return (Integer, MemberOffset (tag, member))
+          | ArrayOffset (ct, t) ->
+             let@ t = check loc local Integer t in
+             return (Integer, ArrayOffset (ct, t))
         in
 
         let ct_pred local = function
@@ -299,32 +315,6 @@ module Make (G : sig val global : Global.t end) = struct
              return (BT.Bool, Subset (t,t'))
         in
 
-        (* let array_op local = function
-         *   | ConstArray it ->
-         *      let@ (bt, it) = infer loc local it in
-         *      let mbt = BT.Array bt in
-         *      return (mbt, ConstArray it)
-         *   | ArrayGet (it,it') ->
-         *      let@ (bt, it) = infer_array_type loc local it in
-         *      let@ it' = check loc local Integer it' in
-         *      return (bt, ArrayGet (it, it'))
-         *   | ArraySet (it,it',it'') ->
-         *      let@ (bt, it) = infer_array_type loc local it in
-         *      let@ it' = check loc local Integer it' in
-         *      let@ it'' = check loc local bt it'' in
-         *      return (Array bt, ArraySet (it, it', it''))
-         *   | ArrayEqualOnRange (it,it',it'',it''') ->
-         *      let@ (bt, it) = infer_array_type loc local it in
-         *      let@ it' = check loc local (Array bt) it' in
-         *      let@ it'' = check loc local Integer it'' in
-         *      let@ it''' = check loc local Integer it''' in
-         *      return (BT.Bool, ArrayEqualOnRange (it, it', it'', it'''))
-         *   | ArrayDef (s, it) -> 
-         *      let local = L.add_l s BT.Integer local in
-         *      let@ (bt, it) = infer loc local it in
-         *      return (BT.Array bt, ArrayDef (s, it))
-         * in *)
-
         let option_op local = function
           | Something it ->
              let@ (bt, it) = infer loc local it in
@@ -361,8 +351,6 @@ module Make (G : sig val global : Global.t end) = struct
              | BT.Param (abt, bt) (* when List.length bts = List.length args *) -> 
                 let@ arg = check loc local abt arg in
                 return (bt, App (it, arg))
-             (* | BT.Param (bts, bt)  -> 
-              *    fail loc (Number_arguments {has = List.length args; expect = List.length bts}) *)
              | bt -> 
                 let (context, it) = Explain.index_terms names local (context, it) in
                 let err = 

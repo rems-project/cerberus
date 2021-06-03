@@ -167,8 +167,8 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
      return (l, r, [], mapping)
 
-let make_pred loc pred (predargs : Ast.term list) pointer iargs = 
-  let@ def = match Global.StringMap.find_opt pred Global.builtin_predicates with
+let make_pred loc predicates pred (predargs : Ast.term list) pointer iargs = 
+  let@ def = match Global.StringMap.find_opt pred predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
@@ -320,7 +320,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
           in
           fail loc (Generic err)
      in
-     return (IT (Struct_op (StructMember (tag, st, member)), BT.of_sct sct), Some sct)
+     return (IT (Struct_op (StructMember (st, member)), BT.of_sct sct), Some sct)
   | IntegerToPointerCast t ->
      let@ t = resolve t in
      return (IT (Pointer_op (IntegerToPointerCast t), Loc), None)
@@ -334,7 +334,7 @@ let resolve_constraint loc layouts mapping lc =
 
 
 
-let apply_ownership_spec layouts label mapping (loc, {predicate; arguments}) =
+let apply_ownership_spec layouts predicates label mapping (loc, {predicate; arguments}) =
   match predicate, arguments with
   | "Owned", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts mapping path in
@@ -366,7 +366,7 @@ let apply_ownership_spec layouts label mapping (loc, {predicate; arguments}) =
            return t
          ) arguments
      in
-     let@ result = make_pred loc predicate arguments pointer_resolved iargs_resolved in
+     let@ result = make_pred loc predicates predicate arguments pointer_resolved iargs_resolved in
      return result
   | pred, _ ->
      fail loc (Generic !^("predicates take at least one (pointer) argument"))
@@ -392,7 +392,7 @@ let garg_item l (garg : garg) =
    o_sct = Some (Sctypes.pointer_sct garg.typ) } 
 
 
-let make_fun_spec loc layouts fsym (fspec : function_spec)
+let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
     : (FT.t * Mapping.t, type_error) m = 
   let open FT in
   let open RT in
@@ -434,7 +434,8 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts "start" mapping (loc, cond) in
+             apply_ownership_spec layouts predicates
+               "start" mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts mapping cond in
@@ -485,7 +486,8 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts "end" mapping (loc, cond) in
+             apply_ownership_spec layouts predicates
+               "end" mapping (loc, cond) in
            return (oL @ l, oR @ r, oC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts mapping cond in
@@ -505,6 +507,7 @@ let make_fun_spec loc layouts fsym (fspec : function_spec)
 let make_label_spec
       (loc : Loc.t)
       layouts
+      predicates
       (lname : string)
       init_mapping
       (lspec: Ast.label_spec)
@@ -564,7 +567,8 @@ let make_label_spec
         match spec with
         | Ast.Resource cond ->
            let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts lname mapping (loc, cond) in
+             apply_ownership_spec layouts predicates
+               lname mapping (loc, cond) in
            return (iL @ l, iR @ r, iC @ c, mapping' @ mapping)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts mapping cond in

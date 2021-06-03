@@ -947,6 +947,7 @@ let normalise_file file : unit Mu.mu_file =
    ; mu_extern = (file.extern)
    ; mu_funinfo = (normalise_funinfos file.funinfo)
    ; mu_loop_attributes = file.loop_attributes0
+   ; mu_predicates = ();
   })
 
 
