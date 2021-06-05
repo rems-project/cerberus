@@ -24,6 +24,7 @@ open Resultat
 module Mu = Retype.New
 open CF.Mucore
 open Mu
+open Binding
 
 open Pp
 open BT
@@ -71,39 +72,6 @@ module Make (G : sig val global : Global.t end) = struct
   (*** meta types ***************************************************************)
   type mem_value = CF.Impl_mem.mem_value
   type pointer_value = CF.Impl_mem.pointer_value
-
-
-
-  (*** variable binding *********************************************************)
-
-  let rec bind_logical (delta : L.t) (lrt : LRT.t) : L.t = 
-    match lrt with
-    | Logical ((s, ls), rt) ->
-       let s' = Sym.fresh () in
-       let rt' = LRT.subst_var {before=s; after=s'} rt in
-       bind_logical (add_l s' ls delta) rt'
-    | Resource (re, rt) -> bind_logical (add_r re delta) rt
-    | Constraint (lc, rt) -> bind_logical (add_c lc delta) rt
-    | I -> delta
-
-  let bind_computational (delta : L.t) (name : Sym.t) (rt : RT.t) : L.t =
-    let Computational ((s, bt), rt) = rt in
-    let s' = Sym.fresh () in
-    let rt' = LRT.subst_var {before = s; after = s'} rt in
-    let delta' = add_a name (bt, s') (add_l s' bt delta) in
-    bind_logical delta' rt'
-
-
-  let bind (name : Sym.t) (rt : RT.t) : L.t =
-    bind_computational L.empty name rt
-
-  let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * L.t) =
-    let Computational ((s, bt), rt) = rt in
-    let s' = Sym.fresh () in
-    let rt' = LRT.subst_var {before = s; after = s'} rt in
-    let delta = add_l s' bt L.empty in
-    let delta' = bind_logical delta rt' in
-    ((bt, s'), delta')
 
 
   (*** auxiliaries **************************************************************)
@@ -719,7 +687,7 @@ module Make (G : sig val global : Global.t end) = struct
                  def.iargs p.iargs 
            in
            let attempt_prompts = 
-             List.map (fun clause ->
+             List.map (fun (_, clause) ->
                  lazy begin
                      let packing_function = subst_its_clause substs clause in
                      prompt (R_Packing {ui_info; local; packing_function})
@@ -951,7 +919,7 @@ module Make (G : sig val global : Global.t end) = struct
           def.iargs p.iargs
       in
       let possible_unpackings = 
-        List.filter_map (fun clause ->
+        List.filter_map (fun (_, clause) ->
             let clause = PackingFT.subst_its substs clause in 
             let condition, outputs = PackingFT.logical_arguments_and_return clause in
             let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in

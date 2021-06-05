@@ -88,7 +88,6 @@ let size_of_ctype (ct : Sctypes.t) =
 
 let align_of_ctype (ct : Sctypes.t) = 
   let open Pp in
-  let () = print stderr (!^"*********************************") in
   match ct with
   | Sctypes.Sctype (_, Void) -> 
      Debug_ocaml.error "align_of_ctype applied to void"

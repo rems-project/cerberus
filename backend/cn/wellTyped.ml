@@ -13,6 +13,7 @@ open Pp
 
 
 module Make (G : sig val global : Global.t end) = struct
+  module Solver = Solver.Make(G)
   module Explain = Explain.Make(G)
 
   let check_bound loc (names : Explain.naming) local kind s = 
@@ -833,7 +834,14 @@ module Make (G : sig val global : Global.t end) = struct
           ) (local, names) pd.iargs
       in
       let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-      ListM.iterM (WPackingFT.welltyped pd.loc names local) pd.clauses
+      ListM.iterM (fun (loc, clause) ->
+          let@ () = WPackingFT.welltyped pd.loc names local clause in
+          let lrt, _ = PackingFT.logical_arguments_and_return clause in
+          let local = Binding.bind_logical local lrt  in
+          if Solver.is_inconsistent local 
+          then fail loc (Generic !^"this clause makes inconsistent assumptions")
+          else return ()            
+        ) pd.clauses
   end
 
 
