@@ -10,7 +10,7 @@ module AT = ArgumentTypes
 module LFT = ArgumentTypes.Make(LogicalReturnTypes)
 module FT = ArgumentTypes.Make(ReturnTypes)
 module LT = ArgumentTypes.Make(False)
-module PackingFT = ArgumentTypes.Make(Assignment)
+module PackingFT = ArgumentTypes.Make(OutputDef)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -278,7 +278,7 @@ module Make (G : sig val global : Global.t end) = struct
 
       and 'r prompt = 
         | R_Resource : resource_request -> (RE.t * L.t) prompt
-        | R_Packing : packing_request -> (Assignment.t * L.t) prompt
+        | R_Packing : packing_request -> (OutputDef.t * L.t) prompt
         | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
         | R_Error : err -> 'r prompt
 
@@ -525,7 +525,7 @@ module Make (G : sig val global : Global.t end) = struct
     module Spine_FT = Spine(ReturnTypes)
     module Spine_LFT = Spine(LogicalReturnTypes)
     module Spine_LT = Spine(False)
-    module Spine_Packing = Spine(Assignment)
+    module Spine_Packing = Spine(OutputDef)
 
 
 
@@ -736,7 +736,7 @@ module Make (G : sig val global : Global.t end) = struct
              { pointer = p.pointer;
                name = p.name;
                iargs = p.iargs;
-               oargs = assignment;
+               oargs = List.map snd assignment;
                unused = p.unused;
              }
            in
@@ -935,7 +935,7 @@ module Make (G : sig val global : Global.t end) = struct
        inference as the spine judgment. So implement the subtyping
        judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
     let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
-      let extra_names = [(arg.lname, Ast.Addr "return")] in
+      let extra_names = [(arg.lname, Ast.Var {label = None; v ="return"})] in
       let open Prompt in
       let ui_info = { loc; extra_names; situation = Subtyping; original_local = local } in
       let lt = LT.of_rt rtyp (LT.I False.False) in
@@ -954,7 +954,7 @@ module Make (G : sig val global : Global.t end) = struct
         List.filter_map (fun clause ->
             let clause = PackingFT.subst_its substs clause in 
             let condition, outputs = PackingFT.logical_arguments_and_return clause in
-            let lc = and_ (List.map2 eq__ p.oargs outputs) in
+            let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
             let spec = LRT.concat condition (Constraint (lc, I)) in
             let lrt = LRT.subst_its substs spec in
             (* remove resource before binding the return
@@ -2125,9 +2125,16 @@ let check mu_file =
   let local = Local.empty in
   let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
   let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in
-  let global = { global with resource_predicates = mu_file.mu_predicates } in
-
   let@ local = record_globals local mu_file.mu_globs in
+  let@ global = 
+    ListM.fold_leftM (fun global (name,def) -> 
+        let module WT = WellTyped.Make(struct let global = global end) in
+        let@ () = WT.WPD.welltyped [] local def in
+        let resource_predicates =
+          StringMap.add name def global.resource_predicates in
+        return {global with resource_predicates}
+      ) global mu_file.mu_predicates
+  in
   (* has to be after globals: the functions can refer to globals *)
   let@ (global, local) = record_funinfo (global, local) mu_file.mu_funinfo in
   let@ () = print_initial_environment global in

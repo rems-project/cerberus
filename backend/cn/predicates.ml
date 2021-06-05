@@ -5,8 +5,9 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RE = Resources.RE
-module PackingFT = ArgumentTypes.Make(Assignment)
+module PackingFT = ArgumentTypes.Make(OutputDef)
 module StringMap = Map.Make(String)
+module Loc = Locations
 open Pp
 
 
@@ -30,16 +31,17 @@ let subst_vars_clause substs =
 
 
 type predicate_definition = {
+    loc : Loc.t;
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
-    oargs : (Sym.t * LS.t) list;
+    oargs : (string * LS.t) list;
     clauses : clause list;
   }
   
 let pp_predicate_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
-  item "oargs" (Pp.list (fun (s,_) -> Sym.pp s) def.oargs) ^/^
+  item "oargs" (Pp.list (fun (s,_) -> Pp.string s) def.oargs) ^/^
   item "clauses" (Pp.list pp_clause def.clauses)
   
 
@@ -54,24 +56,23 @@ let pp_predicate_definition def =
 
 
 type ctype_predicate =
-  { pointer_arg : Sym.t;
-    value_arg : Sym.t;
-    init_arg : Sym.t;
+  { pointer_iarg : Sym.t;
+    value_oarg : string * IT.t;
+    init_oarg : string * IT.t;
     lrt: LRT.t;
-    value_def: IT.t; 
-    init_def: IT.t; 
   }
 
 
 let ctype_predicate_to_predicate ct pred = 
   let clause = 
     PackingFT.of_lrt pred.lrt 
-      (PackingFT.I [pred.value_def; pred.init_def]) in
+      (PackingFT.I [pred.value_oarg; pred.init_oarg]) in
   let def = {
-      pointer = pred.pointer_arg; 
+      loc = Loc.other "internal (Ctype)";
+      pointer = pred.pointer_iarg; 
       iargs = []; 
-      oargs = [(pred.value_arg, IT.bt pred.value_def);
-               (pred.init_arg, IT.bt pred.init_def)];
+      oargs = [(fst pred.value_oarg, IT.bt (snd pred.value_oarg));
+               (fst pred.init_oarg, IT.bt (snd pred.init_oarg))];
       clauses = [clause]
     }
   in
@@ -89,9 +90,9 @@ let ctype_predicate struct_layouts ct =
   let open Resources in
   let open Option in
   let open Sctypes in
-  let pointer_s, pointer_t = IT.fresh BT.Loc in
-  let init_s, init_t = IT.fresh BT.Bool in
-  let v_s, v_t = IT.fresh (BT.of_sct ct) in
+  let pointer_s, pointer_t = IT.fresh_named BT.Loc "?pointer" in
+  let init_s, init_t = IT.fresh_named BT.Bool "?init" in
+  let v_s, v_t = IT.fresh_named (BT.of_sct ct) "?value" in
   let size = size_of_ctype ct in
   let (Sctypes.Sctype (_, ct_)) = ct in
   let@ lrt, value_def = match ct_ with
@@ -141,16 +142,16 @@ let ctype_predicate struct_layouts ct =
            let member_p = addPointer_ (pointer_t, z_ offset) in
            match member_or_padding with
            | Some (member, sct) ->
-              let member_v, member_t = IT.fresh (BT.of_sct sct) in
+              let member_s, member_t = IT.fresh_named (BT.of_sct sct) "?member" in
               let resource = predicate (Ctype sct) member_p [] [member_t; init_t] in
               let lrt = 
-                LRT.Logical ((member_v, IT.bt member_t),
+                LRT.Logical ((member_s, IT.bt member_t),
                 LRT.Resource (resource, lrt))
               in
               let values = (member, member_t) :: values in
               (lrt, values)
            | None ->
-              let padding_s, padding_t = IT.fresh BT.Integer in
+              let padding_s, padding_t = IT.fresh_named BT.Integer "?padding" in
               let resource = point (member_p, size) (q_ (1,1)) padding_t (bool_ false) in
               let lrt = 
                 LRT.Logical ((padding_s, IT.bt padding_t),
@@ -168,12 +169,10 @@ let ctype_predicate struct_layouts ct =
      Debug_ocaml.error "todo: function ctype predicate"
   in
   let def = { 
-      pointer_arg = pointer_s; 
-      value_arg = v_s; 
-      init_arg = init_s;
+      pointer_iarg = pointer_s; 
+      value_oarg = ("value", value_def); 
+      init_oarg = ("init", init_t);
       lrt; 
-      value_def = value_def; 
-      init_def = init_t 
     }
   in
   return def
@@ -191,10 +190,10 @@ let char_ct = Sctypes.Sctype ([], Integer Char)
 
 let region = 
   let id = "Region" in
-  let pointer_s, pointer_t = IT.fresh Loc in
-  let length_s, length_t = IT.fresh Integer in
-  let v_s, v_t = IT.fresh (BT.Param (Integer, Integer)) in
-  let init_s, init_t = IT.fresh (BT.Param (Integer, Bool)) in
+  let pointer_s, pointer_t = IT.fresh_named Loc "?pointer" in
+  let length_s, length_t = IT.fresh_named Integer "?length" in
+  let v_s, v_t = IT.fresh_named (BT.Param (Integer, Integer)) "?value" in
+  let init_s, init_t = IT.fresh_named (BT.Param (Integer, Bool)) "?init" in
   let i_s, i_t = IT.fresh_named Integer "?i" in
   let qpredicate = {
       name = Ctype char_ct;
@@ -216,48 +215,12 @@ let region =
     LRT.I))))
   in
   let predicate = {
+      loc = Loc.other "internal (Region)";
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)]; 
-      oargs = [(v_s, IT.bt v_t); (init_s, IT.bt init_t)]; 
-      clauses = [PackingFT.of_lrt lrt (PackingFT.I [v_t; init_t])]; 
-    } 
-  in
-  (id, predicate)
-
-
-
-let early = 
-  let id = "EarlyAlloc" in
-  let start_s, start_t = IT.fresh Loc in
-  let end_s, end_t = IT.fresh Loc in
-  let length_t = 
-    add_ (sub_ (pointerToIntegerCast_ end_t,
-                pointerToIntegerCast_ start_t), 
-          int_ 1)
-  in
-  let v_s, v_t = IT.fresh (BT.Param (Integer, Integer)) in
-  let init_s, init_t = IT.fresh (BT.Param (Integer, Bool)) in
-  let region = {
-      name = Id "Region";
-      pointer = start_t; 
-      unused = true;
-      iargs = [length_t];
-      oargs = [v_t; init_t];
-    }
-  in
-  let lrt =
-    LRT.Logical ((v_s, IT.bt v_t),
-    LRT.Logical ((init_s, IT.bt init_t),
-    LRT.Resource (Predicate region, 
-    LRT.Constraint (IT.good_pointer start_t char_ct,
-    LRT.Constraint (IT.good_pointer end_t char_ct,
-    LRT.I)))))
-  in
-  let predicate = {
-      pointer = start_s;
-      iargs = [(end_s, IT.bt end_t)]; 
-      oargs = []; 
-      clauses = [PackingFT.of_lrt lrt (PackingFT.I [])]; 
+      oargs = [("value", IT.bt v_t); ("init", IT.bt init_t)]; 
+      clauses = [PackingFT.of_lrt lrt 
+                   (PackingFT.I [("value",v_t); ("init", init_t)])]; 
     } 
   in
   (id, predicate)
@@ -267,11 +230,11 @@ let early =
 
 let part_zero_region = 
   let id = "PartZeroRegion" in
-  let pointer_s, pointer_t = IT.fresh Loc in
-  let length_s, length_t = IT.fresh Integer in
-  let v_s, v_t = IT.fresh (BT.Param (Integer, Integer)) in
-  let init_s, init_t = IT.fresh (BT.Param (Integer, Bool)) in
-  let j_s, j_t = IT.fresh Integer in
+  let pointer_s, pointer_t = IT.fresh_named Loc "?pointer" in
+  let length_s, length_t = IT.fresh_named Integer "?length" in
+  let v_s, v_t = IT.fresh_named (BT.Param (Integer, Integer)) "?v" in
+  let init_s, init_t = IT.fresh_named (BT.Param (Integer, Bool)) "?init" in
+  let j_s, j_t = IT.fresh_named Integer "?j" in
   let i_s, i_t = IT.fresh_named Integer "?i" in
   let region = {
       name = Id "Region";
@@ -300,6 +263,7 @@ let part_zero_region =
     LRT.I)))))
   in
   let predicate = {
+      loc = Loc.other "internal (PartZeroRegion)";
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t); (j_s, IT.bt j_t)];
       oargs = [];
@@ -313,21 +277,63 @@ let part_zero_region =
 
 let zero_region = 
   let id = "ZeroRegion" in
-  let pointer_s, pointer_t = IT.fresh Loc in
-  let length_s, length_t = IT.fresh Integer in
-  let predicate = {
-      name = Id "PartZeroRegion";
-      pointer = pointer_t; 
-      unused = true;
-      iargs = [length_t; length_t];
-      oargs = [];
-    }
+  let pointer_s, pointer_t = IT.fresh_named Loc "?pointer" in
+  let length_s, length_t = IT.fresh_named Integer "?length" in
+  let lrt = 
+    let p = {
+        name = Id "PartZeroRegion";
+        pointer = pointer_t; 
+        unused = true;
+        iargs = [length_t; length_t];
+        oargs = [];
+      }
+    in
+    LRT.Resource (Predicate p, LRT.I) 
   in
-  let lrt = LRT.Resource (Predicate predicate, LRT.I) in
   let predicate = {
+      loc = Loc.other "internal (ZeroRegion)";
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)];
       oargs = [];
+      clauses = [PackingFT.of_lrt lrt (PackingFT.I [])]; 
+    } 
+  in
+  (id, predicate)
+
+
+
+let early = 
+  let id = "EarlyAlloc" in
+  let start_s, start_t = IT.fresh_named Loc "?start" in
+  let end_s, end_t = IT.fresh_named Loc "?end" in
+  let length_t = 
+    add_ (sub_ (pointerToIntegerCast_ end_t,
+                pointerToIntegerCast_ start_t), 
+          int_ 1)
+  in
+  let v_s, v_t = IT.fresh_named (BT.Param (Integer, Integer)) "?v" in
+  let init_s, init_t = IT.fresh_named (BT.Param (Integer, Bool)) "?init" in
+  let region = {
+      name = Id "Region";
+      pointer = start_t; 
+      unused = true;
+      iargs = [length_t];
+      oargs = [v_t; init_t];
+    }
+  in
+  let lrt =
+    LRT.Logical ((v_s, IT.bt v_t),
+    LRT.Logical ((init_s, IT.bt init_t),
+    LRT.Resource (Predicate region, 
+    LRT.Constraint (IT.good_pointer start_t char_ct,
+    LRT.Constraint (IT.good_pointer end_t char_ct,
+    LRT.I)))))
+  in
+  let predicate = {
+      loc = Loc.other "internal (EarlyAlloc)";
+      pointer = start_s;
+      iargs = [(end_s, IT.bt end_t)]; 
+      oargs = []; 
       clauses = [PackingFT.of_lrt lrt (PackingFT.I [])]; 
     } 
   in
@@ -357,16 +363,16 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
   in
 
   let id = "Hyp_pool" in
-  let p_s, p_t = IT.fresh Loc in
-  let hyp_vmemmap_s, hyp_vmemmap_t = IT.fresh Loc in
-  let pPAGE_SHIFT_s, pPAGE_SHIFT_t = IT.fresh Integer in
-  let mMAX_ORDER_s, mMAX_ORDER_t = IT.fresh Integer in
-  let hHYP_NO_ORDER_s, hHYP_NO_ORDER_t = IT.fresh Integer in
-  let pool_s, pool_t = IT.fresh (BT.Struct hyp_pool_tag) in
+  let p_s, p_t = IT.fresh_named Loc "?p" in
+  let hyp_vmemmap_s, hyp_vmemmap_t = IT.fresh_named Loc "?hyp_vmemmap" in
+  let pPAGE_SHIFT_s, pPAGE_SHIFT_t = IT.fresh_named Integer "?PAGE_SHIFT" in
+  let mMAX_ORDER_s, mMAX_ORDER_t = IT.fresh_named Integer "?MAX_ORDER" in
+  let hHYP_NO_ORDER_s, hHYP_NO_ORDER_t = IT.fresh_named Integer "?HYP_NO_ORDER" in
+  let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "?pool" in
   let poolmap_s, poolmap_t = 
-    IT.fresh (BT.Param (Integer, BT.Struct hyp_page_tag)) in
+    IT.fresh_named (BT.Param (Integer, BT.Struct hyp_page_tag)) "?poolmap" in
   let poolmap_i_s, poolmap_i_t = 
-    IT.fresh (BT.Param (Integer, Bool)) in
+    IT.fresh_named (BT.Param (Integer, Bool)) "?poolmap_i" in
 
   
   let (%.) t member = 
@@ -385,13 +391,16 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
 
 
   let hyp_vmemmap_offset_of_node_pointer pointer = 
-    container_of_ (pointer, hyp_page_tag, Id.id "node") %-
+    pointerToIntegerCast_
+      (container_of_ (pointer, hyp_page_tag, Id.id "node")) %-
       pointerToIntegerCast_ hyp_vmemmap_t
   in
 
   let hyp_vmemmap_good_node_pointer pointer = 
-    rem_t_ (hyp_vmemmap_offset_of_node_pointer pointer, 
-            z_ (Memory.size_of_struct hyp_page_tag))
+    (rem_t_ (hyp_vmemmap_offset_of_node_pointer pointer, 
+             z_ (Memory.size_of_struct hyp_page_tag)))
+    %==
+      (int_ 0)
   in
   
   let hyp_vmemmap_node_pointer_to_index pointer = 
@@ -430,7 +439,7 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
 
   let vmmemmap_metadata_owned =
     let element_size = Memory.size_of_struct hyp_page_tag in
-    let i_s, i_t = IT.fresh Integer in
+    let i_s, i_t = IT.fresh_named Integer "?i" in
     let qpredicate = 
       QPredicate {
           pointer = hyp_vmemmap_t %+. (start_t %* z_ element_size);
@@ -462,7 +471,7 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
   in
 
   let free_list_well_formedness = 
-    let o_s, o_t = IT.fresh Integer in
+    let o_s, o_t = IT.fresh_named Integer "?o" in
     let constr = 
       forall_ (o_s, IT.bt o_t) 
         (and_ (
@@ -483,7 +492,7 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
 
   let hyp_page_well_formedness = 
     let constr =  
-      let i_s, i_t = IT.fresh Integer in
+      let i_s, i_t = IT.fresh_named Integer "?i" in
       let first = 
         forall_sth_ (i_s, IT.bt i_t) 
           (and_ [start_t %<= i_t; i_t %< end_t]) 
@@ -520,20 +529,20 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
                
                prev_next_t %==
                  arrayShift_
-                   (memberShift_ (pool_t, hyp_pool_tag, Id.id "free_area"),
+                   (memberShift_ (p_t, hyp_pool_tag, Id.id "free_area"),
                     Sctype ([], Struct list_head_tag),
                     (poolmap_t %@ (i_t %- start_t)) %. "order");
                
                and_ (
                    hyp_vmemmap_good_node_pointer prev_next_t ::
                    let j_t = hyp_vmemmap_node_pointer_to_index prev_next_t in
-                   let k_s, k_t = IT.fresh Integer in
+                   let k_s, k_t = IT.fresh_named Integer "?k" in
                    [start_t %<= j_t; j_t %< end_t;
                     (((poolmap_t %@ (j_t %- start_t)) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== vmemmap_cell_node_address i_t;
                     ((poolmap_t %@ (i_t %- start_t)) %. "order") %== ((poolmap_t %@ (j_t %- start_t)) %. "order");
                     forall_sth_ (k_s, IT.bt k_t)
                       (and_ [(i_t %+ int_ 1) %<= k_t; 
-                             k_t %< i_t %+ (exp_ (int_ 2, (poolmap_t %@ (i_t %- start_t)) %. "order"))])
+                             k_t %< (i_t %+ (exp_ (int_ 2, (poolmap_t %@ (i_t %- start_t)) %. "order")))])
                       (and_ [
                           ((poolmap_t %@ (k_t %- start_t)) %. "order") %== hHYP_NO_ORDER_t;
                           ((poolmap_t %@ (k_t %- start_t)) %. "refcount") %== int_ 0;
@@ -548,12 +557,12 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
   in
 
   let page_group_ownership = 
-    let qp_s, qp_t = IT.fresh Loc in
-    let bytes_s, bytes_t = IT.fresh (BT.Param (Loc, Integer)) in
+    let qp_s, qp_t = IT.fresh_named Loc "?qp" in
+    let bytes_s, bytes_t = IT.fresh_named (BT.Param (Loc, Integer)) "?bytes" in
     let condition = 
-      let i_s, i_t = IT.fresh Integer in
+      let i_s, i_t = IT.fresh_named Integer "?i" in
       and_ [
-          gtPointer_ (qp_t, int_ 0);
+          gtPointer_ (qp_t, pointer_ (Z.of_int 0));
           exists_ (i_s, IT.bt i_t)
             (and_ (
                [start_t %<= i_t; i_t %< end_t;
@@ -562,11 +571,10 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
                  let page_group_start_addr = mul_ (i_t, pPAGE_SIZE_t) in
                  let number_pages = exp_ (int_ 2, (poolmap_t %@ (i_t %- start_t)) %. "order") in
                  let page_group_end_addr = 
-                   addPointer_ (page_group_start_addr, 
-                                mul_ (number_pages, pPAGE_SIZE_t))
+                   page_group_start_addr %+ (number_pages %* pPAGE_SIZE_t)
                  in
-                 [lePointer_ (page_group_start_addr, qp_t);
-                  ltPointer_ (qp_t, page_group_end_addr);]
+                 [lePointer_ (integerToPointerCast_ (page_group_start_addr), qp_t);
+                  ltPointer_ (qp_t, integerToPointerCast_ (page_group_end_addr));]
             ))
         ]
     in
@@ -594,7 +602,9 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
     @@ page_group_ownership
   in
 
-  let predicate = {
+  let predicate = 
+    {
+      loc = Loc.other "internal (Hyp_pool)";
       pointer = 
         p_s;
       iargs = [
@@ -604,27 +614,28 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
           (hHYP_NO_ORDER_s, IT.bt hHYP_NO_ORDER_t);
         ];
       oargs = [
-          (pool_s, IT.bt pool_t);
+          ("pool", IT.bt pool_t);
         ];
       clauses = 
-        [PackingFT.of_lrt lrt (PackingFT.I [pool_t;])]; 
+        [PackingFT.of_lrt lrt (PackingFT.I [("pool", pool_t);])]; 
     } 
   in
   (id, predicate)
 
 
 
+
+
+
+
 let predicate_list struct_decls = 
   region ::
-  early ::
-  zero_region ::
   part_zero_region ::
+  zero_region ::
+  early ::
   (* for now: *)
   try [hyp_pool struct_decls] with
   | Not_found -> []
 
-let predicates struct_decls = 
-  List.fold_left (fun acc (name,def) -> 
-      StringMap.add name def acc
-    ) StringMap.empty (predicate_list struct_decls)
+
     

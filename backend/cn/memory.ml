@@ -3,48 +3,75 @@ module BT = BaseTypes
 module SymMap = Map.Make(Sym)
 
 
+let report fn exn = 
+  Debug_ocaml.error (fn ^ " error: " ^ (Printexc.to_string exn)) 
+
+
+
 let integer_value_to_num iv = 
-  match CF.Impl_mem.eval_integer_value iv with
-  | Some v -> v
-  | None -> Debug_ocaml.error "integer_value_to_num returned None"
+  try
+    match CF.Impl_mem.eval_integer_value iv with
+    | Some v -> v
+    | None -> Debug_ocaml.error "integer_value_to_num returned None"
+  with
+  | exn -> report "integer_value_to_num" exn
 
 
 
 (* adapting from impl_mem *)
 let size_of_integer_type it = 
-  let impl = CF.Ocaml_implementation.get () in
-  match impl.sizeof_ity it with
-  | Some n -> Z.of_int n
-  | None -> Debug_ocaml.error "sizeof_pointer returned None"
+  try
+    let impl = CF.Ocaml_implementation.get () in
+    match impl.sizeof_ity it with
+    | Some n -> Z.of_int n
+    | None -> Debug_ocaml.error "sizeof_pointer returned None"
+  with
+  | exn -> report "size_of_integer_type" exn
 
 (* adapting from impl_mem *)
 let align_of_integer_type it =
-  let impl = CF.Ocaml_implementation.get () in
-  match impl.alignof_ity it with
-  | Some n -> Z.of_int n
-  | None -> Debug_ocaml.error "alignof_pointer returned None"
+  try
+    let impl = CF.Ocaml_implementation.get () in
+    match impl.alignof_ity it with
+    | Some n -> Z.of_int n
+    | None -> Debug_ocaml.error "alignof_pointer returned None"
+  with
+  | exn -> report "align_of_integer_type" exn
+
 
 let max_integer_type it = 
-  integer_value_to_num (CF.Impl_mem.max_ival it) 
+  try
+    integer_value_to_num (CF.Impl_mem.max_ival it) 
+  with
+  | exn -> report "max_integer_type" exn
 
 let min_integer_type it = 
-  integer_value_to_num (CF.Impl_mem.min_ival it)
+  try
+    integer_value_to_num (CF.Impl_mem.min_ival it)
+  with
+  | exn -> report "min_integer_type" exn
 
 
 
 (* adapting from impl_mem *)
 let size_of_pointer =
-  let impl = CF.Ocaml_implementation.get () in
-  match impl.sizeof_pointer with
-  | Some n -> Z.of_int n
-  | None -> Debug_ocaml.error "sizeof_pointer returned None"
+  try 
+    let impl = CF.Ocaml_implementation.get () in
+    match impl.sizeof_pointer with
+    | Some n -> Z.of_int n
+    | None -> Debug_ocaml.error "sizeof_pointer returned None"
+  with
+  | exn -> report "size_of_pointer" exn
 
 (* from impl_mem *)
 let align_of_pointer =
-  let impl = CF.Ocaml_implementation.get () in
-  match impl.alignof_pointer with
-  | Some n -> Z.of_int n
-  | None -> Debug_ocaml.error "alignof_pointer returned None"
+  try
+    let impl = CF.Ocaml_implementation.get () in
+    match impl.alignof_pointer with
+    | Some n -> Z.of_int n
+    | None -> Debug_ocaml.error "alignof_pointer returned None"
+  with
+  | exn -> report "align_of_pointer" exn
 
 
 
@@ -53,16 +80,24 @@ let size_of_ctype (ct : Sctypes.t) =
   | Sctypes.Sctype (_, Void) -> 
      Debug_ocaml.error "size_of_ctype applied to void"
   | _ -> 
-    let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
-    integer_value_to_num s
+     try
+       let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
+       integer_value_to_num s
+     with
+     | exn -> report "size_of_ctype" exn
 
 let align_of_ctype (ct : Sctypes.t) = 
+  let open Pp in
+  let () = print stderr (!^"*********************************") in
   match ct with
   | Sctypes.Sctype (_, Void) -> 
      Debug_ocaml.error "align_of_ctype applied to void"
   | _ -> 
-     let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in
-     integer_value_to_num s
+     try
+       let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in
+       integer_value_to_num s
+     with
+     | exn -> report "align_of_ctype" exn
 
 
 

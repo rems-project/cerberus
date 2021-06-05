@@ -15,6 +15,7 @@ let is_unknown loc = loc = unknown
 
 let pp loc = Location_ocaml.pp_location ~clever:false loc
 
+let other str = Location_ocaml.other str
 
 
 let dirs_to_ignore = 
@@ -27,9 +28,10 @@ let dirs_to_ignore =
     )
 
 let good_location (loc : Location_ocaml.t) = 
-  match Location_ocaml.get_filename loc with
-  | None -> false
-  | Some file -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
+  match Location_ocaml.get_filename loc, Location_ocaml.is_other loc with
+  | Some file, _ -> not (StringSet.mem (Filename.dirname file) dirs_to_ignore)
+  | _, Some other -> true
+  | None, _ -> false
 
 
 let updateB (loc : t) (loc2 : Location_ocaml.t) = 

@@ -180,7 +180,6 @@ let z3_log_file_path =
 
 
 let main filename mjsonfile debug_level print_level =
-  (* let module S = Solver.Make(struct let global = Global.empty end) in *)
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;
   if debug_level > 0 then Printexc.record_backtrace true else ();
@@ -192,7 +191,7 @@ let main filename mjsonfile debug_level print_level =
     begin match frontend filename with
     | CF.Exception.Exception err ->
        prerr_endline (CF.Pp_errors.to_string err);
-       exit 1
+       exit 2
     | CF.Exception.Result file ->
        try
          let open Resultat in

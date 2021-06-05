@@ -105,7 +105,8 @@ module Make (G : sig val global : Global.t end) = struct
       | Some sc -> sc
       | None ->
          let (IT (it_, bt)) = it in
-         (* Pp.debug 10 (lazy (Pp.item "still translating term" (IT.pp it))); *)
+         Pp.debug 10 (lazy (Pp.item "still translating term" (IT.pp it)));
+         Pp.debug 10 (lazy (Pp.item "of type" (BT.pp (IT.bt it))));
          let sc = match it_ with
            | Lit t -> lit t bt
            | Arith_op t -> arith_op t bt

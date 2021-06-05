@@ -146,6 +146,8 @@ instance (Show sym)
     "Symbol" ^ show (n, str_opt)
 end
 
+let show_raw_less (Symbol _ n str_opt) =
+  "Symbol(" ^ show n ^ ", " ^ show str_opt ^ ")"
 let show_raw (Symbol d n str_opt) =
   "Symbol(" ^ show d ^ ", " ^ show n ^ ", " ^ show str_opt ^ ")"
 

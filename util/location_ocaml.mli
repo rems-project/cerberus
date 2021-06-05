@@ -35,3 +35,4 @@ val head_pos_of_location: t -> (string * string)
 val get_filename: t -> string option
 
 val is_unknown: t -> bool
+val is_other: t -> string option

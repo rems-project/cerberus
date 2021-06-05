@@ -33,7 +33,7 @@ module SR_Types = struct
   type gt = ct
   type ut = unit
   type mapping = Mapping.t
-  type predicates = Predicates.predicate_definition Predicates.StringMap.t
+  type predicates = (string * Predicates.predicate_definition) list
 end
 
 module Old = CF.Mucore.Make(CF.Mucore.SimpleTypes)
@@ -448,7 +448,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
 
   let get_layout sym = SymMap.find sym struct_decls in
 
-  let predicates = Predicates.predicates struct_decls in
+  let predicates = Predicates.predicate_list struct_decls in
 
 
   let@ (globs, glob_typs) = 

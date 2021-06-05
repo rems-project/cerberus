@@ -8,6 +8,8 @@ type path = t List1.t
 
 val unknown : t
 
+val other : string -> t
+
 val is_unknown : t -> bool
 
 val pp : t -> PPrint.document

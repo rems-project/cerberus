@@ -16,6 +16,7 @@ let named (s : t) : bool = Option.is_some (S.symbol_name s)
 
 let pp_string = CF.Pp_symbol.to_string_pretty
 let pp sym = Pp.string (pp_string sym)
+let pp_debug sym = Pp.string (CF.Symbol.show_raw_less sym)
 
 let num = S.symbol_num
 

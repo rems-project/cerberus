@@ -420,3 +420,7 @@ let get_filename = function
 let is_unknown = function
   | Loc_unknown -> true 
   | _ -> false
+
+let is_other = function
+  | Loc_other str -> Some str
+  | _ -> None

@@ -167,8 +167,9 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
      return (l, r, [], mapping)
 
-let make_pred loc predicates pred (predargs : Ast.term list) pointer iargs = 
-  let@ def = match Global.StringMap.find_opt pred predicates with
+let make_pred loc (predicates : (string * Predicates.predicate_definition) list) 
+      pred (predargs : Ast.term list) pointer iargs = 
+  let@ def = match List.assoc_opt String.equal pred predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
@@ -176,16 +177,14 @@ let make_pred loc predicates pred (predargs : Ast.term list) pointer iargs =
     ListM.fold_rightM (fun (oarg, bt) (mapping, l) ->
         let s = Sym.fresh () in
         let l = (s, bt) :: l in
-        let mapping = match Sym.name oarg with
-          | Some name -> 
-             let item = 
-               {path = Ast.predarg pred predargs name; 
-                it = sym_ (s, bt);
-                o_sct = None;
-               } 
-             in
-             item :: mapping 
-          | None -> []
+        let mapping = 
+          let item = 
+            {path = Ast.predarg pred predargs oarg; 
+             it = sym_ (s, bt);
+             o_sct = None;
+            } 
+          in
+          item :: mapping 
         in
         return (mapping, l)
       ) def.oargs ([], [])

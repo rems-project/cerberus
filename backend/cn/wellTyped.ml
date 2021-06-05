@@ -8,6 +8,7 @@ module RE = Resources.RE
 
 open Global
 open TE
+open Pp
 
 
 
@@ -24,7 +25,6 @@ module Make (G : sig val global : Global.t end) = struct
     open BaseTypes
     open LogicalSorts
     open IndexTerms
-    open Pp
 
     type t = IndexTerms.t
 
@@ -565,7 +565,7 @@ module Make (G : sig val global : Global.t end) = struct
            ListM.iterM (fun (arg, expected_sort) ->
                WIT.welltyped loc names local expected_sort arg
              ) (List.combine (p.iargs @ p.oargs) 
-               (List.map snd (def.iargs @ def.oargs)))
+               (List.map snd def.iargs @ List.map snd def.oargs))
          in
          return ()
       | QPredicate p -> 
@@ -719,13 +719,35 @@ module Make (G : sig val global : Global.t end) = struct
     let welltyped _ _ _ _ = return ()
   end
 
+  module type WOutputSpec = sig val name_bts : (string * LS.t) list end
+  module WOutputDef (Spec : WOutputSpec) = struct
+    type t = OutputDef.t
+    let check loc names local assignment =
+      let name_bts = List.sort (fun (s, _) (s', _) -> String.compare s s') Spec.name_bts in
+      let assignment = List.sort (fun (s, _) (s', _) -> String.compare s s') assignment in
+      let rec aux name_bts assignment =
+        match name_bts, assignment with
+        | [], [] -> return ()
+        | (name, bt) :: name_bts, (name', it) :: assignment when String.equal name name' ->
+           let@ () = WIT.welltyped loc names local bt it in
+           aux name_bts assignment
+        | (name, _) :: _, _ -> fail loc (Generic !^("missing output argument " ^ name))
+        | _, (name, _) :: _ -> fail loc (Generic !^("surplus output argument " ^ name))
+      in
+      aux name_bts assignment
+    let wellpolarised _ _ _ = return ()
+    let welltyped loc names local assignment = 
+      check loc names local assignment
+  end
+
 
   module type WI_Sig = sig
     type t
-    val check : Loc.t -> Explain.naming -> (L.t) -> t -> (unit,type_error) m
+    val check : Loc.t -> Explain.naming -> L.t -> t -> (unit,type_error) m
     val wellpolarised : Loc.t -> SymSet.t -> t -> (unit,type_error) m
-    val welltyped : Loc.t -> Explain.naming -> (L.t) -> t -> (unit,type_error) m
+    val welltyped : Loc.t -> Explain.naming -> L.t -> t -> (unit,type_error) m
   end
+
 
 
   module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
@@ -792,5 +814,27 @@ module Make (G : sig val global : Global.t end) = struct
 
   module WFT = WAT(ReturnTypes)(WRT)
   module WLT = WAT(False)(WFalse)
+  module WPackingFT(Spec : WOutputSpec) = WAT(OutputDef)(WOutputDef(Spec))
+
+  module WPD = struct
+    
+    let welltyped names local pd = 
+      let open Predicates in
+      let local = L.add_l pd.pointer BT.Loc local in
+      let local, names = 
+        List.fold_left (fun (local, names) (s, ls) -> 
+            let local = L.add_l s ls local in
+            let names = match Sym.name s with
+              | Some name -> 
+                 (s, Ast.Var {label = None; v = name }) :: names
+              | None -> names 
+            in
+            (local, names)
+          ) (local, names) pd.iargs
+      in
+      let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
+      ListM.iterM (WPackingFT.welltyped pd.loc names local) pd.clauses
+  end
+
 
 end
