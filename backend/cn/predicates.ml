@@ -377,9 +377,9 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
 
   let p_s, p_t = IT.fresh_named Loc "?p" in
   let hyp_vmemmap_s, hyp_vmemmap_t = IT.fresh_named Loc "?hyp_vmemmap" in
-  let pPAGE_SHIFT_s, pPAGE_SHIFT_t = IT.fresh_named Integer "?PAGE_SHIFT" in
-  let mMAX_ORDER_s, mMAX_ORDER_t = IT.fresh_named Integer "?MAX_ORDER" in
-  let hHYP_NO_ORDER_s, hHYP_NO_ORDER_t = IT.fresh_named Integer "?HYP_NO_ORDER" in
+  let pPAGE_SHIFT_t = int_ 12 in
+  let mMAX_ORDER_t = int_ 11 in
+  let hHYP_NO_ORDER_t = int_ (0 - 1) in
   let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "?pool" in
   let poolmap_s, poolmap_t = 
     IT.fresh_named (BT.Param (Integer, BT.Struct hyp_page_tag)) "?poolmap" in
@@ -409,10 +409,8 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
   in
 
   let hyp_vmemmap_good_node_pointer pointer = 
-    (rem_t_ (hyp_vmemmap_offset_of_node_pointer pointer, 
-             z_ (Memory.size_of_struct hyp_page_tag)))
-    %==
-      (int_ 0)
+    nat_divides_ (hyp_vmemmap_offset_of_node_pointer pointer, 
+                  (z_ (Memory.size_of_struct hyp_page_tag)))
   in
   
   let hyp_vmemmap_node_pointer_to_index pointer = 
@@ -635,15 +633,18 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
     LRT.Resource (qpoint, LRT.I))
   in
 
-  
+  let _ = free_list_well_formedness in
+  let _ = hyp_page_well_formedness in
+  let _ = page_group_ownership in
+
   let lrt = 
     let open LRT in
     hyp_pool_metadata_owned 
     @@ hyp_pool_metadata_well_formedness
     @@ vmmemmap_metadata_owned
-    @@ free_list_well_formedness
-    @@ hyp_page_well_formedness
-    @@ page_group_ownership
+    (* @@ free_list_well_formedness
+     * @@ hyp_page_well_formedness
+     * @@ page_group_ownership *)
   in
 
   let predicate = 
@@ -653,9 +654,9 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
         p_s;
       iargs = [
           (hyp_vmemmap_s, IT.bt hyp_vmemmap_t);
-          (pPAGE_SHIFT_s, IT.bt pPAGE_SHIFT_t);
-          (mMAX_ORDER_s, IT.bt mMAX_ORDER_t);
-          (hHYP_NO_ORDER_s, IT.bt hHYP_NO_ORDER_t);
+          (* (pPAGE_SHIFT_s, IT.bt pPAGE_SHIFT_t);
+           * (mMAX_ORDER_s, IT.bt mMAX_ORDER_t);
+           * (hHYP_NO_ORDER_s, IT.bt hHYP_NO_ORDER_t); *)
         ];
       oargs = [
           ("pool", IT.bt pool_t);

@@ -168,25 +168,23 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      return (l, r, [], mapping)
 
 let make_pred loc (predicates : (string * Predicates.predicate_definition) list) 
-      pred (predargs : Ast.term list) pointer iargs = 
+      pred ~oname pointer iargs = 
   let@ def = match List.assoc_opt String.equal pred predicates with
     | Some def -> return def
     | None -> fail loc (Missing_predicate pred)
   in
-  let@ (mapping, l) = 
-    ListM.fold_rightM (fun (oarg, bt) (mapping, l) ->
-        let s = Sym.fresh () in
+  let (mapping, l) = 
+    List.fold_right (fun (oarg, bt) (mapping, l) ->
+        let s, it = IT.fresh bt in
         let l = (s, bt) :: l in
-        let mapping = 
-          let item = 
-            {path = Ast.predarg pred predargs oarg; 
-             it = sym_ (s, bt);
-             o_sct = None;
-            } 
-          in
-          item :: mapping 
+        let mapping = match oname with
+          | Some name ->
+             let item = {path = Ast.predarg name oarg; it; o_sct = None } in
+             item :: mapping 
+          | None ->
+             mapping
         in
-        return (mapping, l)
+        (mapping, l)
       ) def.oargs ([], [])
   in
   let oargs = List.map sym_ l in
@@ -215,14 +213,14 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
 let rec resolve_index_term loc layouts mapping (term: Ast.term) 
         : (IT.typed * Sctypes.t option, type_error) m =
   let lookup term = 
-    (* let () = print stderr (item "o" (Ast.pp_path false o)) in
-     * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
+    let () = print stderr (item "o" (Ast.Terms.pp false term)) in
+    let () = print stderr (item "mapping" (Mapping.pp mapping)) in
     let found = List.find_opt (fun {path;_} -> Ast.term_equal path term) mapping  in
     match found with
     | Some {it; o_sct; _} -> 
        return (it, o_sct)
     | None -> 
-       fail loc (Generic (!^"term" ^^^ Ast.pp_term false term ^^^ !^"does not apply"))
+       fail loc (Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply"))
   in
   let resolve it = 
     let@ (it, _) = resolve_index_term loc layouts mapping it in
@@ -235,8 +233,8 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      lookup (Var ln)
   | Pointee it ->
      lookup (Pointee it)
-  | PredArg (name, args, field) ->
-     lookup (PredArg (name, args, field))
+  | PredOutput (name, oarg) ->
+     lookup (PredOutput (name, oarg))
   | Integer i -> 
      return (IT (Lit (IT.Z i), BT.Integer), None)
   | Addition (it, it') -> 
@@ -302,7 +300,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      return (IT (Cmp_op (LE (it', it)), Bool), None)
   | Member (t, member) ->
      let@ st = resolve t in
-     let ppf () = Ast.pp_term false term in
+     let ppf () = Ast.Terms.pp false term in
      let@ tag = match IT.bt st with
        | Struct tag -> return tag
        | _ -> fail loc (Generic (ppf () ^^^ !^"is not a struct"))
@@ -323,6 +321,9 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
   | IntegerToPointerCast t ->
      let@ t = resolve t in
      return (IT (Pointer_op (IntegerToPointerCast t), Loc), None)
+  | PointerToIntegerCast t ->
+     let@ t = resolve t in
+     return (IT (Pointer_op (PointerToIntegerCast t), Loc), None)
      
 
 
@@ -333,27 +334,27 @@ let resolve_constraint loc layouts mapping lc =
 
 
 
-let apply_ownership_spec layouts predicates label mapping (loc, {predicate; arguments}) =
+let apply_ownership_spec layouts predicates label mapping (loc, {predicate; arguments; oname}) =
   match predicate, arguments with
   | "Owned", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts mapping path in
      begin match sct with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_term false path)))
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path)))
      | Some Sctype (_, Pointer (_, sct2)) ->
         make_owned loc layouts label it path sct2
      | Some _ ->
-        fail loc (Generic (Ast.pp_term false path ^^^ !^"is not a pointer"))       
+        fail loc (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer"))       
      end
   | "Owned", _ ->
      fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
   | "Block", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts mapping path in
      begin match sct with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.pp_term false path)))
+     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path)))
      | Some (Sctype (_, Pointer (_, sct2))) -> 
         make_block loc layouts it path sct2
      | Some _ ->
-        fail loc (Generic (Ast.pp_term false path ^^^ !^"is not a pointer"))       
+        fail loc (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer"))       
      end
   | "Block", _ ->
      fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
@@ -365,7 +366,7 @@ let apply_ownership_spec layouts predicates label mapping (loc, {predicate; argu
            return t
          ) arguments
      in
-     let@ result = make_pred loc predicates predicate arguments pointer_resolved iargs_resolved in
+     let@ result = make_pred loc predicates ~oname predicate pointer_resolved iargs_resolved in
      return result
   | pred, _ ->
      fail loc (Generic !^("predicates take at least one (pointer) argument"))

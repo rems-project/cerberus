@@ -8,8 +8,7 @@ open Assertion_parser_util
 %token <string> NAME
 %token <string> MEMBER
 
-/* %token OWNED */
-/* %token BLOCK */
+%token DOTDOT
 
 %token PLUS
 %token MINUS
@@ -32,6 +31,7 @@ open Assertion_parser_util
 %token COLON
 
 %token POINTERCAST
+%token INTEGERCAST
 
 %token AMPERSAND
 %token AT
@@ -43,7 +43,7 @@ open Assertion_parser_util
 %left STAR SLASH
 /* %nonassoc POWER */
 /* %nonassoc POINTERCAST */
-%nonassoc MEMBER
+%nonassoc MEMBER /* PREDARG */
 
 %type <Ast.term>term
 %type <Ast.condition>cond
@@ -66,6 +66,12 @@ labeled_name:
 
 
 
+%inline pred_with_args:
+  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
+      { (id, args) }
+
+
+
 atomic_term:
   | LPAREN t= term RPAREN
       { t }
@@ -74,6 +80,8 @@ atomic_term:
   | a1=atomic_term member=MEMBER
 /* taking the location-handling aspect from c_parser.mly */
       { Ast.Member (a1, Id.parse (Location_ocaml.region ($startpos, $endpos) (Some $startpos(member))) member) }
+  | pred=NAME DOTDOT oarg=NAME
+    { Ast. PredOutput (pred, oarg) }
   | AMPERSAND id=NAME
       { Ast.Addr id }
   | ln=labeled_name
@@ -118,10 +126,14 @@ term:
       { Ast.ITE (a1, a2, a3) }
   | POINTERCAST a1=atomic_term
       { Ast.IntegerToPointerCast a1 }
+  | INTEGERCAST a1=atomic_term
+      { Ast.PointerToIntegerCast a1 }
 
 resource_condition:
-  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
-      { Ast.{predicate=id; arguments = args} }
+  | id_args=pred_with_args name=NAME
+      { Ast.{predicate=fst id_args; arguments = snd id_args; oname = Some name} }
+  | id_args=pred_with_args 
+      { Ast.{predicate=fst id_args; arguments = snd id_args; oname = None} }
 
 
 cond:

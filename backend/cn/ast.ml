@@ -31,7 +31,7 @@ module Terms = struct
     | Addr of string
     | Var of LabeledName.t
     | Pointee of term
-    | PredArg of string * term list * string
+    | PredOutput of string * string
     | Member of term * Id.t
     | Integer of Z.t
     | Addition of term * term
@@ -47,6 +47,7 @@ module Terms = struct
     | GreaterThan of term * term
     | GreaterOrEqual of term * term
     | IntegerToPointerCast of term
+    | PointerToIntegerCast of term
 
 
 
@@ -58,8 +59,8 @@ module Terms = struct
        LabeledName.equal b1 b2
     | Pointee p1, Pointee p2 ->
        term_equal p1 p2
-    | PredArg (p1, t1, a1), PredArg (p2, t2, a2) ->
-       String.equal p1 p2 && List.equal term_equal t1 t2 && String.equal a1 a2
+    | PredOutput (p1, a1), PredOutput (p2, a2) ->
+       String.equal p1 p2 && String.equal a1 a2
     | Member (t1, m1), Member (t2, m2) ->
        term_equal t1 t2 && Id.equal m1 m2
     | Integer i1, Integer i2 -> 
@@ -90,13 +91,15 @@ module Terms = struct
        term_equal a11 a21 && term_equal a12 a22
     | IntegerToPointerCast t1, IntegerToPointerCast t2 ->
        term_equal t1 t2
+    | PointerToIntegerCast t1, PointerToIntegerCast t2 ->
+       term_equal t1 t2
     | Addr _, _ -> 
        false
     | Var _, _ ->
        false
     | Pointee _, _ ->
        false
-    | PredArg _, _ ->
+    | PredOutput _, _ ->
        false
     | Member _, _ ->
        false
@@ -128,51 +131,56 @@ module Terms = struct
        false
     | IntegerToPointerCast _, _ ->
        false
+    | PointerToIntegerCast _, _ -> 
+       false
 
 
   let mparens atomic pp = 
     if atomic then parens pp else pp
 
-  let rec pp_term atomic = function
+  let rec pp atomic = function
     | Addr b -> 
        ampersand ^^ !^b
     | Var b -> 
        LabeledName.pp b
     | Pointee p -> 
-       star ^^ (pp_term true p)
-    | PredArg (p,t,a) -> 
-       !^p ^^ parens (separate_map comma (pp_term false) t) ^^ dot ^^ !^a
+       star ^^ (pp true p)
+    | PredOutput (p,a) -> 
+       !^p ^^ dot ^^ dot ^^ !^a
     | Member (p, m) -> 
-       pp_term true p ^^ dot ^^ Id.pp m
+       pp true p ^^ dot ^^ Id.pp m
     | Integer z -> 
        Z.pp z
     | Addition (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ plus ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ plus ^^^ pp true t2)
     | Subtraction (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ minus ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ minus ^^^ pp true t2)
     | Multiplication (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ star ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ star ^^^ pp true t2)
     | Division (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ !^"/" ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ !^"/" ^^^ pp true t2)
     | Exponentiation (t1, t2) -> 
-       c_app !^"power" [pp_term false t1; pp_term false t2]
+       c_app !^"power" [pp false t1; pp false t2]
     | Equality (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ !^"==" ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ !^"==" ^^^ pp true t2)
     | Inequality (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ !^"!=" ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ !^"!=" ^^^ pp true t2)
     | ITE (t1, t2, t3) ->
-       mparens atomic (pp_term true t1 ^^^ !^"?" ^^^ pp_term true t2
-                       ^^^ !^":" ^^^ pp_term true t3)
+       mparens atomic (pp true t1 ^^^ !^"?" ^^^ pp true t2
+                       ^^^ !^":" ^^^ pp true t3)
     | LessThan (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ !^"<" ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ !^"<" ^^^ pp true t2)
     | LessOrEqual (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ !^"<=" ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ !^"<=" ^^^ pp true t2)
     | GreaterThan (t1, t2) -> 
-          mparens atomic (pp_term true t1 ^^^ !^">" ^^^ pp_term true t2)
+          mparens atomic (pp true t1 ^^^ !^">" ^^^ pp true t2)
     | GreaterOrEqual (t1, t2) -> 
-       mparens atomic (pp_term true t1 ^^^ !^">=" ^^^ pp_term true t2)
+       mparens atomic (pp true t1 ^^^ !^">=" ^^^ pp true t2)
     | IntegerToPointerCast t1 ->
-       mparens atomic (parens !^"pointer" ^^ (pp_term true t1))
+       mparens atomic (parens !^"pointer" ^^ (pp true t1))
+    | PointerToIntegerCast t1 ->
+       mparens atomic (parens !^"integer" ^^ (pp true t1))
+       
 
 
   let addr bn = 
@@ -186,8 +194,8 @@ module Terms = struct
     | Addr bn -> Var {label = olabel; v = bn}
     | t -> Pointee t
 
-  let predarg pr (ps : term list) a =
-    PredArg (pr,ps,a)
+  let predarg pr a =
+    PredOutput (pr,a)
 
   let rec map_labels_term f t = 
     let rec aux = function
@@ -197,8 +205,8 @@ module Terms = struct
          Var (LabeledName.map_label f bn)
       | Pointee p -> 
          Pointee (map_labels_term f p)
-      | PredArg (pr,p,a) -> 
-         PredArg (pr, List.map (map_labels_term f) p, a)
+      | PredOutput (pr,a) -> 
+         PredOutput (pr, a)
       | Member (p, m) -> 
          Member (map_labels_term f p, m)
       | Integer i -> 
@@ -229,6 +237,8 @@ module Terms = struct
          GreaterOrEqual (aux t1, aux t2)
       | IntegerToPointerCast t ->
          IntegerToPointerCast (aux t)
+      | PointerToIntegerCast t ->
+         PointerToIntegerCast (aux t)
     in
     aux t
   
@@ -249,6 +259,7 @@ include Terms
 type resource_condition = {
     predicate : string;
     arguments : term list;
+    oname : string option;
   }
 
 type logical_condition = term
@@ -261,9 +272,9 @@ type condition =
 let map_labels f = function
   | Logical cond -> 
      Logical (map_labels_term f cond)
-  | Resource {predicate; arguments} ->
+  | Resource {predicate; arguments; oname} ->
      let arguments = List.map (map_labels_term f) arguments in
-     Resource { predicate; arguments }
+     Resource { predicate; arguments; oname }
     
 
 type varg = { name : string; vsym : Sym.t; typ : Sctypes.t }

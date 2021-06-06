@@ -3,8 +3,6 @@
 type token =
   | Z of Z.t
   | NAME of string
-  | OWNED
-  | BLOCK
 
   | PLUS
   | MINUS
@@ -28,8 +26,10 @@ type token =
 
 
   | MEMBER of string
+  | DOTDOT
 
   | POINTERCAST
+  | INTEGERCAST
 
   | AMPERSAND
   | AT

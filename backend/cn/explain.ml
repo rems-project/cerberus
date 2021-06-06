@@ -146,7 +146,7 @@ module Make (G : sig val global : Global.t end) = struct
     Subst.make_substs naming_subst substs names
 
   let pp_naming = 
-    Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Ast.pp_term true p))
+    Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Ast.Terms.pp true p))
 
   let naming_of_mapping mapping = 
     let open Mapping in
@@ -306,7 +306,7 @@ module Make (G : sig val global : Global.t end) = struct
     let substitutions = 
       List.fold_right (fun {veclass;path;_} substs ->
           let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
-          let named_symbol = Sym.fresh_named (Pp.plain (Ast.pp_term false path)) in
+          let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
           SymSet.fold (fun sym substs ->
               Subst.{ before = sym; after = named_symbol } :: substs
             ) to_substitute substs 
@@ -425,7 +425,7 @@ module Make (G : sig val global : Global.t end) = struct
           if (not reported) && relevant then
             match bt with
             | BT.Loc -> 
-               Some (Some (Ast.pp_term false c.path), 
+               Some (Some (Ast.Terms.pp false c.path), 
                      o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)),
                      None, 
                      None, 
@@ -436,7 +436,7 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      None, 
-                     Some (Ast.pp_term false c.path), 
+                     Some (Ast.Terms.pp false c.path), 
                      o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)))
           else
             None)

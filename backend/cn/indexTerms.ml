@@ -1029,7 +1029,7 @@ let (%>=) t t' = ge_ (t, t')
 
 
 let nat_divides_ (it, it') = 
-  eq_ (rem_t_ (it, it'), int_ 0)
+  eq_ (it, mul_ (div_ (it, it'), it'))
 
 (* tuple_op *)
 let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))

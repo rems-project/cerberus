@@ -27,6 +27,7 @@ rule main = parse
   | ">="  { T.GE }
 
   | "(pointer)"   { T.POINTERCAST }
+  | "(integer)"   { T.INTEGERCAST }
   
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
@@ -40,15 +41,13 @@ rule main = parse
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 
-
-(*  | "Owned" { T.OWNED } *)
-(*  | "Block" { T.BLOCK } *)
-
   (* names *)
   | ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
       { T.NAME name }
   | '.' (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as member)
       { T.MEMBER member }
+  | ".."
+      { T.DOTDOT }
 
 
   | eof  { T.EOF }
