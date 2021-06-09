@@ -68,7 +68,7 @@ let rec pp bt =
   | Loc -> !^"pointer"
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
-  | Struct sym -> !^"struct" ^^^ Sym.pp_debug sym
+  | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Set t -> !^"set" ^^ angles (pp t)
   (* | Array t -> pp t ^^ brackets empty *)
   | Option t -> !^"option" ^^ angles (pp t)

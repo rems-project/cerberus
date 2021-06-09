@@ -1029,7 +1029,7 @@ let (%>=) t t' = ge_ (t, t')
 
 
 let nat_divides_ (it, it') = 
-  eq_ (it, mul_ (div_ (it, it'), it'))
+  eq_ (rem_t_ (it, it'), int_ 0)
 
 (* tuple_op *)
 let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))
@@ -1208,13 +1208,11 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
   | Array (it, None) -> 
      Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
   | Array (ct, Some n) -> 
-     let lcs = 
-       List.init n (fun i ->
-           representable_ctype struct_layouts ct
-             (app_ about (int_ i))
-         )
-     in
-     and_ lcs
+     let i_s, i_t = fresh BT.Integer in
+     forall_sth_ (i_s, bt i_t)
+       (and_ [le_ (int_ 0, i_t); lt_ (i_t, int_ n)])
+       (representable_ctype struct_layouts ct
+          (app_ about i_t))
   | Pointer _ -> 
      let pointer_byte_size = size_of_pointer in
      let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in

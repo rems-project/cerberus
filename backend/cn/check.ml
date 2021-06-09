@@ -1218,6 +1218,15 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEmember_shift (asym, tag, member) ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+           let@ (predicate, local) = 
+             predicate_request loc (Access (Load None)) local 
+               { name = Ctype (Sctype ([], Struct tag)) ;
+                 pointer = it_of_arg arg;
+                 iargs = [];
+                 oargs = [Struct tag ; BT.Bool];
+                 unused = true;
+               }
+           in
            let@ layout = get_struct_decl loc tag in
            let@ _member_bt = get_member_type loc tag member layout in
            let@ offset = match Memory.member_offset layout member with
@@ -1225,7 +1234,7 @@ module Make (G : sig val global : Global.t end) = struct
              | None -> fail loc (Missing_member (tag, member))
            in
            let vt = (Loc, IT.addPointer_ (it_of_arg arg, z_ offset)) in
-           return (rt_of_vt vt, local)
+           return (RT.concat (rt_of_vt vt) (Resource (Predicate predicate, LRT.I)), local)
         | M_PEnot asym ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in

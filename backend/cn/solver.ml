@@ -18,7 +18,7 @@ let context =
 (* let tactic = Z3.Tactic.mk_tactic context "default" *)
 let params = Z3.Params.mk_params context 
 let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234
-let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt2"
+let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt"
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)

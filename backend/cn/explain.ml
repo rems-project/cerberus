@@ -255,7 +255,8 @@ module Make (G : sig val global : Global.t end) = struct
       let names_syms = SymSet.of_list (List.map fst names) in
       let named_syms = SymSet.of_list (List.filter Sym.named (L.all_names local)) in
       let from_resources = RE.free_vars_list (L.all_resources local) in
-      SymSet.union (SymSet.union names_syms named_syms) from_resources
+      SymSet.union (SymSet.union (SymSet.union names_syms named_syms) from_resources)
+        relevant
     in
     let veclasses = 
       let with_some =
@@ -320,7 +321,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let o_evaluate o_model expr = 
+  let rec o_evaluate o_model expr = 
     let open Option in
     let@ model = o_model in
     match Z3.Model.evaluate model (S.of_index_term expr) true with
@@ -332,13 +333,23 @@ module Make (G : sig val global : Global.t end) = struct
        | BT.Real -> 
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Loc ->
-          Some (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
+          return (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
        | BT.Bool ->
-          Some (Pp.string (Z3.Expr.to_string evaluated_expr))
+          return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Param _ ->
-          Some (Pp.string (Z3.Expr.to_string evaluated_expr))
+          return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Unit ->
-          Some (BT.pp BT.Unit)
+          return (BT.pp BT.Unit)
+       | BT.Struct tag ->
+         let layout = Global.SymMap.find tag G.global.struct_decls in
+         let members = Memory.member_types layout in
+         let@ members = 
+           ListM.mapM (fun (member, sct) -> 
+               let@ s = o_evaluate o_model (IT.member_ ~member_bt:(BT.of_sct sct) (tag, expr, member)) in
+               return (dot ^^ Id.pp member ^^^ equals ^^^ s)
+             ) members 
+         in
+         return (braces (separate comma members))
        | _ -> None
 
 
@@ -497,8 +508,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   let index_term names local it = 
     let (explanation, local) = 
-      explanation names local 
-        (SymSet.union (IT.free_vars it))
+      explanation names local (IT.free_vars it)
     in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     it_pp
@@ -525,6 +535,8 @@ module Make (G : sig val global : Global.t end) = struct
 
   let resource_request names local re = 
     let (explanation, local) = explanation names local (RER.free_vars re) in
+    print stderr !^"free vars";
+    SymSet.iter (fun sym -> print stderr (item "symbol" (Sym.pp sym))) (RER.free_vars re);
     let re_pp = RER.pp (RER.subst_vars explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation (counter_model local))
 

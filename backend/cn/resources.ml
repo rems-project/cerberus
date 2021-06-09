@@ -114,7 +114,7 @@ module Make (O : Output) = struct
                   Sym.pp qp.i ^^^ langle ^^^ IT.pp qp.length;
                   Sym.pp qp.i ^^^ plus ^^^ !^"1"])) ^^^
         let args = 
-          let pointer_arg = addPointer_ (qp.pointer, sym_ (qp.i, BT.Integer)) in
+          let pointer_arg = addPointer_ (qp.pointer, mul_ (sym_ (qp.i, BT.Integer), qp.element_size)) in
           List.map IT.pp (pointer_arg :: qp.iargs) @
             List.map O.pp qp.oargs in
         braces (c_app (pp_predicate_name qp.name) args) ^^^
@@ -338,7 +338,7 @@ module Make (O : Output) = struct
             (O.free_vars_list [b.value; b.init]))
     | Predicate p -> 
        SymSet.union
-         (IT.free_vars_list ((* p.unused :: *) p.iargs))
+         (IT.free_vars_list ((* p.unused :: *) (p.pointer :: p.iargs)))
          (O.free_vars_list p.oargs)
     | QPredicate p -> 
        SymSet.union 

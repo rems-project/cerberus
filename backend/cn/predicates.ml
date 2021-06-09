@@ -438,6 +438,10 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
           (pool_t %. "range_start") %< (pool_t %. "range_end");
           nat_divides_ (pool_t %. "range_start", pPAGE_SIZE_t);
           nat_divides_ (pool_t %. "range_end", pPAGE_SIZE_t);
+          int_ 0 %<= ((pool_t %. "range_start") %* pPAGE_SIZE_t);
+          ((pool_t %. "range_end") %* pPAGE_SIZE_t) %< exp_ (int_ 2, int_ 64);
+          int_ 0 %<= ((pointerToIntegerCast_ hyp_vmemmap_t) %+ (((pool_t %. "range_start") %* z_ (Memory.size_of_struct hyp_page_tag))));
+          ((pointerToIntegerCast_ hyp_vmemmap_t) %+ (((pool_t %. "range_end") %* z_ (Memory.size_of_struct hyp_page_tag)))) %< exp_ (int_ 2, int_ 64);
           (pool_t %. "max_order") %<= mMAX_ORDER_t;
         ]
     in
@@ -452,7 +456,7 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
     let i_s, i_t = IT.fresh_named Integer "?i" in
     let qpredicate = 
       QPredicate {
-          pointer = hyp_vmemmap_t %+. (start_t %* z_ element_size);
+          pointer = hyp_vmemmap_t %+. (start_t %* (z_ element_size));
           element_size = z_ element_size;
           length = sub_ (end_t, start_t);
           name = Ctype (Sctypes.Sctype ([], Struct hyp_page_tag));
@@ -463,9 +467,16 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
           unused = true;
         }
     in
+    let representable = 
+      let i_s, i_t = fresh BT.Integer in
+      forall_sth_ (i_s, bt i_t)
+        (and_ [le_ (start_t, i_t); lt_ (i_t, end_t)])
+        (representable_ (Sctype ([], Struct hyp_page_tag), (app_ poolmap_t (i_t %- start_t))))
+    in
     LRT.Logical ((poolmap_s, IT.bt poolmap_t),
     LRT.Logical ((poolmap_i_s, IT.bt poolmap_i_t),
-    LRT.Resource (qpredicate, LRT.I)))
+    LRT.Constraint (representable,
+    LRT.Resource (qpredicate, LRT.I))))
   in
 
   let vmemmap_cell_address i_t =
@@ -642,9 +653,9 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
     hyp_pool_metadata_owned 
     @@ hyp_pool_metadata_well_formedness
     @@ vmmemmap_metadata_owned
-    (* @@ free_list_well_formedness
-     * @@ hyp_page_well_formedness
-     * @@ page_group_ownership *)
+    (* @@ free_list_well_formedness *)
+    (* @@ hyp_page_well_formedness *)
+    (* @@ page_group_ownership *)
   in
 
   let predicate = 

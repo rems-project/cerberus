@@ -213,8 +213,8 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
 let rec resolve_index_term loc layouts mapping (term: Ast.term) 
         : (IT.typed * Sctypes.t option, type_error) m =
   let lookup term = 
-    let () = print stderr (item "o" (Ast.Terms.pp false term)) in
-    let () = print stderr (item "mapping" (Mapping.pp mapping)) in
+    (* let () = print stderr (item "o" (Ast.Terms.pp false term)) in
+     * let () = print stderr (item "mapping" (Mapping.pp mapping)) in *)
     let found = List.find_opt (fun {path;_} -> Ast.term_equal path term) mapping  in
     match found with
     | Some {it; o_sct; _} -> 
@@ -323,7 +323,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      return (IT (Pointer_op (IntegerToPointerCast t), Loc), None)
   | PointerToIntegerCast t ->
      let@ t = resolve t in
-     return (IT (Pointer_op (PointerToIntegerCast t), Loc), None)
+     return (IT (Pointer_op (PointerToIntegerCast t), Integer), None)
      
 
 
