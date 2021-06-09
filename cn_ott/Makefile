@@ -27,6 +27,9 @@ all:
 	    -tex_suppress_ntr BT_t \
 	    -tex_suppress_ntr ty_bt \
 	    -tex_suppress_ntr IT_t \
+	    -tex_suppress_ntr terminals \
+	    -tex_suppress_ntr user_syntax \
+	    -tex_suppress_ntr judgement \
 	    -o mucore.tex \
 	    mucore.ott
 	pdflatex mucore.tex
