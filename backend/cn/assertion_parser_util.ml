@@ -19,6 +19,8 @@ type token =
 
   | LPAREN
   | RPAREN
+  | LBRACKET
+  | RBRACKET
   | COMMA
 
   | QUESTION

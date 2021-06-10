@@ -93,14 +93,10 @@ module Make (G : sig val global : Global.t end) = struct
              let@ (bt, t) = infer_integer_or_real_type loc local t in
              let@ t' = check loc local bt t' in
              return (bt, Exp (t, t'))
-          | Rem_t (t,t') ->
+          | Rem (t,t') ->
              let@ t = check loc local Integer t in
              let@ t' = check loc local Integer t' in
-             return (Integer, Rem_t (t, t'))
-          | Rem_f (t,t') ->
-             let@ t = check loc local Integer t in
-             let@ t' = check loc local Integer t' in
-             return (Integer, Rem_f (t, t'))
+             return (Integer, Rem (t, t'))
         in
 
         let cmp_op local = function
@@ -255,13 +251,13 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let ct_pred local = function
-          | AlignedI (t, t') ->
-             let@ t = check loc local Integer t in
-             let@ t' = check loc local Loc t' in
-             return (BT.Bool, AlignedI (t, t'))
-          | Aligned (st, t) ->
+          | AlignedI t ->
+             let@ t_t = check loc local Loc t.t in
+             let@ t_align = check loc local Integer t.align in
+             return (BT.Bool, AlignedI {t = t_t; align=t_align})
+          | Aligned (t, ct) ->
              let@ t = check loc local Loc t in
-             return (BT.Bool, Aligned (st, t))
+             return (BT.Bool, Aligned (t, ct))
           | Representable (ct, t) ->
              let@ t = check loc local (BT.of_sct ct) t in
              return (BT.Bool, Representable (ct, t))
@@ -572,7 +568,8 @@ module Make (G : sig val global : Global.t end) = struct
       | QPredicate p -> 
          let@ () = WIT.welltyped loc names local BT.Loc p.pointer in
          let@ () = WIT.welltyped loc names local BT.Integer p.element_size in
-         let@ () = WIT.welltyped loc names local BT.Integer p.length in
+         let@ () = WIT.welltyped loc names local BT.Integer p.istart in
+         let@ () = WIT.welltyped loc names local BT.Integer p.iend in
          let@ () = 
            ListM.iterM (fun it ->
                WIT.welltyped loc names local BT.Loc it

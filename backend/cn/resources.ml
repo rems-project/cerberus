@@ -77,7 +77,8 @@ module Make (O : Output) = struct
   type qpredicate = {
       pointer: IT.t;
       element_size: IT.t;
-      length: IT.t;
+      istart: IT.t;
+      iend: IT.t;
       moved: IT.t list;
       unused: bool;
       name : predicate_name; 
@@ -110,8 +111,8 @@ module Make (O : Output) = struct
     else
       !^"for" ^^
       parens (separate (semi ^^ space) 
-                ([Sym.pp qp.i ^^^ equals ^^^ !^"0";
-                  Sym.pp qp.i ^^^ langle ^^^ IT.pp qp.length;
+                ([Sym.pp qp.i ^^^ equals ^^^ IT.pp qp.istart;
+                  Sym.pp qp.i ^^^ langle ^^^ IT.pp qp.iend;
                   Sym.pp qp.i ^^^ plus ^^^ !^"1"])) ^^^
         let args = 
           let pointer_arg = addPointer_ (qp.pointer, mul_ (sym_ (qp.i, BT.Integer), qp.element_size)) in
@@ -164,7 +165,8 @@ module Make (O : Output) = struct
     let subst = {before=qp.i;after=i'} in
     { pointer = qp.pointer;
       element_size = qp.element_size;
-      length = qp.length;
+      istart = qp.istart;
+      iend = qp.iend;
       moved = qp.moved;
       unused = qp.unused;
       name = qp.name;
@@ -206,24 +208,25 @@ module Make (O : Output) = struct
        let oargs = List.map (O.subst_var subst) oargs in
        (* let unused = IT.subst_var subst unused in *)
        Predicate {name; pointer; iargs; oargs; unused}
-    | QPredicate {pointer; element_size; length; moved; unused; name; i; iargs; oargs} ->
+    | QPredicate {pointer; element_size; istart; iend; moved; unused; name; i; iargs; oargs} ->
        let pointer = IT.subst_var subst pointer in
        let element_size = IT.subst_var subst element_size in
-       let length = IT.subst_var subst length in
+       let istart = IT.subst_var subst istart in
+       let iend = IT.subst_var subst iend in
        let moved = List.map (IT.subst_var subst) moved in
        if Sym.equal i subst.before then
-         QPredicate {pointer; element_size; length; moved; unused; i; name; iargs; oargs}
+         QPredicate {pointer; element_size; istart; iend; moved; unused; i; name; iargs; oargs}
        else if Sym.equal i subst.after then
          let i' = Sym.fresh_same i in
          let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
          let oargs = List.map (O.subst_var {before=i;after=i'}) oargs in
          let iargs = List.map (IT.subst_var subst) iargs in
          let oargs = List.map (O.subst_var subst) oargs in
-         QPredicate {pointer; element_size; length; moved; unused; name; i = i'; iargs; oargs}
+         QPredicate {pointer; element_size; istart; iend; moved; unused; name; i = i'; iargs; oargs}
        else
          let iargs = List.map (IT.subst_var subst) iargs in
          let oargs = List.map (O.subst_var subst) oargs in
-         QPredicate {pointer; element_size; length; moved; unused; name; i; iargs; oargs}
+         QPredicate {pointer; element_size; istart; iend; moved; unused; name; i; iargs; oargs}
 
 
   let subst_it (subst: (Sym.t,IT.t) Subst.t) resource =
@@ -258,24 +261,25 @@ module Make (O : Output) = struct
        let oargs = List.map (O.subst_it subst) oargs in
        (* let unused = IT.subst_it subst unused in *)
        Predicate {name; pointer; iargs; oargs; unused}
-    | QPredicate {pointer; element_size; length; moved; unused; name; i; iargs; oargs} ->
+    | QPredicate {pointer; element_size; istart; iend; moved; unused; name; i; iargs; oargs} ->
        let pointer = IT.subst_it subst pointer in
        let element_size = IT.subst_it subst element_size in
-       let length = IT.subst_it subst length in
+       let istart = IT.subst_it subst istart in
+       let iend = IT.subst_it subst iend in
        let moved = List.map (IT.subst_it subst) moved in
        if Sym.equal i subst.before then
-         QPredicate {pointer; element_size; length; moved; unused; name; i; iargs; oargs}
+         QPredicate {pointer; element_size; istart; iend; moved; unused; name; i; iargs; oargs}
        else if SymSet.mem i (IT.free_vars subst.after) then
          let i' = Sym.fresh_same i in
          let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
          let oargs = List.map (O.subst_var {before=i;after=i'}) oargs in
          let iargs = List.map (IT.subst_it subst) iargs in
          let oargs = List.map (O.subst_it subst) oargs in
-         QPredicate {pointer; element_size; length; moved; unused; name; i = i'; iargs; oargs}
+         QPredicate {pointer; element_size; istart; iend; moved; unused; name; i = i'; iargs; oargs}
        else
          let iargs = List.map (IT.subst_it subst) iargs in
          let oargs = List.map (O.subst_it subst) oargs in
-         QPredicate {pointer; element_size; length; moved; unused; name; i; iargs; oargs}
+         QPredicate {pointer; element_size; istart; iend; moved; unused; name; i; iargs; oargs}
 
 
 
@@ -307,7 +311,8 @@ module Make (O : Output) = struct
     | QPredicate p1, QPredicate p2 ->
        IT.equal p1.pointer p2.pointer &&
        IT.equal p1.element_size p2.element_size &&
-       IT.equal p1.length p2.length &&
+       IT.equal p1.istart p2.istart &&
+       IT.equal p1.iend p2.iend &&
        List.equal IT.equal p1.moved p2.moved &&
        p1.unused = p2.unused && 
        predicate_name_equal p1.name p2.name && 
@@ -342,7 +347,7 @@ module Make (O : Output) = struct
          (O.free_vars_list p.oargs)
     | QPredicate p -> 
        SymSet.union 
-         (IT.free_vars_list ([p.pointer; p.element_size; p.length] @ p.moved) )
+         (IT.free_vars_list ([p.pointer; p.element_size; p.istart; p.iend] @ p.moved) )
          (SymSet.remove p.i (
               SymSet.union 
                 (IT.free_vars_list p.iargs)
@@ -369,10 +374,9 @@ module Make (O : Output) = struct
   let is_pointer_within_qpredicate_range qp pointer = 
     let offset = qpredicate_offset_of_pointer qp pointer in
     let index = div_ (offset, qp.element_size) in
-    and_ [le_ (int_ 0, index);
-          lt_ (index, qp.length);
-          eq_ (rem_f_ (offset, qp.element_size), int_ 0)]
-
+    and_ [le_ (qp.istart, index);
+          lt_ (index, qp.iend);
+          eq_ (rem_ (offset, qp.element_size), int_ 0)]
 
   let is_qpredicate_instance_pointer qp pointer = 
     and_ (is_pointer_within_qpredicate_range qp pointer ::
@@ -380,8 +384,8 @@ module Make (O : Output) = struct
 
   let is_qpredicate_instance_index qp index = 
     let pointer = qpredicate_index_to_pointer qp index in
-    and_ (le_ (int_ 0, index) ::
-          lt_ (index, qp.length) ::
+    and_ (le_ (qp.istart, index) ::
+          lt_ (index, qp.iend) ::
           List.map (ne__ pointer) qp.moved)
 
 
@@ -412,7 +416,7 @@ module RE = struct
     (* the quantifier in IteratedStar is neither input nor output *)
     | QPoint p -> [p.permission]
     | Predicate p -> p.iargs
-    | QPredicate p -> p.pointer :: p.element_size :: p.length :: p.iargs
+    | QPredicate p -> p.pointer :: p.element_size :: p.istart :: p.iend :: p.iargs
 
   let outputs = function
     | Point b -> [b.value; b.init]
@@ -479,45 +483,45 @@ module RE = struct
 
 
 
-  let array_index_to_pointer base element_size index =
-    addPointer_ (base, mul_ (element_size, index))
-
-  let array_pointer_to_index base element_size pointer =
-    div_ (sub_ (pointerToIntegerCast_ pointer, 
-                pointerToIntegerCast_ base), element_size)
-
-  let array_is_at_valid_index base element_size pointer =
-    eq_ (rem_f_ (sub_ (pointerToIntegerCast_ pointer, 
-                       pointerToIntegerCast_ base), element_size),
-         int_ 0)
-
-
-
-
-
-  (* check this *)
-  let array q start length element_size value init permission =
-    let open IT in
-    let qt = sym_ (q, BT.Loc) in
-    let qt_int = pointerToIntegerCast_ qt in
-    let start_int = pointerToIntegerCast_ start in
-    let it = div_ (sub_ (qt_int, start_int), z_ element_size) in
-    let condition = 
-      and_ [
-          le_ (int_ 0, it);
-          lt_ (it, length);
-          eq_ (rem_f_ (sub_ (qt_int, start_int), z_ element_size), int_ 0);
-        ]
-    in
-    let point = {
-        qpointer = q;
-        size = element_size;
-        value = value;
-        init = init;
-        permission = ite_ (condition, permission, q_ (0,1))
-      }
-    in
-    QPoint point
+  (* let array_index_to_pointer base element_size index =
+   *   addPointer_ (base, mul_ (element_size, index))
+   * 
+   * let array_pointer_to_index base element_size pointer =
+   *   div_ (sub_ (pointerToIntegerCast_ pointer, 
+   *               pointerToIntegerCast_ base), element_size)
+   * 
+   * let array_is_at_valid_index base element_size pointer =
+   *   eq_ (rem_f_ (sub_ (pointerToIntegerCast_ pointer, 
+   *                      pointerToIntegerCast_ base), element_size),
+   *        int_ 0)
+   * 
+   * 
+   * 
+   * 
+   * 
+   * (\* check this *\)
+   * let array q start length element_size value init permission =
+   *   let open IT in
+   *   let qt = sym_ (q, BT.Loc) in
+   *   let qt_int = pointerToIntegerCast_ qt in
+   *   let start_int = pointerToIntegerCast_ start in
+   *   let it = div_ (sub_ (qt_int, start_int), z_ element_size) in
+   *   let condition = 
+   *     and_ [
+   *         le_ (int_ 0, it);
+   *         lt_ (it, length);
+   *         eq_ (rem_f_ (sub_ (qt_int, start_int), z_ element_size), int_ 0);
+   *       ]
+   *   in
+   *   let point = {
+   *       qpointer = q;
+   *       size = element_size;
+   *       value = value;
+   *       init = init;
+   *       permission = ite_ (condition, permission, q_ (0,1))
+   *     }
+   *   in
+   *   QPoint point *)
 
 
 
@@ -546,17 +550,18 @@ module RE = struct
        let oargs = List.map simp_it oargs in
        (* let unused = IT.subst_var subst unused in *)
        Predicate {name; pointer; iargs; oargs; unused}
-    | QPredicate {pointer; element_size; length; name; iargs; oargs; i; unused; moved} -> 
+    | QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved} -> 
        let i' = Sym.fresh_same i in
        let iargs = List.map (IT.subst_var {before=i;after=i'}) iargs in
        let oargs = List.map (IT.subst_var {before=i;after=i'}) oargs in
        let pointer = simp_it pointer in
        let element_size = simp_it element_size in
-       let length = simp_it length in
+       let istart = simp_it istart in
+       let iend = simp_it iend in
        let iargs = List.map simp_it iargs in
        let oargs = List.map simp_it oargs in
        let moved = List.map simp_it moved in
-       QPredicate {pointer; element_size; length; name; iargs; oargs; i = i'; unused; moved}
+       QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i = i'; unused; moved}
 
 
 
@@ -599,7 +604,8 @@ module RE = struct
        Requests.QPredicate {
            pointer = p.pointer;
            element_size = p.element_size;
-           length = p.length;
+           istart = p.istart;
+           iend = p.iend;
            moved = p.moved;
            unused = p.unused;
            name = p.name;

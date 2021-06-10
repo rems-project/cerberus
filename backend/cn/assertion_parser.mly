@@ -25,6 +25,8 @@ open Assertion_parser_util
 
 %token LPAREN
 %token RPAREN
+%token LBRACKET
+%token RBRACKET
 %token COMMA
 
 %token QUESTION
@@ -128,6 +130,8 @@ term:
       { Ast.IntegerToPointerCast a1 }
   | INTEGERCAST a1=atomic_term
       { Ast.PointerToIntegerCast a1 }
+  | a1=atomic_term LBRACKET a2=term RBRACKET
+      { Ast.App (a1, a2) }
 
 resource_condition:
   | id_args=pred_with_args name=NAME

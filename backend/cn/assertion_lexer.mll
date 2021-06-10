@@ -31,6 +31,8 @@ rule main = parse
   
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
+  | '['   { T.LBRACKET }
+  | ']'   { T.RBRACKET }
   | ','   { T.COMMA }
 
   | '?'   { T.QUESTION }

@@ -160,9 +160,7 @@ module Make (G : sig val global : Global.t end) = struct
          Z3.Arithmetic.mk_div context (term t1) (term t2)
       | Exp (t1, t2) ->
          Z3.Arithmetic.mk_power context (term t1) (term t2)
-      | Rem_t (t1, t2) ->
-         Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
-      | Rem_f (t1, t2) ->
+      | Rem (t1, t2) ->
          Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
 
     and cmp_op it bt =
@@ -276,14 +274,14 @@ module Make (G : sig val global : Global.t end) = struct
          term (representable_ctype 
                  (fun tag -> (SymMap.find tag G.global.struct_decls))
                  ct t)
-      | AlignedI (t1, t2) ->
-         term (eq_ (rem_t_ (t2, t1), int_ 0))
-      | Aligned (ct, t) ->
+      | AlignedI t ->
+         term (eq_ (rem_ (t.t, t.align), int_ 0))
+      | Aligned (t, ct) ->
          let alignment = match ct with
            | Sctype (_, Function _) -> int_ 1
            | _ -> z_ (Memory.align_of_ctype ct)
          in
-         term (eq_ (rem_t_ (t, alignment), int_ 0))
+         term (eq_ (rem_ (t, alignment), int_ 0))
 
     and option_op it bt = 
       match it with

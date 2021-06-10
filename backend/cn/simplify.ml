@@ -146,27 +146,16 @@ let rec simp (lcs : t list) term =
        end
     | Exp (a, b) ->
        IT (Arith_op (Exp (aux a, aux b)), bt) 
-    | Rem_t (a, b) ->
+    | Rem (a, b) ->
        let a = aux a in
        let b = aux b in 
        begin match a, b with
        | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
        | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
-          IT (Lit (Z Z.zero), bt)
-       | _ ->
-          IT (Arith_op (Rem_t (a, b)), bt) 
-       end
-    | Rem_f (a, b) ->
-       let a = aux a in
-       let b = aux b in 
-       begin match a, b with
-       | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
-       | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
-          IT (Lit (Z Z.zero), bt)
        | _ ->
-          IT (Arith_op (Rem_f (a, b)), bt) 
+          IT (Arith_op (Rem (a, b)), bt) 
        end
 
   and bool_op it bt = 
@@ -271,13 +260,7 @@ let rec simp (lcs : t list) term =
           IT (Lit (Bool ((i1*j2) <= (i2*j1))), bt)
        | _, _ when equal a b ->
           bool_ true
-       | IT (Arith_op (Rem_t (_, IT (Lit (Z z1), _))), _), 
-         IT (Lit (Z z2), _) when
-              Z.gt_big_int z1 Z.zero &&
-              Z.gt_big_int z2 Z.zero &&
-              Z.le_big_int z1 (Z.add_big_int z2 (Z.of_int 1)) ->
-          bool_ true
-       | IT (Arith_op (Rem_f (_, IT (Lit (Z z1), _))), _), 
+       | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
          IT (Lit (Z z2), _) when
               Z.gt_big_int z1 Z.zero &&
               Z.gt_big_int z2 Z.zero &&

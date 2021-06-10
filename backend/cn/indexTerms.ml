@@ -26,8 +26,7 @@ type 'bt arith_op =
   | Mul of 'bt term * 'bt term
   | Div of 'bt term * 'bt term
   | Exp of 'bt term * 'bt term
-  | Rem_t of 'bt term * 'bt term
-  | Rem_f of 'bt term * 'bt term
+  | Rem of 'bt term * 'bt term
   (* | Min of 'bt term * 'bt term
    * | Max of 'bt term * 'bt term *)
 
@@ -86,8 +85,8 @@ and 'bt ct_pred =
   (* | MinInteger of CF.Ctype.integerType
    * | MaxInteger of CF.Ctype.integerType *)
   | Representable of CT.t * 'bt term
-  | AlignedI of 'bt term * 'bt term
-  | Aligned of CT.t * 'bt term
+  | AlignedI of {t : 'bt term; align : 'bt term}
+  | Aligned of 'bt term * CT.t
 
 and 'bt option_op = 
   | Something of 'bt term
@@ -157,8 +156,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Mul (t1,t2), Mul (t1',t2') -> equal t1 t1' && equal t2 t2' 
     | Div (t1,t2), Div (t1',t2') -> equal t1 t1' && equal t2 t2' 
     | Exp (t1,t2), Exp (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Rem_t (t1,t2), Rem_t (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Rem_f (t1,t2), Rem_f (t1',t2') -> equal t1 t1' && equal t2 t2' 
+    | Rem (t1,t2), Rem (t1',t2') -> equal t1 t1' && equal t2 t2' 
     (* | Min (t1,t2), Min (t1',t2') -> equal t1 t1' && equal t2 t2' 
      * | Max (t1,t2), Max (t1',t2') -> equal t1 t1' && equal t2 t2'  *)
     | Add _, _ -> false
@@ -166,8 +164,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Mul _, _ -> false 
     | Div _, _ -> false
     | Exp _, _ -> false
-    | Rem_t _, _ -> false
-    | Rem_f _, _ -> false
+    | Rem _, _ -> false
     (* | Min _, _ -> false
      * | Max _, _ -> false *)
   in
@@ -314,10 +311,10 @@ let rec equal (IT (it, _)) (IT (it', _)) =
 
   let ct_pred it it' = 
     match it, it' with
-    | Aligned (rt, t), Aligned (rt', t') ->
-       CT.equal rt rt' && equal t t'
-    | AlignedI (t1, t2), AlignedI (t1', t2') ->
-       equal t1 t1' && equal t2 t2'
+    | Aligned (t, ct), Aligned (t', ct') ->
+       equal t t' && CT.equal ct ct'
+    | AlignedI t1, AlignedI t2 ->
+       equal t1.t t2.t && equal t1.align t2.align
     | Representable (rt, t), Representable (rt', t') ->
        CT.equal rt rt' && equal t t'
     (* | MinInteger it, MinInteger it' ->
@@ -418,10 +415,8 @@ let pp (it : 'bt term) : PPrint.document =
          mparens (flow (break 1) [aux true it1; slash; aux true it2])
       | Exp (it1,it2) -> 
          c_app !^"power" [aux true it1; aux true it2]
-      | Rem_t (it1,it2) -> 
-         c_app !^"rem_t" [aux true it1; aux true it2]
-      | Rem_f (it1,it2) -> 
-         c_app !^"rem_f" [aux true it1; aux true it2]
+      | Rem (it1,it2) -> 
+         c_app !^"rem" [aux true it1; aux true it2]
       (* | Min (it1,it2) -> 
        *    c_app !^"min" [aux true it1; aux true it2]
        * | Max (it1,it2) -> 
@@ -493,10 +488,10 @@ let pp (it : 'bt term) : PPrint.document =
     in
 
     let ct_pred = function
-      | Aligned (rt, t) ->
-         c_app !^"aligned" [CT.pp rt; aux false t]
-      | AlignedI (t, t') ->
-         c_app !^"aligned" [aux false t; aux false t']
+      | Aligned (t, rt) ->
+         c_app !^"aligned" [aux false t; CT.pp rt]
+      | AlignedI t ->
+         c_app !^"aligned" [aux false t.t; aux false t.align]
       (* | MinInteger it ->
        *    c_app !^"min" [CF.Pp_core_ctype.pp_integer_ctype it]
        * | MaxInteger it ->
@@ -595,8 +590,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Mul (it, it') -> free_vars_list [it; it']
     | Div (it, it') -> free_vars_list [it; it']
     | Exp (it, it') -> free_vars_list [it; it']
-    | Rem_t (it, it') -> free_vars_list [it; it']
-    | Rem_f (it, it') -> free_vars_list [it; it']
+    | Rem (it, it') -> free_vars_list [it; it']
     (* | Min (it, it') -> free_vars_list [it; it']
      * | Max (it, it') -> free_vars_list [it; it'] *)
   in
@@ -640,8 +634,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   in
 
   let ct_pred : 'bt ct_pred -> SymSet.t = function
-    | Aligned (_rt, t) -> free_vars t
-    | AlignedI (t, t') -> free_vars_list [t; t']
+    | Aligned (t, _rt) -> free_vars t
+    | AlignedI t -> free_vars_list [t.t; t.align]
     (* | MinInteger _ -> SymSet.empty
      * | MaxInteger _ -> SymSet.empty *)
     | Representable (_rt,t) -> free_vars t
@@ -722,8 +716,7 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
         | Mul (it, it') -> Mul (aux it, aux it')
         | Div (it, it') -> Div (aux it, aux it')
         | Exp (it, it') -> Exp (aux it, aux it')
-        | Rem_t (it, it') -> Rem_t (aux it, aux it')
-        | Rem_f (it, it') -> Rem_f (aux it, aux it')
+        | Rem (it, it') -> Rem (aux it, aux it')
         (* | Min (it, it') -> Min (aux it, aux it')
          * | Max (it, it') -> Max (aux it, aux it') *)
       in
@@ -809,8 +802,8 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
 
     let ct_pred it bt =
       let it = match it with
-        | Aligned (rt,t) -> Aligned (rt, aux t)
-        | AlignedI (t,t') -> AlignedI (aux t, aux t')
+        | Aligned (t, ct) -> Aligned (aux t, ct)
+        | AlignedI t -> AlignedI {t= aux t.t; align= aux t.align}
         (* | MinInteger it -> MinInteger it
          * | MaxInteger it -> MaxInteger it *)
         | Representable (rt,t) -> Representable (rt,aux t)
@@ -1010,8 +1003,9 @@ let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
 let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
 let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
-let rem_t_ (it, it') = IT (Arith_op (Rem_t (it, it')), BT.Integer)
-let rem_f_ (it, it') = IT (Arith_op (Rem_f (it, it')), BT.Integer)
+let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
+let rem_t___ (it, it') = rem_ (it, it')
+let rem_f___ (it, it') = rem_ (it, it')
 let min_ (it, it') = ite_ (le_ (it, it'), it, it')
 let max_ (it, it') = ite_ (ge_ (it, it'), it, it')
 
@@ -1027,9 +1021,6 @@ let (%<=) t t' = le_ (t, t')
 let (%>) t t' = gt_ (t, t')
 let (%>=) t t' = ge_ (t, t')
 
-
-let nat_divides_ (it, it') = 
-  eq_ (rem_t_ (it, it'), int_ 0)
 
 (* tuple_op *)
 let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))
@@ -1121,8 +1112,8 @@ let representable_ (t, it) =
   IT (CT_pred (Representable (t, it)), BT.Bool)
 let aligned_ (t, it) = 
   IT (CT_pred (Aligned (t, it)), BT.Bool)
-let alignedI_ (it, it') = 
-  IT (CT_pred (AlignedI (it, it')), BT.Bool)
+let alignedI_ ~t ~align = 
+  IT (CT_pred (AlignedI {t; align}), BT.Bool)
 
 (* point_value *)
 let something_ v = 
@@ -1268,7 +1259,7 @@ let good_pointer pointer_it pointee_sct =
   | _ -> 
      and_ [
          representable_ (CT.pointer_sct pointee_sct, pointer_it);
-         aligned_ (pointee_sct, pointer_it);
+         aligned_ (pointer_it, pointee_sct);
        ]
 
 let rec good_value struct_layouts ct about =

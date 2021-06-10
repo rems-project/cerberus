@@ -339,7 +339,8 @@ module Make (G : sig val global : Global.t end) = struct
     | QPredicate p, QPredicate p' 
          when IT.equal p.pointer p'.pointer &&
               IT.equal p.element_size p'.element_size &&
-              IT.equal p.length p'.length &&
+              IT.equal p.istart p'.istart &&
+              IT.equal p.iend p'.iend &&
               List.equal IT.equal p.moved p'.moved &&
               p.unused = p'.unused &&
               predicate_name_equal p.name p'.name &&
@@ -720,7 +721,8 @@ module Make (G : sig val global : Global.t end) = struct
         let r = 
           { name = p.name;
             element_size = p.element_size;
-            length = p.length;
+            istart = p.istart;
+            iend = p.iend;
             i = p.i;
             pointer = p.pointer;
             iargs = p.iargs;
@@ -740,7 +742,8 @@ module Make (G : sig val global : Global.t end) = struct
                     Solver.holds local (
                         and_ [eq_ (p.pointer, p'.pointer);
                               eq_ (p.element_size, p'.element_size);
-                              eq_ (p.length, p'.length);
+                              eq_ (p.istart, p'.istart);
+                              eq_ (p.iend, p'.iend);
                               forall_ (p.i, BT.Integer)
                                 (impl_ 
                                    (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
@@ -750,36 +753,8 @@ module Make (G : sig val global : Global.t end) = struct
                  then 
                    let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
                    (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
-                 else if predicate_name_equal p.name p'.name &&
-                    p.unused = p'.unused &&
-                    Solver.holds local (
-                        and_ [eq_ (p.pointer, p'.pointer);
-                              eq_ (p.element_size, p'.element_size);
-                              lt_ (p.length, p'.length);
-                              forall_ (p.i, BT.Integer)
-                                (impl_ 
-                                   (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
-                                    let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
-                                    and_ (List.map2 eq__ p.iargs iargs')))]
-                      )
-                 then 
-                   let p_moved, p'_moved = 
-                     List.partition (fun moved_pointer ->
-                         Solver.holds local (RER.is_pointer_within_qpredicate_range p moved_pointer)
-                       ) p'.moved in
-                   let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
-                   let p' = 
-                     {p' with 
-                       pointer = addPointer_ (p'.pointer, mul_ (p.length, p'.element_size));
-                       length = sub_ (p'.length, p.length);
-                       moved = p'_moved;
-                       unused = p'.unused;
-                       iargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), p.length)}) p'.iargs;
-                       oargs = List.map (IT.subst_it {before = p'.i; after = sub_ (sym_ (p'.i, BT.Integer), p.length)}) p'.oargs;
-                     }
-                   in
-                   (QPredicate p', Some (oargs', p_moved))
-                 else (re, found)
+                 else 
+                   (re, found)
               | _ ->
                  (re, found)
             ) local None
@@ -790,7 +765,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ (oargs, local) = 
              ListM.fold_leftM (fun (oargs, local) moved_pointer ->
                  (* moved_pointer assumed to satisfy
-                    pointer-element_size-length condition *)
+                    pointer-start-element_size-length condition *)
                  let index = RER.qpredicate_pointer_to_index p moved_pointer in
                  let request = RER.{
                      name = p.name; 
@@ -814,7 +789,8 @@ module Make (G : sig val global : Global.t end) = struct
            let r = 
              { pointer = p.pointer;
                element_size = p.element_size;
-               length = p.length;
+               istart = p.istart;
+               iend = p.iend;
                moved = []; 
                unused = p.unused;
                name = p.name;
@@ -1171,7 +1147,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
          (* try to follow wrapI from runtime/libcore/std.core *)
          let dlt = add_ (sub_ (maxInteger_ ty, minInteger_ ty), int_ 1) in
-         let r = rem_f_ (it_of_arg arg, dlt) in
+         let r = rem_f___ (it_of_arg arg, dlt) in
          let result_it = ite_  (le_ (r, maxInteger_ ty), r,sub_ (r, dlt)) in
          return (rt_of_vt (Integer, result_it), local)
       | _ ->
@@ -1252,8 +1228,8 @@ module Make (G : sig val global : Global.t end) = struct
              | OpSub ->   (((Integer, Integer), Integer), IT.sub_ (v1, v2))
              | OpMul ->   (((Integer, Integer), Integer), IT.mul_ (v1, v2))
              | OpDiv ->   (((Integer, Integer), Integer), IT.div_ (v1, v2))
-             | OpRem_t -> (((Integer, Integer), Integer), IT.rem_t_ (v1, v2))
-             | OpRem_f -> (((Integer, Integer), Integer), IT.rem_f_ (v1, v2))
+             | OpRem_t -> (((Integer, Integer), Integer), IT.rem_t___ (v1, v2))
+             | OpRem_f -> (((Integer, Integer), Integer), IT.rem_f___ (v1, v2))
              | OpExp ->   (((Integer, Integer), Integer), IT.exp_ (v1, v2))
              | OpEq ->    (((Integer, Integer), Bool), IT.eq_ (v1, v2))
              | OpGt ->    (((Integer, Integer), Bool), IT.gt_ (v1, v2))
@@ -1433,7 +1409,8 @@ module Make (G : sig val global : Global.t end) = struct
             | Predicate p ->
                not p.unused
             | QPredicate p ->
-               not p.unused
+               not p.unused &&
+                 not (Solver.holds local (eq_ (p.istart, p.iend)))
           ) local.resources
       in
       match bad with
@@ -1506,12 +1483,12 @@ module Make (G : sig val global : Global.t end) = struct
                   }
               in
               let@ _ = resource_request loc (Access Deref) local request in
-              let vt = (Bool, aligned_ (act.ct, it_of_arg arg)) in
+              let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
               return (rt_of_vt vt, local)
            | M_PtrWellAligned (act, asym) ->
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-              let vt = (Bool, aligned_ (act.ct, it_of_arg arg)) in
+              let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
               return (rt_of_vt vt, local)
            | M_PtrArrayShift (asym1, act, asym2) ->
               let@ vt = infer_array_shift local asym1 act.ct asym2 in
@@ -1551,7 +1528,7 @@ module Make (G : sig val global : Global.t end) = struct
               let rt = 
                 RT.Computational ((ret, Loc), 
                 LRT.Constraint (representable_ (Sctypes.pointer_sct act.ct, sym_ (ret, Loc)), 
-                LRT.Constraint (alignedI_ (it_of_arg arg, sym_ (ret, Loc)), 
+                LRT.Constraint (alignedI_ ~align:(it_of_arg arg) ~t:(sym_ (ret, Loc)), 
                 LRT.Logical ((value_s, BT.of_sct act.ct),
                 LRT.Resource (resource, LRT.I)))))
               in

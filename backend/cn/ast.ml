@@ -48,6 +48,7 @@ module Terms = struct
     | GreaterOrEqual of term * term
     | IntegerToPointerCast of term
     | PointerToIntegerCast of term
+    | App of term * term
 
 
 
@@ -93,6 +94,8 @@ module Terms = struct
        term_equal t1 t2
     | PointerToIntegerCast t1, PointerToIntegerCast t2 ->
        term_equal t1 t2
+    | App (t11, t12), App (t21, t22) ->
+       term_equal t11 t21 && term_equal t12 t22
     | Addr _, _ -> 
        false
     | Var _, _ ->
@@ -133,6 +136,9 @@ module Terms = struct
        false
     | PointerToIntegerCast _, _ -> 
        false
+    | App _, _ ->
+       false
+
 
 
   let mparens atomic pp = 
@@ -180,6 +186,8 @@ module Terms = struct
        mparens atomic (parens !^"pointer" ^^ (pp true t1))
     | PointerToIntegerCast t1 ->
        mparens atomic (parens !^"integer" ^^ (pp true t1))
+    | App (t1, t2) ->
+       mparens atomic (pp true t1 ^^ brackets (pp false t2))
        
 
 
@@ -239,6 +247,8 @@ module Terms = struct
          IntegerToPointerCast (aux t)
       | PointerToIntegerCast t ->
          PointerToIntegerCast (aux t)
+      | App (t1, t2) ->
+         App (aux t1, aux t2)
     in
     aux t
   
