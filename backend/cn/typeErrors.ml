@@ -95,6 +95,7 @@ type type_error =
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
   | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_pp (*  *)
+  | Implementation_defined_behaviour of document * state_pp
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
 
@@ -237,6 +238,8 @@ let pp_type_error te =
   | Undefined_behaviour (undef, state) -> 
      let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
      (!^"Undefined behaviour", [!^ub; consider_state state])
+  | Implementation_defined_behaviour (impl, state) -> 
+     (!^"Implementation defined behaviour:" ^^^ impl, [consider_state state])
   | Unspecified _ctype ->
      (!^"Unspecified value", [])
   | StaticError err ->

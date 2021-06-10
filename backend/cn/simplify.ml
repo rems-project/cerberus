@@ -229,6 +229,8 @@ let rec simp (lcs : t list) term =
           | Some bool -> bool_ bool
           | _ -> eq_ (a, b)
           end
+       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+          bool_ (Z.equal z1 z2)
        | IT (Pointer_op (AddPointer (b1,o1)), _), 
          IT (Pointer_op (AddPointer (b2,o2)), _) 
             when equal b1 b2 ->
@@ -268,6 +270,18 @@ let rec simp (lcs : t list) term =
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
           IT (Lit (Bool ((i1*j2) <= (i2*j1))), bt)
        | _, _ when equal a b ->
+          bool_ true
+       | IT (Arith_op (Rem_t (_, IT (Lit (Z z1), _))), _), 
+         IT (Lit (Z z2), _) when
+              Z.gt_big_int z1 Z.zero &&
+              Z.gt_big_int z2 Z.zero &&
+              Z.le_big_int z1 (Z.add_big_int z2 (Z.of_int 1)) ->
+          bool_ true
+       | IT (Arith_op (Rem_f (_, IT (Lit (Z z1), _))), _), 
+         IT (Lit (Z z2), _) when
+              Z.gt_big_int z1 Z.zero &&
+              Z.gt_big_int z2 Z.zero &&
+              Z.le_big_int z1 (Z.add_big_int z2 (Z.of_int 1)) ->
           bool_ true
        | _, _ ->
           IT (Cmp_op (LE (a, b)), bt)

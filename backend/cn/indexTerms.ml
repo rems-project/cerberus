@@ -1041,6 +1041,26 @@ let struct_ (tag, members) =
 let member_ ~member_bt (tag, it, member) = 
   IT (Struct_op (StructMember (it, member)), member_bt)
 
+let (%.) struct_decls t member = 
+  let tag = match bt t with
+    | BT.Struct tag -> tag
+    | _ -> Debug_ocaml.error "illtyped index term. not a struct"
+  in
+  let member = Id.id member in
+  let member_bt = 
+    BT.of_sct
+      (List.assoc Id.equal member 
+         (Memory.member_types (SymMap.find tag struct_decls)))
+  in
+  member_ ~member_bt (tag, t, member)
+
+
+
+
+
+
+
+
 (* pointer_op *)
 let null_ = IT (Pointer_op Null, BT.Loc)
 let addPointer_ (it, it') = IT (Pointer_op (AddPointer (it, it')), BT.Loc)
@@ -1067,6 +1087,10 @@ let arrayShift_ (t1, ct, t2) =
   addPointer_ (t1, arrayOffset_ (ct, t2))
 
 let (%+.) it it' = addPointer_ (it, it')
+
+
+
+
 
 let container_of_ (t, tag, member) =
   subPointer_ (t, memberOffset_ (tag, member))

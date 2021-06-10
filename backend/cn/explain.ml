@@ -501,6 +501,13 @@ module Make (G : sig val global : Global.t end) = struct
     let (explanation, local) = explanation names local SymSet.empty in
     pp_state_with_model local explanation (counter_model local)
 
+  let implementation_defined_behaviour names local it = 
+    let (explanation, local) = 
+      explanation names local (IT.free_vars it)
+    in
+    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
+    (it_pp, pp_state_with_model local explanation (counter_model local))
+
   let missing_ownership names local it = 
     let (explanation, local) = explanation names local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
@@ -535,8 +542,6 @@ module Make (G : sig val global : Global.t end) = struct
 
   let resource_request names local re = 
     let (explanation, local) = explanation names local (RER.free_vars re) in
-    print stderr !^"free vars";
-    SymSet.iter (fun sym -> print stderr (item "symbol" (Sym.pp sym))) (RER.free_vars re);
     let re_pp = RER.pp (RER.subst_vars explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation (counter_model local))
 

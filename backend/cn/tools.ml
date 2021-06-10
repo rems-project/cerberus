@@ -34,3 +34,7 @@ type stacktrace = string
 
 
 
+
+
+
+let skip swith lrt = if true then swith else lrt

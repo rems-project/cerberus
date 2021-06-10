@@ -427,39 +427,41 @@ module RE = struct
     | Predicate p -> []
     | QPredicate p -> [(p.i, BT.Integer)]
 
-  (* assumption: resource is owned *)
-  let derived_constraint resource = 
-    let open IT in
-    match resource with
-    | Point p -> 
-       impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
-    | QPoint p ->
-       (* todo *)
-       bool_ true
-    | Predicate _ ->
-       bool_ true
-    | QPredicate _ ->
-       bool_ true
+  (* (\* assumption: resource is owned *\)
+   * let derived_constraint resource = 
+   *   let open IT in
+   *   match resource with
+   *   | Point p -> 
+   *      impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
+   *   | QPoint p ->
+   *      (\* todo *\)
+   *      bool_ true
+   *   | Predicate _ ->
+   *      bool_ true
+   *   | QPredicate _ ->
+   *      bool_ true
+   * 
+   * 
+   * (\* assumption: resource owned at the same time as resources' *\)
+   * (\* todo, depending on how much we need *\)
+   * let derived_constraints resource resource' =
+   *   (\* let open IT in *\)
+   *   match resource, resource' with
+   *   | Point p, Point p' -> 
+   *      and_ [impl_ (
+   *           gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+   *           ne_ (p.pointer, p'.pointer)
+   *         )
+   *      ]
+   *   | Predicate _, _
+   *   | _, Predicate _ -> 
+   *      bool_ true
+   *   | _ ->
+   *      (\* todo *\)
+   *      bool_ true *)
 
-
-  (* assumption: resource owned at the same time as resources' *)
-  (* todo, depending on how much we need *)
-  let derived_constraints resource resource' =
-    let open IT in
-    match resource, resource' with
-    | Point p, Point p' -> 
-        (* for now *)
-        [impl_ (
-            gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
-            ne_ (p.pointer, p'.pointer)
-          )
-       ]
-    | Predicate _, _
-    | _, Predicate _ -> 
-       []
-    | _ ->
-       (* todo *)
-       []
+  let derived_constraint _ = bool_ true
+  let derived_constraints _ _ = []
 
 
 

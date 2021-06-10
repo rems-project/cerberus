@@ -659,7 +659,8 @@ module Make (G : sig val global : Global.t end) = struct
                    let oargs = List.map (IT.subst_it {before=p'.i; after=index}) p'.oargs in
                    let moved = p.pointer :: p'.moved in
                    (QPredicate {p' with moved}, Some oargs)
-                 else (re, found)
+                 else
+                   (re, found)
               | _ ->
                  (re, found)
             ) local None
@@ -1313,10 +1314,15 @@ module Make (G : sig val global : Global.t end) = struct
                 when Sctypes.is_unsigned_integer_type act.ct ->
               infer_wrapI local act.ct asym
            | _ ->
-              let ftyp = 
-                Global.get_impl_fun_decl G.global                
-                    Integer__conv_nonrepresentable_signed_integer in
-              calltype_ft loc local [arg] ftyp
+              let () = print_endline "2**************************************************************" in
+              let (it_pp, state_pp) = 
+                Explain.implementation_defined_behaviour names local 
+                  arg_it
+              in
+              let () = print_endline "3**************************************************************" in
+              fail loc (Implementation_defined_behaviour 
+                          (it_pp ^^^ !^"outside representable range for" ^^^ 
+                             Sctypes.pp act.ct, state_pp))
            end
         | M_PEwrapI (act, asym) ->
            infer_wrapI local act.ct asym

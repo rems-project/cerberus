@@ -327,7 +327,10 @@ module Make (G : sig val global : Global.t end) = struct
     in
 
     fun it ->
-    term it
+      let () = Debug_ocaml.begin_csv_timing "of_index_term" in
+      let expr = term it in
+      let () = Debug_ocaml.end_csv_timing "of_index_term" in
+      expr
 
 
 
@@ -338,12 +341,18 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let check ?(ignore_unknown=false) local (lc : IT.t) = 
+    let () = Debug_ocaml.begin_csv_timing "check" in
     let solver = Z3.Solver.mk_simple_solver context in
     let neg_expr = Z3.Boolean.mk_not context (of_index_term lc) in
     let assumptions = List.map of_index_term (Local.all_constraints local) in
     let constraints = neg_expr :: assumptions in
+    let () = Debug_ocaml.begin_csv_timing "adding constraints" in
     Z3.Solver.add solver [Z3.Boolean.mk_and context constraints];
+    let () = Debug_ocaml.end_csv_timing "adding constraints" in
+    let () = Debug_ocaml.begin_csv_timing "actually checking" in
     let result = Z3.Solver.check solver [] in
+    let () = Debug_ocaml.end_csv_timing "actually checking" in
+    let () = Debug_ocaml.end_csv_timing "check" in
     match result with
     | Z3.Solver.UNSATISFIABLE -> (true, solver)
     | Z3.Solver.SATISFIABLE -> (false, solver)
