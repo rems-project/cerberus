@@ -355,20 +355,11 @@ let early =
 
 
 
+let page_alloc_predicates struct_decls = 
 
-
-
-
-
-
-
-
-
-
-let hyp_pool (struct_decls : Memory.struct_decls) =
-
-  let id = "Hyp_pool" in
-  let loc = Loc.other "internal (Hyp_pool)" in
+  let pPAGE_SHIFT_t = int_ 12 in
+  let mMAX_ORDER_t = int_ 11 in
+  let hHYP_NO_ORDER_t = int_ (0 - 1) in
 
   let find_tag tag = 
     SymMap.find_first (fun tag' ->
@@ -376,278 +367,355 @@ let hyp_pool (struct_decls : Memory.struct_decls) =
       ) struct_decls
   in
 
-  let (%.) = IT.(%.) struct_decls in
-
   let list_head_tag, _ = find_tag "list_head" in
   let hyp_pool_tag, _ = find_tag "hyp_pool" in
   let hyp_page_tag, _ = find_tag "hyp_page" in
 
-  let p_s, p_t = IT.fresh_named Loc "?p" in
-  let hyp_vmemmap_s, hyp_vmemmap_t = IT.fresh_named Loc "?hyp_vmemmap" in
-  let pPAGE_SHIFT_t = int_ 12 in
-  let mMAX_ORDER_t = int_ 11 in
-  let hHYP_NO_ORDER_t = int_ (0 - 1) in
-  let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "?pool" in
-  let vmemmap_s, vmemmap_t = 
-    IT.fresh_named (BT.Param (Integer, BT.Struct hyp_page_tag)) "?vmemmap" in
-  let vmemmap_i_s, vmemmap_i_t = 
-    IT.fresh_named (BT.Param (Integer, Bool)) "?vmemmap_i" in
+  let (%.) = IT.(%.) struct_decls in
 
 
-  let hyp_vmemmap_offset_of_node_pointer pointer = 
-    pointerToIntegerCast_
-      (container_of_ (pointer, hyp_page_tag, Id.id "node")) %-
-      pointerToIntegerCast_ hyp_vmemmap_t
-  in
 
-  let hyp_vmemmap_good_node_pointer pointer = 
-    alignedI_ 
-      ~t:(pointerToIntegerCast_ 
-            (hyp_vmemmap_offset_of_node_pointer pointer))
-      ~align:(z_ (Memory.size_of_struct hyp_page_tag))
-  in
-  
-  let hyp_vmemmap_node_pointer_to_index pointer = 
-    hyp_vmemmap_offset_of_node_pointer pointer %/
-      z_ (Memory.size_of_struct hyp_page_tag)
-  in
-
-
-  let hyp_pool_metadata_owned =
-    let points = 
-      point (p_t, Memory.size_of_struct hyp_pool_tag) 
-        (q_ (1, 1)) pool_t (bool_ true)
-    in
-    LRT.Logical ((pool_s, IT.bt pool_t),
-    LRT.Resource (points,
-    LRT.I))
-  in
-  
-  let pPAGE_SIZE_t = exp_ (int_ 2, pPAGE_SHIFT_t) in
-
-  let start_t = (pool_t %. "range_start") %/ pPAGE_SIZE_t in
-  let end_t = (pool_t %. "range_end") %/ pPAGE_SIZE_t in
-
-  let hyp_pool_metadata_well_formedness =
-    let constr = 
-      and_ [
-          int_ 0 %<= (pool_t %. "range_start");
-          (pool_t %. "range_start") %< (pool_t %. "range_end");
-          (pool_t %. "range_end") %< exp_ (int_ 2, int_ 64);
-          rem_ (pool_t %. "range_start", pPAGE_SIZE_t) %== int_ 0;
-          rem_ (pool_t %. "range_end", pPAGE_SIZE_t) %== int_ 0;
-          ((pointerToIntegerCast_ hyp_vmemmap_t) %+ ((end_t %* z_ (Memory.size_of_struct hyp_page_tag)))) %< exp_ (int_ 2, int_ 64);
-          (pool_t %. "max_order") %<= mMAX_ORDER_t;
-        ]
-    in
-    LRT.Constraint (constr, LRT.I)
-  in
-
-  let vmemmap_metadata_owned =
-    let element_size = Memory.size_of_struct hyp_page_tag in
-    let i_s, i_t = IT.fresh_named Integer "?i" in
-    let qpredicate = 
-      QPredicate {
-          pointer = hyp_vmemmap_t;
-          element_size = z_ element_size;
-          istart = start_t;
-          iend = end_t;
-          name = Ctype (Sctypes.Sctype ([], Struct hyp_page_tag));
-          i = i_s;
-          iargs = [];
-          oargs = [app_ vmemmap_t i_t; app_ vmemmap_i_t i_t];
-          moved = [];
-          unused = true;
-        }
-    in
-    let aligned = 
-      aligned_ (hyp_vmemmap_t,
-                Sctype ([], Array (Sctype ([], Struct hyp_page_tag), None)))
-    in
-    LRT.Logical ((vmemmap_s, IT.bt vmemmap_t),
-    LRT.Logical ((vmemmap_i_s, IT.bt vmemmap_i_t),
-    LRT.Constraint (aligned,
-    LRT.Resource (qpredicate, LRT.I))))
-  in
-
-  let vmemmap_cell_address i_t =
+  let vmemmap_cell_address hyp_vmemmap_t i_t =
     arrayShift_ (hyp_vmemmap_t, 
                  Sctype ([], Struct hyp_page_tag), 
                  i_t)
   in
 
-  let vmemmap_cell_node_address i_t =
-    memberShift_ (vmemmap_cell_address i_t,
+  let vmemmap_cell_node_address hyp_vmemmap_t i_t =
+    memberShift_ (vmemmap_cell_address hyp_vmemmap_t i_t,
                   hyp_page_tag,
                   Id.id "node")
   in
 
-  let free_list_well_formedness = 
-    let o_s, o_t = IT.fresh_named Integer "?o" in
-    let constr prev_next = 
-      let prev_next_t = ((pool_t %. "free_area") %@ o_t) %. prev_next in
-      forall_ (o_s, IT.bt o_t) 
-        (or_ [
-             prev_next_t %==
-               arrayShift_
-                 (memberShift_ (p_t, hyp_pool_tag, Id.id "free_area"),
-                  Sctype ([], Struct list_head_tag),
-                  o_t);
-             
-             and_ (
-                 hyp_vmemmap_good_node_pointer prev_next_t ::
-                   (let i_t = hyp_vmemmap_node_pointer_to_index prev_next_t in
-                    [start_t %<= i_t; i_t %< end_t;
-                     ((vmemmap_t %@ i_t) %. "order") %== o_t;
-                     ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
-                   )
-               )
-           ]
-         )
-    in
-    LRT.Constraint (constr "prev",
-    LRT.Constraint (constr "next", LRT.I))
+
+  let vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer = 
+    (pointerToIntegerCast_
+       (container_of_ (pointer, hyp_page_tag, Id.id "node"))) %-
+      pointerToIntegerCast_ hyp_vmemmap_t
+  in
+  
+  let vmemmap_good_node_pointer hyp_vmemmap_t pointer = 
+    alignedI_ 
+      ~t:(integerToPointerCast_ (vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer))
+      ~align:(z_ (Memory.size_of_struct hyp_page_tag))
+  in
+  
+  let vmemmap_node_pointer_to_index hyp_vmemmap_t pointer = 
+    vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer %/
+      z_ (Memory.size_of_struct hyp_page_tag)
   in
 
-  let hyp_page_well_formedness = 
-    let constr =  
-      let i_s, i_t = IT.fresh_named Integer "?i" in
-      let first = 
-        forall_ (i_s, IT.bt i_t) 
-          (and_ [
-              (* initialised *)
-              vmemmap_i_t %@ i_t;
+
+
+  let vmemmap_page =
+
+    let id = "Vmemmap_page" in
+    let loc = Loc.other "internal (Vmemmap_page)" in
+    let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "?pool_pointer" in
+    let page_pointer_s, page_pointer_t = IT.fresh_named Loc "?page_pointer" in
+    let range_start_s, range_start_t = IT.fresh_named Integer "?range_start" in
+    let range_end_s, range_end_t = IT.fresh_named Integer "?range_end" in
+    let page_s, page_t = IT.fresh_named (BT.Struct hyp_page_tag) "?page" in
+    let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "?vmemmap_pointer" in
+
+    let lrt = 
+
+      let resource = 
+        Predicate {
+            pointer = page_pointer_t;
+            name = Ctype (Sctypes.Sctype ([], Struct hyp_page_tag));
+            iargs = [];
+            oargs = [page_t; bool_ true];
+            unused = true;
+          }
+      in
+
+      let wellformedness = 
+        let self_node_pointer_t = memberShift_ (page_pointer_t, hyp_page_tag, Id.id "node" )in
+        let first = [
+
               (* representable *)
-              representable_ (Sctype ([], Struct hyp_page_tag), (vmemmap_t %@ i_t));
+              (representable_ (Sctype ([], Struct hyp_page_tag), page_t));
+
               (* refcount is natural number *)
-              ((vmemmap_t %@ i_t) %. "refcount") %>= int_ 0;
+              ((page_t %. "refcount") %>= int_ 0);
+
               (* refcount is also valid signed int: for hyp_page_count *)
-              (representable_ (Sctype ([], Integer (Signed Int_)), (vmemmap_t %@ i_t) %. "refcount"));
+              ((representable_ (Sctype ([], Integer (Signed Int_)), page_t %. "refcount")));
+
               (* order is HYP_NO_ORDER or between 0 and MAX_ORDER *)
-              (let order = (vmemmap_t %@ i_t) %. "order" in
+              (let order = page_t %. "order" in
                or_ [order %== hHYP_NO_ORDER_t; and_ [int_ 0 %<= order; order %<= mMAX_ORDER_t]]);
+
               (* points back to the pool *)
-              ((vmemmap_t %@ i_t) %. "pool") %== p_t;
-              (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
-              eq_ ((((vmemmap_t %@ i_t) %. "node") %. "next") %== vmemmap_cell_node_address i_t,
-                   (((vmemmap_t %@ i_t) %. "node") %. "prev") %== vmemmap_cell_node_address i_t);
+              ((page_t %. "pool") %== pool_pointer_t);
+
+                (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
+              eq_ (((page_t %. "node") %. "next") %== self_node_pointer_t,
+                    ((page_t %. "node") %. "prev") %== self_node_pointer_t);
               (* list empty in the above sense if and only if refcount 0 and order != NYP_NO_ORDER *)
-              eq_ (
-                  (((vmemmap_t %@ i_t) %. "node") %. "next") %!= vmemmap_cell_node_address i_t,
-                  and_ [((vmemmap_t %@ i_t) %. "refcount") %== int_ 0;
-                        ((vmemmap_t %@ i_t) %. "order") %!= hHYP_NO_ORDER_t;
+              (eq_ (
+                   ((page_t %. "node") %. "next") %!= self_node_pointer_t,
+                   and_ [(page_t %. "refcount") %== int_ 0;
+                         (page_t %. "order") %!= hHYP_NO_ORDER_t;
                      ]
-                )
-          ])
+              ))
+            ]
+        in
+        let linked_list_well_formed prev_next = 
+          let prev_next_t = (page_t %. "node") %.prev_next in
+          or_ [
+              
+              prev_next_t %== self_node_pointer_t;
+              
+              prev_next_t %==
+                arrayShift_
+                  (memberShift_ (pool_pointer_t, hyp_pool_tag, Id.id "free_area"),
+                   Sctype ([], Struct list_head_tag),
+                   page_t %. "order");
+              
+              and_ (
+                  vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t :: 
+                  let cell_pointer_t = 
+                    container_of_ (prev_next_t, hyp_page_tag, Id.id "node") in
+                [ range_start_t %<= (pointerToIntegerCast_ cell_pointer_t);
+                  (pointerToIntegerCast_ cell_pointer_t) %< range_end_t ]
+                );
+              
+            ]
+        in
+        first @
+          [linked_list_well_formed "prev"; 
+           linked_list_well_formed "next"]
       in
-      let linked_list_well_formed prev_next = 
-        forall_ (i_s, IT.bt i_t) 
-          (let prev_next_t = ((vmemmap_t %@ i_t) %. "node") %.prev_next in
-           or_ [
-               
-               prev_next_t %== vmemmap_cell_node_address i_t; (* points to itself *)
-               
-               prev_next_t %==
-                 arrayShift_
-                   (memberShift_ (p_t, hyp_pool_tag, Id.id "free_area"),
-                    Sctype ([], Struct list_head_tag),
-                    (vmemmap_t %@ i_t) %. "order");
-               
-               and_ (
-                   (* hyp_vmemmap_good_node_pointer prev_next_t :: *)
-                   let j_t = hyp_vmemmap_node_pointer_to_index prev_next_t in
-                   (* let k_s, k_t = IT.fresh_named Integer "?k" in *)
-                   [start_t %<= j_t; j_t %< end_t;
-                    (* (((vmemmap_t %@ j_t) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== vmemmap_cell_node_address i_t; *)
-                    (* ((vmemmap_t %@ i_t) %. "order") %== ((vmemmap_t %@ j_t) %. "order"); *)
-                    (* forall_sth_ (k_s, IT.bt k_t)
-                     *   (and_ [(i_t %+ int_ 1) %<= k_t; 
-                     *          k_t %< (i_t %+ (exp_ (int_ 2, (vmemmap_t %@ i_t) %. "order")))])
-                     *   (and_ [
-                     *       ((vmemmap_t %@ k_t) %. "order") %== hHYP_NO_ORDER_t;
-                     *       ((vmemmap_t %@ k_t) %. "refcount") %== int_ 0;
-                     *     ]) *)
-                   ]
-                 );
-               
-          ])
-      in
-      and_ [first; 
-             Tools.skip (bool_ true) (linked_list_well_formed "prev"); 
-             Tools.skip (bool_ true) (linked_list_well_formed "next")]
+
+      LRT.Logical ((page_s, IT.bt page_t),
+      LRT.Resource (resource, 
+      LRT.mConstraints wellformedness
+      LRT.I))
     in
-    LRT.Constraint (constr, LRT.I)
+
+    let predicate = 
+      {
+        loc = loc;
+        pointer = page_pointer_s;
+        iargs = [
+            (vmemmap_pointer_s, IT.bt vmemmap_pointer_t);
+            (pool_pointer_s, IT.bt pool_pointer_t);
+            (range_start_s, IT.bt range_start_t);
+            (range_end_s, IT.bt range_end_t);
+          ];
+        oargs = [("page", IT.bt page_t)];
+        clauses = 
+          [(loc, PackingFT.of_lrt lrt 
+                 (PackingFT.I [("page", page_t)]));]; 
+      } 
+    in
+    (id, predicate)
   in
 
-  let page_group_ownership = 
-    let qp_s, qp_t = IT.fresh_named Loc "?qp" in
-    let bytes_s, bytes_t = IT.fresh_named (BT.Param (Loc, Integer)) "?bytes" in
-    let condition = 
-      let i_t = (pointerToIntegerCast_ qp_t) %/ pPAGE_SIZE_t in
-      and_ [
-          gtPointer_ (qp_t, pointer_ (Z.of_int 0));
-            (and_ (
-               [(pool_t %. "range_start") %<= pointerToIntegerCast_ qp_t; 
-                pointerToIntegerCast_ qp_t %< (pool_t %. "range_end");
-                or_ [
-                    and_ [((vmemmap_t %@ i_t) %. "order") %!= hHYP_NO_ORDER_t;
-                          ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0];
-                    and_ [((vmemmap_t %@ i_t) %. "order") %== hHYP_NO_ORDER_t;
-                          ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
+
+
+
+  let hyp_pool =
+
+    let id = "Hyp_pool" in
+    let loc = Loc.other "internal (Hyp_pool)" in
+
+    let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "?pool_pointer" in
+    let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "?vmemmap_pointer" in
+    let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "?pool" in
+    let vmemmap_s, vmemmap_t = 
+      IT.fresh_named (BT.Param (Integer, BT.Struct hyp_page_tag)) "?vmemmap" in
+
+
+    let hyp_pool_metadata_owned =
+      let points = 
+        point (pool_pointer_t, Memory.size_of_struct hyp_pool_tag) 
+          (q_ (1, 1)) pool_t (bool_ true)
+      in
+      LRT.Logical ((pool_s, IT.bt pool_t),
+      LRT.Resource (points,
+      LRT.I))
+    in
+
+    let pPAGE_SIZE_t = exp_ (int_ 2, pPAGE_SHIFT_t) in
+
+    let start_t = (pool_t %. "range_start") %/ pPAGE_SIZE_t in
+    let end_t = (pool_t %. "range_end") %/ pPAGE_SIZE_t in
+
+    let hyp_pool_metadata_well_formedness =
+      let constrs = [
+            int_ 0 %<= (pool_t %. "range_start");
+            (pool_t %. "range_start") %< (pool_t %. "range_end");
+            (pool_t %. "range_end") %< exp_ (int_ 2, int_ 64);
+            rem_ (pool_t %. "range_start", pPAGE_SIZE_t) %== int_ 0;
+            rem_ (pool_t %. "range_end", pPAGE_SIZE_t) %== int_ 0;
+            ((pointerToIntegerCast_ vmemmap_pointer_t) %+ ((end_t %* z_ (Memory.size_of_struct hyp_page_tag)))) %< exp_ (int_ 2, int_ 64);
+            (pool_t %. "max_order") %> int_ 0;
+            (pool_t %. "max_order") %<= mMAX_ORDER_t;
+          ]
+      in
+      LRT.mConstraints constrs LRT.I
+    in
+
+    let vmemmap_metadata_owned =
+      let element_size = Memory.size_of_struct hyp_page_tag in
+      let i_s, i_t = IT.fresh_named Integer "?i" in
+      let qpredicate = 
+        QPredicate {
+            pointer = vmemmap_pointer_t;
+            element_size = z_ element_size;
+            istart = start_t;
+            iend = end_t;
+            name = Id "Vmemmap_page";
+            i = i_s;
+            iargs = [
+                vmemmap_pointer_t;
+                pool_pointer_t;
+                (pool_t %. "range_start");
+                (pool_t %. "range_end");
+              ];
+            oargs = [app_ vmemmap_t i_t];
+            moved = [];
+            unused = true;
+          }
+      in
+      let aligned = 
+        aligned_ (vmemmap_pointer_t,
+                  Sctype ([], Array (Sctype ([], Struct hyp_page_tag), None)))
+      in
+
+
+      let linked_list_well_formed2 prev_next = 
+        let i_s, i_t = IT.fresh_named Integer "?i" in
+        forall_ (i_s, IT.bt i_t)
+          begin
+            let prev_next_t = ((vmemmap_t %@ i_t) %. "node") %.prev_next in
+            impl_ (
+                vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t
+              ,
+                let j_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
+                and_
+                  [
+                    (((vmemmap_t %@ j_t) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== 
+                      (vmemmap_cell_node_address vmemmap_pointer_t i_t);
+                    ((vmemmap_t %@ i_t) %. "order") %== ((vmemmap_t %@ j_t) %. "order");
+                (* forall_sth_ (k_s, IT.bt k_t)
+                 *   (and_ [(i_t %+ int_ 1) %<= k_t; 
+                 *          k_t %< (i_t %+ (exp_ (int_ 2, (vmemmap_t %@ i_t) %. "order")))])
+                 *   (and_ [
+                 *       ((vmemmap_t %@ k_t) %. "order") %== hHYP_NO_ORDER_t;
+                 *       ((vmemmap_t %@ k_t) %. "refcount") %== int_ 0;
+                 *     ])
+                 * ] *)
                   ]
-               ]
-            ))
-        ]
+              )
+          end
+
+      in
+      
+
+      LRT.Logical ((vmemmap_s, IT.bt vmemmap_t),
+      LRT.Constraint (aligned,
+      LRT.Constraint (linked_list_well_formed2 "prev",
+      LRT.Constraint (linked_list_well_formed2 "next",
+      LRT.Resource (qpredicate, LRT.I)))))
     in
-    let qpoint = 
-      QPoint {
-          qpointer = qp_s;
-          size = Z.of_int 1;
-          permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
-          value = app_ bytes_t qp_t;
-          init = bool_ false;
-        }
+
+    (* let free_list_well_formedness = 
+     *   let o_s, o_t = IT.fresh_named Integer "?o" in
+     *   let constr prev_next = 
+     *     let prev_next_t = ((pool_t %. "free_area") %@ o_t) %. prev_next in
+     *     forall_ (o_s, IT.bt o_t) 
+     *       (or_ [
+     *            prev_next_t %==
+     *              arrayShift_
+     *                (memberShift_ (pool_pointer_t, hyp_pool_tag, Id.id "free_area"),
+     *                 Sctype ([], Struct list_head_tag),
+     *                 o_t);
+     * 
+     *            and_ (
+     *                vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t ::
+     *                  (let i_t = vmemmap_node_pointer_to_index prev_next_t in
+     *                   [start_t %<= i_t; i_t %< end_t;
+     *                    ((vmemmap_t %@ i_t) %. "order") %== o_t;
+     *                    ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
+     *                  )
+     *              )
+     *          ]
+     *        )
+     *   in
+     *   LRT.Constraint (constr "prev",
+     *   LRT.Constraint (constr "next", LRT.I))
+     * in *)
+
+    let page_group_ownership = 
+      let qp_s, qp_t = IT.fresh_named Loc "?qp" in
+      let bytes_s, bytes_t = IT.fresh_named (BT.Param (Loc, Integer)) "?bytes" in
+      let condition = 
+        let i_t = (pointerToIntegerCast_ qp_t) %/ pPAGE_SIZE_t in
+        and_ [
+            gtPointer_ (qp_t, pointer_ (Z.of_int 0));
+              (and_ (
+                 [(pool_t %. "range_start") %<= pointerToIntegerCast_ qp_t; 
+                  pointerToIntegerCast_ qp_t %< (pool_t %. "range_end");
+                  or_ [
+                      and_ [((vmemmap_t %@ i_t) %. "order") %!= hHYP_NO_ORDER_t;
+                            ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0];
+                      and_ [((vmemmap_t %@ i_t) %. "order") %== hHYP_NO_ORDER_t;
+                            ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
+                    ]
+                 ]
+              ))
+          ]
+      in
+      let qpoint = 
+        QPoint {
+            qpointer = qp_s;
+            size = Z.of_int 1;
+            permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
+            value = app_ bytes_t qp_t;
+            init = bool_ false;
+          }
+      in
+      LRT.Logical ((bytes_s, IT.bt bytes_t),
+      LRT.Resource (qpoint, LRT.I))
     in
-    LRT.Logical ((bytes_s, IT.bt bytes_t),
-    LRT.Resource (qpoint, LRT.I))
+
+    let lrt = 
+      let open LRT in
+      hyp_pool_metadata_owned 
+      @@ hyp_pool_metadata_well_formedness
+      @@ vmemmap_metadata_owned
+      (* @@ free_list_well_formedness (\* possibly inconsistent *\) *)
+      @@ Tools.skip (LRT.I) page_group_ownership
+    in
+
+    let predicate = 
+      {
+        loc = loc;
+        pointer = 
+          pool_pointer_s;
+        iargs = [
+            (vmemmap_pointer_s, IT.bt vmemmap_pointer_t);
+          ];
+        oargs = [
+            ("pool", IT.bt pool_t);
+            ("vmemmap", IT.bt vmemmap_t);
+          ];
+        clauses = 
+          [(loc, PackingFT.of_lrt lrt 
+                   (PackingFT.I [("pool", pool_t);
+                                 ("vmemmap", vmemmap_t)]));]; 
+      } 
+    in
+    (id, predicate)
+
+
   in
-
-  let lrt = 
-    let open LRT in
-    hyp_pool_metadata_owned 
-    @@ hyp_pool_metadata_well_formedness
-    @@ vmemmap_metadata_owned
-    @@ Tools.skip LRT.I free_list_well_formedness (* possibly inconsistent *)
-    @@ hyp_page_well_formedness
-    @@ Tools.skip LRT.I page_group_ownership
-  in
-
-  let predicate = 
-    {
-      loc = loc;
-      pointer = 
-        p_s;
-      iargs = [
-          (hyp_vmemmap_s, IT.bt hyp_vmemmap_t);
-          (* (pPAGE_SHIFT_s, IT.bt pPAGE_SHIFT_t);
-           * (mMAX_ORDER_s, IT.bt mMAX_ORDER_t);
-           * (hHYP_NO_ORDER_s, IT.bt hHYP_NO_ORDER_t); *)
-        ];
-      oargs = [
-          ("pool", IT.bt pool_t);
-          ("vmemmap", IT.bt vmemmap_t);
-        ];
-      clauses = 
-        [(loc, PackingFT.of_lrt lrt 
-                 (PackingFT.I [("pool", pool_t);
-                               ("vmemmap", vmemmap_t)]));]; 
-    } 
-  in
-  (id, predicate)
-
-
-
-
+  [vmemmap_page;
+   hyp_pool]
 
 
 
@@ -657,7 +725,7 @@ let predicate_list struct_decls =
   zero_region ::
   early ::
   (* for now: *)
-  try [hyp_pool struct_decls] with
+  try page_alloc_predicates struct_decls with
   | Not_found -> []
 
 

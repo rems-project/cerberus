@@ -480,11 +480,16 @@ module Make (G : sig val global : Global.t end) = struct
 
           if Solver.holds local (and_ lcs) then return rt 
           else
-            let (constr,state) = 
-              Explain.unsatisfied_constraint names original_local 
-                (List.find (fun lc -> not (Solver.holds local lc)) lcs)
+            let err = 
+              lazy begin 
+                  let (constr,state) = 
+                    Explain.unsatisfied_constraint names original_local 
+                      (List.find (fun lc -> not (Solver.holds local lc)) lcs)
+                  in
+                  (Unsat_constraint {constr; hint = None; state})
+                end
             in
-            fail loc (lazy (Unsat_constraint {constr; hint = None; state}))
+            fail loc err
         in
 
         return (rt, local)
@@ -512,13 +517,99 @@ module Make (G : sig val global : Global.t end) = struct
 
     let resource_request_missing ui_info request =
       let open Prompt in
-      let (resource, state) = 
-        Explain.resource_request (names @ ui_info.extra_names) 
-          ui_info.original_local request in
-      Prompt.Operators.fail ui_info.loc 
-        (lazy (Missing_resource {resource; used = None; state; 
-                                 situation = ui_info.situation}))
+      let open Prompt.Operators in
+      let err = 
+        lazy begin 
+            let (resource, state) = 
+              Explain.resource_request (names @ ui_info.extra_names) 
+                ui_info.original_local request 
+            in
+            Missing_resource {resource; used = None; state; 
+                              situation = ui_info.situation}
+          end
+      in
+      fail ui_info.loc err
     
+
+
+
+
+    let unpack_predicate local (p : predicate) = 
+      let def = Option.get (Global.get_predicate_def G.global p.name) in
+      let substs = 
+        {before = def.pointer; after= p.pointer} ::
+        List.map2 (fun (before, _) after -> {before; after}) 
+          def.iargs p.iargs
+      in
+      let possible_unpackings = 
+        List.filter_map (fun (_, clause) ->
+            let clause = PackingFT.subst_its substs clause in 
+            let condition, outputs = PackingFT.logical_arguments_and_return clause in
+            let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
+            let spec = LRT.concat condition (Constraint (lc, I)) in
+            let lrt = LRT.subst_its substs spec in
+            (* remove resource before binding the return
+               type 'condition', so as not to unsoundly
+               introduce extra disjointness constraints *)
+            let test_local = L.remove_resource (Predicate p) local in
+            let test_local = bind_logical test_local lrt in
+            if not (Solver.is_inconsistent test_local)
+            then Some test_local else None
+          ) def.clauses
+      in
+      begin match possible_unpackings with
+      | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
+      | [new_local] -> (new_local, true)
+      | _ -> (local, false)
+      end
+
+
+    let unpack_resources local = 
+      let rec aux local = 
+        let (local, changed) = 
+          List.fold_left (fun (local, changed) resource ->
+              match resource with
+              | RE.Predicate p when p.unused ->
+                 let (local, changed') = unpack_predicate local p in
+                 (local, changed || changed')
+              | _ ->
+                 (local, changed)
+            ) (local, false) (L.all_resources local)
+        in
+        if changed then aux local else local
+      in
+      aux local
+
+
+    let unpack_resources_for local pointer = 
+      let rec aux local = 
+        let (local, changed) = 
+          List.fold_left (fun (local, changed) resource ->
+              match resource with
+              | RE.Predicate p when p.unused ->
+                 let (local, changed') = unpack_predicate local p in
+                 (local, changed || changed')
+              | RE.QPredicate p when p.unused && Solver.holds local (RE.is_qpredicate_instance_pointer p pointer) ->
+                 let p_inst = 
+                   let index = qpredicate_pointer_to_index p p.pointer in
+                   let iargs = List.map (IT.subst_it {before=p.i; after=index}) p.iargs in
+                   let oargs = List.map (IT.subst_it {before=p.i; after=index}) p.oargs in
+                   {name = p.name; pointer; iargs; oargs; unused = true} 
+                 in
+                 let local = L.remove_resource (QPredicate p) local in
+                 let local = L.add_r (QPredicate {p with moved = pointer :: p.moved}) local in
+                 let local = L.add_r (Predicate p_inst) local in
+                 (local, true)
+              | _ ->
+                 (local, changed)
+            ) (local, false) (L.all_resources local)
+        in
+        if changed then aux local else local
+      in
+      aux local
+      
+
+
     let point_request_prompt ui_info local (requested : Resources.Requests.point) = 
       let open Prompt.Operators in
       let needed = requested.permission in 
@@ -888,51 +979,7 @@ module Make (G : sig val global : Global.t end) = struct
       let@ (False.False, local) = handle_prompt prompt in
       return local
 
-    let unpack_predicate local (p : predicate) = 
-      let def = Option.get (Global.get_predicate_def G.global p.name) in
-      let substs = 
-        {before = def.pointer; after= p.pointer} ::
-        List.map2 (fun (before, _) after -> {before; after}) 
-          def.iargs p.iargs
-      in
-      let possible_unpackings = 
-        List.filter_map (fun (_, clause) ->
-            let clause = PackingFT.subst_its substs clause in 
-            let condition, outputs = PackingFT.logical_arguments_and_return clause in
-            let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
-            let spec = LRT.concat condition (Constraint (lc, I)) in
-            let lrt = LRT.subst_its substs spec in
-            (* remove resource before binding the return
-               type 'condition', so as not to unsoundly
-               introduce extra disjointness constraints *)
-            let test_local = L.remove_resource (Predicate p) local in
-            let test_local = bind_logical test_local lrt in
-            if not (Solver.is_inconsistent test_local)
-            then Some test_local else None
-          ) def.clauses
-      in
-      begin match possible_unpackings with
-      | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
-      | [new_local] -> (new_local, true)
-      | _ -> (local, false)
-      end
 
-
-    let unpack_resources local = 
-      let rec aux local = 
-        let (local, changed) = 
-          List.fold_left (fun (local, changed) resource ->
-              match resource with
-              | RE.Predicate p when p.unused ->
-                 let (local, changed') = unpack_predicate local p in
-                 (local, changed || changed')
-              | _ ->
-                 (local, changed)
-            ) (local, false) (L.all_resources local)
-        in
-        if changed then aux local else local
-      in
-      aux local
 
 
     let resource_request (loc: loc) situation local (request : RER.t) : (RE.t * L.t, type_error) m = 
@@ -1195,6 +1242,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEmember_shift (asym, tag, member) ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+           let local = unpack_resources_for local (it_of_arg arg) in
            let@ (predicate, local) = 
              predicate_request loc (Access (Load None)) local 
                { name = Ctype (Sctype ([], Struct tag)) ;
@@ -1434,7 +1482,6 @@ module Make (G : sig val global : Global.t end) = struct
         | M_Epure pe -> 
            infer_pexpr local pe
         | M_Ememop memop ->
-           let local = unpack_resources local in
            let pointer_op op asym1 asym2 = 
              let@ arg1 = arg_of_asym local asym1 in
              let@ arg2 = arg_of_asym local asym2 in
@@ -1542,6 +1589,7 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Kill (M_Static ct, asym) -> 
               let@ arg = arg_of_asym local asym in
               let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+              let local = unpack_resources_for local (it_of_arg arg) in
               let@ (_, local) = 
                 resource_request loc (Access Kill) local 
                   (RER.Predicate {
@@ -1572,6 +1620,7 @@ module Make (G : sig val global : Global.t end) = struct
                   in
                   fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
+              let local = unpack_resources_for local (it_of_arg parg) in
               let@ (_, local) = 
                 resource_request loc (Access (Store None)) local 
                   (RER.Predicate {
@@ -1596,6 +1645,7 @@ module Make (G : sig val global : Global.t end) = struct
            | M_Load (act, pasym, _mo) -> 
               let@ parg = arg_of_asym local pasym in
               let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
+              let local = unpack_resources_for local (it_of_arg parg) in
               let@ (predicate, _) = 
                 predicate_request loc (Access (Load None)) local 
                   { name = Ctype act.ct ;

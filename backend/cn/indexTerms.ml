@@ -607,7 +607,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Not it -> free_vars it
     | ITE (it,it',it'') -> free_vars_list [it;it';it'']
     | EQ (it, it') -> free_vars_list [it; it']
-    | Forall ((s,_), it) -> SymSet.remove s (free_vars it)
+    | Forall ((s,_), it) -> 
+       SymSet.remove s (free_vars it)
   in
 
   let tuple_op : 'bt tuple_op -> SymSet.t = function
@@ -995,7 +996,7 @@ let ne__ it it' = ne_ (it, it')
 let forall_ (s,bt) it = IT (Bool_op (Forall ((s, bt), it)), BT.Bool)
 let forall_sth_ (s, bt) cond it = 
   IT (Bool_op (Forall ((s, bt), impl_ (cond, it))), BT.Bool)
-let exists_ (s, bt) it = not_ (forall_ (s, bt) (not_ it))
+(* let exists_ (s, bt) it = not_ (forall_ (s, bt) (not_ it)) *)
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)

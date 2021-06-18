@@ -411,6 +411,16 @@ module RE = struct
   (* auxiliary functions *)
 
   (* derived information *)
+
+
+  let pointer = function
+    | Point p -> Some p.pointer
+    | QPoint p -> None
+    | Predicate p -> Some p.pointer
+    | QPredicate p -> Some p.pointer
+
+
+
   let inputs = function
     | Point p -> [p.pointer; p.permission]
     (* the quantifier in IteratedStar is neither input nor output *)

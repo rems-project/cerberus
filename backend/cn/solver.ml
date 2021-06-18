@@ -18,7 +18,9 @@ let context =
 (* let tactic = Z3.Tactic.mk_tactic context "default" *)
 let params = Z3.Params.mk_params context 
 let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234
-let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt"
+(* let () = Z3.set_global_param "smt.auto-config" "false"
+ * let () = Z3.set_global_param "smt.mbqi" "true" *)
+(* let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt" *)
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
@@ -322,7 +324,10 @@ module Make (G : sig val global : Global.t end) = struct
              Pp.plain (IT.pp (IT (Param_op it, bt)))
          in
          Debug_ocaml.error err
+
+
     in
+      
 
     fun it ->
       let () = Debug_ocaml.begin_csv_timing "of_index_term" in

@@ -251,6 +251,8 @@ module Make (G : sig val global : Global.t end) = struct
 
   let explanation names local relevant =
 
+    let () = Debug_ocaml.begin_csv_timing "explanation" in
+
     let relevant =
       let names_syms = SymSet.of_list (List.map fst names) in
       let named_syms = SymSet.of_list (List.filter Sym.named (L.all_names local)) in
@@ -313,6 +315,8 @@ module Make (G : sig val global : Global.t end) = struct
             ) to_substitute substs 
         ) veclasses []
     in
+
+    let () = Debug_ocaml.end_csv_timing "explanation" in
 
     ({substitutions; veclasses; relevant}, local)
 
