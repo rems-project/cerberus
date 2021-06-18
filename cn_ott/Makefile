@@ -1,5 +1,35 @@
-all:
+.SUFFIXES: .pdf .tex .bib $(SUFFIXES)
+
+FLAGS := -quiet
+
+BUILD := build
+
+PDFS := mucore.pdf soundness.pdf
+
+all: mucore.pdf mucore.ml cn_included.tex cn_override.tex
+
+.PHONY: all
+
+.SECONDEXPANSION:
+$(PDFS):%.pdf: $$*.tex | $(BUILD)
+	latexmk -pdf -dvi- -ps- $< -shell-escape -output-directory=$(BUILD) $(FLAGS)
+	mv $(BUILD)/$@ $@
+
+soundness.tex: cn_included.tex cn_override.tex
+	touch $@
+
+cn_included.tex: mucore.ott
+	ott -tex_wrap false -signal_parse_errors true -show_defns false \
+	    -tex_name_prefix cn -o $@ mucore.ott
+
+cn_override.tex: override.tex empty.ott
+	ott -tex_wrap false -signal_parse_errors true -show_defns false \
+	    -tex_name_prefix cn -tex_filter override.tex $@ empty.ott
+
+mucore.ml: mucore.ott
 	ott -o mucore.ml mucore.ott
+
+mucore.tex: mucore.ott
 	ott -tex_show_categories true \
 	    -tex_suppress_category X \
 	    -tex_suppress_ntr annots \
@@ -32,7 +62,11 @@ all:
 	    -tex_suppress_ntr judgement \
 	    -o mucore.tex \
 	    mucore.ott
-	pdflatex mucore.tex
+
+$(BUILD): %:
+	mkdir -p $@
+
+.PHONY: clean
 
 clean:
 	rm -rf *~

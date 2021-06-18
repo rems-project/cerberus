@@ -1,0 +1,105 @@
+\documentclass[11pt]{article}%
+
+\usepackage{amsmath,amssymb}%
+% supertabular package required if using the default grammar tabular
+\usepackage{supertabular}
+\usepackage[margin=1in]{geometry}
+
+
+% the un-wrapped (-tex_wrap false) generated LaTeX file for CN
+\include{cn_included}
+\geometry{a4paper,portrait}
+% the package that allows customized layout described in this document
+\usepackage{ottlayout}
+% the automatically generated file (with our Makefile) to link the generated
+% LaTeX with the ottlayout package
+\include{cn_override}
+
+
+\usepackage{pf2}
+\beforePfSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\afterPfSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\interStepSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\pflongindent%
+
+
+\newcommand{\ctxC}{\mathcal{C}}%
+\newcommand{\ctxL}{\mathcal{L}}%
+\newcommand{\ctxN}{\Phi}%
+\newcommand{\ctxR}{\mathcal{R}}%
+\newcommand{\stepsto}{\longrightarrow}%
+\newcommand{\reducesto}{\mathrel{{\longrightarrow}^\ast}}%
+\newcommand{\checks}{\Leftarrow}%
+%\newcommand{\implies}{\Rightarrow}%
+\newcommand{\synths}{\Rightarrow}%
+\newcommand{\conf}[1]{\langle #1 \rangle}%
+\newcommand{\sych}{\Leftrightarrow}%
+\newcommand{\hconf}[2]{\langle #1 ; #2 \rangle}%
+
+\title{Explicit CN Soundness Proof}
+\author{Dhruv Makwana}
+
+\begin{document}
+\ottstyledefaults{premiselayout=justify}%
+
+\maketitle
+
+\section{Typing Judgements}
+
+\cngrammartabular{
+\cnobjectXXvalueXXjtype\cninterrule%
+\cnpvalXXjtype\cninterrule%
+\cnresXXjtype\cninterrule%
+\cnspineXXjtype\cninterrule%
+\cnpexprXXjtype\cninterrule%
+\cntpvalXXjtype\cninterrule%
+\cntpexprXXjtype\cninterrule%
+\cnactionXXjtype\cninterrule%
+\cnmemopXXjtype\cninterrule%
+\cnseqXXexprXXjtype\cninterrule%
+\cnisXXexprXXjtype\cninterrule%
+\cntvalXXjtype\cninterrule%
+\cntexprXXjtype\cninterrule%
+}
+
+\section{Weakening}
+
+If $\ctxC ; \ctxL ; \ctxN ; \ctxR \sqsubseteq \ctxC' ; \ctxL' ; \ctxN' ;
+\ctxR'$ and $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash J$ then $\ctxC' ; \ctxL' ;
+\ctxN' ; \ctxR' \vdash J$.
+
+\section{Substitution}
+
+Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
+\ctxL'' ; \ctxN'' ; \ctxR'' )$.
+
+
+If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
+\ctxN' ; \ctxR')$ and $\ctxC , \ctxC' ; \ctxL, \ctxL' ; \ctxN, \ctxN' ; \ctxR,
+\ctxR' \vdash J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$. 
+
+\section{Opsem Judgements}
+
+\cngrammartabular{
+\cnpureXXopsemXXjtype\cninterrule%
+\cnopsemXXjtype\cninterrule%
+}
+
+\section{Progress}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+\stepsto \hconf{h'}{e'}$.
+
+\section{Framing}
+
+If $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$ and $h_1, h_2$ disjoint then
+$\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+
+\section{Type Preservation}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
+\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+
+\end{document}
