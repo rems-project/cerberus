@@ -3029,7 +3029,7 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 %% defn Ty_Subs
 \newcommand{\cndruleTyXXSubsXXEmpty}[1]{\cndrule[#1]{%
 }{
-\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \cdot  \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{)}}{%
+\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \cdot  \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{)}}{%
 {\cndrulename{Ty\_Subs\_Empty}}{}%
 }}
 
@@ -3062,9 +3062,9 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 
 \newcommand{\cndruleTyXXSubsXXConsXXRes}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}}%
-\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}}%
+\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}}%
 }{
-\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \cnmv{x}  {:}  \cnnt{res}  \cnsym{)}}{%
+\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnsym{(}  \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \cnmv{x}  {:}  \cnnt{res}  \cnsym{)}}{%
 {\cndrulename{Ty\_Subs\_Cons\_Res}}{}%
 }}
 

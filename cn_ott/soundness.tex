@@ -44,6 +44,170 @@
 
 \maketitle
 
+\section{Weakening}
+
+If $\ctxC ; \ctxL ; \ctxN ; \ctxR \sqsubseteq \ctxC' ; \ctxL' ; \ctxN' ;
+\ctxR'$ and $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash J$ then $\ctxC' ; \ctxL' ;
+\ctxN' ; \ctxR' \vdash J$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing judgements.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \sqsubseteq \ctxC' ; \ctxL' ; \ctxN' ; \ctxR'$
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash J$\\
+        \end{pfenum}
+    }
+
+    \prove{$\ctxC' ; \ctxL' ; \ctxN' ; \ctxR' \vdash J$.}
+\end{proof}
+
+\section{Substitution}
+
+\subsection{Weakening for Substitution}
+
+Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
+\ctxL'' ; \ctxN'' ; \ctxR'' )$.
+
+\begin{proof}
+    \pfsketch{ Induction over the substitution.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \sqsubseteq \ctxC' ; \ctxL' ; \ctxN' ; \ctxR'$
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC'' ; \ctxL'' ; \ctxN'' ; \ctxR'' )$\\
+        \end{pfenum}
+    }
+
+    \prove{$\ctxC' ; \ctxL' ; \ctxN' ; \ctxR' \vdash ( \sigma ) : ( \ctxC'' ; \ctxL'' ; \ctxN'' ; \ctxR'' )$.}
+\end{proof}
+
+\subsection{Substitution Lemma}
+
+If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
+\ctxN' ; \ctxR')$ and $\ctxC' ; \ctxL' ; \ctxN' ; \ctxR' \vdash J$ then $\ctxC
+; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$. 
+
+\begin{proof}
+    \pfsketch{ Induction over the typing judgements.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ; \ctxN' ; \ctxR')$
+            \item $\ctxC' ; \ctxL' ; \ctxN' ; \ctxR' \vdash J$\\
+        \end{pfenum}
+    }
+
+    \prove{$\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.}
+\end{proof}
+
+\subsection{Identity Extension}
+
+If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
+\ctxN' ; \ctxR')$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash ( \sigma
+, \mathrm{id} ) : ( \ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1
+, \ctxR')$.
+
+\begin{proof}
+    \pfsketch{ Induction over the substitution.\\}
+
+    \assume{%
+        $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ; \ctxN' ; \ctxR')$\\
+    }
+
+    \prove{%
+        $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash ( \sigma ,
+        \mathrm{id} ) : ( \ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ;
+        \ctxR_1 , \ctxR')$.
+    }
+\end{proof}
+
+
+\subsection{Usable Substitution Lemma}
+
+If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
+\ctxN' ; \ctxR')$ and $\ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ;
+\ctxR_1 , \ctxR' \vdash J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash
+\sigma ( J )$.
+
+\begin{proof}
+    \pfsketch{ Apply identity extension then substitution lemma.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ; \ctxN' ; \ctxR')$
+            \item $\ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+    }
+\end{proof}
+
+\section{Progress}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+\stepsto \hconf{h'}{e'}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing rules.\\}
+
+    \assume{%
+        $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$
+    }
+
+    \prove{%
+        either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+        \stepsto \hconf{h'}{e'}$.
+    }
+\end{proof}
+
+\section{Framing}
+
+If $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$ and $h_1, h_2$ disjoint then
+$\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the operational rules.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$
+            \item $h_1, h_2$ disjoint.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+    }
+\end{proof}
+
+\section{Type Preservation}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
+\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing rules.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$
+            \item arbitrary $h : \ctxR, e' , h' : \ctxR'$
+            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+    }
+\end{proof}
+
+\pagebreak%
 \section{Typing Judgements}
 
 \cngrammartabular{
@@ -62,22 +226,7 @@
 \cntexprXXjtype\cninterrule%
 }
 
-\section{Weakening}
-
-If $\ctxC ; \ctxL ; \ctxN ; \ctxR \sqsubseteq \ctxC' ; \ctxL' ; \ctxN' ;
-\ctxR'$ and $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash J$ then $\ctxC' ; \ctxL' ;
-\ctxN' ; \ctxR' \vdash J$.
-
-\section{Substitution}
-
-Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
-\ctxL'' ; \ctxN'' ; \ctxR'' )$.
-
-
-If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
-\ctxN' ; \ctxR')$ and $\ctxC , \ctxC' ; \ctxL, \ctxL' ; \ctxN, \ctxN' ; \ctxR,
-\ctxR' \vdash J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$. 
-
+\pagebreak%
 \section{Opsem Judgements}
 
 \cngrammartabular{
@@ -85,21 +234,5 @@ If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
 \cnopsemXXjtype\cninterrule%
 }
 
-\section{Progress}
-
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
-either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
-\stepsto \hconf{h'}{e'}$.
-
-\section{Framing}
-
-If $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$ and $h_1, h_2$ disjoint then
-$\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
-
-\section{Type Preservation}
-
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
-$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
-\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
 
 \end{document}
