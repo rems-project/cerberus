@@ -2240,7 +2240,7 @@ defns
 
 
     ---------------------------------------------------------- :: Empty
-    C ; L ; N ; R |- ( cdot ) : ( cdot ; cdot ; cdot ; cdot )
+    C ; L ; N ; cdot |- ( cdot ) : ( cdot ; cdot ; cdot ; cdot )
 
 
     C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
@@ -2262,9 +2262,9 @@ defns
 
     C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
     % ASK is checking here a problem?
-    C ; L ; N ; R |- res_term <= res
-    -------------------------------------------------------------------------- :: Cons_Res
-    C ; L ; N ; R |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
+    C ; L ; N ; R1 |- res_term <= res
+    -------------------------------------------------------------------------------- :: Cons_Res
+    C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
 
 
 % convention: thing on right has more stuff
@@ -2287,17 +2287,19 @@ defns
 %      ————————————————————–————————————————————–——————–
 %       then   C  ; L  ; ϕ  ; R  ⊢ σ ( J )
 %
+% think of sub as arrow on contexts, so σ : C'' L'' ϕ'' R'' → C L ϕ R
+%
 % 1 2 3 are all the inductions needed
 %
 % 4 Neel's easier to prove (induction on new context), implies VET
 %         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%      ————————————————————–————————————————————–——————–————–——————–
-%       then   C  ; L  ; ϕ  ; R  ⊢ ( σ , id ) : ( C , C'' ; L , L'' ; ϕ , ϕ'' ; R'' )
+%      ————————————————————–————————————————————–——————–————–——————–————————————————————–——————
+%       then   C  ; L  ; ϕ  ; R1 , R  ⊢ ( σ , id ) : ( C , C'' ; L , L'' ; ϕ , ϕ'' ; R1 , R'' )
 %
 %
-% 5 very easy thing (VET) for call proof and let:
+% 5 very easy thing (VET) for let proof (and maybe call?):
 %         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%        and   C , C''  ; L , L''  ; ϕ , ϕ ''  ; R''  ⊢ J
-%      ————————————————————–————————————————————–——————–
-%       then   C  ; L  ; ϕ  ; R  ⊢ ( σ , id ) ( J )
-%     same as  C  ; L  ; ϕ  ; R  ⊢ ( σ ) ( J )
+%        and   C , C''  ; L , L''  ; ϕ , ϕ ''  ; R1 ,  R''  ⊢ J
+%      ————————————————————–————————————————————–——————–—————————————
+%       then   C  ; L  ; ϕ  ; R1 , R ⊢ ( σ , id ) ( J )
+%     same as  C  ; L  ; ϕ  ; R1 , R ⊢ ( σ ) ( J )

@@ -630,16 +630,25 @@
 \ottrulehead{\ottnt{action\_jtype}}{::=}{}\ottprodnewline
 \ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  mem\_action  \Rightarrow  \ottnt{ret}}{}{}{}{}}
 
+\newcommand{\ottmemopXXjtype}{
+\ottrulehead{\ottnt{memop\_jtype}}{::=}{}\ottprodnewline
+\ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  mem\_op  \Rightarrow  \ottnt{ret}}{}{}{}{}}
+
 \newcommand{\otttvalXXjtype}{
 \ottrulehead{\ottnt{tval\_jtype}}{::=}{}\ottprodnewline
 \ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  tval  \Leftarrow  \ottnt{ret}}{}{}{}{}}
 
+\newcommand{\ottseqXXexprXXjtype}{
+\ottrulehead{\ottnt{seq\_expr\_jtype}}{::=}{}\ottprodnewline
+\ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  seq\_expr  \Rightarrow  \ottnt{ret}}{}{}{}{}}
+
+\newcommand{\ottisXXexprXXjtype}{
+\ottrulehead{\ottnt{is\_expr\_jtype}}{::=}{}\ottprodnewline
+\ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  is\_expr  \Rightarrow  \ottnt{ret}}{}{}{}{}}
+
 \newcommand{\otttexprXXjtype}{
 \ottrulehead{\ottnt{texpr\_jtype}}{::=}{}\ottprodnewline
-\ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  seq\_expr  \Rightarrow  \ottnt{ret}}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  mem\_op  \Rightarrow  \ottnt{ret}}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  is\_expr  \Rightarrow  \ottnt{ret}}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  seq\_texpr  \Leftarrow  \ottnt{ret}}{}{}{}{}\ottprodnewline
+\ottfirstprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  seq\_texpr  \Leftarrow  \ottnt{ret}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  is\_texpr  \Leftarrow  \ottnt{ret}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  texpr  \Leftarrow  \ottnt{ret}}{}{}{}{}}
 
@@ -757,7 +766,10 @@
 \otttpvalXXjtype\ottinterrule
 \otttpexprXXjtype\ottinterrule
 \ottactionXXjtype\ottinterrule
+\ottmemopXXjtype\ottinterrule
 \otttvalXXjtype\ottinterrule
+\ottseqXXexprXXjtype\ottinterrule
+\ottisXXexprXXjtype\ottinterrule
 \otttexprXXjtype\ottinterrule
 \ottsubsXXjtype\ottinterrule
 \ottpureXXopsemXXjtype\ottinterrule
@@ -1569,6 +1581,72 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \newcommand{\ottdefnsactionXXjtype}{
 \ottdefnTyXXAction{}}
 
+% defns memop_jtype
+%% defn Memop
+\newcommand{\ottdruleTyXXMemopXXRelXXBinop}[1]{\ottdrule[#1]{%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \ottkw{loc}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{2}}}  \Rightarrow  \ottkw{loc}}%
+}{
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  pval_{{\mathrm{1}}} \, \mathbin{ binop_{rel} } \, pval_{{\mathrm{2}}}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottsym{(}    pval_{{\mathrm{1}}}    \mathbin{ binop_{rel} }    pval_{{\mathrm{2}}}    \ottsym{)}  \wedge  \ottkw{I}}{%
+{\ottdrulename{Ty\_Memop\_Rel\_Binop}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXMemopXXIntFromPtr}[1]{\ottdrule[#1]{%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \ottkw{loc}}%
+}{
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{intFromPtr} \, \ottsym{(}  \tau_{{\mathrm{1}}}  \ottsym{,}  \tau_{{\mathrm{2}}}  \ottsym{,}  pval  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{integer}  . \:  \ottmv{y}  =  \ottkw{cast\_ptr\_to\_int} \,  pval   \wedge  \ottkw{I}}{%
+{\ottdrulename{Ty\_Memop\_IntFromPtr}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXMemopXXPtrFromInt}[1]{\ottdrule[#1]{%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \ottkw{integer}}%
+}{
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{ptrFromInt} \, \ottsym{(}  \tau_{{\mathrm{1}}}  \ottsym{,}  \tau_{{\mathrm{2}}}  \ottsym{,}  pval  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{loc}  . \:  \ottmv{y}  =  \ottkw{cast\_int\_to\_ptr} \,  pval   \wedge  \ottkw{I}}{%
+{\ottdrulename{Ty\_Memop\_PtrFromInt}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXMemopXXPtrValidForDeref}[1]{\ottdrule[#1]{%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{0}}}  \Rightarrow  \ottkw{loc}}%
+\ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow   pval_{{\mathrm{1}}}   =   pval_{{\mathrm{0}}}   \ottsym{)}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \Leftarrow    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ }%
+}{
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{ptrValidForDeref} \, \ottsym{(}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottkw{aligned} \, \ottsym{(}  \tau  \ottsym{,}   pval_{{\mathrm{1}}}   \ottsym{)}  \wedge  \langle    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \rangle  \otimes  \ottkw{I}}{%
+{\ottdrulename{Ty\_Memop\_PtrValidForDeref}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXMemopXXPtrWellAligned}[1]{\ottdrule[#1]{%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \ottkw{loc}}%
+}{
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{ptrWellAligned} \, \ottsym{(}  \tau  \ottsym{,}  pval  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottkw{aligned} \, \ottsym{(}  \tau  \ottsym{,}   pval   \ottsym{)}  \wedge  \ottkw{I}}{%
+{\ottdrulename{Ty\_Memop\_PtrWellAligned}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXMemopXXPtrArrayShift}[1]{\ottdrule[#1]{%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \ottkw{loc}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{2}}}  \Rightarrow  \ottkw{integer}}%
+}{
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{ptrArrayShift} \, \ottsym{(}  pval_{{\mathrm{1}}}  \ottsym{,}  \tau  \ottsym{,}  pval_{{\mathrm{2}}}  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{loc}  . \:  \ottmv{y}  =   pval_{{\mathrm{1}}}   \mathbin{ {+}_{ \mathrm{ptr} } }  \ottsym{(}   pval_{{\mathrm{2}}}   \times   \mathrm{size\_of}(  \tau  )   \ottsym{)}  \wedge  \ottkw{I}}{%
+{\ottdrulename{Ty\_Memop\_PtrArrayShift}}{}%
+}}
+
+\newcommand{\ottdefnTyXXMemop}[1]{\begin{ottdefnblock}[#1]{$\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  mem\_op  \Rightarrow  \ottnt{ret}$}{}
+\ottusedrule{\ottdruleTyXXMemopXXRelXXBinop{}}
+\ottusedrule{\ottdruleTyXXMemopXXIntFromPtr{}}
+\ottusedrule{\ottdruleTyXXMemopXXPtrFromInt{}}
+\ottusedrule{\ottdruleTyXXMemopXXPtrValidForDeref{}}
+\ottusedrule{\ottdruleTyXXMemopXXPtrWellAligned{}}
+\ottusedrule{\ottdruleTyXXMemopXXPtrArrayShift{}}
+\end{ottdefnblock}}
+
+
+\newcommand{\ottdefnsmemopXXjtype}{
+\ottdefnTyXXMemop{}}
+
 % defns tval_jtype
 %% defn TVal
 \newcommand{\ottdruleTyXXTValXXI}[1]{\ottdrule[#1]{%
@@ -1634,7 +1712,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \newcommand{\ottdefnstvalXXjtype}{
 \ottdefnTyXXTVal{}}
 
-% defns texpr_jtype
+% defns seq_expr_jtype
 %% defn Seq_E
 \newcommand{\ottdruleTyXXSeqXXEXXCCall}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \ottkw{loc}}%
@@ -1659,67 +1737,11 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \ottusedrule{\ottdruleTyXXSeqXXEXXProc{}}
 \end{ottdefnblock}}
 
-%% defn Memop
-\newcommand{\ottdruleTyXXMemopXXRelXXBinop}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \ottkw{loc}}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{2}}}  \Rightarrow  \ottkw{loc}}%
-}{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  pval_{{\mathrm{1}}} \, \mathbin{ binop_{rel} } \, pval_{{\mathrm{2}}}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottsym{(}    pval_{{\mathrm{1}}}    \mathbin{ binop_{rel} }    pval_{{\mathrm{2}}}    \ottsym{)}  \wedge  \ottkw{I}}{%
-{\ottdrulename{Ty\_Memop\_Rel\_Binop}}{}%
-}}
 
+\newcommand{\ottdefnsseqXXexprXXjtype}{
+\ottdefnTyXXSeqXXE{}}
 
-\newcommand{\ottdruleTyXXMemopXXIntFromPtr}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \ottkw{loc}}%
-}{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{intFromPtr} \, \ottsym{(}  \tau_{{\mathrm{1}}}  \ottsym{,}  \tau_{{\mathrm{2}}}  \ottsym{,}  pval  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{integer}  . \:  \ottmv{y}  =  \ottkw{cast\_ptr\_to\_int} \,  pval   \wedge  \ottkw{I}}{%
-{\ottdrulename{Ty\_Memop\_IntFromPtr}}{}%
-}}
-
-
-\newcommand{\ottdruleTyXXMemopXXPtrFromInt}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \ottkw{integer}}%
-}{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{ptrFromInt} \, \ottsym{(}  \tau_{{\mathrm{1}}}  \ottsym{,}  \tau_{{\mathrm{2}}}  \ottsym{,}  pval  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{loc}  . \:  \ottmv{y}  =  \ottkw{cast\_int\_to\_ptr} \,  pval   \wedge  \ottkw{I}}{%
-{\ottdrulename{Ty\_Memop\_PtrFromInt}}{}%
-}}
-
-
-\newcommand{\ottdruleTyXXMemopXXPtrValidForDeref}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{0}}}  \Rightarrow  \ottkw{loc}}%
-\ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow   pval_{{\mathrm{1}}}   =   pval_{{\mathrm{0}}}   \ottsym{)}}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \Leftarrow    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ }%
-}{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{ptrValidForDeref} \, \ottsym{(}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottkw{aligned} \, \ottsym{(}  \tau  \ottsym{,}   pval_{{\mathrm{1}}}   \ottsym{)}  \wedge  \langle    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \rangle  \otimes  \ottkw{I}}{%
-{\ottdrulename{Ty\_Memop\_PtrValidForDeref}}{}%
-}}
-
-
-\newcommand{\ottdruleTyXXMemopXXPtrWellAligned}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \ottkw{loc}}%
-}{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{ptrWellAligned} \, \ottsym{(}  \tau  \ottsym{,}  pval  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottkw{aligned} \, \ottsym{(}  \tau  \ottsym{,}   pval   \ottsym{)}  \wedge  \ottkw{I}}{%
-{\ottdrulename{Ty\_Memop\_PtrWellAligned}}{}%
-}}
-
-
-\newcommand{\ottdruleTyXXMemopXXPtrArrayShift}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \ottkw{loc}}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{{\mathrm{2}}}  \Rightarrow  \ottkw{integer}}%
-}{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{ptrArrayShift} \, \ottsym{(}  pval_{{\mathrm{1}}}  \ottsym{,}  \tau  \ottsym{,}  pval_{{\mathrm{2}}}  \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{loc}  . \:  \ottmv{y}  =   pval_{{\mathrm{1}}}   \mathbin{ {+}_{ \mathrm{ptr} } }  \ottsym{(}   pval_{{\mathrm{2}}}   \times   \mathrm{size\_of}(  \tau  )   \ottsym{)}  \wedge  \ottkw{I}}{%
-{\ottdrulename{Ty\_Memop\_PtrArrayShift}}{}%
-}}
-
-\newcommand{\ottdefnTyXXMemop}[1]{\begin{ottdefnblock}[#1]{$\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  mem\_op  \Rightarrow  \ottnt{ret}$}{}
-\ottusedrule{\ottdruleTyXXMemopXXRelXXBinop{}}
-\ottusedrule{\ottdruleTyXXMemopXXIntFromPtr{}}
-\ottusedrule{\ottdruleTyXXMemopXXPtrFromInt{}}
-\ottusedrule{\ottdruleTyXXMemopXXPtrValidForDeref{}}
-\ottusedrule{\ottdruleTyXXMemopXXPtrWellAligned{}}
-\ottusedrule{\ottdruleTyXXMemopXXPtrArrayShift{}}
-\end{ottdefnblock}}
-
+% defns is_expr_jtype
 %% defn Is_E
 \newcommand{\ottdruleTyXXIsXXEXXMemop}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  mem\_op  \Rightarrow  \ottnt{ret}}%
@@ -1750,6 +1772,11 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \ottusedrule{\ottdruleTyXXIsXXEXXNegXXAction{}}
 \end{ottdefnblock}}
 
+
+\newcommand{\ottdefnsisXXexprXXjtype}{
+\ottdefnTyXXIsXXE{}}
+
+% defns texpr_jtype
 %% defn Seq_TE
 \newcommand{\ottdruleTyXXSeqXXTEXXTVal}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  tval  \Leftarrow  \ottnt{ret}}%
@@ -1884,7 +1911,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 
 
 \newcommand{\ottdefnstexprXXjtype}{
-\ottdefnTyXXSeqXXE{}\ottdefnTyXXMemop{}\ottdefnTyXXIsXXE{}\ottdefnTyXXSeqXXTE{}\ottdefnTyXXIsXXTE{}\ottdefnTyXXTE{}}
+\ottdefnTyXXSeqXXTE{}\ottdefnTyXXIsXXTE{}\ottdefnTyXXTE{}}
 
 % defns subs_jtype
 %% defn Decons_Value_
@@ -2711,7 +2738,7 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 %% defn Ty_Subs
 \newcommand{\ottdruleTyXXSubsXXEmpty}[1]{\ottdrule[#1]{%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottsym{(}  \cdot  \ottsym{)}  {:}  \ottsym{(}  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{)}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottsym{(}  \cdot  \ottsym{)}  {:}  \ottsym{(}  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{)}}{%
 {\ottdrulename{Ty\_Subs\_Empty}}{}%
 }}
 
@@ -2744,9 +2771,9 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 
 \newcommand{\ottdruleTyXXSubsXXConsXXRes}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottsym{(}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{)}}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res}}%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottsym{(}  \ottnt{res\_term}  \ottsym{/}  \ottmv{x}  \ottsym{,}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \ottmv{x}  {:}  \ottnt{res}  \ottsym{)}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottsym{(}  \ottnt{res\_term}  \ottsym{/}  \ottmv{x}  \ottsym{,}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \ottmv{x}  {:}  \ottnt{res}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Subs\_Cons\_Res}}{}%
 }}
 
@@ -2774,7 +2801,10 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 \ottdefnstpvalXXjtype
 \ottdefnstpexprXXjtype
 \ottdefnsactionXXjtype
+\ottdefnsmemopXXjtype
 \ottdefnstvalXXjtype
+\ottdefnsseqXXexprXXjtype
+\ottdefnsisXXexprXXjtype
 \ottdefnstexprXXjtype
 \ottdefnssubsXXjtype
 \ottdefnspureXXopsemXXjtype

@@ -6,7 +6,7 @@ BUILD := build
 
 PDFS := mucore.pdf soundness.pdf
 
-all: mucore.pdf mucore.ml cn_included.tex cn_override.tex
+all: $(PDFS) mucore.ml
 
 .PHONY: all
 
