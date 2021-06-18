@@ -58,12 +58,13 @@ grammar
     | rem_t :: :: Rem_t {{ tex \mathbin{ [[rem_t]] }  }} {{ com modulus        }}
     | rem_f :: :: Rem_f {{ tex \mathbin{ [[rem_f]] }  }} {{ com remainder      }}
     | ^     :: :: Exp                                    {{ com exponentiation }}
-    % relational operators ( integer -> integer -> bool)
+    % relational operators ( ptr/int -> ptr/int -> bool)
     | =     :: :: Eq    {{ tex \mathbin{ \texttt{=}  } }} {{ com equality, defined both for integer and C types }}
-    | >     :: :: Gt    {{ tex \mathbin{ \texttt{>}  } }} {{ com greater than                                   }}
-    | <     :: :: Lt    {{ tex \mathbin{ \texttt{<}  } }} {{ com less than                                      }}
-    | >=    :: :: Ge    {{ tex \mathbin{ \texttt{>=} } }} {{ com greater than or equal to                       }}
-    | <=    :: :: Le    {{ tex \mathbin{ \texttt{<=} } }} {{ com less than or equal to                          }}
+    | <>    :: :: Ne    {{ tex \mathbin{ \texttt{!=} } }} {{ com inequality, similiarly defined                 }}
+    | >     :: :: Gt    {{ tex \mathbin{ \texttt{>}  } }} {{ com greater than, similarly defined                }}
+    | <     :: :: Lt    {{ tex \mathbin{ \texttt{<}  } }} {{ com less than, similarly defined                   }}
+    | >=    :: :: Ge    {{ tex \mathbin{ \texttt{>=} } }} {{ com greater than or equal to, similarly defined    }}
+    | <=    :: :: Le    {{ tex \mathbin{ \texttt{<=} } }} {{ com less than or equal to, similarly defined       }}
     % logical connectives ( bool -> bool -> bool)
     | /\    :: :: And   {{ tex \mathbin{ \texttt{/\char`\\} } }} {{ com conjucntion }}
     | \/    :: :: Or    {{ tex \mathbin{ \texttt{\char`\\/} } }} {{ com disjunction }}
@@ -81,6 +82,7 @@ grammar
 
   rel_binop {{ tex \mathbin{ binop_{rel} } }} :: 'Rel_Op' ::= {{ phantom }} {{ com relational binary operators }}
     | =     :: :: Eq
+    | <>    :: :: Ne
     | >     :: :: Gt
     | <     :: :: Lt
     | >=    :: :: Ge
@@ -108,7 +110,7 @@ grammar
     | ident :: :: ident
 
 
-grammar 
+grammar
 
   ty_mem_int {{ tex mem\_int }} :: 'Ty_mem_int' ::= {{ ocaml Impl_mem.integer_value }} {{ phantom }} {{ com memory integer value }}
     | mem_one  :: M :: One  {{ ocaml Memory.integer_ival Z.one  }} {{ tex 1 }}
@@ -299,7 +301,7 @@ grammar
 
   mu_pattern_aux {{ tex pattern }} :: 'M_' ::=
     | ty_loc annots mu_pattern :: X :: Pattern     (+ binders = binders(mu_pattern) +)
-    |               mu_pattern :: O :: Pat_no_aux  (+ binders = binders(mu_pattern) +) {{ com Ott-hack for simpler typing rules }} 
+    |               mu_pattern :: O :: Pat_no_aux  (+ binders = binders(mu_pattern) +) {{ com Ott-hack for simpler typing rules }}
 
 
 grammar
@@ -440,14 +442,12 @@ grammar
     | list_op    :: :: List_op
     | array_op   :: :: Array_op
     | ct_pred    :: :: CT_pred
-    | option_op  :: :: Option_op
     | param_op   :: :: Param_op
 
-    | ( term )                     :: S :: Paren   {{ ocaml [[term]] }} {{ com parentheses }}
-    | [ E ] term                   :: M :: envSub  {{ ocaml INDEX_TERM_SUB_ENV [[E]] [[term]] }} {{ tex [[E]] ( [[term]] ) }}
-    | [ term1 / Symbol_sym ] term2 :: M :: Subs    {{ ocaml INDEX_TERM_SUB [[term1]] [[Symbol_sym]] [[term2]] }}
-                                                   {{ com substitute $[[term1]]$ for $[[Symbol_sym]]$ in $[[term2]]$ }}
-    | inj mu_pval_aux              :: M :: Of_pval {{ tex [[mu_pval_aux]] }} {{ ocaml TERM_OF_PVAL_AUX [[mu_pval_aux]] }}
+    | ( term )         :: S :: Paren   {{ ocaml [[term]] }} {{ com parentheses }}
+    | [ subs ] term    :: M :: Subs    {{ ocaml INDEX_TERM_SUBS [[subs]] [[term]] }} {{ tex [[subs]] ( [[term]] ) }}
+                                       {{ com simul-sub $[[subs]]$ in $[[term]]$ }}
+    | inj mu_pval_aux  :: M :: Of_pval {{ tex [[mu_pval_aux]] }} {{ ocaml TERM_OF_PVAL_AUX [[mu_pval_aux]] }}
 
 
   term_aux {{ tex term }} :: '' ::= {{ auxparam 'bt }} {{ com terms with auxiliary info }}
@@ -481,15 +481,15 @@ grammar
   mu_tpexpr {{ tex tpexpr }} :: 'M_TPE' ::= {{ auxparam 'TY }} {{ com top-level pure expressions }}
     | mu_tpval_aux                                                ::   :: tpval  {{ com top-level pure values }}
     | case mu_pval_aux of </ | mu_tpexpr_case_branchi // i /> end ::   :: case   {{ com pattern matching      }}
-    | let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux       ::   :: let    (+ bind binders( mu_sym_or_pattern ) in mu_tpexpr_aux  +) 
+    | let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux       ::   :: let    (+ bind binders( mu_sym_or_pattern ) in mu_tpexpr_aux  +)
                                                                                  {{ com pure let              }}
     | let mu_sym_or_pattern : ( y1 : base_type1 . term1 ) = mu_tpexpr_aux1 in mu_tpexpr_aux2
                                                                   ::   :: letT   (+ bind binders( mu_sym_or_pattern ) in mu_tpexpr_aux2 +)
                                                                                  (+ bind y1 in term1 +)
                                                                                  {{ com pure let              }}
     | if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2      ::   :: if     {{ com pure if               }}
-    | [ E ] mu_tpexpr                                             :: M :: envSub {{ ocaml MU_TPEXPR_ENV_SUB [[E]] [[mu_tpexpr]] }} {{ tex [[E]] ( [[mu_tpexpr]] ) }}
-                                                                                 {{ com simul-sub environment $[[E]]$ in $[[mu_tpexpr]]$ }}
+    | [ subs ] mu_tpexpr                                          :: M :: subs   {{ ocaml MU_TPEXPR_SUBS [[subs]] [[mu_tpexpr]] }} {{ tex [[subs]] ( [[mu_tpexpr]] ) }}
+                                                                                 {{ com simul-sub $[[subs]]$ in $[[mu_tpexpr]]$ }}
 
 
   mu_tpexpr_case_branch {{ tex tpexpr\_case\_branch }} :: 'M_TPE_Case_' ::= {{ auxparam 'TY }} {{ com pure top-level case expression branch }}
@@ -535,13 +535,23 @@ metavar Linux_linux_memory_order {{ tex linux\_mem\_order }} ::= {{ ocaml Linux.
 
 grammar
 
+  res_term :: 'ResT_' ::= {{ com resource terms }}
+    | emp                             :: :: Empty    {{ com empty heap }}
+    | points_to                       :: :: PointsTo {{ com single-cell heap }}
+    | Symbol_sym                      :: :: Var      {{ com variable }}
+    | <( res_term1 , res_term2 )>     :: :: SepPair  {{ com seperating-conjunction pair }}
+    | pack ( mu_pval_aux , res_term ) :: :: Pack     {{ com packing for existentials }}
+
+
+grammar
+
   mu_action {{ tex mem\_action }} :: 'M_' ::= {{ auxparam 'TY }} {{ com memory actions }}
     | create ( mu_pval_aux , ty_act ) Symbol_prefix                                                                   :: :: Create
     | create_readonly ( mu_pval_aux1 , ty_act , mu_pval_aux2 ) Symbol_prefix                                          :: :: CreateReadOnly
     | alloc ( mu_pval_aux1 , mu_pval_aux2 ) Symbol_prefix                                                             :: :: Alloc
-    | kill ( m_kill_kind , mu_pval_aux )                                                                              :: :: Kill
-    | store ( ty_bool , ty_act , mu_pval_aux1 , mu_pval_aux2 , Cmm_memory_order )                                     :: :: Store {{ com true means store is locking }}
-    | load ( ty_act , mu_pval_aux , Cmm_memory_order )                                                                :: :: Load
+    | kill ( m_kill_kind , mu_pval_aux , pt )                                                                         :: :: Kill
+    | store ( ty_bool , ty_act , mu_pval_aux1 , mu_pval_aux2 , Cmm_memory_order , pt )                                :: :: Store {{ com true means store is locking }}
+    | load ( ty_act , mu_pval_aux , Cmm_memory_order , pt )                                                           :: :: Load
     | rmw ( ty_act ,  mu_pval_aux1 , mu_pval_aux2 , mu_pval_aux3 , Cmm_memory_order1 , Cmm_memory_order2 )            :: :: RMW
     | fence ( Cmm_memory_order )                                                                                      :: :: Fence
     | cmp_exch_strong ( ty_act , mu_pval_aux1 , mu_pval_aux2 , mu_pval_aux3 , Cmm_memory_order1 , Cmm_memory_order2 ) :: :: CompareExchangeStrong
@@ -571,17 +581,12 @@ grammar
 grammar
 
   mu_memop {{ tex mem\_op }} :: 'M_' ::=  {{ auxparam 'TY }} {{ com operations involving the memory state}}
-    | mu_pval_aux1 == mu_pval_aux2                            :: :: PtrEq            {{ com pointer equality comparison }}
-    | mu_pval_aux1 <> mu_pval_aux2                            :: :: PtrNe            {{ com pointer inequality comparison }}
-    | mu_pval_aux1 < mu_pval_aux2                             :: :: PtrLt            {{ com pointer less-than comparison }}
-    | mu_pval_aux1 > mu_pval_aux2                             :: :: PtrGt            {{ com pointer greater-than comparison }}
-    | mu_pval_aux1 =< mu_pval_aux2                            :: :: PtrLe            {{ com pointer less-than comparison }}
-    | mu_pval_aux1 >= mu_pval_aux2                            :: :: PtrGe            {{ com pointer greater-than comparison }}
+    | mu_pval_aux1 rel_binop mu_pval_aux2                     :: :: PtrRelBinop      {{ com pointer relational binary operations }}
     | mu_pval_aux1 - ty_act - mu_pval_aux2                    :: :: Ptrdiff          {{ order [[ty_act]] [[mu_pval_aux1]] [[mu_pval_aux2]] }} {{ com pointer subtraction }}
                                                                                      {{ tex [[mu_pval_aux1]] -_{ [[ty_act]] } [[mu_pval_aux2]] }}
     | intFromPtr ( ty_act1 , ty_act2 , mu_pval_aux )          :: :: IntFromPtr       {{ com cast of pointer value to integer value }}
     | ptrFromInt ( ty_act1 , ty_act2 , mu_pval_aux )          :: :: PtrFromInt       {{ com cast of integer value to pointer value }}
-    | ptrValidForDeref ( ty_act , mu_pval_aux )               :: :: PtrValidForDeref {{ com dereferencing validity predicate }}
+    | ptrValidForDeref ( ty_act , mu_pval_aux , pt )          :: :: PtrValidForDeref {{ com dereferencing validity predicate }}
     | ptrWellAligned ( ty_act , mu_pval_aux )                 :: :: PtrWellAligned
     | ptrArrayShift ( mu_pval_aux1 ,  ty_act , mu_pval_aux2 ) :: :: PtrArrayShift
     | memcpy ( mu_pval_aux1 , mu_pval_aux2 , mu_pval_aux3 )   :: :: Memcpy
@@ -593,23 +598,12 @@ grammar
     | va_end ( mu_pval_aux )                                  :: :: Va_end
 
 
-grammar
-
-  res_term :: 'ResT_' ::= {{ com resource terms }}
-    | emp                             :: :: Empty    {{ com empty heap }}
-    | pt                              :: :: PointsTo {{ com single-cell heap }}
-    | Symbol_sym                      :: :: Var      {{ com variable }}
-    | <( res_term1 , res_term2 )>     :: :: SepPair  {{ com seperating-conjunction pair }}
-    | pack ( mu_pval_aux , res_term ) :: :: Pack     {{ com packing for existentials }}
-
 
 grammar
 
-  % ASK runtime terms, pt types annotated?
   spine_elem :: Spine_Elem_ ::= {{ auxparam 'TY }} {{ com spine element }}
-    | mu_pval_aux :: :: pure_val    {{ com pure value      }}
-    | term_aux    :: :: logical_val {{ com logical value   }}
-    | res_term    :: :: res_val     {{ com resource value  }}
+    | mu_pval_aux :: :: val     {{ com pure or logical value      }}
+    | res_term    :: :: res_val {{ com resource value             }}
 
 
   spine :: Spine_ ::= {{ ocaml 'TY spine_elem list }} {{ phantom }} {{ com spine }}
@@ -645,7 +639,7 @@ grammar
   ret_pattern :: RetP_ ::= {{ com return pattern }}
     | comp mu_sym_or_pattern :: :: comp (+ binders = binders( mu_sym_or_pattern ) +) {{ com computational variable }}
     | log  Symbol_sym        :: :: log  (+ binders = Symbol_sym                   +) {{ com logical variable       }}
-    | res  res_pattern       :: :: res  (+ binders = binders( res_pattern )       +) {{ com resource variable      }}
+    | reso res_pattern       :: :: res  (+ binders = binders( res_pattern )       +) {{ com resource variable      }}
 
 
 grammar
@@ -657,10 +651,11 @@ grammar
 
 grammar
 
-  points_to :: '' ::= {{ ocaml type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } }}
+  points_to , pt :: '' ::= {{ ocaml type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } }}
                       {{ phantom }} {{ com points-to separation logic predicate }}
     | term_aux1 ( rational )|- init_t - ct -> term_aux2 :: :: Points_to
-      {{ tex [[term_aux1]] \mathbin{ [[rational]] { \overset{ [[init_t]] }{ \mapsto } }_{ [[ct]] } } [[term_aux2]] }}
+      % Omitting [[rational]] until fractional permissions are used (2021-06)
+      {{ tex [[term_aux1]] \mathbin{ { \overset{ [[init_t]] }{ \mapsto } }_{ [[ct]] } } [[term_aux2]] }}
       {{ ocaml { pointer = [[term_aux1]] ; perm = [[rational]] ; init = [[init_t]] ; ct = [[ct]] ; pointee = [[term_aux2]] ; } }}
 
 
@@ -673,20 +668,21 @@ grammar
     | exists Symbol_sym : base_type . res ::   :: Exists    {{ com existential            }}
     | term_aux /\ res                     ::   :: Term      {{ com logical conjuction     }}
     | <( res )>                           :: S :: Paren     {{ com parentheses            }} {{ ocaml [[res]] }}
-    | [ mu_pval_aux / Symbol_sym ] res    :: M :: Subs      {{ ocaml RES_SUB [[mu_pval_aux]] [[Symbol_sym]] [[res]] }}
-                                                            {{ com substitute $[[mu_pval_aux]]$ for $[[Symbol_sym]]$ in $[[res]]$ }}
+    | [ subs ] res                         :: M :: Subs      {{ ocaml RES_SUBS [[subs]] [[res]]         }}
+                                                            {{ com simul-sub $[[subs]]$ in $[[res]]$   }}
 
 
 grammar
- 
+
    ret , _r {{ tex \_ }} :: RetTy_ ::= {{ com return types }}
-    | sigma tyvar_sym : base_type . ret  :: :: Comp
-    | exists tyvar_sym : base_type . ret :: :: Log
-    | res *o ret                         :: :: Res
-    | term_aux /\ ret                    :: :: Cons
-    | I                                  :: :: I
-    | [ spine_elem / tyvar_sym ] ret     :: M :: Subs   {{ ocaml RET_SPINE_ELEM_SUB [[spine_elem]] [[tyvar_sym]] [[ret]] }}
-    | [ E ] ret                          :: M :: envSub {{ ocaml RET_SPINE_ELEM_SUB_ENV [[E]] [[ret]] }} {{ tex [[E]] ( [[ret]] ) }}
+    | sigma tyvar_sym : base_type . ret  :: :: Comp   {{ com return a computational value          }}
+    | exists tyvar_sym : base_type . ret :: :: Log    {{ com return a logical value                }}
+    | res *o ret                         :: :: Res    {{ com return a resource value               }}
+    | term_aux /\ ret                    :: :: Phi    {{ com return a predicate (post-condition)   }}
+    | I                                  :: :: I      {{ com end return list                       }}
+    | [ subs ] ret                        :: M :: Subs {{ ocaml RET_SPINE_ELEM_SUBS [[subs]] [[ret]] }}
+                                                      {{ tex [[subs]] ( [[ret]] )                   }}
+                                                      {{ com simul-sub $[[subs]]$ in $[[ret]]$      }}
   % | concat rets                        :: M :: Concat {{ tex [[rets]] }} {{ ocaml [[rets]] }} {{ com concatenation of return types }}
 
 
@@ -712,13 +708,13 @@ grammar
   mu_seq_texpr {{ tex seq\_texpr }} :: 'M_Seq_TE' ::= {{ auxparam 'TY }} {{ com sequential top-level (effectful) expressions }}
     | mu_tval                                                           :: :: tval  {{ com (effectful) top-level values   }}
     | run Symbol_sym </ mu_pval_auxi // , // i />                       :: :: run   {{ com run from label                 }}
-    | let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr                  :: :: letP  (+ bind binders( mu_sym_or_pattern ) in mu_texpr  +) 
+    | let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr                  :: :: letP  (+ bind binders( mu_sym_or_pattern ) in mu_texpr  +)
                                                                                     {{ com pure let              }}
     | let mu_sym_or_pattern : ( y1 : base_type1 . term1 ) = mu_tpexpr_aux in mu_texpr
                                                                         :: :: letTP (+ bind binders( mu_sym_or_pattern ) in mu_texpr +)
                                                                                     (+ bind y1 in term1 +)
                                                                                     {{ com pure let              }}
-    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   (+ bind binders( </ ret_patterni // i /> ) in mu_texpr  +) 
+    | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   (+ bind binders( </ ret_patterni // i /> ) in mu_texpr  +)
                                                                                     {{ com bind return patterns           }}
     | let </ ret_patterni // , // i /> : ret = mu_texpr1 in mu_texpr2   :: :: letT  (+ bind binders( </ ret_patterni // i /> ) in mu_texpr2 +)
                                                                                     {{ com annotated bind return patterns }}
@@ -764,10 +760,10 @@ grammar
 
 
   mu_texpr {{ tex texpr }} :: 'M_TE' ::= {{ auxparam 'TY }} {{ com top-level (effectful) expressions }}
-    | mu_seq_texpr_aux    ::   :: Seq    {{ com sequential (effectful) expressions                }}
-    | mu_is_texpr_aux     ::   :: Is     {{ com indet seq (effectful) expressions                 }}
-    | [ E ] mu_texpr      :: M :: envSub {{ ocaml MU_TEXPR_ENV_SUB [[E]] [[mu_texpr]] }} {{ tex [[E]] ( [[mu_texpr]] ) }}
-                                         {{ com simul-sub environment $[[E]]$ in $[[mu_texpr]]$   }}
+    | mu_seq_texpr_aux  ::   :: Seq    {{ com sequential (effectful) expressions                }}
+    | mu_is_texpr_aux   ::   :: Is     {{ com indet seq (effectful) expressions                 }}
+    | [ subs ] mu_texpr  :: M :: Subs  {{ ocaml MU_TEXPR_SUBS [[subs]] [[mu_texpr]] }} {{ tex [[subs]] ( [[mu_texpr]] ) }}
+                                       {{ com simul-sub $[[subs]]$ in $[[mu_texpr]]$   }}
 
 % TODO substitutions
 
@@ -809,13 +805,15 @@ grammar
     | :      :: :: of_type   {{ tex {:}                              }}
     | .      :: :: such_that {{ tex . \:                             }}
     | dot    :: :: dot       {{ tex .                                }}
-    | >>     :: :: chevron   {{ tex \mathbin{ {>} \! \! {>} }        }}
+    | >>     :: :: chevron   {{ tex \gg                              }}
     | :;     :: :: doublecol {{ tex \mathbin{ {:} {:} }              }}
     | ^      :: :: caret     {{ tex \mathbin { \texttt{\char`\^} }   }}
     | \//    :: :: big_or    {{ tex \bigvee                          }}
     | eq     :: :: equiv     {{ tex \equiv                           }}
     | <(     :: :: langle    {{ tex \langle                          }}
     | )>     :: :: rangle    {{ tex \rangle                          }}
+    | reso   :: :: reso      {{ tex \texttt{res}                     }}
+    | [=     :: :: sqlte     {{ tex \sqsubseteq                      }}
 
 
 metavar ty_bt {{ tex }} ::= {{ ocaml 'bt }} {{ phantom }}
@@ -828,20 +826,21 @@ grammar
     | pi tyvar_sym : base_type . arg     ::   :: Comp
     | forall tyvar_sym : base_type . arg ::   :: Log
     | res --o arg                        ::   :: Res
-    | term_aux -) arg                    ::   :: Cons
+    | term_aux -) arg                    ::   :: Phi
     | ret                                ::   :: Ret
-    | [ spine_elem / tyvar_sym ] arg     :: M :: Subs {{ ocaml ARG_SPINE_ELEM_SUB [[spine_elem]] [[tyvar_sym]] [[arg]] }}
+    | [ subs ] arg                       :: M :: Subs {{ ocaml ARG_SPINE_ELEM_SUB [[subs]] [[arg]] }} {{ tex [[subs]] ( [[arg]] ) }}
+                                                      {{ com simul-sub $[[subs]]$ in $[[arg]]$     }}
 
 
   pure_arg :: Pure_ArgTy_ ::= {{ com pure argument/function types }}
     | pi tyvar_sym : base_type . pure_arg  :: :: Comp
-    | term_aux -) pure_arg                 :: :: Cons
+    | term_aux -) pure_arg                 :: :: Phi
     | pure_ret                             :: :: Ret
 
 
   pure_ret :: Pure_RetTy_ ::= {{ com pure return types }}
     | sigma tyvar_sym : base_type . pure_ret :: :: Comp
-    | term_aux /\ pure_ret                   :: :: Cons
+    | term_aux /\ pure_ret                   :: :: Phi
     | I                                      :: :: I
 
 
@@ -883,44 +882,46 @@ grammar
 
 grammar
 
-  E {{ tex \sigma }} :: Values_ ::= {{ phantom }} {{ com values env }}
-    | cdot                         :: :: empty
-    | spine_elem  / Symbol_sym , E :: :: cons
-    | </ Ei // , // i />           :: :: concat
+  subs {{ tex \sigma }} :: Subs_ ::= {{ phantom }} {{ com substitutions }}
+    | cdot                            :: :: empty
+    | spine_elem  / Symbol_sym , subs :: :: cons
+    | </ subsi // , // i />           :: :: concat
 
 grammar
 
   typing :: 'typing_' ::=
     | smt ( N => term_aux )                                                            ::   :: smt
     | Symbol_sym : base_type inEnv C                                                   ::   :: x_in_C
+    | Symbol_sym : base_type inEnv L                                                   ::   :: x_in_L
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals ::   :: struct_in_globals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />                       ::   :: indexed_infer_mem_value       {{ com dependent on memory object model }}
     | </ Ci ; Li ; Ni |- mu_pval_auxi => base_typei // i />                            :: X :: index_infer_mu_pval
     | </ term_auxi as mu_pattern_auxi : base_typei ~> Ci ; Ni // i />                  :: X :: indexed_pattern
     | </ Ci ; Li ; Ni |- mu_tpexpri <= yi : base_typei . termi // i />                 :: X :: indexed_check_mu_tpexpr
     | </ Ci ; Li ; Ni ; Ri |- mu_texpri <= reti // i />                                :: X :: indexed_check_mu_texpr
-    | L |- term_aux : base_type                                                        ::   :: check_logical_value
-    | mu_pval_aux : arg inEnv Globals                                                  ::   :: mu_pval_aux_in_globals
-  
+
 
 grammar
 
   opsem :: 'opsem_' ::=
-    | </ mu_pattern_auxi = mu_pval_auxi ~> Ei // i />                                     :: X :: indexed_decons_value
-    | </ ret_patterni = spine_elemi ~> Ei // i />                                         :: X :: indexed_decons_ret
-    | mu_pval_aux eq </ xi // i /> |-> mu_tpexpr : ( y : base_type . term ) inEnv Globals ::   :: pure_func_body_in_globals
-    | mu_pval_aux eq </ xi // i /> |-> mu_texpr : ret inEnv Globals                       ::   :: func_body_in_globals
-    | forall i <  j . not ( mu_pattern_auxi = mu_pval_aux ~> Ei )                         ::   :: forall_i_lt_j_not_decons_jtype
-    | fresh ( ty_mem_ptr )                                                                ::   :: fresh_loc
+    | </ mu_pattern_auxi = mu_pval_auxi ~> subsi // i />              :: X :: indexed_decons_value
+    | </ ret_patterni = spine_elemi ~> subsi // i />                  :: X :: indexed_decons_ret
+    | forall i <  j . not ( mu_pattern_auxi = mu_pval_aux ~> subsi )  ::   :: forall_i_lt_j_not_decons_jtype
+    | fresh ( ty_mem_ptr )                                            ::   :: fresh_loc
+    | term_aux                                                        ::   :: constraints
+    | mu_pval_aux : base_type                                         ::   :: arb_pval_of_base_type
 
 
 grammar
 
   formula :: 'formula_' ::=
-    | judgement             :: :: judgement
-    | term_aux eq term_aux' :: :: abbreviations
-    | typing                :: :: typing
-    | opsem                 :: :: opsem
+    | judgement                                                       ::   :: judgement
+    | typing                                                          ::   :: typing
+    | opsem                                                           ::   :: opsem
+    % both
+    | term_aux eq term_aux'                                           ::   :: abbreviations
+    | mu_name : pure_arg eq </ xi // i /> |-> mu_tpexpr inEnv Globals ::   :: pure_func_body_in_globals
+    | mu_pval_aux :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals ::   :: func_body_in_globals
 
 
 defns
@@ -944,8 +945,8 @@ defns
     C ; L ; N |- array ( </ mu_loaded_valuei // i /> ) => obj array base_type
 
 
-    Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
-    </ C ; L ; N |- ty_mem_valuei => mem base_typei // i />
+    Symbol_sym : struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
+    </ C ; L ; N |- ty_mem_valuei => mem to_base ( cti ) // i />
     -------------------------------------------------------------------------------- :: Struct
     C ; L ; N |- ( struct ty_tag ) { </ dot Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => obj struct ty_tag
 
@@ -961,7 +962,12 @@ defns
 
 
     x : base_type inEnv C
-    --------------------------- :: Var
+    --------------------------- :: Var_Comp
+    C ; L ; N |- x => base_type
+
+
+    x : base_type inEnv L
+    --------------------------- :: Var_Log
     C ; L ; N |- x => base_type
 
 
@@ -1036,7 +1042,8 @@ defns
     C ; L ; N |- Specified ( mu_pval ) => base_type
 
 
-    </ C ; L ; N |- mu_pvali => base_typei // i />
+    Symbol_sym : struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
+    </ C ; L ; N |- mu_pvali => to_base ( cti ) // i />
     ------------------------------------------------------------------------------------------------ :: Struct
     C ; L ; N |- ( struct ty_tag ) { </ dot Symbol_identifieri = mu_pvali // i /> } => struct ty_tag
 
@@ -1048,7 +1055,7 @@ defns
 
   defn
     N |- res eq res' :: :: Res_Eq :: Res_Eq_ by
-    
+
     -------------------- :: Emp
     N |- emp eq emp
 
@@ -1084,8 +1091,9 @@ defns
     C ; L ; N ; cdot |- emp <= emp
 
 
-    ----------------------------------- :: PointsTo
-    C ; L ; N ; cdot |- pt <= points_to
+    N |- points_to eq points_to'
+    ------------------------------------------------------------ :: PointsTo
+    C ; L ; N ; cdot , _ : points_to |- points_to' <= points_to'
 
 
     N |- res eq res'
@@ -1102,7 +1110,7 @@ defns
     % Has to be checking. Consider type of pack (1 , l |-> 1 , 1)
     % exists y : integer . l |-> (y,y or y,1 or 1,y or 1,1)
     C ; L ; N |- mu_pval_aux => base_type
-    C ; L ; N ; R |- res_term2 <= [ mu_pval_aux / y ] res
+    C ; L ; N ; R |- res_term2 <= [ mu_pval_aux / y , cdot ] res
     ------------------------------------------------------------------------------- :: Pack
     C ; L ; N ; R |- pack ( mu_pval_aux , res_term2 ) <= exists y : base_type . res
 
@@ -1111,34 +1119,34 @@ defns
   spine_jtype :: 'Ty_' ::=
 
   defn
-    C ; L ; N ; R |- </ spine_elemi // , // i /> :; arg >> ret :: :: Spine :: Spine_ by
+    C ; L ; N ; R |- </ xi = spine_elemi // , // i /> :; arg >> subs ; ret :: :: Spine :: Spine_ by
 
-    --------------------------------- :: Empty
-    C ; L ; N ; cdot |- :; ret >> ret
+    ------------------------------------------ :: Empty
+    C ; L ; N ; cdot |- :; ret >> cdot ; ret
 
 
     C ; L ; N |- mu_pval_aux => base_type
-    C ; L ; N ; R |- </ spine_elemi // i /> :; [ mu_pval_aux / x ] arg >> ret
-    -------------------------------------------------------------------------------------- :: Comp
-    C ; L ; N ; R |- mu_pval_aux , </ spine_elemi // i /> :; pi x : base_type . arg >> ret
+    C ; L ; N ; R |- </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ----------------------------------------------------------------- :: Comp
+    C ; L ; N ; R |- x  = mu_pval_aux , </ xi = spine_elemi // i /> :; pi x : base_type . arg >> mu_pval_aux / x , subs ; ret
 
 
-    L |- term_aux : base_type
-    C ; L ; N ; R |- </ spine_elemi  // i /> :; [ term_aux / x ] arg >> ret
-    ----------------------------------------------------------------------------------------- :: Log
-    C ; L ; N ; R |- term_aux , </ spine_elemi // i /> :;  forall x : base_type . arg >> ret
+    C ; L ; N |- mu_pval_aux => base_type
+    C ; L ; N ; R |- </ xi = spine_elemi  // i /> :; arg >> subs ; ret
+    ------------------------------------------------------------------ :: Log
+    C ; L ; N ; R |- x = mu_pval_aux , </ xi = spine_elemi // i /> :;  forall x : base_type . arg >> mu_pval_aux / x , subs ; ret
 
 
     C ; L ; N ; R1 |- res_term <= res
-    C ; L ; N ; R2 |- </ spine_elemi // i /> :; arg >> ret
-    ------------------------------------------------------------------------------- :: Res
-    C ; L ; N ; R1 , R2 |- res_term , </ spine_elemi // i /> :;  res --o arg >> ret
+    C ; L ; N ; R2 |- </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ------------------------------------------------------------------ :: Res
+    C ; L ; N ; R1 , R2 |- x = res_term , </ xi = spine_elemi // i /> :;  res --o arg >> res_term / x , subs ; ret
 
 
     smt ( N => term_aux )
-    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
-    ------------------------------------------------------------------- :: Cons
-    C ; L ; N ; R |- </ spine_elemi // i /> :;  term_aux -) arg >> ret
+    C ; L ; N ; R |- </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ----------------------------------------------------------------------------- :: Phi
+    C ; L ; N ; R |- </ xi = spine_elemi // i /> :;  term_aux -) arg >> subs ; ret
 
 
 defns
@@ -1203,10 +1211,10 @@ defns
     C ; L ; N |- mu_pval_aux1 bool_binop mu_pval_aux2 => y : bool . y = ( inj mu_pval_aux1 ' bool_binop ' inj mu_pval_aux2 )
 
 
-    mu_name : pure_arg inEnv Globals
-    C ; L ; N ; cdot |- </ mu_pval_auxi // i /> :; pure_arg >> sigma y' : base_type' . term' /\ I
-    --------------------------------------------------------------------------------------------- :: Call
-    C ; L ; N |- mu_name ( </ mu_pval_auxi // i /> ) => y' : base_type' . term'
+    mu_name : pure_arg eq </ xi // i /> |-> mu_tpexpr inEnv Globals
+    C ; L ; N ; cdot |- </ xi = mu_pval_auxi // i /> :; pure_arg >> subs ; sigma y : base_type . term /\ I
+    ------------------------------------------------------------------------------------------------------ :: Call
+    C ; L ; N |- mu_name ( </ mu_pval_auxi // i /> ) => y : base_type . [ subs ] term
 
 
     % NOT IMPLEMENTED: memberof ( Symbol_sym , Symbol_identifier , mu_pval_aux )
@@ -1297,8 +1305,8 @@ defns
     emp : emp ~> cdot ; cdot ; cdot
 
 
-    ---------------------------------------------------- :: PointsTo
-    pt : points_to ~> cdot ; cdot ; cdot , r : points_to
+    ----------------------------------------------------------- :: PointsTo
+    points_to : points_to ~> cdot ; cdot ; cdot , _ : points_to
 
 
     ------------------------------------------------- :: Var
@@ -1316,7 +1324,7 @@ defns
     res_pattern : term_aux /\ res ~> L ; N , term_aux ; R
 
 
-    res_pattern : [ x / y ] res ~> L ; N ; R
+    res_pattern : [ x / y , cdot ] res ~> L ; N ; R
     ---------------------------------------------------------------------------------- :: Pack
     pack ( x , res_pattern ) : exists y : base_type . res ~> L , x : base_type ; N ; R
 
@@ -1346,11 +1354,11 @@ defns
     res_pattern : res ~> L1 ; N1 ; R1
     </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
     ---------------------------------------------------------------------------------------- :: Res
-    res res_pattern , </ ret_patterni // i /> : res *o ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
+    reso res_pattern , </ ret_patterni // i /> : res *o ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
 
 
     </ ret_patterni // i /> : ret ~> C ; L ; N ; R
-    --------------------------------------------------------------------- :: Cons
+    --------------------------------------------------------------------- :: Phi
     </ ret_patterni // i /> : term_aux /\ ret ~> C ; L ; N , term_aux ; R
 
 
@@ -1367,7 +1375,7 @@ defns
 
 
     C ; L ; N |- mu_pval_aux => base_type
-    smt ( N => [ inj mu_pval_aux / y ] term )
+    smt ( N => [ mu_pval_aux / y , cdot ] term )
     ----------------------------------------------------- :: Done
     C ; L ; N |- done mu_pval_aux <= y : base_type . term
 
@@ -1424,25 +1432,28 @@ defns
     % C ; L ; N ; cdot |-> create_readonly ( vp , ct , v ) Symbol_prefix => ??
 
 
-    C ; L ; N |- mu_pval_aux1 => loc
-    C ; L ; N |- mu_pval_aux2 => to_base ( ct )
+    C ; L ; N |- mu_pval_aux0 => loc
+    smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
+    C ; L ; N ; R |- inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 <= inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2
+    ----------------------------------------------------------------------------------------------------------------------------------------- :: Load
+    C ; L ; N ; R |- load ( ct , mu_pval_aux0 , _mem_order , inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 ) => sigma y : to_base ( ct ) . y = inj mu_pval_aux2 /\ <( inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 )> *o I
+
+
+    C ; L ; N |- mu_pval_aux0 => loc
+    C ; L ; N |- mu_pval_aux1 => to_base ( ct )
     % NOT IMPLEMENTED - locking boolean
-    smt ( N => representable ( ct , inj mu_pval_aux2 ) )
+    smt ( N => representable ( ct , inj mu_pval_aux1 ) )
+    smt ( N => inj mu_pval_aux2 = inj mu_pval_aux0 )
+    C ; L ; N ; R |- inj mu_pval_aux2 ( q_one )|- _i - ct -> _t <= inj mu_pval_aux2 ( q_one )|- _i - ct -> _t
+    --------------------------------------------------------------------------------------------------------- :: Store
+    C ; L ; N ; R |- store ( _b , ct , mu_pval_aux0 , mu_pval_aux1 , _mem_order , inj mu_pval_aux2 ( q_one )|- _i - ct -> _t ) => sigma _ : unit . <( inj mu_pval_aux2 ( q_one )|- tick - ct -> inj mu_pval_aux1 )> *o I
+
+
+    C ; L ; N |- mu_pval_aux0 => loc
     smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
-    -------------------------------------------------------- :: Store
-    C ; L ; N ; cdot , r : <( inj mu_pval_aux0 ( q_one )|- _i - ct -> _t )> |- store ( _b , ct , mu_pval_aux1 , mu_pval_aux2 , _mem_order ) => sigma _ : unit . inj mu_pval_aux0 ( q_one )|- tick - ct -> inj mu_pval_aux2 *o I
-
-
-    C ; L ; N |- mu_pval_aux1 => loc
-    smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
-    ------------------------------------------------ :: Load
-    C ; L ; N ; cdot , r : <( inj mu_pval_aux0 ( q_one )|- tick - ct -> inj mu_pval_aux2 )> |- load ( ct , mu_pval_aux1 , _mem_order ) => sigma y : to_base ( ct ) . y = inj mu_pval_aux2 /\ <( inj mu_pval_aux0 ( q_one )|- tick - ct -> inj mu_pval_aux2 )> *o I
-
-
-    C ; L ; N |- mu_pval_aux1 => loc
-    smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
-    ---------------------------------------------------- :: Kill_Static
-    C ; L ; N ; cdot , r : <( inj mu_pval_aux0 ( q_one )|- _i - ct -> _t )> |-  kill ( static ct , mu_pval_aux1 ) => sigma _ : unit . I
+    C ; L ; N ; R |- inj mu_pval_aux1 ( q_one )|- _i - ct -> _t <= inj mu_pval_aux1 ( q_one )|- _i - ct -> _t
+    --------------------------------------------------------------------------------------------------------------- :: Kill_Static
+    C ; L ; N ; R |-  kill ( static ct , mu_pval_aux0 , inj mu_pval_aux1 ( q_one )|- _i - ct -> _t ) => sigma _ : unit . I
 
 
     % NOT IMPLEMENTED
@@ -1461,6 +1472,51 @@ defns
     %   | linux_store ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                             :: :: LinuxStore
     %   | linux_rmw ( ty_act , ty_asym1 , ty_asym2 , Linux_linux_memory_order )                               :: :: LinuxRMW
 
+defns
+  memop_jtype :: 'Ty_' ::=
+
+  defn
+    C ; L ; N ; R |- mu_memop => ret :: :: Memop :: Memop_ by
+
+
+    C ; L ; N |- mu_pval_aux1 => loc
+    C ; L ; N |- mu_pval_aux2 => loc
+    ----------------------------------------------------------------------------------------------------------------------------------------- :: Rel_Binop
+    C ; L ; N ; cdot |- mu_pval_aux1 rel_binop mu_pval_aux2 => sigma y : bool . y = ( inj mu_pval_aux1 ' rel_binop ' inj mu_pval_aux2 ) /\ I
+
+
+    % NOT IMPLEMENTED
+    % mu_pval_aux1 - ty_act - mu_pval_aux2
+
+
+    C ; L ; N |- mu_pval_aux => loc
+    ------------------------------- :: IntFromPtr
+    C ; L ; N ; cdot |- intFromPtr ( ct1 , ct2 , mu_pval_aux ) => sigma y : integer . y = cast_ptr_to_int inj mu_pval_aux /\ I
+
+
+    C ; L ; N |- mu_pval_aux => integer
+    ----------------------------------- :: PtrFromInt
+    C ; L ; N ; cdot |- ptrFromInt ( ct1 , ct2 , mu_pval_aux ) => sigma y : loc . y = cast_int_to_ptr inj mu_pval_aux /\ I
+
+
+    C ; L ; N |- mu_pval_aux0 => loc
+    smt ( N => inj mu_pval_aux1 = inj mu_pval_aux0 )
+    C ; L ; N ; R |- inj mu_pval_aux1 ( _q )|- tick - ct -> _t <= inj mu_pval_aux1 ( _q )|- tick - ct -> _t
+    ------------------------------------------------------------------------------------------------------- :: PtrValidForDeref
+    C ; L ; N ; R |- ptrValidForDeref ( ct , mu_pval_aux0 , inj mu_pval_aux1 ( _q )|- tick - ct -> _t ) => sigma y : bool . y = aligned ( ct , inj mu_pval_aux1 ) /\ <( inj mu_pval_aux1 ( _q )|- tick - ct -> _t )> *o I
+
+
+    C ; L ; N |- mu_pval_aux1 => loc
+    -------------------------------- :: PtrWellAligned
+    C ; L ; N ; cdot |- ptrWellAligned ( ct , mu_pval_aux ) => sigma y : bool . y = aligned ( ct , inj mu_pval_aux ) /\ I
+
+
+    C ; L ; N |- mu_pval_aux1 => loc
+    C ; L ; N |- mu_pval_aux2 => integer
+    ------------------------------------ :: PtrArrayShift
+    C ; L ; N ; cdot |- ptrArrayShift ( mu_pval_aux1 ,  ct , mu_pval_aux2 ) => sigma y : loc . y = inj mu_pval_aux1 +ptr ( inj mu_pval_aux2 * size_of ct ) /\ I
+
+
 
 defns
   tval_jtype :: 'Ty_' ::=
@@ -1468,25 +1524,25 @@ defns
   defn
     C ; L ; N ; R |- mu_tval_aux <= ret :: :: TVal :: TVal_ by
 
-    -------------------------- :: I
-    C ; L ; N ; R |- done <= I
+    ------------------------------ :: I
+    C ; L ; N ; cdot |- done <= I
 
 
     C ; L ; N |- mu_pval_aux => base_type
-    C ; L ; N ; R |- done </ spine_elemi // i /> <= [ mu_pval_aux / y ] ret
+    C ; L ; N ; R |- done </ spine_elemi // i /> <= [ mu_pval_aux / y , cdot ] ret
     --------------------------------------------------------------------------------------- :: Comp
     C ; L ; N ; R |- done mu_pval_aux , </ spine_elemi // i /> <= sigma y : base_type . ret
 
 
-    L |- term_aux : base_type
-    C ; L ; N ; R |- done </ spine_elemi // i /> <= [ term_aux / y ] ret
-    -------------------------------------------------------------------------------------- :: Log
-    C ; L ; N ; R |- done term_aux , </ spine_elemi // i /> <= exists y : base_type . ret
+    C ; L ; N |- mu_pval_aux => base_type
+    C ; L ; N ; R |- done </ spine_elemi // i /> <= [ mu_pval_aux / y , cdot ] ret
+    ----------------------------------------------------------------------------------------- :: Log
+    C ; L ; N ; R |- done mu_pval_aux , </ spine_elemi // i /> <= exists y : base_type . ret
 
 
     smt ( N => term_aux )
     C ; L ; N ; R |- done spine <= ret
-    ---------------------------------------------- :: Cons
+    ---------------------------------------------- :: Phi
     C ; L ; N ; R |- done spine <= term_aux /\ ret
 
 
@@ -1502,64 +1558,30 @@ defns
 
 
 defns
-  texpr_jtype :: 'Ty_' ::=
+  seq_expr_jtype :: 'Ty_' ::=
 
   defn
     C ; L ; N ; R |- mu_seq_expr_aux => ret :: :: Seq_E :: Seq_E_ by
 
 
     C ; L ; N |- mu_pval_aux => loc
-    mu_pval_aux : arg inEnv Globals
-    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
-    -------------------------------------------------------------------------------- :: CCall
-    C ; L ; N ; R |- ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) => ret
+    mu_pval_aux :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals
+    C ; L ; N ; R |- </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ----------------------------------------------------------------------------------------- :: CCall
+    C ; L ; N ; R |- ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) => [ subs ] ret
 
 
-    mu_name : arg inEnv Globals
-    C ; L ; N ; R |- </ spine_elemi // i /> :; arg >> ret
-    ------------------------------------------------- :: Proc
-    C ; L ; N ; R |- pcall ( mu_name , </ spine_elemi // i /> ) => ret
+    mu_name :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals
+    C ; L ; N ; R |- </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ----------------------------------------------------------------------------- :: Proc
+    C ; L ; N ; R |- pcall ( mu_name , </ spine_elemi // i /> ) => [ subs ] ret
 
+
+defns
+  is_expr_jtype :: 'Ty_' ::=
 
   defn
     C ; L ; N ; R |- mu_is_expr_aux => ret :: :: Is_E :: Is_E_ by
-
-
-    % NOT IMPLEMENTED
-    % mu_pval_aux1 == mu_pval_aux2
-    % mu_pval_aux1 <> mu_pval_aux2
-    % mu_pval_aux1 < mu_pval_aux2
-    % mu_pval_aux1 > mu_pval_aux2
-    % mu_pval_aux1 =< mu_pval_aux2
-    % mu_pval_aux1 >= mu_pval_aux2
-    % mu_pval_aux1 - ty_act - mu_pval_aux2
-
-
-    C ; L ; N |- mu_pval_aux => loc
-    ------------------------------- :: Memop_IntFromPtr
-    C ; L ; N ; cdot |- memop ( intFromPtr ( ct1 , ct2 , mu_pval_aux ) ) => sigma y : integer . y = cast_ptr_to_int inj mu_pval_aux /\ I
-
-
-    C ; L ; N |- mu_pval_aux => integer
-    ----------------------------------- :: Memop_PtrFromInt
-    C ; L ; N ; cdot |- memop ( ptrFromInt ( ct1 , ct2 , mu_pval_aux ) ) => sigma y : loc . y = cast_int_to_ptr inj mu_pval_aux /\ I
-
-
-    C ; L ; N |- mu_pval_aux1 => loc
-    smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
-    ------------------------------------------------ :: Memop_PtrValidForDeref
-    C ; L ; N ; cdot , r : <( inj mu_pval_aux0 ( _q )|- tick - ct -> _t )> |- memop ( ptrValidForDeref ( ct , mu_pval_aux1 ) ) => sigma y : bool . y = aligned ( ct , inj mu_pval_aux0 ) /\ I
-
-
-    C ; L ; N |- mu_pval_aux1 => loc
-    -------------------------------- :: Memop_PtrWellAligned
-    C ; L ; N ; cdot |- memop ( ptrWellAligned ( ct , mu_pval_aux ) ) => sigma y : bool . y = aligned ( ct , inj mu_pval_aux ) /\ I
-
-
-    C ; L ; N |- mu_pval_aux1 => loc
-    C ; L ; N |- mu_pval_aux2 => integer
-    ------------------------------------ :: Memop_PtrArrayShift
-    C ; L ; N ; cdot |- memop ( ptrArrayShift ( mu_pval_aux1 ,  ct , mu_pval_aux2 ) ) => sigma y : loc . y = inj mu_pval_aux1 +ptr ( inj mu_pval_aux2 * size_of ct ) /\ I
 
 
     % NOT IMPLEMENTED
@@ -1570,6 +1592,11 @@ defns
     % va_copy ( mu_pval_aux )
     % va_arg ( mu_pval_aux , ty_act )
     % va_end ( mu_pval_aux )
+
+
+    C ; L ; N ; R |- mu_memop => ret
+    ------------------------------------------ :: Memop
+    C ; L ; N ; R |- memop ( mu_memop ) => ret
 
 
     C ; L ; N ; R |- mu_action => ret
@@ -1586,6 +1613,8 @@ defns
     % -------------------------------------------------------------------------------------------- :: Unseq
     % C ; L ; N ; </ Ri // i /> |- unseq ( </ mu_texpri : reti // i /> ) => concat </ reti // i />
 
+defns
+  texpr_jtype :: 'Ty_' ::=
 
   defn
     C ; L ; N ; R |- mu_seq_texpr_aux <= ret :: :: Seq_TE :: Seq_TE_ by
@@ -1638,9 +1667,9 @@ defns
     C ; L ; N ; R |- if mu_pval_aux then mu_texpr1 else mu_texpr2 <= ret
 
 
-    Symbol_sym : arg inEnv Globals
-    C ; L ; N ; cdot |- </ mu_pval_auxi // i /> :; arg >> false /\ I
-    ------------------------------------------------------------------------ :: Run
+    Symbol_sym :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals
+    C ; L ; N ; cdot |- </ xi = mu_pval_auxi // i /> :; arg >> subs ; false /\ I
+    ----------------------------------------------------------------------------- :: Run
     C ; L ; N ; cdot |- run Symbol_sym </ mu_pval_auxi // i /> <= false /\ I
 
 
@@ -1685,10 +1714,10 @@ defns
 
 
 defns
-  decons_jtype :: 'Op_' ::=
+  subs_jtype :: 'Subs_' ::=
 
   defn
-    mu_pattern_aux = mu_pval_aux ~> E :: :: Decons_Value_ :: Decons_Value_ by
+    mu_pattern_aux = mu_pval_aux ~> subs :: :: Decons_Value_ :: Decons_Value_ by
 
 
     ----------------------------- :: No_Sym_Annot
@@ -1699,42 +1728,43 @@ defns
     x : _bt = mu_pval_aux ~> mu_pval_aux / x , cdot
 
 
-    mu_pattern_aux1 = mu_pval_aux1 ~> E1
-    mu_pattern_aux2 = mu_pval_aux2 ~> E2
-    -------------------------------------------------------------------------------------------- :: Cons
-    Cons ( mu_pattern_aux1 , mu_pattern_aux2 ) = Cons ( mu_pval_aux1 , mu_pval_aux2 ) ~> E1 , E2
+    mu_pattern_aux1 = mu_pval_aux1 ~> subs1
+    mu_pattern_aux2 = mu_pval_aux2 ~> subs2
+    --------------------------------------------------------------------------------------------------- :: Cons
+    Cons ( mu_pattern_aux1 , mu_pattern_aux2 ) = Cons ( mu_pval_aux1 , mu_pval_aux2 ) ~> subs1 , subs2
 
 
-    </ mu_pattern_auxi = mu_pval_aux1 ~> Ei // i />
-    ----------------------------------------------------------------------------------------- :: Tuple
-    Tuple ( </ mu_pattern_auxi // i /> ) = Tuple ( </ mu_pval_auxi // i /> ) ~> </ Ei // i />
+    </ mu_pattern_auxi = mu_pval_aux1 ~> subsi // i />
+    ------------------------------------------------------------------------------------------- :: Tuple
+    Tuple ( </ mu_pattern_auxi // i /> ) = Tuple ( </ mu_pval_auxi // i /> ) ~> </ subsi // i />
 
 
-    </ mu_pattern_auxi = mu_pval_aux1 ~> Ei // i />
-    ----------------------------------------------------------------------------------------- :: Array
-    Array ( </ mu_pattern_auxi // i /> ) = Array ( </ mu_pval_auxi // i /> ) ~> </ Ei // i />
+    </ mu_pattern_auxi = mu_pval_aux1 ~> subsi // i />
+    -------------------------------------------------------------------------------------------- :: Array
+    Array ( </ mu_pattern_auxi // i /> ) = Array ( </ mu_pval_auxi // i /> ) ~> </ subsi // i />
 
 
-    mu_pattern_aux = mu_pval_aux ~> E
-    ----------------------------------------------- :: Specified
-    Specified ( mu_pattern_aux ) = mu_pval_aux ~> E
+    mu_pattern_aux = mu_pval_aux ~> subs
+    -------------------------------------------------- :: Specified
+    Specified ( mu_pattern_aux ) = mu_pval_aux ~> subs
 
 
   defn
-    mu_sym_or_pattern = mu_pval_aux ~> E :: :: Decons_Value'_ :: Decons_Value'_ by
+    mu_sym_or_pattern = mu_pval_aux ~> subs :: :: Decons_Value'_ :: Decons_Value'_ by
 
 
     ------------------------------------------- :: Sym
     x = mu_pval_aux ~> mu_pval_aux / x , cdot
 
 
-    mu_pattern_aux = mu_pval_aux ~> E
-    --------------------------------- :: Pattern
-    mu_pattern_aux = mu_pval_aux ~> E
+    mu_pattern_aux = mu_pval_aux ~> subs
+    ------------------------------------ :: Pattern
+    mu_pattern_aux = mu_pval_aux ~> subs
 
 
   defn
-    res_pattern = res_term ~> E :: :: Decons_Res :: Decons_Res_ by
+    res_pattern = res_term ~> subs :: :: Decons_Res :: Decons_Res_ by
+
 
     ----------------- :: Emp
     emp = emp ~> cdot
@@ -1743,37 +1773,65 @@ defns
     --------------- :: Points_to
     pt = pt ~> cdot
 
+
     --------------------------------------------------------- :: Var
     Symbol_sym = res_term ~> res_term / Symbol_sym , cdot
 
 
-    res_pattern1 = res_term1 ~> E1
-    res_pattern2 = res_term2 ~> E2
-    -------------------------------------------------------------------------- :: Pair
-    <( res_pattern1 , res_pattern2 )> = <( res_term1 , res_term2 )> ~> E1 , E2
+    res_pattern1 = res_term1 ~> subs1
+    res_pattern2 = res_term2 ~> subs2
+    -------------------------------------------------------------------------------- :: Pair
+    <( res_pattern1 , res_pattern2 )> = <( res_term1 , res_term2 )> ~> subs1 , subs2
 
 
-    res_pattern = res_term ~> E
-    --------------------------------------------------------------------------------------------------- :: Pack
-    pack ( Symbol_sym , res_pattern ) = pack ( mu_pval_aux , res_term ) ~> mu_pval_aux / Symbol_sym , E
+    res_pattern = res_term ~> subs
+    ------------------------------------------------------------------------------------------------------ :: Pack
+    pack ( Symbol_sym , res_pattern ) = pack ( mu_pval_aux , res_term ) ~> mu_pval_aux / Symbol_sym , subs
 
 
   defn
-    ret_pattern = spine_elem ~> E :: :: Decons_Ret :: Decons_Ret_ by
+    ret_pattern = spine_elem ~> subs :: :: Decons_Ret :: Decons_Ret_ by
 
 
-    mu_sym_or_pattern = mu_pval_aux ~> E
-    ----------------------------------------- :: Comp
-    comp mu_sym_or_pattern = mu_pval_aux ~> E
+    mu_sym_or_pattern = mu_pval_aux ~> subs
+    -------------------------------------------- :: Comp
+    comp mu_sym_or_pattern = mu_pval_aux ~> subs
 
 
-    ---------------------------------------------------------- :: Log
-    log Symbol_sym = term_aux ~> term_aux / Symbol_sym , cdot
+    ---------------------------------------------------------------- :: Log
+    log Symbol_sym = mu_pval_aux ~> mu_pval_aux / Symbol_sym , cdot
 
 
-    res_pattern = res_term ~> E
-    ------------------------------- :: Res
-    res res_pattern = res_term ~> E
+    res_pattern = res_term ~> subs
+    ------------------------------------ :: Res
+    reso res_pattern = res_term ~> subs
+
+
+  defn
+    </ xi = spine_elemi // , // i /> :; arg >> subs ; ret :: :: Decons_Arg :: Decons_Arg_ by
+
+    ------------------------------------------ :: Empty
+    :; ret >> cdot ; ret
+
+
+    </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ------------------------------------------------ :: Comp
+    x = mu_pval_aux , </ xi = spine_elemi // i /> :; pi x : base_type . arg >> mu_pval_aux / x , subs ; ret
+
+
+    </ xi = spine_elemi  // i /> :; arg >> subs ; ret
+    ------------------------------------------------- :: Log
+    x = mu_pval_aux , </ xi = spine_elemi // i /> :;  forall x : base_type . arg >> mu_pval_aux / x , subs ; ret
+
+
+    </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    ------------------------------------------------ :: Res
+    x = res_term , </ xi = spine_elemi // i /> :;  res --o arg >> res_term / x , subs ; ret
+
+
+    </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    --------------------------------------------------------------- :: Phi
+    </ xi = spine_elemi // i /> :;  term_aux -) arg >> subs ; ret
 
 
 defns
@@ -1845,51 +1903,52 @@ defns
     <( wrapI ( ty_act , ty_mem_int ) )> --> <( ty_mem_int' )>
 
   defn
-    <( mu_pexpr_aux )> --> <( mu_tpexpr_aux : ( y : base_type . term ) )> :: :: PE_TPE :: PE_TPE_ by
+    <( mu_pexpr_aux )> --> <( mu_tpexpr_aux : ( y : base_type . term_aux ) )> :: :: PE_TPE :: PE_TPE_ by
 
 
-    mu_name eq </ xi // i /> |-> mu_tpexpr : ( y : base_type . term ) inEnv Globals
-    ------------------------------------------------------------------------------- :: Call
-    <( mu_name ( </ mu_pval_auxi // i /> ) )> --> <( [ </ mu_pval_auxi / xi , cdot // i /> ] mu_tpexpr : ( y : base_type . [ </ mu_pval_auxi / xi , cdot // i /> ] term ) )>
+    mu_name : pure_arg eq </ xi // i /> |-> mu_tpexpr inEnv Globals
+    </ xi = mu_pval_auxi // i /> :; pure_arg >> subs ; sigma y : base_type . term /\ I
+    -------------------------------------------------------------------------------------- :: Call
+    <( mu_name ( </ mu_pval_auxi // i /> ) )> --> <( [ subs ] mu_tpexpr : ( y : base_type . [ subs ] term ) )>
 
 
   defn
     <( mu_tpexpr_aux )> --> <( mu_tpexpr_aux' )> :: :: TPE_TPE :: TPE_TPE_ by
 
-    
-    mu_pattern_auxj = mu_pval_aux ~> Ej
-    forall i < j . not ( mu_pattern_auxi = mu_pval_aux ~> Ei )
-    ----------------------------------------------------------------------------------------------------- :: Case
-    <( case mu_pval_aux of </ | mu_pattern_auxi => mu_tpexpri // i /> end )> --> <( [ Ej ]  mu_tpexprj )>
+
+    mu_pattern_auxj = mu_pval_aux ~> subsj
+    forall i < j . not ( mu_pattern_auxi = mu_pval_aux ~> subsi )
+    ------------------------------------------------------------------------------------------------------- :: Case
+    <( case mu_pval_aux of </ | mu_pattern_auxi => mu_tpexpri // i /> end )> --> <( [ subsj ]  mu_tpexprj )>
 
 
-    mu_sym_or_pattern = mu_pval_aux ~> E
+    mu_sym_or_pattern = mu_pval_aux ~> subs
     -------------------------------------------------------------------------------- :: Let_Sub
-    <( let mu_sym_or_pattern = mu_pval_aux in mu_tpexpr )> --> <( [ E ] mu_tpexpr )> 
+    <( let mu_sym_or_pattern = mu_pval_aux in mu_tpexpr )> --> <( [ subs ] mu_tpexpr )>
 
 
     <( mu_pexpr_aux )> --> <( mu_pexpr_aux' )>
     ------------------------------------------- :: Let_Let
-    <( let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux )> --> <( let mu_sym_or_pattern = mu_pexpr_aux' in mu_tpexpr_aux )> 
+    <( let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux )> --> <( let mu_sym_or_pattern = mu_pexpr_aux' in mu_tpexpr_aux )>
 
 
     <( mu_pexpr_aux )> --> <( mu_tpexpr_aux1 : ( y : base_type . term ) )>
     ---------------------------------------------------------------------- :: Let_LetT
-    <( let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux2 )> --> <( let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux1 in mu_tpexpr_aux2 )> 
+    <( let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr_aux2 )> --> <( let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux1 in mu_tpexpr_aux2 )>
 
 
-    mu_sym_or_pattern = mu_pval_aux ~> E
+    mu_sym_or_pattern = mu_pval_aux ~> subs
     ------------------------------------------- :: LetT_Sub
-    <( let mu_sym_or_pattern : ( y : base_type . term ) = done mu_pval_aux in mu_tpexpr )> --> <( [ E ] mu_tpexpr )>
+    <( let mu_sym_or_pattern : ( y : base_type . term ) = done mu_pval_aux in mu_tpexpr )> --> <( [ subs ] mu_tpexpr )>
 
 
     <( mu_tpexpr_aux1 )> --> <( mu_tpexpr_aux1' )>
     ------------------------------------------- :: LetT_LetT
-    <( let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux1 in mu_tpexpr_aux2 )> --> <( let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux1' in mu_tpexpr_aux2 )> 
+    <( let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux1 in mu_tpexpr_aux2 )> --> <( let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux1' in mu_tpexpr_aux2 )>
 
 
-    ------------------------------------------------------------------------------- :: If_True 
-    <( if True then mu_tpexpr_aux1 else mu_tpexpr_aux2 )> --> <( mu_tpexpr_aux1 )> 
+    ------------------------------------------------------------------------------- :: If_True
+    <( if True then mu_tpexpr_aux1 else mu_tpexpr_aux2 )> --> <( mu_tpexpr_aux1 )>
 
 
     -------------------------------------------------------------------------------- :: If_False
@@ -1899,69 +1958,73 @@ defns
 grammar
 
   heap , h :: 'Heap_' ::= {{ phantom }} {{ com heaps }}
-    | h + { ty_mem_ptr |-> *           } :: :: uninit_points_to
-    | h + { ty_mem_ptr |-> mu_pval_aux } :: :: points_to
+    | cdot              :: :: empty
+    | h + { points_to } :: :: points_to
+
 
 defns
   opsem_jtype :: 'Op_' ::=
 
   defn
     <( mu_seq_expr_aux )> --> <( mu_texpr : ret )> :: :: SE_TE :: SE_TE_ by
-    
 
-    mu_pval_aux eq </ xi // i /> |-> mu_texpr : ret inEnv Globals
+
+    mu_pval_aux : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
+    </ xi = spine_elemi // i /> :; arg >> subs ; ret
     ------------------------------------------------------------- :: CCall
-    <( ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) )> --> <( [ </ spine_elemi / xi , cdot // i /> ] mu_texpr : [ </ spine_elemi / xi , cdot // i /> ] ret )>
+    <( ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) )> --> <( [ subs ] mu_texpr : [ subs ] ret )>
 
 
-    mu_name eq </ xi // i /> |-> mu_texpr : ret inEnv Globals
-    ---------------------------------------------------------- :: PCall
-    <( pcall ( mu_name , </ spine_elemi // i /> ) )> --> <( [ </ spine_elemi / xi , cdot // i /> ] mu_texpr : [ </ spine_elemi / xi , cdot // i /> ] ret )>
+    mu_name : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
+    </ xi = spine_elemi // i /> :; arg >> subs ; ret
+    --------------------------------------------------------- :: PCall
+    <( pcall ( mu_name , </ spine_elemi // i /> ) )> --> <( [ subs ] mu_texpr : [ subs ] ret )>
 
 
   defn
     <( h ; mu_seq_texpr_aux )> --> <( h' ; mu_texpr )> :: :: STE_TE :: STE_TE_ by
 
 
-    Symbol_sym eq </ xi // i /> |-> mu_texpr : _r inEnv Globals
-    ------------------------------------------------------------- :: Run
-    <( h ; run Symbol_sym </ mu_pval_auxi // i /> )> --> <( h ; [ </ mu_pval_auxi / xi , cdot // i /> ] mu_texpr )>
-    
-
-    mu_pattern_auxj = mu_pval_aux ~> Ej
-    forall i < j . not ( mu_pattern_auxi = mu_pval_aux ~> Ei )
-    ---------------------------------------------------------- :: Case
-    <( h ; case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end )> --> <( h ; [ Ej ] mu_texprj )>
+    Symbol_sym : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
+    </ xi = mu_pval_auxi // i /> :; arg >> subs ; false /\ I
+    ------------------------------------------------------------ :: Run
+    <( h ; run Symbol_sym </ mu_pval_auxi // i /> )> --> <( h ; [ subs ] mu_texpr )>
 
 
-    mu_sym_or_pattern = mu_pval_aux ~> E
-    ------------------------------------ :: LetP_Sub
-    <( h ; let mu_sym_or_pattern = mu_pval_aux in mu_texpr )> --> <( h ; [ E ] mu_texpr )> 
+    mu_pattern_auxj = mu_pval_aux ~> subsj
+    forall i < j . not ( mu_pattern_auxi = mu_pval_aux ~> subsi )
+    ------------------------------------------------------------ :: Case
+    <( h ; case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri // i /> end )> --> <( h ; [ subsj ] mu_texprj )>
+
+
+    mu_sym_or_pattern = mu_pval_aux ~> subs
+    --------------------------------------- :: LetP_Sub
+    <( h ; let mu_sym_or_pattern = mu_pval_aux in mu_texpr )> --> <( h ; [ subs ] mu_texpr )>
 
 
     <( mu_pexpr_aux )> --> <( mu_pexpr_aux' )>
     ------------------------------------------- :: LetP_LetP
-    <( h ; let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern = mu_pexpr_aux' in mu_texpr )> 
+    <( h ; let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern = mu_pexpr_aux' in mu_texpr )>
 
 
     <( mu_pexpr_aux )> --> <( mu_tpexpr_aux : ( y : base_type . term ) )>
     ---------------------------------------------------------------------- :: LetP_LetTP
-    <( h ; let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr )> 
+    <( h ; let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr )>
 
 
-    mu_sym_or_pattern = mu_pval_aux ~> E
+    mu_sym_or_pattern = mu_pval_aux ~> subs
     ------------------------------------------- :: LetTP_Sub
-    <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = done mu_pval_aux in mu_texpr )> --> <( h ; [ E ] mu_texpr )>
+    <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = done mu_pval_aux in mu_texpr )> --> <( h ; [ subs ] mu_texpr )>
 
 
     <( mu_tpexpr_aux )> --> <( mu_tpexpr_aux' )>
     ------------------------------------------- :: LetTP_LetTP
-    <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux' in mu_texpr )> 
+    <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux' in mu_texpr )>
 
 
-    </ ret_patterni = spine_elemi ~> Ei // i /> 
-    ------------------------------------------- :: LetT_Sub
-    <( h ; let </ ret_patterni // i /> : ret = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ </ Ei // i /> ] mu_texpr )>
+    </ ret_patterni = spine_elemi ~> subsi // i />
+    --------------------------------------------- :: LetT_Sub
+    <( h ; let </ ret_patterni // i /> : ret = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ </ subsi // i /> ] mu_texpr )>
 
 
     <( mu_seq_expr_aux )> --> <( mu_texpr1 : ret )>
@@ -1974,8 +2037,8 @@ defns
     <( h ; let </ ret_patterni // i /> : ret = mu_texpr1 in mu_texpr2 )> --> <( h ; let </ ret_patterni // i /> : ret = mu_texpr1' in mu_texpr2 )>
 
 
-    ----------------------------------------------------------------------- :: If_True 
-    <( h ; if True then mu_texpr1 else mu_texpr2 )> --> <( h ; mu_texpr1 )> 
+    ----------------------------------------------------------------------- :: If_True
+    <( h ; if True then mu_texpr1 else mu_texpr2 )> --> <( h ; mu_texpr1 )>
 
 
     ------------------------------------------------------------------------ :: If_False
@@ -1987,72 +2050,75 @@ defns
 
 
   defn
-    <( mu_memop  )> --> <( mu_pval_aux )> :: :: Memop_Pval :: Memop_Pval_ by
+    <( h ; mu_memop  )> --> <( h' ; mu_tval )> :: :: Memop_Tval :: Memop_TVal_ by
 
 
-    inj ty_mem_int eq cast_ptr_to_int inj mu_pval_aux
-    ----------------------------------------------------------------- :: IntFromPtr
-    <( intFromPtr ( ct1 , ct2 , mu_pval_aux ) )> --> <( ty_mem_int )>
+    inj ty_mem_int eq cast_ptr_to_int inj ty_mem_ptr
+    ---------------------------------------------------------------------- :: IntFromPtr
+    <( h ; intFromPtr ( ct1 , ct2 , ty_mem_ptr ) )> --> <( h ; done ty_mem_int )>
 
 
-    inj ty_mem_ptr eq cast_ptr_to_int inj mu_pval_aux
-    ----------------------------------------------------------------- :: PtrFromInt
-    <( ptrFromInt ( ct1 , ct2 , mu_pval_aux ) )> --> <( ty_mem_ptr )>
+    inj ty_mem_ptr eq cast_ptr_to_int inj ty_mem_int
+    ------------------------------------------------------------------------------ :: PtrFromInt
+    <( h ; ptrFromInt ( ct1 , ct2 , ty_mem_int ) )> --> <( h ; done ty_mem_ptr )>
 
 
-    inj mu_bool_value eq aligned ( ct , inj mu_pval_aux )
-    ------------------------------------------------------------------- :: PtrValidForDeref
-    <( ptrValidForDeref ( ct , mu_pval_aux ) )> --> <( mu_bool_value )>
+    inj mu_bool_value eq aligned ( ct , inj ty_mem_ptr )
+    ---------------------------------------------------- :: PtrValidForDeref
+    <( h + { inj ty_mem_ptr ( _q )|- tick - ct -> _t } ; ptrValidForDeref ( ct , ty_mem_ptr , inj ty_mem_ptr ( _q )|- tick - ct -> _t ) )> --> <( h + { inj ty_mem_ptr ( _q )|- tick - ct -> _t } ; done mu_bool_value , inj ty_mem_ptr ( _q )|- tick - ct -> _t )>
 
 
-    inj mu_bool_value eq aligned ( ct , inj mu_pval_aux )
-    ----------------------------------------------------------------- :: PtrWellAligned
-    <( ptrWellAligned ( ct , mu_pval_aux ) )> --> <( mu_bool_value )>
+    inj mu_bool_value eq aligned ( ct , inj ty_mem_ptr )
+    ---------------------------------------------------- :: PtrWellAligned
+    <( h ; ptrWellAligned ( ct , ty_mem_ptr ) )> --> <( h ; done mu_bool_value )>
 
 
-    inj ty_mem_ptr eq inj mu_pval_aux1 +ptr ( inj mu_pval_aux2 * size_of ct )
-    ------------------------------------------------------------------------------ :: PtrArrayShift
-    <( ptrArrayShift ( mu_pval_aux1 ,  ct , mu_pval_aux2 ) )> --> <( ty_mem_ptr )>
+    inj ty_mem_ptr' eq inj ty_mem_ptr +ptr ( inj ty_mem_int * size_of ct )
+    -------------------------------------------------------------------------------- :: PtrArrayShift
+    <( h ; ptrArrayShift ( ty_mem_ptr ,  ct , ty_mem_int ) )> --> <( h ; done ty_mem_ptr' )>
 
 
   defn
-    <( h ; mu_action_aux  )> --> <( h' ; spine )> :: :: Action_Spine :: Action_Spine_ by
+    <( h ; mu_action_aux  )> --> <( h' ; mu_tval )> :: :: Action_Tval :: Action_Tval_ by
 
 
     fresh ( ty_mem_ptr )
-    ------------------------------------------------------------------------------------------------------------- :: Create
-    <( h ; create ( mu_pval_aux , ct ) Symbol_prefix )> --> <( h + { ty_mem_ptr |-> * } ; ty_mem_ptr , _ , pt )>
+    representable ( ct *s , inj ty_mem_ptr )
+    alignedI ( inj ty_mem_int , inj ty_mem_ptr )
+    mu_pval_aux : to_base ( ct )
+    ------------------------ :: Create
+    <( h ; create ( ty_mem_int , ct ) Symbol_prefix )> --> <( h + { inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux } ; done ty_mem_ptr , mu_pval_aux , inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux )>
 
 
-    %  load ( ty_act , mu_pval_aux , Cmm_memory_order )                                                                :: :: Load
-
-    -------------------------------------------------------------------------------------------------------------------------------------------------- :: Store
-    <( h + { ty_mem_ptr |-> _ }; store ( _b , ct , ty_mem_ptr , mu_pval_aux , _mem_order ) )> --> <( h + { ty_mem_ptr |-> mu_pval_aux } ; Unit , pt )>
+    --------------------------------------------------------------------------------------------------------------------------------------------------------- :: Load
+    <( h + { inj ty_mem_ptr ( q_one )|- tick - ct -> inj mu_pval_aux } ; load ( ct , ty_mem_ptr , _mem_order , inj ty_mem_ptr ( q_one )|- tick - ct -> inj mu_pval_aux ) )> --> <( h + { inj ty_mem_ptr ( q_one )|- tick - ct -> inj mu_pval_aux } ; done mu_pval_aux , inj ty_mem_ptr ( q_one )|- tick - ct -> inj mu_pval_aux )>
 
 
-    ----------------------------------------------------------------------------------- :: Kill_Static
-    <( h + { ty_mem_ptr |-> _ } ; kill ( static ct , ty_mem_ptr ) )> --> <( h ; Unit )>
+    --------------------------------------------------------------------------------------------------------------------------------------------------------- :: Store
+    <( h + { inj ty_mem_ptr ( _q )|- tick - ct -> _t } ; store ( _b , ct , ty_mem_ptr , mu_pval_aux , _mem_order , inj ty_mem_ptr ( _q )|- tick - ct -> _t ) )> --> <( h + { inj ty_mem_ptr ( _q )|- tick - ct -> inj mu_pval_aux } ; done Unit , inj ty_mem_ptr ( _q )|- tick - ct -> inj mu_pval_aux )>
+
+
+    --------------------------------------------------------------------------------------------------------------------------------------------------- :: Kill_Static
+    <( h + { inj ty_mem_ptr ( _q )|- _i - ct -> _t } ; kill ( static ct , ty_mem_ptr , inj ty_mem_ptr ( _q )|- _i - ct -> _t ) )> --> <( h ; done Unit )>
 
 
   defn
     <( h ; mu_is_expr_aux  )> --> <( h' ; mu_is_expr_aux' )> :: :: IsE_IsE :: IsE_IsE_ by
 
 
-    <( mu_memop )> --> <( mu_pval_aux )>
-    ------------------------------------------------------------- :: Memop
-    <( h ; memop ( mu_memop )  )> --> <( h ; done mu_pval_aux )>
+    <( h ; mu_memop )> --> <( h ; mu_tval )>
+    --------------------------------------------------- :: Memop
+    <( h ; memop ( mu_memop )  )> --> <( h ; mu_tval )>
 
 
-    % ASK
-    <( h ; mu_action_aux )> --> <( h ; spine  )>
-    ---------------------------------------------------- :: Action
-    <( h ; Pos mu_action_aux )> --> <( h ; done spine )>
+    <( h ; mu_action_aux )> --> <( h ; mu_tval )>
+    ------------------------------------------------- :: Action
+    <( h ; Pos mu_action_aux )> --> <( h ; mu_tval )>
 
 
-    % ASK
-    <( h ; mu_action_aux )> --> <( h' ; spine )>
+    <( h ; mu_action_aux )> --> <( h' ; mu_tval )>
     ---------------------------------------------------- :: Neg_Action
-    <( h ; Neg mu_action_aux )> --> <( h' ; done spine )>
+    <( h ; Neg mu_action_aux )> --> <( h' ; mu_tval )>
 
 
     % -------------------------------------------------------------------------------------- :: Unseq_Done
@@ -2069,14 +2135,14 @@ defns
 
     % let weak   </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr
 
-    </ ret_patterni = spine_elemi ~> Ei // i />
-    ------------------------------------------- :: LetS_Sub
-    <( h ; let strong </ ret_patterni // i /> = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ </ Ei // i /> ] mu_texpr )> 
+    </ ret_patterni = spine_elemi ~> subsi // i />
+    --------------------------------------------- :: LetS_Sub
+    <( h ; let strong </ ret_patterni // i /> = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ </ subsi // i /> ] mu_texpr )>
 
 
     <( h ; mu_is_expr_aux  )> --> <( h' ; mu_is_expr_aux' )>
     ----------------------------------------------------------------- :: LetS_LetS
-    <( h ; let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr )> --> <( h' ; let strong </ ret_patterni // i /> = mu_is_expr_aux' in mu_texpr )> 
+    <( h ; let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr )> --> <( h' ; let strong </ ret_patterni // i /> = mu_is_expr_aux' in mu_texpr )>
 
 
   defn
@@ -2092,3 +2158,146 @@ defns
     ------------------------------------------------ :: Is
     <( h ; mu_is_texpr_aux )> --> <( h' ; mu_texpr )>
 
+
+defns
+  lemma_jtype :: '' ::=
+
+  defn
+    </ xi // , // i /> :; arg ~> C ; L ; N ; R | ret :: :: Arg_Env :: Arg_Env_ by
+
+    -------------------------------------- :: Ret
+    :; ret ~> cdot ; cdot ; cdot ; cdot | ret
+
+
+    </ xi // i /> :; arg ~> C ; L ; N ; R | ret
+    ---------------------------------------------------------------------------------- :: Comp
+    x , </ xi // i /> :; pi x : base_type . arg ~> C , x : base_type ; L ; N ; R | ret
+
+
+    </ xi // i /> :; arg ~> C ; L ; N ; R | ret
+    --------------------------------------------------------------------------------------- :: Log
+    x , </ xi // i /> :; forall x : base_type . arg ~> C ; L , x : base_type ; N ; R | ret
+
+
+    </ xi // i /> :; arg ~> C ; L ; N ; R | ret
+    -------------------------------------------------------------------- :: Phi
+    </ xi // i /> :; term_aux -) arg ~> C ; L ; N , term_aux ; R | ret
+
+
+    </ xi // i /> :; arg ~> C ; L ; N ; R | ret
+    ----------------------------------------------------------------- :: Res
+    x , </ xi // i /> :; res --o arg ~> C ; L ; N ; R , x : res | ret
+
+
+  defn
+    C ; L ; N ; R [= C' ; L' ; N' ; R' :: :: Weak :: Weak_ by
+
+
+    ------------------------------------------------------ :: Empty
+    cdot ; cdot ; cdot ; cdot [= cdot ; cdot ; cdot ; cdot
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    ------------------------------------------------------------------ :: Cons_Comp
+    C , x : base_type ; L ; N ; R [= C' , x : base_type ; L' ; N' ; R'
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    ----------------------------------------------------------------- :: Cons_Log
+    C ; L , x : base_type ; N ; R [= C' ; L' , x : base_type ; N' ; R'
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    -------------------------------------------------------- :: Cons_Phi
+    C ; L ; N , term_aux ; R [= C' ; L' ; N' , term_aux ; R'
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    ------------------------------------------------------- :: Cons_Res
+    C ; L ; N ; R , x : res [= C' ; L' ; N' ; R' , x : res
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    -------------------------------------------------- :: Skip_Comp
+    C ; L ; N ; R [= C' , x : base_type ; L' ; N' ; R'
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    -------------------------------------------------- :: Skip_Log
+    C ; L ; N ; R [= C' ; L' , x : base_type ; N' ; R'
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    --------------------------------------------- :: Skip_Phi
+    C ; L ; N ; R [= C' ; L' ; N' , term_aux ; R'
+
+
+    % Remember R is a linear environment, so no weakening
+
+
+  defn
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) :: :: Ty_Subs :: Ty_Subs_ by
+
+
+    ---------------------------------------------------------- :: Empty
+    C ; L ; N ; R |- ( cdot ) : ( cdot ; cdot ; cdot ; cdot )
+
+
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; N |- mu_pval_aux => base_type
+    ---------------------------------------------------------------------------------- :: Cons_Comp
+    C ; L ; N ; R |- ( mu_pval_aux / x , subs ) : ( C' , x : base_type ; L' ; N' ; R' )
+
+
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; N |- mu_pval_aux => base_type
+    ---------------------------------------------------------------------------------- :: Cons_Log
+    C ; L ; N ; R |- ( mu_pval_aux / x , subs ) : ( C' ; L' , x : base_type ; N' ; R' )
+
+
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    ------------------------------------------------------------- :: Cons_Phi
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' , term_aux ; R' )
+
+
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    % ASK is checking here a problem?
+    C ; L ; N ; R |- res_term <= res
+    -------------------------------------------------------------------------- :: Cons_Res
+    C ; L ; N ; R |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
+
+
+% convention: thing on right has more stuff
+%
+% C ⊑ C , x : β
+%
+% C ; L ; ϕ ; R ⊑ C' ; L' ; ϕ' ; R'
+%
+% 1 Weakening lemma (induction on J):
+%           if C ; L ; ϕ ; R ⊢ J then C' ; L' ; ϕ' ; R' ⊢ J
+%
+% 2 Weakening for substitution (induction on σ):
+%           [the above with J = ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' ) ]
+%           if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
+%           then C' ; L' ; ϕ' ; R' ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
+%
+% 3 substitution lemma (induction on J):
+%         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
+%        and   C''  ; L''  ; ϕ ''  ; R''  ⊢ J
+%      ————————————————————–————————————————————–——————–
+%       then   C  ; L  ; ϕ  ; R  ⊢ σ ( J )
+%
+% 1 2 3 are all the inductions needed
+%
+% 4 Neel's easier to prove (induction on new context), implies VET
+%         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
+%      ————————————————————–————————————————————–——————–————–——————–
+%       then   C  ; L  ; ϕ  ; R  ⊢ ( σ , id ) : ( C , C'' ; L , L'' ; ϕ , ϕ'' ; R'' )
+%
+%
+% 5 very easy thing (VET) for call proof and let:
+%         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
+%        and   C , C''  ; L , L''  ; ϕ , ϕ ''  ; R''  ⊢ J
+%      ————————————————————–————————————————————–——————–
+%       then   C  ; L  ; ϕ  ; R  ⊢ ( σ , id ) ( J )
+%     same as  C  ; L  ; ϕ  ; R  ⊢ ( σ ) ( J )
