@@ -46,6 +46,8 @@ let pp_memop = function
       !^ "Va_end"
   | PtrArrayShift ->
       !^ "PtrArrayShift"
+  | Copy_alloc_id ->
+      !^ "Copy_alloc_id"
 
 
 

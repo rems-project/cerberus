@@ -563,6 +563,9 @@ let map_from_assoc compare =
 let read_core_object (core_stdlib, core_impl) fname =
   let open Core in
   let ic = open_in_bin fname in
+  let v = input_line ic in
+  if v <> Version.version then
+    prerr_endline ("WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
   { main=    dump.main;
@@ -589,6 +592,7 @@ let write_core_object core_file fname =
     }
   in
   let oc = open_out_bin fname in
+  output_string oc (Version.version ^ "+" ^ Impl_mem.name ^ "\n");
   Marshal.to_channel oc dump [];
   close_out oc
 

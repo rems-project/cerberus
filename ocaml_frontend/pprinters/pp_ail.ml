@@ -518,6 +518,8 @@ let pp_ail_builtin = function
       | AilBLwrite -> !^"linux_write"
       | AilBLrmw -> !^"linux_rmw"
     end
+  | AilBcopy_alloc_id ->
+      !^"copy_alloc_id"
 
 let rec pp_expression_aux mk_pp_annot a_expr =
   let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =

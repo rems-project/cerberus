@@ -356,7 +356,7 @@ let wrap_ptr_rel : (heap_state -> loc -> loc -> bool option)
 
 (** Operation to copy the provenance. *)
 
-let copy_alloc_id : value -> value -> value option = fun v1 v2 ->
+(* let copy_alloc_id : value -> value -> value option = fun v1 v2 ->
   match val_to_loc v1 with None -> None | Some(l1) ->
   match val_to_loc v2 with None -> None | Some(l2) ->
   Some(val_of_loc (fst l2, snd l1))
@@ -365,7 +365,11 @@ let copy_alloc_id_i : value -> value -> int_type -> value option =
   fun v1 v2 it ->
   match val_to_loc v1 with None -> None | Some(l1) ->
   match val_to_loc_weak v2 it with None -> None | Some(l2) ->
-  Some(val_of_loc (fst l2, snd l1))
+  Some(val_of_loc (fst l2, snd l1)) *)
+let copy_alloc_id : value -> value -> value option = fun v1 v2 ->
+  match val_to_Z_weak v1 uintptr_t with None -> None | Some(a) ->
+  match val_to_loc v2 with None -> None | Some(l) ->
+  Some(val_of_loc (fst l, a))
 
 (** Basic operation on the heap. *)
 

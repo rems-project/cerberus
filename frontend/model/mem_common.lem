@@ -202,6 +202,9 @@ type memop =
   | Va_copy
   | Va_arg
   | Va_end
+  
+  (* RefinedC *)
+  | Copy_alloc_id (* (integer, pointer) -> eff pointer *)
 
 
 instance (Show memop)
@@ -244,6 +247,8 @@ instance (Show memop)
         "va_arg"
     | Va_end ->
         "va_end"
+    | Copy_alloc_id ->
+        "copy_alloc_id"
   end
 end
 
