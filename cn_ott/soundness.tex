@@ -35,6 +35,7 @@
 \newcommand{\conf}[1]{\langle #1 \rangle}%
 \newcommand{\sych}{\Leftrightarrow}%
 \newcommand{\hconf}[2]{\langle #1 ; #2 \rangle}%
+\newcommand{\lolly}{\multimap}
 
 \title{Explicit CN Soundness Proof}
 \author{Dhruv Makwana}
@@ -100,6 +101,92 @@ If $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash ( \sigma ) : ( \ctxC' ; \ctxL' ;
     }
 
     \prove{$\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PVal\_Var}.
+        }{%
+            $\ctxC' ; \ctxL' ; \ctxN' \vdash x \synths \beta$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{Have $x : \beta \in \ctxC'$ (or $x : \beta \in \ctxL'$).}
+        \step{<2>3}{So $\exists pval.\ \ctxC ; \ctxL ; \ctxN \vdash pval \synths
+            \beta$ by \textsc{Ty\_Subs\_Cons\_\{Comp,Log\}}.}
+        \step{<2>4}{Since $pval = \sigma(x)$, we are done.}
+    \end{proof}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_TPE\_Let}.
+        }{%
+            $\ctxC' ; \ctxL' ; \ctxN' \vdash \cnkw{let } pat = pexpr \cnkw{ in
+            } tpexpr \checks y_2 : \beta_2.\ term_2$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN \vdash \sigma ( pexpr ) \synths y_1 :
+                \beta_1 .\ \sigma ( term_1 )$\label{IH1}
+            \item $\ctxC , \ctxC_1 ; \ctxL , y_1 : \beta_1 ; \ctxN , term_1 ,
+                \ctxN' \vdash \sigma (tpexpr ) \checks y_2 : \beta_2.\ \sigma (
+                term_2 )$\label{IH2}.
+        \end{pfenum}}\pflabel{IH}
+
+        \step{<2>2}{$\ctxC ; \ctxL ; \ctxN \vdash \sigma ( \cnkw{let } pat =
+            pexpr \cnkw{ in } tpexpr \checks y_2 : \beta_2.\ term_2 )$ as required.}
+    \end{proof}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_TVal\_Log}.
+        }{%
+            $\ctxC' ; \ctxL' ; \ctxN' ; \ctxR' \vdash \cnkw{done } pval ,
+            \overline{spine\_elem} \checks \exists y : \beta.\ ret$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN \vdash \sigma ( pval ) \beta$\label{IH1}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( \cnkw{done }
+                \overline{spine\_elem} ) \checks \sigma ( [ pval / y ] ret )$\label{IH2}.
+        \end{pfenum}}\pflabel{IH}
+
+        \step{<2>2}{Therefore $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma (
+            \cnkw{done } pval , \overline{spine\_elem} \checks \exists y :
+        \beta . ret )$.}
+    \end{proof}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_Spine\_Res}.
+        }{%
+            $\ctxC' ; \ctxL' ; \ctxN' ; \ctxR_1' , \ctxR_2 \vdash x = res\_term ,
+            \overline{ x = spine\_elem } \mathrel{{:}{:}} res \lolly arg \gg
+            res\_term / x , \psi ; ret$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 \vdash x = \sigma (
+                res\_term  ) \checks \sigma ( res ) $\label{IH1}
+            \item $\ctxC ; \ctxL ; \ctxN ; \ctxR_2 \vdash \overline{x = \sigma (
+                spine\_elem )} \mathbin{{:}{:}} \sigma ( res ) \lolly \sigma (
+                arg ) \gg \sigma ( \psi ) ; \sigma ( ret )$\label{IH2}
+        \end{pfenum}}\pflabel{IH}
+
+        \step{<2>2}{Hence $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR_2 \vdash \sigma (
+            x = res\_term , \overline{ x = spine\_elem } \mathrel{{:}{:}} res
+            \lolly arg \gg res\_term / x , \psi ; ret )$}
+    \end{proof}
+
 \end{proof}
 
 \subsection{Identity Extension}

@@ -2,7 +2,7 @@
 
 FLAGS := -quiet
 
-BUILD := build
+BUILD := _build
 
 PDFS := mucore.pdf soundness.pdf
 
