@@ -10,9 +10,15 @@ type sym = t
 let equal = S.symbolEquality
 let compare = S.symbol_compare
 
+
+
 let name (s : t) : string option = S.symbol_name s
 let named (s : t) : bool = Option.is_some (S.symbol_name s)
 
+
+let dest = function
+  | CF.Symbol.Symbol (digest, nat, oname) ->
+     (digest, nat, oname)
 
 let pp_string = CF.Pp_symbol.to_string_pretty
 let pp sym = Pp.string (pp_string sym)

@@ -21,6 +21,75 @@ module Make (G : sig val global : Global.t end) = struct
     else fail loc (TE.Unbound_name (Sym s))
 
 
+  let ensure_integer_or_real_type loc names local context it bt = 
+    let open BT in
+    match bt with
+    | Integer -> 
+       return Integer
+    | Real -> 
+       return Real
+    | _ -> 
+       let (context, it) = Explain.index_terms names local (context, it) in
+       let err = 
+         !^"Illtyped index term" ^^^ context ^^ dot ^^^
+           !^"Expected" ^^^ it ^^^ !^"to have integer or real type" ^^^ 
+             !^"but has type" ^^^ BT.pp bt
+       in
+       fail loc (Generic err)
+
+  let ensure_set_type loc names local context it bt = 
+    let open BT in
+    match bt with
+    | Set bt -> return bt
+    | _ -> 
+       let (context, it) = Explain.index_terms names local (context, it) in
+       let err = 
+         !^"Illtyped index term" ^^^ context ^^ dot ^^^
+           !^"Expected" ^^^ it ^^^ !^"to have set type" ^^ comma ^^^
+             !^"but has type" ^^^ BT.pp bt
+       in
+       fail loc (Generic err)
+
+  let ensure_list_type loc names local context it bt = 
+    let open BT in
+    match bt with
+    | List bt -> return bt
+    | _ -> 
+       let (context, it) = Explain.index_terms names local (context, it) in
+       let err = 
+         !^"Illtyped index term" ^^^ context ^^ dot ^^^
+           !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
+             !^"but has type" ^^^ BT.pp bt
+       in
+       fail loc (Generic err)
+
+  let ensure_param_type loc names local context it bt = 
+    let open BT in
+    match bt with
+    | Param (abt,rbt) -> return (abt, rbt)
+    | _ -> 
+       let (context, it) = Explain.index_terms names local (context, it) in
+       let err = 
+         !^"Illtyped index term" ^^^ context ^^ dot ^^^
+           !^"Expected" ^^^ it ^^^ !^"to have integer map type" ^^ comma ^^^
+             !^"but has type" ^^^ BT.pp bt
+       in
+       fail loc (Generic err)
+
+  let ensure_option_type loc names local context it bt = 
+    let open BT in
+    match bt with
+    | Option bt -> return bt
+    | _ -> 
+       let (context, it) = Explain.index_terms names local (context, it) in
+       let err = 
+         !^"Illtyped index term" ^^^ context ^^ dot ^^^
+           !^"Expected" ^^^ it ^^^ !^"to have option type" ^^ comma ^^^
+             !^"but has type" ^^^ BT.pp bt
+       in
+       fail loc (Generic err)
+  
+
   module WIT = struct
 
     open BaseTypes
@@ -133,10 +202,6 @@ module Make (G : sig val global : Global.t end) = struct
              let@ (ls,t) = infer loc local t in
              let@ t' = check loc local ls t' in
              return (BT.Bool, EQ (t,t')) 
-          | Forall ((s,bt), it) ->
-             let local = L.add_l s bt local in
-             let@ it = check loc local Bool it in
-             return (BT.Bool, Forall ((s, bt), it))
         in
 
         let tuple_op local = function
@@ -419,84 +484,27 @@ module Make (G : sig val global : Global.t end) = struct
 
       and infer_list_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
-        let@ (ls,it) = infer loc local it in
-        let@ bt = match ls with
-          | List bt -> return bt
-          | ls -> 
-             let (context, it) = Explain.index_terms names local (context, it) in
-             let err = 
-               !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                 !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
-                   !^"but has type" ^^^ LS.pp ls
-             in
-             fail loc (Generic err)
-        in
+        let@ (bt,it) = infer loc local it in
+        let@ bt = ensure_list_type loc names local context it bt in
         return (bt, it)
 
       and infer_integer_or_real_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
-        let@ (ls,it) = infer loc local it in
-        let@ bt = match ls with
-          | Integer -> return Integer
-          | Real -> return Real
-          | ls -> 
-             let (context, it) = Explain.index_terms names local (context, it) in
-             let err = 
-               !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                 !^"Expected" ^^^ it ^^^ !^"to have integer or real type" ^^^ 
-                   !^"but has type" ^^^ LS.pp ls
-             in
-             fail loc (Generic err)
-        in
+        let@ (bt,it) = infer loc local it in
+        let@ bt = ensure_integer_or_real_type loc names local context it bt in
         return (bt, it)
-
 
       and infer_set_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
-        let@ (ls, it) = infer loc local it in
-        let@ bt = match ls with
-          | Set bt -> return bt
-          | _ -> 
-             let (context, it) = Explain.index_terms names local (context, it) in
-             let err = 
-               !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                 !^"Expected" ^^^ it ^^^ !^"to have set type" ^^ comma ^^^
-                   !^"but has type" ^^^ LS.pp ls
-             in
-             fail loc (Generic err)
-        in
+        let@ (bt, it) = infer loc local it in
+        let@ bt = ensure_set_type loc names local context it bt in
         return (bt, it)
 
-      (* and infer_array_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
-       *   fun loc local it ->
-       *   let@ (ls, it) = infer loc local it in
-       *   let@ bt = match ls with
-       *     | Array bt -> return bt
-       *     | _ -> 
-       *        let (context, it) = Explain.index_terms names local (context, it) in
-       *        let err = 
-       *          !^"Illtyped index term" ^^^ context ^^ dot ^^^
-       *            !^"Expected" ^^^ it ^^^ !^"to have integer map type" ^^ comma ^^^
-       *              !^"but has type" ^^^ LS.pp ls
-       *        in
-       *        fail loc (Generic err)
-       *   in
-       *   return (bt, it) *)
 
       and infer_option_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
-        let@ (ls, it) = infer loc local it in
-        let@ bt = match ls with
-          | Option bt -> return bt
-          | _ -> 
-             let (context, it) = Explain.index_terms names local (context, it) in
-             let err = 
-               !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                 !^"Expected" ^^^ it ^^^ !^"to have option type" ^^ comma ^^^
-                   !^"but has type" ^^^ LS.pp ls
-             in
-             fail loc (Generic err)
-        in
+        let@ (bt, it) = infer loc local it in
+        let@ bt = ensure_option_type loc names local context it bt in
         return (bt, it)
     
       in  
@@ -627,8 +635,31 @@ module Make (G : sig val global : Global.t end) = struct
 
   module WLC = struct
     type t = LogicalConstraints.t
-    let welltyped loc names env lc =
-      WIT.welltyped loc names env BT.Bool lc
+
+    (* let welltyped_trigger loc names local trigger = 
+     *   match trigger with
+     *   | LC.T_Term it -> 
+     *      let@ (_, bt) = WIT.check_or_infer loc names local None it in
+     *      return bt
+     *   | LC.T_App (t, t') ->
+     *      let@ fbt = welltyped_trigger loc names local t in
+     *      let (abt, rbt) = ensure_param_type loca names local (app_ (t, t')) t fbt in *)
+         
+
+         
+
+    let welltyped loc names local lc =
+      match lc with
+      | LC.T it -> 
+         WIT.welltyped loc names local BT.Bool it
+      | LC.Forall ((s,bt), trigger, it) ->
+         let local = L.add_l s bt local in
+         let@ () = WIT.welltyped loc names local BT.Bool it in
+         match trigger with
+         | None -> return ()
+         | Some trigger -> 
+            (* let@ _ = WIT.check_or_infer loc names local None trigger in *)
+            return ()
   end
 
   module WLRT = struct

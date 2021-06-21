@@ -101,7 +101,7 @@ let add_l lname ls (local : t) =
   {local with logical = SymMap.add lname ls local.logical}
 
 let add_c lc (local : t) = 
-  let lcs = Simplify.simp_flatten local.constraints lc in
+  let lcs = Simplify.simp_lc_flatten local.constraints lc in
   {local with constraints = lcs @ local.constraints}
 
 let add_cs lcs (local : t) = 
@@ -118,7 +118,7 @@ let add_r r (local : t) =
            (all_resources local)
      in
      let local = {local with resources} in
-     add_cs lcs local
+     add_cs (List.map (fun c -> LC.T c) lcs) local
   | None ->
      local
 

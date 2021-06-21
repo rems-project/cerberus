@@ -31,6 +31,7 @@ open BT
 open Resources
 open Resources.RE
 open Predicates
+open LogicalConstraints
 
 
 
@@ -160,7 +161,7 @@ module Make (G : sig val global : Global.t end) = struct
       let (M_Pattern (loc, _, _) : mu_pattern) = pat in
       ensure_base_type loc ~expect:bt (IT.bt it) 
     in
-    let local' = add_c (eq_ (it, sym_ (sym, bt))) local in
+    let local' = add_c (t_ (eq_ (it, sym_ (sym, bt)))) local in
     return local'
     
 
@@ -309,7 +310,7 @@ module Make (G : sig val global : Global.t end) = struct
               Z.equal b.size b'.size &&
               IT.equal b.permission b'.permission ->
        let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
-       if Solver.holds local (and_ (List.map eq_ constrs))
+       if Solver.holds local (t_ (and_ (List.map eq_ constrs)))
        then return res
        else fail loc error
     | QPoint b, QPoint b' 
@@ -326,18 +327,20 @@ module Make (G : sig val global : Global.t end) = struct
        then return res 
        else fail loc error
     | Predicate p, Predicate p' 
-         when predicate_name_equal p.name p'.name &&
-              IT.equal p.pointer p'.pointer &&
-              List.equal IT.equal p.iargs p'.iargs &&
-              p.unused = p'.unused ->
+         when 
+           predicate_name_equal p.name p'.name &&
+             IT.equal p.pointer p'.pointer &&
+               List.equal IT.equal p.iargs p'.iargs &&
+                 p.unused = p'.unused ->
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
        if Solver.holds local 
-            (impl_ (bool_ p'.unused, 
-                    and_ (List.map eq_ constrs)))
+            (t_ (impl_ (bool_ p'.unused, 
+                        and_ (List.map eq_ constrs))))
        then return res 
        else fail loc error
     | QPredicate p, QPredicate p' 
-         when IT.equal p.pointer p'.pointer &&
+         when 
+           IT.equal p.pointer p'.pointer &&
               IT.equal p.element_size p'.element_size &&
               IT.equal p.istart p'.istart &&
               IT.equal p.iend p'.iend &&
@@ -469,29 +472,25 @@ module Make (G : sig val global : Global.t end) = struct
         in
 
         let@ rt = 
-          let rec aux = function
+          let rec check_logical_constraints = function
             | Constraint (c, ftyp) -> 
-               let lcs, rt = aux ftyp in
-               (c :: lcs, rt)
+               if Solver.holds local c then 
+                 check_logical_constraints ftyp
+               else
+                 let err = 
+                   lazy begin
+                       let (constr,state) = 
+                         Explain.unsatisfied_constraint names original_local c
+                       in
+                       (Unsat_constraint {constr; hint = None; state})
+                     end
+                 in
+                 fail loc err
             | I rt ->
-               ([], rt)
+               return rt
           in
-          let lcs, rt = aux ftyp_c in
-
-          if Solver.holds local (and_ lcs) then return rt 
-          else
-            let err = 
-              lazy begin 
-                  let (constr,state) = 
-                    Explain.unsatisfied_constraint names original_local 
-                      (List.find (fun lc -> not (Solver.holds local lc)) lcs)
-                  in
-                  (Unsat_constraint {constr; hint = None; state})
-                end
-            in
-            fail loc err
+          check_logical_constraints ftyp_c
         in
-
         return (rt, local)
 
     end
@@ -510,7 +509,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let is_global local it = 
       SymSet.exists (fun s ->
-        Solver.holds local (eq_ (it, IT.sym_ (s, BT.Loc)))
+        Solver.holds local (t_ (eq_ (it, IT.sym_ (s, BT.Loc))))
       ) local.global
 
 
@@ -546,7 +545,7 @@ module Make (G : sig val global : Global.t end) = struct
             let clause = PackingFT.subst_its substs clause in 
             let condition, outputs = PackingFT.logical_arguments_and_return clause in
             let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
-            let spec = LRT.concat condition (Constraint (lc, I)) in
+            let spec = LRT.concat condition (Constraint (t_ lc, I)) in
             let lrt = LRT.subst_its substs spec in
             (* remove resource before binding the return
                type 'condition', so as not to unsoundly
@@ -589,7 +588,7 @@ module Make (G : sig val global : Global.t end) = struct
               | RE.Predicate p when p.unused ->
                  let (local, changed') = unpack_predicate local p in
                  (local, changed || changed')
-              | RE.QPredicate p when p.unused && Solver.holds local (RE.is_qpredicate_instance_pointer p pointer) ->
+              | RE.QPredicate p when p.unused && Solver.holds local (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
                  let p_inst = 
                    let index = qpredicate_pointer_to_index p p.pointer in
                    let iargs = List.map (IT.subst_it {before=p.i; after=index}) p.iargs in
@@ -619,7 +618,7 @@ module Make (G : sig val global : Global.t end) = struct
             | Point p' 
                  when Z.equal requested.size p'.size &&
                       BT.equal requested.value (IT.bt p'.value) &&
-                      Solver.holds local (eq_ (requested.pointer, p'.pointer)) ->
+                      Solver.holds local (t_ (eq_ (requested.pointer, p'.pointer))) ->
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let value = ite_ (took, p'.value, value) in
@@ -646,7 +645,7 @@ module Make (G : sig val global : Global.t end) = struct
                (re, (needed, value, init))
           ) local (needed, default_ requested.value, default_ BT.Bool)
       in
-      if Solver.holds local (eq_ (needed, q_ (0, 1))) 
+      if Solver.holds local (t_ (eq_ (needed, q_ (0, 1)))) 
       then 
         let r = 
           { pointer = requested.pointer;
@@ -732,10 +731,10 @@ module Make (G : sig val global : Global.t end) = struct
               | Predicate p', None ->
                  if predicate_name_equal p.name p'.name &&
                     p'.unused && 
-                    Solver.holds local (
+                    Solver.holds local (t_ (
                         and_ (IT.eq__ p.pointer p'.pointer ::
                               List.map2 eq__ p.iargs p'.iargs)
-                      )
+                      ))
                  then (Predicate {p' with unused = false}, Some p'.oargs)
                  else (re, found)
               | QPredicate p', None ->
@@ -744,8 +743,8 @@ module Make (G : sig val global : Global.t end) = struct
                     p'.unused && 
                     Solver.holds local (
                         let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
-                        and_ (is_qpredicate_instance_pointer p' p.pointer ::
-                              List.map2 eq__ p.iargs iargs')
+                        t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
+                                    List.map2 eq__ p.iargs iargs'))
                       )
                  then
                    let oargs = List.map (IT.subst_it {before=p'.i; after=index}) p'.oargs in
@@ -806,6 +805,8 @@ module Make (G : sig val global : Global.t end) = struct
 
     let qpredicate_request_prompt ui_info local (p : Resources.Requests.qpredicate) = 
       let open Prompt.Operators in
+      let () = print stderr !^"HERE***********************************************" in
+      let () = print stderr (item "name" (pp_predicate_name p.name)) in
       assert ([] = p.moved); (* todo? *)
       if p.unused = false then
         let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
@@ -828,19 +829,38 @@ module Make (G : sig val global : Global.t end) = struct
           L.map_and_fold_resources (fun re found ->
               match re, found with
               | QPredicate p', None ->
+                 let () = print stderr (item "name" (pp_predicate_name p'.name)) in
                  if predicate_name_equal p.name p'.name &&
                     p.unused = p'.unused &&
-                    Solver.holds local (
-                        and_ [eq_ (p.pointer, p'.pointer);
-                              eq_ (p.element_size, p'.element_size);
-                              eq_ (p.istart, p'.istart);
-                              eq_ (p.iend, p'.iend);
-                              forall_ (p.i, BT.Integer)
-                                (impl_ 
-                                   (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
-                                    let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
-                                    and_ (List.map2 eq__ p.iargs iargs')))]
-                      )
+                    Solver.holds local 
+                      (t_ (and_ [eq_ (p.pointer, p'.pointer);
+                                 eq_ (p.element_size, p'.element_size);
+                                 eq_ (p.istart, p'.istart);
+                                 eq_ (p.iend, p'.iend)])) &&
+                      let () = print stderr !^"2***********************************************" in
+                      let () = 
+                        let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
+                        List.iter (fun (iarg, iarg') ->
+                            print stderr (item "iarg" (IT.pp iarg));
+                            print stderr (item "iarg'" (IT.pp iarg'));
+                            let b = 
+                              Solver.holds local
+                              (forall_ (p.i, BT.Integer)
+                                 (impl_ 
+                                    (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                                    eq_ (iarg, iarg'))))
+                            in
+                            if b then print stderr (!^"ok") 
+                            else print stderr (!^"bad")
+                          ) (List.combine p.iargs iargs');
+                      in
+                      Solver.holds local 
+                        (forall_ (p.i, BT.Integer)
+                           (impl_ 
+                              (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                               let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
+                               and_ (List.map2 eq__ p.iargs iargs')))
+                        )
                  then 
                    let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
                    (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
@@ -892,6 +912,7 @@ module Make (G : sig val global : Global.t end) = struct
            in
            return (r, local)
         | None ->
+           let () = print stderr !^"ENDHERE***********************************************" in
            resource_request_missing ui_info (QPredicate p)
 
     let resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
@@ -911,37 +932,39 @@ module Make (G : sig val global : Global.t end) = struct
          return (QPredicate qpredicate, local)
 
 
-
-
-    let rec handle_prompt : 'a. 'a Prompt.m -> ('a, type_error) m =
+    let handle_prompt : 'a. 'a Prompt.m -> ('a, type_error) m =
+      let rec aux  : 'a. 'a Prompt.m -> ('a, (loc * Tools.stacktrace option * type_error) Lazy.t) result = function
+        | Prompt.Done a -> 
+           Ok a
+        | Prompt.Prompt (r, c) ->
+           begin match r with
+           | Prompt.R_Error (loc,tr,error) -> 
+              Error (lazy (loc,tr, Lazy.force error))
+           | R_Resource {ui_info; local; resource} ->
+              let prompt = 
+                resource_request_prompt ui_info local resource in
+              let@ (unis, local) = aux prompt in
+              aux (c (unis, local))
+           | R_Packing {ui_info; local; packing_function} ->
+              let prompt = Spine_Packing.spine ui_info local [] packing_function in
+              let@ (assignment, local) = aux prompt in
+              aux (c (assignment, local))
+           | R_Try choices ->
+              let rec first_success list1 =
+                let (hd, tl) = List1.dest list1 in
+                let hd_run = aux (Lazy.force hd) in
+                match tl with
+                | [] -> hd_run
+                | hd' :: tl' -> msum hd_run (lazy (first_success (List1.make (hd', tl'))))
+              in
+              let@ reply = first_success choices in
+              aux (c reply)
+           end
+      in
       fun prompt ->
-      match prompt with
-      | Prompt.Done a -> 
-         return a
-      | Prompt.Prompt (r, c) ->
-         begin match r with
-         | Prompt.R_Error (loc,tr,error) -> 
-            Error (loc,tr,Lazy.force error)
-         | R_Resource {ui_info; local; resource} ->
-            let prompt = 
-              resource_request_prompt ui_info local resource in
-            let@ (unis, local) = handle_prompt prompt in
-            handle_prompt (c (unis, local))
-         | R_Packing {ui_info; local; packing_function} ->
-            let prompt = Spine_Packing.spine ui_info local [] packing_function in
-            let@ (assignment, local) = handle_prompt prompt in
-            handle_prompt (c (assignment, local))
-         | R_Try choices ->
-            let rec first_success list1 =
-               let (hd, tl) = List1.dest list1 in
-               let hd_run = handle_prompt (Lazy.force hd) in
-               match tl with
-               | [] -> hd_run
-               | hd' :: tl' -> msum hd_run (lazy (first_success (List1.make (hd', tl'))))
-            in
-            let@ reply = first_success choices in
-            handle_prompt (c reply)
-         end
+      match aux prompt with
+      | Ok a -> Ok a
+      | Error e -> Error (Lazy.force e)
 
 
 
@@ -1006,7 +1029,7 @@ module Make (G : sig val global : Global.t end) = struct
     let rt_of_vt (bt,it) = 
       let s = Sym.fresh () in 
       RT.Computational ((s, bt), 
-      LRT.Constraint (def_ s it,
+      LRT.Constraint (t_ (def_ s it),
       LRT.I))
 
 
@@ -1312,7 +1335,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEassert_undef (asym, _uloc, undef) ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-           if Solver.holds local (it_of_arg arg) then
+           if Solver.holds local (t_ (it_of_arg arg)) then
              return (rt_of_vt (Unit, unit_), local)
            else
              let expl = Explain.undefined_behaviour names local in
@@ -1332,18 +1355,16 @@ module Make (G : sig val global : Global.t end) = struct
               let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
               return (rt_of_vt vt, local)
            | _ 
-                when Solver.holds local (representable_ (act.ct, arg_it)) ->
+                when Solver.holds local (t_ (representable_ (act.ct, arg_it))) ->
               return (rt_of_vt (Integer, arg_it), local)
            | Sctype (_, Integer ty) 
                 when Sctypes.is_unsigned_integer_type act.ct ->
               infer_wrapI local act.ct asym
            | _ ->
-              let () = print_endline "2**************************************************************" in
               let (it_pp, state_pp) = 
                 Explain.implementation_defined_behaviour names local 
                   arg_it
               in
-              let () = print_endline "3**************************************************************" in
               fail loc (Implementation_defined_behaviour 
                           (it_pp ^^^ !^"outside representable range for" ^^^ 
                              Sctypes.pp act.ct, state_pp))
@@ -1374,7 +1395,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ carg = arg_of_asym local casym in
          let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          ListM.iterM (fun (lc, e) ->
-             let local = add_c lc local in
+             let local = add_c (t_ lc) local in
              if Solver.is_inconsistent local then return ()
              else check_tpexpr local e typ
            ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
@@ -1449,7 +1470,7 @@ module Make (G : sig val global : Global.t end) = struct
         List.find_opt (fun resource ->
             match resource with
             | Point p ->
-               not (Solver.holds local (le_ (p.permission, q_ (0, 1))))
+               not (Solver.holds local (t_ (le_ (p.permission, q_ (0, 1)))))
             | QPoint p ->
                not (Solver.holds local 
                       (forall_ (p.qpointer, BT.Loc)
@@ -1458,7 +1479,7 @@ module Make (G : sig val global : Global.t end) = struct
                not p.unused
             | QPredicate p ->
                not p.unused &&
-                 not (Solver.holds local (eq_ (p.istart, p.iend)))
+                 not (Solver.holds local (t_ (eq_ (p.istart, p.iend))))
           ) local.resources
       in
       match bad with
@@ -1574,8 +1595,8 @@ module Make (G : sig val global : Global.t end) = struct
               in
               let rt = 
                 RT.Computational ((ret, Loc), 
-                LRT.Constraint (representable_ (Sctypes.pointer_sct act.ct, sym_ (ret, Loc)), 
-                LRT.Constraint (alignedI_ ~align:(it_of_arg arg) ~t:(sym_ (ret, Loc)), 
+                LRT.Constraint (t_ (representable_ (Sctypes.pointer_sct act.ct, sym_ (ret, Loc))), 
+                LRT.Constraint (t_ (alignedI_ ~align:(it_of_arg arg) ~t:(sym_ (ret, Loc))), 
                 LRT.Logical ((value_s, BT.of_sct act.ct),
                 LRT.Resource (resource, LRT.I)))))
               in
@@ -1614,9 +1635,9 @@ module Make (G : sig val global : Global.t end) = struct
                  understand, are an exception. *)
               let@ () = 
                 let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-                if Solver.holds local in_range_lc then return () else 
+                if Solver.holds local (t_ in_range_lc) then return () else 
                   let (constr,state) = 
-                    Explain.unsatisfied_constraint names local in_range_lc
+                    Explain.unsatisfied_constraint names local (t_ in_range_lc)
                   in
                   fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
               in
@@ -1657,14 +1678,14 @@ module Make (G : sig val global : Global.t end) = struct
               in
               let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
               let@ () = 
-                if Solver.holds local init then return () else
+                if Solver.holds local (t_ init) then return () else
                  let state = Explain.state names local in
                  fail loc (Uninitialised_read {is_member = None; state})
               in
               let ret = Sym.fresh () in
               let constr = def_ ret value in
               let rt = RT.Computational ((ret, IT.bt value), 
-                       Constraint (constr, LRT.I)) 
+                       Constraint (t_ constr, LRT.I)) 
               in
               return (rt, local)
            | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
@@ -1726,7 +1747,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ carg = arg_of_asym local casym in
            let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
            ListM.iterM (fun (lc, e) ->
-               let local = add_c lc local in
+               let local = add_c (t_ lc) local in
                if Solver.is_inconsistent local then return ()
                else check_texpr (local, labels) e typ 
              ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
@@ -2039,7 +2060,7 @@ let record_funinfo (global, local) funinfo =
       let local = 
         let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
         let lc = representable_ (voidstar, sym_ (fsym, Loc)) in
-        Local.add_c lc local
+        Local.add_c (t_ lc) local
       in
       return ({global with fun_decls}, local)
     ) funinfo (global, local)
@@ -2118,7 +2139,7 @@ let record_globals local globs =
          let bt = Loc in
          let local = Local.add_l lsym bt local in
          let local = Local.add_a sym (bt, lsym) local in
-         let local = Local.add_c (IT.good_pointer (sym_ (lsym, bt)) ct) local in
+         let local = Local.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
          let global = SymSet.add lsym local.global in
          return {local with global}
     ) local globs

@@ -42,7 +42,6 @@ and 'bt bool_op =
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EQ of 'bt term * 'bt term
-  | Forall of (Sym.t * BT.t) * 'bt term
 
 and 'bt tuple_op = 
   | Tuple of 'bt term list
@@ -191,8 +190,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
        equal t1 t1' && equal t2 t2' && equal t3 t3'
     | EQ (t1,t2), EQ (t1',t2') -> 
        equal t1 t1' && equal t2 t2' 
-    | Forall ((s,bt), it), Forall ((s',bt'), it') ->
-      Sym.equal s s' && BT.equal bt bt' && equal it it'
     | And _, _ -> 
        false
     | Or _, _ -> 
@@ -204,8 +201,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | ITE _, _ ->
        false
     | EQ _, _ -> 
-       false
-    | Forall _, _ ->
        false
   in
 
@@ -443,8 +438,6 @@ let pp (it : 'bt term) : PPrint.document =
          mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
       | EQ (o1,o2) -> 
          mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
-      | Forall ((s, bt), it) ->
-         c_app !^"forall" [Sym.pp s; BT.pp bt] ^^ dot ^^^ aux atomic it
     in
 
     let tuple_op = function
@@ -607,8 +600,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Not it -> free_vars it
     | ITE (it,it',it'') -> free_vars_list [it;it';it'']
     | EQ (it, it') -> free_vars_list [it; it']
-    | Forall ((s,_), it) -> 
-       SymSet.remove s (free_vars it)
   in
 
   let tuple_op : 'bt tuple_op -> SymSet.t = function
@@ -698,7 +689,6 @@ and free_vars_list l =
 let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 
-
 let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
 
   let rec aux = 
@@ -740,16 +730,6 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
         | Not it -> Not (aux it)
         | ITE (it,it',it'') -> ITE (aux it, aux it', aux it'')
         | EQ (it, it') -> EQ (aux it, aux it')
-        | Forall ((s, bt), it) ->
-           let s' = Sym.fresh_same s in 
-           let substitution =
-             {before = s; 
-              after = 
-                fun bt -> 
-                IT (Lit (Sym s'), bt)}
-           in
-           let it = subst substitution it in
-           Forall ((s', bt), aux it)
       in
       IT (Bool_op it, bt)
     in
@@ -993,10 +973,6 @@ let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
-let forall_ (s,bt) it = IT (Bool_op (Forall ((s, bt), it)), BT.Bool)
-let forall_sth_ (s, bt) cond it = 
-  IT (Bool_op (Forall ((s, bt), impl_ (cond, it))), BT.Bool)
-(* let exists_ (s, bt) it = not_ (forall_ (s, bt) (not_ it)) *)
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
@@ -1038,7 +1014,6 @@ let (%.) struct_decls t member =
     | BT.Struct tag -> tag
     | _ -> Debug_ocaml.error "illtyped index term. not a struct"
   in
-  let member = Id.id member in
   let member_bt = 
     BT.of_sct
       (List.assoc Id.equal member 
@@ -1224,11 +1199,13 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
   | Array (it, None) -> 
      Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
   | Array (ct, Some n) -> 
-     let i_s, i_t = fresh BT.Integer in
-     forall_sth_ (i_s, bt i_t)
-       (and_ [le_ (int_ 0, i_t); lt_ (i_t, int_ n)])
-       (representable_ctype struct_layouts ct
-          (app_ about i_t))
+     let lcs = 
+       List.init n (fun i ->
+           (representable_ctype struct_layouts ct
+              (app_ about (int_ i)))
+         )
+     in
+     and_ lcs
   | Pointer _ -> 
      let pointer_byte_size = size_of_pointer in
      let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in

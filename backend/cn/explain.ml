@@ -10,6 +10,8 @@ module SymPairMap = Map.Make(SymRel.SymPair)
 module L = Local
 
 open Resources.RE
+open IndexTerms
+open LogicalConstraints
 open Pp
 
 module Make (G : sig val global : Global.t end) = struct 
@@ -44,7 +46,7 @@ module Make (G : sig val global : Global.t end) = struct
     let should_be_in_veclass local veclass it = 
       let bt = IT.bt it in
       if not (LS.equal veclass.sort bt) then false 
-      else S.holds ~ignore_unknown:true local (IT.eq_ (IT.sym_ (veclass.repr, bt), it))
+      else S.holds ~ignore_unknown:true local (t_ (eq_ (IT.sym_ (veclass.repr, bt), it)))
 
     let is_in_veclass veclass sym = 
       SymSet.mem sym veclass.c_elements ||
@@ -251,6 +253,9 @@ module Make (G : sig val global : Global.t end) = struct
 
   let explanation names local relevant =
 
+    print stdout !^"producing error report";
+
+
     let () = Debug_ocaml.begin_csv_timing "explanation" in
 
     let relevant =
@@ -328,7 +333,7 @@ module Make (G : sig val global : Global.t end) = struct
   let rec o_evaluate o_model expr = 
     let open Option in
     let@ model = o_model in
-    match Z3.Model.evaluate model (S.of_index_term expr) true with
+    match Z3.Model.evaluate model (fst (S.of_index_term expr)) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 
        match IT.bt expr with
@@ -492,7 +497,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let counter_model local = 
-    let (_, solver) = S.holds_and_solver local (IT.bool_ false) in
+    let (_, solver) = S.holds_and_solver local (t_ (bool_ false)) in
     S.get_model solver
 
 

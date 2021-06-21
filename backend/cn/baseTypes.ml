@@ -105,3 +105,8 @@ let hash = function
   (* | Array _ -> 9 *)
   | Option _ -> 10
   | Param _ -> 11
+
+
+let param_bt = function
+  | Param (abt, rbt) -> (abt, rbt) 
+  | _ -> Debug_ocaml.error "illtyped index term: not an array"

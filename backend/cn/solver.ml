@@ -2,6 +2,8 @@ open IndexTerms
 open BaseTypes
 module SymMap=Map.Make(Sym)
 module IT = IndexTerms
+module LC = LogicalConstraints
+open LogicalConstraints
 
 
 let context = 
@@ -20,10 +22,12 @@ let params = Z3.Params.mk_params context
 let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234
 (* let () = Z3.set_global_param "smt.auto-config" "false"
  * let () = Z3.set_global_param "smt.mbqi" "true" *)
-(* let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt" *)
+let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt"
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
+
+
 
 
 module Make (G : sig val global : Global.t end) = struct
@@ -33,8 +37,14 @@ module Make (G : sig val global : Global.t end) = struct
   let tuple_field_name i = "comp" ^ string_of_int i
   let tuple_field_symbol i = Z3.Symbol.mk_string context (tuple_field_name i)
   let member_name id = Id.s id
-  let member_symbol id = Z3.Symbol.mk_string context (member_name id)
-
+  let member_symbol bt id = Z3.Symbol.mk_string context (bt_name bt ^ "_" ^ member_name id)
+  let sym_to_sym s = 
+    let (digest,id, oname) = Sym.dest s in
+    let str = match oname with
+      | None -> digest ^ "_" ^ string_of_int id
+      | Some s -> s ^ digest ^ "_" ^ string_of_int id
+    in
+    Z3.Symbol.mk_string context str
 
   let sort_of_bt =
     let tbl = BTtbl.create 10 in
@@ -59,7 +69,7 @@ module Make (G : sig val global : Global.t end) = struct
       | Struct tag ->
          let layout = SymMap.find tag G.global.struct_decls in
          let members = Memory.member_types layout in
-         let member_symbols = List.map (fun (id,_) -> member_symbol id) members in
+         let member_symbols = List.map (fun (id,_) -> member_symbol (BT.Struct tag) id) members in
          let member_sorts = 
            List.map (fun (_, sct) -> 
                aux (BT.of_sct sct)
@@ -127,25 +137,26 @@ module Make (G : sig val global : Global.t end) = struct
          sc
 
     and lit it bt =
-      match it with
-      | Sym s -> 
-         let sym = Z3.Symbol.mk_string context (Sym.pp_string s) in
-         Z3.Expr.mk_const context sym (sort_of_bt bt)
-      | Z z ->
-         Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-      | Q (i,i') ->
-         Z3.Arithmetic.Real.mk_numeral_nd context i i'
-      | Pointer z ->
-         Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-      | Bool true ->
-         Z3.Boolean.mk_true context
-      | Bool false ->
-         Z3.Boolean.mk_false context
-      | Unit ->
-         Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
-      | Default bt -> 
-         let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
-         Z3.Expr.mk_const context sym (sort_of_bt bt)
+      let e = match it with
+        | Sym s ->    
+           Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt)
+        | Z z ->
+           Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
+        | Q (i,i') ->
+           Z3.Arithmetic.Real.mk_numeral_nd context i i'
+        | Pointer z ->
+           Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
+        | Bool true ->
+           Z3.Boolean.mk_true context
+        | Bool false ->
+           Z3.Boolean.mk_false context
+        | Unit ->
+           Z3.Expr.mk_fresh_const context "unit" (sort_of_bt Unit)
+        | Default bt -> 
+           let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
+           Z3.Expr.mk_const context sym (sort_of_bt bt)
+      in
+      (e, [])
          
 
 
@@ -153,63 +164,85 @@ module Make (G : sig val global : Global.t end) = struct
     and arith_op it bt = 
       match it with
       | Add (t1, t2) ->
-         Z3.Arithmetic.mk_add context [term t1; term t2]
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_add context [t1; t2], e1 @ e2)
       | Sub (t1, t2) ->
-         Z3.Arithmetic.mk_sub context [term t1; term t2]
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_sub context [t1; t2], e1 @ e2)
       | Mul (t1, t2) ->
-         Z3.Arithmetic.mk_mul context [term t1; term t2]
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_mul context [t1; t2], e1 @ e2)
       | Div (t1, t2) ->
-         Z3.Arithmetic.mk_div context (term t1) (term t2)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_div context t1 t2, e1 @ e2)
       | Exp (t1, t2) ->
-         Z3.Arithmetic.mk_power context (term t1) (term t2)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_power context t1 t2, e1 @ e2)
       | Rem (t1, t2) ->
-         Z3.Arithmetic.Integer.mk_rem context (term t1) (term t2)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.Integer.mk_rem context t1 t2, e1 @ e2)
 
     and cmp_op it bt =
       match it with
       | LT (t1, t2) ->
-         Z3.Arithmetic.mk_lt context (term t1) (term t2)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_lt context t1 t2, e1 @ e2)
       | LE (t1, t2) ->
-         Z3.Arithmetic.mk_le context (term t1) (term t2)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Arithmetic.mk_le context t1 t2, e1 @ e2)
 
     and bool_op it bt =
       match it with
       | And ts -> 
-         Z3.Boolean.mk_and context (List.map term ts)
+         let ts, es = List.split (List.map term ts) in
+         (Z3.Boolean.mk_and context ts, List.concat es)
       | Or ts -> 
-         Z3.Boolean.mk_or context (List.map term ts)
+         let ts, es = List.split (List.map term ts) in
+         (Z3.Boolean.mk_or context ts, List.concat es)
       | Impl (t1, t2) -> 
-         Z3.Boolean.mk_implies context (term t1) (term t2)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Boolean.mk_implies context t1 t2, e1 @ e2)
       | Not t ->
-         Z3.Boolean.mk_not context (term t)
+         let (t, e) = term t in
+         (Z3.Boolean.mk_not context t, e)
       | ITE (t1, t2, t3) ->
-         Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         let (t3, e3) = term t3 in
+         (Z3.Boolean.mk_ite context t1 t2 t3, e1 @ e2 @ e3)
       | EQ (t1, t2) ->
-         Z3.Boolean.mk_eq context (term t1) (term t2)
-      | Forall ((s, bt), it) ->
-         let q = term (sym_ (s, bt)) in
-         let body = (term it) in
-         let q = 
-           Z3.Quantifier.mk_forall_const context [q] 
-             body None [] [] None None 
-         in
-         Z3.Quantifier.expr_of_quantifier q
+         let (t1, e1) = term t1 in
+         let (t2, e2) = term t2 in
+         (Z3.Boolean.mk_eq context t1 t2, e1 @ e2)
 
 
     and tuple_op it bt =
       match it with
       | Tuple ts ->
+         let ts, es = List.split (List.map term ts) in
          let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
-         Z3.Expr.mk_app context constructor (List.map term ts)
+         (Z3.Expr.mk_app context constructor ts, List.concat es)
       | NthTuple (n, t) ->
          let destructors = Z3.Tuple.get_field_decls (sort_of_bt (IT.bt t)) in
-         Z3.Expr.mk_app context (List.nth destructors n) [term t]
+         let t, e = term t in
+         (Z3.Expr.mk_app context (List.nth destructors n) [t], e)
 
     and struct_op it bt =
       match it with
       | Struct (tag, mts) ->
          let constructor = Z3.Tuple.get_mk_decl (sort_of_bt bt) in
-         Z3.Expr.mk_app context constructor (List.map (fun (_, t) -> term t) mts)
+         let mts = (List.map (fun (_, t) -> term t) mts) in
+         let ts, es = List.split mts in
+         (Z3.Expr.mk_app context constructor ts, List.concat es)
       | StructMember (t, member) ->
          let tag = match IT.bt t with
            | Struct tag -> tag
@@ -220,22 +253,33 @@ module Make (G : sig val global : Global.t end) = struct
          let destructors = Z3.Tuple.get_field_decls (sort_of_bt (Struct tag)) in
          let member_destructors = List.combine members destructors in
          let destructor = List.assoc Id.equal member member_destructors in
-         Z3.Expr.mk_app context destructor [term t]       
+         let t, e = term t in
+         (Z3.Expr.mk_app context destructor [t], e)
 
     and pointer_op it bt =
       match it with
       | Null ->
          term (int_ 0)
       | AddPointer (t1, t2) ->
-         Z3.Arithmetic.mk_add context [term t1; term t2]
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Arithmetic.mk_add context [t1; t2], e1 @ e2)
       | SubPointer (t1, t2) ->
-         Z3.Arithmetic.mk_sub context [term t1; term t2]
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Arithmetic.mk_sub context [t1; t2], e1 @ e2)
       | MulPointer (t1, t2) ->
-         Z3.Arithmetic.mk_mul context [term t1; term t2]
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Arithmetic.mk_mul context [t1; t2], e1 @ e2)
       | LTPointer (t1, t2) ->
-         Z3.Arithmetic.mk_lt context (term t1) (term t2)
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Arithmetic.mk_lt context t1 t2, e1 @ e2)
       | LEPointer (t1, t2) ->
-         Z3.Arithmetic.mk_le context (term t1) (term t2)
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Arithmetic.mk_le context t1 t2, e1 @ e2)
       | IntegerToPointerCast t ->
          term t
       | PointerToIntegerCast t ->
@@ -260,15 +304,23 @@ module Make (G : sig val global : Global.t end) = struct
     and set_op it bt =
       match it with
       | SetMember (t1, t2) ->
-          Z3.Set.mk_membership context (term t1) (term t2)
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Set.mk_membership context t1 t2, e1 @ e2)
       | SetUnion ts ->
-          Z3.Set.mk_union context (List.map term (List1.to_list ts))
+         let ts, es = List.split (List.map term (List1.to_list ts)) in
+         (Z3.Set.mk_union context ts, List.concat es)
       | SetIntersection ts ->
-          Z3.Set.mk_intersection context (List.map term (List1.to_list ts))
+         let ts, es = List.split (List.map term (List1.to_list ts)) in
+         (Z3.Set.mk_intersection context ts, List.concat es)
       | SetDifference (t1, t2) ->
-         Z3.Set.mk_difference context (term t1) (term t2)
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Set.mk_difference context t1 t2, e1 @ e2)
       | Subset (t1, t2) ->
-         Z3.Set.mk_subset context (term t1) (term t2)
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         (Z3.Set.mk_subset context t1 t2, e1 @ e2)
 
     and ct_pred it bt =
       match it with
@@ -290,40 +342,60 @@ module Make (G : sig val global : Global.t end) = struct
       | Something it ->
          let option_sort = sort_of_bt bt in
          let constructors = Z3.Datatype.get_constructors option_sort in
-         Z3.Expr.mk_app context (List.hd constructors) [term it]
+         let t, e = term it in
+         (Z3.Expr.mk_app context (List.hd constructors) [t], e)
       | Nothing _ ->
          let option_sort = sort_of_bt bt in
          let constructors = Z3.Datatype.get_constructors option_sort in
-         Z3.Expr.mk_app context (List.hd (List.tl constructors)) []
+         (Z3.Expr.mk_app context (List.hd (List.tl constructors)) [], [])
       | Is_some it -> 
          let option_sort = sort_of_bt (IT.bt it) in
          let recognisers = Z3.Datatype.get_recognizers option_sort in
-         Z3.Expr.mk_app context (List.hd recognisers) [term it]
+         let t, e = term it in
+         (Z3.Expr.mk_app context (List.hd recognisers) [t], e)
       | Value_of_some it -> 
          let option_sort = sort_of_bt (IT.bt it) in
          let accessors = Z3.Datatype.get_accessors option_sort in
-         Z3.Expr.mk_app context (List.hd (List.hd accessors)) [term it]
+         let t, e = term it in
+         (Z3.Expr.mk_app context (List.hd (List.hd accessors)) [t], e)
 
     and param_op it bt = 
       match it with
       | Const t ->
-         Z3.Z3Array.mk_const_array context (sort_of_bt Integer) (term t)
+         let t, e = term t in
+         (Z3.Z3Array.mk_const_array context (sort_of_bt Integer) t, e)
       | Mod (t1, t2, t3) ->
-         Z3.Z3Array.mk_store context (term t1) (term t2) (term t3)  
+         let t1, e1 = term t1 in
+         let t2, e2 = term t2 in
+         let t3, e3 = term t3 in
+         (Z3.Z3Array.mk_store context t1 t2 t3, e1 @ e2 @ e3)
       | App (f, arg) ->
          begin match f with
          | IT (Param_op (Param (t_arg, body)),_) ->
             let subst = Subst.{before = (fst t_arg); after = arg} in
             term (IT.subst_it subst body)
          | _ ->
-            Z3.Z3Array.mk_select context (term f) (term arg)
+            let f, e1 = term f in
+            let a, e2 = term arg in
+            (Z3.Z3Array.mk_select context f a, e1 @ e2)
          end
-      | Param ((sym, abt), body) ->
-         let err = 
-           "SMT solver applied to parameterised expression (of_index_term): " ^
-             Pp.plain (IT.pp (IT (Param_op it, bt)))
+      | Param ((i, abt), body) ->
+         let array_s = Sym.fresh () in
+         let array_t = Z3.Expr.mk_const context (sym_to_sym array_s) (sort_of_bt bt) in
+         let body_t, body_e = term body in
+         let select_t, select_e = term (app_ (sym_ (array_s, bt)) (sym_ (i, abt))) in
+         let constr = 
+           Z3.Quantifier.expr_of_quantifier (
+           Z3.Quantifier.mk_forall_const context 
+             [Z3.Expr.mk_const context (sym_to_sym i) (sort_of_bt abt)]
+             (Z3.Boolean.mk_eq context 
+                select_t body_t)
+             None 
+             [Z3.Quantifier.mk_pattern context [select_t]]
+             [] None None
+           )
          in
-         Debug_ocaml.error err
+         (array_t, constr :: select_e @ body_e)
 
 
     in
@@ -343,14 +415,88 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error ("Z3 error: " ^ err)
 
 
-  let check ?(ignore_unknown=false) local (lc : IT.t) = 
+  let rec make_trigger = function
+    | T_Term (IT (Lit (Sym s), bt)) -> 
+       let t = Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt) in
+       (bt, t, [])
+    | T_Term it -> 
+       let _, t1 = IT.fresh (IT.bt it) in
+       let t1, e1 = of_index_term_aux t1 in
+       let t2, e2 = of_index_term_aux it in
+       (IT.bt it, t1, Z3.Boolean.mk_eq context t1 t2 :: e1 @ e2)
+    | T_App (t, t') ->
+       let (bt, t, cs) = make_trigger t in
+       let (_, t', cs') = make_trigger t' in
+       let (_, rbt) = param_bt bt in
+       (rbt, Z3.Z3Array.mk_select context t t', cs @ cs')
+    | T_Member (t, member) ->
+       let (sbt, t, cs) = make_trigger t in
+       let tag = match sbt with
+         | Struct tag -> tag
+         | _ -> Debug_ocaml.error "illtyped index term: not a struct"
+       in
+       let layout = SymMap.find tag G.global.struct_decls in
+       let members = List.map fst (Memory.member_types layout) in
+       let bt = BT.of_sct (List.assoc Id.equal member (Memory.member_types layout)) in
+       let destructors = Z3.Tuple.get_field_decls (sort_of_bt (Struct tag)) in
+       let member_destructors = List.combine members destructors in
+       let destructor = List.assoc Id.equal member member_destructors in
+       (bt, Z3.Expr.mk_app context destructor [t], cs)
+
+
+  let of_logical_constraint_assumption c = 
+    try 
+      match c with
+      | T it -> 
+         let t, e = of_index_term_aux it in
+         t :: e
+      | Forall ((s, bt), trigger, body) ->
+         let (triggers, cs) = match trigger with
+           | Some trigger -> 
+              let (_, t, cs) = make_trigger trigger in
+              (* let open Pp in
+               * print stderr (item "s" (Sym.pp s));
+               * print stderr (item "trigger" (IT.pp t));
+               * print stderr (list IT.pp cs); *)
+              ([Z3.Quantifier.mk_pattern context [t]], cs)
+           | None ->
+              ([], [])
+         in
+         let body, cs' = of_index_term_aux body in
+         let q = 
+           Z3.Quantifier.mk_forall_const context 
+             [Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt)] 
+             body 
+             None triggers [] None None 
+         in
+         cs @ cs' @ [Z3.Quantifier.expr_of_quantifier q]
+    with
+    | Z3.Error err -> 
+       Debug_ocaml.error ("Z3 error: " ^ err)
+
+
+
+
+  let check ?(ignore_unknown=false) local (lc : LC.t) = 
     let () = Debug_ocaml.begin_csv_timing "check" in
     let solver = Z3.Solver.mk_simple_solver context in
-    let neg_expr = Z3.Boolean.mk_not context (of_index_term lc) in
-    let assumptions = List.map of_index_term (Local.all_constraints local) in
-    let constraints = neg_expr :: assumptions in
+    let assumptions = 
+      List.concat_map of_logical_constraint_assumption 
+        (Local.all_constraints local) 
+    in
     let () = Debug_ocaml.begin_csv_timing "adding constraints" in
-    Z3.Solver.add solver [Z3.Boolean.mk_and context constraints];
+    Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
+    begin
+      match lc with
+      | T t ->
+         let t, e = of_index_term t in
+         Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
+      | Forall ((s, bt), _trigger, t) -> 
+         let s' = Sym.fresh () in
+         let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
+         let t, e = of_index_term t in
+         Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
+    end;
     let () = Debug_ocaml.end_csv_timing "adding constraints" in
     let () = Debug_ocaml.begin_csv_timing "actually checking" in
     let result = Z3.Solver.check solver [] in
@@ -375,7 +521,7 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error ("Z3 error: " ^ err)
 
 
-  let is_inconsistent local = holds local (bool_ false)
+  let is_inconsistent local = holds local (t_ (bool_ false))
 
   let get_model solver = Z3.Solver.get_model solver
 

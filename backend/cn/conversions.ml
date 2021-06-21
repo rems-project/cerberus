@@ -506,6 +506,8 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
       (oL, oR, oC, mapping) fspec.post_condition
   in
 
+  let oC = List.map LC.t_ oC in
+  let iC = List.map LC.t_ iC in
   let lrt = LRT.mLogicals oL (LRT.mResources oR (LRT.mConstraints oC LRT.I)) in
   let rt = RT.mComputational oA lrt in
   let lft = FT.mLogicals iL (FT.mResources iR (FT.mConstraints iC (FT.I rt))) in
@@ -587,6 +589,7 @@ let make_label_spec
       (iL, iR, iC, mapping) lspec.invariant
   in
 
+  let iC = List.map LC.t_ iC in
   let llt = LT.mLogicals iL (LT.mResources iR (LT.mConstraints iC (LT.I False.False))) in
   let lt = LT.mComputationals iA llt in
   return (lt, mapping)

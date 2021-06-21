@@ -1,3 +1,4 @@
+module LC = LogicalConstraints
 module IT = IndexTerms
 open IndexTerms
 
@@ -12,33 +13,42 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let rec simp (lcs : t list) term = 
+let rec simp (lcs : LC.t list) term = 
 
   let values = 
-    List.fold_right (fun (IT (it, bt)) values ->
-        match it with
-        | Bool_op (EQ (it, it')) ->
-           begin match is_sym it with
-           | Some (sym, _) -> SymMap.add sym it' values
-           | None -> values
+    List.fold_right (fun c values ->
+        match c with
+        | LC.T (IT (it, bt)) ->
+           begin match it with
+           | Bool_op (EQ (it, it')) ->
+              begin match is_sym it with
+              | Some (sym, _) -> SymMap.add sym it' values
+              | None -> values
+              end
+           | _ -> values
            end
-        | _ -> values
+        | Forall _ ->
+           values
       ) lcs SymMap.empty
   in
 
   let equalities =
-    List.fold_right (fun it equalities ->
-        match it with
-        | IT (Bool_op (EQ (it, it')), _) ->
-           begin match is_sym it, is_sym it' with
-           | Some (sym, _), Some (sym', _) -> 
-              SymPairMap.add (sym, sym') true equalities
-           | _ -> equalities
-           end
-        | IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), _))), _) ->
-           begin match is_sym it, is_sym it' with
-           | Some (sym, _), Some (sym', _) -> 
-              SymPairMap.add (sym, sym') false equalities
+    List.fold_right (fun c equalities ->
+        match c with
+        | LC.T it ->
+           begin match it with
+           | IT (Bool_op (EQ (it, it')), _) ->
+              begin match is_sym it, is_sym it' with
+              | Some (sym, _), Some (sym', _) -> 
+                 SymPairMap.add (sym, sym') true equalities
+              | _ -> equalities
+              end
+           | IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), _))), _) ->
+              begin match is_sym it, is_sym it' with
+              | Some (sym, _), Some (sym', _) -> 
+                 SymPairMap.add (sym, sym') false equalities
+              | _ -> equalities
+              end
            | _ -> equalities
            end
         | _ -> equalities
@@ -199,8 +209,8 @@ let rec simp (lcs : t list) term =
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = simp (a :: lcs) b in
-       let c = simp (not_ a :: lcs) c in
+       let b = simp (LC.T a :: lcs) b in
+       let c = simp (LC.T (not_ a) :: lcs) c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -230,10 +240,6 @@ let rec simp (lcs : t list) term =
        | _, _ ->
           eq_ (a, b)
        end
-    | Forall ((s, bt), it) -> 
-       let s' = Sym.fresh_same s in 
-       let it = aux (IT.subst_var {before=s; after=s'} it) in
-       IT (Bool_op (Forall ((s', bt), it)), bt)
 
         
 
@@ -400,3 +406,19 @@ let simp_flatten lcs term =
   match simp lcs term with
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
+
+
+
+
+
+
+let simp_lc_flatten lcs c = 
+  match c with
+  | LC.T it ->
+     List.map (fun c -> LC.T c) (simp_flatten lcs it)
+  | LC.Forall ((s, bt), trigger, it) -> 
+     let s' = Sym.fresh_same s in 
+     let it = IndexTerms.subst_var Subst.{before=s; after=s'} it in
+     let trigger = Option.map (LC.subst_var_trigger Subst.{before=s; after=s'}) trigger in
+     let it = simp lcs it in
+     [LC.Forall ((s', bt), trigger, it)]
