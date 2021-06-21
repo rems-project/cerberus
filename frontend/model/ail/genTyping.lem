@@ -853,7 +853,14 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
              | _ ->
                  error "WIP: typing of linux_rmw"
            end
-        | (_, _) ->
+       | (AilBcopy_alloc_id, [from_e; to_e]) ->
+            let ret_ty = mk_ctype_pointer no_qualifiers void in
+            let params = [(no_qualifiers, uintptr_t, false); (no_qualifiers, mk_ctype_pointer no_qualifiers void, false)] in
+            annotate_arguments loc_cursor true false [from_e; to_e] params >>= fun es' ->
+            E.return (AilEcall begin
+              AnnotatedExpression (GenRValueType (GenFunction true (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
+            end es', GenRValueType (inject_type ret_ty))
+       | (_, _) ->
            error "WIP: typing builtin"
     end
     

@@ -346,18 +346,56 @@ let isWellAligned_ptrval ref_ty ptrval =
               return (Nat_big_num.(equal (modulus addr (of_int (Common.alignof ref_ty))) zero))
         end
 
+
+let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
+  let impl = Ocaml_implementation.get () in
+  let sz = match impl.sizeof_ity ity with
+    | Some z -> z
+    | None   -> failwith "the Caesium memory model requires a complete implementation (to_int_type)" in
+  { it_bytes_per_int_log= Z.(log2 (of_int sz))
+  ; it_signed= impl.is_signed_ity ity }
+
+
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
-let ptrcast_ival: Ctype.ctype -> Ctype.ctype -> integer_value -> pointer_value memM =
-  fun _ _ i -> return (PVptr(Caesium.int_repr_to_loc i))
+let ptrcast_ival src_ty ref_ty ival : pointer_value memM =
+  let ity = match src_ty with
+    | Ctype.(Ctype (_, Basic (Integer z))) ->
+        z
+    | _ ->
+        assert false in
+  let int_ty = (to_int_type ity) in
+  let v = match Caesium.val_of_int_repr ival int_ty with
+    | None -> assert false
+    | Some z -> z in
+  match Caesium.ip_cast int_ty v with
+    | None -> assert false
+    | Some v' ->
+        begin match Caesium.val_to_loc v' with
+          | None -> assert false
+          | Some loc -> return (PVptr loc)
+        end
+(* 
+  fun _ _ i -> return (PVptr(Caesium.int_repr_to_loc i)) *)
 
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
 let intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM =
-  fun _ _ pv ->
+  fun ref_ty ity pv ->
   match pv with
-  | PVptr l  -> return (IRLoc l)
-  | PVnull _ -> assert false (* TODO *)
-  | PVfun _ -> assert false (* TODO should be UB I think *)
+  | PVptr loc  ->
+    let int_ty = (to_int_type ity) in
+    begin match Caesium.pi_cast int_ty (Caesium.val_of_loc loc) with
+      | None -> assert false
+      | Some v ->
+          begin match Caesium.val_to_int_repr v int_ty with
+            | None -> assert false
+            | Some i -> return i
+          end
+    end
+  | PVnull _ ->
+      return (IRInt Z.zero)
+  | PVfun _ ->
+      assert false (* TODO should be UB I think *)
 
 let offsetof_ival tagDefs tag_sym memb_ident =
   let (xs, _) = Common.offsetsof tagDefs tag_sym in
@@ -403,16 +441,32 @@ let member_shift_ptrval ptrval tag_sym memb_ident =
 let eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM =
   fun _ _ _ -> assert false (* TODO *)
 
-let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
-  let impl = Ocaml_implementation.get () in
-  let sz = match impl.sizeof_ity ity with
-    | Some z -> z
-    | None   -> failwith "the Caesium memory model requires a complete implementation (to_int_type)" in
-  { it_bytes_per_int_log= Z.(log2 (of_int sz))
-  ; it_signed= impl.is_signed_ity ity }
 
 let memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM =
   fun _ _ _ -> assert false (* TODO *)
+
+
+let interp_mbyte = function
+  | [MByte n] ->
+      Some (IRInt (Z.of_int n))
+  | [MPtrFrag ((_, addr), offset)] ->
+      Some (IRInt (Z.logand (Z.shift_right addr (8 * (offset-1))) (Z.of_int 0xFF)))
+  | [MPoison] ->
+      failwith "WIP: poison in interp_mbyte"
+  | _ ->
+      failwith  "WIP: interp_mbyte not a singleton"
+
+(*     
+  match mb1, mb2 with
+    | MByte n1, MByte n2 ->
+        Stdlib.compare n1 n2
+    | P
+
+| MByte of int
+| MPtrFrag of loc * int
+| MPoison
+*)
+
 let memcmp ptrval1 ptrval2 size_ival =
   let size_n = Caesium.int_repr_to_Z size_ival in
   let rec get_bytes ptrval acc = function
@@ -422,7 +476,7 @@ let memcmp ptrval1 ptrval2 size_ival =
         load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= fun (_, (_, bs)) ->
           (* TODO: use the effectful one instead *)
           let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IRInt (Nat_big_num.(succ zero))) in
-          match Caesium.val_to_int_repr bs (to_int_type Ctype.(Unsigned Ichar)) with
+          match interp_mbyte bs (* Caesium.val_to_int_repr bs (to_int_type Ctype.(Unsigned Ichar)) *) with
             | None ->
                 Printf.printf "bs: %s\n" (string_of_mbytes bs);
                 failwith "TODO: val_to_int_repr failed in memcmp()"
@@ -453,6 +507,8 @@ let va_end: integer_value -> unit memM =
   fun _ -> assert false (* TODO *)
 let va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM =
   fun _ -> assert false (* TODO *)
+
+
 
 
 (* Integer value constructors *)
@@ -714,6 +770,34 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
   'a =
   fun _ _ _ _ _ _ _ _ _ -> failwith "case_mem_value" (* TODO *)
 *)
+
+
+
+let copy_alloc_id ival ptrval =
+  let v1 = match Caesium.(val_of_int_repr ival uintptr_t) with
+    | None -> assert false
+    | Some z -> z in
+  let (_, v2) = pointer_mval Ctype.void ptrval in
+  match Caesium.(copy_alloc_id  v1 v2) with
+    | None ->
+        failwith "copy_alloc_id => None"
+    | Some res ->
+      begin match Caesium.val_to_loc res with
+        | None -> assert false
+        | Some loc -> return (PVptr loc)
+      end
+
+      (* Printf.printf "COPY_ALLOC_ID ==> TODO\n";
+  return ptrval TODO *)
+(*
+type pointer_value =
+  | PVnull of Ctype.ctype
+  | PVptr of Caesium.loc
+  | PVfun of Symbol.sym
+
+type integer_value = Caesium.int_repr
+*)
+
 
 (* For race detection *)
 let sequencePoint: unit memM =
