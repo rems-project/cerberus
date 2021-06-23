@@ -364,7 +364,8 @@
 \ottprodline{|}{\ottnt{points\_to}}{}{}{}{\ottcom{single-cell heap}}\ottprodnewline
 \ottprodline{|}{ident}{}{}{}{\ottcom{variable}}\ottprodnewline
 \ottprodline{|}{\langle  \ottnt{res\_term_{{\mathrm{1}}}}  \ottsym{,}  \ottnt{res\_term_{{\mathrm{2}}}}  \rangle}{}{}{}{\ottcom{seperating-conjunction pair}}\ottprodnewline
-\ottprodline{|}{\ottkw{pack} \, \ottsym{(}  pval  \ottsym{,}  \ottnt{res\_term}  \ottsym{)}}{}{}{}{\ottcom{packing for existentials}}}
+\ottprodline{|}{\ottkw{pack} \, \ottsym{(}  pval  \ottsym{,}  \ottnt{res\_term}  \ottsym{)}}{}{}{}{\ottcom{packing for existentials}}\ottprodnewline
+\ottprodline{|}{ \sigma  (  \ottnt{res\_term}  ) } {\textsf{M}}{}{}{\ottcom{substitution for resource terms}}}
 
 \newcommand{\ottmuXXaction}{
 \ottrulehead{mem\_action}{::=}{\ottcom{memory actions}}\ottprodnewline
@@ -412,7 +413,8 @@
 \newcommand{\ottspineXXelem}{
 \ottrulehead{\ottnt{spine\_elem}}{::=}{\ottcom{spine element}}\ottprodnewline
 \ottfirstprodline{|}{pval}{}{}{}{\ottcom{pure or logical value}}\ottprodnewline
-\ottprodline{|}{\ottnt{res\_term}}{}{}{}{\ottcom{resource value}}}
+\ottprodline{|}{\ottnt{res\_term}}{}{}{}{\ottcom{resource value}}\ottprodnewline
+\ottprodline{|}{ \sigma  (  \ottnt{spine\_elem}  ) } {\textsf{M}}{}{}{\ottcom{substitution for spine elements / return values}}}
 
 \newcommand{\ottspine}{
 \ottrulehead{\ottnt{spine}}{::=}{\ottcom{spine}}\ottprodnewline
@@ -511,6 +513,7 @@
 \ottprodline{|}{\ottnt{res}  \multimap  \ottnt{arg}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{term  \supset  \ottnt{arg}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\ottnt{ret}}{}{}{}{}\ottprodnewline
+\ottprodline{|}{ \ottnt{arg} } {\textsf{S}}{}{}{}\ottprodnewline
 \ottprodline{|}{ \sigma  (  \ottnt{arg}  ) } {\textsf{M}}{}{}{\ottcom{simul-sub $\sigma$ in $\ottnt{arg}$}}}
 
 \newcommand{\ottpureXXarg}{
@@ -550,10 +553,11 @@
 \ottprodline{|}{\ottcomp{\mathcal{R}_{\ottmv{i}}}{\ottmv{i}}}{}{}{}{}}
 
 \newcommand{\ottsubs}{
-\ottrulehead{\sigma}{::=}{\ottcom{substitutions}}\ottprodnewline
+\ottrulehead{\sigma  ,\ \psi}{::=}{\ottcom{substitutions}}\ottprodnewline
 \ottfirstprodline{|}{\cdot}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\ottnt{spine\_elem}  \ottsym{/}  ident  \ottsym{,}  \sigma}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\ottcomp{\sigma_{\ottmv{i}}}{\ottmv{i}}}{}{}{}{}}
+\ottprodline{|}{\ottcomp{\sigma_{\ottmv{i}}}{\ottmv{i}}}{}{}{}{}\ottprodnewline
+\ottprodline{|}{ \sigma  (  \psi  ) } {\textsf{M}}{}{}{\ottcom{apply $\sigma$ to all elements in $\psi$}}}
 
 \newcommand{\otttyping}{
 \ottrulehead{\ottnt{typing}}{::=}{}\ottprodnewline

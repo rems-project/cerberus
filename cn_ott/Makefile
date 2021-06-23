@@ -15,12 +15,9 @@ $(PDFS):%.pdf: $$*.tex | $(BUILD)
 	latexmk -pdf -dvi- -ps- $< -shell-escape -output-directory=$(BUILD) $(FLAGS)
 	mv $(BUILD)/$@ $@
 
-soundness.tex: cn_included.tex cn_override.tex
-	touch $@
-
-cn_included.tex: mucore.ott
+soundness.tex cn_included.tex: mucore.ott soundness.mng
 	ott -tex_wrap false -signal_parse_errors true -show_defns false \
-	    -tex_name_prefix cn -o $@ mucore.ott
+	    -tex_name_prefix cn -o cn_included.tex mucore.ott -tex_filter soundness.mng soundness.tex
 
 cn_override.tex: override.tex empty.ott
 	ott -tex_wrap false -signal_parse_errors true -show_defns false \
