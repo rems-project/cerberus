@@ -1,0 +1,853 @@
+% vim: ft=tex
+\documentclass[11pt]{article}%
+
+\usepackage{amsmath,amssymb}%
+% supertabular package required if using the default grammar tabular
+\usepackage{supertabular}
+\usepackage[margin=1in]{geometry}
+
+
+% the un-wrapped (-tex_wrap false) generated LaTeX file for CN
+\include{cn_included}
+\geometry{a4paper,portrait}
+% the package that allows customized layout described in this document
+\usepackage{ottlayout}
+% the automatically generated file (with our Makefile) to link the generated
+% LaTeX with the ottlayout package
+\include{cn_override}
+
+
+\usepackage{pf2}
+\beforePfSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\afterPfSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\interStepSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\pflongindent%
+
+
+\newcommand{\ctxC}{\mathcal{C}}%
+\newcommand{\ctxL}{\mathcal{L}}%
+\newcommand{\ctxN}{\Phi}%
+\newcommand{\ctxR}{\mathcal{R}}%
+\newcommand{\CLNR}{\ctxC ; \ctxL ; \ctxN ; \ctxR}
+\newcommand{\CLNRp}{\ctxC' ; \ctxL' ; \ctxN' ; \ctxR'}
+\newcommand{\stepsto}{\longrightarrow}%
+\newcommand{\reducesto}{\mathrel{{\longrightarrow}^\ast}}%
+\newcommand{\checks}{\Leftarrow}%
+\newcommand{\synths}{\Rightarrow}%
+\newcommand{\conf}[1]{\langle #1 \rangle}%
+\newcommand{\sych}{\Leftrightarrow}%
+\newcommand{\hconf}[2]{\langle #1 ; #2 \rangle}%
+\newcommand{\lolly}{\multimap}
+
+\title{Explicit CN Soundness Proof}
+\author{Dhruv Makwana}
+
+\begin{document}
+\ottstyledefaults{premiselayout=justify}%
+
+\maketitle
+
+\section{Weakening}
+
+If $[[ C ; L ; N ; R [= C' ; L' ; N' ; R' ]]$ and $\CLNR \vdash J$ then
+$\CLNRp \vdash J$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing judgements.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $[[ C ; L ; N ; R [= C' ; L' ; N' ; R' ]]$.
+            \item $\CLNR \vdash J$.\\
+        \end{pfenum}
+    }
+
+    \prove{$\CLNRp \vdash J$.}
+\end{proof}
+
+\section{Substitution}
+
+\subsection{Weakening for Substitution}
+
+Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
+\ctxL'' ; \ctxN'' ; \ctxR'' )$.
+
+\begin{proof}
+    \pfsketch{ Induction over the substitution.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $[[ C ; L ; N ; R [= C' ; L' ; N' ; R' ]]$.
+            \item $[[ C ; L ; N ; R |- ( subs ) : ( C'' ; L'' ; N'' ; R'' ) ]]$.\\
+        \end{pfenum}
+    }
+
+    \prove{$[[ C' ; L' ; N' ; R' |- ( subs ) : ( C'' ; L'' ; N'' ; R'' ) ]]$.}
+\end{proof}
+
+\subsection{Substitution Lemma}
+
+If $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$ and $\CLNRp \vdash
+J$ then $\CLNR \vdash \sigma ( J )$. 
+
+\begin{proof}
+    \pfsketch{ Induction over the typing judgements.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$.
+            \item $\CLNRp \vdash J$.\\
+        \end{pfenum}
+    }
+
+    \prove{$\CLNR \vdash \sigma ( J )$.}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PVal\_Var}.
+        }{%
+            $[[ C' ; L' ; N' |- x => base_type ]]$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{Have $[[ x : base_type inEnv C' ]]$ (or $[[ x : base_type inEnv L']]$).}
+        \step{<2>2}{So $\exists pval.\ [[ C ; L ; N |- mu_pval => base_type ]]$
+            by \textsc{Ty\_Subs\_Cons\_\{Comp,Log\}}.}
+        \step{<2>3}{Since $pval = \sigma(x)$, we are done.}
+    \end{proof}
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_TPE\_Let}.
+        }{%
+            $[[ C' ; L' ; N' |- let mu_sym_or_pattern = mu_pexpr in mu_tpexpr
+            <= y2 : base_type2. term2 ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,
+        \begin{pfenum}
+            \item $[[ C ; L ; N |- [ subs ] mu_pexpr  => y1 : base_type . [ subs ] term1 ]]$
+            \item $[[ C ,C1 ; L , y1 : base_type ; N , term1 , N' |- [ subs ]
+                mu_tpexpr <= y2 : base_type . [ subs ] term2 ]]$.
+        \end{pfenum}}
+
+        \step{<2>2}{$[[ C ; L ; N |- [ subs ] let mu_sym_or_pattern = mu_pexpr
+            in mu_tpexpr <= y2 : base_type2 . [ subs ] term2 ]]$ as required.}
+    \end{proof}
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_TVal\_Log}.
+        }{%
+            $[[ C' ; L' ; N' ; R' |- done mu_pval , </ spine_elemi // i /> <=
+            exists y : base_type . ret ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $[[ C ; L ; N |- [ subs ]  mu_pval => base_type ]]$
+            \item $[[ C ; L ; N ; R |- [ subs ] done </ spine_elemi // i /> <=
+                [ subs ] [ mu_pval / y , cdot ] ret ]]$.
+        \end{pfenum}}
+
+        \step{<2>2}{Therefore $[[ C ; L ; N ; R |- [ subs ] done mu_pval , </
+            spine_elemi // i /> <= exists y : base_type . [ subs ] ret ]]$.}
+    \end{proof}
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_Spine\_Res}.
+        }{%
+            $[[ C' ; L' ; N' ; R1' , R2 |- x = res_term , </ xi = spine_elemi
+            // i/> :; res --o arg >> res_term / x , psi ; ret ]]$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $[[ C ; L ; N ; R1 |- [ subs ] res_term <= [ subs ] res ]]$.
+            \item $[[ C ; L ; N ; R2 |- </ xi = [ subs ] spine_elemi // i /> :;
+                ( [ subs ] res ) --o [ subs ] arg >> [ subs ] psi ; [ subs ] ret ]]$.
+        \end{pfenum}}
+
+        \step{<2>2}{Hence $[[ C ; L;  N ; R1 , R2 |- x = [ subs ] res_term ,
+            </ xi = [ subs ] spine_elemi // i /> :; [ subs ] ( res --o arg ) >>
+            [ subs ] ( res_term / x , psi ) ; [ subs ] ret ]]$ as required.}
+    \end{proof}
+
+\end{proof}
+
+\subsection{Identity Extension}
+
+If $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$ then $[[ C ; L ; N
+; R1 , R |- ( subs , id ) : ( C , C' ; L , L' ; N , N' ; R1 , R' ) ]]$.
+
+\begin{proof}
+    \pfsketch{ Induction over the substitution.\\}
+
+    \assume{%
+        $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$.\\
+    }
+
+    \prove{%
+        $[[ C ; L ; N; R1 , R |- ( subs , id ) : ( C , C' ; L , L' ; N , N' ; R1 , R' ) ]]$.
+    }
+
+    \step{<1>1}{$[[ C ; L ; N ; R1 |- ( id ) : ( C ; L ; N ; R1 ) ]]$.\\
+        \pf\ By induction on each of $\ctxC ; \ctxL ; \ctxN ; \ctxR_1$.}
+
+    \step{<1>2}{$[[ C ; L ; N ; R1 , R |- ( subs , id ) : ( C , C' ; L , L'
+        ; N , N' ; R1 , R' ) ]]$ \\
+        \pf\ By induction on $\sigma$ with base case as above.}
+
+\end{proof}
+
+
+\subsection{Usable Substitution Lemma}
+
+If $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$ and $\ctxC ,
+\ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$ then
+$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+
+\begin{proof}
+    \pfsketch{ Apply identity extension then substitution lemma.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$.\label{usl1}
+            \item $\ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+    }
+
+    \step{<1>1}{$[[ C ; L ; N ; R |- ( subs , id ) : ( C , C' ; L , L' ; N , N' ; R1 , R' ) ]]$.\\
+        \pf\ Apply identity extension to \ref{usl1}.}\pflabel{usl2}
+
+    \step{<1>2}{$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash ( \sigma , \mathrm{id} ) ( J )$.\\
+        \pf\ Apply substitution lemma to \pfref{usl2}.}
+
+    \step{<1>3}{$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.\\
+        \pf\ $\mathrm{id}( J )  = J$.}
+
+\end{proof}
+
+\section{Progress}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+\stepsto \hconf{h'}{e'}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing rules.\\}
+
+    \assume{%
+        $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$.
+    }
+
+    \prove{%
+        either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+        \stepsto \hconf{h'}{e'}$.
+    }
+\end{proof}
+
+\section{Framing}
+
+If $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$ and $h_1, h_2$ disjoint then
+$\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the operational rules.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$.
+            \item $h_1, h_2$ disjoint.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+    }
+\end{proof}
+
+\section{Type Preservation}
+
+\subsection{\textsc{Ty\_Spine\_*} and \textsc{Decons\_Arg\_*} construct same
+substitution and return type}\label{subsec:spine_decons_same}
+
+If $[[C ; L ; N ; R |- </ xi = spine_elemi // i /> :; arg >> subs ; ret]]$ and
+$[[</ xi = spine_elemi // i /> :; arg >> subs' ; ret' ]]$ then $[[ subs ]] =
+[[subs']]$ and $[[ret]] = [[ret']]$.
+
+\pfsketch{ Induction over $[[arg]]$.}
+
+\subsection{Type Preservation Statement and Proof}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
+\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing rules.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$
+            \item arbitrary $h : \ctxR, e' , h' : \ctxR'$
+            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.\\
+    }
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_Action\_Create}.
+        }{%
+            \pflet{%
+                $pt = [[ inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux ]]$.\\
+                $ret = [[ sigma yp : loc . representable ( ct *s , yp ) /\
+                alignedI ( inj ty_mem_int , yp ) /\ exists y : to_base ( ct ) . (
+                yp ( q_one )|- * - ct -> y ) *o I ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot ; cdot |- create ( ty_mem_int
+                        , ct ) Symbol_prefix => ret ]]$.
+                    \item $[[ <( cdot ; create ( ty_mem_int , ct ) Symbol_prefix
+                        )> --> <( cdot + { pt } ; done ty_mem_ptr , mu_pval_aux ,
+                        pt )> ]]$.
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot ; cdot , _ : pt |- done ty_mem_ptr ,
+                mu_pval_aux , pt <= ret ]]$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ cdot ; cdot ; cdot |- ty_mem_ptr => loc ]]$ by
+            \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
+
+        \step{<2>2}{$[[ smt ( cdot => representable ( ct *s , ty_mem_ptr ) /\ alignedI (
+            inj ty_mem_int , ty_mem_ptr ) ) ]]$ by construction of $[[ty_mem_ptr]]$.}
+
+        \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
+            by construction of $[[mu_pval_aux]]$.}
+
+        \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot , _ : pt |- pt <= pt ]]$ by
+            \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
+            \textsc{Ty\_TVal\_\{Res,Log,Phi,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_PE\_Call}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot |- mu_name ( </ mu_pval_auxi // i /> ) => y
+                        : base_type . [ subs ] term ]]$.\label{call_assm1}
+                    \item $[[<( mu_name ( </ mu_pval_auxi // i /> ) )> --> <( [
+                        subs' ] mu_tpexpr : ( y : base_type' . [ subs' ] term' )
+                        )>]]$.
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot |- [ subs ] mu_tpexpr <= y : base_type . [ subs ] term ]]$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ mu_name : pure_arg eq </ xi // i /> |-> mu_tpexpr inEnv
+            Globals ]]$ by inversion (on either assumption).}
+
+        \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot |- </ xi = mu_pval_auxi // i
+            /> :; pure_arg >> subs ; sigma y : base_type . term /\ I ]]$ by
+            inversion on \ref{call_assm1}.}
+
+        \step{<2>3}{$[[ base_type ]] = [[ base_type' ]]$, $[[ term ]] = [[
+            term' ]]$ and $[[ subs ]] = [[ subs' ]]$ by induction on $[[ pure_arg ]]$.\\
+            Follows from lemma \ref{subsec:spine_decons_same}.}
+
+        \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot |- ( subs ) : ( C ; cdot ; N ; cdot ) ]]$.\\
+            \pf\ Constructing such a substitution requires $[[ </ cdot ; cdot ;
+            cdot |- mu_pval_auxi => base_typei // i /> ]]$ for each $[[ xi :
+            base_typei inEnv C]]$ which can be deduced from \stepref{<2>2}.}
+
+        \step{<2>5}{$[[ C'' ; cdot ; N'' |- mu_tpexpr <= y : base_type'' . term'' ]]$
+            where $[[ </ xi // i /> :; pure_arg ~> C'' ; cdot ; N'' ; cdot | sigma
+            y : base_type'' . term'' /\ I ]]$ formalises the assumption that all
+            global functions and labels are well-typed.}
+        
+        \step{<2>6}{$[[C]] = [[C'']]$ , $[[N]] = [[N'']]$ , $[[base_type]] = [[base_type'']]$
+            and $[[term]] = [[term'']]$.\\
+            \pf\ By induction on $[[pure_arg]]$.}
+
+        \step{<2>7}{Apply usable substitution lemma to \stepref{<2>4} and
+            \stepref{<2>5} to finish proof.}
+
+    \end{proof}
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrValidForDeref}.
+        }{%
+            \pflet{%
+                $pt = [[ inj ty_mem_ptr ( _q )|- tick - ct -> _t ]]$.\\
+                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ pt *o I]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot ; R |- ptrValidForDeref ( ct ,
+                        ty_mem_ptr , pt ) => ret ]]$.\label{ptrValid-assm1}
+
+                    \item $[[ <( cdot + { pt } ; ptrValidForDeref ( ct ,
+                        ty_mem_ptr , pt ) )> --> <( cdot + { pt } ; done
+                        mu_bool_value , pt )> ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot ; R  |- done mu_bool_value , pt <= ret ]]$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ cdot ; cdot ; cdot ; R |- pt <= pt]]$, by inversion on
+            \ref{ptrValid-assm1}.}
+
+        \step{<2>2}{$R = [[ cdot , _ : pt ]]$, by \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>3}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
+            construction of $[[mu_bool_value]]$.}
+
+        \step{<2>4}{$[[cdot ; cdot ; cdot |- mu_bool_value => bool]]$ by
+            \textsc{Ty\_PVal\_\{True,False\}}.}
+
+        \step{<2>5}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>2} --
+            \stepref{<2>4} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+            respectively, we are done.}
+    \end{proof}
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+    \step{<1>?}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ ]]$.\label{assm1}
+
+                    \item $[[ ]]$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ ]]$
+            }
+        }
+    }
+
+\end{proof}
+
+\pagebreak%
+\section{Typing Judgements}
+
+\cngrammartabular{
+\cnobjectXXvalueXXjtype\cninterrule%
+\cnpvalXXjtype\cninterrule%
+\cnresXXjtype\cninterrule%
+\cnspineXXjtype\cninterrule%
+\cnpexprXXjtype\cninterrule%
+\cntpvalXXjtype\cninterrule%
+\cntpexprXXjtype\cninterrule%
+\cnactionXXjtype\cninterrule%
+\cnmemopXXjtype\cninterrule%
+\cnseqXXexprXXjtype\cninterrule%
+\cnisXXexprXXjtype\cninterrule%
+\cntvalXXjtype\cninterrule%
+\cntexprXXjtype\cninterrule%
+}
+
+\pagebreak%
+\section{Opsem Judgements}
+
+\cngrammartabular{
+\cnpureXXopsemXXjtype\cninterrule%
+\cnopsemXXjtype\cninterrule%
+}
+
+
+\end{document}

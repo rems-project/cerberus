@@ -267,6 +267,9 @@ grammar
   mu_pval_aux {{ tex pval }} :: 'M_P' ::= {{ auxparam 'TY }} {{ com pure values with auxiliary info }}
     | ty_loc annots tyvar_TY mu_pval :: X :: val
     |                        mu_pval :: O :: val_no_aux {{ com Ott-hack for simpler typing rules }}
+    |               [ subs ] mu_pval :: M :: val_subs   {{ com substitution for pure values }}
+                                                        {{ ocaml MU_PVAL_SUBS [[subs]] [[mu_pval]] }}
+                                                        {{ tex [[subs]] ( [[mu_pval]] ) }}
 
 
   subrules
@@ -317,7 +320,7 @@ grammar
                                                      {{ tex \mathrm{size\_of}( [[ct]] )              }}
                                                      {{ com size of a C type                         }}
     | offset_of ty_tag Symbol_identifier :: M :: of_Member
-      {{ ocaml z_ ( Memory.member_offset ( ?? [[ty_tag]] ) ( [[Symbol_identifier]] ) ) }}
+      {{ ocaml z_ ( Memory.member_offset ( (??) [[ty_tag]] ) ( [[Symbol_identifier]] ) ) }}
       {{ tex \mathrm{offset\_of}_{ [[ty_tag]] }( [[Symbol_identifier]] )               }}
       {{ com offset of a struct member                                                 }}
     | ptr_size                    :: M :: Ptr_size   {{ ocaml Memory.size_of_pointer                 }}
@@ -476,6 +479,9 @@ grammar
   mu_pexpr_aux {{ tex pexpr }} :: 'M_P' ::= {{ auxparam 'TY }} {{ com pure expressions with location and annotations }}
     | ty_loc annots tyvar_TY mu_pexpr :: X :: expr
     |                        mu_pexpr :: O :: expr_no_aux {{ com Ott-hack for simpler typing rules }}
+    |               [ subs ] mu_pexpr :: M :: expr_subs   {{ com substitution for pure expressions }}
+                                                          {{ ocaml MU_PEXPR_SUBS [[subs]] [[mu_pexpr]] }}
+                                                          {{ tex [[subs]] ( [[mu_pexpr]] ) }}
 
 
   mu_tpexpr {{ tex tpexpr }} :: 'M_TPE' ::= {{ auxparam 'TY }} {{ com top-level pure expressions }}
@@ -536,11 +542,14 @@ metavar Linux_linux_memory_order {{ tex linux\_mem\_order }} ::= {{ ocaml Linux.
 grammar
 
   res_term :: 'ResT_' ::= {{ com resource terms }}
-    | emp                             :: :: Empty    {{ com empty heap }}
-    | points_to                       :: :: PointsTo {{ com single-cell heap }}
-    | Symbol_sym                      :: :: Var      {{ com variable }}
-    | <( res_term1 , res_term2 )>     :: :: SepPair  {{ com seperating-conjunction pair }}
-    | pack ( mu_pval_aux , res_term ) :: :: Pack     {{ com packing for existentials }}
+    | emp                             ::   :: Empty    {{ com empty heap }}
+    | points_to                       ::   :: PointsTo {{ com single-cell heap }}
+    | Symbol_sym                      ::   :: Var      {{ com variable }}
+    | <( res_term1 , res_term2 )>     ::   :: SepPair  {{ com seperating-conjunction pair }}
+    | pack ( mu_pval_aux , res_term ) ::   :: Pack     {{ com packing for existentials }}
+    |               [ subs ] res_term :: M :: Subs     {{ com substitution for resource terms }}
+                                                       {{ tex [[subs]] ( [[res_term]] ) }}
+                                                       {{ ocaml RES_TERM_SUBS [[subs]] [[res_term]] }}
 
 
 grammar
@@ -602,9 +611,12 @@ grammar
 grammar
 
   spine_elem :: Spine_Elem_ ::= {{ auxparam 'TY }} {{ com spine element }}
-    | mu_pval_aux :: :: val     {{ com pure or logical value      }}
-    | res_term    :: :: res_val {{ com resource value             }}
-
+    | mu_pval_aux         ::   :: val     {{ com pure or logical value      }}
+    | res_term            ::   :: res_val {{ com resource value             }}
+    | [ subs ] spine_elem :: M :: subs    {{ com substitution for spine elements / return values }}
+                                          {{ ocaml SPINE_ELEM_SUBS [[subs]] [[spine_elem]] }}
+                                          {{ tex [[subs]] ( [[spine_elem]] ) }}
+  
 
   spine :: Spine_ ::= {{ ocaml 'TY spine_elem list }} {{ phantom }} {{ com spine }}
     | </ spine_elemi // , // i /> ::   :: elems
@@ -620,6 +632,9 @@ grammar
    mu_tval_aux {{ tex tval }} :: 'M_T' ::= {{ auxparam 'TY }} {{ com (effectful) top-level values with auxiliary info }}
      | ty_loc annots mu_tval :: X :: val
      |               mu_tval :: O :: no_aux   {{ com Ott-hack for simpler typing rules }}
+     |      [ subs ] mu_tval :: M :: val_subs {{ com substitution for top-level values }}
+                                              {{ ocaml MU_TVAL_SUBS [[subs]] [[mu_tval]] }}
+                                              {{ tex [[subs]] ( [[mu_tval]] ) }}
 
 
 grammar
@@ -667,9 +682,10 @@ grammar
     | res1 *s res2                        ::   :: SepConj   {{ com seperating conjunction }}
     | exists Symbol_sym : base_type . res ::   :: Exists    {{ com existential            }}
     | term_aux /\ res                     ::   :: Term      {{ com logical conjuction     }}
-    | <( res )>                           :: S :: Paren     {{ com parentheses            }} {{ ocaml [[res]] }}
-    | [ subs ] res                         :: M :: Subs      {{ ocaml RES_SUBS [[subs]] [[res]]         }}
+    | ( res )                             :: X S :: Paren   {{ com parentheses            }} {{ ocaml [[res]] }} {{ tex [[res]] }}
+    | [ subs ] res                        :: M :: Subs      {{ ocaml RES_SUBS [[subs]] [[res]]         }}
                                                             {{ com simul-sub $[[subs]]$ in $[[res]]$   }}
+                                                            {{ tex [[subs]] ( [[res]] )   }}
 
 
 grammar
@@ -680,7 +696,7 @@ grammar
     | res *o ret                         :: :: Res    {{ com return a resource value               }}
     | term_aux /\ ret                    :: :: Phi    {{ com return a predicate (post-condition)   }}
     | I                                  :: :: I      {{ com end return list                       }}
-    | [ subs ] ret                        :: M :: Subs {{ ocaml RET_SPINE_ELEM_SUBS [[subs]] [[ret]] }}
+    | [ subs ] ret                       :: M :: Subs {{ ocaml RET_SPINE_ELEM_SUBS [[subs]] [[ret]] }}
                                                       {{ tex [[subs]] ( [[ret]] )                   }}
                                                       {{ com simul-sub $[[subs]]$ in $[[ret]]$      }}
   % | concat rets                        :: M :: Concat {{ tex [[rets]] }} {{ ocaml [[rets]] }} {{ com concatenation of return types }}
@@ -828,8 +844,9 @@ grammar
     | res --o arg                        ::   :: Res
     | term_aux -) arg                    ::   :: Phi
     | ret                                ::   :: Ret
-    | [ subs ] arg                       :: M :: Subs {{ ocaml ARG_SPINE_ELEM_SUB [[subs]] [[arg]] }} {{ tex [[subs]] ( [[arg]] ) }}
-                                                      {{ com simul-sub $[[subs]]$ in $[[arg]]$     }}
+    | ( arg  )                           :: X S :: Paren {{ tex [[arg]] }}
+    | [ subs ] arg                       :: M :: Subs  {{ ocaml ARG_SPINE_ELEM_SUB [[subs]] [[arg]] }} {{ tex [[subs]] ( [[arg]] ) }}
+                                                       {{ com simul-sub $[[subs]]$ in $[[arg]]$     }}
 
 
   pure_arg :: Pure_ArgTy_ ::= {{ com pure argument/function types }}
@@ -882,10 +899,15 @@ grammar
 
 grammar
 
-  subs {{ tex \sigma }} :: Subs_ ::= {{ phantom }} {{ com substitutions }}
-    | cdot                            :: :: empty
-    | spine_elem  / Symbol_sym , subs :: :: cons
-    | </ subsi // , // i />           :: :: concat
+  subs {{ tex \sigma }} , psi {{ tex \psi }} :: Subs_ ::= {{ phantom }} {{ com substitutions }}
+    | cdot                            ::   :: empty
+    | id                              :: X M :: id {{ com identity substitution }} {{ tex \mathrm{id} }} {{ ocaml SUBS_ID }}
+    | spine_elem  / Symbol_sym , subs ::   :: cons
+    | </ subsi // , // i />           ::   :: concat
+    | ( subs )                        :: X S :: paren {{ com parentheses }} {{ tex [[subs]] }}
+    | [ subs ] psi                    :: M :: subs {{ com apply $[[subs]]$ to all elements in $[[psi]]$ }}
+                                                   {{ ocaml SUBS_SUBS [[subs]] [[psi]] }}
+                                                   {{ tex [[subs]] ( [[psi]] ) }}
 
 grammar
 
@@ -1051,7 +1073,7 @@ defns
    % NOT IMPLEMENTED - union
 
 defns
-  res_jtype :: 'Ty' ::=
+  res_jtype :: 'Ty_' ::=
 
   defn
     N |- res eq res' :: :: Res_Eq :: Res_Eq_ by
@@ -1425,7 +1447,7 @@ defns
 
     C ; L ; N |- mu_pval_aux => integer
     ----------------------------------- :: Create
-    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . representable ( ct *s , yp ) /\ alignedI ( inj mu_pval_aux , yp ) /\ exists y : to_base ( ct ) . <( yp ( q_one )|- * - ct -> y )> *o I
+    C ; L ; N ; cdot |- create ( mu_pval_aux , ct ) Symbol_prefix => sigma yp : loc . representable ( ct *s , yp ) /\ alignedI ( inj mu_pval_aux , yp ) /\ exists y : to_base ( ct ) . ( yp ( q_one )|- * - ct -> y ) *o I
 
 
     % NOT IMPLEMENTED
@@ -1436,7 +1458,7 @@ defns
     smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
     C ; L ; N ; R |- inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 <= inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2
     ----------------------------------------------------------------------------------------------------------------------------------------- :: Load
-    C ; L ; N ; R |- load ( ct , mu_pval_aux0 , _mem_order , inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 ) => sigma y : to_base ( ct ) . y = inj mu_pval_aux2 /\ <( inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 )> *o I
+    C ; L ; N ; R |- load ( ct , mu_pval_aux0 , _mem_order , inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 ) => sigma y : to_base ( ct ) . y = inj mu_pval_aux2 /\ ( inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 ) *o I
 
 
     C ; L ; N |- mu_pval_aux0 => loc
@@ -1446,7 +1468,7 @@ defns
     smt ( N => inj mu_pval_aux2 = inj mu_pval_aux0 )
     C ; L ; N ; R |- inj mu_pval_aux2 ( q_one )|- _i - ct -> _t <= inj mu_pval_aux2 ( q_one )|- _i - ct -> _t
     --------------------------------------------------------------------------------------------------------- :: Store
-    C ; L ; N ; R |- store ( _b , ct , mu_pval_aux0 , mu_pval_aux1 , _mem_order , inj mu_pval_aux2 ( q_one )|- _i - ct -> _t ) => sigma _ : unit . <( inj mu_pval_aux2 ( q_one )|- tick - ct -> inj mu_pval_aux1 )> *o I
+    C ; L ; N ; R |- store ( _b , ct , mu_pval_aux0 , mu_pval_aux1 , _mem_order , inj mu_pval_aux2 ( q_one )|- _i - ct -> _t ) => sigma _ : unit . ( inj mu_pval_aux2 ( q_one )|- tick - ct -> inj mu_pval_aux1 ) *o I
 
 
     C ; L ; N |- mu_pval_aux0 => loc
@@ -1503,7 +1525,7 @@ defns
     smt ( N => inj mu_pval_aux1 = inj mu_pval_aux0 )
     C ; L ; N ; R |- inj mu_pval_aux1 ( _q )|- tick - ct -> _t <= inj mu_pval_aux1 ( _q )|- tick - ct -> _t
     ------------------------------------------------------------------------------------------------------- :: PtrValidForDeref
-    C ; L ; N ; R |- ptrValidForDeref ( ct , mu_pval_aux0 , inj mu_pval_aux1 ( _q )|- tick - ct -> _t ) => sigma y : bool . y = aligned ( ct , inj mu_pval_aux1 ) /\ <( inj mu_pval_aux1 ( _q )|- tick - ct -> _t )> *o I
+    C ; L ; N ; R |- ptrValidForDeref ( ct , mu_pval_aux0 , inj mu_pval_aux1 ( _q )|- tick - ct -> _t ) => sigma y : bool . y = aligned ( ct , inj mu_pval_aux1 ) /\ ( inj mu_pval_aux1 ( _q )|- tick - ct -> _t ) *o I
 
 
     C ; L ; N |- mu_pval_aux1 => loc
