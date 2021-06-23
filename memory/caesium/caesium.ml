@@ -23,12 +23,47 @@ type lock_state =
   | WSt
   | RSt of int
 
-type loc = alloc_id option * addr
+type prov =
+  | ProvNull
+  | ProvAlloc of alloc_id option
+  | ProvFnPtr
 
-let pp_loc : out_channel -> loc -> unit = fun oc (id, a) ->
-  match id with
-  | None     -> Printf.fprintf oc "(None, %a)" Z.output a;
-  | Some(id) -> Printf.fprintf oc "(%a, %a)" Z.output id Z.output a;
+let prov_to_aid : prov -> alloc_id option = fun prov ->
+  match prov with
+  | ProvAlloc(id) -> id
+  | _             -> None
+
+type loc = prov * addr
+
+let compare_prov : prov -> prov -> int = fun prov1 prov2 ->
+  let compare_id id1 id2 =
+    match (id1, id2) with
+    | (None    , None    ) -> 0
+    | (None    , Some(_) ) -> -1
+    | (Some(_) , None    ) -> 1
+    | (Some(i1), Some(i2)) -> Z.compare i1 i2
+  in
+  match (prov1, prov2) with
+  | (ProvNull      , ProvNull      ) -> 0
+  | (ProvNull      , _             ) -> -1
+  | (ProvAlloc(_)  , ProvNull      ) -> 1
+  | (ProvAlloc(id1), ProvAlloc(id2)) -> compare_id id1 id2
+  | (ProvAlloc(_)  , _             ) -> -1
+  | (ProvFnPtr     , ProvFnPtr     ) -> 0
+  | (ProvFnPtr     , _             ) -> 1
+
+let compare_loc : loc -> loc -> int = fun (prov1, a1) (prov2, a2) ->
+  match compare_prov prov1 prov2 with 0 -> Z.compare a1 a2 | i -> i
+
+let pp_prov : out_channel -> prov -> unit = fun oc prov ->
+  match prov with
+  | ProvNull            -> Printf.fprintf oc "Null"
+  | ProvAlloc(None)     -> Printf.fprintf oc "None"
+  | ProvAlloc(Some(id)) -> Printf.fprintf oc "%a" Z.output id
+  | ProvFnPtr           -> Printf.fprintf oc "FnPtr"
+
+let pp_loc : out_channel -> loc -> unit = fun oc (prov, a) ->
+  Printf.fprintf oc "(%a, %a)" pp_prov prov Z.output a;
 
 type mbyte =
   | MByte of int
@@ -75,31 +110,36 @@ let initial_heap_state : heap_state = {
 
 (** Full program state. *)
 
-module LocM = Map.Make(
-  struct
-    type t = loc
-    let compare (id1, a1) (id2, a2) =
-      let i1 =
-        match (id1, id2) with
-        | (None     , None     ) -> 0
-        | (None     , _        ) -> -1
-        | (_        , None     ) -> 1
-        | (Some(id1), Some(id2)) -> Z.compare id1 id2
-      in
-      if i1 <> 0 then i1 else Z.compare a1 a2
-  end)
-
 type func = Symbol.sym
 
 type state = {
   st_heap  : heap_state;
-  st_fntbl : func LocM.t;
+  st_fntbl : func AddrM.t;
 }
 
 let initial_state : state = {
   st_heap  = initial_heap_state;
-  st_fntbl = LocM.empty;
+  st_fntbl = AddrM.empty;
 }
+
+(** Auxiliary functions to validate pointers. *)
+
+let block_alive : heap_state -> loc -> bool = fun hs (prov, _) ->
+  match prov_to_aid prov with None -> false | Some(id) ->
+  try (AllocM.find id hs.hs_allocs).al_alive
+  with Not_found -> false
+
+let heap_state_loc_in_bounds : heap_state -> loc -> int -> bool =
+  fun hs (prov, a) n ->
+  match prov_to_aid prov with None -> false | Some(id) ->
+  try
+    let al = AllocM.find id hs.hs_allocs in
+    let n = Z.of_int n in
+    Z.leq al.al_start a && Z.leq (Z.add a n) (al_end al)
+  with Not_found -> false
+
+let valid_ptr : heap_state -> loc -> bool = fun hs l ->
+  block_alive hs l && heap_state_loc_in_bounds hs l 0
 
 (** Conversion betweem values and locations. *)
 
@@ -224,7 +264,7 @@ let int_repr_to_Z : int_repr -> Z.t = fun i ->
 let int_repr_to_loc : int_repr -> loc = fun i ->
   match i with
   | IRLoc(l) -> l
-  | IRInt(z) -> (None, z)
+  | IRInt(z) -> (ProvAlloc(None), z)
 
 let val_of_int_repr : int_repr -> int_type -> value option = fun i it ->
   match i with
@@ -261,15 +301,27 @@ let ii_cast : int_type -> int_type -> value -> value option = fun it ot v ->
   | None    -> None
   | Some(i) -> val_of_int_repr i ot
 
-let pi_cast : int_type -> value -> value option = fun ot v ->
-  match val_to_loc v with
-  | None    -> None
-  | Some(l) -> val_of_int_repr (IRLoc l) ot
+let ip_cast : heap_state -> int_repr -> loc = fun hs i ->
+  match i with
+  | IRLoc(l) -> if block_alive hs l then l else (ProvAlloc(None), snd l)
+  | IRInt(z) -> ((if Z.equal z Z.zero then ProvNull else ProvAlloc(None)), z)
 
-let ip_cast : int_type -> value -> value option = fun it v ->
-  match val_to_loc_weak v it with
-  | None    -> None
-  | Some(l) -> Some(val_of_loc l)
+let wrapped_ip_cast : heap_state -> int_type -> value -> value option =
+  fun hs it v ->
+  match val_to_int_repr v it with None -> None | Some(i) ->
+  Some(val_of_loc(ip_cast hs i))
+
+let pi_cast : heap_state -> loc -> int_repr option = fun hs l ->
+  match l with
+  | (ProvNull, a) when Z.equal a Z.zero -> Some(IRInt(Z.zero))
+  | _                                   ->
+  if block_alive hs l then Some(IRLoc(l)) else None
+
+let wrapped_pi_cast : heap_state -> int_type -> value -> value option =
+  fun hs it v ->
+  match val_to_loc v with None -> None | Some(l) ->
+  match pi_cast hs l with None -> None | Some(i) ->
+  val_of_int_repr i it
 
 (** Arithmetic operations. *)
 
@@ -305,32 +357,10 @@ let geq : int_type -> value -> value -> value option = arith_rel Z.geq
 
 (** Relational operators on (non-NULL) pointers. *)
 
-let block_alive : heap_state -> loc -> bool = fun hs (id,_) ->
-  match id with
-  | None     -> false
-  | Some(id) -> try (AllocM.find id hs.hs_allocs).al_alive
-                with Not_found -> false
-
-let heap_state_loc_in_bounds : heap_state -> loc -> int -> bool =
-  fun hs (id,a) n ->
-  match id with
-  | None     -> false
-  | Some(id) ->
-  try
-    let al = AllocM.find id hs.hs_allocs in
-    let n = Z.of_int n in
-    Z.leq al.al_start a && Z.leq (Z.add a n) (al_end al)
-  with Not_found -> false
-
-let valid_ptr : heap_state -> loc -> bool = fun hs l ->
-  block_alive hs l && heap_state_loc_in_bounds hs l 0
-
-let same_alloc_id : loc -> loc -> bool = fun (id1,_) (id2,_) ->
-  match (id1, id2) with
-  | (None     , None     ) -> true
-  | (None     , _        ) -> false
-  | (_        , None     ) -> false
-  | (Some(id1), Some(id2)) -> Z.equal id1 id2
+let same_alloc_id : loc -> loc -> bool = fun (prov1,_) (prov2,_) ->
+  match (prov1, prov2) with
+  | (ProvAlloc(Some(id1)), ProvAlloc(Some(id2))) -> Z.equal id1 id2
+  | (_                   , _                   ) -> false
 
 let ptr_rel : bool -> op_bool -> heap_state -> loc -> loc -> bool option =
   fun is_eq op hs l1 l2 ->
@@ -356,20 +386,17 @@ let wrap_ptr_rel : (heap_state -> loc -> loc -> bool option)
 
 (** Operation to copy the provenance. *)
 
-(* let copy_alloc_id : value -> value -> value option = fun v1 v2 ->
-  match val_to_loc v1 with None -> None | Some(l1) ->
-  match val_to_loc v2 with None -> None | Some(l2) ->
-  Some(val_of_loc (fst l2, snd l1))
+let copy_alloc_id : heap_state -> int_repr -> loc -> loc option =
+  fun hs i l ->
+  let l_res = (fst l, int_repr_to_Z i) in
+  if not (valid_ptr hs l_res) then None else Some(l_res)
 
-let copy_alloc_id_i : value -> value -> int_type -> value option =
-  fun v1 v2 it ->
-  match val_to_loc v1 with None -> None | Some(l1) ->
-  match val_to_loc_weak v2 it with None -> None | Some(l2) ->
-  Some(val_of_loc (fst l2, snd l1)) *)
-let copy_alloc_id : value -> value -> value option = fun v1 v2 ->
-  match val_to_Z_weak v1 uintptr_t with None -> None | Some(a) ->
+let wrapped_copy_alloc_id : heap_state -> value -> value -> value option =
+  fun hs v1 v2 ->
+  match val_to_int_repr v1 uintptr_t with None -> None | Some(i) ->
   match val_to_loc v2 with None -> None | Some(l) ->
-  Some(val_of_loc (fst l, a))
+  match copy_alloc_id hs i l with None -> None | Some(l) ->
+  Some(val_of_loc l)
 
 (** Basic operation on the heap. *)
 
@@ -431,8 +458,8 @@ let na_prepare_read : loc -> int -> heap -> heap option = fun l n h ->
   Printf.fprintf stderr "na_prepare_read %a %d _\n%!" pp_loc l n;
   let pred hc =
     match (fst l, hc.hc_lock_state) with
-    | (Some(id), RSt(_)) -> id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(_)) -> id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
   | None    -> None
@@ -450,8 +477,8 @@ let na_read : loc -> int -> heap -> (value * heap) option = fun l n h ->
   Printf.fprintf stderr "na_read %a %d _\n%!" pp_loc l n;
   let pred hc =
     match (fst l, hc.hc_lock_state) with
-    | (Some(id), RSt(n)) -> n > 0 && id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(n)) -> n > 0 && id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
   | None    -> None
@@ -472,8 +499,8 @@ let na_prepare_write : loc -> value -> heap -> heap option = fun l v h ->
   let n = List.length v in
   let pred hc =
     match (fst l, hc.hc_lock_state) with
-    | (Some(id), RSt(0)) -> id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(0)) -> id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
   | None    -> None
@@ -492,8 +519,8 @@ let na_write : loc -> value -> heap -> heap option = fun l v h ->
   let n = List.length v in
   let pred hc =
     match (fst l, hc.hc_lock_state) with
-    | (Some(id), WSt) -> id = hc.hc_alloc_id
-    | (_       , _  ) -> false
+    | (ProvAlloc(Some(id)), WSt) -> id = hc.hc_alloc_id
+    | (_                  , _  ) -> false
   in
   match heap_read (snd l) n pred h with
   | None    -> None
@@ -515,8 +542,8 @@ let na_write : loc -> value -> heap -> heap option = fun l v h ->
 let sc_read : loc -> int -> heap -> (value * heap) option = fun l n h ->
   let pred hc =
     match (fst l, hc.hc_lock_state) with
-    | (Some(id), RSt(_)) -> id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(_)) -> id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
   | None    -> None
@@ -526,8 +553,8 @@ let sc_write : loc -> value -> heap -> heap option = fun l v h ->
   let n = List.length v in
   let pred hc =
     match (fst l, hc.hc_lock_state) with
-    | (Some(id), RSt(0)) -> id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(0)) -> id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
   | None    -> None
@@ -547,9 +574,9 @@ let cas : value -> value -> value -> int_type -> heap
   let rst1_is_0 = ref true in
   let pred1 hc =
     match (fst l1, hc.hc_lock_state) with
-    | (Some(id), RSt(n)) -> if n <> 0 then rst1_is_0 := false;
-                            id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(n)) -> if n <> 0 then rst1_is_0 := false;
+                                       id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l1) (bytes_per_int it) pred1 h with
   | None     -> None
@@ -557,9 +584,9 @@ let cas : value -> value -> value -> int_type -> heap
   let rst2_is_0 = ref true in
   let pred2 hc =
     match (fst l2, hc.hc_lock_state) with
-    | (Some(id), RSt(n)) -> if n <> 0 then rst2_is_0 := false;
-                            id = hc.hc_alloc_id
-    | (_       , _     ) -> false
+    | (ProvAlloc(Some(id)), RSt(n)) -> if n <> 0 then rst2_is_0 := false;
+                                       id = hc.hc_alloc_id
+    | (_                  , _     ) -> false
   in
   match heap_read (snd l2) (bytes_per_int it) pred2 h with
   | None     -> None
@@ -595,9 +622,9 @@ let cas : value -> value -> value -> int_type -> heap
 (** Allocation and free. *)
 
 let free_block : loc -> int -> heap_state -> heap_state option =
-  fun (ido, a) n {hs_heap = h; hs_allocs = m} ->
+  fun (prov, a) n {hs_heap = h; hs_allocs = m} ->
   (* Check that the location as a corresponding live allocation. *)
-  match ido with None -> None | Some(id) ->
+  match prov_to_aid prov with None -> None | Some(id) ->
   match AllocM.find_opt id m with None -> None | Some(al) ->
   if not al.al_alive then None else
   (* Check that there is no concurent read or write on the heap. *)
@@ -614,16 +641,16 @@ let free_block : loc -> int -> heap_state -> heap_state option =
   })
 
 let free_block_wrapper : loc -> heap_state -> heap_state option = fun l hs ->
-  match fst l with None -> None | Some(id) ->
+  match prov_to_aid (fst l) with None -> None | Some(id) ->
   match AllocM.find_opt id hs.hs_allocs with None -> None | Some(al) ->
   free_block l al.al_len hs
 
 (* FIXME find a valid address? *)
 let alloc_new_block : loc -> value -> heap_state -> heap_state option =
-  fun (ido, a) v {hs_heap = h; hs_allocs = m} ->
+  fun (prov, a) v {hs_heap = h; hs_allocs = m} ->
   (* Check that the allocation identifier is free, create allocation. *)
   Printf.fprintf stderr "alloc_new_block %a\n%!" Z.output a;
-  match ido with None -> None | Some(id) ->
+  match prov_to_aid prov with None -> None | Some(id) ->
   match AllocM.find_opt id m with Some(_) -> None | _ ->
   let al = {al_start = a; al_len = List.length v; al_alive = true;} in
   if not (allocation_in_range al) then None else

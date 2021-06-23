@@ -133,7 +133,7 @@ let pick_location size align : Caesium.loc memM =
       next_alloc_id= Nat_big_num.succ alloc_id;
       last_address= addr
     } >>= fun () ->
-    return (Some alloc_id, addr)
+    return (ProvAlloc(Some alloc_id), addr)
 
 (* Memory actions *)
 (* NOTE for Rodolphe: the spec of this actions for Core is that if an init
@@ -359,43 +359,25 @@ let to_int_type (ity: Ctype.integerType) : Caesium.int_type =
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
 let ptrcast_ival src_ty ref_ty ival : pointer_value memM =
-  let ity = match src_ty with
-    | Ctype.(Ctype (_, Basic (Integer z))) ->
-        z
-    | _ ->
-        assert false in
-  let int_ty = (to_int_type ity) in
-  let v = match Caesium.val_of_int_repr ival int_ty with
-    | None -> assert false
-    | Some z -> z in
-  match Caesium.ip_cast int_ty v with
-    | None -> assert false
-    | Some v' ->
-        begin match Caesium.val_to_loc v' with
-          | None -> assert false
-          | Some loc -> return (PVptr loc)
-        end
-(* 
-  fun _ _ i -> return (PVptr(Caesium.int_repr_to_loc i)) *)
+  ND.nd_get >>= fun st ->
+  match ip_cast st.state.st_heap ival with
+  | (ProvNull , _) -> return (PVnull ref_ty)
+  | (ProvFnPtr, _) -> assert false (* Impossible. *)
+  | loc            -> return (PVptr loc)
+
+let loc_of_pval pval _ =
+  match pval with
+  | PVnull _ -> (ProvNull, Z.zero)
+  | PVptr(l) -> l
+  | PVfun(_) -> assert false (* TODO *)
 
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-let intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM =
-  fun ref_ty ity pv ->
-  match pv with
-  | PVptr loc  ->
-    let int_ty = (to_int_type ity) in
-    begin match Caesium.pi_cast int_ty (Caesium.val_of_loc loc) with
-      | None -> assert false
-      | Some v ->
-          begin match Caesium.val_to_int_repr v int_ty with
-            | None -> assert false
-            | Some i -> return i
-          end
-    end
-  | PVnull _ ->
-      return (IRInt Z.zero)
-  | PVfun _ ->
-      assert false (* TODO should be UB I think *)
+let intcast_ptrval ref_ty int_ty pval : integer_value memM =
+  ND.nd_get >>= fun st ->
+  let pval = loc_of_pval pval st in
+  match pi_cast st.state.st_heap pval with
+  | None    -> assert false (* Error *)
+  | Some(i) -> return i
 
 let offsetof_ival tagDefs tag_sym memb_ident =
   let (xs, _) = Common.offsetsof tagDefs tag_sym in
@@ -773,19 +755,14 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
 
 
 
-let copy_alloc_id ival ptrval =
-  let v1 = match Caesium.(val_of_int_repr ival uintptr_t) with
-    | None -> assert false
-    | Some z -> z in
-  let (_, v2) = pointer_mval Ctype.void ptrval in
-  match Caesium.(copy_alloc_id  v1 v2) with
-    | None ->
-        failwith "copy_alloc_id => None"
-    | Some res ->
-      begin match Caesium.val_to_loc res with
-        | None -> assert false
-        | Some loc -> return (PVptr loc)
-      end
+let copy_alloc_id ival pval =
+  ND.nd_get >>= fun st ->
+  let pval = loc_of_pval pval st in
+  match Caesium.copy_alloc_id st.state.st_heap ival pval with
+  | None ->
+      failwith "copy_alloc_id => None"
+  | Some l ->
+      return (PVptr l)
 
       (* Printf.printf "COPY_ALLOC_ID ==> TODO\n";
   return ptrval TODO *)
@@ -809,12 +786,14 @@ open Pp_prelude
 let pp_pointer_value = function
   | PVnull ty ->
       !^ "null" ^^ parens (Pp_core_ctype.pp_ctype ty)
-  | PVptr (alloc_id_opt, addr) ->
-    let str_alloc_id = match alloc_id_opt with
-      | None ->
-          "@none"
-      | Some alloc_id ->
-          "@" ^ Z.to_string alloc_id in
+  | PVptr (prov, addr) ->
+      let str_alloc_id =
+        match prov with
+        | ProvAlloc(None) ->
+            "@none"
+        | ProvAlloc(Some alloc_id) ->
+            "@" ^ Z.to_string alloc_id
+        | _ -> assert false (* Should never happen? *) in
     parens (!^ str_alloc_id ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string addr))))
   | PVfun sym ->
       !^ "funptr" ^^ parens (!^ (Pp_symbol.to_string sym))
