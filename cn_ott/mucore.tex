@@ -455,8 +455,7 @@
 \ottprodline{|}{\ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}}}{}{}{}{\ottcom{seperating conjunction}}\ottprodnewline
 \ottprodline{|}{\exists \, ident  {:}  \beta  . \:  \ottnt{res}}{}{}{}{\ottcom{existential}}\ottprodnewline
 \ottprodline{|}{term  \wedge  \ottnt{res}}{}{}{}{\ottcom{logical conjuction}}\ottprodnewline
-\ottprodline{|}{\langle  \ottnt{res}  \rangle} {\textsf{S}}{}{}{\ottcom{parentheses}}\ottprodnewline
-\ottprodline{|}{\ottsym{[}  \sigma  \ottsym{]}  \ottnt{res}} {\textsf{M}}{}{}{\ottcom{simul-sub $\sigma$ in $\ottnt{res}$}}}
+\ottprodline{|}{ \sigma  (  \ottnt{res}  ) } {\textsf{M}}{}{}{\ottcom{simul-sub $\sigma$ in $\ottnt{res}$}}}
 
 \newcommand{\ottret}{
 \ottrulehead{\ottnt{ret}  ,\ \_}{::=}{\ottcom{return types}}\ottprodnewline
@@ -513,7 +512,6 @@
 \ottprodline{|}{\ottnt{res}  \multimap  \ottnt{arg}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{term  \supset  \ottnt{arg}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\ottnt{ret}}{}{}{}{}\ottprodnewline
-\ottprodline{|}{ \ottnt{arg} } {\textsf{S}}{}{}{}\ottprodnewline
 \ottprodline{|}{ \sigma  (  \ottnt{arg}  ) } {\textsf{M}}{}{}{\ottcom{simul-sub $\sigma$ in $\ottnt{arg}$}}}
 
 \newcommand{\ottpureXXarg}{
@@ -977,107 +975,107 @@
 
 % defns res_jtype
 %% defn Res_Eq
-\newcommand{\ottdruleTyResXXEqXXEmp}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXEqXXEmp}[1]{\ottdrule[#1]{%
 }{
 \Phi  \vdash  \ottkw{emp} \, \equiv \, \ottkw{emp}}{%
-{\ottdrulename{TyRes\_Eq\_Emp}}{}%
+{\ottdrulename{Ty\_Res\_Eq\_Emp}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXEqXXPointsTo}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXEqXXPointsTo}[1]{\ottdrule[#1]{%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  \ottsym{(}  term_{{\mathrm{1}}}  =  term'_{{\mathrm{1}}}  \ottsym{)}  \wedge  \ottsym{(}  term_{{\mathrm{2}}}  =  term'_{{\mathrm{2}}}  \ottsym{)}  \ottsym{)}}%
 }{
 \Phi  \vdash   term_{{\mathrm{1}}}  \mathbin{ { \overset{  init  }{ \mapsto } }_{  \tau  } }  term_{{\mathrm{2}}}  \, \equiv \,  term'_{{\mathrm{1}}}  \mathbin{ { \overset{  init  }{ \mapsto } }_{  \tau  } }  term'_{{\mathrm{2}}} }{%
-{\ottdrulename{TyRes\_Eq\_PointsTo}}{}%
+{\ottdrulename{Ty\_Res\_Eq\_PointsTo}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXEqXXSepConj}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXEqXXSepConj}[1]{\ottdrule[#1]{%
 \ottpremise{\Phi  \vdash  \ottnt{res_{{\mathrm{1}}}} \, \equiv \, \ottnt{res'_{{\mathrm{1}}}}}%
 \ottpremise{\Phi  \vdash  \ottnt{res_{{\mathrm{2}}}} \, \equiv \, \ottnt{res'_{{\mathrm{2}}}}}%
 }{
 \Phi  \vdash  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}} \, \equiv \, \ottnt{res'_{{\mathrm{1}}}}  *  \ottnt{res'_{{\mathrm{2}}}}}{%
-{\ottdrulename{TyRes\_Eq\_SepConj}}{}%
+{\ottdrulename{Ty\_Res\_Eq\_SepConj}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXEqXXExists}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXEqXXExists}[1]{\ottdrule[#1]{%
 \ottpremise{\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}}%
 }{
 \Phi  \vdash  \exists \, ident  {:}  \beta  . \:  \ottnt{res} \, \equiv \, \exists \, ident  {:}  \beta  . \:  \ottnt{res'}}{%
-{\ottdrulename{TyRes\_Eq\_Exists}}{}%
+{\ottdrulename{Ty\_Res\_Eq\_Exists}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXEqXXTerm}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXEqXXTerm}[1]{\ottdrule[#1]{%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \ottsym{,}  term  \Rightarrow  term'  \ottsym{)}}%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \ottsym{,}  term'  \Rightarrow  term  \ottsym{)}}%
 \ottpremise{\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}}%
 }{
 \Phi  \vdash  term  \wedge  \ottnt{res} \, \equiv \, term'  \wedge  \ottnt{res'}}{%
-{\ottdrulename{TyRes\_Eq\_Term}}{}%
+{\ottdrulename{Ty\_Res\_Eq\_Term}}{}%
 }}
 
-\newcommand{\ottdefnTyResXXEq}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}$}{}
-\ottusedrule{\ottdruleTyResXXEqXXEmp{}}
-\ottusedrule{\ottdruleTyResXXEqXXPointsTo{}}
-\ottusedrule{\ottdruleTyResXXEqXXSepConj{}}
-\ottusedrule{\ottdruleTyResXXEqXXExists{}}
-\ottusedrule{\ottdruleTyResXXEqXXTerm{}}
+\newcommand{\ottdefnTyXXResXXEq}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}$}{}
+\ottusedrule{\ottdruleTyXXResXXEqXXEmp{}}
+\ottusedrule{\ottdruleTyXXResXXEqXXPointsTo{}}
+\ottusedrule{\ottdruleTyXXResXXEqXXSepConj{}}
+\ottusedrule{\ottdruleTyXXResXXEqXXExists{}}
+\ottusedrule{\ottdruleTyXXResXXEqXXTerm{}}
 \end{ottdefnblock}}
 
 %% defn Res
-\newcommand{\ottdruleTyResXXEmp}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXEmp}[1]{\ottdrule[#1]{%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{emp}  \Leftarrow  \ottkw{emp}}{%
-{\ottdrulename{TyRes\_Emp}}{}%
+{\ottdrulename{Ty\_Res\_Emp}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXPointsTo}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXPointsTo}[1]{\ottdrule[#1]{%
 \ottpremise{\Phi  \vdash  \ottnt{points\_to} \, \equiv \, \ottnt{points\_to'}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{\_}  {:}  \ottnt{points\_to}  \vdash  \ottnt{points\_to'}  \Leftarrow  \ottnt{points\_to'}}{%
-{\ottdrulename{TyRes\_PointsTo}}{}%
+{\ottdrulename{Ty\_Res\_PointsTo}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXVar}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXVar}[1]{\ottdrule[#1]{%
 \ottpremise{\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{r}  {:}  \ottnt{res}  \vdash  \ottmv{r}  \Leftarrow  \ottnt{res'}}{%
-{\ottdrulename{TyRes\_Var}}{}%
+{\ottdrulename{Ty\_Res\_Var}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXSepConj}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXSepConj}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottnt{res\_term_{{\mathrm{1}}}}  \Leftarrow  \ottnt{res_{{\mathrm{1}}}}}%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}  \vdash  \ottnt{res\_term_{{\mathrm{2}}}}  \Leftarrow  \ottnt{res_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{R}_{{\mathrm{2}}}  \vdash  \langle  \ottnt{res\_term_{{\mathrm{1}}}}  \ottsym{,}  \ottnt{res\_term_{{\mathrm{2}}}}  \rangle  \Leftarrow  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}}}{%
-{\ottdrulename{TyRes\_SepConj}}{}%
+{\ottdrulename{Ty\_Res\_SepConj}}{}%
 }}
 
 
-\newcommand{\ottdruleTyResXXPack}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXResXXPack}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \beta}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term_{{\mathrm{2}}}}  \Leftarrow  \ottsym{[}  pval  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  \ottsym{]}  \ottnt{res}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term_{{\mathrm{2}}}}  \Leftarrow   pval  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{res}  ) }%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{pack} \, \ottsym{(}  pval  \ottsym{,}  \ottnt{res\_term_{{\mathrm{2}}}}  \ottsym{)}  \Leftarrow  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{res}}{%
-{\ottdrulename{TyRes\_Pack}}{}%
+{\ottdrulename{Ty\_Res\_Pack}}{}%
 }}
 
-\newcommand{\ottdefnTyRes}[1]{\begin{ottdefnblock}[#1]{$\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res}$}{}
-\ottusedrule{\ottdruleTyResXXEmp{}}
-\ottusedrule{\ottdruleTyResXXPointsTo{}}
-\ottusedrule{\ottdruleTyResXXVar{}}
-\ottusedrule{\ottdruleTyResXXSepConj{}}
-\ottusedrule{\ottdruleTyResXXPack{}}
+\newcommand{\ottdefnTyXXRes}[1]{\begin{ottdefnblock}[#1]{$\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res}$}{}
+\ottusedrule{\ottdruleTyXXResXXEmp{}}
+\ottusedrule{\ottdruleTyXXResXXPointsTo{}}
+\ottusedrule{\ottdruleTyXXResXXVar{}}
+\ottusedrule{\ottdruleTyXXResXXSepConj{}}
+\ottusedrule{\ottdruleTyXXResXXPack{}}
 \end{ottdefnblock}}
 
 
 \newcommand{\ottdefnsresXXjtype}{
-\ottdefnTyResXXEq{}\ottdefnTyRes{}}
+\ottdefnTyXXResXXEq{}\ottdefnTyXXRes{}}
 
 % defns spine_jtype
 %% defn Spine
@@ -1381,7 +1379,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 
 
 \newcommand{\ottdruleTyXXPatXXResXXPack}[1]{\ottdrule[#1]{%
-\ottpremise{\ottnt{res\_pattern}  {:}  \ottsym{[}  \ottmv{x}  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  \ottsym{]}  \ottnt{res}  \leadsto  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}}%
+\ottpremise{\ottnt{res\_pattern}  {:}   \ottmv{x}  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{res}  )   \leadsto  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}}%
 }{
 \ottkw{pack} \, \ottsym{(}  \ottmv{x}  \ottsym{,}  \ottnt{res\_pattern}  \ottsym{)}  {:}  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{res}  \leadsto  \mathcal{L}  \ottsym{,}  \ottmv{x}  {:}  \beta  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}}{%
 {\ottdrulename{Ty\_Pat\_Res\_Pack}}{}%
@@ -1538,7 +1536,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \newcommand{\ottdruleTyXXActionXXCreate}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \ottkw{integer}}%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{create} \, \ottsym{(}  pval  \ottsym{,}  \tau  \ottsym{)}    \Rightarrow  \Sigma \, { y_p }  {:}  \ottkw{loc}  . \:  \ottkw{representable} \, \ottsym{(}  \tau  *  \ottsym{,}  { y_p }  \ottsym{)}  \wedge  \ottkw{alignedI} \, \ottsym{(}   pval   \ottsym{,}  { y_p }  \ottsym{)}  \wedge  \exists \, \ottmv{y}  {:}   \beta_{  \tau  }   . \:  \langle   { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \ottmv{y}   \rangle  \otimes  \ottkw{I}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \vdash  \ottkw{create} \, \ottsym{(}  pval  \ottsym{,}  \tau  \ottsym{)}    \Rightarrow  \Sigma \, { y_p }  {:}  \ottkw{loc}  . \:  \ottkw{representable} \, \ottsym{(}  \tau  *  \ottsym{,}  { y_p }  \ottsym{)}  \wedge  \ottkw{alignedI} \, \ottsym{(}   pval   \ottsym{,}  { y_p }  \ottsym{)}  \wedge  \exists \, \ottmv{y}  {:}   \beta_{  \tau  }   . \:    { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \ottmv{y}    \otimes  \ottkw{I}}{%
 {\ottdrulename{Ty\_Action\_Create}}{}%
 }}
 
@@ -1548,7 +1546,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow   pval_{{\mathrm{0}}}   =   pval_{{\mathrm{1}}}   \ottsym{)}}%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}    \Leftarrow    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}  }%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{load} \, \ottsym{(}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}  \_  \ottsym{,}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}    \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}   \beta_{  \tau  }   . \:  \ottmv{y}  =   pval_{{\mathrm{2}}}   \wedge  \langle    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}    \rangle  \otimes  \ottkw{I}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{load} \, \ottsym{(}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}  \_  \ottsym{,}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}    \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}   \beta_{  \tau  }   . \:  \ottmv{y}  =   pval_{{\mathrm{2}}}   \wedge     pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}     \otimes  \ottkw{I}}{%
 {\ottdrulename{Ty\_Action\_Load}}{}%
 }}
 
@@ -1560,7 +1558,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow   pval_{{\mathrm{2}}}   =   pval_{{\mathrm{0}}}   \ottsym{)}}%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash    pval_{{\mathrm{2}}}   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_   \Leftarrow    pval_{{\mathrm{2}}}   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_ }%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{store} \, \ottsym{(}  \_  \ottsym{,}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}  pval_{{\mathrm{1}}}  \ottsym{,}  \_  \ottsym{,}    pval_{{\mathrm{2}}}   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_   \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{\_}  {:}  \ottkw{unit}  . \:  \langle    pval_{{\mathrm{2}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{1}}}    \rangle  \otimes  \ottkw{I}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{store} \, \ottsym{(}  \_  \ottsym{,}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}  pval_{{\mathrm{1}}}  \ottsym{,}  \_  \ottsym{,}    pval_{{\mathrm{2}}}   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_   \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{\_}  {:}  \ottkw{unit}  . \:     pval_{{\mathrm{2}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{1}}}     \otimes  \ottkw{I}}{%
 {\ottdrulename{Ty\_Action\_Store}}{}%
 }}
 
@@ -1617,7 +1615,7 @@ term \, \ottkw{as} \, pattern  {:}  \beta  \leadsto  \mathcal{C}  \ottsym{;}  \P
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow   pval_{{\mathrm{1}}}   =   pval_{{\mathrm{0}}}   \ottsym{)}}%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \Leftarrow    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ }%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{ptrValidForDeref} \, \ottsym{(}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottkw{aligned} \, \ottsym{(}  \tau  \ottsym{,}   pval_{{\mathrm{1}}}   \ottsym{)}  \wedge  \langle    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \rangle  \otimes  \ottkw{I}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{ptrValidForDeref} \, \ottsym{(}  \tau  \ottsym{,}  pval_{{\mathrm{0}}}  \ottsym{,}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \ottsym{)}  \Rightarrow  \Sigma \, \ottmv{y}  {:}  \ottkw{bool}  . \:  \ottmv{y}  =  \ottkw{aligned} \, \ottsym{(}  \tau  \ottsym{,}   pval_{{\mathrm{1}}}   \ottsym{)}  \wedge     pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_    \otimes  \ottkw{I}}{%
 {\ottdrulename{Ty\_Memop\_PtrValidForDeref}}{}%
 }}
 

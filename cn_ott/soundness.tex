@@ -1,0 +1,844 @@
+% vim: ft=tex
+\documentclass[11pt]{article}%
+
+\usepackage{amsmath,amssymb}%
+% supertabular package required if using the default grammar tabular
+\usepackage{supertabular}
+\usepackage[margin=1in]{geometry}
+
+
+% the un-wrapped (-tex_wrap false) generated LaTeX file for CN
+\include{cn_included}
+\geometry{a4paper,portrait}
+% the package that allows customized layout described in this document
+\usepackage{ottlayout}
+% the automatically generated file (with our Makefile) to link the generated
+% LaTeX with the ottlayout package
+\include{cn_override}
+
+
+\usepackage{pf2}
+\beforePfSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\afterPfSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\interStepSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
+\pflongindent%
+
+
+\newcommand{\ctxC}{\mathcal{C}}%
+\newcommand{\ctxL}{\mathcal{L}}%
+\newcommand{\ctxN}{\Phi}%
+\newcommand{\ctxR}{\mathcal{R}}%
+\newcommand{\CLNR}{\ctxC ; \ctxL ; \ctxN ; \ctxR}
+\newcommand{\CLNRp}{\ctxC' ; \ctxL' ; \ctxN' ; \ctxR'}
+\newcommand{\stepsto}{\longrightarrow}%
+\newcommand{\reducesto}{\mathrel{{\longrightarrow}^\ast}}%
+\newcommand{\checks}{\Leftarrow}%
+\newcommand{\synths}{\Rightarrow}%
+\newcommand{\conf}[1]{\langle #1 \rangle}%
+\newcommand{\sych}{\Leftrightarrow}%
+\newcommand{\hconf}[2]{\langle #1 ; #2 \rangle}%
+\newcommand{\lolly}{\multimap}
+
+\title{Explicit CN Soundness Proof}
+\author{Dhruv Makwana}
+
+\begin{document}
+\ottstyledefaults{premiselayout=justify}%
+
+\maketitle
+
+\section{Weakening}
+
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \sqsubseteq  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$ and $\CLNR \vdash J$ then
+$\CLNRp \vdash J$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing judgements.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \sqsubseteq  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.
+            \item $\CLNR \vdash J$.\\
+        \end{pfenum}
+    }
+
+    \prove{$\CLNRp \vdash J$.}
+\end{proof}
+
+\section{Substitution}
+
+\subsection{Weakening for Substitution}
+
+Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
+\ctxL'' ; \ctxN'' ; \ctxR'' )$.
+
+\begin{proof}
+    \pfsketch{ Induction over the substitution.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \sqsubseteq  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.\\
+        \end{pfenum}
+    }
+
+    \prove{$\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.}
+\end{proof}
+
+\subsection{Substitution Lemma}
+
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ and $\CLNRp \vdash
+J$ then $\CLNR \vdash \sigma ( J )$. 
+
+\begin{proof}
+    \pfsketch{ Induction over the typing judgements.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.
+            \item $\CLNRp \vdash J$.\\
+        \end{pfenum}
+    }
+
+    \prove{$\CLNR \vdash \sigma ( J )$.}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PVal\_Var}.
+        }{%
+            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \vdash  \cnmv{x}  \Rightarrow  \beta$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{Have $\cnmv{x}  {:}  \beta \, \in \, \mathcal{C}'$ (or $\cnmv{x}  {:}  \beta \, \in \, \mathcal{L}'$).}
+        \step{<2>2}{So $\exists pval.\ \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval  \Rightarrow  \beta$
+            by \textsc{Ty\_Subs\_Cons\_\{Comp,Log\}}.}
+        \step{<2>3}{Since $pval = \sigma(x)$, we are done.}
+    \end{proof}
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_TPE\_Let}.
+        }{%
+            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \vdash  \cnkw{let} \, ident\_or\_pattern  =  pexpr \, \cnkw{in} \, tpexpr  \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:  \cnnt{term_{{\mathrm{2}}}}$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash   \sigma  (  pexpr  )   \Rightarrow  \cnmv{y_{{\mathrm{1}}}}  {:}  \beta  . \:   \sigma  (  \cnnt{term_{{\mathrm{1}}}}  ) $
+            \item $\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{,}  \cnmv{y_{{\mathrm{1}}}}  {:}  \beta  \cnsym{;}  \Phi  \cnsym{,}  \cnnt{term_{{\mathrm{1}}}}  \cnsym{,}  \Phi'  \vdash   \sigma  (  tpexpr  )   \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta  . \:   \sigma  (  \cnnt{term_{{\mathrm{2}}}}  ) $.
+        \end{pfenum}}
+
+        \step{<2>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash   \sigma  (  \cnkw{let} \, ident\_or\_pattern  =  pexpr \, \cnkw{in} \, tpexpr  )   \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:   \sigma  (  \cnnt{term_{{\mathrm{2}}}}  ) $ as required.}
+    \end{proof}
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_TVal\_Log}.
+        }{%
+            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \vdash  \cnkw{done} \, pval  \cnsym{,} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{ret}$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash   \sigma  (  pval  )   \Rightarrow  \beta$
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  )   \Leftarrow   \sigma  (   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{ret}  )   ) $.
+        \end{pfenum}}
+
+        \step{<2>2}{Therefore $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnkw{done} \, pval  \cnsym{,} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  )   \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:   \sigma  (  \cnnt{ret}  ) $.}
+    \end{proof}
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_Spine\_Res}.
+        }{%
+            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}_{{\mathrm{2}}}  \vdash  \cnmv{x}  =  \cnnt{res\_term}  \cnsym{,} \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{res}  \multimap  \cnnt{arg}  \gg  \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \psi  \cnsym{;}  \cnnt{ret}$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash   \sigma  (  \cnnt{res\_term}  )   \Leftarrow   \sigma  (  \cnnt{res}  ) $.
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =   \sigma  (  \cnnt{spine\_elem_{\cnmv{i}}}  ) }{\cnmv{i}} \, \mathbin{ {:} {:} }    \sigma  (  \cnnt{res}  )    \multimap   \sigma  (  \cnnt{arg}  )   \gg   \sigma  (  \psi  )   \cnsym{;}   \sigma  (  \cnnt{ret}  ) $.
+        \end{pfenum}}
+
+        \step{<2>2}{Hence $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}_{{\mathrm{2}}}  \vdash  \cnmv{x}  =   \sigma  (  \cnnt{res\_term}  )   \cnsym{,} \, \cncomp{\cnmv{x_{\cnmv{i}}}  =   \sigma  (  \cnnt{spine\_elem_{\cnmv{i}}}  ) }{\cnmv{i}} \, \mathbin{ {:} {:} }   \sigma  (   \cnnt{res}  \multimap  \cnnt{arg}   )   \gg   \sigma  (   \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \psi   )   \cnsym{;}   \sigma  (  \cnnt{ret}  ) $ as required.}
+    \end{proof}
+
+\end{proof}
+
+\subsection{Identity Extension}
+
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ then $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the substitution.\\}
+
+    \assume{%
+        $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
+    }
+
+    \prove{%
+        $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.
+    }
+
+    \step{<1>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnsym{(}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{)}$.\\
+        \pf\ By induction on each of $\ctxC ; \ctxL ; \ctxN ; \ctxR_1$.}
+
+    \step{<1>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$ \\
+        \pf\ By induction on $\sigma$ with base case as above.}
+
+\end{proof}
+
+
+\subsection{Usable Substitution Lemma}
+
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ and $\ctxC ,
+\ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$ then
+$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+
+\begin{proof}
+    \pfsketch{ Apply identity extension then substitution lemma.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\label{usl1}
+            \item $\ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+    }
+
+    \step{<1>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.\\
+        \pf\ Apply identity extension to \ref{usl1}.}\pflabel{usl2}
+
+    \step{<1>2}{$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash ( \sigma , \mathrm{id} ) ( J )$.\\
+        \pf\ Apply substitution lemma to \pfref{usl2}.}
+
+    \step{<1>3}{$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.\\
+        \pf\ $\mathrm{id}( J )  = J$.}
+
+\end{proof}
+
+\section{Progress}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+\stepsto \hconf{h'}{e'}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing rules.\\}
+
+    \assume{%
+        $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$.
+    }
+
+    \prove{%
+        either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
+        \stepsto \hconf{h'}{e'}$.
+    }
+\end{proof}
+
+\section{Framing}
+
+If $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$ and $h_1, h_2$ disjoint then
+$\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+
+\begin{proof}
+    \pfsketch{ Induction over the operational rules.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$.
+            \item $h_1, h_2$ disjoint.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
+    }
+\end{proof}
+
+\section{Type Preservation}
+
+\subsection{\textsc{Ty\_Spine\_*} and \textsc{Decons\_Arg\_*} construct same
+substitution and return type}\label{subsec:spine_decons_same}
+
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}$ and
+$\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma'  \cnsym{;}  \cnnt{ret'}$ then $\sigma =
+\sigma'$ and $\cnnt{ret} = \cnnt{ret'}$.
+
+\pfsketch{ Induction over $\cnnt{arg}$.}
+
+\subsection{Pointed-to values have type $ \beta_{  \tau  } $}\label{subsec:pt_val_type}
+
+For $pt  =  \cnmv{\_}  \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $, 
+if $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ then
+$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval  \Rightarrow   \beta_{  \tau  } $.
+
+\pfsketch{ Induction over the typing judgements. Only
+    \textsc{Ty\_Action\_Store} create such permissions, and its premise $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow   \beta_{  \tau  } $ ensures the desired property.
+    \textsc{Ty\_Action\_Load} simply preserves the property.}
+
+\subsection{Type Preservation Statement and Proof}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
+\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+
+\begin{proof}
+    \pfsketch{ Induction over the typing rules.\\}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$
+            \item arbitrary $h : \ctxR, e' , h' : \ctxR'$
+            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$.\\
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.\\
+    }
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrValidForDeref}.
+        }{%
+            \pflet{%
+                $pt =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ $.\\
+                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{ptrValid-assm1}
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \rangle$.\label{ptrValid-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
+            \ref{ptrValid-assm1}.}
+
+        \step{<2>2}{$R = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}$, by \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>3}{$bool\_value = \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}$ by
+            construction of $bool\_value$ (inversion on \ref{ptrValid-assm2}).}
+
+        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value  \Rightarrow  \cnkw{bool}$ by
+            \textsc{Ty\_PVal\_\{True,False\}}.}
+
+        \step{<2>5}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>2} --
+            \stepref{<2>4} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+            respectively, we are done.}
+    \end{proof}
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_PE\_Array\_Shift}.
+        }{%
+            \pflet{%
+                $term =  mem\_ptr   \mathbin{ {+}_{ \mathrm{ptr} } }  \cnsym{(}   mem\_int   \times   \mathrm{size\_of}(  \tau  )   \cnsym{)}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
+
+                    \item $\langle  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \rangle  \longrightarrow  \langle  mem\_ptr'  \rangle$.\label{array-shift-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr'  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
+                \textsc{Ty\_PE\_Val} and construction of $mem\_ptr'$
+                (inversion on \ref{array-shift-assm2}).
+        }
+    }
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_PE\_Member\_Shift}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_Array\_Shift}.
+        }
+    }
+
+    \step{<1>5}{%
+        \case{%
+            \textsc{Ty\_PE\_Not}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{not} \, \cnsym{(}  bool\_value  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
+
+                    \item $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{False}  \rangle$
+                        or $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{True}  \rangle$.\label{not-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value'  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
+            }
+            \pf\ By \textsc{Ty\_PVal\_\{True,False\}}, \textsc{Ty\_PE\_Val} and
+                \ref{not-assm2}.
+        }
+    }
+
+    \step{<1>6}{%
+        \case{%
+            \textsc{Ty\_PE\_Arith\_Binop}.
+        }{%
+            \pflet{%
+                $term =   mem\_int_{{\mathrm{1}}}    \mathbin{ binop_{arith} }    mem\_int_{{\mathrm{2}}}  $.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+
+                    \item $\langle  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  mem\_int  \rangle$.\label{arith-binop-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
+                \textsc{Ty\_PE\_Val} and construction of $mem\_int$
+                (inversion on \ref{arith-binop-assm2}).
+        }
+    }
+
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_PE\_\{Rel,Bool\}\_Binop}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_PE\_Arith\_Binop}.
+        }
+    }
+
+    \step{<1>8}{%
+        \case{%
+            \textsc{Ty\_PE\_Call}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  name  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \beta  . \:   \sigma  (  \cnnt{term}  ) $.\label{call-assm1}
+                    \item $\langle  name  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  \rangle  \longrightarrow  \langle   \sigma'  (  tpexpr  )   {:}  \cnsym{(}  \cnmv{y}  {:}  \beta'  . \:   \sigma'  (  \cnnt{term'}  )   \cnsym{)}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash   \sigma  (  tpexpr  )   \Leftarrow  \cnmv{y}  {:}  \beta  . \:   \sigma  (  \cnnt{term}  ) $.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$name  {:}  \cnnt{pure\_arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  tpexpr \, \in \, \cnkw{Globals}$ by inversion (on either assumption).}
+
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  pval_{\cnmv{i}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \gg  \sigma  \cnsym{;}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{term}  \wedge  \cnkw{I}$ by
+            inversion on \ref{call-assm1}.}
+
+        \step{<2>3}{$\beta = \beta'$, $\cnnt{term} = \cnnt{term'}$ and $\sigma = \sigma'$ by induction on $\cnnt{pure\_arg}$.\\
+            Follows from lemma \ref{subsec:spine_decons_same}.}
+
+        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \cdot  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{)}$.\\
+            \pf\ Constructing such a substitution requires $\cncomp{\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval_{\cnmv{i}}  \Rightarrow  \beta_{\cnmv{i}}}{\cnmv{i}}$ for each $\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}} \, \in \, \mathcal{C}$ which can be deduced from \stepref{<2>2}.}
+
+        \step{<2>5}{$\mathcal{C}''  \cnsym{;}  \cdot  \cnsym{;}  \Phi''  \vdash  tpexpr  \Leftarrow  \cnmv{y}  {:}  \beta''  . \:  \cnnt{term''}$
+            where $\cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \leadsto  \mathcal{C}''  \cnsym{;}  \cdot  \cnsym{;}  \Phi''  \cnsym{;}  \cdot  \mid  \Sigma \, \cnmv{y}  {:}  \beta''  . \:  \cnnt{term''}  \wedge  \cnkw{I}$ formalises the assumption that all
+            global functions and labels are well-typed.}
+        
+        \step{<2>6}{$\mathcal{C} = \mathcal{C}''$ , $\Phi = \Phi''$ , $\beta = \beta''$
+            and $\cnnt{term} = \cnnt{term''}$.\\
+            \pf\ By induction on $\cnnt{pure\_arg}$.}
+
+        \step{<2>7}{Apply usable substitution lemma to \stepref{<2>4} and
+            \stepref{<2>5} to finish proof.}
+
+    \end{proof}
+
+    \step{<1>9}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
+
+                    \item $\langle  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{Unit}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Unit} and \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>10}{%
+        \case{%
+            \textsc{Ty\_PE\_Bool\_To\_Integer}.
+        }{%
+            \pflet{%
+                $term = \cnkw{if} \,  bool\_value  \, \cnkw{then} \,  1  \, \cnkw{else} \,  0 $.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{bool\_to\_integer} \, \cnsym{(}  bool\_value  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+
+                    \item $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle   1   \rangle$ or $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle   0   \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$
+            }
+            \pf\ By cases on $bool\_value$, then applying
+                \textsc{Ty\_PVal\_\{True,False\}} and \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>11}{%
+        \case{%
+            \textsc{Ty\_PE\_WrapI}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_PE\_Bool\_To\_Integer}, except by
+                cases on $\cnmv{abbrev_{{\mathrm{2}}}}  \leq   \mathrm{max\_int}_{  \tau  } $, then applying
+                \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj} and
+                \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>12}{%
+        \case{%
+            \textsc{Ty\_TPE\_If}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_If} for a more general case and proof.
+        }
+    }
+
+    \step{<1>13}{%
+        \case{%
+            \textsc{Ty\_TPE\_Let}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_Let} for a more general case and proof.
+        }
+    }
+
+    \step{<1>14}{%
+        \case{%
+            \textsc{Ty\_TPE\_LetT}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_LetT} for a more general case and proof.
+        }
+    }
+
+    \step{<1>15}{%
+        \case{%
+            \textsc{Ty\_TPE\_Case}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_Case} for a more general case and proof.
+        }
+    }
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_Action\_Create}.
+        }{%
+            \pflet{%
+                $pt =   mem\_ptr   \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }   pval  $.\\
+                $ term = \cnkw{representable} \, \cnsym{(}  \tau  *  \cnsym{,}  { y_p }  \cnsym{)}  \wedge  \cnkw{alignedI} \, \cnsym{(}   mem\_int   \cnsym{,}  { y_p }  \cnsym{)}$.\\
+                $ret = \Sigma \, { y_p }  {:}  \cnkw{loc}  . \:  \cnnt{term}  \wedge  \exists \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:    { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \cnmv{y}    \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \Rightarrow  \cnnt{ret}$.
+                    \item $\langle  \cdot  \cnsym{;}  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr  \Rightarrow  \cnkw{loc}$ by
+            \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
+
+        \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow  \cnnt{term}  \cnsym{)}$ by construction of $mem\_ptr$.}
+
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
+            by construction of $pval$.}
+
+        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ by
+            \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
+            \textsc{Ty\_TVal\_\{Res,Log,Phi,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>16}{%
+        \case{%
+            \textsc{Ty\_Action\_Load}.
+        }{%
+            \pflet{%
+                $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
+                $ret = \Sigma \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:  \cnmv{y}  =   pval   \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{load-assm1}
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \rangle$.\label{load-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
+            \ref{load-assm1}.}
+
+        \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   pval   =   pval   \cnsym{)}$ trivially.}
+
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
+            by \stepref{<2>1} and lemma \ref{subsec:pt_val_type}.}
+
+        \step{<2>4}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>1} --
+            \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+            respectively, we are done.}
+    \end{proof}
+
+    \step{<1>17}{%
+        \case{%
+            \textsc{Ty\_Action\_Store}.
+        }{%
+            \pflet{%
+                $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ $.\\
+                $pt' =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
+                $ret = \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnnt{pt'}  \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  pval_{{\mathrm{1}}}  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \Leftarrow  \cnnt{ret}$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}.
+
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
+            by \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+            with \textsc{Ty\_TVal\_\{Res,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>18}{%
+        \case{%
+            \textsc{Ty\_Action\_Kill\_Static}.
+        }{%
+            \pflet{%
+                $pt =   mem\_ptr   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_ $.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$.
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, \cnkw{Unit}  \Leftarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$
+            }
+            \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
+        }
+    }
+
+    \step{<1>19}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>20}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>21}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>22}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>23}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>24}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>25}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+    \step{<1>26}{%
+        \case{%
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.
+
+                    \item $\,$.
+                \end{pfenum}}
+            \prove{%
+                $\,$
+            }
+        }
+    }
+
+\end{proof}
+
+\pagebreak%
+\section{Typing Judgements}
+
+\cngrammartabular{
+\cnobjectXXvalueXXjtype\cninterrule%
+\cnpvalXXjtype\cninterrule%
+\cnresXXjtype\cninterrule%
+\cnspineXXjtype\cninterrule%
+\cnpexprXXjtype\cninterrule%
+\cntpvalXXjtype\cninterrule%
+\cntpexprXXjtype\cninterrule%
+\cnactionXXjtype\cninterrule%
+\cnmemopXXjtype\cninterrule%
+\cnseqXXexprXXjtype\cninterrule%
+\cnisXXexprXXjtype\cninterrule%
+\cntvalXXjtype\cninterrule%
+\cntexprXXjtype\cninterrule%
+}
+
+\pagebreak%
+\section{Opsem Judgements}
+
+\cngrammartabular{
+\cnpureXXopsemXXjtype\cninterrule%
+\cnopsemXXjtype\cninterrule%
+}
+
+
+\end{document}
