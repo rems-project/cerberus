@@ -290,6 +290,17 @@ $[[</ xi = spine_elemi // i /> :; arg >> subs' ; ret' ]]$ then $[[ subs ]] =
 
 \pfsketch{ Induction over $[[arg]]$.}
 
+\subsection{Pointed-to values have type $[[to_base ( ct ) ]]$}\label{subsec:pt_val_type}
+
+For $pt  = [[ _ ( _q )|- tick - ct -> inj mu_pval_aux ]]$, 
+if $[[ C ; L ; N ; R |- pt <= pt]]$ then
+$[[ C ; L ; N |- mu_pval_aux => to_base ( ct ) ]]$.
+
+\pfsketch{ Induction over the typing judgements. Only
+    \textsc{Ty\_Action\_Store} create such permissions, and its premise $[[ C ;
+    L; N |- mu_pval_aux1 => to_base ( ct ) ]]$ ensures the desired property.
+    \textsc{Ty\_Action\_Load} simply preserves the property.}
+
 \subsection{Type Preservation Statement and Proof}
 
 If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
@@ -313,60 +324,143 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
     \step{<1>1}{%
         \case{%
-            \textsc{Ty\_Action\_Create}.
+            \textsc{Ty\_Memop\_PtrValidForDeref}.
         }{%
             \pflet{%
-                $pt = [[ inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux ]]$.\\
-                $ret = [[ sigma yp : loc . representable ( ct *s , yp ) /\
-                alignedI ( inj ty_mem_int , yp ) /\ exists y : to_base ( ct ) . (
-                yp ( q_one )|- * - ct -> y ) *o I ]]$.
+                $pt = [[ inj ty_mem_ptr ( _q )|- tick - ct -> _t ]]$.\\
+                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ pt *o I]]$.
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ cdot ; cdot ; cdot ; cdot |- create ( ty_mem_int
-                        , ct ) Symbol_prefix => ret ]]$.
-                    \item $[[ <( cdot ; create ( ty_mem_int , ct ) Symbol_prefix
-                        )> --> <( cdot + { pt } ; done ty_mem_ptr , mu_pval_aux ,
-                        pt )> ]]$.
+                    \item $[[ cdot ; cdot ; cdot ; R |- ptrValidForDeref ( ct ,
+                        ty_mem_ptr , pt ) => ret ]]$.\label{ptrValid-assm1}
+
+                    \item $[[ <( cdot + { pt } ; ptrValidForDeref ( ct ,
+                        ty_mem_ptr , pt ) )> --> <( cdot + { pt } ; done
+                        mu_bool_value , pt )> ]]$.\label{ptrValid-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; cdot , _ : pt |- done ty_mem_ptr ,
-                mu_pval_aux , pt <= ret ]]$
+                $[[ cdot ; cdot ; cdot ; R  |- done mu_bool_value , pt <= ret ]]$.
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ cdot ; cdot ; cdot |- ty_mem_ptr => loc ]]$ by
-            \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
+        \step{<2>1}{$[[ cdot ; cdot ; cdot ; R |- pt <= pt]]$, by inversion on
+            \ref{ptrValid-assm1}.}
 
-        \step{<2>2}{$[[ smt ( cdot => representable ( ct *s , ty_mem_ptr ) /\ alignedI (
-            inj ty_mem_int , ty_mem_ptr ) ) ]]$ by construction of $[[ty_mem_ptr]]$.}
+        \step{<2>2}{$R = [[ cdot , _ : pt ]]$, by \textsc{Ty\_Res\_PointsTo}.}
 
-        \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
-            by construction of $[[mu_pval_aux]]$.}
+        \step{<2>3}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
+            construction of $[[mu_bool_value]]$ (inversion on \ref{ptrValid-assm2}).}
 
-        \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot , _ : pt |- pt <= pt ]]$ by
-            \textsc{Ty\_Res\_PointsTo}.}
+        \step{<2>4}{$[[cdot ; cdot ; cdot |- mu_bool_value => bool]]$ by
+            \textsc{Ty\_PVal\_\{True,False\}}.}
 
-        \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
-            \textsc{Ty\_TVal\_\{Res,Log,Phi,Comp\}} respectively, we are done.}
+        \step{<2>5}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>2} --
+            \stepref{<2>4} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+            respectively, we are done.}
     \end{proof}
 
     \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_PE\_Array\_Shift}.
+        }{%
+            \pflet{%
+                $term = [[ inj ty_mem_ptr +ptr ( inj ty_mem_int * size_of ct ) ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot |- array_shift ( ty_mem_ptr ,
+                        ct , ty_mem_int ) => y : loc . y = term ]]$.
+
+                    \item $[[ <( array_shift ( ty_mem_ptr , ct , ty_mem_int )
+                        )> --> <( ty_mem_ptr' )> ]]$.\label{array-shift-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot |- ty_mem_ptr' => y : loc . y = term ]]$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
+                \textsc{Ty\_PE\_Val} and construction of $[[ty_mem_ptr']]$
+                (inversion on \ref{array-shift-assm2}).
+        }
+    }
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_PE\_Member\_Shift}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_Array\_Shift}.
+        }
+    }
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_PE\_Not}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot |- not ( mu_bool_value ) => y
+                            : bool . y = neg inj mu_bool_value ]]$.
+
+                    \item $[[ <( not ( True ) )> --> <( False )> ]]$
+                        or $[[ <( not ( False ) )> --> <( True )> ]]$.\label{not-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot |- mu_bool_value' => y : bool . y = neg
+                    inj mu_bool_value ]]$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_\{True,False\}}, \textsc{Ty\_PE\_Val} and
+                \ref{not-assm2}.
+        }
+    }
+
+    \step{<1>5}{%
+        \case{%
+            \textsc{Ty\_PE\_Arith\_Binop}.
+        }{%
+            \pflet{%
+                $term = [[ inj ty_mem_int1 ' arith_binop ' inj ty_mem_int2 ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot |- ty_mem_int1 arith_binop
+                        ty_mem_int2 => y : integer . y = term ]]$.
+
+                    \item $[[ <( ty_mem_int1 arith_binop ty_mem_int2 )> --> <(
+                        ty_mem_int )> ]]$.\label{arith-binop-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot |- ty_mem_int => y : integer . y = term ]]$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
+                \textsc{Ty\_PE\_Val} and construction of $[[ty_mem_int]]$
+                (inversion on \ref{arith-binop-assm2}).
+        }
+    }
+
+    \step{<1>6}{%
+        \case{%
+            \textsc{Ty\_PE\_\{Rel,Bool\}\_Binop}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_PE\_Arith\_Binop}.
+        }
+    }
+
+    \step{<1>7}{%
         \case{%
             \textsc{Ty\_PE\_Call}.
         }{%
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot |- mu_name ( </ mu_pval_auxi // i /> ) => y
-                        : base_type . [ subs ] term ]]$.\label{call_assm1}
+                        : base_type . [ subs ] term ]]$.\label{call-assm1}
                     \item $[[<( mu_name ( </ mu_pval_auxi // i /> ) )> --> <( [
                         subs' ] mu_tpexpr : ( y : base_type' . [ subs' ] term' )
                         )>]]$.
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot |- [ subs ] mu_tpexpr <= y : base_type . [ subs ] term ]]$
+                $[[ cdot ; cdot ; cdot |- [ subs ] mu_tpexpr <= y : base_type . [ subs ] term ]]$.
             }
         }
     }
@@ -377,7 +471,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
         \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot |- </ xi = mu_pval_auxi // i
             /> :; pure_arg >> subs ; sigma y : base_type . term /\ I ]]$ by
-            inversion on \ref{call_assm1}.}
+            inversion on \ref{call-assm1}.}
 
         \step{<2>3}{$[[ base_type ]] = [[ base_type' ]]$, $[[ term ]] = [[
             term' ]]$ and $[[ subs ]] = [[ subs' ]]$ by induction on $[[ pure_arg ]]$.\\
@@ -402,47 +496,225 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
     \end{proof}
 
-    \step{<1>3}{%
+    \step{<1>8}{%
         \case{%
-            \textsc{Ty\_Memop\_PtrValidForDeref}.
+            \textsc{Ty\_Fill\_In}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot |- assert_undef ( True , ty_loc
+                        UB_name ) => y : unit . y = unit ]]$.
+
+                    \item $[[ <( assert_undef ( True , ty_loc UB_name ) )> --> <( Unit )> ]]$.
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot |- Unit => y : unit . y = unit ]]$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Unit} and \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>9}{%
+        \case{%
+            \textsc{Ty\_PE\_Bool\_To\_Integer}.
         }{%
             \pflet{%
-                $pt = [[ inj ty_mem_ptr ( _q )|- tick - ct -> _t ]]$.\\
-                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ pt *o I]]$.
+                $term = [[ if inj mu_bool_value then z_one else z_zero ]]$.
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ cdot ; cdot ; cdot ; R |- ptrValidForDeref ( ct ,
-                        ty_mem_ptr , pt ) => ret ]]$.\label{ptrValid-assm1}
+                    \item $[[ cdot ; cdot ; cdot |- bool_to_integer (
+                        mu_bool_value ) => y : integer . y = term ]]$.
 
-                    \item $[[ <( cdot + { pt } ; ptrValidForDeref ( ct ,
-                        ty_mem_ptr , pt ) )> --> <( cdot + { pt } ; done
-                        mu_bool_value , pt )> ]]$.\label{ptrValid-assm2}
+                    \item $[[ <( bool_to_integer ( True ) )> --> <( mem_one )>
+                        ]]$ or $[[ <( bool_to_integer ( False ) )> --> <(
+                        mem_zero )> ]]$.
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R  |- done mu_bool_value , pt <= ret ]]$
+                $[[ cdot ; cdot ; cdot |- ty_mem_int => y : integer . y = term ]]$
+            }
+            \pf\ By cases on $[[mu_bool_value]]$, then applying
+                \textsc{Ty\_PVal\_\{True,False\}} and \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>10}{%
+        \case{%
+            \textsc{Ty\_PE\_WrapI}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_PE\_Bool\_To\_Integer}, except by
+                cases on $[[abbrev2 =< max_int ct]]$, then applying
+                \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj} and
+                \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>11}{%
+        \case{%
+            \textsc{Ty\_TPE\_If}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_If} for a more general case and proof.
+        }
+    }
+
+    \step{<1>12}{%
+        \case{%
+            \textsc{Ty\_TPE\_Let}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_Let} for a more general case and proof.
+        }
+    }
+
+    \step{<1>13}{%
+        \case{%
+            \textsc{Ty\_TPE\_LetT}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_LetT} for a more general case and proof.
+        }
+    }
+
+    \step{<1>14}{%
+        \case{%
+            \textsc{Ty\_TPE\_Case}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_Case} for a more general case and proof.
+        }
+    }
+
+    \step{<1>15}{%
+        \case{%
+            \textsc{Ty\_Action\_Create}.
+        }{%
+            \pflet{%
+                $pt = [[ inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux ]]$.\\
+                $ term = [[ representable ( ct *s , yp ) /\ alignedI ( inj ty_mem_int , yp ) ]]$.\\
+                $ret = [[ sigma yp : loc . term /\ exists y : to_base ( ct ) . (
+                yp ( q_one )|- * - ct -> y ) *o I ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot ; cdot |- create ( ty_mem_int
+                        , ct ) Symbol_prefix => ret ]]$.
+                    \item $[[ <( cdot ; create ( ty_mem_int , ct ) Symbol_prefix
+                        )> --> <( cdot + { pt } ; done ty_mem_ptr , mu_pval_aux ,
+                        pt )> ]]$.
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot ; cdot , _ : pt |- done ty_mem_ptr ,
+                mu_pval_aux , pt <= ret ]]$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ cdot ; cdot ; cdot |- ty_mem_ptr => loc ]]$ by
+            \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
+
+        \step{<2>2}{$[[ smt ( cdot => term ) ]]$ by construction of $[[ty_mem_ptr]]$.}
+
+        \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
+            by construction of $[[mu_pval_aux]]$.}
+
+        \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot , _ : pt |- pt <= pt ]]$ by
+            \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
+            \textsc{Ty\_TVal\_\{Res,Log,Phi,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>16}{%
+        \case{%
+            \textsc{Ty\_Action\_Load}.
+        }{%
+            \pflet{%
+                $pt  = [[ inj ty_mem_ptr ( q_one )|- tick - ct -> inj mu_pval_aux   ]]$.\\
+                $ret = [[ sigma y : to_base ( ct ) . y = inj mu_pval_aux /\ pt *o I ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot ; cdot , _ : pt |- load ( ct , ty_mem_ptr
+                        , _mem_order , pt ) => ret]]$.\label{load-assm1}
+
+                    \item $[[ <( cdot + { pt } ; load ( ct , ty_mem_ptr , _mem_order , pt ) )>
+                        --> <( cdot + { pt } ; done mu_pval_aux , pt )> ]]$.\label{load-assm2}
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot ; cdot , _ : pt |- done mu_pval_aux , pt <= ret ]]$
             }
         }
     }
 
     \begin{proof}
         \step{<2>1}{$[[ cdot ; cdot ; cdot ; R |- pt <= pt]]$, by inversion on
-            \ref{ptrValid-assm1}.}
+            \ref{load-assm1}.}
 
-        \step{<2>2}{$R = [[ cdot , _ : pt ]]$, by \textsc{Ty\_Res\_PointsTo}.}
+        \step{<2>2}{$[[ smt ( cdot => inj mu_pval_aux = inj mu_pval_aux ) ]]$ trivially.}
 
-        \step{<2>3}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
-            construction of $[[mu_bool_value]]$.}
+        \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
+            by \stepref{<2>1} and lemma \ref{subsec:pt_val_type}.}
 
-        \step{<2>4}{$[[cdot ; cdot ; cdot |- mu_bool_value => bool]]$ by
-            \textsc{Ty\_PVal\_\{True,False\}}.}
-
-        \step{<2>5}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>2} --
-            \stepref{<2>4} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+        \step{<2>4}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>1} --
+            \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
             respectively, we are done.}
     \end{proof}
 
-    \step{<1>?}{%
+    \step{<1>17}{%
+        \case{%
+            \textsc{Ty\_Action\_Store}.
+        }{%
+            \pflet{%
+                $pt  = [[ inj ty_mem_ptr ( _q )|- tick - ct -> _t ]]$.\\
+                $pt' = [[ inj ty_mem_ptr ( _q )|- tick - ct -> inj mu_pval_aux ]]$.\\
+                $ret = [[ sigma _ : unit . pt' *o I ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot ; cdot , _ : pt |- store ( _b , ct ,
+                        mu_pval_aux0 , mu_pval_aux1 , _mem_order , pt ) => ret ]]$.
+
+                    \item $[[ <( cdot + { pt } ; store ( _b , ct , ty_mem_ptr , mu_pval_aux ,
+                        _mem_order , pt )  )> --> <( cdot + { pt' } ; done Unit , pt' )> ]]$.
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot ; cdot , _ : pt' |- done Unit , pt' <= ret ]]$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
+
+        \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot , _ : pt' |- pt' <= pt' ]]$
+            by \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+            with \textsc{Ty\_TVal\_\{Res,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>18}{%
+        \case{%
+            \textsc{Ty\_Action\_Kill\_Static}.
+        }{%
+            \pflet{%
+                $pt = [[ inj ty_mem_ptr ( _q )|- _i - ct -> _t ]]$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $[[ cdot ; cdot ; cdot ; cdot , _ : pt |-  kill ( static ct ,
+                        mu_pval_aux0 , pt ) => sigma _ : unit . I ]]$.
+
+                    \item $[[ <( cdot + { pt } ; kill ( static ct , ty_mem_ptr , pt ) )>
+                        --> <( h ; done Unit )> ]]$.
+                \end{pfenum}}
+            \prove{%
+                $[[ cdot ; cdot ; cdot ; cdot |- done Unit <= sigma _ : unit . I ]]$
+            }
+            \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
+        }
+    }
+
+    % Remaining - Memop and Seq/IS TE
+    \step{<1>19}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -450,9 +722,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -460,7 +734,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>20}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -468,9 +742,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -478,7 +754,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>21}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -486,9 +762,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -496,7 +774,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>22}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -504,9 +782,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -514,7 +794,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>23}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -522,9 +802,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -532,7 +814,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>24}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -540,9 +822,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -550,7 +834,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>25}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -558,9 +842,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
@@ -568,7 +854,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }
     }
 
-    \step{<1>?}{%
+    \step{<1>26}{%
         \case{%
             \textsc{Ty\_Fill\_In}.
         }{%
@@ -576,243 +862,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
+                    \item $[[
+]]$.
 
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
-                \end{pfenum}}
-            \prove{%
-                $[[ ]]$
-            }
-        }
-    }
-
-    \step{<1>?}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $[[ ]]$.\label{assm1}
-
-                    \item $[[ ]]$.\label{ptrValid-assm2}
+                    \item $[[
+]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ ]]$
