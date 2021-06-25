@@ -31,7 +31,10 @@ open Assertion_parser_util
 
 %token QUESTION
 %token COLON
+%token OR
+%token AND
 
+%token NULL
 %token POINTERCAST
 %token INTEGERCAST
 
@@ -90,6 +93,8 @@ atomic_term:
       { Ast.Var ln }
   | STAR p=atomic_term
       { Ast.Pointee p }
+  | NULL
+      { Ast.Null }
 
 arith_term:
   | a1=arith_or_atomic_term PLUS a2=arith_or_atomic_term
@@ -126,6 +131,10 @@ term:
       { Ast.GreaterOrEqual (a1, a2) }
   | a1=atomic_term QUESTION a2=atomic_term COLON a3=atomic_term
       { Ast.ITE (a1, a2, a3) }
+  | a1=atomic_term OR a2=atomic_term
+      { Ast.Or (a1, a2) }
+  | a1=atomic_term AND a2=atomic_term
+      { Ast.And (a1, a2) }
   | POINTERCAST a1=atomic_term
       { Ast.IntegerToPointerCast a1 }
   | INTEGERCAST a1=atomic_term

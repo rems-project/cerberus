@@ -19,10 +19,11 @@ let context =
 
 (* let tactic = Z3.Tactic.mk_tactic context "default" *)
 let params = Z3.Params.mk_params context 
-let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234
-(* let () = Z3.set_global_param "smt.auto-config" "false"
- * let () = Z3.set_global_param "smt.mbqi" "true" *)
-let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt"
+(* let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234 *)
+(* let () = Z3.set_global_param "smt.auto-config" "true" *)
+(* let () = Z3.set_global_param "smt.mbqi" "true"
+ * let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt"
+ * let () = Z3.set_global_param ":smt.pull-nested-quantifiers" "true" *)
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
@@ -41,8 +42,8 @@ module Make (G : sig val global : Global.t end) = struct
   let sym_to_sym s = 
     let (digest,id, oname) = Sym.dest s in
     let str = match oname with
-      | None -> digest ^ "_" ^ string_of_int id
-      | Some s -> s ^ digest ^ "_" ^ string_of_int id
+      | None -> string_of_int id ^"." ^ digest
+      | Some s -> string_of_int id ^"." ^ digest
     in
     Z3.Symbol.mk_string context str
 

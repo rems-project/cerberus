@@ -133,10 +133,10 @@ let equal c c' =
 
 let t_ it = T it
 
-let forall_ (s,bt) it = 
+let forall_ (s,bt) trigger it = 
   Forall ((s, bt), None, it)
-let forall_sth_ (s, bt) cond it = 
-  Forall ((s, bt), None, IT.impl_ (cond, it))
-let forall_trigger_ (s,bt) trigger it = 
-  Forall ((s, bt), trigger, it)
+(* let forall_sth_ (s, bt) cond it = 
+ *   Forall ((s, bt), None, IT.impl_ (cond, it))
+ * let forall_trigger_ (s,bt) trigger it = 
+ *   Forall ((s, bt), trigger, it) *)
 

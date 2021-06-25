@@ -42,12 +42,15 @@ module Terms = struct
     | Equality of term * term
     | Inequality of term * term
     | ITE of term * term * term
+    | Or of term * term
+    | And of term * term
     | LessThan of term * term
     | LessOrEqual of term * term
     | GreaterThan of term * term
     | GreaterOrEqual of term * term
     | IntegerToPointerCast of term
     | PointerToIntegerCast of term
+    | Null
     | App of term * term
 
 
@@ -84,6 +87,10 @@ module Terms = struct
        term_equal a11 a21 && term_equal a12 a22
     | ITE (a11,a12,a13), ITE (a21,a22,a23) ->
        term_equal a11 a21 && term_equal a12 a22 && term_equal a13 a23
+    | Or (a11,a12), Or (a21,a22) ->
+       term_equal a11 a21 && term_equal a12 a22
+    | And (a11,a12), And (a21,a22) ->
+       term_equal a11 a21 && term_equal a12 a22
     | LessOrEqual (a11,a12), LessOrEqual (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
     | GreaterThan (a11,a12), GreaterThan (a21,a22) ->
@@ -94,6 +101,8 @@ module Terms = struct
        term_equal t1 t2
     | PointerToIntegerCast t1, PointerToIntegerCast t2 ->
        term_equal t1 t2
+    | Null, Null ->
+       true
     | App (t11, t12), App (t21, t22) ->
        term_equal t11 t21 && term_equal t12 t22
     | Addr _, _ -> 
@@ -124,6 +133,10 @@ module Terms = struct
        false
     | ITE _, _ ->
        false
+    | Or _, _ ->
+       false
+    | And _, _ ->
+       false
     | LessThan _, _ ->
        false
     | LessOrEqual _, _ ->
@@ -135,6 +148,8 @@ module Terms = struct
     | IntegerToPointerCast _, _ ->
        false
     | PointerToIntegerCast _, _ -> 
+       false
+    | Null, _ ->
        false
     | App _, _ ->
        false
@@ -174,6 +189,10 @@ module Terms = struct
     | ITE (t1, t2, t3) ->
        mparens atomic (pp true t1 ^^^ !^"?" ^^^ pp true t2
                        ^^^ !^":" ^^^ pp true t3)
+    | Or (t1, t2) ->
+       mparens atomic (pp true t1 ^^^ !^"||" ^^^ pp true t2)
+    | And (t1, t2) ->
+       mparens atomic (pp true t1 ^^^ !^"&&" ^^^ pp true t2)
     | LessThan (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"<" ^^^ pp true t2)
     | LessOrEqual (t1, t2) -> 
@@ -186,9 +205,12 @@ module Terms = struct
        mparens atomic (parens !^"pointer" ^^ (pp true t1))
     | PointerToIntegerCast t1 ->
        mparens atomic (parens !^"integer" ^^ (pp true t1))
+    | Null ->
+       !^"NULL"
     | App (t1, t2) ->
        mparens atomic (pp true t1 ^^ brackets (pp false t2))
        
+
 
 
   let addr bn = 
@@ -235,6 +257,10 @@ module Terms = struct
          Inequality (aux t1, aux t2) 
       | ITE (t1, t2, t3) ->
          ITE (aux t1, aux t2, aux t3)
+      | Or (t1, t2) ->
+         Or (aux t1, aux t2)
+      | And (t1, t2) ->
+         And (aux t1, aux t2)
       | LessThan (t1, t2) -> 
          LessThan (aux t1, aux t2)
       | LessOrEqual (t1, t2) -> 
@@ -247,6 +273,8 @@ module Terms = struct
          IntegerToPointerCast (aux t)
       | PointerToIntegerCast t ->
          PointerToIntegerCast (aux t)
+      | Null ->
+         Null
       | App (t1, t2) ->
          App (aux t1, aux t2)
     in

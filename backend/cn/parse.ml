@@ -146,7 +146,8 @@ let parse_label
       (Attrs attributes)
   = 
   (* TODO: make it so reverse does not need to happen here *)
-  let attributes = List.rev attributes in
+  (* seems to no longer be needed, unclear why *)
+  (* let attributes = List.rev attributes in *)
   let cn_attributes = cn_attributes attributes in
   let arguments = 
     List.map (fun (asym, typ) -> 

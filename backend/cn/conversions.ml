@@ -160,11 +160,14 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      fail loc (Generic !^"cannot make owned void* pointer")
   | _ ->
      let pointee = Sym.fresh () in
+     let init = Sym.fresh () in
      let pointee_bt = BT.of_sct sct in
+     let init_bt = BT.Bool in
      let pointee_t = sym_ (pointee, pointee_bt) in
-     let l = [(pointee, pointee_bt)] in
+     let init_t = sym_ (init, init_bt) in
+     let l = [(pointee, pointee_bt); (init, init_bt)] in
      let mapping = [] in
-     let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
+     let r = [predicate (Ctype sct) pointer [] [pointee_t; init_t]] in
      return (l, r, [], mapping)
 
 let make_pred loc (predicates : (string * Predicates.predicate_definition) list) 
@@ -282,6 +285,14 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      let@ it'' = resolve it'' in
      let@ it''' = resolve it''' in
      return (IT (Bool_op (ITE (it', it'', it''')), IT.bt it''), None)
+  | Or (it', it'') ->
+     let@ it' = resolve it' in
+     let@ it'' = resolve it'' in
+     return (IT (Bool_op (Or [it'; it'']), Bool), None)
+  | And (it', it'') ->
+     let@ it' = resolve it' in
+     let@ it'' = resolve it'' in
+     return (IT (Bool_op (And [it'; it'']), Bool), None)
   | LessThan (it, it') -> 
      let@ it = resolve it in
      let@ it' = resolve it' in
@@ -324,6 +335,8 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
   | PointerToIntegerCast t ->
      let@ t = resolve t in
      return (IT (Pointer_op (PointerToIntegerCast t), Integer), None)
+  | Null ->
+     return (IT (Pointer_op Null, BT.Loc), None)
   | App (t1, t2) ->
      let@ it1 = resolve t1 in
      let@ it2 = resolve t2 in

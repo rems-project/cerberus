@@ -37,6 +37,10 @@ rule main = parse
 
   | '?'   { T.QUESTION }
   | ':'   { T.COLON }
+  | "||"  { T.OR }
+  | "&&"  { T.AND }
+
+  | "NULL" { T.NULL }
 
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }

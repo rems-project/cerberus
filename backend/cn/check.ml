@@ -322,6 +322,7 @@ module Make (G : sig val global : Global.t end) = struct
        let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
        if Solver.holds local 
             (forall_ (b.qpointer, BT.Loc)
+               None
                (impl_ (gt_ (b.permission, q_ (0, 1)), 
                        and_ (List.map eq_ constrs))))
        then return res 
@@ -353,6 +354,7 @@ module Make (G : sig val global : Global.t end) = struct
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
        if Solver.holds local 
             (forall_ (p.i, BT.Integer)
+             None
                (impl_ (and_ [bool_ p.unused; 
                              is_qpredicate_instance_index p (sym_ (p.i, Integer))],
                        and_ (List.map eq_ constrs))))
@@ -534,6 +536,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
     let unpack_predicate local (p : predicate) = 
+
       let def = Option.get (Global.get_predicate_def G.global p.name) in
       let substs = 
         {before = def.pointer; after= p.pointer} ::
@@ -695,7 +698,7 @@ module Make (G : sig val global : Global.t end) = struct
           ) local (needed, default_ requested.value, default_ BT.Bool)
       in
       if Solver.holds local 
-           (forall_ (requested.qpointer, BT.Loc)
+           (forall_ (requested.qpointer, BT.Loc) None
               (eq_ (needed, q_ (0, 1))))
       then 
         let r = 
@@ -805,8 +808,6 @@ module Make (G : sig val global : Global.t end) = struct
 
     let qpredicate_request_prompt ui_info local (p : Resources.Requests.qpredicate) = 
       let open Prompt.Operators in
-      let () = print stderr !^"HERE***********************************************" in
-      let () = print stderr (item "name" (pp_predicate_name p.name)) in
       assert ([] = p.moved); (* todo? *)
       if p.unused = false then
         let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
@@ -829,7 +830,6 @@ module Make (G : sig val global : Global.t end) = struct
           L.map_and_fold_resources (fun re found ->
               match re, found with
               | QPredicate p', None ->
-                 let () = print stderr (item "name" (pp_predicate_name p'.name)) in
                  if predicate_name_equal p.name p'.name &&
                     p.unused = p'.unused &&
                     Solver.holds local 
@@ -837,25 +837,8 @@ module Make (G : sig val global : Global.t end) = struct
                                  eq_ (p.element_size, p'.element_size);
                                  eq_ (p.istart, p'.istart);
                                  eq_ (p.iend, p'.iend)])) &&
-                      let () = print stderr !^"2***********************************************" in
-                      let () = 
-                        let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
-                        List.iter (fun (iarg, iarg') ->
-                            print stderr (item "iarg" (IT.pp iarg));
-                            print stderr (item "iarg'" (IT.pp iarg'));
-                            let b = 
-                              Solver.holds local
-                              (forall_ (p.i, BT.Integer)
-                                 (impl_ 
-                                    (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
-                                    eq_ (iarg, iarg'))))
-                            in
-                            if b then print stderr (!^"ok") 
-                            else print stderr (!^"bad")
-                          ) (List.combine p.iargs iargs');
-                      in
                       Solver.holds local 
-                        (forall_ (p.i, BT.Integer)
+                        (forall_ (p.i, BT.Integer) None
                            (impl_ 
                               (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
                                let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
@@ -912,7 +895,6 @@ module Make (G : sig val global : Global.t end) = struct
            in
            return (r, local)
         | None ->
-           let () = print stderr !^"ENDHERE***********************************************" in
            resource_request_missing ui_info (QPredicate p)
 
     let resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
@@ -1473,7 +1455,7 @@ module Make (G : sig val global : Global.t end) = struct
                not (Solver.holds local (t_ (le_ (p.permission, q_ (0, 1)))))
             | QPoint p ->
                not (Solver.holds local 
-                      (forall_ (p.qpointer, BT.Loc)
+                      (forall_ (p.qpointer, BT.Loc) None
                          (le_ (p.permission, q_ (0, 1)))))
             | Predicate p ->
                not p.unused
@@ -1495,6 +1477,9 @@ module Make (G : sig val global : Global.t end) = struct
 
     let infer_expr (local, labels) (e : 'bty mu_expr) 
             : ((RT.t * L.t), type_error) m = 
+
+      if Solver.is_inconsistent local then
+        failwith "asd2";
       let (M_Expr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "inferring expression"));
       debug 3 (lazy (item "expr" (group (pp_expr e))));
@@ -1737,6 +1722,9 @@ module Make (G : sig val global : Global.t end) = struct
        either an updated environment, or `False` in case of Goto *)
     let rec check_texpr (local, labels) (e : 'bty mu_texpr) (typ : RT.t orFalse) 
             : (unit, type_error) m = 
+
+      if Solver.is_inconsistent local then
+        failwith "asd";
       let (M_TExpr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "checking expression"));
       debug 3 (lazy (item "expr" (group (pp_texpr e))));

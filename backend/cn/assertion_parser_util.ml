@@ -25,6 +25,10 @@ type token =
 
   | QUESTION
   | COLON
+  | OR
+  | AND
+
+  | NULL
 
 
   | MEMBER of string
