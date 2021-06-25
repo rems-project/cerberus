@@ -1477,9 +1477,6 @@ module Make (G : sig val global : Global.t end) = struct
 
     let infer_expr (local, labels) (e : 'bty mu_expr) 
             : ((RT.t * L.t), type_error) m = 
-
-      if Solver.is_inconsistent local then
-        failwith "asd2";
       let (M_Expr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "inferring expression"));
       debug 3 (lazy (item "expr" (group (pp_expr e))));
@@ -1723,8 +1720,6 @@ module Make (G : sig val global : Global.t end) = struct
     let rec check_texpr (local, labels) (e : 'bty mu_texpr) (typ : RT.t orFalse) 
             : (unit, type_error) m = 
 
-      if Solver.is_inconsistent local then
-        failwith "asd";
       let (M_TExpr (loc, _annots, e_)) = e in
       debug 3 (lazy (action "checking expression"));
       debug 3 (lazy (item "expr" (group (pp_texpr e))));
