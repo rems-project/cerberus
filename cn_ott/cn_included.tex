@@ -709,7 +709,6 @@
 \newcommand{\cnopsem}{
 \cnrulehead{\cnnt{opsem}}{::=}{}\cnprodnewline
 \cnfirstprodline{|}{\cncomp{pattern_{\cnmv{i}}  =  pval_{\cnmv{i}}  \leadsto  \sigma_{\cnmv{i}}}{\cnmv{i}}}{}{}{}{}\cnprodnewline
-\cnprodline{|}{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}  \leadsto  \sigma_{\cnmv{i}}}{\cnmv{i}}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\forall \, \cnmv{i}  \cnsym{<}  \cnmv{j}  . \: \, \cnkw{not} \, \cnsym{(}  pattern_{\cnmv{i}}  =  pval  \leadsto  \sigma_{\cnmv{i}}  \cnsym{)}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\cnkw{fresh} \, \cnsym{(}  mem\_ptr  \cnsym{)}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{term}{}{}{}{}\cnprodnewline
@@ -802,7 +801,7 @@
 \cnfirstprodline{|}{pattern  =  pval  \leadsto  \sigma}{}{}{}{}\cnprodnewline
 \cnprodline{|}{ident\_or\_pattern  =  pval  \leadsto  \sigma}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\cnnt{res\_pattern}  =  \cnnt{res\_term}  \leadsto  \sigma}{}{}{}{}\cnprodnewline
-\cnprodline{|}{\cnnt{ret\_pattern}  =  \cnnt{spine\_elem}  \leadsto  \sigma}{}{}{}{}\cnprodnewline
+\cnprodline{|}{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}}{}{}{}{}}
 
 \newcommand{\cnpureXXopsemXXjtype}{
@@ -813,7 +812,7 @@
 
 \newcommand{\cnopsemXXjtype}{
 \cnrulehead{\cnnt{opsem\_jtype}}{::=}{}\cnprodnewline
-\cnfirstprodline{|}{\langle  seq\_expr  \rangle  \longrightarrow  \langle  texpr  {:}  \cnnt{ret}  \rangle}{}{}{}{}\cnprodnewline
+\cnfirstprodline{|}{\langle  \cnnt{h}  \cnsym{;}  seq\_expr  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  texpr  {:}  \cnnt{ret}  \rangle}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\langle  \cnnt{h}  \cnsym{;}  seq\_texpr  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  texpr  \rangle}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\langle  \cnnt{h}  \cnsym{;}  mem\_op  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  tval  \rangle}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\langle  \cnnt{h}  \cnsym{;}  mem\_action  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  tval  \rangle}{}{}{}{}\cnprodnewline
@@ -2337,29 +2336,40 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 \end{cndefnblock}}
 
 %% defn Decons_Ret
+\newcommand{\cndruleSubsXXDeconsXXRetXXEmpty}[1]{\cndrule[#1]{%
+}{
+\,  \leadsto  \cdot}{%
+{\cndrulename{Subs\_Decons\_Ret\_Empty}}{}%
+}}
+
+
 \newcommand{\cndruleSubsXXDeconsXXRetXXComp}[1]{\cndrule[#1]{%
 \cnpremise{ident\_or\_pattern  =  pval  \leadsto  \sigma}%
+\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \psi}%
 }{
-\cnkw{comp} \, ident\_or\_pattern  =  pval  \leadsto  \sigma}{%
+\cnkw{comp} \, ident\_or\_pattern  =  pval  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma  \cnsym{,}  \psi}{%
 {\cndrulename{Subs\_Decons\_Ret\_Comp}}{}%
 }}
 
 
 \newcommand{\cndruleSubsXXDeconsXXRetXXLog}[1]{\cndrule[#1]{%
+\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \psi}%
 }{
-\cnkw{log} \, ident  =  pval  \leadsto  pval  \cnsym{/}  ident  \cnsym{,}  \cdot}{%
+\cnkw{log} \, ident  =  pval  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  pval  \cnsym{/}  ident  \cnsym{,}  \psi}{%
 {\cndrulename{Subs\_Decons\_Ret\_Log}}{}%
 }}
 
 
 \newcommand{\cndruleSubsXXDeconsXXRetXXRes}[1]{\cndrule[#1]{%
 \cnpremise{\cnnt{res\_pattern}  =  \cnnt{res\_term}  \leadsto  \sigma}%
+\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \psi}%
 }{
-\texttt{res} \, \cnnt{res\_pattern}  =  \cnnt{res\_term}  \leadsto  \sigma}{%
+\texttt{res} \, \cnnt{res\_pattern}  =  \cnnt{res\_term}  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma  \cnsym{,}  \psi}{%
 {\cndrulename{Subs\_Decons\_Ret\_Res}}{}%
 }}
 
-\newcommand{\cndefnSubsXXDeconsXXRet}[1]{\begin{cndefnblock}[#1]{$\cnnt{ret\_pattern}  =  \cnnt{spine\_elem}  \leadsto  \sigma$}{}
+\newcommand{\cndefnSubsXXDeconsXXRet}[1]{\begin{cndefnblock}[#1]{$\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma$}{}
+\cnusedrule{\cndruleSubsXXDeconsXXRetXXEmpty{}}
 \cnusedrule{\cndruleSubsXXDeconsXXRetXXComp{}}
 \cnusedrule{\cndruleSubsXXDeconsXXRetXXLog{}}
 \cnusedrule{\cndruleSubsXXDeconsXXRetXXRes{}}
@@ -2613,7 +2623,7 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 \cnpremise{pval  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}}%
 \cnpremise{\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}}%
 }{
-\langle  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  pval  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle   \sigma  (  texpr  )   {:}   \sigma  (  \cnnt{ret}  )   \rangle}{%
+\langle  \cnnt{h}  \cnsym{;}  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  pval  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr  )   {:}   \sigma  (  \cnnt{ret}  )   \rangle}{%
 {\cndrulename{Op\_SE\_TE\_CCall}}{}%
 }}
 
@@ -2622,11 +2632,11 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 \cnpremise{name  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}}%
 \cnpremise{\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}}%
 }{
-\langle  \cnkw{pcall} \, \cnsym{(}  name  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle   \sigma  (  texpr  )   {:}   \sigma  (  \cnnt{ret}  )   \rangle}{%
+\langle  \cnnt{h}  \cnsym{;}  \cnkw{pcall} \, \cnsym{(}  name  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr  )   {:}   \sigma  (  \cnnt{ret}  )   \rangle}{%
 {\cndrulename{Op\_SE\_TE\_PCall}}{}%
 }}
 
-\newcommand{\cndefnOpXXSEXXTE}[1]{\begin{cndefnblock}[#1]{$\langle  seq\_expr  \rangle  \longrightarrow  \langle  texpr  {:}  \cnnt{ret}  \rangle$}{}
+\newcommand{\cndefnOpXXSEXXTE}[1]{\begin{cndefnblock}[#1]{$\langle  \cnnt{h}  \cnsym{;}  seq\_expr  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  texpr  {:}  \cnnt{ret}  \rangle$}{}
 \cnusedrule{\cndruleOpXXSEXXTEXXCCall{}}
 \cnusedrule{\cndruleOpXXSEXXTEXXPCall{}}
 \end{cndefnblock}}
@@ -2691,15 +2701,15 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 
 
 \newcommand{\cndruleOpXXSTEXXTEXXLetTXXSub}[1]{\cndrule[#1]{%
-\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}  \leadsto  \sigma_{\cnmv{i}}}{\cnmv{i}}}%
+\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma}%
 }{
-\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \cncomp{\sigma_{\cnmv{i}}}{\cnmv{i}}  (  texpr  )   \rangle}{%
+\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr  )   \rangle}{%
 {\cndrulename{Op\_STE\_TE\_LetT\_Sub}}{}%
 }}
 
 
 \newcommand{\cndruleOpXXSTEXXTEXXLetXXLetT}[1]{\cndrule[#1]{%
-\cnpremise{\langle  seq\_expr  \rangle  \longrightarrow  \langle  texpr_{{\mathrm{1}}}  {:}  \cnnt{ret}  \rangle}%
+\cnpremise{\langle  \cnnt{h}  \cnsym{;}  seq\_expr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  texpr_{{\mathrm{1}}}  {:}  \cnnt{ret}  \rangle}%
 }{
 \langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle}{%
 {\cndrulename{Op\_STE\_TE\_Let\_LetT}}{}%
@@ -2869,9 +2879,9 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 
 %% defn IsTE_TE
 \newcommand{\cndruleOpXXIsTEXXIsTEXXLetSXXSub}[1]{\cndrule[#1]{%
-\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}  \leadsto  \sigma_{\cnmv{i}}}{\cnmv{i}}}%
+\cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma}%
 }{
-\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cnkw{strong} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \cncomp{\sigma_{\cnmv{i}}}{\cnmv{i}}  (  texpr  )   \rangle}{%
+\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cnkw{strong} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr  )   \rangle}{%
 {\cndrulename{Op\_IsTE\_IsTE\_LetS\_Sub}}{}%
 }}
 

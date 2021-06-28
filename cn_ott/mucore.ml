@@ -627,7 +627,6 @@ typing =
 type 
 opsem = 
    Opsem_indexed_decons_value of ((mu_pattern_aux * 'TY mu_pval_aux * subs)) list
- | Opsem_indexed_decons_ret of ((ret_pattern * 'TY spine_elem * subs)) list
  | Opsem_forall_i_lt_j_not_decons_jtype of n * n * mu_pattern_aux * 'TY mu_pval_aux * subs
  | Opsem_fresh_loc of Impl_mem.pointer_value
  | Opsem_constraints of 'bt term_aux

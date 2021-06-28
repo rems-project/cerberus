@@ -659,7 +659,7 @@
 \ottfirstprodline{|}{pattern  =  pval  \leadsto  \sigma}{}{}{}{}\ottprodnewline
 \ottprodline{|}{ident\_or\_pattern  =  pval  \leadsto  \sigma}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\ottnt{res\_pattern}  =  \ottnt{res\_term}  \leadsto  \sigma}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\ottnt{ret\_pattern}  =  \ottnt{spine\_elem}  \leadsto  \sigma}{}{}{}{}\ottprodnewline
+\ottprodline{|}{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \sigma}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\ottcomp{\ottmv{x_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \mathbin{ {:} {:} }  \ottnt{arg}  \gg  \sigma  \ottsym{;}  \ottnt{ret}}{}{}{}{}}
 
 \newcommand{\ottpureXXopsemXXjtype}{
@@ -670,7 +670,7 @@
 
 \newcommand{\ottopsemXXjtype}{
 \ottrulehead{\ottnt{opsem\_jtype}}{::=}{}\ottprodnewline
-\ottfirstprodline{|}{\langle  seq\_expr  \rangle  \longrightarrow  \langle  texpr  {:}  \ottnt{ret}  \rangle}{}{}{}{}\ottprodnewline
+\ottfirstprodline{|}{\langle  \ottnt{h}  \ottsym{;}  seq\_expr  \rangle  \longrightarrow  \langle  \ottnt{h'}  \ottsym{;}  texpr  {:}  \ottnt{ret}  \rangle}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\langle  \ottnt{h}  \ottsym{;}  seq\_texpr  \rangle  \longrightarrow  \langle  \ottnt{h'}  \ottsym{;}  texpr  \rangle}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\langle  \ottnt{h}  \ottsym{;}  mem\_op  \rangle  \longrightarrow  \langle  \ottnt{h'}  \ottsym{;}  tval  \rangle}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\langle  \ottnt{h}  \ottsym{;}  mem\_action  \rangle  \longrightarrow  \langle  \ottnt{h'}  \ottsym{;}  tval  \rangle}{}{}{}{}\ottprodnewline
@@ -2039,29 +2039,40 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 \end{ottdefnblock}}
 
 %% defn Decons_Ret
+\newcommand{\ottdruleSubsXXDeconsXXRetXXEmpty}[1]{\ottdrule[#1]{%
+}{
+\,  \leadsto  \cdot}{%
+{\ottdrulename{Subs\_Decons\_Ret\_Empty}}{}%
+}}
+
+
 \newcommand{\ottdruleSubsXXDeconsXXRetXXComp}[1]{\ottdrule[#1]{%
 \ottpremise{ident\_or\_pattern  =  pval  \leadsto  \sigma}%
+\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \psi}%
 }{
-\ottkw{comp} \, ident\_or\_pattern  =  pval  \leadsto  \sigma}{%
+\ottkw{comp} \, ident\_or\_pattern  =  pval  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \sigma  \ottsym{,}  \psi}{%
 {\ottdrulename{Subs\_Decons\_Ret\_Comp}}{}%
 }}
 
 
 \newcommand{\ottdruleSubsXXDeconsXXRetXXLog}[1]{\ottdrule[#1]{%
+\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \psi}%
 }{
-\ottkw{log} \, ident  =  pval  \leadsto  pval  \ottsym{/}  ident  \ottsym{,}  \cdot}{%
+\ottkw{log} \, ident  =  pval  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  pval  \ottsym{/}  ident  \ottsym{,}  \psi}{%
 {\ottdrulename{Subs\_Decons\_Ret\_Log}}{}%
 }}
 
 
 \newcommand{\ottdruleSubsXXDeconsXXRetXXRes}[1]{\ottdrule[#1]{%
 \ottpremise{\ottnt{res\_pattern}  =  \ottnt{res\_term}  \leadsto  \sigma}%
+\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \psi}%
 }{
-\texttt{res} \, \ottnt{res\_pattern}  =  \ottnt{res\_term}  \leadsto  \sigma}{%
+\texttt{res} \, \ottnt{res\_pattern}  =  \ottnt{res\_term}  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \sigma  \ottsym{,}  \psi}{%
 {\ottdrulename{Subs\_Decons\_Ret\_Res}}{}%
 }}
 
-\newcommand{\ottdefnSubsXXDeconsXXRet}[1]{\begin{ottdefnblock}[#1]{$\ottnt{ret\_pattern}  =  \ottnt{spine\_elem}  \leadsto  \sigma$}{}
+\newcommand{\ottdefnSubsXXDeconsXXRet}[1]{\begin{ottdefnblock}[#1]{$\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \sigma$}{}
+\ottusedrule{\ottdruleSubsXXDeconsXXRetXXEmpty{}}
 \ottusedrule{\ottdruleSubsXXDeconsXXRetXXComp{}}
 \ottusedrule{\ottdruleSubsXXDeconsXXRetXXLog{}}
 \ottusedrule{\ottdruleSubsXXDeconsXXRetXXRes{}}
@@ -2315,7 +2326,7 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 \ottpremise{pval  {:}  \ottnt{arg} \, \equiv \, \ottcomp{\ottmv{x_{\ottmv{i}}}}{\ottmv{i}} \, \mapsto  texpr \, \in \, \ottkw{Globals}}%
 \ottpremise{\ottcomp{\ottmv{x_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \mathbin{ {:} {:} }  \ottnt{arg}  \gg  \sigma  \ottsym{;}  \ottnt{ret}}%
 }{
-\langle  \ottkw{ccall} \, \ottsym{(}  \tau  \ottsym{,}  pval  \ottsym{,}  \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}}  \ottsym{)}  \rangle  \longrightarrow  \langle   \sigma  (  texpr  )   {:}   \sigma  (  \ottnt{ret}  )   \rangle}{%
+\langle  \ottnt{h}  \ottsym{;}  \ottkw{ccall} \, \ottsym{(}  \tau  \ottsym{,}  pval  \ottsym{,}  \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}}  \ottsym{)}  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}   \sigma  (  texpr  )   {:}   \sigma  (  \ottnt{ret}  )   \rangle}{%
 {\ottdrulename{Op\_SE\_TE\_CCall}}{}%
 }}
 
@@ -2324,11 +2335,11 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 \ottpremise{name  {:}  \ottnt{arg} \, \equiv \, \ottcomp{\ottmv{x_{\ottmv{i}}}}{\ottmv{i}} \, \mapsto  texpr \, \in \, \ottkw{Globals}}%
 \ottpremise{\ottcomp{\ottmv{x_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \mathbin{ {:} {:} }  \ottnt{arg}  \gg  \sigma  \ottsym{;}  \ottnt{ret}}%
 }{
-\langle  \ottkw{pcall} \, \ottsym{(}  name  \ottsym{,}  \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}}  \ottsym{)}  \rangle  \longrightarrow  \langle   \sigma  (  texpr  )   {:}   \sigma  (  \ottnt{ret}  )   \rangle}{%
+\langle  \ottnt{h}  \ottsym{;}  \ottkw{pcall} \, \ottsym{(}  name  \ottsym{,}  \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}}  \ottsym{)}  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}   \sigma  (  texpr  )   {:}   \sigma  (  \ottnt{ret}  )   \rangle}{%
 {\ottdrulename{Op\_SE\_TE\_PCall}}{}%
 }}
 
-\newcommand{\ottdefnOpXXSEXXTE}[1]{\begin{ottdefnblock}[#1]{$\langle  seq\_expr  \rangle  \longrightarrow  \langle  texpr  {:}  \ottnt{ret}  \rangle$}{}
+\newcommand{\ottdefnOpXXSEXXTE}[1]{\begin{ottdefnblock}[#1]{$\langle  \ottnt{h}  \ottsym{;}  seq\_expr  \rangle  \longrightarrow  \langle  \ottnt{h'}  \ottsym{;}  texpr  {:}  \ottnt{ret}  \rangle$}{}
 \ottusedrule{\ottdruleOpXXSEXXTEXXCCall{}}
 \ottusedrule{\ottdruleOpXXSEXXTEXXPCall{}}
 \end{ottdefnblock}}
@@ -2393,15 +2404,15 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 
 
 \newcommand{\ottdruleOpXXSTEXXTEXXLetTXXSub}[1]{\ottdrule[#1]{%
-\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}  \leadsto  \sigma_{\ottmv{i}}}{\ottmv{i}}}%
+\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \sigma}%
 }{
-\langle  \ottnt{h}  \ottsym{;}  \ottkw{let} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  =  \ottkw{done} \, \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \ottkw{in} \, texpr  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}   \ottcomp{\sigma_{\ottmv{i}}}{\ottmv{i}}  (  texpr  )   \rangle}{%
+\langle  \ottnt{h}  \ottsym{;}  \ottkw{let} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  =  \ottkw{done} \, \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \ottkw{in} \, texpr  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}   \sigma  (  texpr  )   \rangle}{%
 {\ottdrulename{Op\_STE\_TE\_LetT\_Sub}}{}%
 }}
 
 
 \newcommand{\ottdruleOpXXSTEXXTEXXLetXXLetT}[1]{\ottdrule[#1]{%
-\ottpremise{\langle  seq\_expr  \rangle  \longrightarrow  \langle  texpr_{{\mathrm{1}}}  {:}  \ottnt{ret}  \rangle}%
+\ottpremise{\langle  \ottnt{h}  \ottsym{;}  seq\_expr  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}  texpr_{{\mathrm{1}}}  {:}  \ottnt{ret}  \rangle}%
 }{
 \langle  \ottnt{h}  \ottsym{;}  \ottkw{let} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  seq\_expr \, \ottkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}  \ottkw{let} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  =  texpr_{{\mathrm{1}}} \, \ottkw{in} \, texpr_{{\mathrm{2}}}  \rangle}{%
 {\ottdrulename{Op\_STE\_TE\_Let\_LetT}}{}%
@@ -2571,9 +2582,9 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 
 %% defn IsTE_TE
 \newcommand{\ottdruleOpXXIsTEXXIsTEXXLetSXXSub}[1]{\ottdrule[#1]{%
-\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}  \leadsto  \sigma_{\ottmv{i}}}{\ottmv{i}}}%
+\ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}  =  \ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \leadsto  \sigma}%
 }{
-\langle  \ottnt{h}  \ottsym{;}  \ottkw{let} \, \ottkw{strong} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  \ottkw{done} \, \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \ottkw{in} \, texpr  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}   \ottcomp{\sigma_{\ottmv{i}}}{\ottmv{i}}  (  texpr  )   \rangle}{%
+\langle  \ottnt{h}  \ottsym{;}  \ottkw{let} \, \ottkw{strong} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  \ottkw{done} \, \ottcomp{\ottnt{spine\_elem_{\ottmv{i}}}}{\ottmv{i}} \, \ottkw{in} \, texpr  \rangle  \longrightarrow  \langle  \ottnt{h}  \ottsym{;}   \sigma  (  texpr  )   \rangle}{%
 {\ottdrulename{Op\_IsTE\_IsTE\_LetS\_Sub}}{}%
 }}
 
@@ -2822,7 +2833,7 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 \ottall
 
 \begin{verbatim}
-Definition rules:        195 good    0 bad
-Definition rule clauses: 432 good    0 bad
+Definition rules:        196 good    0 bad
+Definition rule clauses: 436 good    0 bad
 \end{verbatim}
 \end{document}
