@@ -844,7 +844,7 @@ grammar
     | res --o arg                        ::   :: Res
     | term_aux -) arg                    ::   :: Phi
     | ret                                ::   :: Ret
-    | ( arg  )                           :: X S :: Paren {{ tex [[arg]] }}
+    | ( arg  )                           :: X S :: Paren {{ tex [[arg]] }} {{ ocaml [[arg]] }}
     | [ subs ] arg                       :: M :: Subs  {{ ocaml ARG_SPINE_ELEM_SUB [[subs]] [[arg]] }} {{ tex [[subs]] ( [[arg]] ) }}
                                                        {{ com simul-sub $[[subs]]$ in $[[arg]]$     }}
 
@@ -904,7 +904,7 @@ grammar
     | id                              :: X M :: id {{ com identity substitution }} {{ tex \mathrm{id} }} {{ ocaml SUBS_ID }}
     | spine_elem  / Symbol_sym , subs ::   :: cons
     | </ subsi // , // i />           ::   :: concat
-    | ( subs )                        :: X S :: paren {{ com parentheses }} {{ tex [[subs]] }}
+    | ( subs )                        :: X S :: paren {{ com parentheses }} {{ tex [[subs]] }} {{ ocaml [[subs]] }}
     | [ subs ] psi                    :: M :: subs {{ com apply $[[subs]]$ to all elements in $[[psi]]$ }}
                                                    {{ ocaml SUBS_SUBS [[subs]] [[psi]] }}
                                                    {{ tex [[subs]] ( [[psi]] ) }}
@@ -927,7 +927,6 @@ grammar
 
   opsem :: 'opsem_' ::=
     | </ mu_pattern_auxi = mu_pval_auxi ~> subsi // i />              :: X :: indexed_decons_value
-    | </ ret_patterni = spine_elemi ~> subsi // i />                  :: X :: indexed_decons_ret
     | forall i <  j . not ( mu_pattern_auxi = mu_pval_aux ~> subsi )  ::   :: forall_i_lt_j_not_decons_jtype
     | fresh ( ty_mem_ptr )                                            ::   :: fresh_loc
     | term_aux                                                        ::   :: constraints
@@ -1812,21 +1811,27 @@ defns
 
 
   defn
-    ret_pattern = spine_elem ~> subs :: :: Decons_Ret :: Decons_Ret_ by
+    </ ret_patterni = spine_elemi // , // i /> ~> subs :: :: Decons_Ret :: Decons_Ret_ by
 
+
+    ------- :: Empty
+    ~> cdot
 
     mu_sym_or_pattern = mu_pval_aux ~> subs
+    </ ret_patterni = spine_elemi // i /> ~> psi
     -------------------------------------------- :: Comp
-    comp mu_sym_or_pattern = mu_pval_aux ~> subs
+    comp mu_sym_or_pattern = mu_pval_aux , </ ret_patterni = spine_elemi // i /> ~> subs , psi
 
 
-    ---------------------------------------------------------------- :: Log
-    log Symbol_sym = mu_pval_aux ~> mu_pval_aux / Symbol_sym , cdot
+    </ ret_patterni = spine_elemi // i /> ~> psi
+    -------------------------------------------- :: Log
+    log Symbol_sym = mu_pval_aux , </ ret_patterni = spine_elemi // i /> ~> mu_pval_aux / Symbol_sym , psi
 
 
     res_pattern = res_term ~> subs
-    ------------------------------------ :: Res
-    reso res_pattern = res_term ~> subs
+    </ ret_patterni = spine_elemi // i /> ~> psi
+    --------------------------------------------- :: Res
+    reso res_pattern = res_term , </ ret_patterni = spine_elemi // i /> ~> subs , psi
 
 
   defn
@@ -1988,19 +1993,19 @@ defns
   opsem_jtype :: 'Op_' ::=
 
   defn
-    <( mu_seq_expr_aux )> --> <( mu_texpr : ret )> :: :: SE_TE :: SE_TE_ by
+    <( h ; mu_seq_expr_aux )> --> <( h' ; mu_texpr : ret )> :: :: SE_TE :: SE_TE_ by
 
 
     mu_pval_aux : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
     </ xi = spine_elemi // i /> :; arg >> subs ; ret
     ------------------------------------------------------------- :: CCall
-    <( ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) )> --> <( [ subs ] mu_texpr : [ subs ] ret )>
+    <( h ; ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) )> --> <( h ; [ subs ] mu_texpr : [ subs ] ret )>
 
 
     mu_name : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
     </ xi = spine_elemi // i /> :; arg >> subs ; ret
     --------------------------------------------------------- :: PCall
-    <( pcall ( mu_name , </ spine_elemi // i /> ) )> --> <( [ subs ] mu_texpr : [ subs ] ret )>
+    <( h ; pcall ( mu_name , </ spine_elemi // i /> ) )> --> <( h ; [ subs ] mu_texpr : [ subs ] ret )>
 
 
   defn
@@ -2044,13 +2049,13 @@ defns
     <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr )> --> <( h ; let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux' in mu_texpr )>
 
 
-    </ ret_patterni = spine_elemi ~> subsi // i />
+    </ ret_patterni = spine_elemi // i /> ~> subs
     --------------------------------------------- :: LetT_Sub
-    <( h ; let </ ret_patterni // i /> : ret = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ </ subsi // i /> ] mu_texpr )>
+    <( h ; let </ ret_patterni // i /> : ret = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ subs ] mu_texpr )>
 
 
-    <( mu_seq_expr_aux )> --> <( mu_texpr1 : ret )>
-    ----------------------------------------------- :: Let_LetT
+    <( h ; mu_seq_expr_aux )> --> <( h ; mu_texpr1 : ret )>
+    -------------------------------------------------------- :: Let_LetT
     <( h ; let </ ret_patterni // i /> = mu_seq_expr_aux in mu_texpr2 )> --> <( h ; let </ ret_patterni // i /> : ret = mu_texpr1 in mu_texpr2 )>
 
 
@@ -2157,9 +2162,9 @@ defns
 
     % let weak   </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr
 
-    </ ret_patterni = spine_elemi ~> subsi // i />
+    </ ret_patterni = spine_elemi // i /> ~> subs
     --------------------------------------------- :: LetS_Sub
-    <( h ; let strong </ ret_patterni // i /> = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ </ subsi // i /> ] mu_texpr )>
+    <( h ; let strong </ ret_patterni // i /> = done </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ subs ] mu_texpr )>
 
 
     <( h ; mu_is_expr_aux  )> --> <( h' ; mu_is_expr_aux' )>
@@ -2289,39 +2294,3 @@ defns
     C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
 
 
-% convention: thing on right has more stuff
-%
-% C ⊑ C , x : β
-%
-% C ; L ; ϕ ; R ⊑ C' ; L' ; ϕ' ; R'
-%
-% 1 Weakening lemma (induction on J):
-%           if C ; L ; ϕ ; R ⊢ J then C' ; L' ; ϕ' ; R' ⊢ J
-%
-% 2 Weakening for substitution (induction on σ):
-%           [the above with J = ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' ) ]
-%           if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%           then C' ; L' ; ϕ' ; R' ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%
-% 3 substitution lemma (induction on J):
-%         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%        and   C''  ; L''  ; ϕ ''  ; R''  ⊢ J
-%      ————————————————————–————————————————————–——————–
-%       then   C  ; L  ; ϕ  ; R  ⊢ σ ( J )
-%
-% think of sub as arrow on contexts, so σ : C'' L'' ϕ'' R'' → C L ϕ R
-%
-% 1 2 3 are all the inductions needed
-%
-% 4 Neel's easier to prove (induction on new context), implies VET
-%         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%      ————————————————————–————————————————————–——————–————–——————–————————————————————–——————
-%       then   C  ; L  ; ϕ  ; R1 , R  ⊢ ( σ , id ) : ( C , C'' ; L , L'' ; ϕ , ϕ'' ; R1 , R'' )
-%
-%
-% 5 very easy thing (VET) for let proof (and maybe call?):
-%         if   C  ; L  ; ϕ  ; R  ⊢ ( σ ) : ( C'' ; L'' ; ϕ'' ; R'' )
-%        and   C , C''  ; L , L''  ; ϕ , ϕ ''  ; R1 ,  R''  ⊢ J
-%      ————————————————————–————————————————————–——————–—————————————
-%       then   C  ; L  ; ϕ  ; R1 , R ⊢ ( σ , id ) ( J )
-%     same as  C  ; L  ; ϕ  ; R1 , R ⊢ ( σ ) ( J )

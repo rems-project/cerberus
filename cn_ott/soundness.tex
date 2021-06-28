@@ -288,6 +288,30 @@ $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval  \Rightarrow
     \textsc{Ty\_Action\_Store} create such permissions, and its premise $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval_{{\mathrm{1}}}  \Rightarrow   \beta_{  \tau  } $ ensures the desired property.
     \textsc{Ty\_Action\_Load} simply preserves the property.}
 
+\subsection{Deconstructing a pattern leads to a well-typed
+substitution}\label{subsec:decons_pat_wt_sub}
+
+\begin{proof}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma$.\label{wt_sub-assm1}
+            \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \cnnt{ret}$.\label{wt_sub-assm2}
+            \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'$.\label{wt_sub-assm3}
+        \end{pfenum}
+    }
+
+    \prove{%
+        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.
+    }
+
+    \pfsketch{ Induction on $\cnnt{ret}$; inversion on \ref{wt_sub-assm1},
+        \ref{wt_sub-assm2} and \ref{wt_sub-assm3} to conclude the empty
+        substitution is well-typed and each addition preserves that property.}
+
+\end{proof}
+
+
 \subsection{Type Preservation Statement and Proof}
 
 If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
@@ -309,7 +333,344 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         $\cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.\\
     }
 
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PE\_Array\_Shift}.
+        }{%
+            \pflet{%
+                $term =  mem\_ptr   \mathbin{ {+}_{ \mathrm{ptr} } }  \cnsym{(}   mem\_int   \times   \mathrm{size\_of}(  \tau  )   \cnsym{)}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
+
+                    \item $\langle  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \rangle  \longrightarrow  \langle  mem\_ptr'  \rangle$.\label{array-shift-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr'  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
+                \textsc{Ty\_PE\_Val} and construction of $mem\_ptr'$
+                (inversion on \ref{array-shift-assm2}).
+        }
+    }
+
     \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_PE\_Member\_Shift}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_Array\_Shift}.
+        }
+    }
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_PE\_Not}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{not} \, \cnsym{(}  bool\_value  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
+
+                    \item $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{False}  \rangle$
+                        or $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{True}  \rangle$.\label{not-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value'  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
+            }
+            \pf\ By \textsc{Ty\_PVal\_\{True,False\}}, \textsc{Ty\_PE\_Val} and
+                \ref{not-assm2}.
+        }
+    }
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_PE\_Arith\_Binop}.
+        }{%
+            \pflet{%
+                $term =   mem\_int_{{\mathrm{1}}}    \mathbin{ binop_{arith} }    mem\_int_{{\mathrm{2}}}  $.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+
+                    \item $\langle  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  mem\_int  \rangle$.\label{arith-binop-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
+                \textsc{Ty\_PE\_Val} and construction of $mem\_int$
+                (inversion on \ref{arith-binop-assm2}).
+        }
+    }
+
+    \step{<1>5}{%
+        \case{%
+            \textsc{Ty\_PE\_\{Rel,Bool\}\_Binop}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_PE\_Arith\_Binop}.
+        }
+    }
+
+    \step{<1>6}{%
+        \case{%
+            \textsc{Ty\_PE\_Call}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_E\_Call} for a more general case and proof.
+        }
+    }
+
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_PE\_Assert\_Undef}.
+        }{%
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
+
+                    \item $\langle  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{Unit}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
+            }
+            \pf\ By \textsc{Ty\_PVal\_Unit} and \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>8}{%
+        \case{%
+            \textsc{Ty\_PE\_Bool\_To\_Integer}.
+        }{%
+            \pflet{%
+                $term = \cnkw{if} \,  bool\_value  \, \cnkw{then} \,  1  \, \cnkw{else} \,  0 $.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{bool\_to\_integer} \, \cnsym{(}  bool\_value  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+
+                    \item $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle   1   \rangle$ or $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle   0   \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$
+            }
+            \pf\ By cases on $bool\_value$, then applying
+                \textsc{Ty\_PVal\_\{True,False\}} and \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>9}{%
+        \case{%
+            \textsc{Ty\_PE\_WrapI}.
+        }{%
+            \pfsketch\ Similar to \textsc{Ty\_PE\_Bool\_To\_Integer}, except by
+                cases on $\cnmv{abbrev_{{\mathrm{2}}}}  \leq   \mathrm{max\_int}_{  \tau  } $, then applying
+                \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj} and
+                \textsc{Ty\_PE\_Val}.
+        }
+    }
+
+    \step{<1>10}{%
+        \case{%
+            \textsc{Ty\_TPE\_If}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_If} for a more general case and proof.
+        }
+    }
+
+    \step{<1>11}{%
+        \case{%
+            \textsc{Ty\_TPE\_Let}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_Let} for a more general case and proof.
+        }
+    }
+
+    \step{<1>12}{%
+        \case{%
+            \textsc{Ty\_TPE\_LetT}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_LetT} for a more general case and proof.
+        }
+    }
+
+    \step{<1>13}{%
+        \case{%
+            \textsc{Ty\_TPE\_Case}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_Case} for a more general case and proof.
+        }
+    }
+
+    \step{<1>14}{%
+        \case{%
+            \textsc{Ty\_Action\_Create}.
+        }{%
+            \pflet{%
+                $pt =   mem\_ptr   \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }   pval  $.\\
+                $ term = \cnkw{representable} \, \cnsym{(}  \tau  *  \cnsym{,}  { y_p }  \cnsym{)}  \wedge  \cnkw{alignedI} \, \cnsym{(}   mem\_int   \cnsym{,}  { y_p }  \cnsym{)}$.\\
+                $ret = \Sigma \, { y_p }  {:}  \cnkw{loc}  . \:  \cnnt{term}  \wedge  \exists \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:    { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \cnmv{y}    \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \Rightarrow  \cnnt{ret}$.
+                    \item $\langle  \cdot  \cnsym{;}  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr  \Rightarrow  \cnkw{loc}$ by
+            \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
+
+        \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow  \cnnt{term}  \cnsym{)}$ by construction of $mem\_ptr$.}
+
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
+            by construction of $pval$.}
+
+        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ by
+            \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
+            \textsc{Ty\_TVal\_\{Res,Log,Phi,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>15}{%
+        \case{%
+            \textsc{Ty\_Action\_Load}.
+        }{%
+            \pflet{%
+                $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
+                $ret = \Sigma \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:  \cnmv{y}  =   pval   \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{load-assm1}
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \rangle$.\label{load-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
+            \ref{load-assm1}.}
+
+        \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   pval   =   pval   \cnsym{)}$ trivially.}
+
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
+            by \stepref{<2>1} and lemma \ref{subsec:pt_val_type}.}
+
+        \step{<2>4}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>1} --
+            \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+            respectively, we are done.}
+    \end{proof}
+
+    \step{<1>16}{%
+        \case{%
+            \textsc{Ty\_Action\_Store}.
+        }{%
+            \pflet{%
+                $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ $.\\
+                $pt' =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
+                $ret = \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnnt{pt'}  \otimes  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  pval_{{\mathrm{1}}}  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \Leftarrow  \cnnt{ret}$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}
+
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
+            by \textsc{Ty\_Res\_PointsTo}.}
+
+        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+            with \textsc{Ty\_TVal\_\{Res,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>17}{%
+        \case{%
+            \textsc{Ty\_Action\_Kill\_Static}.
+        }{%
+            \pflet{%
+                $pt =   mem\_ptr   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_ $.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$.
+
+                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \rangle$.
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, \cnkw{Unit}  \Leftarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$
+            }
+            \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
+        }
+    }
+
+    \step{<1>18}{%
+        \case{%
+            \textsc{Ty\_Memop\_Rel\_Binop}.
+        }{%
+            \pf\  Similar \textsc{Ty\_PE\_Rel\_Binop}, except with
+            \textsc{Ty\_TVal\_\{I,Phi,Comp\}} at the end.
+        }
+    }
+
+    \step{<1>19}{%
+        \case{%
+            \textsc{Ty\_Memop\_IntFromPtr}.
+        }{%
+            \pflet{%
+                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnkw{cast\_ptr\_to\_int} \,  mem\_ptr   \wedge  \cnkw{I}$.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{intFromPtr} \, \cnsym{(}  \tau_{{\mathrm{1}}}  \cnsym{,}  \tau_{{\mathrm{2}}}  \cnsym{,}  mem\_ptr  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
+
+                    \item $\langle  \cdot  \cnsym{;}  \cnkw{intFromPtr} \, \cnsym{(}  \tau_{{\mathrm{1}}}  \cnsym{,}  \tau_{{\mathrm{2}}}  \cnsym{,}  mem\_ptr  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{;}  \cnkw{done} \, mem\_int  \rangle$.\label{intfromptr-assm2}
+                \end{pfenum}}
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, mem\_int  \Leftarrow  \cnnt{ret}$
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   mem\_int   =  \cnkw{cast\_ptr\_to\_int} \,  mem\_ptr   \cnsym{)}$
+            by construction of $mem\_int$ (inversion on \ref{intfromptr-assm2}).}
+
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnkw{integer}$
+            by \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
+
+        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+            with \textsc{Ty\_TVal\_\{Phi,Comp\}} respectively, we are done.}
+    \end{proof}
+
+    \step{<1>20}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrFromInt}.
+        }{%
+            \pf\ Similar to \textsc{Ty\_Memop\_IntFromPtr}, swapping base types
+            $\cnkw{integer}$ and $\cnkw{loc}$.
+        }
+    }
+
+    \step{<1>21}{%
         \case{%
             \textsc{Ty\_Memop\_PtrValidForDeref}.
         }{%
@@ -346,467 +707,195 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             respectively, we are done.}
     \end{proof}
 
-    \step{<1>3}{%
-        \case{%
-            \textsc{Ty\_PE\_Array\_Shift}.
-        }{%
-            \pflet{%
-                $term =  mem\_ptr   \mathbin{ {+}_{ \mathrm{ptr} } }  \cnsym{(}   mem\_int   \times   \mathrm{size\_of}(  \tau  )   \cnsym{)}$.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
-
-                    \item $\langle  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \rangle  \longrightarrow  \langle  mem\_ptr'  \rangle$.\label{array-shift-assm2}
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr'  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
-            }
-            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
-                \textsc{Ty\_PE\_Val} and construction of $mem\_ptr'$
-                (inversion on \ref{array-shift-assm2}).
-        }
-    }
-
-    \step{<1>4}{%
-        \case{%
-            \textsc{Ty\_PE\_Member\_Shift}.
-        }{%
-            \pfsketch\ Similar to \textsc{Ty\_Array\_Shift}.
-        }
-    }
-
-    \step{<1>5}{%
-        \case{%
-            \textsc{Ty\_PE\_Not}.
-        }{%
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{not} \, \cnsym{(}  bool\_value  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
-
-                    \item $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{False}  \rangle$
-                        or $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{True}  \rangle$.\label{not-assm2}
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value'  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
-            }
-            \pf\ By \textsc{Ty\_PVal\_\{True,False\}}, \textsc{Ty\_PE\_Val} and
-                \ref{not-assm2}.
-        }
-    }
-
-    \step{<1>6}{%
-        \case{%
-            \textsc{Ty\_PE\_Arith\_Binop}.
-        }{%
-            \pflet{%
-                $term =   mem\_int_{{\mathrm{1}}}    \mathbin{ binop_{arith} }    mem\_int_{{\mathrm{2}}}  $.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
-
-                    \item $\langle  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  mem\_int  \rangle$.\label{arith-binop-assm2}
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
-            }
-            \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
-                \textsc{Ty\_PE\_Val} and construction of $mem\_int$
-                (inversion on \ref{arith-binop-assm2}).
-        }
-    }
-
-    \step{<1>7}{%
-        \case{%
-            \textsc{Ty\_PE\_\{Rel,Bool\}\_Binop}.
-        }{%
-            \pfsketch\ Similar to \textsc{Ty\_PE\_Arith\_Binop}.
-        }
-    }
-
-    \step{<1>8}{%
-        \case{%
-            \textsc{Ty\_PE\_Call}.
-        }{%
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  name  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \beta  . \:   \sigma  (  \cnnt{term}  ) $.\label{call-assm1}
-                    \item $\langle  name  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  \rangle  \longrightarrow  \langle   \sigma'  (  tpexpr  )   {:}  \cnsym{(}  \cnmv{y}  {:}  \beta'  . \:   \sigma'  (  \cnnt{term'}  )   \cnsym{)}  \rangle$.
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash   \sigma  (  tpexpr  )   \Leftarrow  \cnmv{y}  {:}  \beta  . \:   \sigma  (  \cnnt{term}  ) $.
-            }
-        }
-    }
-
-    \begin{proof}
-        \step{<2>1}{$name  {:}  \cnnt{pure\_arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  tpexpr \, \in \, \cnkw{Globals}$ by inversion (on either assumption).}
-
-        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  pval_{\cnmv{i}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \gg  \sigma  \cnsym{;}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{term}  \wedge  \cnkw{I}$ by
-            inversion on \ref{call-assm1}.}
-
-        \step{<2>3}{$\beta = \beta'$, $\cnnt{term} = \cnnt{term'}$ and $\sigma = \sigma'$ by induction on $\cnnt{pure\_arg}$.\\
-            Follows from lemma \ref{subsec:spine_decons_same}.}
-
-        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \cdot  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{)}$.\\
-            \pf\ Constructing such a substitution requires $\cncomp{\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval_{\cnmv{i}}  \Rightarrow  \beta_{\cnmv{i}}}{\cnmv{i}}$ for each $\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}} \, \in \, \mathcal{C}$ which can be deduced from \stepref{<2>2}.}
-
-        \step{<2>5}{$\mathcal{C}''  \cnsym{;}  \cdot  \cnsym{;}  \Phi''  \vdash  tpexpr  \Leftarrow  \cnmv{y}  {:}  \beta''  . \:  \cnnt{term''}$
-            where $\cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \leadsto  \mathcal{C}''  \cnsym{;}  \cdot  \cnsym{;}  \Phi''  \cnsym{;}  \cdot  \mid  \Sigma \, \cnmv{y}  {:}  \beta''  . \:  \cnnt{term''}  \wedge  \cnkw{I}$ formalises the assumption that all
-            global functions and labels are well-typed.}
-        
-        \step{<2>6}{$\mathcal{C} = \mathcal{C}''$ , $\Phi = \Phi''$ , $\beta = \beta''$
-            and $\cnnt{term} = \cnnt{term''}$.\\
-            \pf\ By induction on $\cnnt{pure\_arg}$.}
-
-        \step{<2>7}{Apply usable substitution lemma to \stepref{<2>4} and
-            \stepref{<2>5} to finish proof.}
-
-    \end{proof}
-
-    \step{<1>9}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
-
-                    \item $\langle  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{Unit}  \rangle$.
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
-            }
-            \pf\ By \textsc{Ty\_PVal\_Unit} and \textsc{Ty\_PE\_Val}.
-        }
-    }
-
-    \step{<1>10}{%
-        \case{%
-            \textsc{Ty\_PE\_Bool\_To\_Integer}.
-        }{%
-            \pflet{%
-                $term = \cnkw{if} \,  bool\_value  \, \cnkw{then} \,  1  \, \cnkw{else} \,  0 $.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{bool\_to\_integer} \, \cnsym{(}  bool\_value  \cnsym{)}  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
-
-                    \item $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle   1   \rangle$ or $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle   0   \rangle$.
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$
-            }
-            \pf\ By cases on $bool\_value$, then applying
-                \textsc{Ty\_PVal\_\{True,False\}} and \textsc{Ty\_PE\_Val}.
-        }
-    }
-
-    \step{<1>11}{%
-        \case{%
-            \textsc{Ty\_PE\_WrapI}.
-        }{%
-            \pfsketch\ Similar to \textsc{Ty\_PE\_Bool\_To\_Integer}, except by
-                cases on $\cnmv{abbrev_{{\mathrm{2}}}}  \leq   \mathrm{max\_int}_{  \tau  } $, then applying
-                \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj} and
-                \textsc{Ty\_PE\_Val}.
-        }
-    }
-
-    \step{<1>12}{%
-        \case{%
-            \textsc{Ty\_TPE\_If}.
-        }{%
-            \pf\ See \textsc{Ty\_Seq\_TE\_If} for a more general case and proof.
-        }
-    }
-
-    \step{<1>13}{%
-        \case{%
-            \textsc{Ty\_TPE\_Let}.
-        }{%
-            \pf\ See \textsc{Ty\_Seq\_TE\_Let} for a more general case and proof.
-        }
-    }
-
-    \step{<1>14}{%
-        \case{%
-            \textsc{Ty\_TPE\_LetT}.
-        }{%
-            \pf\ See \textsc{Ty\_Seq\_TE\_LetT} for a more general case and proof.
-        }
-    }
-
-    \step{<1>15}{%
-        \case{%
-            \textsc{Ty\_TPE\_Case}.
-        }{%
-            \pf\ See \textsc{Ty\_Seq\_TE\_Case} for a more general case and proof.
-        }
-    }
-
-    \step{<1>1}{%
-        \case{%
-            \textsc{Ty\_Action\_Create}.
-        }{%
-            \pflet{%
-                $pt =   mem\_ptr   \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }   pval  $.\\
-                $ term = \cnkw{representable} \, \cnsym{(}  \tau  *  \cnsym{,}  { y_p }  \cnsym{)}  \wedge  \cnkw{alignedI} \, \cnsym{(}   mem\_int   \cnsym{,}  { y_p }  \cnsym{)}$.\\
-                $ret = \Sigma \, { y_p }  {:}  \cnkw{loc}  . \:  \cnnt{term}  \wedge  \exists \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:    { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \cnmv{y}    \otimes  \cnkw{I}$.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \Rightarrow  \cnnt{ret}$.
-                    \item $\langle  \cdot  \cnsym{;}  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \rangle$.
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
-            }
-        }
-    }
-
-    \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr  \Rightarrow  \cnkw{loc}$ by
-            \textsc{Ty\_PVal\_Obj\_Int} and \textsc{Ty\_PVal\_Obj}.}
-
-        \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow  \cnnt{term}  \cnsym{)}$ by construction of $mem\_ptr$.}
-
-        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
-            by construction of $pval$.}
-
-        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ by
-            \textsc{Ty\_Res\_PointsTo}.}
-
-        \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
-            \textsc{Ty\_TVal\_\{Res,Log,Phi,Comp\}} respectively, we are done.}
-    \end{proof}
-
-    \step{<1>16}{%
-        \case{%
-            \textsc{Ty\_Action\_Load}.
-        }{%
-            \pflet{%
-                $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
-                $ret = \Sigma \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:  \cnmv{y}  =   pval   \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{load-assm1}
-
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \rangle$.\label{load-assm2}
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$
-            }
-        }
-    }
-
-    \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
-            \ref{load-assm1}.}
-
-        \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   pval   =   pval   \cnsym{)}$ trivially.}
-
-        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
-            by \stepref{<2>1} and lemma \ref{subsec:pt_val_type}.}
-
-        \step{<2>4}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>1} --
-            \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
-            respectively, we are done.}
-    \end{proof}
-
-    \step{<1>17}{%
-        \case{%
-            \textsc{Ty\_Action\_Store}.
-        }{%
-            \pflet{%
-                $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ $.\\
-                $pt' =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
-                $ret = \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnnt{pt'}  \otimes  \cnkw{I}$.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  pval_{{\mathrm{1}}}  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
-
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \Leftarrow  \cnnt{ret}$
-            }
-        }
-    }
-
-    \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}.
-
-        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
-            by \textsc{Ty\_Res\_PointsTo}.}
-
-        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
-            with \textsc{Ty\_TVal\_\{Res,Comp\}} respectively, we are done.}
-    \end{proof}
-
-    \step{<1>18}{%
-        \case{%
-            \textsc{Ty\_Action\_Kill\_Static}.
-        }{%
-            \pflet{%
-                $pt =   mem\_ptr   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_ $.
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$.
-
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \rangle$.
-                \end{pfenum}}
-            \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, \cnkw{Unit}  \Leftarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$
-            }
-            \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
-        }
-    }
-
-    \step{<1>19}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\,$.
-
-                    \item $\,$.
-                \end{pfenum}}
-            \prove{%
-                $\,$
-            }
-        }
-    }
-
-    \step{<1>20}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\,$.
-
-                    \item $\,$.
-                \end{pfenum}}
-            \prove{%
-                $\,$
-            }
-        }
-    }
-
-    \step{<1>21}{%
-        \case{%
-            \textsc{Ty\_Fill\_In}.
-        }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\,$.
-
-                    \item $\,$.
-                \end{pfenum}}
-            \prove{%
-                $\,$
-            }
-        }
-    }
 
     \step{<1>22}{%
         \case{%
-            \textsc{Ty\_Fill\_In}.
+            \textsc{Ty\_Memop\_PtrWellAligned}.
         }{%
             \pflet{%
+                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \wedge  \cnkw{I}$.
             }
             \assume{%
                 \begin{pfenum}
-                    \item $\,$.
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{ptrWellAligned} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
 
-                    \item $\,$.
+                    \item $\langle  \cdot  \cnsym{;}  \cnkw{ptrWellAligned} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{;}  \cnkw{done} \, bool\_value  \rangle$.\label{wellaligned-assm2}
                 \end{pfenum}}
             \prove{%
-                $\,$
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, bool\_value  \Rightarrow  \cnnt{ret}$.
             }
         }
     }
 
+    \begin{proof}
+        \step{<2>1}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   bool\_value   =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \cnsym{)}$
+            by construction of $bool\_value$ (inversion on \ref{wellaligned-assm2}).}
+
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value  \Rightarrow  \cnkw{bool}$ by
+            \textsc{Ty\_PVal\_\{True,False\}}.}
+
+        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+            with \textsc{Ty\_TVal\_\{Phi,Comp\}} respectively, we are done.}
+    \end{proof}
+
     \step{<1>23}{%
         \case{%
-            \textsc{Ty\_Fill\_In}.
+            \textsc{Ty\_Memop\_PtrArrayShift}.
         }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\,$.
-
-                    \item $\,$.
-                \end{pfenum}}
-            \prove{%
-                $\,$
-            }
+            \pf\ Similiar to \textsc{Ty\_PE\_Array\_Shift}, except with
+            \textsc{Ty\_TVal\_\{I,Phi,Comp\}} at the end.
         }
     }
 
     \step{<1>24}{%
         \case{%
-            \textsc{Ty\_Fill\_In}.
+            \textsc{Ty\_Seq\_E\_CCall}.
         }{%
-            \pflet{%
-            }
             \assume{%
                 \begin{pfenum}
-                    \item $\,$.
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  pval  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \Rightarrow   \sigma  (  \cnnt{ret}  ) $.\label{ccall-assm1}
 
-                    \item $\,$.
+                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  pval  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma'  (  texpr  )   {:}   \sigma'  (  \cnnt{ret}  )   \rangle$.
                 \end{pfenum}}
             \prove{%
-                $\,$
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  texpr  )   \Leftarrow   \sigma  (  \cnnt{ret}  ) $
             }
         }
     }
 
+    \begin{proof}
+        \step{<2>1}{$pval  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}$
+            by inversion (on either assumption).}
+
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}$ by
+            inversion on \ref{ccall-assm1}.}
+
+        \step{<2>3}{$\sigma = \sigma'$ and $\cnnt{ret} = \cnnt{ret'}$
+            by induction on $\cnnt{arg}$.\\
+            \pf\ Follows from lemma \ref{subsec:spine_decons_same}.}
+
+        \step{<2>4}{
+            \pflet{$\ctxC ; \ctxL ; \ctxN ; \ctxR'$ be the the type of
+                substitution $\sigma$: $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.}
+            \pf\ Constructing such a substitution requires $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval_{\cnmv{i}}  \Rightarrow  \beta_{\cnmv{i}}$ for each $\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}} \, \in \, \mathcal{C}$ or $\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}} \, \in \, \mathcal{L}$ and $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \vdash  \cnnt{res\_term_{\cnmv{i}}}  \Leftarrow  \cnnt{res_{\cnmv{i}}}$ for each $\_ : res_i \in \ctxR'$ which
+            can be deduced from \stepref{<2>2}.}
+
+        \step{<2>5}{$\mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \vdash  texpr  \Leftarrow  \cnnt{ret''}$ where
+            $\cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \leadsto  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \mid  \cnnt{ret''}$ formalises
+            the assumption that all global functions and labels are well-typed.}
+
+        \step{<2>6}{$\mathcal{C} = \mathcal{C}''$ , $\Phi = \Phi''$ , $\mathcal{L} = \mathcal{L}''$ ,
+            $\mathcal{R}' = \mathcal{R}''$ and $\cnnt{ret} = \cnnt{ret''}$.\\
+            \pf\ By induction on $\cnnt{arg}$.}
+
+        \step{<2>7}{Apply substitution lemma to \stepref{<2>4} and
+            \stepref{<2>5} to finish proof.}
+
+    \end{proof}
+
+
     \step{<1>25}{%
         \case{%
-            \textsc{Ty\_Fill\_In}.
+            \textsc{Ty\_Seq\_E\_Proc}.
         }{%
-            \pflet{%
-            }
-            \assume{%
-                \begin{pfenum}
-                    \item $\,$.
-
-                    \item $\,$.
-                \end{pfenum}}
-            \prove{%
-                $\,$
-            }
+            \pf\  Similar to \textsc{Ty\_Seq\_E\_CCall}.
         }
     }
 
     \step{<1>26}{%
         \case{%
-            \textsc{Ty\_Fill\_In}.
+            \textsc{Ty\_Is\_E\_Memo}.
+        }{%
+            \pf\ By induction on \textsc{Ty\_Memop*} cases.
+        }
+    }
+
+    \step{<1>27}{%
+        \case{%
+            \textsc{Ty\_Is\_E\_\{Neg\_\}Action}.
+        }{%
+            \pf\ By induction on \textsc{Ty\_Action*} cases.
+        }
+    }
+
+    \step{<1>28}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_LetP}.
+        }{%
+            \pfsketch{ Only covering case $\langle  pexpr  \rangle  \longrightarrow  \langle  pexpr'  \rangle$ here.\\
+                See \textsc{Ty\_Seq\_TE\_Let} for a more general version and
+                proof for the remaining $\langle  pexpr  \rangle  \longrightarrow  \langle  tpexpr  {:}  \cnsym{(}  \cnmv{y}  {:}  \beta  . \:  term  \cnsym{)}  \rangle$ case.
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{let} \, ident\_or\_pattern  =  pexpr \, \cnkw{in} \, tpexpr  \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:  \cnnt{term_{{\mathrm{2}}}}$.\label{letp-assm1}
+                    \item $\langle  \cnkw{let} \, ident\_or\_pattern  =  pexpr \, \cnkw{in} \, tpexpr  \rangle  \longrightarrow  \langle  \cnkw{let} \, ident\_or\_pattern  =  pexpr' \, \cnkw{in} \, tpexpr  \rangle$.\label{letp-assm2}
+                \end{pfenum}
+            }
+            \prove{%
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{let} \, ident\_or\_pattern  =  pexpr' \, \cnkw{in} \, tpexpr  \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:  \cnnt{term_{{\mathrm{2}}}}$.
+            }
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{ \begin{pfenum}
+                \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pexpr  \Rightarrow  \cnmv{y}  {:}  \beta  . \:  \cnnt{term}$.
+                \item $\cnmv{y} \, \cnkw{as} \, ident\_or\_pattern  {:}  \beta  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}$.
+                \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{y}  {:}  \beta  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{term}  \cnsym{,}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \vdash  texpr  \Leftarrow  \cnnt{ret}$.
+            \end{pfenum}
+            \pf\ Invert assumption \ref{letp-assm1}.}
+
+        \step{<2>2}{$\langle  pexpr  \rangle  \longrightarrow  \langle  pexpr'  \rangle$.\\
+            \pf\ Invert assumption \ref{letp-assm2}.}
+
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pexpr'  \Rightarrow  \cnmv{y}  {:}  \beta  . \:  \cnnt{term}$.\\
+            \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
+        
+        \step{<2>4}{ $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{let} \, ident\_or\_pattern  =  pexpr' \, \cnkw{in} \, tpexpr  \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:  \cnnt{term_{{\mathrm{2}}}}$.\\
+            \pf\ By \textsc{Ty\_Seq\_TE\_LetP} using \stepref{<2>1}.2,3 and \stepref{<2>3}.}
+    \end{proof}
+
+    \step{<1>29}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_LetPT}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_LetT} for a more general case and proof.
+        }
+    }
+
+    \step{<1>30}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_Let}.
         }{%
             \pflet{%
             }
             \assume{%
                 \begin{pfenum}
-                    \item $\,$.
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.\label{let_letT-assm1}
 
-                    \item $\,$.
+                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle$.\label{let_letT-assm2}
+                \end{pfenum}}
+
+            \prove{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
+            }
+        }
+    }
+
+    \step{<1>31}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_LetT}.
+        }{%
+            \pflet{%
+            }
+            \assume{%
+                \begin{pfenum}
+                    \item $\,$.\label{-assm1}
+
+                    \item $\,$.\label{-assm2}
                 \end{pfenum}}
             \prove{%
-                $\,$
+                $\,$.
             }
         }
     }
