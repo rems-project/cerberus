@@ -72,6 +72,21 @@ type mbyte =
 
 type value = mbyte list
 
+let pp_mbyte : out_channel -> mbyte -> unit = fun oc mb ->
+  match mb with
+    | MByte n           -> Printf.fprintf oc "MByte(%d)" n
+    | MPtrFrag (loc, n) -> Printf.fprintf oc "MPtrFrag(%a, %n)" pp_loc loc n
+    | MPoison           -> Printf.fprintf oc "MPoison"
+
+
+let pp_value : out_channel -> value -> unit = fun oc v ->
+  let rec aux oc = function
+    | []     -> ()
+    | [mb]   -> Printf.fprintf oc "%a" pp_mbyte mb
+    | mb::xs -> Printf.fprintf oc "%a, %a" pp_mbyte mb aux xs
+  in
+  Printf.fprintf oc "[%a]" aux v
+
 type hcell = {
   hc_alloc_id   : alloc_id;
   hc_lock_state : lock_state;
@@ -144,15 +159,21 @@ let valid_ptr : heap_state -> loc -> bool = fun hs l ->
 (** Conversion betweem values and locations. *)
 
 let val_of_loc_n : int -> loc -> value = fun n l ->
+  (* Printf.printf "\x1b[31mENTERING val_of_loc_n ==> n: %d, l: %a\x1b[0m\n" n pp_loc l; *)
   let rec loop acc n =
     if n = 0 then acc else loop (MPtrFrag(l, n) :: acc) (n - 1)
   in
+  (* KKK*) let ret =
   loop [] n
+  (* KKK *) in
+  (* (* KKK *) Printf.printf "RETURNING => %a\n" pp_value ret; *)
+  ret
 
 let val_to_loc_n : int -> value -> loc option = fun n v ->
+  (* Printf.printf "\x1b[31mENTERING val_to_loc_n ==> n: %d, v: %a\x1b[0m\n" n pp_value v; *)
   match v with
-  | MPtrFrag(l,_) :: _ -> if v = val_of_loc_n n l then Some(l) else None
-  | _                  -> None
+  | MPtrFrag(l,_) :: _ -> if v = val_of_loc_n n l then Some(l) else ( (*print_endline "==> FAILED v compare"; *)None)
+  | _                  -> ((* print_endline "==> NOT MPtrFrag()"; *) None)
 
 let val_of_loc : loc -> value =
   val_of_loc_n 8
@@ -274,12 +295,14 @@ let val_of_int_repr : int_repr -> int_type -> value option = fun i it ->
       else None
 
 let val_to_int_repr : value -> int_type -> int_repr option = fun v it ->
+  (* Printf.printf "\x1b[31mENTERING val_to_int_repr ==> v: %a, it: %s\x1b[0m\n"
+    pp_value v "TODO(it)"; *)
   match val_to_Z v it with
   | Some(z) -> Some(IRInt(z))
   | None    ->
       match val_to_loc_n (bytes_per_int it) v with
-      | None    -> None
-      | Some(l) -> if in_range (snd l) uintptr_t then Some(IRLoc(l)) else None
+      | None    -> ((*prerr_endline "[val_to_int_repr] => val_to_loc_n FAILED"; *)None)
+      | Some(l) -> if in_range (snd l) uintptr_t then Some(IRLoc(l)) else ((*prerr_endline "[val_to_int_repr] => l NOT in_range"; *)None)
 
 let val_to_Z_weak : value -> int_type -> Z.t option = fun v it ->
   match val_to_int_repr v it with
@@ -408,8 +431,8 @@ let heap_read : addr -> int -> (hcell -> bool) -> heap -> value option =
     | _ ->
     try
       let hc = AddrM.find a h in
-      if pred hc then loop (hc.hc_value :: acc) (Z.succ a) (n - 1) else None
-    with Not_found -> None
+      if pred hc then loop (hc.hc_value :: acc) (Z.succ a) (n - 1) else (print_endline "[heap_read] => pred failed"; None)
+    with Not_found -> (print_endline "[heap_read] => address not found"; None)
   in
   Printf.fprintf stderr "heap_read %a %d\n%!" Z.output a n;
   loop [] a n
@@ -462,7 +485,7 @@ let na_prepare_read : loc -> int -> heap -> heap option = fun l n h ->
     | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
-  | None    -> None
+  | None    -> (print_endline "[na_prepare_read] ==> heap_read FAILED"; None)
   | Some(v) ->
   let fn hco _ =
     (* The case where [hco = None is unreachable. *)
@@ -503,7 +526,7 @@ let na_prepare_write : loc -> value -> heap -> heap option = fun l v h ->
     | (_                  , _     ) -> false
   in
   match heap_read (snd l) n pred h with
-  | None    -> None
+  | None    -> print_endline "HEAP_READ FAILED"; None
   | Some(v) ->
   let fn hco _ =
     (* The case where [hco = None is unreachable. *)

@@ -1,9 +1,13 @@
+include Vip
+(*
+
 open Memory_model
 
 module ND = Nondeterminism
 module MC = Mem_common
 
 open Caesium
+open Vip
 open Ctype
 
 let name : string = "RefinedC's Caesium memory model"
@@ -201,7 +205,7 @@ let read_heap f error =
         ND.nd_put { st with state = { st.state with st_heap }} >>= fun () ->
         return z
 
-let load loc ty  ptrval =
+let load loc ty ptrval =
   (* TODO do atomic based on [ty] *)
   let sz = Common.sizeof ty in
   match ptrval with
@@ -247,13 +251,17 @@ let store loc ty is_locking ptrval mval =
         return FOOTPRINT
 
 
-
+let string_of_prov = function
+  | ProvNull            -> "Null"
+  | ProvAlloc(None)     -> "None"
+  | ProvAlloc(Some(id)) -> "@" ^(Z.to_string id)
+  | ProvFnPtr           -> "FnPtr"  
 let string_of_mbytes xs =
   let aux = function
     | MByte n ->
         "mbyte(" ^ string_of_int n ^ ")"
-    | MPtrFrag ((_, addr), i) ->
-        "mptrfrag(" ^ Z.to_string addr ^ ", " ^ string_of_int i ^ ")"
+    | MPtrFrag ((prov, addr), i) ->
+        "mptrfrag([" ^ string_of_prov prov ^ "] " ^ Z.to_string addr ^ ", " ^ string_of_int i ^ ")"
     | MPoison ->
         "mpoison" in
   "[" ^ String.concat "; " (List.map aux xs) ^ "]"
@@ -425,10 +433,10 @@ let eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> po
 
 
 let memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM =
-  fun _ _ _ -> assert false (* TODO *)
+  fun _ _ _ -> failwith "Caesium.memcpy" (* TODO *)
 
 
-let interp_mbyte = function
+let interp_mbyte_OLD = function
   | [MByte n] ->
       Some (IRInt (Z.of_int n))
   | [MPtrFrag ((_, addr), offset)] ->
@@ -458,7 +466,7 @@ let memcmp ptrval1 ptrval2 size_ival =
         load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= fun (_, (_, bs)) ->
           (* TODO: use the effectful one instead *)
           let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IRInt (Nat_big_num.(succ zero))) in
-          match interp_mbyte bs (* Caesium.val_to_int_repr bs (to_int_type Ctype.(Unsigned Ichar)) *) with
+          match interp_mbyte_OLD bs (* Caesium.val_to_int_repr bs (to_int_type Ctype.(Unsigned Ichar)) *) with
             | None ->
                 Printf.printf "bs: %s\n" (string_of_mbytes bs);
                 failwith "TODO: val_to_int_repr failed in memcmp()"
@@ -707,6 +715,23 @@ let union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value =
   fun _ _ _ -> assert false (* TODO *)
 
 (* Memory value destructor *)
+let interp_mbyte = function
+  | MByte n ->
+      Some (Z.of_int n)
+  | MPtrFrag ((_, addr), offset) ->
+      Some (Z.logand (Z.shift_right addr (8 * (offset-1))) (Z.of_int 0xFF))
+  | MPoison ->
+      None
+
+let interp_value bs : Z.t =
+  let rec aux offset acc = function
+    | []     -> acc
+    | b::bs' ->
+        match interp_mbyte b with
+          | None   -> failwith "UNSPEC"
+          | Some n -> aux (offset+1) (Z.add acc (Z.shift_left n (8*offset))) bs' in
+  aux 0 Z.zero bs
+
 let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_union =
   if List.exists (function MPoison -> true | _ -> false) bs then
     (* NOTE Rodolphe: making the value unspecified if one byte is poison,
@@ -720,7 +745,8 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
               Printf.printf "ty ==> %s\n" (String_core_ctype.string_of_ctype ty);
               Printf.printf "bytes_per_int ==> %d\n" (Caesium.bytes_per_int int_ty);
               Printf.printf "==> %s\n" (string_of_mbytes bs);
-              failwith "case_mem_value, integer, None"
+              Printf.printf "\x1b[32mKKK ==> using interp_value in case_mem_value (integer)\x1b[0m\n";
+              f_int ity (IRInt (interp_value bs))
           | Some ival ->
               f_int ity ival
         end
@@ -728,7 +754,9 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
         begin match Caesium.val_to_loc bs with
           | None ->
               Printf.printf "==> %s\n" (string_of_mbytes bs);
-              failwith "case_mem_value, pointer, None"
+              Printf.printf "\x1b[32mKKK ==> using interp_value in case_mem_value (pointer)\x1b[0m\n";
+              (* TODO: null pointers and function pointers *)
+              f_ptr ty (PVptr (ProvAlloc None, interp_value bs))
           | Some l ->
               f_ptr ty (PVptr l)
         end
@@ -754,26 +782,6 @@ let case_mem_value (ty, bs) f_unspec _ f_int f_float f_ptr f_array f_struct f_un
 *)
 
 
-
-let copy_alloc_id ival pval =
-  ND.nd_get >>= fun st ->
-  let pval = loc_of_pval pval st in
-  match Caesium.copy_alloc_id st.state.st_heap ival pval with
-  | None ->
-      failwith "copy_alloc_id => None"
-  | Some l ->
-      return (PVptr l)
-
-      (* Printf.printf "COPY_ALLOC_ID ==> TODO\n";
-  return ptrval TODO *)
-(*
-type pointer_value =
-  | PVnull of Ctype.ctype
-  | PVptr of Caesium.loc
-  | PVfun of Symbol.sym
-
-type integer_value = Caesium.int_repr
-*)
 
 
 (* For race detection *)
@@ -823,3 +831,32 @@ let string_of_integer_value: integer_value -> string =
   fun _ -> assert false (* TODO *)
 let string_of_mem_value (ty, bs) =
   "(" ^ "TODO_caesium_value" ^ ": " ^ String_core_ctype.string_of_ctype ty ^ ")"
+
+
+
+let copy_alloc_id ival pval =
+  Printf.printf "\x1b[33mCOPY_ALLOC_ID ival: %s, pval: %s\x1b[0m\n"
+    (Pp_utils.to_plain_string (pp_integer_value ival))
+    (Pp_utils.to_plain_string (pp_pointer_value pval));
+  
+  ND.nd_get >>= fun st ->
+  let pval = loc_of_pval pval st in
+  match Caesium.copy_alloc_id st.state.st_heap ival pval with
+  | None ->
+      failwith "copy_alloc_id => None"
+  | Some l ->
+      return (PVptr l)
+
+      (* Printf.printf "COPY_ALLOC_ID ==> TODO\n";
+  return ptrval TODO *)
+(*
+type pointer_value =
+  | PVnull of Ctype.ctype
+  | PVptr of Caesium.loc
+  | PVfun of Symbol.sym
+
+type integer_value = Caesium.int_repr
+*)
+
+
+*)

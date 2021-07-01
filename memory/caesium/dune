@@ -3,5 +3,5 @@
  (public_name cerberus.mem.caesium)
  (flags (:standard -w -27-32))
  (implements cerb_frontend)
- (private_modules common caesium)
+ (private_modules common caesium vip)
  (libraries zarith))
