@@ -9,6 +9,14 @@ open Annot
 
 open Debug_ocaml
 
+module Option = struct
+  let equal eq o1 o2 =
+    match (o1, o2) with
+    | (None, None) -> true
+    | (Some _, None) | (None, Some _) -> false
+    | (Some v1, Some v2) -> eq v1 v2
+end
+
 
 module Mu = Mucore.Make(Mucore.SimpleTypes)
 open Mu
