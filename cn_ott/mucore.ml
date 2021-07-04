@@ -8,7 +8,7 @@ base_type =  (* base types *)
  | Integer (* integer *)
  | Read (* rational numbers? *)
  | Loc (* location *)
- | Array of base_type (* array *)
+ | ArrayTy of base_type (* array *)
  | ListTy of base_type (* list *)
  | TupleTy of (base_type) list (* tuple *)
  | Struct of tag (* struct *)
@@ -256,6 +256,7 @@ and 'bt cmp_op =
 
 and 'bt list_op = 
    Nil
+ | Cons of 'bt term_aux * 'bt term_aux
  | Tail of 'bt term_aux
  | NthList of int * 'bt term_aux
 
@@ -270,7 +271,8 @@ and 'bt pointer_op =
  | PointerToIntegerCast of 'bt term_aux
 
 and 'bt array_op = 
-   ArrayGet of 'bt term_aux * 'bt term_aux
+   Array of ('bt term_aux) list
+ | ArrayGet of 'bt term_aux * 'bt term_aux
 
 and 'bt param_op = 
    Param of Symbol.sym * base_type * 'bt term_aux
@@ -619,7 +621,7 @@ typing =
  | Typing_struct_in_globals of Symbol.sym * tag * ((Symbol.identifier * T.ct)) list
  | Typing_indexed_infer_mem_value of ((c * l * n * Impl_mem.mem_value * base_type)) list (* dependent on memory object model *)
  | Typing_index_infer_mu_pval of ((c * l * n * 'TY mu_pval_aux * base_type)) list
- | Typing_indexed_pattern of (('bt term_aux * mu_pattern_aux * base_type * c * n)) list
+ | Typing_indexed_pattern of ((mu_pattern_aux * base_type * c * 'bt term_aux)) list
  | Typing_indexed_check_mu_tpexpr of ((c * l * n * 'TY mu_tpexpr * ident * base_type * 'bt term)) list
  | Typing_indexed_check_mu_texpr of ((c * l * n * r * 'TY mu_texpr * ret)) list
 

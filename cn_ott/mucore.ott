@@ -34,7 +34,7 @@ grammar
     | integer                                    ::   :: Integer  {{ com integer           }}
     | real                                       ::   :: Read     {{ com rational numbers? }}
     | loc                                        ::   :: Loc      {{ com location          }}
-    | array base_type                            ::   :: Array    {{ com array             }}
+    | array base_type                            ::   :: ArrayTy  {{ com array             }}
     | list base_type                             ::   :: ListTy   {{ com list              }}
     | </ base_typei // * // i />                 ::   :: TupleTy  {{ com tuple             }}
     | struct ty_tag                              ::   :: Struct   {{ com struct            }}
@@ -394,10 +394,11 @@ grammar
 
 
   list_op :: '' ::= {{ auxparam 'bt }}
-    | nil                   :: :: Nil
-    | tl term_aux           :: :: Tail
-    | ty_int th_l term_aux :: :: NthList {{ order [[ty_int]] [[term_aux]]   }}
-                                       {{ tex [[term_aux]]^{([[ty_int]])} }}
+    | nil                      :: :: Nil
+    | term_aux1 cons term_aux2 :: :: Cons    {{ tex [[term_aux1]] :: [[term_aux2]] }}
+    | tl term_aux              :: :: Tail
+    | ty_int th_l term_aux     :: :: NthList {{ order [[ty_int]] [[term_aux]]   }}
+                                             {{ tex [[term_aux]]^{([[ty_int]])} }}
 
   tuple_op :: '' ::= {{ auxparam 'bt }}
     | ( </ term_auxi // , // i /> ) :: :: Tuple
@@ -416,7 +417,8 @@ grammar
 
 
   array_op :: '' ::= {{ auxparam 'bt }}
-    | term_aux1 [ term_aux2 ]     :: :: ArrayGet
+    | [ | </ term_auxi // , // i /> |] :: :: Array
+    | term_aux1 [ term_aux2 ]          :: :: ArrayGet
 
 
   param_op :: '' ::= {{ auxparam 'bt }}
@@ -894,7 +896,8 @@ grammar
 
   R {{ tex \mathcal{R} }} :: Res_ ::= {{ phantom }} {{ com resources env }}
     | cdot                 ::   :: empty
-    | R , Symbol_sym : res ::   :: cons
+    | R , res              ::   :: anon_cons
+    | R , Symbol_sym : res ::   :: bound_cons
     | </ Ri // , // i />   ::   :: concat
 
 grammar
@@ -902,7 +905,8 @@ grammar
   subs {{ tex \sigma }} , psi {{ tex \psi }} :: Subs_ ::= {{ phantom }} {{ com substitutions }}
     | cdot                            ::   :: empty
     | id                              :: X M :: id {{ com identity substitution }} {{ tex \mathrm{id} }} {{ ocaml SUBS_ID }}
-    | spine_elem  / Symbol_sym , subs ::   :: cons
+    | spine_elem  / Symbol_sym , subs ::   :: cons_spine_elem
+    | term_aux / Symbol_sym , subs    ::   :: cons_term
     | </ subsi // , // i />           ::   :: concat
     | ( subs )                        :: X S :: paren {{ com parentheses }} {{ tex [[subs]] }} {{ ocaml [[subs]] }}
     | [ subs ] psi                    :: M :: subs {{ com apply $[[subs]]$ to all elements in $[[psi]]$ }}
@@ -918,7 +922,7 @@ grammar
     | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals ::   :: struct_in_globals
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />                       ::   :: indexed_infer_mem_value       {{ com dependent on memory object model }}
     | </ Ci ; Li ; Ni |- mu_pval_auxi => base_typei // i />                            :: X :: index_infer_mu_pval
-    | </ term_auxi as mu_pattern_auxi : base_typei ~> Ci ; Ni // i />                  :: X :: indexed_pattern
+    | </ mu_pattern_auxi : base_typei ~> Ci with term_auxi // i />                     :: X :: indexed_pattern
     | </ Ci ; Li ; Ni |- mu_tpexpri <= yi : base_typei . termi // i />                 :: X :: indexed_check_mu_tpexpr
     | </ Ci ; Li ; Ni ; Ri |- mu_texpri <= reti // i />                                :: X :: indexed_check_mu_texpr
 
@@ -1114,11 +1118,11 @@ defns
 
     N |- points_to eq points_to'
     ------------------------------------------------------------ :: PointsTo
-    C ; L ; N ; cdot , _ : points_to |- points_to' <= points_to'
+    C ; L ; N ; cdot , points_to |- points_to' <= points_to'
 
 
     N |- res eq res'
-    ------------------------------------------------- :: Var
+    --------------------------------------- :: Var
     C ; L ; N ; cdot , r : res |- r <= res'
 
 
@@ -1126,6 +1130,12 @@ defns
     C ; L ; N ; R2 |- res_term2 <= res2
     ------------------------------------------------------------------ :: SepConj
     C ; L ; N ; R1 , R2 |- <( res_term1 , res_term2 )> <= res1 *s res2
+
+
+    smt ( N => term_aux )
+    C ; L ; N ; R |- res_term <= res
+    ----------------------------------------------------------------- :: Conj
+    C ; L ; N ; R |- res_term <= term_aux /\ res
 
 
     % Has to be checking. Consider type of pack (1 , l |-> 1 , 1)
@@ -1267,53 +1277,53 @@ defns
   comp_pattern_jtype :: 'Ty_Pat_' ::=
 
   defn
-    term_aux as mu_pattern_aux : base_type ~> C ; N :: :: Comp_ :: Comp_ by
+    mu_pattern_aux : base_type ~> C with term_aux :: :: Comp_ :: Comp_ by
 
 
-    ---------------------------------------------------- :: No_Sym_Annot
-    term_aux as _ : base_type : base_type ~> cdot ; cdot
+    ---------------------------------------- :: No_Sym_Annot
+    _ : base_type : base_type ~> cdot with _
 
 
-    ----------------------------------------------------------------------------------- :: Sym_Annot
-    term_aux as x : base_type : base_type ~> cdot , x : base_type ; cdot , x = term_aux
+    -------------------------------------------------------- :: Sym_Annot
+    x : base_type : base_type ~> cdot , x : base_type with x
 
 
-    ------------------------------------------------------------- :: Nil
-    term_aux as Nil base_type ( ) : list base_type ~> cdot ; cdot
+    --------------------------------------------------- :: Nil
+    Nil base_type ( ) : list base_type ~> cdot with nil
 
 
-    i_one th_l term_aux as mu_pattern_aux1 : base_type ~> C1 ; N1
-    tl term_aux as mu_pattern_aux2 : list base_type ~> C2 ; N1
-    -------------------------------------------------------------------------------------------- :: Cons
-    term_aux as Cons ( mu_pattern_aux1 , mu_pattern_aux2 ) : list base_type ~> C1 , C2 ; N1 , N2
+    mu_pattern_aux1 : base_type ~> C1 with term_aux1
+    mu_pattern_aux2 : list base_type ~> C2 with term_aux2
+    ---------------------------------------------------------------------------------------------------- :: Cons
+    Cons ( mu_pattern_aux1 , mu_pattern_aux2 ) : list base_type ~> C1 , C2 with term_aux1 cons term_aux2
 
 
-    </ i th_t term_aux as mu_pattern_auxi : base_typei ~> Ci ; Ni // i />
-    --------------------------------------------------------------------------------------------------------- :: Tuple
-    term_aux as Tuple ( </ mu_pattern_auxi // i /> ) : </ base_typei // i /> ~> </ Ci // i /> ; </ Ni // i />
+    </ mu_pattern_auxi : base_typei ~> Ci with term_auxi // i />
+    ----------------------------------------------------------------------------------------------------------- :: Tuple
+    Tuple ( </ mu_pattern_auxi // i /> ) : </ base_typei // i /> ~> </ Ci // i /> with ( </ term_auxi // i /> )
 
 
-    </ term_aux [ i ] as mu_pattern_auxi : base_type ~> Ci ; Ni // i />
-    --------------------------------------------------------------------------------------------------- :: Array
-    term_aux as Array ( </ mu_pattern_auxi // i /> ) : array base_type ~> </ Ci // i /> ; </ Ni // i />
+    </ mu_pattern_auxi : base_type ~> Ci with term_auxi // i />
+    ------------------------------------------------------------------------------------------------------- :: Array
+    Array ( </ mu_pattern_auxi // i /> ) : array base_type ~> </ Ci // i /> with [| </ term_auxi // i /> |]
 
 
-    term_aux as mu_pattern_aux : base_type ~> C ; N
-    ------------------------------------------------------------- :: Specified
-    term_aux as Specified ( mu_pattern_aux ) : base_type ~> C ; N
+    mu_pattern_aux : base_type ~> C with term_aux
+    ----------------------------------------------------------- :: Specified
+    Specified ( mu_pattern_aux ) : base_type ~> C with term_aux
 
 
   defn
-    term_aux as mu_sym_or_pattern : base_type ~> C ; N :: :: Sym_Or_Pattern :: Sym_Or_Pattern_ by
+    mu_sym_or_pattern : base_type ~> C with term_aux :: :: Sym_Or_Pattern :: Sym_Or_Pattern_ by
 
 
-    ------------------------------------------------------------------------ :: Sym
-    term_aux as x : base_type ~> cdot , x : base_type ; cdot , x = term_aux
+    -------------------------------------------- :: Sym
+    x : base_type ~> cdot , x : base_type with x
 
 
-    term_aux as mu_pattern_aux : base_type ~> C ; N
+    mu_pattern_aux : base_type ~> C with term_aux
     ----------------------------------------------- :: Pattern
-    term_aux as mu_pattern_aux : base_type ~> C ; N
+    mu_pattern_aux : base_type ~> C with term_aux
 
 defns
   res_pattern_jtype :: 'Ty_Pat_' ::=
@@ -1327,7 +1337,7 @@ defns
 
 
     ----------------------------------------------------------- :: PointsTo
-    points_to : points_to ~> cdot ; cdot ; cdot , _ : points_to
+    points_to : points_to ~> cdot ; cdot ; cdot , points_to
 
 
     ------------------------------------------------- :: Var
@@ -1361,10 +1371,10 @@ defns
      : I ~> cdot ; cdot ; cdot ; cdot
 
 
-    y as mu_sym_or_pattern : base_type ~> C1 ; N1
-    </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
-    ----------------------------------------------------------------------------------------------------- :: Comp
-    comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
+    mu_sym_or_pattern : base_type ~> C1 with term_aux1
+    </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L2 ; N2 ; R2
+    --------------------------------------------------------------------------- :: Comp
+    comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N1, N2 ; R2
 
 
     </ ret_patterni // i /> : ret ~> C ; L ; N ; R
@@ -1417,22 +1427,22 @@ defns
 
 
     C ; L ; N |- mu_pexpr_aux => y1 : base_type1 . term1
-    y1 as mu_sym_or_pattern : base_type1 ~> C1 ; N1
-    C , C1 ; L , y1 : base_type1 ; N , term1 , N1 |- mu_tpexpr <= y2 : base_type2 . term2
-    ------------------------------------------------------------------------------------------ :: Let
+    mu_sym_or_pattern : base_type1 ~> C1 with term_aux
+    C , C1 ; L ; N , [ term_aux / y1 , cdot ] term1 , N1 |- mu_tpexpr <= y2 : base_type2 . term2
+    -------------------------------------------------------------------------------------------- :: Let
     C ; L ; N |- let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr <= y2 : base_type2 . term2
 
 
     C ; L ; N |- mu_tpexpr_aux1 <= y1 : base_type1 . term1
-    y1 as mu_sym_or_pattern : base_type1 ~> C1 ; N1
-    C , C1 ; L , y1 : base_type1 ; N , term1 , N1 |- mu_tpexpr <= y2 : base_type2 . term2
+    mu_sym_or_pattern : base_type1 ~> C1 with term_aux
+    C , C1 ; L ; N , [ term_aux / y1 , cdot ] term1 , N1 |- mu_tpexpr <= y2 : base_type2 . term2
     ------------------------------------------------------------------------------------------------------------------------------ :: LetT
     C ; L ; N |- let mu_sym_or_pattern : ( y1 : base_type1 . term1 ) = mu_tpexpr_aux1 in mu_tpexpr_aux2 <= y2 : base_type2 . term2
 
 
     C ; L ; N |- mu_pval_aux => base_type1
-    </ y1 as mu_patterni : base_type1 ~> Ci ; Ni // i />
-    </ C , Ci ; L , y1 : base_type1 ; N , y1 = inj mu_pval_aux , Ni |- mu_tpexpri <= y2 : base_type2 . term2 // i />
+    </ mu_patterni : base_type1 ~> Ci with term_auxi // i />
+    </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux , Ni |- mu_tpexpri <= y2 : base_type2 . term2 // i />
     ---------------------------------------------------------------------------------------------------------------- :: Case
     C ; L ; N |- case mu_pval_aux of </ | mu_patterni => mu_tpexpri // i /> end <= y2 : base_type2 . term2
 
@@ -1647,15 +1657,15 @@ defns
 
 
     C ; L ; N |- mu_pexpr_aux => y : base_type . term
-    y as mu_sym_or_pattern : base_type ~> C1 ; N1
-    C , C1 ; L , y : base_type ; N , term , N1 ; R |- mu_texpr <= ret
-    ------------------------------------------------------------------------ :: LetP
+    mu_sym_or_pattern : base_type ~> C1 with term_aux1
+    C , C1 ; L ; N , [ term_aux1 / y , cdot ] term , N1 ; R |- mu_texpr <= ret
+    ------------------------------------------------------------------------- :: LetP
     C ; L ; N ; R |- let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr <= ret
 
 
     C ; L ; N |- mu_tpexpr_aux <= y : base_type . term
-    y as mu_sym_or_pattern : base_type ~> C1 ; N1
-    C , C1 ; L , y : base_type ; N , term , N1 ; R |- mu_texpr <= ret
+    mu_sym_or_pattern : base_type ~> C1 with term_aux1
+    C , C1 ; L ; N , [ term_aux1 / y , cdot ] term , N1 ; R |- mu_texpr <= ret
     ---------------------------------------------------------------------------------------------------- :: LetPT
     C ; L ; N ; R |- let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr <= ret
 
@@ -1675,8 +1685,8 @@ defns
 
 
     C ; L ; N |- mu_pval_aux => base_type1
-    </ y1 as mu_patterni : base_type1 ~> Ci ; Ni // i />
-    </ C , Ci ; L , y1 : base_type1 ; N , y1 = inj mu_pval_aux , Ni ; R |- mu_texpri <= ret // i />
+    </ mu_patterni : base_type1 ~> Ci with term_auxi // i />
+    </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux , Ni ; R |- mu_texpri <= ret // i />
     ------------------------------------------------------------------------------------------------ :: Case
     C ; L ; N ; R |- case mu_pval_aux of </ | mu_patterni => mu_texpri // i /> end <= ret
 
@@ -1755,12 +1765,12 @@ defns
     Cons ( mu_pattern_aux1 , mu_pattern_aux2 ) = Cons ( mu_pval_aux1 , mu_pval_aux2 ) ~> subs1 , subs2
 
 
-    </ mu_pattern_auxi = mu_pval_aux1 ~> subsi // i />
+    </ mu_pattern_auxi = mu_pval_auxi ~> subsi // i />
     ------------------------------------------------------------------------------------------- :: Tuple
     Tuple ( </ mu_pattern_auxi // i /> ) = Tuple ( </ mu_pval_auxi // i /> ) ~> </ subsi // i />
 
 
-    </ mu_pattern_auxi = mu_pval_aux1 ~> subsi // i />
+    </ mu_pattern_auxi = mu_pval_auxi ~> subsi // i />
     -------------------------------------------------------------------------------------------- :: Array
     Array ( </ mu_pattern_auxi // i /> ) = Array ( </ mu_pval_auxi // i /> ) ~> </ subsi // i />
 
@@ -2061,7 +2071,7 @@ defns
 
     <( h ; mu_texpr1 )> --> <( h' ; mu_texpr1' )>
     -------------------------------------------- :: LetT_LetT
-    <( h ; let </ ret_patterni // i /> : ret = mu_texpr1 in mu_texpr2 )> --> <( h ; let </ ret_patterni // i /> : ret = mu_texpr1' in mu_texpr2 )>
+    <( h ; let </ ret_patterni // i /> : ret = mu_texpr1 in mu_texpr2 )> --> <( h' ; let </ ret_patterni // i /> : ret = mu_texpr1' in mu_texpr2 )>
 
 
     ----------------------------------------------------------------------- :: If_True
@@ -2138,9 +2148,9 @@ defns
     <( h ; memop ( mu_memop )  )> --> <( h ; mu_tval )>
 
 
-    <( h ; mu_action_aux )> --> <( h ; mu_tval )>
+    <( h ; mu_action_aux )> --> <( h' ; mu_tval )>
     ------------------------------------------------- :: Action
-    <( h ; Pos mu_action_aux )> --> <( h ; mu_tval )>
+    <( h ; Pos mu_action_aux )> --> <( h' ; mu_tval )>
 
 
     <( h ; mu_action_aux )> --> <( h' ; mu_tval )>
@@ -2290,7 +2300,14 @@ defns
     C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
     % ASK is checking here a problem?
     C ; L ; N ; R1 |- res_term <= res
-    -------------------------------------------------------------------------------- :: Cons_Res
+    -------------------------------------------------------------------------------- :: Cons_Res_Named
     C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
+
+
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    % ASK is checking here a problem?
+    C ; L ; N ; </ cdot , resi // i /> |- res_term <= res
+    ---------------------------------------------------------------------------------------------------- :: Cons_Res_Anon
+    C ; L ; N ; R , </ cdot , resi // i /> |- ( subs ) :  ( C' ; L' ; N' ; R' , </ cdot , resi // i /> )
 
 
