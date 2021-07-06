@@ -1463,6 +1463,7 @@ defns
     % C ; L ; N ; cdot |-> create_readonly ( vp , ct , v ) Symbol_prefix => ??
 
 
+    % NOT IMPLEMENTED - memory order
     C ; L ; N |- mu_pval_aux0 => loc
     smt ( N => inj mu_pval_aux0 = inj mu_pval_aux1 )
     C ; L ; N ; R |- inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2 <= inj mu_pval_aux1 ( q_one )|- tick - ct -> inj mu_pval_aux2
@@ -1892,11 +1893,11 @@ defns
     <( member_shift ( ty_mem_ptr , ty_tag , Symbol_identifier ) )> --> <( ty_mem_ptr' )>
 
 
-    ------------------------------------ :: NotTrue
+    ------------------------------------ :: Not_True
     <( not ( True ) )> --> <( False )>
 
 
-    ------------------------------------ :: NotFalse
+    ------------------------------------ :: Not_False
     <( not ( False ) )> --> <( True )>
 
 
@@ -2006,10 +2007,10 @@ defns
     <( h ; mu_seq_expr_aux )> --> <( h' ; mu_texpr : ret )> :: :: SE_TE :: SE_TE_ by
 
 
-    mu_pval_aux : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
+    ty_mem_ptr : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
     </ xi = spine_elemi // i /> :; arg >> subs ; ret
     ------------------------------------------------------------- :: CCall
-    <( h ; ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) )> --> <( h ; [ subs ] mu_texpr : [ subs ] ret )>
+    <( h ; ccall ( ty_act , ty_mem_ptr , </ spine_elemi // i /> ) )> --> <( h ; [ subs ] mu_texpr : [ subs ] ret )>
 
 
     mu_name : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
@@ -2090,6 +2091,11 @@ defns
     <( h ; mu_memop  )> --> <( h' ; mu_tval )> :: :: Memop_Tval :: Memop_TVal_ by
 
 
+    inj mu_bool_value eq inj ty_mem_int1 ' rel_binop ' inj ty_mem_int2
+    ---------------------------------------------------------------------------- :: Rel_Binop
+    <( h ; ty_mem_int1 rel_binop ty_mem_int2 )> --> <( h ; done mu_bool_value )>
+
+
     inj ty_mem_int eq cast_ptr_to_int inj ty_mem_ptr
     ---------------------------------------------------------------------- :: IntFromPtr
     <( h ; intFromPtr ( ct1 , ct2 , ty_mem_ptr ) )> --> <( h ; done ty_mem_int )>
@@ -2123,7 +2129,7 @@ defns
     representable ( ct *s , inj ty_mem_ptr )
     alignedI ( inj ty_mem_int , inj ty_mem_ptr )
     mu_pval_aux : to_base ( ct )
-    ------------------------ :: Create
+    -------------------------------------------- :: Create
     <( h ; create ( ty_mem_int , ct ) Symbol_prefix )> --> <( h + { inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux } ; done ty_mem_ptr , mu_pval_aux , inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux )>
 
 
