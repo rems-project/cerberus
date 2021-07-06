@@ -228,46 +228,7 @@ $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
 
 \end{proof}
 
-\section{Progress}
-
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
-either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
-\stepsto \hconf{h'}{e'}$.
-
-\begin{proof}
-    \textsc{Proof Strategy:} Induction over the typing rules.\\
-
-    \assume{%
-        $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$.
-    }
-
-    \prove{%
-        either $\mathrm{value}(e)$ or $\forall h : R.\ \exists e' , h' .\ \hconf{h}{e}
-        \stepsto \hconf{h'}{e'}$.
-    }
-\end{proof}
-
-\section{Framing}
-
-If $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$ and $h_1, h_2$ disjoint then
-$\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
-
-\begin{proof}
-    \textsc{Proof Strategy:} Induction over the operational rules.\\
-
-    \assume{%
-        \begin{pfenum}
-            \item $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$.
-            \item $h_1, h_2$ disjoint.\\
-        \end{pfenum}
-    }
-
-    \prove{%
-        $\hconf{h_1 + h_2}{e} \stepsto \hconf{h_1' + h_2}{e'}$.
-    }
-\end{proof}
-
-\section{Type Preservation}
+\section{Progress}\label{sec:progress}
 
 \subsection{\textsc{Ty\_Spine\_*} and \textsc{Decons\_Arg\_*} construct same
 substitution and return type}\label{subsec:spine_decons_same}
@@ -277,6 +238,386 @@ $\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \ma
 \sigma'$ and $\cnnt{ret} = \cnnt{ret'}$.
 
 \pfsketch{ Induction over $\cnnt{arg}$.}
+
+\subsection{Progress Statement and Proof}\label{subsec:progress}
+
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
+either $\mathrm{value}(e)$, or it is unreachable, or $\forall h : R.\ \exists
+e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
+
+\begin{proof}
+    \textsc{Proof Strategy:} Induction over the typing rules.\\
+
+    \assume{%
+        $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$.
+    }
+
+    \prove{%
+        Either $\mathrm{value}(e)$, or it is unreachable, or $\forall h : R.\
+        \exists e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
+    }
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PVal\_Obj*}, \textsc{Ty\_PVal*}, \textsc{Ty\_PE\_Val}, \textsc{Ty\_TPVal*},
+            \textsc{Ty\_TVal*}, \textsc{Ty\_Seq\_TE\_TVal}.
+        }{
+            \pf\ All these judgements/rules give types to syntactic values; and there
+            are no operational rules corresponding to them (see Section~\ref{sec:opsem}).
+        }
+    }
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_PE\_Array\_Shift}.
+        }{
+            \pf\ By inversion on $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval_{{\mathrm{1}}}  \Rightarrow  \cnkw{loc}$,
+            $pval_{{\mathrm{1}}}$ must be a $mem\_ptr$ (\textsc{Ty\_PVal\_Obj\_Ptr}).
+            Similarly $pval_{{\mathrm{2}}}$ must be a $mem\_int$,
+            so rule \textsc{Op\_PE\_PE\_ArrayShift} applies.
+        }
+    }
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_PE\_Member\_Shift}.
+        }{%
+            \pf\ $pval$ must be a $mem\_ptr$ so
+            \textsc{Op\_PE\_PE\_MemberShift}.
+        }
+    }
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_PE\_Not}.
+        }{%
+            \pf\ $pval$ must be a $bool\_value$ so 
+            \textsc{Op\_PE\_PE\_Not\_\{True,False\}}.
+        }
+    }
+
+    \step{<1>5}{%
+        \case{%
+            \textsc{Ty\_PE\_\{Arith,Rel\}\_Binop}.
+        }{%
+            \pf\ $pval_{{\mathrm{1}}}$ and $pval_{{\mathrm{2}}}$ must be $mem\_int$s so
+            \textsc{Op\_PE\_PE\_\{Arith,Rel\}\_Binop} respectively.
+        }
+    }
+
+    \step{<1>6}{%
+        \case{%
+            \textsc{Ty\_PE\_Bool\_Binop}.
+        }{%
+            \pf\ $pval_{{\mathrm{1}}}$ and $pval_{{\mathrm{2}}}$ must be $bool\_value$s so
+            \textsc{Op\_PE\_PE\_Bool\_Binop}.
+        }
+    }
+
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_PE\_Call}.
+        }{%
+            \pf\ By inversion we have $name  {:}  \cnnt{pure\_arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  tpexpr \, \in \, \cnkw{Globals}$ and $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  pval_{\cnmv{i}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \gg  \sigma  \cnsym{;}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{term}  \wedge  \cnkw{I}$, with the latter implying $\cncomp{\cnmv{x_{\cnmv{i}}}  =  pval_{\cnmv{i}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \gg  \sigma  \cnsym{;}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{term}  \wedge  \cnkw{I}$ (lemma
+           \ref{subsec:spine_decons_same}. Thus it can step with
+           \textsc{Op\_PE\_TPE\_Call}.
+        }
+    }
+
+    \step{<1>8}{%
+        \case{%
+            \textsc{Ty\_PE\_Assert\_Undef}.
+        }{%
+            \pf\ $pval$ must be a $bool\_value$ and
+            $\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow   pval   \cnsym{)}$. If it is $\cnkw{False}$, then by the latter,
+            we have an inconsistent constraints context, meaning the code is unreachable.
+            If it is $\cnkw{True}$, we may step with \textsc{Op\_PE\_PE\_Assert\_Undef}.
+        }
+    }
+
+    \step{<1>9}{%
+        \case{%
+            \textsc{Ty\_PE\_Bool\_To\_Integer}.
+        }{%
+            \pf\ $pval$ must be a $bool\_value$ and so
+            \textsc{Op\_PE\_PE\_Bool\_To\_Integer\_\{True,False\}}.
+        }
+    }
+
+    \step{<1>10}{%
+        \case{%
+                \textsc{Ty\_PE\_WrapI}.
+        }{%
+            \pf\ $pval$ must be a $mem\_int$ and so
+            \textsc{Op\_PE\_PE\_WrapI}.
+        }
+    }
+
+    \step{<1>11}{%
+        \case{%
+            \textsc{Ty\_TPE\_\{If,Let,LetT,Case\}}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_\{If,Let,LetT,Case\}} cases for more
+            general cases and proofs.
+        }
+    }
+
+
+    \step{<1>12}{%
+        \case{%
+            \textsc{Ty\_Action\_Create}.
+        }{%
+            \pf\ $pval$ must be a $mem\_int$ and $\cnnt{h}$ must
+            be $\cdot$, so \textsc{Op\_Action\_TVal\_Create}
+            ($mem\_ptr$ and $pval  {:}   \beta_{  \tau  } $ are free
+            in the premises and so can be constructed to satisfy the requirements).
+        }
+    }
+
+    \step{<1>13}{%
+        \case{%
+            \textsc{Ty\_Action\_Load}.
+        }{%
+            \pf\ $pval_{{\mathrm{0}}}$ must be a $mem\_ptr$ and $\cnnt{h} = \cdot  \cnsym{+}  \cnsym{\{}    pval_{{\mathrm{1}}}   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval_{{\mathrm{2}}}    \cnsym{\}}$, so
+            \textsc{Op\_Action\_TVal\_Load}.
+        }
+    }
+
+    \step{<1>14}{%
+        \case{%
+            \textsc{Ty\_Action\_Store}.
+        }{%
+            \pf\ $pval_{{\mathrm{0}}}$ and $pval_{{\mathrm{2}}}$ must be the same
+            $mem\_ptr$, so \textsc{Op\_Action\_TVal\_Store}.
+        }
+    }
+
+    \step{<1>15}{%
+        \case{%
+            \textsc{Ty\_Action\_Kill\_Static}.
+        }{%
+            \pf\ $pval_{{\mathrm{0}}}$ and $pval_{{\mathrm{1}}}$ must be the same
+            $mem\_ptr$, so
+            \textsc{Op\_Action\_TVal\_Kill\_Static}.
+        }
+    }
+
+    \step{<1>16}{%
+        \case{%
+            \textsc{Ty\_Memop\_Rel\_Binop}.
+        }{%
+            \pf\ Similar to \textsc{Ty\_PE\_\{Arith,Rel\}\_Binop}.
+        }
+    }
+
+    \step{<1>17}{%
+        \case{%
+            \textsc{Ty\_Memop\_IntFromPtr}.
+        }{%
+            \pf\ $pval$ must be a $mem\_ptr$ so
+            \textsc{Op\_Memop\_TVal\_Rel\_IntFromPtr}.
+        }
+    }
+
+
+    \step{<1>18}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrFromInt}.
+        }{%
+            \pf\ $pval$ must be a $mem\_int$ so
+            \textsc{Op\_Memop\_TVal\_Rel\_PtrFromInt}.
+        }
+    }
+
+    \step{<1>19}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrValidForDeref}.
+        }{%
+            \pf\ $pval$ must be a $mem\_ptr$ and $\cnnt{h}$ must be
+            $\cdot  \cnsym{+}  \cnsym{\{}    mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_   \cnsym{\}}$so it can
+            take a step with \textsc{Op\_Memop\_TVal\_Rel\_PtrValidForDeref}.
+        }
+    }
+
+    \step{<1>20}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrWellAligned}.
+        }{%
+            \pf\ $pval$ must be a $mem\_ptr$ and so
+            \textsc{Op\_Memop\_TVal\_PtrWellAligned}.
+        }
+    }
+
+    \step{<1>21}{%
+        \case{%
+            \textsc{Ty\_Memop\_PtrArrayShift}.
+        }{%
+            \pf\ $pval_{{\mathrm{1}}}$ must be a $mem\_ptr$ and
+            $pval_{{\mathrm{2}}}$ must be a $mem\_int$ and so
+            \textsc{Op\_Memop\_TVal\_PtrArrayShift}.
+        }
+    }
+
+    \step{<1>22}{%
+        \case{%
+            \textsc{Ty\_Seq\_E\_CCall}.
+        }{%
+            \pf\ By inversion we have $pval$ must be a $mem\_ptr$,
+            and $mem\_ptr  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}$
+            and $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}$, with the latter implying $\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}$ (lemma \ref{subsec:spine_decons_same}.
+            Thus it can step with \textsc{Op\_SE\_TE\_CCall}.
+        }
+    }
+
+    \step{<1>23}{%
+        \case{%
+            \textsc{Ty\_Seq\_E\_Proc}.
+        }{%
+            \pf\ Similar to \textsc{Ty\_Seq\_E\_CCall}.
+        }
+    }
+
+    \step{<1>24}{%
+        \case{%
+            \textsc{Ty\_Is\_E\_Memop}.
+        }{%
+            \pf\ By induction, if $mem\_op$ is unreachable, then the whole
+            expression is so. Memops are not values. Only stepping cases applies,
+            so \textsc{Op\_IsE\_IsE\_Memop}.
+        }
+    }
+
+    \step{<1>25}{%
+        \case{%
+            \textsc{Ty\_Is\_E\_\{Neg\_\}Action}.
+        }{%
+            \pf\ By induction, if $mem\_action$ is unreachable, then the whole
+            expression is so. Actions are not values. Only stepping case
+            applies, so \textsc{Op\_IsE\_IsE\_\{Neg\_\}Action}.
+        }
+    }
+
+    \step{<1>26}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_\{LetP,LetPT\}}.
+        }{%
+            \pf\ See \textsc{Ty\_Seq\_TE\_\{Let,LetT\}} for more general cases
+            and proofs.
+        }
+    }
+
+    \step{<1>27}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_Let}.
+        }{%
+            \pf\ By induction, since $seq\_expr$ is not value, if it is
+            unreachable, the whole expression is so. If it takes a step, then
+            \textsc{Op\_STE\_TE\_Let\_LetT}.
+        }
+    }
+
+    \step{<1>28}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_LetT}.
+        }{%
+            \pf\ By induction, if $texpr$ is unreachable, so is the
+            whole expression.  If if it a $tval$ then
+            \textsc{Op\_STE\_TE\_LetT\_Sub}.  If if takes a step, then
+            \textsc{Op\_STE\_TE\_LetT\_LetT}.
+        }
+    }
+
+    \step{<1>29}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_Case}.
+        }{%
+            \pf\ We have to show that assuming the case-expression is
+            well-typed, then there is at least one pattern against
+            which $pval$ will match.
+            % ASK
+        }
+    }
+
+    \step{<1>30}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_If}.
+        }{%
+            \pf\ $pval$ must be a $bool\_value$ and so
+            \textsc{Op\_STE\_TE\_If\_\{True,False\}}.
+        }
+    }
+
+    \step{<1>31}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_Run}.
+        }{%
+            \pf\ Similar to \textsc{Ty\_Seq\_E\_CCall}.
+        }
+    }
+
+    \step{<1>32}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_Bound}.
+        }{%
+            \pf\ By \textsc{Op\_STE\_TE\_Bound}.
+        }
+    }
+
+    \step{<1>33}{%
+        \case{%
+            \textsc{Ty\_Is\_TE\_LetS}.
+        }{%
+            \pf\ Similar to \textsc{Ty\_Seq\_TE\_LetT}.
+        }
+    }
+
+\end{proof}
+
+\section{Framing}
+
+If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_2.\
+\mathrm{disjoint}(h_1, h_2) \wedge h = h_1 + h_2 \wedge \hconf{h_1}{e} \stepsto
+\hconf{h_1'}{e'}$ then $h' = h_1' + h_2$.
+
+\begin{proof}
+
+    \assume{%
+        \begin{pfenum}
+            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$,
+            \item $h = h_1 + h_2$ where $h_1, h_2$ disjoint,
+            \item and $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$.
+        \end{pfenum}
+    }
+
+    \prove{%
+        $h' = h_1' + h_2$.
+    }
+
+    \pfsketch{%
+        Induction over the operational rules. Only covering ones
+        which modify the heap; rest are trivially true.\\
+    }
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Op\_Action\_TVal\_Create}
+        }{%
+            \pf\ Because  $mem\_ptr$ is fresh.
+        }
+    }
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Op\_Action\_TVal\_\{Store,Kill\}}.
+        }{%
+            \pf\ By assumption of disjointness, $mem\_ptr \in \cnnt{h_{{\mathrm{1}}}}$
+            implies $mem\_ptr \notin \cnnt{h_{{\mathrm{2}}}}$.
+        }
+    }
+
+\end{proof}
+
+\section{Type Preservation}
 
 \subsection{Pointed-to values have type $ \beta_{  \tau  } $}\label{subsec:pt_val_type}
 
@@ -1094,7 +1435,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}''  \vdash  texpr'_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.\\
             \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
 
-        \step{<2>4}{By \stepref{<2>3}, \stepref{<1>32}.2,3 using
+        \step{<2>4}{By \stepref{<2>3}, \stepref{<2>1}.2,3 using
             \textsc{Ty\_Seq\_TE\_LetT}, we are done.}
     \end{proof}
 
@@ -1134,7 +1475,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma_{\cnmv{j}}  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{\cnmv{i}}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  term_{\cnmv{j}}  =   pval_{\cnmv{j}}   \cnsym{;}  \mathcal{R}  \cnsym{)}$.\\
             \pf\ By \stepref{<2>3}, \textsc{Ty\_Subs\_Cons\_Phi} and \textsc{Ty\_Subs\_Cons\_Res*}.}
 
-        \step{<2>5}{By \stepref{<2>1}.3 and \ref{subsec:sub_lemma}, we are done.}
+        \step{<2>5}{By \stepref{<1>32}.3 and \ref{subsec:sub_lemma}, we are done.}
 
     \end{proof}
 
@@ -1204,7 +1545,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 }
 
 \pagebreak%
-\section{Opsem Judgements}
+\section{Opsem Judgements}\label{sec:opsem}
 
 \cngrammartabular{
 \cnpureXXopsemXXjtype\cninterrule%

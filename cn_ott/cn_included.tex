@@ -2458,17 +2458,17 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 }}
 
 
-\newcommand{\cndruleOpXXPEXXPEXXNotTrue}[1]{\cndrule[#1]{%
+\newcommand{\cndruleOpXXPEXXPEXXNotXXTrue}[1]{\cndrule[#1]{%
 }{
 \langle  \cnkw{not} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{False}  \rangle}{%
-{\cndrulename{Op\_PE\_PE\_NotTrue}}{}%
+{\cndrulename{Op\_PE\_PE\_Not\_True}}{}%
 }}
 
 
-\newcommand{\cndruleOpXXPEXXPEXXNotFalse}[1]{\cndrule[#1]{%
+\newcommand{\cndruleOpXXPEXXPEXXNotXXFalse}[1]{\cndrule[#1]{%
 }{
 \langle  \cnkw{not} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{True}  \rangle}{%
-{\cndrulename{Op\_PE\_PE\_NotFalse}}{}%
+{\cndrulename{Op\_PE\_PE\_Not\_False}}{}%
 }}
 
 
@@ -2529,8 +2529,8 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 \newcommand{\cndefnOpXXPEXXPE}[1]{\begin{cndefnblock}[#1]{$\langle  pexpr  \rangle  \longrightarrow  \langle  pexpr'  \rangle$}{}
 \cnusedrule{\cndruleOpXXPEXXPEXXArrayShift{}}
 \cnusedrule{\cndruleOpXXPEXXPEXXMemberShift{}}
-\cnusedrule{\cndruleOpXXPEXXPEXXNotTrue{}}
-\cnusedrule{\cndruleOpXXPEXXPEXXNotFalse{}}
+\cnusedrule{\cndruleOpXXPEXXPEXXNotXXTrue{}}
+\cnusedrule{\cndruleOpXXPEXXPEXXNotXXFalse{}}
 \cnusedrule{\cndruleOpXXPEXXPEXXArithXXBinop{}}
 \cnusedrule{\cndruleOpXXPEXXPEXXRelXXBinop{}}
 \cnusedrule{\cndruleOpXXPEXXPEXXBoolXXBinop{}}
@@ -2634,10 +2634,10 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 % defns opsem_jtype
 %% defn SE_TE
 \newcommand{\cndruleOpXXSEXXTEXXCCall}[1]{\cndrule[#1]{%
-\cnpremise{pval  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}}%
+\cnpremise{mem\_ptr  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}}%
 \cnpremise{\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{arg}  \gg  \sigma  \cnsym{;}  \cnnt{ret}}%
 }{
-\langle  \cnnt{h}  \cnsym{;}  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  pval  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr  )   {:}   \sigma  (  \cnnt{ret}  )   \rangle}{%
+\langle  \cnnt{h}  \cnsym{;}  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr  )   {:}   \sigma  (  \cnnt{ret}  )   \rangle}{%
 {\cndrulename{Op\_SE\_TE\_CCall}}{}%
 }}
 
@@ -2775,6 +2775,14 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 \end{cndefnblock}}
 
 %% defn Memop_Tval
+\newcommand{\cndruleOpXXMemopXXTValXXRelXXBinop}[1]{\cndrule[#1]{%
+\cnpremise{ bool\_value  \, \equiv \,   mem\_int_{{\mathrm{1}}}    \mathbin{ binop_{rel} }    mem\_int_{{\mathrm{2}}}  }%
+}{
+\langle  \cnnt{h}  \cnsym{;}  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{rel} } \, mem\_int_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{done} \, bool\_value  \rangle}{%
+{\cndrulename{Op\_Memop\_TVal\_Rel\_Binop}}{}%
+}}
+
+
 \newcommand{\cndruleOpXXMemopXXTValXXIntFromPtr}[1]{\cndrule[#1]{%
 \cnpremise{ mem\_int  \, \equiv \, \cnkw{cast\_ptr\_to\_int} \,  mem\_ptr }%
 }{
@@ -2815,6 +2823,7 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 }}
 
 \newcommand{\cndefnOpXXMemopXXTval}[1]{\begin{cndefnblock}[#1]{$\langle  \cnnt{h}  \cnsym{;}  mem\_op  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  tval  \rangle$}{}
+\cnusedrule{\cndruleOpXXMemopXXTValXXRelXXBinop{}}
 \cnusedrule{\cndruleOpXXMemopXXTValXXIntFromPtr{}}
 \cnusedrule{\cndruleOpXXMemopXXTValXXPtrFromInt{}}
 \cnusedrule{\cndruleOpXXMemopXXTValXXPtrValidForDeref{}}
