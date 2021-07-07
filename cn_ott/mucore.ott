@@ -890,6 +890,8 @@ grammar
     | cdot                 ::   :: empty
     | N , term_aux         ::   :: cons
     | </ Ni // , // i />   ::   :: concat
+    | [ subs ] N           :: M X :: subs  {{ tex [[ subs ]] ( [[N]] ) }} {{ ocaml SUB_N_CTX [[subs]] [[N]] }}
+    | ( N )                :: S X :: paren {{ tex [[ N ]] }} {{ ocaml [[N]] }}
 
 
 grammar
@@ -1428,14 +1430,14 @@ defns
 
     C ; L ; N |- mu_pexpr_aux => y1 : base_type1 . term1
     mu_sym_or_pattern : base_type1 ~> C1 with term_aux
-    C , C1 ; L ; N , [ term_aux / y1 , cdot ] term1 , N1 |- mu_tpexpr <= y2 : base_type2 . term2
+    C , C1 ; L ; N , [ term_aux / y1 , cdot ] term1 |- mu_tpexpr <= y2 : base_type2 . term2
     -------------------------------------------------------------------------------------------- :: Let
     C ; L ; N |- let mu_sym_or_pattern = mu_pexpr_aux in mu_tpexpr <= y2 : base_type2 . term2
 
 
     C ; L ; N |- mu_tpexpr_aux1 <= y1 : base_type1 . term1
     mu_sym_or_pattern : base_type1 ~> C1 with term_aux
-    C , C1 ; L ; N , [ term_aux / y1 , cdot ] term1 , N1 |- mu_tpexpr <= y2 : base_type2 . term2
+    C , C1 ; L ; N , [ term_aux / y1 , cdot ] term1 |- mu_tpexpr <= y2 : base_type2 . term2
     ------------------------------------------------------------------------------------------------------------------------------ :: LetT
     C ; L ; N |- let mu_sym_or_pattern : ( y1 : base_type1 . term1 ) = mu_tpexpr_aux1 in mu_tpexpr_aux2 <= y2 : base_type2 . term2
 
@@ -1659,14 +1661,14 @@ defns
 
     C ; L ; N |- mu_pexpr_aux => y : base_type . term
     mu_sym_or_pattern : base_type ~> C1 with term_aux1
-    C , C1 ; L ; N , [ term_aux1 / y , cdot ] term , N1 ; R |- mu_texpr <= ret
+    C , C1 ; L ; N , [ term_aux1 / y , cdot ] term ; R |- mu_texpr <= ret
     ------------------------------------------------------------------------- :: LetP
     C ; L ; N ; R |- let mu_sym_or_pattern = mu_pexpr_aux in mu_texpr <= ret
 
 
     C ; L ; N |- mu_tpexpr_aux <= y : base_type . term
     mu_sym_or_pattern : base_type ~> C1 with term_aux1
-    C , C1 ; L ; N , [ term_aux1 / y , cdot ] term , N1 ; R |- mu_texpr <= ret
+    C , C1 ; L ; N , [ term_aux1 / y , cdot ] term ; R |- mu_texpr <= ret
     ---------------------------------------------------------------------------------------------------- :: LetPT
     C ; L ; N ; R |- let mu_sym_or_pattern : ( y : base_type . term ) = mu_tpexpr_aux in mu_texpr <= ret
 
@@ -2256,7 +2258,12 @@ defns
 
 
     C ; L ; N ; R [= C' ; L' ; N' ; R'
-    ------------------------------------------------------- :: Cons_Res
+    ---------------------------------------------- :: Cons_Res_Anon
+    C ; L ; N ; R , res [= C' ; L' ; N' ; R' , res
+
+
+    C ; L ; N ; R [= C' ; L' ; N' ; R'
+    ------------------------------------------------------- :: Cons_Res_Named
     C ; L ; N ; R , x : res [= C' ; L' ; N' ; R' , x : res
 
 
@@ -2279,41 +2286,36 @@ defns
 
 
   defn
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) :: :: Ty_Subs :: Ty_Subs_ by
+    C ; L ; R |- ( subs ) : ( C' ; L' ; R' ) :: :: Ty_Subs :: Ty_Subs_ by
 
 
     ---------------------------------------------------------- :: Empty
-    C ; L ; N ; cdot |- ( cdot ) : ( cdot ; cdot ; cdot ; cdot )
+    C ; L ; cdot |- ( cdot ) : ( cdot ; cdot ; cdot )
 
 
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
     C ; L ; N |- mu_pval_aux => base_type
-    ---------------------------------------------------------------------------------- :: Cons_Comp
-    C ; L ; N ; R |- ( mu_pval_aux / x , subs ) : ( C' , x : base_type ; L' ; N' ; R' )
+    -------------------------------------------------------------------------- :: Cons_Comp
+    C ; L ; R |- ( mu_pval_aux / x , subs ) : ( C' , x : base_type ; L' ; R' )
 
 
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
     C ; L ; N |- mu_pval_aux => base_type
-    ---------------------------------------------------------------------------------- :: Cons_Log
-    C ; L ; N ; R |- ( mu_pval_aux / x , subs ) : ( C' ; L' , x : base_type ; N' ; R' )
+    -------------------------------------------------------------------------- :: Cons_Log
+    C ; L ; R |- ( mu_pval_aux / x , subs ) : ( C' ; L' , x : base_type ; R' )
 
 
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
-    ------------------------------------------------------------- :: Cons_Phi
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' , term_aux ; R' )
-
-
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
     % ASK is checking here a problem?
     C ; L ; N ; R1 |- res_term <= res
-    -------------------------------------------------------------------------------- :: Cons_Res_Named
-    C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
+    ----------------------------------------------------------------------- :: Cons_Res_Named
+    C ; L ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; R' , x : res )
 
 
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
     % ASK is checking here a problem?
     C ; L ; N ; </ cdot , resi // i /> |- res_term <= res
-    ---------------------------------------------------------------------------------------------------- :: Cons_Res_Anon
-    C ; L ; N ; R , </ cdot , resi // i /> |- ( subs ) :  ( C' ; L' ; N' ; R' , </ cdot , resi // i /> )
+    ------------------------------------------------------------------------------------------- :: Cons_Res_Anon
+    C ; L ; R , </ cdot , resi // i /> |- ( subs ) :  ( C' ; L' ; R' , </ cdot , resi // i /> )
 
 

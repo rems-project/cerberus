@@ -62,7 +62,7 @@ $\CLNRp \vdash J$.
         \end{pfenum}
     }
 
-    \prove{$\CLNRp \vdash J$.}
+    \prove{$\CLNRp \vdash J$.\\}
 \end{proof}
 
 \section{Substitution}
@@ -70,7 +70,7 @@ $\CLNRp \vdash J$.
 \subsection{Weakening for Substitution}
 
 Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
-\ctxL'' ; \ctxN'' ; \ctxR'' )$.
+\ctxL'' ; \ctxR'' )$.
 
 \begin{proof}
     \textsc{Proof Strategy:} Induction over the substitution.\\
@@ -78,29 +78,102 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
     \assume{%
         \begin{pfenum}
             \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \sqsubseteq  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.
-            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.\\
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.\\
         \end{pfenum}
     }
 
-    \prove{$\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.}
+    \prove{$\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.\\}
 \end{proof}
 
 \subsection{Substitution Lemma}\label{subsec:sub_lemma}
 
-If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ and $\CLNRp \vdash
-J$ then $\CLNR \vdash \sigma ( J )$. 
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ and $\CLNRp \vdash
+J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$. 
 
 \begin{proof}
     \textsc{Proof Strategy:} Induction over the typing judgements.\\
 
     \assume{%
         \begin{pfenum}
-            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.
             \item $\CLNRp \vdash J$.\\
         \end{pfenum}
     }
 
-    \prove{$\CLNR \vdash \sigma ( J )$.}
+    \prove{$\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.\\}
+
+    \step{<1>a}{%
+        \case{%
+            \textsc{Ty\_PVal\_Obj*},
+            \textsc{Ty\_PVal\_\{Obj,Loaded,Unit,True,False,Ctor\_Nil\}}.
+        }{%
+            \pf\ No free variables in $J$ so $\sigma ( J ) = J$ and the rules
+            do not depend on the environment, so we are done. 
+        }
+    }
+
+    \step{<1>b}{%
+        \case{%
+            \textsc{Ty\_PVal\_\{List,Tuple,Ctor\_Cons,Ctor\_Tuple,Ctor\_Array,Ctor\_Specified\}}. 
+        }{%
+            \pf\ By induction and then definition of substitution over values.
+        }
+    }
+
+    \step{<1>c}{%
+        \case{%
+            \textsc{Ty\_PVal\_Error}.
+            \suffices{ $\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \cnkw{false}  \cnsym{)}$. }
+        }{%
+            % Ask: how to deduce from smt ( N' => false ) ?
+            \pf\ TODO
+        }
+    }
+
+    \step{<1>d}{%
+        \case{%
+            \textsc{Ty\_PVal\_Struct}.
+        }{%
+    % Symbol_sym : struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
+    % </ C ; L ; N |- mu_pvali => to_base ( cti ) // i />
+    % ------------------------------------------------------------------------------------------------ :: Struct
+    % C ; L ; N |- ( struct ty_tag ) { </ dot Symbol_identifieri = mu_pvali // i /> } => struct ty_tag
+        }
+    }
+    % \textsc{Ty\_PVal*}, \textsc{Ty\_PE\_Val}, \textsc{Ty\_TPVal*},
+    % \textsc{Ty\_TVal*}, \textsc{Ty\_Seq\_TE\_TVal}.
+    % \textsc{Ty\_PE\_Array\_Shift}.
+    % \textsc{Ty\_PE\_Member\_Shift}.
+    % \textsc{Ty\_PE\_Not}.
+    % \textsc{Ty\_PE\_\{Arith,Rel\}\_Binop}.
+    % \textsc{Ty\_PE\_Bool\_Binop}.
+    % \textsc{Ty\_PE\_Call}.
+    % \textsc{Ty\_PE\_Assert\_Undef}.
+    % \textsc{Ty\_PE\_Bool\_To\_Integer}.
+    % \textsc{Ty\_PE\_WrapI}.
+    % \textsc{Ty\_TPE\_\{If,Let,LetT,Case\}}.
+    % \textsc{Ty\_Action\_Create}.
+    % \textsc{Ty\_Action\_Load}.
+    % \textsc{Ty\_Action\_Store}.
+    % \textsc{Ty\_Action\_Kill\_Static}.
+    % \textsc{Ty\_Memop\_Rel\_Binop}.
+    % \textsc{Ty\_Memop\_IntFromPtr}.
+    % \textsc{Ty\_Memop\_PtrFromInt}.
+    % \textsc{Ty\_Memop\_PtrValidForDeref}.
+    % \textsc{Ty\_Memop\_PtrWellAligned}.
+    % \textsc{Ty\_Memop\_PtrArrayShift}.
+    % \textsc{Ty\_Seq\_E\_CCall}.
+    % \textsc{Ty\_Seq\_E\_Proc}.
+    % \textsc{Ty\_Is\_E\_Memop}.
+    % \textsc{Ty\_Is\_E\_\{Neg\_\}Action}.
+    % \textsc{Ty\_Seq\_TE\_\{LetP,LetPT\}}.
+    % \textsc{Ty\_Seq\_TE\_Let}.
+    % \textsc{Ty\_Seq\_TE\_LetT}.
+    % \textsc{Ty\_Seq\_TE\_Case}.
+    % \textsc{Ty\_Seq\_TE\_If}.
+    % \textsc{Ty\_Seq\_TE\_Run}.
+    % \textsc{Ty\_Seq\_TE\_Bound}.
+    % \textsc{Ty\_Is\_TE\_LetS}.
 
     \step{<1>1}{%
         \case{%
@@ -128,11 +201,11 @@ J$ then $\CLNR \vdash \sigma ( J )$.
     \begin{proof}
         \step{<2>1}{By induction,
         \begin{pfenum}
-            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash   \sigma  (  pexpr  )   \Rightarrow  \cnmv{y_{{\mathrm{1}}}}  {:}  \beta  . \:   \sigma  (  \cnnt{term_{{\mathrm{1}}}}  ) $
-            \item $\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{,}  \cnmv{y_{{\mathrm{1}}}}  {:}  \beta  \cnsym{;}  \Phi  \cnsym{,}  \cnnt{term_{{\mathrm{1}}}}  \cnsym{,}  \Phi'  \vdash   \sigma  (  tpexpr  )   \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta  . \:   \sigma  (  \cnnt{term_{{\mathrm{2}}}}  ) $.
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}   \sigma  (  \Phi'  )   \vdash   \sigma  (  pexpr  )   \Rightarrow  \cnmv{y_{{\mathrm{1}}}}  {:}  \beta  . \:   \sigma  (  \cnnt{term_{{\mathrm{1}}}}  ) $.
+            \item $\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{;}    \sigma  (  \Phi'  )    \cnsym{,}   term  \cnsym{/}  \cnmv{y_{{\mathrm{1}}}}  \cnsym{,}  \sigma  (  \cnnt{term_{{\mathrm{1}}}}  )   \vdash   \sigma  (  tpexpr  )   \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:   \sigma  (  \cnnt{term_{{\mathrm{2}}}}  ) $.
         \end{pfenum}}
 
-        \step{<2>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash   \sigma  (  \cnkw{let} \, ident\_or\_pattern  =  pexpr \, \cnkw{in} \, tpexpr  )   \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:   \sigma  (  \cnnt{term_{{\mathrm{2}}}}  ) $ as required.}
+        \step{<2>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}   \sigma  (  \Phi'  )   \vdash   \sigma  (  \cnkw{let} \, ident\_or\_pattern  =  pexpr \, \cnkw{in} \, tpexpr  )   \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:   \sigma  (  \cnnt{term_{{\mathrm{2}}}}  ) $ as required.}
     \end{proof}
 
     \step{<1>3}{%
@@ -175,23 +248,23 @@ J$ then $\CLNR \vdash \sigma ( J )$.
 
 \subsection{Identity Extension}
 
-If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ then $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ then $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.
 
 \begin{proof}
     \pfsketch{ Induction over the substitution.\\}
 
     \assume{%
-        $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
+        $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
     }
 
     \prove{%
-        $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.
+        $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.\\
     }
 
-    \step{<1>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnsym{(}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{)}$.\\
-        \pf\ By induction on each of $\ctxC ; \ctxL ; \ctxN ; \ctxR_1$.}
+    \step{<1>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnsym{(}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{)}$.\\
+        \pf\ By induction on each of $\ctxC ; \ctxL ; \ctxR_1$.}
 
-    \step{<1>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$ \\
+    \step{<1>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$ \\
         \pf\ By induction on $\sigma$ with base case as above.}
 
 \end{proof}
@@ -199,31 +272,31 @@ If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}
 
 \subsection{Let-friendly Substitution Lemma}\label{subsec:let_sub_lemma}
 
-If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ and $\ctxC ,
-\ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$ then
-$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$ and $\ctxC ,
+\ctxC' ; \ctxL , \ctxL' ; \ctxN ; \ctxR_1 , \ctxR' \vdash J$ then
+$\ctxC ; \ctxL ; \sigma ( \ctxN ) ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
 
 \begin{proof}
     \pfsketch{ Apply identity extension then substitution lemma.\\}
 
     \assume{%
         \begin{pfenum}
-            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\label{usl1}
-            \item $\ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN , \ctxN' ; \ctxR_1 , \ctxR' \vdash J$.\\
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\label{usl1}
+            \item $\ctxC , \ctxC' ; \ctxL , \ctxL' ; \ctxN ; \ctxR_1 , \ctxR' \vdash J$.\\
         \end{pfenum}
     }
 
     \prove{%
-        $\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.
+        $\ctxC ; \ctxL ; \sigma ( \ctxN ) ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.\\
     }
 
-    \step{<1>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \Phi  \cnsym{,}  \Phi'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.\\
+    \step{<1>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{,}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{,}  \mathcal{C}'  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}'  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}'  \cnsym{)}$.\\
         \pf\ Apply identity extension to \ref{usl1}.}\pflabel{usl2}
 
-    \step{<1>2}{$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash ( \sigma , \mathrm{id} ) ( J )$.\\
+    \step{<1>2}{$\ctxC ; \ctxL ; \sigma ( \ctxN ) ; \ctxR_1 , \ctxR \vdash ( \sigma , \mathrm{id} ) ( J )$.\\
     \pf\ Apply substitution lemma (\ref{subsec:sub_lemma}) to \pfref{usl2}.}
 
-    \step{<1>3}{$\ctxC ; \ctxL ; \ctxN ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.\\
+    \step{<1>3}{$\ctxC ; \ctxL ; \sigma( \ctxN ) ; \ctxR_1 , \ctxR \vdash \sigma ( J )$.\\
         \pf\ $\mathrm{id}( J )  = J$.}
 
 \end{proof}
@@ -241,20 +314,23 @@ $\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \ma
 
 \subsection{Progress Statement and Proof}\label{subsec:progress}
 
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
-either $\mathrm{value}(e)$, or it is unreachable, or $\forall h : R.\ \exists
-e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ and all pattern in $e$ are
+exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
+: R.\ \exists e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
 
 \begin{proof}
     \textsc{Proof Strategy:} Induction over the typing rules.\\
 
     \assume{%
-        $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$.
+        \begin{pfenum}
+            \item $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$.
+            \item All patterns in $e$ are exhaustive.
+        \end{pfenum}
     }
 
     \prove{%
-        Either $\mathrm{value}(e)$, or it is unreachable, or $\forall h : R.\
-        \exists e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
+        Either $e$ is a value, or it is unreachable, or $\forall h : R.\
+        \exists e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.\\
     }
 
     \step{<1>1}{%
@@ -346,7 +422,7 @@ e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
 
     \step{<1>10}{%
         \case{%
-                \textsc{Ty\_PE\_WrapI}.
+            \textsc{Ty\_PE\_WrapI}.
         }{%
             \pf\ $pval$ must be a $mem\_int$ and so
             \textsc{Op\_PE\_PE\_WrapI}.
@@ -531,10 +607,9 @@ e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
         \case{%
             \textsc{Ty\_Seq\_TE\_Case}.
         }{%
-            \pf\ We have to show that assuming the case-expression is
-            well-typed, then there is at least one pattern against
-            which $pval$ will match.
-            % ASK
+            \pf\ By assumption that all patterns are exhaustive, there is
+            at least one pattern against which $pval$ will match,
+            so \textsc{Op\_STE\_TE\_Case}.
         }
     }
 
@@ -590,7 +665,7 @@ If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_2.\
     }
 
     \prove{%
-        $h' = h_1' + h_2$.
+        $h' = h_1' + h_2$.\\
     }
 
     \pfsketch{%
@@ -642,7 +717,7 @@ First, computational part.
         \end{pfenum}}
 
     \prove{%
-        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{)}$.
+        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{)}$.\\
     }
 
     \pfsketch{ By induction over \ref{wt_sub_comp-assm2}.}
@@ -653,8 +728,7 @@ First, computational part.
         }{
             $\sigma = pval  \cnsym{/}  \cnmv{x}  \cnsym{,}  \cdot$ and
             $\mathcal{C} = \cdot  \cnsym{,}  \cnmv{x}  {:}  \beta$.\\
-            \pf\ By \textsc{Ty\_Subs\_Cons\_Comp} and \ref{wt_sub_comp-assm1} and
-            \textsc{Ty\_Subs\_Cons\_Phi}.
+            \pf\ By \textsc{Ty\_Subs\_Cons\_Comp} and \ref{wt_sub_comp-assm1}.
         }
     }
 
@@ -688,7 +762,7 @@ Now, resource part.
         \end{pfenum}}
 
     \prove{%
-        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.
+        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
     }
 
     \pfsketch{ By induction over \ref{wt_sub_res-assm2}.}
@@ -736,7 +810,7 @@ Now, resource part.
         \case{%
             \textsc{Ty\_Pat\_Res\_Conj}.
         }{%
-            \pf\ By induction and \textsc{Ty\_Subs\_Cons\_Phi}.
+            \pf\ By induction.
         }
     }
 
@@ -768,14 +842,14 @@ Now, full proof.
     }
 
     \prove{%
-        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.
+        $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
     }
 
     \pfsketch{ Induction on \ref{wt_sub-assm3}. Base case by \textsc{Ty\_Subs\_Empty}.
         \textsc{Ty\_Ret\_Pat\_\{Comp,Res\}} by induction, well-typed computational /
         resource substitutions and concatenating well-typed substitutions.
         \textsc{Ty\_Ret\_Pat\_\{Log,Phi\}} by induction and
-        \textsc{Ty\_Subs\_Cons\_\{Log,Phi\}}.}
+        \textsc{Ty\_Subs\_Cons\_Log}.}
 
 \end{proof}
 
@@ -1244,7 +1318,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
         \step{<2>4}{
             \pflet{$\ctxC ; \ctxL ; \ctxN ; \ctxR'$ be the the type of
-                substitution $\sigma$: $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.}
+                substitution $\sigma$: $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.}
             % TODO fix this
             \pf\ Constructing such a substitution requires $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval_{\cnmv{i}}  \Rightarrow  \beta_{\cnmv{i}}$ for each $\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}} \, \in \, \mathcal{C}$ or $\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}} \, \in \, \mathcal{L}$ and $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \vdash  \cnnt{res\_term_{\cnmv{i}}}  \Leftarrow  \cnnt{res_{\cnmv{i}}}$ for each $ res_i \in \ctxR'$ which
             can be deduced from \stepref{<2>2}.}
@@ -1398,7 +1472,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>2}{$\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma$.\\
             \pf\ By inversion on \ref{letT_sub-assm2}.}
 
-        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{)}$.\\
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{)}$.\\
             \pf\ By \stepref{<2>1}.1,2 and \stepref{<2>2} using lemma \ref{subsec:wt_sub}.}
 
         \step{<2>4}{By \stepref{<2>1}.3 and \stepref{<2>3} and lemma
@@ -1469,13 +1543,10 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \end{pfenum}
             \pf\ By inversion on \ref{case-assm2}.}
 
-        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma_{\cnmv{j}}  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{\cnmv{i}}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{)}$.\\
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma_{\cnmv{j}}  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{\cnmv{i}}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{)}$.\\
             \pf\ By lemma \ref{subsec:wt_sub}.}
 
-        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma_{\cnmv{j}}  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{\cnmv{i}}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  term_{\cnmv{j}}  =   pval_{\cnmv{j}}   \cnsym{;}  \mathcal{R}  \cnsym{)}$.\\
-            \pf\ By \stepref{<2>3}, \textsc{Ty\_Subs\_Cons\_Phi} and \textsc{Ty\_Subs\_Cons\_Res*}.}
-
-        \step{<2>5}{By \stepref{<1>32}.3 and \ref{subsec:sub_lemma}, we are done.}
+        \step{<2>5}{By \stepref{<2>.1}.3 and \ref{subsec:sub_lemma}, we are done.}
 
     \end{proof}
 
@@ -1493,7 +1564,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret}$.
             }
-            \pf\ Invert \ref{if-assm1}, note $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnkw{true}  =  \cnkw{true}  \cnsym{;}  \mathcal{R}  \cnsym{)}$ and then
+            \pf\ Invert \ref{if-assm1}, note $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \cnsym{)}$ and then
             apply substitution lemma (\ref{subsec:sub_lemma}).
         }
     }
