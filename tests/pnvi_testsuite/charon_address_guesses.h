@@ -1,4 +1,4 @@
-// MUST CALL cerberus-caesium with --nolibc
+// MUST CALL cerberus-vip with --nolibc
 
 #define ADDRESS_PFI_1I   0xffffffdc
 #define ADDRESS_PFI_1IG  0xffffffd4
