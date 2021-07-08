@@ -455,8 +455,9 @@ module Concrete : Memory = struct
       | MerrPtrFromInt
       | MerrPtrComparison
       | MerrArrayShift
-      | MerrWIP _ ->
-          Location_ocaml.other "Concrete" in
+      | MerrWIP _
+      | MerrVIP _ ->
+            Location_ocaml.other "Concrete" in
     let open Nondeterminism in
     match undefinedFromMem_error err with
       | Some ubs ->

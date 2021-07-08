@@ -20,14 +20,14 @@
  (action (copy main.ml main_symbolic.ml)))
 
 (executable
- (name main_caesium)
- (public_name cerberus-caesium)
+ (name main_vip)
+ (public_name cerberus-vip)
  (package cerberus)
- (modules main_caesium)
+ (modules main_vip)
  (libraries result cmdliner str unix
-  cerb_frontend cerb_backend mem_caesium util))
+  cerb_frontend cerb_backend mem_vip util))
 
 (rule
- (target main_caesium.ml)
+ (target main_vip.ml)
  (deps main.ml)
- (action (copy main.ml main_caesium.ml)))
+ (action (copy main.ml main_vip.ml)))

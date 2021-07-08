@@ -54,7 +54,7 @@ CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
 # Running ci tests
 for file in "${citests[@]}"
 do
-  $CERB --exec --batch ci/$file > tmp/result 2> tmp/stderr
+  $CERB --exec --batch --nolibc ci/$file > tmp/result 2> tmp/stderr
   if [ -f ./ci/expected/$file.expected ]; then
     if [[ $file == *.error.c ]]; then 
       cmp --silent tmp/stderr ci/expected/$file.expected

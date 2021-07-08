@@ -189,8 +189,9 @@ let fail err =
     | MerrPtrFromInt
     | MerrPtrComparison
     | MerrArrayShift
-    | MerrWIP _ ->
-        Location_ocaml.other "VIP WIP error" in
+    | MerrWIP _
+    | MerrVIP _ ->
+        Location_ocaml.other "VIP" in
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
     | Some ubs ->
@@ -254,7 +255,7 @@ let fetch_bytes bytemap base_addr n_bytes : AbsByte.t list =
             Printf.printf "FETCH WTF ==> %s\n" (N.to_string addr); *)
          b
      | None ->
-         failwith "AbsByte.{ prov= Prov_empty; value= None; ptrfrag_idx= None }"
+         failwith "INTERNAL ERROR: Vip.AbsByte.{ prov= Prov_empty; value= None; ptrfrag_idx= None }"
  ) (List.init n_bytes (fun z ->
         (* NOTE: the reversal in the offset is to model
            little-endianness *)
@@ -331,7 +332,7 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
         Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
         let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
           | None ->
-              failwith "the VIP memory model requires a complete implementation"
+              failwith "INTERNAL ERROR: the VIP memory model requires a complete implementation"
           | Some z ->
               z in
         begin match ptrval with
@@ -341,7 +342,7 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
                 (fun _ -> AbsByte.{prov= Prov_empty; value= (Some '\000'); ptrfrag_idx= None})
           | PVfunptr (Symbol.Symbol (file_dig, n, opt_name)) ->
               (* TODO: *)
-              failwith "TODO repr funptr"
+              not_implemented "VIP.repr => function pointer"
               (* (begin match opt_name with
                 | Some name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
                 | None -> funptrmap
@@ -433,7 +434,7 @@ let interp_bytes xs : [ `SPECIFIED of   [ `PROV of allocation_id | `NOPROV ]
            `SPECIFIED (prov_status', prov2_status', c :: cs, ptrfrag_status')
  ) (`SPECIFIED (`NOPROV, `NOPROV2, [], `VALID_PTRFRAG 0)) (List.rev xs) in
 if List.length bs < Common.sizeof cty then
- failwith "abst, |bs| < sizeof(ty)";
+ failwith "INTERNAL ERROR: Vip.abst, |bs| < sizeof(ty)";
 match ty with
  | Void
  | Array (_, None)
@@ -483,8 +484,9 @@ match ty with
              let addr = int_of_bytes false cs in
              if N.(equal addr zero) then
                MVpointer (ref_ty, PVnull)
-             else if (print_endline "TODO: function pointer"; false) then
-               failwith "TODO: abst function pointer"
+                     (* TODO: fix this when implementing funptr *)
+             else if false then
+               not_implemented "Vip.abst ==> function pointer"
              else begin match prov2_status, ptrfrag_status with
                | `PROV2 alloc_id, `VALID_PTRFRAG _ ->
                    (* TODO: I think that if we have a VALID_PTRFRAG,
@@ -501,11 +503,20 @@ match ty with
              MVunspecified cty
        end , bs2)
  | Atomic atom_ty ->
-     failwith "TODO: abst Atomic"
+     (* NOTE: we are giving the same representation for atomic types as
+              the type they are derived from *)
+     self atom_ty bs
  | Struct tag_sym ->
-     failwith "TODO: abst Struct"
- | Union tag_sym ->
-     failwith "TODO: abst, Union (as value)"
+     let (bs1, bs2) = L.split_at (Common.sizeof cty) bs in
+     let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
+       let pad = memb_offset - previous_offset in
+       let (mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
+       ((memb_ident, memb_ty, mval)::acc_xs, memb_offset + Common.sizeof memb_ty, acc_bs')
+     ) ([], 0, bs1) (fst (Common.offsetsof (Tags.tagDefs ()) tag_sym)) in
+     (* TODO: check that bs' = last padding of the struct *)
+     (MVstruct (tag_sym, List.rev rev_xs), bs2)
+| Union tag_sym ->
+     not_implemented "Vip.abst, Union (as value)"
 
 
 (* "addr \not\in [a_i .. a_i + n_i]" *)
@@ -537,7 +548,7 @@ let allocate_object tid pref al_ival ty init_opt : pointer_value memM =
 
 
 let allocate_region tid pref al_ival sz_ival : pointer_value memM =
-  failwith "TODO VIP.allocate_region"
+  fail (MerrOther "VIP does not support allocate_region()")
 
 
 let kill loc is_dyn ptrval : unit memM =
@@ -546,13 +557,13 @@ let kill loc is_dyn ptrval : unit memM =
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
           (* TODO: this should be a Cerberus internal error *)
-          fail (MerrOther "attempted to kill dead allocation")
+          fail (MerrUndefinedFree (loc, Free_dead_allocation))
         else
           update (fun st ->
             { st with allocations= IntMap.add alloc_id {alloc with killed= true} st.allocations}
           )
     | _ ->
-        fail (MerrOther "VIP.kill() invalid pointer value (NULL, @empty prov, or funptr)")
+        fail (MerrVIP (VIP_free_invalid_pointer loc))
 
 
 let load loc ty ptrval : (footprint * mem_value) memM =
@@ -655,14 +666,14 @@ let rel_op_ptrval f_op ptrval1 ptrval2 : bool memM =
     , PVloc (Prov_some alloc_id2, addr2) when N.equal alloc_id1 alloc_id2 ->
         lookup_alloc alloc_id1 >>= fun alloc ->
         if alloc.killed then
-          failwith "TODO: UB rel_op_ptrval ==> killed allocation"
+          fail (MerrVIP VIP_relop_killed)
         else if not (in_bounds addr1 alloc && in_bounds addr2 alloc) then
-          failwith "TODO: UB rel_op_ptrval ==> out of bound allocation"
+          fail (MerrVIP VIP_relop_out_of_bound)
         else
           (* VIP-rel-op-ptr *)
           return (f_op addr1 addr2)
     | _ ->
-        failwith "TODO: UB rel_op_ptrval ==> invalid pointer"
+        fail (MerrVIP VIP_relop_invalid)
 
 let lt_ptrval ptrval1 ptrval2 : bool memM =
   rel_op_ptrval N.less ptrval1 ptrval2
@@ -689,14 +700,13 @@ let diff_ptrval diff_ty ptrval1 ptrval2 : integer_value memM =
                 diff_ty in
           return (IVint (N.div (N.sub addr1 addr2) (N.of_int (Common.sizeof diff_ty'))))
         else
-          failwith "VIP.diff_ptrval ==> out of bound allocs" (* TODO *)
+          fail (MerrVIP VIP_diffptr_out_of_bound)
     | _ ->
-      (* TODO: more precise error message? *)
       fail MerrPtrdiff
 
 let update_prefix: (Symbol.prefix * mem_value) -> unit memM =
   fun _ ->
-    prerr_endline "TODO: VIP.update_prefix isn't doing anything";
+    (* TODO: VIP.update_prefix isn't doing anything *)
     return ()
 let prefix_of_pointer: pointer_value -> string option memM =
   fun _ -> return None (* TODO *)
@@ -740,13 +750,15 @@ let in_range n ity =
 let ptrcast_ival ity ref_ty ival : pointer_value memM =
   match ival with
     | IVloc (Prov_empty, _) ->
-        failwith "TODO: UB, ptrcast_ival() @empty"
+        fail (MerrVIP VIP_ptrcast_empty)
     | IVloc (Prov_some alloc_id, a) ->
         lookup_alloc alloc_id >>= fun alloc ->
         if N.(equal a zero) then
           return PVnull
-        else if (print_endline "TODO: ptrcast_ival, IVloc => 𝑎 = address_of_function(ident)"; false) then
-          failwith "funptr(ident)"
+                (* TODO: fix this when implementing funptr *)
+                (* if addr = address_of_function(ident) then PVfunptr(ident) *)
+        else if false then
+          not_implemented "Vip.ptrcast_ival => function pointer (IVloc)"
         else if    not alloc.killed
                 && N.less_equal alloc.base a
                 && N.less_equal a (N.add alloc.base alloc.length) then
@@ -756,8 +768,10 @@ let ptrcast_ival ity ref_ty ival : pointer_value memM =
     | IVint a ->
         if N.(equal a zero) then
           return PVnull
-        else if (print_endline "TODO: ptrcast_ival, IVint => 𝑎 = address_of_function(ident)"; false) then
-          failwith "funptr(ident)"
+                (* TODO: fix this when implementing funptr *)
+                (* if addr = address_of_function(ident) then PVfunptr(ident) *)
+        else if false then
+          not_implemented "Vip.ptrcast_ival => function pointer (IVint)"
         else
           return (PVloc (Prov_empty, a))
 
@@ -771,31 +785,32 @@ let intcast_ptrval ref_ty ity ptrval : integer_value memM =
         (* VIP-cast-ptr-to-int-null *)
         return (IVint N.zero)
     | PVloc (Prov_empty, addr) ->
-        failwith "TODO: UB, intcast_ptrval() @empty pointer"
+        fail (MerrVIP (VIP_intcast VIP_empty))
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
-          failwith "TODO: UB, intcast_ptrval() killed"
+          fail (MerrVIP (VIP_intcast VIP_killed))
         else if not (in_range addr ity) then
-          failwith "TODO: UB, intcast_ptrval() address not in_range"
+          fail (MerrVIP VIP_intcast_not_in_range)
         else
-          (* VIP-cast-int-to-ptr-int *)
-          (* Printf.printf "IN intcast_ptrval() ==> IVloc addr: %s\n" (N.to_string addr); *)
           return (IVloc (Prov_some alloc_id, addr))
     | PVfunptr sym ->
-        failwith "TODO: intcast_ptrval() fun pointer"
+      fail (MerrVIP (VIP_intcast VIP_funptr))
 
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival : pointer_value =
-  (* failwith "VIP memory model should be called SWITCH strict_pointer_arith" *)
+  (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)
   match ptrval with
     | PVnull ->
-      failwith "TODO UB, array_offset ==> NULL"
+        (* TODO *)
+        failwith "UB: array_offset ==> NULL"
     | PVloc (Prov_empty, _) ->
-      failwith "TODO UB, array_offset ==> @empty"
+        (* TODO *)
+        failwith "UB: array_offset ==> @empty"
     | PVloc (Prov_some alloc_id, addr) ->
         (* lookup_alloc alloc_id >>= fun alloc -> *)
         let addr' = N.(add addr (mul (ival_to_int ival) (N.of_int (Common.sizeof ty)))) in
+        (* TODO *)
         (* if alloc.killed then
           failwith "TODO UB, array_offset ==> killed"
         else if not (in_bounds addr' alloc) then
@@ -804,7 +819,8 @@ let array_shift_ptrval ptrval ty ival : pointer_value =
           (* TODO: hack *)
           PVloc (Prov_some alloc_id, addr')
     | PVfunptr sym ->
-      failwith "TODO UB, array_offset ==> funptr"
+        (* TODO *)
+        failwith "UB: array_offset ==> funptr"
 
 let offsetof_ival tagDefs tag_sym membr_ident =
   let (xs, _) = Common.offsetsof tagDefs tag_sym in
@@ -814,14 +830,16 @@ let offsetof_ival tagDefs tag_sym membr_ident =
     | Some (_, _, offset) ->
         IVint (N.of_int offset)
     | None ->
+        (* NOTE: this is an internal error *)
         failwith "VIP.offsetof_ival: invalid membr_ident"
 
 let member_shift_ptrval ptrval tag_sym membr_ident : pointer_value =
+  (* TODO: need an effectful variant in the interface to have the errors inside the monad *)
   match ptrval with
     | PVnull ->
-        failwith "TODO UB, member_offset ==> NULL"
+        failwith "UB: member_offset ==> NULL"
     | PVloc (Prov_empty, _) ->
-        failwith "TODO UB, member_offset ==> @empty"
+        failwith "UB: member_offset ==> @empty"
     | PVloc (Prov_some alloc_id, addr) ->
         let addr' = N.(add addr (ival_to_int (offsetof_ival (Tags.tagDefs ()) tag_sym membr_ident))) in
         PVloc (Prov_some alloc_id, addr')
@@ -834,23 +852,23 @@ let member_shift_ptrval ptrval tag_sym membr_ident : pointer_value =
         else
           PVloc (Prov_some alloc_id, addr') *)
     | PVfunptr sym ->
-        failwith "TODO UB, member_offset ==> funptr"
+        failwith "UB: member_offset ==> funptr"
 
 let eff_array_shift_ptrval ptrval ty ival : pointer_value memM =
   match ptrval with
     | PVnull ->
-        failwith "TODO UB, array_offset ==> NULL"
+        fail (MerrVIP (VIP_array_shift VIP_null))
     | PVloc (Prov_empty, _) ->
-        failwith "TODO UB, array_offset ==> @empty"
+        fail (MerrVIP (VIP_array_shift VIP_empty))
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
           let addr' = N.(add addr (mul (ival_to_int ival) (N.of_int (Common.sizeof ty)))) in
         if not (in_bounds addr' alloc) then
-          failwith "TODO UB, array_offset ==> out-of-bound"
+          fail (MerrVIP (VIP_array_shift VIP_out_of_bound))
         else
           return (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
-        failwith "TODO UB, array_offset ==> funptr"
+        fail (MerrVIP (VIP_array_shift VIP_funptr))
       
 
 let memcpy ptrval1 ptrval2 sz_ival : pointer_value memM =
@@ -911,15 +929,15 @@ let copy_alloc_id ival ptrval : pointer_value memM =
     | PVloc (Prov_some alloc_id, _) ->
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
-          failwith "TODO: UB, copy_alloc_id() killed"
+          fail (MerrVIP (VIP_copy_alloc_id VIP_killed))
         else
           let n = ival_to_int ival in
           if not N.(less_equal alloc.base n && less_equal n (add alloc.base alloc.length)) then
-            failwith "TODO: UB, copy_alloc_id() out of bound"
+            fail (MerrVIP (VIP_copy_alloc_id VIP_out_of_bound))
           else
             return (PVloc (Prov_some alloc_id, n))
     | _ ->
-        failwith "TODO: copy_alloc_id"
+        fail (MerrVIP VIP_copy_alloc_id_invalid)
 
 (* Integer value constructors *)
 let concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value =
