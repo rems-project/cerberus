@@ -455,8 +455,9 @@ module Concrete : Memory = struct
       | MerrPtrFromInt
       | MerrPtrComparison
       | MerrArrayShift
-      | MerrWIP _ ->
-          Location_ocaml.other "Concrete" in
+      | MerrWIP _
+      | MerrVIP _ ->
+            Location_ocaml.other "Concrete" in
     let open Nondeterminism in
     match undefinedFromMem_error err with
       | Some ubs ->
@@ -2513,6 +2514,12 @@ let combine_prov prov1 prov2 =
       | None ->
           fail (MerrWIP "va_list")
     end
+
+  let copy_alloc_id ival ptrval =
+    (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
+    (* the first ctype is the original referenced type, the integerType is the target integer type *)
+    intcast_ptrval Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrcast_ival Ctype.(Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 

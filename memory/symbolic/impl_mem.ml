@@ -599,6 +599,7 @@ let va_copy _ = failwith "Defacto: va_copy"
 let va_arg _ _ = failwith "Defacto: va_arg"
 let va_end _ = failwith "Defacto: va_end"
 let va_list _ = failwith "Defacto: va_list"
+let copy_alloc_id _ _ = failwith "Defactor: copy_alloc_id"
 let concurRead_ival = Defacto_memory.impl_concurRead_ival
 let integer_ival = Defacto_memory.impl_integer_ival
 let max_ival = Defacto_memory.impl_max_ival
