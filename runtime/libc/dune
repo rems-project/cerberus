@@ -4,7 +4,7 @@
  (target libm.co)
  (deps src/math.c include/math.h include/stdint.h include/limits.h)
  (action
-  (run cerberus-vip --nolibc -I include -I include/posix --sequentialise
+  (run cerberus --nolibc -I include -I include/posix --sequentialise
                 --rewrite -o libm.co src/math.c)))
 
 (rule
@@ -133,7 +133,7 @@
        include/string.h
        src/internal.h)
  (action
-  (run cerberus-vip --nolibc -I include -I include/posix --sequentialise
+  (run cerberus --nolibc -I include -I include/posix --sequentialise
                 --rewrite -o libc.co src/ctype.c src/stdio.c src/stdlib.c
                 src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
                 src/uio.c src/internal.c src/vfscanf.c src/signal.c)))
