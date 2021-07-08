@@ -49,6 +49,27 @@ let stringFromFree_error = function
       "Free_out_of_bound"
 end
 
+type vip_kind =
+  | VIP_null
+  | VIP_empty
+  | VIP_killed
+  | VIP_out_of_bound
+  | VIP_funptr
+
+type vip_error =
+  | VIP_free_invalid_pointer of Loc.t (* UB *)
+  | VIP_relop_killed (* UB *)
+  | VIP_relop_out_of_bound (* UB *)
+  | VIP_relop_invalid (* UB *)
+  | VIP_diffptr_out_of_bound (* UB *)
+  | VIP_ptrcast_empty (* UB *)
+  | VIP_intcast of vip_kind (* UB *)
+  | VIP_intcast_not_in_range (* UB *)
+  | VIP_array_shift of vip_kind (* UB *)
+  | VIP_copy_alloc_id of vip_kind (* UB *)
+  | VIP_copy_alloc_id_invalid (* UB *)
+
+
 type mem_error =
   | MerrOutsideLifetime of string (* mem_read_request *)
   | MerrInternal of string
@@ -69,6 +90,9 @@ type mem_error =
   | MerrArrayShift
   
   | MerrWIP of string
+
+    (* for the VIP memory model (should add a mechanism in the memory interface to expose custom errors) *)
+  | MerrVIP of vip_error
 
 instance (Show mem_error)
   let show = function
@@ -103,6 +127,44 @@ instance (Show mem_error)
         "MerrPtrComparison"
     | MerrArrayShift ->
         "MerrArrayShift"
+    
+    | MerrVIP err ->
+        let show_kind = function
+          | VIP_null ->
+              "null"
+          | VIP_empty ->
+              "empty"
+          | VIP_killed ->
+              "killed"
+          | VIP_out_of_bound ->
+              "out_of_bound"
+          | VIP_funptr ->
+              "funptr"
+        end in
+        match err with
+          | VIP_free_invalid_pointer loc ->
+              "MerrVIP free_invalid_pointer [" ^ Loc.stringFromLocation loc ^ "]"
+          | VIP_relop_killed ->
+              "MerrVIP relop_killed"
+          | VIP_relop_out_of_bound ->
+              "MerrVIP relop_out_of_bound"
+          | VIP_relop_invalid ->
+              "MerrVIP relop_out_of_invalid"
+          | VIP_diffptr_out_of_bound ->
+              "MerrVIP diffptr_out_of_bound"
+          | VIP_ptrcast_empty ->
+              "MerrVIP ptrcast_empty"
+          | VIP_intcast kind ->
+              "MerrVIP intcast, " ^ show_kind kind
+          | VIP_intcast_not_in_range ->
+              "MerrVIP intcast_not_in_range"
+          | VIP_array_shift kind ->
+              "MerrVIP array_shift, " ^ show_kind kind
+          | VIP_copy_alloc_id kind ->
+              "MerrVIP copy_alloc_id, " ^ show_kind kind
+          | VIP_copy_alloc_id_invalid ->
+              "MerrVIP copy_alloc_id_invalid"
+        end
   end
 end
 
