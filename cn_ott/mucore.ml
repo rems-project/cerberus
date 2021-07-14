@@ -618,7 +618,7 @@ typing =
    Typing_smt of n * 'bt term_aux
  | Typing_x_in_C of Symbol.sym * base_type * c
  | Typing_x_in_L of Symbol.sym * base_type * l
- | Typing_struct_in_globals of Symbol.sym * tag * ((Symbol.identifier * T.ct)) list
+ | Typing_struct_in_globals of tag * ((Symbol.identifier * T.ct)) list
  | Typing_indexed_infer_mem_value of ((c * l * n * Impl_mem.mem_value * base_type)) list (* dependent on memory object model *)
  | Typing_index_infer_mu_pval of ((c * l * n * 'TY mu_pval_aux * base_type)) list
  | Typing_indexed_pattern of ((mu_pattern_aux * base_type * c * 'bt term_aux)) list
