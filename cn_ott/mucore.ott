@@ -712,8 +712,8 @@ grammar
 
   % There used to be an effectful value (mu_val) `skip' - I (dcm41) removed it because it seemed redundant.
   mu_seq_expr {{ tex seq\_expr }} :: 'M_Seq_E' ::= {{ auxparam 'TY }} {{ com sequential (effectful) expressions }}
-    | ccall ( ty_act , mu_pval_aux , spine ) :: :: ccall  {{ com C function call  }}
-    | pcall ( mu_name , spine )              :: :: proc   {{ com procedure call   }}
+    | ccall ( ty_act , Symbol_sym , spine ) :: :: ccall  {{ com C function call  }}
+    | pcall ( mu_name , spine )              :: :: proc  {{ com procedure call   }}
 
 
   mu_seq_expr_aux {{ tex seq\_expr }} :: 'M_Seq_' ::= {{ auxparam 'TY }} {{ com sequential (effectful) expressions with auxiliary info }}
@@ -890,8 +890,6 @@ grammar
     | cdot                 ::   :: empty
     | N , term_aux         ::   :: cons
     | </ Ni // , // i />   ::   :: concat
-    | [ subs ] N           :: M X :: subs  {{ tex [[ subs ]] ( [[N]] ) }} {{ ocaml SUB_N_CTX [[subs]] [[N]] }}
-    | ( N )                :: S X :: paren {{ tex [[ N ]] }} {{ ocaml [[N]] }}
 
 
 grammar
@@ -918,15 +916,15 @@ grammar
 grammar
 
   typing :: 'typing_' ::=
-    | smt ( N => term_aux )                                                            ::   :: smt
-    | Symbol_sym : base_type inEnv C                                                   ::   :: x_in_C
-    | Symbol_sym : base_type inEnv L                                                   ::   :: x_in_L
-    | Symbol_sym : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals ::   :: struct_in_globals
-    | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />                       ::   :: indexed_infer_mem_value       {{ com dependent on memory object model }}
-    | </ Ci ; Li ; Ni |- mu_pval_auxi => base_typei // i />                            :: X :: index_infer_mu_pval
-    | </ mu_pattern_auxi : base_typei ~> Ci with term_auxi // i />                     :: X :: indexed_pattern
-    | </ Ci ; Li ; Ni |- mu_tpexpri <= yi : base_typei . termi // i />                 :: X :: indexed_check_mu_tpexpr
-    | </ Ci ; Li ; Ni ; Ri |- mu_texpri <= reti // i />                                :: X :: indexed_check_mu_texpr
+    | smt ( N => term_aux )                                               ::   :: smt
+    | Symbol_sym : base_type inEnv C                                      ::   :: x_in_C
+    | Symbol_sym : base_type inEnv L                                      ::   :: x_in_L
+    | struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals ::   :: struct_in_globals
+    | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />          ::   :: indexed_infer_mem_value       {{ com dependent on memory object model }}
+    | </ Ci ; Li ; Ni |- mu_pval_auxi => base_typei // i />               :: X :: index_infer_mu_pval
+    | </ mu_pattern_auxi : base_typei ~> Ci with term_auxi // i />        :: X :: indexed_pattern
+    | </ Ci ; Li ; Ni |- mu_tpexpri <= yi : base_typei . termi // i />    :: X :: indexed_check_mu_tpexpr
+    | </ Ci ; Li ; Ni ; Ri |- mu_texpri <= reti // i />                   :: X :: indexed_check_mu_texpr
 
 
 grammar
@@ -948,7 +946,7 @@ grammar
     % both
     | term_aux eq term_aux'                                           ::   :: abbreviations
     | mu_name : pure_arg eq </ xi // i /> |-> mu_tpexpr inEnv Globals ::   :: pure_func_body_in_globals
-    | mu_pval_aux :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals ::   :: func_body_in_globals
+    | mu_name : arg      eq </ xi // i /> |-> mu_texpr  inEnv Globals ::   :: func_body_in_globals
 
 
 defns
@@ -972,7 +970,7 @@ defns
     C ; L ; N |- array ( </ mu_loaded_valuei // i /> ) => obj array base_type
 
 
-    Symbol_sym : struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
+    struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
     </ C ; L ; N |- ty_mem_valuei => mem to_base ( cti ) // i />
     -------------------------------------------------------------------------------- :: Struct
     C ; L ; N |- ( struct ty_tag ) { </ dot Symbol_identifieri : T_cti = ty_mem_valuei //  i /> } => obj struct ty_tag
@@ -1069,7 +1067,7 @@ defns
     C ; L ; N |- Specified ( mu_pval ) => base_type
 
 
-    Symbol_sym : struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
+    struct ty_tag & </ Symbol_identifieri : cti // i /> inEnv Globals
     </ C ; L ; N |- mu_pvali => to_base ( cti ) // i />
     ------------------------------------------------------------------------------------------------ :: Struct
     C ; L ; N |- ( struct ty_tag ) { </ dot Symbol_identifieri = mu_pvali // i /> } => struct ty_tag
@@ -1216,7 +1214,7 @@ defns
 
 
     C ; L ; N |- mu_pval_aux => loc
-    _ : struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
+    struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals
     ------------------------------------------------------------------------ :: Member_Shift
     C ; L ; N |- member_shift ( mu_pval_aux , ty_tag , Symbol_identifierj ) => y : loc . y = inj mu_pval_aux +ptr offset_of ty_tag Symbol_identifierj
 
@@ -1376,7 +1374,7 @@ defns
     mu_sym_or_pattern : base_type ~> C1 with term_aux1
     </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L2 ; N2 ; R2
     --------------------------------------------------------------------------- :: Comp
-    comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N1, N2 ; R2
+    comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
 
 
     </ ret_patterni // i /> : ret ~> C ; L ; N ; R
@@ -1444,7 +1442,7 @@ defns
 
     C ; L ; N |- mu_pval_aux => base_type1
     </ mu_patterni : base_type1 ~> Ci with term_auxi // i />
-    </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux , Ni |- mu_tpexpri <= y2 : base_type2 . term2 // i />
+    </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux |- mu_tpexpri <= y2 : base_type2 . term2 // i />
     ---------------------------------------------------------------------------------------------------------------- :: Case
     C ; L ; N |- case mu_pval_aux of </ | mu_patterni => mu_tpexpri // i /> end <= y2 : base_type2 . term2
 
@@ -1587,7 +1585,7 @@ defns
 
 
     smt ( N => false )
-    ----------------------------------------------- :: UB
+    ----------------------------------------------- :: Undef
     C ; L ; N ; cdot |- undef ty_loc UB_name <= ret
 
 
@@ -1598,11 +1596,10 @@ defns
     C ; L ; N ; R |- mu_seq_expr_aux => ret :: :: Seq_E :: Seq_E_ by
 
 
-    C ; L ; N |- mu_pval_aux => loc
-    mu_pval_aux :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals
+    Symbol_sym :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals
     C ; L ; N ; R |- </ xi = spine_elemi // i /> :; arg >> subs ; ret
     ----------------------------------------------------------------------------------------- :: CCall
-    C ; L ; N ; R |- ccall ( ty_act , mu_pval_aux , </ spine_elemi // i /> ) => [ subs ] ret
+    C ; L ; N ; R |- ccall ( ty_act , Symbol_sym , </ spine_elemi // i /> ) => [ subs ] ret
 
 
     mu_name :  arg eq </ xi // i /> |-> mu_texpr  inEnv Globals
@@ -1689,7 +1686,7 @@ defns
 
     C ; L ; N |- mu_pval_aux => base_type1
     </ mu_patterni : base_type1 ~> Ci with term_auxi // i />
-    </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux , Ni ; R |- mu_texpri <= ret // i />
+    </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux ; R |- mu_texpri <= ret // i />
     ------------------------------------------------------------------------------------------------ :: Case
     C ; L ; N ; R |- case mu_pval_aux of </ | mu_patterni => mu_texpri // i /> end <= ret
 
@@ -2009,10 +2006,10 @@ defns
     <( h ; mu_seq_expr_aux )> --> <( h' ; mu_texpr : ret )> :: :: SE_TE :: SE_TE_ by
 
 
-    ty_mem_ptr : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
+    Symbol_sym : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
     </ xi = spine_elemi // i /> :; arg >> subs ; ret
     ------------------------------------------------------------- :: CCall
-    <( h ; ccall ( ty_act , ty_mem_ptr , </ spine_elemi // i /> ) )> --> <( h ; [ subs ] mu_texpr : [ subs ] ret )>
+    <( h ; ccall ( ty_act , Symbol_sym , </ spine_elemi // i /> ) )> --> <( h ; [ subs ] mu_texpr : [ subs ] ret )>
 
 
     mu_name : arg eq </ xi // i /> |-> mu_texpr inEnv Globals
@@ -2286,36 +2283,42 @@ defns
 
 
   defn
-    C ; L ; R |- ( subs ) : ( C' ; L' ; R' ) :: :: Ty_Subs :: Ty_Subs_ by
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) :: :: Ty_Subs :: Ty_Subs_ by
 
 
     ---------------------------------------------------------- :: Empty
-    C ; L ; cdot |- ( cdot ) : ( cdot ; cdot ; cdot )
+    C ; L ; N ; cdot |- ( cdot ) : ( cdot ; cdot ; cdot ; cdot )
 
 
-    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
     C ; L ; N |- mu_pval_aux => base_type
-    -------------------------------------------------------------------------- :: Cons_Comp
-    C ; L ; R |- ( mu_pval_aux / x , subs ) : ( C' , x : base_type ; L' ; R' )
+    ------------------------------------------------------------------------------------ :: Cons_Comp
+    C ; L ; N ; R |- ( mu_pval_aux / x , subs ) : ( C' , x : base_type ; L' ; N' ; R' )
 
 
-    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
     C ; L ; N |- mu_pval_aux => base_type
-    -------------------------------------------------------------------------- :: Cons_Log
-    C ; L ; R |- ( mu_pval_aux / x , subs ) : ( C' ; L' , x : base_type ; R' )
+    ----------------------------------------------------------------------------------- :: Cons_Log
+    C ; L ; N ; R |- ( mu_pval_aux / x , subs ) : ( C' ; L' , x : base_type ; N' ; R' )
 
 
-    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
+    smt ( N => term_aux )
+    ------------------------------------------------------------- :: Cons_Phi
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' , term_aux ; R' )
+
+
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
     % ASK is checking here a problem?
     C ; L ; N ; R1 |- res_term <= res
-    ----------------------------------------------------------------------- :: Cons_Res_Named
-    C ; L ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; R' , x : res )
+    -------------------------------------------------------------------------------- :: Cons_Res_Named
+    C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
 
 
-    C ; L ; R |- ( subs ) : ( C' ; L' ; R' )
+    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
     % ASK is checking here a problem?
     C ; L ; N ; </ cdot , resi // i /> |- res_term <= res
-    ------------------------------------------------------------------------------------------- :: Cons_Res_Anon
-    C ; L ; R , </ cdot , resi // i /> |- ( subs ) :  ( C' ; L' ; R' , </ cdot , resi // i /> )
+    --------------------------------------------------------------------------------------------------- :: Cons_Res_Anon
+    C ; L ; N ; R , </ cdot , resi // i /> |- ( subs ) :  ( C' ; L' ; N' ; R' , </ cdot , resi // i /> )
 
 
