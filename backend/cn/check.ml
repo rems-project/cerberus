@@ -555,8 +555,9 @@ module Make (G : sig val global : Global.t end) = struct
                introduce extra disjointness constraints *)
             let test_local = L.remove_resource (Predicate p) local in
             let test_local = bind_logical test_local lrt in
-            if not (Solver.is_inconsistent test_local)
-            then Some test_local else None
+            if Solver.is_inconsistent test_local
+            then None 
+            else Some test_local
           ) def.clauses
       in
       begin match possible_unpackings with
@@ -832,18 +833,17 @@ module Make (G : sig val global : Global.t end) = struct
               | QPredicate p', None ->
                  if predicate_name_equal p.name p'.name &&
                     p.unused = p'.unused &&
-                    Solver.holds local 
-                      (t_ (and_ [eq_ (p.pointer, p'.pointer);
-                                 eq_ (p.element_size, p'.element_size);
-                                 eq_ (p.istart, p'.istart);
-                                 eq_ (p.iend, p'.iend)])) &&
                       Solver.holds local 
                         (forall_ (p.i, BT.Integer) None
-                           (impl_ 
-                              (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
-                               let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
-                               and_ (List.map2 eq__ p.iargs iargs')))
-                        )
+                           (and_ [eq_ (p.pointer, p'.pointer);
+                                  eq_ (p.element_size, p'.element_size);
+                                  eq_ (p.istart, p'.istart);
+                                  eq_ (p.iend, p'.iend);
+                                  impl_ 
+                                    (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                                     let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
+                                     and_ (List.map2 eq__ p.iargs iargs'))]
+                        ))
                  then 
                    let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
                    (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
@@ -1192,18 +1192,11 @@ module Make (G : sig val global : Global.t end) = struct
       in
       return (Loc, v)
 
-    let infer_wrapI local ct asym =
-      match ct with
-      | Sctypes.Sctype (_, Integer ty) ->
-         let@ arg = arg_of_asym local asym in
-         let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
-         (* try to follow wrapI from runtime/libcore/std.core *)
-         let dlt = add_ (sub_ (maxInteger_ ty, minInteger_ ty), int_ 1) in
-         let r = rem_f___ (it_of_arg arg, dlt) in
-         let result_it = ite_  (le_ (r, maxInteger_ ty), r,sub_ (r, dlt)) in
-         return (rt_of_vt (Integer, result_it), local)
-      | _ ->
-         Debug_ocaml.error "wrapI applied to non-integer type"
+    let wrapI ity arg =
+      (* try to follow wrapI from runtime/libcore/std.core *)
+      let dlt = add_ (sub_ (maxInteger_ ity, minInteger_ ity), int_ 1) in
+      let r = rem_f___ (arg, dlt) in
+      ite_  (le_ (r, maxInteger_ ity), r,sub_ (r, dlt))
 
 
 
@@ -1332,17 +1325,26 @@ module Make (G : sig val global : Global.t end) = struct
            let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
            (* try to follow conv_int from runtime/libcore/std.core *)
            let arg_it = it_of_arg arg in
-           begin match act.ct with
-           | Sctype (_, Integer Bool) ->
+           let ity = match act.ct with
+             | Sctype (_, Integer ity) -> ity
+             | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
+           in
+           begin match ity with
+           | Bool ->
               let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
               return (rt_of_vt vt, local)
-           | _ 
-                when Solver.holds local (t_ (representable_ (act.ct, arg_it))) ->
-              return (rt_of_vt (Integer, arg_it), local)
-           | Sctype (_, Integer ty) 
-                when Sctypes.is_unsigned_integer_type act.ct ->
-              infer_wrapI local act.ct asym
+           | _
+                when Sctypes.is_unsigned_integer_type ity ->
+              let result = 
+                ite_ (representable_ (act.ct, arg_it),
+                      arg_it,
+                      wrapI ity arg_it)
+              in
+              return (rt_of_vt (Integer, result), local)
            | _ ->
+              if Solver.holds local (t_ (representable_ (act.ct, arg_it))) then
+                return (rt_of_vt (Integer, arg_it), local)
+              else
               let (it_pp, state_pp) = 
                 Explain.implementation_defined_behaviour names local 
                   arg_it
@@ -1352,7 +1354,14 @@ module Make (G : sig val global : Global.t end) = struct
                              Sctypes.pp act.ct, state_pp))
            end
         | M_PEwrapI (act, asym) ->
-           infer_wrapI local act.ct asym
+           let@ arg = arg_of_asym local asym in
+           let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
+           let ity = match act.ct with
+             | Sctype (_, Integer ity) -> ity
+             | _ -> Debug_ocaml.error "wrapI applied to non-integer type"
+           in
+           let result = wrapI ity (it_of_arg arg) in
+           return (rt_of_vt (Integer, result), local)
       in  
       debug 3 (lazy (item "type" (RT.pp rt)));
       return (rt, local)
@@ -1617,7 +1626,9 @@ module Make (G : sig val global : Global.t end) = struct
                  understand, are an exception. *)
               let@ () = 
                 let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-                if Solver.holds local (t_ in_range_lc) then return () else 
+                if Solver.holds local (t_ in_range_lc) 
+                then return () 
+                else 
                   let (constr,state) = 
                     Explain.unsatisfied_constraint names local (t_ in_range_lc)
                   in
@@ -1660,9 +1671,11 @@ module Make (G : sig val global : Global.t end) = struct
               in
               let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
               let@ () = 
-                if Solver.holds local (t_ init) then return () else
-                 let state = Explain.state names local in
-                 fail loc (Uninitialised_read {is_member = None; state})
+                if Solver.holds local (t_ init) 
+                then return () 
+                else
+                  let state = Explain.state names local in
+                  fail loc (Uninitialised_read {is_member = None; state})
               in
               let ret = Sym.fresh () in
               let constr = def_ ret value in

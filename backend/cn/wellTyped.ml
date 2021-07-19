@@ -868,7 +868,7 @@ module Make (G : sig val global : Global.t end) = struct
           let local = Binding.bind_logical local lrt  in
           if Solver.is_inconsistent local 
           then fail loc (Generic !^"this clause makes inconsistent assumptions")
-          else return ()            
+          else return ()
         ) pd.clauses
   end
 

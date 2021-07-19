@@ -18,7 +18,12 @@ and t_ =
                 * (* is_variadic *)bool
 
 
-let is_unsigned_integer_type = function
+let is_unsigned_integer_type ty =
+  AilTypesAux.is_unsigned_integer_type 
+    (Ctype ([], Ctype.Basic (Ctype.Integer ty)))
+
+
+let is_unsigned_integer_ctype = function
   | Sctype (_, Integer ty) ->
      AilTypesAux.is_unsigned_integer_type 
        (Ctype ([], Ctype.Basic (Ctype.Integer ty)))
