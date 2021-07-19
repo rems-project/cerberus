@@ -111,6 +111,7 @@ module type Memory = sig
   val va_end: integer_value -> unit memM
   val va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM
 
+  val copy_alloc_id: integer_value -> pointer_value -> pointer_value memM
   
   (* Integer value constructors *)
   val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value

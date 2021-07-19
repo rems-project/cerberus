@@ -2245,8 +2245,26 @@ end
          end
 
 
-
-
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin A.AilBcopy_alloc_id)) [from_e; to_e] ->
+          self from_e >>= fun from_e  ->
+          self to_e   >>= fun to_e    ->
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, loaded_from_sym_pat, loaded_from_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, object_from_sym_pat, object_from_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_to_sym_pat  , loaded_to_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_to_sym_pat  , object_to_sym_pe  ) ->
+          E.return begin
+            Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_from_sym_pat; loaded_to_sym_pat])
+              begin
+                Caux.mk_unseq_e [from_e; to_e]
+              end
+              begin
+                Caux.mk_case_e (Caux.mk_tuple_pe [loaded_from_sym_pe; loaded_to_sym_pe])
+                  [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat object_from_sym_pat; Caux.mk_specified_pat object_to_sym_pat]
+                    , Caux.mk_memop_e Mem_common.Copy_alloc_id [object_from_sym_pe; object_to_sym_pe] )
+                  ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_integer; C.BTy_loaded C.OTy_pointer])
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspec, copy_alloc_id()"))) ]
+              end
+          end
 
 
 

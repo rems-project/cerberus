@@ -159,6 +159,10 @@ declare ocaml target_rep function va_arg = `Impl_mem.va_arg`
 declare ocaml target_rep function va_end = `Impl_mem.va_end`
 declare ocaml target_rep function va_list = `Impl_mem.va_list`
 
+(* only implemented by the VIP memory model *)
+val copy_alloc_id: integer_value -> pointer_value -> memM pointer_value
+declare ocaml target_rep function copy_alloc_id = `Impl_mem.copy_alloc_id`
+
 
 (* Integer value constructors *)
 val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value

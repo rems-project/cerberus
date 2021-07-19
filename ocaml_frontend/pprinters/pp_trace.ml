@@ -60,8 +60,11 @@ let pp_trace_event = function
                ^^^ P.parens (pp_pointer_value ptrval)
                ^^^ P.parens (pp_mem_value mval)
 
-  | ME_eff_array_shift_ptrval (arr_ptrval, cty, ival, ptrval) ->
-    !^ "array_shift (TODO)"
+  | ME_eff_array_shift_ptrval (ptrval, cty, ival, res_ptrval) ->
+    !^ "array_shift" ^^^ P.parens (pp_pointer_value ptrval)
+                     ^^^ P.parens (pp_ctype cty)
+                     ^^^ P.parens (pp_integer_value ival)
+                     ^^^ P.parens (pp_pointer_value res_ptrval)
 
   | ME_member_shift _ ->
     !^ "member_shift (TODO)"

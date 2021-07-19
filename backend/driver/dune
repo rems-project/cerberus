@@ -18,3 +18,16 @@
  (target main_symbolic.ml)
  (deps main.ml)
  (action (copy main.ml main_symbolic.ml)))
+
+(executable
+ (name main_vip)
+ (public_name cerberus-vip)
+ (package cerberus)
+ (modules main_vip)
+ (libraries result cmdliner str unix
+  cerb_frontend cerb_backend mem_vip util))
+
+(rule
+ (target main_vip.ml)
+ (deps main.ml)
+ (action (copy main.ml main_vip.ml)))

@@ -461,6 +461,10 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
     | "__cerbvar_WINT_MAX" ->
         const_int $ IConstantMax Wint_t
     
+    (* RefinedC *)
+    | "__cerbvar_copy_alloc_id" ->
+        Just (AilEbuiltin AilBcopy_alloc_id)
+    
     | _ ->
       Nothing
 end
