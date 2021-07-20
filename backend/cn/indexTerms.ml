@@ -889,22 +889,26 @@ let subst_vars it = make_substs subst_var it
 let subst_its it = make_substs subst_it it
 
 
+(* not general unification: match left-hand side against right-hand
+   side, where right-hand side is fully concrete *)
 let rec unify it it' res = 
   let equal_it = equal in
   let open Option in
   let open Uni in
+  let match_symbol s it' res = 
+    let@ uni = SymMap.find_opt s res in
+    match uni.resolved with
+    | Some it_res when equal_it it_res it' -> return res 
+    | Some _ -> fail
+    | None -> return (SymMap.add s {resolved = Some it'} res)
+  in
   if equal_it it it' then return res else
     match it, it' with
-    | IT (Lit (Sym s), _), _ ->
-       let@ uni = SymMap.find_opt s res in
-       begin match uni.resolved with
-       | Some it_res when equal_it it_res it' -> return res 
-       | Some s -> fail
-       | None -> return (SymMap.add s {resolved = Some it'} res)
-       end
-    | IT (Param_op (App (IT (Lit (Sym f), fbt), arg)), _), 
+    | IT (Lit (Sym s), _), _ -> 
+       match_symbol s it' res
+    | IT (Param_op (App (IT (Lit (Sym f), _), arg)), _), 
       IT (Param_op (App (f_it', arg')), _) ->
-       let@ res = unify (IT (Lit (Sym f), fbt)) f_it' res in
+       let@ res = match_symbol f f_it' res in
        unify arg arg' res
     | _ -> fail
 
