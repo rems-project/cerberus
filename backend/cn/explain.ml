@@ -46,7 +46,7 @@ module Make (G : sig val global : Global.t end) = struct
     let should_be_in_veclass local veclass it = 
       let bt = IT.bt it in
       if not (LS.equal veclass.sort bt) then false 
-      else S.holds_ignore_unknown local (t_ (eq_ (IT.sym_ (veclass.repr, bt), it)))
+      else S.provable local (t_ (eq_ (IT.sym_ (veclass.repr, bt), it)))
 
     let is_in_veclass veclass sym = 
       SymSet.mem sym veclass.c_elements ||
@@ -342,7 +342,12 @@ module Make (G : sig val global : Global.t end) = struct
        | BT.Real -> 
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Loc ->
-          return (Z.pp_hex 16 (Z.of_string (Z3.Expr.to_string evaluated_expr)))
+          let str = Z3.Expr.to_string evaluated_expr in
+          begin try 
+              return (Z.pp_hex 16 (Z.of_string str))
+            with
+            | _ -> Debug_ocaml.error ("error parsing string: " ^ str)
+          end
        | BT.Bool ->
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Param _ ->
@@ -497,7 +502,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
   let counter_model local = 
-    let (_, solver) = S.holds_and_solver local (t_ (bool_ false)) in
+    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
     S.get_model solver
 
 
@@ -539,7 +544,7 @@ module Make (G : sig val global : Global.t end) = struct
     (it_pp, it_pp')
 
   let unsatisfied_constraint names local lc = 
-    let model = let (_,solver) = S.holds_and_solver local lc in S.get_model solver in
+    let model = let (_,solver) = S.provable_and_solver local lc in S.get_model solver in
     let (explanation, local) = explanation names local (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)

@@ -619,7 +619,7 @@ let page_alloc_predicates struct_decls =
     let range_start_t = pool_t %. "range_start" in
     let range_end_t = pool_t %. "range_end" in
     let max_order_t = pool_t %. "max_order" in
-    let _free_area_t = pool_t %. "free_area" in
+    let free_area_t = pool_t %. "free_area" in
     let pPAGE_SIZE_t = exp_ (int_ 2, int_ pPAGE_SHIFT) in
     let start_t = range_start_t %/ pPAGE_SIZE_t in
     let end_t = range_end_t %/ pPAGE_SIZE_t in
@@ -673,32 +673,35 @@ let page_alloc_predicates struct_decls =
     in
 
     let free_area_well_formedness = 
-      (* let constr prev_next = 
-       *   let o_s, o_t = IT.fresh_named Integer "?o" in
-       *   let prev_next_t = (free_area_t %@ o_t) %. prev_next in
-       *   let cell_pointer_t = 
-       *     arrayShift_ (memberShift_ (pool_pointer_t, hyp_pool_tag, Id.id "free_area"),
-       *                  Sctype ([], Struct hyp_pool_tag),
-       *                  o_t) 
-       *   in
-       *   forall_ (o_s, IT.bt o_t) 
-       *     (Some (T_Member (T_App (T_Term free_area_t, T_Term o_t), Id.id prev_next)))
-       *     begin
-       *       or_ [
-       *           prev_next_t %== cell_pointer_t;
-       *           and_ (
-       *               vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t :: []
-       *                 (\* (let i_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
-       *                  *  [range_start_t %<= i_t; i_t %< range_end_t;
-       *                  *   ((vmemmap_t %@ i_t) %. "order") %== o_t;
-       *                  *   ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0] *\)
-       *             )
-       *         ]
-       *     end
-       * in
-       * LRT.Constraint (constr "prev",
-       * LRT.Constraint (constr "next", *)
-      LRT.I
+      let constr prev_next = 
+        let o_s, o_t = IT.fresh_named Integer "?o" in
+        let prev_next_t = (free_area_t %@ o_t) %. prev_next in
+        let cell_pointer_t = 
+          arrayShift_ (memberShift_ (pool_pointer_t, hyp_pool_tag, Id.id "free_area"),
+                       Sctype ([], Struct hyp_pool_tag),
+                       o_t) 
+        in
+        forall_ (o_s, IT.bt o_t) 
+          (Some (T_Member (T_App (T_Term free_area_t, T_Term o_t), Id.id prev_next)))
+          begin
+            and_ [
+                good_pointer prev_next_t (Sctype ([], Struct list_head_tag));
+                or_ [
+                    prev_next_t %== cell_pointer_t;
+                    and_ (
+                        vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t :: []
+                      (* (let i_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
+                       *  [range_start_t %<= i_t; i_t %< range_end_t;
+                       *   ((vmemmap_t %@ i_t) %. "order") %== o_t;
+                       *   ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0] *)
+                      )
+                  ]
+              ]
+          end
+      in
+      LRT.Constraint (constr "prev",
+      LRT.Constraint (constr "next",
+      LRT.I))
     in
 
     let vmemmap_well_formedness2 = 

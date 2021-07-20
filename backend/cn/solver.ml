@@ -10,20 +10,18 @@ let context =
   Z3.mk_context [
       ("model", "true");
       ("well_sorted_check","false");
-      (* ("auto_config", "false"); *)
       (* ("trace", "true");
        * ("trace_file_name", "trace.smt") *)
     ] 
 
 
-
-(* let tactic = Z3.Tactic.mk_tactic context "default" *)
 let params = Z3.Params.mk_params context 
-(* let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "smt.random_seed") 98234 *)
-(* let () = Z3.set_global_param "smt.auto-config" "true"
- * let () = Z3.set_global_param "smt.mbqi" "true" *)
-(* let () = Z3.set_global_param "solver.smtlib2_log" "z3.smt" *)
+let () = Z3.set_global_param "smt.auto-config" "false"
+let () = Z3.set_global_param "smt.mbqi" "false"
 let () = Z3.set_global_param "smt.pull-nested-quantifiers" "true"
+
+
+
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
@@ -115,12 +113,12 @@ module Make (G : sig val global : Global.t end) = struct
       fun it ->
       Pp.debug 10 (lazy (Pp.item "translating term" (IT.pp it)));
       match ITtbl.find_opt tbl it with
-      | Some sc -> sc
+      | Some (sc, scs) -> (sc, scs)
       | None ->
          let (IT (it_, bt)) = it in
          Pp.debug 10 (lazy (Pp.item "still translating term" (IT.pp it)));
          Pp.debug 10 (lazy (Pp.item "of type" (BT.pp (IT.bt it))));
-         let sc = match it_ with
+         let sc, scs = match it_ with
            | Lit t -> lit t bt
            | Arith_op t -> arith_op t bt
            | Bool_op t -> bool_op t bt
@@ -134,8 +132,14 @@ module Make (G : sig val global : Global.t end) = struct
            | Option_op t -> option_op t bt
            | Param_op t -> param_op t bt
          in
-         let () = ITtbl.add tbl it sc in
-         sc
+         let scs = match bt with
+           | Loc -> 
+              let zero = Z3.Arithmetic.Integer.mk_numeral_s context "0" in
+              (Z3.Arithmetic.mk_le context zero sc) :: scs
+           | _ -> scs
+         in
+         let () = ITtbl.add tbl it (sc, scs) in
+         (sc, scs)
 
     and lit it bt =
       let e = match it with
@@ -478,66 +482,72 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let check local (lc : LC.t) = 
-    let () = Debug_ocaml.begin_csv_timing "check" in
+  let check local (lc : LC.t) =  
     let solver = Z3.Solver.mk_simple_solver context in
-    let assumptions = 
-      List.concat_map of_logical_constraint_assumption 
-        (Local.all_constraints local) 
-    in
-    let () = Debug_ocaml.begin_csv_timing "adding constraints" in
-    Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
-    begin
-      match lc with
-      | T t ->
-         let t, e = of_index_term t in
-         Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
-      | Forall ((s, bt), _trigger, t) -> 
-         let s' = Sym.fresh () in
-         let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
-         let t, e = of_index_term t in
-         Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
-    end;
-    let () = Debug_ocaml.end_csv_timing "adding constraints" in
-    let () = Debug_ocaml.begin_csv_timing "actually checking" in
-    let result = 
-      try Z3.Solver.check solver [] with
-      | Z3.Error err -> 
-         Debug_ocaml.error ("Z3 error: " ^ err)
-    in
-    let () = Debug_ocaml.end_csv_timing "actually checking" in
-    let () = Debug_ocaml.end_csv_timing "check" in
-    (result, solver)
+    (* as similarly suggested by Robbert *)
+    match lc with
+    | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
+       (`YES, solver)
+    | _ ->
+       let () = Debug_ocaml.begin_csv_timing "check" in
+       let assumptions = 
+         List.concat_map of_logical_constraint_assumption 
+           (Local.all_constraints local) 
+       in
+       let () = Debug_ocaml.begin_csv_timing "adding constraints" in
+       Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
+       begin
+         match lc with
+         | T t ->
+            let t, e = of_index_term t in
+            Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
+         | Forall ((s, bt), _trigger, t) -> 
+            let s' = Sym.fresh () in
+            let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
+            let t, e = of_index_term t in
+               Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
+       end;
+       let () = Debug_ocaml.end_csv_timing "adding constraints" in
+       let () = Debug_ocaml.begin_csv_timing "actually checking" in
+       let result = 
+         try Z3.Solver.check solver [] with
+         | Z3.Error err -> 
+            Debug_ocaml.error ("Z3 error: " ^ err)
+       in
+       let () = Debug_ocaml.end_csv_timing "actually checking" in
+       let () = Debug_ocaml.end_csv_timing "check" in
+       match result with
+       | Z3.Solver.UNSATISFIABLE -> (`YES, solver)
+       | Z3.Solver.SATISFIABLE -> (`NO, solver)
+       | Z3.Solver.UNKNOWN -> (`MAYBE, solver)
 
-  let holds local it = 
-    let (result, solver) = check local it in
-    match result with
-    | Z3.Solver.UNSATISFIABLE -> true
-    | Z3.Solver.SATISFIABLE -> false
-    | Z3.Solver.UNKNOWN ->
-       let reason = Z3.Solver.get_reason_unknown solver in
-       Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
+  (* let holds local it = 
+   *   let (result, solver) = check local it in
+   *   match result with
+   *   | Z3.Solver.UNSATISFIABLE -> true
+   *   | Z3.Solver.SATISFIABLE -> false
+   *   | Z3.Solver.UNKNOWN ->
+   *      let reason = Z3.Solver.get_reason_unknown solver in
+   *      Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason) *)
 
 
-  let holds_ignore_unknown local it = 
+  let provable local it = 
     let (result, _solver) = check local it in
     match result with
-    | Z3.Solver.UNSATISFIABLE -> true
-    | Z3.Solver.SATISFIABLE -> false
-    | Z3.Solver.UNKNOWN -> false
+    | `YES -> true
+    | `NO -> false
+    | `MAYBE -> false
 
 
-  let holds_and_solver local it = 
+  let provable_and_solver local it = 
     let (result, solver) = check local it in
     match result with
-    | Z3.Solver.UNSATISFIABLE -> (true, solver)
-    | Z3.Solver.SATISFIABLE -> (false, solver)
-    | Z3.Solver.UNKNOWN ->
-       let reason = Z3.Solver.get_reason_unknown solver in
-       Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason)
+    | `YES -> (true, solver)
+    | `NO -> (false, solver)
+    | `MAYBE -> (false, solver)
 
 
-  let is_inconsistent local = holds local (t_ (bool_ false))
+  let provably_inconsistent local = provable local (t_ (bool_ false))
 
   let get_model solver = Z3.Solver.get_model solver
 

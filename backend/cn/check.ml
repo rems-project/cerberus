@@ -310,7 +310,7 @@ module Make (G : sig val global : Global.t end) = struct
               Z.equal b.size b'.size &&
               IT.equal b.permission b'.permission ->
        let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
-       if Solver.holds local (t_ (and_ (List.map eq_ constrs)))
+       if Solver.provable local (t_ (and_ (List.map eq_ constrs)))
        then return res
        else fail loc error
     | QPoint b, QPoint b' 
@@ -320,7 +320,7 @@ module Make (G : sig val global : Global.t end) = struct
        let b' = { b' with value = eta_expand (b.qpointer, Loc) b'.value;
                           init = eta_expand (b.qpointer, Loc) b'.init; } in
        let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
-       if Solver.holds local 
+       if Solver.provable local 
             (forall_ (b.qpointer, BT.Loc)
                None
                (impl_ (gt_ (b.permission, q_ (0, 1)), 
@@ -334,7 +334,7 @@ module Make (G : sig val global : Global.t end) = struct
                List.equal IT.equal p.iargs p'.iargs &&
                  p.unused = p'.unused ->
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-       if Solver.holds local 
+       if Solver.provable local 
             (t_ (impl_ (bool_ p'.unused, 
                         and_ (List.map eq_ constrs))))
        then return res 
@@ -352,7 +352,7 @@ module Make (G : sig val global : Global.t end) = struct
               List.equal IT.equal p.iargs p'.iargs ->
        let p' = { p' with oargs = List.map (eta_expand (p.i, Integer)) p'.oargs } in
        let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-       if Solver.holds local 
+       if Solver.provable local 
             (forall_ (p.i, BT.Integer)
              None
                (impl_ (and_ [bool_ p.unused; 
@@ -476,7 +476,7 @@ module Make (G : sig val global : Global.t end) = struct
         let@ rt = 
           let rec check_logical_constraints = function
             | Constraint (c, ftyp) -> 
-               if Solver.holds local c then 
+               if Solver.provable local c then 
                  check_logical_constraints ftyp
                else
                  let err = 
@@ -511,7 +511,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let is_global local it = 
       SymSet.exists (fun s ->
-        Solver.holds local (t_ (eq_ (it, IT.sym_ (s, BT.Loc))))
+        Solver.provable local (t_ (eq_ (it, IT.sym_ (s, BT.Loc))))
       ) local.global
 
 
@@ -555,7 +555,7 @@ module Make (G : sig val global : Global.t end) = struct
                introduce extra disjointness constraints *)
             let test_local = L.remove_resource (Predicate p) local in
             let test_local = bind_logical test_local lrt in
-            if Solver.is_inconsistent test_local
+            if Solver.provably_inconsistent test_local
             then None 
             else Some test_local
           ) def.clauses
@@ -592,7 +592,7 @@ module Make (G : sig val global : Global.t end) = struct
               | RE.Predicate p when p.unused ->
                  let (local, changed') = unpack_predicate local p in
                  (local, changed || changed')
-              | RE.QPredicate p when p.unused && Solver.holds local (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
+              | RE.QPredicate p when p.unused && Solver.provable local (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
                  let p_inst = 
                    let index = qpredicate_pointer_to_index p p.pointer in
                    let iargs = List.map (IT.subst_it {before=p.i; after=index}) p.iargs in
@@ -622,7 +622,7 @@ module Make (G : sig val global : Global.t end) = struct
             | Point p' 
                  when Z.equal requested.size p'.size &&
                       BT.equal requested.value (IT.bt p'.value) &&
-                      Solver.holds local (t_ (eq_ (requested.pointer, p'.pointer))) ->
+                      Solver.provable local (t_ (eq_ (requested.pointer, p'.pointer))) ->
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let value = ite_ (took, p'.value, value) in
@@ -649,7 +649,7 @@ module Make (G : sig val global : Global.t end) = struct
                (re, (needed, value, init))
           ) local (needed, default_ requested.value, default_ BT.Bool)
       in
-      if Solver.holds local (t_ (eq_ (needed, q_ (0, 1)))) 
+      if Solver.provable local (t_ (eq_ (needed, q_ (0, 1)))) 
       then 
         let r = 
           { pointer = requested.pointer;
@@ -698,7 +698,7 @@ module Make (G : sig val global : Global.t end) = struct
                (re, (needed, value, init))
           ) local (needed, default_ requested.value, default_ BT.Bool)
       in
-      if Solver.holds local 
+      if Solver.provable local 
            (forall_ (requested.qpointer, BT.Loc) None
               (eq_ (needed, q_ (0, 1))))
       then 
@@ -735,7 +735,7 @@ module Make (G : sig val global : Global.t end) = struct
               | Predicate p', None ->
                  if predicate_name_equal p.name p'.name &&
                     p'.unused && 
-                    Solver.holds local (t_ (
+                    Solver.provable local (t_ (
                         and_ (IT.eq__ p.pointer p'.pointer ::
                               List.map2 eq__ p.iargs p'.iargs)
                       ))
@@ -745,7 +745,7 @@ module Make (G : sig val global : Global.t end) = struct
                  let index = qpredicate_pointer_to_index p' p.pointer in
                  if predicate_name_equal p.name p'.name &&
                     p'.unused && 
-                    Solver.holds local (
+                    Solver.provable local (
                         let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
                         t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
                                     List.map2 eq__ p.iargs iargs'))
@@ -833,7 +833,7 @@ module Make (G : sig val global : Global.t end) = struct
               | QPredicate p', None ->
                  if predicate_name_equal p.name p'.name &&
                     p.unused = p'.unused &&
-                      Solver.holds local 
+                      Solver.provable local 
                         (forall_ (p.i, BT.Integer) None
                            (and_ [eq_ (p.pointer, p'.pointer);
                                   eq_ (p.element_size, p'.element_size);
@@ -1310,7 +1310,7 @@ module Make (G : sig val global : Global.t end) = struct
         | M_PEassert_undef (asym, _uloc, undef) ->
            let@ arg = arg_of_asym local asym in
            let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-           if Solver.holds local (t_ (it_of_arg arg)) then
+           if Solver.provable local (t_ (it_of_arg arg)) then
              return (rt_of_vt (Unit, unit_), local)
            else
              let expl = Explain.undefined_behaviour names local in
@@ -1342,7 +1342,7 @@ module Make (G : sig val global : Global.t end) = struct
               in
               return (rt_of_vt (Integer, result), local)
            | _ ->
-              if Solver.holds local (t_ (representable_ (act.ct, arg_it))) then
+              if Solver.provable local (t_ (representable_ (act.ct, arg_it))) then
                 return (rt_of_vt (Integer, arg_it), local)
               else
               let (it_pp, state_pp) = 
@@ -1387,7 +1387,7 @@ module Make (G : sig val global : Global.t end) = struct
          let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          ListM.iterM (fun (lc, e) ->
              let local = add_c (t_ lc) local in
-             if Solver.is_inconsistent local then return ()
+             if Solver.provably_inconsistent local then return ()
              else check_tpexpr local e typ
            ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
       | M_PEcase (asym, pats_es) ->
@@ -1395,7 +1395,7 @@ module Make (G : sig val global : Global.t end) = struct
          ListM.iterM (fun (pat, pe) ->
              let@ delta = pattern_match (arg.lname, arg.bt) pat in
              let local = delta ++ local in
-             if Solver.is_inconsistent local then return ()
+             if Solver.provably_inconsistent local then return ()
              else check_tpexpr local e typ
            ) pats_es
       | M_PElet (p, e1, e2) ->
@@ -1461,16 +1461,16 @@ module Make (G : sig val global : Global.t end) = struct
         List.find_opt (fun resource ->
             match resource with
             | Point p ->
-               not (Solver.holds local (t_ (le_ (p.permission, q_ (0, 1)))))
+               not (Solver.provable local (t_ (le_ (p.permission, q_ (0, 1)))))
             | QPoint p ->
-               not (Solver.holds local 
+               not (Solver.provable local 
                       (forall_ (p.qpointer, BT.Loc) None
                          (le_ (p.permission, q_ (0, 1)))))
             | Predicate p ->
                not p.unused
             | QPredicate p ->
                not p.unused &&
-                 not (Solver.holds local (t_ (eq_ (p.istart, p.iend))))
+                 not (Solver.provable local (t_ (eq_ (p.istart, p.iend))))
           ) local.resources
       in
       match bad with
@@ -1626,7 +1626,7 @@ module Make (G : sig val global : Global.t end) = struct
                  understand, are an exception. *)
               let@ () = 
                 let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-                if Solver.holds local (t_ in_range_lc) 
+                if Solver.provable local (t_ in_range_lc) 
                 then return () 
                 else 
                   let (constr,state) = 
@@ -1671,7 +1671,7 @@ module Make (G : sig val global : Global.t end) = struct
               in
               let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
               let@ () = 
-                if Solver.holds local (t_ init) 
+                if Solver.provable local (t_ init) 
                 then return () 
                 else
                   let state = Explain.state names local in
@@ -1744,7 +1744,7 @@ module Make (G : sig val global : Global.t end) = struct
            let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
            ListM.iterM (fun (lc, e) ->
                let local = add_c (t_ lc) local in
-               if Solver.is_inconsistent local then return ()
+               if Solver.provably_inconsistent local then return ()
                else check_texpr (local, labels) e typ 
              ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
         | M_Ebound (_, e) ->
@@ -1756,7 +1756,7 @@ module Make (G : sig val global : Global.t end) = struct
            ListM.iterM (fun (pat, pe) ->
                let@ delta = pattern_match (arg.lname, arg.bt) pat in
                let local = delta ++ local in
-               if Solver.is_inconsistent local then return ()
+               if Solver.provably_inconsistent local then return ()
                else check_texpr (local, labels) e typ
              ) pats_es
         | M_Elet (p, e1, e2) ->
@@ -1876,7 +1876,7 @@ module Make (G : sig val global : Global.t end) = struct
 
   
   let check_initial_environment_consistent loc info local = 
-    match Solver.is_inconsistent local, info with
+    match Solver.provably_inconsistent local, info with
     | true, `Label -> 
        fail loc (Generic (!^"this label makes inconsistent assumptions"))
     | true, `Fun -> 
@@ -2177,6 +2177,5 @@ let check mu_file =
    - when resources are missing because of BT mismatches, report that correctly
    - be more careful about which counter-model to use in Explain
    - rem_t vs rem_f
-   - check resource definition well-formedness
    - check globals with expressions
  *)

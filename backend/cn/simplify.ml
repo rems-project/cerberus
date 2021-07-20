@@ -410,6 +410,16 @@ let simp_flatten lcs term =
 
 
 
+let simp_lc lcs lc = 
+  match lc with
+  | LC.T it -> 
+     LC.T (simp lcs it)
+  | LC.Forall ((s, bt), trigger, it) -> 
+     let s' = Sym.fresh_same s in 
+     let it = IndexTerms.subst_var Subst.{before=s; after=s'} it in
+     let trigger = Option.map (LC.subst_var_trigger Subst.{before=s; after=s'}) trigger in
+     let it = simp lcs it in
+     LC.Forall ((s', bt), trigger, it)
 
 
 let simp_lc_flatten lcs c = 

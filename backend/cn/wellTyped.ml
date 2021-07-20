@@ -866,7 +866,7 @@ module Make (G : sig val global : Global.t end) = struct
           let@ () = WPackingFT.welltyped pd.loc names local clause in
           let lrt, _ = PackingFT.logical_arguments_and_return clause in
           let local = Binding.bind_logical local lrt  in
-          if Solver.is_inconsistent local 
+          if Solver.provably_inconsistent local 
           then fail loc (Generic !^"this clause makes inconsistent assumptions")
           else return ()
         ) pd.clauses
