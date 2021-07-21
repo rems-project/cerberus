@@ -239,6 +239,7 @@
 \ottrulehead{\ottnt{bool\_op}}{::=}{}\ottprodnewline
 \ottfirstprodline{|}{\neg \, term}{}{}{}{}\ottprodnewline
 \ottprodline{|}{term_{{\mathrm{1}}}  =  term_{{\mathrm{2}}}}{}{}{}{}\ottprodnewline
+\ottprodline{|}{term_{{\mathrm{1}}}  \rightarrow  term_{{\mathrm{2}}}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\bigwedge  \ottsym{(} \, \ottcomp{term_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{\bigvee  \ottsym{(} \, \ottcomp{term_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}}{}{}{}{}\ottprodnewline
 \ottprodline{|}{ term_{{\mathrm{1}}}   \mathbin{ binop_{bool} }   term_{{\mathrm{2}}} } {\textsf{M}}{}{}{}\ottprodnewline
@@ -1012,8 +1013,7 @@
 
 
 \newcommand{\ottdruleTyXXResXXEqXXTerm}[1]{\ottdrule[#1]{%
-\ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \ottsym{,}  term  \Rightarrow  term'  \ottsym{)}}%
-\ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \ottsym{,}  term'  \Rightarrow  term  \ottsym{)}}%
+\ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  \ottsym{(}  term  \rightarrow  term'  \ottsym{)}  \wedge  \ottsym{(}  term'  \rightarrow  term  \ottsym{)}  \ottsym{)}}%
 \ottpremise{\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}}%
 }{
 \Phi  \vdash  term  \wedge  \ottnt{res} \, \equiv \, term'  \wedge  \ottnt{res'}}{%
@@ -1038,8 +1038,9 @@
 
 \newcommand{\ottdruleTyXXResXXPointsTo}[1]{\ottdrule[#1]{%
 \ottpremise{\Phi  \vdash  \ottnt{points\_to} \, \equiv \, \ottnt{points\_to'}}%
+\ottpremise{\Phi  \vdash  \ottnt{points\_to'} \, \equiv \, \ottnt{points\_to''}}%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottnt{points\_to}  \vdash  \ottnt{points\_to'}  \Leftarrow  \ottnt{points\_to'}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottnt{points\_to}  \vdash  \ottnt{points\_to'}  \Leftarrow  \ottnt{points\_to''}}{%
 {\ottdrulename{Ty\_Res\_PointsTo}}{}%
 }}
 
@@ -1072,9 +1073,9 @@
 
 \newcommand{\ottdruleTyXXResXXPack}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval  \Rightarrow  \beta}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term_{{\mathrm{2}}}}  \Leftarrow   pval  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{res}  ) }%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term}  \Leftarrow   pval  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{res}  ) }%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{pack} \, \ottsym{(}  pval  \ottsym{,}  \ottnt{res\_term_{{\mathrm{2}}}}  \ottsym{)}  \Leftarrow  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{res}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{pack} \, \ottsym{(}  pval  \ottsym{,}  \ottnt{res\_term}  \ottsym{)}  \Leftarrow  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{res}}{%
 {\ottdrulename{Ty\_Res\_Pack}}{}%
 }}
 
@@ -2816,7 +2817,7 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 
 \newcommand{\ottdruleTyXXSubsXXConsXXResXXNamed}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottsym{(}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{)}}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottnt{res\_term}  \Leftarrow   \sigma  (  \ottnt{res}  ) }%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottsym{(}  \ottnt{res\_term}  \ottsym{/}  \ottmv{x}  \ottsym{,}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \ottmv{x}  {:}  \ottnt{res}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Subs\_Cons\_Res\_Named}}{}%
@@ -2825,9 +2826,9 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 
 \newcommand{\ottdruleTyXXSubsXXConsXXResXXAnon}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottsym{(}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{)}}%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \ottcomp{\cdot  \ottsym{,}  \ottnt{res_{\ottmv{i}}}}{\ottmv{i}}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottnt{res\_term}  \Leftarrow   \sigma  (  \ottnt{res}  ) }%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \ottsym{,} \, \ottcomp{\cdot  \ottsym{,}  \ottnt{res_{\ottmv{i}}}}{\ottmv{i}}  \vdash  \ottsym{(}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{,} \, \ottcomp{\cdot  \ottsym{,}  \ottnt{res_{\ottmv{i}}}}{\ottmv{i}}  \ottsym{)}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \ottsym{(}  \sigma  \ottsym{)}  {:}  \ottsym{(}  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \ottnt{res}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Subs\_Cons\_Res\_Anon}}{}%
 }}
 

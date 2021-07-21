@@ -247,8 +247,8 @@ grammar
 grammar
 
   mu_name {{ tex name }} :: '' ::= {{ ocaml Symbol.sym Core.generic_name }} {{ phantom }}
-    | Symbol_sym :: :: Sym  {{ com Core identifier                 }}
-    | impl_const :: :: Impl {{ com implementation-defined constant }}
+    | Symbol_sym :: :: Sym   {{ com Core identifier                 }}
+    | impl_const :: :: ImplC {{ com implementation-defined constant }}
 
 
 grammar
@@ -362,6 +362,7 @@ grammar
   bool_op :: '' ::= {{ auxparam 'bt }}
     | neg term_aux                         ::     :: Not
     | term_aux1 = term_aux2                ::     :: Eq
+    | term_aux1 -> term_aux2               ::     :: Impl
     | /\\ ( </ term_auxi // , // i />    ) ::     :: And
     | \// ( </ term_auxi // , // i />    ) ::     :: Or
     | term_aux1 /\ term_aux2               :: X M :: And_Binary {{ ocaml And ( [ [[term_aux1]] , [[term_aux2]] ] ) }}
@@ -713,12 +714,13 @@ grammar
   % There used to be an effectful value (mu_val) `skip' - I (dcm41) removed it because it seemed redundant.
   mu_seq_expr {{ tex seq\_expr }} :: 'M_Seq_E' ::= {{ auxparam 'TY }} {{ com sequential (effectful) expressions }}
     | ccall ( ty_act , Symbol_sym , spine ) :: :: ccall  {{ com C function call  }}
-    | pcall ( mu_name , spine )              :: :: proc  {{ com procedure call   }}
+    | pcall ( mu_name , spine )             :: :: proc  {{ com procedure call   }}
 
 
   mu_seq_expr_aux {{ tex seq\_expr }} :: 'M_Seq_' ::= {{ auxparam 'TY }} {{ com sequential (effectful) expressions with auxiliary info }}
     | ty_loc annots mu_seq_expr :: X :: expr
     |               mu_seq_expr :: O :: no_aux   {{ com Ott-hack for simpler typing rules }}
+    |      [ subs ] mu_seq_expr :: M :: Subs     {{ ocaml MU_SEQ_EXPR_SUBS [[subs]] [[mu_seq_expr]] }} {{ tex [[subs]] ( [[mu_seq_expr]] ) }}
 
 
   % nd() is only used in the elab of if/loops for the case where the condiditional expression evaluates to unspecified()
@@ -778,10 +780,10 @@ grammar
 
 
   mu_texpr {{ tex texpr }} :: 'M_TE' ::= {{ auxparam 'TY }} {{ com top-level (effectful) expressions }}
-    | mu_seq_texpr_aux  ::   :: Seq    {{ com sequential (effectful) expressions                }}
-    | mu_is_texpr_aux   ::   :: Is     {{ com indet seq (effectful) expressions                 }}
-    | [ subs ] mu_texpr  :: M :: Subs  {{ ocaml MU_TEXPR_SUBS [[subs]] [[mu_texpr]] }} {{ tex [[subs]] ( [[mu_texpr]] ) }}
-                                       {{ com simul-sub $[[subs]]$ in $[[mu_texpr]]$   }}
+    | mu_seq_texpr_aux  ::   :: Seq   {{ com sequential (effectful) expressions                }}
+    | mu_is_texpr_aux   ::   :: Is    {{ com indet seq (effectful) expressions                 }}
+    | [ subs ] mu_texpr :: M :: Subs  {{ ocaml MU_TEXPR_SUBS [[subs]] [[mu_texpr]] }} {{ tex [[subs]] ( [[mu_texpr]] ) }}
+                                      {{ com simul-sub $[[subs]]$ in $[[mu_texpr]]$   }}
 
 % TODO substitutions
 
@@ -1101,10 +1103,9 @@ defns
     N |- exists Symbol_sym : base_type . res eq exists Symbol_sym : base_type . res'
 
 
-    smt ( N , term_aux  => term_aux' )
-    smt ( N , term_aux' => term_aux  )
+    smt ( N =>  ( term_aux -> term_aux' ) /\ ( term_aux' -> term_aux ) )
     N |- res eq res'
-    ----------------------------------------- :: Term
+    -------------------------------------------------------------------- :: Term
     N |- term_aux /\ res eq term_aux' /\ res'
 
 
@@ -1116,9 +1117,10 @@ defns
     C ; L ; N ; cdot |- emp <= emp
 
 
-    N |- points_to eq points_to'
-    ------------------------------------------------------------ :: PointsTo
-    C ; L ; N ; cdot , points_to |- points_to' <= points_to'
+    N |- points_to  eq points_to'
+    N |- points_to' eq points_to''
+    --------------------------------------------------------- :: PointsTo
+    C ; L ; N ; cdot , points_to |- points_to' <= points_to''
 
 
     N |- res eq res'
@@ -1141,9 +1143,9 @@ defns
     % Has to be checking. Consider type of pack (1 , l |-> 1 , 1)
     % exists y : integer . l |-> (y,y or y,1 or 1,y or 1,1)
     C ; L ; N |- mu_pval_aux => base_type
-    C ; L ; N ; R |- res_term2 <= [ mu_pval_aux / y , cdot ] res
+    C ; L ; N ; R |- res_term <= [ mu_pval_aux / y , cdot ] res
     ------------------------------------------------------------------------------- :: Pack
-    C ; L ; N ; R |- pack ( mu_pval_aux , res_term2 ) <= exists y : base_type . res
+    C ; L ; N ; R |- pack ( mu_pval_aux , res_term ) <= exists y : base_type . res
 
 
 defns
@@ -2308,17 +2310,16 @@ defns
     C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' , term_aux ; R' )
 
 
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
-    % ASK is checking here a problem?
-    C ; L ; N ; R1 |- res_term <= res
+    C ; L ; N ; R  |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; N ; R1 |- res_term <= [ subs ] res
     -------------------------------------------------------------------------------- :: Cons_Res_Named
     C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
 
 
-    C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' )
-    % ASK is checking here a problem?
-    C ; L ; N ; </ cdot , resi // i /> |- res_term <= res
-    --------------------------------------------------------------------------------------------------- :: Cons_Res_Anon
-    C ; L ; N ; R , </ cdot , resi // i /> |- ( subs ) :  ( C' ; L' ; N' ; R' , </ cdot , resi // i /> )
+    % ASK: not so sure about this rule - it is necessary but how?
+    C ; L ; N ; R  |- ( subs ) : ( C' ; L' ; N' ; R' )
+    C ; L ; N ; R1 |- res_term <= [ subs ] res
+    ------------------------------------------------------------- :: Cons_Res_Anon
+    C ; L ; N ; R , R1 |- ( subs ) :  ( C' ; L' ; N' ; R' , res )
 
 

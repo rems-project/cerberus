@@ -70,7 +70,7 @@ $\CLNRp \vdash J$.
 \subsection{Weakening for Substitution}
 
 Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
-\ctxL'' ; \ctxR'' )$.
+\ctxL'' ; \ctxN'' ; \ctxR'' )$.
 
 \begin{proof}
     \textsc{Proof Strategy:} Induction over the substitution.\\
@@ -85,10 +85,127 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
     \prove{$[[ C' ; L' ; N' ; R' |- ( subs ) : ( C'' ; L'' ; N'' ; R'' ) ]]$.\\}
 \end{proof}
 
+
+\subsection{Substitutions preserve SMT results}\label{subsec:sub_smt}
+
+\begin{proof}
+    \assume{%
+        \begin{pfenum}
+            \item $[[ smt ( N' => term ) ]]$.\label{sub_smt-assm1}
+            \item $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$.\label{sub_smt-assm2}\\
+        \end{pfenum}}
+
+    \prove{$[[ smt ( N => [ subs ] term ) ]]$.\\}
+
+    \step{<1>1}{$[[ smt ( N' => [ subs ] term ) ]]$.\\
+        \pf\ By assumption \ref{sub_smt-assm1}, which means it is true for
+        all (well-typed) instantiations of its free variables.}
+
+    \step{<1>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
+        \pf\ By $[[ smt ( N => term ) ]]$ for each $ [[ term ]] \in [[N']] $
+        (from assumption \ref{sub_smt-assm2}) and \stepref{<1>1}.}
+
+\end{proof}
+
+\subsection{Resource typing subsumption}\label{subsec:res_subsum}
+
+\begin{proof}
+    \assume{%
+        \begin{pfenum}
+            \item $[[ N |- res eq res' ]]$.
+            \item $[[ C ; L ; N ; R |- res_term <= res ]]$.
+            \item $[[ N |- [ subs ] res eq [ subs ] res' ]]$.\\
+        \end{pfenum}}
+
+    \prove{$[[ C ; L ; N ; R |- res_term <= res' ]]$.\\}
+
+    \pfsketch{ Induction over $[[ C ; L ; N ; R |- res_term <= res ]]$.\\}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_Res\_Emp}
+        }{%
+            \pf\ $[[ res ]] = [[ res' ]] = [[ res_term ]] = [[ emp ]]$.
+        }
+    }
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_Res\_PointsTo}
+        }{%
+            $[[ res ]] = [[ points_to'' ]] , [[ res_term ]] = [[ points_to' ]]$,
+            $[[ res' ]] = [[ points_to1 ]]$, $[[ R ]] = [[ cdot , points_to ]]$.
+        }
+    }
+    
+    \begin{proof}
+        \step{<2>1}{$[[ N |- points_to eq points_to' ]]$ and $[[ N |-
+            points_to' eq points_to'' ]]$ by inversion.}
+
+        % TODO state transitivity as a lemma
+        \step{<2>2}{$[[ N |- points_to' eq points_to1 ]]$ by transitivity.}
+
+        \step{<2>3}{$[[ C ; L ; N ; cdot , points_to |- points_to' <= points_to1 ]]$ as required.}
+    \end{proof}
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_Res\_Var}
+        }{%
+            % TODO state transitivity as a lemma
+            \pf\ By transitivity.
+        }
+    }
+
+    \step{<1>4}{%
+        \case{%
+            \textsc{Ty\_Res\_SepConj}
+        }{%
+            \pf\ By induction.
+        }
+    }
+
+    \step{<1>5}{%
+        \case{%
+            \textsc{Ty\_Res\_Conj}
+        }{%
+            \pf\ We know $[[ smt ( N => ( term -> term' ) ) ]]$ (by inversion on
+            the equality) and $[[ smt ( N => term ) ]]$ (by inversion on the
+            typing rule) so $[[ smt ( N => term' ) ]]$. Rest follows by induction.
+        }
+    }
+
+    \step{<1>6}{%
+        \case{%
+            \textsc{Ty\_Res\_Pack}
+        }{%
+            $[[ res_term ]] = [[ pack ( mu_pval_aux , res_term' ) ]]$, $[[ res
+            ]] = [[ exists y : base_type . res1 ]]$, $[[ res' ]] = [[ exists y
+            : base_type . res1' ]]$.
+        }
+    }
+
+    \begin{proof}
+
+        \step{<2>1}{$[[ N |- res1 eq res1' ]]$ by inversion on the equality.}
+
+        \step{<2>2}{$[[ N |- [ mu_pval_aux / y , cdot ] res1 eq [ mu_pval_aux /
+            y , cdot ] res1' ]]$ by inversion on substitution assumption.}
+
+        \step{<2>3}{$[[ C ; L ; N ; R |- res_term' <= [ mu_pval_aux / y , cdot ]
+            res1' ]]$ by induction.}
+
+        \step{<2>4}{$[[ C ; L ; N ; R |- pack ( mu_pval_aux , res_term' ) <=
+            exists y : base_type . res1' ]]$ as required.}
+
+    \end{proof}
+
+\end{proof}
+
 \subsection{Substitution Lemma}\label{subsec:sub_lemma}
 
 If $[[ C ; L ; N ; R |- ( subs ) : ( C' ; L' ; N' ; R' ) ]]$ and $\CLNRp \vdash
-J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$. 
+J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
 
 \begin{proof}
     \pfsketch{ Induction over the typing judgements.\\}
@@ -100,7 +217,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         \end{pfenum}
     }
 
-    \prove{$\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.\\}
+    \prove{$\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.\\}
 
     \step{<1>1}{%
         \case{%
@@ -108,13 +225,13 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
             \textsc{Ty\_PVal\_\{Obj,Loaded,Unit,True,False,Ctor\_Nil\}}.
         }{%
             \pf\ No free variables in $J$ so $\sigma ( J ) = J$ and the rules
-            do not depend on the environment, so we are done. 
+            do not depend on the environment, so we are done.
         }
     }
 
     \step{<1>2}{%
         \case{%
-            \textsc{Ty\_PVal\_\{List,Tuple,Ctor\_Cons,Ctor\_Tuple,Ctor\_Array,Ctor\_Specified\}}. 
+            \textsc{Ty\_PVal\_\{List,Tuple,Ctor\_Cons,Ctor\_Tuple,Ctor\_Array,Ctor\_Specified\}}.
         }{%
             \pf\ By induction and then definition of substitution over values.
         }
@@ -139,8 +256,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_PVal\_Error}.
         }{%
-            \pf\ We know $[[smt ( N' => false )]]$ and $[[ smt ( N => term_aux ) ]]$ 
-            for each $ term \in \Phi'$ so $[[ smt ( N => false ) ]]$.
+            \pf\ By lemma \ref{subsec:sub_smt}.
         }
     }
 
@@ -159,8 +275,231 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         \step{<2>2}{$[[ C ; L ; N |- ( struct ty_tag ) { </ dot
             Symbol_identifieri = [ subs ] mu_pvali // i /> } => struct ty_tag ]]$ }
     \end{proof}
-    
+
     \step{<1>6}{%
+        \case{%
+            \textsc{Ty\_Eq\_Emp}
+        }{
+            \pf\ True trivially (no free variables).
+        }
+    }
+
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_Res\_Eq\_PointsTo}.
+        }{
+            \pf\ By lemma \ref{subsec:sub_smt}.
+        }
+    }
+
+    \step{<1>8}{%
+        \case{%
+            \textsc{Ty\_Res\_Eq\_SepConj}.
+        }{
+            \pf\ By induction.
+        }
+    }
+
+    \step{<1>9}{%
+        \case{%
+            \textsc{Ty\_Res\_Eq\_Exists}.
+        }{
+            \pf\ By induction.
+        }
+    }
+
+    \step{<1>10}{%
+        \case{%
+            \textsc{Ty\_Res\_Eq\_Term}.
+        }{
+            \pf\ By induction and lemma \ref{subsec:sub_smt}.
+        }
+    }
+
+    \step{<1>11}{%
+        \case{%
+            \textsc{Ty\_Res\_Emp}.
+        }{
+            \pf True trivially (no free variables).
+        }
+    }
+
+    \step{<1>12}{%
+        \case{%
+            \textsc{Ty\_Res\_PointsTo}.
+        }{%
+            $[[ C' ; L' ; N' ; cdot , points_to |- points_to' <= points_to' ]]$.
+        }
+    }
+
+    \begin{proof}
+
+    \end{proof}
+
+    \step{<1>13}{%
+        \case{%
+            \textsc{Ty\_Res\_Var}.
+        }{%
+            $[[ C' ; L' ; N' ; cdot , r : res |- r <= res' ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{From $[[ R' ]] = [[ cdot , r : res ]]$, we know $[[ subs ]]$
+            was derived using \textsc{Ty\_Subs\_Cons\_Res\_Named}.}
+
+        \step{<2>2}{$[[ subs ]] = [[ res_term / r , subs' ]]$ and $[[ C ; L ; N ; R
+            |- res_term <= [ subs' ] res ]]$ by inversion on \stepref{<2>1}.}
+
+        \step{<2>3}{$[[ N' |- res eq res' ]]$ by inversion on \textsc{Ty\_Res\_Var}.}
+        
+        % TODO turn this into a lemma
+        \step{<2>4}{$[[ N |- res eq res' ]]$ and $[[ N |- [ subs ] res eq [ subs ] res' ]]$
+            by \stepref{<2>3} and substitution lemma.}
+
+        \step{<2>5}{$[[ C ; L ; N ; R |- res_term <= [ subs' ] res ]]$ by
+            inversion on \textsc{Ty\_Subs\_Cons\_Res\_Named}.}
+
+        \step{<2>6}{$[[ [ subs ] r ]] = [[ res_term ]]$ by \stepref{<2>2}.}
+
+        \step{<2>7}{$[[ [ subs' ] res' ]] = [[ [ subs ] res' ]]$ (and same for $[[ res ]]$)
+            because $r$ cannot occur in either.}
+
+        \step{<2>8}{\suffices{ $[[ C ; L ; N ; R |- res_term <= [ subs' ] res' ]]$ by
+            \stepref{<2>3} and \stepref{<2>7}.}
+            \pf\ By lemma \ref{subsec:res_subsum} and \stepref{<2>4}.}
+
+    \end{proof}
+
+    \step{<1>14}{%
+        \case{%
+            \textsc{Ty\_Res\_SepConj}.
+        }{%
+            \pf\ By induction.
+        }
+    }
+
+    \step{<1>15}{%
+        \case{%
+            \textsc{Ty\_Res\_Conj}.
+        }{%
+            $[[ C' ; L' ; N' ; R' |- res_term <= term_aux /\ res ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ C ; L ; N ; R |- [subs] res_term <= [subs] res]]$.\\
+            \pf\ By induction.}
+
+        \step{<2>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
+            \pf\ By lemma \ref{subsec:sub_smt}.}
+
+        \step{<2>3}{$[[ C ; L ; N ; R |- [ subs ] res_term <= [ subs ] term_aux /\ res ]]$
+            as required.}
+
+    \end{proof}
+
+    \step{<1>16}{%
+        \case{%
+            \textsc{Ty\_Res\_Pack}.
+        }{%
+            $[[ C' ; L' ; N' ; R' |- pack ( mu_pval_aux , res_term ) <= exists y : base_type . res ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,\begin{pfenum}
+            \item $[[ C ; L ; N |- [ subs ] mu_pval => base_type ]]$.
+            \item $[[ C ; L ; N ; R |- [ subs ] res_term <= [ subs , mu_pval_aux / y , cdot ] res ]]$.
+        \end{pfenum}}
+
+        \step{<2>2}{So $[[ C ; L ; N ; R |- [ subs ] pack ( mu_pval_aux ,
+            res_term ) <= [ subs ] exists y : base_type . res ]]$.}
+    \end{proof}
+
+    \step{<1>17}{%
+        \case{%
+            \textsc{Ty\_Spine\_Empty}.
+        }{
+            \pf\ $[[ret]]$ can be anything, including $[[ [subs] ret ]]$ and
+            the rule does not depend on the environment, so we are done.
+        }
+    }
+
+    \step{<1>18}{%
+        \case{%
+            \textsc{Ty\_Spine\_Comp}.
+        }{
+            $[[ C' ; L' ; N' ; R'  |- x  = mu_pval_aux , </ xi = spine_elemi //
+                i /> :; pi x : base_type . arg >> mu_pval_aux / x , psi ; ret ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,\begin{pfenum}
+            \item $[[ C ; L ; N |- [ subs ] mu_pval => base_type ]]$.
+            \item $[[ C ; L ; N ; R |- </ xi = [ subs ] spine_elemi // i /> :; [ subs ] arg >>
+                [subs] psi ; [ subs ] ret ]]$.
+        \end{pfenum}}
+
+        \step{<2>2}{So $[[ C ; L ; N ; R  |- x  = [ subs ] mu_pval_aux , </ xi = [ subs ] spine_elemi //
+            i /> :; [ subs ] pi x : base_type . arg >> [ subs] ( mu_pval_aux / x , psi ) ; [ subs ] ret ]]$.}
+    \end{proof}
+
+    \step{<1>19}{%
+        \case{%
+            \textsc{Ty\_Spine\_Log}.
+        }{
+            \pf\ Similar to \textsc{Ty\_Spine\_Comp}.
+        }
+    }
+
+    \step{<1>20}{%
+        \case{%
+            \textsc{Ty\_Spine\_Res}.
+        }{%
+            $[[ C' ; L' ; N' ; R1' , R2 |- x = res_term , </ xi = spine_elemi
+            // i/> :; res --o arg >> res_term / x , psi ; ret ]]$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By inversion and then induction,
+        \begin{pfenum}
+            \item $[[ C ; L ; N ; R1 |- [ subs ] res_term <= [ subs ] res ]]$.
+            \item $[[ C ; L ; N ; R2 |- </ xi = [ subs ] spine_elemi // i /> :;
+                ( [ subs ] res ) --o [ subs ] arg >> [ subs ] psi ; [ subs ] ret ]]$.
+        \end{pfenum}}
+
+        \step{<2>2}{Hence $[[ C ; L;  N ; R1 , R2 |- x = [ subs ] res_term ,
+            </ xi = [ subs ] spine_elemi // i /> :; [ subs ] ( res --o arg ) >>
+            [ subs ] ( res_term / x , psi ) ; [ subs ] ret ]]$ as required.}
+    \end{proof}
+
+    \step{<1>21}{%
+        \case{%
+            \textsc{Ty\_Spine\_Phi}.
+        }{%
+            $[[ C' ; L' ; N' ; R' |- </ xi = spine_elemi // i /> :;  term_aux
+                -) arg >> psi ; ret ]]$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{$[[ C ; L ; N ; R |- </ xi = [ subs ] spine_elemi // i /> :;
+                ( [ subs ] res ) --o [ subs ] arg >> [ subs ] psi ; [ subs ] ret ]]$.\\
+            \pf\ By induction.}
+
+        \step{<2>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
+            \pf\ By lemma \ref{subsec:sub_smt}.}
+
+        \step{<2>3}{Hence $[[ C ; L;  N ; R1 , R2 |- x = [ subs ] res_term ,
+            </ xi = [ subs ] spine_elemi // i /> :; [ subs ] ( res --o arg ) >>
+            [ subs ] ( res_term / x , psi ) ; [ subs ] ret ]]$ as required.}
+    \end{proof}
+
+
+    \step{<1>22}{%
         \case{%
             \textsc{Ty\_PE\_Val}
         }{%
@@ -168,7 +507,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>7}{%
+    \step{<1>23}{%
         \case{%
             \textsc{Ty\_PE\_Array\_Shift}.
         }{%
@@ -189,7 +528,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
             inj mu_pval_aux2 * size_of ct ) )]]$.}
     \end{proof}
 
-    \step{<1>8}{%
+    \step{<1>24}{%
         \case{%
             \textsc{Ty\_PE\_Member\_Shift}.
         }{%
@@ -197,7 +536,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>9}{%
+    \step{<1>25}{%
         \case{%
             \textsc{Ty\_PE\_\{Not,Arith\_Binop,Rel\_Binop,Bool\_Binop\}}.
         }{%
@@ -205,7 +544,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>10}{%
+    \step{<1>26}{%
         \case{%
             \textsc{Ty\_PE\_Call}.
         }{%
@@ -213,7 +552,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>11}{%
+    \step{<1>27}{%
         \case{%
             \textsc{Ty\_PE\_\{Assert\_Undef,Bool\_To\_Integer,WrapI\}}.
         }{%
@@ -221,7 +560,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>12}{%
+    \step{<1>28}{%
         \case{%
             \textsc{Ty\_TPVal\_Undef}
         }{%
@@ -229,7 +568,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>13}{%
+    \step{<1>29}{%
         \case{%
             \textsc{Ty\_TPVal\_Done}
         }{%
@@ -238,17 +577,17 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
     }
 
     \begin{proof}
-        \step{<2>1}{By induction,
-            \begin{pfenum}
-                \item $[[C ; L ; N |- [ subs ] mu_pval => base_type ]]$.
-                \item $[[ smt ( N => [ subs , mu_pval_aux / y , cdot ] term ) ]]$.
-            \end{pfenum}}
+        \step{<2>1}{$[[C ; L ; N |- [ subs ] mu_pval => base_type ]]$.\\
+            \pf\ By induction.}
 
-        \step{<2>2}{So $[[C ; L ; N |- [ subs ] done mu_pval_aux <= y
+        \step{<2>2}{$[[ smt ( N => [ subs , mu_pval_aux / y , cdot ] term ) ]]$.\\
+            \pf\ By lemma \ref{subsec:sub_smt}.}
+
+        \step{<2>3}{So $[[C ; L ; N |- [ subs ] done mu_pval_aux <= y
             : base_type . [ subs ] term ]]$.}
     \end{proof}
 
-    \step{<1>14}{%
+    \step{<1>30}{%
         \case{%
             \textsc{Ty\_TPE\_\{Let,LetT\}}.
         }{%
@@ -256,47 +595,33 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>15}{%
+    \step{<1>31}{%
         \case{%
             \textsc{Ty\_TPE\_If}.
         }{%
             \pf\ By induction.
         }
     }
-    
-    \step{<1>16}{%
+
+    \step{<1>32}{%
         \case{%
             \textsc{Ty\_TPE\_Case}.
         }{%
-            $[[ C' ; L' ; N' |- case mu_pval_aux of </ | mu_patterni =>
-                mu_tpexpri // i /> end <= y2 : base_type2 . term2]]$.
+            \pf\ See \textsc{Ty\_Seq\_TE\_Case} for more general case and proof.
         }
     }
 
-    \begin{proof}
-        \step{<2>1}{By induction,
-            \begin{pfenum}
-                \item $[[ C ; L ; N |- [ subs ] mu_pval => base_type1 ]]$.
-                \item $[[ </ mu_patterni : base_type1 ~> Ci with term_auxi // i />]]$.
-                \item $[[ </ C , Ci ; L ; N , term_auxi = inj mu_pval_aux
-                    |- [ subs ] mu_tpexpri <= y2 : base_type2 . [ subs ] term2 // i /> ]]$.
-            \end{pfenum}}
-
-        \step{<2>2}{$[[ C ; L ; N |- [ subs ] case mu_pval_aux of </ | mu_patterni =>
-            mu_tpexpri // i /> end <= y2 : base_type2 . [ subs ] term2]]$.}
-    \end{proof}
-
-    \step{<1>17}{%
+    \step{<1>33}{%
         \case{%
             \textsc{Ty\_\{Action*,Memop*\}}.
         }{%
-            \pf\ By induction. Rules with SMT checks still hold because the
-            same substitution is applied to the constraint context and the
-            consequent.
+            \pf\ By induction. Rules with SMT checks still hold because they are
+            true for all (well-typed) instantiations of a term's free variables,
+            and $[[ smt ( N => term ) ]]$ for each $ [[ term ]] \in [[N']]$.
         }
     }
 
-    \step{<1>18}{%
+    \step{<1>34}{%
         \case{%
             \textsc{Ty\_TVal\_I}
         }{%
@@ -304,7 +629,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>19}{%
+    \step{<1>35}{%
         \case{%
             \textsc{Ty\_TVal\_\{Comp,Log\}}.
         }{%
@@ -326,32 +651,26 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
             spine_elemi // i /> <= exists y : base_type . [ subs ] ret ]]$.}
     \end{proof}
 
-    \step{<1>20}{%
+    \step{<1>36}{%
         \case{%
             \textsc{Ty\_TVal\_Phi}
         }{%
-            $[[ C' ; L' ; N' ; R' |- </ xi = spine_elemi // i /> :; 
-                term_aux -) arg >> psi ; ret ]]$.
+            $[[ C' ; L' ; N' ; R' |- done spine <= term_aux /\ ret ]]$
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ C ; L ; N ; R |- </ xi = [ subs ] spine_elemi
-                // i /> :; [ subs ] arg >> [ subs ] psi ; [ subs ] ret ]]$.\\
+        \step{<2>1}{$[[ C ; L ; N ; R |- [ subs ] done spine <= [ subs ] ret ]]$.\\
             \pf\ By induction.}
 
-        \step{<2>2}{$[[smt ( N' => [ subs ] term ) ]]$.\\
-            \pf\ We $[[ smt ( N' => term ) ]]$, which means it is true for
-            all (well-typed) instantiations of its free variables.}
+        \step{<2>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
+            \pf\ By lemma \ref{subsec:sub_smt}.}
 
-        \step{<2>3}{$[[ smt ( N => [ subs ] term ) ]]$.\\
-            \pf\ From $ \Phi \Rightarrow \Phi' $ and \stepref{<2>2}.}
-
-        \step{<2>4}{$[[ C ; L ; N ; R |- </ xi = [ subs ] spine_elemi // i /> :; 
-            [ subs ] ( term_aux -) arg ) >> [ subs ] psi ; [ subs ] ret ]]$ as required.}
+        \step{<2>3}{$[[ C ; L ; N ; R |- [ subs ] done spine <= [ subs ]
+            term_aux /\ ret  ]]$ as required.}
     \end{proof}
 
-    \step{<1>21}{%
+    \step{<1>37}{%
         \case{%
             \textsc{Ty\_TVal\_Res}
         }{%
@@ -360,7 +679,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>22}{%
+    \step{<1>38}{%
         \case{%
             \textsc{Ty\_TVal\_Undef}
         }{%
@@ -368,7 +687,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>23}{%
+    \step{<1>39}{%
         \case{%
             \textsc{Ty\_Seq\_TE\_\{TVal,If,Bound\}}.
         }{%
@@ -376,7 +695,7 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
         }
     }
 
-    \step{<1>24}{%
+    \step{<1>40}{%
         \case{%
             \textsc{Ty\_Seq\_E\_\{CCall,Proc,Run\}}.
         }{%
@@ -398,47 +717,71 @@ J$ then $\ctxC ; \ctxL ; \sigma ( \ctxN' ) ; \ctxR \vdash \sigma ( J )$.
 
     \end{proof}
 
-    % \textsc{Ty\_Is\_E\_Memop}.
-    % \textsc{Ty\_Is\_E\_\{Neg\_\}Action}.
-    % \textsc{Ty\_Seq\_TE\_\{LetP,LetPT\}}.
-    % \textsc{Ty\_Seq\_TE\_Let}.
-    % \textsc{Ty\_Seq\_TE\_LetT}.
-
-    %         $[[ C' ; L' ; N' |- let mu_sym_or_pattern = mu_pexpr in mu_tpexpr <= y2 : base_type2. term2 ]]$.
-    % \begin{proof}
-    %     \step{<2>1}{By induction,
-    %     \begin{pfenum}
-    %         \item $[[ C ; L ; N |- [ subs ] mu_pexpr  => y1 : base_type . [ subs ] term1 ]]$.
-    %         \item $[[ C , C1 ; L ; N , [ term_aux / y1 , subs ] term1 |- [ subs ] mu_tpexpr <= y2 : base_type2 . [subs] term2]]$.
-    %     \end{pfenum}}
-
-    %     \step{<2>2}{$[[ C ; L ; N |- [ subs ] let mu_sym_or_pattern = mu_pexpr in mu_tpexpr <= y2 : base_type2 . [ subs ] term2 ]]$ as required.}
-    % \end{proof}
-
-    % \textsc{Ty\_Seq\_TE\_Case}.
-    % \textsc{Ty\_Is\_TE\_LetS}.
-
-    \step{<1>25}{%
+    \step{<1>41}{%
         \case{%
-            \textsc{Ty\_Spine\_Res}.
-        }{%
-            $[[ C' ; L' ; N' ; R1' , R2 |- x = res_term , </ xi = spine_elemi
-            // i/> :; res --o arg >> res_term / x , psi ; ret ]]$
+            \textsc{Ty\_Is\_\{Memop,Neg\_Action,Action\}}
+        }{
+            \pf\ By induction.
+        }
+    }
+
+    \step{<1>42}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_\{LetP,LetPT\}}.
+        }{
+            \pf\ See \textsc{Ty\_Seq\_TE\_\{Let,LetT\}}.
+        }
+    }
+
+    \step{<1>43}{%
+        \case{%
+            \textsc{Ty\_Seq\_TE\_\{Let,LetT,LetS\}}.
+        }{
+            Only doing \textsc{Let} case, \textsc{LetT} and \textsc{LetS} are similar.\\
+            $[[ C' ; L' ; N' ; R''' , R'' |- let </ ret_patterni // i /> =
+                mu_seq_expr in mu_texpr <= ret2 ]]$.
         }
     }
 
     \begin{proof}
-        \step{<2>1}{By inversion and then induction,
+        \step{<2>1}{By induction,
         \begin{pfenum}
-            \item $[[ C ; L ; N ; R1 |- [ subs ] res_term <= [ subs ] res ]]$.
-            \item $[[ C ; L ; N ; R2 |- </ xi = [ subs ] spine_elemi // i /> :;
-                ( [ subs ] res ) --o [ subs ] arg >> [ subs ] psi ; [ subs ] ret ]]$.
+            \item $[[ C ; L ; N ; R' |- [ subs ] mu_seq_expr => [ subs ]  ret1 ]]$.
+            \item $[[ C , C1 ; L , L1 ; N , N1 ; R , R1 |- [ subs ] mu_texpr <= [ subs ] ret2 ]]$.
         \end{pfenum}}
 
-        \step{<2>2}{Hence $[[ C ; L;  N ; R1 , R2 |- x = [ subs ] res_term ,
-            </ xi = [ subs ] spine_elemi // i /> :; [ subs ] ( res --o arg ) >>
-            [ subs ] ( res_term / x , psi ) ; [ subs ] ret ]]$ as required.}
+        \step{<2>2}{$[[ C ; L ; N ; R' , R |- [ subs ] let </ ret_patterni // i /> =
+            mu_seq_expr in mu_texpr <= [ subs ] ret2 ]]$ as required.}
     \end{proof}
+
+    \step{<1>44}{
+        \case{%
+            \textsc{Ty\_Seq\_TE\_Case}.
+        }{
+            $[[ C' ; L' ; N' ; R' |- case mu_pval_aux of </ | mu_patterni => mu_texpri // i /> end <= ret ]]$.
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,
+            \begin{pfenum}
+                \item $[[ C ; L ; N |- [ subs ] mu_pval => base_type1 ]]$.
+                \item $[[ </ C , Ci ; L ; N , term_auxi = inj [ subs ]
+                    mu_pval ; R |- [ subs ] mu_texpri <= [ subs ] ret // i /> ]]$.
+            \end{pfenum}}
+
+        \step{<2>2}{$[[ C ; L ; N ; R |- [ subs ] case mu_pval_aux of </ |
+            mu_patterni => mu_texpri // i /> end <= [ subs ] ret ]]$ as required.}
+
+    \end{proof}
+
+    \step{<1>45}{%
+        \case{%
+            \textsc{Ty\_TE\_\{Is,Seq\}}.
+        }{
+            \pf\ By induction.
+        }
+    }
 
 \end{proof}
 
@@ -565,7 +908,7 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
         \case{%
             \textsc{Ty\_PE\_Not}.
         }{%
-            \pf\ $[[mu_pval_aux]]$ must be a $[[mu_bool_value]]$ so 
+            \pf\ $[[mu_pval_aux]]$ must be a $[[mu_bool_value]]$ so
             \textsc{Op\_PE\_PE\_Not\_\{True,False\}}.
         }
     }
@@ -902,7 +1245,7 @@ If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_2.\
 \subsection{Pointed-to values have type $[[to_base ( ct )
 ]]$}\label{subsec:pt_val_type}
 
-For $pt  = [[ _ ( _q )|- tick - ct -> inj mu_pval_aux ]]$, 
+For $pt  = [[ _ ( _q )|- tick - ct -> inj mu_pval_aux ]]$,
 if $[[ C ; L ; N ; R |- pt <= pt]]$ then
 $[[ C ; L ; N |- mu_pval_aux => to_base ( ct ) ]]$.
 
@@ -929,19 +1272,19 @@ values}\label{subsec:pattern_term}
 
 % \subsection{Constraints derived patterns from patterns are
 % provable}\label{subsec:pattern_phi}
-% 
+%
 % \begin{proof}
 %     \assume{%
 %         \begin{pfenum}
 %             \item $[[ cdot ; cdot ; cdot ; R' |- done </ spine_elemi // i /> <= ret ]]$.\label{pattern_term-assm1}
 %             \item $[[ </ ret_patterni // i /> : ret ~> C ; L ; N ; R ]]$.
 %         \end{pfenum}}
-% 
+%
 %     \prove{ $ cdot => N $.\\}
-% 
+%
 %     \pfsketch{ Induction over \ref{pattern_term-assm1}, focusing only on cases computational
 %         and constraint cases.\\}
-% 
+%
 %     \step{<1>1}{%
 %         \case{%
 %             \textsc{Ty\_TVal\_Phi}
@@ -950,24 +1293,24 @@ values}\label{subsec:pattern_term}
 %             $ cdot => N' $ by induction. So $ cdot => N' , term_aux $.
 %         }
 %     }
-% 
+%
 %     \step{<1>2}{%
 %         \case{%
 %             \textsc{Ty\_TVal\_Comp}
 %         }{%
 %         }
 %     }
-% 
+%
 %     \begin{proof}
 %         \step{<2>1}{By inversion on the assumptions,\begin{pfenum}
 %             \item $[[mu_sym_or_pattern : base_type ~> C1 with term_aux1 ]]$.
 %             \item $[[ </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L ; N ; R ]]$.
 %             \item $[[ cdot ; cdot ; cdot ; R |- done </ spine_elemi // i /> <= [ mu_pval_aux / y , cdot ] ret ]]$.
 %         \end{pfenum}}
-% 
+%
 %         \step{<2>2}{By lemma \ref{subsec:pattern_term} and induction, we have $ cdot => N $.}
 %     \end{proof}
-% 
+%
 % \end{proof}
 
 
@@ -1047,6 +1390,7 @@ Now, resource part.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_Pat\_Res\_PointsTo}.
+            % TODO check this
         }{
             $[[res_pattern]] = [[res_term]] = [[res]] = [[pt]]$.
             $[[subs]] = \cdot$, $[[L]] = \cdot$, $[[N]] = \cdot$,
@@ -1386,6 +1730,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
             by construction of $[[mu_pval_aux]]$.}
 
+        % TODO check this
         \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot , pt |- pt <= pt ]]$ by
             \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1455,6 +1800,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
 
+        % TODO check this
         \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot , pt' |- pt' <= pt' ]]$
             by \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1561,6 +1907,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>1}{$[[ cdot ; cdot ; cdot ; R |- pt <= pt]]$, by inversion on
             \ref{ptrValid-assm1}.}
 
+        % TODO check this
         \step{<2>2}{$R = [[ cdot , pt ]]$, by \textsc{Ty\_Res\_PointsTo}.}
 
         \step{<2>3}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
@@ -1736,7 +2083,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
         \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pexpr_aux' => y : base_type . term ]]$.\\
             \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
-        
+
         \step{<2>4}{ $[[ cdot ; cdot ; cdot |- let mu_sym_or_pattern = mu_pexpr_aux'
             in mu_tpexpr <= y2 : base_type2 . term2 ]]$.\\
             \pf\ By \textsc{Ty\_Seq\_TE\_LetP} using \stepref{<2>1}.2,3 and \stepref{<2>3}.}

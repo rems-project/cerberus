@@ -271,6 +271,7 @@
 \cnrulehead{\cnnt{bool\_op}}{::=}{}\cnprodnewline
 \cnfirstprodline{|}{\neg \, term}{}{}{}{}\cnprodnewline
 \cnprodline{|}{term_{{\mathrm{1}}}  =  term_{{\mathrm{2}}}}{}{}{}{}\cnprodnewline
+\cnprodline{|}{term_{{\mathrm{1}}}  \rightarrow  term_{{\mathrm{2}}}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\bigwedge  \cnsym{(} \, \cncomp{term_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\bigvee  \cnsym{(} \, \cncomp{term_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{term_{{\mathrm{1}}}  \wedge  term_{{\mathrm{2}}}} {\textsf{M}}{}{}{}\cnprodnewline
@@ -543,7 +544,8 @@
 \newcommand{\cnmuXXseqXXexprXXaux}{
 \cnrulehead{seq\_expr}{::=}{\cncom{sequential (effectful) expressions with auxiliary info}}\cnprodnewline
 \cnfirstprodline{|}{ \,  \, seq\_expr}{}{}{}{}\cnprodnewline
-\cnprodline{|}{seq\_expr}{}{}{}{\cncom{Ott-hack for simpler typing rules}}}
+\cnprodline{|}{seq\_expr}{}{}{}{\cncom{Ott-hack for simpler typing rules}}\cnprodnewline
+\cnprodline{|}{ \sigma  (  seq\_expr  ) } {\textsf{M}}{}{}{}}
 
 \newcommand{\cnmuXXseqXXtexpr}{
 \cnrulehead{seq\_texpr}{::=}{\cncom{sequential top-level (effectful) expressions}}\cnprodnewline
@@ -1309,8 +1311,7 @@
 
 
 \newcommand{\cndruleTyXXResXXEqXXTerm}[1]{\cndrule[#1]{%
-\cnpremise{\cnkw{smt} \, \cnsym{(}  \Phi  \cnsym{,}  term  \Rightarrow  term'  \cnsym{)}}%
-\cnpremise{\cnkw{smt} \, \cnsym{(}  \Phi  \cnsym{,}  term'  \Rightarrow  term  \cnsym{)}}%
+\cnpremise{\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \cnsym{(}  term  \rightarrow  term'  \cnsym{)}  \wedge  \cnsym{(}  term'  \rightarrow  term  \cnsym{)}  \cnsym{)}}%
 \cnpremise{\Phi  \vdash  \cnnt{res} \, \equiv \, \cnnt{res'}}%
 }{
 \Phi  \vdash  term  \wedge  \cnnt{res} \, \equiv \, term'  \wedge  \cnnt{res'}}{%
@@ -1335,8 +1336,9 @@
 
 \newcommand{\cndruleTyXXResXXPointsTo}[1]{\cndrule[#1]{%
 \cnpremise{\Phi  \vdash  \cnnt{points\_to} \, \equiv \, \cnnt{points\_to'}}%
+\cnpremise{\Phi  \vdash  \cnnt{points\_to'} \, \equiv \, \cnnt{points\_to''}}%
 }{
-\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{points\_to}  \vdash  \cnnt{points\_to'}  \Leftarrow  \cnnt{points\_to'}}{%
+\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{points\_to}  \vdash  \cnnt{points\_to'}  \Leftarrow  \cnnt{points\_to''}}{%
 {\cndrulename{Ty\_Res\_PointsTo}}{}%
 }}
 
@@ -1369,9 +1371,9 @@
 
 \newcommand{\cndruleTyXXResXXPack}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval  \Rightarrow  \beta}%
-\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term_{{\mathrm{2}}}}  \Leftarrow   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res}  ) }%
+\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res}  ) }%
 }{
-\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term_{{\mathrm{2}}}}  \cnsym{)}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res}}{%
+\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term}  \cnsym{)}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res}}{%
 {\cndrulename{Ty\_Res\_Pack}}{}%
 }}
 
@@ -3113,7 +3115,7 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 
 \newcommand{\cndruleTyXXSubsXXConsXXResXXNamed}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}}%
-\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}}%
+\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnnt{res\_term}  \Leftarrow   \sigma  (  \cnnt{res}  ) }%
 }{
 \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnsym{(}  \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \cnmv{x}  {:}  \cnnt{res}  \cnsym{)}}{%
 {\cndrulename{Ty\_Subs\_Cons\_Res\_Named}}{}%
@@ -3122,9 +3124,9 @@ ident  =  \cnnt{res\_term}  \leadsto  \cnnt{res\_term}  \cnsym{/}  ident  \cnsym
 
 \newcommand{\cndruleTyXXSubsXXConsXXResXXAnon}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{)}}%
-\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cncomp{\cdot  \cnsym{,}  \cnnt{res_{\cnmv{i}}}}{\cnmv{i}}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}}%
+\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnnt{res\_term}  \Leftarrow   \sigma  (  \cnnt{res}  ) }%
 }{
-\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \cnsym{,} \, \cncomp{\cdot  \cnsym{,}  \cnnt{res_{\cnmv{i}}}}{\cnmv{i}}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{,} \, \cncomp{\cdot  \cnsym{,}  \cnnt{res_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}}{%
+\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \cnnt{res}  \cnsym{)}}{%
 {\cndrulename{Ty\_Subs\_Cons\_Res\_Anon}}{}%
 }}
 

@@ -207,7 +207,7 @@ let is_mu_pexpr_of_mu_pexpr (mu_pexpr5:'TY mu_pexpr) : bool =
 
 let is_mu_seq_expr_of_mu_seq_expr (mu_seq_expr5:'TY mu_seq_expr) : bool =
   match mu_seq_expr5 with
-  | (M_Seq_Eccall (ty_act,mu_pval_aux,spine)) -> (true)
+  | (M_Seq_Eccall (ty_act,symbol_sym,spine)) -> (true)
   | (M_Seq_Eproc (mu_name,spine)) -> ((is_mu_name_of_mu_pval mu_name))
 
 
@@ -237,6 +237,7 @@ type
 'bt bool_op = 
    Not of 'bt term_aux
  | Eq of 'bt term_aux * 'bt term_aux
+ | Impl of 'bt term_aux * 'bt term_aux
  | And of ('bt term_aux) list
  | Or of ('bt term_aux) list
  | ITE of 'bt term_aux * 'bt term_aux * 'bt term_aux
@@ -459,7 +460,7 @@ res =  (* resources *)
 
 type 
 'TY mu_seq_expr =  (* sequential (effectful) expressions *)
-   M_Seq_Eccall of 'TY act * 'TY mu_pval_aux * 'TY spine_elem list (* C function call *)
+   M_Seq_Eccall of 'TY act * Symbol.sym * 'TY spine_elem list (* C function call *)
  | M_Seq_Eproc of 'TY mu_pval * 'TY spine_elem list (* procedure call *)
 
 
