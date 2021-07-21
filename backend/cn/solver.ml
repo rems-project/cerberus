@@ -19,6 +19,8 @@ let params = Z3.Params.mk_params context
 let () = Z3.set_global_param "smt.auto-config" "false"
 let () = Z3.set_global_param "smt.mbqi" "false"
 let () = Z3.set_global_param "smt.pull-nested-quantifiers" "true"
+let () = Z3.set_global_param "smt.macro_finder" "true"
+
 
 
 
@@ -131,12 +133,6 @@ module Make (G : sig val global : Global.t end) = struct
            | CT_pred t -> ct_pred t bt
            | Option_op t -> option_op t bt
            | Param_op t -> param_op t bt
-         in
-         let scs = match bt with
-           | Loc -> 
-              let zero = Z3.Arithmetic.Integer.mk_numeral_s context "0" in
-              (Z3.Arithmetic.mk_le context zero sc) :: scs
-           | _ -> scs
          in
          let () = ITtbl.add tbl it (sc, scs) in
          (sc, scs)
@@ -393,8 +389,7 @@ module Make (G : sig val global : Global.t end) = struct
            Z3.Quantifier.expr_of_quantifier (
            Z3.Quantifier.mk_forall_const context 
              [Z3.Expr.mk_const context (sym_to_sym i) (sort_of_bt abt)]
-             (Z3.Boolean.mk_eq context 
-                select_t body_t)
+             (Z3.Boolean.mk_eq context select_t body_t)
              None 
              [Z3.Quantifier.mk_pattern context [select_t]]
              [] None None
@@ -480,21 +475,18 @@ module Make (G : sig val global : Global.t end) = struct
        Debug_ocaml.error ("Z3 error: " ^ err)
 
 
-
-
   let check local (lc : LC.t) =  
-    let solver = Z3.Solver.mk_simple_solver context in
     (* as similarly suggested by Robbert *)
     match lc with
     | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
+       let solver = Z3.Solver.mk_simple_solver context in
        (`YES, solver)
     | _ ->
-       let () = Debug_ocaml.begin_csv_timing "check" in
+       let solver = Z3.Solver.mk_simple_solver context in
        let assumptions = 
          List.concat_map of_logical_constraint_assumption 
            (Local.all_constraints local) 
        in
-       let () = Debug_ocaml.begin_csv_timing "adding constraints" in
        Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
        begin
          match lc with
@@ -507,15 +499,11 @@ module Make (G : sig val global : Global.t end) = struct
             let t, e = of_index_term t in
                Z3.Solver.add solver (Z3.Boolean.mk_not context t :: e)
        end;
-       let () = Debug_ocaml.end_csv_timing "adding constraints" in
-       let () = Debug_ocaml.begin_csv_timing "actually checking" in
        let result = 
          try Z3.Solver.check solver [] with
          | Z3.Error err -> 
             Debug_ocaml.error ("Z3 error: " ^ err)
        in
-       let () = Debug_ocaml.end_csv_timing "actually checking" in
-       let () = Debug_ocaml.end_csv_timing "check" in
        match result with
        | Z3.Solver.UNSATISFIABLE -> (`YES, solver)
        | Z3.Solver.SATISFIABLE -> (`NO, solver)

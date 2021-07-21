@@ -53,8 +53,9 @@ open Assertion_parser_util
 %type <Ast.term>term
 %type <Ast.condition>cond
 %type <Ast.condition>start
+%type <Z.t>integer
 
-%start start
+%start start integer
 
 %%
 
@@ -75,6 +76,14 @@ labeled_name:
   | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
       { (id, args) }
 
+
+integer:
+  | MINUS z=Z
+      { Z.minus_big_int z }
+  | z=Z
+      { z }
+  | LPAREN z=integer RPAREN
+      { z }
 
 
 atomic_term:

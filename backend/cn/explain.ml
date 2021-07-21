@@ -342,12 +342,13 @@ module Make (G : sig val global : Global.t end) = struct
        | BT.Real -> 
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Loc ->
+          (* adapting from core_parser_driver.ml *)
           let str = Z3.Expr.to_string evaluated_expr in
-          begin try 
-              return (Z.pp_hex 16 (Z.of_string str))
-            with
-            | _ -> Debug_ocaml.error ("error parsing string: " ^ str)
-          end
+          let lexbuf = Lexing.from_string str in
+          let z = try Assertion_parser.integer Assertion_lexer.main lexbuf with
+                  | _ -> Debug_ocaml.error ("error parsing string: " ^ str)
+          in
+          return (Z.pp_hex 16 z)
        | BT.Bool ->
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Param _ ->
