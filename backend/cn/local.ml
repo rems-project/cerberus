@@ -18,6 +18,7 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
+    descriptions : Ast.Terms.term SymMap.t;
     (* a subset of the logical symbols, just for error reporting, all
        pointer-typed *)
     global : SymSet.t;
@@ -29,6 +30,7 @@ let empty = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
+    descriptions = SymMap.empty;
     global = SymSet.empty;
   }
 
@@ -132,6 +134,15 @@ let remove_resource resource local =
   { local with resources }
 
 
+let add_description (s, term) local = 
+  let descriptions = SymMap.add s term local.descriptions in 
+  { local with descriptions }
+
+let add_descriptions =
+  List.fold_right add_description
+
+
+(* let add_descriptions descrs local *)
 
 
 
@@ -147,7 +158,7 @@ let concat (local' : t) (local : t) =
 let (++) = concat
 
 
-let all_names (local : t) = 
+let all_vars (local : t) = 
   List.map fst (SymMap.bindings local.computational) @
   List.map fst (SymMap.bindings local.logical)
 

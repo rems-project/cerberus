@@ -251,7 +251,9 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let explanation names local relevant =
+  let explanation local relevant =
+
+    let names = SymMap.bindings local.L.descriptions in
 
     print stdout !^"producing error report";
 
@@ -260,7 +262,7 @@ module Make (G : sig val global : Global.t end) = struct
 
     let relevant =
       let names_syms = SymSet.of_list (List.map fst names) in
-      let named_syms = SymSet.of_list (List.filter Sym.named (L.all_names local)) in
+      let named_syms = SymSet.of_list (List.filter Sym.named (L.all_vars local)) in
       let from_resources = RE.free_vars_list (L.all_resources local) in
       SymSet.union (SymSet.union (SymSet.union names_syms named_syms) from_resources)
         relevant
@@ -488,8 +490,8 @@ module Make (G : sig val global : Global.t end) = struct
     table4 ("pointer", "size", "state", "variable") lines
 
 
-  let json_state names local : Yojson.Safe.t = 
-    let (explanation, local) = explanation names local SymSet.empty in
+  let json_state local : Yojson.Safe.t = 
+    let (explanation, local) = explanation local SymSet.empty in
     let lines = 
       List.map (fun (a,_,c,d,e,_) : Yojson.Safe.t ->
           let jsonf doc = `String (Pp.plain doc) in
@@ -508,61 +510,61 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let state names local = 
-    let (explanation, local) = explanation names local SymSet.empty in
+  let state local = 
+    let (explanation, local) = explanation local SymSet.empty in
     pp_state local explanation
 
-  let undefined_behaviour names local = 
-    let (explanation, local) = explanation names local SymSet.empty in
+  let undefined_behaviour local = 
+    let (explanation, local) = explanation local SymSet.empty in
     pp_state_with_model local explanation (counter_model local)
 
-  let implementation_defined_behaviour names local it = 
+  let implementation_defined_behaviour local it = 
     let (explanation, local) = 
-      explanation names local (IT.free_vars it)
+      explanation local (IT.free_vars it)
     in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation (counter_model local))
 
-  let missing_ownership names local it = 
-    let (explanation, local) = explanation names local (IT.free_vars it) in
+  let missing_ownership local it = 
+    let (explanation, local) = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation (counter_model local))
 
-  let index_term names local it = 
+  let index_term local it = 
     let (explanation, local) = 
-      explanation names local (IT.free_vars it)
+      explanation local (IT.free_vars it)
     in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     it_pp
 
-  let index_terms names local (it,it') = 
+  let index_terms local (it,it') = 
     let (explanation, local) = 
-      explanation names local 
+      explanation local 
         (SymSet.union (IT.free_vars it) (IT.free_vars it'))
     in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
     (it_pp, it_pp')
 
-  let unsatisfied_constraint names local lc = 
+  let unsatisfied_constraint local lc = 
     let model = let (_,solver) = S.provable_and_solver local lc in S.get_model solver in
-    let (explanation, local) = explanation names local (LC.free_vars lc) in
+    let (explanation, local) = explanation local (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
-  let resource names local re = 
-    let (explanation, local) = explanation names local (RE.free_vars re) in
+  let resource local re = 
+    let (explanation, local) = explanation local (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation (counter_model local))
 
-  let resource_request names local re = 
-    let (explanation, local) = explanation names local (RER.free_vars re) in
+  let resource_request local re = 
+    let (explanation, local) = explanation local (RER.free_vars re) in
     let re_pp = RER.pp (RER.subst_vars explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation (counter_model local))
 
-  let resources names local (re1, re2) = 
+  let resources local (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
-    let (explanation, local) = explanation names local relevant in
+    let (explanation, local) = explanation local relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
     ((re1, re2), pp_state_with_model local explanation (counter_model local))
