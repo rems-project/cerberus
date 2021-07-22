@@ -107,6 +107,10 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
 
 \end{proof}
 
+\subsection{Resource equality is an equivalence relation}\label{subsec:res_eq_eqrel}
+
+\pfsketch{ By induction.}
+
 \subsection{Resource typing subsumption}\label{subsec:res_subsum}
 
 \begin{proof}
@@ -142,8 +146,8 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
         \step{<2>1}{$[[ N |- points_to eq points_to' ]]$ and $[[ N |-
             points_to' eq points_to'' ]]$ by inversion.}
 
-        % TODO state transitivity as a lemma
-        \step{<2>2}{$[[ N |- points_to' eq points_to1 ]]$ by transitivity.}
+        \step{<2>2}{$[[ N |- points_to' eq points_to1 ]]$ by transitivity
+            (lemma \ref{subsec:res_eq_eqrel}).}
 
         \step{<2>3}{$[[ C ; L ; N ; cdot , points_to |- points_to' <= points_to1 ]]$ as required.}
     \end{proof}
@@ -152,8 +156,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
         \case{%
             \textsc{Ty\_Res\_Var}
         }{%
-            % TODO state transitivity as a lemma
-            \pf\ By transitivity.
+            \pf\ By transitivity (lemma \ref{subsec:res_eq_eqrel}).
         }
     }
 
@@ -256,7 +259,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_PVal\_Error}.
         }{%
-            \pf\ By lemma \ref{subsec:sub_smt}.
+            \pf\ Substitutions preserve SMT results (lemma \ref{subsec:sub_smt}).
         }
     }
 
@@ -288,7 +291,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_Res\_Eq\_PointsTo}.
         }{
-            \pf\ By lemma \ref{subsec:sub_smt}.
+            \pf\ Substitutions preserver SMT results (lemma \ref{subsec:sub_smt}).
         }
     }
 
@@ -312,7 +315,8 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_Res\_Eq\_Term}.
         }{
-            \pf\ By induction and lemma \ref{subsec:sub_smt}.
+            \pf\ By induction and substitutions preserving SMT results (lemma
+            \ref{subsec:sub_smt}).
         }
     }
 
@@ -328,11 +332,37 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_Res\_PointsTo}.
         }{%
-            $[[ C' ; L' ; N' ; cdot , points_to |- points_to' <= points_to' ]]$.
+            $[[ C' ; L' ; N' ; cdot , pt |- pt' <= pt'' ]]$.
+            \prove{ $[[ C ; L ; N ; R |- [ subs ] pt' <= [ subs ] pt'' ]]$.}
         }
     }
 
     \begin{proof}
+
+    \step{<2>1}{Since $[[ R' ]] = [[ cdot , pt ]]$, $[[ subs ]]$ was
+        derived using \textsc{Ty\_Subs\_Cons\_Res\_Anon}.}
+
+    \step{<2>2}{$[[ N' |- pt eq pt' ]]$ and $[[ N' |- pt' eq pt'' ]]$ by inversion on the case.}
+
+    \step{<2>3}{So $[[ N |- [ subs ] pt eq [ subs ] pt' ]]$ and $[[ N |- [ subs ] pt' eq
+        [ subs ] pt'' ]]$ because substitutions preserve SMT results (lemma \ref{subsec:sub_smt}).}
+
+    \step{<2>4}{$[[ C ; L ; N ; R |- res_term <= [ subs ] pt ]]$ by inversion on \stepref{<2>1}.}
+
+    \step{<2>5}{$[[ res_term ]] = [[ pt3 ]]$ for some $[[ pt3 ]]$ by inversion
+        on \stepref{<2>4} (\textsc{Ty\_Res\_PointsTo}).}
+
+    \step{<2>6}{$[[ N |- pt3 eq [ subs ] pt ]]$ by inversion on \stepref{<2>3}.}
+
+    \step{<2>7}{$[[ C ; L ; N ; R |- [ subs ] pt' <= pt3 ]]$.\\
+        \pf\ \textsc{Ty\_Res\_PointsTo} is symmetric in all its $[[pt]]$
+        arguments (because resource equality is an equivalence relation, lemma
+        \ref{subsec:res_eq_eqrel}).}
+
+    \step{<2>8}{$[[ C ; L ; N ; R |- [ subs ] pt' <= [ subs ] pt'' ]]$.\\
+        \pf\ By \stepref{<2>3}, resource equality an equivalence relation
+        (lemma \ref{subsec:res_eq_eqrel}) and resource typing subsumption
+        (lemma \ref{subsec:res_subsum}).}
 
     \end{proof}
 
@@ -353,9 +383,8 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
 
         \step{<2>3}{$[[ N' |- res eq res' ]]$ by inversion on \textsc{Ty\_Res\_Var}.}
         
-        % TODO turn this into a lemma
         \step{<2>4}{$[[ N |- res eq res' ]]$ and $[[ N |- [ subs ] res eq [ subs ] res' ]]$
-            by \stepref{<2>3} and substitution lemma.}
+            by \stepref{<2>3} and substitution lemma over \textsc{Ty\_Res\_Eq*} cases.}
 
         \step{<2>5}{$[[ C ; L ; N ; R |- res_term <= [ subs' ] res ]]$ by
             inversion on \textsc{Ty\_Subs\_Cons\_Res\_Named}.}
@@ -367,7 +396,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
 
         \step{<2>8}{\suffices{ $[[ C ; L ; N ; R |- res_term <= [ subs' ] res' ]]$ by
             \stepref{<2>3} and \stepref{<2>7}.}
-            \pf\ By lemma \ref{subsec:res_subsum} and \stepref{<2>4}.}
+            \pf\ Resource typing subsumption (lemma \ref{subsec:res_subsum}) and \stepref{<2>4}.}
 
     \end{proof}
 
@@ -392,7 +421,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
             \pf\ By induction.}
 
         \step{<2>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
-            \pf\ By lemma \ref{subsec:sub_smt}.}
+            \pf\ Substitutions preserve SMT results (lemma \ref{subsec:sub_smt}).}
 
         \step{<2>3}{$[[ C ; L ; N ; R |- [ subs ] res_term <= [ subs ] term_aux /\ res ]]$
             as required.}
@@ -491,7 +520,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
             \pf\ By induction.}
 
         \step{<2>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
-            \pf\ By lemma \ref{subsec:sub_smt}.}
+            \pf\ Substitutions preserve SMT results (lemma \ref{subsec:sub_smt}).}
 
         \step{<2>3}{Hence $[[ C ; L;  N ; R1 , R2 |- x = [ subs ] res_term ,
             </ xi = [ subs ] spine_elemi // i /> :; [ subs ] ( res --o arg ) >>
@@ -581,7 +610,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
             \pf\ By induction.}
 
         \step{<2>2}{$[[ smt ( N => [ subs , mu_pval_aux / y , cdot ] term ) ]]$.\\
-            \pf\ By lemma \ref{subsec:sub_smt}.}
+            \pf\ Substitutions preserve SMT results (lemma \ref{subsec:sub_smt}).}
 
         \step{<2>3}{So $[[C ; L ; N |- [ subs ] done mu_pval_aux <= y
             : base_type . [ subs ] term ]]$.}
@@ -664,7 +693,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
             \pf\ By induction.}
 
         \step{<2>2}{$[[ smt ( N => [ subs ] term ) ]]$.\\
-            \pf\ By lemma \ref{subsec:sub_smt}.}
+            \pf\ Substitutions preserve SMT results (lemma \ref{subsec:sub_smt}).}
 
         \step{<2>3}{$[[ C ; L ; N ; R |- [ subs ] done spine <= [ subs ]
             term_aux /\ ret  ]]$ as required.}
@@ -1390,7 +1419,7 @@ Now, resource part.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_Pat\_Res\_PointsTo}.
-            % TODO check this
+            % TODO fix this
         }{
             $[[res_pattern]] = [[res_term]] = [[res]] = [[pt]]$.
             $[[subs]] = \cdot$, $[[L]] = \cdot$, $[[N]] = \cdot$,
@@ -1730,7 +1759,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
             by construction of $[[mu_pval_aux]]$.}
 
-        % TODO check this
+        % TODO fix this
         \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot , pt |- pt <= pt ]]$ by
             \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1766,8 +1795,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
         \step{<2>2}{$[[ smt ( cdot => inj mu_pval_aux = inj mu_pval_aux ) ]]$ trivially.}
 
-        \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
-            by \stepref{<2>1} and lemma \ref{subsec:pt_val_type}.}
+        \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$ by \stepref{<2>1}
+            and pointed-values have the right type (lemma \ref{subsec:pt_val_type}).}
 
         \step{<2>4}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>1} --
             \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
@@ -1800,7 +1829,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
 
-        % TODO check this
+        % TODO fix this
         \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot , pt' |- pt' <= pt' ]]$
             by \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1907,7 +1936,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>1}{$[[ cdot ; cdot ; cdot ; R |- pt <= pt]]$, by inversion on
             \ref{ptrValid-assm1}.}
 
-        % TODO check this
+        % TODO fix this
         \step{<2>2}{$R = [[ cdot , pt ]]$, by \textsc{Ty\_Res\_PointsTo}.}
 
         \step{<2>3}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
@@ -1991,7 +2020,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
 
         \step{<2>3}{$[[ subs ]] = [[ subs' ]]$ and $[[ ret ]] = [[ ret' ]]$
             by induction on $[[ arg ]]$.\\
-            \pf\ Follows from lemma \ref{subsec:spine_decons_same}.}
+            \pf\ \textsc{Ty\_Spine\_*} and \textsc{Decons\_Arg\_*} construct same
+            substitution and return type (lemma \ref{subsec:spine_decons_same}).}
 
         \step{<2>4}{
             \pflet{$\ctxC ; \ctxL ; \ctxN ; \ctxR'$ be the the type of
@@ -2251,14 +2281,16 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{case-assm2}.}
 
         \step{<2>3}{$[[ term_auxj = inj mu_pval_aux ]]$.\\
-            \pf\ By \stepref{<1>32}.2 and lemma \ref{subsec:pattern_term}.}
+            \pf\ By \stepref{<1>32}.2 and terms derived from patterns are
+            ``equal to'' matching values (lemma \ref{subsec:pattern_term}).}
 
         \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot |- ( subsj ) : ( Cj ; cdot ;
             cdot , term_auxj = inj mu_pval_aux ; cdot ) ]]$.\\
             \pf\ By \stepref{<2>3} and lemma \ref{subsec:wt_sub}
             (deconstructing a pattern produces a well-typed substitution).}
 
-        \step{<2>5}{By \stepref{<2>4}, \stepref{<1>32}.3 and \ref{subsec:sub_lemma}, we are done.}
+        \step{<2>5}{By \stepref{<2>4}, \stepref{<1>32}.3 and substitution lemma
+            \ref{subsec:sub_lemma}, we are done.}
 
     \end{proof}
 
