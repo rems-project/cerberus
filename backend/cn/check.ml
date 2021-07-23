@@ -2160,25 +2160,24 @@ let record_globals local globs =
 
 
 
+let check_and_record_predicate_defs global predicates =
+  ListM.fold_leftM (fun global (name,def) -> 
+      let module WT = WellTyped.Make(struct let global = global end) in
+      let@ () = WT.WPD.welltyped L.empty def in
+      let resource_predicates =
+        StringMap.add name def global.resource_predicates in
+      return {global with resource_predicates}
+    ) global predicates
 
 
 
 let check mu_file = 
-  let open Global in
   let global = Global.empty in
   let local = Local.empty in
-  let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
   let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in
+  let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
   let@ local = record_globals local mu_file.mu_globs in
-  let@ global = 
-    ListM.fold_leftM (fun global (name,def) -> 
-        let module WT = WellTyped.Make(struct let global = global end) in
-        let@ () = WT.WPD.welltyped local def in
-        let resource_predicates =
-          StringMap.add name def global.resource_predicates in
-        return {global with resource_predicates}
-      ) global mu_file.mu_predicates
-  in
+  let@ global = check_and_record_predicate_defs global mu_file.mu_predicates in
   (* has to be after globals: the functions can refer to globals *)
   let@ (global, local) = record_funinfo (global, local) mu_file.mu_funinfo in
   let@ () = print_initial_environment global in

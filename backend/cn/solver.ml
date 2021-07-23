@@ -24,11 +24,15 @@ let () = Z3.set_global_param "smt.macro_finder" "true"
 
 
 
+let unit_sort = Z3.Sort.mk_uninterpreted_s context "unit"
+let bool_sort = Z3.Boolean.mk_sort context
+let integer_sort = Z3.Arithmetic.Integer.mk_sort context
+let real_sort = Z3.Arithmetic.Real.mk_sort context
+
+
 
 module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
-
-
 
 
 module Make (G : sig val global : Global.t end) = struct
@@ -51,16 +55,11 @@ module Make (G : sig val global : Global.t end) = struct
     let tbl = BTtbl.create 10 in
     let rec aux bt =
       match bt with
-      | Unit ->
-         Z3.Sort.mk_uninterpreted_s context "unit"
-      | Bool ->
-         Z3.Boolean.mk_sort context
-      | Integer ->
-         Z3.Arithmetic.Integer.mk_sort context
-      | Real -> 
-         Z3.Arithmetic.Real.mk_sort context
-      | Loc ->
-         Z3.Arithmetic.Integer.mk_sort context
+      | Unit -> unit_sort
+      | Bool -> bool_sort
+      | Integer -> integer_sort
+      | Real -> real_sort
+      | Loc -> integer_sort
       | List bt ->
          Z3.Z3List.mk_sort context (bt_symbol bt) (aux bt) 
       | Tuple bts ->
@@ -108,7 +107,7 @@ module Make (G : sig val global : Global.t end) = struct
 
 
 
-  let of_index_term_aux =
+  let of_index_term =
 
     let rec term =
       let tbl = ITtbl.create 5000 in
@@ -408,21 +407,14 @@ module Make (G : sig val global : Global.t end) = struct
       expr
 
 
-
-  let of_index_term it = 
-    try of_index_term_aux it with
-    | Z3.Error err -> 
-       Debug_ocaml.error ("Z3 error: " ^ err)
-
-
   let rec make_trigger = function
     | T_Term (IT (Lit (Sym s), bt)) -> 
        let t = Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt) in
        (bt, t, [])
     | T_Term it -> 
        let _, t1 = IT.fresh (IT.bt it) in
-       let t1, e1 = of_index_term_aux t1 in
-       let t2, e2 = of_index_term_aux it in
+       let t1, e1 = of_index_term t1 in
+       let t2, e2 = of_index_term it in
        (IT.bt it, t1, Z3.Boolean.mk_eq context t1 t2 :: e1 @ e2)
     | T_App (t, t') ->
        let (bt, t, cs) = make_trigger t in
@@ -448,7 +440,7 @@ module Make (G : sig val global : Global.t end) = struct
     try 
       match c with
       | T it -> 
-         let t, e = of_index_term_aux it in
+         let t, e = of_index_term it in
          t :: e
       | Forall ((s, bt), trigger, body) ->
          let (triggers, cs) = match trigger with
@@ -462,7 +454,7 @@ module Make (G : sig val global : Global.t end) = struct
            | None ->
               ([], [])
          in
-         let body, cs' = of_index_term_aux body in
+         let body, cs' = of_index_term body in
          let q = 
            Z3.Quantifier.mk_forall_const context 
              [Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt)] 
