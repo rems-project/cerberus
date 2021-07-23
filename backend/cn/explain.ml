@@ -146,133 +146,6 @@ let make_name =
 
 
 
-(* module Make (G : sig val global : Global.t end) = struct 
- * 
- *   module S = Solver.Make(G)
- * 
- * 
- *   module VEClass = struct
- * 
- *     type veclass = { 
- *         sort: LS.t;
- *         value : Z3.Expr.expr;
- *         l_elements : SymSet.t;
- *         c_elements : SymSet.t;
- *       }
- * 
- *     type t = veclass
- * 
- * 
- *     let new_veclass l ls value = { 
- *         sort = ls;
- *         value = value;
- *         l_elements = SymSet.singleton l;
- *         c_elements = SymSet.empty;
- *       }
- * 
- *     let add_l l veclass = 
- *       { veclass with l_elements = SymSet.add l veclass.l_elements }
- * 
- *     let add_c c veclass = 
- *       { veclass with c_elements = SymSet.add c veclass.c_elements }
- * 
- *     let belongs_in_veclass local veclass v = 
- *       Z3.Expr.equal v veclass.value
- * 
- *     let is_in_veclass veclass sym = 
- *       SymSet.mem sym veclass.c_elements ||
- *         SymSet.mem sym veclass.l_elements
- * 
- *     let classify local veclasses (l, (bt : BT.t)) : veclass list =
- *       let rec aux = function
- *         | veclass :: veclasses ->
- *            if is_in_veclass veclass l ||
- *              should_be_in_veclass local veclass (IT.sym_ (l, bt)) 
- *            then (add_l l veclass :: veclasses)
- *            else (veclass :: aux veclasses)
- *         | [] -> 
- *            [new_veclass l bt]
- *       in
- *       aux veclasses
- * 
- * 
- *     (\* think about whether the 'Addr' part is always safe' *\)
- *     let has_symbol_name veclass = 
- *       let all = SymSet.elements (SymSet.union veclass.c_elements veclass.l_elements) in
- *       Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
- * 
- *     let make_name = 
- *       let faa counter = 
- *         let v = !counter in
- *         let () = counter := v + 1 in
- *         v
- *       in
- *       let sym_prefixed_int (prefix, i) = 
- *         "?" ^ prefix ^ string_of_int i
- *       in
- *       let unit_counter = ref 0 in
- *       let bool_counter = ref 0 in
- *       let integer_counter = ref 0 in
- *       let real_counter = ref 0 in
- *       let loc_counter = ref 0 in
- *       let list_counter = ref 0 in
- *       let tuple_counter = ref 0 in
- *       let struct_counter = ref 0 in
- *       let set_counter = ref 0 in
- *       (\* let array_counter = ref 0 in *\)
- *       let option_counter = ref 0 in
- *       let param_counter = ref 0 in
- *       fun veclass ->
- *       let bt = veclass.sort in
- *       sym_prefixed_int
- *         begin match bt with
- *         | Unit -> ("u", faa unit_counter)
- *         | Bool -> ("b", faa bool_counter)
- *         | Integer -> ("i", faa integer_counter)
- *         | Real -> ("r", faa real_counter)
- *         | Loc -> ("l", faa loc_counter)
- *         | List _ -> ("l", faa list_counter)
- *         | Tuple _ ->  ("t", faa tuple_counter)
- *         | Struct _ -> ("s", faa struct_counter)
- *         | Set _ -> ("set", faa set_counter)
- *         (\* | Array _ -> ("array", faa array_counter) *\)
- *         | Option _ -> ("option", faa option_counter)
- *         | Param _ -> ("p", faa param_counter)
- *         end
- * 
- *   end
- * 
- *   module VEClassSet = Set.Make(VEClass)
- * 
- *   module VEClassPair = struct 
- *     type t = VEClass.t * VEClass.t
- *     let compare a b = Lem_basic_classes.pairCompare VEClass.compare VEClass.compare a b
- *   end
- *   
- *   module VEClassRel = struct
- *     include Pset
- *     type t = VEClassPair.t Pset.set
- *     let empty = Pset.empty VEClassPair.compare
- *     let transitiveClosure = Pset.tc VEClassPair.compare
- *   end 
- * 
- * 
- *   module VEClassRelMap = Map.Make(VEClassPair)
- * 
- * 
- *   open VEClass *)
-
-
-
-
-
-
-
-
-
-
-
-module Make (G : sig val global : Global.t end) = struct 
 
   type naming = (Sym.t * Ast.term) list
 
@@ -296,40 +169,39 @@ module Make (G : sig val global : Global.t end) = struct
       ) mapping
 
 
-  type variable_relation = 
-    | Pointee  
+type variable_relation = 
+  | Pointee  
 
-  type name_kind = 
-    | Given
-    | Symbol
-    | Derived
-    | Default
+type name_kind = 
+  | Given
+  | Symbol
+  | Derived
+  | Default
 
-  type vclass_explanation = {
-      path : Ast.term;
-      name_kind : name_kind;
-      vclass : vclass;
-    }
+type vclass_explanation = {
+    path : Ast.term;
+    name_kind : name_kind;
+    vclass : vclass;
+  }
 
-  type explanation = {
-      substitutions : (Sym.t, Sym.t) Subst.t list;
-      vclasses : vclass_explanation list;
-      relevant : SymSet.t
-    }
-
-
+type explanation = {
+    substitutions : (Sym.t, Sym.t) Subst.t list;
+    vclasses : vclass_explanation list;
+    relevant : SymSet.t
+  }
 
 
+module Make 
+         (G : sig val global : Global.t end)
+         (S : Solver.S) 
+         (L : Local.S)
+  = struct 
 
-  module S = Solver.Make(G)
 
 
 
   let lvar_value model (l, bt) =
-    Z3.Model.evaluate model 
-      (Z3.Expr.mk_const Solver.context 
-         (S.sym_to_sym l) (S.sort_of_bt bt))
-      true
+    Z3.Model.evaluate model (S.symbol_expression l bt) true
 
 
 
@@ -423,7 +295,7 @@ let explanation local model relevant =
   print stdout !^"producing error report";
 
   
-  let names = SymMap.bindings local.L.descriptions in
+  let names = SymMap.bindings (L.descriptions local) in
 
 
   let relevant =
@@ -499,7 +371,7 @@ let explanation local model relevant =
 
   let rec o_evaluate model expr = 
     let open Option in
-    match Z3.Model.evaluate model (fst (S.of_index_term expr)) true with
+    match Z3.Model.evaluate model (fst (S.expr expr)) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 
        match IT.bt expr with
@@ -673,13 +545,15 @@ let explanation local model relevant =
    *   pp_state local explanation *)
 
   let undefined_behaviour local = 
-    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let (_, solver) = 
+      S.provable_and_solver (L.all_solver_constraints local) (t_ (bool_ false)) in
     let model = S.get_model solver in
     let (explanation, local) = explanation local model SymSet.empty in
     pp_state_with_model local explanation model
 
   let implementation_defined_behaviour local it = 
-    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let (_, solver) = 
+      S.provable_and_solver (L.all_solver_constraints local) (t_ (bool_ false)) in
     let model = S.get_model solver in
     let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
@@ -691,14 +565,16 @@ let explanation local model relevant =
     (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
-    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let (_, solver) = 
+      S.provable_and_solver (L.all_solver_constraints local) (t_ (bool_ false)) in
     let model = S.get_model solver in
     let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     it_pp
 
   let index_terms local (it,it') = 
-    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let (_, solver) = 
+      S.provable_and_solver (L.all_solver_constraints local) (t_ (bool_ false)) in
     let model = S.get_model solver in
     let (explanation, local) = 
       explanation local model (SymSet.union (IT.free_vars it) (IT.free_vars it'))

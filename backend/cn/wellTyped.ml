@@ -3,7 +3,6 @@ module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make(Sym)
 module TE = TypeErrors
-module L = Local
 module RE = Resources.RE
 
 open Global
@@ -12,9 +11,12 @@ open Pp
 
 
 
-module Make (G : sig val global : Global.t end) = struct
-  module Solver = Solver.Make(G)
-  module Explain = Explain.Make(G)
+module Make
+         (G : sig val global : Global.t end)
+         (S : Solver.S) 
+         (L : Local.S)
+  = struct
+  module Explain = Explain.Make(G)(S)(L)
 
   let check_bound loc local kind s = 
     if L.bound s kind local then return ()
@@ -856,8 +858,8 @@ module Make (G : sig val global : Global.t end) = struct
       ListM.iterM (fun (loc, clause) ->
           let@ () = WPackingFT.welltyped pd.loc local clause in
           let lrt, _ = PackingFT.logical_arguments_and_return clause in
-          let local = Binding.bind_logical local lrt  in
-          if Solver.provably_inconsistent local 
+          let local = L.bind_logical local lrt  in
+          if S.provably_inconsistent (L.all_solver_constraints local) 
           then fail loc (Generic !^"this clause makes inconsistent assumptions")
           else return ()
         ) pd.clauses

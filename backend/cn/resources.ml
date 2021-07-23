@@ -590,23 +590,27 @@ module RE = struct
 
   let normalise resource =
 
-    let return a = (a, []) in
+    let open State in
 
-    let bind (x, cs) f = 
-      let (y, cs') = f x in
-      (y, cs @ cs')
+    let sym (s,bt) = 
+      let@ (syms, constrs) = get () in
+      let@ () = set ((s,bt) :: syms, constrs) in
+      return ()
     in
 
-    let constrs cs = ((), cs) in
-
-    let (let@) = bind in
+    let constr c =
+      let@ (syms, constrs) = get () in
+      let@ () = set (syms, c :: constrs) in
+      return ()
+    in
 
     let symbol it = 
       if Option.is_some (IT.is_sym it) 
       then return it 
       else 
-        let _, it' = IT.fresh (IT.bt it) in
-        let@ () = constrs [LC.T (eq__ it it')] in
+        let s', it' = IT.fresh (IT.bt it) in
+        let@ () = sym (s', IT.bt it) in
+        let@ () = constr (LC.T (eq__ it it')) in
         return it'
     in
 
@@ -615,8 +619,9 @@ module RE = struct
       then return it 
       else 
         let body = IT.make_param (s, bt) it in
-        let _, it' = IT.fresh (IT.bt body) in
-        let@ () = constrs [LC.T (eq__ it' body)] in
+        let s', it' = IT.fresh (IT.bt body) in
+        let@ () = sym (s', IT.bt body) in
+        let@ () = constr (LC.T (eq__ it' body)) in
         return (app_ it' (sym_ (s, bt)))
     in
 
@@ -630,31 +635,33 @@ module RE = struct
     in
 
 
-    match resource with
-    | Point {pointer; size; value; init; permission} ->
-       let@ pointer = symbol pointer in
-       let@ value = symbol value in
-       let@ init = symbol init in
-       let@ permission = symbol permission in
-       return (Point {pointer; size; value; init; permission})
-    | QPoint {qpointer; size; value; init; permission} ->
-       let@ value = lambda (qpointer, Loc) value in
-       let@ init = lambda (qpointer, Loc) init in
-       let@ permission = lambda (qpointer, Loc) permission in
-       return (QPoint {qpointer; size; value; init; permission})       
-    | Predicate {name; pointer; iargs; oargs; unused} -> 
-       let@ pointer = symbol pointer in
-       let@ iargs = mapM symbol iargs in
-       let@ oargs = mapM symbol oargs in
-       return (Predicate {name; pointer; iargs; oargs; unused})
-    | QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved} -> 
-       let@ pointer = symbol pointer in
-       let@ isart = symbol istart in
-       let@ iend = symbol iend in
-       let@ iargs = mapM (lambda (i, Integer)) iargs in
-       let@ oargs = mapM (lambda (i, Integer)) oargs in
-       let@ moved = mapM symbol moved in
-       return (QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved})
+    let aux = match resource with
+      | Point {pointer; size; value; init; permission} ->
+         let@ pointer = symbol pointer in
+         let@ value = symbol value in
+         let@ init = symbol init in
+         let@ permission = symbol permission in
+         return (Point {pointer; size; value; init; permission})
+      | QPoint {qpointer; size; value; init; permission} ->
+         let@ value = lambda (qpointer, Loc) value in
+         let@ init = lambda (qpointer, Loc) init in
+         let@ permission = lambda (qpointer, Loc) permission in
+         return (QPoint {qpointer; size; value; init; permission})       
+      | Predicate {name; pointer; iargs; oargs; unused} -> 
+         let@ pointer = symbol pointer in
+         let@ iargs = mapM symbol iargs in
+         let@ oargs = mapM symbol oargs in
+         return (Predicate {name; pointer; iargs; oargs; unused})
+      | QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved} -> 
+         let@ pointer = symbol pointer in
+         let@ isart = symbol istart in
+         let@ iend = symbol iend in
+         let@ iargs = mapM (lambda (i, Integer)) iargs in
+         let@ oargs = mapM (lambda (i, Integer)) oargs in
+         let@ moved = mapM symbol moved in
+         return (QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved})
+    in
+    aux ([], [])
 
 
 

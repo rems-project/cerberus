@@ -12,195 +12,274 @@ module IT = IndexTerms
 module SymMap = Map.Make(Sym)
 
 
+module type S = sig
 
-type t = {
-    computational : (BT.t * Sym.t) SymMap.t;
-    logical : LS.t SymMap.t;
-    resources : RE.t list;
-    constraints : LC.t list;
-    descriptions : Ast.Terms.term SymMap.t;
-    (* a subset of the logical symbols, just for error reporting, all
-       pointer-typed *)
-    global : SymSet.t;
-  }
+  type t 
+  val empty : t
+  val pp : t -> Pp.document
+  val all_computational : t -> (SymMap.key * (LS.t * SymMap.key)) list
+  val all_logical : t -> (SymMap.key * LS.t) list
+  val all_constraints : t -> LC.t list
+  val all_solver_constraints : t -> Z3.Expr.expr list
+  val all_resources : t -> RE.t list
+  val descriptions : t -> Ast.Terms.term SymMap.t
+  val bound : Sym.t -> Kind.t -> t -> bool
+  val get_a : Sym.t -> t -> BT.t * SymMap.key
+  val get_l : Sym.t -> t -> LS.t
+  val add_a : Sym.t -> BT.t * Sym.t -> t -> t
+  val add_l : Sym.t -> LS.t -> t -> t
+  val add_c : LC.t -> t -> t
+  val add_cs : LC.t list -> t -> t
+  val add_r : RE.t -> t -> t
 
+  val remove_resource : RE.t -> t -> t
+  val map_and_fold_resources : 
+    (RE.t -> 'acc -> RE.t * 'acc) -> 
+    t -> 'acc -> t * 'acc
+  val add_description : Sym.t * Ast.Terms.term -> t -> t
+  val add_descriptions : (Sym.t * Ast.Terms.term) list -> t -> t
+  val (++) : t -> t -> t
+  val all_vars : t -> Sym.t list
+  val json : t -> Yojson.Safe.t
+  val bind : Sym.t -> ReturnTypes.t -> t
+  val bind_logical : t -> LogicalReturnTypes.t -> t
+  val bind_logically : ReturnTypes.t -> (BT.t * Sym.t) * t
 
-let empty = {
-    computational = SymMap.empty;
-    logical = SymMap.empty;
-    resources = [];
-    constraints = [];
-    descriptions = SymMap.empty;
-    global = SymSet.empty;
-  }
+  
 
-
-
-let pp (local : t) = 
-  item "computational" 
-    (Pp.list (fun (sym, (bt,lsym)) -> 
-         typ (Sym.pp sym) (BT.pp bt ^^ tilde ^^ Sym.pp lsym)
-       ) (SymMap.bindings local.computational)) ^/^
-  item "logical" 
-    (Pp.list (fun (sym, ls) -> 
-         typ (Sym.pp sym) (LS.pp ls)
-       ) (SymMap.bindings local.logical)) ^/^
-  item "resources" 
-    (Pp.list RE.pp local.resources) ^/^
-  item "constraints" 
-    (Pp.list LC.pp local.constraints)
-
-
-(* let filter (p : Sym.t * bound -> 'a option) (local : t) = 
- *   let aux sym b (acc : 'a list) =
- *     match p (sym, b) with
- *     | Some a -> a :: acc
- *     | None -> acc
- *   in
- *   SymMap.fold aux local [] *)
-
-let all_computational (local : t) = SymMap.bindings local.computational
-let all_logical (local : t) = SymMap.bindings local.logical
-let all_resources (local : t) = local.resources
-let all_constraints (local : t) = local.constraints
+end
 
 
 
+module Make (S : Solver.S) : S = struct
 
 
 
-
-(* let kind sym (local : t) = Option.map VB.kind (get_safe sym local)
- * let bound sym (local : t) = Option.is_some (kind sym local) *)
-
-let bound sym kind local = 
-  match kind with
-  | Kind.KComputational -> SymMap.mem sym local.computational
-  | Kind.KLogical -> SymMap.mem sym local.logical
-
-
-
-let get_a (name: Sym.t) (local:t)  = 
-  SymMap.find name local.computational
-
-let get_l (name: Sym.t) (local:t) = 
-  SymMap.find name local.logical
-
-let add_a aname (bt, lname) local = 
-  {local with computational = SymMap.add aname (bt, lname) local.computational}
-
-let add_l lname ls (local : t) = 
-  {local with logical = SymMap.add lname ls local.logical}
-
-let add_c lc (local : t) = 
-  let lcs = Simplify.simp_lc_flatten local.constraints lc in
-  {local with constraints = lcs @ local.constraints}
-
-let add_cs lcs (local : t) = 
-  List.fold_left (fun local lc -> add_c lc local) local lcs
+  type t = {
+      computational : (BT.t * Sym.t) SymMap.t;
+      logical : LS.t SymMap.t;
+      resources : RE.t list;
+      constraints : LC.t list;
+      solver_constraints : Z3.Expr.expr list;
+      descriptions : Ast.Terms.term SymMap.t;
+    }
 
 
-let add_r r (local : t) = 
-  match RE.simp_or_empty local.constraints r with
-  | Some r -> 
-     (* let r, lcs1 = RE.normalise r in *)
-     let r, lcs1 = r, [] in
-     let resources = r :: local.resources in
-     let lcs2 = 
-       RE.derived_constraint r ::
-         List.map (fun r' -> RE.derived_constraints r r') 
-           (all_resources local)
-     in
-     let local = {local with resources} in
-     add_cs (lcs1 @ lcs2) local
-  | None ->
-     local
-
-
-let remove_resource resource local = 
-  let resources = 
-    List.filter (fun r -> 
-        not (RE.equal r resource)
-      ) local.resources
-  in
-  { local with resources }
+  let empty = {
+      computational = SymMap.empty;
+      logical = SymMap.empty;
+      resources = [];
+      constraints = [];
+      solver_constraints = [];
+      descriptions = SymMap.empty;
+    }
 
 
 
+  let pp (local : t) = 
+    item "computational" 
+      (Pp.list (fun (sym, (bt,lsym)) -> 
+           typ (Sym.pp sym) (BT.pp bt ^^ tilde ^^ Sym.pp lsym)
+         ) (SymMap.bindings local.computational)) ^/^
+    item "logical" 
+      (Pp.list (fun (sym, ls) -> 
+           typ (Sym.pp sym) (LS.pp ls)
+         ) (SymMap.bindings local.logical)) ^/^
+    item "resources" 
+      (Pp.list RE.pp local.resources) ^/^
+    item "constraints" 
+      (Pp.list LC.pp local.constraints)
 
-let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
-      (local : t) (acc : 'acc) = 
-  let resources, constraints, acc =
-    List.fold_right (fun re (resources, constraints, acc) ->
-        let (re, acc) = f re acc in
-        match RE.simp_or_empty local.constraints re with
-        | Some re -> 
-           (* let (re, lcs) = RE.normalise re in *)
-           let (re, lcs) = re, [] in
-           (re :: resources, lcs @ constraints, acc)
-        | None -> (resources, constraints, acc)
-      ) local.resources ([], [], acc)
-  in
-  let local = add_cs constraints {local with resources} in
-  (local, acc)
+
+  let all_computational (local : t) = SymMap.bindings local.computational
+  let all_logical (local : t) = SymMap.bindings local.logical
+  let all_resources (local : t) = local.resources
+  let all_constraints (local : t) = local.constraints
+  let all_solver_constraints (local : t) = local.solver_constraints
+  let descriptions local = local.descriptions
 
 
 
 
 
-let add_description (s, term) local = 
-  let descriptions = SymMap.add s term local.descriptions in 
-  { local with descriptions }
-
-let add_descriptions =
-  List.fold_right add_description
-
-
-(* let add_descriptions descrs local *)
+  let bound sym kind local = 
+    match kind with
+    | Kind.KComputational -> SymMap.mem sym local.computational
+    | Kind.KLogical -> SymMap.mem sym local.logical
 
 
 
+  let get_a (name: Sym.t) (local:t)  = 
+    SymMap.find name local.computational
 
-let concat (local' : t) (local : t) = 
-  let local = SymMap.fold add_a local'.computational local in
-  let local = SymMap.fold add_l local'.logical local in
-  let local = List.fold_right add_r local'.resources local in
-  let local = List.fold_right add_c local'.constraints local in
-  local
+  let get_l (name: Sym.t) (local:t) = 
+    SymMap.find name local.logical
 
+  let add_a aname (bt, lname) local = 
+    {local with computational = SymMap.add aname (bt, lname) local.computational}
 
-let (++) = concat
+  let add_l lname ls (local : t) = 
+    {local with logical = SymMap.add lname ls local.logical}
 
+  let add_ls lvars local = 
+    List.fold_left (fun local (l, bt) ->
+        add_l l bt local
+      ) local lvars
 
-let all_vars (local : t) = 
-  List.map fst (SymMap.bindings local.computational) @
-  List.map fst (SymMap.bindings local.logical)
+  let add_c lc (local : t) = 
+    let lcs = Simplify.simp_lc_flatten local.constraints lc in
+    let scs = List.concat_map S.constr lcs in
+    { local with constraints = lcs @ local.constraints;
+                 solver_constraints = scs @ local.solver_constraints
+    }
 
-
-let json (local : t) : Yojson.Safe.t = 
-
-  let computational  = 
-    List.map (fun (sym, (bt, lname)) ->
-        `Assoc [("name", Sym.json sym);
-                ("basetype", BT.json bt); 
-                ("logical", Sym.json lname)]        
-      ) (SymMap.bindings local.computational)
-  in
-  let logical = 
-    List.map (fun (sym, ls) ->
-        `Assoc [("name", Sym.json sym);
-                ("sort", LS.json ls)]
-      ) (SymMap.bindings local.logical)
-  in
-  let resources = List.map RE.json local.resources in
-  let constraints = List.map LC.json local.constraints in
-  let json_record = 
-    `Assoc [("computational", `List computational);
-            ("logical", `List logical);
-            ("resources", `List resources);
-            ("constraints", `List constraints)
-      ]
-  in
-  `Variant ("Context", Some json_record)
+  let add_cs lcs (local : t) = 
+    List.fold_left (fun local lc -> add_c lc local) local lcs
 
 
+  let add_r r (local : t) = 
+    match RE.simp_or_empty local.constraints r with
+    | Some r -> 
+       (* let r, (l, lcs1) = RE.normalise r in *)
+       let re, (l, lcs1) = r, ([], []) in
+       let resources = r :: local.resources in
+       let lcs2 = 
+         RE.derived_constraint r ::
+           List.map (fun r' -> RE.derived_constraints r r') 
+             (all_resources local)
+       in
+       let local = add_ls l local in
+       let local = {local with resources} in
+       add_cs (lcs1 @ lcs2) local
+    | None ->
+       local
+
+
+  let remove_resource resource local = 
+    let resources = 
+      List.filter (fun r -> 
+          not (RE.equal r resource)
+        ) local.resources
+    in
+    { local with resources }
+
+
+
+
+  let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
+        (local : t) (acc : 'acc) = 
+    let resources, lvars, constraints, acc =
+      List.fold_right (fun re (resources, lvars, constraints, acc) ->
+          let (re, acc) = f re acc in
+          match RE.simp_or_empty local.constraints re with
+          | Some re -> 
+             (* let re, (l, lcs) = RE.normalise re in *)
+             let re, (l, lcs) = re, ([], []) in
+             (re :: resources, l @ lvars, lcs @ constraints, acc)
+          | None -> (resources, lvars, constraints, acc)
+        ) local.resources ([], [], [], acc)
+    in
+    let local = add_ls lvars local in
+    let local = add_cs constraints {local with resources} in
+    (local, acc)
+
+
+
+
+
+  let add_description (s, term) local = 
+    let descriptions = SymMap.add s term local.descriptions in 
+    { local with descriptions }
+
+  let add_descriptions =
+    List.fold_right add_description
+
+
+  (* let add_descriptions descrs local *)
+
+
+
+
+  let concat (local' : t) (local : t) = 
+    let local = SymMap.fold add_a local'.computational local in
+    let local = SymMap.fold add_l local'.logical local in
+    let local = List.fold_right add_r local'.resources local in
+    let constraints = local'.constraints @ local.constraints in
+    let solver_constraints = local'.solver_constraints @ 
+                               local.solver_constraints in
+    { local with constraints; solver_constraints }
+
+
+  let (++) = concat
+
+
+  let all_vars (local : t) = 
+    List.map fst (SymMap.bindings local.computational) @
+    List.map fst (SymMap.bindings local.logical)
+
+
+  let json (local : t) : Yojson.Safe.t = 
+
+    let computational  = 
+      List.map (fun (sym, (bt, lname)) ->
+          `Assoc [("name", Sym.json sym);
+                  ("basetype", BT.json bt); 
+                  ("logical", Sym.json lname)]        
+        ) (SymMap.bindings local.computational)
+    in
+    let logical = 
+      List.map (fun (sym, ls) ->
+          `Assoc [("name", Sym.json sym);
+                  ("sort", LS.json ls)]
+        ) (SymMap.bindings local.logical)
+    in
+    let resources = List.map RE.json local.resources in
+    let constraints = List.map LC.json local.constraints in
+    let json_record = 
+      `Assoc [("computational", `List computational);
+              ("logical", `List logical);
+              ("resources", `List resources);
+              ("constraints", `List constraints)
+        ]
+    in
+    `Variant ("Context", Some json_record)
+
+
+
+
+  module LRT = LogicalReturnTypes
+  module RT = ReturnTypes
+
+
+
+  let rec bind_logical (delta : t) (lrt : LRT.t) : t = 
+    match lrt with
+    | Logical ((s, ls), rt) ->
+       let s' = Sym.fresh () in
+       let rt' = LRT.subst_var {before=s; after=s'} rt in
+       bind_logical (add_l s' ls delta) rt'
+    | Resource (re, rt) -> bind_logical (add_r re delta) rt
+    | Constraint (lc, rt) -> bind_logical (add_c lc delta) rt
+    | I -> delta
+
+  let bind_computational (delta : t) (name : Sym.t) (rt : RT.t) : t =
+    let Computational ((s, bt), rt) = rt in
+    let s' = Sym.fresh () in
+    let rt' = LRT.subst_var {before = s; after = s'} rt in
+    let delta' = add_a name (bt, s') (add_l s' bt delta) in
+    bind_logical delta' rt'
+
+
+  let bind (name : Sym.t) (rt : RT.t) : t =
+    bind_computational empty name rt
+
+  let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * t) =
+    let Computational ((s, bt), rt) = rt in
+    let s' = Sym.fresh () in
+    let rt' = LRT.subst_var {before = s; after = s'} rt in
+    let delta = add_l s' bt empty in
+    let delta' = bind_logical delta rt' in
+    ((bt, s'), delta')
+
+
+end

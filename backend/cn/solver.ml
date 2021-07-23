@@ -35,7 +35,22 @@ module BTtbl = Hashtbl.Make(BaseTypes)
 module ITtbl = Hashtbl.Make(IndexTerms)
 
 
-module Make (G : sig val global : Global.t end) = struct
+module type S = sig
+
+  val provable : Z3.Expr.expr list -> LC.t -> bool
+  val provable_and_solver : Z3.Expr.expr list -> LC.t -> bool * Z3.Solver.solver
+  val provably_inconsistent : Z3.Expr.expr list -> bool
+  val get_model : Z3.Solver.solver -> Z3.Model.model
+  val symbol_expression : Sym.t -> BT.t -> Z3.Expr.expr
+  val expr : IT.t -> Z3.Expr.expr * Z3.Expr.expr list
+  val constr : LC.t -> Z3.Expr.expr list
+
+end
+
+
+
+
+module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
   let bt_name bt = Pp.plain (BT.pp bt)
   let bt_symbol bt = Z3.Symbol.mk_string context (bt_name bt)
@@ -67,7 +82,7 @@ module Make (G : sig val global : Global.t end) = struct
          let sorts = List.map aux bts in
          Z3.Tuple.mk_sort context (bt_symbol (Tuple bts)) field_symbols sorts
       | Struct tag ->
-         let layout = SymMap.find tag G.global.struct_decls in
+         let layout = SymMap.find tag SD.struct_decls in
          let members = Memory.member_types layout in
          let member_symbols = List.map (fun (id,_) -> member_symbol (BT.Struct tag) id) members in
          let member_sorts = 
@@ -104,6 +119,11 @@ module Make (G : sig val global : Global.t end) = struct
        let sort = aux bt in
        let () = BTtbl.add tbl bt sort in
        sort
+
+
+  let symbol_expression s bt =
+    Z3.Expr.mk_const context 
+      (sym_to_sym s) (sort_of_bt bt)
 
 
 
@@ -248,7 +268,7 @@ module Make (G : sig val global : Global.t end) = struct
            | Struct tag -> tag
            | _ -> Debug_ocaml.error "illtyped index term: not a struct"
          in
-         let layout = SymMap.find tag G.global.struct_decls in
+         let layout = SymMap.find tag SD.struct_decls in
          let members = List.map fst (Memory.member_types layout) in
          let destructors = Z3.Tuple.get_field_decls (sort_of_bt (Struct tag)) in
          let member_destructors = List.combine members destructors in
@@ -287,7 +307,7 @@ module Make (G : sig val global : Global.t end) = struct
       | MemberOffset (tag, member) ->
          let o_offset = 
            Memory.member_offset
-             (SymMap.find tag G.global.struct_decls) member
+             (SymMap.find tag SD.struct_decls) member
          in
          let offset = match o_offset with
            | Some offset -> offset 
@@ -326,7 +346,7 @@ module Make (G : sig val global : Global.t end) = struct
       match it with
       | Representable (ct, t) ->
          term (representable_ctype 
-                 (fun tag -> (SymMap.find tag G.global.struct_decls))
+                 (fun tag -> (SymMap.find tag SD.struct_decls))
                  ct t)
       | AlignedI t ->
          term (eq_ (rem_ (t.t, t.align), int_ 0))
@@ -407,6 +427,10 @@ module Make (G : sig val global : Global.t end) = struct
       expr
 
 
+  let expr = of_index_term
+
+
+
   let rec make_trigger = function
     | T_Term (IT (Lit (Sym s), bt)) -> 
        let t = Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt) in
@@ -427,7 +451,7 @@ module Make (G : sig val global : Global.t end) = struct
          | Struct tag -> tag
          | _ -> Debug_ocaml.error "illtyped index term: not a struct"
        in
-       let layout = SymMap.find tag G.global.struct_decls in
+       let layout = SymMap.find tag SD.struct_decls in
        let members = List.map fst (Memory.member_types layout) in
        let bt = BT.of_sct (List.assoc Id.equal member (Memory.member_types layout)) in
        let destructors = Z3.Tuple.get_field_decls (sort_of_bt (Struct tag)) in
@@ -436,38 +460,30 @@ module Make (G : sig val global : Global.t end) = struct
        (bt, Z3.Expr.mk_app context destructor [t], cs)
 
 
-  let of_logical_constraint_assumption c = 
-    try 
-      match c with
-      | T it -> 
-         let t, e = of_index_term it in
-         t :: e
-      | Forall ((s, bt), trigger, body) ->
-         let (triggers, cs) = match trigger with
-           | Some trigger -> 
-              let (_, t, cs) = make_trigger trigger in
-              (* let open Pp in
-               * print stderr (item "s" (Sym.pp s));
-               * print stderr (item "trigger" (IT.pp t));
-               * print stderr (list IT.pp cs); *)
-              ([Z3.Quantifier.mk_pattern context [t]], cs)
-           | None ->
-              ([], [])
-         in
-         let body, cs' = of_index_term body in
-         let q = 
-           Z3.Quantifier.mk_forall_const context 
-             [Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt)] 
-             body 
-             None triggers [] None None 
-         in
-         cs @ cs' @ [Z3.Quantifier.expr_of_quantifier q]
-    with
-    | Z3.Error err -> 
-       Debug_ocaml.error ("Z3 error: " ^ err)
+  let of_logical_constraint c = 
+    match c with
+    | T it -> 
+       let t, e = of_index_term it in
+       t :: e
+    | Forall ((s, bt), trigger, body) ->
+       let (triggers, cs) = match trigger with
+         | Some trigger -> 
+            let (_, t, cs) = make_trigger trigger in
+            ([Z3.Quantifier.mk_pattern context [t]], cs)
+         | None ->
+            ([], [])
+       in
+       let body, cs' = of_index_term body in
+       let q = 
+         Z3.Quantifier.mk_forall_const context 
+           [Z3.Expr.mk_const context (sym_to_sym s) (sort_of_bt bt)] 
+           body 
+           None triggers [] None None 
+       in
+       cs @ cs' @ [Z3.Quantifier.expr_of_quantifier q]
 
 
-  let check local (lc : LC.t) =  
+  let check (assumptions: Z3.Expr.expr list) (lc : LC.t) =  
     (* as similarly suggested by Robbert *)
     match lc with
     | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
@@ -475,10 +491,6 @@ module Make (G : sig val global : Global.t end) = struct
        (`YES, solver)
     | _ ->
        let solver = Z3.Solver.mk_simple_solver context in
-       let assumptions = 
-         List.concat_map of_logical_constraint_assumption 
-           (Local.all_constraints local) 
-       in
        Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
        begin
          match lc with
@@ -501,33 +513,26 @@ module Make (G : sig val global : Global.t end) = struct
        | Z3.Solver.SATISFIABLE -> (`NO, solver)
        | Z3.Solver.UNKNOWN -> (`MAYBE, solver)
 
-  (* let holds local it = 
-   *   let (result, solver) = check local it in
-   *   match result with
-   *   | Z3.Solver.UNSATISFIABLE -> true
-   *   | Z3.Solver.SATISFIABLE -> false
-   *   | Z3.Solver.UNKNOWN ->
-   *      let reason = Z3.Solver.get_reason_unknown solver in
-   *      Debug_ocaml.error ("SMT solver returned 'unknown'. Reason: " ^ reason) *)
+  let constr = of_logical_constraint
 
 
-  let provable local it = 
-    let (result, _solver) = check local it in
+  let provable assumptions lc = 
+    let (result, _solver) = check assumptions lc in
     match result with
     | `YES -> true
     | `NO -> false
     | `MAYBE -> false
 
 
-  let provable_and_solver local it = 
-    let (result, solver) = check local it in
+  let provable_and_solver assumptions lc = 
+    let (result, solver) = check assumptions lc in
     match result with
     | `YES -> (true, solver)
     | `NO -> (false, solver)
     | `MAYBE -> (false, solver)
 
 
-  let provably_inconsistent local = provable local (t_ (bool_ false))
+  let provably_inconsistent assumptions = provable assumptions (t_ (bool_ false))
 
   let get_model solver = 
     Option.value_err "Z3 did not produce a counter model"

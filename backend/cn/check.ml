@@ -14,7 +14,6 @@ module PackingFT = ArgumentTypes.Make(OutputDef)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
-module L = Local
 
 open Subst
 open IT
@@ -23,7 +22,6 @@ open Resultat
 module Mu = Retype.New
 open CF.Mucore
 open Mu
-open Binding
 
 open Pp
 open BT
@@ -61,10 +59,13 @@ let pp_expr e = PP_MUCORE.pp_expr e
 let pp_texpr e = PP_MUCORE.pp_texpr (pp_budget ()) e
 
 
-module Make (G : sig val global : Global.t end) = struct
-  module Solver = Solver.Make(G)
-  module WT = WellTyped.Make(G)
-  module Explain = Explain.Make(G)
+module Make 
+         (G : sig val global : Global.t end)
+         (S : Solver.S) 
+         (L : Local.S)
+  = struct
+  module WT = WellTyped.Make(G)(S)(L)
+  module E = Explain.Make(G)(S)(L)
   open L
 
 
@@ -305,7 +306,7 @@ let match_resources loc local error r1 r2 res =
             IT.equal b.permission b'.permission ->
      let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
      let (result, solver) = 
-       Solver.provable_and_solver local (t_ (and_ (List.map eq_ constrs))) in
+       S.provable_and_solver (L.all_solver_constraints local) (t_ (and_ (List.map eq_ constrs))) in
      if result then return res else fail loc (error solver)
   | QPoint b, QPoint b' 
        when Sym.equal b.qpointer b'.qpointer &&
@@ -315,7 +316,7 @@ let match_resources loc local error r1 r2 res =
                         init = eta_expand (b.qpointer, Loc) b'.init; } in
      let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
      let (result, solver) = 
-       Solver.provable_and_solver local 
+       S.provable_and_solver (L.all_solver_constraints local)
           (forall_ (b.qpointer, BT.Loc)
              None
              (impl_ (gt_ (b.permission, q_ (0, 1)), 
@@ -330,7 +331,7 @@ let match_resources loc local error r1 r2 res =
                p.unused = p'.unused ->
      let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
      let (result, solver) =
-       Solver.provable_and_solver local 
+       S.provable_and_solver (L.all_solver_constraints local)
          (t_ (impl_ (bool_ p'.unused, 
                      and_ (List.map eq_ constrs))))
      in
@@ -349,7 +350,7 @@ let match_resources loc local error r1 r2 res =
      let p' = { p' with oargs = List.map (eta_expand (p.i, Integer)) p'.oargs } in
      let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
      let (result, solver) =
-       Solver.provable_and_solver local 
+       S.provable_and_solver (L.all_solver_constraints local)
          (forall_ (p.i, BT.Integer)
             None
             (impl_ (and_ [bool_ p.unused; 
@@ -438,9 +439,9 @@ let match_resources loc local error r1 r2 res =
              let@ (resource', local) = prompt (R_Resource rr) in
              let mismatch solver = 
                lazy begin
-                   let model = Solver.get_model solver in
+                   let model = S.get_model solver in
                    let ((expect,has), state) = 
-                     Explain.resources original_local model (resource, resource') in
+                     E.resources original_local model (resource, resource') in
                    (Resource_mismatch {expect; has; state; situation})
                  end
              in
@@ -473,13 +474,14 @@ let match_resources loc local error r1 r2 res =
       let@ rt = 
         let rec check_logical_constraints = function
           | Constraint (c, ftyp) -> 
-             let (holds, solver) = Solver.provable_and_solver local c in
+             let (holds, solver) = 
+               S.provable_and_solver (L.all_solver_constraints local) c in
              if holds then check_logical_constraints ftyp else
                let err = 
                  lazy begin
                      let (constr,state) = 
-                       Explain.unsatisfied_constraint original_local 
-                         (Solver.get_model solver) c
+                       E.unsatisfied_constraint original_local 
+                         (S.get_model solver) c
                      in
                      (Unsat_constraint {constr; hint = None; state})
                    end
@@ -506,22 +508,15 @@ let match_resources loc local error r1 r2 res =
 
 
 
-  let is_global local it = 
-    SymSet.exists (fun s ->
-      Solver.provable local (t_ (eq_ (it, IT.sym_ (s, BT.Loc))))
-    ) local.global
-
-
-
   let resource_request_missing ui_info solver request =
     let open Prompt in
     let open Prompt.Operators in
     let err = 
       lazy begin 
           let (resource, state) = 
-            Explain.resource_request
+            E.resource_request
               ui_info.original_local 
-              (Solver.get_model solver) 
+              (S.get_model solver) 
               request
           in
           Missing_resource {resource; used = None; state; 
@@ -554,7 +549,7 @@ let match_resources loc local error r1 r2 res =
              introduce extra disjointness constraints *)
           let test_local = L.remove_resource (Predicate p) local in
           let test_local = bind_logical test_local lrt in
-          if Solver.provably_inconsistent test_local
+          if S.provably_inconsistent (L.all_solver_constraints test_local)
           then None 
           else Some test_local
         ) def.clauses
@@ -588,10 +583,14 @@ let match_resources loc local error r1 r2 res =
       let (local, changed) = 
         List.fold_left (fun (local, changed) resource ->
             match resource with
-            | RE.Predicate p when p.unused ->
+            | RE.Predicate p 
+                 when p.unused ->
                let (local, changed') = unpack_predicate local p in
                (local, changed || changed')
-            | RE.QPredicate p when p.unused && Solver.provable local (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
+            | RE.QPredicate p 
+                 when p.unused && 
+                        S.provable (L.all_solver_constraints local)
+                          (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
                let p_inst = 
                  let index = qpredicate_pointer_to_index p p.pointer in
                  let iargs = List.map (IT.subst_it {before=p.i; after=index}) p.iargs in
@@ -621,7 +620,7 @@ let match_resources loc local error r1 r2 res =
           | Point p' 
                when Z.equal requested.size p'.size &&
                     BT.equal requested.value (IT.bt p'.value) &&
-                    Solver.provable local (t_ (eq_ (requested.pointer, p'.pointer))) ->
+                    S.provable (L.all_solver_constraints local) (t_ (eq_ (requested.pointer, p'.pointer))) ->
              let can_take = min_ (p'.permission, needed) in
              let took = gt_ (can_take, q_ (0, 1)) in
              let value = ite_ (took, p'.value, value) in
@@ -649,13 +648,14 @@ let match_resources loc local error r1 r2 res =
         ) local (needed, default_ requested.value, default_ BT.Bool)
     in
     let (holds, solver) = 
-      Solver.provable_and_solver local (t_ (eq_ (needed, q_ (0, 1)))) in
+      S.provable_and_solver (L.all_solver_constraints local)
+        (t_ (eq_ (needed, q_ (0, 1)))) in
     if holds then
       let r = 
         { pointer = requested.pointer;
           size = requested.size;
-          value = Simplify.simp local.constraints value;
-          init = Simplify.simp local.constraints init;
+          value = Simplify.simp (all_constraints local) value;
+          init = Simplify.simp (all_constraints local) init;
           permission = requested.permission }
       in
       return (r, local)
@@ -699,7 +699,7 @@ let match_resources loc local error r1 r2 res =
         ) local (needed, default_ requested.value, default_ BT.Bool)
     in
     let (holds, solver) =
-      Solver.provable_and_solver local 
+      S.provable_and_solver (L.all_solver_constraints local)
         (forall_ (requested.qpointer, BT.Loc) None
            (eq_ (needed, q_ (0, 1))))
     in
@@ -707,8 +707,8 @@ let match_resources loc local error r1 r2 res =
       let r = 
         { qpointer = requested.qpointer;
           size = requested.size;
-          value = Simplify.simp local.constraints value; 
-          init = Simplify.simp local.constraints init;
+          value = Simplify.simp (all_constraints local) value; 
+          init = Simplify.simp (all_constraints local) init;
           permission = requested.permission;
         } 
       in
@@ -737,7 +737,7 @@ let match_resources loc local error r1 r2 res =
             | Predicate p', None ->
                if predicate_name_equal p.name p'.name &&
                   p'.unused && 
-                  Solver.provable local (t_ (
+                  S.provable (L.all_solver_constraints local) (t_ (
                       and_ (IT.eq__ p.pointer p'.pointer ::
                             List.map2 eq__ p.iargs p'.iargs)
                     ))
@@ -747,7 +747,7 @@ let match_resources loc local error r1 r2 res =
                let index = qpredicate_pointer_to_index p' p.pointer in
                if predicate_name_equal p.name p'.name &&
                   p'.unused && 
-                  Solver.provable local (
+                  S.provable (L.all_solver_constraints local) (
                       let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
                       t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
                                   List.map2 eq__ p.iargs iargs'))
@@ -795,7 +795,7 @@ let match_resources loc local error r1 r2 res =
          let error_prompt = 
            lazy begin
                let (_, solver) = 
-                 Solver.provable_and_solver local (T (bool_ false)) in
+                 S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
                resource_request_missing ui_info solver (Predicate p)
              end
          in
@@ -839,7 +839,7 @@ let match_resources loc local error r1 r2 res =
             | QPredicate p', None ->
                if predicate_name_equal p.name p'.name &&
                   p.unused = p'.unused &&
-                    Solver.provable local 
+                    S.provable (L.all_solver_constraints local)
                       (forall_ (p.i, BT.Integer) None
                          (and_ [eq_ (p.pointer, p'.pointer);
                                 eq_ (p.element_size, p'.element_size);
@@ -901,7 +901,7 @@ let match_resources loc local error r1 r2 res =
          in
          return (r, local)
       | None ->
-         let (_, solver) = Solver.provable_and_solver local (T (bool_ false)) in
+         let (_, solver) = S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
          resource_request_missing ui_info solver (QPredicate p)
 
   let resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
@@ -1318,10 +1318,10 @@ let match_resources loc local error r1 r2 res =
       | M_PEassert_undef (asym, _uloc, undef) ->
          let@ arg = arg_of_asym local asym in
          let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-         if Solver.provable local (t_ (it_of_arg arg)) then
+         if S.provable (L.all_solver_constraints local) (t_ (it_of_arg arg)) then
            return (rt_of_vt (Unit, unit_), local)
          else
-           let expl = Explain.undefined_behaviour local in
+           let expl = E.undefined_behaviour local in
            fail loc (Undefined_behaviour (undef, expl))
       | M_PEbool_to_integer asym ->
          let@ arg = arg_of_asym local asym in
@@ -1350,11 +1350,11 @@ let match_resources loc local error r1 r2 res =
             in
             return (rt_of_vt (Integer, result), local)
          | _ ->
-            if Solver.provable local (t_ (representable_ (act.ct, arg_it))) then
+            if S.provable (L.all_solver_constraints local) (t_ (representable_ (act.ct, arg_it))) then
               return (rt_of_vt (Integer, arg_it), local)
             else
             let (it_pp, state_pp) = 
-              Explain.implementation_defined_behaviour local arg_it
+              E.implementation_defined_behaviour local arg_it
             in
             fail loc (Implementation_defined_behaviour 
                         (it_pp ^^^ !^"outside representable range for" ^^^ 
@@ -1394,7 +1394,8 @@ let match_resources loc local error r1 r2 res =
        let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
        ListM.iterM (fun (lc, e) ->
            let local = add_c (t_ lc) local in
-           if Solver.provably_inconsistent local then return ()
+           if S.provably_inconsistent (L.all_solver_constraints local) 
+           then return ()
            else check_tpexpr local e typ
          ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
     | M_PEcase (asym, pats_es) ->
@@ -1402,7 +1403,8 @@ let match_resources loc local error r1 r2 res =
        ListM.iterM (fun (pat, pe) ->
            let@ delta = pattern_match (arg.lname, arg.bt) pat in
            let local = delta ++ local in
-           if Solver.provably_inconsistent local then return ()
+           if S.provably_inconsistent (L.all_solver_constraints local)
+           then return ()
            else check_tpexpr local e typ
          ) pats_es
     | M_PElet (p, e1, e2) ->
@@ -1417,7 +1419,7 @@ let match_resources loc local error r1 r2 res =
        let@ local = subtype loc local arg typ in
        return ()
     | M_PEundef (_loc, undef) ->
-       let expl = Explain.undefined_behaviour local in
+       let expl = E.undefined_behaviour local in
        fail loc (Undefined_behaviour (undef, expl))
 
 
@@ -1465,7 +1467,7 @@ let match_resources loc local error r1 r2 res =
 
   let all_empty loc local = 
     let error resource solver = 
-      let (resource, state) = Explain.resource local (Solver.get_model solver) resource in
+      let (resource, state) = E.resource local (S.get_model solver) resource in
       fail loc (Unused_resource {resource; state})
     in
 
@@ -1474,24 +1476,27 @@ let match_resources loc local error r1 r2 res =
           match resource with
           | Point p ->
              let (holds, solver) = 
-               Solver.provable_and_solver local (t_ (le_ (p.permission, q_ (0, 1)))) 
+               S.provable_and_solver (L.all_solver_constraints local)
+                 (t_ (le_ (p.permission, q_ (0, 1)))) 
              in
              if holds then return () else error resource solver
           | QPoint p ->
              let (holds, solver) = 
-               Solver.provable_and_solver local 
+               S.provable_and_solver (L.all_solver_constraints local)
                  (forall_ (p.qpointer, BT.Loc) None
                     (le_ (p.permission, q_ (0, 1))))
              in
              if holds then return () else error resource solver
           | Predicate p ->
              if not p.unused then return () else
-               let (_, solver) = Solver.provable_and_solver local (T (bool_ false)) in
+               let (_, solver) = 
+                 S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
                error resource solver
           | QPredicate p ->
-             let (holds, solver) = Solver.provable_and_solver local (t_ (eq_ (p.istart, p.iend))) in
+             let (holds, solver) = 
+               S.provable_and_solver (L.all_solver_constraints local) (t_ (eq_ (p.istart, p.iend))) in
              if not p.unused && holds then return () else error resource solver
-        ) local.resources
+        ) (all_resources local)
     in
     return ()
 
@@ -1641,11 +1646,14 @@ let match_resources loc local error r1 r2 res =
                understand, are an exception. *)
             let@ () = 
               let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-              let (holds, solver) = Solver.provable_and_solver local (t_ in_range_lc) in
+              let (holds, solver) = 
+                S.provable_and_solver 
+                  (L.all_solver_constraints local) (t_ in_range_lc) 
+              in
               if holds then return () else 
                 let (constr,state) = 
-                  Explain.unsatisfied_constraint local 
-                    (Solver.get_model solver) (t_ in_range_lc)
+                  E.unsatisfied_constraint local 
+                    (S.get_model solver) (t_ in_range_lc)
                 in
                 fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
             in
@@ -1686,10 +1694,10 @@ let match_resources loc local error r1 r2 res =
             in
             let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
             let@ () = 
-              let (holds, solver) = Solver.provable_and_solver local (t_ init) in
+              let (holds, solver) = S.provable_and_solver (L.all_solver_constraints local) (t_ init) in
               if holds then return () else
                 let (state, _) = 
-                  Explain.unsatisfied_constraint local (Solver.get_model solver) (t_ init) in
+                  E.unsatisfied_constraint local (S.get_model solver) (t_ init) in
                 fail loc (Uninitialised_read {is_member = None; state})
             in
             let ret = Sym.fresh () in
@@ -1759,7 +1767,8 @@ let match_resources loc local error r1 r2 res =
          let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
          ListM.iterM (fun (lc, e) ->
              let local = add_c (t_ lc) local in
-             if Solver.provably_inconsistent local then return ()
+             if S.provably_inconsistent (L.all_solver_constraints local)
+             then return ()
              else check_texpr (local, labels) e typ 
            ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
       | M_Ebound (_, e) ->
@@ -1771,7 +1780,8 @@ let match_resources loc local error r1 r2 res =
          ListM.iterM (fun (pat, pe) ->
              let@ delta = pattern_match (arg.lname, arg.bt) pat in
              let local = delta ++ local in
-             if Solver.provably_inconsistent local then return ()
+             if S.provably_inconsistent (L.all_solver_constraints local)
+             then return ()
              else check_texpr (local, labels) e typ
            ) pats_es
       | M_Elet (p, e1, e2) ->
@@ -1806,7 +1816,7 @@ let match_resources loc local error r1 r2 res =
             fail loc (Generic !^err)
          end
       | M_Eundef (_loc, undef) ->
-         let expl = Explain.undefined_behaviour local in
+         let expl = E.undefined_behaviour local in
          fail loc (Undefined_behaviour (undef, expl))
       | M_Erun (label_sym, asyms) ->
          let local = unpack_resources local in
@@ -1890,7 +1900,7 @@ let match_resources loc local error r1 r2 res =
 
   
   let check_initial_environment_consistent loc info local = 
-    match Solver.provably_inconsistent local, info with
+    match S.provably_inconsistent (L.all_solver_constraints local), info with
     | true, `Label -> 
        fail loc (Generic (!^"this label makes inconsistent assumptions"))
     | true, `Fun -> 
@@ -1902,7 +1912,7 @@ let match_resources loc local error r1 r2 res =
   (* check_function: type check a (pure) function *)
   let check_function 
         (loc : loc) 
-        (local : Local.t)
+        (local : L.t)
         mapping 
         (info : string) 
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
@@ -1931,7 +1941,7 @@ let match_resources loc local error r1 r2 res =
 
   (* check_procedure: type check an (impure) procedure *)
   let check_procedure 
-        (loc : loc) (local : Local.t)
+        (loc : loc) (local : L.t)
         mapping (fsym : Sym.t)
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
         (body : 'bty mu_texpr) (function_typ : FT.t) 
@@ -2029,161 +2039,146 @@ end
 
 
 
-
-(* TODO: do this when we've added the machinery for user-defined predicates *)
-let check_predicate_definition def = return ()
-
-
-let check_and_record_tagDefs (global: Global.t) tagDefs = 
-  let open Memory in
-  PmapM.foldM (fun tag def (global: Global.t) ->
-      match def with
-      | M_UnionDef _ -> 
-         unsupported Loc.unknown !^"todo: union types"
-      | M_StructDef layout -> 
-         let@ () =
-           ListM.iterM (fun piece ->
-               match piece.member_or_padding with
-               | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
-                  begin match SymMap.find_opt sym2 global.struct_decls with
-                  | Some _ -> return ()
-                  | None -> fail Loc.unknown (Missing_struct sym2)
-                  end
-               | _ -> return ()
-             ) layout
-         in
-         let struct_decls = SymMap.add tag layout global.struct_decls in
-         return { global with struct_decls }
-    ) tagDefs global
-
-
-
-
-let record_funinfo (global, local) funinfo =
-  let module WT = WellTyped.Make(struct let global = global end) in
-  let module Explain = Explain.Make(struct let global = global end) in
-  PmapM.foldM
-    (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, has_proto, mapping)) 
-         (global, local) ->
-      let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
-      let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
-      let local = L.add_descriptions (Explain.naming_of_mapping mapping) local in
-      let@ () = WT.WFT.welltyped loc local ftyp in
-      let fun_decls = SymMap.add fsym (loc, ftyp) global.Global.fun_decls in
-      let local = 
-        let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
-        let lc = representable_ (voidstar, sym_ (fsym, Loc)) in
-        Local.add_c (t_ lc) local
-      in
-      return ({global with fun_decls}, local)
-    ) funinfo (global, local)
-
-
-let print_initial_environment genv = 
-  debug 1 (lazy (headline "initial environment"));
-  debug 1 (lazy (Global.pp genv));
-  return ()
-
-
-let check_functions (global, local) fns =
-  let module C = Make(struct let global = global end) in
-  PmapM.iterM (fun fsym fn -> 
-      match fn with
-      | M_Fun (rbt, args, body) ->
-         let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
-           | Some t -> return t
-           | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
-         in
-         C.check_function loc local Mapping.empty 
-           (Sym.pp_string fsym) args rbt body ftyp
-      | M_Proc (loc, rbt, args, body, labels, mapping) ->
-         let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
-           | Some t -> return t
-           | None -> fail loc (TypeErrors.Missing_function fsym)
-         in
-         C.check_procedure loc' local mapping 
-           fsym args rbt body ftyp labels
-      | M_ProcDecl _
-      | M_BuiltinDecl _ -> 
-         return ()
-    ) fns
-
-
-
-let check_and_record_impls (global, local) impls = 
-  let open Global in
-  PmapM.foldM (fun impl impl_decl global ->
-      let module G = struct let global = global end in
-      let module C = Make(G) in
-      let module WT = WellTyped.Make(G) in
-      let descr = CF.Implementation.string_of_implementation_constant impl in
-      match impl_decl with
-      | M_Def (rt, rbt, pexpr) -> 
-         let@ () = WT.WRT.welltyped Loc.unknown local rt in
-         let@ () = 
-           C.check_function Loc.unknown local
-             [] descr [] rbt pexpr (FT.I rt) in
-         let global = 
-           { global with impl_constants = 
-                           ImplMap.add impl rt global.impl_constants}
-         in
-         return global
-      | M_IFun (ft, rbt, args, pexpr) ->
-         let@ () = WT.WFT.welltyped Loc.unknown local ft in
-         let@ () = 
-           C.check_function Loc.unknown local [] 
-             (CF.Implementation.string_of_implementation_constant impl)
-             args rbt pexpr ft
-         in
-         let impl_fun_decls = ImplMap.add impl ft global.impl_fun_decls in
-         return { global with impl_fun_decls }
-    ) impls global
-
-
-
-
-(* TODO: check the expressions *)
-let record_globals local globs = 
-  let open Global in
-  ListM.fold_leftM (fun local (sym, def) ->
-      match def with
-      | M_GlobalDef (lsym, (_, ct), _)
-      | M_GlobalDecl (lsym, (_, ct)) ->
-         let bt = Loc in
-         let local = Local.add_l lsym bt local in
-         let local = Local.add_a sym (bt, lsym) local in
-         let local = Local.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
-         let global = SymSet.add lsym local.global in
-         return {local with global}
-    ) local globs
-
-
-
-
-let check_and_record_predicate_defs global predicates =
-  ListM.fold_leftM (fun global (name,def) -> 
-      let module WT = WellTyped.Make(struct let global = global end) in
-      let@ () = WT.WPD.welltyped L.empty def in
-      let resource_predicates =
-        StringMap.add name def global.resource_predicates in
-      return {global with resource_predicates}
-    ) global predicates
-
-
-
 let check mu_file = 
+
   let global = Global.empty in
-  let local = Local.empty in
-  let@ global = check_and_record_tagDefs global mu_file.mu_tagDefs in
-  let@ global = check_and_record_impls (global, local) mu_file.mu_impl in
-  let@ local = record_globals local mu_file.mu_globs in
-  let@ global = check_and_record_predicate_defs global mu_file.mu_predicates in
-  (* has to be after globals: the functions can refer to globals *)
-  let@ (global, local) = record_funinfo (global, local) mu_file.mu_funinfo in
-  let@ () = print_initial_environment global in
-  let@ result = check_functions (global, local) mu_file.mu_stdlib in
-  let@ result = check_functions (global, local) mu_file.mu_funs in
-  return result
+  
+  let@ global = 
+    (* check and record tagDefs *)
+    let open Memory in
+    PmapM.foldM (fun tag def (global: Global.t) ->
+        match def with
+        | M_UnionDef _ -> 
+           unsupported Loc.unknown !^"todo: union types"
+        | M_StructDef layout -> 
+           let@ () =
+             ListM.iterM (fun piece ->
+                 match piece.member_or_padding with
+                 | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
+                    begin match SymMap.find_opt sym2 global.struct_decls with
+                    | Some _ -> return ()
+                    | None -> fail Loc.unknown (Missing_struct sym2)
+                    end
+                 | _ -> return ()
+               ) layout
+           in
+           let struct_decls = SymMap.add tag layout global.struct_decls in
+           return { global with struct_decls }
+      ) mu_file.mu_tagDefs global
+  in
+
+  let module S = Solver.Make(struct let struct_decls = global.struct_decls end) in
+  let module L = Local.Make(S) in
+
+  let local = L.empty in
+
+  let@ local = 
+    (* record globals *)
+    (* TODO: check the expressions *)
+    let open Global in
+    ListM.fold_leftM (fun local (sym, def) ->
+        match def with
+        | M_GlobalDef (lsym, (_, ct), _)
+        | M_GlobalDecl (lsym, (_, ct)) ->
+           let bt = Loc in
+           let local = L.add_l lsym bt local in
+           let local = L.add_a sym (bt, lsym) local in
+           let local = L.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
+           return local
+      ) local mu_file.mu_globs 
+  in
+
+  let@ global = 
+    (* check and record impls *)
+    let open Global in
+    PmapM.foldM (fun impl impl_decl global ->
+        let module G = struct let global = global end in
+        let module C = Make(G)(S)(L) in
+        let module WT = WellTyped.Make(G)(S)(L) in
+        let descr = CF.Implementation.string_of_implementation_constant impl in
+        match impl_decl with
+        | M_Def (rt, rbt, pexpr) -> 
+           let@ () = WT.WRT.welltyped Loc.unknown L.empty rt in
+           let@ () = 
+             C.check_function Loc.unknown L.empty
+               [] descr [] rbt pexpr (FT.I rt) in
+           let global = 
+             { global with impl_constants = 
+                             ImplMap.add impl rt global.impl_constants}
+           in
+           return global
+        | M_IFun (ft, rbt, args, pexpr) ->
+           let@ () = WT.WFT.welltyped Loc.unknown L.empty ft in
+           let@ () = 
+             C.check_function Loc.unknown L.empty [] 
+               (CF.Implementation.string_of_implementation_constant impl)
+               args rbt pexpr ft
+           in
+           let impl_fun_decls = ImplMap.add impl ft global.impl_fun_decls in
+           return { global with impl_fun_decls }
+      ) mu_file.mu_impl global
+  in
+  
+  let@ global = 
+    (* check and record predicate defs *)
+    ListM.fold_leftM (fun global (name,def) -> 
+        let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
+        let@ () = WT.WPD.welltyped L.empty def in
+        let resource_predicates =
+          StringMap.add name def global.resource_predicates in
+        return {global with resource_predicates}
+      ) global mu_file.mu_predicates
+  in
+
+  let@ (global, local) =
+    let open Global in
+    let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
+    PmapM.foldM
+      (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, has_proto, mapping)) 
+           (global, local) ->
+        let global = 
+          { global with fun_decls = SymMap.add fsym (loc, ftyp) global.fun_decls }
+        in
+        let local = 
+          let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
+          let lc = representable_ (voidstar, sym_ (fsym, Loc)) in
+          L.add_c (t_ lc) local
+        in
+        let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
+        let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
+        let@ () = WT.WFT.welltyped loc (L.add_descriptions (Explain.naming_of_mapping mapping) local) ftyp in
+        return (global, local)
+      ) mu_file.mu_funinfo (global, local)
+  in
+
+
+  let check_functions fns =
+    let module C = Make(struct let global = global end)(S)(L) in
+    PmapM.iterM (fun fsym fn -> 
+        match fn with
+        | M_Fun (rbt, args, body) ->
+           let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
+             | Some t -> return t
+             | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
+           in
+           C.check_function loc local Mapping.empty 
+             (Sym.pp_string fsym) args rbt body ftyp
+        | M_Proc (loc, rbt, args, body, labels, mapping) ->
+           let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
+             | Some t -> return t
+             | None -> fail loc (TypeErrors.Missing_function fsym)
+           in
+           C.check_procedure loc' local mapping 
+             fsym args rbt body ftyp labels
+        | M_ProcDecl _
+        | M_BuiltinDecl _ -> 
+           return ()
+      ) fns
+  in
+
+  let@ () = check_functions mu_file.mu_stdlib in
+  let@ () = check_functions mu_file.mu_funs in
+  return ()
 
 
 
