@@ -63,6 +63,33 @@ $\CLNRp \vdash J$.
     }
 
     \prove{$\CLNRp \vdash J$.\\}
+
+    \pfsketch{ Consider only the below cases, the rest are functorial in the environment.}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PVal\_Var\_\{Comp,Log\}}.
+        }{
+            \pf\ By \textsc{Weak\_Cons\_\{Comp,Log\}}, if $\cnmv{x}  {:}  \beta \, \in \, \mathcal{C}$ (or $\cnmv{x}  {:}  \beta \, \in \, \mathcal{L}$) then $\cnmv{x}  {:}  \beta \, \in \, \mathcal{C}'$ (or $\cnmv{x}  {:}  \beta \, \in \, \mathcal{L}$).
+        }
+    }
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_PVal\_Error}, \textsc{Ty\_Res\_Eq\_\{PointsTo,Term\}},
+            \textsc{Ty\_Res\_Conj}, \textsc{Ty\_Spine\_Res\_Phi},
+            \textsc{Ty\_PE\_AssertUndef}, \textsc{Ty\_TPVal\_\{Undef,Done\}},
+            \textsc{Ty\_Action\_\{Load,Store,Kill\}},
+            \textsc{Ty\_Memop\_PtrValidForDeref},
+            \textsc{Ty\_TVal\_\{Phi,Undef\}}.
+        }{%
+            \pf\ Assume $\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \cnnt{term'}  \cnsym{)}$. Show $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$.By \textsc{Weak\_Cons\_Phi}, if $\cnnt{term} \in \Phi$ then
+            $\cnnt{term} \in \Phi'$. Any extra constraints in $\Phi'$ (by
+            \textsc{Weak\_Skip\_Phi}) would either be irrelevant, redundant, or
+            inconsistent. In all cases, $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$ as required.
+        }
+    }
+
 \end{proof}
 
 \section{Substitution}
@@ -117,8 +144,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
     \assume{%
         \begin{pfenum}
             \item $\Phi  \vdash  \cnnt{res} \, \equiv \, \cnnt{res'}$.
-            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}$.
-            \item $\Phi  \vdash   \sigma  (  \cnnt{res}  )  \, \equiv \,  \sigma  (  \cnnt{res'}  ) $.\\
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}$.\\
         \end{pfenum}}
 
     \prove{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res'}$.\\}
@@ -187,11 +213,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
 
     \begin{proof}
 
-        \step{<2>1}{$\Phi  \vdash  \cnnt{res_{{\mathrm{1}}}} \, \equiv \, \cnnt{res'_{{\mathrm{1}}}}$ by inversion on the equality.}
-
-        \step{<2>2}{$\Phi  \vdash   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res_{{\mathrm{1}}}}  )  \, \equiv \,  pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res'_{{\mathrm{1}}}}  ) $ by inversion on substitution assumption.}
-
-        \step{<2>3}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term'}  \Leftarrow   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res'_{{\mathrm{1}}}}  ) $ by induction.}
+        \step{<2>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term'}  \Leftarrow   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res'_{{\mathrm{1}}}}  ) $ by induction.}
 
         \step{<2>4}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term'}  \cnsym{)}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res'_{{\mathrm{1}}}}$ as required.}
 
@@ -343,7 +365,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
     \step{<2>5}{$\cnnt{res\_term} = \cnnt{pt_{{\mathrm{3}}}}$ for some $\cnnt{pt_{{\mathrm{3}}}}$ by inversion
         on \stepref{<2>4} (\textsc{Ty\_Res\_PointsTo}).}
 
-    \step{<2>6}{$\Phi  \vdash  \cnnt{pt_{{\mathrm{3}}}} \, \equiv \,  \sigma  (  \cnnt{pt}  ) $ by inversion on \stepref{<2>7}.}
+    \step{<2>6}{$\Phi  \vdash  \cnnt{pt_{{\mathrm{3}}}} \, \equiv \,  \sigma  (  \cnnt{pt}  ) $ by inversion on \stepref{<2>3}.}
 
     \step{<2>7}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnnt{pt'}  )   \Leftarrow  \cnnt{pt_{{\mathrm{3}}}}$.\\
         \pf\ \textsc{Ty\_Res\_PointsTo} is symmetric in all its $\cnnt{pt}$
@@ -618,9 +640,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_\{Action*,Memop*\}}.
         }{%
-            \pf\ By induction. Rules with SMT checks still hold because they are
-            true for all (well-typed) instantiations of a term's free variables,
-            and $\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \cnnt{term}  \cnsym{)}$ for each $ \cnnt{term} \in \Phi'$.
+            \pf\ By induction and lemma \ref{subsec:sub_smt} (substitutions preserve SMT results).
         }
     }
 
@@ -1251,50 +1271,6 @@ values}\label{subsec:pattern_term}
 
 \end{proof}
 
-% \subsection{Constraints derived patterns from patterns are
-% provable}\label{subsec:pattern_phi}
-%
-% \begin{proof}
-%     \assume{%
-%         \begin{pfenum}
-%             \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \cnnt{ret}$.\label{pattern_term-assm1}
-%             \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$.
-%         \end{pfenum}}
-%
-%     \prove{ $ cdot => N $.\\}
-%
-%     \pfsketch{ Induction over \ref{pattern_term-assm1}, focusing only on cases computational
-%         and constraint cases.\\}
-%
-%     \step{<1>1}{%
-%         \case{%
-%             \textsc{Ty\_TVal\_Phi}
-%         }{%
-%             \pf\ $\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow  term  \cnsym{)}$ by inversion on \ref{pattern_term-assm1}.
-%             $ cdot => N' $ by induction. So $ cdot => N' , term_aux $.
-%         }
-%     }
-%
-%     \step{<1>2}{%
-%         \case{%
-%             \textsc{Ty\_TVal\_Comp}
-%         }{%
-%         }
-%     }
-%
-%     \begin{proof}
-%         \step{<2>1}{By inversion on the assumptions,\begin{pfenum}
-%             \item $ident\_or\_pattern  {:}  \beta  \leadsto  \mathcal{C}_{{\mathrm{1}}} \, \cnkw{with} \, term_{{\mathrm{1}}}$.
-%             \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}   term_{{\mathrm{1}}}  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{ret}  )   \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$.
-%             \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{ret}  ) $.
-%         \end{pfenum}}
-%
-%         \step{<2>2}{By lemma \ref{subsec:pattern_term} and induction, we have $ cdot => N $.}
-%     \end{proof}
-%
-% \end{proof}
-
-
 \subsection{Deconstructing a pattern leads to a well-typed
 substitution}\label{subsec:wt_sub}
 
@@ -1371,7 +1347,8 @@ Now, resource part.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_Pat\_Res\_PointsTo}.
-            % TODO fix this
+            % This gets around the equivalence required by the typing rule
+            % by having the pattern-matching require syntactic equality.
         }{
             $\cnnt{res\_pattern} = \cnnt{res\_term} = \cnnt{res} = \cnnt{pt}$.
             $\sigma = \cdot$, $\mathcal{L} = \cdot$, $\Phi = \cdot$,
@@ -1696,7 +1673,6 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
             by construction of $pval$.}
 
-        % TODO fix this
         \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ by
             \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1762,7 +1738,6 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}
 
-        % TODO fix this
         \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
             by \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1853,26 +1828,23 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \rangle$.\label{ptrValid-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
             \ref{ptrValid-assm1}.}
 
-        % TODO fix this
-        \step{<2>2}{$R = \cdot  \cnsym{,}  \cnnt{pt}$, by \textsc{Ty\_Res\_PointsTo}.}
-
-        \step{<2>3}{$bool\_value = \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}$ by
+        \step{<2>2}{$bool\_value = \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}$ by
             construction of $bool\_value$ (inversion on \ref{ptrValid-assm2}).}
 
-        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value  \Rightarrow  \cnkw{bool}$ by
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value  \Rightarrow  \cnkw{bool}$ by
             \textsc{Ty\_PVal\_\{True,False\}}.}
 
-        \step{<2>5}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>2} --
-            \stepref{<2>4} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+        \step{<2>4}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>1} --
+            \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
             respectively, we are done.}
     \end{proof}
 

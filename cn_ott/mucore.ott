@@ -1724,11 +1724,11 @@ defns
 
 
     % NOT IMPLEMENTED - memory events
-    C ; L ; N ; R |- mu_is_expr_aux => ret1
+    C ; L ; N ; R' |- mu_is_expr_aux => ret1
     </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret2
-    ---------------------------------------------------------------------------------------- :: LetS
-    C ; L ; N ; R |- let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr <= ret2
+    --------------------------------------------------------------------------------------------- :: LetS
+    C ; L ; N ; R' , R |- let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr <= ret2
 
 
     % impl does Ret orFalse, for checking the body of a label (to ensure it doesn't return)

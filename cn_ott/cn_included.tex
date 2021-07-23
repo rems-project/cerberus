@@ -2190,11 +2190,11 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 
 %% defn Is_TE
 \newcommand{\cndruleTyXXIsXXTEXXLetS}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  is\_expr  \Rightarrow  \cnnt{ret_{{\mathrm{1}}}}}%
+\cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \vdash  is\_expr  \Rightarrow  \cnnt{ret_{{\mathrm{1}}}}}%
 \cnpremise{\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \cnpremise{\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi  \cnsym{,}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}%
 }{
-\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{let} \, \cnkw{strong} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  is\_expr \, \cnkw{in} \, texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}{%
+\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cnkw{strong} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  is\_expr \, \cnkw{in} \, texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}{%
 {\cndrulename{Ty\_Is\_TE\_LetS}}{}%
 }}
 

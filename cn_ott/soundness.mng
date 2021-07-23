@@ -63,6 +63,38 @@ $\CLNRp \vdash J$.
     }
 
     \prove{$\CLNRp \vdash J$.\\}
+
+    \pfsketch{ Consider only the below cases, the rest are functorial in the environment.}
+
+    \step{<1>1}{%
+        \case{%
+            \textsc{Ty\_PVal\_Var\_\{Comp,Log\}}.
+        }{
+            \pf\ By \textsc{Weak\_Cons\_\{Comp,Log\}}, if $[[ x : base_type
+            inEnv C]]$ (or $[[ x : base_type inEnv L ]]$) then $[[ x :
+            base_type inEnv C' ]]$ (or $[[ x : base_type inEnv L ]]$).
+        }
+    }
+
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_PVal\_Error}, \textsc{Ty\_Res\_Eq\_\{PointsTo,Term\}},
+            \textsc{Ty\_Res\_Conj}, \textsc{Ty\_Spine\_Res\_Phi},
+            \textsc{Ty\_PE\_AssertUndef}, \textsc{Ty\_TPVal\_\{Undef,Done\}},
+            \textsc{Ty\_Action\_\{Load,Store,Kill\}},
+            \textsc{Ty\_Memop\_PtrValidForDeref},
+            \textsc{Ty\_TVal\_\{Phi,Undef\}}.
+        }{%
+            \pf\ Assume $[[ smt ( N => term' ) ]]$. Show $[[ smt ( N' => term'
+            ) ]]$.By \textsc{Weak\_Cons\_Phi}, if $[[ term ]] \in [[ N ]]$ then
+            $[[ term ]] \in [[ N' ]]$. Any extra constraints in $[[N']]$ (by
+            \textsc{Weak\_Skip\_Phi}) would either be irrelevant, redundant, or
+            inconsistent. In all cases, $[[ smt ( N' => term' ) ]]$ as required.
+        }
+    }
+
+    % TODO Resource cases
+
 \end{proof}
 
 \section{Substitution}
@@ -117,8 +149,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
     \assume{%
         \begin{pfenum}
             \item $[[ N |- res eq res' ]]$.
-            \item $[[ C ; L ; N ; R |- res_term <= res ]]$.
-            \item $[[ N |- [ subs ] res eq [ subs ] res' ]]$.\\
+            \item $[[ C ; L ; N ; R |- res_term <= res ]]$.\\
         \end{pfenum}}
 
     \prove{$[[ C ; L ; N ; R |- res_term <= res' ]]$.\\}
@@ -190,12 +221,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
 
     \begin{proof}
 
-        \step{<2>1}{$[[ N |- res1 eq res1' ]]$ by inversion on the equality.}
-
-        \step{<2>2}{$[[ N |- [ mu_pval_aux / y , cdot ] res1 eq [ mu_pval_aux /
-            y , cdot ] res1' ]]$ by inversion on substitution assumption.}
-
-        \step{<2>3}{$[[ C ; L ; N ; R |- res_term' <= [ mu_pval_aux / y , cdot ]
+        \step{<2>1}{$[[ C ; L ; N ; R |- res_term' <= [ mu_pval_aux / y , cdot ]
             res1' ]]$ by induction.}
 
         \step{<2>4}{$[[ C ; L ; N ; R |- pack ( mu_pval_aux , res_term' ) <=
@@ -644,9 +670,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_\{Action*,Memop*\}}.
         }{%
-            \pf\ By induction. Rules with SMT checks still hold because they are
-            true for all (well-typed) instantiations of a term's free variables,
-            and $[[ smt ( N => term ) ]]$ for each $ [[ term ]] \in [[N']]$.
+            \pf\ By induction and lemma \ref{subsec:sub_smt} (substitutions preserve SMT results).
         }
     }
 
@@ -1299,50 +1323,6 @@ values}\label{subsec:pattern_term}
 
 \end{proof}
 
-% \subsection{Constraints derived patterns from patterns are
-% provable}\label{subsec:pattern_phi}
-%
-% \begin{proof}
-%     \assume{%
-%         \begin{pfenum}
-%             \item $[[ cdot ; cdot ; cdot ; R' |- done </ spine_elemi // i /> <= ret ]]$.\label{pattern_term-assm1}
-%             \item $[[ </ ret_patterni // i /> : ret ~> C ; L ; N ; R ]]$.
-%         \end{pfenum}}
-%
-%     \prove{ $ cdot => N $.\\}
-%
-%     \pfsketch{ Induction over \ref{pattern_term-assm1}, focusing only on cases computational
-%         and constraint cases.\\}
-%
-%     \step{<1>1}{%
-%         \case{%
-%             \textsc{Ty\_TVal\_Phi}
-%         }{%
-%             \pf\ $[[ smt ( cdot => term_aux ) ]]$ by inversion on \ref{pattern_term-assm1}.
-%             $ cdot => N' $ by induction. So $ cdot => N' , term_aux $.
-%         }
-%     }
-%
-%     \step{<1>2}{%
-%         \case{%
-%             \textsc{Ty\_TVal\_Comp}
-%         }{%
-%         }
-%     }
-%
-%     \begin{proof}
-%         \step{<2>1}{By inversion on the assumptions,\begin{pfenum}
-%             \item $[[mu_sym_or_pattern : base_type ~> C1 with term_aux1 ]]$.
-%             \item $[[ </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L ; N ; R ]]$.
-%             \item $[[ cdot ; cdot ; cdot ; R |- done </ spine_elemi // i /> <= [ mu_pval_aux / y , cdot ] ret ]]$.
-%         \end{pfenum}}
-%
-%         \step{<2>2}{By lemma \ref{subsec:pattern_term} and induction, we have $ cdot => N $.}
-%     \end{proof}
-%
-% \end{proof}
-
-
 \subsection{Deconstructing a pattern leads to a well-typed
 substitution}\label{subsec:wt_sub}
 
@@ -1419,7 +1399,8 @@ Now, resource part.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_Pat\_Res\_PointsTo}.
-            % TODO fix this
+            % This gets around the equivalence required by the typing rule
+            % by having the pattern-matching require syntactic equality.
         }{
             $[[res_pattern]] = [[res_term]] = [[res]] = [[pt]]$.
             $[[subs]] = \cdot$, $[[L]] = \cdot$, $[[N]] = \cdot$,
@@ -1759,7 +1740,6 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>3}{$[[ cdot ; cdot ; cdot |- mu_pval_aux => to_base ( ct ) ]]$
             by construction of $[[mu_pval_aux]]$.}
 
-        % TODO fix this
         \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot , pt |- pt <= pt ]]$ by
             \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1829,7 +1809,6 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
 
-        % TODO fix this
         \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot , pt' |- pt' <= pt' ]]$
             by \textsc{Ty\_Res\_PointsTo}.}
 
@@ -1927,26 +1906,23 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                         mu_bool_value , pt )> ]]$.\label{ptrValid-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R  |- done mu_bool_value , pt <= ret ]]$.
+                $[[ cdot ; cdot ; cdot ; cdot , pt |- done mu_bool_value , pt <= ret ]]$.
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ cdot ; cdot ; cdot ; R |- pt <= pt]]$, by inversion on
+        \step{<2>1}{$[[ cdot ; cdot ; cdot ; cdot , pt |- pt <= pt]]$, by inversion on
             \ref{ptrValid-assm1}.}
 
-        % TODO fix this
-        \step{<2>2}{$R = [[ cdot , pt ]]$, by \textsc{Ty\_Res\_PointsTo}.}
-
-        \step{<2>3}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
+        \step{<2>2}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
             construction of $[[mu_bool_value]]$ (inversion on \ref{ptrValid-assm2}).}
 
-        \step{<2>4}{$[[cdot ; cdot ; cdot |- mu_bool_value => bool]]$ by
+        \step{<2>3}{$[[cdot ; cdot ; cdot |- mu_bool_value => bool]]$ by
             \textsc{Ty\_PVal\_\{True,False\}}.}
 
-        \step{<2>5}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>2} --
-            \stepref{<2>4} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
+        \step{<2>4}{By \textsc{Ty\_TVal\_I}, and then \stepref{<2>1} --
+            \stepref{<2>3} with \textsc{Ty\_TVal\_\{Res,Phi,Comp\}}
             respectively, we are done.}
     \end{proof}
 

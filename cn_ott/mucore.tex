@@ -1892,11 +1892,11 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 
 %% defn Is_TE
 \newcommand{\ottdruleTyXXIsXXTEXXLetS}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  is\_expr  \Rightarrow  \ottnt{ret_{{\mathrm{1}}}}}%
+\ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \vdash  is\_expr  \Rightarrow  \ottnt{ret_{{\mathrm{1}}}}}%
 \ottpremise{\ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \ottpremise{\mathcal{C}  \ottsym{,}  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}  \ottsym{,}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi  \ottsym{,}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{let} \, \ottkw{strong} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  is\_expr \, \ottkw{in} \, texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \mathcal{R}  \vdash  \ottkw{let} \, \ottkw{strong} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  is\_expr \, \ottkw{in} \, texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}{%
 {\ottdrulename{Ty\_Is\_TE\_LetS}}{}%
 }}
 
