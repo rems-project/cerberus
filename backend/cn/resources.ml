@@ -406,6 +406,10 @@ module Requests =
     end)
 
 
+
+
+
+
 module RE = struct 
   include Make(IT)
 
@@ -447,14 +451,14 @@ module RE = struct
     let open IT in
     match resource with
     | Point p -> 
-       impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer)))
+       LC.T (impl_ (gt_ (p.permission, q_ (0, 1)), not_ (eq_ (null_, p.pointer))))
     | QPoint p ->
        (* todo *)
-       bool_ true
+       LC.T (bool_ true)
     | Predicate _ ->
-       bool_ true
+       LC.T (bool_ true)
     | QPredicate _ ->
-       bool_ true
+       LC.T (bool_ true)
   
   
   (* assumption: resource owned at the same time as resources' *)
@@ -463,17 +467,17 @@ module RE = struct
     (* let open IT in *)
     match resource, resource' with
     | Point p, Point p' -> 
-       [impl_ (
+       LC.T (impl_ (
             gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
             ne_ (p.pointer, p'.pointer)
           )
-       ]
+         )
     | Predicate _, _
     | _, Predicate _ -> 
-       []
+       LC.T (bool_ true)
     | _ ->
        (* todo *)
-       []
+       LC.T (bool_ true)
 
 
 
@@ -580,6 +584,78 @@ module RE = struct
     | Predicate p when not p.unused -> None
     | QPredicate p when not p.unused -> None
     | re -> Some re
+
+
+
+
+  let normalise resource =
+
+    let return a = (a, []) in
+
+    let bind (x, cs) f = 
+      let (y, cs') = f x in
+      (y, cs @ cs')
+    in
+
+    let constrs cs = ((), cs) in
+
+    let (let@) = bind in
+
+    let symbol it = 
+      if Option.is_some (IT.is_sym it) 
+      then return it 
+      else 
+        let _, it' = IT.fresh (IT.bt it) in
+        let@ () = constrs [LC.T (eq__ it it')] in
+        return it'
+    in
+
+    let lambda (s, bt) it = 
+      if Option.is_some (IT.is_app it) 
+      then return it 
+      else 
+        let body = IT.make_param (s, bt) it in
+        let _, it' = IT.fresh (IT.bt body) in
+        let@ () = constrs [LC.T (eq__ it' body)] in
+        return (app_ it' (sym_ (s, bt)))
+    in
+
+    let rec mapM f xs = 
+      match xs with
+      | [] -> return []
+      | x :: xs -> 
+         let@ x = f x in
+         let@ xs = mapM f xs in
+         return (x :: xs)
+    in
+
+
+    match resource with
+    | Point {pointer; size; value; init; permission} ->
+       let@ pointer = symbol pointer in
+       let@ value = symbol value in
+       let@ init = symbol init in
+       let@ permission = symbol permission in
+       return (Point {pointer; size; value; init; permission})
+    | QPoint {qpointer; size; value; init; permission} ->
+       let@ value = lambda (qpointer, Loc) value in
+       let@ init = lambda (qpointer, Loc) init in
+       let@ permission = lambda (qpointer, Loc) permission in
+       return (QPoint {qpointer; size; value; init; permission})       
+    | Predicate {name; pointer; iargs; oargs; unused} -> 
+       let@ pointer = symbol pointer in
+       let@ iargs = mapM symbol iargs in
+       let@ oargs = mapM symbol oargs in
+       return (Predicate {name; pointer; iargs; oargs; unused})
+    | QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved} -> 
+       let@ pointer = symbol pointer in
+       let@ isart = symbol istart in
+       let@ iend = symbol iend in
+       let@ iargs = mapM (lambda (i, Integer)) iargs in
+       let@ oargs = mapM (lambda (i, Integer)) oargs in
+       let@ moved = mapM symbol moved in
+       return (QPredicate {pointer; element_size; istart; iend; name; iargs; oargs; i; unused; moved})
+
 
 
 

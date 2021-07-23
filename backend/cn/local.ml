@@ -66,17 +66,7 @@ let all_constraints (local : t) = local.constraints
 
 
 
-let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
-      (local : t) (acc : 'acc) = 
-  let resources, acc =
-    List.fold_right (fun re (resources, acc) ->
-        let (re, acc) = f re acc in
-        match RE.simp_or_empty local.constraints re with
-        | Some re -> (re :: resources, acc)
-        | None -> (resources, acc)
-      ) local.resources ([], acc)
-  in
-  ({local with resources}, acc)
+
 
 
 
@@ -113,14 +103,16 @@ let add_cs lcs (local : t) =
 let add_r r (local : t) = 
   match RE.simp_or_empty local.constraints r with
   | Some r -> 
+     (* let r, lcs1 = RE.normalise r in *)
+     let r, lcs1 = r, [] in
      let resources = r :: local.resources in
-     let lcs = 
+     let lcs2 = 
        RE.derived_constraint r ::
-         List.concat_map (fun r' -> RE.derived_constraints r r') 
+         List.map (fun r' -> RE.derived_constraints r r') 
            (all_resources local)
      in
      let local = {local with resources} in
-     add_cs (List.map (fun c -> LC.T c) lcs) local
+     add_cs (lcs1 @ lcs2) local
   | None ->
      local
 
@@ -132,6 +124,28 @@ let remove_resource resource local =
       ) local.resources
   in
   { local with resources }
+
+
+
+
+let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
+      (local : t) (acc : 'acc) = 
+  let resources, constraints, acc =
+    List.fold_right (fun re (resources, constraints, acc) ->
+        let (re, acc) = f re acc in
+        match RE.simp_or_empty local.constraints re with
+        | Some re -> 
+           (* let (re, lcs) = RE.normalise re in *)
+           let (re, lcs) = re, [] in
+           (re :: resources, lcs @ constraints, acc)
+        | None -> (resources, constraints, acc)
+      ) local.resources ([], [], acc)
+  in
+  let local = add_cs constraints {local with resources} in
+  (local, acc)
+
+
+
 
 
 let add_description (s, term) local = 

@@ -102,9 +102,8 @@ let hash = function
   | Tuple _ -> 6
   | Struct _ -> 7
   | Set _ -> 8
-  (* | Array _ -> 9 *)
-  | Option _ -> 10
-  | Param _ -> 11
+  | Option _ -> 9
+  | Param _ -> 10
 
 
 let param_bt = function

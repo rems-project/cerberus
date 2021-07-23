@@ -18,7 +18,6 @@ module L = Local
 
 open Subst
 open IT
-open Locations
 open TypeErrors
 open Resultat
 module Mu = Retype.New
@@ -305,9 +304,9 @@ let match_resources loc local error r1 r2 res =
             Z.equal b.size b'.size &&
             IT.equal b.permission b'.permission ->
      let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
-     if Solver.provable local (t_ (and_ (List.map eq_ constrs)))
-     then return res
-     else fail loc error
+     let (result, solver) = 
+       Solver.provable_and_solver local (t_ (and_ (List.map eq_ constrs))) in
+     if result then return res else fail loc (error solver)
   | QPoint b, QPoint b' 
        when Sym.equal b.qpointer b'.qpointer &&
             Z.equal b.size b'.size &&
@@ -315,13 +314,14 @@ let match_resources loc local error r1 r2 res =
      let b' = { b' with value = eta_expand (b.qpointer, Loc) b'.value;
                         init = eta_expand (b.qpointer, Loc) b'.init; } in
      let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
-     if Solver.provable local 
+     let (result, solver) = 
+       Solver.provable_and_solver local 
           (forall_ (b.qpointer, BT.Loc)
              None
              (impl_ (gt_ (b.permission, q_ (0, 1)), 
                      and_ (List.map eq_ constrs))))
-     then return res 
-     else fail loc error
+     in
+     if result then return res else fail loc (error solver)
   | Predicate p, Predicate p' 
        when 
          predicate_name_equal p.name p'.name &&
@@ -329,11 +329,12 @@ let match_resources loc local error r1 r2 res =
              List.equal IT.equal p.iargs p'.iargs &&
                p.unused = p'.unused ->
      let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-     if Solver.provable local 
-          (t_ (impl_ (bool_ p'.unused, 
-                      and_ (List.map eq_ constrs))))
-     then return res 
-     else fail loc error
+     let (result, solver) =
+       Solver.provable_and_solver local 
+         (t_ (impl_ (bool_ p'.unused, 
+                     and_ (List.map eq_ constrs))))
+     in
+     if result then return res else fail loc (error solver)
   | QPredicate p, QPredicate p' 
        when 
          IT.equal p.pointer p'.pointer &&
@@ -347,16 +348,17 @@ let match_resources loc local error r1 r2 res =
             List.equal IT.equal p.iargs p'.iargs ->
      let p' = { p' with oargs = List.map (eta_expand (p.i, Integer)) p'.oargs } in
      let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-     if Solver.provable local 
-          (forall_ (p.i, BT.Integer)
-           None
-             (impl_ (and_ [bool_ p.unused; 
-                           is_qpredicate_instance_index p (sym_ (p.i, Integer))],
-                     and_ (List.map eq_ constrs))))
-     then return res 
-     else fail loc error
+     let (result, solver) =
+       Solver.provable_and_solver local 
+         (forall_ (p.i, BT.Integer)
+            None
+            (impl_ (and_ [bool_ p.unused; 
+                          is_qpredicate_instance_index p (sym_ (p.i, Integer))],
+                    and_ (List.map eq_ constrs))))
+     in
+     if result then return res else fail loc (error solver)
   | _ -> 
-     fail loc error
+     Debug_ocaml.error "resource inference has inferred mismatched resources"
 
 
   module Spine (I : AT.I_Sig) = struct
@@ -434,10 +436,11 @@ let match_resources loc local error r1 r2 res =
           | Resource (resource, ftyp) -> 
              let rr = { ui_info; local; resource = RE.request resource; } in
              let@ (resource', local) = prompt (R_Resource rr) in
-             let mismatch = 
+             let mismatch solver = 
                lazy begin
+                   let model = Solver.get_model solver in
                    let ((expect,has), state) = 
-                     Explain.resources original_local (resource, resource') in
+                     Explain.resources original_local model (resource, resource') in
                    (Resource_mismatch {expect; has; state; situation})
                  end
              in
@@ -470,13 +473,13 @@ let match_resources loc local error r1 r2 res =
       let@ rt = 
         let rec check_logical_constraints = function
           | Constraint (c, ftyp) -> 
-             if Solver.provable local c then 
-               check_logical_constraints ftyp
-             else
+             let (holds, solver) = Solver.provable_and_solver local c in
+             if holds then check_logical_constraints ftyp else
                let err = 
                  lazy begin
                      let (constr,state) = 
-                       Explain.unsatisfied_constraint original_local c
+                       Explain.unsatisfied_constraint original_local 
+                         (Solver.get_model solver) c
                      in
                      (Unsat_constraint {constr; hint = None; state})
                    end
@@ -510,14 +513,16 @@ let match_resources loc local error r1 r2 res =
 
 
 
-  let resource_request_missing ui_info request =
+  let resource_request_missing ui_info solver request =
     let open Prompt in
     let open Prompt.Operators in
     let err = 
       lazy begin 
           let (resource, state) = 
             Explain.resource_request
-              ui_info.original_local request 
+              ui_info.original_local 
+              (Solver.get_model solver) 
+              request
           in
           Missing_resource {resource; used = None; state; 
                             situation = ui_info.situation}
@@ -643,8 +648,9 @@ let match_resources loc local error r1 r2 res =
              (re, (needed, value, init))
         ) local (needed, default_ requested.value, default_ BT.Bool)
     in
-    if Solver.provable local (t_ (eq_ (needed, q_ (0, 1)))) 
-    then 
+    let (holds, solver) = 
+      Solver.provable_and_solver local (t_ (eq_ (needed, q_ (0, 1)))) in
+    if holds then
       let r = 
         { pointer = requested.pointer;
           size = requested.size;
@@ -653,7 +659,7 @@ let match_resources loc local error r1 r2 res =
           permission = requested.permission }
       in
       return (r, local)
-    else resource_request_missing ui_info (Point requested)
+    else resource_request_missing ui_info solver (Point requested)
 
   let qpoint_request_prompt ui_info local (requested : Resources.Requests.qpoint) = 
     let open Prompt.Operators in
@@ -692,10 +698,12 @@ let match_resources loc local error r1 r2 res =
              (re, (needed, value, init))
         ) local (needed, default_ requested.value, default_ BT.Bool)
     in
-    if Solver.provable local 
-         (forall_ (requested.qpointer, BT.Loc) None
-            (eq_ (needed, q_ (0, 1))))
-    then 
+    let (holds, solver) =
+      Solver.provable_and_solver local 
+        (forall_ (requested.qpointer, BT.Loc) None
+           (eq_ (needed, q_ (0, 1))))
+    in
+    if holds then
       let r = 
         { qpointer = requested.qpointer;
           size = requested.size;
@@ -706,7 +714,7 @@ let match_resources loc local error r1 r2 res =
       in
       return (r, local)
     else 
-      resource_request_missing ui_info (QPoint requested)
+      resource_request_missing ui_info solver (QPoint requested)
 
 
   let predicate_request_prompt ui_info local (p : Resources.Requests.predicate) = 
@@ -784,10 +792,14 @@ let match_resources loc local error r1 r2 res =
                  end
              ) def.clauses
          in
-         let choices = 
-           attempt_prompts @ 
-             [lazy (resource_request_missing ui_info (Predicate p))] 
+         let error_prompt = 
+           lazy begin
+               let (_, solver) = 
+                 Solver.provable_and_solver local (T (bool_ false)) in
+               resource_request_missing ui_info solver (Predicate p)
+             end
          in
+         let choices = attempt_prompts @ [error_prompt] in
          let choices1 = List1.make (List.hd choices, List.tl choices) in
          let@ (assignment, local) = try_choices choices1 in
          let r = 
@@ -889,7 +901,8 @@ let match_resources loc local error r1 r2 res =
          in
          return (r, local)
       | None ->
-         resource_request_missing ui_info (QPredicate p)
+         let (_, solver) = Solver.provable_and_solver local (T (bool_ false)) in
+         resource_request_missing ui_info solver (QPredicate p)
 
   let resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
     let open Prompt.Operators in
@@ -1436,42 +1449,51 @@ let match_resources loc local error r1 r2 res =
 
 
   (*** auxiliary ****************************************************************)
-  let json_local loc local : Yojson.Safe.t = 
-    `Assoc [("loc", json_loc loc);
-            ("context", `Variant ("context", Some (Explain.json_state local)))]
-
-  let json_false loc : Yojson.Safe.t = 
-    `Assoc [("loc", json_loc loc);
-            ("context", `Variant ("unreachable", None))]
-
-  let json_local_or_false loc = function
-    | Normal local -> json_local loc local
-    | False -> json_false loc
+  (* let json_local loc local : Yojson.Safe.t = 
+   *   `Assoc [("loc", json_loc loc);
+   *           ("context", `Variant ("context", Some (Explain.json_state local)))]
+   * 
+   * let json_false loc : Yojson.Safe.t = 
+   *   `Assoc [("loc", json_loc loc);
+   *           ("context", `Variant ("unreachable", None))]
+   * 
+   * let json_local_or_false loc = function
+   *   | Normal local -> json_local loc local
+   *   | False -> json_false loc *)
 
 
 
   let all_empty loc local = 
-    let bad = 
-      List.find_opt (fun resource ->
+    let error resource solver = 
+      let (resource, state) = Explain.resource local (Solver.get_model solver) resource in
+      fail loc (Unused_resource {resource; state})
+    in
+
+    let _ = 
+      ListM.mapM (fun resource ->
           match resource with
           | Point p ->
-             not (Solver.provable local (t_ (le_ (p.permission, q_ (0, 1)))))
+             let (holds, solver) = 
+               Solver.provable_and_solver local (t_ (le_ (p.permission, q_ (0, 1)))) 
+             in
+             if holds then return () else error resource solver
           | QPoint p ->
-             not (Solver.provable local 
-                    (forall_ (p.qpointer, BT.Loc) None
-                       (le_ (p.permission, q_ (0, 1)))))
+             let (holds, solver) = 
+               Solver.provable_and_solver local 
+                 (forall_ (p.qpointer, BT.Loc) None
+                    (le_ (p.permission, q_ (0, 1))))
+             in
+             if holds then return () else error resource solver
           | Predicate p ->
-             not p.unused
+             if not p.unused then return () else
+               let (_, solver) = Solver.provable_and_solver local (T (bool_ false)) in
+               error resource solver
           | QPredicate p ->
-             not p.unused &&
-               not (Solver.provable local (t_ (eq_ (p.istart, p.iend))))
+             let (holds, solver) = Solver.provable_and_solver local (t_ (eq_ (p.istart, p.iend))) in
+             if not p.unused && holds then return () else error resource solver
         ) local.resources
     in
-    match bad with
-    | None -> return ()
-    | Some resource ->
-       let (resource, state) = Explain.resource local resource in
-       fail loc (Unused_resource {resource; state})
+    return ()
 
 
   type labels = (LT.t * label_kind) SymMap.t
@@ -1619,11 +1641,11 @@ let match_resources loc local error r1 r2 res =
                understand, are an exception. *)
             let@ () = 
               let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-              if Solver.provable local (t_ in_range_lc) 
-              then return () 
-              else 
+              let (holds, solver) = Solver.provable_and_solver local (t_ in_range_lc) in
+              if holds then return () else 
                 let (constr,state) = 
-                  Explain.unsatisfied_constraint local (t_ in_range_lc)
+                  Explain.unsatisfied_constraint local 
+                    (Solver.get_model solver) (t_ in_range_lc)
                 in
                 fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
             in
@@ -1664,10 +1686,10 @@ let match_resources loc local error r1 r2 res =
             in
             let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
             let@ () = 
-              if Solver.provable local (t_ init) 
-              then return () 
-              else
-                let state = Explain.state local in
+              let (holds, solver) = Solver.provable_and_solver local (t_ init) in
+              if holds then return () else
+                let (state, _) = 
+                  Explain.unsatisfied_constraint local (Solver.get_model solver) (t_ init) in
                 fail loc (Uninitialised_read {is_member = None; state})
             in
             let ret = Sym.fresh () in

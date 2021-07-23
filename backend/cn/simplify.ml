@@ -13,7 +13,7 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let rec simp (lcs : LC.t list) term = 
+let rec simp (lcs : LC.t list) term =
 
   let values = 
     List.fold_right (fun c values ->

@@ -14,128 +14,265 @@ open IndexTerms
 open LogicalConstraints
 open Pp
 
-module Make (G : sig val global : Global.t end) = struct 
-  module S = Solver.Make(G)
+
+module VClass = struct
+
+  type t = {
+      id : int;
+      sort : LS.t;
+      ovalue : Z3.Expr.expr option;
+      computational : SymSet.t;
+      logical : SymSet.t;
+    }
+
+  type vclass = t
 
 
-  module VEClass = struct
+  let make sort ovalue = {
+      id = Fresh.int ();
+      sort = sort;
+      ovalue = ovalue;
+      computational = SymSet.empty;
+      logical = SymSet.empty
+    }
 
-    type veclass = { 
-        repr : Sym.t;
-        sort: LS.t;
-        l_elements : SymSet.t;
-        c_elements : SymSet.t;
-      }
+  let right_class vclass sort ovalue =
+    LS.equal sort vclass.sort &&
+    match vclass.ovalue, ovalue with
+    | Some value, Some value' ->
+       Z3.Expr.equal value value'
+    | _ -> false
 
-    type t = veclass
+  let rec classify vclasses vclass' : vclass list = 
+    match vclasses with
+    | vclass :: vclasses when right_class vclass vclass'.sort vclass'.ovalue ->
+       let computational = 
+         SymSet.union vclass.computational vclass'.computational in
+       let logical = 
+         SymSet.union vclass.logical vclass'.logical in
+       let vclass = { vclass with computational; logical} in
+       vclass :: vclasses
+    | vclass :: vclasses ->
+       vclass :: classify vclasses vclass'
+    | [] -> [vclass']
+    
 
-
-    let new_veclass l ls = { 
-        repr = l;
-        sort = ls;
-        l_elements = SymSet.singleton l;
-        c_elements = SymSet.empty;
-      }
-
-    let add_l l veclass = 
-      { veclass with l_elements = SymSet.add l veclass.l_elements }
-
-    let add_c c veclass = 
-      { veclass with c_elements = SymSet.add c veclass.c_elements }
-
-    let should_be_in_veclass local veclass it = 
-      let bt = IT.bt it in
-      if not (LS.equal veclass.sort bt) then false 
-      else S.provable local (t_ (eq_ (IT.sym_ (veclass.repr, bt), it)))
-
-    let is_in_veclass veclass sym = 
-      SymSet.mem sym veclass.c_elements ||
-        SymSet.mem sym veclass.l_elements
-
-    let classify local veclasses (l, (bt : BT.t)) : veclass list =
-      let rec aux = function
-        | veclass :: veclasses ->
-           if is_in_veclass veclass l ||
-             should_be_in_veclass local veclass (IT.sym_ (l, bt)) 
-           then (add_l l veclass :: veclasses)
-           else (veclass :: aux veclasses)
-        | [] -> 
-           [new_veclass l bt]
-      in
-      aux veclasses
+  let find vclasses sort value = 
+    List.find_opt (fun vclass -> 
+        right_class vclass sort value
+      ) vclasses
 
 
-    (* think about whether the 'Addr' part is always safe' *)
-    let has_symbol_name veclass = 
-      let all = SymSet.elements (SymSet.union veclass.c_elements veclass.l_elements) in
-      Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
+  let compare vc1 vc2 = compare vc1.id vc2.id
+  let equal vc1 vc2 = vc1.id = vc2.id
 
-    let make_name = 
-      let faa counter = 
-        let v = !counter in
-        let () = counter := v + 1 in
-        v
-      in
-      let sym_prefixed_int (prefix, i) = 
-        "?" ^ prefix ^ string_of_int i
-      in
-      let unit_counter = ref 0 in
-      let bool_counter = ref 0 in
-      let integer_counter = ref 0 in
-      let real_counter = ref 0 in
-      let loc_counter = ref 0 in
-      let list_counter = ref 0 in
-      let tuple_counter = ref 0 in
-      let struct_counter = ref 0 in
-      let set_counter = ref 0 in
-      (* let array_counter = ref 0 in *)
-      let option_counter = ref 0 in
-      let param_counter = ref 0 in
-      fun veclass ->
-      let bt = veclass.sort in
-      sym_prefixed_int
-        begin match bt with
-        | Unit -> ("u", faa unit_counter)
-        | Bool -> ("b", faa bool_counter)
-        | Integer -> ("i", faa integer_counter)
-        | Real -> ("r", faa real_counter)
-        | Loc -> ("l", faa loc_counter)
-        | List _ -> ("l", faa list_counter)
-        | Tuple _ ->  ("t", faa tuple_counter)
-        | Struct _ -> ("s", faa struct_counter)
-        | Set _ -> ("set", faa set_counter)
-        (* | Array _ -> ("array", faa array_counter) *)
-        | Option _ -> ("option", faa option_counter)
-        | Param _ -> ("p", faa param_counter)
-        end
+end
 
-    let compare veclass1 veclass2 = 
-      Sym.compare veclass1.repr veclass2.repr
+open VClass
 
-    let equal veclass1 veclass2 = 
-      compare veclass1 veclass2 = 0
 
-  end
-
-  module VEClassSet = Set.Make(VEClass)
-
-  module VEClassPair = struct 
-    type t = VEClass.t * VEClass.t
-    let compare a b = Lem_basic_classes.pairCompare VEClass.compare VEClass.compare a b
-  end
+module VClassPair = struct 
+  type t = VClass.t * VClass.t
+  let compare a b = 
+    Lem_basic_classes.pairCompare VClass.compare VClass.compare a b
+end
   
-  module VEClassRel = struct
-    include Pset
-    type t = VEClassPair.t Pset.set
-    let empty = Pset.empty VEClassPair.compare
-    let transitiveClosure = Pset.tc VEClassPair.compare
-  end 
+module VClassRel = struct
+  include Pset
+  type t = VClassPair.t Pset.set
+  let empty = Pset.empty VClassPair.compare
+  let transitiveClosure = Pset.tc VClassPair.compare
+end 
 
 
-  module VEClassRelMap = Map.Make(VEClassPair)
+module VClassRelMap = Map.Make(VClassPair)
 
 
-  open VEClass
+
+
+
+let make_name = 
+  let unit_c = ref 0 in
+  let bool_c = ref 0 in
+  let integer_c = ref 0 in
+  let real_c = ref 0 in
+  let loc_c = ref 0 in
+  let list_c = ref 0 in
+  let tuple_c = ref 0 in
+  let struct_c = ref 0 in
+  let set_c = ref 0 in
+  let option_c = ref 0 in
+  let param_c = ref 0 in
+  
+  let bt_prefix (bt : BT.t) = 
+    match bt with
+    | Unit -> "u"
+    | Bool -> "b"
+    | Integer -> "i"
+    | Real -> "r"
+    | Loc -> "l"
+    | List _ -> "list"
+    | Tuple _ -> "tuple"
+    | Struct _ -> "s"
+    | Set _ -> "set"
+    | Option _ -> "option"
+    | Param _ -> "a"
+  in
+  
+  let bt_counter (bt : BT.t) = 
+    match bt with
+    | Unit -> unit_c
+    | Bool -> bool_c
+    | Integer -> integer_c
+    | Real -> real_c
+    | Loc -> loc_c
+    | List _ -> list_c
+    | Tuple _ -> tuple_c
+    | Struct _ -> struct_c
+    | Set _ -> set_c
+    | Option _ -> option_c
+    | Param _ -> param_c
+  in
+
+
+  let counter_and_increment bt = 
+    let c = !(bt_counter bt) in
+    let () = (bt_counter bt) := (c + 1) in
+    c
+  in
+  fun vclass ->
+  "?" ^ bt_prefix vclass.sort ^ 
+    string_of_int (counter_and_increment vclass.sort)
+
+
+
+(* module Make (G : sig val global : Global.t end) = struct 
+ * 
+ *   module S = Solver.Make(G)
+ * 
+ * 
+ *   module VEClass = struct
+ * 
+ *     type veclass = { 
+ *         sort: LS.t;
+ *         value : Z3.Expr.expr;
+ *         l_elements : SymSet.t;
+ *         c_elements : SymSet.t;
+ *       }
+ * 
+ *     type t = veclass
+ * 
+ * 
+ *     let new_veclass l ls value = { 
+ *         sort = ls;
+ *         value = value;
+ *         l_elements = SymSet.singleton l;
+ *         c_elements = SymSet.empty;
+ *       }
+ * 
+ *     let add_l l veclass = 
+ *       { veclass with l_elements = SymSet.add l veclass.l_elements }
+ * 
+ *     let add_c c veclass = 
+ *       { veclass with c_elements = SymSet.add c veclass.c_elements }
+ * 
+ *     let belongs_in_veclass local veclass v = 
+ *       Z3.Expr.equal v veclass.value
+ * 
+ *     let is_in_veclass veclass sym = 
+ *       SymSet.mem sym veclass.c_elements ||
+ *         SymSet.mem sym veclass.l_elements
+ * 
+ *     let classify local veclasses (l, (bt : BT.t)) : veclass list =
+ *       let rec aux = function
+ *         | veclass :: veclasses ->
+ *            if is_in_veclass veclass l ||
+ *              should_be_in_veclass local veclass (IT.sym_ (l, bt)) 
+ *            then (add_l l veclass :: veclasses)
+ *            else (veclass :: aux veclasses)
+ *         | [] -> 
+ *            [new_veclass l bt]
+ *       in
+ *       aux veclasses
+ * 
+ * 
+ *     (\* think about whether the 'Addr' part is always safe' *\)
+ *     let has_symbol_name veclass = 
+ *       let all = SymSet.elements (SymSet.union veclass.c_elements veclass.l_elements) in
+ *       Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
+ * 
+ *     let make_name = 
+ *       let faa counter = 
+ *         let v = !counter in
+ *         let () = counter := v + 1 in
+ *         v
+ *       in
+ *       let sym_prefixed_int (prefix, i) = 
+ *         "?" ^ prefix ^ string_of_int i
+ *       in
+ *       let unit_counter = ref 0 in
+ *       let bool_counter = ref 0 in
+ *       let integer_counter = ref 0 in
+ *       let real_counter = ref 0 in
+ *       let loc_counter = ref 0 in
+ *       let list_counter = ref 0 in
+ *       let tuple_counter = ref 0 in
+ *       let struct_counter = ref 0 in
+ *       let set_counter = ref 0 in
+ *       (\* let array_counter = ref 0 in *\)
+ *       let option_counter = ref 0 in
+ *       let param_counter = ref 0 in
+ *       fun veclass ->
+ *       let bt = veclass.sort in
+ *       sym_prefixed_int
+ *         begin match bt with
+ *         | Unit -> ("u", faa unit_counter)
+ *         | Bool -> ("b", faa bool_counter)
+ *         | Integer -> ("i", faa integer_counter)
+ *         | Real -> ("r", faa real_counter)
+ *         | Loc -> ("l", faa loc_counter)
+ *         | List _ -> ("l", faa list_counter)
+ *         | Tuple _ ->  ("t", faa tuple_counter)
+ *         | Struct _ -> ("s", faa struct_counter)
+ *         | Set _ -> ("set", faa set_counter)
+ *         (\* | Array _ -> ("array", faa array_counter) *\)
+ *         | Option _ -> ("option", faa option_counter)
+ *         | Param _ -> ("p", faa param_counter)
+ *         end
+ * 
+ *   end
+ * 
+ *   module VEClassSet = Set.Make(VEClass)
+ * 
+ *   module VEClassPair = struct 
+ *     type t = VEClass.t * VEClass.t
+ *     let compare a b = Lem_basic_classes.pairCompare VEClass.compare VEClass.compare a b
+ *   end
+ *   
+ *   module VEClassRel = struct
+ *     include Pset
+ *     type t = VEClassPair.t Pset.set
+ *     let empty = Pset.empty VEClassPair.compare
+ *     let transitiveClosure = Pset.tc VEClassPair.compare
+ *   end 
+ * 
+ * 
+ *   module VEClassRelMap = Map.Make(VEClassPair)
+ * 
+ * 
+ *   open VEClass *)
+
+
+
+
+
+
+
+
+
+
+
+module Make (G : sig val global : Global.t end) = struct 
 
   type naming = (Sym.t * Ast.term) list
 
@@ -168,78 +305,107 @@ module Make (G : sig val global : Global.t end) = struct
     | Derived
     | Default
 
-  type veclass_explanation = {
+  type vclass_explanation = {
       path : Ast.term;
       name_kind : name_kind;
-      veclass : veclass;
+      vclass : vclass;
     }
-  
+
   type explanation = {
       substitutions : (Sym.t, Sym.t) Subst.t list;
-      veclasses : veclass_explanation list;
-      relevant : SymSet.t;
+      vclasses : vclass_explanation list;
+      relevant : SymSet.t
     }
 
 
 
-    
-  let veclasses_partial_order local veclasses =
-    List.fold_right (fun resource (graph, rels) ->
+
+
+  module S = Solver.Make(G)
+
+
+
+  let lvar_value model (l, bt) =
+    Z3.Model.evaluate model 
+      (Z3.Expr.mk_const Solver.context 
+         (S.sym_to_sym l) (S.sort_of_bt bt))
+      true
+
+
+
+
+  let vclasses_graph local model vclasses =
+    List.fold_right (fun resource graph ->
         match resource with
         | RE.Point {pointer; size; value; init; permission} ->
-           let found1 = 
-             List.find_opt (fun veclass ->
-                 should_be_in_veclass local veclass pointer
-               ) veclasses
+           let pointer_value, pointer_sort = 
+             let (s,bt) = Option.value_err "resource not normalised" (IT.is_sym pointer) in
+             (lvar_value model (s, bt), bt)
            in
-           let found2 = 
-             List.find_opt (fun veclass ->
-                 should_be_in_veclass local veclass value
-               ) veclasses
+           let value_value, value_sort = 
+             let (s,bt) = Option.value_err "resource not normalised" (IT.is_sym value) in
+             (lvar_value model (s, bt), bt)
            in
+           let found1 = VClass.find vclasses pointer_sort pointer_value in
+           let found2 = VClass.find vclasses value_sort value_value in
            begin match found1, found2 with
-           | Some veclass1, Some veclass2 
-                when not (VEClassRel.mem (veclass2, veclass1) graph) ->
-              (VEClassRel.add (veclass1, veclass2) graph,
-               VEClassRelMap.add (veclass1, veclass2) Pointee rels)
+           | Some vclass1, Some vclass2 
+                when not (VClassRelMap.mem (vclass2, vclass1) graph) ->
+              (VClassRelMap.add (vclass1, vclass2) Pointee graph)
            | _ -> 
-              (graph, rels)
+              graph
            end
         | _ -> 
-           (graph, rels)
+           graph
       ) (L.all_resources local) 
-      (VEClassRel.empty, VEClassRelMap.empty)
+      VClassRelMap.empty
 
 
-  let veclasses_total_order local veclasses = 
-    let (graph, rels) = veclasses_partial_order local veclasses in
-    let graph = 
-      List.fold_left (fun graph veclass1 ->
-          List.fold_left (fun graph veclass2 ->
-              if 
-                VEClass.equal veclass1 veclass2 ||
-                  VEClassRel.mem (veclass1, veclass2) graph ||
-                    VEClassRel.mem (veclass2, veclass1) graph
-              then
-                graph
-              else
-                VEClassRel.transitiveClosure (VEClassRel.add (veclass1, veclass2) graph)
-            ) graph veclasses
-        ) graph veclasses
+  let vclasses_total_order local model vclasses = 
+    let graph = vclasses_graph local model vclasses in
+
+    let no_incoming_edges graph n = 
+      not (VClassRelMap.exists (fun (_, n2) _ -> VClass.equal n n2) graph)
     in
-    let graph_compare veclass1 veclass2 =
-      if VEClassRel.mem (veclass1,veclass2) graph then -1 else 1
+
+    let order = [] in
+    let inits, others = List.partition (no_incoming_edges graph) vclasses in
+
+    let rec aux graph inits others order =
+      match inits with
+      | [] -> (List.rev order, others)
+      | init :: inits ->
+         let order = init :: order in
+         let (graph, inits, others) = 
+           VClassRelMap.fold (fun (n1, n2) _ (graph, inits, others) ->
+               if VClass.equal init n1 then
+                 let graph = VClassRelMap.remove (n1, n2) graph in
+                 let new_inits, others = List.partition (no_incoming_edges graph) others in
+                 (graph, inits @ new_inits, others)
+               else 
+                 (graph, inits, others)
+             ) graph (graph, inits, others)
+         in
+         aux graph inits others order
     in
-    (List.sort graph_compare veclasses, rels)
+
+    let (order, not_yet_ordered) = aux graph inits others order in
+    (order @ not_yet_ordered, graph)
+
+
+
 
   let has_given_name names veclass =
     Option.map snd
-      (List.find_opt (fun (sym,name) -> is_in_veclass veclass sym) names)
+      (List.find_opt (fun (sym,name) -> 
+           SymSet.mem sym veclass.logical ||
+           SymSet.mem sym veclass.computational
+         ) names)
 
   let has_derived_name (named_veclasses, rels) veclass =
     let rec aux = function
-      | {veclass = named_veclass; path;_} :: named_veclasses ->
-         begin match VEClassRelMap.find_opt (named_veclass, veclass) rels with
+      | {vclass = named_veclass; path;_} :: named_veclasses ->
+         begin match VClassRelMap.find_opt (named_veclass, veclass) rels with
          | Some Pointee -> Some (Ast.pointee None path)
          | None -> aux named_veclasses
          end
@@ -247,94 +413,92 @@ module Make (G : sig val global : Global.t end) = struct
     in
     aux named_veclasses
 
+  let has_symbol_name veclass = 
+    let all = SymSet.elements (SymSet.union veclass.computational veclass.logical) in
+    Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
 
 
+let explanation local model relevant =
+
+  print stdout !^"producing error report";
+
+  
+  let names = SymMap.bindings local.L.descriptions in
 
 
-  let explanation local relevant =
+  let relevant =
+    let names_syms = SymSet.of_list (List.map fst names) in
+    let named_syms = SymSet.of_list (List.filter Sym.named (L.all_vars local)) in
+    let from_resources = RE.free_vars_list (L.all_resources local) in
+    SymSet.union (SymSet.union (SymSet.union names_syms named_syms) from_resources)
+      relevant
+  in
 
-    let names = SymMap.bindings local.L.descriptions in
+  let vclasses =
 
-    print stdout !^"producing error report";
-
-
-    let () = Debug_ocaml.begin_csv_timing "explanation" in
-
-    let relevant =
-      let names_syms = SymSet.of_list (List.map fst names) in
-      let named_syms = SymSet.of_list (List.filter Sym.named (L.all_vars local)) in
-      let from_resources = RE.free_vars_list (L.all_resources local) in
-      SymSet.union (SymSet.union (SymSet.union names_syms named_syms) from_resources)
-        relevant
-    in
-    let veclasses = 
-      let with_some =
-        List.fold_left (fun veclasses (c, (bt, l)) ->
-            if SymSet.mem c relevant || SymSet.mem l relevant then
-              let veclasses = classify local veclasses (l, bt) in
-              List.map (fun veclass ->
-                  if is_in_veclass veclass l
-                  then add_c c veclass 
-                  else veclass
-                ) veclasses
-            else veclasses
-          ) [] (L.all_computational local)
-      in
-      let with_all = 
-        List.fold_left (fun veclasses (l, bt) ->
-            if SymSet.mem l relevant 
-            then classify local veclasses (l, bt)
-            else veclasses
-          ) with_some (L.all_logical local)
-      in
-      let (sorted, rels) = veclasses_total_order local with_all in
-      let named =
-        List.fold_left (fun veclasses_explanation veclass ->
-            match has_given_name names veclass, 
-                  has_symbol_name veclass,
-                  has_derived_name (veclasses_explanation, rels) veclass with
-            | Some given_name, o_symbol_name, o_derived_name ->
-               let without_labels = Ast.remove_labels_term given_name in
-               let path = 
-                 if Option.equal Ast.term_equal (Some without_labels) (o_symbol_name) ||
-                      Option.equal Ast.term_equal (Some without_labels) (o_derived_name) 
-                 then without_labels
-                 else given_name
-               in
-               veclasses_explanation @ [{veclass; path; name_kind = Given}]
-            | None, Some symbol_name, _ ->
-               veclasses_explanation @ [{veclass; path = symbol_name; name_kind = Symbol}]
-            | None, None, Some derived_name ->
-               veclasses_explanation @ [{veclass; path = derived_name; name_kind = Symbol}]
-            | None, None, None ->
-               let name = Ast.LabeledName.{label = None; v = make_name veclass} in
-               veclasses_explanation @ [{veclass; path = Var name; name_kind = Default}]
-          ) [] sorted
-      in
-      named
-    in
-    let substitutions = 
-      List.fold_right (fun {veclass;path;_} substs ->
-          let to_substitute = SymSet.union veclass.c_elements veclass.l_elements in
-          let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
-          SymSet.fold (fun sym substs ->
-              Subst.{ before = sym; after = named_symbol } :: substs
-            ) to_substitute substs 
-        ) veclasses []
+    let vclasses = 
+      List.fold_left (fun vclasses (c, (bt, l)) ->
+          classify vclasses 
+            { (VClass.make bt (lvar_value model (l, bt))) with
+              computational = SymSet.singleton c;
+              logical = SymSet.singleton l; }
+        ) [] (L.all_computational local)
     in
 
-    let () = Debug_ocaml.end_csv_timing "explanation" in
+    let vclasses = 
+      List.fold_left (fun vclasses (l, bt) ->
+          classify vclasses 
+            { (VClass.make bt (lvar_value model (l, bt))) with
+              computational = SymSet.empty;
+              logical = SymSet.singleton l; }
+        ) vclasses (L.all_logical local)
+    in
 
-    ({substitutions; veclasses; relevant}, local)
+    let (sorted, rels) = vclasses_total_order local model vclasses in
+
+
+    List.fold_left (fun vclasses_explanation vclass ->
+        match has_given_name names vclass, 
+              has_symbol_name vclass,
+              has_derived_name (vclasses_explanation, rels) vclass with
+        | Some given_name, o_symbol_name, o_derived_name ->
+           let without_labels = Ast.remove_labels_term given_name in
+           let path = 
+             if Option.equal Ast.term_equal (Some without_labels) (o_symbol_name) ||
+                  Option.equal Ast.term_equal (Some without_labels) (o_derived_name) 
+             then without_labels
+             else given_name
+           in
+           vclasses_explanation @ [{vclass; path; name_kind = Given}]
+        | None, Some symbol_name, _ ->
+           vclasses_explanation @ [{vclass; path = symbol_name; name_kind = Symbol}]
+        | None, None, Some derived_name ->
+           vclasses_explanation @ [{vclass; path = derived_name; name_kind = Symbol}]
+        | None, None, None ->
+           let name = Ast.LabeledName.{label = None; v = make_name vclass} in
+           vclasses_explanation @ [{vclass; path = Var name; name_kind = Default}]
+      ) [] sorted
+  in
+
+  let substitutions = 
+    List.fold_right (fun {vclass;path;_} substs ->
+        let to_substitute = SymSet.union vclass.computational vclass.logical in
+        let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
+        SymSet.fold (fun sym substs ->
+            Subst.{ before = sym; after = named_symbol } :: substs
+          ) to_substitute substs 
+      ) vclasses []
+  in
+  
+  let () = Debug_ocaml.end_csv_timing "explanation" in
+  
+  ({substitutions; vclasses; relevant}, local)
 
 
 
 
-
-
-  let rec o_evaluate o_model expr = 
+  let rec o_evaluate model expr = 
     let open Option in
-    let@ model = o_model in
     match Z3.Model.evaluate model (fst (S.of_index_term expr)) true with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 
@@ -362,7 +526,7 @@ module Make (G : sig val global : Global.t end) = struct
          let members = Memory.member_types layout in
          let@ members = 
            ListM.mapM (fun (member, sct) -> 
-               let@ s = o_evaluate o_model (IT.member_ ~member_bt:(BT.of_sct sct) (tag, expr, member)) in
+               let@ s = o_evaluate model (IT.member_ ~member_bt:(BT.of_sct sct) (tag, expr, member)) in
                return (dot ^^ Id.pp member ^^^ equals ^^^ s)
              ) members 
          in
@@ -380,7 +544,7 @@ module Make (G : sig val global : Global.t end) = struct
     | _ -> SymSet.empty
 
 
-  let pp_state_aux local {substitutions; veclasses; relevant} o_model =
+  let pp_state_aux local {substitutions; vclasses; relevant} o_model =
     (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
 
     let (resource_lines, reported_pointees) = 
@@ -447,14 +611,14 @@ module Make (G : sig val global : Global.t end) = struct
     in
     let var_lines = 
       List.filter_map (fun c ->
-          let bt = c.veclass.sort in
-          let relevant = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements relevant)) in
-          let reported = not (SymSet.is_empty (SymSet.inter c.veclass.l_elements reported_pointees)) in
+          let bt = c.vclass.sort in
+          let relevant = not (SymSet.is_empty (SymSet.inter c.vclass.logical relevant)) in
+          let reported = not (SymSet.is_empty (SymSet.inter c.vclass.logical reported_pointees)) in
           if (not reported) && relevant then
             match bt with
             | BT.Loc -> 
                Some (Some (Ast.Terms.pp false c.path), 
-                     o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)),
+                     o_evaluate o_model (IT.sym_ (SymSet.choose c.vclass.logical, bt)),
                      None, 
                      None, 
                      None, 
@@ -465,10 +629,10 @@ module Make (G : sig val global : Global.t end) = struct
                      None, 
                      None, 
                      Some (Ast.Terms.pp false c.path), 
-                     o_evaluate o_model (IT.sym_ (c.veclass.repr, bt)))
+                     o_evaluate o_model (IT.sym_ (SymSet.choose c.vclass.logical, bt)))
           else
             None)
-        veclasses
+        vclasses
     in
     resource_lines @ var_lines
 
@@ -482,91 +646,88 @@ module Make (G : sig val global : Global.t end) = struct
     table6 ("pointer", "location", "size", "state", "variable", "value") lines
       
 
-  let pp_state local explanation =
-    let lines = 
-      List.map (fun (a,_,c,d,e,_) -> ((L,a), (R,c), (L,d), (L,e)))
-        (pp_state_aux local explanation None)
-    in
-    table4 ("pointer", "size", "state", "variable") lines
+  (* let pp_state local explanation =
+   *   let lines = 
+   *     List.map (fun (a,_,c,d,e,_) -> ((L,a), (R,c), (L,d), (L,e)))
+   *       (pp_state_aux local explanation None)
+   *   in
+   *   table4 ("pointer", "size", "state", "variable") lines *)
 
 
-  let json_state local : Yojson.Safe.t = 
-    let (explanation, local) = explanation local SymSet.empty in
-    let lines = 
-      List.map (fun (a,_,c,d,e,_) : Yojson.Safe.t ->
-          let jsonf doc = `String (Pp.plain doc) in
-          `Assoc [("pointer", Option.json jsonf a);
-                  ("size", Option.json jsonf c);
-                  ("state", Option.json jsonf d);
-                  ("variable", Option.json jsonf e)]
-        ) (pp_state_aux local explanation None)
-    in
-    `List lines
+  (* let json_state local : Yojson.Safe.t = 
+   *   let (explanation, local) = explanation local SymSet.empty in
+   *   let lines = 
+   *     List.map (fun (a,_,c,d,e,_) : Yojson.Safe.t ->
+   *         let jsonf doc = `String (Pp.plain doc) in
+   *         `Assoc [("pointer", Option.json jsonf a);
+   *                 ("size", Option.json jsonf c);
+   *                 ("state", Option.json jsonf d);
+   *                 ("variable", Option.json jsonf e)]
+   *       ) (pp_state_aux local explanation None)
+   *   in
+   *   `List lines *)
 
 
-  let counter_model local = 
-    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
-    S.get_model solver
-
-
-
-  let state local = 
-    let (explanation, local) = explanation local SymSet.empty in
-    pp_state local explanation
+  (* let state local = 
+   *   let (explanation, local) = explanation local SymSet.empty in
+   *   pp_state local explanation *)
 
   let undefined_behaviour local = 
-    let (explanation, local) = explanation local SymSet.empty in
-    pp_state_with_model local explanation (counter_model local)
+    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let model = S.get_model solver in
+    let (explanation, local) = explanation local model SymSet.empty in
+    pp_state_with_model local explanation model
 
   let implementation_defined_behaviour local it = 
-    let (explanation, local) = 
-      explanation local (IT.free_vars it)
-    in
+    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let model = S.get_model solver in
+    let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, pp_state_with_model local explanation (counter_model local))
+    (it_pp, pp_state_with_model local explanation model)
 
-  let missing_ownership local it = 
-    let (explanation, local) = explanation local (IT.free_vars it) in
+  let missing_ownership local model it = 
+    let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    (it_pp, pp_state_with_model local explanation (counter_model local))
+    (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
-    let (explanation, local) = 
-      explanation local (IT.free_vars it)
-    in
+    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let model = S.get_model solver in
+    let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     it_pp
 
   let index_terms local (it,it') = 
+    let (_, solver) = S.provable_and_solver local (t_ (bool_ false)) in
+    let model = S.get_model solver in
     let (explanation, local) = 
-      explanation local 
-        (SymSet.union (IT.free_vars it) (IT.free_vars it'))
+      explanation local model (SymSet.union (IT.free_vars it) (IT.free_vars it'))
     in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
     (it_pp, it_pp')
 
-  let unsatisfied_constraint local lc = 
-    let model = let (_,solver) = S.provable_and_solver local lc in S.get_model solver in
-    let (explanation, local) = explanation local (LC.free_vars lc) in
+  let unsatisfied_constraint local model lc = 
+    let (explanation, local) = explanation local model (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
-  let resource local re = 
-    let (explanation, local) = explanation local (RE.free_vars re) in
+  let resource local model re = 
+    let (explanation, local) = explanation local model (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state_with_model local explanation (counter_model local))
+    (re_pp, pp_state_with_model local explanation model)
 
-  let resource_request local re = 
-    let (explanation, local) = explanation local (RER.free_vars re) in
+  let resource_request local model re = 
+    let (explanation, local) = explanation local model (RER.free_vars re) in
     let re_pp = RER.pp (RER.subst_vars explanation.substitutions re) in
-    (re_pp, pp_state_with_model local explanation (counter_model local))
+    (re_pp, pp_state_with_model local explanation model)
 
-  let resources local (re1, re2) = 
+  let resources local model (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
-    let (explanation, local) = explanation local relevant in
+    let (explanation, local) = explanation local model relevant in
     let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
-    ((re1, re2), pp_state_with_model local explanation (counter_model local))
+    ((re1, re2), pp_state_with_model local explanation model)
+
 
 end

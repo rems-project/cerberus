@@ -912,14 +912,7 @@ let rec unify it it' res =
        unify arg arg' res
     | _ -> fail
 
-and unify_list its its' res = 
-  let open Option in
-  match its, its' with
-  | [], [] -> return res
-  | it :: its, it' :: its' -> 
-     let@ res = unify it it' res in
-     unify_list its its res 
-  | _, _ -> fail
+
 
 
 let rec unifiable = function
@@ -934,6 +927,12 @@ let rec unifiable = function
 let is_sym = function
   | IT (Lit (Sym sym), bt) -> Some (sym, bt)
   | _ -> None
+
+let is_app = function
+  | IT (Param_op (App (f,arg)), _) -> Some (f, arg)
+  | _ -> None
+
+
 
 let zero_frac = function
   | IT (Lit (Q (i,j)), _) when i = 0 -> true
@@ -1123,8 +1122,13 @@ let app_ v arg =
 let (%@) it it' = app_ it it'
 
 
+let make_param (sym, bt) body = 
+  (param_ (sym, bt) body)
+
 let eta_expand (sym, bt) body = 
   app_ (param_ (sym, bt) body) (sym_ (sym, bt))
+
+
 
 
 

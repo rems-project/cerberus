@@ -537,7 +537,9 @@ module Make (G : sig val global : Global.t end) = struct
 
   let provably_inconsistent local = provable local (t_ (bool_ false))
 
-  let get_model solver = Z3.Solver.get_model solver
+  let get_model solver = 
+    Option.value_err "Z3 did not produce a counter model"
+      (Z3.Solver.get_model solver)
 
 
 end
