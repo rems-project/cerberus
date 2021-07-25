@@ -450,15 +450,6 @@ type
 
 
 type 
-res =  (* resources *)
-   Res_Empty (* empty heap *)
- | Res_Points_to of type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } (* points-top heap pred. *)
- | Res_SepConj of res * res (* seperating conjunction *)
- | Res_Exists of Symbol.sym * base_type * res (* existential *)
- | Res_Term of 'bt term_aux * res (* logical conjuction *)
-
-
-type 
 'TY mu_seq_expr =  (* sequential (effectful) expressions *)
    M_Seq_Eccall of 'TY act * Symbol.sym * 'TY spine_elem list (* C function call *)
  | M_Seq_Eproc of 'TY mu_pval * 'TY spine_elem list (* procedure call *)
@@ -481,12 +472,12 @@ type
 
 
 type 
-ret =  (* return types *)
-   RetTy_Comp of 'sym * base_type * ret (* return a computational value *)
- | RetTy_Log of 'sym * base_type * ret (* return a logical value *)
- | RetTy_Res of res * ret (* return a resource value *)
- | RetTy_Phi of 'bt term_aux * ret (* return a predicate (post-condition) *)
- | RetTy_I (* end return list *)
+res =  (* resources *)
+   Res_Empty (* empty heap *)
+ | Res_Points_to of type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } (* points-top heap pred. *)
+ | Res_SepConj of res * res (* seperating conjunction *)
+ | Res_Exists of Symbol.sym * base_type * res (* existential *)
+ | Res_Term of 'bt term_aux * res (* logical conjuction *)
 
 
 type 
@@ -509,9 +500,12 @@ type
 
 
 type 
-'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
-   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
- | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
+ret =  (* return types *)
+   RetTy_Comp of 'sym * base_type * ret (* return a computational value *)
+ | RetTy_Log of 'sym * base_type * ret (* return a logical value *)
+ | RetTy_Res of res * ret (* return a resource value *)
+ | RetTy_Phi of 'bt term_aux * ret (* return a predicate (post-condition) *)
+ | RetTy_I (* end return list *)
 
 
 type 
@@ -544,6 +538,12 @@ and 'TY mu_is_texpr_aux =  (* indet seq top-level (effectful) expressions with a
 and 'TY mu_texpr =  (* top-level (effectful) expressions *)
    M_TESeq of 'TY mu_seq_texpr_aux (* sequential (effectful) expressions *)
  | M_TEIs of 'TY mu_is_texpr_aux (* indet seq (effectful) expressions *)
+
+
+type 
+'TY mu_tval_aux =  (* (effectful) top-level values with auxiliary info *)
+   M_Tval of Location_ocaml.t * annot list * 'TY mu_tval
+ | M_Tno_aux of 'TY mu_tval (* Ott-hack for simpler typing rules *)
 
 let aux_binders_ty_sym_opt_T_bt_of_ty_sym_opt_T_bt (ty_sym_opt_T_bt5:ty_sym_opt_T_bt) : Symbol.sym list =
   match ty_sym_opt_T_bt5 with
