@@ -53,7 +53,6 @@ If $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}
 $\CLNRp \vdash J$.
 
 \begin{proof}
-    \textsc{Proof Strategy:} Induction over the typing judgements.\\
 
     \assume{%
         \begin{pfenum}
@@ -77,18 +76,59 @@ $\CLNRp \vdash J$.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_PVal\_Error}, \textsc{Ty\_Res\_Eq\_\{PointsTo,Term\}},
-            \textsc{Ty\_Res\_Conj}, \textsc{Ty\_Spine\_Res\_Phi},
-            \textsc{Ty\_PE\_AssertUndef}, \textsc{Ty\_TPVal\_\{Undef,Done\}},
+            \textsc{Ty\_Res\_Conj},\\
+            \textsc{Ty\_Spine\_Res\_Phi}, \textsc{Ty\_PE\_AssertUndef},
+            \textsc{Ty\_TPVal\_\{Undef,Done\}},\\
             \textsc{Ty\_Action\_\{Load,Store,Kill\}},
-            \textsc{Ty\_Memop\_PtrValidForDeref},
+            \textsc{Ty\_Memop\_PtrValidForDeref},\\
             \textsc{Ty\_TVal\_\{Phi,Undef\}}.
         }{%
-            \pf\ Assume $\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \cnnt{term'}  \cnsym{)}$. Show $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$.By \textsc{Weak\_Cons\_Phi}, if $\cnnt{term} \in \Phi$ then
-            $\cnnt{term} \in \Phi'$. Any extra constraints in $\Phi'$ (by
-            \textsc{Weak\_Skip\_Phi}) would either be irrelevant, redundant, or
-            inconsistent. In all cases, $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$ as required.
         }
     }
+
+    \begin{proof}
+
+        \assume{ $\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \cnnt{term'}  \cnsym{)}$.}
+
+        \prove{ $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$.\\}
+
+        \step{<2>1}{If $\cnnt{term} \in \Phi$ then $\cnnt{term} \in \Phi'$.
+            \pf\ By \textsc{Weak\_Cons\_Phi}.}
+
+        \step{<2>2}{Any extra constraints in $\Phi'$ (by \textsc{Weak\_Skip\_Phi})
+            would either be irrelevant, redundant, or inconsistent.}
+
+        \step{<2>3}{In all cases, $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$ as required.}
+
+    \end{proof}
+
+    % TODO Resource cases
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_Res\_\{Emp,PointsTo,Var,SepConj\}},
+            \textsc{Ty\_Spine\_\{Empty,Res\}},\\
+            \textsc{Ty\_Action\_Create}, \textsc{Ty\_TVal\_Res},
+            \textsc{Ty\_Memop\_\{Rel\_Binop, \\
+            IntFromPtr, PtrFromInt, WellAligned, PtrArrayShift\}},\\
+            \textsc{Ty\_TVal\_\{I,Undef\}}, \textsc{Ty\_Seq\_TE\_\{Let,LetT,Run\}},
+            \textsc{Ty\_IS\_TE\_LetS}.
+        }{
+        }
+    }
+
+    \begin{proof}
+
+        \step{<2>1}{$\mathcal{R} = \mathcal{R}'$.\\
+            \pf\ Only \textsc{Weak\_Cons\_Res\_\{Anon,Named\}} exist, no
+            \textsc{Weak\_Skip\_Res}.}
+
+        \step{<2>2}{All the rules are otherwise functorial in $\mathcal{C}, \mathcal{L}, \Phi$,
+        .}
+
+        \step{<2>3}{So $\mathcal{C}' ; \mathcal{L}' ; \Phi' ; \mathcal{R}'  \vdash  J$ as required.}
+
+    \end{proof}
 
 \end{proof}
 
@@ -100,7 +140,6 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
 \ctxL'' ; \ctxN'' ; \ctxR'' )$.
 
 \begin{proof}
-    \textsc{Proof Strategy:} Induction over the substitution.\\
 
     \assume{%
         \begin{pfenum}
@@ -110,6 +149,9 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
     }
 
     \prove{$\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}''  \cnsym{;}  \mathcal{L}''  \cnsym{;}  \Phi''  \cnsym{;}  \mathcal{R}''  \cnsym{)}$.\\}
+
+    \pfsketch{ By weakening and induction over the substitution.}
+
 \end{proof}
 
 
@@ -167,7 +209,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
             $\cnnt{res'} = \cnnt{points\_to_{{\mathrm{1}}}}$, $\mathcal{R} = \cdot  \cnsym{,}  \cnnt{points\_to}$.
         }
     }
-    
+
     \begin{proof}
         \step{<2>1}{$\Phi  \vdash  \cnnt{points\_to} \, \equiv \, \cnnt{points\_to'}$ and $\Phi  \vdash  \cnnt{points\_to'} \, \equiv \, \cnnt{points\_to''}$ by inversion.}
 
@@ -215,7 +257,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
 
         \step{<2>1}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term'}  \Leftarrow   pval  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res'_{{\mathrm{1}}}}  ) $ by induction.}
 
-        \step{<2>4}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term'}  \cnsym{)}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res'_{{\mathrm{1}}}}$ as required.}
+        \step{<2>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term'}  \cnsym{)}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res'_{{\mathrm{1}}}}$ as required.}
 
     \end{proof}
 
@@ -394,7 +436,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \step{<2>2}{$\sigma = \cnnt{res\_term}  \cnsym{/}  \cnmv{r}  \cnsym{,}  \sigma'$ and $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow   \sigma'  (  \cnnt{res}  ) $ by inversion on \stepref{<2>1}.}
 
         \step{<2>3}{$\Phi'  \vdash  \cnnt{res} \, \equiv \, \cnnt{res'}$ by inversion on \textsc{Ty\_Res\_Var}.}
-        
+
         \step{<2>4}{$\Phi  \vdash  \cnnt{res} \, \equiv \, \cnnt{res'}$ and $\Phi  \vdash   \sigma  (  \cnnt{res}  )  \, \equiv \,  \sigma  (  \cnnt{res'}  ) $
             by \stepref{<2>3} and substitution lemma over \textsc{Ty\_Res\_Eq*} cases.}
 
@@ -1690,19 +1732,19 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{load-assm1}
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{load-assm1}
 
                     \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \rangle$.\label{load-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
-            \ref{load-assm1}.}
+        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$
+            by inversion on \ref{load-assm1}.}
 
         \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   pval   =   pval   \cnsym{)}$ trivially.}
 
@@ -1725,7 +1767,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  pval_{{\mathrm{1}}}  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  pval_{{\mathrm{1}}}  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
 
                     \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
                 \end{pfenum}}
@@ -1736,12 +1778,15 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}
+        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnnt{pt_{{\mathrm{2}}}}$ where $\cdot  \vdash  \cnnt{pt''} \, \equiv \, \cnnt{pt}$,
+            by inversion on the typing assumption.}
 
-        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
+        \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}
+
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
             by \textsc{Ty\_Res\_PointsTo}.}
 
-        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+        \step{<2>4}{By \textsc{Ty\_TVal\_I} and \stepref{<2>2} and \stepref{<2>3}
             with \textsc{Ty\_TVal\_\{Res,Comp\}} respectively, we are done.}
     \end{proof}
 
@@ -1754,7 +1799,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$.
+                    \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$.
 
                     \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \rangle$.
                 \end{pfenum}}
@@ -1762,6 +1807,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, \cnkw{Unit}  \Leftarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$
             }
             \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
+            Note: $\mathcal{R} = \cdot  \cnsym{,}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$.
         }
     }
 

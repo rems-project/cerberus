@@ -53,7 +53,6 @@ If $[[ C ; L ; N ; R [= C' ; L' ; N' ; R' ]]$ and $\CLNR \vdash J$ then
 $\CLNRp \vdash J$.
 
 \begin{proof}
-    \textsc{Proof Strategy:} Induction over the typing judgements.\\
 
     \assume{%
         \begin{pfenum}
@@ -79,21 +78,59 @@ $\CLNRp \vdash J$.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_PVal\_Error}, \textsc{Ty\_Res\_Eq\_\{PointsTo,Term\}},
-            \textsc{Ty\_Res\_Conj}, \textsc{Ty\_Spine\_Res\_Phi},
-            \textsc{Ty\_PE\_AssertUndef}, \textsc{Ty\_TPVal\_\{Undef,Done\}},
+            \textsc{Ty\_Res\_Conj},\\
+            \textsc{Ty\_Spine\_Res\_Phi}, \textsc{Ty\_PE\_AssertUndef},
+            \textsc{Ty\_TPVal\_\{Undef,Done\}},\\
             \textsc{Ty\_Action\_\{Load,Store,Kill\}},
-            \textsc{Ty\_Memop\_PtrValidForDeref},
+            \textsc{Ty\_Memop\_PtrValidForDeref},\\
             \textsc{Ty\_TVal\_\{Phi,Undef\}}.
         }{%
-            \pf\ Assume $[[ smt ( N => term' ) ]]$. Show $[[ smt ( N' => term'
-            ) ]]$.By \textsc{Weak\_Cons\_Phi}, if $[[ term ]] \in [[ N ]]$ then
-            $[[ term ]] \in [[ N' ]]$. Any extra constraints in $[[N']]$ (by
-            \textsc{Weak\_Skip\_Phi}) would either be irrelevant, redundant, or
-            inconsistent. In all cases, $[[ smt ( N' => term' ) ]]$ as required.
         }
     }
 
+    \begin{proof}
+
+        \assume{ $[[ smt ( N => term' ) ]]$.}
+
+        \prove{ $[[ smt ( N' => term') ]]$.\\}
+
+        \step{<2>1}{If $[[ term ]] \in [[ N ]]$ then $[[ term ]] \in [[ N' ]]$.
+            \pf\ By \textsc{Weak\_Cons\_Phi}.}
+
+        \step{<2>2}{Any extra constraints in $[[N']]$ (by \textsc{Weak\_Skip\_Phi})
+            would either be irrelevant, redundant, or inconsistent.}
+
+        \step{<2>3}{In all cases, $[[ smt ( N' => term' ) ]]$ as required.}
+
+    \end{proof}
+
     % TODO Resource cases
+
+    \step{<1>3}{%
+        \case{%
+            \textsc{Ty\_Res\_\{Emp,PointsTo,Var,SepConj\}},
+            \textsc{Ty\_Spine\_\{Empty,Res\}},\\
+            \textsc{Ty\_Action\_Create}, \textsc{Ty\_TVal\_Res},
+            \textsc{Ty\_Memop\_\{Rel\_Binop, \\
+            IntFromPtr, PtrFromInt, WellAligned, PtrArrayShift\}},\\
+            \textsc{Ty\_TVal\_\{I,Undef\}}, \textsc{Ty\_Seq\_TE\_\{Let,LetT,Run\}},
+            \textsc{Ty\_IS\_TE\_LetS}.
+        }{
+        }
+    }
+
+    \begin{proof}
+
+        \step{<2>1}{$[[R]] = [[R']]$.\\
+            \pf\ Only \textsc{Weak\_Cons\_Res\_\{Anon,Named\}} exist, no
+            \textsc{Weak\_Skip\_Res}.}
+
+        \step{<2>2}{All the rules are otherwise functorial in $[[C]], [[L]], [[N]]$,
+        .}
+
+        \step{<2>3}{So $[[C']] ; [[L']] ; [[N']] ; [[R']] [[|-]] J$ as required.}
+
+    \end{proof}
 
 \end{proof}
 
@@ -105,7 +142,6 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
 \ctxL'' ; \ctxN'' ; \ctxR'' )$.
 
 \begin{proof}
-    \textsc{Proof Strategy:} Induction over the substitution.\\
 
     \assume{%
         \begin{pfenum}
@@ -115,6 +151,9 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
     }
 
     \prove{$[[ C' ; L' ; N' ; R' |- ( subs ) : ( C'' ; L'' ; N'' ; R'' ) ]]$.\\}
+
+    \pfsketch{ By weakening and induction over the substitution.}
+
 \end{proof}
 
 
@@ -172,7 +211,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
             $[[ res' ]] = [[ points_to1 ]]$, $[[ R ]] = [[ cdot , points_to ]]$.
         }
     }
-    
+
     \begin{proof}
         \step{<2>1}{$[[ N |- points_to eq points_to' ]]$ and $[[ N |-
             points_to' eq points_to'' ]]$ by inversion.}
@@ -224,7 +263,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
         \step{<2>1}{$[[ C ; L ; N ; R |- res_term' <= [ mu_pval_aux / y , cdot ]
             res1' ]]$ by induction.}
 
-        \step{<2>4}{$[[ C ; L ; N ; R |- pack ( mu_pval_aux , res_term' ) <=
+        \step{<2>2}{$[[ C ; L ; N ; R |- pack ( mu_pval_aux , res_term' ) <=
             exists y : base_type . res1' ]]$ as required.}
 
     \end{proof}
@@ -408,7 +447,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
             |- res_term <= [ subs' ] res ]]$ by inversion on \stepref{<2>1}.}
 
         \step{<2>3}{$[[ N' |- res eq res' ]]$ by inversion on \textsc{Ty\_Res\_Var}.}
-        
+
         \step{<2>4}{$[[ N |- res eq res' ]]$ and $[[ N |- [ subs ] res eq [ subs ] res' ]]$
             by \stepref{<2>3} and substitution lemma over \textsc{Ty\_Res\_Eq*} cases.}
 
@@ -1757,21 +1796,21 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ cdot ; cdot ; cdot ; cdot , pt |- load ( ct , ty_mem_ptr
+                    \item $[[ cdot ; cdot ; cdot ; R |- load ( ct , ty_mem_ptr
                         , _mem_order , pt ) => ret]]$.\label{load-assm1}
 
                     \item $[[ <( cdot + { pt } ; load ( ct , ty_mem_ptr , _mem_order , pt ) )>
                         --> <( cdot + { pt } ; done mu_pval_aux , pt )> ]]$.\label{load-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; cdot , pt |- done mu_pval_aux , pt <= ret ]]$
+                $[[ cdot ; cdot ; cdot ; R |- done mu_pval_aux , pt <= ret ]]$
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ cdot ; cdot ; cdot ; cdot , pt |- pt <= pt]]$, by inversion on
-            \ref{load-assm1}.}
+        \step{<2>1}{$[[ R ]] = [[ cdot, pt' ]]$ where $[[ cdot |- pt' eq pt ]]$
+            by inversion on \ref{load-assm1}.}
 
         \step{<2>2}{$[[ smt ( cdot => inj mu_pval_aux = inj mu_pval_aux ) ]]$ trivially.}
 
@@ -1794,7 +1833,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ cdot ; cdot ; cdot ; cdot , pt |- store ( _b , ct ,
+                    \item $[[ cdot ; cdot ; cdot ; R |- store ( _b , ct ,
                         mu_pval_aux0 , mu_pval_aux1 , _mem_order , pt ) => ret ]]$.
 
                     \item $[[ <( cdot + { pt } ; store ( _b , ct , ty_mem_ptr , mu_pval_aux ,
@@ -1807,12 +1846,15 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
+        \step{<2>1}{$[[ R ]] = [[ cdot , pt2 ]]$ where $[[ cdot |- pt'' eq pt ]]$,
+            by inversion on the typing assumption.}
 
-        \step{<2>2}{$[[ cdot ; cdot ; cdot ; cdot , pt' |- pt' <= pt' ]]$
+        \step{<2>2}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
+
+        \step{<2>3}{$[[ cdot ; cdot ; cdot ; cdot , pt' |- pt' <= pt' ]]$
             by \textsc{Ty\_Res\_PointsTo}.}
 
-        \step{<2>3}{By \textsc{Ty\_TVal\_I} and \stepref{<2>1} and \stepref{<2>2}
+        \step{<2>4}{By \textsc{Ty\_TVal\_I} and \stepref{<2>2} and \stepref{<2>3}
             with \textsc{Ty\_TVal\_\{Res,Comp\}} respectively, we are done.}
     \end{proof}
 
@@ -1825,7 +1867,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \assume{%
                 \begin{pfenum}
-                    \item $[[ cdot ; cdot ; cdot ; cdot , pt |-  kill ( static ct ,
+                    \item $[[ cdot ; cdot ; cdot ; R |-  kill ( static ct ,
                         mu_pval_aux0 , pt ) => sigma _ : unit . I ]]$.
 
                     \item $[[ <( cdot + { pt } ; kill ( static ct , ty_mem_ptr , pt ) )>
@@ -1835,6 +1877,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 $[[ cdot ; cdot ; cdot ; cdot |- done Unit <= sigma _ : unit . I ]]$
             }
             \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
+            Note: $[[R]] = [[ cdot , pt' ]]$ where $[[ cdot |- pt' eq pt ]]$.
         }
     }
 
