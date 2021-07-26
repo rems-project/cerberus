@@ -93,9 +93,8 @@ and 'bt option_op =
   | Is_some of 'bt term
   | Value_of_some of 'bt term
 
-and 'bt param_op = 
+and 'bt array_op = 
   | Const of 'bt term
-  | Param of (Sym.t * BT.t) * 'bt term
   | Mod of 'bt term * 'bt term * 'bt term
   | App of 'bt term * 'bt term
 
@@ -111,7 +110,7 @@ and 'bt term_ =
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
   | Option_op of 'bt option_op
-  | Param_op of 'bt param_op
+  | Array_op of 'bt array_op
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -335,20 +334,16 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     | Value_of_some _, _ ->false
   in
 
-  let param_op it it' = 
+  let array_op it it' = 
     match it, it' with
     | Const t, Const t' ->
        equal t t'
     | Mod (t1,t2,t3), Mod (t1',t2',t3') ->
        equal t1 t1' && equal t2 t2' && equal t3 t3'
-    | Param (args,t), Param (args',t') -> 
-       (fun (s,bt) (s',bt') -> Sym.equal s s' && BT.equal bt bt') args args' &&
-         equal t t'
     | App (t, args), App (t', args') ->
        equal t t' && (* List.equal *) equal args args'
     | Const _, _ -> false
     | Mod _, _ -> false
-    | Param _, _ -> false
     | App _, _ -> false
   in
 
@@ -364,7 +359,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Set_op it, Set_op it' -> set_op it it'
   | CT_pred it, CT_pred it' -> ct_pred it it'
   | Option_op it, Option_op it' -> option_op it it'
-  | Param_op it, Param_op it' -> param_op it it'
+  | Array_op it, Array_op it' -> array_op it it'
   | Lit _, _ -> false
   | Arith_op _, _ -> false
   | Bool_op _, _ -> false
@@ -376,7 +371,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Set_op _, _ -> false
   | CT_pred _, _ -> false
   | Option_op _, _ -> false
-  | Param_op _, _ -> false
+  | Array_op _, _ -> false
 
 
 
@@ -532,16 +527,11 @@ let pp (it : 'bt term) : PPrint.document =
          c_app !^"value_of_some" [aux false it]
     in
 
-    let param_op = function
+    let array_op = function
       | Const t ->
          c_app !^"const" [aux false t]
       | Mod (t1,t2,t3) ->
          aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
-      | Param ((sym, bt), t) -> 
-         parens (
-             parens (typ (Sym.pp sym) (BT.pp bt)) ^^^ !^"->" ^^^
-             aux false t
-           )
       | App (t, args) ->
          c_app (aux true t) [aux false args]
     in
@@ -558,7 +548,7 @@ let pp (it : 'bt term) : PPrint.document =
     | List_op it -> list_op it
     | Set_op it -> set_op it
     | Option_op it -> option_op it
-    | Param_op it -> param_op it
+    | Array_op it -> array_op it
 
   in
 
@@ -657,10 +647,9 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
     | Value_of_some it -> free_vars it
   in
 
-  let param_op = function
+  let array_op = function
     | Const t -> free_vars t
     | Mod (t1,t2,t3) -> free_vars_list [t1;t2;t3]
-    | Param (arg, t) -> SymSet.remove (fst arg) (free_vars t)
     | App (t, arg) -> free_vars_list ([t; arg])
   in
 
@@ -677,7 +666,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | List_op it -> list_op it
   | Set_op it -> set_op it
   | Option_op it -> option_op it
-  | Param_op it -> param_op it
+  | Array_op it -> array_op it
 
 
 and free_vars_list l = 
@@ -689,7 +678,7 @@ and free_vars_list l =
 let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 
-let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
+let subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
 
   let rec aux = 
 
@@ -825,7 +814,7 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
       IT (Option_op it, bt)
     in
 
-    let param_op it bt =
+    let array_op it bt =
       let it = match it with
         | Const t ->
            Const (aux t)
@@ -833,17 +822,8 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
            Mod (aux t1, aux t2, aux t3)
         | App (it, arg) ->
            App (aux it, aux arg)
-        | Param ((sym, bt), body) ->
-           let sym' = Sym.fresh_same sym in 
-           let substitution =
-             {before = sym; 
-              after = fun bt -> IT (Lit (Sym sym'), bt)}
-           in
-           let body = subst substitution body in
-           let body = aux body in
-           Param ((sym', bt), body)
       in
-      IT (Param_op it, bt)
+      IT (Array_op it, bt)
     in
 
 
@@ -860,7 +840,7 @@ let rec subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
     | List_op it -> list_op it bt
     | Set_op it -> set_op it bt
     | Option_op it -> option_op it bt
-    | Param_op it -> param_op it bt
+    | Array_op it -> array_op it bt
   in
 
   fun it -> aux it
@@ -906,8 +886,8 @@ let rec unify it it' res =
     match it, it' with
     | IT (Lit (Sym s), _), _ -> 
        match_symbol s it' res
-    | IT (Param_op (App (IT (Lit (Sym f), _), arg)), _), 
-      IT (Param_op (App (f_it', arg')), _) ->
+    | IT (Array_op (App (IT (Lit (Sym f), _), arg)), _), 
+      IT (Array_op (App (f_it', arg')), _) ->
        let@ res = match_symbol f f_it' res in
        unify arg arg' res
     | _ -> fail
@@ -917,7 +897,7 @@ let rec unify it it' res =
 
 let rec unifiable = function
   | IT (Lit (Sym s), _) -> Some s
-  | IT (Param_op (App (it, args)), _) -> unifiable it
+  | IT (Array_op (App (it, args)), _) -> unifiable it
   | _ -> None
 
 
@@ -929,7 +909,7 @@ let is_sym = function
   | _ -> None
 
 let is_app = function
-  | IT (Param_op (App (f,arg)), _) -> Some (f, arg)
+  | IT (Array_op (App (f,arg)), _) -> Some (f, arg)
   | _ -> None
 
 
@@ -1108,27 +1088,16 @@ let value_of_some_ v =
   | _ -> Debug_ocaml.error "illtyped index term"
 
 let const_ t = 
-  IT (Param_op (Const t), BT.Param (Integer, bt t))
+  IT (Array_op (Const t), BT.Array (Integer, bt t))
 let mod_ (t1, t2, t3) = 
-  IT (Param_op (Mod (t1, t2, t3)), bt t1)
-let param_ (sym, abt) v = 
-  IT (Param_op (Param ((sym, abt), v)), BT.Param (abt, bt v))
+  IT (Array_op (Mod (t1, t2, t3)), bt t1)
 let app_ v arg = 
   match bt v with
-  | BT.Param (_, bt) ->
-     IT (Param_op (App (v, arg)), bt)
+  | BT.Array (_, bt) ->
+     IT (Array_op (App (v, arg)), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
 
 let (%@) it it' = app_ it it'
-
-
-let make_param (sym, bt) body = 
-  (param_ (sym, bt) body)
-
-let eta_expand (sym, bt) body = 
-  app_ (param_ (sym, bt) body) (sym_ (sym, bt))
-
-
 
 
 
@@ -1182,7 +1151,7 @@ let hash (IT (it, _bt)) =
   | Set_op it -> 9
   (* | Array_op it -> 10 *)
   | Option_op it -> 11
-  | Param_op it -> 12
+  | Array_op it -> 12
   | Lit lit ->
      begin match lit with
      | Z z -> 20

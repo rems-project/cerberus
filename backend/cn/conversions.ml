@@ -341,12 +341,12 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      let@ it1 = resolve t1 in
      let@ it2 = resolve t2 in
      let@ result_bt = match IT.bt it1 with
-       | BT.Param (_, bt) -> return bt
+       | BT.Array (_, bt) -> return bt
        | _ -> 
           let ppf () = Ast.Terms.pp false t1 in
           fail loc (Generic (ppf () ^^^ !^"is not an array"))
      in
-     return (IT (Param_op (App (it1, it2)), result_bt), None)
+     return (IT (Array_op (App (it1, it2)), result_bt), None)
      
 
 

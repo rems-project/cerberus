@@ -65,15 +65,15 @@ module Make
        in
        fail loc (Generic err)
 
-  let ensure_param_type loc local context it bt = 
+  let ensure_array_type loc local context it bt = 
     let open BT in
     match bt with
-    | Param (abt,rbt) -> return (abt, rbt)
+    | Array (abt,rbt) -> return (abt, rbt)
     | _ -> 
        let (context, it) = Explain.index_terms local (context, it) in
        let err = 
          !^"Illtyped index term" ^^^ context ^^ dot ^^^
-           !^"Expected" ^^^ it ^^^ !^"to have integer map type" ^^ comma ^^^
+           !^"Expected" ^^^ it ^^^ !^"to have array type" ^^ comma ^^^
              !^"but has type" ^^^ BT.pp bt
        in
        fail loc (Generic err)
@@ -395,35 +395,21 @@ module Make
              return (bt, Value_of_some it)
         in
 
-        let param_op local = function
+        let array_op local = function
           | Const it ->
              let@ (bt, it) = infer loc local it in
-             return (BT.Param (BT.Integer, bt), Const it)
+             return (BT.Array (BT.Integer, bt), Const it)
           | Mod (it1, it2, it3) ->
              let@ (bt2, it2) = infer loc local it2 in
              let@ (bt3, it3) = infer loc local it3 in
-             let bt = BT.Param (bt2, bt3) in
+             let bt = BT.Array (bt2, bt3) in
              let@ it1 = check loc local bt it1 in
              return (bt, Mod (it1, it2, it3))
-          | Param ((sym, abt), it) -> 
-             let local = L.add_l sym abt local in
-             let@ (bt, it) = infer loc local it in
-             return (BT.Param (abt, bt), Param ((sym, abt), it))
           | App (it, arg) -> 
              let@ (fbt, it) = infer loc local it in
-             begin match fbt with
-             | BT.Param (abt, bt) (* when List.length bts = List.length args *) -> 
-                let@ arg = check loc local abt arg in
-                return (bt, App (it, arg))
-             | bt -> 
-                let (context, it) = Explain.index_terms local (context, it) in
-                let err = 
-                  !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                    !^"Expected" ^^^ it ^^^ !^"to have parameterised type" ^^^ 
-                      !^"but has type" ^^^ BT.pp bt
-                in
-                fail loc (Generic err)
-             end               
+             let@ (abt, bt) = ensure_array_type loc local context it fbt in
+             let@ arg = check loc local abt arg in
+             return (bt, App (it, arg))
         in
 
         fun loc local (IT (it, _)) ->
@@ -458,15 +444,12 @@ module Make
         | Set_op it ->
            let@ (bt, it) = set_op local it in
            return (bt, IT (Set_op it, bt))
-        (* | Array_op it ->
-         *    let@ (bt, array_op) = array_op local it in
-         *    return (bt, IT (Array_op array_op, bt)) *)
         | Option_op it ->
            let@ (bt, option_op) = option_op local it in
            return (bt, IT (Option_op option_op, bt))
-        | Param_op it -> 
-           let@ (bt, param_op) = param_op local it in
-           return (bt, IT (Param_op param_op, bt))
+        | Array_op it -> 
+           let@ (bt, array_op) = array_op local it in
+           return (bt, IT (Array_op array_op, bt))
            
            
 

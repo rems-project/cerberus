@@ -102,7 +102,7 @@ let make_name =
   let struct_c = ref 0 in
   let set_c = ref 0 in
   let option_c = ref 0 in
-  let param_c = ref 0 in
+  let array_c = ref 0 in
   
   let bt_prefix (bt : BT.t) = 
     match bt with
@@ -116,7 +116,7 @@ let make_name =
     | Struct _ -> "s"
     | Set _ -> "set"
     | Option _ -> "option"
-    | Param _ -> "a"
+    | Array _ -> "a"
   in
   
   let bt_counter (bt : BT.t) = 
@@ -131,7 +131,7 @@ let make_name =
     | Struct _ -> struct_c
     | Set _ -> set_c
     | Option _ -> option_c
-    | Param _ -> param_c
+    | Array _ -> array_c
   in
 
 
@@ -389,7 +389,7 @@ let explanation local model relevant =
           return (Z.pp_hex 16 z)
        | BT.Bool ->
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
-       | BT.Param _ ->
+       | BT.Array _ ->
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Unit ->
           return (BT.pp BT.Unit)

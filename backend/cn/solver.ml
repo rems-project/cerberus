@@ -108,7 +108,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
              recognizer [] [] []
          in
          Z3.Datatype.mk_sort_s context (bt_name (BT.Option bt)) [some_c; none_c]
-      | Param (abt, rbt) ->
+      | Array (abt, rbt) ->
          Z3.Z3Array.mk_sort context (aux abt) (aux rbt)
     in    
 
@@ -151,7 +151,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
            | Set_op t -> set_op t bt
            | CT_pred t -> ct_pred t bt
            | Option_op t -> option_op t bt
-           | Param_op t -> param_op t bt
+           | Array_op t -> array_op t bt
          in
          let () = ITtbl.add tbl it (sc, scs) in
          (sc, scs)
@@ -379,7 +379,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          let t, e = term it in
          (Z3.Expr.mk_app context (List.hd (List.hd accessors)) [t], e)
 
-    and param_op it bt = 
+    and array_op it bt = 
       match it with
       | Const t ->
          let t, e = term t in
@@ -390,31 +390,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          let t3, e3 = term t3 in
          (Z3.Z3Array.mk_store context t1 t2 t3, e1 @ e2 @ e3)
       | App (f, arg) ->
-         begin match f with
-         | IT (Param_op (Param (t_arg, body)),_) ->
-            let subst = Subst.{before = (fst t_arg); after = arg} in
-            term (IT.subst_it subst body)
-         | _ ->
-            let f, e1 = term f in
-            let a, e2 = term arg in
-            (Z3.Z3Array.mk_select context f a, e1 @ e2)
-         end
-      | Param ((i, abt), body) ->
-         let array_s = Sym.fresh () in
-         let array_t = Z3.Expr.mk_const context (sym_to_sym array_s) (sort_of_bt bt) in
-         let body_t, body_e = term body in
-         let select_t, select_e = term (app_ (sym_ (array_s, bt)) (sym_ (i, abt))) in
-         let constr = 
-           Z3.Quantifier.expr_of_quantifier (
-           Z3.Quantifier.mk_forall_const context 
-             [Z3.Expr.mk_const context (sym_to_sym i) (sort_of_bt abt)]
-             (Z3.Boolean.mk_eq context select_t body_t)
-             None 
-             [Z3.Quantifier.mk_pattern context [select_t]]
-             [] None None
-           )
-         in
-         (array_t, constr :: select_e @ body_e)
+         let f, e1 = term f in
+         let a, e2 = term arg in
+         (Z3.Z3Array.mk_select context f a, e1 @ e2)
 
 
     in
@@ -443,7 +421,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     | T_App (t, t') ->
        let (bt, t, cs) = make_trigger t in
        let (_, t', cs') = make_trigger t' in
-       let (_, rbt) = param_bt bt in
+       let (_, rbt) = BT.array_bt bt in
        (rbt, Z3.Z3Array.mk_select context t t', cs @ cs')
     | T_Member (t, member) ->
        let (sbt, t, cs) = make_trigger t in
