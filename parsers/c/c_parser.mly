@@ -1519,15 +1519,112 @@ attribute:
     { (attr, args_opt) }
 ;
 
-attribute_token:
+(* C keywords are allowed to appear as attribute identifiers *)
+(* TODO: there probably is a better way of doing this... *)
+c_keyword_as_string:
+| AUTO
+    { "auto" }
+| BREAK
+    { "break" }
+| CASE
+    { "case" }
+| CHAR
+    { "char" }
+| CONST
+    { "const" }
+| CONTINUE
+    { "continue" }
+| DEFAULT
+    { "default" }
+| DO
+    { "do" }
+| DOUBLE
+    { "double" }
+| ELSE
+    { "else" }
+| ENUM
+    { "enum" }
+| EXTERN
+    { "extern" }
+| FLOAT
+    { "float" }
+| FOR
+    { "for" }
+| GOTO
+    { "goto" }
+| IF
+    { "if" }
+| INLINE
+    { "inline" }
+| INT
+    { "int" }
+| LONG
+    { "long" }
+| REGISTER
+    { "register" }
+| RESTRICT
+    { "restrict" }
+| RETURN
+    { "return" }
+| SHORT
+    { "short" }
+| SIGNED
+    { "signed" }
+| SIZEOF
+    { "sizeof" }
+| STATIC
+    { "static" }
+| STRUCT
+    { "struct" }
+| SWITCH
+    { "switch" }
+| TYPEDEF
+    { "typedef" }
+| UNION
+    { "union" }
+| UNSIGNED
+    { "unsigned" }
+| VOID
+    { "void" }
+| VOLATILE
+    { "volatile" }
+| WHILE
+    { "while" }
+| ALIGNAS
+    { "_Alignas" }
+| ALIGNOF
+    { "_Alignof" }
+| ATOMIC
+    { "_Atomic" }
+| BOOL
+    { "_Bool" }
+| COMPLEX
+    { "_Complex" }
+| GENERIC
+    { "_Generic" }
+(* IMAGINARY *)
+| NORETURN
+    { "_Noreturn" }
+| STATIC_ASSERT
+    { "_Static_assert" }
+| THREAD_LOCAL
+    { "_Thread_local" }
+
+attribute_identifier:
 | name= general_identifier
+    { name }
+| str= c_keyword_as_string
+    { Symbol.Identifier (Location_ocaml.point $startpos, str) }
+
+attribute_token:
+| name= attribute_identifier
     { (None, name) }
 | attr= attribute_prefixed_token
     { attr }
 ;
 
 attribute_prefixed_token:
-| pre= general_identifier COLON_COLON name= general_identifier
+| pre= attribute_identifier COLON_COLON name= attribute_identifier
     { (Some pre, name) }
 ;
 
