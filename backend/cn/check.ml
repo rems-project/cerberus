@@ -288,6 +288,19 @@ module Make
 
 
 
+let make_function local (x_s, x_bt) body =
+  let x_t = sym_ (x_s, x_bt) in
+  match body with
+  | IT (Array_op (App (_, x')), _) when IT.equal x_t x' ->
+     (body, local)
+  | _ ->
+     let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
+     let f_def = forall_ (x_s, x_bt) None (eq_ (app_ f_t x_t, body)) in
+     let local = add_l f_s (IT.bt f_t) local in
+     let local = add_c f_def local in
+     (app_ f_t x_t, local)
+
+
 (* requires equality on inputs *)
 let match_resources loc local error r1 r2 res =
   let open Prompt.Operators in
@@ -307,22 +320,27 @@ let match_resources loc local error r1 r2 res =
      let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
      let (result, solver) = 
        S.provable_and_solver (L.all_solver_constraints local) (t_ (and_ (List.map eq_ constrs))) in
-     if result then return res else fail loc (error solver)
+     if result then return (res, local) else fail loc (error solver)
   | QPoint b, QPoint b' 
        when Sym.equal b.qpointer b'.qpointer &&
             Z.equal b.size b'.size &&
             IT.equal b.permission b'.permission ->
-     let b' = { b' with value = eta_expand (b.qpointer, Loc) b'.value;
-                        init = eta_expand (b.qpointer, Loc) b'.init; } in
+     
+     let b', local = 
+       let value, local = make_function local (b.qpointer, Loc) b'.value in
+       let init, local = make_function local (b.qpointer, Loc) b'.init in
+       ({ b' with value; init }, local)
+     in
      let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
      let (result, solver) = 
-       S.provable_and_solver (L.all_solver_constraints local)
+       S.provable_and_solver 
+         (L.all_solver_constraints local)
           (forall_ (b.qpointer, BT.Loc)
              None
              (impl_ (gt_ (b.permission, q_ (0, 1)), 
                      and_ (List.map eq_ constrs))))
      in
-     if result then return res else fail loc (error solver)
+     if result then return (res, local) else fail loc (error solver)
   | Predicate p, Predicate p' 
        when 
          predicate_name_equal p.name p'.name &&
@@ -335,7 +353,7 @@ let match_resources loc local error r1 r2 res =
          (t_ (impl_ (bool_ p'.unused, 
                      and_ (List.map eq_ constrs))))
      in
-     if result then return res else fail loc (error solver)
+     if result then return (res, local) else fail loc (error solver)
   | QPredicate p, QPredicate p' 
        when 
          IT.equal p.pointer p'.pointer &&
@@ -347,7 +365,16 @@ let match_resources loc local error r1 r2 res =
             predicate_name_equal p.name p'.name &&
             Sym.equal p.i p'.i &&
             List.equal IT.equal p.iargs p'.iargs ->
-     let p' = { p' with oargs = List.map (eta_expand (p.i, Integer)) p'.oargs } in
+
+     let p', local = 
+       let (oargs, local) = 
+         List.fold_right (fun oarg (oargs, local) ->
+             let oarg, local = make_function local (p.i, Integer) oarg in
+             (oarg :: oargs, local)
+           ) p'.oargs ([], local)
+       in
+       ({ p' with oargs }, local)
+     in
      let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
      let (result, solver) =
        S.provable_and_solver (L.all_solver_constraints local)
@@ -357,7 +384,7 @@ let match_resources loc local error r1 r2 res =
                           is_qpredicate_instance_index p (sym_ (p.i, Integer))],
                     and_ (List.map eq_ constrs))))
      in
-     if result then return res else fail loc (error solver)
+     if result then return (res, local) else fail loc (error solver)
   | _ -> 
      Debug_ocaml.error "resource inference has inferred mismatched resources"
 
@@ -445,7 +472,7 @@ let match_resources loc local error r1 r2 res =
                    (Resource_mismatch {expect; has; state; situation})
                  end
              in
-             let@ unis = match_resources loc local mismatch resource resource' unis in
+             let@ (unis, local) = match_resources loc local mismatch resource resource' unis in
              let new_substs = Uni.find_resolved local unis in
              let ftyp' = NFT.subst_its_r new_substs ftyp in
              infer_resources local unis ftyp'
@@ -1038,7 +1065,7 @@ let match_resources loc local error r1 r2 res =
           return (index + 1, mod_ (it, int_ index, arg_it))
            ) (0, const_ (default_ item_bt)) vts
     in
-    return (BT.Param (Integer, item_bt), it)
+    return (BT.Array (Integer, item_bt), it)
 
 
   let infer_constructor (loc : loc) local (constructor : mu_ctor) 
@@ -1851,7 +1878,7 @@ let match_resources loc local error r1 r2 res =
         type variables (this is used for instantiating those type variables
         in label specifications in the function body when type checking a
         procedure. *)
-  (* the logic is parameterised by RT_Sig so it can be used uniformly
+  (* the code is parameterised by RT_Sig so it can be used uniformly
      for functions and procedures (with return type) and labels with
      no-return (False) type. *)
   module CBF (I : AT.I_Sig) = struct

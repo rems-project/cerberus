@@ -102,7 +102,7 @@ let make_name =
   let struct_c = ref 0 in
   let set_c = ref 0 in
   let option_c = ref 0 in
-  let param_c = ref 0 in
+  let array_c = ref 0 in
   
   let bt_prefix (bt : BT.t) = 
     match bt with
@@ -116,7 +116,7 @@ let make_name =
     | Struct _ -> "s"
     | Set _ -> "set"
     | Option _ -> "option"
-    | Param _ -> "a"
+    | Array _ -> "a"
   in
   
   let bt_counter (bt : BT.t) = 
@@ -131,7 +131,7 @@ let make_name =
     | Struct _ -> struct_c
     | Set _ -> set_c
     | Option _ -> option_c
-    | Param _ -> param_c
+    | Array _ -> array_c
   in
 
 
@@ -200,8 +200,7 @@ module Make
 
 
 
-  let lvar_value model (l, bt) =
-    Z3.Model.evaluate model (S.symbol_expression l bt) true
+  let evaluate model expr = Z3.Model.evaluate model (S.expr expr) true
 
 
 
@@ -210,16 +209,8 @@ module Make
     List.fold_right (fun resource graph ->
         match resource with
         | RE.Point {pointer; size; value; init; permission} ->
-           let pointer_value, pointer_sort = 
-             let (s,bt) = Option.value_err "resource not normalised" (IT.is_sym pointer) in
-             (lvar_value model (s, bt), bt)
-           in
-           let value_value, value_sort = 
-             let (s,bt) = Option.value_err "resource not normalised" (IT.is_sym value) in
-             (lvar_value model (s, bt), bt)
-           in
-           let found1 = VClass.find vclasses pointer_sort pointer_value in
-           let found2 = VClass.find vclasses value_sort value_value in
+           let found1 = VClass.find vclasses (IT.bt pointer) (evaluate model pointer) in
+           let found2 = VClass.find vclasses (IT.bt value) (evaluate model value) in
            begin match found1, found2 with
            | Some vclass1, Some vclass2 
                 when not (VClassRelMap.mem (vclass2, vclass1) graph) ->
@@ -311,7 +302,7 @@ let explanation local model relevant =
     let vclasses = 
       List.fold_left (fun vclasses (c, (bt, l)) ->
           classify vclasses 
-            { (VClass.make bt (lvar_value model (l, bt))) with
+            { (VClass.make bt (evaluate model (sym_ (l, bt)))) with
               computational = SymSet.singleton c;
               logical = SymSet.singleton l; }
         ) [] (L.all_computational local)
@@ -320,7 +311,7 @@ let explanation local model relevant =
     let vclasses = 
       List.fold_left (fun vclasses (l, bt) ->
           classify vclasses 
-            { (VClass.make bt (lvar_value model (l, bt))) with
+            { (VClass.make bt (evaluate model (sym_ (l, bt)))) with
               computational = SymSet.empty;
               logical = SymSet.singleton l; }
         ) vclasses (L.all_logical local)
@@ -371,7 +362,7 @@ let explanation local model relevant =
 
   let rec o_evaluate model expr = 
     let open Option in
-    match Z3.Model.evaluate model (fst (S.expr expr)) true with
+    match evaluate model expr with
     | None -> Debug_ocaml.error "failure constructing counter model"
     | Some evaluated_expr -> 
        match IT.bt expr with
@@ -389,7 +380,7 @@ let explanation local model relevant =
           return (Z.pp_hex 16 z)
        | BT.Bool ->
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
-       | BT.Param _ ->
+       | BT.Array _ ->
           return (Pp.string (Z3.Expr.to_string evaluated_expr))
        | BT.Unit ->
           return (BT.pp BT.Unit)
