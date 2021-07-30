@@ -848,7 +848,7 @@ let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
     | (Array elem_ty1 n1_opt, Array elem_ty2 n2_opt) ->
         (* STD §6.7.6.2#6 *)
            are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2)
-        && match (n1_opt, n1_opt) with
+        && match (n1_opt, n2_opt) with
              | (Just n1, Just n2) -> n1 = n2
              | (Just _ , Nothing) -> true
              | (Nothing, Just _ ) -> true
