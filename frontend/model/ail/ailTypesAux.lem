@@ -1010,6 +1010,8 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
         Maybe.map (fun ref_ty -> Ctype (a1++a2) (Pointer ref_qs1 ref_ty)) (make_composite ref_ty1 ref_ty2)
+    | (Atomic atom_ty1, Atomic atom_ty2) ->
+        Maybe.map (fun atom_ty -> Ctype (a1++a2) (Atomic atom_ty)) (make_composite atom_ty1 atom_ty2)
     | (Struct tag1, Struct tag2) ->
         if tag1 = tag2 then
           Just cty1
