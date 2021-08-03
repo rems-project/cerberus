@@ -454,34 +454,44 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
   let check (assumptions: Z3.Expr.expr list) (lc : LC.t) =  
     (* as similarly suggested by Robbert *)
-    match lc with
-    | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-       let solver = Z3.Solver.mk_simple_solver context in
-       (`YES, solver)
-    | _ ->
-       let solver = Z3.Solver.mk_simple_solver context in
-       Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
-       begin
-         match lc with
-         | T t ->
-            let t = of_index_term t in
-            Z3.Solver.add solver [Z3.Boolean.mk_not context t]
-         | Forall ((s, bt), _trigger, t) -> 
-            let s' = Sym.fresh () in
-            let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
-            let t = of_index_term t in
-               Z3.Solver.add solver [Z3.Boolean.mk_not context t]
-       end;
-       let result = 
-         try Z3.Solver.check solver [] with
-         | Z3.Error err -> 
-            Debug_ocaml.error ("Z3 error: " ^ err)
-       in
-       match result with
-       | Z3.Solver.UNSATISFIABLE -> (`YES, solver)
-       | Z3.Solver.SATISFIABLE -> (`NO, solver)
-       | Z3.Solver.UNKNOWN -> (`MAYBE, solver)
+    let () = Debug_ocaml.begin_csv_timing "solver" in
+    let result = match lc with
+      | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
+         let solver = Z3.Solver.mk_simple_solver context in
+         (`YES, solver)
+      | _ ->
+         let solver = Z3.Solver.mk_simple_solver context in
+         let () = Debug_ocaml.begin_csv_timing "adding assumptions" in
+         Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
+         let () = Debug_ocaml.end_csv_timing "adding assumptions" in
+         let () = Debug_ocaml.begin_csv_timing "adding goal" in
+         let () = match lc with
+           | T t ->
+              let t = of_index_term t in
+              Z3.Solver.add solver [Z3.Boolean.mk_not context t]
+           | Forall ((s, bt), _trigger, t) -> 
+              let s' = Sym.fresh () in
+              let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
+              let t = of_index_term t in
+              Z3.Solver.add solver [Z3.Boolean.mk_not context t]
+         in
+         let () = Debug_ocaml.end_csv_timing "adding goal" in
+         let () = Debug_ocaml.begin_csv_timing "solving" in
+         let result = 
+           try Z3.Solver.check solver [] with
+           | Z3.Error err -> 
+              Debug_ocaml.error ("Z3 error: " ^ err)
+         in
+         let () = Debug_ocaml.end_csv_timing "solving" in
+         match result with
+         | Z3.Solver.UNSATISFIABLE -> (`YES, solver)
+         | Z3.Solver.SATISFIABLE -> (`NO, solver)
+         | Z3.Solver.UNKNOWN -> (`MAYBE, solver)
+    in
+    let () = Debug_ocaml.end_csv_timing "solver" in
+    result
 
+  
   let constr = of_logical_constraint
 
 
