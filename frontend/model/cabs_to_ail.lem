@@ -3812,16 +3812,33 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           AilSexpr <$> desugar_expression e
       
       | CabsSif e s1 s2_opt ->
-          (* TODO: check *)
-          AilSif <$> desugar_expression e
-                 <*> self s1
-                 <*> maybe (E.return $ AnnotatedStatement Loc.unknown Annot.no_attributes AilSskip) self s2_opt
+          (* STD §6.8.4#3 both the if-statement and its sub statements are distinct blocks *)
+          (* NOTE: there is no risk of missing object delcarations in these scopes because:
+                     1. the controlling expression can't declare any object (but can declare enum
+                        constants, hence the scope)
+                     2. if the sub-statements are declaring objects, it can be because of
+                        a naked CabsSdecl because the parser won't accept it *)
+          E.fresh_block_scope >>= fun if_scope ->
+          E.fresh_block_scope >>= fun s1_scope ->
+          E.under_scope if_scope begin
+            AilSif <$> desugar_expression e
+                   <*> E.under_scope s1_scope (self s1)
+                   <*> maybe (E.return $ AnnotatedStatement loc Annot.no_attributes AilSskip)
+                             (fun z -> E.fresh_block_scope >>= fun s2_scope ->
+                                       E.under_scope s2_scope (self z))
+                             s2_opt
+          end
       
       | CabsSswitch e s ->
           let ctx' = <| ctx with switch_depth= ctx.switch_depth + 1 |> in
-          (* TODO: check *)
-          AilSswitch <$> desugar_expression e
-                     <*> desugar_statement_aux ctx' s
+          (* STD §6.8.4#3 both the switch-statement and its sub statement are distinct blocks *)
+          (* NOTE: see the note in CabsSif *)
+          E.fresh_block_scope >>= fun switch_scope ->
+          E.fresh_block_scope >>= fun s_scope      ->
+          E.under_scope switch_scope begin
+            AilSswitch <$> desugar_expression e
+                       <*> E.under_scope s_scope (desugar_statement_aux ctx' s)
+          end
       
       | CabsSwhile e s ->
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
