@@ -3841,19 +3841,31 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end
       
       | CabsSwhile e s ->
+          (* TODO: when supporting VLAs ==> §6.8.4.2#2 *)
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
             <| ctx with cont_ident_opt= Just cont_ident |> in
-          desugar_expression e         >>= fun d_e ->
-          desugar_statement_aux ctx' s >>= fun d_s ->
+          (* STD §6.8.5#5 both the while-statement and its body are distinct blocks *)
+          (* NOTE: the note in CabsSif also applies here *)
+          E.fresh_block_scope >>= fun while_scope ->
+          E.fresh_block_scope >>= fun s_scope     ->
+          E.under_scope while_scope begin
+            desugar_expression e >>= fun d_e ->
+            E.under_scope s_scope
+              (desugar_statement_aux ctx' s) >>= fun d_s ->
+            E.return (d_e, d_s)
+          end >>= fun (d_e, d_s) ->
           let loop_id = Symbol.fresh_int () in
-          E.record_loop_attribute loop_id attrs >> 
+          E.record_loop_attribute loop_id attrs >>= fun () ->
+          (* while (E) S  ==>  while (E) { S; cont: ;} *)
           E.return begin
               AilSwhile d_e begin
                 AnnotatedStatement loc Annot.no_attributes begin
-                  AilSblock [] [d_s; AnnotatedStatement loc Annot.no_attributes (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id)))]
+                  AilSblock [] [ d_s
+                               ; AnnotatedStatement loc Annot.no_attributes
+                                   (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id))) ]
                 end
               end loop_id 
           end 
@@ -3864,14 +3876,25 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
             <| ctx with cont_ident_opt= Just cont_ident |> in
-          desugar_expression e         >>= fun d_e ->
-          desugar_statement_aux ctx' s >>= fun d_s ->
+          (* STD §6.8.5#5 both the do-statement and its body are distinct blocks *)
+          (* NOTE: the note in CabsSif also applies here *)
+          E.fresh_block_scope >>= fun while_scope ->
+          E.fresh_block_scope >>= fun s_scope     ->
+          E.under_scope while_scope begin
+            E.under_scope s_scope
+              (desugar_statement_aux ctx' s) >>= fun d_s ->
+            desugar_expression e >>= fun d_e ->
+            E.return (d_e, d_s)
+          end >>= fun (d_e, d_s) ->
           let loop_id = Symbol.fresh_int () in
-          E.record_loop_attribute loop_id attrs >> 
+          E.record_loop_attribute loop_id attrs >>= fun () ->
+          (* do S (E)  ==>  do { S; cont: ;} (E) *)
           E.return begin
               AilSdo begin
                 AnnotatedStatement loc Annot.no_attributes begin
-                  AilSblock [] [d_s; AnnotatedStatement loc Annot.no_attributes (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id)))]
+                  AilSblock [] [ d_s
+                               ; AnnotatedStatement loc Annot.no_attributes
+                                   (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id)))]
                 end
               end d_e loop_id
           end
@@ -3882,10 +3905,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
             <| ctx with cont_ident_opt= Just cont_ident |> in
-          
-          (* TODO: this is not really a block scope (...) *)
-          E.fresh_block_scope >>= fun scope ->
-          E.under_scope scope (
+          E.fresh_block_scope >>= fun for_scope ->
+          E.under_scope for_scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
@@ -3947,11 +3968,15 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
-              desugar_statement_aux ctx' s                      >>= fun d_s  ->
+              (* STD §6.8.5#5 the body has its own scope *)
+              (* NOTE: the desugaring of s needs to be done last, because there might be some enum constants
+                       declarations in any of the expressions *)
+              E.fresh_block_scope >>= fun s_scope ->
               let loop_annot = Just (Annot.LAloop_continue loop_id) in
               match e3_opt with
                 | Just e3 ->
                     desugar_expression e3 >>= fun d_e3 ->
+                    E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s  ->
                     let d_s_e3 = AnnotatedStatement Loc.unknown Annot.no_attributes $ AilSexpr d_e3 in
                     E.return match d_s with
                       | AnnotatedStatement loc' attrs (AilSblock bindings d_ss) ->
@@ -3964,6 +3989,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                           )
                     end
                 | Nothing ->
+                    E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s ->
                     E.return begin
                       AnnotatedStatement loc Annot.no_attributes (
                         AilSblock [] [ d_s
@@ -3972,85 +3998,97 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                     end
               end >>= fun d_s_body ->
             (* TODO: this seems to put the attributes not on the while loop but the declaration part *)
-              E.return $
+              E.return begin
                 AilSblock bindings [
                   AnnotatedStatement loc Annot.no_attributes (AilSdeclaration sym_d_es);
                   AnnotatedStatement loc Annot.no_attributes (AilSwhile d_e2 d_s_body loop_id)
                 ]
+              end
           )
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
+          (* fc_opt is either Nothing, a static assertion, or a FC_expr *)
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let loop_id = Symbol.fresh_int () in
-          E.record_loop_attribute loop_id attrs >> 
+          E.record_loop_attribute loop_id attrs >>
           let ctx' =
             <| ctx with cont_ident_opt= Just cont_ident |> in
           
-          (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
-          (* for (...; ; ...) ...   ==> { ...; while(1) ... } *)
-          maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
-          desugar_statement_aux ctx' s                      >>= fun d_s  ->
-          let loop_annot = Just (Annot.LAloop_continue loop_id) in
-          match e3_opt with
-            | Nothing ->
-                E.return begin
-                  AnnotatedStatement loc Annot.no_attributes (
-                    AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) loop_annot
-                  )
-                end
-            | Just e3 ->
-                desugar_expression e3 >>= fun d_e3 ->
-                E.return begin
-                  AnnotatedStatement loc Annot.no_attributes (
-                    AilSlabel cont_sym (AnnotatedStatement (Loc.locOf e3) Annot.no_attributes (AilSexpr d_e3)) loop_annot
-                  )
-                end
-          end >>= fun d_s_e3 ->
-          match fc_opt with
-            | Just (FC_expr e1) ->
-                (* for (E1; E2; E3) S ==> { E1; while(E2) { S'; cont: E3   } }  *)
-                (* for (E1; E2; ) S   ==> { E1; while(E2) { S'; cont: skip } }  *)
-                desugar_expression e1 >>= fun d_e1 ->
-                let d_s_e1 =
-                  AnnotatedStatement (Loc.locOf e1) Annot.no_attributes (AilSexpr d_e1) in
-                let d_s_body = match d_s with
-                  | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
-                      AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
-                  | _ ->
-                      AnnotatedStatement loc Annot.no_attributes (AilSblock [] [d_s; d_s_e3])
-                end in
-                E.return begin
-                  AilSblock [] [ d_s_e1
-                               ; AnnotatedStatement loc Annot.no_attributes (AilSwhile d_e2 d_s_body loop_id) ]
-                end
-            | Just (FC_decl (Declaration_base _ _ _)) ->
-                error "desugar_statement_aux: Just (FC_decl (Declaration_base _ _ _)), _)"
-            | Just (FC_decl (Declaration_static_assert sa_decl)) ->
-                (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
-                (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
-                desugar_and_register_static_assert_declaration sa_decl >>
-                let d_s_body = match d_s with
-                  | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
-                      AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
-                  | _ ->
-                      AnnotatedStatement Loc.unknown Annot.no_attributes $
-                        AilSblock [] [d_s; d_s_e3]
-                end in
-                E.return (AilSwhile d_e2 d_s_body loop_id)
-            | Nothing ->
-                (* for (; E2; E3) S ==> while(E2) { S'; cont: E3 } *)
-                (* for (; E2; ) S ==> while(E2) { S'; cont: skip } *)
-                let d_s_body = match d_s with
-                  | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
-                      AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
-                  | _ ->
-                      AnnotatedStatement Loc.unknown Annot.no_attributes $
-                        AilSblock [] [d_s; d_s_e3]
-                end in
-                E.return (AilSwhile d_e2 d_s_body loop_id)
-          end
+          (* NOTE: it is important that the expressions and the body are
+             desugared in the order of the syntax *)
+          E.fresh_block_scope >>= fun for_scope ->
+          E.under_scope for_scope begin
+            match fc_opt with
+              | Just (FC_expr e1) ->
+                  (* for (E1; E2; E3) S ==> { E1; while(E2) { S'; cont: E3   } }  *)
+                  (* for (E1; E2; ) S   ==> { E1; while(E2) { S'; cont: skip } }  *)
+                  desugar_expression e1 >>= fun d_e1 ->
+                  let d_s_e1 =
+                    AnnotatedStatement (Loc.locOf e1) Annot.no_attributes (AilSexpr d_e1) in
+                  let mk_d_s_body d_s_e3 = function
+                    | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
+                        AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
+                    | d_s ->
+                        AnnotatedStatement loc Annot.no_attributes (AilSblock [] [d_s; d_s_e3])
+                  end in
+                  E.return begin
+                    fun d_e2 d_s_e3 d_s ->
+                      AilSblock [] [ d_s_e1
+                                   ; AnnotatedStatement loc Annot.no_attributes (AilSwhile d_e2 (mk_d_s_body d_s_e3 d_s) loop_id) ]
+                  end
+              | Just (FC_decl (Declaration_base _ _ _)) ->
+                  error "desugar_statement_aux: Just (FC_decl (Declaration_base _ _ _)), _)"
+              | Just (FC_decl (Declaration_static_assert sa_decl)) ->
+                  (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
+                  (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
+                  desugar_and_register_static_assert_declaration sa_decl >>
+                  let mk_d_s_body d_s_e3 = function
+                    | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
+                        AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
+                    | d_s ->
+                        AnnotatedStatement Loc.unknown Annot.no_attributes begin
+                          AilSblock [] [d_s; d_s_e3]
+                        end
+                  end in
+                  E.return (fun d_e2 d_s_e3 d_s -> AilSwhile d_e2 (mk_d_s_body d_s_e3 d_s) loop_id)
+              | Nothing ->
+                  (* for (; E2; E3) S ==> while(E2) { S'; cont: E3 } *)
+                  (* for (; E2; ) S ==> while(E2) { S'; cont: skip } *)
+                  let mk_d_s_body d_s_e3 = function
+                    | AnnotatedStatement loc attrs (AilSblock bs d_ss) ->
+                        AnnotatedStatement loc attrs (AilSblock bs (d_ss ++ [d_s_e3]))
+                    | d_s ->
+                        AnnotatedStatement Loc.unknown Annot.no_attributes begin
+                          AilSblock [] [d_s; d_s_e3]
+                        end
+                  end in
+                  E.return (fun d_e2 d_s_e3 d_s -> AilSwhile d_e2 (mk_d_s_body d_s_e3 d_s) loop_id)
+            end >>= fun mk_for ->
+            (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
+            (* for (...; ; ...) ...   ==> { ...; while(1) ... } *)
+            maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
+            let loop_annot = Just (Annot.LAloop_continue loop_id) in
+            match e3_opt with
+              | Nothing ->
+                  E.return begin
+                    AnnotatedStatement loc Annot.no_attributes (
+                      AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) loop_annot
+                    )
+                  end
+              | Just e3 ->
+                  desugar_expression e3 >>= fun d_e3 ->
+                  E.return begin
+                    AnnotatedStatement loc Annot.no_attributes (
+                      AilSlabel cont_sym (AnnotatedStatement (Loc.locOf e3) Annot.no_attributes (AilSexpr d_e3)) loop_annot
+                    )
+                  end
+            end >>= fun d_s_e3 ->
+            E.fresh_block_scope >>= fun s_scope ->
+            E.under_scope s_scope (desugar_statement_aux ctx' s) >>= fun d_s ->
+            E.return (mk_for d_e2 d_s_e3 d_s)
+        end
       
       | CabsSgoto ident ->
           AilSgoto <$> E.resolve_label ident
