@@ -884,9 +884,8 @@ and are_compatible_params_aux acc = function
       acc
   | (((qs1, ty1, _) :: params1), ((qs2, ty2, _) :: params2)) ->
       are_compatible_params_aux (
-        (* NOTE(unsure): but as far as I can tell the twos parameters can differ
-           on whether they have the register storage-class *)
-        acc && are_compatible (qs1, ty1) (qs2, ty2)
+        (* STD (§6.7.6.3#15) the unqualified versions of the parameters types are compared *)
+        acc && are_compatible (no_qualifiers, ty1) (no_qualifiers, ty2)
       ) (params1, params2)
   | _ ->
       (* the list of params must have the same length to be compatible *)
