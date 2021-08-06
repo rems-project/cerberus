@@ -89,7 +89,8 @@ let maybe_open_csv_timing_file () =
   if !debug_level >= 1 then 
     begin
       let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb_times.csv" in
-      csv_timing_stack_file := Some oc
+      csv_timing_stack_file := Some oc;
+      Printf.fprintf oc "action,time\n";
     end
 
 

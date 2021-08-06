@@ -557,36 +557,38 @@ let match_resources loc local error r1 r2 res =
 
 
   let unpack_predicate local (p : predicate) = 
-
     let def = Option.get (Global.get_predicate_def G.global p.name) in
     let substs = 
       {before = def.pointer; after= p.pointer} ::
       List.map2 (fun (before, _) after -> {before; after}) 
         def.iargs p.iargs
     in
-    let possible_unpackings = 
-      List.filter_map (fun (_, clause) ->
-          let clause = PackingFT.subst_its substs clause in 
-          let condition, outputs = PackingFT.logical_arguments_and_return clause in
-          let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
-          let spec = LRT.concat condition (Constraint (t_ lc, I)) in
-          let lrt = LRT.subst_its substs spec in
-          (* remove resource before binding the return
-             type 'condition', so as not to unsoundly
-             introduce extra disjointness constraints *)
-          let test_local = L.remove_resource (Predicate p) local in
-          let test_local = bind_logical test_local lrt in
-          if S.provably_inconsistent (L.all_solver_constraints test_local)
-          then None 
-          else Some test_local
-        ) def.clauses
+    let unpack (_loc, clause) = 
+      let clause = PackingFT.subst_its substs clause in 
+      let condition, outputs = PackingFT.logical_arguments_and_return clause in
+      let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
+      let spec = LRT.concat condition (Constraint (t_ lc, I)) in
+      let lrt = LRT.subst_its substs spec in
+      (* remove resource before binding the return
+         type 'condition', so as not to unsoundly 
+         introduce extra disjointness constraints   *)
+      let test_local = L.remove_resource (Predicate p) local in
+      let test_local = bind_logical test_local lrt in
+      test_local
     in
-    begin match possible_unpackings with
-    | [] -> Debug_ocaml.error "inconsistent state in every possible resource unpacking"
-    | [new_local] -> (new_local, true)
-    | _ -> (local, false)
-    end
-
+    let possible_unpackings = List.map unpack def.clauses in
+    match possible_unpackings with
+    | [local] -> Some local
+    | clauses ->
+       let consistent_unpackings = 
+         List.filter (fun test_local ->
+             S.provably_inconsistent (L.all_solver_constraints test_local)
+           ) clauses
+       in
+       match consistent_unpackings with
+       | [] -> Some (List.hd possible_unpackings)
+       | [new_local] -> Some new_local
+       | _ -> None
 
   let unpack_resources local = 
     let rec aux local = 
@@ -594,8 +596,10 @@ let match_resources loc local error r1 r2 res =
         List.fold_left (fun (local, changed) resource ->
             match resource with
             | RE.Predicate p when p.unused ->
-               let (local, changed') = unpack_predicate local p in
-               (local, changed || changed')
+               begin match unpack_predicate local p with
+               | None -> (local, changed)
+               | Some local -> (local, true)
+               end
             | _ ->
                (local, changed)
           ) (local, false) (L.all_resources local)
@@ -612,8 +616,10 @@ let match_resources loc local error r1 r2 res =
             match resource with
             | RE.Predicate p 
                  when p.unused ->
-               let (local, changed') = unpack_predicate local p in
-               (local, changed || changed')
+               begin match unpack_predicate local p with
+               | Some local -> (local, true)
+               | None -> (local, changed)
+               end
             | RE.QPredicate p 
                  when p.unused && 
                         S.provable (L.all_solver_constraints local)
@@ -2068,8 +2074,10 @@ end
 
 let check mu_file = 
 
+  let () = Debug_ocaml.begin_csv_timing "total" in
   let global = Global.empty in
   
+  let () = Debug_ocaml.begin_csv_timing "tagDefs" in
   let@ global = 
     (* check and record tagDefs *)
     let open Memory in
@@ -2082,10 +2090,8 @@ let check mu_file =
              ListM.iterM (fun piece ->
                  match piece.member_or_padding with
                  | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
-                    begin match SymMap.find_opt sym2 global.struct_decls with
-                    | Some _ -> return ()
-                    | None -> fail Loc.unknown (Missing_struct sym2)
-                    end
+                    if SymMap.mem sym2 global.struct_decls then return ()
+                    else fail Loc.unknown (Missing_struct sym2)
                  | _ -> return ()
                ) layout
            in
@@ -2093,12 +2099,15 @@ let check mu_file =
            return { global with struct_decls }
       ) mu_file.mu_tagDefs global
   in
+  let () = Debug_ocaml.end_csv_timing "tagDefs" in
 
   let module S = Solver.Make(struct let struct_decls = global.struct_decls end) in
   let module L = Local.Make(S) in
 
   let local = L.empty in
 
+
+  let () = Debug_ocaml.begin_csv_timing "globals" in
   let@ local = 
     (* record globals *)
     (* TODO: check the expressions *)
@@ -2114,7 +2123,9 @@ let check mu_file =
            return local
       ) local mu_file.mu_globs 
   in
+  let () = Debug_ocaml.end_csv_timing "globals" in
 
+  let () = Debug_ocaml.begin_csv_timing "impls" in
   let@ global = 
     (* check and record impls *)
     let open Global in
@@ -2145,7 +2156,10 @@ let check mu_file =
            return { global with impl_fun_decls }
       ) mu_file.mu_impl global
   in
+  let () = Debug_ocaml.end_csv_timing "impls" in
   
+
+  let () = Debug_ocaml.begin_csv_timing "predicate defs" in
   let@ global = 
     (* check and record predicate defs *)
     ListM.fold_leftM (fun global (name,def) -> 
@@ -2156,7 +2170,10 @@ let check mu_file =
         return {global with resource_predicates}
       ) global mu_file.mu_predicates
   in
+  let () = Debug_ocaml.end_csv_timing "predicate defs" in
 
+
+  let () = Debug_ocaml.begin_csv_timing "welltypedness" in
   let@ (global, local) =
     let open Global in
     let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
@@ -2177,7 +2194,7 @@ let check mu_file =
         return (global, local)
       ) mu_file.mu_funinfo (global, local)
   in
-
+  let () = Debug_ocaml.end_csv_timing "welltypedness" in
 
   let check_functions fns =
     let module C = Make(struct let global = global end)(S)(L) in
@@ -2197,14 +2214,22 @@ let check mu_file =
            in
            C.check_procedure loc' local mapping 
              fsym args rbt body ftyp labels
-        | M_ProcDecl _
+      | M_ProcDecl _
         | M_BuiltinDecl _ -> 
-           return ()
+         return ()
       ) fns
   in
 
+  let () = Debug_ocaml.begin_csv_timing "check stdlib" in
   let@ () = check_functions mu_file.mu_stdlib in
+  let () = Debug_ocaml.end_csv_timing "check stdlib" in
+  let () = Debug_ocaml.begin_csv_timing "check functions" in
   let@ () = check_functions mu_file.mu_funs in
+  let () = Debug_ocaml.end_csv_timing "check functions" in
+
+
+  let () = Debug_ocaml.end_csv_timing "total" in
+
   return ()
 
 
@@ -2212,8 +2237,6 @@ let check mu_file =
 
 
 (* TODO: 
-   - when resources are missing because of BT mismatches, report that correctly
-   - be more careful about which counter-model to use in Explain
    - rem_t vs rem_f
    - check globals with expressions
  *)
