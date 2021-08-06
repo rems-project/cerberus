@@ -315,7 +315,7 @@ let unpack_predicate local (p : predicate) =
 
     (* requires equality on inputs *)
     let match_resources loc local error r1 r2 res =
-
+      
       let make_function local (x_s, x_bt) body =
         let x_t = sym_ (x_s, x_bt) in
         match body with
