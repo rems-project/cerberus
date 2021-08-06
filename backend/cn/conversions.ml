@@ -7,9 +7,7 @@ open Pp
 module BT = BaseTypes
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
-module LFT = ArgumentTypes.Make(LogicalReturnTypes)
-module FT = ArgumentTypes.Make(ReturnTypes)
-module LT = ArgumentTypes.Make(False)
+module AT = ArgumentTypes
 open TypeErrors
 open IndexTerms
 open Resources.RE
@@ -416,8 +414,8 @@ let garg_item l (garg : garg) =
 
 
 let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
-    : (FT.t * Mapping.t, type_error) m = 
-  let open FT in
+    : (AT.ft * Mapping.t, type_error) m = 
+  let open AT in
   let open RT in
 
   let iA, iL, iR, iC = [], [], [], [] in
@@ -523,8 +521,8 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   let iC = List.map LC.t_ iC in
   let lrt = LRT.mLogicals oL (LRT.mResources oR (LRT.mConstraints oC LRT.I)) in
   let rt = RT.mComputational oA lrt in
-  let lft = FT.mLogicals iL (FT.mResources iR (FT.mConstraints iC (FT.I rt))) in
-  let ft = FT.mComputationals iA lft in
+  let lft = AT.mLogicals iL (AT.mResources iR (AT.mConstraints iC (AT.I rt))) in
+  let ft = AT.mComputationals iA lft in
   return (ft, init_mapping)
 
 
@@ -603,8 +601,8 @@ let make_label_spec
   in
 
   let iC = List.map LC.t_ iC in
-  let llt = LT.mLogicals iL (LT.mResources iR (LT.mConstraints iC (LT.I False.False))) in
-  let lt = LT.mComputationals iA llt in
+  let llt = AT.mLogicals iL (AT.mResources iR (AT.mConstraints iC (AT.I False.False))) in
+  let lt = AT.mComputationals iA llt in
   return (lt, mapping)
 
 

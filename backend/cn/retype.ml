@@ -7,8 +7,7 @@ module Symbol=CF.Symbol
 module Loc=Locations
 module RT=ReturnTypes
 module LRT=LogicalReturnTypes
-module FT=ArgumentTypes.Make(ReturnTypes)
-module LT=ArgumentTypes.Make(False)
+module AT = ArgumentTypes
 module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
@@ -25,10 +24,10 @@ open TypeErrors
 module SR_Types = struct
   type ct = Sctypes.t
   type bt = BT.t
-  type ift = FT.t
+  type ift = AT.ft
   type ict = RT.t
-  type ft = FT.t
-  type lt = LT.t
+  type ft = AT.ft
+  type lt = AT.lt
   type st = Memory.struct_layout
   type gt = ct
   type ut = unit
@@ -494,8 +493,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
                  return (Sym.fresh (), bt)
                ) argbts 
            in
-           let ft = (FT.mComputationals args) 
-                      (FT.I (RT.Computational ((Sym.fresh (), rbt), LRT.I)))
+           let ft = (AT.mComputationals args) 
+                      (AT.I (RT.Computational ((Sym.fresh (), rbt), LRT.I)))
            in
            return ft
          in
@@ -551,7 +550,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
     in
     match def with
     | Old.M_Return (loc, _) ->
-       let lt = LT.of_rt (FT.get_return ftyp) (LT.I False.False) in
+       let lt = AT.of_rt (AT.get_return ftyp) (AT.I False.False) in
        return (New.M_Return (loc, lt))
     | Old.M_Label (loc, argtyps, args, e, annots, _) -> 
        let@ args = mapM (retype_arg loc) args in

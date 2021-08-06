@@ -4,6 +4,7 @@ module BT = BaseTypes
 module SymSet = Set.Make(Sym)
 module TE = TypeErrors
 module RE = Resources.RE
+module AT = ArgumentTypes
 
 open Global
 open TE
@@ -690,7 +691,7 @@ module Make
 
   module WRT = struct
 
-    open ReturnTypes
+    include ReturnTypes
     type t = ReturnTypes.t
 
     let check loc local rt = 
@@ -718,6 +719,7 @@ module Make
 
 
   module WFalse = struct
+    include False
     type t = False.t
     let check _ _ _ = return ()
     let wellpolarised _ _ _ = return ()
@@ -726,6 +728,7 @@ module Make
 
   module type WOutputSpec = sig val name_bts : (string * LS.t) list end
   module WOutputDef (Spec : WOutputSpec) = struct
+    include OutputDef
     type t = OutputDef.t
     let check loc local assignment =
       let name_bts = List.sort (fun (s, _) (s', _) -> String.compare s s') Spec.name_bts in
@@ -748,6 +751,9 @@ module Make
 
   module type WI_Sig = sig
     type t
+    val subst_var : (Sym.t, Sym.t) Subst.t -> t -> t
+    val subst_it : (Sym.t, IndexTerms.t) Subst.t -> t -> t
+    val pp : t -> Pp.document
     val check : Loc.t -> L.t -> t -> (unit,type_error) m
     val wellpolarised : Loc.t -> SymSet.t -> t -> (unit,type_error) m
     val welltyped : Loc.t -> L.t -> t -> (unit,type_error) m
@@ -755,36 +761,36 @@ module Make
 
 
 
-  module WAT (I: ArgumentTypes.I_Sig) (WI: WI_Sig with type t = I.t) = struct
 
-    module T = ArgumentTypes.Make(I)
+  module WAT (WI: WI_Sig) = struct
 
-    type t = T.t
 
-    let rec check loc local (at : T.t) : (unit, type_error) m = 
+    type t = WI.t AT.t
+
+    let rec check loc local (at : t) : (unit, type_error) m = 
       let open Resultat in
       match at with
-      | T.Computational ((name,bt), at) ->
+      | AT.Computational ((name,bt), at) ->
          let name' = Sym.fresh_same name in
          let lname = Sym.fresh () in
          let local = L.add_l lname bt local in
          let local = L.add_a name' (bt, lname) local in
-         let at = T.subst_var Subst.{before = name; after = lname} at in
+         let at = AT.subst_var WI.subst_var Subst.{before = name; after = lname} at in
          check loc local at
-      | T.Logical ((s,ls), at) -> 
+      | AT.Logical ((s,ls), at) -> 
          let lname = Sym.fresh_same s in
          let local = L.add_l lname ls local in
-         let at = T.subst_var Subst.{before = s; after = lname} at in
+         let at = AT.subst_var WI.subst_var Subst.{before = s; after = lname} at in
          check loc local at
-      | T.Resource (re, at) -> 
+      | AT.Resource (re, at) -> 
          let@ () = WRE.welltyped loc local re in
          let local = L.add_r re local in
          check loc local at
-      | T.Constraint (lc, at) ->
+      | AT.Constraint (lc, at) ->
          let@ () = WLC.welltyped loc local lc in
          let local = L.add_c lc local in
          check loc local at
-      | T.I i -> 
+      | AT.I i -> 
          WI.check loc local i
 
 
@@ -792,18 +798,18 @@ module Make
       let open Resultat in
       let rec aux determined undetermined ft = 
       match ft with
-      | T.Computational ((s, _), ft) ->
+      | AT.Computational ((s, _), ft) ->
          aux (SymSet.add s determined) undetermined ft
-      | T.Logical ((s, _), ft) ->
+      | AT.Logical ((s, _), ft) ->
          aux determined (SymSet.add s undetermined) ft
-      | T.Resource (re, ft) ->
+      | AT.Resource (re, ft) ->
          let@ fixed = resource_inputs_outputs_ok loc re determined in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined ft
-      | T.Constraint (_, ft) ->
+      | AT.Constraint (_, ft) ->
          aux determined undetermined ft
-      | T.I rt ->
+      | AT.I rt ->
          match SymSet.elements undetermined with
          | [] -> WI.wellpolarised loc determined rt
          | s :: _ ->  fail loc (Unconstrained_logical_variable s)
@@ -817,9 +823,9 @@ module Make
   end
 
 
-  module WFT = WAT(ReturnTypes)(WRT)
-  module WLT = WAT(False)(WFalse)
-  module WPackingFT(Spec : WOutputSpec) = WAT(OutputDef)(WOutputDef(Spec))
+  module WFT = WAT(WRT)
+  module WLT = WAT(WFalse)
+  module WPackingFT(Spec : WOutputSpec) = WAT(WOutputDef(Spec))
 
   module WPD = struct
     
@@ -840,7 +846,7 @@ module Make
       let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
       ListM.iterM (fun (loc, clause) ->
           let@ () = WPackingFT.welltyped pd.loc local clause in
-          let lrt, _ = PackingFT.logical_arguments_and_return clause in
+          let lrt, _ = AT.logical_arguments_and_return clause in
           let local = L.bind_logical local lrt  in
           if S.provably_inconsistent (L.all_solver_constraints local) 
           then fail loc (Generic !^"this clause makes inconsistent assumptions")

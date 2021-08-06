@@ -13,7 +13,6 @@ module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
 module RT = ReturnTypes
-module FT = ArgumentTypes.Make(RT)
 open Memory
 
 
@@ -61,8 +60,8 @@ let impl_lookup (e: 'v ImplMap.t) i =
 
 type t = 
   { struct_decls : struct_decls; 
-    fun_decls : (Locations.t * FT.t) SymMap.t;
-    impl_fun_decls : FT.t ImplMap.t;
+    fun_decls : (Locations.t * AT.ft) SymMap.t;
+    impl_fun_decls : AT.ft ImplMap.t;
     impl_constants : RT.t ImplMap.t;
     (* stdlib_funs : FT.t SymMap.t; *)
     resource_predicates : predicate_definition StringMap.t;
@@ -116,7 +115,7 @@ let pp_struct_layout (tag,layout) =
 let pp_struct_decls decls = 
   Pp.list pp_struct_layout (SymMap.bindings decls) 
 
-let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (FT.pp t)
+let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (AT.pp RT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
 let pp_predicate_definitions defs =

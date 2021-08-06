@@ -7,10 +7,10 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
-module LFT = ArgumentTypes.Make(LogicalReturnTypes)
-module FT = ArgumentTypes.Make(ReturnTypes)
-module LT = ArgumentTypes.Make(False)
-module PackingFT = ArgumentTypes.Make(OutputDef)
+(* module LFT = ArgumentTypes.Make(LogicalReturnTypes)
+ * module FT = ArgumentTypes.Make(ReturnTypes)
+ * module LT = ArgumentTypes.Make(False) *)
+(* module PackingFT = ArgumentTypes.Make(OutputDef) *)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -43,9 +43,9 @@ module PP_TYPS = struct
   module T = Retype.SR_Types
   let pp_bt = BT.pp 
   let pp_ct ct = Sctypes.pp ct
-  let pp_ft = FT.pp
+  let pp_ft = AT.pp RT.pp
   let pp_gt = pp_ct
-  let pp_lt = LT.pp
+  let pp_lt = AT.pp False.pp
   let pp_ut _ = Pp.string "todo: implement union type printer"
   let pp_st _ = Pp.string "todo: implement struct type printer"
 end
@@ -179,10 +179,10 @@ module Make
 
 
 
-  (*** function call typing and subtyping ***************************************)
+  (*** function call typing, subtyping, and resource inference *****************)
 
-  (* Spine is parameterised by RT_Sig, so it can be used both for
-     function and label types (which don't have a return type) *)
+  (* spine is parameterised so it can be used both for function and
+     label types (which don't have a return type) *)
 
 
   type arg = {lname : Sym.t; bt : BT.t; loc : loc}
@@ -212,26 +212,12 @@ module Make
 
 
 
-
-
   module Prompt = struct
 
     type request_ui_info = { 
         original_local : L.t;
         loc: loc;
         situation: situation 
-      }
-
-    type resource_request = { 
-        local : L.t;
-        resource : RER.t;
-        ui_info : request_ui_info;
-      }
-
-    type packing_request = { 
-        local : L.t;
-        packing_function : PackingFT.t;
-        ui_info : request_ui_info;
       }
 
     type err = loc * Tools.stacktrace option * type_error Lazy.t
@@ -241,8 +227,6 @@ module Make
       | Prompt : 'r prompt * ('r -> 'a m) -> 'a m
 
     and 'r prompt = 
-      | R_Resource : resource_request -> (RE.t * L.t) prompt
-      | R_Packing : packing_request -> (OutputDef.t * L.t) prompt
       | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
       | R_Error : err -> 'r prompt
 
@@ -389,149 +373,6 @@ let match_resources loc local error r1 r2 res =
      Debug_ocaml.error "resource inference has inferred mismatched resources"
 
 
-  module Spine (I : AT.I_Sig) = struct
-
-    module FT = AT.Make(I)
-    module NFT = NormalisedArgumentTypes.Make(I)
-
-    let pp_argslocs =
-      Pp.list (fun ca -> parens (BT.pp ca.bt ^/^ bar ^/^ Sym.pp ca.lname))
-
-    open Prompt
-    open Prompt.Operators
-
-
-    let spine 
-          ui_info
-          local
-          (arguments : arg list) 
-          (ftyp : FT.t) : (I.t * L.t) m =
-
-      let open NFT in
-
-      let loc = ui_info.loc in
-      let original_local = ui_info.original_local in
-      let situation = ui_info.situation in
-
-      let ftyp = NFT.normalise ftyp in
-      let unis = SymMap.empty in
-
-      debug 6 (lazy (checking_situation situation));
-      debug 6 (lazy (item "local" (L.pp local)));
-      debug 6 (lazy (item "spec" (NFT.pp ftyp)));
-
-      let@ ftyp_l = 
-        let rec check_computational args ftyp = 
-          match args, ftyp with
-          | (arg :: args), (Computational ((s, bt), ftyp))
-               when BT.equal arg.bt bt ->
-             let ftyp' = NFT.subst_var {before = s; after = arg.lname} ftyp in
-             check_computational args ftyp'
-          | (arg :: _), (Computational ((_, bt), _))  ->
-             fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
-          | [], (L ftyp) -> 
-             return ftyp
-          | _ -> 
-             let expect = NFT.count_computational ftyp in
-             let has = List.length arguments in
-             fail loc (lazy (Number_arguments {expect; has}))
-        in
-        check_computational arguments ftyp 
-      in
-
-      let@ ((unis, lspec), ftyp_r) = 
-        let rec delay_logical (unis, lspec) ftyp =
-          debug 6 (lazy (item "local" (L.pp local)));
-          debug 6 (lazy (item "spec" (NFT.pp_l ftyp)));
-          match ftyp with
-          | Logical ((s, ls), ftyp) ->
-             let s' = Sym.fresh () in
-             let unis = SymMap.add s' Uni.{resolved = None} unis in
-             let ftyp' = NFT.subst_var_l {before = s; after = s'} ftyp in
-             delay_logical (unis, lspec @ [(s', ls)]) ftyp'
-          | R ftyp -> 
-             return ((unis, lspec), ftyp)
-        in
-        delay_logical (unis, []) ftyp_l
-      in
-
-      let@ (local, unis, ftyp_c) = 
-        let rec infer_resources local unis ftyp = 
-          debug 6 (lazy (item "local" (L.pp local)));
-          debug 6 (lazy (item "spec" (NFT.pp_r ftyp)));
-          debug 6 (lazy (item "unis" (pp_unis unis)));
-          match ftyp with
-          | Resource (resource, ftyp) -> 
-             let rr = { ui_info; local; resource = RE.request resource; } in
-             let@ (resource', local) = prompt (R_Resource rr) in
-             let mismatch solver = 
-               lazy begin
-                   let model = S.get_model solver in
-                   let ((expect,has), state) = 
-                     E.resources original_local model (resource, resource') in
-                   (Resource_mismatch {expect; has; state; situation})
-                 end
-             in
-             let@ (unis, local) = match_resources loc local mismatch resource resource' unis in
-             let new_substs = Uni.find_resolved local unis in
-             let ftyp' = NFT.subst_its_r new_substs ftyp in
-             infer_resources local unis ftyp'
-          | C ftyp ->
-             return (local, unis, ftyp)
-        in
-        infer_resources local unis ftyp_r
-      in
-
-      let@ () = 
-        let rec check_logical_variables = function
-          | [] -> return ()
-          | (s, expect) :: lspec ->
-             let Uni.{resolved} = SymMap.find s unis in
-             match resolved with
-             | Some solution ->
-                if LS.equal (IT.bt solution) expect 
-                then check_logical_variables lspec
-                else fail loc (lazy (Mismatch { has = IT.bt solution; expect }))
-             | None -> 
-                Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
-        in
-        check_logical_variables lspec
-      in
-
-      let@ rt = 
-        let rec check_logical_constraints = function
-          | Constraint (c, ftyp) -> 
-             let (holds, solver) = 
-               S.provable_and_solver (L.all_solver_constraints local) c in
-             if holds then check_logical_constraints ftyp else
-               let err = 
-                 lazy begin
-                     let (constr,state) = 
-                       E.unsatisfied_constraint original_local 
-                         (S.get_model solver) c
-                     in
-                     (Unsat_constraint {constr; hint = None; state})
-                   end
-               in
-               fail loc err
-          | I rt ->
-             return rt
-        in
-        check_logical_constraints ftyp_c
-      in
-      return (rt, local)
-
-  end
-
-  module Spine_FT = Spine(ReturnTypes)
-  module Spine_LFT = Spine(LogicalReturnTypes)
-  module Spine_LT = Spine(False)
-  module Spine_Packing = Spine(OutputDef)
-
-
-
-
-  (*** resource inference *******************************************************)
 
 
 
@@ -553,10 +394,7 @@ let match_resources loc local error r1 r2 res =
     fail ui_info.loc err
 
 
-
-
-
-  let unpack_predicate local (p : predicate) = 
+let unpack_predicate local (p : predicate) = 
     let def = Option.get (Global.get_predicate_def G.global p.name) in
     let substs = 
       {before = def.pointer; after= p.pointer} ::
@@ -564,8 +402,8 @@ let match_resources loc local error r1 r2 res =
         def.iargs p.iargs
     in
     let unpack (_loc, clause) = 
-      let clause = PackingFT.subst_its substs clause in 
-      let condition, outputs = PackingFT.logical_arguments_and_return clause in
+      let clause = AT.subst_its OutputDef.subst_it substs clause in 
+      let condition, outputs = AT.logical_arguments_and_return clause in
       let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
       let spec = LRT.concat condition (Constraint (t_ lc, I)) in
       let lrt = LRT.subst_its substs spec in
@@ -644,7 +482,150 @@ let match_resources loc local error r1 r2 res =
 
 
 
-  let point_request_prompt ui_info local (requested : Resources.Requests.point) = 
+  let rec spine :
+            'rt. 
+            ((Sym.t, Sym.t) Subst.t -> 'rt -> 'rt) ->
+            ((Sym.t, IT.t) Subst.t -> 'rt -> 'rt) ->
+            ('rt -> Pp.doc) ->
+            Prompt.request_ui_info ->
+            L.t ->
+            arg list ->
+            'rt AT.t ->
+            ('rt * L.t) Prompt.m
+    =
+    fun rt_subst_var rt_subst_it rt_pp
+        ui_info local arguments ftyp ->
+
+    let open Prompt in
+    let open Prompt.Operators in
+    let open NormalisedArgumentTypes in
+
+    let loc = ui_info.loc in
+    let original_local = ui_info.original_local in
+    let situation = ui_info.situation in
+
+    let ftyp = normalise ftyp in
+    let unis = SymMap.empty in
+
+    debug 6 (lazy (checking_situation situation));
+    debug 6 (lazy (item "local" (L.pp local)));
+    debug 6 (lazy (item "spec" (pp rt_pp ftyp)));
+
+    let@ ftyp_l = 
+      let rec check_computational args ftyp = 
+        match args, ftyp with
+        | (arg :: args), (Computational ((s, bt), ftyp))
+             when BT.equal arg.bt bt ->
+           let ftyp' = subst_var rt_subst_var {before = s; after = arg.lname} ftyp in
+           check_computational args ftyp'
+        | (arg :: _), (Computational ((_, bt), _))  ->
+           fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
+        | [], (L ftyp) -> 
+           return ftyp
+        | _ -> 
+           let expect = count_computational ftyp in
+           let has = List.length arguments in
+           fail loc (lazy (Number_arguments {expect; has}))
+      in
+      check_computational arguments ftyp 
+    in
+
+    let@ ((unis, lspec), ftyp_r) = 
+      let rec delay_logical (unis, lspec) ftyp =
+        debug 6 (lazy (item "local" (L.pp local)));
+        debug 6 (lazy (item "spec" (pp_l rt_pp ftyp)));
+        match ftyp with
+        | Logical ((s, ls), ftyp) ->
+           let s' = Sym.fresh () in
+           let unis = SymMap.add s' Uni.{resolved = None} unis in
+           let ftyp' = subst_var_l rt_subst_var {before = s; after = s'} ftyp in
+           delay_logical (unis, lspec @ [(s', ls)]) ftyp'
+        | R ftyp -> 
+           return ((unis, lspec), ftyp)
+      in
+      delay_logical (unis, []) ftyp_l
+    in
+
+    let@ (local, unis, ftyp_c) = 
+      let rec infer_resources local unis ftyp = 
+        debug 6 (lazy (item "local" (L.pp local)));
+        debug 6 (lazy (item "spec" (pp_r rt_pp ftyp)));
+        debug 6 (lazy (item "unis" (pp_unis unis)));
+        match ftyp with
+        | Resource (resource, ftyp) -> 
+           let@ (resource', local) = 
+             resource_request_prompt ui_info local (RE.request resource) in
+           let mismatch solver = 
+             lazy begin
+                 let model = S.get_model solver in
+                 let ((expect,has), state) = 
+                   E.resources original_local model (resource, resource') in
+                 (Resource_mismatch {expect; has; state; situation})
+               end
+           in
+           let@ (unis, local) = match_resources loc local mismatch resource resource' unis in
+           let new_substs = Uni.find_resolved local unis in
+           let ftyp' = subst_its_r rt_subst_it new_substs ftyp in
+           infer_resources local unis ftyp'
+        | C ftyp ->
+           return (local, unis, ftyp)
+      in
+      infer_resources local unis ftyp_r
+    in
+
+    let@ () = 
+      let rec check_logical_variables = function
+        | [] -> return ()
+        | (s, expect) :: lspec ->
+           let Uni.{resolved} = SymMap.find s unis in
+           match resolved with
+           | Some solution ->
+              if LS.equal (IT.bt solution) expect 
+              then check_logical_variables lspec
+              else fail loc (lazy (Mismatch { has = IT.bt solution; expect }))
+           | None -> 
+              Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+      in
+      check_logical_variables lspec
+    in
+
+    let@ rt = 
+      let rec check_logical_constraints = function
+        | Constraint (c, ftyp) -> 
+           let (holds, solver) = 
+             S.provable_and_solver (L.all_solver_constraints local) c in
+           if holds then check_logical_constraints ftyp else
+             let err = 
+               lazy begin
+                   let (constr,state) = 
+                     E.unsatisfied_constraint original_local 
+                       (S.get_model solver) c
+                   in
+                   (Unsat_constraint {constr; hint = None; state})
+                 end
+             in
+             fail loc err
+        | I rt ->
+           return rt
+      in
+      check_logical_constraints ftyp_c
+    in
+    return (rt, local)
+
+  and spine_ft ui_info local arguments ft = 
+    spine RT.subst_var RT.subst_it RT.pp ui_info 
+      local arguments ft
+
+  and spine_lt ui_info local arguments ft = 
+    spine False.subst_var False.subst_it False.pp 
+      ui_info local arguments ft
+
+  and spine_packing ui_info local arguments ft =
+    spine OutputDef.subst_var OutputDef.subst_it OutputDef.pp 
+      ui_info local arguments ft
+
+
+  and point_request_prompt ui_info local (requested : Resources.Requests.point) = 
     let open Prompt.Operators in
     let needed = requested.permission in 
     let local, (needed, value, init) =
@@ -694,7 +675,7 @@ let match_resources loc local error r1 r2 res =
       return (r, local)
     else resource_request_missing ui_info solver (Point requested)
 
-  let qpoint_request_prompt ui_info local (requested : Resources.Requests.qpoint) = 
+  and qpoint_request_prompt ui_info local (requested : Resources.Requests.qpoint) = 
     let open Prompt.Operators in
     let needed = requested.permission in
     let local, (needed, value, init) =
@@ -749,8 +730,7 @@ let match_resources loc local error r1 r2 res =
     else 
       resource_request_missing ui_info solver (QPoint requested)
 
-
-  let predicate_request_prompt ui_info local (p : Resources.Requests.predicate) = 
+  and predicate_request_prompt ui_info local (p : Resources.Requests.predicate) = 
     let open Prompt.Operators in
     if p.unused = false then
       let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
@@ -821,7 +801,7 @@ let match_resources loc local error r1 r2 res =
            List.map (fun (_, clause) ->
                lazy begin
                    let packing_function = subst_its_clause substs clause in
-                   prompt (R_Packing {ui_info; local; packing_function})
+                   spine_packing ui_info local [] packing_function
                  end
              ) def.clauses
          in
@@ -846,7 +826,7 @@ let match_resources loc local error r1 r2 res =
          return (r, local)
       end
 
-  let qpredicate_request_prompt ui_info local (p : Resources.Requests.qpredicate) = 
+  and qpredicate_request_prompt ui_info local (p : Resources.Requests.qpredicate) = 
     let open Prompt.Operators in
     assert ([] = p.moved); (* todo? *)
     if p.unused = false then
@@ -937,7 +917,7 @@ let match_resources loc local error r1 r2 res =
          let (_, solver) = S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
          resource_request_missing ui_info solver (QPredicate p)
 
-  let resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
+  and resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
     let open Prompt.Operators in
     match request with
     | Point requested ->
@@ -962,15 +942,6 @@ let match_resources loc local error r1 r2 res =
          begin match r with
          | Prompt.R_Error (loc,tr,error) -> 
             Error (lazy (loc,tr, Lazy.force error))
-         | R_Resource {ui_info; local; resource} ->
-            let prompt = 
-              resource_request_prompt ui_info local resource in
-            let@ (unis, local) = aux prompt in
-            aux (c (unis, local))
-         | R_Packing {ui_info; local; packing_function} ->
-            let prompt = Spine_Packing.spine ui_info local [] packing_function in
-            let@ (assignment, local) = aux prompt in
-            aux (c (assignment, local))
          | R_Try choices ->
             let rec first_success list1 =
               let (hd, tl) = List1.dest list1 in
@@ -992,7 +963,7 @@ let match_resources loc local error r1 r2 res =
 
 
 
-  let calltype_ft loc local args (ftyp : FT.t) : (RT.t * L.t, type_error) m =
+  let calltype_ft loc local args (ftyp : AT.ft) : (RT.t * L.t, type_error) m =
     let names = 
       List.mapi (fun i arg ->
           let v = "ARG" ^ string_of_int i in
@@ -1002,14 +973,14 @@ let match_resources loc local error r1 r2 res =
     let local = add_descriptions names local in
     let open Prompt in
     let ui_info = { loc; situation = FunctionCall; original_local = local } in
-    let prompt = Spine_FT.spine ui_info local args ftyp in
+    let prompt = spine_ft ui_info local args ftyp in
     let@ (rt, local) = handle_prompt prompt in
     return (rt, local)
 
-  let calltype_lt loc local args ((ltyp : LT.t), label_kind) : (False.t * L.t, type_error) m =
+  let calltype_lt loc local args ((ltyp : AT.lt), label_kind) : (False.t * L.t, type_error) m =
     let open Prompt in
     let ui_info = { loc; situation = LabelCall label_kind; original_local = local } in
-    let prompt = Spine_LT.spine ui_info local args ltyp in
+    let prompt = spine_lt ui_info local args ltyp in
     let@ (rt, local) = handle_prompt prompt in
     return (rt, local)
 
@@ -1020,8 +991,12 @@ let match_resources loc local error r1 r2 res =
     let local = add_description (arg.lname, Ast.Var {label = None; v ="return"}) local in
     let open Prompt in
     let ui_info = { loc; situation = Subtyping; original_local = local } in
-    let lt = LT.of_rt rtyp (LT.I False.False) in
-    let prompt = Spine_LT.spine ui_info local [arg] lt in
+    let ft = AT.of_rt rtyp (AT.I False.False) in
+    let prompt = 
+      spine 
+        False.subst_var False.subst_it False.pp
+        ui_info local [arg] ft 
+    in
     let@ (False.False, local) = handle_prompt prompt in
     return local
 
@@ -1534,7 +1509,7 @@ let match_resources loc local error r1 r2 res =
     return ()
 
 
-  type labels = (LT.t * label_kind) SymMap.t
+  type labels = (AT.lt * label_kind) SymMap.t
 
 
   let infer_expr (local, labels) (e : 'bty mu_expr) 
@@ -1884,53 +1859,46 @@ let match_resources loc local error r1 r2 res =
         type variables (this is used for instantiating those type variables
         in label specifications in the function body when type checking a
         procedure. *)
-  (* the code is parameterised by RT_Sig so it can be used uniformly
-     for functions and procedures (with return type) and labels with
+  (* the code is parameterised so it can be used uniformly for
+     functions and procedures (with return type) and labels with
      no-return (False) type. *)
-  module CBF (I : AT.I_Sig) = struct
-    module T = AT.Make(I)
-    let check_and_bind_arguments loc arguments (function_typ : T.t) = 
-      let rec check acc_substs local pure_local args (ftyp : T.t) =
-        match args, ftyp with
-        | ((aname,abt) :: args), (T.Computational ((lname, sbt), ftyp))
-             when BT.equal abt sbt ->
-           let new_lname = Sym.fresh () in
-           let subst = {before=lname;after=new_lname} in
-           let ftyp' = T.subst_var subst ftyp in
-           let local = add_l new_lname abt local in
-           let local = add_a aname (abt,new_lname) local in
-           let pure_local = add_l new_lname abt pure_local in
-           let pure_local = add_a aname (abt,new_lname) pure_local in
-           check (acc_substs@[subst]) local pure_local args ftyp'
-        | ((aname, abt) :: args), (T.Computational ((sname, sbt), ftyp)) ->
-           fail loc (Mismatch {has = abt; expect = sbt})
-        | [], (T.Computational (_,_))
-        | (_ :: _), (T.I _) ->
-           let expect = T.count_computational function_typ in
-           let has = List.length arguments in
-           fail loc (Number_arguments {expect; has})
-        | args, (T.Logical ((sname, sls), ftyp)) ->
-           let new_lname = Sym.fresh_same sname in
-           let subst = {before = sname; after = new_lname} in
-           let ftyp' = T.subst_var subst ftyp in
-           let local = add_l new_lname sls local in
-           let pure_local = add_l new_lname sls pure_local in
-           check (acc_substs@[subst]) local pure_local args ftyp'
-        | args, (T.Resource (re, ftyp)) ->
-           check acc_substs (add_r re local) pure_local args ftyp
-        | args, (T.Constraint (lc, ftyp)) ->
-           let local = add_c lc local in
-           let pure_local = add_c lc pure_local in
-           check acc_substs local pure_local args ftyp
-        | [], (T.I rt) ->
-           return (rt, local, pure_local, acc_substs)
-      in
-      check [] L.empty L.empty arguments function_typ
-  end
-
-  module CBF_FT = CBF(ReturnTypes)
-  module CBF_LT = CBF(False)
-
+  let check_and_bind_arguments rt_subst_var loc arguments (function_typ : 'rt AT.t) = 
+    let rec check acc_substs local pure_local args (ftyp : 'rt AT.t) =
+      match args, ftyp with
+      | ((aname,abt) :: args), (AT.Computational ((lname, sbt), ftyp))
+           when BT.equal abt sbt ->
+         let new_lname = Sym.fresh () in
+         let subst = {before=lname;after=new_lname} in
+         let ftyp' = AT.subst_var rt_subst_var subst ftyp in
+         let local = add_l new_lname abt local in
+         let local = add_a aname (abt,new_lname) local in
+         let pure_local = add_l new_lname abt pure_local in
+         let pure_local = add_a aname (abt,new_lname) pure_local in
+         check (acc_substs@[subst]) local pure_local args ftyp'
+      | ((aname, abt) :: args), (AT.Computational ((sname, sbt), ftyp)) ->
+         fail loc (Mismatch {has = abt; expect = sbt})
+      | [], (AT.Computational (_,_))
+      | (_ :: _), (AT.I _) ->
+         let expect = AT.count_computational function_typ in
+         let has = List.length arguments in
+         fail loc (Number_arguments {expect; has})
+      | args, (AT.Logical ((sname, sls), ftyp)) ->
+         let new_lname = Sym.fresh_same sname in
+         let subst = {before = sname; after = new_lname} in
+         let ftyp' = AT.subst_var rt_subst_var subst ftyp in
+         let local = add_l new_lname sls local in
+         let pure_local = add_l new_lname sls pure_local in
+         check (acc_substs@[subst]) local pure_local args ftyp'
+      | args, (AT.Resource (re, ftyp)) ->
+         check acc_substs (add_r re local) pure_local args ftyp
+      | args, (AT.Constraint (lc, ftyp)) ->
+         let local = add_c lc local in
+         let pure_local = add_c lc pure_local in
+         check acc_substs local pure_local args ftyp
+      | [], (AT.I rt) ->
+         return (rt, local, pure_local, acc_substs)
+    in
+    check [] L.empty L.empty arguments function_typ
   
   let check_initial_environment_consistent loc info local = 
     match S.provably_inconsistent (L.all_solver_constraints local), info with
@@ -1949,10 +1917,10 @@ let match_resources loc local error r1 r2 res =
         mapping 
         (info : string) 
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-        (body : 'bty mu_tpexpr) (function_typ : FT.t) : (unit, type_error) m =
+        (body : 'bty mu_tpexpr) (function_typ : AT.ft) : (unit, type_error) m =
     debug 2 (lazy (headline ("checking function " ^ info)));
     let@ (rt, delta, _, substs) = 
-      CBF_FT.check_and_bind_arguments loc arguments function_typ 
+      check_and_bind_arguments RT.subst_var loc arguments function_typ 
     in
     let local = delta ++ local in
     let@ () = check_initial_environment_consistent loc `Fun local in
@@ -1977,15 +1945,15 @@ let match_resources loc local error r1 r2 res =
         (loc : loc) (local : L.t)
         mapping (fsym : Sym.t)
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-        (body : 'bty mu_texpr) (function_typ : FT.t) 
+        (body : 'bty mu_texpr) (function_typ : AT.ft) 
         (label_defs : 'bty mu_label_defs) : (unit, type_error) m =
     print stdout (!^("checking function " ^ Sym.pp_string fsym));
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
-    debug 2 (lazy (item "type" (FT.pp function_typ)));
+    debug 2 (lazy (item "type" (AT.pp RT.pp function_typ)));
 
     (* check and bind the function arguments *)
     let@ (rt, delta, pure_delta, substs) = 
-      CBF_FT.check_and_bind_arguments loc arguments function_typ 
+      check_and_bind_arguments RT.subst_var loc arguments function_typ 
     in
     (* prepare name mapping *)
     let fnames = 
@@ -2006,9 +1974,10 @@ let match_resources loc local error r1 r2 res =
       Pmap.map (fun def ->
           match def with
           | M_Return (loc, lt) -> 
-             M_Return (loc, LT.subst_vars substs lt)
+             M_Return (loc, AT.subst_vars False.subst_var substs lt)
           | M_Label (loc, lt, args, body, annots, mapping) -> 
-             M_Label (loc, LT.subst_vars substs lt, args, body, annots, mapping)
+             M_Label (loc, AT.subst_vars False.subst_var 
+                             substs lt, args, body, annots, mapping)
         ) label_defs 
     in
 
@@ -2039,9 +2008,9 @@ let match_resources loc local error r1 r2 res =
          return ()
       | M_Label (loc, lt, args, body, annots, mapping) ->
          debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
-         debug 2 (lazy (item "type" (LT.pp lt)));
+         debug 2 (lazy (item "type" (AT.pp False.pp lt)));
          let@ (rt, delta_label, _, lsubsts) = 
-           CBF_LT.check_and_bind_arguments loc args lt 
+           check_and_bind_arguments False.subst_var loc args lt 
          in
          let@ () = check_initial_environment_consistent loc 
                      `Label (delta_label ++ pure_delta ++ local) in
@@ -2139,7 +2108,7 @@ let check mu_file =
            let@ () = WT.WRT.welltyped Loc.unknown L.empty rt in
            let@ () = 
              C.check_function Loc.unknown L.empty
-               [] descr [] rbt pexpr (FT.I rt) in
+               [] descr [] rbt pexpr (AT.I rt) in
            let global = 
              { global with impl_constants = 
                              ImplMap.add impl rt global.impl_constants}
@@ -2178,7 +2147,7 @@ let check mu_file =
     let open Global in
     let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
     PmapM.foldM
-      (fun fsym (M_funinfo (loc, Attrs attrs, ftyp, has_proto, mapping)) 
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto, mapping)) 
            (global, local) ->
         let global = 
           { global with fun_decls = SymMap.add fsym (loc, ftyp) global.fun_decls }
@@ -2189,7 +2158,7 @@ let check mu_file =
           L.add_c (t_ lc) local
         in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
-        let () = debug 2 (lazy (item "type" (FT.pp ftyp))) in
+        let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
         let@ () = WT.WFT.welltyped loc (L.add_descriptions (Explain.naming_of_mapping mapping) local) ftyp in
         return (global, local)
       ) mu_file.mu_funinfo (global, local)

@@ -5,7 +5,7 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RE = Resources.RE
-module PackingFT = ArgumentTypes.Make(OutputDef)
+module AT = ArgumentTypes
 module StringMap = Map.Make(String)
 module Loc = Locations
 open Pp
@@ -16,12 +16,12 @@ open BT
 open IT
 open LC
 
-type clause = Loc.t * PackingFT.t
+type clause = Loc.t * AT.packing_ft
 
-let pp_clause c = PackingFT.pp c
+let pp_clause c = AT.pp OutputDef.pp c
 
-let subst_it_clause subst c = PackingFT.subst_it subst c
-let subst_var_clause subst c = PackingFT.subst_var subst c
+let subst_it_clause subst c = AT.subst_it OutputDef.subst_it subst c
+let subst_var_clause subst c = AT.subst_var OutputDef.subst_var subst c
 
 let subst_its_clause substs = 
   Subst.make_substs subst_it_clause substs
@@ -66,9 +66,7 @@ type ctype_predicate =
 
 let ctype_predicate_to_predicate ct pred = 
   let loc = Loc.other "internal (Ctype)" in
-  let clause = 
-    PackingFT.of_lrt pred.lrt 
-      (PackingFT.I [pred.value_oarg; pred.init_oarg]) in
+  let clause = AT.of_lrt pred.lrt (AT.I [pred.value_oarg; pred.init_oarg]) in
   let def = {
       loc = loc;
       pointer = pred.pointer_iarg; 
@@ -220,10 +218,7 @@ let region =
     LRT.Constraint (t_ (IT.good_pointer pointer_t char_ct),
     LRT.I))))
   in
-  let clause = 
-    PackingFT.of_lrt lrt 
-      (PackingFT.I [("value",v_t); ("init", init_t)])
-  in
+  let clause = AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]) in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
@@ -281,7 +276,7 @@ let part_zero_region =
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t); (up_to_s, IT.bt up_to_t)];
       oargs = [];
-      clauses = [(loc, PackingFT.of_lrt lrt (PackingFT.I []))]; 
+      clauses = [(loc, AT.of_lrt lrt (AT.I []))]; 
     } 
   in
   (id, predicate)
@@ -310,7 +305,7 @@ let zero_region =
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)];
       oargs = [];
-      clauses = [(loc, PackingFT.of_lrt lrt (PackingFT.I []))]; 
+      clauses = [(loc, AT.of_lrt lrt (AT.I []))]; 
     } 
   in
   (id, predicate)
@@ -350,7 +345,7 @@ let early =
       pointer = start_s;
       iargs = [(end_s, IT.bt end_t)]; 
       oargs = []; 
-      clauses = [(loc, PackingFT.of_lrt lrt (PackingFT.I []))]; 
+      clauses = [(loc, AT.of_lrt lrt (AT.I []))]; 
     } 
   in
   (id, predicate)
@@ -552,12 +547,12 @@ let page_alloc_predicates struct_decls =
     in
 
     let clause = 
-      PackingFT.of_lrt (
+      AT.of_lrt (
         LRT.Logical ((page_s, IT.bt page_t),
         LRT.Resource (resource, 
         LRT.mConstraints wellformedness
         LRT.I)))
-        (PackingFT.I [("page", page_t)])
+        (AT.I [("page", page_t)])
     in
 
     let predicate = 
@@ -796,9 +791,9 @@ let page_alloc_predicates struct_decls =
             ("vmemmap", IT.bt vmemmap_t);
           ];
         clauses = 
-          [(loc, PackingFT.of_lrt lrt 
-                   (PackingFT.I [("pool", pool_t);
-                                 ("vmemmap", vmemmap_t)]));]; 
+          [(loc, AT.of_lrt lrt 
+                   (AT.I [("pool", pool_t);
+                          ("vmemmap", vmemmap_t)]));]; 
       } 
     in
     (id, predicate)
