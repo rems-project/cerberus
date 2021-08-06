@@ -1324,6 +1324,10 @@ let register_global_object_definition2 loc sym link gdef =
               (* TODO: this function is not correct for desugaring *)
               match AilTypesAux.make_composite prev_ty ty with
                 | Nothing ->
+                    let () = Debug.print_debug 0 [] (fun () ->
+                      "  prev_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers prev_ty ^ "\n" ^
+                      "  ty:      " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty
+                    ) in
                     error "[register_global_object_definition2] make_composite failed"
                 | Just ty' ->
                     do_update (Tentative ty')
@@ -1417,10 +1421,14 @@ val register_function_declaration:
 let register_function_declaration loc attrs sym is_proto decl =
   (* DEBUG *)
   let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
-    let params' = Maybe.maybe [] id params_opt in
-    let fun_ty = Ctype.Ctype [Annot.Aloc loc] (Ctype.Function is_proto (ret_qs, ret_ty) params' isVariadic) in
+    let fun_ty = match params_opt with
+      | Nothing ->
+        Ctype.Ctype [Annot.Aloc loc] (Ctype.FunctionNoParams is_proto (ret_qs, ret_ty))
+      | Just params ->
+          Ctype.Ctype [Annot.Aloc loc] (Ctype.Function is_proto (ret_qs, ret_ty) params isVariadic)
+    end in
     Pp.stringFromAil_ctype Ctype.no_qualifiers fun_ty ^
-    (if Maybe.isNothing params_opt then " NO_PARAMS" else "")
+    (if Maybe.isNothing params_opt && isVariadic then " WARNING: isVariadic when NOPARAMS" else "")
   in
 (*
     Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
@@ -1433,67 +1441,42 @@ let register_function_declaration loc attrs sym is_proto decl =
     Map.lookup sym st.function_declarations
   ) >>= function
     | Just (prev_has_proto, prev_loc, prev_attrs, prev_decl) ->
-(* KKK
-        let () = Debug.print_debug 1 [] (fun () ->
-          "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
-        ) in
-*)
-(*
-        let (prev_ret_qs_ty, prev_params, prev_is_variadic, prev_is_inline, prev_is_Noreturn) = prev_decl in
-        let (new_ret_qs_ty, new_params, new_is_variadic, new_is_inline, new_is_Noreturn) = decl in
-        
-        let prev_fun_ty = Ctype.Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
-        let new_fun_ty  = Ctype.Function is_proto new_ret_qs_ty new_params new_is_variadic in
-        
-        let () = Debug.print_debug 1 [] (fun () ->
-          "PREVIOUS qs,ty ==> " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers prev_fun_ty
-        ) in
-        let () = Debug.print_debug 1 [] (fun () ->
-          "NEW qs,ty ==> " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers new_fun_ty
-        ) in
-        
-        let () = match AilTypesAux.make_composite prev_fun_ty new_fun_ty with
-          | Just compo_ty ->
-              Debug.print_debug 1 [] (fun () -> "make_composite WORKED: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers compo_ty)
+        match make_composite_fdecl prev_decl decl with
           | Nothing ->
-              Debug.print_debug 1 [] (fun () -> "make_composite FAILED")
-        end in
-*)
-
+              (* TODO: check that we are indeed only dealing with same scope redefinition here *)
+              constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
+          | Just decl' ->
+              (* NOTE: we concat the attributes from the previous declartion with the new ones *)
+              (* TODO: is it right to only use prev_has_proto? *)
+              let () = Debug.print_debug 1 [] (fun () -> "[register_function_declaration] - had prev, valid composite") in
+              State_exception.update (fun st ->
+                <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, decl') st.function_declarations |>
+              )
+        end
 (*
-        (* function () returning void *)
-        let old_ty = Ctype.Function true (Ctype.no_qualifiers, Ctype.Void) [] false in
-        (* function (pointer to function () returning void) returning void *)
-        let new_ty = Ctype.Function true (Ctype.no_qualifiers, Ctype.Void) [(Ctype.no_qualifiers, old_ty, false)] false in
-        
-*)
-(*
-        
-        let prev_fun_type = Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
-        let new_fun_type  = Function new_has_proto new_ret_qs_ty new_params new_is_variadic in
-
-Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1
-
-AilTypesAux.make_composite
-
-
-
-  (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
-
-
-((Ctype.qualifiers * Ctype.ctype) * (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool)
-*)
-
         if decl <> prev_decl then
-(*          undef loc Undefined.UB015_incompatible_redeclaration *)
-          (* TODO: check that we are indeed only dealing with same scope redefinition here *)
-          constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
+          let () = Debug.print_debug 0 [] (fun () ->
+            "decl: " ^ string_of_decl decl ^ "\n" ^
+            "prev_decl: " ^ string_of_decl prev_decl
+          ) in
+          match make_composite_fdecl prev_decl decl with
+            | Nothing ->
+                (* TODO: check that we are indeed only dealing with same scope redefinition here *)
+                constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
+            | Just decl' ->
+                (* NOTE: we concat the attributes from the previous declartion with the new ones *)
+                (* TODO: is it right to only use prev_has_proto? *)
+                State_exception.update (fun st ->
+                  <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, decl') st.function_declarations |>
+                )
+          end
         else
           let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
           (* NOTE: we concat the attributes from the previous declartion with the new ones *)
           State_exception.update (fun st ->
             <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, prev_decl) st.function_declarations |>
           )
+*)
     | Nothing ->
         State_exception.update (fun st ->
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1517,6 +1500,14 @@ let register_external_object_declaration sym ((_, loc, _, new_dur, _, new_qs, ne
     Map.lookup sym st.external_object_declarations
   ) >>= function
     | Just (_, _, _, prev_dur, _, prev_qs, prev_ty) ->
+        let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+          "has previous decl ==> with dur: " ^ string_of_storageDuration prev_dur ^
+          " qs, ty: " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^
+          " are_compatible ?= " ^
+          (if AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)
+           then "true" else "false")
+        ) in
+    
         if not (prev_dur = A.Thread --> new_dur = A.Thread) then
           constraint_violation loc Constraint.ThreadLocalShouldAppearInEveryDeclaration
         
@@ -1537,7 +1528,7 @@ let register_external_object_declaration sym ((_, loc, _, new_dur, _, new_qs, ne
           let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
           (* TODO: check that is ok to use AilTypesAux.make_composite for object types (see comment in AilTypesAux) *)
           (* TODO: what about qualifiers? *)
-          if AilTypesAux.is_array prev_ty && AilTypesAux.is_array new_ty then
+          if true (* AilTypesAux.is_array prev_ty && AilTypesAux.is_array new_ty *) then
             match AilTypesAux.make_composite prev_ty new_ty with
               | Just ty' ->
                   State_exception.update (fun st ->

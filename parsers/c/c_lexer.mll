@@ -253,7 +253,7 @@ and onelinecomment = parse
 (* We assume gcc -E syntax. **)
 and hash = parse
   | (' ' (('0' | decimal_constant) as n) " \""
-    ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n')
+    ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* ('\n' | eof))
       { (
         let n =
           try int_of_string n

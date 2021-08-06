@@ -438,7 +438,8 @@ if List.length bs < Common.sizeof cty then
 match ty with
  | Void
  | Array (_, None)
- | Function _ ->
+ | Function _
+ | FunctionNoParams _ ->
      (* ty must have a known size *)
      assert false
  | Basic (Integer ity) ->

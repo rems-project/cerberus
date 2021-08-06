@@ -161,7 +161,8 @@ let rec simplify_integer_value_base ival_ =
               assert false
           | Array (elem_ty, Some n) ->
               simplify_integer_value_base (IVop (IntMul, [IVsizeof elem_ty; IVconcrete n]))
-          | Function _ ->
+          | Function _
+          | FunctionNoParams _ ->
               (* Ail type error *)
               assert false
           | Pointer (_, ref_ty) ->
@@ -235,7 +236,8 @@ let rec simplify_integer_value_base ival_ =
               end
           | Array (elem_ty, _) ->
               simplify_integer_value_base (IValignof elem_ty)
-          | Function _ ->
+          | Function _
+          | FunctionNoParams _ ->
               (* Ail type error *)
               assert false
           | Pointer (_, ref_ty) ->

@@ -80,6 +80,8 @@ let rec of_ctype (Ctype.Ctype (annots,ct_)) =
      in
      let@ ret_ct = of_ctype ret_ct in
      return (Function (has_proto, (ret_q, ret_ct), args, variadic))
+  | Ctype.FunctionNoParams _ ->
+      fail
   | Ctype.Pointer (qualifiers,ctype) -> 
      let@ t = of_ctype ctype in
      return (Pointer (qualifiers, t))

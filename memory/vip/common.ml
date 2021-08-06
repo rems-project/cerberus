@@ -29,7 +29,7 @@ let rec offsetsof tagDefs tag_sym =
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
-    | Void | Array (_, None) | Function _ ->
+    | Void | Array (_, None) | Function _ | FunctionNoParams _ ->
         Printf.fprintf stderr "Common.sizeof ==> ty: %s\n"
           (String_core_ctype.string_of_ctype cty);
         assert false
@@ -100,7 +100,8 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
     | Array (elem_ty, _) ->
         alignof ~tagDefs elem_ty
-    | Function _ ->
+    | Function _
+    | FunctionNoParams _ ->
         assert false
     | Pointer _ ->
         begin match (Ocaml_implementation.get ()).alignof_pointer with

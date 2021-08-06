@@ -160,6 +160,8 @@ val is_function: ctype -> bool
 let is_function = function
   | Ctype _ (Function _ _ _ _) ->
       true
+  | Ctype _ (FunctionNoParams _ _) ->
+      true
   | _ ->
       false
 end
@@ -242,6 +244,7 @@ let is_derived (Ctype _ ty) =
   | Struct _ -> true
   | Union _ -> true
   | Function _ _ _ _ -> true
+  | FunctionNoParams _ _ -> true
   | Pointer _ _ -> true
   | Atomic _ -> true
   | _ -> false
@@ -856,10 +859,15 @@ let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
            end
     | (Function _ (ret_qs1, ret_ty1) params1 isVariadic1, Function _ (ret_qs2, ret_ty2) params2 isVariadic2) ->
         (* STD §6.7.6.3#15 *)
-        (* TODO: when the two types do not both have a param list *)
            are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)
         && are_compatible_params params1 params2
         && isVariadic1 = isVariadic2
+    | (FunctionNoParams _ (ret_qs1, ret_ty1), FunctionNoParams _ (ret_qs2, ret_ty2)) ->
+        are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)
+    | (Function _ (ret_qs1, ret_ty1) _ isVariadic1, FunctionNoParams _ (ret_qs2, ret_ty2)) ->
+        are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2) && not isVariadic1
+    | (FunctionNoParams _ (ret_qs1, ret_ty1), Function _ (ret_qs2, ret_ty2) _ isVariadic2) ->
+        are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2) && not isVariadic2
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* STD §6.7.6.1#2 *)
         are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
@@ -884,9 +892,8 @@ and are_compatible_params_aux acc = function
       acc
   | (((qs1, ty1, _) :: params1), ((qs2, ty2, _) :: params2)) ->
       are_compatible_params_aux (
-        (* NOTE(unsure): but as far as I can tell the twos parameters can differ
-           on whether they have the register storage-class *)
-        acc && are_compatible (qs1, ty1) (qs2, ty2)
+        (* STD (§6.7.6.3#15) the unqualified versions of the parameters types are compared *)
+        acc && are_compatible (no_qualifiers, ty1) (no_qualifiers, ty2)
       ) (params1, params2)
   | _ ->
       (* the list of params must have the same length to be compatible *)
@@ -906,7 +913,7 @@ and are_compatible_params params1 params2 =
 
 
 
-val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
+(* val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
                                         list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
 let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
   match (p1, p2, p3) with
@@ -934,6 +941,9 @@ let rec ~{coq} is_composite (Ctype _ ty1) (Ctype _ ty2) (Ctype _ ty3) =
     | (Function _ (qs1, ty1) p1 _, Function _ (qs2, ty2) p2 _, Function _ (qs3, ty3) p3 _) ->
         (* TODO: return qualifiers? *)
         is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
+    | (FunctionNoParams _ (qs1, ty1), FunctionNoParams _ (qs2, ty2), FunctionNoParams _ (qs3, ty3)) ->
+        (* TODO: return qualifiers? *)
+        error "TODO: is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3"
     | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
         is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
     | _ ->
@@ -942,7 +952,7 @@ let rec ~{coq} is_composite (Ctype _ ty1) (Ctype _ ty2) (Ctype _ ty3) =
 
 val        is_composite_params: list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
 let ~{coq} is_composite_params params1 params2 params3 =
-  is_composite_params_aux is_composite params1 params2 params3
+  is_composite_params_aux is_composite params1 params2 params3 *)
 
 val make_composite_params_aux:
   (ctype -> ctype -> maybe ctype) ->
@@ -999,17 +1009,55 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
         (* TODO: like the preceding comment said, there is quite a bit of
            simplication here *)
         if isVariadic1 <> isVariadic2 then
+          (* TODO: this is redundant given the compatibility check *)
           Nothing
         else match (make_composite ret_ty1 ret_ty2, make_composite_params params1 params2) with
           | (Just ret_ty, Just params) ->
               (* TODO: check the prototype thing *)
               Just (Ctype (a1++a2) (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params isVariadic1))
           | _ ->
+              (* TODO: this is redundant given the compatibility check *)
               Nothing
         end
+    | (FunctionNoParams hasProto1 (ret_qs1, ret_ty1), FunctionNoParams hasProto2 (ret_qs2, ret_ty2)) ->
+        match make_composite ret_ty1 ret_ty2 with
+          | Just ret_ty ->
+              (* TODO: check the prototype thing *)
+              Just (Ctype (a1++a2) (FunctionNoParams (hasProto1 || hasProto2) (ret_qs1, ret_ty)))
+          | Nothing ->
+              Nothing
+        end
+    | (Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1, FunctionNoParams hasProto2 (ret_qs2, ret_ty2)) ->
+        if isVariadic1 then
+          (* TODO: this is redundant given the compatibility check *)
+          Nothing
+        else match make_composite ret_ty1 ret_ty2 with
+          | Just ret_ty ->
+              (* TODO: check the prototype thing *)
+              Just (Ctype (a1++a2) (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params1 isVariadic1))
+          | Nothing ->
+              (* TODO: this is redundant given the compatibility check *)
+              Nothing
+        end
+    | (FunctionNoParams hasProto1 (ret_qs1, ret_ty1), Function hasProto2 (ret_qs2, ret_ty2) params2 isVariadic2) ->
+        if isVariadic2 then
+          (* TODO: this is redundant given the compatibility check *)
+          Nothing
+        else match make_composite ret_ty1 ret_ty2 with
+          | Just ret_ty ->
+              (* TODO: check the prototype thing *)
+              Just (Ctype (a1++a2) (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params2 isVariadic2))
+          | Nothing ->
+              (* TODO: this is redundant given the compatibility check *)
+              Nothing
+        end
+    | (_, FunctionNoParams _ _) ->
+        error "AilTypesAux.make_composite ==> FunctionNoParams (right)"
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
         Maybe.map (fun ref_ty -> Ctype (a1++a2) (Pointer ref_qs1 ref_ty)) (make_composite ref_ty1 ref_ty2)
+    | (Atomic atom_ty1, Atomic atom_ty2) ->
+        Maybe.map (fun atom_ty -> Ctype (a1++a2) (Atomic atom_ty)) (make_composite atom_ty1 atom_ty2)
     | (Struct tag1, Struct tag2) ->
         if tag1 = tag2 then
           Just cty1
@@ -1045,6 +1093,8 @@ let function_coercion (Ctype loc ty) =
 Ctype loc $ match ty with
   | Function hasProto ret_qs_ty params isVariadic ->
       Pointer no_qualifiers (Ctype [] (Function hasProto ret_qs_ty params isVariadic))
+  | FunctionNoParams _ _ ->
+      error "AilTypesAux.function_coercion ==> FunctionNoParams"
   | ty ->
       ty
 end
@@ -1261,6 +1311,8 @@ match ty with
        "(unsure) AilTypesAux.Function, qualifiers"
      ) in
      (no_qualifiers, Ctype a (Pointer qs (Ctype [] (Function hasProto ret_qs_ty params isVariadic))))
+ | FunctionNoParams _ _ ->
+     error "AilTypesAux.adjust ==> FunctionNoParams"
  | ty ->
      (qs, Ctype a ty)
 end
@@ -1317,6 +1369,8 @@ let rec has_pointer_at_leafs (Ctype _ ty) =
     | Array elem_ty _ ->
         has_pointer_at_leafs elem_ty
     | Function _ _ _ _ ->
+        false
+    | FunctionNoParams _ _ ->
         false
     | Pointer _ _ ->
         true

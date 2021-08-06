@@ -63,10 +63,14 @@ function create_testsuite {
   JOUTPUT=""
 }
 
+# Use the provided path to cerberus, otherwise default to the driver backend build
+# CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
+CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+
 # Running TinyCC tests
 for file in tcc/*.c
 do
-  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -D__LP64__ -I../include/c/libc -I..include/c/posix" --exec > tmp/result 2> tmp/stderr
+  $CERB $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -D__LP64__ -I../include/c/libc -I..include/c/posix" --exec > tmp/result 2> tmp/stderr
   cmp --silent tmp/result ${file%.c}.expect
   report $file $?
 done

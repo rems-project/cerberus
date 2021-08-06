@@ -89,6 +89,16 @@ let rec wf_type sigm (Ctype _ ty) =
       ) in
       wf_lvalue_aux ret_qs ret_ty >>
       wf_parameters params
+  | FunctionNoParams _ (ret_qs, ret_ty) ->
+      guard (Loc.locOf ret_ty) (TError_ConstraintViolation Constraint.IllegalReturnTypeFunctionDeclarator) (
+        not (is_array ret_ty || is_function ret_ty)
+      ) >>
+      wf_type ret_ty >>
+      (* TODO *)
+      let () = Debug.warn [] (fun () ->
+        "(unsure) wf_type, FunctionNoParams calls ==> wf_lvalue_aux"
+      ) in
+      wf_lvalue_aux ret_qs ret_ty
   | Pointer ref_qs ref_ty ->
       wf_type ref_ty >>
       wf_lvalue_aux ref_qs ref_ty
