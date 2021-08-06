@@ -1,7 +1,7 @@
 open import Pervasives
 open import Utils Cabs
 
-import AilSyntax Ctype Annot
+import AilSyntax AilTypesAux Ctype Annot
 
 module A = AilSyntax
 
@@ -142,3 +142,75 @@ val oneAil: expression unit
 let oneAil =
   AnnotatedExpression () [] Loc.unknown
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
+
+type fun_declaration =
+  ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool)
+
+val make_composite_fdecl: fun_declaration -> fun_declaration -> maybe fun_declaration
+let make_composite_fdecl fdecl1 fdecl2 =
+  let ((ret_qs1, ret_ty1), params_opt1, is_variadic1, is_inline1, is_Noreturn1) = fdecl1 in
+  let ((ret_qs2, ret_ty2), params_opt2, is_variadic2, is_inline2, is_Noreturn2) = fdecl2 in
+  if not (AilTypesAux.are_compatible (ret_qs1, ret_ty1) (ret_qs1, ret_ty2)) then
+    Nothing
+  else if is_variadic1 <> is_variadic2 then
+    Nothing
+  else match AilTypesAux.make_composite ret_ty1 ret_ty2 with
+    | Nothing ->
+        Nothing
+    | Just ret_ty' ->
+        let mk_composite z =
+          (* NOTE: from the compatility check we know that ret_qs1 = ret_qs2 *)
+          Just ((ret_qs1, ret_ty'), z, is_variadic1, is_inline1 || is_inline2, is_Noreturn1 || is_Noreturn2) in
+        match (params_opt1, params_opt2) with
+          | (Just params1, Just params2) ->
+              match (AilTypesAux.make_composite_params params1 params2) with
+                | Just params ->
+                    mk_composite (Just params)
+                | _ ->
+                    Nothing
+              end
+          | (Nothing, Just params) ->
+              mk_composite (Just params)
+          | (Just params, Nothing) ->
+              mk_composite (Just params)
+          | (Nothing, Nothing) ->
+              mk_composite Nothing
+        end
+  end
+
+val export_ctype: Ctype.ctype -> Ctype.ctype
+let rec export_ctype (Ctype.Ctype annot ty_ as ty) =
+  match ty_ with
+    | Ctype.Void ->
+        ty
+    | Ctype.Basic _ ->
+        ty
+    | Ctype.Array elem_ty n_opt ->
+        Ctype.Ctype annot (Ctype.Array (export_ctype elem_ty) n_opt)
+    | Ctype.Function has_proto (ret_qs, ret_ty) params is_variadic ->
+      Ctype.Ctype annot begin
+          Ctype.Function has_proto (ret_qs, export_ctype ret_ty)
+            (List.map (fun (qs, ty, is_register) -> (qs, export_ctype ty, is_register)) params)
+            is_variadic
+        end
+    | Ctype.FunctionNoParams _ _ ->
+        error "TODO: Cabs_to_ail_aux.export_ctype ==> FunctionNoParams"
+    (* | Ctype.FunctionDesug has_proto (ret_qs, ret_ty) Nothing is_variadic ->
+        Ctype.Ctype annot begin
+          Ctype.Function has_proto (ret_qs, export_ctype ret_ty) [] is_variadic
+          end
+    | Ctype.FunctionDesug has_proto (ret_qs, ret_ty) (Just params) is_variadic ->
+      Ctype.Ctype annot begin
+        Ctype.Function has_proto (ret_qs, export_ctype ret_ty)
+            (List.map (fun (qs, ty, is_register) -> (qs, export_ctype ty, is_register)) params)
+            is_variadic
+        end *)
+    | Ctype.Pointer qs ref_ty ->
+      Ctype.Ctype annot (Ctype.Pointer qs (export_ctype ref_ty))
+    | Ctype.Atomic atom_ty ->
+      Ctype.Ctype annot (Ctype.Atomic atom_ty)
+    | Ctype.Struct _ ->
+        ty
+    | Ctype.Union _ ->
+        ty
+  end

@@ -320,7 +320,8 @@ let rec ctype_to_expr slvSt (Ctype.Ctype (_, ty)) =
       | Pointer (_, ref_ty) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 3)
             [ctype_to_expr slvSt ref_ty]
-      | Function _ ->
+      | Function _
+      | FunctionNoParams _ ->
           failwith "TODO: Smt.ctype_to_expr, Function"
       | Atomic _ ->
           failwith "TODO: Smt.ctype_to_expr, Atomic"

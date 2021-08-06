@@ -28,7 +28,12 @@ let ctype_equal ty1 ty2 =
             (no_qualifiers, Ctype ([], unqualify ret_ty)),
             List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify ty), false)) xs,
             b
-         )
+          )
+      | FunctionNoParams (p, (_, ret_ty)) ->
+          FunctionNoParams (
+            p,
+            (no_qualifiers, Ctype ([], unqualify ret_ty))
+          )
       | Array (elem_ty, n_opt) ->
           Array (Ctype ([], unqualify elem_ty), n_opt)
       | Pointer (_, ref_ty) ->
@@ -111,7 +116,7 @@ let rec offsetsof tagDefs tag_sym =
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
-    | Void | Array (_, None) | Function _ ->
+    | Void | Array (_, None) | Function _ | FunctionNoParams _ ->
         assert false
     | Basic (Integer ity) ->
         begin match (Ocaml_implementation.get ()).sizeof_ity ity with
@@ -180,7 +185,8 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
     | Array (elem_ty, _) ->
         alignof ~tagDefs elem_ty
-    | Function _ ->
+    | Function _
+    | FunctionNoParams _ ->
         assert false
     | Pointer _ ->
         begin match (Ocaml_implementation.get ()).alignof_pointer with
@@ -848,7 +854,8 @@ module Concrete : Memory = struct
     match ty with
       | Void
       | Array (_, None)
-      | Function _ ->
+      | Function _
+      | FunctionNoParams _ ->
           (* ty must have a known size *)
           assert false
       | Basic (Integer ity) ->
@@ -1177,7 +1184,8 @@ module Concrete : Memory = struct
     let rec aux addr alloc = function
       | None
       | Some (Ctype (_, Void))
-      | Some (Ctype (_, Function _)) ->
+      | Some (Ctype (_, Function _))
+      | Some (Ctype (_, FunctionNoParams _)) ->
           None
       | Some (Ctype (_, Basic _))
       | Some (Ctype (_, Union _))

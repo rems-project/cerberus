@@ -267,6 +267,9 @@ let rec symbolify_ctype (Ctype (annots, ty)) =
       symbolify_ctype ret_ty >>= fun ret_ty' ->
       Eff.mapM (fun (qs, ty, _) -> symbolify_ctype ty >>= fun ty' -> Eff.return (qs, ty', false)) params >>= fun params' ->
       Eff.return (Function (hasProto, (ret_qs, ret_ty'), params', isVariadic))
+  | FunctionNoParams (hasProto, (ret_qs, ret_ty)) ->
+      symbolify_ctype ret_ty >>= fun ret_ty' ->
+      Eff.return (FunctionNoParams (hasProto, (ret_qs, ret_ty')))
   | Pointer (qs, ty) ->
       symbolify_ctype ty >>= fun ty' ->
       Eff.return (Pointer (qs, ty'))

@@ -52,6 +52,14 @@ let rec pp_ctype_human_aux qs (Ctype (_, ty)) =
           ) params
         ) ^^^
         !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
+    | FunctionNoParams (has_proto, (ret_qs, ret_ty)) ->
+        (* TODO: warn if [qs] is not empty, this is an invariant violation *)
+        if not (AilTypesAux.is_unqualified qs) then
+          print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
+        
+        !^ "function (NO PARAMS)" ^^^
+        (if has_proto then !^ "with proto " else P.empty) ^^
+        !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
     | Pointer (ref_qs, ref_ty) ->
         prefix_pp_qs ^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
     | Atomic atom_ty ->

@@ -57,28 +57,31 @@ type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
 |>
 
 type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
- | Void
- | Basic of basicType
-   (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
-   (* the qualifiers are that of the element type (§6.7.3#9) *)
-   (* STD §6.2.5#20, bullet 1 *)
- | Array of ctype * (maybe integer)
-   (* NOTE: the qualifiers associated to a ctype in the
-            list of parameters is that of the parameter lvalue. For example if
-            we have a parameter with type "restrict pointer to a const char",
-            the qualifiers in the tuple will be:
-              {no_qualifiers with restrict=true} *)
-   (* STD §6.2.5#20, bullet 4 *)
- | Function of (* has_proto *)bool * (qualifiers * ctype)
-             * list (qualifiers * ctype * (* is_register *)bool)
-             * (* is_variadic *)bool
-   (* STD §6.2.5#20, bullet 5 *)
-   (* NOTE: the qualifiers are that of the referenced type *)
- | Pointer of qualifiers * ctype
-   (* STD §6.2.5#20, bullet 6 *)
- | Atomic of ctype
- | Struct of Symbol.sym
- | Union of Symbol.sym
+  | Void
+  | Basic of basicType
+    (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
+    (* the qualifiers are that of the element type (§6.7.3#9) *)
+    (* STD §6.2.5#20, bullet 1 *)
+  | Array of ctype * (maybe integer)
+    (* NOTE: the qualifiers associated to a ctype in the
+              list of parameters is that of the parameter lvalue. For example if
+              we have a parameter with type "restrict pointer to a const char",
+              the qualifiers in the tuple will be:
+                {no_qualifiers with restrict=true} *)
+    (* STD §6.2.5#20, bullet 4 *)
+  | Function of (* has_proto *)bool * (qualifiers * ctype)
+              * list (qualifiers * ctype * (* is_register *)bool)
+              * (* is_variadic *)bool
+    (* this version only exists during desugaring (for function declarations) *)
+  | FunctionNoParams of (* has_proto *)bool * (qualifiers * ctype)
+
+    (* STD §6.2.5#20, bullet 5 *)
+    (* NOTE: the qualifiers are that of the referenced type *)
+  | Pointer of qualifiers * ctype
+    (* STD §6.2.5#20, bullet 6 *)
+  | Atomic of ctype
+  | Struct of Symbol.sym
+  | Union of Symbol.sym
 and ctype =
   Ctype of list Annot.annot * ctype_
 
@@ -233,14 +236,16 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         2
     | Function _ _ _ _ ->
         3
-    | Pointer _ _ ->
+    | FunctionNoParams _ _ ->
         4
-    | Atomic _ ->
+    | Pointer _ _ ->
         5
-    | Struct _ ->
+    | Atomic _ ->
         6
-    | Union _ ->
+    | Struct _ ->
         7
+    | Union _ ->
+        8
   end in
   let paramsEqual (qs1, ty1, b1) (qs2, ty2, b2) =
     qs1 = qs2 && ctypeEqual ty1 ty2 && b1 = b2 in
@@ -254,6 +259,10 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         has_proto1 = has_proto2 &&
         qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2 &&
         List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2
+    | (FunctionNoParams has_proto1 (qs1, ty1),
+       FunctionNoParams has_proto2 (qs2, ty2)) ->
+        has_proto1 = has_proto2 &&
+        qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2
     | (Atomic ty1, Atomic ty2) ->
         ctypeEqual ty1 ty2
     | (Struct id1, Struct id2) ->
