@@ -131,7 +131,7 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) label (pointer : IT
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
-     fail loc (Generic !^"cannot make owned void* pointer")
+     fail loc (lazy (Generic !^"cannot make owned void* pointer"))
   | _ ->
      let pointee = Sym.fresh () in
      let pointee_bt = BT.of_sct sct in
@@ -155,7 +155,7 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
-     fail loc (Generic !^"cannot make owned void* pointer")
+     fail loc (lazy (Generic !^"cannot make owned void* pointer"))
   | _ ->
      let pointee = Sym.fresh () in
      let init = Sym.fresh () in
@@ -172,7 +172,7 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
       pred ~oname pointer iargs = 
   let@ def = match List.assoc_opt String.equal pred predicates with
     | Some def -> return def
-    | None -> fail loc (Missing_predicate pred)
+    | None -> fail loc (lazy (Missing_predicate pred))
   in
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
@@ -221,7 +221,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
     | Some {it; o_sct; _} -> 
        return (it, o_sct)
     | None -> 
-       fail loc (Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply"))
+       fail loc (lazy (Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")))
   in
   let resolve it = 
     let@ (it, _) = resolve_index_term loc layouts mapping it in
@@ -312,7 +312,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
      let ppf () = Ast.Terms.pp false term in
      let@ tag = match IT.bt st with
        | Struct tag -> return tag
-       | _ -> fail loc (Generic (ppf () ^^^ !^"is not a struct"))
+       | _ -> fail loc (lazy (Generic (ppf () ^^^ !^"is not a struct")))
      in
      let layout = layouts tag in
      let decl_members = Memory.member_types layout in
@@ -324,7 +324,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
             !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
               ppf () ^^^ !^"does not have member" ^^^ Id.pp member
           in
-          fail loc (Generic err)
+          fail loc (lazy (Generic err))
      in
      return (IT (Struct_op (StructMember (st, member)), BT.of_sct sct), Some sct)
   | IntegerToPointerCast t ->
@@ -342,7 +342,7 @@ let rec resolve_index_term loc layouts mapping (term: Ast.term)
        | BT.Array (_, bt) -> return bt
        | _ -> 
           let ppf () = Ast.Terms.pp false t1 in
-          fail loc (Generic (ppf () ^^^ !^"is not an array"))
+          fail loc (lazy (Generic (ppf () ^^^ !^"is not an array")))
      in
      return (IT (Array_op (App (it1, it2)), result_bt), None)
      
@@ -360,25 +360,27 @@ let apply_ownership_spec layouts predicates label mapping (loc, {predicate; argu
   | "Owned", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts mapping path in
      begin match sct with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path)))
+     | None -> 
+        fail loc (lazy (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))))
      | Some Sctype (_, Pointer (_, sct2)) ->
         make_owned loc layouts label it path sct2
      | Some _ ->
-        fail loc (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer"))       
+        fail loc (lazy (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")))
      end
   | "Owned", _ ->
-     fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
+     fail loc (lazy (Generic !^"Owned predicate takes 1 argument, which has to be a path"))
   | "Block", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts mapping path in
      begin match sct with
-     | None -> fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path)))
+     | None -> 
+        fail loc (lazy (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))))
      | Some (Sctype (_, Pointer (_, sct2))) -> 
         make_block loc layouts it path sct2
      | Some _ ->
-        fail loc (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer"))       
+        fail loc (lazy (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")))
      end
   | "Block", _ ->
-     fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
+     fail loc (lazy (Generic !^"Block predicate takes 1 argument, which has to be a path"))
   | _, pointer :: arguments ->
      let@ (pointer_resolved, _) = resolve_index_term loc layouts mapping pointer in
      let@ iargs_resolved = 
@@ -390,7 +392,7 @@ let apply_ownership_spec layouts predicates label mapping (loc, {predicate; argu
      let@ result = make_pred loc predicates ~oname predicate pointer_resolved iargs_resolved in
      return result
   | pred, _ ->
-     fail loc (Generic !^("predicates take at least one (pointer) argument"))
+     fail loc (lazy (Generic !^("predicates take at least one (pointer) argument")))
 
 
 

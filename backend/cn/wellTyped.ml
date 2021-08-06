@@ -21,7 +21,7 @@ module Make
 
   let check_bound loc local kind s = 
     if L.bound s kind local then return ()
-    else fail loc (TE.Unbound_name (Sym s))
+    else fail loc (lazy (TE.Unbound_name (Sym s)))
 
 
   let ensure_integer_or_real_type loc local context it bt = 
@@ -34,11 +34,14 @@ module Make
     | _ -> 
        let (context, it) = Explain.index_terms local (context, it) in
        let err = 
-         !^"Illtyped index term" ^^^ context ^^ dot ^^^
-           !^"Expected" ^^^ it ^^^ !^"to have integer or real type" ^^^ 
-             !^"but has type" ^^^ BT.pp bt
+         lazy begin 
+             Generic 
+               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                  !^"Expected" ^^^ it ^^^ !^"to have integer or real type" ^^^ 
+                    !^"but has type" ^^^ BT.pp bt)
+           end
        in
-       fail loc (Generic err)
+       fail loc err
 
   let ensure_set_type loc local context it bt = 
     let open BT in
@@ -47,11 +50,14 @@ module Make
     | _ -> 
        let (context, it) = Explain.index_terms local (context, it) in
        let err = 
-         !^"Illtyped index term" ^^^ context ^^ dot ^^^
-           !^"Expected" ^^^ it ^^^ !^"to have set type" ^^ comma ^^^
-             !^"but has type" ^^^ BT.pp bt
+         lazy begin
+             Generic
+               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                  !^"Expected" ^^^ it ^^^ !^"to have set type" ^^ comma ^^^
+                    !^"but has type" ^^^ BT.pp bt)
+           end
        in
-       fail loc (Generic err)
+       fail loc err
 
   let ensure_list_type loc local context it bt = 
     let open BT in
@@ -60,11 +66,14 @@ module Make
     | _ -> 
        let (context, it) = Explain.index_terms local (context, it) in
        let err = 
-         !^"Illtyped index term" ^^^ context ^^ dot ^^^
-           !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
-             !^"but has type" ^^^ BT.pp bt
+         lazy begin
+             Generic (
+                 !^"Illtyped index term" ^^^ context ^^ dot ^^^
+                   !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
+                     !^"but has type" ^^^ BT.pp bt)
+           end
        in
-       fail loc (Generic err)
+       fail loc err
 
   let ensure_array_type loc local context it bt = 
     let open BT in
@@ -73,11 +82,14 @@ module Make
     | _ -> 
        let (context, it) = Explain.index_terms local (context, it) in
        let err = 
-         !^"Illtyped index term" ^^^ context ^^ dot ^^^
-           !^"Expected" ^^^ it ^^^ !^"to have array type" ^^ comma ^^^
-             !^"but has type" ^^^ BT.pp bt
+         lazy begin
+             Generic 
+               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                  !^"Expected" ^^^ it ^^^ !^"to have array type" ^^ comma ^^^
+                    !^"but has type" ^^^ BT.pp bt)
+           end
        in
-       fail loc (Generic err)
+       fail loc err
 
   let ensure_option_type loc local context it bt = 
     let open BT in
@@ -86,11 +98,14 @@ module Make
     | _ -> 
        let (context, it) = Explain.index_terms local (context, it) in
        let err = 
-         !^"Illtyped index term" ^^^ context ^^ dot ^^^
-           !^"Expected" ^^^ it ^^^ !^"to have option type" ^^ comma ^^^
-             !^"but has type" ^^^ BT.pp bt
+         lazy begin
+             Generic 
+               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                  !^"Expected" ^^^ it ^^^ !^"to have option type" ^^ comma ^^^
+                    !^"but has type" ^^^ BT.pp bt)
+           end
        in
-       fail loc (Generic err)
+       fail loc err
   
 
   module WIT = struct
@@ -108,7 +123,7 @@ module Make
       let get_struct_decl tag = 
         match SymMap.find_opt tag G.global.struct_decls with
         | Some decl -> return decl
-        | None -> fail loc (Missing_struct tag)
+        | None -> fail loc (lazy (Missing_struct tag))
       in
 
       let get_member_type decl_members member it =
@@ -117,10 +132,13 @@ module Make
         | None -> 
            let (context, it) = Explain.index_terms local (context, it) in
            let err = 
-             !^"Illtyped index term" ^^^ context ^^ dot ^^^
-               it ^^^ !^"does not have member" ^^^ Id.pp member
+             lazy begin
+                 Generic
+                   (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                      it ^^^ !^"does not have member" ^^^ Id.pp member)
+               end
            in
-           fail loc (Generic err)
+           fail loc err
       in
       
 
@@ -221,20 +239,26 @@ module Make
                   | None -> 
                      let (context, t') = Explain.index_terms local (context, t') in
                      let err = 
-                       !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                         !^"Expected" ^^^ t' ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
-                           !^"components, but has type" ^^^ BT.pp (Tuple bts)
+                       lazy begin
+                           Generic
+                             (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                                !^"Expected" ^^^ t' ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
+                                  !^"components, but has type" ^^^ BT.pp (Tuple bts))
+                         end
                      in
-                     fail loc (Generic err)
+                     fail loc err
                   end
                | _ -> 
                   let (context, t') = Explain.index_terms local (context, t') in
                   let err = 
-                    !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                      !^"Expected" ^^^ t' ^^^ !^"to have tuple type, but has type" ^^^
-                        BT.pp tuple_bt
+                    lazy begin
+                        Generic
+                          (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                             !^"Expected" ^^^ t' ^^^ !^"to have tuple type, but has type" ^^^
+                               BT.pp tuple_bt)
+                        end
                   in
-                  fail loc (Generic err)
+                  fail loc err
              in
              return (item_bt, NthTuple (n, t'))
         in
@@ -247,7 +271,7 @@ module Make
                let has = List.length members in
                let expect = List.length decl_members in
                if has = expect then return ()
-               else fail loc (Number_members {has; expect})
+               else fail loc (lazy (Number_members {has; expect}))
              in
              let@ members = 
                ListM.mapM (fun (member,t) ->
@@ -264,11 +288,13 @@ module Make
                | _ -> 
                   let (context, t) = Explain.index_terms local (context, t) in
                   let err = 
-                    !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                      !^"Expected" ^^^ t ^^^ !^"to have struct type" ^^^ 
-                        !^"but has type" ^^^ BT.pp bt
+                    lazy begin
+                        Generic (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                                   !^"Expected" ^^^ t ^^^ !^"to have struct type" ^^^ 
+                                     !^"but has type" ^^^ BT.pp bt)
+                      end
                   in
-                  fail loc (Generic err)
+                  fail loc err
              in
              let@ layout = get_struct_decl tag in
              let decl_members = Memory.member_types layout in
@@ -333,13 +359,13 @@ module Make
 
         let list_op local = function
           | Nil -> 
-             fail loc (Polymorphic_it context)
+             fail loc (lazy (Polymorphic_it context))
           | Cons (t1,t2) ->
              let@ (item_bt, t1) = infer loc local t1 in
              let@ t2 = check loc local (List item_bt) t2 in
              return (BT.List item_bt, Cons (t1, t2))
           | List [] ->
-             fail loc (Polymorphic_it context)
+             fail loc (lazy (Polymorphic_it context))
           | List (t :: ts) ->
              let@ (bt, t) = infer loc local t in
              let@ ts = ListM.mapM (check loc local bt) ts in
@@ -465,8 +491,13 @@ module Make
            if LS.equal ls ls' then
              return it
            else
-             let (context, it) = Explain.index_terms local (context, it) in
-             fail loc (Illtyped_it {context; it; has = ls'; expected = ls})
+             let err =
+               lazy begin
+                   let (context, it) = Explain.index_terms local (context, it) in
+                   Illtyped_it {context; it; has = ls'; expected = ls}
+                 end
+             in
+             fail loc  err
 
       and infer_list_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
         fun loc local it ->
@@ -521,15 +552,15 @@ module Make
       let get_predicate_def name = 
         match Global.get_predicate_def G.global name, name with
         | Some def, _ -> return def
-        | None, Ctype ct -> fail loc (Missing_ctype_predicate ct)
-        | None, Id id -> fail loc (Missing_predicate id)
+        | None, Ctype ct -> fail loc (lazy (Missing_ctype_predicate ct))
+        | None, Id id -> fail loc (lazy (Missing_predicate id))
       in
       
       let ensure_same_argument_number input_output has ~expect =
         if has = expect then return () else 
           match input_output with
-          | `Input -> fail loc (Number_input_arguments {has; expect})
-          | `Output -> fail loc (Number_input_arguments {has; expect})
+          | `Input -> fail loc (lazy (Number_input_arguments {has; expect}))
+          | `Output -> fail loc (lazy (Number_input_arguments {has; expect}))
       in
 
       function
@@ -597,7 +628,7 @@ module Make
       | true -> return ()
       | false ->
          let bad = List.hd (SymSet.elements undetermined) in
-         fail loc (Unconstrained_logical_variable bad)
+         fail loc (lazy (Unconstrained_logical_variable bad))
     in
     let@ fixed = 
       ListM.fold_leftM (fun fixed output ->
@@ -614,7 +645,7 @@ module Make
          (* otherwise, fail *)
          | false, _ ->
             let bad = List.hd (SymSet.elements undetermined) in
-            fail loc (Logical_variable_not_good_for_unification bad)
+            fail loc (lazy (Logical_variable_not_good_for_unification bad))
         ) SymSet.empty (RE.outputs resource)
     in
     return fixed
@@ -678,7 +709,7 @@ module Make
       | I ->
          match SymSet.elements undetermined with
          | [] -> return ()
-         | s :: _ ->  fail loc (Unconstrained_logical_variable s)
+         | s :: _ ->  fail loc (lazy (Unconstrained_logical_variable s))
       in
       aux determined SymSet.empty lrt
 
@@ -739,8 +770,8 @@ module Make
         | (name, bt) :: name_bts, (name', it) :: assignment when String.equal name name' ->
            let@ () = WIT.welltyped loc local bt it in
            aux name_bts assignment
-        | (name, _) :: _, _ -> fail loc (Generic !^("missing output argument " ^ name))
-        | _, (name, _) :: _ -> fail loc (Generic !^("surplus output argument " ^ name))
+        | (name, _) :: _, _ -> fail loc (lazy (Generic !^("missing output argument " ^ name)))
+        | _, (name, _) :: _ -> fail loc (lazy (Generic !^("surplus output argument " ^ name)))
       in
       aux name_bts assignment
     let wellpolarised _ _ _ = return ()
@@ -812,7 +843,7 @@ module Make
       | AT.I rt ->
          match SymSet.elements undetermined with
          | [] -> WI.wellpolarised loc determined rt
-         | s :: _ ->  fail loc (Unconstrained_logical_variable s)
+         | s :: _ ->  fail loc (lazy (Unconstrained_logical_variable s))
       in
       aux determined SymSet.empty ft
 
@@ -849,7 +880,7 @@ module Make
           let lrt, _ = AT.logical_arguments_and_return clause in
           let local = L.bind_logical local lrt  in
           if S.provably_inconsistent (L.all_solver_constraints local) 
-          then fail loc (Generic !^"this clause makes inconsistent assumptions")
+          then fail loc (lazy (Generic !^"this clause makes inconsistent assumptions"))
           else return ()
         ) pd.clauses
   end

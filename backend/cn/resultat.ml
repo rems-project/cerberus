@@ -1,17 +1,17 @@
-include Result
+(* include Result *)
 module Loc = Locations
+
+type ('a, 'e) t = 
+  ('a, Locations.loc * Tools.stacktrace option * 'e Lazy.t) Result.t
+
+type ('a, 'e) m = ('a, 'e) t
 
 
 let return (a: 'a) : ('a,'e) t = 
   Ok a
 
-let error (e: 'e) : ('a,'e) t = 
-  Error e
-
-type 'e error = Locations.loc * Tools.stacktrace option * 'e
-
-let fail (loc: Locations.loc) (e: 'e) : ('a, 'e error) t = 
-  error (loc, Tools.do_stack_trace (),  e)
+let fail (loc: Locations.loc) (e: 'e Lazy.t) : ('a, 'e) t = 
+  Error (loc, Tools.do_stack_trace (),  e)
 
 let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
   match m with
@@ -30,13 +30,16 @@ let unsupported (loc : Loc.t) (err : Pp.document) : 'a =
 
 
 
-type ('a,'e) m = ('a, 'e error) Result.t
-
-
-let msum (m1 : ('a,'e) t) (m2 : (('a,'e) t) Lazy.t) : ('a,'e) t = 
-  match m1 with
-  | Ok a -> Ok a
-  | Error _ -> Lazy.force m2
+let rec attempt (fs : ((('a, 'e) t) Lazy.t) List1.t) : ('a,'e) t = 
+  let (hd, tl) = List1.dest fs in
+  let hd_run = Lazy.force hd in
+  match hd_run, tl with
+  | Ok a, _ -> 
+     Ok a
+  | Error _, hd' :: tl' -> 
+     attempt (List1.make (hd', tl'))
+  | Error err, _ -> 
+     Error err
 
 
 let assoc_err loc equality entry list err =

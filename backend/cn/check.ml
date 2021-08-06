@@ -80,7 +80,7 @@ module Make
   let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit, type_error) m =
     if LS.equal has expect 
     then return () 
-    else fail loc (Mismatch {has; expect})
+    else fail loc (lazy (Mismatch {has; expect}))
 
   let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_error) m =
     ensure_logical_sort loc ~expect has
@@ -88,18 +88,18 @@ module Make
 
   let check_computational_bound loc s local = 
     if L.bound s KComputational local then return ()
-    else fail loc (Unbound_name (Sym s))
+    else fail loc (lazy (Unbound_name (Sym s)))
 
   let get_struct_decl loc tag = 
     let open Global in
     match SymMap.find_opt tag G.global.struct_decls with
       | Some decl -> return decl
-      | None -> fail loc (Missing_struct tag)
+      | None -> fail loc (lazy (Missing_struct tag))
 
   let get_member_type loc tag member layout = 
     match List.assoc_opt Id.equal member (Memory.member_types layout) with
     | Some membertyp -> return membertyp
-    | None -> fail loc (Missing_member (tag, member))
+    | None -> fail loc (lazy (Missing_member (tag, member)))
 
 
 
@@ -119,7 +119,7 @@ module Make
          let local' = add_l lsym has_bt local' in
          begin match o_s with
          | Some s when L.bound s KComputational local' -> 
-            fail loc (Name_bound_twice (Sym s))
+            fail loc (lazy (Name_bound_twice (Sym s)))
          | Some s -> 
             let local' = add_a s (has_bt, lsym) local' in
             return (local', sym_ (lsym, has_bt))
@@ -131,14 +131,14 @@ module Make
          | M_Cnil item_bt, [] ->
             return (local', IT.nil_ ~item_bt)
          | M_Cnil item_bt, _ ->
-            fail loc (Number_arguments {has = List.length pats; expect = 0})
+            fail loc (lazy (Number_arguments {has = List.length pats; expect = 0}))
          | M_Ccons, [p1; p2] ->
             let@ (local', it1) = aux local' p1 in
             let@ (local', it2) = aux local' p2 in
             let@ () = ensure_base_type loc ~expect:(List (IT.bt it1)) (IT.bt it2) in
             return (local', cons_ (it1, it2))
          | M_Ccons, _ -> 
-            fail loc (Number_arguments {has = List.length pats; expect = 2})
+            fail loc (lazy (Number_arguments {has = List.length pats; expect = 2}))
          | M_Ctuple, pats ->
             let@ (local', its) = 
               ListM.fold_rightM (fun pat (local', its) ->
@@ -150,7 +150,7 @@ module Make
          | M_Cspecified, [pat] ->
             aux local' pat
          | M_Cspecified, _ ->
-            fail loc (Number_arguments {expect = 1; has = List.length pats})
+            fail loc (lazy (Number_arguments {expect = 1; has = List.length pats}))
          | M_Carray, _ ->
             Debug_ocaml.error "todo: array types"
     in
@@ -212,64 +212,12 @@ module Make
 
 
 
-  module Prompt = struct
-
-    type request_ui_info = { 
-        original_local : L.t;
-        loc: loc;
-        situation: situation 
-      }
-
-    type err = loc * Tools.stacktrace option * type_error Lazy.t
-
-    type 'a m = 
-      | Done : 'a -> 'a m
-      | Prompt : 'r prompt * ('r -> 'a m) -> 'a m
-
-    and 'r prompt = 
-      | R_Try : (('r m) Lazy.t) List1.t -> 'r prompt
-      | R_Error : err -> 'r prompt
-
-
-    module Operators = struct
-
-      let return a = 
-        Done a
-
-      let fail loc err = 
-        let r = R_Error (loc, Tools.do_stack_trace (),  err) in
-        Prompt (r, fun r -> Done r)
-
-      let prompt r = 
-        Prompt (r, fun reply -> Done reply)
-
-      let try_choices choices = 
-        let r = R_Try choices in
-        Prompt (r, fun reply -> Done reply)
-
-
-      let rec bind m f = 
-        match m with
-        | Done a -> f a
-        | Prompt (r, c) -> Prompt (r, fun r -> bind (c r) f)
-
-      let (let@) = bind
-
-      module ListM = struct  
-        let fold_leftM (f : 'a -> 'b -> 'c m) (a : 'a) (bs : 'b list) =
-          Stdlib.List.fold_left (fun aM b -> let@ a = aM in f a b) (return a) bs
-
-        (* maybe from Exception.lem *)
-        let fold_rightM (f : 'b -> 'a -> 'c m) (bs : 'b list) (a : 'a) =
-          Stdlib.List.fold_right (fun b aM -> let@ a = aM in f b a) bs (return a)
-
-      end
-
-    end
-
-  end
-
-
+  type request_ui_info = { 
+      original_local : L.t;
+      loc: loc;
+      situation: situation 
+    }
+  
 
 
 let make_function local (x_s, x_bt) body =
@@ -287,7 +235,6 @@ let make_function local (x_s, x_bt) body =
 
 (* requires equality on inputs *)
 let match_resources loc local error r1 r2 res =
-  let open Prompt.Operators in
   let aux (res, constrs) (c, c') = 
     match IT.unify c c' res with
     | Some res -> return (res, constrs)
@@ -377,8 +324,6 @@ let match_resources loc local error r1 r2 res =
 
 
   let resource_request_missing ui_info solver request =
-    let open Prompt in
-    let open Prompt.Operators in
     let err = 
       lazy begin 
           let (resource, state) = 
@@ -487,17 +432,15 @@ let unpack_predicate local (p : predicate) =
             ((Sym.t, Sym.t) Subst.t -> 'rt -> 'rt) ->
             ((Sym.t, IT.t) Subst.t -> 'rt -> 'rt) ->
             ('rt -> Pp.doc) ->
-            Prompt.request_ui_info ->
+            request_ui_info ->
             L.t ->
             arg list ->
             'rt AT.t ->
-            ('rt * L.t) Prompt.m
+            ('rt * L.t, type_error) m
     =
     fun rt_subst_var rt_subst_it rt_pp
         ui_info local arguments ftyp ->
 
-    let open Prompt in
-    let open Prompt.Operators in
     let open NormalisedArgumentTypes in
 
     let loc = ui_info.loc in
@@ -626,7 +569,6 @@ let unpack_predicate local (p : predicate) =
 
 
   and point_request_prompt ui_info local (requested : Resources.Requests.point) = 
-    let open Prompt.Operators in
     let needed = requested.permission in 
     let local, (needed, value, init) =
       L.map_and_fold_resources (fun re (needed, value, init) ->
@@ -676,7 +618,6 @@ let unpack_predicate local (p : predicate) =
     else resource_request_missing ui_info solver (Point requested)
 
   and qpoint_request_prompt ui_info local (requested : Resources.Requests.qpoint) = 
-    let open Prompt.Operators in
     let needed = requested.permission in
     let local, (needed, value, init) =
       L.map_and_fold_resources (fun re (needed, value, init) ->
@@ -731,7 +672,6 @@ let unpack_predicate local (p : predicate) =
       resource_request_missing ui_info solver (QPoint requested)
 
   and predicate_request_prompt ui_info local (p : Resources.Requests.predicate) = 
-    let open Prompt.Operators in
     if p.unused = false then
       let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
       let r = 
@@ -814,7 +754,7 @@ let unpack_predicate local (p : predicate) =
          in
          let choices = attempt_prompts @ [error_prompt] in
          let choices1 = List1.make (List.hd choices, List.tl choices) in
-         let@ (assignment, local) = try_choices choices1 in
+         let@ (assignment, local) = attempt choices1 in
          let r = 
            { pointer = p.pointer;
              name = p.name;
@@ -827,7 +767,6 @@ let unpack_predicate local (p : predicate) =
       end
 
   and qpredicate_request_prompt ui_info local (p : Resources.Requests.qpredicate) = 
-    let open Prompt.Operators in
     assert ([] = p.moved); (* todo? *)
     if p.unused = false then
       let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
@@ -917,8 +856,7 @@ let unpack_predicate local (p : predicate) =
          let (_, solver) = S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
          resource_request_missing ui_info solver (QPredicate p)
 
-  and resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t) Prompt.m = 
-    let open Prompt.Operators in
+  and resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t, type_error) m = 
     match request with
     | Point requested ->
        let@ point, local = point_request_prompt ui_info local requested in
@@ -934,34 +872,6 @@ let unpack_predicate local (p : predicate) =
        return (QPredicate qpredicate, local)
 
 
-  let handle_prompt : 'a. 'a Prompt.m -> ('a, type_error) m =
-    let rec aux  : 'a. 'a Prompt.m -> ('a, (loc * Tools.stacktrace option * type_error) Lazy.t) result = function
-      | Prompt.Done a -> 
-         Ok a
-      | Prompt.Prompt (r, c) ->
-         begin match r with
-         | Prompt.R_Error (loc,tr,error) -> 
-            Error (lazy (loc,tr, Lazy.force error))
-         | R_Try choices ->
-            let rec first_success list1 =
-              let (hd, tl) = List1.dest list1 in
-              let hd_run = aux (Lazy.force hd) in
-              match tl with
-              | [] -> hd_run
-              | hd' :: tl' -> msum hd_run (lazy (first_success (List1.make (hd', tl'))))
-            in
-            let@ reply = first_success choices in
-            aux (c reply)
-         end
-    in
-    fun prompt ->
-    match aux prompt with
-    | Ok a -> Ok a
-    | Error e -> Error (Lazy.force e)
-
-
-
-
 
   let calltype_ft loc local args (ftyp : AT.ft) : (RT.t * L.t, type_error) m =
     let names = 
@@ -971,50 +881,38 @@ let unpack_predicate local (p : predicate) =
         ) args
     in
     let local = add_descriptions names local in
-    let open Prompt in
     let ui_info = { loc; situation = FunctionCall; original_local = local } in
-    let prompt = spine_ft ui_info local args ftyp in
-    let@ (rt, local) = handle_prompt prompt in
-    return (rt, local)
+    spine_ft ui_info local args ftyp
 
   let calltype_lt loc local args ((ltyp : AT.lt), label_kind) : (False.t * L.t, type_error) m =
-    let open Prompt in
     let ui_info = { loc; situation = LabelCall label_kind; original_local = local } in
-    let prompt = spine_lt ui_info local args ltyp in
-    let@ (rt, local) = handle_prompt prompt in
-    return (rt, local)
+    spine_lt ui_info local args ltyp
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
      inference as the spine judgment. So implement the subtyping
      judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
   let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
     let local = add_description (arg.lname, Ast.Var {label = None; v ="return"}) local in
-    let open Prompt in
     let ui_info = { loc; situation = Subtyping; original_local = local } in
     let ft = AT.of_rt rtyp (AT.I False.False) in
-    let prompt = 
+    let@ (False.False, local) = 
       spine 
         False.subst_var False.subst_it False.pp
         ui_info local [arg] ft 
     in
-    let@ (False.False, local) = handle_prompt prompt in
     return local
 
 
 
 
   let resource_request (loc: loc) situation local (request : RER.t) : (RE.t * L.t, type_error) m = 
-    let open Prompt in
     let ui_info = { loc; situation; original_local = local } in
-    let prompt = resource_request_prompt ui_info local request in
-    handle_prompt prompt
+    resource_request_prompt ui_info local request
 
 
   let predicate_request (loc: loc) situation local (request : RER.predicate) : (RE.predicate * L.t, type_error) m = 
-    let open Prompt in
     let ui_info = { loc; situation; original_local = local } in
-    let prompt = predicate_request_prompt ui_info local request in
-    handle_prompt prompt
+    predicate_request_prompt ui_info local request
 
 
 
@@ -1059,19 +957,19 @@ let unpack_predicate local (p : predicate) =
     | M_Cspecified, [arg] ->
        return (vt_of_arg arg)
     | M_Cspecified, _ ->
-       fail loc (Number_arguments {has = List.length args; expect = 1})
+       fail loc (lazy (Number_arguments {has = List.length args; expect = 1}))
     | M_Cnil item_bt, [] -> 
        let bt = List item_bt in
        return (bt, nil_ ~item_bt)
     | M_Cnil item_bt, _ -> 
-       fail loc (Number_arguments {has = List.length args; expect=0})
+       fail loc (lazy (Number_arguments {has = List.length args; expect=0}))
     | M_Ccons, [arg1; arg2] -> 
        let bt = List arg1.bt in
        let@ () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
        let list_it = cons_ (it_of_arg arg1, it_of_arg arg2) in
        return (arg2.bt, list_it)
     | M_Ccons, _ ->
-       fail loc (Number_arguments {has = List.length args; expect = 2})
+       fail loc (lazy (Number_arguments {has = List.length args; expect = 2}))
 
 
 
@@ -1090,7 +988,7 @@ let unpack_predicate local (p : predicate) =
     let open BT in
     CF.Impl_mem.case_mem_value mem
       ( fun ct -> 
-        fail loc (Unspecified ct) )
+        fail loc (lazy (Unspecified ct)) )
       ( fun _ _ -> 
         unsupported loc !^"infer_mem_value: concurrent read case" )
       ( fun it iv -> 
@@ -1126,9 +1024,9 @@ let unpack_predicate local (p : predicate) =
       | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
          Debug_ocaml.error "mismatch in fields in infer_struct"
       | [], ((member, _) :: _) ->
-         fail loc (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing"))
+         fail loc (lazy (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")))
       | ((member,_) :: _), [] ->
-         fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
+         fail loc (lazy (Generic (!^"supplying unexpected field" ^^^ Id.pp member)))
     in
     let@ it = check member_values (Memory.member_types layout) in
     return (BT.Struct tag, IT.struct_ (tag, it))
@@ -1235,7 +1133,7 @@ let unpack_predicate local (p : predicate) =
          Debug_ocaml.error "todo: PEconstrained"
       | M_PEerror (err, asym) ->
          let@ arg = arg_of_asym local asym in
-         fail arg.loc (StaticError err)
+         fail arg.loc (lazy (StaticError err))
       | M_PEctor (ctor, asyms) ->
          let@ args = args_of_asyms local asyms in
          let@ vt = infer_constructor loc (local, G.global) ctor args in
@@ -1270,7 +1168,7 @@ let unpack_predicate local (p : predicate) =
          let@ _member_bt = get_member_type loc tag member layout in
          let@ offset = match Memory.member_offset layout member with
            | Some offset -> return offset
-           | None -> fail loc (Missing_member (tag, member))
+           | None -> fail loc (lazy (Missing_member (tag, member)))
          in
          let vt = (Loc, IT.addPointer_ (it_of_arg arg, z_ offset)) in
          return (RT.concat (rt_of_vt vt) (Resource (Predicate predicate, LRT.I)), local)
@@ -1317,7 +1215,7 @@ let unpack_predicate local (p : predicate) =
            | CF.Core.Sym sym -> 
               let@ (_, t) = match Global.get_fun_decl G.global sym with
                 | Some t -> return t
-                | None -> fail loc (Missing_function sym)
+                | None -> fail loc (lazy (Missing_function sym))
               in
               return t
          in
@@ -1329,8 +1227,13 @@ let unpack_predicate local (p : predicate) =
          if S.provable (L.all_solver_constraints local) (t_ (it_of_arg arg)) then
            return (rt_of_vt (Unit, unit_), local)
          else
-           let expl = E.undefined_behaviour local in
-           fail loc (Undefined_behaviour (undef, expl))
+           let err = 
+             lazy begin 
+                 let expl = E.undefined_behaviour local in
+                 (Undefined_behaviour (undef, expl))
+               end
+           in
+           fail loc err
       | M_PEbool_to_integer asym ->
          let@ arg = arg_of_asym local asym in
          let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
@@ -1361,12 +1264,15 @@ let unpack_predicate local (p : predicate) =
             if S.provable (L.all_solver_constraints local) (t_ (representable_ (act.ct, arg_it))) then
               return (rt_of_vt (Integer, arg_it), local)
             else
-            let (it_pp, state_pp) = 
-              E.implementation_defined_behaviour local arg_it
-            in
-            fail loc (Implementation_defined_behaviour 
-                        (it_pp ^^^ !^"outside representable range for" ^^^ 
-                           Sctypes.pp act.ct, state_pp))
+              let err = 
+                lazy begin 
+                    let (it_pp, state_pp) = E.implementation_defined_behaviour local arg_it in
+                    (Implementation_defined_behaviour 
+                       (it_pp ^^^ !^"outside representable range for" ^^^ 
+                          Sctypes.pp act.ct, state_pp))
+                  end 
+              in
+            fail loc err
          end
       | M_PEwrapI (act, asym) ->
          let@ arg = arg_of_asym local asym in
@@ -1427,8 +1333,13 @@ let unpack_predicate local (p : predicate) =
        let@ local = subtype loc local arg typ in
        return ()
     | M_PEundef (_loc, undef) ->
-       let expl = E.undefined_behaviour local in
-       fail loc (Undefined_behaviour (undef, expl))
+       let err = 
+         lazy begin
+             let expl = E.undefined_behaviour local in
+             (Undefined_behaviour (undef, expl))
+           end
+       in
+       fail loc err
 
 
   (*** impure expression inference **********************************************)
@@ -1475,8 +1386,13 @@ let unpack_predicate local (p : predicate) =
 
   let all_empty loc local = 
     let error resource solver = 
-      let (resource, state) = E.resource local (S.get_model solver) resource in
-      fail loc (Unused_resource {resource; state})
+      let err = 
+        lazy begin
+            let (resource, state) = E.resource local (S.get_model solver) resource in
+            (Unused_resource {resource; state})
+          end
+      in
+      fail loc err
     in
 
     let _ = 
@@ -1659,11 +1575,16 @@ let unpack_predicate local (p : predicate) =
                   (L.all_solver_constraints local) (t_ in_range_lc) 
               in
               if holds then return () else 
-                let (constr,state) = 
-                  E.unsatisfied_constraint local 
-                    (S.get_model solver) (t_ in_range_lc)
+                let err = 
+                  lazy begin 
+                      let (constr,state) = 
+                        E.unsatisfied_constraint local 
+                          (S.get_model solver) (t_ in_range_lc)
+                      in
+                      (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
+                    end
                 in
-                fail loc (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
+                fail loc err
             in
             let local = unpack_resources_for local (it_of_arg parg) in
             let@ (_, local) = 
@@ -1704,9 +1625,14 @@ let unpack_predicate local (p : predicate) =
             let@ () = 
               let (holds, solver) = S.provable_and_solver (L.all_solver_constraints local) (t_ init) in
               if holds then return () else
-                let (state, _) = 
-                  E.unsatisfied_constraint local (S.get_model solver) (t_ init) in
-                fail loc (Uninitialised_read {is_member = None; state})
+                let err = 
+                  lazy begin
+                      let (state, _) = 
+                        E.unsatisfied_constraint local (S.get_model solver) (t_ init) in
+                      (Uninitialised_read {is_member = None; state})
+                    end
+                in
+                fail loc err
             in
             let ret = Sym.fresh () in
             let constr = def_ ret value in
@@ -1739,7 +1665,7 @@ let unpack_predicate local (p : predicate) =
          let@ args = args_of_asyms local asyms in
          let@ (_loc, ft) = match Global.get_fun_decl G.global afsym.sym with
            | Some (loc, ft) -> return (loc, ft)
-           | None -> fail loc (Missing_function afsym.sym)
+           | None -> fail loc (lazy (Missing_function afsym.sym))
          in
          calltype_ft loc local args ft
       | M_Eproc (fname, asyms) ->
@@ -1750,7 +1676,7 @@ let unpack_predicate local (p : predicate) =
            | CF.Core.Sym sym ->
               match Global.get_fun_decl G.global sym with
               | Some (loc, ft) -> return ft
-              | None -> fail loc (Missing_function sym)
+              | None -> fail loc (lazy (Missing_function sym))
          in
          let@ args = args_of_asyms local asyms in
          calltype_ft loc local args decl_typ
@@ -1821,15 +1747,20 @@ let unpack_predicate local (p : predicate) =
               "This expression returns but is expected "^
                 "to have non-return type."
             in
-            fail loc (Generic !^err)
+            fail loc (lazy (Generic !^err))
          end
       | M_Eundef (_loc, undef) ->
-         let expl = E.undefined_behaviour local in
-         fail loc (Undefined_behaviour (undef, expl))
+         let err = 
+           lazy begin
+               let expl = E.undefined_behaviour local in
+               (Undefined_behaviour (undef, expl))
+             end
+         in
+         fail loc err
       | M_Erun (label_sym, asyms) ->
          let local = unpack_resources local in
          let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
-           | None -> fail loc (Generic (!^"undefined label" ^/^ Sym.pp label_sym))
+           | None -> fail loc (lazy (Generic (!^"undefined label" ^/^ Sym.pp label_sym)))
            | Some (lt,lkind) -> return (lt,lkind)
          in
          let@ args = args_of_asyms local asyms in
@@ -1876,12 +1807,12 @@ let unpack_predicate local (p : predicate) =
          let pure_local = add_a aname (abt,new_lname) pure_local in
          check (acc_substs@[subst]) local pure_local args ftyp'
       | ((aname, abt) :: args), (AT.Computational ((sname, sbt), ftyp)) ->
-         fail loc (Mismatch {has = abt; expect = sbt})
+         fail loc (lazy (Mismatch {has = abt; expect = sbt}))
       | [], (AT.Computational (_,_))
       | (_ :: _), (AT.I _) ->
          let expect = AT.count_computational function_typ in
          let has = List.length arguments in
-         fail loc (Number_arguments {expect; has})
+         fail loc (lazy (Number_arguments {expect; has}))
       | args, (AT.Logical ((sname, sls), ftyp)) ->
          let new_lname = Sym.fresh_same sname in
          let subst = {before = sname; after = new_lname} in
@@ -1903,9 +1834,9 @@ let unpack_predicate local (p : predicate) =
   let check_initial_environment_consistent loc info local = 
     match S.provably_inconsistent (L.all_solver_constraints local), info with
     | true, `Label -> 
-       fail loc (Generic (!^"this label makes inconsistent assumptions"))
+       fail loc (lazy (Generic (!^"this label makes inconsistent assumptions")))
     | true, `Fun -> 
-       fail loc (Generic (!^"this function makes inconsistent assumptions"))
+       fail loc (lazy (Generic (!^"this function makes inconsistent assumptions")))
     | _ -> 
        return ()
 
@@ -2060,7 +1991,7 @@ let check mu_file =
                  match piece.member_or_padding with
                  | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
                     if SymMap.mem sym2 global.struct_decls then return ()
-                    else fail Loc.unknown (Missing_struct sym2)
+                    else fail Loc.unknown (lazy (Missing_struct sym2))
                  | _ -> return ()
                ) layout
            in
@@ -2172,14 +2103,14 @@ let check mu_file =
         | M_Fun (rbt, args, body) ->
            let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
              | Some t -> return t
-             | None -> fail Loc.unknown (TypeErrors.Missing_function fsym)
+             | None -> fail Loc.unknown (lazy (Missing_function fsym))
            in
            C.check_function loc local Mapping.empty 
              (Sym.pp_string fsym) args rbt body ftyp
         | M_Proc (loc, rbt, args, body, labels, mapping) ->
            let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
              | Some t -> return t
-             | None -> fail loc (TypeErrors.Missing_function fsym)
+             | None -> fail loc (lazy (Missing_function fsym))
            in
            C.check_procedure loc' local mapping 
              fsym args rbt body ftyp labels
