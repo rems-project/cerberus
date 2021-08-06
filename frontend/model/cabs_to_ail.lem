@@ -2474,7 +2474,7 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
     | InitDecl loc decltor Nothing ->
         desugar_declarator NotFunDef decltor >>= fun ((ident_attrs, ident), mk_qs_ctype) ->
         let (qs, _ty) = mk_qs_ctype base_qs base_ty in
-        let ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
+        let ty = if isAtomic then wrap_atomic _ty else _ty in
         let mk_desug_init =
           fun () -> E.return Nothing in
         (* STD §6.9.2#2, sentence 1 *)
@@ -2503,7 +2503,7 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
         else
           desugar_declarator NotFunDef decltor >>= fun ((ident_attrs, ident), mk_qs_ctype) ->
           let (qs, _ty) = mk_qs_ctype base_qs base_ty in
-          let ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
+          let ty = if isAtomic then wrap_atomic _ty else _ty in
           (* TODO: check that we really never have parameter objects here *)
           let kind = if AilTypesAux.is_function ty then E.OK_function else E.OK_object false in
           (* TODO: I don't like the fact that we are using this function directly here *)
@@ -2558,7 +2558,7 @@ and desugar_struct_declaration struct_decl =
                member. *)
             let (qs, ty) =
               mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty in
-            E.return (ident, (Annot.combine_attributes outer_attrs attrs, qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty))
+            E.return (ident, (Annot.combine_attributes outer_attrs attrs, qs, if isAtomic then wrap_atomic ty else ty))
           ) sdecltors
     
     | Struct_assert sa_decl ->
@@ -2643,7 +2643,7 @@ and desugar_type_name (Type_name specs tquals align_specs abs_decltor_opt) =
   
   let (qs, ty) =
     mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
-  E.return (qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty)
+  E.return (qs, (if isAtomic then wrap_atomic ty else ty))
 
 
 

@@ -143,6 +143,22 @@ let oneAil =
   AnnotatedExpression () [] Loc.unknown
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
 
+
+val     wrap_atomic: Ctype.ctype -> Ctype.ctype
+let rec wrap_atomic (Ctype.Ctype annots ty_ as ty) =
+  match ty_ with
+    | Ctype.Function has_proto (ret_qs, ret_ty) params is_variadic ->
+        Ctype.Ctype annots (Ctype.Function has_proto (ret_qs, Ctype.Ctype [] (Ctype.Atomic ret_ty)) params is_variadic)
+    | Ctype.FunctionNoParams has_proto (ret_qs, ret_ty) ->
+        Ctype.Ctype annots (Ctype.FunctionNoParams has_proto (ret_qs, Ctype.Ctype [] (Ctype.Atomic ret_ty)))
+    | Ctype.Pointer ref_qs ref_ty ->
+        Ctype.Ctype annots (Ctype.Pointer ref_qs (wrap_atomic ref_ty))
+    | Ctype.Atomic _ ->
+        ty
+    | _ ->
+        Ctype.Ctype [] (Ctype.Atomic ty)
+  end
+
 type fun_declaration =
   ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool)
 
