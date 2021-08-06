@@ -185,158 +185,7 @@ module Make
      label types (which don't have a return type) *)
 
 
-  type arg = {lname : Sym.t; bt : BT.t; loc : loc}
-  type args = arg list
 
-  let arg_of_sym (loc : loc) (local : L.t) (sym : Sym.t) : (arg, type_error) m = 
-    let@ () = check_computational_bound loc sym local in
-    let (bt,lname) = get_a sym local in
-    return {lname; bt; loc}
-
-  let arg_of_asym (local : L.t) (asym : 'bty asym) : (arg, type_error) m = 
-    arg_of_sym asym.loc local asym.sym
-
-  let args_of_asyms (local : L.t) (asyms : 'bty asyms) : (args, type_error) m = 
-    ListM.mapM (arg_of_asym local) asyms
-
-
-  let pp_unis (unis : IT.t Uni.t) : Pp.document = 
-   let pp_entry (sym, Uni.{resolved}) =
-     match resolved with
-     | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp res
-     | None -> Sym.pp sym ^^^ !^"unresolved"
-   in
-   Pp.list pp_entry (SymMap.bindings unis)
-
-
-
-
-
-  type request_ui_info = { 
-      original_local : L.t;
-      loc: loc;
-      situation: situation 
-    }
-  
-
-
-let make_function local (x_s, x_bt) body =
-  let x_t = sym_ (x_s, x_bt) in
-  match body with
-  | IT (Array_op (App (_, x')), _) when IT.equal x_t x' ->
-     (body, local)
-  | _ ->
-     let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
-     let f_def = forall_ (x_s, x_bt) None (eq_ (app_ f_t x_t, body)) in
-     let local = add_l f_s (IT.bt f_t) local in
-     let local = add_c f_def local in
-     (app_ f_t x_t, local)
-
-
-(* requires equality on inputs *)
-let match_resources loc local error r1 r2 res =
-  let aux (res, constrs) (c, c') = 
-    match IT.unify c c' res with
-    | Some res -> return (res, constrs)
-    | None -> return (res, (c, c') :: constrs)
-  in
-  let auxs (res, constrs) cs cs' =
-    ListM.fold_leftM aux (res, []) (List.combine cs cs')
-  in
-  match r1, r2 with
-  | Point b, Point b' 
-       when IT.equal b.pointer b'.pointer &&
-            Z.equal b.size b'.size &&
-            IT.equal b.permission b'.permission ->
-     let@ (res, constrs) = auxs (res, []) [b.value;b.init] [b'.value; b'.init] in
-     let (result, solver) = 
-       S.provable_and_solver (L.all_solver_constraints local) (t_ (and_ (List.map eq_ constrs))) in
-     if result then return (res, local) else fail loc (error solver)
-  | QPoint b, QPoint b' 
-       when Sym.equal b.qpointer b'.qpointer &&
-            Z.equal b.size b'.size &&
-            IT.equal b.permission b'.permission ->
-     
-     let b', local = 
-       let value, local = make_function local (b.qpointer, Loc) b'.value in
-       let init, local = make_function local (b.qpointer, Loc) b'.init in
-       ({ b' with value; init }, local)
-     in
-     let@ (res,constrs) = auxs (res, []) [b.value; b.init] [b'.value; b'.init] in
-     let (result, solver) = 
-       S.provable_and_solver 
-         (L.all_solver_constraints local)
-          (forall_ (b.qpointer, BT.Loc)
-             None
-             (impl_ (gt_ (b.permission, q_ (0, 1)), 
-                     and_ (List.map eq_ constrs))))
-     in
-     if result then return (res, local) else fail loc (error solver)
-  | Predicate p, Predicate p' 
-       when 
-         predicate_name_equal p.name p'.name &&
-           IT.equal p.pointer p'.pointer &&
-             List.equal IT.equal p.iargs p'.iargs &&
-               p.unused = p'.unused ->
-     let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-     let (result, solver) =
-       S.provable_and_solver (L.all_solver_constraints local)
-         (t_ (impl_ (bool_ p'.unused, 
-                     and_ (List.map eq_ constrs))))
-     in
-     if result then return (res, local) else fail loc (error solver)
-  | QPredicate p, QPredicate p' 
-       when 
-         IT.equal p.pointer p'.pointer &&
-            IT.equal p.element_size p'.element_size &&
-            IT.equal p.istart p'.istart &&
-            IT.equal p.iend p'.iend &&
-            List.equal IT.equal p.moved p'.moved &&
-            p.unused = p'.unused &&
-            predicate_name_equal p.name p'.name &&
-            Sym.equal p.i p'.i &&
-            List.equal IT.equal p.iargs p'.iargs ->
-
-     let p', local = 
-       let (oargs, local) = 
-         List.fold_right (fun oarg (oargs, local) ->
-             let oarg, local = make_function local (p.i, Integer) oarg in
-             (oarg :: oargs, local)
-           ) p'.oargs ([], local)
-       in
-       ({ p' with oargs }, local)
-     in
-     let@ (res, constrs) = auxs (res, []) p.oargs p'.oargs in
-     let (result, solver) =
-       S.provable_and_solver (L.all_solver_constraints local)
-         (forall_ (p.i, BT.Integer)
-            None
-            (impl_ (and_ [bool_ p.unused; 
-                          is_qpredicate_instance_index p (sym_ (p.i, Integer))],
-                    and_ (List.map eq_ constrs))))
-     in
-     if result then return (res, local) else fail loc (error solver)
-  | _ -> 
-     Debug_ocaml.error "resource inference has inferred mismatched resources"
-
-
-
-
-
-  let resource_request_missing ui_info solver request =
-    let err = 
-      lazy begin 
-          let (resource, state) = 
-            E.resource_request
-              ui_info.original_local 
-              (S.get_model solver) 
-              request
-          in
-          Missing_resource {resource; used = None; state; 
-                            situation = ui_info.situation}
-        end
-    in
-    fail ui_info.loc err
 
 
 let unpack_predicate local (p : predicate) = 
@@ -427,493 +276,665 @@ let unpack_predicate local (p : predicate) =
 
 
 
-  let rec spine :
-            'rt. 
-            ((Sym.t, Sym.t) Subst.t -> 'rt -> 'rt) ->
-            ((Sym.t, IT.t) Subst.t -> 'rt -> 'rt) ->
-            ('rt -> Pp.doc) ->
-            request_ui_info ->
-            L.t ->
-            arg list ->
-            'rt AT.t ->
-            ('rt * L.t, type_error) m
-    =
-    fun rt_subst_var rt_subst_it rt_pp
-        ui_info local arguments ftyp ->
 
-    let open NormalisedArgumentTypes in
+  type arg = {lname : Sym.t; bt : BT.t; loc : loc}
+  type args = arg list
 
-    let loc = ui_info.loc in
-    let original_local = ui_info.original_local in
-    let situation = ui_info.situation in
+  let arg_of_sym (loc : loc) (local : L.t) (sym : Sym.t) : (arg, type_error) m = 
+    let@ () = check_computational_bound loc sym local in
+    let (bt,lname) = get_a sym local in
+    return {lname; bt; loc}
 
-    let ftyp = normalise ftyp in
-    let unis = SymMap.empty in
+  let arg_of_asym (local : L.t) (asym : 'bty asym) : (arg, type_error) m = 
+    arg_of_sym asym.loc local asym.sym
 
-    debug 6 (lazy (checking_situation situation));
-    debug 6 (lazy (item "local" (L.pp local)));
-    debug 6 (lazy (item "spec" (pp rt_pp ftyp)));
+  let args_of_asyms (local : L.t) (asyms : 'bty asyms) : (args, type_error) m = 
+    ListM.mapM (arg_of_asym local) asyms
+  
 
-    let@ ftyp_l = 
-      let rec check_computational args ftyp = 
-        match args, ftyp with
-        | (arg :: args), (Computational ((s, bt), ftyp))
-             when BT.equal arg.bt bt ->
-           let ftyp' = subst_var rt_subst_var {before = s; after = arg.lname} ftyp in
-           check_computational args ftyp'
-        | (arg :: _), (Computational ((_, bt), _))  ->
-           fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
-        | [], (L ftyp) -> 
-           return ftyp
-        | _ -> 
-           let expect = count_computational ftyp in
-           let has = List.length arguments in
-           fail loc (lazy (Number_arguments {expect; has}))
+
+
+  module Spine : sig
+    val calltype_ft : 
+      Loc.t -> L.t -> args -> AT.ft -> (RT.t * L.t, type_error) m
+    val calltype_lt : 
+      Loc.t -> L.t -> args -> AT.lt * label_kind -> (L.t, type_error) m
+    val subtype : 
+      Loc.t -> L.t -> arg -> RT.t -> (L.t, type_error) m
+    val resource_request :
+      Loc.t -> situation -> L.t -> RER.t -> (RE.t * L.t, type_error) m
+    val predicate_request :
+      Loc.t -> situation -> L.t -> RER.predicate -> (RE.predicate * L.t, type_error) m
+  end = struct
+
+    type request_ui_info = { 
+        original_local : L.t;
+        loc: loc;
+        situation: situation 
+      }
+
+    (* requires equality on inputs *)
+    let match_resources loc local error r1 r2 res =
+
+      let make_function local (x_s, x_bt) body =
+        let x_t = sym_ (x_s, x_bt) in
+        match body with
+        | IT (Array_op (App (_, x')), _) when IT.equal x_t x' ->
+           (body, local)
+        | _ ->
+           let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
+           let f_def = forall_ (x_s, x_bt) None (eq_ (app_ f_t x_t, body)) in
+           let local = add_l f_s (IT.bt f_t) local in
+           let local = add_c f_def local in
+           (app_ f_t x_t, local)
       in
-      check_computational arguments ftyp 
-    in
 
-    let@ ((unis, lspec), ftyp_r) = 
-      let rec delay_logical (unis, lspec) ftyp =
-        debug 6 (lazy (item "local" (L.pp local)));
-        debug 6 (lazy (item "spec" (pp_l rt_pp ftyp)));
-        match ftyp with
-        | Logical ((s, ls), ftyp) ->
-           let s' = Sym.fresh () in
-           let unis = SymMap.add s' Uni.{resolved = None} unis in
-           let ftyp' = subst_var_l rt_subst_var {before = s; after = s'} ftyp in
-           delay_logical (unis, lspec @ [(s', ls)]) ftyp'
-        | R ftyp -> 
-           return ((unis, lspec), ftyp)
+      let unify_or_constrain (res, constrs) (c, c') = 
+        match IT.unify c c' res with
+        | Some res -> return (res, constrs)
+        | None -> return (res, (c, c') :: constrs)
       in
-      delay_logical (unis, []) ftyp_l
-    in
 
-    let@ (local, unis, ftyp_c) = 
-      let rec infer_resources local unis ftyp = 
-        debug 6 (lazy (item "local" (L.pp local)));
-        debug 6 (lazy (item "spec" (pp_r rt_pp ftyp)));
-        debug 6 (lazy (item "unis" (pp_unis unis)));
-        match ftyp with
-        | Resource (resource, ftyp) -> 
-           let@ (resource', local) = 
-             resource_request_prompt ui_info local (RE.request resource) in
-           let mismatch solver = 
+      let unify_or_constrain_list (res, constrs) cs cs' =
+        ListM.fold_leftM unify_or_constrain (res, []) (List.combine cs cs')
+      in
+
+      match r1, r2 with
+      | Point b, Point b' 
+           when IT.equal b.pointer b'.pointer &&
+                Z.equal b.size b'.size &&
+                IT.equal b.permission b'.permission ->
+         let@ (res, constrs) = 
+           unify_or_constrain_list (res, []) [b.value;b.init] [b'.value; b'.init] in
+         let (result, solver) = 
+           S.provable_and_solver (L.all_solver_constraints local) (t_ (and_ (List.map eq_ constrs))) in
+         if result then return (res, local) else fail loc (error solver)
+      | QPoint b, QPoint b' 
+           when Sym.equal b.qpointer b'.qpointer &&
+                Z.equal b.size b'.size &&
+                IT.equal b.permission b'.permission ->
+
+         let b', local = 
+           let value, local = make_function local (b.qpointer, Loc) b'.value in
+           let init, local = make_function local (b.qpointer, Loc) b'.init in
+           ({ b' with value; init }, local)
+         in
+         let@ (res,constrs) = 
+           unify_or_constrain_list (res, []) [b.value; b.init] [b'.value; b'.init] in
+         let (result, solver) = 
+           S.provable_and_solver 
+             (L.all_solver_constraints local)
+              (forall_ (b.qpointer, BT.Loc)
+                 None
+                 (impl_ (gt_ (b.permission, q_ (0, 1)), 
+                         and_ (List.map eq_ constrs))))
+         in
+         if result then return (res, local) else fail loc (error solver)
+      | Predicate p, Predicate p' 
+           when 
+             predicate_name_equal p.name p'.name &&
+               IT.equal p.pointer p'.pointer &&
+                 List.equal IT.equal p.iargs p'.iargs &&
+                   p.unused = p'.unused ->
+         let@ (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
+         let (result, solver) =
+           S.provable_and_solver (L.all_solver_constraints local)
+             (t_ (impl_ (bool_ p'.unused, 
+                         and_ (List.map eq_ constrs))))
+         in
+         if result then return (res, local) else fail loc (error solver)
+      | QPredicate p, QPredicate p' 
+           when 
+             IT.equal p.pointer p'.pointer &&
+                IT.equal p.element_size p'.element_size &&
+                IT.equal p.istart p'.istart &&
+                IT.equal p.iend p'.iend &&
+                List.equal IT.equal p.moved p'.moved &&
+                p.unused = p'.unused &&
+                predicate_name_equal p.name p'.name &&
+                Sym.equal p.i p'.i &&
+                List.equal IT.equal p.iargs p'.iargs ->
+
+         let p', local = 
+           let (oargs, local) = 
+             List.fold_right (fun oarg (oargs, local) ->
+                 let oarg, local = make_function local (p.i, Integer) oarg in
+                 (oarg :: oargs, local)
+               ) p'.oargs ([], local)
+           in
+           ({ p' with oargs }, local)
+         in
+         let@ (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
+         let (result, solver) =
+           S.provable_and_solver (L.all_solver_constraints local)
+             (forall_ (p.i, BT.Integer)
+                None
+                (impl_ (and_ [bool_ p.unused; 
+                              is_qpredicate_instance_index p (sym_ (p.i, Integer))],
+                        and_ (List.map eq_ constrs))))
+         in
+         if result then return (res, local) else fail loc (error solver)
+      | _ -> 
+         Debug_ocaml.error "resource inference has inferred mismatched resources"
+
+
+
+
+
+    let resource_request_missing ui_info solver request =
+      let err = 
+        lazy begin 
+            let (resource, state) = 
+              E.resource_request
+                ui_info.original_local 
+                (S.get_model solver) 
+                request
+            in
+            Missing_resource {resource; used = None; state; 
+                              situation = ui_info.situation}
+          end
+      in
+      fail ui_info.loc err
+
+
+
+
+
+    let pp_unis (unis : IT.t Uni.t) : Pp.document = 
+     let pp_entry (sym, Uni.{resolved}) =
+       match resolved with
+       | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp res
+       | None -> Sym.pp sym ^^^ !^"unresolved"
+     in
+     Pp.list pp_entry (SymMap.bindings unis)
+
+
+
+    let rec spine :
+              'rt. 
+              ((Sym.t, Sym.t) Subst.t -> 'rt -> 'rt) ->
+              ((Sym.t, IT.t) Subst.t -> 'rt -> 'rt) ->
+              ('rt -> Pp.doc) ->
+              request_ui_info ->
+              L.t ->
+              arg list ->
+              'rt AT.t ->
+              ('rt * L.t, type_error) m
+      =
+      fun rt_subst_var rt_subst_it rt_pp
+          ui_info local arguments ftyp ->
+
+      let open NormalisedArgumentTypes in
+
+      let loc = ui_info.loc in
+      let original_local = ui_info.original_local in
+      let situation = ui_info.situation in
+
+      let ftyp = normalise ftyp in
+      let unis = SymMap.empty in
+
+      debug 6 (lazy (checking_situation situation));
+      debug 6 (lazy (item "local" (L.pp local)));
+      debug 6 (lazy (item "spec" (pp rt_pp ftyp)));
+
+      let@ ftyp_l = 
+        let rec check_computational args ftyp = 
+          match args, ftyp with
+          | (arg :: args), (Computational ((s, bt), ftyp))
+               when BT.equal arg.bt bt ->
+             let ftyp' = subst_var rt_subst_var {before = s; after = arg.lname} ftyp in
+             check_computational args ftyp'
+          | (arg :: _), (Computational ((_, bt), _))  ->
+             fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
+          | [], (L ftyp) -> 
+             return ftyp
+          | _ -> 
+             let expect = count_computational ftyp in
+             let has = List.length arguments in
+             fail loc (lazy (Number_arguments {expect; has}))
+        in
+        check_computational arguments ftyp 
+      in
+
+      let@ ((unis, lspec), ftyp_r) = 
+        let rec delay_logical (unis, lspec) ftyp =
+          debug 6 (lazy (item "local" (L.pp local)));
+          debug 6 (lazy (item "spec" (pp_l rt_pp ftyp)));
+          match ftyp with
+          | Logical ((s, ls), ftyp) ->
+             let s' = Sym.fresh () in
+             let unis = SymMap.add s' Uni.{resolved = None} unis in
+             let ftyp' = subst_var_l rt_subst_var {before = s; after = s'} ftyp in
+             delay_logical (unis, lspec @ [(s', ls)]) ftyp'
+          | R ftyp -> 
+             return ((unis, lspec), ftyp)
+        in
+        delay_logical (unis, []) ftyp_l
+      in
+
+      let@ (local, unis, ftyp_c) = 
+        let rec infer_resources local unis ftyp = 
+          debug 6 (lazy (item "local" (L.pp local)));
+          debug 6 (lazy (item "spec" (pp_r rt_pp ftyp)));
+          debug 6 (lazy (item "unis" (pp_unis unis)));
+          match ftyp with
+          | Resource (resource, ftyp) -> 
+             let@ (resource', local) = 
+               resource_request ui_info local (RE.request resource) in
+             let mismatch solver = 
+               lazy begin
+                   let model = S.get_model solver in
+                   let ((expect,has), state) = 
+                     E.resources original_local model (resource, resource') in
+                   (Resource_mismatch {expect; has; state; situation})
+                 end
+             in
+             let@ (unis, local) = match_resources loc local mismatch resource resource' unis in
+             let new_substs = Uni.find_resolved local unis in
+             let ftyp' = subst_its_r rt_subst_it new_substs ftyp in
+             infer_resources local unis ftyp'
+          | C ftyp ->
+             return (local, unis, ftyp)
+        in
+        infer_resources local unis ftyp_r
+      in
+
+      let@ () = 
+        let rec check_logical_variables = function
+          | [] -> return ()
+          | (s, expect) :: lspec ->
+             let Uni.{resolved} = SymMap.find s unis in
+             match resolved with
+             | Some solution ->
+                if LS.equal (IT.bt solution) expect 
+                then check_logical_variables lspec
+                else fail loc (lazy (Mismatch { has = IT.bt solution; expect }))
+             | None -> 
+                Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+        in
+        check_logical_variables lspec
+      in
+
+      let@ rt = 
+        let rec check_logical_constraints = function
+          | Constraint (c, ftyp) -> 
+             let (holds, solver) = 
+               S.provable_and_solver (L.all_solver_constraints local) c in
+             if holds then check_logical_constraints ftyp else
+               let err = 
+                 lazy begin
+                     let (constr,state) = 
+                       E.unsatisfied_constraint original_local 
+                         (S.get_model solver) c
+                     in
+                     (Unsat_constraint {constr; hint = None; state})
+                   end
+               in
+               fail loc err
+          | I rt ->
+             return rt
+        in
+        check_logical_constraints ftyp_c
+      in
+      return (rt, local)
+
+    and spine_ft ui_info local arguments ft = 
+      spine RT.subst_var RT.subst_it RT.pp ui_info 
+        local arguments ft
+
+    and spine_lt ui_info local arguments ft = 
+      spine False.subst_var False.subst_it False.pp 
+        ui_info local arguments ft
+
+    and spine_packing ui_info local arguments ft =
+      spine OutputDef.subst_var OutputDef.subst_it OutputDef.pp 
+        ui_info local arguments ft
+
+
+    and point_request ui_info local (requested : Resources.Requests.point) = 
+      let needed = requested.permission in 
+      let local, (needed, value, init) =
+        L.map_and_fold_resources (fun re (needed, value, init) ->
+            match re with
+            | Point p' 
+                 when Z.equal requested.size p'.size &&
+                      BT.equal requested.value (IT.bt p'.value) &&
+                      S.provable (L.all_solver_constraints local) (t_ (eq_ (requested.pointer, p'.pointer))) ->
+               let can_take = min_ (p'.permission, needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let value = ite_ (took, p'.value, value) in
+               let init = ite_ (took, p'.init, init) in
+               let needed = sub_ (needed, can_take) in
+               let permission' = sub_ (p'.permission, can_take) in
+               (Point {p' with permission = permission'}, (needed, value, init))
+            | QPoint p' 
+                 when Z.equal requested.size p'.size &&
+                      BT.equal requested.value (IT.bt p'.value) ->
+               let subst = {before=p'.qpointer; after = requested.pointer} in
+               let can_take = min_ (IT.subst_it subst p'.permission, needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let value =  ite_ (took, IT.subst_it subst p'.value, value) in
+               let init = ite_ (took, IT.subst_it subst p'.init, init) in
+               let needed = sub_ (needed, can_take) in
+               let permission' =
+                 ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
+                       sub_ (IT.subst_it subst p'.permission, can_take),
+                       p'.permission)
+               in
+               (QPoint {p' with permission = permission'}, (needed, value, init))
+            | re ->
+               (re, (needed, value, init))
+          ) local (needed, default_ requested.value, default_ BT.Bool)
+      in
+      let (holds, solver) = 
+        S.provable_and_solver (L.all_solver_constraints local)
+          (t_ (eq_ (needed, q_ (0, 1)))) in
+      if holds then
+        let r = 
+          { pointer = requested.pointer;
+            size = requested.size;
+            value = Simplify.simp (all_constraints local) value;
+            init = Simplify.simp (all_constraints local) init;
+            permission = requested.permission }
+        in
+        return (r, local)
+      else resource_request_missing ui_info solver (Point requested)
+
+    and qpoint_request ui_info local (requested : Resources.Requests.qpoint) = 
+      let needed = requested.permission in
+      let local, (needed, value, init) =
+        L.map_and_fold_resources (fun re (needed, value, init) ->
+            match re with
+            | Point p' 
+                 when Z.equal requested.size p'.size &&
+                      BT.equal requested.value (IT.bt p'.value) ->
+               let subst = {before=requested.qpointer; after = p'.pointer} in
+               let can_take = min_ (p'.permission, IT.subst_it subst needed) in
+               let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+               let needed = ite_ (pmatch, sub_ (IT.subst_it subst needed, can_take), needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let value = ite_ (and_ [pmatch;took], p'.value, value) in
+               let init = ite_ (and_ [pmatch;took], p'.init, init) in
+               let permission' = sub_ (p'.permission, can_take) in
+               (Point {p' with permission = permission'}, (needed, value, init))
+            | QPoint p' 
+                 when Z.equal requested.size p'.size &&
+                      BT.equal requested.value (IT.bt p'.value) ->
+               let subst = {before=p'.qpointer; after = requested.qpointer} in
+               let can_take = min_ (IT.subst_var subst p'.permission, needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let needed = sub_ (needed, can_take) in
+               let value = ite_ (took, IT.subst_var subst p'.value, value) in
+               let init = ite_ (took, IT.subst_var subst p'.init, init) in
+               let permission' = 
+                 sub_ (p'.permission, 
+                       IT.subst_var {before=requested.qpointer; after = p'.qpointer} 
+                         can_take)
+               in
+               (QPoint {p' with permission = permission'}, (needed, value, init))
+            | re ->
+               (re, (needed, value, init))
+          ) local (needed, default_ requested.value, default_ BT.Bool)
+      in
+      let (holds, solver) =
+        S.provable_and_solver (L.all_solver_constraints local)
+          (forall_ (requested.qpointer, BT.Loc) None
+             (eq_ (needed, q_ (0, 1))))
+      in
+      if holds then
+        let r = 
+          { qpointer = requested.qpointer;
+            size = requested.size;
+            value = Simplify.simp (all_constraints local) value; 
+            init = Simplify.simp (all_constraints local) init;
+            permission = requested.permission;
+          } 
+        in
+        return (r, local)
+      else 
+        resource_request_missing ui_info solver (QPoint requested)
+
+    and predicate_request ui_info local (p : Resources.Requests.predicate) = 
+      if p.unused = false then
+        let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
+        let r = 
+          { name = p.name;
+            pointer = p.pointer;
+            iargs = p.iargs;
+            oargs = oargs;
+            unused = p.unused;
+          }
+        in
+        return (r, local)
+      else
+        let local, found =
+          L.map_and_fold_resources (fun re found ->
+              match re, found with
+              | Predicate p', None ->
+                 if predicate_name_equal p.name p'.name &&
+                    p'.unused && 
+                    S.provable (L.all_solver_constraints local) (t_ (
+                        and_ (IT.eq__ p.pointer p'.pointer ::
+                              List.map2 eq__ p.iargs p'.iargs)
+                      ))
+                 then (Predicate {p' with unused = false}, Some p'.oargs)
+                 else (re, found)
+              | QPredicate p', None ->
+                 let index = qpredicate_pointer_to_index p' p.pointer in
+                 if predicate_name_equal p.name p'.name &&
+                    p'.unused && 
+                    S.provable (L.all_solver_constraints local) (
+                        let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
+                        t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
+                                    List.map2 eq__ p.iargs iargs'))
+                      )
+                 then
+                   let oargs = List.map (IT.subst_it {before=p'.i; after=index}) p'.oargs in
+                   let moved = p.pointer :: p'.moved in
+                   (QPredicate {p' with moved}, Some oargs)
+                 else
+                   (re, found)
+              | _ ->
+                 (re, found)
+            ) local None
+        in
+        begin match found with
+        (* we've already got the right resource *)
+        | Some oargs ->
+           let r = 
+             { name = p.name;
+               pointer = p.pointer;
+               iargs = p.iargs;
+               oargs = oargs;
+               unused = p.unused;
+             }
+           in
+           return (r, local)
+        | None ->
+           (* we haven't and will try to get it by packing *)
+           (* (we've eagerly unpacked, so no need to try to get it by unpacking) *)
+           let def = Option.get (Global.get_predicate_def G.global p.name) in
+           let substs = 
+             (* only input arguments! *)
+             {before = def.pointer; after = p.pointer} ::
+               List.map2 (fun (before, _) after -> {before; after}) 
+                 def.iargs p.iargs 
+           in
+           let attempts = 
+             List.map (fun (_, clause) ->
+                 lazy begin
+                     let packing_function = subst_its_clause substs clause in
+                     spine_packing ui_info local [] packing_function
+                   end
+               ) def.clauses
+           in
+           let error = 
              lazy begin
-                 let model = S.get_model solver in
-                 let ((expect,has), state) = 
-                   E.resources original_local model (resource, resource') in
-                 (Resource_mismatch {expect; has; state; situation})
+                 let (_, solver) = 
+                   S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
+                 resource_request_missing ui_info solver (Predicate p)
                end
            in
-           let@ (unis, local) = match_resources loc local mismatch resource resource' unis in
-           let new_substs = Uni.find_resolved local unis in
-           let ftyp' = subst_its_r rt_subst_it new_substs ftyp in
-           infer_resources local unis ftyp'
-        | C ftyp ->
-           return (local, unis, ftyp)
-      in
-      infer_resources local unis ftyp_r
-    in
+           let choices = attempts @ [error] in
+           let choices1 = List1.make (List.hd choices, List.tl choices) in
+           let@ (assignment, local) = attempt choices1 in
+           let r = 
+             { pointer = p.pointer;
+               name = p.name;
+               iargs = p.iargs;
+               oargs = List.map snd assignment;
+               unused = p.unused;
+             }
+           in
+           return (r, local)
+        end
 
-    let@ () = 
-      let rec check_logical_variables = function
-        | [] -> return ()
-        | (s, expect) :: lspec ->
-           let Uni.{resolved} = SymMap.find s unis in
-           match resolved with
-           | Some solution ->
-              if LS.equal (IT.bt solution) expect 
-              then check_logical_variables lspec
-              else fail loc (lazy (Mismatch { has = IT.bt solution; expect }))
-           | None -> 
-              Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
-      in
-      check_logical_variables lspec
-    in
-
-    let@ rt = 
-      let rec check_logical_constraints = function
-        | Constraint (c, ftyp) -> 
-           let (holds, solver) = 
-             S.provable_and_solver (L.all_solver_constraints local) c in
-           if holds then check_logical_constraints ftyp else
-             let err = 
-               lazy begin
-                   let (constr,state) = 
-                     E.unsatisfied_constraint original_local 
-                       (S.get_model solver) c
-                   in
-                   (Unsat_constraint {constr; hint = None; state})
-                 end
-             in
-             fail loc err
-        | I rt ->
-           return rt
-      in
-      check_logical_constraints ftyp_c
-    in
-    return (rt, local)
-
-  and spine_ft ui_info local arguments ft = 
-    spine RT.subst_var RT.subst_it RT.pp ui_info 
-      local arguments ft
-
-  and spine_lt ui_info local arguments ft = 
-    spine False.subst_var False.subst_it False.pp 
-      ui_info local arguments ft
-
-  and spine_packing ui_info local arguments ft =
-    spine OutputDef.subst_var OutputDef.subst_it OutputDef.pp 
-      ui_info local arguments ft
-
-
-  and point_request_prompt ui_info local (requested : Resources.Requests.point) = 
-    let needed = requested.permission in 
-    let local, (needed, value, init) =
-      L.map_and_fold_resources (fun re (needed, value, init) ->
-          match re with
-          | Point p' 
-               when Z.equal requested.size p'.size &&
-                    BT.equal requested.value (IT.bt p'.value) &&
-                    S.provable (L.all_solver_constraints local) (t_ (eq_ (requested.pointer, p'.pointer))) ->
-             let can_take = min_ (p'.permission, needed) in
-             let took = gt_ (can_take, q_ (0, 1)) in
-             let value = ite_ (took, p'.value, value) in
-             let init = ite_ (took, p'.init, init) in
-             let needed = sub_ (needed, can_take) in
-             let permission' = sub_ (p'.permission, can_take) in
-             (Point {p' with permission = permission'}, (needed, value, init))
-          | QPoint p' 
-               when Z.equal requested.size p'.size &&
-                    BT.equal requested.value (IT.bt p'.value) ->
-             let subst = {before=p'.qpointer; after = requested.pointer} in
-             let can_take = min_ (IT.subst_it subst p'.permission, needed) in
-             let took = gt_ (can_take, q_ (0, 1)) in
-             let value =  ite_ (took, IT.subst_it subst p'.value, value) in
-             let init = ite_ (took, IT.subst_it subst p'.init, init) in
-             let needed = sub_ (needed, can_take) in
-             let permission' =
-               ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                     sub_ (IT.subst_it subst p'.permission, can_take),
-                     p'.permission)
-             in
-             (QPoint {p' with permission = permission'}, (needed, value, init))
-          | re ->
-             (re, (needed, value, init))
-        ) local (needed, default_ requested.value, default_ BT.Bool)
-    in
-    let (holds, solver) = 
-      S.provable_and_solver (L.all_solver_constraints local)
-        (t_ (eq_ (needed, q_ (0, 1)))) in
-    if holds then
-      let r = 
-        { pointer = requested.pointer;
-          size = requested.size;
-          value = Simplify.simp (all_constraints local) value;
-          init = Simplify.simp (all_constraints local) init;
-          permission = requested.permission }
-      in
-      return (r, local)
-    else resource_request_missing ui_info solver (Point requested)
-
-  and qpoint_request_prompt ui_info local (requested : Resources.Requests.qpoint) = 
-    let needed = requested.permission in
-    let local, (needed, value, init) =
-      L.map_and_fold_resources (fun re (needed, value, init) ->
-          match re with
-          | Point p' 
-               when Z.equal requested.size p'.size &&
-                    BT.equal requested.value (IT.bt p'.value) ->
-             let subst = {before=requested.qpointer; after = p'.pointer} in
-             let can_take = min_ (p'.permission, IT.subst_it subst needed) in
-             let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-             let needed = ite_ (pmatch, sub_ (IT.subst_it subst needed, can_take), needed) in
-             let took = gt_ (can_take, q_ (0, 1)) in
-             let value = ite_ (and_ [pmatch;took], p'.value, value) in
-             let init = ite_ (and_ [pmatch;took], p'.init, init) in
-             let permission' = sub_ (p'.permission, can_take) in
-             (Point {p' with permission = permission'}, (needed, value, init))
-          | QPoint p' 
-               when Z.equal requested.size p'.size &&
-                    BT.equal requested.value (IT.bt p'.value) ->
-             let subst = {before=p'.qpointer; after = requested.qpointer} in
-             let can_take = min_ (IT.subst_var subst p'.permission, needed) in
-             let took = gt_ (can_take, q_ (0, 1)) in
-             let needed = sub_ (needed, can_take) in
-             let value = ite_ (took, IT.subst_var subst p'.value, value) in
-             let init = ite_ (took, IT.subst_var subst p'.init, init) in
-             let permission' = 
-               sub_ (p'.permission, 
-                     IT.subst_var {before=requested.qpointer; after = p'.qpointer} 
-                       can_take)
-             in
-             (QPoint {p' with permission = permission'}, (needed, value, init))
-          | re ->
-             (re, (needed, value, init))
-        ) local (needed, default_ requested.value, default_ BT.Bool)
-    in
-    let (holds, solver) =
-      S.provable_and_solver (L.all_solver_constraints local)
-        (forall_ (requested.qpointer, BT.Loc) None
-           (eq_ (needed, q_ (0, 1))))
-    in
-    if holds then
-      let r = 
-        { qpointer = requested.qpointer;
-          size = requested.size;
-          value = Simplify.simp (all_constraints local) value; 
-          init = Simplify.simp (all_constraints local) init;
-          permission = requested.permission;
-        } 
-      in
-      return (r, local)
-    else 
-      resource_request_missing ui_info solver (QPoint requested)
-
-  and predicate_request_prompt ui_info local (p : Resources.Requests.predicate) = 
-    if p.unused = false then
-      let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
-      let r = 
-        { name = p.name;
-          pointer = p.pointer;
-          iargs = p.iargs;
-          oargs = oargs;
-          unused = p.unused;
-        }
-      in
-      return (r, local)
-    else
-      let local, found =
-        L.map_and_fold_resources (fun re found ->
-            match re, found with
-            | Predicate p', None ->
-               if predicate_name_equal p.name p'.name &&
-                  p'.unused && 
-                  S.provable (L.all_solver_constraints local) (t_ (
-                      and_ (IT.eq__ p.pointer p'.pointer ::
-                            List.map2 eq__ p.iargs p'.iargs)
-                    ))
-               then (Predicate {p' with unused = false}, Some p'.oargs)
-               else (re, found)
-            | QPredicate p', None ->
-               let index = qpredicate_pointer_to_index p' p.pointer in
-               if predicate_name_equal p.name p'.name &&
-                  p'.unused && 
-                  S.provable (L.all_solver_constraints local) (
-                      let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
-                      t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
-                                  List.map2 eq__ p.iargs iargs'))
-                    )
-               then
-                 let oargs = List.map (IT.subst_it {before=p'.i; after=index}) p'.oargs in
-                 let moved = p.pointer :: p'.moved in
-                 (QPredicate {p' with moved}, Some oargs)
-               else
+    and qpredicate_request ui_info local (p : Resources.Requests.qpredicate) = 
+      assert ([] = p.moved); (* todo? *)
+      if p.unused = false then
+        let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
+        let r = 
+          { name = p.name;
+            element_size = p.element_size;
+            istart = p.istart;
+            iend = p.iend;
+            i = p.i;
+            pointer = p.pointer;
+            iargs = p.iargs;
+            oargs = oargs;
+            unused = p.unused;
+            moved = p.moved;
+          }
+        in
+        return (r, local)
+      else
+        let local, found =
+          L.map_and_fold_resources (fun re found ->
+              match re, found with
+              | QPredicate p', None ->
+                 if predicate_name_equal p.name p'.name &&
+                    p.unused = p'.unused &&
+                      S.provable (L.all_solver_constraints local)
+                        (forall_ (p.i, BT.Integer) None
+                           (and_ [eq_ (p.pointer, p'.pointer);
+                                  eq_ (p.element_size, p'.element_size);
+                                  eq_ (p.istart, p'.istart);
+                                  eq_ (p.iend, p'.iend);
+                                  impl_ 
+                                    (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
+                                     let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
+                                     and_ (List.map2 eq__ p.iargs iargs'))]
+                        ))
+                 then 
+                   let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
+                   (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
+                 else 
+                   (re, found)
+              | _ ->
                  (re, found)
-            | _ ->
-               (re, found)
-          ) local None
+            ) local None
+        in
+        match found with
+        | Some (oargs, moved) ->
+           (* fill in moved ownership *)
+           let@ (oargs, local) = 
+             ListM.fold_leftM (fun (oargs, local) moved_pointer ->
+                 (* moved_pointer assumed to satisfy
+                    pointer-start-element_size-length condition *)
+                 let index = RER.qpredicate_pointer_to_index p moved_pointer in
+                 let request = RER.{
+                     name = p.name; 
+                     pointer = moved_pointer;
+                     iargs = List.map (IT.subst_it{before=p.i;after=index}) p.iargs;
+                     oargs = p.oargs; 
+                     unused = true
+                   }
+                 in
+                 let@ (packed, local) = predicate_request ui_info local request in
+                 let oargs = 
+                   List.map2 (fun oa oa' ->
+                       ite_ (eq_ (sym_ (p.i, Integer), index), oa', oa)
+                     ) oargs packed.oargs
+                 in
+                 return (oargs, local)
+               ) (oargs, local) moved
+           in
+           let r = 
+             { pointer = p.pointer;
+               element_size = p.element_size;
+               istart = p.istart;
+               iend = p.iend;
+               moved = []; 
+               unused = p.unused;
+               name = p.name;
+               i = p.i;
+               iargs = p.iargs;
+               oargs = oargs 
+             }
+           in
+           return (r, local)
+        | None ->
+           let (_, solver) = S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
+           resource_request_missing ui_info solver (QPredicate p)
+
+    and resource_request ui_info local (request : Resources.Requests.t) : (RE.t * L.t, type_error) m = 
+      match request with
+      | Point requested ->
+         let@ point, local = point_request ui_info local requested in
+         return (Point point, local)
+      | QPoint requested ->
+         let@ qpoint, local = qpoint_request ui_info local requested in
+         return (QPoint qpoint, local)
+      | Predicate requested ->
+         let@ predicate, local = predicate_request ui_info local requested in
+         return (Predicate predicate, local)
+      | QPredicate requested ->
+         let@ qpredicate, local = qpredicate_request ui_info local requested in
+         return (QPredicate qpredicate, local)
+
+
+
+    let calltype_ft loc local args (ftyp : AT.ft) : (RT.t * L.t, type_error) m =
+      let names = 
+        List.mapi (fun i arg ->
+            let v = "ARG" ^ string_of_int i in
+            (arg.lname, Ast.Addr v)
+          ) args
       in
-      begin match found with
-      (* we've already got the right resource *)
-      | Some oargs ->
-         let r = 
-           { name = p.name;
-             pointer = p.pointer;
-             iargs = p.iargs;
-             oargs = oargs;
-             unused = p.unused;
-           }
-         in
-         return (r, local)
-      | None ->
-         (* we haven't and will try to get it by packing *)
-         (* (we've eagerly unpacked, so no need to try to get it by unpacking) *)
-         let def = Option.get (Global.get_predicate_def G.global p.name) in
-         let substs = 
-           (* only input arguments! *)
-           {before = def.pointer; after = p.pointer} ::
-             List.map2 (fun (before, _) after -> {before; after}) 
-               def.iargs p.iargs 
-         in
-         let attempt_prompts = 
-           List.map (fun (_, clause) ->
-               lazy begin
-                   let packing_function = subst_its_clause substs clause in
-                   spine_packing ui_info local [] packing_function
-                 end
-             ) def.clauses
-         in
-         let error_prompt = 
-           lazy begin
-               let (_, solver) = 
-                 S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
-               resource_request_missing ui_info solver (Predicate p)
-             end
-         in
-         let choices = attempt_prompts @ [error_prompt] in
-         let choices1 = List1.make (List.hd choices, List.tl choices) in
-         let@ (assignment, local) = attempt choices1 in
-         let r = 
-           { pointer = p.pointer;
-             name = p.name;
-             iargs = p.iargs;
-             oargs = List.map snd assignment;
-             unused = p.unused;
-           }
-         in
-         return (r, local)
-      end
+      let local = add_descriptions names local in
+      let ui_info = { loc; situation = FunctionCall; original_local = local } in
+      spine_ft ui_info local args ftyp
 
-  and qpredicate_request_prompt ui_info local (p : Resources.Requests.qpredicate) = 
-    assert ([] = p.moved); (* todo? *)
-    if p.unused = false then
-      let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
-      let r = 
-        { name = p.name;
-          element_size = p.element_size;
-          istart = p.istart;
-          iend = p.iend;
-          i = p.i;
-          pointer = p.pointer;
-          iargs = p.iargs;
-          oargs = oargs;
-          unused = p.unused;
-          moved = p.moved;
-        }
+    let calltype_lt loc local args ((ltyp : AT.lt), label_kind) : (L.t, type_error) m =
+      let ui_info = { loc; situation = LabelCall label_kind; original_local = local } in
+      let@ (False.False, local) = spine_lt ui_info local args ltyp in
+      return local
+
+    (* The "subtyping" judgment needs the same resource/lvar/constraint
+       inference as the spine judgment. So implement the subtyping
+       judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
+    let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
+      let local = add_description (arg.lname, Ast.Var {label = None; v ="return"}) local in
+      let ui_info = { loc; situation = Subtyping; original_local = local } in
+      let ft = AT.of_rt rtyp (AT.I False.False) in
+      let@ (False.False, local) = 
+        spine 
+          False.subst_var False.subst_it False.pp
+          ui_info local [arg] ft 
       in
-      return (r, local)
-    else
-      let local, found =
-        L.map_and_fold_resources (fun re found ->
-            match re, found with
-            | QPredicate p', None ->
-               if predicate_name_equal p.name p'.name &&
-                  p.unused = p'.unused &&
-                    S.provable (L.all_solver_constraints local)
-                      (forall_ (p.i, BT.Integer) None
-                         (and_ [eq_ (p.pointer, p'.pointer);
-                                eq_ (p.element_size, p'.element_size);
-                                eq_ (p.istart, p'.istart);
-                                eq_ (p.iend, p'.iend);
-                                impl_ 
-                                  (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
-                                   let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
-                                   and_ (List.map2 eq__ p.iargs iargs'))]
-                      ))
-               then 
-                 let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
-                 (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
-               else 
-                 (re, found)
-            | _ ->
-               (re, found)
-          ) local None
-      in
-      match found with
-      | Some (oargs, moved) ->
-         (* fill in moved ownership *)
-         let@ (oargs, local) = 
-           ListM.fold_leftM (fun (oargs, local) moved_pointer ->
-               (* moved_pointer assumed to satisfy
-                  pointer-start-element_size-length condition *)
-               let index = RER.qpredicate_pointer_to_index p moved_pointer in
-               let request = RER.{
-                   name = p.name; 
-                   pointer = moved_pointer;
-                   iargs = List.map (IT.subst_it{before=p.i;after=index}) p.iargs;
-                   oargs = p.oargs; 
-                   unused = true
-                 }
-               in
-               let@ (packed, local) = 
-                 predicate_request_prompt ui_info local request
-               in
-               let oargs = 
-                 List.map2 (fun oa oa' ->
-                     ite_ (eq_ (sym_ (p.i, Integer), index), oa', oa)
-                   ) oargs packed.oargs
-               in
-               return (oargs, local)
-             ) (oargs, local) moved
-         in
-         let r = 
-           { pointer = p.pointer;
-             element_size = p.element_size;
-             istart = p.istart;
-             iend = p.iend;
-             moved = []; 
-             unused = p.unused;
-             name = p.name;
-             i = p.i;
-             iargs = p.iargs;
-             oargs = oargs 
-           }
-         in
-         return (r, local)
-      | None ->
-         let (_, solver) = S.provable_and_solver (L.all_solver_constraints local) (T (bool_ false)) in
-         resource_request_missing ui_info solver (QPredicate p)
+      return local
 
-  and resource_request_prompt ui_info local (request : Resources.Requests.t) : (RE.t * L.t, type_error) m = 
-    match request with
-    | Point requested ->
-       let@ point, local = point_request_prompt ui_info local requested in
-       return (Point point, local)
-    | QPoint requested ->
-       let@ qpoint, local = qpoint_request_prompt ui_info local requested in
-       return (QPoint qpoint, local)
-    | Predicate requested ->
-       let@ predicate, local = predicate_request_prompt ui_info local requested in
-       return (Predicate predicate, local)
-    | QPredicate requested ->
-       let@ qpredicate, local = qpredicate_request_prompt ui_info local requested in
-       return (QPredicate qpredicate, local)
+    let resource_request (loc: loc) situation local (request : RER.t) : (RE.t * L.t, type_error) m = 
+      let ui_info = { loc; situation; original_local = local } in
+      resource_request ui_info local request
 
 
-
-  let calltype_ft loc local args (ftyp : AT.ft) : (RT.t * L.t, type_error) m =
-    let names = 
-      List.mapi (fun i arg ->
-          let v = "ARG" ^ string_of_int i in
-          (arg.lname, Ast.Addr v)
-        ) args
-    in
-    let local = add_descriptions names local in
-    let ui_info = { loc; situation = FunctionCall; original_local = local } in
-    spine_ft ui_info local args ftyp
-
-  let calltype_lt loc local args ((ltyp : AT.lt), label_kind) : (False.t * L.t, type_error) m =
-    let ui_info = { loc; situation = LabelCall label_kind; original_local = local } in
-    spine_lt ui_info local args ltyp
-
-  (* The "subtyping" judgment needs the same resource/lvar/constraint
-     inference as the spine judgment. So implement the subtyping
-     judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
-  let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
-    let local = add_description (arg.lname, Ast.Var {label = None; v ="return"}) local in
-    let ui_info = { loc; situation = Subtyping; original_local = local } in
-    let ft = AT.of_rt rtyp (AT.I False.False) in
-    let@ (False.False, local) = 
-      spine 
-        False.subst_var False.subst_it False.pp
-        ui_info local [arg] ft 
-    in
-    return local
+    let predicate_request (loc: loc) situation local (request : RER.predicate) : (RE.predicate * L.t, type_error) m = 
+      let ui_info = { loc; situation; original_local = local } in
+      predicate_request ui_info local request
 
 
-
-
-  let resource_request (loc: loc) situation local (request : RER.t) : (RE.t * L.t, type_error) m = 
-    let ui_info = { loc; situation; original_local = local } in
-    resource_request_prompt ui_info local request
-
-
-  let predicate_request (loc: loc) situation local (request : RER.predicate) : (RE.predicate * L.t, type_error) m = 
-    let ui_info = { loc; situation; original_local = local } in
-    predicate_request_prompt ui_info local request
-
+  end
 
 
   (*** pure value inference *****************************************************)
@@ -1156,7 +1177,7 @@ let unpack_predicate local (p : predicate) =
          let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
          let local = unpack_resources_for local (it_of_arg arg) in
          let@ (predicate, local) = 
-           predicate_request loc (Access (Load None)) local 
+           Spine.predicate_request loc (Access (Load None)) local 
              { name = Ctype (Sctype ([], Struct tag)) ;
                pointer = it_of_arg arg;
                iargs = [];
@@ -1220,7 +1241,7 @@ let unpack_predicate local (p : predicate) =
               return t
          in
          let@ args = args_of_asyms local asyms in
-         calltype_ft loc local args decl_typ
+         Spine.calltype_ft loc local args decl_typ
       | M_PEassert_undef (asym, _uloc, undef) ->
          let@ arg = arg_of_asym local asym in
          let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
@@ -1330,7 +1351,7 @@ let unpack_predicate local (p : predicate) =
        check_tpexpr (delta ++ local) e2 typ
     | M_PEdone asym ->
        let@ arg = arg_of_asym local asym in
-       let@ local = subtype loc local arg typ in
+       let@ local = Spine.subtype loc local arg typ in
        return ()
     | M_PEundef (_loc, undef) ->
        let err = 
@@ -1485,7 +1506,7 @@ let unpack_predicate local (p : predicate) =
                   unused = true;
                 }
             in
-            let@ _ = resource_request loc (Access Deref) local request in
+            let@ _ = Spine.resource_request loc (Access Deref) local request in
             let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
             return (rt_of_vt vt, local)
          | M_PtrWellAligned (act, asym) ->
@@ -1547,7 +1568,7 @@ let unpack_predicate local (p : predicate) =
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
             let local = unpack_resources_for local (it_of_arg arg) in
             let@ (_, local) = 
-              resource_request loc (Access Kill) local 
+              Spine.resource_request loc (Access Kill) local 
                 (RER.Predicate {
                      name = Ctype ct;
                      pointer = it_of_arg arg;
@@ -1588,7 +1609,7 @@ let unpack_predicate local (p : predicate) =
             in
             let local = unpack_resources_for local (it_of_arg parg) in
             let@ (_, local) = 
-              resource_request loc (Access (Store None)) local 
+              Spine.resource_request loc (Access (Store None)) local 
                 (RER.Predicate {
                      name = Ctype act.ct; 
                      pointer = it_of_arg parg;
@@ -1613,7 +1634,7 @@ let unpack_predicate local (p : predicate) =
             let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
             let local = unpack_resources_for local (it_of_arg parg) in
             let@ (predicate, _) = 
-              predicate_request loc (Access (Load None)) local 
+              Spine.predicate_request loc (Access (Load None)) local 
                 { name = Ctype act.ct ;
                   pointer = it_of_arg parg;
                   iargs = [];
@@ -1667,7 +1688,7 @@ let unpack_predicate local (p : predicate) =
            | Some (loc, ft) -> return (loc, ft)
            | None -> fail loc (lazy (Missing_function afsym.sym))
          in
-         calltype_ft loc local args ft
+         Spine.calltype_ft loc local args ft
       | M_Eproc (fname, asyms) ->
          let local = unpack_resources local in
          let@ decl_typ = match fname with
@@ -1679,7 +1700,7 @@ let unpack_predicate local (p : predicate) =
               | None -> fail loc (lazy (Missing_function sym))
          in
          let@ args = args_of_asyms local asyms in
-         calltype_ft loc local args decl_typ
+         Spine.calltype_ft loc local args decl_typ
     in
     debug 3 (lazy (RT.pp (fst result)));
     return result
@@ -1740,7 +1761,7 @@ let unpack_predicate local (p : predicate) =
          begin match typ with
          | Normal typ ->
             let@ arg = arg_of_asym local asym in
-            let@ local = subtype loc local arg typ in
+            let@ local = Spine.subtype loc local arg typ in
             all_empty loc local
          | False ->
             let err = 
@@ -1769,7 +1790,7 @@ let unpack_predicate local (p : predicate) =
               add_description (arg.lname, Ast.Var {label = None; v = "return"}) local
            | _ -> local
          in
-         let@ (False, local) = calltype_lt loc local args (lt,lkind) in
+         let@ local = Spine.calltype_lt loc local args (lt,lkind) in
          let@ () = all_empty loc local in
          return ()
 
