@@ -555,7 +555,7 @@ let pp (it : 'bt term) : PPrint.document =
   aux false it
 
 
-let rec free_vars : 'bt term -> SymSet.t =
+let rec free_vars : 'bt. 'bt term -> SymSet.t =
 
   let lit : lit -> SymSet.t = function
     | Sym symbol -> SymSet.singleton symbol
