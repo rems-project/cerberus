@@ -7,10 +7,6 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
-(* module LFT = ArgumentTypes.Make(LogicalReturnTypes)
- * module FT = ArgumentTypes.Make(ReturnTypes)
- * module LT = ArgumentTypes.Make(False) *)
-(* module PackingFT = ArgumentTypes.Make(OutputDef) *)
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -1781,7 +1777,7 @@ let unpack_predicate local (p : predicate) =
       | M_Erun (label_sym, asyms) ->
          let local = unpack_resources local in
          let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
-           | None -> fail loc (lazy (Generic (!^"undefined label" ^/^ Sym.pp label_sym)))
+           | None -> fail loc (lazy (Generic (!^"undefined code label" ^/^ Sym.pp label_sym)))
            | Some (lt,lkind) -> return (lt,lkind)
          in
          let@ args = args_of_asyms local asyms in
@@ -1851,15 +1847,6 @@ let unpack_predicate local (p : predicate) =
          return (rt, local, pure_local, acc_substs)
     in
     check [] L.empty L.empty arguments function_typ
-  
-  let check_initial_environment_consistent loc info local = 
-    match S.provably_inconsistent (L.all_solver_constraints local), info with
-    | true, `Label -> 
-       fail loc (lazy (Generic (!^"this label makes inconsistent assumptions")))
-    | true, `Fun -> 
-       fail loc (lazy (Generic (!^"this function makes inconsistent assumptions")))
-    | _ -> 
-       return ()
 
 
   (* check_function: type check a (pure) function *)
@@ -1875,7 +1862,6 @@ let unpack_predicate local (p : predicate) =
       check_and_bind_arguments RT.subst_var loc arguments function_typ 
     in
     let local = delta ++ local in
-    let@ () = check_initial_environment_consistent loc `Fun local in
     (* rbt consistency *)
     let@ () = 
       let Computational ((sname, sbt), t) = rt in
@@ -1912,9 +1898,6 @@ let unpack_predicate local (p : predicate) =
       Explain.naming_substs substs (Explain.naming_of_mapping mapping) 
     in
 
-    (* check that the function does not make inconsistent assumptions *)
-    let@ () = check_initial_environment_consistent loc `Fun (delta ++ local) in
-
     (* rbt consistency *)
     let@ () = 
       let Computational ((sname, sbt), t) = rt in
@@ -1939,7 +1922,7 @@ let unpack_predicate local (p : predicate) =
           match def with
           | M_Return (loc, lt) ->
              let local = add_descriptions fnames (pure_delta ++ local) in
-             let@ () = WT.WLT.welltyped loc local lt in
+             let@ () = WT.WLT.welltyped "return label" loc local lt in
              return (SymMap.add sym (lt, Return) acc)
           | M_Label (loc, lt, _, _, annots, mapping) -> 
              let label_kind = match CF.Annot.get_label_annot annots with
@@ -1948,7 +1931,7 @@ let unpack_predicate local (p : predicate) =
                | _ -> Other
              in
              let local = add_descriptions fnames (pure_delta ++ local) in
-             let@ () = WT.WLT.welltyped loc local lt in
+             let@ () = WT.WLT.welltyped "label" loc local lt in
              return (SymMap.add sym (lt, label_kind) acc)
         ) label_defs SymMap.empty 
     in
@@ -1964,8 +1947,6 @@ let unpack_predicate local (p : predicate) =
          let@ (rt, delta_label, _, lsubsts) = 
            check_and_bind_arguments False.subst_var loc args lt 
          in
-         let@ () = check_initial_environment_consistent loc 
-                     `Label (delta_label ++ pure_delta ++ local) in
          let@ local_or_false = 
            let names = 
              Explain.naming_substs (lsubsts @ substs)
@@ -2027,25 +2008,6 @@ let check mu_file =
 
   let local = L.empty in
 
-
-  let () = Debug_ocaml.begin_csv_timing "globals" in
-  let@ local = 
-    (* record globals *)
-    (* TODO: check the expressions *)
-    let open Global in
-    ListM.fold_leftM (fun local (sym, def) ->
-        match def with
-        | M_GlobalDef (lsym, (_, ct), _)
-        | M_GlobalDecl (lsym, (_, ct)) ->
-           let bt = Loc in
-           let local = L.add_l lsym bt local in
-           let local = L.add_a sym (bt, lsym) local in
-           let local = L.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
-           return local
-      ) local mu_file.mu_globs 
-  in
-  let () = Debug_ocaml.end_csv_timing "globals" in
-
   let () = Debug_ocaml.begin_csv_timing "impls" in
   let@ global = 
     (* check and record impls *)
@@ -2067,7 +2029,7 @@ let check mu_file =
            in
            return global
         | M_IFun (ft, rbt, args, pexpr) ->
-           let@ () = WT.WFT.welltyped Loc.unknown L.empty ft in
+           let@ () = WT.WFT.welltyped "implementation-defined function" Loc.unknown L.empty ft in
            let@ () = 
              C.check_function Loc.unknown L.empty [] 
                (CF.Implementation.string_of_implementation_constant impl)
@@ -2094,6 +2056,24 @@ let check mu_file =
   let () = Debug_ocaml.end_csv_timing "predicate defs" in
 
 
+  let () = Debug_ocaml.begin_csv_timing "globals" in
+  let@ local = 
+    (* record globals *)
+    (* TODO: check the expressions *)
+    let open Global in
+    ListM.fold_leftM (fun local (sym, def) ->
+        match def with
+        | M_GlobalDef (lsym, (_, ct), _)
+        | M_GlobalDecl (lsym, (_, ct)) ->
+           let bt = Loc in
+           let local = L.add_l lsym bt local in
+           let local = L.add_a sym (bt, lsym) local in
+           let local = L.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
+           return local
+      ) local mu_file.mu_globs 
+  in
+  let () = Debug_ocaml.end_csv_timing "globals" in
+
   let () = Debug_ocaml.begin_csv_timing "welltypedness" in
   let@ (global, local) =
     let open Global in
@@ -2111,7 +2091,7 @@ let check mu_file =
         in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-        let@ () = WT.WFT.welltyped loc (L.add_descriptions (Explain.naming_of_mapping mapping) local) ftyp in
+        let@ () = WT.WFT.welltyped "global" loc (L.add_descriptions (Explain.naming_of_mapping mapping) local) ftyp in
         return (global, local)
       ) mu_file.mu_funinfo (global, local)
   in

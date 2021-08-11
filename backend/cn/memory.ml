@@ -28,6 +28,9 @@ let size_of_integer_type it =
   with
   | exn -> report "size_of_integer_type" exn
 
+
+
+
 (* adapting from impl_mem *)
 let align_of_integer_type it =
   try
@@ -85,6 +88,10 @@ let size_of_ctype (ct : Sctypes.t) =
        integer_value_to_num s
      with
      | exn -> report "size_of_ctype" exn
+
+let size_of_ctype_opt ct = 
+  try Some (size_of_ctype ct) with
+  | _ -> None
 
 let align_of_ctype (ct : Sctypes.t) = 
   let open Pp in

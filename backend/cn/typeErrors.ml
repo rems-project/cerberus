@@ -86,7 +86,7 @@ type type_error =
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
-  | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: LS.t}
+  | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
   | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp}
   | Unconstrained_logical_variable of Sym.t
@@ -94,7 +94,7 @@ type type_error =
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_pp (*  *)
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_pp
   | Implementation_defined_behaviour of document * state_pp
   | Unspecified of CF.Ctype.ctype
   | StaticError of string
@@ -216,9 +216,9 @@ let pp_type_error te =
      (!^"Expected value of type" ^^^ LS.pp expect ^^^
         !^"but found value of type" ^^^ LS.pp has, [])
   | Illtyped_it {context;it;has;expected} ->
-     (!^"Illtyped index term" ^^ colon ^^^ context ^^ dot ^^^ 
-        !^"Expected" ^^^ it ^^^ !^"to have type" ^^^ LS.pp expected ^^^
-          !^"but has type" ^^^ LS.pp has,  [])
+     (!^"Illtyped expression" ^^ colon ^^^ context ^^ dot ^^^ 
+        !^"Expected" ^^^ it ^^^ !^"to have" ^^^ !^expected ^^^ !^"type" ^^^
+          !^"but has" ^^^ LS.pp has ^^^ !^"type",  [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
   | Unsat_constraint {constr;hint; state} ->

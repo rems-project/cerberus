@@ -17,95 +17,56 @@ module Make
          (S : Solver.S) 
          (L : Local.S)
   = struct
-  module Explain = Explain.Make(G)(S)(L)
+  module E = Explain.Make(G)(S)(L)
 
   let check_bound loc local kind s = 
     if L.bound s kind local then return ()
     else fail loc (lazy (TE.Unbound_name (Sym s)))
 
 
-  let ensure_integer_or_real_type loc local context it bt = 
-    let open BT in
-    match bt with
-    | Integer -> 
-       return Integer
-    | Real -> 
-       return Real
-    | _ -> 
-       let (context, it) = Explain.index_terms local (context, it) in
-       let err = 
-         lazy begin 
-             Generic 
-               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
-                  !^"Expected" ^^^ it ^^^ !^"to have integer or real type" ^^^ 
-                    !^"but has type" ^^^ BT.pp bt)
-           end
-       in
-       fail loc err
+  let illtyped_index_term loc local context it has expected =
+    lazy begin 
+        let (context, it) = E.illtyped_index_term local context it in
+        TypeErrors.Illtyped_it {context; it; has; expected = "integer or real type"}
+    end
 
-  let ensure_set_type loc local context it bt = 
+
+
+  let ensure_integer_or_real_type loc local context it has = 
     let open BT in
-    match bt with
+    match has with
+    | (Integer | Real) -> return has
+    | _ -> 
+       let expect = "integer or real type" in
+       fail loc (illtyped_index_term loc local context it has expect)
+
+  let ensure_set_type loc local context it has = 
+    let open BT in
+    match has with
     | Set bt -> return bt
     | _ -> 
-       let (context, it) = Explain.index_terms local (context, it) in
-       let err = 
-         lazy begin
-             Generic
-               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
-                  !^"Expected" ^^^ it ^^^ !^"to have set type" ^^ comma ^^^
-                    !^"but has type" ^^^ BT.pp bt)
-           end
-       in
-       fail loc err
+       fail loc (illtyped_index_term loc local context it has "set type")
 
-  let ensure_list_type loc local context it bt = 
+  let ensure_list_type loc local context it has = 
     let open BT in
-    match bt with
+    match has with
     | List bt -> return bt
     | _ -> 
-       let (context, it) = Explain.index_terms local (context, it) in
-       let err = 
-         lazy begin
-             Generic (
-                 !^"Illtyped index term" ^^^ context ^^ dot ^^^
-                   !^"Expected" ^^^ it ^^^ !^"to have list type" ^^^ 
-                     !^"but has type" ^^^ BT.pp bt)
-           end
-       in
-       fail loc err
+       fail loc (illtyped_index_term loc local context it has "list type")
 
-  let ensure_array_type loc local context it bt = 
+  let ensure_array_type loc local context it has = 
     let open BT in
-    match bt with
-    | Array (abt,rbt) -> return (abt, rbt)
+    match has with
+    | Array (abt, rbt) -> return (abt, rbt)
     | _ -> 
-       let (context, it) = Explain.index_terms local (context, it) in
-       let err = 
-         lazy begin
-             Generic 
-               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
-                  !^"Expected" ^^^ it ^^^ !^"to have array type" ^^ comma ^^^
-                    !^"but has type" ^^^ BT.pp bt)
-           end
-       in
-       fail loc err
+       fail loc (illtyped_index_term loc local context it has "array type")
 
-  let ensure_option_type loc local context it bt = 
+  let ensure_option_type loc local context it has = 
     let open BT in
-    match bt with
+    match has with
     | Option bt -> return bt
     | _ -> 
-       let (context, it) = Explain.index_terms local (context, it) in
-       let err = 
-         lazy begin
-             Generic 
-               (!^"Illtyped index term" ^^^ context ^^ dot ^^^
-                  !^"Expected" ^^^ it ^^^ !^"to have option type" ^^ comma ^^^
-                    !^"but has type" ^^^ BT.pp bt)
-           end
-       in
-       fail loc err
+       fail loc (illtyped_index_term loc local context it has "option type")
   
 
   module WIT = struct
@@ -130,11 +91,11 @@ module Make
         match List.assoc_opt Id.equal member decl_members with
         | Some sct -> return (BT.of_sct sct)
         | None -> 
-           let (context, it) = Explain.index_terms local (context, it) in
+           let (context, it) = E.illtyped_index_term local context it in
            let err = 
              lazy begin
                  Generic
-                   (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                   (!^"Illtyped expression" ^^^ context ^^ dot ^^^
                       it ^^^ !^"does not have member" ^^^ Id.pp member)
                end
            in
@@ -237,11 +198,11 @@ module Make
                   begin match List.nth_opt bts n with
                   | Some t -> return t
                   | None -> 
-                     let (context, t') = Explain.index_terms local (context, t') in
+                     let (context, t') = E.illtyped_index_term local context t' in
                      let err = 
                        lazy begin
                            Generic
-                             (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                             (!^"Illtyped expression" ^^^ context ^^ dot ^^^
                                 !^"Expected" ^^^ t' ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
                                   !^"components, but has type" ^^^ BT.pp (Tuple bts))
                          end
@@ -249,11 +210,11 @@ module Make
                      fail loc err
                   end
                | _ -> 
-                  let (context, t') = Explain.index_terms local (context, t') in
+                  let (context, t') = E.illtyped_index_term local context t' in
                   let err = 
                     lazy begin
                         Generic
-                          (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                          (!^"Illtyped expression" ^^^ context ^^ dot ^^^
                              !^"Expected" ^^^ t' ^^^ !^"to have tuple type, but has type" ^^^
                                BT.pp tuple_bt)
                         end
@@ -286,10 +247,10 @@ module Make
              let@ tag = match bt with
                | Struct tag -> return tag
                | _ -> 
-                  let (context, t) = Explain.index_terms local (context, t) in
+                  let (context, t) = E.illtyped_index_term local context t in
                   let err = 
                     lazy begin
-                        Generic (!^"Illtyped index term" ^^^ context ^^ dot ^^^
+                        Generic (!^"Illtyped expression" ^^^ context ^^ dot ^^^
                                    !^"Expected" ^^^ t ^^^ !^"to have struct type" ^^^ 
                                      !^"but has type" ^^^ BT.pp bt)
                       end
@@ -493,8 +454,8 @@ module Make
            else
              let err =
                lazy begin
-                   let (context, it) = Explain.index_terms local (context, it) in
-                   Illtyped_it {context; it; has = ls'; expected = ls}
+                   let (context, it) = E.illtyped_index_term local context it in
+                   Illtyped_it {context; it; has = ls'; expected = Pp.plain (LS.pp ls)}
                  end
              in
              fail loc  err
@@ -798,7 +759,7 @@ module Make
 
     type t = WI.t AT.t
 
-    let rec check loc local (at : t) : (unit, type_error) m = 
+    let rec check kind loc local (at : t) : (unit, type_error) m = 
       let open Resultat in
       match at with
       | AT.Computational ((name,bt), at) ->
@@ -807,22 +768,24 @@ module Make
          let local = L.add_l lname bt local in
          let local = L.add_a name' (bt, lname) local in
          let at = AT.subst_var WI.subst_var Subst.{before = name; after = lname} at in
-         check loc local at
+         check kind loc local at
       | AT.Logical ((s,ls), at) -> 
          let lname = Sym.fresh_same s in
          let local = L.add_l lname ls local in
          let at = AT.subst_var WI.subst_var Subst.{before = s; after = lname} at in
-         check loc local at
+         check kind loc local at
       | AT.Resource (re, at) -> 
          let@ () = WRE.welltyped loc local re in
          let local = L.add_r re local in
-         check loc local at
+         check kind loc local at
       | AT.Constraint (lc, at) ->
          let@ () = WLC.welltyped loc local lc in
          let local = L.add_c lc local in
-         check loc local at
+         check kind loc local at
       | AT.I i -> 
-         WI.check loc local i
+         if S.provably_inconsistent (L.all_solver_constraints local) 
+         then fail loc (lazy (Generic !^("this "^kind^" makes inconsistent assumptions")))
+         else WI.check loc local i
 
 
     let wellpolarised loc determined ft = 
@@ -847,8 +810,8 @@ module Make
       in
       aux determined SymSet.empty ft
 
-    let welltyped loc local at = 
-      let@ () = check loc local at in
+    let welltyped kind loc local at = 
+      let@ () = check kind loc local at in
       wellpolarised loc (SymSet.of_list (L.all_vars local)) at
 
   end
@@ -876,12 +839,7 @@ module Make
       in
       let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
       ListM.iterM (fun (loc, clause) ->
-          let@ () = WPackingFT.welltyped pd.loc local clause in
-          let lrt, _ = AT.logical_arguments_and_return clause in
-          let local = L.bind_logical local lrt  in
-          if S.provably_inconsistent (L.all_solver_constraints local) 
-          then fail loc (lazy (Generic !^"this clause makes inconsistent assumptions"))
-          else return ()
+          WPackingFT.welltyped "clause" pd.loc local clause
         ) pd.clauses
   end
 

@@ -25,67 +25,26 @@ module VClass = struct
       logical : SymSet.t;
     }
 
-  type vclass = t
-
-
-  let make sort ovalue = {
-      id = Fresh.int ();
-      sort = sort;
-      ovalue = ovalue;
-      computational = SymSet.empty;
-      logical = SymSet.empty
-    }
-
-  let right_class vclass sort ovalue =
-    LS.equal sort vclass.sort &&
-    match vclass.ovalue, ovalue with
-    | Some value, Some value' ->
-       Z3.Expr.equal value value'
-    | _ -> false
-
-  let rec classify vclasses vclass' : vclass list = 
-    match vclasses with
-    | vclass :: vclasses when right_class vclass vclass'.sort vclass'.ovalue ->
-       let computational = 
-         SymSet.union vclass.computational vclass'.computational in
-       let logical = 
-         SymSet.union vclass.logical vclass'.logical in
-       let vclass = { vclass with computational; logical} in
-       vclass :: vclasses
-    | vclass :: vclasses ->
-       vclass :: classify vclasses vclass'
-    | [] -> [vclass']
-    
-
-  let find vclasses sort value = 
-    List.find_opt (fun vclass -> 
-        right_class vclass sort value
-      ) vclasses
-
 
   let compare vc1 vc2 = compare vc1.id vc2.id
   let equal vc1 vc2 = vc1.id = vc2.id
 
+  type vclass = t
+
+  let make sort ovalue computational logical = 
+    let id = Fresh.int () in
+    { id; sort; ovalue; computational; logical }
+
+  let right_class sort ovalue vclass =
+    LS.equal sort vclass.sort &&
+    match vclass.ovalue, ovalue with
+    | Some value, Some value' ->
+       Z3.Expr.equal value value'
+    | _ -> false    
+
 end
 
 open VClass
-
-
-module VClassPair = struct 
-  type t = VClass.t * VClass.t
-  let compare a b = 
-    Lem_basic_classes.pairCompare VClass.compare VClass.compare a b
-end
-  
-module VClassRel = struct
-  include Pset
-  type t = VClassPair.t Pset.set
-  let empty = Pset.empty VClassPair.compare
-  let transitiveClosure = Pset.tc VClassPair.compare
-end 
-
-
-module VClassRelMap = Map.Make(VClassPair)
 
 
 
@@ -181,12 +140,11 @@ type name_kind =
 type vclass_explanation = {
     path : Ast.term;
     name_kind : name_kind;
-    vclass : vclass;
   }
 
 type explanation = {
     substitutions : (Sym.t, Sym.t) Subst.t list;
-    vclasses : vclass_explanation list;
+    vclasses : (vclass * vclass_explanation) list;
     relevant : SymSet.t
   }
 
@@ -200,162 +158,129 @@ module Make
 
 
 
-  let evaluate model expr = Z3.Model.evaluate model (S.expr expr) true
+  let evaluate model expr = 
+    Z3.Model.evaluate model (S.expr expr) true
 
 
+  module VClassGraph = Graph.Make(VClass)
+  open VClassGraph     
 
 
-  let vclasses_graph local model vclasses =
-    List.fold_right (fun resource graph ->
-        match resource with
-        | RE.Point {pointer; size; value; init; permission} ->
-           let found1 = VClass.find vclasses (IT.bt pointer) (evaluate model pointer) in
-           let found2 = VClass.find vclasses (IT.bt value) (evaluate model value) in
-           begin match found1, found2 with
-           | Some vclass1, Some vclass2 
-                when not (VClassRelMap.mem (vclass2, vclass1) graph) ->
-              (VClassRelMap.add (vclass1, vclass2) Pointee graph)
-           | _ -> 
-              graph
-           end
-        | _ -> 
-           graph
-      ) (L.all_resources local) 
-      VClassRelMap.empty
+  let explanation local model relevant =
 
 
-  let vclasses_total_order local model vclasses = 
-    let graph = vclasses_graph local model vclasses in
+    print stdout !^"producing error report";
 
-    let no_incoming_edges graph n = 
-      not (VClassRelMap.exists (fun (_, n2) _ -> VClass.equal n n2) graph)
+    let names = SymMap.bindings (L.descriptions local) in
+
+    (* only report the state of the relevant variables *)
+    let relevant =
+      List.fold_left SymSet.union SymSet.empty
+        [SymSet.of_list (List.map fst names); 
+         SymSet.of_list (List.filter Sym.named (L.all_vars local)); 
+         RE.free_vars_list (L.all_resources local); 
+         relevant]
     in
 
-    let order = [] in
-    let inits, others = List.partition (no_incoming_edges graph) vclasses in
-
-    let rec aux graph inits others order =
-      match inits with
-      | [] -> (List.rev order, others)
-      | init :: inits ->
-         let order = init :: order in
-         let (graph, inits, others) = 
-           VClassRelMap.fold (fun (n1, n2) _ (graph, inits, others) ->
-               if VClass.equal init n1 then
-                 let graph = VClassRelMap.remove (n1, n2) graph in
-                 let new_inits, others = List.partition (no_incoming_edges graph) others in
-                 (graph, inits @ new_inits, others)
-               else 
-                 (graph, inits, others)
-             ) graph (graph, inits, others)
-         in
-         aux graph inits others order
+    (* populate empty graph with variable equivalence classes *)
+    let graph = 
+      (* for a new class vclass, add it into the graph, either merging
+         it into an equivalent existing one or as a new class *)
+      let classify vclass graph : 'a VClassGraph.t = 
+        match find_node_opt (right_class vclass.sort vclass.ovalue) graph with
+        | Some vclass' ->
+           let c = SymSet.union vclass.computational vclass'.computational in
+           let l = SymSet.union vclass.logical vclass'.logical in
+           add_node { vclass with computational = c; logical = l}
+             (remove_node vclass' graph)
+        | None ->
+           add_node vclass graph
+      in
+      let classify_l (l, bt) = 
+        classify (VClass.make bt (evaluate model (sym_ (l, bt)))
+                    SymSet.empty (SymSet.singleton l))
+      in
+      let classify_c (c, (bt, l)) =
+        classify (VClass.make bt (evaluate model (sym_ (l, bt)))
+                    (SymSet.singleton c) (SymSet.singleton l))
+      in
+      List.fold_right classify_l (L.all_logical local) 
+        (List.fold_right classify_c (L.all_computational local)
+           VClassGraph.empty) 
     in
 
-    let (order, not_yet_ordered) = aux graph inits others order in
-    (order @ not_yet_ordered, graph)
-
-
-
-
-  let has_given_name names veclass =
-    Option.map snd
-      (List.find_opt (fun (sym,name) -> 
-           SymSet.mem sym veclass.logical ||
-           SymSet.mem sym veclass.computational
-         ) names)
-
-  let has_derived_name (named_veclasses, rels) veclass =
-    let rec aux = function
-      | {vclass = named_veclass; path;_} :: named_veclasses ->
-         begin match VClassRelMap.find_opt (named_veclass, veclass) rels with
-         | Some Pointee -> Some (Ast.pointee None path)
-         | None -> aux named_veclasses
-         end
-      | [] -> None         
-    in
-    aux named_veclasses
-
-  let has_symbol_name veclass = 
-    let all = SymSet.elements (SymSet.union veclass.computational veclass.logical) in
-    Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
-
-
-let explanation local model relevant =
-
-  print stdout !^"producing error report";
-
-  
-  let names = SymMap.bindings (L.descriptions local) in
-
-
-  let relevant =
-    let names_syms = SymSet.of_list (List.map fst names) in
-    let named_syms = SymSet.of_list (List.filter Sym.named (L.all_vars local)) in
-    let from_resources = RE.free_vars_list (L.all_resources local) in
-    SymSet.union (SymSet.union (SymSet.union names_syms named_syms) from_resources)
-      relevant
-  in
-
-  let vclasses =
-
-    let vclasses = 
-      List.fold_left (fun vclasses (c, (bt, l)) ->
-          classify vclasses 
-            { (VClass.make bt (evaluate model (sym_ (l, bt)))) with
-              computational = SymSet.singleton c;
-              logical = SymSet.singleton l; }
-        ) [] (L.all_computational local)
+    (* add 'Pointee' edges between nodes whenever the resources indicate that *)
+    let graph = 
+      List.fold_right (fun resource graph ->
+          match resource with
+          | RE.Point {pointer; size; value; init; permission} ->
+             (* the 'not found' cases should not be fatal: e.g. the
+                resource might have 'x + 16' as a pointer *)
+             let ovc1 = VClassGraph.find_node_opt (right_class (IT.bt pointer) (evaluate model pointer)) graph in
+             let ovc2 = VClassGraph.find_node_opt (right_class (IT.bt value) (evaluate model value)) graph in
+             begin match ovc1, ovc2 with
+             | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
+             | _ -> graph
+             end
+          | _ -> 
+             graph
+        ) (L.all_resources local) 
+        graph
     in
 
-    let vclasses = 
-      List.fold_left (fun vclasses (l, bt) ->
-          classify vclasses 
-            { (VClass.make bt (evaluate model (sym_ (l, bt)))) with
-              computational = SymSet.empty;
-              logical = SymSet.singleton l; }
-        ) vclasses (L.all_logical local)
+    (* add an explanation to each equivalence class: either because one o *)
+    let vclass_explanations = 
+      List.fold_left (fun vclasses_explanation vclass ->
+          let has_given_name =
+            Option.map snd
+              (List.find_opt (fun (sym,name) -> 
+                   SymSet.mem sym vclass.logical ||
+                     SymSet.mem sym vclass.computational
+                 ) names)
+          in
+          let has_symbol_name = 
+            let all = SymSet.elements (SymSet.union vclass.computational vclass.logical) in
+            Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
+          in        
+          let has_derived_name =
+            List.find_map (fun (named_vclass, {path;_}) -> 
+                Option.bind 
+                  (VClassGraph.edge_label (named_vclass, vclass) graph)
+                  (function Pointee -> Some (Ast.pointee None path))  
+              ) vclasses_explanation
+          in
+          match has_given_name, has_symbol_name, has_derived_name with
+          | Some given_name, o_symbol_name, o_derived_name ->
+             let without_labels = Ast.remove_labels_term given_name in
+             let path = 
+               if Option.equal Ast.term_equal (Some without_labels) (o_symbol_name) ||
+                    Option.equal Ast.term_equal (Some without_labels) (o_derived_name) 
+               then without_labels
+               else given_name
+             in
+             vclasses_explanation @ [(vclass, {path; name_kind = Given})]
+          | None, Some symbol_name, _ ->
+             vclasses_explanation @ [(vclass, {path = symbol_name; name_kind = Symbol})]
+          | None, None, Some derived_name ->
+             vclasses_explanation @ [(vclass, {path = derived_name; name_kind = Symbol})]
+          | None, None, None ->
+             let name = Ast.LabeledName.{label = None; v = make_name vclass} in
+             vclasses_explanation @ [(vclass, {path = Var name; name_kind = Default})]
+        ) [] (VClassGraph.linearise graph)
     in
 
-    let (sorted, rels) = vclasses_total_order local model vclasses in
 
+    let substitutions = 
+      List.fold_right (fun (vclass, {path;_}) substs ->
+          let to_substitute = SymSet.union vclass.computational vclass.logical in
+          let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
+          SymSet.fold (fun sym substs ->
+              Subst.{ before = sym; after = named_symbol } :: substs
+            ) to_substitute substs 
+        ) vclass_explanations []
+    in
 
-    List.fold_left (fun vclasses_explanation vclass ->
-        match has_given_name names vclass, 
-              has_symbol_name vclass,
-              has_derived_name (vclasses_explanation, rels) vclass with
-        | Some given_name, o_symbol_name, o_derived_name ->
-           let without_labels = Ast.remove_labels_term given_name in
-           let path = 
-             if Option.equal Ast.term_equal (Some without_labels) (o_symbol_name) ||
-                  Option.equal Ast.term_equal (Some without_labels) (o_derived_name) 
-             then without_labels
-             else given_name
-           in
-           vclasses_explanation @ [{vclass; path; name_kind = Given}]
-        | None, Some symbol_name, _ ->
-           vclasses_explanation @ [{vclass; path = symbol_name; name_kind = Symbol}]
-        | None, None, Some derived_name ->
-           vclasses_explanation @ [{vclass; path = derived_name; name_kind = Symbol}]
-        | None, None, None ->
-           let name = Ast.LabeledName.{label = None; v = make_name vclass} in
-           vclasses_explanation @ [{vclass; path = Var name; name_kind = Default}]
-      ) [] sorted
-  in
-
-  let substitutions = 
-    List.fold_right (fun {vclass;path;_} substs ->
-        let to_substitute = SymSet.union vclass.computational vclass.logical in
-        let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
-        SymSet.fold (fun sym substs ->
-            Subst.{ before = sym; after = named_symbol } :: substs
-          ) to_substitute substs 
-      ) vclasses []
-  in
-  
-  let () = Debug_ocaml.end_csv_timing "explanation" in
-  
-  ({substitutions; vclasses; relevant}, local)
+    ({substitutions; vclasses = vclass_explanations; relevant}, local)
 
 
 
@@ -462,7 +387,7 @@ let explanation local model relevant =
           | QPredicate p ->
              let entry =
                (Some (IT.pp (IT.subst_vars substitutions p.pointer)),
-                None, 
+                o_evaluate o_model p.pointer, 
                 None, 
                 Some (RE.pp (RE.subst_vars substitutions (QPredicate p))),
                 None,
@@ -473,15 +398,15 @@ let explanation local model relevant =
         ) (L.all_resources local) ([], SymSet.empty)
     in
     let var_lines = 
-      List.filter_map (fun c ->
-          let bt = c.vclass.sort in
-          let relevant = not (SymSet.is_empty (SymSet.inter c.vclass.logical relevant)) in
-          let reported = not (SymSet.is_empty (SymSet.inter c.vclass.logical reported_pointees)) in
+      List.filter_map (fun (vclass,c) ->
+          let bt = vclass.sort in
+          let relevant = not (SymSet.is_empty (SymSet.inter vclass.logical relevant)) in
+          let reported = not (SymSet.is_empty (SymSet.inter vclass.logical reported_pointees)) in
           if (not reported) && relevant then
             match bt with
             | BT.Loc -> 
                Some (Some (Ast.Terms.pp false c.path), 
-                     o_evaluate o_model (IT.sym_ (SymSet.choose c.vclass.logical, bt)),
+                     o_evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, bt)),
                      None, 
                      None, 
                      None, 
@@ -492,7 +417,7 @@ let explanation local model relevant =
                      None, 
                      None, 
                      Some (Ast.Terms.pp false c.path), 
-                     o_evaluate o_model (IT.sym_ (SymSet.choose c.vclass.logical, bt)))
+                     o_evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, bt)))
           else
             None)
         vclasses
@@ -563,17 +488,6 @@ let explanation local model relevant =
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     it_pp
 
-  let index_terms local (it,it') = 
-    let (_, solver) = 
-      S.provable_and_solver (L.all_solver_constraints local) (t_ (bool_ false)) in
-    let model = S.get_model solver in
-    let (explanation, local) = 
-      explanation local model (SymSet.union (IT.free_vars it) (IT.free_vars it'))
-    in
-    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
-    let it_pp' = IT.pp (IT.subst_vars explanation.substitutions it') in
-    (it_pp, it_pp')
-
   let unsatisfied_constraint local model lc = 
     let (explanation, local) = explanation local model (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
@@ -596,5 +510,17 @@ let explanation local model relevant =
     let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
     ((re1, re2), pp_state_with_model local explanation model)
 
+
+
+  let illtyped_index_term local context it =
+    let (_, solver) = 
+      S.provable_and_solver (L.all_solver_constraints local) (t_ (bool_ false)) in
+    let model = S.get_model solver in
+    let (explanation, local) = 
+      explanation local model (IT.free_vars_list [it; context])
+    in
+    let it = IT.pp (IT.subst_vars explanation.substitutions it) in
+    let context = IT.pp (IT.subst_vars explanation.substitutions context) in
+    (context, it)
 
 end
