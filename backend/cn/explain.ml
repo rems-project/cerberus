@@ -15,12 +15,14 @@ open LogicalConstraints
 open Pp
 
 
+
+
+
 module VClass = struct
 
   type t = {
       id : int;
       sort : LS.t;
-      ovalue : Z3.Expr.expr option;
       computational : SymSet.t;
       logical : SymSet.t;
     }
@@ -31,21 +33,26 @@ module VClass = struct
 
   type vclass = t
 
-  let make sort ovalue computational logical = 
-    let id = Fresh.int () in
-    { id; sort; ovalue; computational; logical }
+  let make ((l, sort) : Sym.t * LS.t) : t = {
+      id = Fresh.int (); 
+      sort; 
+      computational = SymSet.empty; 
+      logical = SymSet.singleton l
+    }
 
-  let right_class sort ovalue vclass =
-    LS.equal sort vclass.sort &&
-    match vclass.ovalue, ovalue with
-    | Some value, Some value' ->
-       Z3.Expr.equal value value'
-    | _ -> false    
+  let merge (c1 : t) (c2 : t) : t = 
+    let computational = SymSet.union c1.computational c2.computational in
+    let logical = SymSet.union c1.logical c2.logical in
+    { c1 with id = Fresh.int (); computational; logical }
+
+  let in_class (lvar : Sym.t) (c : t) = 
+    SymSet.mem lvar c.logical
 
 end
 
 open VClass
 
+module VClassSet = Set.Make(VClass)
 
 
 
@@ -163,11 +170,13 @@ module Make
 
 
   module VClassGraph = Graph.Make(VClass)
-  open VClassGraph     
+
+  let find_class p classes =
+    VClassGraph.find_node p classes
+
 
 
   let explanation local model relevant =
-
 
     print stdout !^"producing error report";
 
@@ -182,31 +191,35 @@ module Make
          relevant]
     in
 
-    (* populate empty graph with variable equivalence classes *)
-    let graph = 
-      (* for a new class vclass, add it into the graph, either merging
-         it into an equivalent existing one or as a new class *)
-      let classify vclass graph : 'a VClassGraph.t = 
-        match find_node_opt (right_class vclass.sort vclass.ovalue) graph with
-        | Some vclass' ->
-           let c = SymSet.union vclass.computational vclass'.computational in
-           let l = SymSet.union vclass.logical vclass'.logical in
-           add_node { vclass with computational = c; logical = l}
-             (remove_node vclass' graph)
-        | None ->
-           add_node vclass graph
+    (* graph of variable equivalence classes with no edges *)
+    let graph =
+      (* make each logical variable its own class *)
+      let with_logical = 
+        List.fold_right (fun (l, sort) g ->
+            VClassGraph.add_node (make (l, sort)) g
+          ) (L.all_logical local) VClassGraph.empty
       in
-      let classify_l (l, bt) = 
-        classify (VClass.make bt (evaluate model (sym_ (l, bt)))
-                    SymSet.empty (SymSet.singleton l))
+      (* add computational variables into the classes *)
+      let with_all = 
+        List.fold_right (fun (s, (bt, l)) g ->
+            let c = find_class (in_class l) g in
+            let c' = { c with computational = SymSet.add s c.computational } in
+            VClassGraph.add_node c' (VClassGraph.remove_node c g)
+          ) (L.all_computational local) with_logical
       in
-      let classify_c (c, (bt, l)) =
-        classify (VClass.make bt (evaluate model (sym_ (l, bt)))
-                    (SymSet.singleton c) (SymSet.singleton l))
-      in
-      List.fold_right classify_l (L.all_logical local) 
-        (List.fold_right classify_c (L.all_computational local)
-           VClassGraph.empty) 
+      (* merge classes based on variable equalities *)
+      List.fold_right (fun lc g ->
+          match is_sym_equality lc with
+          | Some (s, s') ->
+             let c = find_class (in_class s) g in
+             let c' = find_class (in_class s') g in
+             let merged = VClass.merge c c' in
+             VClassGraph.add_node merged 
+               (VClassGraph.remove_node c' 
+                  (VClassGraph.remove_node c g))
+          | None -> 
+             g
+        ) (L.all_constraints local) with_all
     in
 
     (* add 'Pointee' edges between nodes whenever the resources indicate that *)
@@ -216,8 +229,14 @@ module Make
           | RE.Point {pointer; size; value; init; permission} ->
              (* the 'not found' cases should not be fatal: e.g. the
                 resource might have 'x + 16' as a pointer *)
-             let ovc1 = VClassGraph.find_node_opt (right_class (IT.bt pointer) (evaluate model pointer)) graph in
-             let ovc2 = VClassGraph.find_node_opt (right_class (IT.bt value) (evaluate model value)) graph in
+             let ovc1 = 
+               Option.bind (IT.is_sym pointer) 
+                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+             in
+             let ovc2 = 
+               Option.bind (IT.is_sym value)
+                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+             in
              begin match ovc1, ovc2 with
              | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
              | _ -> graph
@@ -361,7 +380,12 @@ module Make
                 o_evaluate o_model value
                )
              in
-             (entry :: acc_table, SymSet.union (SymSet.union (symbol_it pointer) (something_symbol_it value)) acc_reported)
+             let reported = 
+               (SymSet.union 
+                  (symbol_it pointer) 
+                  (something_symbol_it value))
+             in
+             (entry :: acc_table, SymSet.union reported acc_reported)
           | QPoint p ->
              let entry =
                (None,
@@ -383,7 +407,7 @@ module Make
                 None
                )
              in
-             (entry :: acc_table, SymSet.empty)
+             (entry :: acc_table, symbol_it p.pointer)
           | QPredicate p ->
              let entry =
                (Some (IT.pp (IT.subst_vars substitutions p.pointer)),
@@ -394,7 +418,7 @@ module Make
                 None
                )
              in
-             (entry :: acc_table, SymSet.empty)
+             (entry :: acc_table, symbol_it p.pointer)
         ) (L.all_resources local) ([], SymSet.empty)
     in
     let var_lines = 
@@ -422,7 +446,9 @@ module Make
             None)
         vclasses
     in
-    resource_lines @ var_lines
+    resource_lines @ 
+      [(Some !^"break", None, None, None, None, None)] @ 
+      var_lines
 
 
 

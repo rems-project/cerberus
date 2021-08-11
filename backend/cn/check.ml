@@ -2086,8 +2086,9 @@ let check mu_file =
         in
         let local = 
           let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
-          let lc = representable_ (voidstar, sym_ (fsym, Loc)) in
-          L.add_c (t_ lc) local
+          let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
+          let lc2 = t_ (representable_ (voidstar, sym_ (fsym, Loc))) in
+          L.add_l fsym Loc (L.add_cs [lc1; lc2] local)
         in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in

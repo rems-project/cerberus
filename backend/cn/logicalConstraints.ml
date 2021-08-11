@@ -140,3 +140,16 @@ let forall_ (s,bt) trigger it =
  * let forall_trigger_ (s,bt) trigger it = 
  *   Forall ((s, bt), trigger, it) *)
 
+
+
+
+
+
+let is_sym_equality = function
+  | T (IT (Bool_op (EQ (a, b)), _)) ->
+     begin match IT.is_sym a, IT.is_sym b with
+     | Some (s, bt), Some (s', bt') ->
+        Some (s, s')
+     | _ -> None
+     end
+  | _ -> None

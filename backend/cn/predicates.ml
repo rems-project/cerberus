@@ -362,9 +362,11 @@ let page_alloc_predicates struct_decls =
   let _hHYP_NO_ORDER = 0 - 1 in
 
   let find_tag tag = 
-    SymMap.find_first (fun tag' ->
-        Option.equal String.equal (Sym.name tag') (Some tag)
-      ) struct_decls
+    SymMap.choose
+      (SymMap.filter (fun tag' _ ->
+           Option.equal String.equal (Sym.name tag') (Some tag)
+         ) struct_decls
+      )
   in
 
   let list_head_tag, _ = find_tag "list_head" in

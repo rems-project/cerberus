@@ -70,10 +70,12 @@ module Make(V : I) : (S with type node = V.t) = struct
     { g with nodes = List.filter (fun n' -> not (V.equal n n')) g.nodes }
 
   let find_edge_opt f g = 
-    VRelMap.find_first_opt f g.edges
+    let filter (n1, n2) _ = f (n1, n2) in
+    VRelMap.choose_opt (VRelMap.filter filter g.edges)
 
   let find_edge f g = 
-    VRelMap.find_first f g.edges
+    let filter (n1, n2) _ = f (n1, n2) in
+    VRelMap.choose (VRelMap.filter filter g.edges)
 
   let have_edge (n1, n2) g = 
     VRelMap.mem (n1, n2) g.edges
