@@ -151,8 +151,8 @@ module Make (O : Output) = struct
 
 
 
-  let alpha_rename_qpoint qp = 
-    let qpointer' = Sym.fresh_same qp.qpointer in
+  let alpha_rename_qpoint qp name = 
+    let qpointer' = Sym.fresh_named name in
     let subst = {before=qp.qpointer;after=qpointer'} in
     { qpointer = qpointer';
       size = qp.size;
@@ -161,8 +161,8 @@ module Make (O : Output) = struct
       permission = IT.subst_var subst qp.permission }
 
 
-  let alpha_rename_qpredicate qp = 
-    let i' = Sym.fresh_same qp.i in
+  let alpha_rename_qpredicate qp name = 
+    let i' = Sym.fresh_named name in
     let subst = {before=qp.i;after=i'} in
     { pointer = qp.pointer;
       element_size = qp.element_size;
