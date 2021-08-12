@@ -30,7 +30,7 @@ module type Memory = sig
   val cs_module : (module Constraints with type t = mem_iv_constraint)
   
   type footprint
-  val do_overlap: footprint -> footprint -> bool
+  val check_overlap: footprint -> footprint -> Mem_common.overlap_status
   
   type mem_state
   val initial_mem_state: mem_state
@@ -91,9 +91,9 @@ module type Memory = sig
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrcast_ival: Ctype.ctype -> Ctype.ctype -> integer_value -> pointer_value memM
+  val ptrfromint: Ctype.ctype -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
+  val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
   
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value

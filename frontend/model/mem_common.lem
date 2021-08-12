@@ -7,6 +7,11 @@ open import Nondeterminism
 
 type thread_id = nat
 
+type overlap_status =
+  | Disjoint
+  | ExactOverlap
+  | PartialOverlap
+
 type access_kind =
   | LoadAccess
   | StoreAccess
