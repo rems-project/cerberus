@@ -165,15 +165,39 @@ module Make
 
 
 
-  let evaluate model expr = 
-    Z3.Model.evaluate model (S.expr expr) true
 
 
   module VClassGraph = Graph.Make(VClass)
 
-  let find_class p classes =
-    VClassGraph.find_node p classes
-
+  let veclasses local model = 
+    let find_class p classes = 
+      VClassSet.choose (VClassSet.filter p classes) in
+    let with_logical = 
+      List.fold_right (fun (l, sort) g ->
+          VClassSet.add (make (l, sort)) g
+        ) (L.all_logical local) VClassSet.empty
+    in
+    (* add computational variables into the classes *)
+    let with_all = 
+      List.fold_right (fun (s, (bt, l)) g ->
+          let c = find_class (in_class l) g in
+          let c' = { c with computational = SymSet.add s c.computational } in
+          VClassSet.add c' (VClassSet.remove c g)
+        ) (L.all_computational local) with_logical
+    in
+    (* merge classes based on variable equalities *)
+    List.fold_right (fun lc g ->
+        match is_sym_equality lc with
+        | Some (s, s') ->
+           let c = find_class (in_class s) g in
+           let c' = find_class (in_class s') g in
+           let merged = VClass.merge c c' in
+           VClassSet.add merged 
+             (VClassSet.remove c' 
+                (VClassSet.remove c g))
+        | None -> 
+           g
+      ) (L.all_constraints local) with_all
 
 
   let explanation local model relevant =
@@ -191,60 +215,29 @@ module Make
          relevant]
     in
 
-    (* graph of variable equivalence classes with no edges *)
-    let graph =
-      (* make each logical variable its own class *)
-      let with_logical = 
-        List.fold_right (fun (l, sort) g ->
-            VClassGraph.add_node (make (l, sort)) g
-          ) (L.all_logical local) VClassGraph.empty
-      in
-      (* add computational variables into the classes *)
-      let with_all = 
-        List.fold_right (fun (s, (bt, l)) g ->
-            let c = find_class (in_class l) g in
-            let c' = { c with computational = SymSet.add s c.computational } in
-            VClassGraph.add_node c' (VClassGraph.remove_node c g)
-          ) (L.all_computational local) with_logical
-      in
-      (* merge classes based on variable equalities *)
-      List.fold_right (fun lc g ->
-          match is_sym_equality lc with
-          | Some (s, s') ->
-             let c = find_class (in_class s) g in
-             let c' = find_class (in_class s') g in
-             let merged = VClass.merge c c' in
-             VClassGraph.add_node merged 
-               (VClassGraph.remove_node c' 
-                  (VClassGraph.remove_node c g))
-          | None -> 
-             g
-        ) (L.all_constraints local) with_all
-    in
-
     (* add 'Pointee' edges between nodes whenever the resources indicate that *)
     let graph = 
       List.fold_right (fun resource graph ->
           match resource with
-          | RE.Point {pointer; size; value; init; permission} ->
-             (* the 'not found' cases should not be fatal: e.g. the
-                resource might have 'x + 16' as a pointer *)
-             let ovc1 = 
-               Option.bind (IT.is_sym pointer) 
-                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
-             in
-             let ovc2 = 
-               Option.bind (IT.is_sym value)
-                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
-             in
-             begin match ovc1, ovc2 with
-             | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
-             | _ -> graph
-             end
+          (* | RE.Point {pointer; size; value; init; permission} ->
+           *    (\* the 'not found' cases should not be fatal: e.g. the
+           *       resource might have 'x + 16' as a pointer *\)
+           *    let ovc1 = 
+           *      Option.bind (IT.is_sym pointer) 
+           *        (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+           *    in
+           *    let ovc2 = 
+           *      Option.bind (IT.is_sym value)
+           *        (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+           *    in
+           *    begin match ovc1, ovc2 with
+           *    | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
+           *    | _ -> graph
+           *    end *)
           | _ -> 
              graph
         ) (L.all_resources local) 
-        graph
+        (VClassSet.fold VClassGraph.add_node (veclasses local model) VClassGraph.empty)
     in
 
     (* add an explanation to each equivalence class: either because one o *)
@@ -304,16 +297,15 @@ module Make
 
 
 
-  let rec o_evaluate model expr = 
-    let open Option in
-    match evaluate model expr with
-    | None -> Debug_ocaml.error "failure constructing counter model"
+  let rec evaluate model expr : string = 
+    match Z3.Model.evaluate model (S.expr expr) true with
+    | None -> "(not evaluated)"
     | Some evaluated_expr -> 
        match IT.bt expr with
        | BT.Integer -> 
-          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+          Z3.Expr.to_string evaluated_expr
        | BT.Real -> 
-          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+          Z3.Expr.to_string evaluated_expr
        | BT.Loc ->
           (* adapting from core_parser_driver.ml *)
           let str = Z3.Expr.to_string evaluated_expr in
@@ -321,143 +313,165 @@ module Make
           let z = try Assertion_parser.integer Assertion_lexer.main lexbuf with
                   | _ -> Debug_ocaml.error ("error parsing string: " ^ str)
           in
-          return (Z.pp_hex 16 z)
+          Pp.plain (Z.pp_hex 16 z)
        | BT.Bool ->
-          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+          Z3.Expr.to_string evaluated_expr
        | BT.Array _ ->
-          return (Pp.string (Z3.Expr.to_string evaluated_expr))
+          Z3.Expr.to_string evaluated_expr
        | BT.Unit ->
-          return (BT.pp BT.Unit)
+          Pp.plain (BT.pp BT.Unit)
        | BT.Struct tag ->
          let layout = Global.SymMap.find tag G.global.struct_decls in
          let members = Memory.member_types layout in
-         let@ members = 
-           ListM.mapM (fun (member, sct) -> 
-               let@ s = o_evaluate model (IT.member_ ~member_bt:(BT.of_sct sct) (tag, expr, member)) in
-               return (dot ^^ Id.pp member ^^^ equals ^^^ s)
+         let members = 
+           List.map (fun (member, sct) -> 
+               let s = evaluate model (IT.member_ ~member_bt:(BT.of_sct sct) (tag, expr, member)) in
+               "." ^ Id.pp_string member ^ " = " ^ s
              ) members 
          in
-         return (braces (separate comma members))
-       | _ -> None
+         "{" ^ (String.concat ", " members) ^ "}"
+       | _ -> 
+          "(not evaluated)"
 
+  let evaluate_bool model expr = 
+    match evaluate model expr with
+    | "true" -> true
+    | "false" -> false
+    | str -> Debug_ocaml.error ("error parsing string: " ^ str)
 
   let symbol_it = function
     | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
     | _ -> SymSet.empty
 
-  let something_symbol_it = function
-    | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
-    | IT.IT (Option_op (Something (IT.IT (Lit (Sym s), _))), _) -> SymSet.singleton s
-    | _ -> SymSet.empty
-
-
   let pp_state_aux local {substitutions; vclasses; relevant} o_model =
     (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
+
 
     let (resource_lines, reported_pointees) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           match resource with
-          | Point {pointer; size; value; init; permission} ->
-             let permission = 
-               Option.bind (o_evaluate o_model permission)
-                 (fun p -> Some (!^"permission:" ^^^ p))
-             in
-             let init = 
-               Option.bind (o_evaluate o_model init)
-                 (fun p -> Some (!^"init:" ^^^ p))
-             in
+          | Point p ->
+             let loc_val = !^(evaluate o_model p.pointer) in
+             let size = !^(Z.to_string p.size) in
+             let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
+             let permission_v = evaluate o_model p.permission in
+             let init_v = evaluate_bool o_model p.init in
              let state = 
-               !^"owned" ^^^ 
-                 separate comma 
-                   (List.filter_map (fun p -> p) [permission; init]) 
+               !^"owned" ^^
+                 begin match permission_v with
+                 | "1.0" -> 
+                    Pp.empty
+                 | _ ->
+                    Pp.space ^^ comma ^^^ !^"permission" ^^ colon ^^^ !^permission_v
+                 end ^^ comma ^^^
+                   !^(if init_v then "init" else "uninit")
              in
-             let entry = 
-               (Some (IT.pp (IT.subst_vars substitutions pointer)), 
-                o_evaluate o_model pointer,
-                Some (Z.pp size),
-                Some state,
-                Some (IT.pp (IT.subst_vars substitutions value)),
-                o_evaluate o_model value
-               )
+             let value = 
+               (BT.pp (IT.bt p.value)) ^^^ 
+               IT.pp (IT.subst_vars substitutions p.value) ^^^ 
+               equals ^^^
+               !^(evaluate o_model p.value) 
              in
+             let entry = (Some loc_expr, Some loc_val, Some size, Some state, Some value) in
              let reported = 
-               (SymSet.union 
-                  (symbol_it pointer) 
-                  (something_symbol_it value))
+               List.fold_left SymSet.union SymSet.empty
+                 [symbol_it p.pointer; 
+                  IT.free_vars p.value;
+                  IT.free_vars p.init;
+                  IT.free_vars p.permission;
+                 ]
              in
              (entry :: acc_table, SymSet.union reported acc_reported)
           | QPoint p ->
-             let entry =
-               (None,
-                None, 
-                None, 
-                Some (RE.pp (RE.subst_vars substitutions resource)),
-                None,
-                None
-               )
-             in
+             let p = RE.alpha_rename_qpoint p "?p" in
+             let loc_expr = Sym.pp p.qpointer in
+             let value = (BT.pp (IT.bt p.value)) ^^^ !^(evaluate o_model p.value) in
+             let entry = (Some loc_expr, None, None, None, Some value) in
              (entry :: acc_table, SymSet.add p.qpointer acc_reported)
-          | Predicate p ->
-             let entry =
-               (Some (IT.pp (IT.subst_vars substitutions p.pointer)),
-                None, 
-                None, 
-                Some (RE.pp (RE.subst_vars substitutions (Predicate p))),
-                None,
-                None
-               )
-             in
+          | Predicate p when p.unused ->
+             begin match p.name, p.oargs with
+             | Ctype ct, [p_value; p_init] ->
+                let loc_val = !^(evaluate o_model p.pointer) in
+                let osize = Option.map (fun n -> !^(Z.to_string n)) (Memory.size_of_ctype_opt ct) in
+                let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
+                let init_v = !^(evaluate o_model p_init) in
+                let state = !^"owned" ^^ comma ^^^ !^"init:" ^^^ init_v in
+                let value = 
+                  (BT.pp (IT.bt p_value)) ^^^ 
+                    IT.pp (IT.subst_vars substitutions p_value) ^^^ 
+                      equals ^^^
+                        !^(evaluate o_model p_value) 
+                in
+                let entry = (Some loc_expr, Some loc_val, osize, Some state, Some value) in
+                let reported = 
+                  List.fold_left SymSet.union SymSet.empty
+                    [symbol_it p.pointer; 
+                     IT.free_vars p_value;
+                     IT.free_vars p_init;
+                    ]
+                in
+                (entry :: acc_table, SymSet.union reported acc_reported)
+             | _ ->
+                let loc_val = !^(evaluate o_model p.pointer) in
+                let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
+                let state = (RE.pp (RE.subst_vars substitutions (Predicate p))) in
+                let entry = (Some loc_expr, Some loc_val, None, Some state, None) in
+                (entry :: acc_table, symbol_it p.pointer)
+             end
+          | QPredicate p when p.unused ->
+             let index_name = "$i" in
+             let p = RE.alpha_rename_qpredicate p index_name in
+             let pointer = qpredicate_index_to_pointer p (sym_ (p.i, BT.Integer)) in
+             let pred = ({pointer; name = p.name; iargs = p.iargs; oargs = p.oargs; unused = true} :  predicate) in
+             let loc_val = !^(evaluate o_model p.pointer) in
+             let loc_expr = IT.pp (IT.subst_vars substitutions pred.pointer) in
+             let state = 
+               !^"for each" ^^^ 
+                 IT.pp p.istart ^^ !^ "<="^^ !^index_name^^ !^"<" ^^ IT.pp p.iend ^^ colon ^^^ 
+                   (RE.pp (RE.subst_vars substitutions (Predicate pred))) 
+             in 
+             let entry = (Some loc_expr, Some loc_val, None, Some state, None) in
              (entry :: acc_table, symbol_it p.pointer)
-          | QPredicate p ->
-             let entry =
-               (Some (IT.pp (IT.subst_vars substitutions p.pointer)),
-                o_evaluate o_model p.pointer, 
-                None, 
-                Some (RE.pp (RE.subst_vars substitutions (QPredicate p))),
-                None,
-                None
-               )
-             in
-             (entry :: acc_table, symbol_it p.pointer)
+          | _ ->
+             (acc_table, acc_reported)
         ) (L.all_resources local) ([], SymSet.empty)
     in
-    let var_lines = 
+    let report vclass = 
+      let relevant = not (SymSet.is_empty (SymSet.inter vclass.logical relevant)) in
+      let reported = not (SymSet.is_empty (SymSet.inter vclass.logical reported_pointees)) in
+      (not reported) && relevant
+    in
+    let memory_var_lines = 
       List.filter_map (fun (vclass,c) ->
-          let bt = vclass.sort in
-          let relevant = not (SymSet.is_empty (SymSet.inter vclass.logical relevant)) in
-          let reported = not (SymSet.is_empty (SymSet.inter vclass.logical reported_pointees)) in
-          if (not reported) && relevant then
-            match bt with
-            | BT.Loc -> 
-               Some (Some (Ast.Terms.pp false c.path), 
-                     o_evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, bt)),
-                     None, 
-                     None, 
-                     None, 
-                     None)
-            | _ -> 
-               Some (None,
-                     None, 
-                     None, 
-                     None, 
-                     Some (Ast.Terms.pp false c.path), 
-                     o_evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, bt)))
+          if report vclass && BT.equal vclass.sort Loc then
+               let loc_val = !^(evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
+               let loc_expr = Ast.Terms.pp false c.path in
+               let entry = (Some loc_expr, Some loc_val, None, None, None) in
+               Some entry
+          else None
+        ) vclasses
+    in
+    let logical_var_lines = 
+      List.filter_map (fun (vclass,c) ->
+          if report vclass && not (BT.equal vclass.sort Loc) then
+            let expr = Ast.Terms.pp false c.path in
+            let state = !^(evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
+            let entry = (Some expr, Some state) in
+            Some entry
           else
             None)
         vclasses
     in
-    resource_lines @ 
-      [(Some !^"break", None, None, None, None, None)] @ 
-      var_lines
+    (resource_lines @ memory_var_lines, logical_var_lines)
 
 
 
   let pp_state_with_model local explanation o_model =
-    let lines = 
-      List.map (fun (a,b,c,d,e,f) -> ((L,a), (R,b), (R,c), (L,d), (L,e), (R,f)))
-        (pp_state_aux local explanation o_model)
-    in
-    table6 ("pointer", "location", "size", "state", "variable", "value") lines
+    let (memory, variables) = (pp_state_aux local explanation o_model) in
+    table5 ("pointer", "location", "size", "state", "value") 
+      (List.map (fun (a, b, c, d, e) -> ((L, a), (R, b), (R, c), (L, d), (L, e))) memory) ^/^
+    table2 ("variable", "value") 
+      (List.map (fun (a, b) -> ((L, a), (L, b))) variables)
       
 
   (* let pp_state local explanation =

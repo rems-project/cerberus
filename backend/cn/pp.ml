@@ -12,7 +12,7 @@ let term_col = match get_terminal_size () with
   | Some (_, col) -> col - 1
   | _ -> 80 - 1
 
-let max_table_column_width = 40
+let max_table_column_width = 80
 
 
 

@@ -88,7 +88,7 @@ type type_error =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp}
+  | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp; situation : situation}
   | Unconstrained_logical_variable of Sym.t
   | Logical_variable_not_good_for_unification of Sym.t
 
@@ -221,10 +221,14 @@ let pp_type_error te =
           !^"but has" ^^^ LS.pp has ^^^ !^"type",  [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
-  | Unsat_constraint {constr;hint; state} ->
+  | Unsat_constraint {constr;hint; state; situation} ->
      let msg = match hint with
-       | Some hint -> !^"Unsatisfied constraint" ^^^ parens hint ^^^ constr 
-       | None -> !^"Unsatisfied constraint" ^^^ constr 
+       | Some hint -> 
+          !^"Unsatisfied constraint" ^^^ for_situation situation ^^ colon ^^^
+            parens hint ^^^ constr 
+       | None -> 
+          !^"Unsatisfied constraint" ^^^ for_situation situation ^^ colon ^^^
+            constr 
      in
      (msg, [consider_state state])
   | Unconstrained_logical_variable name ->

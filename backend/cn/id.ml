@@ -6,6 +6,7 @@ let s (CF.Symbol.Identifier (_,s)) = s
 
 let loc (CF.Symbol.Identifier (loc,_)) = loc
 
+let pp_string id = s id
 let pp id = PPrint.(!^)(s id)
 
 let equal = CF.Symbol.idEqual

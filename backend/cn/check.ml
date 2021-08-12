@@ -563,7 +563,7 @@ let unpack_predicate local (p : predicate) =
                        E.unsatisfied_constraint original_local 
                          (S.get_model solver) c
                      in
-                     (Unsat_constraint {constr; hint = None; state})
+                     (Unsat_constraint {constr; hint = None; state; situation})
                    end
                in
                fail loc err
@@ -1598,7 +1598,7 @@ let unpack_predicate local (p : predicate) =
                         E.unsatisfied_constraint local 
                           (S.get_model solver) (t_ in_range_lc)
                       in
-                      (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"})
+                      (Unsat_constraint {constr; state; hint = Some !^"write value unrepresentable"; situation = Access (Store None)})
                     end
                 in
                 fail loc err
