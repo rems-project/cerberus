@@ -7,6 +7,8 @@ open Cerb_frontend
 
 module IdSet = Set.Make(String)
 
+exception KnR_declaration of Location_ocaml.t
+
 type context = IdSet.t
 
 let cerb_builtin_types =
@@ -154,7 +156,7 @@ let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
     let decl = Cabs.Declarator (None, direct_declarator) in
     Cabs.FunDef (loc, Annot.Attrs xs, specifs, decl, stmt)
   | DeclFunIds (_, ids), Some rev_dlist ->
-    assert false
+    raise (KnR_declaration loc)
   | _, _ ->
     Cabs.FunDef (loc, Annot.Attrs xs, specifs, cabs_of_declarator d, stmt)
 

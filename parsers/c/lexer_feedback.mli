@@ -5,6 +5,8 @@
 
 open Cerb_frontend
 
+exception KnR_declaration of Location_ocaml.t
+
 type context
 val save_context: unit -> context
 val restore_context: context -> unit

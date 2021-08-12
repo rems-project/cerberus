@@ -13,9 +13,11 @@ let parse lexbuf =
   | Failure msg ->
     prerr_endline "CPARSER_DRIVER (Failure)";
     failwith msg
-  | _ ->
+  | Lexer_feedback.KnR_declaration loc ->
+    Exception.fail (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
+  | exn ->
     let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
-    failwith @@ "CPARSER_DRIVER(" ^ Location_ocaml.location_to_string loc ^ ")"
+    failwith @@ "CPARSER_DRIVER(" ^ Location_ocaml.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
 
 let parse_from_channel input =
   let read f input =
