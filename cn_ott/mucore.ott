@@ -1101,6 +1101,17 @@ defns
     N |- term_aux /\ res eq term_aux' /\ res'
 
 
+    smt ( N => ( term_aux1 -> term_aux2 ) /\ ( term_aux2 -> term_aux1 ) )
+    N |- res11 eq res21
+    N |- res21 eq res22
+    ----------------------------------------------------------------------------- :: OrdDisj
+    N |- if term_aux1 then res11 else res12 eq if term_aux2 then res21 else res22
+
+
+    ------------------------------------------------------------------- :: Pred
+    N |- a ( </ mu_pval_auxi // i /> ) eq a ( </ mu_pval_auxi // i /> )
+
+
   defn
     C ; L ; N ; R |- res_term <= res :: :: Res :: Res_ by
 
@@ -1115,9 +1126,11 @@ defns
     C ; L ; N ; cdot , _ : points_to |- points_to' <= points_to''
 
 
-    N |- res eq res'
-    --------------------------------------- :: Var
-    C ; L ; N ; cdot , r : res |- r <= res'
+    L ; N |- res1' = strip_ifs ( res1 )
+    L ; N |- res2' = strip_ifs ( res2 )
+    N |- res1' eq res2'
+    ---------------------------------------- :: Var
+    C ; L ; N ; cdot , r : res1 |- r <= res2
 
 
     C ; L ; N ; R1 |- res_term1 <= res1
@@ -1495,17 +1508,21 @@ defns
 
     smt ( N => term_aux )
     L ; N |- res1' = strip_ifs ( res1' )
-    -------------------------------------------------------------- :: OrdDisj_True
+    -------------------------------------------------------------- :: True
     L ; N |- res1' = strip_ifs ( if term_aux then res1 else res2 )
 
 
     smt ( N => neg term_aux )
     L ; N |- res2' = strip_ifs ( res2 )
-    -------------------------------------------------------------- :: OrdDisj_False
+    -------------------------------------------------------------- :: False
     L ; N |- res2' = strip_ifs ( if term_aux then res1 else res2 )
 
 
-    ------------------------------------------------------------------------------------ :: PredVar
+    ------------------------------------------------------------------------------------------- :: UnderDet
+    L ; N |- if term_aux then res1 else res2 = strip_ifs ( if term_aux then res1 else res2 )
+
+
+    ------------------------------------------------------------------------------------ :: Pred
     L ; N |- a ( </ mu_pval_auxi // i /> ) = strip_ifs ( a ( </ mu_pval_auxi // i /> ) )
 
 
@@ -2007,6 +2024,11 @@ defns
     res_pattern = res_term ~> subs
     ------------------------------------------------------------------------------------------------------ :: Pack
     pack ( Symbol_sym , res_pattern ) = pack ( mu_pval_aux , res_term ) ~> mu_pval_aux / Symbol_sym , subs
+
+
+    res_pattern = res_term ~> subs
+    --------------------------------------- :: Fold
+    fold ( res_pattern ) = res_term ~> subs
 
 
   defn

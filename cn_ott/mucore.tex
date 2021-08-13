@@ -1011,12 +1011,31 @@
 {\ottdrulename{Ty\_Res\_Eq\_Term}}{}%
 }}
 
+
+\newcommand{\ottdruleTyXXResXXEqXXOrdDisj}[1]{\ottdrule[#1]{%
+\ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  \ottsym{(}  term_{{\mathrm{1}}}  \rightarrow  term_{{\mathrm{2}}}  \ottsym{)}  \wedge  \ottsym{(}  term_{{\mathrm{2}}}  \rightarrow  term_{{\mathrm{1}}}  \ottsym{)}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res_{{\mathrm{11}}}} \, \equiv \, \ottnt{res_{{\mathrm{21}}}}}%
+\ottpremise{\Phi  \vdash  \ottnt{res_{{\mathrm{21}}}} \, \equiv \, \ottnt{res_{{\mathrm{22}}}}}%
+}{
+\Phi  \vdash  \ottkw{if} \, term_{{\mathrm{1}}} \, \ottkw{then} \, \ottnt{res_{{\mathrm{11}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{12}}}} \, \equiv \, \ottkw{if} \, term_{{\mathrm{2}}} \, \ottkw{then} \, \ottnt{res_{{\mathrm{21}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{22}}}}}{%
+{\ottdrulename{Ty\_Res\_Eq\_OrdDisj}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXResXXEqXXPred}[1]{\ottdrule[#1]{%
+}{
+\Phi  \vdash  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)} \, \equiv \, { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}}{%
+{\ottdrulename{Ty\_Res\_Eq\_Pred}}{}%
+}}
+
 \newcommand{\ottdefnTyXXResXXEq}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}$}{}
 \ottusedrule{\ottdruleTyXXResXXEqXXEmp{}}
 \ottusedrule{\ottdruleTyXXResXXEqXXPointsTo{}}
 \ottusedrule{\ottdruleTyXXResXXEqXXSepConj{}}
 \ottusedrule{\ottdruleTyXXResXXEqXXExists{}}
 \ottusedrule{\ottdruleTyXXResXXEqXXTerm{}}
+\ottusedrule{\ottdruleTyXXResXXEqXXOrdDisj{}}
+\ottusedrule{\ottdruleTyXXResXXEqXXPred{}}
 \end{ottdefnblock}}
 
 %% defn Res
@@ -1037,9 +1056,11 @@
 
 
 \newcommand{\ottdruleTyXXResXXVar}[1]{\ottdrule[#1]{%
-\ottpremise{\Phi  \vdash  \ottnt{res} \, \equiv \, \ottnt{res'}}%
+\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{1}}}}  \ottsym{)}}%
+\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}} \, \equiv \, \ottnt{res'_{{\mathrm{2}}}}}%
 }{
-\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{r}  {:}  \ottnt{res}  \vdash  \ottmv{r}  \Leftarrow  \ottnt{res'}}{%
+\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{r}  {:}  \ottnt{res_{{\mathrm{1}}}}  \vdash  \ottmv{r}  \Leftarrow  \ottnt{res_{{\mathrm{2}}}}}{%
 {\ottdrulename{Ty\_Res\_Var}}{}%
 }}
 
@@ -1607,28 +1628,35 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 }}
 
 
-\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXOrdDisjXXTrue}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXTrue}[1]{\ottdrule[#1]{%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  term  \ottsym{)}}%
 \ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res'_{{\mathrm{1}}}}  \ottsym{)}}%
 }{
 \mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
-{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_OrdDisj\_True}}{}%
+{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_True}}{}%
 }}
 
 
-\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXOrdDisjXXFalse}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXFalse}[1]{\ottdrule[#1]{%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  \neg \, term  \ottsym{)}}%
 \ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}%
 }{
 \mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
-{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_OrdDisj\_False}}{}%
+{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_False}}{}%
 }}
 
 
-\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXPredVar}[1]{\ottdrule[#1]{%
+\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXUnderDet}[1]{\ottdrule[#1]{%
+}{
+\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
+{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_UnderDet}}{}%
+}}
+
+
+\newcommand{\ottdruleTyXXPatXXResXXStripIfsXXPred}[1]{\ottdrule[#1]{%
 }{
 \mathcal{L}  \ottsym{;}  \Phi  \vdash  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}  \ottsym{)}}{%
-{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_PredVar}}{}%
+{\ottdrulename{Ty\_Pat\_Res\_StripIfs\_Pred}}{}%
 }}
 
 \newcommand{\ottdefnTyXXPatXXResXXStripIfsXX}[1]{\begin{ottdefnblock}[#1]{$\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}$}{}
@@ -1637,9 +1665,10 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 \ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXSepConj{}}
 \ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXExists{}}
 \ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXTermConj{}}
-\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXOrdDisjXXTrue{}}
-\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXOrdDisjXXFalse{}}
-\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXPredVar{}}
+\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXTrue{}}
+\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXFalse{}}
+\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXUnderDet{}}
+\ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXPred{}}
 \end{ottdefnblock}}
 
 %% defn Res_Match_
@@ -2340,11 +2369,20 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 {\ottdrulename{Subs\_Decons\_Res\_Pack}}{}%
 }}
 
+
+\newcommand{\ottdruleSubsXXDeconsXXResXXFold}[1]{\ottdrule[#1]{%
+\ottpremise{\ottnt{res\_pattern}  =  \ottnt{res\_term}  \leadsto  \sigma}%
+}{
+\ottkw{fold} \, \ottsym{(}  \ottnt{res\_pattern}  \ottsym{)}  =  \ottnt{res\_term}  \leadsto  \sigma}{%
+{\ottdrulename{Subs\_Decons\_Res\_Fold}}{}%
+}}
+
 \newcommand{\ottdefnSubsXXDeconsXXRes}[1]{\begin{ottdefnblock}[#1]{$\ottnt{res\_pattern}  =  \ottnt{res\_term}  \leadsto  \sigma$}{}
 \ottusedrule{\ottdruleSubsXXDeconsXXResXXEmp{}}
 \ottusedrule{\ottdruleSubsXXDeconsXXResXXVar{}}
 \ottusedrule{\ottdruleSubsXXDeconsXXResXXPair{}}
 \ottusedrule{\ottdruleSubsXXDeconsXXResXXPack{}}
+\ottusedrule{\ottdruleSubsXXDeconsXXResXXFold{}}
 \end{ottdefnblock}}
 
 %% defn Decons_Ret
@@ -2975,7 +3013,7 @@ ident  =  \ottnt{res\_term}  \leadsto  \ottnt{res\_term}  \ottsym{/}  ident  \ot
 \ottall
 
 \begin{verbatim}
-Definition rules:        209 good    0 bad
-Definition rule clauses: 466 good    0 bad
+Definition rules:        213 good    0 bad
+Definition rule clauses: 476 good    0 bad
 \end{verbatim}
 \end{document}
