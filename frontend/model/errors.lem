@@ -55,6 +55,7 @@ type cparser_cause =
   | Cparser_unexpected_token of string
   | Cparser_non_standard_string_concatenation
   | Cparser_extra_semi (* semicolon after a function definition (is an extension it least since C++11) *)
+  | Cparser_KnR_declaration (* we don't support K&R syntax for declarations *)
 
 type core_parser_cause =
   | Core_parser_invalid_symbol

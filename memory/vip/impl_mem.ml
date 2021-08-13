@@ -123,9 +123,9 @@ end : Constraints with type t = mem_iv_constraint)
 type footprint =
   FOOTPRINT
 
-let do_overlap _ _ =
+let check_overlap _ _ =
   (* No unsequenced races detection *)
-  false
+  Mem_common.Disjoint
 
 
 module IntMap = Map.Make(struct
@@ -748,7 +748,7 @@ let in_range n ity =
 (* Casting operations *)
 (* 'cast_ival_to_ptrval()' in the paper *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
-let ptrcast_ival ity ref_ty ival : pointer_value memM =
+let ptrfromint ity ref_ty ival : pointer_value memM =
   match ival with
     | IVloc (Prov_empty, _) ->
         fail (MerrVIP VIP_ptrcast_empty)
@@ -780,7 +780,7 @@ let ptrcast_ival ity ref_ty ival : pointer_value memM =
 
 (* 'cast_ptrval_to_ival()' in the paper *)
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-let intcast_ptrval ref_ty ity ptrval : integer_value memM =
+let intfromptr ref_ty ity ptrval : integer_value memM =
   match ptrval with
     | PVnull ->
         (* VIP-cast-ptr-to-int-null *)

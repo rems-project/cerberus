@@ -435,10 +435,16 @@ module Concrete : Memory = struct
   }
   
   type footprint =
-    | Footprint
+    (* base address, size *)
+    | FP of address * N.num
   
-  let do_overlap fp1 fp2 =
-    failwith "TODO: do_overlap"
+  let check_overlap (FP (b1, sz1)) (FP (b2, sz2)) =
+    if N.equal b1 b2 && N.equal sz1 sz2 then
+      ExactOverlap
+    else if N.(less_equal (add b1 sz1) b2) || N.(less_equal (add b2 sz2) b1) then
+      Disjoint
+    else
+      PartialOverlap
   
   type 'a memM = ('a, mem_error, integer_value mem_constraint, mem_state) Eff.eff
   
@@ -1381,6 +1387,7 @@ module Concrete : Memory = struct
         return ()
       end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
+      let fp = FP (addr, (N.of_int (sizeof ty))) in
       begin match bs' with
         | [] ->
             Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
@@ -1393,9 +1400,9 @@ module Concrete : Memory = struct
                 | MVunspecified _ ->
                     fail (MerrOther "load from uninitialised memory")
                 | _ ->
-                    return (Footprint, mval)
+                    return (fp, mval)
             else
-              return (Footprint, mval)
+              return (fp, mval)
         | _ ->
             fail (MerrWIP "load, bs' <> []")
       end in
@@ -1490,7 +1497,7 @@ module Concrete : Memory = struct
                     funptrmap= funptrmap; }
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-        return Footprint in
+        return (FP (addr, (N.of_int (sizeof ty)))) in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
             fail (MerrAccess (loc, StoreAccess, NullPtr))
@@ -1895,7 +1902,7 @@ module Concrete : Memory = struct
           return false
 
   
-  let ptrcast_ival _ ref_ty (IV (prov, n)) =
+  let ptrfromint _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD §6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
@@ -2168,7 +2175,7 @@ module Concrete : Memory = struct
     end)
   
   (* TODO: conversion? *)
-  let intcast_ptrval _ ity (PV (prov, ptrval_)) =
+  let intfromptr _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
       | PVnull _ ->
           return (mk_ival prov Nat_big_num.zero)
@@ -2526,8 +2533,8 @@ let combine_prov prov1 prov2 =
   let copy_alloc_id ival ptrval =
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
-    intcast_ptrval Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrcast_ival Ctype.(Unsigned Intptr_t) Ctype.void ival
+    intfromptr Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrfromint Ctype.(Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 

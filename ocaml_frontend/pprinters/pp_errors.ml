@@ -42,6 +42,8 @@ let string_of_cparser_cause = function
       "unsupported non-standard concatenation of string literals"
   | Cparser_extra_semi ->
       "found a semicolon after a function definition"
+  | Cparser_KnR_declaration ->
+      "found K&R-style declaration (unsupported)"
 
 
 let string_of_constraint_violation = function

@@ -558,7 +558,7 @@ end : Constraints with type t = mem_iv_constraint)
 let cs_module = (module Constraints : Constraints with type t = mem_iv_constraint)
 
 type footprint = Defacto_memory_types.impl_footprint
-let do_overlap _ _ = false (* TODO *)
+let check_overlap _ _ = Mem_common.Disjoint (* TODO *)
 type mem_state = Defacto_memory.impl_mem_state
 let initial_mem_state = Defacto_memory.impl_initial_mem_state
 type 'a memM =
@@ -587,8 +587,8 @@ let update_prefix _ = return ()
 let prefix_of_pointer _ = return None
 let validForDeref_ptrval = Defacto_memory.impl_validForDeref_ptrval
 let isWellAligned_ptrval = Defacto_memory.impl_isWellAligned_ptrval
-let ptrcast_ival = Defacto_memory.impl_ptrcast_ival
-let intcast_ptrval = Defacto_memory.impl_intcast_ptrval
+let ptrfromint = Defacto_memory.impl_ptrcast_ival
+let intfromptr = Defacto_memory.impl_intcast_ptrval
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval
 let member_shift_ptrval = Defacto_memory.impl_member_shift_ptrval
 let eff_array_shift_ptrval _ _ = failwith "Defacto_memory.impl_array_shift_ptrval"
