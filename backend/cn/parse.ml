@@ -9,10 +9,10 @@ open CF.Annot
 
 (* adapting from core_parser_driver.ml *)
 
-let set_default_label label = 
-  function 
-  | None -> Some label
-  | Some label' -> Some label'
+(* let set_default_label label = 
+ *   function 
+ *   | None -> Some label
+ *   | Some label' -> Some label' *)
 
 let parse_condition default_label (loc, string) = 
   let lexbuf = Lexing.from_string string in
@@ -43,7 +43,7 @@ let parse_condition default_label (loc, string) =
        let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
        fail loc (lazy (Generic !^ ("Unexpected token " ^ Lexing.lexeme lexbuf)))
   in
-  return (loc, Ast.map_labels (set_default_label default_label) parsed_spec)
+  return (loc, parsed_spec)
 
 type cn_attribute = {
     keyword : Loc.t * string;

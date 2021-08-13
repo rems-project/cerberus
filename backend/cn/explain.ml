@@ -126,11 +126,11 @@ let make_name =
   let pp_naming = 
     Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Ast.Terms.pp true p))
 
-  let naming_of_mapping mapping = 
+  let naming_of_mapping name mapping = 
     let open Mapping in
     List.filter_map (fun i ->
         match IT.is_sym i.it with
-        | Some (sym, _) -> Some (sym, i.path)
+        | Some (sym, _) -> Some (sym, Ast.Env (i.path, name))
         | None -> None
       ) mapping
 
@@ -258,12 +258,12 @@ module Make
             List.find_map (fun (named_vclass, {path;_}) -> 
                 Option.bind 
                   (VClassGraph.edge_label (named_vclass, vclass) graph)
-                  (function Pointee -> Some (Ast.pointee None path))  
+                  (function Pointee -> Some (Ast.pointee path))  
               ) vclasses_explanation
           in
           match has_given_name, has_symbol_name, has_derived_name with
           | Some given_name, o_symbol_name, o_derived_name ->
-             let without_labels = Ast.remove_labels_term given_name in
+             let without_labels = Ast.Terms.remove_labels given_name in
              let path = 
                if Option.equal Ast.term_equal (Some without_labels) (o_symbol_name) ||
                     Option.equal Ast.term_equal (Some without_labels) (o_derived_name) 
@@ -276,7 +276,7 @@ module Make
           | None, None, Some derived_name ->
              vclasses_explanation @ [(vclass, {path = derived_name; name_kind = Symbol})]
           | None, None, None ->
-             let name = Ast.LabeledName.{label = None; v = make_name vclass} in
+             let name = make_name vclass in
              vclasses_explanation @ [(vclass, {path = Var name; name_kind = Default})]
         ) [] (VClassGraph.linearise graph)
     in
@@ -470,7 +470,7 @@ module Make
     let (memory, variables) = (pp_state_aux local explanation o_model) in
     table5 ("pointer", "location", "size", "state", "value") 
       (List.map (fun (a, b, c, d, e) -> ((L, a), (R, b), (R, c), (L, d), (L, e))) memory) ^/^
-    table2 ("variable", "value") 
+    table2 ("expression", "value") 
       (List.map (fun (a, b) -> ((L, a), (L, b))) variables)
       
 

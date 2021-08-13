@@ -64,11 +64,6 @@ start:
   | cond=cond EOF
       { cond }
 
-labeled_name:
-  | id=NAME
-      { Ast.LabeledName.{label = None; v = id } }
-  | id=NAME AT label=NAME
-      { Ast.LabeledName.{label = Some label; v = id } }
 
 
 
@@ -98,12 +93,14 @@ atomic_term:
     { Ast. PredOutput (pred, oarg) }
   | AMPERSAND id=NAME
       { Ast.Addr id }
-  | ln=labeled_name
-      { Ast.Var ln }
+  | v=NAME
+      { Ast.Var v }
   | STAR p=atomic_term
       { Ast.Pointee p }
   | NULL
       { Ast.Null }
+  | LPAREN a=term RPAREN AT l=NAME
+      { Ast.Env (a, l) }
 
 arith_term:
   | a1=arith_or_atomic_term PLUS a2=arith_or_atomic_term

@@ -831,7 +831,7 @@ module Make
             let local = L.add_l s ls local in
             let local = match Sym.name s with
               | Some name -> 
-                 L.add_description (s, Ast.Var {label = None; v = name}) local
+                 L.add_description (s, Ast.Var name) local
               | None -> local
             in
             local

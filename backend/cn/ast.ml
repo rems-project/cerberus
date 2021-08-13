@@ -2,34 +2,11 @@ module Loc = Locations
 open Pp
 
 
-module LabeledName = struct
-
-  type t = 
-    {label : string option; v : string}
-
-  let equal b1 b2 = 
-    Option.equal String.equal b1.label b2.label && 
-      String.equal b1.v b2.v
-
-  let pp {label; v} = 
-    match label with
-    | Some label -> !^v ^^ at ^^ !^label
-    | None -> !^v
-
-  let map_label f {v; label} = 
-    {v; label = f label}
-
-  let remove_label = map_label (fun _ -> None)
-
-end
-
-
-
 module Terms = struct
 
   type term = 
     | Addr of string
-    | Var of LabeledName.t
+    | Var of string
     | Pointee of term
     | PredOutput of string * string
     | Member of term * Id.t
@@ -52,6 +29,7 @@ module Terms = struct
     | PointerToIntegerCast of term
     | Null
     | App of term * term
+    | Env of term * string
 
 
 
@@ -60,7 +38,7 @@ module Terms = struct
     | Addr b1, Addr b2 ->
        String.equal b1 b2
     | Var b1, Var b2 -> 
-       LabeledName.equal b1 b2
+       String.equal b1 b2
     | Pointee p1, Pointee p2 ->
        term_equal p1 p2
     | PredOutput (p1, a1), PredOutput (p2, a2) ->
@@ -105,6 +83,8 @@ module Terms = struct
        true
     | App (t11, t12), App (t21, t22) ->
        term_equal t11 t21 && term_equal t12 t22
+    | Env (t1, e1), Env (t2, e2) ->
+       term_equal t1 t2 && String.equal e1 e2
     | Addr _, _ -> 
        false
     | Var _, _ ->
@@ -153,6 +133,8 @@ module Terms = struct
        false
     | App _, _ ->
        false
+    | Env _, _ ->
+       false
 
 
 
@@ -163,7 +145,7 @@ module Terms = struct
     | Addr b -> 
        ampersand ^^ !^b
     | Var b -> 
-       LabeledName.pp b
+       !^b
     | Pointee p -> 
        star ^^ (pp true p)
     | PredOutput (p,a) -> 
@@ -209,6 +191,8 @@ module Terms = struct
        !^"NULL"
     | App (t1, t2) ->
        mparens atomic (pp true t1 ^^ brackets (pp false t2))
+    | Env (t, e) ->
+       parens (pp false t) ^^ at ^^ !^e
        
 
 
@@ -220,25 +204,25 @@ module Terms = struct
     Var bn
 
 
-  let pointee olabel = function
-    | Addr bn -> Var {label = olabel; v = bn}
+  let pointee = function
+    | Addr var -> Var var
     | t -> Pointee t
 
   let predarg pr a =
     PredOutput (pr,a)
 
-  let rec map_labels_term f t = 
+  let rec remove_labels t = 
     let rec aux = function
       | Addr bn -> 
          Addr bn
       | Var bn -> 
-         Var (LabeledName.map_label f bn)
+         Var bn
       | Pointee p -> 
-         Pointee (map_labels_term f p)
+         Pointee (remove_labels p)
       | PredOutput (pr,a) -> 
          PredOutput (pr, a)
       | Member (p, m) -> 
-         Member (map_labels_term f p, m)
+         Member (remove_labels p, m)
       | Integer i -> 
          Integer i
       | Addition (t1, t2) -> 
@@ -277,12 +261,11 @@ module Terms = struct
          Null
       | App (t1, t2) ->
          App (aux t1, aux t2)
+      | Env (t, _) ->
+         t
     in
     aux t
   
-
-  let remove_labels_term = map_labels_term (fun _ -> None)
-
 
 
 
@@ -307,11 +290,11 @@ type condition =
   | Resource of resource_condition
 
 
-let map_labels f = function
+let remove_labels = function
   | Logical cond -> 
-     Logical (map_labels_term f cond)
+     Logical (remove_labels cond)
   | Resource {predicate; arguments; oname} ->
-     let arguments = List.map (map_labels_term f) arguments in
+     let arguments = List.map remove_labels arguments in
      Resource { predicate; arguments; oname }
     
 

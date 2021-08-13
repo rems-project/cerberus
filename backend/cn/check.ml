@@ -910,7 +910,7 @@ let unpack_predicate local (p : predicate) =
        inference as the spine judgment. So implement the subtyping
        judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
     let subtype (loc : loc) local arg (rtyp : RT.t) : (L.t, type_error) m =
-      let local = add_description (arg.lname, Ast.Var {label = None; v ="return"}) local in
+      let local = add_description (arg.lname, Ast.Var "return") local in
       let ui_info = { loc; situation = Subtyping; original_local = local } in
       let ft = AT.of_rt rtyp (AT.I False.False) in
       let@ (False.False, local) = 
@@ -1783,7 +1783,7 @@ let unpack_predicate local (p : predicate) =
          let@ args = args_of_asyms local asyms in
          let local = match args, lkind with
            | [arg], Return -> 
-              add_description (arg.lname, Ast.Var {label = None; v = "return"}) local
+              add_description (arg.lname, Ast.Var "return") local
            | _ -> local
          in
          let@ local = Spine.calltype_lt loc local args (lt,lkind) in
@@ -1870,7 +1870,7 @@ let unpack_predicate local (p : predicate) =
     let@ local_or_false =
       let names = 
         Explain.naming_substs substs 
-          (Explain.naming_of_mapping mapping)
+          (Explain.naming_of_mapping "start" mapping)
       in
       let local = add_descriptions names local in
       check_tpexpr local body rt 
@@ -1895,7 +1895,8 @@ let unpack_predicate local (p : predicate) =
     in
     (* prepare name mapping *)
     let fnames = 
-      Explain.naming_substs substs (Explain.naming_of_mapping mapping) 
+      Explain.naming_substs substs 
+        (Explain.naming_of_mapping "start" mapping) 
     in
 
     (* rbt consistency *)
@@ -1948,9 +1949,13 @@ let unpack_predicate local (p : predicate) =
            check_and_bind_arguments False.subst_var loc args lt 
          in
          let@ local_or_false = 
+           let lname = match Sym.name lsym with
+             | Some lname -> lname
+             | None -> failwith "label without name"
+           in
            let names = 
              Explain.naming_substs (lsubsts @ substs)
-               (Explain.naming_of_mapping mapping)  
+               (Explain.naming_of_mapping lname mapping)  
            in
            let local = add_descriptions names (delta_label ++ pure_delta ++ local) in
            check_texpr (local, labels) body False
@@ -2092,7 +2097,9 @@ let check mu_file =
         in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-        let@ () = WT.WFT.welltyped "global" loc (L.add_descriptions (Explain.naming_of_mapping mapping) local) ftyp in
+        let@ () = WT.WFT.welltyped "global" loc
+                    (L.add_descriptions (Explain.naming_of_mapping "start" mapping) local) ftyp 
+        in
         return (global, local)
       ) mu_file.mu_funinfo (global, local)
   in

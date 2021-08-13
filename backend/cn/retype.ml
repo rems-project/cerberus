@@ -526,12 +526,12 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
             ) args
         in
         let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
-        let@ (ftyp, init_mapping) = 
+        let@ (ftyp, mappings) = 
           Conversions.make_fun_spec loc get_layout predicates fsym fspec 
         in
-        let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto, init_mapping) in
+        let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto, mappings) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
-        let funinfo_extra = Pmap.add fsym (fspec, init_mapping) funinfo_extra in
+        let funinfo_extra = Pmap.add fsym (fspec, mappings) funinfo_extra in
         return (funinfo, funinfo_extra)
     in
     PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
@@ -544,7 +544,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       | Some (New.M_funinfo (_,_,ftyp,_,_)) -> ftyp 
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
-    let (fspec, init_mapping) = match Pmap.lookup fsym funinfo_extra with
+    let (fspec, start_mapping) = match Pmap.lookup fsym funinfo_extra with
       | Some extra -> extra
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
@@ -572,14 +572,15 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           in
           let lname = match Sym.name lsym with
             | Some lname -> lname
-            | None -> Sym.pp_string lsym (* check *)
+            | None -> failwith "label without name"
           in
           let@ lspec = Parse.parse_label lname argtyps fspec this_attrs in
           let@ (lt,mapping) = 
-            Conversions.make_label_spec loc get_layout predicates lname init_mapping lspec
+            Conversions.make_label_spec loc get_layout predicates lname 
+              start_mapping lspec
           in
           let@ e = retype_texpr e in
-          return (New.M_Label (loc, lt,args,e,annots,mapping))
+          return (New.M_Label (loc, lt,args,e,annots, mapping))
        | Some (LAloop_break loop_id) ->
           error "break label has not been inlined"
        | Some LAreturn -> 
@@ -605,7 +606,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       let@ expr = retype_texpr expr in
       let@ labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
       let mapping = match Pmap.lookup fsym funinfo_extra with
-        | Some (_, init_mapping) -> init_mapping
+        | Some (_, start_mapping) -> start_mapping
         | None -> Mapping.empty
       in
       return (New.M_Proc (loc,bt,args,expr,labels, mapping))
