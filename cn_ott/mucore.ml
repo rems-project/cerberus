@@ -458,7 +458,6 @@ type
 type 
 res_pattern =  (* resource terms *)
    ResP_Empty (* empty heap *)
- | ResP_PointsTo of type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } (* single-cell heap *)
  | ResP_Var of Symbol.sym (* variable *)
  | ResP_SepPair of res_pattern * res_pattern (* seperating-conjunction pair *)
  | ResP_Pack of Symbol.sym * res_pattern (* packing for existentials *)
@@ -477,7 +476,11 @@ res =  (* resources *)
  | Res_Points_to of type points_to = { pointer: 'bt term; perm : int * int; init: bool; ct = Sctypes.t; pointee : 'bt term; } (* points-top heap pred. *)
  | Res_SepConj of res * res (* seperating conjunction *)
  | Res_Exists of Symbol.sym * base_type * res (* existential *)
- | Res_Term of 'bt term_aux * res (* logical conjuction *)
+ | Res_TermConj of 'bt term_aux * res (* logical conjuction *)
+ | Res_OrdDisj of 'bt term_aux * res * res (* ordered disjuction *)
+ | Res_Pred of res * ('TY mu_pval_aux) list (* predicate *)
+ | Res_FixpVar of Symbol.sym (* recursive res. pred. variable *)
+ | Res_FixpExpr of Symbol.sym * ((Symbol.sym * base_type)) list * res (* recursive res. pred. expression *)
 
 
 type 
@@ -565,7 +568,6 @@ aux_binders_mu_pattern_of_mu_pattern (mu_pattern5:mu_pattern) : Symbol.sym list 
 let rec aux_binders_res_pattern_of_res_pattern (res_pattern_5:res_pattern) : Symbol.sym list =
   match res_pattern_5 with
   | ResP_Empty -> []
-  | (ResP_PointsTo pt) -> []
   | (ResP_Var symbol_sym) -> [symbol_sym]
   | (ResP_SepPair (res_pattern1,res_pattern2)) -> (aux_binders_res_pattern_of_res_pattern res_pattern1) @ (aux_binders_res_pattern_of_res_pattern res_pattern2)
   | (ResP_Pack (symbol_sym,res_pattern)) -> [symbol_sym] @ (aux_binders_res_pattern_of_res_pattern res_pattern)
