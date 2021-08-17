@@ -188,6 +188,7 @@ let main filename mjsonfile debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
+    Pp.print stdout (Pp.string ("Cerberus frontend"));
     begin match frontend filename with
     | CF.Exception.Exception err ->
        prerr_endline (CF.Pp_errors.to_string err);
@@ -199,6 +200,7 @@ let main filename mjsonfile debug_level print_level =
          assert (Z3.Log.open_ z3_log_file_path);
          Debug_ocaml.maybe_open_csv_timing_file ();
          let result = 
+           Pp.print stdout (Pp.string ("processing type assertions"));
            let@ file = Retype.retype_file file in
            Check.check file 
          in

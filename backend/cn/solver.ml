@@ -37,9 +37,9 @@ module ITtbl = Hashtbl.Make(IndexTerms)
 
 module type S = sig
 
-  val provable : Z3.Expr.expr list -> LC.t -> bool
-  val provable_and_solver : Z3.Expr.expr list -> LC.t -> bool * Z3.Solver.solver
-  val provably_inconsistent : Z3.Expr.expr list -> bool
+  val provable : Z3.Solver.solver -> LC.t -> bool
+  val provable_and_solver : Z3.Solver.solver -> LC.t -> bool * Z3.Solver.solver
+  val provably_inconsistent : Z3.Solver.solver -> bool
   val get_model : Z3.Solver.solver -> Z3.Model.model
   val expr : IT.t -> Z3.Expr.expr
   val constr : LC.t -> Z3.Expr.expr list
@@ -452,7 +452,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
        Z3.Quantifier.expr_of_quantifier q :: cs
 
 
-  let check (assumptions: Z3.Expr.expr list) (lc : LC.t) =  
+  let check solver (lc : LC.t) =  
     (* as similarly suggested by Robbert *)
     let () = Debug_ocaml.begin_csv_timing "solver" in
     let result = match lc with
@@ -460,27 +460,16 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          let solver = Z3.Solver.mk_simple_solver context in
          (`YES, solver)
       | _ ->
-         let solver = Z3.Solver.mk_simple_solver context in
-         let () = Debug_ocaml.begin_csv_timing "adding assumptions" in
-         Z3.Solver.add solver [Z3.Boolean.mk_and context assumptions];
-         let () = Debug_ocaml.end_csv_timing "adding assumptions" in
-         let () = Debug_ocaml.begin_csv_timing "adding goal" in
-         let () = match lc with
+         let () = Debug_ocaml.begin_csv_timing "solving" in
+         let result = match lc with
            | T t ->
               let t = of_index_term t in
-              Z3.Solver.add solver [Z3.Boolean.mk_not context t]
+              Z3.Solver.check solver [Z3.Boolean.mk_not context t]
            | Forall ((s, bt), _trigger, t) -> 
               let s' = Sym.fresh () in
               let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
               let t = of_index_term t in
-              Z3.Solver.add solver [Z3.Boolean.mk_not context t]
-         in
-         let () = Debug_ocaml.end_csv_timing "adding goal" in
-         let () = Debug_ocaml.begin_csv_timing "solving" in
-         let result = 
-           try Z3.Solver.check solver [] with
-           | Z3.Error err -> 
-              Debug_ocaml.error ("Z3 error: " ^ err)
+              Z3.Solver.check solver [Z3.Boolean.mk_not context t]
          in
          let () = Debug_ocaml.end_csv_timing "solving" in
          match result with

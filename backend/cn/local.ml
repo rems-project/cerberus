@@ -15,12 +15,11 @@ module SymMap = Map.Make(Sym)
 module type S = sig
 
   type t 
-  val empty : t
+  val empty : unit -> t
   val pp : t -> Pp.document
   val all_computational : t -> (SymMap.key * (LS.t * SymMap.key)) list
   val all_logical : t -> (SymMap.key * LS.t) list
   val all_constraints : t -> LC.t list
-  val all_solver_constraints : t -> Z3.Expr.expr list
   val all_resources : t -> RE.t list
   val descriptions : t -> Ast.Terms.term SymMap.t
   val bound : Sym.t -> Kind.t -> t -> bool
@@ -31,6 +30,7 @@ module type S = sig
   val add_c : LC.t -> t -> t
   val add_cs : LC.t list -> t -> t
   val add_r : RE.t -> t -> t
+  val solver : t -> Z3.Solver.solver
 
   val remove_resource : RE.t -> t -> t
   val map_and_fold_resources : 
@@ -38,7 +38,7 @@ module type S = sig
     t -> 'acc -> t * 'acc
   val add_description : Sym.t * Ast.Terms.term -> t -> t
   val add_descriptions : (Sym.t * Ast.Terms.term) list -> t -> t
-  val (++) : t -> t -> t
+  (* val (++) : t -> t -> t *)
   val all_vars : t -> Sym.t list
   val json : t -> Yojson.Safe.t
   val bind : t -> Sym.t -> ReturnTypes.t -> t
@@ -60,17 +60,17 @@ module Make (S : Solver.S) : S = struct
       logical : LS.t SymMap.t;
       resources : RE.t list;
       constraints : LC.t list;
-      solver_constraints : Z3.Expr.expr list;
+      solver : Z3.Solver.solver;
       descriptions : Ast.Terms.term SymMap.t;
     }
 
 
-  let empty = {
+  let empty () = {
       computational = SymMap.empty;
       logical = SymMap.empty;
       resources = [];
       constraints = [];
-      solver_constraints = [];
+      solver = Z3.Solver.mk_simple_solver Solver.context;
       descriptions = SymMap.empty;
     }
 
@@ -95,11 +95,9 @@ module Make (S : Solver.S) : S = struct
   let all_logical (local : t) = SymMap.bindings local.logical
   let all_resources (local : t) = local.resources
   let all_constraints (local : t) = local.constraints
-  let all_solver_constraints (local : t) = local.solver_constraints
   let descriptions local = local.descriptions
 
-
-
+  let solver local = local.solver
 
 
   let bound sym kind local = 
@@ -129,9 +127,12 @@ module Make (S : Solver.S) : S = struct
   let add_c lc (local : t) = 
     let lcs = Simplify.simp_lc_flatten local.constraints lc in
     let scs = List.concat_map S.constr lcs in
+    let () = 
+      Z3.Solver.add local.solver 
+        [Z3.Boolean.mk_and Solver.context scs] 
+    in
     { local with constraints = lcs @ local.constraints;
-                 solver_constraints = scs @ local.solver_constraints
-    }
+                 solver = local.solver }
 
   let add_cs lcs (local : t) = 
     List.fold_left (fun local lc -> add_c lc local) local lcs
@@ -193,19 +194,17 @@ module Make (S : Solver.S) : S = struct
   (* let add_descriptions descrs local *)
 
 
-
-
-  let concat (local' : t) (local : t) = 
-    let local = SymMap.fold add_a local'.computational local in
-    let local = SymMap.fold add_l local'.logical local in
-    let local = List.fold_right add_r local'.resources local in
-    let constraints = local'.constraints @ local.constraints in
-    let solver_constraints = local'.solver_constraints @ 
-                               local.solver_constraints in
-    { local with constraints; solver_constraints }
-
-
-  let (++) = concat
+  (* let concat (local' : t) (local : t) = 
+   *   let local = SymMap.fold add_a local'.computational local in
+   *   let local = SymMap.fold add_l local'.logical local in
+   *   let local = List.fold_right add_r local'.resources local in
+   *   let constraints = local'.constraints @ local.constraints in
+   *   let solver_constraints = local'.solver_constraints @ 
+   *                              local.solver_constraints in
+   *   { local with constraints; solver_constraints }
+   * 
+   * 
+   * let (++) = concat *)
 
 
   let all_vars (local : t) = 

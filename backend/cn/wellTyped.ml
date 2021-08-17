@@ -736,8 +736,8 @@ end
            let@ () = add_c lc in
            welltyped kind loc at
         | AT.I i -> 
-           let@ all_scs = all_solver_constraints () in
-           if S.provably_inconsistent all_scs
+           let@ solver = solver () in
+           if S.provably_inconsistent solver
            then fail loc (lazy (Generic !^("this "^kind^" makes inconsistent assumptions")))
            else WI.welltyped loc i
         end

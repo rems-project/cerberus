@@ -56,13 +56,5 @@ module Make(S : S) = struct
     in
     { c }
 
-  let pure (m : 'a t) : 'a t =
-    let c s =
-      match m.c s with
-      | Ok (a, _) -> Ok (a, s)
-      | Error e -> Error e
-    in
-    { c }
-
 
 end

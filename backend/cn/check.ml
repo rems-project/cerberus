@@ -185,7 +185,7 @@ module Make
 
 
 let unpack_predicate (p : predicate) = 
-    let@ lcs = all_solver_constraints () in
+    let@ solver = solver () in
     let def = Option.get (Global.get_predicate_def G.global p.name) in
     let substs = 
       {before = def.pointer; after= p.pointer} ::
@@ -194,7 +194,7 @@ let unpack_predicate (p : predicate) =
     in
     let unpackable = 
       List.find_opt (fun (_, guard, _) -> 
-          S.provable lcs (LC.subst_its substs guard)
+          S.provable solver (LC.subst_its substs guard)
         ) def.clauses 
     in
     match unpackable with
@@ -235,7 +235,7 @@ let unpack_predicate (p : predicate) =
       let@ resources = all_resources () in
       let@ changed = 
         ListM.fold_leftM (fun changed resource ->
-            let@ lcs = all_solver_constraints () in
+            let@ solver = solver () in
             match resource with
             | RE.Predicate p 
                  when p.unused ->
@@ -243,7 +243,7 @@ let unpack_predicate (p : predicate) =
                return (changed || unpacked)
             | RE.QPredicate p 
                  when p.unused && 
-                        S.provable lcs (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
+                        S.provable solver (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
                let p_inst = 
                  let index = qpredicate_pointer_to_index p p.pointer in
                  let iargs = List.map (IT.subst_it {before=p.i; after=index}) p.iargs in
@@ -334,10 +334,9 @@ let unpack_predicate (p : predicate) =
                 IT.equal b.permission b'.permission ->
          let (res, constrs) = 
            unify_or_constrain_list (res, []) [b.value;b.init] [b'.value; b'.init] in
-         let@ all_scs = all_solver_constraints () in
+         let@ solver = solver () in
          let (result, solver) = 
-           S.provable_and_solver all_scs
-             (t_ (and_ (List.map eq_ constrs))) 
+           S.provable_and_solver solver (t_ (and_ (List.map eq_ constrs))) 
          in
          if result then return res else fail loc (error solver)
       | QPoint b, QPoint b' 
@@ -352,10 +351,9 @@ let unpack_predicate (p : predicate) =
          in
          let (res,constrs) = 
            unify_or_constrain_list (res, []) [b.value; b.init] [b'.value; b'.init] in
-         let@ all_scs = all_solver_constraints () in
+         let@ solver = solver () in
          let (result, solver) = 
-           S.provable_and_solver 
-             all_scs
+           S.provable_and_solver solver
               (forall_ (b.qpointer, BT.Loc)
                  None
                  (impl_ (gt_ (b.permission, q_ (0, 1)), 
@@ -369,9 +367,9 @@ let unpack_predicate (p : predicate) =
                  List.equal IT.equal p.iargs p'.iargs &&
                    p.unused = p'.unused ->
          let (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
-         let@ all_scs = all_solver_constraints () in
+         let@ solver = solver () in
          let (result, solver) =
-           S.provable_and_solver all_scs
+           S.provable_and_solver solver
              (t_ (impl_ (bool_ p'.unused, 
                          and_ (List.map eq_ constrs))))
          in
@@ -393,9 +391,9 @@ let unpack_predicate (p : predicate) =
            return { p' with oargs }
          in
          let (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
-         let@ all_scs = all_solver_constraints () in
+         let@ solver = solver () in
          let (result, solver) =
-           S.provable_and_solver all_scs
+           S.provable_and_solver solver
              (forall_ (p.i, BT.Integer)
                 None
                 (impl_ (and_ [bool_ p.unused; 
@@ -546,11 +544,10 @@ let unpack_predicate (p : predicate) =
       in
 
       let@ rt = 
-        let@ all_scs = all_solver_constraints () in
+        let@ solver = solver () in
         let rec check_logical_constraints = function
           | Constraint (c, ftyp) -> 
-             let (holds, solver) = 
-               S.provable_and_solver all_scs c in
+             let (holds, solver) = S.provable_and_solver solver c in
              if holds then check_logical_constraints ftyp else
                let err = 
                  lazy begin
@@ -585,14 +582,14 @@ let unpack_predicate (p : predicate) =
     and point_request ui_info (requested : Resources.Requests.point) = 
       let needed = requested.permission in 
       let@ all_lcs = all_constraints () in
-      let@ all_scs = all_solver_constraints () in
+      let@ solver = solver () in
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
             match re with
             | Point p' 
                  when Z.equal requested.size p'.size &&
                       BT.equal requested.value (IT.bt p'.value) &&
-                      S.provable all_scs (t_ (eq_ (requested.pointer, p'.pointer))) ->
+                      S.provable solver (t_ (eq_ (requested.pointer, p'.pointer))) ->
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let value = ite_ (took, p'.value, value) in
@@ -620,8 +617,7 @@ let unpack_predicate (p : predicate) =
           ) (needed, default_ requested.value, default_ BT.Bool)
       in
       let (holds, solver) = 
-        S.provable_and_solver all_scs
-          (t_ (eq_ (needed, q_ (0, 1)))) in
+        S.provable_and_solver solver (t_ (eq_ (needed, q_ (0, 1)))) in
       if holds then
         let r = 
           { pointer = requested.pointer;
@@ -635,8 +631,8 @@ let unpack_predicate (p : predicate) =
 
     and qpoint_request ui_info (requested : Resources.Requests.qpoint) = 
       let needed = requested.permission in
-      let@ all_scs = all_solver_constraints () in
       let@ all_lcs = all_constraints () in
+      let@ solver = solver () in
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
             match re with
@@ -672,7 +668,7 @@ let unpack_predicate (p : predicate) =
           ) (needed, default_ requested.value, default_ BT.Bool)
       in
       let (holds, solver) =
-        S.provable_and_solver all_scs
+        S.provable_and_solver solver
           (forall_ (requested.qpointer, BT.Loc) None
              (eq_ (needed, q_ (0, 1))))
       in
@@ -702,7 +698,7 @@ let unpack_predicate (p : predicate) =
         in
         return r
       else
-        let@ all_scs = all_solver_constraints () in
+        let@ solver = solver () in
         let@ all_lcs = all_constraints () in
         let@ found =
           map_and_fold_resources (fun re found ->
@@ -710,7 +706,7 @@ let unpack_predicate (p : predicate) =
               | Predicate p', None ->
                  if predicate_name_equal p.name p'.name &&
                     p'.unused && 
-                    S.provable all_scs (t_ (
+                    S.provable solver (t_ (
                         and_ (IT.eq__ p.pointer p'.pointer ::
                               List.map2 eq__ p.iargs p'.iargs)
                       ))
@@ -720,7 +716,7 @@ let unpack_predicate (p : predicate) =
                  let index = qpredicate_pointer_to_index p' p.pointer in
                  if predicate_name_equal p.name p'.name &&
                     p'.unused && 
-                    S.provable all_scs (
+                    S.provable solver (
                         let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
                         t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
                                     List.map2 eq__ p.iargs iargs'))
@@ -768,11 +764,11 @@ let unpack_predicate (p : predicate) =
                    end
                ) def.clauses
            in
-           let@ all_scs = all_solver_constraints () in
+           let@ solver = M.solver () in
            let error = 
              lazy begin        
                  let (_, solver) = 
-                   S.provable_and_solver all_scs (T (bool_ false)) in
+                   S.provable_and_solver solver (T (bool_ false)) in
                  resource_request_missing ui_info solver (Predicate p)
                end
            in
@@ -809,14 +805,14 @@ let unpack_predicate (p : predicate) =
         in
         return r
       else
-        let@ all_scs = all_solver_constraints () in
+        let@ solver = solver () in
         let@ found =
           map_and_fold_resources (fun re found ->
               match re, found with
               | QPredicate p', None ->
                  if predicate_name_equal p.name p'.name &&
                     p.unused = p'.unused &&
-                      S.provable all_scs
+                      S.provable solver
                         (forall_ (p.i, BT.Integer) None
                            (and_ [eq_ (p.pointer, p'.pointer);
                                   eq_ (p.element_size, p'.element_size);
@@ -876,8 +872,8 @@ let unpack_predicate (p : predicate) =
            in
            return r
         | None ->
-           let@ all_scs = all_solver_constraints () in
-           let (_, solver) = S.provable_and_solver all_scs (T (bool_ false)) in
+           let@ solver = M.solver () in
+           let (_, solver) = S.provable_and_solver solver (T (bool_ false)) in
            resource_request_missing ui_info solver (QPredicate p)
 
     and resource_request ui_info (request : Resources.Requests.t) : RE.t m = 
@@ -1254,8 +1250,8 @@ let unpack_predicate (p : predicate) =
       | M_PEassert_undef (asym, _uloc, undef) ->
          let@ arg = arg_of_asym asym in
          let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-         let@ all_scs = all_solver_constraints () in
-         if S.provable all_scs (t_ (it_of_arg arg)) then
+         let@ solver = solver () in
+         if S.provable solver (t_ (it_of_arg arg)) then
            return (rt_of_vt (Unit, unit_))
          else
            let@ explain_local = get () in
@@ -1293,8 +1289,8 @@ let unpack_predicate (p : predicate) =
             in
             return (rt_of_vt (Integer, result))
          | _ ->
-            let@ all_scs =all_solver_constraints () in
-            if S.provable all_scs (t_ (representable_ (act.ct, arg_it))) then
+            let@ solver = solver () in
+            if S.provable solver (t_ (representable_ (act.ct, arg_it))) then
               return (rt_of_vt (Integer, arg_it))
             else
               let@ explain_local = get () in
@@ -1339,8 +1335,8 @@ let unpack_predicate (p : predicate) =
        ListM.iterM (fun (lc, e) ->
            pure begin
                let@ () = add_c (t_ lc) in
-               let@ all_scs = all_solver_constraints () in
-               if S.provably_inconsistent all_scs 
+               let@ solver = solver () in
+               if S.provably_inconsistent solver
                then return ()
                else check_tpexpr e typ
              end
@@ -1350,8 +1346,8 @@ let unpack_predicate (p : predicate) =
        ListM.iterM (fun (pat, pe) ->
            pure begin 
                let@ () = pattern_match (sym_ (arg.lname, arg.bt)) pat in
-               let@ all_scs = all_solver_constraints () in
-               if S.provably_inconsistent all_scs
+               let@ solver = solver () in
+               if S.provably_inconsistent solver
                then return ()
                else check_tpexpr e typ
              end
@@ -1434,20 +1430,20 @@ let unpack_predicate (p : predicate) =
       fail loc err
     in
 
-    let@ all_scs = all_solver_constraints () in
+    let@ solver = solver () in
     let@ all_resources = all_resources () in
     let _ = 
       ListM.mapM (fun resource ->
           match resource with
           | Point p ->
              let (holds, solver) = 
-               S.provable_and_solver all_scs
+               S.provable_and_solver solver
                  (t_ (le_ (p.permission, q_ (0, 1)))) 
              in
              if holds then return () else error resource solver
           | QPoint p ->
              let (holds, solver) = 
-               S.provable_and_solver all_scs
+               S.provable_and_solver solver
                  (forall_ (p.qpointer, BT.Loc) None
                     (le_ (p.permission, q_ (0, 1))))
              in
@@ -1455,11 +1451,11 @@ let unpack_predicate (p : predicate) =
           | Predicate p ->
              if not p.unused then return () else
                let (_, solver) = 
-                 S.provable_and_solver all_scs (T (bool_ false)) in
+                 S.provable_and_solver solver (T (bool_ false)) in
                error resource solver
           | QPredicate p ->
              let (holds, solver) = 
-               S.provable_and_solver all_scs (t_ (eq_ (p.istart, p.iend))) in
+               S.provable_and_solver solver (t_ (eq_ (p.istart, p.iend))) in
              if not p.unused && holds then return () else error resource solver
         ) all_resources
     in
@@ -1611,8 +1607,8 @@ let unpack_predicate (p : predicate) =
                understand, are an exception. *)
             let@ () = 
               let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-              let@ all_scs = all_solver_constraints () in
-              let (holds, solver) = S.provable_and_solver all_scs (t_ in_range_lc) in
+              let@ solver = solver () in
+              let (holds, solver) = S.provable_and_solver solver (t_ in_range_lc) in
               if holds then return () else 
                 let@ explain_local = get () in
                 let err = 
@@ -1665,8 +1661,8 @@ let unpack_predicate (p : predicate) =
             in
             let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
             let@ () = 
-              let@ all_scs = all_solver_constraints () in
-              let (holds, solver) = S.provable_and_solver all_scs (t_ init) in
+              let@ solver = solver () in
+              let (holds, solver) = S.provable_and_solver solver (t_ init) in
               if holds then return () else
                 let@ explain_local = get () in
                 let err = 
@@ -1747,8 +1743,8 @@ let unpack_predicate (p : predicate) =
          ListM.iterM (fun (lc, e) ->
              pure begin 
                  let@ () = add_c (t_ lc) in
-                 let@ all_scs = all_solver_constraints () in
-                 if S.provably_inconsistent all_scs
+                 let@ solver = solver () in
+                 if S.provably_inconsistent solver
                  then return ()
                  else check_texpr labels e typ 
                end
@@ -1762,8 +1758,8 @@ let unpack_predicate (p : predicate) =
          ListM.iterM (fun (pat, pe) ->
              pure begin 
                  let@ () = pattern_match (sym_ (arg.lname, arg.bt)) pat in
-                 let@ all_scs = all_solver_constraints () in
-                 if S.provably_inconsistent all_scs
+                 let@ solver = solver () in
+                 if S.provably_inconsistent solver
                  then return ()
                  else check_texpr labels e typ
                end
@@ -2064,10 +2060,10 @@ let check mu_file =
         let descr = CF.Implementation.string_of_implementation_constant impl in
         match impl_decl with
         | M_Def (rt, rbt, pexpr) -> 
-           let@ ((), _) = (WT.WRT.welltyped Loc.unknown rt).c L.empty in
+           let@ ((), _) = (WT.WRT.welltyped Loc.unknown rt).c (L.empty ()) in
            let@ ((), _) = 
              (C.check_function Loc.unknown
-               [] descr [] rbt pexpr (AT.I rt)).c L.empty in
+               [] descr [] rbt pexpr (AT.I rt)).c (L.empty ()) in
            let global = 
              { global with impl_constants = 
                              ImplMap.add impl rt global.impl_constants}
@@ -2076,12 +2072,12 @@ let check mu_file =
         | M_IFun (ft, rbt, args, pexpr) ->
            let@ ((), _) = 
              (WT.WFT.welltyped "implementation-defined function" Loc.unknown ft).c 
-               L.empty
+               (L.empty ())
            in
            let@ ((), _) = 
              (C.check_function Loc.unknown [] 
                 (CF.Implementation.string_of_implementation_constant impl)
-                args rbt pexpr ft).c L.empty
+                args rbt pexpr ft).c (L.empty ())
            in
            let impl_fun_decls = ImplMap.add impl ft global.impl_fun_decls in
            return { global with impl_fun_decls }
@@ -2095,7 +2091,7 @@ let check mu_file =
     (* check and record predicate defs *)
     ListM.fold_leftM (fun global (name,def) -> 
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
-        let@ ((), _) = (WT.WPD.welltyped def).c L.empty in
+        let@ ((), _) = (WT.WPD.welltyped def).c (L.empty ()) in
         let resource_predicates =
           StringMap.add name def global.resource_predicates in
         return {global with resource_predicates}
@@ -2118,7 +2114,7 @@ let check mu_file =
            let local = L.add_a sym (bt, lsym) local in
            let local = L.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
            return local
-      ) L.empty mu_file.mu_globs 
+      ) (L.empty ()) mu_file.mu_globs 
   in
   let () = Debug_ocaml.end_csv_timing "globals" in
 

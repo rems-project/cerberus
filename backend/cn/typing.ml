@@ -7,6 +7,23 @@ module Make (L : Local.S) = struct
 
   include Effectful.Make(State_and_exception)
 
+
+
+  let pure (m : 'a t) : 'a t =
+    let c s = 
+      Z3.Solver.push (L.solver s);
+      let outcome = match m.c s with
+        | Ok (a, _) -> Ok (a, s)
+        | Error e -> Error e
+      in
+      Z3.Solver.pop (L.solver s) 1;
+      outcome
+    in
+    { c }
+
+
+
+
   let all_computational () = 
     let@ l = get () in
     return (L.all_computational l)
@@ -19,9 +36,9 @@ module Make (L : Local.S) = struct
     let@ l = get () in
     return (L.all_constraints l)
 
-  let all_solver_constraints () =
+  let solver () =
     let@ l = get () in
-    return (L.all_solver_constraints l)
+    return (L.solver l)
 
   let all_resources () = 
     let@ l = get () in
