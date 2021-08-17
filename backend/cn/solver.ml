@@ -38,7 +38,6 @@ module ITtbl = Hashtbl.Make(IndexTerms)
 module type S = sig
 
   val provable : Z3.Solver.solver -> LC.t -> bool
-  val provable_and_solver : Z3.Solver.solver -> LC.t -> bool * Z3.Solver.solver
   val provably_inconsistent : Z3.Solver.solver -> bool
   val get_model : Z3.Solver.solver -> Z3.Model.model
   val expr : IT.t -> Z3.Expr.expr
@@ -453,14 +452,13 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
 
   let check solver (lc : LC.t) =  
-    (* as similarly suggested by Robbert *)
     let () = Debug_ocaml.begin_csv_timing "solver" in
     let result = match lc with
+      (* as similarly suggested by Robbert *)
       | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
          let solver = Z3.Solver.mk_simple_solver context in
          (`YES, solver)
       | _ ->
-         let () = Debug_ocaml.begin_csv_timing "solving" in
          let result = match lc with
            | T t ->
               let t = of_index_term t in
@@ -471,7 +469,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
               let t = of_index_term t in
               Z3.Solver.check solver [Z3.Boolean.mk_not context t]
          in
-         let () = Debug_ocaml.end_csv_timing "solving" in
          match result with
          | Z3.Solver.UNSATISFIABLE -> (`YES, solver)
          | Z3.Solver.SATISFIABLE -> (`NO, solver)
@@ -490,14 +487,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     | `YES -> true
     | `NO -> false
     | `MAYBE -> false
-
-
-  let provable_and_solver assumptions lc = 
-    let (result, solver) = check assumptions lc in
-    match result with
-    | `YES -> (true, solver)
-    | `NO -> (false, solver)
-    | `MAYBE -> (false, solver)
 
 
   let provably_inconsistent assumptions = provable assumptions (t_ (bool_ false))

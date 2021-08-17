@@ -335,9 +335,7 @@ let unpack_predicate (p : predicate) =
          let (res, constrs) = 
            unify_or_constrain_list (res, []) [b.value;b.init] [b'.value; b'.init] in
          let@ solver = solver () in
-         let (result, solver) = 
-           S.provable_and_solver solver (t_ (and_ (List.map eq_ constrs))) 
-         in
+         let result = S.provable solver (t_ (and_ (List.map eq_ constrs))) in
          if result then return res else fail loc (error solver)
       | QPoint b, QPoint b' 
            when Sym.equal b.qpointer b'.qpointer &&
@@ -352,8 +350,8 @@ let unpack_predicate (p : predicate) =
          let (res,constrs) = 
            unify_or_constrain_list (res, []) [b.value; b.init] [b'.value; b'.init] in
          let@ solver = solver () in
-         let (result, solver) = 
-           S.provable_and_solver solver
+         let result = 
+           S.provable solver
               (forall_ (b.qpointer, BT.Loc)
                  None
                  (impl_ (gt_ (b.permission, q_ (0, 1)), 
@@ -368,8 +366,8 @@ let unpack_predicate (p : predicate) =
                    p.unused = p'.unused ->
          let (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
          let@ solver = solver () in
-         let (result, solver) =
-           S.provable_and_solver solver
+         let result =
+           S.provable solver
              (t_ (impl_ (bool_ p'.unused, 
                          and_ (List.map eq_ constrs))))
          in
@@ -392,8 +390,8 @@ let unpack_predicate (p : predicate) =
          in
          let (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
          let@ solver = solver () in
-         let (result, solver) =
-           S.provable_and_solver solver
+         let result =
+           S.provable solver
              (forall_ (p.i, BT.Integer)
                 None
                 (impl_ (and_ [bool_ p.unused; 
@@ -547,7 +545,7 @@ let unpack_predicate (p : predicate) =
         let@ solver = solver () in
         let rec check_logical_constraints = function
           | Constraint (c, ftyp) -> 
-             let (holds, solver) = S.provable_and_solver solver c in
+             let holds = S.provable solver c in
              if holds then check_logical_constraints ftyp else
                let err = 
                  lazy begin
@@ -616,8 +614,7 @@ let unpack_predicate (p : predicate) =
                (re, (needed, value, init))
           ) (needed, default_ requested.value, default_ BT.Bool)
       in
-      let (holds, solver) = 
-        S.provable_and_solver solver (t_ (eq_ (needed, q_ (0, 1)))) in
+      let holds = S.provable solver (t_ (eq_ (needed, q_ (0, 1)))) in
       if holds then
         let r = 
           { pointer = requested.pointer;
@@ -667,8 +664,8 @@ let unpack_predicate (p : predicate) =
                (re, (needed, value, init))
           ) (needed, default_ requested.value, default_ BT.Bool)
       in
-      let (holds, solver) =
-        S.provable_and_solver solver
+      let holds =
+        S.provable solver
           (forall_ (requested.qpointer, BT.Loc) None
              (eq_ (needed, q_ (0, 1))))
       in
@@ -767,8 +764,7 @@ let unpack_predicate (p : predicate) =
            let@ solver = M.solver () in
            let error = 
              lazy begin        
-                 let (_, solver) = 
-                   S.provable_and_solver solver (T (bool_ false)) in
+                 let _ = S.provable solver (T (bool_ false)) in
                  resource_request_missing ui_info solver (Predicate p)
                end
            in
@@ -873,7 +869,7 @@ let unpack_predicate (p : predicate) =
            return r
         | None ->
            let@ solver = M.solver () in
-           let (_, solver) = S.provable_and_solver solver (T (bool_ false)) in
+           let _ = S.provable solver (T (bool_ false)) in
            resource_request_missing ui_info solver (QPredicate p)
 
     and resource_request ui_info (request : Resources.Requests.t) : RE.t m = 
@@ -1436,26 +1432,24 @@ let unpack_predicate (p : predicate) =
       ListM.mapM (fun resource ->
           match resource with
           | Point p ->
-             let (holds, solver) = 
-               S.provable_and_solver solver
+             let holds = 
+               S.provable solver
                  (t_ (le_ (p.permission, q_ (0, 1)))) 
              in
              if holds then return () else error resource solver
           | QPoint p ->
-             let (holds, solver) = 
-               S.provable_and_solver solver
+             let holds = 
+               S.provable solver
                  (forall_ (p.qpointer, BT.Loc) None
                     (le_ (p.permission, q_ (0, 1))))
              in
              if holds then return () else error resource solver
           | Predicate p ->
              if not p.unused then return () else
-               let (_, solver) = 
-                 S.provable_and_solver solver (T (bool_ false)) in
+               let _ = S.provable solver (T (bool_ false)) in
                error resource solver
           | QPredicate p ->
-             let (holds, solver) = 
-               S.provable_and_solver solver (t_ (eq_ (p.istart, p.iend))) in
+             let holds = S.provable solver (t_ (eq_ (p.istart, p.iend))) in
              if not p.unused && holds then return () else error resource solver
         ) all_resources
     in
@@ -1608,7 +1602,7 @@ let unpack_predicate (p : predicate) =
             let@ () = 
               let in_range_lc = representable_ (act.ct, it_of_arg varg) in
               let@ solver = solver () in
-              let (holds, solver) = S.provable_and_solver solver (t_ in_range_lc) in
+              let holds = S.provable solver (t_ in_range_lc) in
               if holds then return () else 
                 let@ explain_local = get () in
                 let err = 
@@ -1662,7 +1656,7 @@ let unpack_predicate (p : predicate) =
             let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
             let@ () = 
               let@ solver = solver () in
-              let (holds, solver) = S.provable_and_solver solver (t_ init) in
+              let holds = S.provable solver (t_ init) in
               if holds then return () else
                 let@ explain_local = get () in
                 let err = 

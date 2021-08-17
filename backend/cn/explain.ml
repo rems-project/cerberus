@@ -501,14 +501,14 @@ module Make
    *   pp_state local explanation *)
 
   let undefined_behaviour local = 
-    let (_, solver) = S.provable_and_solver (L.solver local) (t_ (bool_ false)) in
-    let model = S.get_model solver in
+    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let model = S.get_model (L.solver local) in
     let (explanation, local) = explanation local model SymSet.empty in
     pp_state_with_model local explanation model
 
   let implementation_defined_behaviour local it = 
-    let (_, solver) = S.provable_and_solver (L.solver local) (t_ (bool_ false)) in
-    let model = S.get_model solver in
+    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let model = S.get_model (L.solver local) in
     let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation model)
@@ -519,8 +519,8 @@ module Make
     (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
-    let (_, solver) = S.provable_and_solver (L.solver local) (t_ (bool_ false)) in
-    let model = S.get_model solver in
+    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let model = S.get_model (L.solver local) in
     let (explanation, local) = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
     it_pp
@@ -550,8 +550,8 @@ module Make
 
 
   let illtyped_index_term local context it =
-    let (_, solver) = S.provable_and_solver (L.solver local) (t_ (bool_ false)) in
-    let model = S.get_model solver in
+    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let model = S.get_model (L.solver local) in
     let (explanation, local) = 
       explanation local model (IT.free_vars_list [it; context])
     in
