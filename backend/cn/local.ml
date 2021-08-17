@@ -41,9 +41,9 @@ module type S = sig
   val (++) : t -> t -> t
   val all_vars : t -> Sym.t list
   val json : t -> Yojson.Safe.t
-  val bind : Sym.t -> ReturnTypes.t -> t
+  val bind : t -> Sym.t -> ReturnTypes.t -> t
   val bind_logical : t -> LogicalReturnTypes.t -> t
-  val bind_logically : ReturnTypes.t -> (BT.t * Sym.t) * t
+  val bind_logically : t -> ReturnTypes.t -> (BT.t * Sym.t) * t
 
   
 
@@ -168,20 +168,15 @@ module Make (S : Solver.S) : S = struct
 
   let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
         (local : t) (acc : 'acc) = 
-    let resources, lvars, constraints, acc =
-      List.fold_right (fun re (resources, lvars, constraints, acc) ->
+    let resources, acc =
+      List.fold_right (fun re (resources, acc) ->
           let (re, acc) = f re acc in
           match RE.simp_or_empty local.constraints re with
-          | Some re -> 
-             (* let re, (l, lcs) = RE.normalise re in *)
-             let re, (l, lcs) = re, ([], []) in
-             (re :: resources, l @ lvars, lcs @ constraints, acc)
-          | None -> (resources, lvars, constraints, acc)
-        ) local.resources ([], [], [], acc)
+          | Some re -> (re :: resources, acc)
+          | None -> (resources, acc)
+        ) local.resources ([], acc)
     in
-    let local = add_ls lvars local in
-    let local = add_cs constraints {local with resources} in
-    (local, acc)
+    ({local with resources}, acc)
 
 
 
@@ -252,34 +247,31 @@ module Make (S : Solver.S) : S = struct
 
 
 
-  let rec bind_logical (delta : t) (lrt : LRT.t) : t = 
+  let rec bind_logical (local : t) (lrt : LRT.t) : t = 
     match lrt with
     | Logical ((s, ls), rt) ->
        let s' = Sym.fresh () in
        let rt' = LRT.subst_var {before=s; after=s'} rt in
-       bind_logical (add_l s' ls delta) rt'
-    | Resource (re, rt) -> bind_logical (add_r re delta) rt
-    | Constraint (lc, rt) -> bind_logical (add_c lc delta) rt
-    | I -> delta
+       bind_logical (add_l s' ls local) rt'
+    | Resource (re, rt) -> bind_logical (add_r re local) rt
+    | Constraint (lc, rt) -> bind_logical (add_c lc local) rt
+    | I -> local
 
-  let bind_computational (delta : t) (name : Sym.t) (rt : RT.t) : t =
+  let bind_computational (local : t) (name : Sym.t) (rt : RT.t) : t =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst_var {before = s; after = s'} rt in
-    let delta' = add_a name (bt, s') (add_l s' bt delta) in
-    bind_logical delta' rt'
+    bind_logical (add_a name (bt, s') (add_l s' bt local)) rt'
 
 
-  let bind (name : Sym.t) (rt : RT.t) : t =
-    bind_computational empty name rt
+  let bind (local : t) (name : Sym.t) (rt : RT.t) : t =
+    bind_computational local name rt
 
-  let bind_logically (rt : RT.t) : ((BT.t * Sym.t) * t) =
+  let bind_logically (local : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst_var {before = s; after = s'} rt in
-    let delta = add_l s' bt empty in
-    let delta' = bind_logical delta rt' in
-    ((bt, s'), delta')
+    ((bt, s'), bind_logical (add_l s' bt local) rt')
 
 
 end

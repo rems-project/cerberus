@@ -8,7 +8,7 @@ type 'res unis = ('res uni) SymMap.t
 
 type 'res t = 'res unis
 
-let find_resolved env unis = 
+let find_resolved unis = 
   SymMap.fold (fun usym {resolved} resolveds ->
       match resolved with
       | None -> resolveds

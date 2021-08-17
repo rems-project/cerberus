@@ -33,7 +33,10 @@ type stacktrace = string
 
 
 
-
+let unsupported (loc : Locations.t) (err : Pp.document) : 'a = 
+  let trace = Option.map Pp.string (do_stack_trace ()) in
+  Pp.error loc err (Option.to_list trace);
+  exit 2
 
 
 

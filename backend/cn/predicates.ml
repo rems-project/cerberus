@@ -16,9 +16,11 @@ open BT
 open IT
 open LC
 
-type clause = Loc.t * AT.packing_ft
+type clause = Loc.t * LC.t * AT.packing_ft
 
-let pp_clause c = AT.pp OutputDef.pp c
+let pp_clause (loc, lc, c) = 
+  item "condition" (LC.pp lc) ^^ comma ^^^
+  item "return type" (AT.pp OutputDef.pp c)
 
 let subst_it_clause subst c = AT.subst_it OutputDef.subst_it subst c
 let subst_var_clause subst c = AT.subst_var OutputDef.subst_var subst c
@@ -43,7 +45,7 @@ let pp_predicate_definition def =
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
   item "oargs" (Pp.list (fun (s,_) -> Pp.string s) def.oargs) ^/^
-  item "clauses" (Pp.list (fun (_, clause) -> pp_clause clause) def.clauses)
+  item "clauses" (Pp.list pp_clause def.clauses)
   
 
 
@@ -66,14 +68,18 @@ type ctype_predicate =
 
 let ctype_predicate_to_predicate ct pred = 
   let loc = Loc.other "internal (Ctype)" in
-  let clause = AT.of_lrt pred.lrt (AT.I [pred.value_oarg; pred.init_oarg]) in
+  let clause = 
+    (loc,
+     t_ (bool_ true),
+     AT.of_lrt pred.lrt (AT.I [pred.value_oarg; pred.init_oarg]))
+  in
   let def = {
       loc = loc;
       pointer = pred.pointer_iarg; 
       iargs = []; 
       oargs = [(fst pred.value_oarg, IT.bt (snd pred.value_oarg));
                (fst pred.init_oarg, IT.bt (snd pred.init_oarg))];
-      clauses = [(loc, clause)]
+      clauses = [clause]
     }
   in
   def
@@ -218,13 +224,17 @@ let region =
     LRT.Constraint (t_ (IT.good_pointer pointer_t char_ct),
     LRT.I))))
   in
-  let clause = AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]) in
+  let clause = 
+    (loc,
+     t_ (bool_ true),
+     AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]))
+  in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)]; 
       oargs = [("value", IT.bt v_t); ("init", IT.bt init_t)]; 
-      clauses = [(loc, clause)]; 
+      clauses = [clause]; 
     } 
   in
   (id, predicate)
@@ -271,12 +281,17 @@ let part_zero_region =
     LRT.Constraint (init_constr,
     LRT.I)))))
   in
+  let clause = 
+    (loc, 
+     t_ (bool_ true),
+     AT.of_lrt lrt (AT.I []))
+  in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t); (up_to_s, IT.bt up_to_t)];
       oargs = [];
-      clauses = [(loc, AT.of_lrt lrt (AT.I []))]; 
+      clauses = [clause]; 
     } 
   in
   (id, predicate)
@@ -300,12 +315,17 @@ let zero_region =
     in
     LRT.Resource (Predicate p, LRT.I) 
   in
+  let clause =
+    (loc, 
+     t_ (bool_ true),
+     AT.of_lrt lrt (AT.I []))
+  in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)];
       oargs = [];
-      clauses = [(loc, AT.of_lrt lrt (AT.I []))]; 
+      clauses = [clause]; 
     } 
   in
   (id, predicate)
@@ -340,12 +360,17 @@ let early =
     LRT.Constraint (t_ (IT.good_pointer end_t char_ct),
     LRT.I)))))
   in
+  let clause =
+    (loc, 
+     t_ (bool_ true),
+     AT.of_lrt lrt (AT.I []))
+  in
   let predicate = {
       loc = loc;
       pointer = start_s;
       iargs = [(end_s, IT.bt end_t)]; 
       oargs = []; 
-      clauses = [(loc, AT.of_lrt lrt (AT.I []))]; 
+      clauses = [clause]; 
     } 
   in
   (id, predicate)
@@ -548,7 +573,7 @@ let page_alloc_predicates struct_decls =
       List.map t_ constrs
     in
 
-    let clause = 
+    let lrt = 
       AT.of_lrt (
         LRT.Logical ((page_s, IT.bt page_t),
         LRT.Resource (resource, 
@@ -557,6 +582,13 @@ let page_alloc_predicates struct_decls =
         (AT.I [("page", page_t)])
     in
 
+    let clause =
+      (loc, 
+       t_ (bool_ true),
+       lrt)
+    in
+
+    
     let predicate = 
       {
         loc = loc;
@@ -568,7 +600,7 @@ let page_alloc_predicates struct_decls =
             (range_end_s, IT.bt range_end_t);
           ];
         oargs = [("page", IT.bt page_t)];
-        clauses = [(loc, clause)]; 
+        clauses = [clause]; 
       } 
     in
     (id, predicate)
@@ -780,6 +812,14 @@ let page_alloc_predicates struct_decls =
       (* @@ Tools.skip (LRT.I) page_group_ownership *)
     in
 
+    let clause =
+      (loc, 
+       t_ (bool_ true),
+       AT.of_lrt lrt 
+         (AT.I [("pool", pool_t);
+                ("vmemmap", vmemmap_t)]))
+    in
+
     let predicate = 
       {
         loc = loc;
@@ -793,9 +833,7 @@ let page_alloc_predicates struct_decls =
             ("vmemmap", IT.bt vmemmap_t);
           ];
         clauses = 
-          [(loc, AT.of_lrt lrt 
-                   (AT.I [("pool", pool_t);
-                          ("vmemmap", vmemmap_t)]));]; 
+          [clause;]; 
       } 
     in
     (id, predicate)

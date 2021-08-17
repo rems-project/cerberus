@@ -16,6 +16,7 @@ open Mapping
 open Ast
 open Predicates
 open Memory
+open Tools
 
 
 module StringMap = Map.Make(String)

@@ -23,10 +23,7 @@ let (let@) = bind
 
 
 
-let unsupported (loc : Loc.t) (err : Pp.document) : 'a = 
-  let trace = Option.map Pp.string (Tools.do_stack_trace ()) in
-  Pp.error loc err (Option.to_list trace);
-  exit 2
+
 
 
 
@@ -40,12 +37,6 @@ let rec attempt (fs : ((('a, 'e) t) Lazy.t) List1.t) : ('a,'e) t =
      attempt (List1.make (hd', tl'))
   | Error err, _ -> 
      Error err
-
-
-let assoc_err loc equality entry list err =
-  match List.assoc_opt equality entry list with
-  | Some result -> return result
-  | None -> fail loc err
 
 
 
@@ -139,5 +130,8 @@ module PmapM = struct
       ) m (Pmap.empty cmp)
 
 end
+
+
+
 
 

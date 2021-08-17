@@ -1,4 +1,3 @@
-open Resultat
 module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make(Sym)
@@ -18,58 +17,65 @@ module Make
          (L : Local.S)
   = struct
   module E = Explain.Make(G)(S)(L)
-
-  let check_bound loc local kind s = 
-    if L.bound s kind local then return ()
-    else fail loc (lazy (TE.Unbound_name (Sym s)))
-
-
-  let illtyped_index_term loc local context it has expected =
-    lazy begin 
-        let (context, it) = E.illtyped_index_term local context it in
-        TypeErrors.Illtyped_it {context; it; has; expected = "integer or real type"}
-    end
-
-
-
-  let ensure_integer_or_real_type loc local context it has = 
-    let open BT in
-    match has with
-    | (Integer | Real) -> return has
-    | _ -> 
-       let expect = "integer or real type" in
-       fail loc (illtyped_index_term loc local context it has expect)
-
-  let ensure_set_type loc local context it has = 
-    let open BT in
-    match has with
-    | Set bt -> return bt
-    | _ -> 
-       fail loc (illtyped_index_term loc local context it has "set type")
-
-  let ensure_list_type loc local context it has = 
-    let open BT in
-    match has with
-    | List bt -> return bt
-    | _ -> 
-       fail loc (illtyped_index_term loc local context it has "list type")
-
-  let ensure_array_type loc local context it has = 
-    let open BT in
-    match has with
-    | Array (abt, rbt) -> return (abt, rbt)
-    | _ -> 
-       fail loc (illtyped_index_term loc local context it has "array type")
-
-  let ensure_option_type loc local context it has = 
-    let open BT in
-    match has with
-    | Option bt -> return bt
-    | _ -> 
-       fail loc (illtyped_index_term loc local context it has "option type")
   
+  module Typing = Typing.Make(L)
+  open Typing
 
   module WIT = struct
+
+
+    let check_bound loc kind s = 
+      let@ is_bound = bound s kind in
+      if is_bound then return ()
+      else fail loc (lazy (TE.Unbound_name (Sym s)))
+
+
+    let illtyped_index_term loc context it has expected =
+      let@ explain_local = get () in
+      fail loc
+        (lazy begin 
+             let (context_pp, it_pp) = E.illtyped_index_term explain_local context it in
+             TypeErrors.Illtyped_it {context = context_pp; it = it_pp; 
+                                     has; expected = "integer or real type"}
+           end)
+
+
+    let ensure_integer_or_real_type loc context it = 
+      let open BT in
+      match IT.bt it with
+      | (Integer | Real) -> return ()
+      | _ -> 
+         let expect = "integer or real type" in
+         illtyped_index_term loc context it (IT.bt it) expect
+
+    let ensure_set_type loc context it = 
+      let open BT in
+      match IT.bt it with
+      | Set bt -> return bt
+      | _ -> illtyped_index_term loc context it (IT.bt it) "set type"
+
+    let ensure_list_type loc context it = 
+      let open BT in
+      match IT.bt it with
+      | List bt -> return bt
+      | _ -> illtyped_index_term loc context it (IT.bt it) "list type"
+
+    let ensure_array_type loc context it = 
+      let open BT in
+      match IT.bt it with
+      | Array (abt, rbt) -> return (abt, rbt)
+      | _ -> illtyped_index_term loc context it (IT.bt it) "array type"
+
+    let ensure_option_type loc context it = 
+      let open BT in
+      match IT.bt it with
+      | Option bt -> return bt
+      | _ -> illtyped_index_term loc context it (IT.bt it) "option type"
+
+    let get_struct_decl loc tag = 
+      match SymMap.find_opt tag G.global.struct_decls with
+      | Some decl -> return decl
+      | None -> fail loc (lazy (Missing_struct tag))
 
     open BaseTypes
     open LogicalSorts
@@ -77,429 +83,382 @@ module Make
 
     type t = IndexTerms.t
 
-    let check_or_infer loc local ols it = 
 
-      let context = it in
-
-      let get_struct_decl tag = 
-        match SymMap.find_opt tag G.global.struct_decls with
-        | Some decl -> return decl
-        | None -> fail loc (lazy (Missing_struct tag))
-      in
-
-      let get_member_type decl_members member it =
-        match List.assoc_opt Id.equal member decl_members with
-        | Some sct -> return (BT.of_sct sct)
-        | None -> 
-           let (context, it) = E.illtyped_index_term local context it in
-           let err = 
-             lazy begin
-                 Generic
-                   (!^"Illtyped expression" ^^^ context ^^ dot ^^^
-                      it ^^^ !^"does not have member" ^^^ Id.pp member)
-               end
+    let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> IT.t m =
+        fun loc ~context (IT (it, _)) ->
+        match it with
+        | Lit lit ->
+           let@ (bt, lit) = match lit with
+             | Sym s ->
+                let@ () = check_bound loc KLogical s in
+                let@ bt = get_l s in
+                return (bt, Sym s)
+             | Z z -> 
+                return (Integer, Z z)
+             | Q (n,n') -> 
+                return (Real, Q (n,n'))
+             | Pointer p -> 
+                return (Loc, Pointer p)
+             | Bool b -> 
+                return (BT.Bool, Bool b)
+             | Unit -> 
+                return (BT.Unit, Unit)
+             | Default bt -> 
+                return (bt, Default bt)
            in
-           fail loc err
-      in
-      
-
-      let rec infer : 'bt. Loc.t -> L.t -> 'bt IT.term -> (LogicalSorts.t * IT.t, type_error) m =
-
-        let lit local = function
-          | Sym s ->
-             let@ () = check_bound loc local KLogical s in
-             return (L.get_l s local, Sym s)
-          | Z z -> 
-             return (Integer, Z z)
-          | Q (n,n') -> 
-             return (Real, Q (n,n'))
-          | Pointer p -> 
-             return (Loc, Pointer p)
-          | Bool b -> 
-             return (BT.Bool, Bool b)
-          | Unit -> 
-             return (BT.Unit, Unit)
-          | Default bt -> 
-             return (bt, Default bt)
-        in
-
-        let arith_op local = function
-          | Add (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (bt, Add (t, t'))
-          | Sub (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (bt, Sub (t, t'))
-          | Mul (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (bt, Mul (t, t'))
-          | Div (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (bt, Div (t, t'))
-          | Exp (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (bt, Exp (t, t'))
-          | Rem (t,t') ->
-             let@ t = check loc local Integer t in
-             let@ t' = check loc local Integer t' in
-             return (Integer, Rem (t, t'))
-        in
-
-        let cmp_op local = function
-          | LT (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (BT.Bool, LT (t, t'))
-          | LE (t,t') ->
-             let@ (bt, t) = infer_integer_or_real_type loc local t in
-             let@ t' = check loc local bt t' in
-             return (BT.Bool, LE (t, t'))
-        in
-
-        let bool_op local = function
-          | And ts ->
-             let@ ts = ListM.mapM (check loc local Bool) ts in
-             return (BT.Bool, And ts)
-          | Or ts ->
-             let@ ts = ListM.mapM (check loc local Bool) ts in
-             return (BT.Bool, Or ts)
-          | Impl (t,t') ->
-             let@ t = check loc local Bool t in
-             let@ t' = check loc local Bool t' in
-             return (BT.Bool, Impl (t, t'))
-          | Not t ->
-             let@ t = check loc local Bool t in
-             return (BT.Bool, Not t)
-          | ITE (t,t',t'') ->
-             let@ t = check loc local Bool t in
-             let@ (ls, t') = infer loc local t' in
-             let@ t'' = check loc local ls t'' in
-             return (ls, ITE (t, t', t''))
-          | EQ (t,t') ->
-             let@ (ls,t) = infer loc local t in
-             let@ t' = check loc local ls t' in
-             return (BT.Bool, EQ (t,t')) 
-        in
-
-        let tuple_op local = function
-          | Tuple ts ->
-             let@ bts_ts = ListM.mapM (infer loc local) ts in
-             let (bts,ts) = List.split bts_ts in
-             return (BT.Tuple bts, Tuple ts)
-          | NthTuple (n, t') ->
-             let@ (tuple_bt,t') = infer loc local t' in
-             let@ item_bt = match tuple_bt with
-               | Tuple bts ->
-                  begin match List.nth_opt bts n with
-                  | Some t -> return t
-                  | None -> 
-                     let (context, t') = E.illtyped_index_term local context t' in
+           return (IT (Lit lit, bt))
+        | Arith_op arith_op ->
+           let@ (bt, arith_op) = match arith_op with
+             | Add (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (IT.bt t, Add (t, t'))
+             | Sub (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (IT.bt t, Sub (t, t'))
+             | Mul (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (IT.bt t, Mul (t, t'))
+             | Div (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (IT.bt t, Div (t, t'))
+             | Exp (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (IT.bt t, Exp (t, t'))
+             | Rem (t,t') ->
+                let@ t = check loc ~context Integer t in
+                let@ t' = check loc ~context Integer t' in
+                return (Integer, Rem (t, t'))
+           in
+           return (IT (Arith_op arith_op, bt))
+        | Cmp_op cmp_op ->
+           let@ (bt, cmp_op) = match cmp_op with
+             | LT (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (BT.Bool, LT (t, t'))
+             | LE (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ () = ensure_integer_or_real_type loc context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (BT.Bool, LE (t, t'))
+           in
+           return (IT (Cmp_op cmp_op, bt))
+        | Bool_op bool_op ->
+           let@ (bt, bool_op) = match bool_op with
+             | And ts ->
+                let@ ts = ListM.mapM (check loc ~context Bool) ts in
+                return (BT.Bool, And ts)
+             | Or ts ->
+                let@ ts = ListM.mapM (check loc ~context Bool) ts in
+                return (BT.Bool, Or ts)
+             | Impl (t,t') ->
+                let@ t = check loc ~context Bool t in
+                let@ t' = check loc ~context Bool t' in
+                return (BT.Bool, Impl (t, t'))
+             | Not t ->
+                let@ t = check loc ~context Bool t in
+                return (BT.Bool, Not t)
+             | ITE (t,t',t'') ->
+                let@ t = check loc ~context Bool t in
+                let@ t' = infer loc ~context t' in
+                let@ t'' = check loc ~context (IT.bt t') t'' in
+                return (IT.bt t', ITE (t, t', t''))
+             | EQ (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ t' = check loc ~context (IT.bt t) t' in
+                return (BT.Bool, EQ (t,t')) 
+           in
+           return (IT (Bool_op bool_op, bt))
+        | Tuple_op tuple_op ->
+           let@ (bt, tuple_op) = match tuple_op with
+             | Tuple ts ->
+                let@ ts = ListM.mapM (infer loc ~context) ts in
+                let bts = List.map IT.bt ts in
+                return (BT.Tuple bts, Tuple ts)
+             | NthTuple (n, t') ->
+                let@ t' = infer loc ~context t' in
+                let@ item_bt = match IT.bt t' with
+                  | Tuple bts ->
+                     begin match List.nth_opt bts n with
+                     | Some t -> return t
+                     | None -> 
+                        let@ explain_local = get () in
+                        let (context_pp, t'_pp) = E.illtyped_index_term explain_local context t' in
+                        let err = 
+                          lazy begin
+                              Generic
+                                (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                   !^"Expected" ^^^ t'_pp ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
+                                     !^"components, but has type" ^^^ BT.pp (Tuple bts))
+                            end
+                        in
+                        fail loc err
+                     end
+                  | _ -> 
+                     let@ explain_local = get () in
+                     let (context_pp, t'_pp) = E.illtyped_index_term explain_local context t' in
                      let err = 
                        lazy begin
                            Generic
-                             (!^"Illtyped expression" ^^^ context ^^ dot ^^^
-                                !^"Expected" ^^^ t' ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
-                                  !^"components, but has type" ^^^ BT.pp (Tuple bts))
+                             (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                !^"Expected" ^^^ t'_pp ^^^ !^"to have tuple type, but has type" ^^^
+                                  BT.pp (IT.bt t'))
+                           end
+                     in
+                     fail loc err
+                in
+                return (item_bt, NthTuple (n, t'))
+           in
+           return (IT (Tuple_op tuple_op, bt))
+        | Struct_op struct_op ->
+           let@ (bt, struct_op) = match struct_op with
+             | Struct (tag, members) ->
+                let@ layout = get_struct_decl loc tag in
+                let decl_members = Memory.member_types layout in
+                let@ () = 
+                  let has = List.length members in
+                  let expect = List.length decl_members in
+                  if has = expect then return ()
+                  else fail loc (lazy (Number_members {has; expect}))
+                in
+                let@ members = 
+                  ListM.mapM (fun (member,t) ->
+                      let@ bt = match List.assoc_opt Id.equal member decl_members with
+                        | Some sct -> return (BT.of_sct sct)
+                        | None -> 
+                           let@ explain_local = get () in
+                           let context_pp = E.index_term explain_local context in
+                           let err = 
+                             lazy begin
+                                 Generic
+                                   (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                      !^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ Id.pp member)
+                               end
+                           in
+                           fail loc err
+                      in
+                      let@ t = check loc ~context bt t in
+                      return (member, t)
+                    ) members
+                in
+                return (BT.Struct tag, Struct (tag, members))
+             | StructMember (t, member) ->
+                let@ t = infer loc ~context t in
+                let@ tag = match IT.bt t with
+                  | Struct tag -> return tag
+                  | _ -> 
+                     let@ explain_local = get () in
+                     let (context_pp, t_pp) = E.illtyped_index_term explain_local context t in
+                     let err = 
+                       lazy begin
+                           Generic (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                      !^"Expected" ^^^ t_pp ^^^ !^"to have struct type" ^^^ 
+                                        !^"but has type" ^^^ BT.pp (IT.bt t))
                          end
                      in
                      fail loc err
-                  end
-               | _ -> 
-                  let (context, t') = E.illtyped_index_term local context t' in
-                  let err = 
-                    lazy begin
-                        Generic
-                          (!^"Illtyped expression" ^^^ context ^^ dot ^^^
-                             !^"Expected" ^^^ t' ^^^ !^"to have tuple type, but has type" ^^^
-                               BT.pp tuple_bt)
-                        end
-                  in
-                  fail loc err
-             in
-             return (item_bt, NthTuple (n, t'))
-        in
-        
-        let struct_op local = function
-          | Struct (tag, members) ->
-             let@ layout = get_struct_decl tag in
-             let decl_members = Memory.member_types layout in
-             let@ () = 
-               let has = List.length members in
-               let expect = List.length decl_members in
-               if has = expect then return ()
-               else fail loc (lazy (Number_members {has; expect}))
-             in
-             let@ members = 
-               ListM.mapM (fun (member,t) ->
-                   let@ bt = get_member_type decl_members member it in
-                   let@ t = check loc local bt t in
-                   return (member, t)
-                 ) members
-             in
-             return (BT.Struct tag, Struct (tag, members))
-          | StructMember (t, member) ->
-             let@ (bt, t) = infer loc local t in
-             let@ tag = match bt with
-               | Struct tag -> return tag
-               | _ -> 
-                  let (context, t) = E.illtyped_index_term local context t in
-                  let err = 
-                    lazy begin
-                        Generic (!^"Illtyped expression" ^^^ context ^^ dot ^^^
-                                   !^"Expected" ^^^ t ^^^ !^"to have struct type" ^^^ 
-                                     !^"but has type" ^^^ BT.pp bt)
-                      end
-                  in
-                  fail loc err
-             in
-             let@ layout = get_struct_decl tag in
-             let decl_members = Memory.member_types layout in
-             let@ bt = get_member_type decl_members member t in
-             return (bt, StructMember (t, member))
-        in
+                in
+                let@ layout = get_struct_decl loc tag in
+                let decl_members = Memory.member_types layout in
+                let@ bt = match List.assoc_opt Id.equal member decl_members with
+                  | Some sct -> return (BT.of_sct sct)
+                  | None -> 
+                     let@ explain_local = get () in
+                     let (context_pp, t_pp) = E.illtyped_index_term explain_local context t in
+                     let err = 
+                       lazy begin
+                           Generic
+                             (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                t_pp ^^^ !^"does not have member" ^^^ Id.pp member)
+                         end
+                     in
+                     fail loc err
+                in
+                return (bt, StructMember (t, member))
+           in
+           return (IT (Struct_op struct_op, bt))
+        | Pointer_op pointer_op ->
+           let@ (bt, pointer_op) = match pointer_op with 
+             | Null ->
+                return (BT.Loc, Null)
+             | AddPointer (t, t') ->
+                let@ t = check loc ~context Loc t in
+                let@ t' = check loc ~context Integer t' in
+                return (Loc, AddPointer (t, t'))
+             | SubPointer (t, t') ->
+                let@ t = check loc ~context Loc t in
+                let@ t' = check loc ~context Integer t' in
+                return (Loc, SubPointer (t, t'))
+             | MulPointer (t, t') ->
+                let@ t = check loc ~context Loc t in
+                let@ t' = check loc ~context Integer t' in
+                return (Loc, MulPointer (t, t'))
+             | LTPointer (t, t') ->
+                let@ t = check loc ~context Loc t in
+                let@ t' = check loc ~context Loc t' in
+                return (BT.Bool, LTPointer (t, t'))
+             | LEPointer (t, t') ->
+                let@ t = check loc ~context Loc t in
+                let@ t' = check loc ~context Loc t' in
+                return (BT.Bool, LEPointer (t, t'))
+             | IntegerToPointerCast t ->
+                let@ t = check loc ~context Integer t in
+                return (Loc, IntegerToPointerCast t)
+             | PointerToIntegerCast t ->
+                let@ t = check loc ~context Loc t in
+                return (Integer, PointerToIntegerCast t)
+             | MemberOffset (tag, member) ->
+                return (Integer, MemberOffset (tag, member))
+             | ArrayOffset (ct, t) ->
+                let@ t = check loc ~context Integer t in
+                return (Integer, ArrayOffset (ct, t))
+           in
+           return (IT (Pointer_op pointer_op, bt))
+        | CT_pred ct_pred ->
+           let@ (bt, ct_pred) = match ct_pred with
+             | AlignedI t ->
+                let@ t_t = check loc ~context Loc t.t in
+                let@ t_align = check loc ~context Integer t.align in
+                return (BT.Bool, AlignedI {t = t_t; align=t_align})
+             | Aligned (t, ct) ->
+                let@ t = check loc ~context Loc t in
+                return (BT.Bool, Aligned (t, ct))
+             | Representable (ct, t) ->
+                let@ t = check loc ~context (BT.of_sct ct) t in
+                return (BT.Bool, Representable (ct, t))
+           in
+           return (IT (CT_pred ct_pred, bt))
+        | List_op list_op ->
+           let@ (bt, list_op) = match list_op with
+             | Nil -> 
+                fail loc (lazy (Polymorphic_it context))
+             | Cons (t1,t2) ->
+                let@ t1 = infer loc ~context t1 in
+                let@ t2 = check loc ~context (List (IT.bt t1)) t2 in
+                return (BT.List (IT.bt t1), Cons (t1, t2))
+             | List [] ->
+                fail loc (lazy (Polymorphic_it context))
+             | List (t :: ts) ->
+                let@ t = infer loc ~context t in
+                let@ ts = ListM.mapM (check loc ~context (IT.bt t)) ts in
+                return (BT.List (IT.bt t), List (t :: ts))
+             | Head t ->
+                let@ t = infer loc ~context t in
+                let@ bt = ensure_list_type loc context t in
+                return (bt, Head t)
+             | Tail t ->
+                let@ t = infer loc ~context t in
+                let@ bt = ensure_list_type loc context t in
+                return (BT.List bt, Tail t)
+             | NthList (i, t) ->
+                let@ t = infer loc ~context t in
+                let@ bt = ensure_list_type loc context t in
+                return (bt, NthList (i, t))
+           in
+           return (IT (List_op list_op, bt))
+        | Set_op set_op ->
+           let@ (bt, set_op) = match set_op with
+             | SetMember (t,t') ->
+                let@ t = infer loc ~context t in
+                let@ t' = check loc ~context (Set (IT.bt t)) t' in
+                return (BT.Bool, SetMember (t, t'))
+             | SetUnion its ->
+                let (t, ts) = List1.dest its in
+                let@ t = infer loc ~context t in
+                let@ itembt = ensure_set_type loc context t in
+                let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
+                return (Set itembt, SetUnion (List1.make (t, ts)))
+             | SetIntersection its ->
+                let (t, ts) = List1.dest its in
+                let@ t = infer loc ~context t in
+                let@ itembt = ensure_set_type loc context t in
+                let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
+                return (Set itembt, SetIntersection (List1.make (t, ts)))
+             | SetDifference (t, t') ->
+                let@ t  = infer loc ~context t in
+                let@ itembt = ensure_set_type loc context t in
+                let@ t' = check loc ~context (Set itembt) t' in
+                return (Set itembt, SetDifference (t, t'))
+             | Subset (t, t') ->
+                let@ t = infer loc ~context t in
+                let@ itembt = ensure_set_type loc context t in
+                let@ t' = check loc ~context (Set itembt) t' in
+                return (BT.Bool, Subset (t,t'))
+           in
+           return (IT (Set_op set_op, bt))
+        | Option_op option_op ->
+           let@ (bt, option_op) = match option_op with
+             | Something t ->
+                let@ t = infer loc ~context t in
+                let@ bt = ensure_option_type loc context t in
+                return (BT.Option bt, Something t)
+             | Nothing bt ->
+                return (BT.Option bt, Nothing bt)
+             | Is_some t ->
+                let@ t = infer loc ~context t in
+                let@ bt = ensure_option_type loc context t in
+                return (BT.Bool, Is_some t)
+             | Value_of_some t ->
+                let@ t = infer loc ~context t in
+                let@ bt = ensure_option_type loc context t in
+                return (bt, Value_of_some t)
+           in
+           return (IT (Option_op option_op, bt))
+        | Array_op array_op -> 
+           let@ (bt, array_op) = match array_op with
+             | Const t ->
+                let@ t = infer loc ~context t in
+                return (BT.Array (BT.Integer, IT.bt t), Const t)
+             | Mod (t1, t2, t3) ->
+                let@ t2 = infer loc ~context t2 in
+                let@ t3 = infer loc ~context t3 in
+                let bt = BT.Array (IT.bt t2, IT.bt t3) in
+                let@ t1 = check loc ~context bt t1 in
+                return (bt, Mod (t1, t2, t3))
+             | App (t, arg) -> 
+                let@ t = infer loc ~context t in
+                let@ (abt, bt) = ensure_array_type loc context t in
+                let@ arg = check loc ~context abt arg in
+                return (bt, App (t, arg))
+           in
+           return (IT (Array_op array_op, bt))
 
-        let pointer_op local = function
-          | Null ->
-             return (BT.Loc, Null)
-          | AddPointer (t, t') ->
-             let@ t = check loc local Loc t in
-             let@ t' = check loc local Integer t' in
-             return (Loc, AddPointer (t, t'))
-          | SubPointer (t, t') ->
-             let@ t = check loc local Loc t in
-             let@ t' = check loc local Integer t' in
-             return (Loc, SubPointer (t, t'))
-          | MulPointer (t, t') ->
-             let@ t = check loc local Loc t in
-             let@ t' = check loc local Integer t' in
-             return (Loc, MulPointer (t, t'))
-          | LTPointer (t, t') ->
-             let@ t = check loc local Loc t in
-             let@ t' = check loc local Loc t' in
-             return (BT.Bool, LTPointer (t, t'))
-          | LEPointer (t, t') ->
-             let@ t = check loc local Loc t in
-             let@ t' = check loc local Loc t' in
-             return (BT.Bool, LEPointer (t, t'))
-          (* | Disjoint ((t,s), (t',s')) ->
-           *    let@ t = check loc (Base Loc) t in
-           *    let@ t' = check loc (Base Loc) t' in
-           *    let@ s = check loc (Base Integer) s in
-           *    let@ s' = check loc (Base Integer) s' in
-           *    return (Base Bool, Disjoint ((t,s), (t',s'))) *)
-          | IntegerToPointerCast t ->
-             let@ t = check loc local Integer t in
-             return (Loc, IntegerToPointerCast t)
-          | PointerToIntegerCast t ->
-             let@ t = check loc local Loc t in
-             return (Integer, PointerToIntegerCast t)
-          | MemberOffset (tag, member) ->
-             return (Integer, MemberOffset (tag, member))
-          | ArrayOffset (ct, t) ->
-             let@ t = check loc local Integer t in
-             return (Integer, ArrayOffset (ct, t))
-        in
-
-        let ct_pred local = function
-          | AlignedI t ->
-             let@ t_t = check loc local Loc t.t in
-             let@ t_align = check loc local Integer t.align in
-             return (BT.Bool, AlignedI {t = t_t; align=t_align})
-          | Aligned (t, ct) ->
-             let@ t = check loc local Loc t in
-             return (BT.Bool, Aligned (t, ct))
-          | Representable (ct, t) ->
-             let@ t = check loc local (BT.of_sct ct) t in
-             return (BT.Bool, Representable (ct, t))
-        in
-
-        let list_op local = function
-          | Nil -> 
-             fail loc (lazy (Polymorphic_it context))
-          | Cons (t1,t2) ->
-             let@ (item_bt, t1) = infer loc local t1 in
-             let@ t2 = check loc local (List item_bt) t2 in
-             return (BT.List item_bt, Cons (t1, t2))
-          | List [] ->
-             fail loc (lazy (Polymorphic_it context))
-          | List (t :: ts) ->
-             let@ (bt, t) = infer loc local t in
-             let@ ts = ListM.mapM (check loc local bt) ts in
-             return (BT.List bt, List (t :: ts))
-          | Head t ->
-             let@ (bt,t) = infer_list_type loc local t in
-             return (bt, Head t)
-          | Tail t ->
-             let@ (bt,t) = infer_list_type loc local t in
-             return (BT.List bt, Tail t)
-          | NthList (i, t) ->
-             let@ (bt,t) = infer_list_type loc local t in
-             return (bt, NthList (i, t))
-        in
-
-        let set_op local = function
-          | SetMember (t,t') ->
-             let@ (bt, t) = infer loc local t in
-             let@ t' = check loc local (Set bt) t' in
-             return (BT.Bool, SetMember (t, t'))
-          | SetUnion its ->
-             let (t, ts) = List1.dest its in
-             let@ (itembt, t) = infer_set_type loc local t in
-             let@ ts = ListM.mapM (check loc local (Set itembt)) ts in
-             return (Set itembt, SetUnion (List1.make (t, ts)))
-          | SetIntersection its ->
-             let (t, ts) = List1.dest its in
-             let@ (itembt, t) = infer_set_type loc local t in
-             let@ ts = ListM.mapM (check loc local (Set itembt)) ts in
-             return (Set itembt, SetIntersection (List1.make (t, ts)))
-          | SetDifference (t, t') ->
-             let@ (itembt, t)  = infer_set_type loc local t in
-             let@ t' = check loc local (Set itembt) t' in
-             return (Set itembt, SetDifference (t, t'))
-          | Subset (t, t') ->
-             let@ (bt, t) = infer_set_type loc local t in
-             let@ t' = check loc local (Set bt) t' in
-             return (BT.Bool, Subset (t,t'))
-        in
-
-        let option_op local = function
-          | Something it ->
-             let@ (bt, it) = infer loc local it in
-             let mbt = BT.Option bt in
-             return (mbt, Something it)
-          | Nothing bt ->
-             let mbt = BT.Option bt in
-             return (mbt, Nothing bt)
-          | Is_some it ->
-             let@ (_, it) = infer_option_type loc local it in
-             return (BT.Bool, Is_some it)
-          | Value_of_some it ->
-             let@ (bt, it) = infer_option_type loc local it in
-             return (bt, Value_of_some it)
-        in
-
-        let array_op local = function
-          | Const it ->
-             let@ (bt, it) = infer loc local it in
-             return (BT.Array (BT.Integer, bt), Const it)
-          | Mod (it1, it2, it3) ->
-             let@ (bt2, it2) = infer loc local it2 in
-             let@ (bt3, it3) = infer loc local it3 in
-             let bt = BT.Array (bt2, bt3) in
-             let@ it1 = check loc local bt it1 in
-             return (bt, Mod (it1, it2, it3))
-          | App (it, arg) -> 
-             let@ (fbt, it) = infer loc local it in
-             let@ (abt, bt) = ensure_array_type loc local context it fbt in
-             let@ arg = check loc local abt arg in
-             return (bt, App (it, arg))
-        in
-
-        fun loc local (IT (it, _)) ->
-        match it with
-        | Lit it ->
-           let@ (bt, it) = lit local it in
-           return (bt, IT (Lit it, bt))
-        | Arith_op it ->
-           let@ (bt, it) = arith_op local it in
-           return (bt, IT (Arith_op it, bt))
-        | Cmp_op it ->
-           let@ (bt, it) = cmp_op local it in
-           return (bt, IT (Cmp_op it, bt))
-        | Bool_op it ->
-           let@ (bt, it) = bool_op local it in
-           return (bt, IT (Bool_op it, bt))
-        | Tuple_op it ->
-           let@ (bt, it) = tuple_op local it in
-           return (bt, IT (Tuple_op it, bt))
-        | Struct_op it ->
-           let@ (bt, it) = struct_op local it in
-           return (bt, IT (Struct_op it, bt))
-        | Pointer_op it ->
-           let@ (bt, it) = pointer_op local it in
-           return (bt, IT (Pointer_op it, bt))
-        | CT_pred it ->
-           let@ (bt, it) = ct_pred local it in
-           return (bt, IT (CT_pred it, bt))
-        | List_op it ->
-           let@ (bt, it) = list_op local it in
-           return (bt, IT (List_op it, bt))
-        | Set_op it ->
-           let@ (bt, it) = set_op local it in
-           return (bt, IT (Set_op it, bt))
-        | Option_op it ->
-           let@ (bt, option_op) = option_op local it in
-           return (bt, IT (Option_op option_op, bt))
-        | Array_op it -> 
-           let@ (bt, array_op) = array_op local it in
-           return (bt, IT (Array_op array_op, bt))
-           
-           
-
-
-      and check : 'bt. Loc.t -> L.t -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
-        fun loc local ls it ->
+      and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> IT.t m =
+        fun loc ~context ls it ->
         match it, ls with
         | IT (List_op Nil, _), List bt ->
            return (IT (List_op Nil, BT.List bt))
         | _, _ ->
-           let@ (ls',it) = infer loc local it in
-           if LS.equal ls ls' then
+           let@ it = infer loc ~context it in
+           if LS.equal ls (IT.bt it) then
              return it
            else
+             let@ explain_local = get () in
              let err =
                lazy begin
-                   let (context, it) = E.illtyped_index_term local context it in
-                   Illtyped_it {context; it; has = ls'; expected = Pp.plain (LS.pp ls)}
+                   let (context_pp, it_pp) = E.illtyped_index_term explain_local context it in
+                   Illtyped_it {context = context_pp; it = it_pp; 
+                                has = IT.bt it; expected = Pp.plain (LS.pp ls)}
                  end
              in
              fail loc  err
 
-      and infer_list_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
-        fun loc local it ->
-        let@ (bt,it) = infer loc local it in
-        let@ bt = ensure_list_type loc local context it bt in
-        return (bt, it)
+    let infer loc it = 
+      pure (infer loc ~context:it it)
 
-      and infer_integer_or_real_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
-        fun loc local it ->
-        let@ (bt,it) = infer loc local it in
-        let@ bt = ensure_integer_or_real_type loc local context it bt in
-        return (bt, it)
-
-      and infer_set_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
-        fun loc local it ->
-        let@ (bt, it) = infer loc local it in
-        let@ bt = ensure_set_type loc local context it bt in
-        return (bt, it)
-
-
-      and infer_option_type : 'bt. Loc.t -> L.t -> 'bt IT.term -> (BT.t * IT.t, type_error) m =
-        fun loc local it ->
-        let@ (bt, it) = infer loc local it in
-        let@ bt = ensure_option_type loc local context it bt in
-        return (bt, it)
-    
-      in  
-
-      match ols with
-      | Some ls -> 
-         let@ it = check loc local ls it in
-         return (ls, it)
-      | None -> infer loc local it
-
-
-
-
-    let welltyped loc local ls it = 
-      let@ _ = check_or_infer loc local (Some ls) it in
-      return ()
-
+    let check loc ls it = 
+      pure (check loc ~context:it ls it)
 
   end
 
@@ -508,127 +467,118 @@ module Make
 
     open Resources.RE
 
-    let welltyped loc local = 
-
-      let get_predicate_def name = 
-        match Global.get_predicate_def G.global name, name with
-        | Some def, _ -> return def
-        | None, Ctype ct -> fail loc (lazy (Missing_ctype_predicate ct))
-        | None, Id id -> fail loc (lazy (Missing_predicate id))
-      in
+    let get_predicate_def loc name = 
+      match Global.get_predicate_def G.global name, name with
+      | Some def, _ -> return def
+      | None, Ctype ct -> fail loc (lazy (Missing_ctype_predicate ct))
+      | None, Id id -> fail loc (lazy (Missing_predicate id))
       
-      let ensure_same_argument_number input_output has ~expect =
-        if has = expect then return () else 
-          match input_output with
-          | `Input -> fail loc (lazy (Number_input_arguments {has; expect}))
-          | `Output -> fail loc (lazy (Number_input_arguments {has; expect}))
+    let ensure_same_argument_number loc input_output has ~expect =
+      if has = expect then return () else 
+        match input_output with
+        | `Input -> fail loc (lazy (Number_input_arguments {has; expect}))
+        | `Output -> fail loc (lazy (Number_input_arguments {has; expect}))
+        
+    let welltyped loc resource = 
+      pure begin match resource with
+        | Point b -> 
+           let@ _ = WIT.check loc BT.Loc b.pointer in
+           let@ _ = WIT.infer loc b.value in
+           let@ _ = WIT.check loc BT.Bool b.init in
+           let@ _ = WIT.check loc BT.Real b.permission in
+           return ()
+        | QPoint b -> 
+           let@ () = add_l b.qpointer Loc in
+           let@ _ = WIT.infer loc b.value in
+           let@ _ = WIT.check loc BT.Bool b.init in
+           let@ _ = WIT.check loc BT.Real b.permission in
+           return ()
+        | Predicate p -> 
+           let@ def = get_predicate_def loc p.name in
+           let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
+           let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+           let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
+           let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+           let@ _ = WIT.check loc BT.Loc p.pointer in
+           let@ _ = 
+             ListM.mapM (fun (arg, expected_sort) ->
+                 WIT.check loc expected_sort arg
+               ) (List.combine (p.iargs @ p.oargs) 
+                 (List.map snd def.iargs @ List.map snd def.oargs))
+           in
+           return ()
+        | QPredicate p -> 
+           let@ _ = WIT.check loc BT.Loc p.pointer in
+           let@ _ = WIT.check loc BT.Integer p.element_size in
+           let@ _ = WIT.check loc BT.Integer p.istart in
+           let@ _ = WIT.check loc BT.Integer p.iend in
+           let@ _ = ListM.mapM (WIT.check loc BT.Loc) p.moved
+           in
+           let@ def = get_predicate_def loc p.name in
+           let@ () = add_l p.i Integer in
+           let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
+           let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+           let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
+           let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+           let@ _ = 
+             ListM.mapM (fun (arg, (_, expected_sort)) ->
+                 WIT.check loc expected_sort arg
+               ) (List.combine p.iargs def.iargs)
+           in
+           let@ _ = 
+             ListM.mapM (fun (arg, (_, expected_sort)) ->
+                 WIT.check loc expected_sort arg
+               ) (List.combine p.oargs def.oargs)
+           in
+           return ()
+        end
+
+
+    let resource_mode_check loc undetermined resource = 
+      let free_inputs = IT.free_vars_list (RE.inputs resource) in
+      let@ () = match SymSet.elements (SymSet.inter free_inputs undetermined) with
+        | [] -> return ()
+        | lvar :: _ -> fail loc (lazy (Unconstrained_logical_variable lvar))
       in
+      let@ fixed = 
+        ListM.fold_leftM (fun fixed output ->
+           let undetermined = SymSet.inter (IT.free_vars output) undetermined in
+           match SymSet.is_empty undetermined, IT.unifiable output with
+           (* if the logical variables in the outputs are already determined, ok *)
+           | true, _ -> 
+              return fixed
+           (* if the output is an (unresolved) logical variable, then it can be
+              resolved by unification *)
+           | false, Some sym -> 
+              return (SymSet.add sym fixed)
+           (* otherwise, fail *)
+           | false, _ ->
+              let bad = List.hd (SymSet.elements undetermined) in
+              fail loc (lazy (Logical_variable_not_good_for_unification bad))
+          ) SymSet.empty (RE.outputs resource)
+      in
+      return fixed
 
-      function
-      | Point b -> 
-         let@ () = WIT.welltyped loc local BT.Loc b.pointer in
-         let@ _ = WIT.check_or_infer loc local None b.value in
-         let@ _ = WIT.check_or_infer loc local (Some BT.Bool) b.init in
-         let@ _ = WIT.check_or_infer loc local (Some BT.Real) b.permission in
-         return ()
-      | QPoint b -> 
-         let local = L.add_l b.qpointer Loc local in
-         let@ _ = WIT.check_or_infer loc local None b.value in
-         let@ _ = WIT.check_or_infer loc local (Some BT.Bool) b.init in
-         let@ _ = WIT.check_or_infer loc local (Some BT.Real) b.permission in
-         return ()
-      | Predicate p -> 
-         let@ def = get_predicate_def p.name in
-         let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
-         let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
-         let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
-         let@ () = ensure_same_argument_number `Output has_oargs ~expect:expect_oargs in
-         let@ () = WIT.welltyped loc local BT.Loc p.pointer in
-         let@ () = 
-           ListM.iterM (fun (arg, expected_sort) ->
-               WIT.welltyped loc local expected_sort arg
-             ) (List.combine (p.iargs @ p.oargs) 
-               (List.map snd def.iargs @ List.map snd def.oargs))
-         in
-         return ()
-      | QPredicate p -> 
-         let@ () = WIT.welltyped loc local BT.Loc p.pointer in
-         let@ () = WIT.welltyped loc local BT.Integer p.element_size in
-         let@ () = WIT.welltyped loc local BT.Integer p.istart in
-         let@ () = WIT.welltyped loc local BT.Integer p.iend in
-         let@ () = 
-           ListM.iterM (fun it ->
-               WIT.welltyped loc local BT.Loc it
-             ) p.moved
-         in
-         let@ def = get_predicate_def p.name in
-         let local = L.add_l p.i Integer local in
-         let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
-         let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
-         let@ () = ensure_same_argument_number `Input has_iargs ~expect:expect_iargs in
-         let@ () = ensure_same_argument_number `Output has_oargs ~expect:expect_oargs in
-         let@ () = 
-           ListM.iterM (fun (arg, (_, expected_sort)) ->
-               WIT.welltyped loc local expected_sort arg
-             ) (List.combine p.iargs def.iargs)
-         in
-         let@ () = 
-           ListM.iterM (fun (arg, (_, expected_sort)) ->
-               WIT.welltyped loc local expected_sort arg
-             ) (List.combine p.oargs def.oargs)
-         in
-         return ()
   end
-
-
-  let resource_inputs_outputs_ok loc resource determined = 
-    let bound = SymSet.of_list (List.map fst (RE.quantified resource)) in
-    let free = IT.free_vars_list (RE.inputs resource) in
-    let undetermined = SymSet.diff free (SymSet.union determined bound) in
-    let@ () = match SymSet.is_empty undetermined with
-      | true -> return ()
-      | false ->
-         let bad = List.hd (SymSet.elements undetermined) in
-         fail loc (lazy (Unconstrained_logical_variable bad))
-    in
-    let@ fixed = 
-      ListM.fold_leftM (fun fixed output ->
-         let undetermined = 
-           SymSet.diff (IT.free_vars output) 
-             (SymSet.union determined bound) 
-         in
-         match SymSet.is_empty undetermined, IT.unifiable output with
-         (* if the logical variables in tht outputs are already determined, ok *)
-         | true, _ -> return fixed
-         (* if the output is an (unresolved) logical variable, then it can be
-            resolved by unification *)       
-         | false, Some sym -> return (SymSet.add sym fixed)
-         (* otherwise, fail *)
-         | false, _ ->
-            let bad = List.hd (SymSet.elements undetermined) in
-            fail loc (lazy (Logical_variable_not_good_for_unification bad))
-        ) SymSet.empty (RE.outputs resource)
-    in
-    return fixed
 
   module WLC = struct
     type t = LogicalConstraints.t
-         
 
-         
 
-    let welltyped loc local lc =
-      match lc with
-      | LC.T it -> 
-         WIT.welltyped loc local BT.Bool it
-      | LC.Forall ((s,bt), trigger, it) ->
-         let local = L.add_l s bt local in
-         let@ () = WIT.welltyped loc local BT.Bool it in
-         match trigger with
-         | None -> return ()
-         | Some trigger -> 
-            (* let@ _ = WIT.check_or_infer loc local None trigger in *)
-            return ()
+    let welltyped loc lc =
+      pure begin match lc with
+        | LC.T it -> 
+           let@ _ = WIT.check loc BT.Bool it in
+           return ()
+        | LC.Forall ((s,bt), trigger, it) ->
+           let@ () = add_l s bt in
+           let@ _ = WIT.check loc BT.Bool it in
+           match trigger with
+           | None -> return ()
+           | Some trigger -> 
+              (* let@ _ = WIT.infer loc local trigger in *)
+              return ()
+        end
   end
 
   module WLRT = struct
@@ -636,32 +586,32 @@ module Make
     open LogicalReturnTypes
     type t = LogicalReturnTypes.t
 
-    let rec check loc local lrt = 
-      match lrt with
-      | Logical ((s,ls), lrt) -> 
-         let lname = Sym.fresh_same s in
-         let local = L.add_l lname ls local in
-         let lrt = subst_var Subst.{before = s; after = lname} lrt in
-         check loc local lrt
-      | Resource (re, lrt) -> 
-         let@ () = WRE.welltyped loc local re in
-         let local = L.add_r re local in
-         check loc local lrt
-      | Constraint (lc, lrt) ->
-         let@ () = WLC.welltyped loc local lc in
-         let local = L.add_c lc local in
-         check loc local lrt
-      | I -> 
-         return ()
+    let rec welltyped loc lrt = 
+      pure begin match lrt with
+        | Logical ((s,ls), lrt) -> 
+           let lname = Sym.fresh_same s in
+           let@ () = add_l lname ls in
+           let lrt = subst_var Subst.{before = s; after = lname} lrt in
+           welltyped loc lrt
+        | Resource (re, lrt) -> 
+           let@ () = WRE.welltyped loc re in
+           let@ () = add_r re in
+           welltyped loc lrt
+        | Constraint (lc, lrt) ->
+           let@ () = WLC.welltyped loc lc in
+           let@ () = add_c lc in
+           welltyped loc lrt
+        | I -> 
+           return ()
+        end
 
-    let wellpolarised loc determined lrt = 
-      let open Resultat in
+    let mode_check loc determined lrt = 
       let rec aux determined undetermined lrt = 
       match lrt with
       | Logical ((s, _), lrt) ->
          aux determined (SymSet.add s undetermined) lrt
       | Resource (re, lrt) ->
-         let@ fixed = resource_inputs_outputs_ok loc re determined in
+         let@ fixed = WRE.resource_mode_check loc undetermined re in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined lrt
@@ -674,9 +624,11 @@ module Make
       in
       aux determined SymSet.empty lrt
 
-    let welltyped loc local lrt = 
-      let@ () = check loc local lrt in
-      wellpolarised loc (SymSet.of_list (L.all_vars local)) lrt
+    let good loc lrt = 
+      let@ () = welltyped loc lrt in
+      let@ all_vars = all_vars () in
+      let@ () = mode_check loc (SymSet.of_list all_vars) lrt in
+      return ()
 
   end
 
@@ -686,25 +638,28 @@ module Make
     include ReturnTypes
     type t = ReturnTypes.t
 
-    let check loc local rt = 
-      match rt with 
-      | Computational ((name,bt), lrt) ->
-         let name' = Sym.fresh_same name in
-         let lname = Sym.fresh () in
-         let local = L.add_l lname bt local in
-         let local = L.add_a name' (bt, lname) local in
-         let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
-         WLRT.check loc local lrt
+    let welltyped loc rt = 
+      pure begin match rt with 
+        | Computational ((name,bt), lrt) ->
+           let name' = Sym.fresh_same name in
+           let lname = Sym.fresh () in
+           let@ () = add_l lname bt in
+           let@ () = add_a name' (bt, lname) in
+           let lrt = LRT.subst_var Subst.{before = name; after = lname} lrt in
+           WLRT.welltyped loc lrt
+        end
 
-    let wellpolarised loc determined rt = 
+    let mode_check loc determined rt = 
       match rt with
       | Computational ((s, _), lrt) ->
-         WLRT.wellpolarised loc (SymSet.add s determined) lrt
+         WLRT.mode_check loc (SymSet.add s determined) lrt
 
-    let welltyped loc local at = 
-      let@ () = check loc local at in
-      wellpolarised loc (SymSet.of_list (L.all_vars local)) at
-
+    
+    let good loc rt =
+      let@ () = welltyped loc rt in
+      let@ all_vars = all_vars () in
+      let@ () = mode_check loc (SymSet.of_list all_vars) rt in
+      return ()
 
   end
 
@@ -713,32 +668,32 @@ module Make
   module WFalse = struct
     include False
     type t = False.t
-    let check _ _ _ = return ()
-    let wellpolarised _ _ _ = return ()
-    let welltyped _ _ _ = return ()
+    let welltyped _ _ = return ()
+    let mode_check _ _ _ = return ()
   end
 
   module type WOutputSpec = sig val name_bts : (string * LS.t) list end
   module WOutputDef (Spec : WOutputSpec) = struct
     include OutputDef
     type t = OutputDef.t
-    let check loc local assignment =
+    let check loc assignment =
       let name_bts = List.sort (fun (s, _) (s', _) -> String.compare s s') Spec.name_bts in
       let assignment = List.sort (fun (s, _) (s', _) -> String.compare s s') assignment in
       let rec aux name_bts assignment =
         match name_bts, assignment with
         | [], [] -> return ()
         | (name, bt) :: name_bts, (name', it) :: assignment when String.equal name name' ->
-           let@ () = WIT.welltyped loc local bt it in
+           let@ _ = WIT.check loc bt it in
            aux name_bts assignment
         | (name, _) :: _, _ -> fail loc (lazy (Generic !^("missing output argument " ^ name)))
         | _, (name, _) :: _ -> fail loc (lazy (Generic !^("surplus output argument " ^ name)))
       in
       aux name_bts assignment
-    let wellpolarised _ _ _ = return ()
-    let welltyped loc local assignment = 
-      check loc local assignment
-  end
+    let mode_check _ _ _ = return ()
+    let welltyped loc assignment = 
+      check loc assignment
+
+end
 
 
   module type WI_Sig = sig
@@ -746,9 +701,8 @@ module Make
     val subst_var : (Sym.t, Sym.t) Subst.t -> t -> t
     val subst_it : (Sym.t, IndexTerms.t) Subst.t -> t -> t
     val pp : t -> Pp.document
-    val check : Loc.t -> L.t -> t -> (unit,type_error) m
-    val wellpolarised : Loc.t -> SymSet.t -> t -> (unit,type_error) m
-    val welltyped : Loc.t -> L.t -> t -> (unit,type_error) m
+    val mode_check : Loc.t -> SymSet.t -> t -> unit m
+    val welltyped : Loc.t -> t -> unit m
   end
 
 
@@ -759,37 +713,37 @@ module Make
 
     type t = WI.t AT.t
 
-    let rec check kind loc local (at : t) : (unit, type_error) m = 
-      let open Resultat in
-      match at with
-      | AT.Computational ((name,bt), at) ->
-         let name' = Sym.fresh_same name in
-         let lname = Sym.fresh () in
-         let local = L.add_l lname bt local in
-         let local = L.add_a name' (bt, lname) local in
-         let at = AT.subst_var WI.subst_var Subst.{before = name; after = lname} at in
-         check kind loc local at
-      | AT.Logical ((s,ls), at) -> 
-         let lname = Sym.fresh_same s in
-         let local = L.add_l lname ls local in
-         let at = AT.subst_var WI.subst_var Subst.{before = s; after = lname} at in
-         check kind loc local at
-      | AT.Resource (re, at) -> 
-         let@ () = WRE.welltyped loc local re in
-         let local = L.add_r re local in
-         check kind loc local at
-      | AT.Constraint (lc, at) ->
-         let@ () = WLC.welltyped loc local lc in
-         let local = L.add_c lc local in
-         check kind loc local at
-      | AT.I i -> 
-         if S.provably_inconsistent (L.all_solver_constraints local) 
-         then fail loc (lazy (Generic !^("this "^kind^" makes inconsistent assumptions")))
-         else WI.check loc local i
+    let rec welltyped kind loc (at : t) : unit m = 
+      pure begin match at with
+        | AT.Computational ((name,bt), at) ->
+           let name' = Sym.fresh_same name in
+           let lname = Sym.fresh () in
+           let@ () = add_l lname bt in
+           let@ () = add_a name' (bt, lname) in
+           let at = AT.subst_var WI.subst_var Subst.{before = name; after = lname} at in
+           welltyped kind loc at
+        | AT.Logical ((s,ls), at) -> 
+           let lname = Sym.fresh_same s in
+           let@ () = add_l lname ls in
+           let at = AT.subst_var WI.subst_var Subst.{before = s; after = lname} at in
+           welltyped kind loc at
+        | AT.Resource (re, at) -> 
+           let@ () = WRE.welltyped loc re in
+           let@ () = add_r re in
+           welltyped kind loc at
+        | AT.Constraint (lc, at) ->
+           let@ () = WLC.welltyped loc lc in
+           let@ () = add_c lc in
+           welltyped kind loc at
+        | AT.I i -> 
+           let@ all_scs = all_solver_constraints () in
+           if S.provably_inconsistent all_scs
+           then fail loc (lazy (Generic !^("this "^kind^" makes inconsistent assumptions")))
+           else WI.welltyped loc i
+        end
 
 
-    let wellpolarised loc determined ft = 
-      let open Resultat in
+    let mode_check loc determined ft = 
       let rec aux determined undetermined ft = 
       match ft with
       | AT.Computational ((s, _), ft) ->
@@ -797,7 +751,7 @@ module Make
       | AT.Logical ((s, _), ft) ->
          aux determined (SymSet.add s undetermined) ft
       | AT.Resource (re, ft) ->
-         let@ fixed = resource_inputs_outputs_ok loc re determined in
+         let@ fixed = WRE.resource_mode_check loc undetermined re in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
          aux determined undetermined ft
@@ -805,14 +759,17 @@ module Make
          aux determined undetermined ft
       | AT.I rt ->
          match SymSet.elements undetermined with
-         | [] -> WI.wellpolarised loc determined rt
-         | s :: _ ->  fail loc (lazy (Unconstrained_logical_variable s))
+         | [] -> WI.mode_check loc determined rt
+         | s :: _ -> fail loc (lazy (Unconstrained_logical_variable s))
       in
       aux determined SymSet.empty ft
 
-    let welltyped kind loc local at = 
-      let@ () = check kind loc local at in
-      wellpolarised loc (SymSet.of_list (L.all_vars local)) at
+
+    let good kind loc ft = 
+      let@ () = welltyped kind loc ft in
+      let@ all_vars = all_vars () in
+      let@ () = mode_check loc (SymSet.of_list all_vars) ft in
+      return ()
 
   end
 
@@ -823,24 +780,43 @@ module Make
 
   module WPD = struct
     
-    let welltyped local pd = 
+    let welltyped pd = 
+      pure begin
+          let open Predicates in
+          let@ () = add_l pd.pointer BT.Loc in
+          let@ () = 
+            ListM.iterM (fun (s, ls) -> 
+                let@ () = add_l s ls in
+                match Sym.name s with
+                  | Some name -> add_description (s, Ast.Var name)
+                  | None -> return ()
+              ) pd.iargs
+          in
+          let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
+          ListM.iterM (fun (loc, lc, clause) ->
+              let@ () = WLC.welltyped loc lc in
+              WPackingFT.welltyped "clause" pd.loc clause
+            ) pd.clauses
+        end
+
+    let mode_check determined pd = 
       let open Predicates in
-      let local = L.add_l pd.pointer BT.Loc local in
-      let local = 
-        List.fold_left (fun local (s, ls) -> 
-            let local = L.add_l s ls local in
-            let local = match Sym.name s with
-              | Some name -> 
-                 L.add_description (s, Ast.Var name) local
-              | None -> local
-            in
-            local
-          ) local pd.iargs
+      let determined = 
+        List.fold_left (fun determined (s, _) -> 
+            SymSet.add s determined
+          ) determined pd.iargs
       in
       let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-      ListM.iterM (fun (loc, clause) ->
-          WPackingFT.welltyped "clause" pd.loc local clause
+      ListM.iterM (fun (loc, lc, clause) ->
+          WPackingFT.mode_check pd.loc determined clause
         ) pd.clauses
+
+    let good pd =
+      let@ () = welltyped pd in
+      let@ all_vars = all_vars () in
+      let@ () = mode_check (SymSet.of_list all_vars) pd in
+      return ()
+
   end
 
 
