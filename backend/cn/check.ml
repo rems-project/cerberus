@@ -68,8 +68,9 @@ module Make
   module E = Explain.Make(G)(S)(L)
 
 
-  module M = Typing.Make(L)
-  open M
+  module Typing = Typing.Make(L)
+  open Typing
+  open Effectful.Make(Typing)
 
 
 
@@ -168,7 +169,7 @@ module Make
      logical variable and record constraints about how the variables
      introduced in the pattern-matching relate to (lname,bound). *)
   let pattern_match_rt (pat : mu_pattern) (rt : RT.t) : unit m =
-    let@ (bt, s') = bind_logically rt in
+    let@ (bt, s') = logically_bind_return_type rt in
     pattern_match (sym_ (s', bt)) pat
 
 
@@ -209,7 +210,7 @@ let unpack_predicate (p : predicate) =
        (* remove resource before binding the return type
           'condition', so as not to unsoundly introduce extra
           disjointness constraints *)
-       let@ () = bind_logical lrt in
+       let@ () = bind_logical_return_type lrt in
        return true
 
   let unpack_resources () = 
@@ -761,7 +762,7 @@ let unpack_predicate (p : predicate) =
                    end
                ) def.clauses
            in
-           let@ solver = M.solver () in
+           let@ solver = Typing.solver () in
            let error = 
              lazy begin        
                  let _ = S.provable solver (T (bool_ false)) in
@@ -868,7 +869,7 @@ let unpack_predicate (p : predicate) =
            in
            return r
         | None ->
-           let@ solver = M.solver () in
+           let@ solver = Typing.solver () in
            let _ = S.provable solver (T (bool_ false)) in
            resource_request_missing ui_info solver (QPredicate p)
 
@@ -1352,7 +1353,7 @@ let unpack_predicate (p : predicate) =
        let@ rt = infer_pexpr e1 in
        pure begin
            let@ () = match p with
-             | M_Symbol sym -> bind sym rt
+             | M_Symbol sym -> bind_return_type sym rt
              | M_Pat pat -> pattern_match_rt pat rt
            in
            check_tpexpr e2 typ
@@ -1762,7 +1763,7 @@ let unpack_predicate (p : predicate) =
          let@ rt = infer_pexpr e1 in
          pure begin
              let@ () = match p with 
-               | M_Symbol sym -> bind sym rt
+               | M_Symbol sym -> bind_return_type sym rt
                | M_Pat pat -> pattern_match_rt pat rt
              in
              check_texpr labels e2 typ
@@ -1777,7 +1778,7 @@ let unpack_predicate (p : predicate) =
          let@ rt = infer_expr labels e1 in
          pure begin
              let@ () = match pat with
-               | M_Symbol sym -> bind sym rt
+               | M_Symbol sym -> bind_return_type sym rt
                | M_Pat pat -> pattern_match_rt pat rt
              in
              check_texpr labels e2 typ
@@ -2042,6 +2043,7 @@ let check mu_file =
 
   let module S = Solver.Make(struct let struct_decls = global.struct_decls end) in
   let module L = Local.Make(S) in
+  let module Typing = Typing.Make(L) in
 
   let () = Debug_ocaml.begin_csv_timing "impls" in
   let@ global = 
@@ -2054,10 +2056,10 @@ let check mu_file =
         let descr = CF.Implementation.string_of_implementation_constant impl in
         match impl_decl with
         | M_Def (rt, rbt, pexpr) -> 
-           let@ ((), _) = (WT.WRT.welltyped Loc.unknown rt).c (L.empty ()) in
+           let@ ((), _) = Typing.run (WT.WRT.welltyped Loc.unknown rt) (L.empty ()) in
            let@ ((), _) = 
-             (C.check_function Loc.unknown
-               [] descr [] rbt pexpr (AT.I rt)).c (L.empty ()) in
+             Typing.run (C.check_function Loc.unknown
+               [] descr [] rbt pexpr (AT.I rt)) (L.empty ()) in
            let global = 
              { global with impl_constants = 
                              ImplMap.add impl rt global.impl_constants}
@@ -2065,13 +2067,14 @@ let check mu_file =
            return global
         | M_IFun (ft, rbt, args, pexpr) ->
            let@ ((), _) = 
-             (WT.WFT.welltyped "implementation-defined function" Loc.unknown ft).c 
+             Typing.run 
+               (WT.WFT.welltyped "implementation-defined function" Loc.unknown ft) 
                (L.empty ())
            in
            let@ ((), _) = 
-             (C.check_function Loc.unknown [] 
+             Typing.run (C.check_function Loc.unknown [] 
                 (CF.Implementation.string_of_implementation_constant impl)
-                args rbt pexpr ft).c (L.empty ())
+                args rbt pexpr ft) (L.empty ())
            in
            let impl_fun_decls = ImplMap.add impl ft global.impl_fun_decls in
            return { global with impl_fun_decls }
@@ -2085,7 +2088,7 @@ let check mu_file =
     (* check and record predicate defs *)
     ListM.fold_leftM (fun global (name,def) -> 
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
-        let@ ((), _) = (WT.WPD.welltyped def).c (L.empty ()) in
+        let@ ((), _) = Typing.run (WT.WPD.welltyped def) (L.empty ()) in
         let resource_predicates =
           StringMap.add name def global.resource_predicates in
         return {global with resource_predicates}
@@ -2137,7 +2140,7 @@ let check mu_file =
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
         let local' = L.add_descriptions (Explain.naming_of_mapping "start" mapping) local in
-        let@ ((), _) = (WT.WFT.welltyped "global" loc ftyp).c local' in
+        let@ ((), _) = Typing.run (WT.WFT.welltyped "global" loc ftyp) local' in
         return ()
       ) mu_file.mu_funinfo
   in
@@ -2152,15 +2155,15 @@ let check mu_file =
                | Some t -> return t
                | None -> fail Loc.unknown (lazy (Missing_function fsym))
              in
-             (C.check_function loc Mapping.empty 
-                (Sym.pp_string fsym) args rbt body ftyp).c local
+             Typing.run (C.check_function loc Mapping.empty 
+                (Sym.pp_string fsym) args rbt body ftyp) local
           | M_Proc (loc, rbt, args, body, labels, mapping) ->
              let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
                | Some t -> return t
                | None -> fail loc (lazy (Missing_function fsym))
              in
-             (C.check_procedure loc' mapping 
-               fsym args rbt body ftyp labels).c local
+             Typing.run (C.check_procedure loc' mapping 
+               fsym args rbt body ftyp labels) local
           | M_ProcDecl _ -> 
              return ((), local)
           | M_BuiltinDecl _ -> 

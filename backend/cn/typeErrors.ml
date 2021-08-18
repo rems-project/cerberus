@@ -253,6 +253,10 @@ let pp_type_error te =
      (err, [])
 
 
+type t = type_error
+
+
+
 (* stealing some logic from pp_errors *)
 let report (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
   let (msg, extras) = pp_type_error err in

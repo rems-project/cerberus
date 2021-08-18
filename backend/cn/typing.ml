@@ -1,11 +1,101 @@
-module Make (L : Local.S) = struct
+module Make(L : Local.S) : sig
 
-  module State_and_exception =
-    State_and_exception.Make(struct type e = TypeErrors.type_error type s = L.t end)
+  type error = 
+    Locations.loc * Tools.stacktrace option * TypeErrors.type_error Lazy.t
 
-  include State_and_exception
 
-  include Effectful.Make(State_and_exception)
+  type 'a t
+  type 'a m = 'a t
+  val run : 'a m -> L.t -> ('a * L.t, error) Result.t
+  val return : 'a -> 'a m
+  val bind : 'a m -> ('a -> 'b m) -> 'b m
+  val (let@) : 'a m -> ('a -> 'b m) -> 'b m
+  val fail : Locations.t -> TypeErrors.type_error Lazy.t -> 'a m
+  val attempt : (('a m) Lazy.t) List1.t -> 'a m
+  val get: unit -> L.t m
+  val pure : 'a m -> 'a m
+  val all_computational : unit -> ((Sym.t * (BaseTypes.t * Sym.t)) list) m
+  val all_logical : unit -> ((Sym.t * LogicalSorts.t) list) m
+  val all_constraints : unit -> (LogicalConstraints.t list) m
+  val all_resources : unit -> (Resources.RE.t list) m
+  val solver : unit -> Z3.Solver.solver m
+  val descriptions : unit -> (Ast.Terms.term Local.SymMap.t) m
+  val bound : Sym.t -> Kind.t -> bool m
+  val get_a : Sym.t -> (BaseTypes.t * Sym.t) m
+  val get_l : Sym.t -> LogicalSorts.t m
+  val add_a : Sym.t -> (BaseTypes.t * Sym.t) -> unit m
+  val add_l : Sym.t -> LogicalSorts.t -> unit m
+  val add_c : LogicalConstraints.t -> unit m
+  val add_cs : LogicalConstraints.t list -> unit m
+  val add_r : Resources.RE.t -> unit m
+  val remove_resource : Resources.RE.t -> unit m
+  val map_and_fold_resources : 
+    (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
+    'acc -> 'acc m
+  val add_description : (Sym.t * Ast.Terms.term) -> unit m
+  val add_descriptions : (Sym.t * Ast.Terms.term) list -> unit m
+  val all_vars : unit -> (Sym.t list) m
+  val bind_return_type : Sym.t -> ReturnTypes.t -> unit m
+  val bind_logical_return_type : LogicalReturnTypes.t -> unit m
+  val logically_bind_return_type : ReturnTypes.t -> (BaseTypes.t * Sym.t) m
+
+end = struct
+
+  type e = TypeErrors.type_error
+  type s = L.t
+
+  type error = 
+    Locations.loc * Tools.stacktrace option * e Lazy.t
+
+  type 'a t = 
+    { c : s -> ('a * s, error) Result.t }
+
+  type 'a m = 
+    'a t
+
+  let run m s = 
+    m.c s
+
+
+  let return (a : 'a) : 'a t =
+    { c = fun s -> Ok (a, s) }
+
+  let bind (m : 'a t) (f : 'a -> 'b t) : 'b t = 
+    let c s = match m.c s with
+      | Error e -> Error e
+      | Ok (x, s') -> (f x).c s'
+    in
+    { c }
+
+  let (let@) = bind
+
+  let get () : 'a t = 
+    { c = fun s -> Ok (s, s) }
+
+  let set (s : 's) : unit t = 
+    { c = fun _ -> Ok ((), s) }
+
+
+  let error loc e = 
+    (loc, Tools.do_stack_trace (),  e)
+
+  let fail (loc: Locations.loc) (e: 'e Lazy.t) : 'a t = 
+    { c = fun _ -> Error (error loc e) }
+
+
+  let rec attempt (fs : (('a t) Lazy.t) List1.t) : 'a t = 
+    let c s = 
+      let (hd, tl) = List1.dest fs in
+      let hd_run = Lazy.force hd in
+      match hd_run.c s, tl with
+      | Ok (a, s'), _ -> 
+         Ok (a, s')
+      | Error _, hd' :: tl' -> 
+         (attempt (List1.make (hd', tl'))).c s
+      | Error err, _ -> 
+         Error err
+    in
+    { c }
 
 
 
@@ -36,13 +126,13 @@ module Make (L : Local.S) = struct
     let@ l = get () in
     return (L.all_constraints l)
 
-  let solver () =
-    let@ l = get () in
-    return (L.solver l)
-
   let all_resources () = 
     let@ l = get () in
     return (L.all_resources l)
+
+  let solver () =
+    let@ l = get () in
+    return (L.solver l)
 
   let descriptions () = 
     let@ l = get () in
@@ -103,19 +193,19 @@ module Make (L : Local.S) = struct
     let@ l = get () in
     return (L.all_vars l)
 
-  let bind s rt = 
+  let bind_return_type s rt = 
     let@ l = get () in
     set (L.bind l s rt)
 
-  let bind_logical rt = 
+  let bind_logical_return_type lrt = 
     let@ l = get () in
-    set (L.bind_logical l rt)
+    set (L.bind_logical l lrt)
 
-  let bind_logically rt = 
+  let logically_bind_return_type rt = 
     let@ l = get () in
     let ((bt, s), l') = L.bind_logically l rt in
     let@ () = set l' in
     return (bt, s)
-    
+
 
 end

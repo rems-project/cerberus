@@ -20,6 +20,7 @@ module Make
   
   module Typing = Typing.Make(L)
   open Typing
+  open Effectful.Make(Typing)
 
   module WIT = struct
 
