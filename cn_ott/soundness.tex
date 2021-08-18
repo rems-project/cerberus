@@ -120,8 +120,7 @@ $\CLNRp \vdash J$.
     \begin{proof}
 
         \step{<2>1}{$\mathcal{R} = \mathcal{R}'$.\\
-            \pf\ Only \textsc{Weak\_Cons\_Res\_\{Anon,Named\}} exist, no
-            \textsc{Weak\_Skip\_Res}.}
+            \pf\ Only \textsc{Weak\_Cons\_Res} exists, no \textsc{Weak\_Skip\_Res}.}
 
         \step{<2>2}{All the rules are otherwise functorial in $\mathcal{C}, \mathcal{L}, \Phi$,
         .}
@@ -206,7 +205,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
             \textsc{Ty\_Res\_PointsTo}
         }{%
             $\cnnt{res} = \cnnt{points\_to''} , \cnnt{res\_term} = \cnnt{points\_to'}$,
-            $\cnnt{res'} = \cnnt{points\_to_{{\mathrm{1}}}}$, $\mathcal{R} = \cdot  \cnsym{,}  \cnnt{points\_to}$.
+            $\cnnt{res'} = \cnnt{points\_to_{{\mathrm{1}}}}$, $\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{points\_to}$.
         }
     }
 
@@ -216,7 +215,7 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
         \step{<2>2}{$\Phi  \vdash  \cnnt{points\_to'} \, \equiv \, \cnnt{points\_to_{{\mathrm{1}}}}$ by transitivity
             (lemma \ref{subsec:res_eq_eqrel}).}
 
-        \step{<2>3}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{points\_to}  \vdash  \cnnt{points\_to'}  \Leftarrow  \cnnt{points\_to_{{\mathrm{1}}}}$ as required.}
+        \step{<2>3}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{points\_to}  \vdash  \cnnt{points\_to'}  \Leftarrow  \cnnt{points\_to_{{\mathrm{1}}}}$ as required.}
     \end{proof}
 
     \step{<1>3}{%
@@ -388,15 +387,15 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \case{%
             \textsc{Ty\_Res\_PointsTo}.
         }{%
-            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt''}$.
+            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt''}$.
             \prove{ $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnnt{pt'}  )   \Leftarrow   \sigma  (  \cnnt{pt''}  ) $.}
         }
     }
 
     \begin{proof}
 
-    \step{<2>1}{Since $\mathcal{R}' = \cdot  \cnsym{,}  \cnnt{pt}$, $\sigma$ was
-        derived using \textsc{Ty\_Subs\_Cons\_Res\_Anon}.}
+    \step{<2>1}{Since $\mathcal{R}' = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}$, $\sigma$ was
+        derived using \textsc{Ty\_Subs\_Cons\_Res}.}
 
     \step{<2>2}{$\Phi'  \vdash  \cnnt{pt} \, \equiv \, \cnnt{pt'}$ and $\Phi'  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt''}$ by inversion on the case.}
 
@@ -431,7 +430,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
 
     \begin{proof}
         \step{<2>1}{From $\mathcal{R}' = \cdot  \cnsym{,}  \cnmv{r}  {:}  \cnnt{res}$, we know $\sigma$
-            was derived using \textsc{Ty\_Subs\_Cons\_Res\_Named}.}
+            was derived using \textsc{Ty\_Subs\_Cons\_Res}.}
 
         \step{<2>2}{$\sigma = \cnnt{res\_term}  \cnsym{/}  \cnmv{r}  \cnsym{,}  \sigma'$ and $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow   \sigma'  (  \cnnt{res}  ) $ by inversion on \stepref{<2>1}.}
 
@@ -441,7 +440,7 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
             by \stepref{<2>3} and substitution lemma over \textsc{Ty\_Res\_Eq*} cases.}
 
         \step{<2>5}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow   \sigma'  (  \cnnt{res}  ) $ by
-            inversion on \textsc{Ty\_Subs\_Cons\_Res\_Named}.}
+            inversion on \textsc{Ty\_Subs\_Cons\_Res}.}
 
         \step{<2>6}{$ \sigma  (  \cnmv{r}  )  = \cnnt{res\_term}$ by \stepref{<2>2}.}
 
@@ -1366,7 +1365,8 @@ Now, resource part.
     \assume{%
         \begin{pfenum}
         \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}$.\label{wt_sub_res-assm1}
-        \item $\cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'$.\label{wt_sub_res-assm2}
+        % FIXME update proof for predicates
+        \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\label{wt_sub_res-assm2}
         \item $\cnnt{res\_pattern}  =  \cnnt{res\_term}  \leadsto  \sigma$.\label{wt_sub_sub-assm3}
         \end{pfenum}}
 
@@ -1386,26 +1386,13 @@ Now, resource part.
         }
     }
 
-    \step{<1>2}{%
-        \case{%
-            \textsc{Ty\_Pat\_Res\_PointsTo}.
-            % This gets around the equivalence required by the typing rule
-            % by having the pattern-matching require syntactic equality.
-        }{
-            $\cnnt{res\_pattern} = \cnnt{res\_term} = \cnnt{res} = \cnnt{pt}$.
-            $\sigma = \cdot$, $\mathcal{L} = \cdot$, $\Phi = \cdot$,
-            $\mathcal{R} = \mathcal{R}' = \cdot  \cnsym{,}  \cnnt{pt}$.\\
-            \pf\ By \textsc{Ty\_Subs\_Cons\_Res\_Anon}.
-        }
-    }
-
     \step{<1>3}{%
         \case{%
             \textsc{Ty\_Pat\_Res\_Var}.
         }{%
             $\cnnt{res\_pattern} = \cnmv{r}$, $\sigma = \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \cdot$,
             $\mathcal{L} = \cdot$, $\Phi = \cdot$, $\mathcal{R}' = \cdot  \cnsym{,}  \cnmv{x}  {:}  \cnnt{res}$.\\
-            \pf\ By \textsc{Ty\_Subs\_Cons\_Res\_Named}.
+            \pf\ By \textsc{Ty\_Subs\_Cons\_Res}.
         }
     }
 
@@ -1449,7 +1436,8 @@ Now, full proof.
         \begin{pfenum}
             \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma$.\label{wt_sub-assm1}
             \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \cnnt{ret}$.\label{wt_sub-assm2}
-            \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'$.\label{wt_sub-assm3}
+            % FIXME update proof for predicates
+            \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\label{wt_sub-assm3}
         \end{pfenum}
     }
 
@@ -1701,7 +1689,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cdot  \cnsym{;}  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \rangle$.
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
             }
         }
     }
@@ -1715,7 +1703,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  pval  \Rightarrow   \beta_{  \tau  } $
             by construction of $pval$.}
 
-        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ by
+        \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$ by
             \textsc{Ty\_Res\_PointsTo}.}
 
         \step{<2>5}{By \textsc{Ty\_TVal\_I} and then \stepref{<2>4} -- \stepref{<2>1} with
@@ -1743,7 +1731,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$
+        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$
             by inversion on \ref{load-assm1}.}
 
         \step{<2>2}{$\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow   pval   =   pval   \cnsym{)}$ trivially.}
@@ -1772,18 +1760,18 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt'}  \vdash  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \Leftarrow  \cnnt{ret}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \Leftarrow  \cnnt{ret}$.
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnnt{pt_{{\mathrm{2}}}}$ where $\cdot  \vdash  \cnnt{pt''} \, \equiv \, \cnnt{pt}$,
+        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt_{{\mathrm{2}}}}$ where $\cdot  \vdash  \cnnt{pt''} \, \equiv \, \cnnt{pt}$,
             by inversion on the typing assumption.}
 
         \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}
 
-        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
+        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnnt{pt'}  \Leftarrow  \cnnt{pt'}$
             by \textsc{Ty\_Res\_PointsTo}.}
 
         \step{<2>4}{By \textsc{Ty\_TVal\_I} and \stepref{<2>2} and \stepref{<2>3}
@@ -1807,7 +1795,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, \cnkw{Unit}  \Leftarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$
             }
             \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
-            Note: $\mathcal{R} = \cdot  \cnsym{,}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$.
+            Note: $\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$.
         }
     }
 
@@ -1874,13 +1862,13 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \rangle$.\label{ptrValid-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
             }
         }
     }
 
     \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
             \ref{ptrValid-assm1}.}
 
         \step{<2>2}{$bool\_value = \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}$ by
@@ -2076,7 +2064,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  seq\_expr  \Rightarrow  \cnnt{ret_{{\mathrm{1}}}}$.
-                \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
+                % FIXME update proof for predicates
+                \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
                 \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             \end{pfenum}
             \pf\ By inversion on \ref{let_letT-assm1}.}
@@ -2114,7 +2103,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.
-                \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
+                % FIXME update proof for predicates
+                \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
                 \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             \end{pfenum}
             \pf\ By inversion on \ref{letT_sub-assm1}.}
@@ -2150,7 +2140,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.
-                \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
+                % FIXME update proof for predicates
+                \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
                 \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             \end{pfenum}
             \pf\ By inversion on \ref{letT_letT-assm1}.}

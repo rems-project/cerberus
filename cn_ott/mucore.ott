@@ -911,7 +911,6 @@ grammar
     | id                              :: X M :: id {{ com identity substitution }} {{ tex \mathrm{id} }} {{ ocaml SUBS_ID }}
     | spine_elem  / Symbol_sym , subs ::   :: cons_spine_elem
     | term_aux / Symbol_sym , subs    ::   :: cons_term
-    | res / Symbol_sym , subs         ::   :: cons_res
     | </ subsi // , // i />           ::   :: concat
     | ( subs )                        :: X S :: paren {{ com parentheses }} {{ tex [[subs]] }} {{ ocaml [[subs]] }}
     | [ subs ] psi                    :: M :: subs {{ com apply $[[subs]]$ to all elements in $[[psi]]$ }}

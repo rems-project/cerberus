@@ -370,7 +370,7 @@ type
    M_TPEtpval of 'TY mu_tpval_aux (* top-level pure values *)
  | M_TPEcase of 'TY mu_pval_aux * ('TY mu_tpexpr_case_branch) list (* pattern matching *)
  | M_TPElet of 'TY mu_sym_or_pattern * 'TY mu_pexpr_aux * 'TY mu_tpexpr_aux (* pure let *)
- | M_TPEletT of 'TY mu_sym_or_pattern * ident * base_type * 'bt term * 'TY mu_tpexpr_aux * 'TY mu_tpexpr_aux (* pure let *)
+ | M_TPEletT of 'TY mu_sym_or_pattern * ident * base_type * 'bt term * 'TY mu_tpexpr_aux * 'TY mu_tpexpr_aux (* annoted pure let *)
  | M_TPEif of 'TY mu_pval_aux * 'TY mu_tpexpr_aux * 'TY mu_tpexpr_aux (* pure if *)
 
 and 'TY mu_tpexpr_case_branch =  (* pure top-level case expression branch *)
@@ -388,6 +388,7 @@ res_term =  (* resource terms *)
  | ResT_Var of Symbol.sym (* variable *)
  | ResT_SepPair of res_term * res_term (* seperating-conjunction pair *)
  | ResT_Pack of 'TY mu_pval_aux * res_term (* packing for existentials *)
+ | ResT_Fold of res_term (* fold into recursive res. pred. *)
 
 
 type 
@@ -459,6 +460,7 @@ type
 res_pattern =  (* resource terms *)
    ResP_Empty (* empty heap *)
  | ResP_Var of Symbol.sym (* variable *)
+ | ResP_Fold of res_pattern (* unfold (recursive) predicate *)
  | ResP_SepPair of res_pattern * res_pattern (* seperating-conjunction pair *)
  | ResP_Pack of Symbol.sym * res_pattern (* packing for existentials *)
 
@@ -478,9 +480,7 @@ res =  (* resources *)
  | Res_Exists of Symbol.sym * base_type * res (* existential *)
  | Res_TermConj of 'bt term_aux * res (* logical conjuction *)
  | Res_OrdDisj of 'bt term_aux * res * res (* ordered disjuction *)
- | Res_Pred of res * ('TY mu_pval_aux) list (* predicate *)
- | Res_FixpVar of Symbol.sym (* recursive res. pred. variable *)
- | Res_FixpExpr of Symbol.sym * ((Symbol.sym * base_type)) list * res (* recursive res. pred. expression *)
+ | Res_Pred of ident * ('TY mu_pval_aux) list (* predicate *)
 
 
 type 
@@ -516,7 +516,7 @@ type
    M_Seq_TEtval of 'TY mu_tval (* (effectful) top-level values *)
  | M_Seq_TErun of Symbol.sym * ('TY mu_pval_aux) list (* run from label *)
  | M_Seq_TEletP of 'TY mu_sym_or_pattern * 'TY mu_pexpr_aux * 'TY mu_texpr (* pure let *)
- | M_Seq_TEletTP of 'TY mu_sym_or_pattern * ident * base_type * 'bt term * 'TY mu_tpexpr_aux * 'TY mu_texpr (* pure let *)
+ | M_Seq_TEletTP of 'TY mu_sym_or_pattern * ident * base_type * 'bt term * 'TY mu_tpexpr_aux * 'TY mu_texpr (* annotated pure let *)
  | M_Seq_TElet of (ret_pattern) list * 'TY mu_seq_expr_aux * 'TY mu_texpr (* bind return patterns *)
  | M_Seq_TEletT of (ret_pattern) list * ret * 'TY mu_texpr * 'TY mu_texpr (* annotated bind return patterns *)
  | M_Seq_TEcase of 'TY mu_pval_aux * ('TY mu_texpr_case_branch) list (* pattern matching *)
@@ -569,6 +569,7 @@ let rec aux_binders_res_pattern_of_res_pattern (res_pattern_5:res_pattern) : Sym
   match res_pattern_5 with
   | ResP_Empty -> []
   | (ResP_Var symbol_sym) -> [symbol_sym]
+  | (ResP_Fold res_pattern) -> []
   | (ResP_SepPair (res_pattern1,res_pattern2)) -> (aux_binders_res_pattern_of_res_pattern res_pattern1) @ (aux_binders_res_pattern_of_res_pattern res_pattern2)
   | (ResP_Pack (symbol_sym,res_pattern)) -> [symbol_sym] @ (aux_binders_res_pattern_of_res_pattern res_pattern)
 
@@ -622,6 +623,7 @@ typing =
  | Typing_x_in_C of Symbol.sym * base_type * c
  | Typing_x_in_L of Symbol.sym * base_type * l
  | Typing_struct_in_globals of tag * ((Symbol.identifier * T.ct)) list
+ | Typing_rec_res_pred_in_globals of ident * ((ident * base_type)) list * res (* recursive resource predicate *)
  | Typing_indexed_infer_mem_value of ((c * l * n * Impl_mem.mem_value * base_type)) list (* dependent on memory object model *)
  | Typing_index_infer_mu_pval of ((c * l * n * 'TY mu_pval_aux * base_type)) list
  | Typing_indexed_pattern of ((mu_pattern_aux * base_type * c * 'bt term_aux)) list
