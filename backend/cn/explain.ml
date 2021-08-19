@@ -27,7 +27,6 @@ module VClass = struct
       logical : SymSet.t;
     }
 
-
   let compare vc1 vc2 = compare vc1.id vc2.id
   let equal vc1 vc2 = vc1.id = vc2.id
 
@@ -48,6 +47,7 @@ module VClass = struct
   let in_class (lvar : Sym.t) (c : t) = 
     SymSet.mem lvar c.logical
 
+
 end
 
 open VClass
@@ -55,6 +55,23 @@ open VClass
 module VClassSet = Set.Make(VClass)
 
 
+let find_class p classes = 
+  VClassSet.choose (VClassSet.filter p classes)
+
+
+
+
+let good_description s = 
+  match Sym.description s with
+  | Sym.SD_Id _ -> None
+  | Sym.SD_None -> None
+  | Sym.SD_ObjectAddress name -> Some (Ast.Addr name)
+  | Sym.SD_Return -> Some (Ast.Var "return")
+  | Sym.SD_FunArg i -> Some (Ast.Var ("ARG" ^ string_of_int i))
+  (* | Sym.SD_Pointee *)
+
+let has_good_description s =
+  Option.is_some (good_description s)
 
 
 let make_name = 
@@ -100,47 +117,25 @@ let make_name =
     | Array _ -> array_c
   in
 
-
   let counter_and_increment bt = 
     let c = !(bt_counter bt) in
     let () = (bt_counter bt) := (c + 1) in
     c
   in
-  fun vclass ->
-  "?" ^ bt_prefix vclass.sort ^ 
-    string_of_int (counter_and_increment vclass.sort)
+  fun sort ->
+  "?" ^ bt_prefix sort ^ 
+    string_of_int (counter_and_increment sort)
 
 
 
 
-  type naming = (Sym.t * Ast.term) list
-
-  let naming_subst subst names = 
-    List.map (fun (sym,p) ->
-        (Sym.subst subst sym, p)
-      ) names
-
-  let naming_substs substs names = 
-    Subst.make_substs naming_subst substs names
-
-  let pp_naming = 
-    Pp.list (fun (s, p) -> parens (Sym.pp s ^^ comma ^^ Ast.Terms.pp true p))
-
-  let naming_of_mapping name mapping = 
-    let open Mapping in
-    List.filter_map (fun i ->
-        match IT.is_sym i.it with
-        | Some (sym, _) -> Some (sym, Ast.Env (i.path, name))
-        | None -> None
-      ) mapping
 
 
 type variable_relation = 
   | Pointee  
 
 type name_kind = 
-  | Given
-  | Symbol
+  | Description
   | Derived
   | Default
 
@@ -163,15 +158,9 @@ module Make
   = struct 
 
 
-
-
-
-
   module VClassGraph = Graph.Make(VClass)
 
   let veclasses local model = 
-    let find_class p classes = 
-      VClassSet.choose (VClassSet.filter p classes) in
     let with_logical = 
       List.fold_right (fun (l, sort) g ->
           VClassSet.add (make (l, sort)) g
@@ -204,55 +193,50 @@ module Make
 
     print stdout !^"producing error report";
 
-    let names = SymMap.bindings (L.descriptions local) in
-
     (* only report the state of the relevant variables *)
     let relevant =
       List.fold_left SymSet.union SymSet.empty
-        [SymSet.of_list (List.map fst names); 
-         SymSet.of_list (List.filter Sym.named (L.all_vars local)); 
+        [SymSet.of_list (List.filter has_good_description (L.all_vars local)); 
          RE.free_vars_list (L.all_resources local); 
          relevant]
     in
 
+
     (* add 'Pointee' edges between nodes whenever the resources indicate that *)
+    let graph = 
+      VClassSet.fold VClassGraph.add_node (veclasses local model) 
+        VClassGraph.empty 
+    in
     let graph = 
       List.fold_right (fun resource graph ->
           match resource with
-          (* | RE.Point {pointer; size; value; init; permission} ->
-           *    (\* the 'not found' cases should not be fatal: e.g. the
-           *       resource might have 'x + 16' as a pointer *\)
-           *    let ovc1 = 
-           *      Option.bind (IT.is_sym pointer) 
-           *        (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
-           *    in
-           *    let ovc2 = 
-           *      Option.bind (IT.is_sym value)
-           *        (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
-           *    in
-           *    begin match ovc1, ovc2 with
-           *    | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
-           *    | _ -> graph
-           *    end *)
+          | RE.Point p ->
+             (* the 'not found' cases should not be fatal: e.g. the
+                resource might have 'x + 16' as a pointer *)
+             let ovc1 = 
+               Option.bind (IT.is_sym p.pointer) 
+                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+             in
+             let ovc2 = 
+               Option.bind (IT.is_sym p.value)
+                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+             in
+             begin match ovc1, ovc2 with
+             | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
+             | _ -> graph
+             end
           | _ -> 
              graph
         ) (L.all_resources local) 
-        (VClassSet.fold VClassGraph.add_node (veclasses local model) VClassGraph.empty)
+        graph
     in
 
     (* add an explanation to each equivalence class: either because one o *)
     let vclass_explanations = 
       List.fold_left (fun vclasses_explanation vclass ->
-          let has_given_name =
-            Option.map snd
-              (List.find_opt (fun (sym,name) -> 
-                   SymSet.mem sym vclass.logical ||
-                     SymSet.mem sym vclass.computational
-                 ) names)
-          in
-          let has_symbol_name = 
+          let has_description = 
             let all = SymSet.elements (SymSet.union vclass.computational vclass.logical) in
-            Option.map (fun s -> Ast.Addr s) (List.find_map Sym.name all)
+            List.find_map good_description all
           in        
           let has_derived_name =
             List.find_map (fun (named_vclass, {path;_}) -> 
@@ -261,22 +245,13 @@ module Make
                   (function Pointee -> Some (Ast.pointee path))  
               ) vclasses_explanation
           in
-          match has_given_name, has_symbol_name, has_derived_name with
-          | Some given_name, o_symbol_name, o_derived_name ->
-             let without_labels = Ast.Terms.remove_labels given_name in
-             let path = 
-               if Option.equal Ast.term_equal (Some without_labels) (o_symbol_name) ||
-                    Option.equal Ast.term_equal (Some without_labels) (o_derived_name) 
-               then without_labels
-               else given_name
-             in
-             vclasses_explanation @ [(vclass, {path; name_kind = Given})]
-          | None, Some symbol_name, _ ->
-             vclasses_explanation @ [(vclass, {path = symbol_name; name_kind = Symbol})]
-          | None, None, Some derived_name ->
-             vclasses_explanation @ [(vclass, {path = derived_name; name_kind = Symbol})]
-          | None, None, None ->
-             let name = make_name vclass in
+          match has_description, has_derived_name with
+          | Some description, _ ->
+             vclasses_explanation @ [(vclass, {path = description; name_kind = Description})]
+          | None, Some derived_name ->
+             vclasses_explanation @ [(vclass, {path = derived_name; name_kind = Derived})]
+          | None, None ->
+             let name = make_name vclass.sort in
              vclasses_explanation @ [(vclass, {path = Var name; name_kind = Default})]
         ) [] (VClassGraph.linearise graph)
     in
@@ -344,10 +319,11 @@ module Make
     | _ -> SymSet.empty
 
   let pp_state_aux local {substitutions; vclasses; relevant} o_model =
-    (* let resources = List.map (RE.subst_vars substitutions) (L.all_resources local) in *)
+
+    let () = print stderr (item "relevant" (list Sym.pp (SymSet.elements relevant))) in
 
 
-    let (resource_lines, reported_pointees) = 
+    let (resource_lines, reported) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           match resource with
           | Point p ->
@@ -383,7 +359,7 @@ module Make
              in
              (entry :: acc_table, SymSet.union reported acc_reported)
           | QPoint p ->
-             let p = RE.alpha_rename_qpoint p "?p" in
+             let p = RE.alpha_rename_qpoint p (make_name Loc) in
              let loc_expr = Sym.pp p.qpointer in
              let value = (BT.pp (IT.bt p.value)) ^^^ !^(evaluate o_model p.value) in
              let entry = (Some loc_expr, None, None, None, Some value) in
@@ -419,15 +395,14 @@ module Make
                 (entry :: acc_table, symbol_it p.pointer)
              end
           | QPredicate p when p.unused ->
-             let index_name = "$i" in
-             let p = RE.alpha_rename_qpredicate p index_name in
+             let p = RE.alpha_rename_qpredicate p (make_name Integer) in
              let pointer = qpredicate_index_to_pointer p (sym_ (p.i, BT.Integer)) in
              let pred = ({pointer; name = p.name; iargs = p.iargs; oargs = p.oargs; unused = true} :  predicate) in
              let loc_val = !^(evaluate o_model p.pointer) in
              let loc_expr = IT.pp (IT.subst_vars substitutions pred.pointer) in
              let state = 
                !^"for each" ^^^ 
-                 IT.pp p.istart ^^ !^ "<="^^ !^index_name^^ !^"<" ^^ IT.pp p.iend ^^ colon ^^^ 
+                 IT.pp p.istart ^^ !^ "<="^^ Sym.pp p.i ^^ !^"<" ^^ IT.pp p.iend ^^ colon ^^^ 
                    (RE.pp (RE.subst_vars substitutions (Predicate pred))) 
              in 
              let entry = (Some loc_expr, Some loc_val, None, Some state, None) in
@@ -436,10 +411,10 @@ module Make
              (acc_table, acc_reported)
         ) (L.all_resources local) ([], SymSet.empty)
     in
+    let relevant_unreported = SymSet.diff relevant reported in
     let report vclass = 
-      let relevant = not (SymSet.is_empty (SymSet.inter vclass.logical relevant)) in
-      let reported = not (SymSet.is_empty (SymSet.inter vclass.logical reported_pointees)) in
-      (not reported) && relevant
+      not (SymSet.is_empty (SymSet.inter vclass.logical relevant_unreported)) ||
+      not (SymSet.is_empty (SymSet.inter vclass.computational relevant_unreported))
     in
     let memory_var_lines = 
       List.filter_map (fun (vclass,c) ->

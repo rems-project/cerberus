@@ -57,11 +57,8 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let member_name id = Id.s id
   let member_symbol bt id = Z3.Symbol.mk_string context (bt_name bt ^ "_" ^ member_name id)
   let sym_to_sym s = 
-    let (digest,id, oname) = Sym.dest s in
-    let str = match oname with
-      | None -> string_of_int id ^"." ^ digest
-      | Some s -> string_of_int id ^"." ^ digest
-    in
+    let (digest, id, _) = Sym.dest s in
+    let str = string_of_int id ^"." ^ digest in
     Z3.Symbol.mk_string context str
 
   let sort_of_bt =

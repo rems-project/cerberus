@@ -30,6 +30,12 @@ let wrapped_fresh_symbol bTy =
   let sym = Symbol.fresh () in
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
+(* TODO: this does not need to be in the monad *)
+(* val wrapped_fresh_symbol_descr: C.core_base_type -> Symbol.symbol_description -> elabM (Symbol.sym * C.pattern * C.pexpr)
+ * let wrapped_fresh_symbol_descr bTy descr =
+ *   let sym = Symbol.fresh_description descr in
+ *   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym) *)
+
 (* register C objects from block scope. *)
 val push_block_objects: list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM unit
 let push_block_objects binds = fun st ->
@@ -79,12 +85,12 @@ let resolve_object_type sym = fun st ->
     | Just qs_ty ->
         (qs_ty, st)
     | Nothing ->
-        let sym_str = match sym with
-          | Symbol.Symbol _ n Nothing ->
-              "sym_" ^ show n
-          | Symbol.Symbol _ n (Just str) ->
-              str ^ "{" ^ show n ^ "}"
-        end in
-        error ("Translation_effect.resolve_object_type ===> " ^ sym_str)
+        (* let sym_str = match sym with
+         *   | Symbol.Symbol _ n SD_None ->
+         *       "sym_" ^ show n
+         *   | Symbol.Symbol _ n (SD_Id str) ->
+         *       str ^ "{" ^ show n ^ "}"
+         * end in *)
+        error ("Translation_effect.resolve_object_type ===> " ^ show sym)
   end
 

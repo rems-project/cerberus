@@ -34,7 +34,6 @@ module type TYPES = sig
   type ft
   type lt
   type gt
-  type mapping
 
   type predicates
 
@@ -256,14 +255,14 @@ module Make(T : TYPES) = struct
 
   type 'TY mu_label_def = 
     | M_Return of loc * T.lt
-    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_texpr * annot list * T.mapping
+    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_texpr * annot list
 
   type 'TY mu_label_defs = (symbol, ('TY mu_label_def)) Pmap.map
 
 
   type 'TY mu_fun_map_decl =
     | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_tpexpr
-    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_texpr * 'TY mu_label_defs * T.mapping
+    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_texpr * 'TY mu_label_defs
     | M_ProcDecl of Location_ocaml.t * T.bt * T.bt list
     | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list
 
@@ -293,7 +292,7 @@ module Make(T : TYPES) = struct
     Pmap.map
 
   type mu_funinfo = 
-    M_funinfo of Location_ocaml.t * Annot.attributes * T.ft * bool * T.mapping
+    M_funinfo of Location_ocaml.t * Annot.attributes * T.ft * bool
 
   type mu_funinfos = 
     (symbol, mu_funinfo) Pmap.map
@@ -333,7 +332,6 @@ module SimpleTypes : TYPES
        with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
        with type gt = Ctype.ctype
-       with type mapping = unit
        with type predicates = unit
   = 
 struct
@@ -348,7 +346,6 @@ struct
   type ft = ct * (Symbol.sym * ct) list * bool
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
   type gt = ct
-  type mapping = unit
   type predicates = unit
 
 end

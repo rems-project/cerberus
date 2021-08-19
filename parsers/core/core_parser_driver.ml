@@ -41,11 +41,18 @@ let parse_stdlib =
 let parse stdlib =
   genparse ImplORFileMode
     begin List.fold_left (fun acc (fsym, _) ->
-        match fsym with
-        | Symbol.Symbol (_, _, Some str) ->
+        let open Symbol in
+        let Symbol (_, _, sd) = fsym in
+        match sd with
+        | SD_Id str ->
           let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
           Pmap.add (str, (std_pos, std_pos)) fsym acc
-        | Symbol.Symbol (_, _, None) ->
+        | SD_ObjectAddress _
+        | SD_Return
+        | SD_FunArg _
+        (* | SD_Pointee _ *)
+        (* | SD_PredOutput _ *)
+        | SD_None ->
           acc
       ) (Pmap.empty Core_parser_util._sym_compare) (Pmap.bindings_list (snd stdlib))
     end

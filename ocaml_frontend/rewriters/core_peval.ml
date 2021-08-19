@@ -437,8 +437,8 @@ let core_peval file : 'bty RW.rewriter =
   let not_unfold = Not_unfold.not_unfold in
 
   let stdlib_unfold_pred fsym fdecl =
-    match Symbol.symbol_name fsym, fdecl with
-    | Some name, Fun (_, sym_bTys, _) ->
+    match Symbol.symbol_description fsym, fdecl with
+    | SD_Id name, Fun (_, sym_bTys, _) ->
        not (List.mem name not_unfold) &&
        List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
     | _ ->

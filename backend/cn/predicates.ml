@@ -96,9 +96,9 @@ let ctype_predicate struct_layouts ct =
   let open Resources in
   let open Option in
   let open Sctypes in
-  let pointer_s, pointer_t = IT.fresh_named BT.Loc "?pointer" in
-  let init_s, init_t = IT.fresh_named BT.Bool "?init" in
-  let v_s, v_t = IT.fresh_named (BT.of_sct ct) "?value" in
+  let pointer_s, pointer_t = IT.fresh_named BT.Loc "pointer" in
+  let init_s, init_t = IT.fresh_named BT.Bool "init" in
+  let v_s, v_t = IT.fresh_named (BT.of_sct ct) "value" in
   let size = size_of_ctype ct in
   let (Sctypes.Sctype (_, ct_)) = ct in
   let@ lrt, value_def = match ct_ with
@@ -122,7 +122,7 @@ let ctype_predicate struct_layouts ct =
      (* todo: connect with user-annotation *)
      Debug_ocaml.error "representation: array of unknown length"
   | Array (ct', Some length) ->
-     let i_s, i_t = IT.fresh_named BT.Integer "?i" in
+     let i_s, i_t = IT.fresh_named BT.Integer "i" in
      let qpredicate = {
          pointer = pointer_t; 
          element_size = z_ (size_of_ctype ct'); 
@@ -149,7 +149,7 @@ let ctype_predicate struct_layouts ct =
            let member_p = addPointer_ (pointer_t, z_ offset) in
            match member_or_padding with
            | Some (member, sct) ->
-              let member_s, member_t = IT.fresh_named (BT.of_sct sct) "?member" in
+              let member_s, member_t = IT.fresh_named (BT.of_sct sct) "member" in
               let resource = predicate (Ctype sct) member_p [] [member_t; init_t] in
               let lrt = 
                 LRT.Logical ((member_s, IT.bt member_t),
@@ -158,7 +158,7 @@ let ctype_predicate struct_layouts ct =
               let values = (member, member_t) :: values in
               (lrt, values)
            | None ->
-              let padding_s, padding_t = IT.fresh_named BT.Integer "?padding" in
+              let padding_s, padding_t = IT.fresh_named BT.Integer "padding" in
               let resource = point (member_p, size) (q_ (1,1)) padding_t (bool_ false) in
               let lrt = 
                 LRT.Logical ((padding_s, IT.bt padding_t),
@@ -198,11 +198,11 @@ let char_ct = Sctypes.Sctype ([], Integer Char)
 let region = 
   let id = "Region" in
   let loc = Loc.other "internal (Region)" in
-  let pointer_s, pointer_t = IT.fresh_named Loc "?pointer" in
-  let length_s, length_t = IT.fresh_named Integer "?length" in
-  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "?value" in
-  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "?init" in
-  let p_s, p_t = IT.fresh_named Loc "?p" in
+  let pointer_s, pointer_t = IT.fresh_named Loc "pointer" in
+  let length_s, length_t = IT.fresh_named Integer "length" in
+  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
+  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
+  let p_s, p_t = IT.fresh_named Loc "p" in
   let qpoint = {
       qpointer = p_s;
       size = Z.of_int 1; 
@@ -245,12 +245,12 @@ let region =
 let part_zero_region = 
   let id = "PartZeroRegion" in
   let loc = Loc.other "internal (PartZeroRegion)" in
-  let pointer_s, pointer_t = IT.fresh_named Loc "?pointer" in
-  let length_s, length_t = IT.fresh_named Integer "?length" in
-  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "?v" in
-  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "?init" in
-  let up_to_s, up_to_t = IT.fresh_named Loc "?up_to" in
-  let p_s, p_t = IT.fresh_named Loc "?p" in
+  let pointer_s, pointer_t = IT.fresh_named Loc "pointer" in
+  let length_s, length_t = IT.fresh_named Integer "length" in
+  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "v" in
+  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
+  let up_to_s, up_to_t = IT.fresh_named Loc "up_to" in
+  let p_s, p_t = IT.fresh_named Loc "p" in
   let region = {
       name = Id "Region";
       pointer = pointer_t; 
@@ -302,8 +302,8 @@ let part_zero_region =
 let zero_region = 
   let id = "ZeroRegion" in
   let loc = Loc.other "internal (ZeroRegion)" in
-  let pointer_s, pointer_t = IT.fresh_named Loc "?pointer" in
-  let length_s, length_t = IT.fresh_named Integer "?length" in
+  let pointer_s, pointer_t = IT.fresh_named Loc "pointer" in
+  let length_s, length_t = IT.fresh_named Integer "length" in
   let lrt = 
     let p = {
         name = Id "PartZeroRegion";
@@ -335,15 +335,15 @@ let zero_region =
 let early = 
   let id = "EarlyAlloc" in
   let loc = Loc.other "internal (EarlyAlloc)" in
-  let start_s, start_t = IT.fresh_named Loc "?start" in
-  let end_s, end_t = IT.fresh_named Loc "?end" in
+  let start_s, start_t = IT.fresh_named Loc "start" in
+  let end_s, end_t = IT.fresh_named Loc "end" in
   let length_t = 
     add_ (sub_ (pointerToIntegerCast_ end_t,
                 pointerToIntegerCast_ start_t), 
           int_ 1)
   in
-  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "?v" in
-  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "?init" in
+  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "v" in
+  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
   let region = {
       name = Id "Region";
       pointer = start_t; 
@@ -388,8 +388,10 @@ let page_alloc_predicates struct_decls =
 
   let find_tag tag = 
     SymMap.choose
-      (SymMap.filter (fun tag' _ ->
-           Option.equal String.equal (Sym.name tag') (Some tag)
+      (SymMap.filter (fun s _ ->
+           match Sym.description s with
+           | Sym.SD_Id tag' when String.equal tag tag' -> true
+           | _ -> false
          ) struct_decls
       )
   in
@@ -440,14 +442,14 @@ let page_alloc_predicates struct_decls =
    *   let id = "Free_area_cell" in
    *   let loc = Loc.other "internal (Free_area_cell)" in
    *   
-   *   let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "?vmemmap_pointer" in
-   *   let vmemmap_s, vmemmap_t = IT.fresh_named (BT.Array (Integer, Struct hyp_page_tag)) "?vmemmap" in
-   *   let range_start_s, range_start_t = IT.fresh_named Integer "?range_start" in
-   *   let range_end_s, range_end_t = IT.fresh_named Integer "?range_end" in
-   *   let order_s, order_t = IT.fresh_named Integer "?order" in
+   *   let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "vmemmap_pointer" in
+   *   let vmemmap_s, vmemmap_t = IT.fresh_named (BT.Array (Integer, Struct hyp_page_tag)) "vmemmap" in
+   *   let range_start_s, range_start_t = IT.fresh_named Integer "range_start" in
+   *   let range_end_s, range_end_t = IT.fresh_named Integer "range_end" in
+   *   let order_s, order_t = IT.fresh_named Integer "order" in
    * 
-   *   let cell_pointer_s, cell_pointer_t = IT.fresh_named Loc "?cell_pointer" in
-   *   let cell_s, cell_t = IT.fresh_named (BT.Struct list_head_tag) "?cell" in
+   *   let cell_pointer_s, cell_pointer_t = IT.fresh_named Loc "cell_pointer" in
+   *   let cell_s, cell_t = IT.fresh_named (BT.Struct list_head_tag) "cell" in
    * 
    *   let constr prev_next = 
    *     let prev_next_t = cell_t %. prev_next in
@@ -502,12 +504,12 @@ let page_alloc_predicates struct_decls =
 
     let id = "Vmemmap_page" in
     let loc = Loc.other "internal (Vmemmap_page)" in
-    let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "?pool_pointer" in
-    let page_pointer_s, page_pointer_t = IT.fresh_named Loc "?page_pointer" in
-    let range_start_s, range_start_t = IT.fresh_named Integer "?range_start" in
-    let range_end_s, range_end_t = IT.fresh_named Integer "?range_end" in
-    let page_s, page_t = IT.fresh_named (BT.Struct hyp_page_tag) "?page" in
-    let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "?vmemmap_pointer" in
+    let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "pool_pointer" in
+    let page_pointer_s, page_pointer_t = IT.fresh_named Loc "page_pointer" in
+    let range_start_s, range_start_t = IT.fresh_named Integer "range_start" in
+    let range_end_s, range_end_t = IT.fresh_named Integer "range_end" in
+    let page_s, page_t = IT.fresh_named (BT.Struct hyp_page_tag) "page" in
+    let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "vmemmap_pointer" in
 
     let resource = 
       Predicate {
@@ -614,8 +616,8 @@ let page_alloc_predicates struct_decls =
     let id = "Hyp_pool" in
     let loc = Loc.other "internal (Hyp_pool)" in
 
-    let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "?pool_pointer" in
-    let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "?pool" in
+    let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "pool_pointer" in
+    let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
 
     let hyp_pool_metadata_owned =
       let predicate : RE.predicate = {
@@ -641,10 +643,10 @@ let page_alloc_predicates struct_decls =
       LRT.I)))
     in
 
-    let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "?vmemmap_pointer" in
-    (* let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "?pool" in *)
+    let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "vmemmap_pointer" in
+    (* let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in *)
     let vmemmap_s, vmemmap_t = 
-      IT.fresh_named (BT.Array (Integer, BT.Struct hyp_page_tag)) "?vmemmap" in
+      IT.fresh_named (BT.Array (Integer, BT.Struct hyp_page_tag)) "vmemmap" in
     let range_start_t = pool_t %. "range_start" in
     let range_end_t = pool_t %. "range_end" in
     let max_order_t = pool_t %. "max_order" in
@@ -670,7 +672,7 @@ let page_alloc_predicates struct_decls =
 
     let vmemmap_metadata_owned =
       let element_size = Memory.size_of_struct hyp_page_tag in
-      let i_s, i_t = IT.fresh_named Integer "?i" in
+      let i_s, i_t = IT.fresh_named Integer "i" in
       let vmemmap_array = 
         QPredicate {
             pointer = vmemmap_pointer_t;
@@ -703,7 +705,7 @@ let page_alloc_predicates struct_decls =
 
     let free_area_well_formedness = 
       let constr prev_next = 
-        let o_s, o_t = IT.fresh_named Integer "?o" in
+        let o_s, o_t = IT.fresh_named Integer "o" in
         let prev_next_t = (free_area_t %@ o_t) %. prev_next in
         let cell_pointer_t = 
           arrayShift_ (memberShift_ (pool_pointer_t, hyp_pool_tag, Id.id "free_area"),
@@ -735,7 +737,7 @@ let page_alloc_predicates struct_decls =
 
     let vmemmap_well_formedness2 = 
       let constr prev_next =
-        (* let i_s, i_t = IT.fresh_named Integer "?i" in *)
+        (* let i_s, i_t = IT.fresh_named Integer "i" in *)
         (* let trigger = 
          *   T_Member (T_Member (T_App (T_Term vmemmap_t, T_Term i_t), Id.id "node"), Id.id prev_next)
          * in *)
@@ -770,8 +772,8 @@ let page_alloc_predicates struct_decls =
     in
 
     (* let page_group_ownership = 
-     *   let qp_s, qp_t = IT.fresh_named Loc "?qp" in
-     *   let bytes_s, bytes_t = IT.fresh_named (BT.Array (Loc, Integer)) "?bytes" in
+     *   let qp_s, qp_t = IT.fresh_named Loc "qp" in
+     *   let bytes_s, bytes_t = IT.fresh_named (BT.Array (Loc, Integer)) "bytes" in
      *   let condition = 
      *     let i_t = (pointerToIntegerCast_ qp_t) %/ pPAGE_SIZE_t in
      *     and_ [

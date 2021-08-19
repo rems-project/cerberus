@@ -196,12 +196,14 @@ let expr_n_pexpr_domain = {
   }
 
 
-let letbind_pexpr domain pexpr ctxt : 'a = 
+let letbind_pexpr_ sym domain pexpr ctxt : 'a = 
   let (M_Pexpr (loc, _, bty, _)) = pexpr in
-  let sym = Symbol.fresh () in
   let asym = asym_pack loc [] bty sym in
   let body = ctxt asym in
   domain.d_let loc [] (M_Symbol sym) pexpr body
+
+let letbind_pexpr domain pexpr ctxt = 
+  letbind_pexpr_ (Symbol.fresh ()) domain pexpr ctxt
 
 
 let rec n_ov loc v =
@@ -385,11 +387,11 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
      k (annotate (M_PEmemberof(sym1, id1, e'))))
   | PEcall(sym1, args) ->
      begin match sym1, args with
-     | Sym (Symbol (_, _, Some "conv_int")), [arg1;arg2] ->
+     | Sym (Symbol (_, _, SD_Id "conv_int")), [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(conv_int,_): not a ctype" arg1) in
         n_pexpr_name loc domain arg2 (fun arg2 ->
         k (annotate (M_PEconv_int(ct, arg2))))
-     | Sym (Symbol (_, _, Some "wrapI")), [arg1;arg2] ->
+     | Sym (Symbol (_, _, SD_Id "wrapI")), [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(wrapI,_): not a ctype" arg1) in
         n_pexpr_name loc domain arg2 (fun arg2 ->
         k (annotate (M_PEwrapI(ct, arg2))))
@@ -657,7 +659,8 @@ let n_memop loc memop pexprs k: mu_texpr =
 
 
 
-let rec n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr = 
+let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
+          (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr = 
   (* print_endline ("\n\n\n*******************************************************\nnormalising ");
    * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr e);
    * print_endline "\n";
@@ -671,8 +674,7 @@ let rec n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr =
   let n_pexpr_in_expr = (n_pexpr_in_expr loc) in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
-  let n_expr = (n_expr loc) in
-  (* let normalise_expr = normalise_expr loc in *)
+  let n_expr = (n_expr loc returns) in
   match pe with
   | Epure pexpr2 -> 
      n_pexpr_in_expr pexpr2 (fun e -> 
@@ -787,17 +789,25 @@ let rec n_expr loc (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr =
   (* DISCARDS CONTINUATION *)
   | Erun(_a, sym1, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
-     twrap (M_Erun(sym1, pes)))
+       match pes, Pset.mem sym1 returns with
+       | [e], true ->
+          let e_pexpr = M_Pexpr(e.loc, e.annot, e.type_annot, (M_PEsym e.sym)) in
+          letbind_pexpr_ (Symbol.fresh_description Symbol.SD_Return) 
+            expr_n_pexpr_domain e_pexpr (fun e ->
+          twrap (M_Erun(sym1, [e])))
+       | _ ->
+          twrap (M_Erun(sym1, pes))
+     )
   | Epar es -> 
      error "core_anormalisation: Epar"
   | Ewait tid1 ->
      error "core_anormalisation: Ewait"
 
 
-let rec normalise_expr loc e : mu_texpr =
+let rec normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
   let sym = Symbol.fresh () in
   let asym = asym_pack loc [] () sym in
-  n_expr loc e (fun e ->
+  n_expr loc returns e (fun e ->
   M_TExpr (loc, [], M_Esseq (M_Symbol sym, e, 
   M_TExpr (loc, [], M_Edone asym))))
 
@@ -823,6 +833,11 @@ let normalise_fun_map_decl
      M_Fun(bt, args, normalise_pexpr Loc.unknown pe)
   | Proc (loc, bt, args, e) -> 
      let saves = (Core_aux.m_collect_saves e) in
+     let returns = 
+       Pmap.fold (fun sym (_,_,_,annots) returns ->
+           if is_return annots then Pset.add sym returns else returns
+         ) saves (Pset.empty Symbol.symbol_compare)
+     in
      let saves' =
        (Pmap.map (fun (_,params,body,annots) ->
             let param_tys = 
@@ -838,33 +853,39 @@ let normalise_fun_map_decl
             let lloc = update_loc loc (Annot.get_loc_ annots) in
             if is_return annots
             then M_Return (lloc, param_tys)
-            else M_Label(lloc, param_tys, params, normalise_expr loc body, annots, ())
+            else M_Label (lloc, param_tys, params, normalise_expr loc returns body, annots)
           ) saves)
      in
-     M_Proc(loc, bt, args, normalise_expr loc e, saves', ())
+     M_Proc(loc, bt, args, normalise_expr loc returns e, saves')
   | ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
   | BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 
 let normalise_fun_map (fmap : (unit, 'a) generic_fun_map) : unit mu_fun_map= 
   let fmap = 
     Pmap.filter (fun sym _ ->
-        match Symbol.symbol_name sym with
-        | Some name when List.mem name Not_unfold.not_unfold -> false
+        match Symbol.symbol_description sym with
+        | SD_Id name when List.mem name Not_unfold.not_unfold -> false
         | _ -> true
       ) fmap 
   in
    (Pmap.mapi normalise_fun_map_decl fmap)
   
 
-let fresh_relative (s : symbol) (f : string -> string) : symbol =
-  match Symbol.symbol_name s with
-  | Some name -> Symbol.fresh_pretty (f name)
-  | None -> Symbol.fresh ()
+
 
 let normalise_globs sym (g : ('a, unit) generic_globs) : unit mu_globs = 
+
+  let fresh_relative (s : symbol) (f : string -> string) : symbol =
+    match Symbol.symbol_description s with
+    | SD_ObjectAddress name -> 
+       Symbol.fresh_object_address name
+    | _ -> Symbol.fresh ()
+  in
+
   match g with
   | GlobalDef((bt, ct), e) -> 
-     M_GlobalDef (fresh_relative sym (fun s -> s^"_l"), (bt, ct), normalise_expr Loc.unknown e)
+     M_GlobalDef (fresh_relative sym (fun s -> s^"_l"), (bt, ct), 
+                  normalise_expr Loc.unknown (Pset.empty Symbol.symbol_compare) e)
   | GlobalDecl (bt, ct) -> 
      M_GlobalDecl (fresh_relative sym (fun s -> s^"_l"), (bt, ct))
 
@@ -891,7 +912,7 @@ let normalise_funinfo (loc,annots2,ret,args,b1,b2) =
         | None -> (Symbol.fresh (), ct)
       ) args 
   in
-  M_funinfo (loc,annots2,(ret,args,b1),b2, ())
+  M_funinfo (loc,annots2,(ret,args,b1),b2)
 
 let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)

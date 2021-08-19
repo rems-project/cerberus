@@ -19,7 +19,6 @@ module Make(L : Local.S) : sig
   val all_constraints : unit -> (LogicalConstraints.t list) m
   val all_resources : unit -> (Resources.RE.t list) m
   val solver : unit -> Z3.Solver.solver m
-  val descriptions : unit -> (Ast.Terms.term Local.SymMap.t) m
   val bound : Sym.t -> Kind.t -> bool m
   val get_a : Sym.t -> (BaseTypes.t * Sym.t) m
   val get_l : Sym.t -> LogicalSorts.t m
@@ -32,8 +31,6 @@ module Make(L : Local.S) : sig
   val map_and_fold_resources : 
     (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
     'acc -> 'acc m
-  val add_description : (Sym.t * Ast.Terms.term) -> unit m
-  val add_descriptions : (Sym.t * Ast.Terms.term) list -> unit m
   val all_vars : unit -> (Sym.t list) m
   val bind_return_type : Sym.t -> ReturnTypes.t -> unit m
   val bind_logical_return_type : LogicalReturnTypes.t -> unit m
@@ -134,10 +131,6 @@ end = struct
     let@ l = get () in
     return (L.solver l)
 
-  let descriptions () = 
-    let@ l = get () in
-    return (L.descriptions l)
-
   let bound s kind = 
     let@ l = get () in
     return (L.bound s kind l)
@@ -179,14 +172,6 @@ end = struct
     let (l', acc) = L.map_and_fold_resources f l acc in
     let@ () = set l' in
     return acc
-
-  let add_description descr = 
-    let@ l = get () in
-    set (L.add_description descr l)
-
-  let add_descriptions descrs = 
-    let@ l = get () in
-    set (L.add_descriptions descrs l)
 
 
   let all_vars () = 

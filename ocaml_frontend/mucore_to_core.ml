@@ -540,7 +540,7 @@ let mu_to_core__fun_map_decl d : ('bty, unit) Core.generic_fun_map_decl=
    ((match d with
   | M_Fun( bt1, args, pe) ->
      Core.Fun( bt1, args, (mu_to_core__tpexpr (Pmap.empty Symbol.symbol_compare) pe))
-  | M_Proc( loc, bt1, args, e, _labels, _mapping) ->
+  | M_Proc( loc, bt1, args, e, _labels) ->
      Core.Proc( loc, bt1, args, (mu_to_core__texpr (Pmap.empty Symbol.symbol_compare) e))
   | M_ProcDecl( loc, bt1, bts) ->
      Core.ProcDecl( loc, bt1, bts)
@@ -578,7 +578,7 @@ let mu_to_core__globs_list (gs : (symbol * 'bty mu_globs) list )
    (map (fun (sym1,g) -> (sym1, mu_to_core__globs g)) gs)
 
 
-let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args,b1),b2,_mapping)):Location_ocaml.t*attributes*'b*'a*bool*bool=
+let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args,b1),b2)):Location_ocaml.t*attributes*'b*'a*bool*bool=
   let args = List.map (fun (s,ct) -> (Some s, ct)) args in
    (loc,annots2,ret,args,b1,b2)
 

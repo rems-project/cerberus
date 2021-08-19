@@ -544,8 +544,8 @@ let remove_unused_functions remove_funinfo_entries file =
   let used_stdlib : ('bty, 'a) generic_fun_map = 
     Pmap.filter (fun name _ -> 
           Pset.mem (Def.Sym name) keep ||
-            match Symbol.symbol_name name with
-            | Some sname ->
+            match Symbol.symbol_description name with
+            | SD_Id sname ->
                Pset.mem (Def.Impl (BuiltinFunction sname)) keep
             | _ -> false
       ) file.stdlib 

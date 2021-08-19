@@ -863,7 +863,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         | M_BuiltinDecl (loc, bTy, bTys) ->
             pp_cond loc @@
             pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
-        | M_Proc (loc, bTy, params, e, labels, _mapping) ->
+        | M_Proc (loc, bTy, params, e, labels) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
@@ -875,7 +875,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                    begin match def with
                    | M_Return (_, lt) -> 
                       P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
-                   | M_Label (_, lt, args, lbody, annots, _mapping) ->
+                   | M_Label (_, lt, args, lbody, annots) ->
                       P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt ^^
                         (* label core function definition *)
                         P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
@@ -930,13 +930,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           acc) P.empty globs
 
   let pp_funinfo finfos =
-      Pmap.fold (fun sym (M_funinfo (_, _, ft, has_proto, _mapping)) acc ->
+      Pmap.fold (fun sym (M_funinfo (_, _, ft, has_proto)) acc ->
           acc ^^ pp_symbol sym ^^ P.colon
           ^^^ pp_ft ft
           ^^ P.hardline) finfos P.empty
 
     let pp_funinfo_with_attributes finfos =
-      Pmap.fold (fun sym (M_funinfo (loc, attrs, ft, has_proto, _mapping)) acc ->
+      Pmap.fold (fun sym (M_funinfo (loc, attrs, ft, has_proto)) acc ->
           acc ^^ pp_symbol sym ^^ P.colon
           ^^^ pp_ft ft
           ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs

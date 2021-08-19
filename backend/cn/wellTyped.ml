@@ -785,14 +785,7 @@ end
       pure begin
           let open Predicates in
           let@ () = add_l pd.pointer BT.Loc in
-          let@ () = 
-            ListM.iterM (fun (s, ls) -> 
-                let@ () = add_l s ls in
-                match Sym.name s with
-                  | Some name -> add_description (s, Ast.Var name)
-                  | None -> return ()
-              ) pd.iargs
-          in
+          let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
           let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
           ListM.iterM (fun (loc, lc, clause) ->
               let@ () = WLC.welltyped loc lc in

@@ -73,19 +73,62 @@ instance (Show digest)
 end
 
 
+
+type symbol_description =
+  | SD_None
+  | SD_Id of string
+  | SD_ObjectAddress of string
+  | SD_Return
+  | SD_FunArg of nat
+  (* | SD_Pointee of string (\* label/environment *\) * symbol_description *)
+  (* | SD_PredOutput of string (\* label/environment *\) * string (\* pred *\) * string (\* output *\) *)
+
+
+(* type prefix =
+ *   | PrefSource of Loc.t * list sym
+ *   | PrefFunArg of Loc.t * digest * int
+ *   | PrefStringLiteral of Loc.t * digest
+ *   | PrefCompoundLiteral of Loc.t * digest
+ *   | PrefMalloc
+ *   | PrefOther of string *)
+
+
+let show_symbol_description sd =
+  match sd with
+  | SD_None -> 
+     "SD_None"
+  | SD_Id str -> 
+     "SD_Id("^show str^")"
+  | SD_ObjectAddress name -> 
+     "SD_ObjectAddress" ^ show name
+  | SD_Return ->
+     "SD_Return"
+  | SD_FunArg n ->
+     "SD_FunArg" ^ "(" ^ show n ^ ")"
+  (* | SD_Pointee env symbol_description ->
+   *    "SD_Pointee" ^ show (env, show_symbol_description symbol_description) *)
+end
+
+instance (Show symbol_description)
+  let show = show_symbol_description
+end
+
 (* Symbolic identifiers *)
 type sym =
-  Symbol of digest * nat * maybe string
+  Symbol of digest * nat * symbol_description
+
+
+
 
 val        symbolEqual: sym -> sym -> bool
 let inline symbolEqual sym1 sym2 =
   match (sym1, sym2) with
-    | (Symbol d1 n1 str_opt1, Symbol d2 n2 str_opt2) ->
+    | (Symbol d1 n1 sd1, Symbol d2 n2 sd2) ->
         if d1 = d2 && n1 = n2 then
-          if Debug.get_level () >= 5 && str_opt1 <> str_opt2 then
+          if Debug.get_level () >= 5 && sd1 <> sd2 then
             let () = Debug.print_debug 5 [] (fun () ->
-              "[Symbol.symbolEqual] suspicious equality ==> " ^ show str_opt1
-              ^ " <-> " ^ show str_opt2) in
+              "[Symbol.symbolEqual] suspicious equality ==> " ^ show sd1
+              ^ " <-> " ^ show sd2) in
             true
           else
             true
@@ -132,24 +175,26 @@ end
 
 instance (NumSucc sym)
   let succ sym =
-    let (Symbol d n str_opt) = sym in 
-    Symbol d (n+1) str_opt
+    let (Symbol d n sd) = sym in 
+    Symbol d (n+1) sd
 end
 
 instance (SetType sym)
   let setElemCompare sym1 sym2 = ordCompare sym1 sym2
 end
 
+let show_symbol sym =
+  let Symbol d n sd = sym in
+  "Symbol" ^ show (n, sd)
+
 instance (Show sym)
-  let show sym =
-    let Symbol d n str_opt = sym in
-    "Symbol" ^ show (n, str_opt)
+  let show = show_symbol
 end
 
-let show_raw_less (Symbol _ n str_opt) =
-  "Symbol(" ^ show n ^ ", " ^ show str_opt ^ ")"
-let show_raw (Symbol d n str_opt) =
-  "Symbol(" ^ show d ^ ", " ^ show n ^ ", " ^ show str_opt ^ ")"
+let show_raw_less (Symbol _ n sd) =
+  "Symbol(" ^ show n ^ ", " ^ show sd ^ ")"
+let show_raw (Symbol d n sd) =
+  "Symbol(" ^ show d ^ ", " ^ show n ^ ", " ^ show sd ^ ")"
 
 
 (* Location prefix *)
@@ -170,16 +215,16 @@ let digest_of_sym (Symbol dig _ _) = dig
 
 val fresh: unit -> sym
 let fresh () =
-  Symbol (digest()) (fresh_int ()) Nothing
+  Symbol (digest()) (fresh_int ()) SD_None
 
 val fresh_pretty : string -> sym
 let fresh_pretty str =
-  Symbol (digest()) (fresh_int ()) (Just str)
+  Symbol (digest()) (fresh_int ()) (SD_Id str)
 
 val fresh_pretty_with_id : (nat -> string) -> sym
 let fresh_pretty_with_id mkStr =
   let id = fresh_int () in
-  Symbol (digest()) id (Just (mkStr id))
+  Symbol (digest()) id (SD_Id (mkStr id))
 
 val fresh_fancy : maybe string -> sym
 let fresh_fancy = function
@@ -187,10 +232,30 @@ let fresh_fancy = function
   | Nothing  -> fresh ()
 end
 
+let fresh_object_address name =
+  Symbol (digest()) (fresh_int ()) (SD_ObjectAddress name)
+
+let fresh_funarg i = 
+  Symbol (digest ()) (fresh_int ()) (SD_FunArg i)
+
+let fresh_description sd =
+  Symbol (digest ()) (fresh_int ()) sd
+
+let set_symbol_description (Symbol d n _) sd = 
+  Symbol d n sd
+
+
+
+(* let fresh_pointee env sd = 
+ *   let id = fresh_int () in
+ *   Symbol (digest ()) id (SD_Pointee env sd) *)
+  
+
+
 val from_same_translation_unit: sym -> sym -> bool
 let from_same_translation_unit sym1 sym2 =
   0 = digest_compare (digest_of_sym sym1) (digest_of_sym sym2)
 
 
-let symbol_name (Symbol _ _ mname) = mname
+let symbol_description (Symbol _ _ descr) = descr
 let symbol_num (Symbol _ num _) = num

@@ -891,13 +891,6 @@ let unpack_predicate (p : predicate) =
 
 
     let calltype_ft loc args (ftyp : AT.ft) : RT.t m =
-      let names = 
-        List.mapi (fun i arg ->
-            let v = "ARG" ^ string_of_int i in
-            (arg.lname, Ast.Addr v)
-          ) args
-      in
-      let@ () = add_descriptions names in
       let@ original_local = get () in
       let ui_info = { loc; situation = FunctionCall; original_local } in
       spine_ft ui_info args ftyp
@@ -912,7 +905,6 @@ let unpack_predicate (p : predicate) =
        inference as the spine judgment. So implement the subtyping
        judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
     let subtype (loc : loc) arg (rtyp : RT.t) : unit m =
-      let@ () = add_description (arg.lname, Ast.Var "return") in
       let@ original_local = get () in
       let ui_info = { loc; situation = Subtyping; original_local } in
       let ft = AT.of_rt rtyp (AT.I False.False) in
@@ -1812,11 +1804,6 @@ let unpack_predicate (p : predicate) =
            | Some (lt,lkind) -> return (lt,lkind)
          in
          let@ args = args_of_asyms asyms in
-         let@ () = match args, lkind with
-           | [arg], Return -> 
-              add_description (arg.lname, Ast.Var "return")
-           | _ -> return ()
-         in
          let@ () = Spine.calltype_lt loc args (lt,lkind) in
          let@ () = all_empty loc in
          return ()
@@ -1860,11 +1847,8 @@ let unpack_predicate (p : predicate) =
          let has = List.length arguments in
          fail loc (lazy (Number_arguments {expect; has}))
       | args, (AT.Logical ((sname, sls), ftyp)) ->
-         let new_lname = Sym.fresh_same sname in
-         let subst = {before = sname; after = new_lname} in
-         let ftyp' = AT.subst_var rt_subst_var subst ftyp in
-         let@ () = add_l new_lname sls in
-         check (acc_substs@[subst]) resources args ftyp'
+         let@ () = add_l sname sls in
+         check acc_substs resources args ftyp
       | args, (AT.Resource (re, ftyp)) ->
          check acc_substs (re :: resources) args ftyp
       | args, (AT.Constraint (lc, ftyp)) ->
@@ -1879,7 +1863,6 @@ let unpack_predicate (p : predicate) =
   (* check_function: type check a (pure) function *)
   let check_function 
         (loc : loc) 
-        mapping 
         (info : string) 
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
         (body : 'bty mu_tpexpr) (function_typ : AT.ft) : unit m =
@@ -1894,21 +1877,13 @@ let unpack_predicate (p : predicate) =
           let Computational ((sname, sbt), t) = rt in
           ensure_base_type loc ~expect:sbt rbt
         in
-        let@ local_or_false =
-          let names = 
-            Explain.naming_substs substs 
-              (Explain.naming_of_mapping "start" mapping)
-          in
-          let@ () = add_descriptions names in
-          check_tpexpr body rt 
-        in
+        let@ local_or_false = check_tpexpr body rt in
         return ()
       end
 
   (* check_procedure: type check an (impure) procedure *)
   let check_procedure 
-        (loc : loc)
-        mapping (fsym : Sym.t)
+        (loc : loc) (fsym : Sym.t)
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
         (body : 'bty mu_texpr) (function_typ : AT.ft) 
         (label_defs : 'bty mu_label_defs) : unit m =
@@ -1921,11 +1896,6 @@ let unpack_predicate (p : predicate) =
         let@ (rt, resources, substs) = 
           check_and_bind_arguments RT.subst_var loc arguments function_typ 
         in
-        (* prepare name mapping *)
-        let fnames = 
-          Explain.naming_substs substs 
-            (Explain.naming_of_mapping "start" mapping) 
-        in
         (* rbt consistency *)
         let@ () = 
           let Computational ((sname, sbt), t) = rt in
@@ -1937,9 +1907,9 @@ let unpack_predicate (p : predicate) =
               match def with
               | M_Return (loc, lt) -> 
                  M_Return (loc, AT.subst_vars False.subst_var substs lt)
-              | M_Label (loc, lt, args, body, annots, mapping) -> 
-                 M_Label (loc, AT.subst_vars False.subst_var 
-                                 substs lt, args, body, annots, mapping)
+              | M_Label (loc, lt, args, body, annots) -> 
+                 M_Label (loc, AT.subst_vars False.subst_var substs lt, 
+                          args, body, annots)
             ) label_defs 
         in
 
@@ -1949,16 +1919,14 @@ let unpack_predicate (p : predicate) =
               pure begin 
                   match def with
                   | M_Return (loc, lt) ->
-                     let@ () = add_descriptions fnames in
                      let@ () = WT.WLT.good "return label" loc lt in
                      return (SymMap.add sym (lt, Return) acc)
-                  | M_Label (loc, lt, _, _, annots, mapping) -> 
+                  | M_Label (loc, lt, _, _, annots) -> 
                      let label_kind = match CF.Annot.get_label_annot annots with
                        | Some (LAloop_body loop_id) -> Loop
                        | Some (LAloop_continue loop_id) -> Loop
                        | _ -> Other
                      in
-                     let@ () = add_descriptions fnames in
                      let@ () = WT.WLT.welltyped "label" loc lt in
                      return (SymMap.add sym (lt, label_kind) acc)
                 end
@@ -1971,22 +1939,13 @@ let unpack_predicate (p : predicate) =
             match def with
             | M_Return (loc, lt) ->
                return ()
-            | M_Label (loc, lt, args, body, annots, mapping) ->
+            | M_Label (loc, lt, args, body, annots) ->
                debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
                debug 2 (lazy (item "type" (AT.pp False.pp lt)));
                let@ (rt, resources, lsubsts) = 
                  check_and_bind_arguments False.subst_var loc args lt 
                in
                let@ local_or_false = 
-                 let lname = match Sym.name lsym with
-                   | Some lname -> lname
-                   | None -> failwith "label without name"
-                 in
-                 let names = 
-                   Explain.naming_substs (lsubsts @ substs)
-                     (Explain.naming_of_mapping lname mapping)  
-                 in
-                 let@ () = add_descriptions names in
                  let@ () = ListM.iterM add_r resources in
                  check_texpr labels body False
                in
@@ -1998,7 +1957,6 @@ let unpack_predicate (p : predicate) =
         (* check the function body *)
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
         let@ local_or_false = 
-          let@ () = add_descriptions fnames in
           let@ () = ListM.iterM add_r resources in
           check_texpr (labels) body (Normal rt)
         in
@@ -2059,7 +2017,7 @@ let check mu_file =
            let@ ((), _) = Typing.run (WT.WRT.welltyped Loc.unknown rt) (L.empty ()) in
            let@ ((), _) = 
              Typing.run (C.check_function Loc.unknown
-               [] descr [] rbt pexpr (AT.I rt)) (L.empty ()) in
+               descr [] rbt pexpr (AT.I rt)) (L.empty ()) in
            let global = 
              { global with impl_constants = 
                              ImplMap.add impl rt global.impl_constants}
@@ -2072,7 +2030,7 @@ let check mu_file =
                (L.empty ())
            in
            let@ ((), _) = 
-             Typing.run (C.check_function Loc.unknown [] 
+             Typing.run (C.check_function Loc.unknown
                 (CF.Implementation.string_of_implementation_constant impl)
                 args rbt pexpr ft) (L.empty ())
            in
@@ -2118,7 +2076,7 @@ let check mu_file =
   let@ (global, local) =
     let open Global in
     PmapM.foldM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto, mapping)) 
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto)) 
            (global, local) ->
         let global = 
           { global with fun_decls = SymMap.add fsym (loc, ftyp) global.fun_decls }
@@ -2135,12 +2093,11 @@ let check mu_file =
   let () = Debug_ocaml.begin_csv_timing "welltypedness" in
   let@ () =
     PmapM.iterM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto, mapping))  ->
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto))  ->
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
-        let local' = L.add_descriptions (Explain.naming_of_mapping "start" mapping) local in
-        let@ ((), _) = Typing.run (WT.WFT.welltyped "global" loc ftyp) local' in
+        let@ ((), _) = Typing.run (WT.WFT.welltyped "global" loc ftyp) local in
         return ()
       ) mu_file.mu_funinfo
   in
@@ -2155,14 +2112,14 @@ let check mu_file =
                | Some t -> return t
                | None -> fail Loc.unknown (lazy (Missing_function fsym))
              in
-             Typing.run (C.check_function loc Mapping.empty 
+             Typing.run (C.check_function loc
                 (Sym.pp_string fsym) args rbt body ftyp) local
-          | M_Proc (loc, rbt, args, body, labels, mapping) ->
+          | M_Proc (loc, rbt, args, body, labels) ->
              let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
                | Some t -> return t
                | None -> fail loc (lazy (Missing_function fsym))
              in
-             Typing.run (C.check_procedure loc' mapping 
+             Typing.run (C.check_procedure loc'
                fsym args rbt body ftyp labels) local
           | M_ProcDecl _ -> 
              return ((), local)

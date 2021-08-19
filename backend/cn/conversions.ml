@@ -403,22 +403,82 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
 
 
 
-let aarg_item (aarg : aarg) =
-  let path = Ast.addr aarg.name in
-  {path; 
-   it = sym_ (aarg.asym, BT.Loc); 
-   o_sct = Some (Sctypes.pointer_sct aarg.typ) }
 
-let varg_item (varg : varg) =
-  let path = Ast.var varg.name in
-  {path; 
-   it = sym_ (varg.vsym, BT.of_sct varg.typ);
-   o_sct = Some varg.typ} 
 
-let garg_item (garg : garg) =
-  let path = Ast.addr garg.name in
-  {path; it = sym_ (garg.lsym, BT.Loc);
-   o_sct = Some (Sctypes.pointer_sct garg.typ) } 
+let error_with_loc loc msg = 
+  let (head, pos) = Locations.head_pos_of_location loc in
+  print stderr (format [Bold; Red] "error:" ^^^ 
+                  format [Bold] head ^^^ !^msg);
+  failwith "internal error"
+  
+
+(* let aarg_item loc (aarg : aarg) =
+ *   match Sym.description aarg.asym with
+ *     | SD_ObjectAddress name -> 
+ *        {path = Ast.addr name; 
+ *         it = sym_ (aarg.asym, BT.Loc); 
+ *         o_sct = Some (Sctypes.pointer_sct aarg.typ) }
+ *     | sd -> 
+ *        error_with_loc loc
+ *          ("address argument " ^ Sym.pp_string aarg.asym ^
+ *             " without SD_ObjectAddress, but " ^ Sym.show_symbol_description sd)
+ * 
+ * let varg_item loc (varg : varg) =
+ *   match Sym.description varg.vsym with
+ *   | SD_ObjectValue name -> 
+ *      {path = Ast.var name; 
+ *       it = sym_ (varg.vsym, BT.of_sct varg.typ);
+ *       o_sct = Some varg.typ} 
+ *   | sd -> 
+ *      error_with_loc loc
+ *        ("value argument " ^ Sym.pp_string varg.vsym ^ 
+ *           " without SD_ObjectValue, but " ^ Sym.show_symbol_description sd)
+ * 
+ * let garg_item loc (garg : garg) =
+ *   match Sym.description garg.asym with
+ *   | SD_ObjectAddress name -> 
+ *      {path = Ast.addr name; 
+ *       it = sym_ (garg.lsym, BT.Loc);
+ *       o_sct = Some (Sctypes.pointer_sct garg.typ) } 
+ *   | sd -> 
+ *      error_with_loc loc
+ *        ("global argument " ^ Sym.pp_string garg.asym ^ 
+ *           " without SD_ObjectAddress, but " ^ Sym.show_symbol_description sd) *)
+
+let aarg_item loc (aarg : aarg) =
+  let path = match Sym.description aarg.asym with
+    | SD_ObjectAddress name -> Ast.addr name; 
+    | SD_None -> Ast.addr (Sym.pp_string aarg.asym)
+    | sd ->
+       error_with_loc loc
+         ("address argument " ^ Sym.pp_string aarg.asym ^ 
+            " without SD_ObjectAddress or SD_None, but " ^ Sym.show_symbol_description sd)
+  in
+  { path = path;
+    it = sym_ (aarg.asym, BT.Loc); 
+    o_sct = Some (Sctypes.pointer_sct aarg.typ) }
+
+let varg_item loc (varg : varg) =
+  match Sym.description varg.vsym with
+  | SD_Return -> 
+     {path = Ast.var "return"; 
+      it = sym_ (varg.vsym, BT.of_sct varg.typ);
+      o_sct = Some varg.typ} 
+  | sd -> 
+     error_with_loc loc
+       ("value argument " ^ Sym.pp_string varg.vsym ^ 
+          " without SD_ObjectValue, but " ^ Sym.show_symbol_description sd)
+
+let garg_item loc (garg : garg) =
+  match Sym.description garg.asym with
+  | SD_ObjectAddress name -> 
+     {path = Ast.addr name; 
+      it = sym_ (garg.lsym, BT.Loc);
+      o_sct = Some (Sctypes.pointer_sct garg.typ) } 
+  | sd -> 
+     error_with_loc loc
+       ("global argument " ^ Sym.pp_string garg.asym ^ 
+          " without SD_ObjectAddress, but " ^ Sym.show_symbol_description sd)
 
 
 let mod_mapping 
@@ -446,7 +506,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   (* globs *)
   let@ (iL, iR, iC, mappings) = 
     ListM.fold_leftM (fun (iL, iR, iC, mappings) garg ->
-        let item = garg_item garg in
+        let item = garg_item loc garg in
         let@ (l, r, c, mapping') = 
           match garg.accessed with
           | Some loc -> 
@@ -467,7 +527,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   let@ (iA, iL, iR, iC, mappings) = 
     ListM.fold_leftM (fun (iA, iL, iR, iC, mappings) (aarg : aarg) ->
         let a = [(aarg.asym, BT.Loc)] in
-        let item = aarg_item aarg in
+        let item = aarg_item loc aarg in
         let@ (l, r, c, mapping') = 
           make_owned loc layouts item.it item.path aarg.typ in
         let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
@@ -503,7 +563,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   (* ret *)
   let (oA, oC, mappings) = 
     let ret = fspec.function_return in
-    let item = varg_item ret in
+    let item = varg_item loc ret in
     let c = [good_value layouts ret.typ item.it] in
     let mappings =
       mod_mapping "end" mappings
@@ -515,7 +575,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   (* globs *)
   let@ (oL, oR, oC, mappings) = 
     ListM.fold_leftM (fun (oL, oR, oC, mappings) garg ->
-        let item = garg_item garg in
+        let item = garg_item loc garg in
         let@ (l, r, c, mapping') = 
           match garg.accessed with
           | Some loc -> 
@@ -534,7 +594,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   (* fargs *)
   let@ (oL, oR, oC, mappings) = 
     ListM.fold_leftM (fun (oL, oR, oC, mappings) aarg ->
-        let item = aarg_item aarg in
+        let item = aarg_item loc aarg in
         let@ (l, r, c, mapping') = 
           make_owned loc layouts item.it item.path aarg.typ in
         let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
@@ -597,7 +657,7 @@ let make_label_spec
   (* globs *)
   let@ (iL, iR, iC, mappings) = 
     ListM.fold_leftM (fun (iL, iR, iC, mappings) garg ->
-        let item = garg_item garg in
+        let item = garg_item loc garg in
         let@ (l, r, c, mapping') = 
           match garg.accessed with
           | Some loc -> 
@@ -616,7 +676,7 @@ let make_label_spec
   (* fargs *)
   let@ (iL, iR, iC, mappings) = 
     ListM.fold_leftM (fun (iL, iR, iC, mappings) aarg ->
-        let item = aarg_item aarg in
+        let item = aarg_item loc aarg in
         let@ (l, r, c, mapping') = 
           make_owned loc layouts item.it item.path aarg.typ 
         in
@@ -637,7 +697,7 @@ let make_label_spec
     let@ (ia, iL, iR, iC, mapping') = 
       ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
           let a = [(aarg.asym, BT.Loc)] in
-          let item = aarg_item aarg in
+          let item = aarg_item loc aarg in
           let@ (l, r, c, mapping') = 
             make_owned loc layouts item.it item.path aarg.typ in
           let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in

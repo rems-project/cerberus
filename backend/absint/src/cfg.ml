@@ -12,9 +12,25 @@ module Sym = struct
   let compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
     if d1 = d2 then compare n1 n2
     else Digest.compare d1 d2
-  let show = function
-    | Symbol.Symbol (_, _, Some s) -> s
-    | Symbol.Symbol (_, n, None) -> "a" ^ string_of_int n
+  let show (Symbol.Symbol (_, n, sd)) =
+    let open Symbol in
+    let descr = function
+      | SD_None -> 
+         "a" ^ string_of_int n
+      | SD_Id s -> 
+         s
+      | SD_ObjectAddress name -> 
+         "&" ^ name
+      | SD_Return -> 
+         "return"
+      | SD_FunArg n ->
+         "ARG" ^ string_of_int n 
+      (* | SD_Pointee (env, sd) ->
+       *    "(" ^ descr sd ^ ")@" ^ env
+       * | SD_PredOutput (env, pred, output) ->
+       *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env *)
+    in
+    descr sd
 end
 
 module IMap = Map.Make(Int)
@@ -1022,7 +1038,7 @@ let mk_dot ?(sequentialise=false) output_filename core =
   let cfg = mk_cfg ~sequentialise core in
   let oc = open_out @@ output_filename ^ ".cfg" in
   output_string oc "digraph G {\n";
-  dot_of_proc oc (Symbol.Symbol ("", 0, Some "globs")) (snd cfg.globs);
+  dot_of_proc oc (Symbol.Symbol ("", 0, SD_Id "globs")) (snd cfg.globs);
   Pmap.iter (fun nm f ->
       match f with
       | Tgraph (_, _, g) ->

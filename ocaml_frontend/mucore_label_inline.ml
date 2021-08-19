@@ -50,11 +50,7 @@ let rec ib_texpr label e =
      else
        let () = 
          Debug_ocaml.print_debug 1 [] 
-           begin fun () -> 
-           let Symbol.Symbol( d, n, str_opt) = l in
-             ("REPLACING LABEL " ^ 
-                "Symbol" ^ stringFromPair string_of_int (fun x_opt-> stringFromMaybe (fun s-> "\"" ^ (s ^ "\"")) x_opt) (n, str_opt))
-           end 
+           (fun () -> ("REPLACING LABEL " ^ Symbol.show_symbol l))
        in
        let arguments = (Lem_list.list_combine label_arg_syms args) in
        let (M_TExpr(_, annots2, e_)) = 
@@ -82,8 +78,8 @@ let rec inline_label_labels_and_body to_inline to_keep body =
      let to_keep' = 
        (Pmap.map (fun def -> (match def with
          | M_Return _ -> def
-         | M_Label(loc, lt, args, lbody, annot, mapping) -> 
-            M_Label(loc, lt, args, (ib_texpr l lbody), annot, mapping)
+         | M_Label(loc, lt, args, lbody, annot) -> 
+            M_Label(loc, lt, args, (ib_texpr l lbody), annot)
          )) to_keep)
      in
      let body' = (ib_texpr l body) in
@@ -96,12 +92,12 @@ let ib_fun_map_decl
       (d : unit mu_fun_map_decl) 
     : unit mu_fun_map_decl=
    (try ((match d with
-     | M_Proc( loc, rbt, arg_bts, body, label_defs, mapping) -> 
+     | M_Proc( loc, rbt, arg_bts, body, label_defs) -> 
         let (to_keep, to_inline) =
           (let aux label def (to_keep, to_inline)=
              ((match def with
             | M_Return _ -> (Pmap.add label def to_keep, to_inline)
-            | M_Label(_loc, lt1, args, lbody, annot2, _) ->
+            | M_Label(_loc, lt1, args, lbody, annot2) ->
                match get_label_annot annot2 with
                | Some (LAloop_break _)
                | Some (LAloop_continue _) 
@@ -116,10 +112,9 @@ let ib_fun_map_decl
         let (label_defs, body) = 
           (inline_label_labels_and_body to_inline to_keep body)
         in
-        M_Proc( loc, rbt, arg_bts, body, label_defs, mapping)
+        M_Proc( loc, rbt, arg_bts, body, label_defs)
      | _ -> d
-     )) with | Failure error -> failwith ( (let Symbol.Symbol( d, n, str_opt) = name1 in
-    "Symbol" ^ (stringFromPair string_of_int (fun x_opt->stringFromMaybe (fun s->"\"" ^ (s ^ "\"")) x_opt) (n, str_opt)))  ^ error) )
+     )) with | Failure error -> failwith (Symbol.show_symbol name1 ^ ": "  ^ error) )
 
 let ib_fun_map (fmap1 : unit mu_fun_map) : unit mu_fun_map = 
    (Pmap.mapi ib_fun_map_decl fmap1)

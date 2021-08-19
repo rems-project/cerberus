@@ -71,24 +71,21 @@ let make_accessed globals (loc, name) =
   let rec aux = function
     | [] -> 
        fail loc (lazy (Generic !^("'"^name^"' is not a global variable")))
-    | garg :: gargs when String.equal garg.name name ->
-       begin match garg.accessed with
-       | Some _ -> 
-          fail loc (lazy (Generic !^("already specified '"^name^"' as accessed")))
-       | None -> 
-          return ({ garg with accessed = Some loc } :: gargs)
-       end
-    | garg :: gargs -> 
-       let@ gargs = aux gargs in
-       return (garg :: gargs)
+    | garg :: gargs ->
+      match CF.Symbol.symbol_description garg.asym with
+      | SD_ObjectAddress name' when String.equal name name' ->
+         begin match garg.accessed with
+         | Some _ -> 
+            fail loc (lazy (Generic !^("already specified '"^name^"' as accessed")))
+         | None -> 
+            return ({ garg with accessed = Some loc } :: gargs)
+         end
+      | _ -> 
+         let@ gargs = aux gargs in
+         return (garg :: gargs)
   in
   aux globals
 
-
-let give_name sym = 
-  match Sym.name sym with
-  | Some name -> name
-  | None -> Sym.pp_string sym
 
 let parse_function 
       (globals : (Sym.t * Sym.t * Sctypes.t) list)
@@ -101,7 +98,7 @@ let parse_function
   let cn_attributes = cn_attributes attributes in
   let globals = 
     List.map (fun (asym, lsym, typ) ->
-        {name = give_name asym; asym; lsym; typ; accessed = None}
+        {asym; lsym; typ; accessed = None}
       ) globals 
   in
   let@ (globals, pre, post) = 
@@ -128,10 +125,8 @@ let parse_function
   in
   let global_arguments = globals in
   let function_arguments = 
-    List.map (fun (asym, typ) -> 
-        {name = give_name asym; asym; typ}
-      ) arguments in
-  let function_return = { name = "return"; vsym = Sym.fresh (); typ = return_type } in
+    List.map (fun (asym, typ) -> {asym; typ}) arguments in
+  let function_return = { vsym = Sym.fresh_description SD_Return; typ = return_type } in
   let pre_condition = pre in
   let post_condition = post in
   return { 
@@ -153,9 +148,7 @@ let parse_label
   (* let attributes = List.rev attributes in *)
   let cn_attributes = cn_attributes attributes in
   let arguments = 
-    List.map (fun (asym, typ) -> 
-        {name = give_name asym; asym; typ}
-      ) arguments 
+    List.map (fun (asym, typ) -> {asym; typ}) arguments 
   in
   let@ inv = 
     ListM.fold_leftM (fun inv attr ->

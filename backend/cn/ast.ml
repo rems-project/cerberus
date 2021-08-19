@@ -298,9 +298,9 @@ let remove_labels = function
      Resource { predicate; arguments; oname }
     
 
-type varg = { name : string; vsym : Sym.t; typ : Sctypes.t }
-type aarg = { name : string; asym : Sym.t; typ : Sctypes.t }
-type garg = { name : string; asym : Sym.t; lsym : Sym.t; typ : Sctypes.t; accessed : Loc.t option }
+type varg = { vsym : Sym.t; typ : Sctypes.t }
+type aarg = { asym : Sym.t; typ : Sctypes.t }
+type garg = { asym : Sym.t; lsym : Sym.t; typ : Sctypes.t; accessed : Loc.t option }
 
 
 type function_spec = { 

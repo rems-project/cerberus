@@ -865,10 +865,10 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     end
     
     (* TODO: this is wrong in so many ways!! *)
-    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol digest s (Just "atomic_thread_fence")))) [order_e] ->
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol digest s (Symbol.SD_Id "atomic_thread_fence")))) [order_e] ->
         (* TODO: do typechecking *)
         annotate_rvalue order_e >>= fun (order_e', order_gty) ->
-        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol digest s (Just "atomic_thread_fence")))) [order_e'], GenRValueType GenVoid)
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol digest s (Symbol.SD_Id "atomic_thread_fence")))) [order_e'], GenRValueType GenVoid)
     
     | AilEcall e es ->
         E.add "§6.5.2.2#1" >>

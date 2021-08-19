@@ -1,7 +1,7 @@
 module CF = Cerb_frontend
 module S = CF.Symbol
 
-(* include S *)
+include S
 
 
 type t = S.sym
@@ -11,9 +11,10 @@ let equal = S.symbolEquality
 let compare = S.symbol_compare
 
 
+type description = S.symbol_description
 
-let name (s : t) : string option = S.symbol_name s
-let named (s : t) : bool = Option.is_some (S.symbol_name s)
+
+let description (s : t) : description = S.symbol_description s
 
 
 let dest = function
@@ -28,12 +29,10 @@ let num = S.symbol_num
 
 let fresh = S.fresh
 let fresh_named = S.fresh_pretty
-
+let fresh_description = S.fresh_description
 
 let fresh_same (s : t) : t =
-  match S.symbol_name s with
-  | Some name -> fresh_named name
-  | None -> fresh ()
+  fresh_description (S.symbol_description s)
 
 
 open Subst

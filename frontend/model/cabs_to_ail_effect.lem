@@ -581,8 +581,12 @@ let internal_register_identifier if_found ident namespace kind link_opt =
   end >>
   let do_fresh () =
     (* generates a fresh symbol *)
-    let Symbol.Identifier _ str = ident in
-    let sym = Symbol.fresh_pretty str in
+    let Symbol.Identifier loc str = ident in
+    let sym = match kind with
+      | Kind_ordinary (OK_object _) ->
+         Symbol.fresh_object_address str
+      | _ -> Symbol.fresh_pretty str 
+    end in
     (* associates it to the identifier *)
     State_exception.update (fun st ->
       match link_opt with

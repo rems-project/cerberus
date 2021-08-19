@@ -21,7 +21,6 @@ module type S = sig
   val all_logical : t -> (SymMap.key * LS.t) list
   val all_constraints : t -> LC.t list
   val all_resources : t -> RE.t list
-  val descriptions : t -> Ast.Terms.term SymMap.t
   val bound : Sym.t -> Kind.t -> t -> bool
   val get_a : Sym.t -> t -> BT.t * SymMap.key
   val get_l : Sym.t -> t -> LS.t
@@ -36,9 +35,6 @@ module type S = sig
   val map_and_fold_resources : 
     (RE.t -> 'acc -> RE.t * 'acc) -> 
     t -> 'acc -> t * 'acc
-  val add_description : Sym.t * Ast.Terms.term -> t -> t
-  val add_descriptions : (Sym.t * Ast.Terms.term) list -> t -> t
-  (* val (++) : t -> t -> t *)
   val all_vars : t -> Sym.t list
   val json : t -> Yojson.Safe.t
   val bind : t -> Sym.t -> ReturnTypes.t -> t
@@ -61,7 +57,6 @@ module Make (S : Solver.S) : S = struct
       resources : RE.t list;
       constraints : LC.t list;
       solver : Z3.Solver.solver;
-      descriptions : Ast.Terms.term SymMap.t;
     }
 
 
@@ -71,7 +66,6 @@ module Make (S : Solver.S) : S = struct
       resources = [];
       constraints = [];
       solver = Z3.Solver.mk_simple_solver Solver.context;
-      descriptions = SymMap.empty;
     }
 
 
@@ -95,7 +89,6 @@ module Make (S : Solver.S) : S = struct
   let all_logical (local : t) = SymMap.bindings local.logical
   let all_resources (local : t) = local.resources
   let all_constraints (local : t) = local.constraints
-  let descriptions local = local.descriptions
 
   let solver local = local.solver
 
@@ -181,30 +174,6 @@ module Make (S : Solver.S) : S = struct
 
 
 
-
-
-  let add_description (s, term) local = 
-    let descriptions = SymMap.add s term local.descriptions in 
-    { local with descriptions }
-
-  let add_descriptions =
-    List.fold_right add_description
-
-
-  (* let add_descriptions descrs local *)
-
-
-  (* let concat (local' : t) (local : t) = 
-   *   let local = SymMap.fold add_a local'.computational local in
-   *   let local = SymMap.fold add_l local'.logical local in
-   *   let local = List.fold_right add_r local'.resources local in
-   *   let constraints = local'.constraints @ local.constraints in
-   *   let solver_constraints = local'.solver_constraints @ 
-   *                              local.solver_constraints in
-   *   { local with constraints; solver_constraints }
-   * 
-   * 
-   * let (++) = concat *)
 
 
   let all_vars (local : t) = 

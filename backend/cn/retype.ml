@@ -513,7 +513,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   let@ ((funinfo : funinfos), 
         (funinfo_extra : funinfo_extras)) =
     let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
-      let (Old.M_funinfo (floc,attrs,(ret_ctype,args,is_variadic),has_proto, _mapping)) = funinfo_entry in
+      let (Old.M_funinfo (floc,attrs,(ret_ctype,args,is_variadic),has_proto)) = funinfo_entry in
       let loc = Loc.update Loc.unknown floc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
@@ -530,7 +530,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
         let@ (ftyp, mappings) = 
           Conversions.make_fun_spec loc get_layout predicates fsym fspec 
         in
-        let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto, mappings) in
+        let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
         let funinfo_extra = Pmap.add fsym (fspec, mappings) funinfo_extra in
         return (funinfo, funinfo_extra)
@@ -542,7 +542,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
 
   let retype_label ~fsym (lsym : Sym.t) def = 
     let ftyp = match Pmap.lookup fsym funinfo with
-      | Some (New.M_funinfo (_,_,ftyp,_,_)) -> ftyp 
+      | Some (New.M_funinfo (_,_,ftyp,_)) -> ftyp 
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
     let (fspec, start_mapping) = match Pmap.lookup fsym funinfo_extra with
@@ -553,7 +553,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
     | Old.M_Return (loc, _) ->
        let lt = AT.of_rt (AT.get_return ftyp) (AT.I False.False) in
        return (New.M_Return (loc, lt))
-    | Old.M_Label (loc, argtyps, args, e, annots, _) -> 
+    | Old.M_Label (loc, argtyps, args, e, annots) -> 
        let@ args = mapM (retype_arg loc) args in
        let@ argtyps = 
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
@@ -571,9 +571,9 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
             | Some attrs -> attrs 
             | None -> CF.Annot.no_attributes
           in
-          let lname = match Sym.name lsym with
-            | Some lname -> lname
-            | None -> failwith "label without name"
+          let lname = match Sym.description lsym with
+            | Sym.SD_Id lname -> lname
+            | _ -> failwith "label without name"
           in
           let@ lspec = Parse.parse_label lname argtyps fspec this_attrs in
           let@ (lt,mapping) = 
@@ -581,7 +581,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
               start_mapping lspec
           in
           let@ e = retype_texpr e in
-          return (New.M_Label (loc, lt,args,e,annots, mapping))
+          return (New.M_Label (loc, lt,args,e,annots))
        | Some (LAloop_break loop_id) ->
           error "break label has not been inlined"
        | Some LAreturn -> 
@@ -601,16 +601,12 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       let@ args = mapM (retype_arg Loc.unknown) args in
       let@ pexpr = retype_tpexpr pexpr in
       return (New.M_Fun (bt,args,pexpr))
-   | Old.M_Proc (loc,cbt,args,expr,labels,_) ->
+   | Old.M_Proc (loc,cbt,args,expr,labels) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (retype_arg loc) args in
       let@ expr = retype_texpr expr in
       let@ labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
-      let mapping = match Pmap.lookup fsym funinfo_extra with
-        | Some (_, start_mapping) -> start_mapping
-        | None -> Mapping.empty
-      in
-      return (New.M_Proc (loc,bt,args,expr,labels, mapping))
+      return (New.M_Proc (loc,bt,args,expr,labels))
    | Old.M_ProcDecl (loc,cbt,args) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (Conversions.bt_of_core_base_type loc) args in

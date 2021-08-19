@@ -248,19 +248,19 @@ let rec absvalue_of_texpr ~with_sym core man = function
         debug @@ String_core.string_of_value v;
         assert false
     end
-  | TEcall (Sym (Symbol.Symbol (_, _, Some "catch_exceptional_condition")), [_; te])
-  | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_int")), [_; te])
-  | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_loaded_int")), [_; te])
+  | TEcall (Sym (Symbol.Symbol (_, _, SD_Id "catch_exceptional_condition")), [_; te])
+  | TEcall (Sym (Symbol.Symbol (_, _, SD_Id "conv_int")), [_; te])
+  | TEcall (Sym (Symbol.Symbol (_, _, SD_Id "conv_loaded_int")), [_; te])
     ->
     absvalue_of_texpr ~with_sym core man te
-  | TEcall (Sym (Symbol.Symbol (_, _, Some "params_length")), [te]) ->
+  | TEcall (Sym (Symbol.Symbol (_, _, SD_Id "params_length")), [te]) ->
     absvalue_of_texpr ~with_sym core man te >>= begin function
       | ATtuple xs ->
         get_env () >>= fun env ->
         return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int (List.length xs)))
       | _ -> assert false
     end
-  | TEcall (Sym (Symbol.Symbol (_, _, Some "params_nth")), [te_xs; te_n]) ->
+  | TEcall (Sym (Symbol.Symbol (_, _, SD_Id "params_nth")), [te_xs; te_n]) ->
     absvalue_of_texpr ~with_sym core man te_xs >>= fun xs ->
     absvalue_of_texpr ~with_sym core man te_n >>= fun n ->
     (* TODO/FIXME: this is choosing the first params always *)

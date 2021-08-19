@@ -914,7 +914,7 @@ module Concrete : Memory = struct
                           (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
                           begin match IntMap.find_opt n funptrmap with
                             | Some (file_dig, name) ->
-                                MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, Some name))))
+                                MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))))
                             | None ->
                                 failwith ("unknown function pointer: " ^ N.to_string n)
                           end
@@ -1051,8 +1051,13 @@ module Concrete : Memory = struct
             | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
                 (* TODO: *)
                 (begin match opt_name with
-                  | Some name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
-                  | None -> funptrmap
+                  | SD_Id name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
+                  | SD_ObjectAddress _ -> funptrmap
+                  | SD_Return -> funptrmap
+                  | SD_FunArg _ -> funptrmap
+                  (* | SD_Pointee _ -> funptrmap *)
+                  (* | SD_PredOutput _ -> funptrmap *)
+                  | SD_None -> funptrmap
                 end, List.map (AbsByte.v prov) begin
                   bytes_of_int
                       false
@@ -1608,7 +1613,7 @@ module Concrete : Memory = struct
       (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
       begin match IntMap.find_opt addr st.funptrmap with
         | Some (file_dig, name) ->
-            Some (Symbol.Symbol (file_dig, N.to_int addr, Some name))
+            Some (Symbol.Symbol (file_dig, N.to_int addr, SD_Id name))
         | None ->
             None
       end
