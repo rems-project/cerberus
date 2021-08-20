@@ -36,3 +36,6 @@ val get_filename: t -> string option
 
 val is_unknown: t -> bool
 val is_other: t -> string option
+
+
+val simple_location : t -> string

@@ -79,7 +79,7 @@ type symbol_description =
   | SD_Id of string
   | SD_ObjectAddress of string
   | SD_Return
-  | SD_FunArg of nat
+  | SD_FunArg of Loc.t *  nat
   (* | SD_Pointee of string (\* label/environment *\) * symbol_description *)
   (* | SD_PredOutput of string (\* label/environment *\) * string (\* pred *\) * string (\* output *\) *)
 
@@ -103,7 +103,7 @@ let show_symbol_description sd =
      "SD_ObjectAddress" ^ show name
   | SD_Return ->
      "SD_Return"
-  | SD_FunArg n ->
+  | SD_FunArg _ n ->
      "SD_FunArg" ^ "(" ^ show n ^ ")"
   (* | SD_Pointee env symbol_description ->
    *    "SD_Pointee" ^ show (env, show_symbol_description symbol_description) *)
@@ -235,8 +235,8 @@ end
 let fresh_object_address name =
   Symbol (digest()) (fresh_int ()) (SD_ObjectAddress name)
 
-let fresh_funarg i = 
-  Symbol (digest ()) (fresh_int ()) (SD_FunArg i)
+let fresh_funarg loc i = 
+  Symbol (digest ()) (fresh_int ()) (SD_FunArg loc i)
 
 let fresh_description sd =
   Symbol (digest ()) (fresh_int ()) sd

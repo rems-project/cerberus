@@ -34,3 +34,7 @@ val json_path : path -> Yojson.Safe.t
 val point: Lexing.position -> t
 val region: Lexing.position * Lexing.position -> Lexing.position option -> t
 val regions: (Lexing.position * Lexing.position) list -> Lexing.position option -> t
+
+
+
+val simple_location : t -> string

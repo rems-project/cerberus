@@ -126,3 +126,7 @@ let json_path locs : Yojson.Safe.t =
 let point = Location_ocaml.point
 let region = Location_ocaml.region
 let regions = Location_ocaml.regions
+
+
+
+let simple_location = Location_ocaml.simple_location

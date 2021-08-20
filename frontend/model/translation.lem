@@ -2385,7 +2385,7 @@ TODO: #9
           self e >>= fun core_e ->
           (* symbolic names for the arguments temporary objects *)
           let n_args = List.length es in
-          let arg_ptr_syms_tys = mapi (fun i arg_e -> (Symbol.fresh_funarg i, ctype_of arg_e)) es in
+          let arg_ptr_syms_tys = mapi (fun i arg_e -> (Symbol.fresh_funarg (locOf arg_e) i, ctype_of arg_e)) es in
           let arg_ptr_syms = map fst arg_ptr_syms_tys in
           let arg_ptr_sym_pats = match arg_ptr_syms with
             | [sym] -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)

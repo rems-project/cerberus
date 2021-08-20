@@ -406,6 +406,25 @@ let head_pos_of_location = function
             )
         | None -> "" )
 
+
+
+let simple_location = 
+  let string_of_pos pos =
+    Printf.sprintf "%d:%d" pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
+  in
+  function
+  | Loc_unknown -> 
+     "<unknown location>"
+  | Loc_other str ->
+     "<other location: " ^ str ^ ">"
+  | Loc_point pos -> 
+     string_of_pos pos
+  | Loc_region (start_p, end_p, _) ->
+     Printf.sprintf "<%s--%s>" (string_of_pos start_p) (string_of_pos end_p)
+  | Loc_regions (xs, _) ->
+     let (start_p, end_p) = List.hd xs in
+     Printf.sprintf "<%s--%s>" (string_of_pos start_p) (string_of_pos end_p)
+
 let get_filename = function
   | Loc_unknown
   | Loc_regions ([], _) ->

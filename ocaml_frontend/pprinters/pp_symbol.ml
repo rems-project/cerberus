@@ -20,7 +20,7 @@ let to_string (Symbol (dig, n, sd)) =
      *    "(" ^ symbol_description_to_string descr ^ ")@" ^ env
      * | SD_PredOutput (env, pred, output) ->
      *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
-    | SD_FunArg i ->
+    | SD_FunArg (_, i) ->
        "ARG" ^ string_of_int i
   in
   let str = symbol_description_to_string sd in
@@ -46,7 +46,7 @@ let to_string_pretty (Symbol (_, n, sd) as s) =
      *    "(" ^ symbol_description descr ^ ")@" ^ env
      * | SD_PredOutput (env, pred, output) ->
      *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
-    | SD_FunArg i ->
+    | SD_FunArg (_, i) ->
        "ARG" ^ string_of_int i
   in
   match sd with
