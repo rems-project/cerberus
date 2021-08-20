@@ -1,3 +1,5 @@
+module Loc = Locations
+
 module Make(L : Local.S) : sig
 
   type error = 
@@ -26,15 +28,15 @@ module Make(L : Local.S) : sig
   val add_l : Sym.t -> LogicalSorts.t -> unit m
   val add_c : LogicalConstraints.t -> unit m
   val add_cs : LogicalConstraints.t list -> unit m
-  val add_r : Resources.RE.t -> unit m
+  val add_r : Local.where option -> Resources.RE.t -> unit m
   val remove_resource : Resources.RE.t -> unit m
   val map_and_fold_resources : 
     (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
     'acc -> 'acc m
   val all_vars : unit -> (Sym.t list) m
-  val bind_return_type : Sym.t -> ReturnTypes.t -> unit m
-  val bind_logical_return_type : LogicalReturnTypes.t -> unit m
-  val logically_bind_return_type : ReturnTypes.t -> (BaseTypes.t * Sym.t) m
+  val bind_return_type : Local.where option -> Sym.t -> ReturnTypes.t -> unit m
+  val bind_logical_return_type : Local.where option -> LogicalReturnTypes.t -> unit m
+  val logically_bind_return_type : Local.where option -> ReturnTypes.t -> (BaseTypes.t * Sym.t) m
 
 end = struct
 
@@ -159,9 +161,9 @@ end = struct
     let@ l = get () in
     set (L.add_cs lcs l)
 
-  let add_r r = 
+  let add_r oloc r = 
     let@ l = get () in
-    set (L.add_r r l)
+    set (L.add_r oloc r l)
 
   let remove_resource re = 
     let@ l = get () in
@@ -178,17 +180,17 @@ end = struct
     let@ l = get () in
     return (L.all_vars l)
 
-  let bind_return_type s rt = 
+  let bind_return_type oloc s rt = 
     let@ l = get () in
-    set (L.bind l s rt)
+    set (L.bind oloc l s rt)
 
-  let bind_logical_return_type lrt = 
+  let bind_logical_return_type oloc lrt = 
     let@ l = get () in
-    set (L.bind_logical l lrt)
+    set (L.bind_logical oloc l lrt)
 
-  let logically_bind_return_type rt = 
+  let logically_bind_return_type oloc rt = 
     let@ l = get () in
-    let ((bt, s), l') = L.bind_logically l rt in
+    let ((bt, s), l') = L.bind_logically oloc l rt in
     let@ () = set l' in
     return (bt, s)
 

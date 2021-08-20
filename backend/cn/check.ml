@@ -168,8 +168,8 @@ module Make
      constraints carry over to those values, record (lname,bound) as a
      logical variable and record constraints about how the variables
      introduced in the pattern-matching relate to (lname,bound). *)
-  let pattern_match_rt (pat : mu_pattern) (rt : RT.t) : unit m =
-    let@ (bt, s') = logically_bind_return_type rt in
+  let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : unit m =
+    let@ (bt, s') = logically_bind_return_type (Some loc) rt in
     pattern_match (sym_ (s', bt)) pat
 
 
@@ -185,7 +185,7 @@ module Make
 
 
 
-let unpack_predicate (p : predicate) = 
+let unpack_predicate (loc : Loc.t) (p : predicate) = 
     let@ solver = solver () in
     let def = Option.get (Global.get_predicate_def G.global p.name) in
     let substs = 
@@ -200,7 +200,7 @@ let unpack_predicate (p : predicate) =
     in
     match unpackable with
     | None -> return false
-    | Some (loc, guard, clause) ->
+    | Some (_, guard, clause) ->
        let@ () = remove_resource (Predicate p) in
        let clause = AT.subst_its OutputDef.subst_it substs clause in 
        let condition, outputs = AT.logical_arguments_and_return clause in
@@ -210,17 +210,17 @@ let unpack_predicate (p : predicate) =
        (* remove resource before binding the return type
           'condition', so as not to unsoundly introduce extra
           disjointness constraints *)
-       let@ () = bind_logical_return_type lrt in
+       let@ () = bind_logical_return_type (Some (Loc loc)) lrt in
        return true
 
-  let unpack_resources () = 
+  let unpack_resources (loc : Loc.t) = 
     let rec aux () = 
       let@ resources = all_resources () in
       let@ changed = 
         ListM.fold_leftM (fun changed resource ->
             match resource with
             | RE.Predicate p when p.unused ->
-               let@ unpacked = unpack_predicate p in
+               let@ unpacked = unpack_predicate loc p in
                return (changed || unpacked)
             | _ ->
                return changed
@@ -231,7 +231,7 @@ let unpack_predicate (p : predicate) =
     aux ()
 
 
-  let unpack_resources_for pointer = 
+  let unpack_resources_for (loc : Loc.t) pointer = 
     let rec aux () = 
       let@ resources = all_resources () in
       let@ changed = 
@@ -240,7 +240,7 @@ let unpack_predicate (p : predicate) =
             match resource with
             | RE.Predicate p 
                  when p.unused ->
-               let@ unpacked = unpack_predicate p in
+               let@ unpacked = unpack_predicate loc p in
                return (changed || unpacked)
             | RE.QPredicate p 
                  when p.unused && 
@@ -252,8 +252,8 @@ let unpack_predicate (p : predicate) =
                  {name = p.name; pointer; iargs; oargs; unused = true} 
                in
                let@ () = remove_resource (QPredicate p) in
-               let@ () = add_r (QPredicate {p with moved = pointer :: p.moved}) in
-               let@ () = add_r (Predicate p_inst) in
+               let@ () = add_r (Some (Loc loc)) (QPredicate {p with moved = pointer :: p.moved}) in
+               let@ () = add_r (Some (Loc loc)) (Predicate p_inst) in
                return true
             | _ ->
                return changed
@@ -1169,7 +1169,7 @@ let unpack_predicate (p : predicate) =
       | M_PEmember_shift (asym, tag, member) ->
          let@ arg = arg_of_asym asym in
          let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-         let@ () = unpack_resources_for (it_of_arg arg) in
+         let@ () = unpack_resources_for loc (it_of_arg arg) in
          let@ predicate = 
            Spine.predicate_request loc (Access (Load None))
              { name = Ctype (Sctype ([], Struct tag)) ;
@@ -1345,8 +1345,8 @@ let unpack_predicate (p : predicate) =
        let@ rt = infer_pexpr e1 in
        pure begin
            let@ () = match p with
-             | M_Symbol sym -> bind_return_type sym rt
-             | M_Pat pat -> pattern_match_rt pat rt
+             | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
+             | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
            in
            check_tpexpr e2 typ
          end
@@ -1499,7 +1499,7 @@ let unpack_predicate (p : predicate) =
             (* check *)
             let@ arg = arg_of_asym asym in
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let@ () = unpack_resources () in
+            let@ () = unpack_resources loc in
             let request = 
               RER.Predicate {
                   name = Ctype act.ct; 
@@ -1536,7 +1536,7 @@ let unpack_predicate (p : predicate) =
             Debug_ocaml.error "todo: M_Va_end"
          end
       | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
-         let@ () = unpack_resources () in
+         let@ () = unpack_resources loc in
          begin match action_ with
          | M_Create (asym, act, _prefix) -> 
             let@ arg = arg_of_asym asym in
@@ -1569,7 +1569,7 @@ let unpack_predicate (p : predicate) =
          | M_Kill (M_Static ct, asym) -> 
             let@ arg = arg_of_asym asym in
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let@ () = unpack_resources_for (it_of_arg arg) in
+            let@ () = unpack_resources_for loc (it_of_arg arg) in
             let@ _ = 
               Spine.resource_request loc (Access Kill)
                 (RER.Predicate {
@@ -1609,7 +1609,7 @@ let unpack_predicate (p : predicate) =
                 in
                 fail loc err
             in
-            let@ () = unpack_resources_for (it_of_arg parg) in
+            let@ () = unpack_resources_for loc (it_of_arg parg) in
             let@ _ = 
               Spine.resource_request loc (Access (Store None))
                 (RER.Predicate {
@@ -1634,7 +1634,7 @@ let unpack_predicate (p : predicate) =
          | M_Load (act, pasym, _mo) -> 
             let@ parg = arg_of_asym pasym in
             let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
-            let@ () = unpack_resources_for (it_of_arg parg) in
+            let@ () = unpack_resources_for loc (it_of_arg parg) in
             let@ predicate = 
               pure begin
                   Spine.predicate_request loc (Access (Load None)) 
@@ -1688,7 +1688,7 @@ let unpack_predicate (p : predicate) =
          let rt = RT.Computational ((Sym.fresh (), Unit), I) in
          return rt
       | M_Eccall (_ctype, afsym, asyms) ->
-         let@ () = unpack_resources () in
+         let@ () = unpack_resources loc in
          let@ args = args_of_asyms asyms in
          let@ (_loc, ft) = match Global.get_fun_decl G.global afsym.sym with
            | Some (loc, ft) -> return (loc, ft)
@@ -1696,7 +1696,7 @@ let unpack_predicate (p : predicate) =
          in
          Spine.calltype_ft loc args ft
       | M_Eproc (fname, asyms) ->
-         let@ () = unpack_resources () in
+         let@ () = unpack_resources loc in
          let@ decl_typ = match fname with
            | CF.Core.Impl impl -> 
               return (Global.get_impl_fun_decl G.global impl)
@@ -1755,23 +1755,23 @@ let unpack_predicate (p : predicate) =
          let@ rt = infer_pexpr e1 in
          pure begin
              let@ () = match p with 
-               | M_Symbol sym -> bind_return_type sym rt
-               | M_Pat pat -> pattern_match_rt pat rt
+               | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
+               | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
              in
              check_texpr labels e2 typ
            end
       | M_Ewseq (pat, e1, e2) ->
          let@ rt = infer_expr labels e1 in
          pure begin
-             let@ () = pattern_match_rt pat rt in
+             let@ () = pattern_match_rt (Loc (loc_of_expr e1)) pat rt in
              check_texpr labels e2 typ
            end
       | M_Esseq (pat, e1, e2) ->
          let@ rt = infer_expr labels e1 in
          pure begin
              let@ () = match pat with
-               | M_Symbol sym -> bind_return_type sym rt
-               | M_Pat pat -> pattern_match_rt pat rt
+               | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_expr e1))) sym rt
+               | M_Pat pat -> pattern_match_rt (Loc (loc_of_expr e1)) pat rt
              in
              check_texpr labels e2 typ
            end
@@ -1798,7 +1798,7 @@ let unpack_predicate (p : predicate) =
          in
          fail loc err
       | M_Erun (label_sym, asyms) ->
-         let@ () = unpack_resources () in
+         let@ () = unpack_resources loc in
          let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
            | None -> fail loc (lazy (Generic (!^"undefined code label" ^/^ Sym.pp label_sym)))
            | Some (lt,lkind) -> return (lt,lkind)
@@ -1871,7 +1871,7 @@ let unpack_predicate (p : predicate) =
         let@ (rt, resources, substs) = 
           check_and_bind_arguments RT.subst_var loc arguments function_typ 
         in
-        let@ () = ListM.iterM add_r resources in
+        let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
         (* rbt consistency *)
         let@ () = 
           let Computational ((sname, sbt), t) = rt in
@@ -1942,13 +1942,15 @@ let unpack_predicate (p : predicate) =
             | M_Label (loc, lt, args, body, annots) ->
                debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
                debug 2 (lazy (item "type" (AT.pp False.pp lt)));
+               let label_name = match Sym.description lsym with
+                 | Sym.SD_Id l -> l
+                 | _ -> Debug_ocaml.error "label without name"
+               in
                let@ (rt, resources, lsubsts) = 
                  check_and_bind_arguments False.subst_var loc args lt 
                in
-               let@ local_or_false = 
-                 let@ () = ListM.iterM add_r resources in
-                 check_texpr labels body False
-               in
+               let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
+               let@ local_or_false = check_texpr labels body False in
                return ()
             end
         in
@@ -1956,10 +1958,8 @@ let unpack_predicate (p : predicate) =
 
         (* check the function body *)
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
-        let@ local_or_false = 
-          let@ () = ListM.iterM add_r resources in
-          check_texpr (labels) body (Normal rt)
-        in
+        let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
+        let@ local_or_false = check_texpr labels body (Normal rt) in
         return ()
       end
 

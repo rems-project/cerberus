@@ -596,7 +596,7 @@ module Make
            welltyped loc lrt
         | Resource (re, lrt) -> 
            let@ () = WRE.welltyped loc re in
-           let@ () = add_r re in
+           let@ () = add_r None re in
            welltyped loc lrt
         | Constraint (lc, lrt) ->
            let@ () = WLC.welltyped loc lc in
@@ -730,7 +730,7 @@ end
            welltyped kind loc at
         | AT.Resource (re, at) -> 
            let@ () = WRE.welltyped loc re in
-           let@ () = add_r re in
+           let@ () = add_r None re in
            welltyped kind loc at
         | AT.Constraint (lc, at) ->
            let@ () = WLC.welltyped loc lc in

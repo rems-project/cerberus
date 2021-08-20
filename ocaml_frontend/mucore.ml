@@ -151,6 +151,8 @@ module Make(T : TYPES) = struct
   and 'TY mu_pexpr = 
    | M_Pexpr of loc * annot list * 'TY * ('TY mu_pexpr_)
 
+  let loc_of_pexpr (M_Pexpr (loc, _, _, _)) = loc
+
 
   type 'TY mu_tpexpr_ = 
    | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
@@ -161,6 +163,8 @@ module Make(T : TYPES) = struct
 
   and 'TY mu_tpexpr = 
    | M_TPexpr of loc * annot list * 'TY * ('TY mu_tpexpr_)
+
+  let loc_of_tpexpr (M_TPexpr (loc, _, _, _)) = loc
 
 
   type m_kill_kind = 
@@ -224,6 +228,8 @@ module Make(T : TYPES) = struct
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
 
+  let loc_of_expr (M_Expr (loc, _, _)) = loc
+
 
   type 'TY mu_texpr_ =
    | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_texpr)
@@ -239,6 +245,8 @@ module Make(T : TYPES) = struct
 
   and 'TY mu_texpr = 
    | M_TExpr of loc * annot list * ('TY mu_texpr_)
+
+  let loc_of_texpr (M_Expr (loc, _, _)) = loc
 
 
   let embed_pexpr_expr pe : 'TY mu_expr= 

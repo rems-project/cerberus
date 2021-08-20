@@ -322,9 +322,6 @@ module Make
 
   let pp_state_aux local {substitutions; vclasses; relevant} o_model =
 
-    let () = print stderr (item "relevant" (list Sym.pp (SymSet.elements relevant))) in
-
-
     let (resource_lines, reported) = 
       List.fold_right (fun resource (acc_table, acc_reported) ->
           match resource with
@@ -439,6 +436,9 @@ module Make
             None)
         vclasses
     in
+
+    (* let () = print stdout (list Local.pp_old (L.old local)) in *)
+
     (resource_lines @ memory_var_lines, logical_var_lines)
 
 

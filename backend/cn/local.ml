@@ -12,6 +12,24 @@ module IT = IndexTerms
 module SymMap = Map.Make(Sym)
 
 
+
+
+
+
+type where = 
+  | Loc of Loc.t
+  | Label of string
+
+let pp_where = function
+  | Label l -> !^l
+  | Loc loc -> !^(Loc.simple_location loc)
+
+type old = { address : IT.t; value : IT.t; where : where }
+
+let pp_old old = 
+  parens (IT.pp old.address ^^^ !^"->" ^^^ IT.pp old.value) ^^ at ^^ 
+    pp_where old.where
+
 module type S = sig
 
   type t 
@@ -28,8 +46,9 @@ module type S = sig
   val add_l : Sym.t -> LS.t -> t -> t
   val add_c : LC.t -> t -> t
   val add_cs : LC.t list -> t -> t
-  val add_r : RE.t -> t -> t
+  val add_r : where option -> RE.t -> t -> t
   val solver : t -> Z3.Solver.solver
+  val old : t -> old list
 
   val remove_resource : RE.t -> t -> t
   val map_and_fold_resources : 
@@ -37,9 +56,9 @@ module type S = sig
     t -> 'acc -> t * 'acc
   val all_vars : t -> Sym.t list
   val json : t -> Yojson.Safe.t
-  val bind : t -> Sym.t -> ReturnTypes.t -> t
-  val bind_logical : t -> LogicalReturnTypes.t -> t
-  val bind_logically : t -> ReturnTypes.t -> (BT.t * Sym.t) * t
+  val bind : where option -> t -> Sym.t -> ReturnTypes.t -> t
+  val bind_logical : where option -> t -> LogicalReturnTypes.t -> t
+  val bind_logically : where option -> t -> ReturnTypes.t -> (BT.t * Sym.t) * t
 
   
 
@@ -57,6 +76,7 @@ module Make (S : Solver.S) : S = struct
       resources : RE.t list;
       constraints : LC.t list;
       solver : Z3.Solver.solver;
+      old : old list;
     }
 
 
@@ -66,7 +86,11 @@ module Make (S : Solver.S) : S = struct
       resources = [];
       constraints = [];
       solver = Z3.Solver.mk_simple_solver Solver.context;
+      old = [];
     }
+
+
+
 
 
 
@@ -82,7 +106,9 @@ module Make (S : Solver.S) : S = struct
     item "resources" 
       (Pp.list RE.pp local.resources) ^/^
     item "constraints" 
-      (Pp.list LC.pp local.constraints)
+      (Pp.list LC.pp local.constraints) ^/^
+    item "old" 
+      (Pp.list pp_old local.old)
 
 
   let all_computational (local : t) = SymMap.bindings local.computational
@@ -91,6 +117,8 @@ module Make (S : Solver.S) : S = struct
   let all_constraints (local : t) = local.constraints
 
   let solver local = local.solver
+
+  let old local = local.old
 
 
   let bound sym kind local = 
@@ -112,11 +140,6 @@ module Make (S : Solver.S) : S = struct
   let add_l lname ls (local : t) = 
     {local with logical = SymMap.add lname ls local.logical}
 
-  let add_ls lvars local = 
-    List.fold_left (fun local (l, bt) ->
-        add_l l bt local
-      ) local lvars
-
   let add_c lc (local : t) = 
     let lcs = Simplify.simp_lc_flatten local.constraints lc in
     let scs = List.concat_map S.constr lcs in
@@ -131,20 +154,30 @@ module Make (S : Solver.S) : S = struct
     List.fold_left (fun local lc -> add_c lc local) local lcs
 
 
-  let add_r r (local : t) = 
+  let add_r owhere r (local : t) = 
     match RE.simp_or_empty local.constraints r with
     | Some r -> 
        (* let r, (l, lcs1) = RE.normalise r in *)
-       let re, (l, lcs1) = r, ([], []) in
        let resources = r :: local.resources in
        let lcs2 = 
          RE.derived_constraint r ::
            List.map (fun r' -> RE.derived_constraints r r') 
              (all_resources local)
        in
-       let local = add_ls l local in
        let local = {local with resources} in
-       add_cs (lcs1 @ lcs2) local
+       let local = add_cs lcs2 local in
+       let local = 
+         let old = match owhere, r with
+           | Some where, Point p -> 
+              { address = p.pointer; value = p.value; where } :: local.old
+           | Some where, Predicate ({oargs = [value; _init]; _} as p) -> 
+              { address = p.pointer; value = value; where } :: local.old
+           | _ -> 
+              local.old
+         in
+         { local with old }
+       in
+       local
     | None ->
        local
 
@@ -215,31 +248,31 @@ module Make (S : Solver.S) : S = struct
 
 
 
-  let rec bind_logical (local : t) (lrt : LRT.t) : t = 
+  let rec bind_logical where (local : t) (lrt : LRT.t) : t = 
     match lrt with
     | Logical ((s, ls), rt) ->
        let s' = Sym.fresh () in
        let rt' = LRT.subst_var {before=s; after=s'} rt in
-       bind_logical (add_l s' ls local) rt'
-    | Resource (re, rt) -> bind_logical (add_r re local) rt
-    | Constraint (lc, rt) -> bind_logical (add_c lc local) rt
+       bind_logical where (add_l s' ls local) rt'
+    | Resource (re, rt) -> bind_logical where (add_r where re local) rt
+    | Constraint (lc, rt) -> bind_logical where (add_c lc local) rt
     | I -> local
 
-  let bind_computational (local : t) (name : Sym.t) (rt : RT.t) : t =
+  let bind_computational where (local : t) (name : Sym.t) (rt : RT.t) : t =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst_var {before = s; after = s'} rt in
-    bind_logical (add_a name (bt, s') (add_l s' bt local)) rt'
+    bind_logical where (add_a name (bt, s') (add_l s' bt local)) rt'
 
 
-  let bind (local : t) (name : Sym.t) (rt : RT.t) : t =
-    bind_computational local name rt
+  let bind where (local : t) (name : Sym.t) (rt : RT.t) : t =
+    bind_computational where local name rt
 
-  let bind_logically (local : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
+  let bind_logically where (local : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst_var {before = s; after = s'} rt in
-    ((bt, s'), bind_logical (add_l s' bt local) rt')
+    ((bt, s'), bind_logical where (add_l s' bt local) rt')
 
 
 end
