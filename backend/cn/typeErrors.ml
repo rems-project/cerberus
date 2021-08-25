@@ -24,6 +24,7 @@ type situation =
   | FunctionCall
   | LabelCall of label_kind
   | Subtyping
+  | ArrayShift
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -41,6 +42,7 @@ let checking_situation = function
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
   | Subtyping -> !^"checking subtyping"
+  | ArrayShift -> !^"array shifting"
 
 let for_situation = function
   | Access access -> for_access access
@@ -49,6 +51,7 @@ let for_situation = function
   | LabelCall Loop -> !^"for loop"
   | LabelCall Other -> !^"for calling label"
   | Subtyping -> !^"for subtyping"
+  | ArrayShift -> !^"for array shifting"
 
 
 
@@ -171,7 +174,7 @@ let pp_type_error te =
      let msg = !^"Missing resource" ^^^ resource ^^^ for_situation situation in
      (msg, consider_state state :: Option.list [pp_used used] )
   | Resource_mismatch {has; state; expect; situation} ->
-     let msg = !^"Need a resource" ^^^ has ^^^ !^"but have resource" ^^^ expect in
+     let msg = !^"Need a resource" ^^^ expect ^^^ !^"but have resource" ^^^ has in
      (msg, [consider_state state])
   | Cannot_unpack {resource; state; situation} ->
      let msg = !^"Cannot unpack resource" ^^^ resource ^^^ for_situation situation in

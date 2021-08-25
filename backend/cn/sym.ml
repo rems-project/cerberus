@@ -1,5 +1,6 @@
 module CF = Cerb_frontend
 module S = CF.Symbol
+open Pp
 
 include S
 
@@ -27,7 +28,8 @@ let pp_debug sym = Pp.string (CF.Symbol.show_raw_less sym)
 
 let num = S.symbol_num
 
-let fresh = S.fresh
+let fresh () = S.fresh ()
+
 let fresh_named = S.fresh_pretty
 let fresh_description = S.fresh_description
 

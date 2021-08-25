@@ -327,7 +327,6 @@ module Make
           match resource with
           | Point p ->
              let loc_val = !^(evaluate o_model p.pointer) in
-             let size = !^(Z.to_string p.size) in
              let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
              let permission_v = evaluate o_model p.permission in
              let init_v = evaluate_bool o_model p.init in
@@ -347,7 +346,7 @@ module Make
                equals ^^^
                !^(evaluate o_model p.value) 
              in
-             let entry = (Some loc_expr, Some loc_val, Some size, Some state, Some value) in
+             let entry = (Some loc_expr, Some loc_val, Some state, Some value) in
              let reported = 
                List.fold_left SymSet.union SymSet.empty
                  [symbol_it p.pointer; 
@@ -358,56 +357,21 @@ module Make
              in
              (entry :: acc_table, SymSet.union reported acc_reported)
           | QPoint p ->
-             let p = RE.alpha_rename_qpoint p (make_name Loc) in
-             let loc_expr = Sym.pp p.qpointer in
+             let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
              let value = (BT.pp (IT.bt p.value)) ^^^ !^(evaluate o_model p.value) in
-             let entry = (Some loc_expr, None, None, None, Some value) in
+             let entry = (Some loc_expr, None, None, Some value) in
              (entry :: acc_table, SymSet.add p.qpointer acc_reported)
-          | Predicate p when p.unused ->
-             begin match p.name, p.oargs with
-             | Ctype ct, [p_value; p_init] ->
-                let loc_val = !^(evaluate o_model p.pointer) in
-                let osize = Option.map (fun n -> !^(Z.to_string n)) (Memory.size_of_ctype_opt ct) in
-                let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
-                let init_v = !^(evaluate o_model p_init) in
-                let state = !^"owned" ^^ comma ^^^ !^"init:" ^^^ init_v in
-                let value = 
-                  (BT.pp (IT.bt p_value)) ^^^ 
-                    IT.pp (IT.subst_vars substitutions p_value) ^^^ 
-                      equals ^^^
-                        !^(evaluate o_model p_value) 
-                in
-                let entry = (Some loc_expr, Some loc_val, osize, Some state, Some value) in
-                let reported = 
-                  List.fold_left SymSet.union SymSet.empty
-                    [symbol_it p.pointer; 
-                     IT.free_vars p_value;
-                     IT.free_vars p_init;
-                    ]
-                in
-                (entry :: acc_table, SymSet.union reported acc_reported)
-             | _ ->
-                let loc_val = !^(evaluate o_model p.pointer) in
-                let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
-                let state = (RE.pp (RE.subst_vars substitutions (Predicate p))) in
-                let entry = (Some loc_expr, Some loc_val, None, Some state, None) in
-                (entry :: acc_table, symbol_it p.pointer)
-             end
-          | QPredicate p when p.unused ->
-             let p = RE.alpha_rename_qpredicate p (make_name Integer) in
-             let pointer = qpredicate_index_to_pointer p (sym_ (p.i, BT.Integer)) in
-             let pred = ({pointer; name = p.name; iargs = p.iargs; oargs = p.oargs; unused = true} :  predicate) in
+          | Predicate p ->
              let loc_val = !^(evaluate o_model p.pointer) in
-             let loc_expr = IT.pp (IT.subst_vars substitutions pred.pointer) in
-             let state = 
-               !^"for each" ^^^ 
-                 IT.pp p.istart ^^ !^ "<="^^ Sym.pp p.i ^^ !^"<" ^^ IT.pp p.iend ^^ colon ^^^ 
-                   (RE.pp (RE.subst_vars substitutions (Predicate pred))) 
-             in 
-             let entry = (Some loc_expr, Some loc_val, None, Some state, None) in
+             let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
+             let state = (RE.pp (RE.subst_vars substitutions (Predicate p))) in
+             let entry = (Some loc_expr, Some loc_val, Some state, None) in
              (entry :: acc_table, symbol_it p.pointer)
-          | _ ->
-             (acc_table, acc_reported)
+          | QPredicate p ->
+             let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
+             let entry = (Some loc_expr, None, Some (RE.pp_qpredicate p), None) in
+             (entry :: acc_table, SymSet.add p.qpointer acc_reported)
+
         ) (L.all_resources local) ([], SymSet.empty)
     in
     let relevant_unreported = SymSet.diff relevant reported in
@@ -420,7 +384,7 @@ module Make
           if report vclass && BT.equal vclass.sort Loc then
                let loc_val = !^(evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
                let loc_expr = Ast.Terms.pp false c.path in
-               let entry = (Some loc_expr, Some loc_val, None, None, None) in
+               let entry = (Some loc_expr, Some loc_val, None, None) in
                Some entry
           else None
         ) vclasses
@@ -445,8 +409,8 @@ module Make
 
   let pp_state_with_model local explanation o_model =
     let (memory, variables) = (pp_state_aux local explanation o_model) in
-    table5 ("pointer", "location", "size", "state", "value") 
-      (List.map (fun (a, b, c, d, e) -> ((L, a), (R, b), (R, c), (L, d), (L, e))) memory) ^/^
+    table4 ("pointer", "location", "state", "value") 
+      (List.map (fun (a, b, c, d) -> ((L, a), (R, b), (R, c), (L, d))) memory) ^/^
     table2 ("expression", "value") 
       (List.map (fun (a, b) -> ((L, a), (L, b))) variables)
       

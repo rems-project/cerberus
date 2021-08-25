@@ -38,6 +38,7 @@ type predicate_definition = {
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
     oargs : (string * LS.t) list;
+    permission: Sym.t;
     clauses : clause list;
   }
   
@@ -45,149 +46,9 @@ let pp_predicate_definition def =
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
   item "oargs" (Pp.list (fun (s,_) -> Pp.string s) def.oargs) ^/^
+  item "permission" (Sym.pp def.permission) ^/^
   item "clauses" (Pp.list pp_clause def.clauses)
   
-
-
-
-(* let rec init_bt (Sctype (_, ct_)) =
- *   match ct_ with
- *   | Array (t, _) -> BT.Param (Integer, init_bt t)
- *   | t -> Bool *)
-
-
-
-
-type ctype_predicate =
-  { pointer_iarg : Sym.t;
-    value_oarg : string * IT.t;
-    init_oarg : string * IT.t;
-    lrt: LRT.t;
-  }
-
-
-let ctype_predicate_to_predicate ct pred = 
-  let loc = Loc.other "internal (Ctype)" in
-  let clause = 
-    (loc,
-     t_ (bool_ true),
-     AT.of_lrt pred.lrt (AT.I [pred.value_oarg; pred.init_oarg]))
-  in
-  let def = {
-      loc = loc;
-      pointer = pred.pointer_iarg; 
-      iargs = []; 
-      oargs = [(fst pred.value_oarg, IT.bt (snd pred.value_oarg));
-               (fst pred.init_oarg, IT.bt (snd pred.init_oarg))];
-      clauses = [clause]
-    }
-  in
-  def
-
-
-
-
-
-
-let ctype_predicate struct_layouts ct = 
-  let open ReturnTypes in
-  let open LRT in
-  let open Memory in
-  let open Resources in
-  let open Option in
-  let open Sctypes in
-  let pointer_s, pointer_t = IT.fresh_named BT.Loc "pointer" in
-  let init_s, init_t = IT.fresh_named BT.Bool "init" in
-  let v_s, v_t = IT.fresh_named (BT.of_sct ct) "value" in
-  let size = size_of_ctype ct in
-  let (Sctypes.Sctype (_, ct_)) = ct in
-  let@ lrt, value_def = match ct_ with
-  | Void ->
-     Debug_ocaml.error "ctype_predicate void"
-  | Integer it ->
-     let lrt = 
-       Logical ((v_s, IT.bt v_t), 
-       Logical ((init_s, IT.bt init_t), 
-       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, LRT.I)))
-     in
-     return (lrt, v_t)
-  | Pointer (_, ct') ->
-     let lrt = 
-       Logical ((v_s, IT.bt v_t), 
-       Logical ((init_s, IT.bt init_t), 
-       Resource (point (pointer_t, size) (q_ (1,1)) v_t init_t, LRT.I)))
-     in
-     return (lrt, v_t)
-  | Array (t, None) ->
-     (* todo: connect with user-annotation *)
-     Debug_ocaml.error "representation: array of unknown length"
-  | Array (ct', Some length) ->
-     let i_s, i_t = IT.fresh_named BT.Integer "i" in
-     let qpredicate = {
-         pointer = pointer_t; 
-         element_size = z_ (size_of_ctype ct'); 
-         istart = int_ 0;
-         iend = int_ length;
-         moved = []; 
-         unused = true;
-         name = Ctype ct';
-         i = i_s;
-         iargs = [];
-         oargs = [app_ v_t i_t; init_t];
-       }
-     in
-     let lrt = 
-       Logical ((v_s, IT.bt v_t), 
-       Logical ((init_s, IT.bt init_t), 
-       Resource (QPredicate qpredicate, LRT.I)))
-     in
-     return (lrt, v_t)
-  | Struct tag ->
-     let@ layout = struct_layouts tag in
-     let (lrt, values) = 
-       List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
-           let member_p = addPointer_ (pointer_t, z_ offset) in
-           match member_or_padding with
-           | Some (member, sct) ->
-              let member_s, member_t = IT.fresh_named (BT.of_sct sct) "member" in
-              let resource = predicate (Ctype sct) member_p [] [member_t; init_t] in
-              let lrt = 
-                LRT.Logical ((member_s, IT.bt member_t),
-                LRT.Resource (resource, lrt))
-              in
-              let values = (member, member_t) :: values in
-              (lrt, values)
-           | None ->
-              let padding_s, padding_t = IT.fresh_named BT.Integer "padding" in
-              let resource = point (member_p, size) (q_ (1,1)) padding_t (bool_ false) in
-              let lrt = 
-                LRT.Logical ((padding_s, IT.bt padding_t),
-                LRT.Resource (resource, lrt)) 
-              in
-              (lrt, values)
-         ) layout (LRT.I, [])
-     in
-     let value_t = IT.struct_ (tag, values) in
-     let lrt = 
-       Logical ((init_s, IT.bt init_t), lrt) @@ LRT.I
-     in
-    return (lrt, value_t)
-  | Function _ -> 
-     Debug_ocaml.error "todo: function ctype predicate"
-  in
-  let def = { 
-      pointer_iarg = pointer_s; 
-      value_oarg = ("value", value_def); 
-      init_oarg = ("init", init_t);
-      lrt; 
-    }
-  in
-  return def
-
-
-
-
-
 
 
 
@@ -200,17 +61,18 @@ let region =
   let loc = Loc.other "internal (Region)" in
   let pointer_s, pointer_t = IT.fresh_named Loc "pointer" in
   let length_s, length_t = IT.fresh_named Integer "length" in
+  let permission_s, permission_t = IT.fresh_named BT.Real "permission" in
   let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
   let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
   let p_s, p_t = IT.fresh_named Loc "p" in
   let qpoint = {
+      ct = Sctype ([], Integer Char); 
       qpointer = p_s;
-      size = Z.of_int 1; 
       permission = 
         ite_ (
             and_ [lePointer_ (pointer_t, p_t); 
                   ltPointer_ (p_t, addPointer_ (pointer_t, length_t));], 
-            q_ (1, 1), 
+            permission_t, 
             q_ (0, 1)
           );
       value = app_ v_t p_t;
@@ -234,6 +96,7 @@ let region =
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)]; 
       oargs = [("value", IT.bt v_t); ("init", IT.bt init_t)]; 
+      permission = permission_s;
       clauses = [clause]; 
     } 
   in
@@ -247,16 +110,17 @@ let part_zero_region =
   let loc = Loc.other "internal (PartZeroRegion)" in
   let pointer_s, pointer_t = IT.fresh_named Loc "pointer" in
   let length_s, length_t = IT.fresh_named Integer "length" in
+  let permission_s, permission_t = IT.fresh_named BT.Real "permission" in
   let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "v" in
   let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
   let up_to_s, up_to_t = IT.fresh_named Loc "up_to" in
   let p_s, p_t = IT.fresh_named Loc "p" in
   let region = {
-      name = Id "Region";
+      name = "Region";
       pointer = pointer_t; 
-      unused = true;
       iargs = [length_t];
       oargs = [v_t; init_t];
+      permission = permission_t;
     }
   in
   let v_constr = 
@@ -291,6 +155,7 @@ let part_zero_region =
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t); (up_to_s, IT.bt up_to_t)];
       oargs = [];
+      permission = permission_s;
       clauses = [clause]; 
     } 
   in
@@ -303,14 +168,15 @@ let zero_region =
   let id = "ZeroRegion" in
   let loc = Loc.other "internal (ZeroRegion)" in
   let pointer_s, pointer_t = IT.fresh_named Loc "pointer" in
+  let permission_s, permission_t = IT.fresh_named BT.Real "permission" in
   let length_s, length_t = IT.fresh_named Integer "length" in
   let lrt = 
     let p = {
-        name = Id "PartZeroRegion";
+        name = "PartZeroRegion";
         pointer = pointer_t; 
-        unused = true;
         iargs = [length_t; addPointer_ (pointer_t, length_t)];
         oargs = [];
+        permission = permission_t;
       }
     in
     LRT.Resource (Predicate p, LRT.I) 
@@ -326,6 +192,7 @@ let zero_region =
       iargs = [(length_s, IT.bt length_t)];
       oargs = [];
       clauses = [clause]; 
+      permission = permission_s;
     } 
   in
   (id, predicate)
@@ -336,6 +203,7 @@ let early =
   let id = "EarlyAlloc" in
   let loc = Loc.other "internal (EarlyAlloc)" in
   let start_s, start_t = IT.fresh_named Loc "start" in
+  let permission_s, permission_t = IT.fresh_named BT.Real "permission" in
   let end_s, end_t = IT.fresh_named Loc "end" in
   let length_t = 
     add_ (sub_ (pointerToIntegerCast_ end_t,
@@ -345,11 +213,11 @@ let early =
   let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "v" in
   let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
   let region = {
-      name = Id "Region";
+      name = "Region";
       pointer = start_t; 
-      unused = true;
       iargs = [length_t];
       oargs = [v_t; init_t];
+      permission = permission_t;
     }
   in
   let lrt =
@@ -370,6 +238,7 @@ let early =
       pointer = start_s;
       iargs = [(end_s, IT.bt end_t)]; 
       oargs = []; 
+      permission = permission_s;
       clauses = [clause]; 
     } 
   in
@@ -426,12 +295,16 @@ let page_alloc_predicates struct_decls =
   let vmemmap_good_node_pointer hyp_vmemmap_t pointer = 
     alignedI_ 
       ~t:(integerToPointerCast_ (vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer))
-      ~align:(z_ (Memory.size_of_struct hyp_page_tag))
+      ~align:(int_ (Memory.size_of_struct hyp_page_tag))
   in
   
   let _vmemmap_node_pointer_to_index hyp_vmemmap_t pointer = 
     vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer %/
-      z_ (Memory.size_of_struct hyp_page_tag)
+      int_ (Memory.size_of_struct hyp_page_tag)
+  in
+  
+  let _vmemmap_node_pointer_to_cell_pointer hyp_vmemmap_t pointer = 
+    vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer
   in
 
 
@@ -504,6 +377,7 @@ let page_alloc_predicates struct_decls =
 
     let id = "Vmemmap_page" in
     let loc = Loc.other "internal (Vmemmap_page)" in
+    let permission_s, permission_t = IT.fresh_named BT.Real "permission" in
     let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "pool_pointer" in
     let page_pointer_s, page_pointer_t = IT.fresh_named Loc "page_pointer" in
     let range_start_s, range_start_t = IT.fresh_named Integer "range_start" in
@@ -512,12 +386,12 @@ let page_alloc_predicates struct_decls =
     let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "vmemmap_pointer" in
 
     let resource = 
-      Predicate {
+      Point {
+          ct = Sctypes.Sctype ([], Struct hyp_page_tag);
           pointer = page_pointer_t;
-          name = Ctype (Sctypes.Sctype ([], Struct hyp_page_tag));
-          iargs = [];
-          oargs = [page_t; bool_ true];
-          unused = true;
+          value = page_t; 
+          init = bool_ true;
+          permission = permission_t;
         }
     in
 
@@ -602,6 +476,7 @@ let page_alloc_predicates struct_decls =
             (range_end_s, IT.bt range_end_t);
           ];
         oargs = [("page", IT.bt page_t)];
+        permission = permission_s;
         clauses = [clause]; 
       } 
     in
@@ -618,20 +493,21 @@ let page_alloc_predicates struct_decls =
 
     let pool_pointer_s, pool_pointer_t = IT.fresh_named Loc "pool_pointer" in
     let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
+    let permission_s, permission_t = IT.fresh_named BT.Real "permission" in
 
     let hyp_pool_metadata_owned =
-      let predicate : RE.predicate = {
-          name = Ctype (Sctype ([], Struct hyp_pool_tag));
+      let point : RE.point = {
+          ct = Sctype ([], Struct hyp_pool_tag);
           pointer = pool_pointer_t;
-          iargs = [];
-          oargs = [pool_t; bool_ true];
-          unused = true;
+          value = pool_t;
+          init = bool_ true;
+          permission = permission_t;
         }
       in
       let pointer_good = 
         let beyond_end_of_pool_struct = 
           addPointer_ (pool_pointer_t, 
-                       z_ (Memory.size_of_struct hyp_pool_tag))
+                       int_ (Memory.size_of_struct hyp_pool_tag))
         in
         representable_ (pointer_sct (Sctype ([], Void)),
                         beyond_end_of_pool_struct)
@@ -639,14 +515,14 @@ let page_alloc_predicates struct_decls =
 
       LRT.Logical ((pool_s, IT.bt pool_t), 
       LRT.Constraint (T pointer_good,
-      LRT.Resource (Predicate predicate,
+      LRT.Resource (Point point,
       LRT.I)))
     in
 
     let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "vmemmap_pointer" in
     (* let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in *)
     let vmemmap_s, vmemmap_t = 
-      IT.fresh_named (BT.Array (Integer, BT.Struct hyp_page_tag)) "vmemmap" in
+      IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
     let range_start_t = pool_t %. "range_start" in
     let range_end_t = pool_t %. "range_end" in
     let max_order_t = pool_t %. "max_order" in
@@ -662,7 +538,7 @@ let page_alloc_predicates struct_decls =
           range_end_t %< exp_ (int_ 2, int_ 64);
           rem_ (range_start_t, pPAGE_SIZE_t) %== int_ 0;
           rem_ (range_end_t, pPAGE_SIZE_t) %== int_ 0;
-          ((pointerToIntegerCast_ vmemmap_pointer_t) %+ ((end_t %* z_ (Memory.size_of_struct hyp_page_tag)))) %< exp_ (int_ 2, int_ 64);
+          ((pointerToIntegerCast_ vmemmap_pointer_t) %+ ((end_t %* int_ (Memory.size_of_struct hyp_page_tag)))) %< exp_ (int_ 2, int_ 64);
           max_order_t %> int_ 0;
           max_order_t %<= int_ mMAX_ORDER;
         ]
@@ -672,24 +548,23 @@ let page_alloc_predicates struct_decls =
 
     let vmemmap_metadata_owned =
       let element_size = Memory.size_of_struct hyp_page_tag in
-      let i_s, i_t = IT.fresh_named Integer "i" in
+      let p_s, p_t = IT.fresh_named Loc "p" in
+      let point_permission = 
+        array_permission p_t vmemmap_pointer_t 
+          (sub_ (end_t, start_t)) (int_ element_size) permission_t 
+      in
       let vmemmap_array = 
         QPredicate {
-            pointer = vmemmap_pointer_t;
-            element_size = z_ element_size;
-            istart = start_t;
-            iend = end_t;
-            name = Id "Vmemmap_page";
-            i = i_s;
+            qpointer = p_s;
+            name = "Vmemmap_page";
             iargs = [
                 vmemmap_pointer_t;
                 pool_pointer_t;
                 range_start_t;
                 range_end_t;
               ];
-            oargs = [app_ vmemmap_t i_t];
-            moved = [];
-            unused = true;
+            oargs = [app_ vmemmap_t p_t];
+            permission = point_permission;
           }
       in
       let aligned = 
@@ -721,10 +596,10 @@ let page_alloc_predicates struct_decls =
                     prev_next_t %== cell_pointer_t;
                     and_ (
                         vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t :: []
-                      (* (let i_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
-                       *  [range_start_t %<= i_t; i_t %< range_end_t;
-                       *   ((vmemmap_t %@ i_t) %. "order") %== o_t;
-                       *   ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0] *)
+                      (* (let p_t = vmemmap_node_pointer_to_cell_pointer vmemmap_pointer_t prev_next_t in
+                       *  [range_start_t %<= p_t; p_t %< range_end_t;
+                       *   ((vmemmap_t %@ p_t) %. "order") %== o_t;
+                       *   ((vmemmap_t %@ p_t) %. "refcount") %== int_ 0] *)
                       )
                   ]
               ]
@@ -836,6 +711,8 @@ let page_alloc_predicates struct_decls =
           ];
         clauses = 
           [clause;]; 
+        permission = 
+          permission_s;
       } 
     in
     (id, predicate)

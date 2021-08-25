@@ -13,6 +13,7 @@ module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
 module RT = ReturnTypes
+module AT = ArgumentTypes
 open Memory
 
 
@@ -80,15 +81,13 @@ let empty =
 
 
 
-let get_predicate_def global predicate_name = 
-  let open Resources in
-  match predicate_name with
-  | Id id -> 
-     StringMap.find_opt id global.resource_predicates
-  | Ctype ct ->
-     let layouts tag = SymMap.find_opt tag global.struct_decls in
-     let opred = ctype_predicate layouts ct in
-     Option.map (ctype_predicate_to_predicate ct) opred
+let get_predicate_def global id = 
+  (* let open resources in *)
+  StringMap.find_opt id global.resource_predicates
+  (* | Ctype ct ->
+   *    let layouts tag = SymMap.find_opt tag global.struct_decls in
+   *    let opred = ctype_predicate layouts ct in
+   *    Option.map (ctype_predicate_to_predicate ct) opred *)
 
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = impl_lookup global.impl_fun_decls i
@@ -98,15 +97,15 @@ let get_impl_constant global i = impl_lookup global.impl_constants i
 
 let pp_struct_layout (tag,layout) = 
   item ("struct " ^ plain (Sym.pp tag) ^ " (raw)") 
-    (separate_map hardline (fun {offset; size; member_or_padding} -> 
-         item "offset" (Z.pp offset) ^^ comma ^^^
-           item "size" (Z.pp size) ^^ comma ^^^
+    (separate_map hardline (fun Memory.{offset; size; member_or_padding} -> 
+         item "offset" (Pp.int offset) ^^ comma ^^^
+           item "size" (Pp.int size) ^^ comma ^^^
              item "content" 
                begin match member_or_padding with 
                | Some (member, sct) -> 
                   typ (Id.pp member) (Sctypes.pp sct)
                | None ->
-                  parens (!^"padding" ^^^ Z.pp size)
+                  parens (!^"padding" ^^^ Pp.int size)
                end
        ) layout
     )

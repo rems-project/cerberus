@@ -364,7 +364,7 @@ let rec simp (lcs : LC.t list) term =
     | MemberOffset (tag, member) ->
        IT (Pointer_op (MemberOffset (tag, member)), bt)
     | ArrayOffset (ct, t) ->
-       aux (mul_ (z_ (Memory.size_of_ctype ct), t))
+       aux (mul_ (int_ (Memory.size_of_ctype ct), t))
 
 
   and option_op it bt =

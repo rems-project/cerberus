@@ -91,7 +91,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
   let member_offset tag member = 
     let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
-    Memory.integer_value_to_num iv
+    Z.int_of_big_int (Memory.integer_value_to_num iv)
   in
 
   let struct_layout loc members tag = 
@@ -103,17 +103,17 @@ let struct_decl loc fields (tag : BT.tag) =
          let sct = sct_of_ct loc ct in
          let offset = member_offset tag member in
          let size = Memory.size_of_ctype sct in
-         let to_pad = Z.sub offset position in
+         let to_pad = offset - position in
          let padding = 
-           if Z.gt_big_int to_pad Z.zero 
+           if to_pad > 0
            then [{offset = position; size = to_pad; member_or_padding = None}] 
            else [] 
          in
          let member = [{offset; size; member_or_padding = Some (member, sct)}] in
-         let@ rest = aux members (Z.add_big_int offset size) in
+         let@ rest = aux members (offset + size) in
          return (padding @ member @ rest)
     in
-    (aux members Z.zero)
+    (aux members 0)
   in
 
   let@ layout = struct_layout loc fields tag in
@@ -143,9 +143,17 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
          o_sct = Some sct;
        } 
      in
-     let c = [good_value layouts sct pointee_t] in
-     let r = [predicate (Ctype sct) pointer [] [pointee_t; (bool_ true)]] in
-     return (l, r, c, [mapping])
+     let c = good_value layouts sct pointee_t in
+     let r = 
+       RE.Point {
+           ct = sct; 
+           pointer; 
+           permission = q_ (1, 1); 
+           value = pointee_t; 
+           init = bool_ true
+           }
+     in
+     return (l, [r], [c], [mapping])
 
 
 
@@ -165,8 +173,16 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let init_t = sym_ (init, init_bt) in
      let l = [(pointee, pointee_bt); (init, init_bt)] in
      let mapping = [] in
-     let r = [predicate (Ctype sct) pointer [] [pointee_t; init_t]] in
-     return (l, r, [], mapping)
+     let r = 
+       RE.Point {
+           ct = sct; 
+           pointer;
+           permission = q_ (1, 1);
+           value = pointee_t;
+           init = init_t
+         } 
+     in
+     return (l, [r], [], mapping)
 
 let make_pred loc (predicates : (string * Predicates.predicate_definition) list) 
       pred ~oname pointer iargs = 
@@ -191,11 +207,11 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
   let oargs = List.map sym_ l in
   let r = 
     RE.Predicate {
-        name = Id pred; 
+        name = pred; 
         pointer = pointer;
         iargs; 
         oargs;
-        unused = (* bool_ *) true;
+        permission = q_ (1, 1);
       } 
   in
   return (l, [r], [], mapping)
@@ -396,7 +412,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
            return t
          ) arguments
      in
-     let@ result = make_pred loc predicates ~oname predicate pointer_resolved iargs_resolved in
+     let@ result = make_pred loc predicates predicate ~oname pointer_resolved iargs_resolved in
      return result
   | pred, _ ->
      fail loc (lazy (Generic !^("predicates take at least one (pointer) argument")))

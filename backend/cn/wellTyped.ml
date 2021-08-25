@@ -469,10 +469,9 @@ module Make
     open Resources.RE
 
     let get_predicate_def loc name = 
-      match Global.get_predicate_def G.global name, name with
-      | Some def, _ -> return def
-      | None, Ctype ct -> fail loc (lazy (Missing_ctype_predicate ct))
-      | None, Id id -> fail loc (lazy (Missing_predicate id))
+      match Global.get_predicate_def G.global name with
+      | Some def -> return def
+      | None -> fail loc (lazy (Missing_predicate name))
       
     let ensure_same_argument_number loc input_output has ~expect =
       if has = expect then return () else 
@@ -507,55 +506,54 @@ module Make
                ) (List.combine (p.iargs @ p.oargs) 
                  (List.map snd def.iargs @ List.map snd def.oargs))
            in
+           let@ _ = WIT.check loc BT.Real p.permission in
            return ()
         | QPredicate p -> 
-           let@ _ = WIT.check loc BT.Loc p.pointer in
-           let@ _ = WIT.check loc BT.Integer p.element_size in
-           let@ _ = WIT.check loc BT.Integer p.istart in
-           let@ _ = WIT.check loc BT.Integer p.iend in
-           let@ _ = ListM.mapM (WIT.check loc BT.Loc) p.moved
-           in
            let@ def = get_predicate_def loc p.name in
-           let@ () = add_l p.i Integer in
            let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
            let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
            let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
            let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+           let@ () = add_l p.qpointer Loc in
            let@ _ = 
-             ListM.mapM (fun (arg, (_, expected_sort)) ->
+             ListM.mapM (fun (arg, expected_sort) ->
                  WIT.check loc expected_sort arg
-               ) (List.combine p.iargs def.iargs)
+               ) (List.combine (p.iargs @ p.oargs) 
+                 (List.map snd def.iargs @ List.map snd def.oargs))
            in
-           let@ _ = 
-             ListM.mapM (fun (arg, (_, expected_sort)) ->
-                 WIT.check loc expected_sort arg
-               ) (List.combine p.oargs def.oargs)
-           in
+           let@ _ = WIT.check loc BT.Real p.permission in
            return ()
         end
 
 
     let resource_mode_check loc undetermined resource = 
-      let free_inputs = IT.free_vars_list (RE.inputs resource) in
+      let free_inputs = 
+        SymSet.diff (IT.free_vars_list (RE.inputs resource)) 
+          (RE.bound resource)
+      in
       let@ () = match SymSet.elements (SymSet.inter free_inputs undetermined) with
         | [] -> return ()
         | lvar :: _ -> fail loc (lazy (Unconstrained_logical_variable lvar))
       in
       let@ fixed = 
         ListM.fold_leftM (fun fixed output ->
-           let undetermined = SymSet.inter (IT.free_vars output) undetermined in
-           match SymSet.is_empty undetermined, IT.unifiable output with
-           (* if the logical variables in the outputs are already determined, ok *)
-           | true, _ -> 
-              return fixed
-           (* if the output is an (unresolved) logical variable, then it can be
-              resolved by unification *)
-           | false, Some sym -> 
-              return (SymSet.add sym fixed)
-           (* otherwise, fail *)
-           | false, _ ->
-              let bad = List.hd (SymSet.elements undetermined) in
-              fail loc (lazy (Logical_variable_not_good_for_unification bad))
+            (* if the logical variables in the outputs are already determined, ok *)
+            if SymSet.is_empty (SymSet.inter (IT.free_vars output) undetermined) 
+            then return fixed else
+              (* otherwise, check that there is a single unification
+                 variable that can be resolved by unification *)
+              match RE.quantifier resource, output with
+              | None, 
+                IT (Lit (Sym s), _) -> 
+                 return (SymSet.add s fixed)
+              | Some (q, _), 
+                IT (Array_op (App (IT (Lit (Sym s), _), IT (Lit (Sym s'), _))), _)
+                   when Sym.equal s' q ->
+                 return (SymSet.add s fixed)
+              (* otherwise, fail *)
+              | _ ->
+                 let bad = List.hd (SymSet.elements undetermined) in
+                 fail loc (lazy (Logical_variable_not_good_for_unification bad))
           ) SymSet.empty (RE.outputs resource)
       in
       return fixed
@@ -785,6 +783,7 @@ end
       pure begin
           let open Predicates in
           let@ () = add_l pd.pointer BT.Loc in
+          let@ () = add_l pd.permission BT.Real in
           let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
           let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
           ListM.iterM (fun (loc, lc, clause) ->

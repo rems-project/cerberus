@@ -85,7 +85,7 @@ let size_of_ctype (ct : Sctypes.t) =
   | _ -> 
      try
        let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
-       integer_value_to_num s
+       Z.int_of_big_int (integer_value_to_num s)
      with
      | exn -> report "size_of_ctype" exn
 
@@ -101,7 +101,7 @@ let align_of_ctype (ct : Sctypes.t) =
   | _ -> 
      try
        let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in
-       integer_value_to_num s
+       Z.int_of_big_int (integer_value_to_num s)
      with
      | exn -> report "align_of_ctype" exn
 
@@ -115,15 +115,15 @@ let align_of_struct tag =
 
 
 type struct_piece = 
-  { offset: Z.t;
-    size: Z.t;
+  { offset: int;
+    size: int;
     member_or_padding: (BT.member * Sctypes.t) option }
 
 type struct_layout = struct_piece list
 
 type struct_member = 
-  { offset: Z.t;
-    size: Z.t;
+  { offset: int;
+    size: int;
     member: BT.member * Sctypes.t }
 
 

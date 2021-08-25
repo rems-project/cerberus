@@ -15,6 +15,8 @@ let term_col = match get_terminal_size () with
 let max_table_column_width = 80
 
 
+let int i = string (string_of_int i)
+
 
 let unicode = ref true
 let print_level = ref 0

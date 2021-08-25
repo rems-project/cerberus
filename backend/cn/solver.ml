@@ -300,9 +300,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
            | Some offset -> offset 
            | None -> Debug_ocaml.error "illtyped index term: member offset does not apply"
          in
-         term (z_ offset)
+         term (int_ offset)
       | ArrayOffset (ct, t) ->
-         term (mul_ (z_ (Memory.size_of_ctype ct), t))
+         term (mul_ (int_ (Memory.size_of_ctype ct), t))
   
 
     and list_op _ _ =
@@ -340,7 +340,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
       | Aligned (t, ct) ->
          let alignment = match ct with
            | Sctype (_, Function _) -> int_ 1
-           | _ -> z_ (Memory.align_of_ctype ct)
+           | _ -> int_ (Memory.align_of_ctype ct)
          in
          term (eq_ (rem_ (t, alignment), int_ 0))
 

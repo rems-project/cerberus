@@ -213,61 +213,105 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
        let@ () = bind_logical_return_type (Some (Loc loc)) lrt in
        return true
 
-  let unpack_resources (loc : Loc.t) = 
-    let rec aux () = 
-      let@ resources = all_resources () in
-      let@ changed = 
-        ListM.fold_leftM (fun changed resource ->
-            match resource with
-            | RE.Predicate p when p.unused ->
-               let@ unpacked = unpack_predicate loc p in
-               return (changed || unpacked)
-            | _ ->
-               return changed
-          ) false resources
-      in
-      if changed then aux () else return ()
-    in
-    aux ()
+  
 
 
-  let unpack_resources_for (loc : Loc.t) pointer = 
-    let rec aux () = 
-      let@ resources = all_resources () in
-      let@ changed = 
-        ListM.fold_leftM (fun changed resource ->
-            let@ solver = solver () in
-            match resource with
-            | RE.Predicate p 
-                 when p.unused ->
-               let@ unpacked = unpack_predicate loc p in
-               return (changed || unpacked)
-            | RE.QPredicate p 
-                 when p.unused && 
-                        S.provable solver (t_ (RE.is_qpredicate_instance_pointer p pointer)) ->
-               let p_inst = 
-                 let index = qpredicate_pointer_to_index p p.pointer in
-                 let iargs = List.map (IT.subst_it {before=p.i; after=index}) p.iargs in
-                 let oargs = List.map (IT.subst_it {before=p.i; after=index}) p.oargs in
-                 {name = p.name; pointer; iargs; oargs; unused = true} 
+  let fold_struct, unfold_struct = 
+    let open Memory in
+    let make fold_or_unfold tag base_pointer_t permission_t = 
+      let value_s, value_t = IT.fresh (BT.Struct tag) in
+      let init_s, init_t = IT.fresh BT.Bool in
+      let layout = SymMap.find tag G.global.struct_decls in
+      let (lrt, values) = 
+        List.fold_right (fun {offset; size; member_or_padding} (lrt, values) ->
+            let member_p = addPointer_ (base_pointer_t, int_ offset) in
+            match member_or_padding with
+            | Some (member, sct) ->
+               let member_s, member_t = IT.fresh (BT.of_sct sct) in
+               let resource = 
+                 Point {
+                     ct = sct;
+                     pointer = member_p;
+                     permission = permission_t;
+                     value = member_t;
+                     init = init_t
+                   } 
                in
-               let@ () = remove_resource (QPredicate p) in
-               let@ () = add_r (Some (Loc loc)) (QPredicate {p with moved = pointer :: p.moved}) in
-               let@ () = add_r (Some (Loc loc)) (Predicate p_inst) in
-               return true
-            | _ ->
-               return changed
-          ) false resources
+               let lrt = 
+                 LRT.Logical ((member_s, IT.bt member_t),
+                 LRT.Resource (resource, lrt))
+               in
+               let values = (member, member_t) :: values in
+               (lrt, values)
+            | None ->
+               let rec bytes i =
+                 if i = size then LRT.I else
+                   let member_p = addPointer_ (member_p, int_ i) in
+                   let padding_s, padding_t = IT.fresh BT.Integer in
+                   let resource = 
+                     Point {
+                         ct = Sctype ([], Integer Char);
+                         pointer = member_p;
+                         permission = permission_t;
+                         value = padding_t;
+                         init = bool_ false
+                       } 
+                   in
+                   LRT.Logical ((padding_s, IT.bt padding_t),
+                   LRT.Resource (resource, 
+                   bytes (i + 1)))
+               in
+               let lrt = LRT.concat (bytes 0) lrt in
+               (lrt, values)
+          ) layout (LRT.I, [])
       in
-      if changed then aux () else return ()
+      let folded_resource = 
+        Point {
+            ct = Sctype ([], Struct tag);
+            pointer = base_pointer_t;
+            value = value_t; 
+            init = init_t;
+            permission = permission_t;
+          }
+      in
+      let value_constr = t_ (eq_ (value_t, IT.struct_ (tag, values))) in
+      match fold_or_unfold with
+      | `FOLD ->
+         AT.of_lrt
+           (LRT.Logical ((init_s, IT.bt init_t), 
+            lrt))
+           (AT.I (
+            LRT.Logical ((value_s, IT.bt value_t), 
+            LRT.Resource (folded_resource, 
+            LRT.Constraint (value_constr,
+            LRT.I)))))
+      | `UNFOLD ->
+         AT.of_lrt
+           (LRT.Logical ((value_s, IT.bt value_t),
+           (LRT.Logical ((init_s, IT.bt init_t),
+           (LRT.Resource (folded_resource, 
+            LRT.I))))))
+           (AT.I
+             (LRT.concat 
+                lrt
+                (LRT.Constraint (value_constr, 
+                 LRT.I))))
     in
-    aux ()
+    let fold_struct = make `FOLD in
+    let unfold_struct = make `UNFOLD in
+    fold_struct, unfold_struct
+
+
+
+
+
 
 
 
 
   type arg = {lname : Sym.t; bt : BT.t; loc : loc}
   type args = arg list
+  let it_of_arg arg = sym_ (arg.lname, arg.bt)
 
   let arg_of_sym (loc : loc) (sym : Sym.t) : arg m = 
     let@ () = check_computational_bound loc sym in
@@ -286,15 +330,32 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
   module Spine : sig
     val calltype_ft : 
       Loc.t -> args -> AT.ft -> RT.t m
+    val calltype_lft : 
+      Loc.t -> AT.lft -> LRT.t m
     val calltype_lt : 
       Loc.t -> args -> AT.lt * label_kind -> unit m
     val subtype : 
       Loc.t -> arg -> RT.t -> unit m
     val resource_request :
       Loc.t -> situation -> RER.t -> RE.t m
+    val point_request :
+      Loc.t -> situation -> RER.point -> RE.point m
+    val qpoint_request :
+      Loc.t -> situation -> RER.qpoint -> RE.qpoint m
     val predicate_request :
       Loc.t -> situation -> RER.predicate -> RE.predicate m
+    val qpredicate_request :
+      Loc.t -> situation -> RER.qpredicate -> RE.qpredicate m
+    val fold_array :
+      Loc.t -> situation -> Sctypes.t -> IT.t -> int -> IT.t -> LRT.t m
+    val unfold_array :
+      Loc.t -> situation -> Sctypes.t -> IT.t -> int -> IT.t -> LRT.t m
   end = struct
+
+    let pp_unis (unis : LS.t SymMap.t) : Pp.document = 
+     Pp.list (fun (sym, ls) ->
+       Sym.pp sym ^^^ !^"unresolved" ^^^ parens (LS.pp ls)
+       ) (SymMap.bindings unis)
 
     type request_ui_info = { 
         original_local : L.t;
@@ -303,103 +364,125 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       }
 
     (* requires equality on inputs *)
-    let match_resources loc error r1 r2 res =
-      
-      let make_function (x_s, x_bt) body =
+    (* could optimise to delay checking the constraints until later *)
+    let match_resources loc error =
+
+      let make_array (x_s, x_bt) body =
         let x_t = sym_ (x_s, x_bt) in
         match body with
-        | IT (Array_op (App (_, x')), _) when IT.equal x_t x' ->
-           return body
+        | IT (Array_op (App (array, x')), _) when IT.equal x_t x' ->
+           return array
         | _ ->
            let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
            let f_def = forall_ (x_s, x_bt) None (eq_ (app_ f_t x_t, body)) in
            let@ () = add_l f_s (IT.bt f_t) in
            let@ () = add_c f_def in
-           return (app_ f_t x_t)
+           return f_t
       in
 
-      let unify_or_constrain (res, constrs) (c, c') = 
-        match IT.unify c c' res with
-        | Some res -> (res, constrs)
-        | None -> (res, (c, c') :: constrs)
+      let ls_matches_spec unis uni_var instantiation = 
+        if LS.equal (IT.bt instantiation) (SymMap.find uni_var unis) 
+        then return ()
+        else fail loc (lazy (Mismatch { has = IT.bt instantiation; expect = SymMap.find uni_var unis}))
       in
 
-      let unify_or_constrain_list (res, constrs) cs cs' =
-        List.fold_left unify_or_constrain (res, []) (List.combine cs cs')
+      let unify_or_constrain (unis, substs, constrs) (output_spec, output_have) =
+        match IT.subst_its substs output_spec with
+        | IT (Lit (Sym s), _) when SymMap.mem s unis ->
+           let@ () = ls_matches_spec unis s output_have in
+           return (SymMap.remove s unis, {before = s; after= output_have} :: substs, constrs)
+        | _ ->
+           return (unis, substs, eq_ (output_spec, output_have) :: constrs)
       in
+      let unify_or_constrain_list = ListM.fold_leftM unify_or_constrain in
 
-      match r1, r2 with
-      | Point b, Point b' 
-           when IT.equal b.pointer b'.pointer &&
-                Z.equal b.size b'.size &&
-                IT.equal b.permission b'.permission ->
-         let (res, constrs) = 
-           unify_or_constrain_list (res, []) [b.value;b.init] [b'.value; b'.init] in
-         let@ solver = solver () in
-         let result = S.provable solver (t_ (and_ (List.map eq_ constrs))) in
-         if result then return res else fail loc (error solver)
-      | QPoint b, QPoint b' 
-           when Sym.equal b.qpointer b'.qpointer &&
-                Z.equal b.size b'.size &&
-                IT.equal b.permission b'.permission ->
+      (* ASSUMES unification variables and quantifier q_s are disjoint  *)
+      let unify_or_constrain_q (q_s,q_bt) (unis, substs, constrs) (output_spec, output_have) = 
+        match IT.subst_its substs output_spec with
+        | IT (Array_op (App (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
+             when Sym.equal q' q_s && SymMap.mem s unis ->
+           let@ output_have_body = make_array (q_s, q_bt) output_have in
+           let@ () = ls_matches_spec unis s output_have_body in
+           return (SymMap.remove s unis, {before = s; after= output_have_body} :: substs, constrs)
+        | _ ->
+           return (unis, substs, eq_ (output_spec, output_have) :: constrs)
+      in
+      let unify_or_constrain_q_list q = ListM.fold_leftM (unify_or_constrain_q q) in
 
-         let@ b' = 
-           let@ value = make_function (b.qpointer, Loc) b'.value in
-           let@ init = make_function (b.qpointer, Loc) b'.init in
-           return { b' with value; init }
+      fun (unis : LS.t SymMap.t) r_spec r_have ->
+
+      match r_spec, r_have with
+      | Point p_spec, Point p_have
+           when Sctypes.equal p_spec.ct p_have.ct &&
+                IT.equal p_spec.pointer p_have.pointer &&
+                IT.equal p_spec.permission p_have.permission ->
+         let@ (unis, substs, constrs) = 
+           unify_or_constrain_list (unis, [], []) 
+             [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
          in
-         let (res,constrs) = 
-           unify_or_constrain_list (res, []) [b.value; b.init] [b'.value; b'.init] in
+         let@ solver = solver () in
+         let result = 
+           S.provable solver 
+             (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+         in
+         if result then return (unis, substs) else fail loc (error solver)
+      | QPoint p_spec, QPoint p_have
+           when Sctypes.equal p_spec.ct p_have.ct &&
+                Sym.equal p_spec.qpointer p_have.qpointer &&
+                IT.equal p_spec.permission p_have.permission ->
+         let p_spec, p_have = 
+           let qpointer = Sym.fresh_same p_spec.qpointer in
+           RE.alpha_rename_qpoint qpointer p_spec,
+           RE.alpha_rename_qpoint qpointer p_have
+         in
+
+         let@ (unis, substs, constrs) = 
+           unify_or_constrain_q_list (p_have.qpointer, Loc) (unis, [], []) 
+             [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
+         in
+
          let@ solver = solver () in
          let result = 
            S.provable solver
-              (forall_ (b.qpointer, BT.Loc)
-                 None
-                 (impl_ (gt_ (b.permission, q_ (0, 1)), 
-                         and_ (List.map eq_ constrs))))
+              (forall_ (p_have.qpointer, BT.Loc) None
+                 (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return res else fail loc (error solver)
-      | Predicate p, Predicate p' 
-           when 
-             predicate_name_equal p.name p'.name &&
-               IT.equal p.pointer p'.pointer &&
-                 List.equal IT.equal p.iargs p'.iargs &&
-                   p.unused = p'.unused ->
-         let (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
+         if result then return (unis, substs) else fail loc (error solver)
+      | Predicate p_spec, Predicate p_have 
+           when predicate_name_equal p_spec.name p_have.name &&
+                IT.equal p_spec.pointer p_have.pointer &&
+                IT.equal p_spec.permission p_have.permission &&
+                List.equal IT.equal p_spec.iargs p_have.iargs ->
+         let@ (unis, substs, constrs) = 
+           unify_or_constrain_list (unis, [], [])
+             (List.combine p_spec.oargs p_have.oargs) in
          let@ solver = solver () in
          let result =
            S.provable solver
-             (t_ (impl_ (bool_ p'.unused, 
-                         and_ (List.map eq_ constrs))))
+             (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return res else fail loc (error solver)
-      | QPredicate p, QPredicate p' 
-           when 
-             IT.equal p.pointer p'.pointer &&
-                IT.equal p.element_size p'.element_size &&
-                IT.equal p.istart p'.istart &&
-                IT.equal p.iend p'.iend &&
-                List.equal IT.equal p.moved p'.moved &&
-                p.unused = p'.unused &&
-                predicate_name_equal p.name p'.name &&
-                Sym.equal p.i p'.i &&
-                List.equal IT.equal p.iargs p'.iargs ->
-
-         let@ p' = 
-           let@ oargs = ListM.mapM (make_function (p.i, Integer)) p'.oargs in
-           return { p' with oargs }
+         if result then return (unis, substs) else fail loc (error solver)
+      | QPredicate p_spec, QPredicate p_have 
+           when predicate_name_equal p_spec.name p_have.name &&
+                Sym.equal p_spec.qpointer p_have.qpointer &&
+                IT.equal p_spec.permission p_have.permission &&
+                List.equal IT.equal p_spec.iargs p_have.iargs ->
+         let p_spec, p_have = 
+           let qpointer = (Sym.fresh_same p_spec.qpointer) in
+           RE.alpha_rename_qpredicate qpointer p_spec,
+           RE.alpha_rename_qpredicate qpointer p_have 
          in
-         let (res, constrs) = unify_or_constrain_list (res, []) p.oargs p'.oargs in
+         let@ (unis, substs, constrs) = 
+           unify_or_constrain_q_list (p_have.qpointer, Loc)
+             (unis, [], []) (List.combine p_spec.oargs p_have.oargs) 
+         in
          let@ solver = solver () in
          let result =
            S.provable solver
-             (forall_ (p.i, BT.Integer)
-                None
-                (impl_ (and_ [bool_ p.unused; 
-                              is_qpredicate_instance_index p (sym_ (p.i, Integer))],
-                        and_ (List.map eq_ constrs))))
+             (forall_ (p_have.qpointer, BT.Loc) None
+                (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return res else fail loc (error solver)
+         if result then return (unis, substs) else fail loc (error solver)
       | _ -> 
          Debug_ocaml.error "resource inference has inferred mismatched resources"
 
@@ -426,13 +509,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
 
 
 
-    let pp_unis (unis : IT.t Uni.t) : Pp.document = 
-     let pp_entry (sym, Uni.{resolved}) =
-       match resolved with
-       | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp res
-       | None -> Sym.pp sym ^^^ !^"unresolved"
-     in
-     Pp.list pp_entry (SymMap.bindings unis)
+
 
 
 
@@ -456,7 +533,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       let situation = ui_info.situation in
 
       let ftyp = normalise ftyp in
-      let unis = SymMap.empty in
 
       let@ print_local = get () in
       debug 6 (lazy (checking_situation situation));
@@ -468,8 +544,8 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
           match args, ftyp with
           | (arg :: args), (Computational ((s, bt), ftyp))
                when BT.equal arg.bt bt ->
-             let ftyp' = subst_var rt_subst_var {before = s; after = arg.lname} ftyp in
-             check_computational args ftyp'
+             check_computational args 
+               (subst_var rt_subst_var {before = s; after = arg.lname} ftyp)
           | (arg :: _), (Computational ((_, bt), _))  ->
              fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
           | [], (L ftyp) -> 
@@ -482,21 +558,20 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
         check_computational arguments ftyp 
       in
 
-      let@ ((unis, lspec), ftyp_r) = 
-        let rec delay_logical (unis, lspec) ftyp =
+      let@ (unis, ftyp_r) = 
+        let rec delay_logical unis ftyp =
           let@ print_local = get () in
           debug 6 (lazy (item "local" (L.pp print_local)));
           debug 6 (lazy (item "spec" (pp_l rt_pp ftyp)));
           match ftyp with
           | Logical ((s, ls), ftyp) ->
              let s' = Sym.fresh () in
-             let unis = SymMap.add s' Uni.{resolved = None} unis in
-             let ftyp' = subst_var_l rt_subst_var {before = s; after = s'} ftyp in
-             delay_logical (unis, lspec @ [(s', ls)]) ftyp'
+             delay_logical (SymMap.add s' ls unis) 
+               (subst_var_l rt_subst_var {before = s; after = s'} ftyp)
           | R ftyp -> 
-             return ((unis, lspec), ftyp)
+             return (unis, ftyp)
         in
-        delay_logical (unis, []) ftyp_l
+        delay_logical SymMap.empty ftyp_l
       in
 
       let@ (unis, ftyp_c) = 
@@ -507,6 +582,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
           debug 6 (lazy (item "unis" (pp_unis unis)));
           match ftyp with
           | Resource (resource, ftyp) -> 
+             flush stdout;
              let@ resource' = resource_request ui_info (RE.request resource) in
              let mismatch solver = 
                lazy begin
@@ -516,30 +592,19 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                    (Resource_mismatch {expect; has; state; situation})
                  end
              in
-             let@ unis = match_resources loc mismatch resource resource' unis in
-             let new_substs = Uni.find_resolved unis in
-             let ftyp' = subst_its_r rt_subst_it new_substs ftyp in
-             infer_resources unis ftyp'
+             let@ (unis, new_substs) = match_resources loc mismatch unis resource resource' in
+             infer_resources unis (subst_its_r rt_subst_it new_substs ftyp)
           | C ftyp ->
              return (unis, ftyp)
         in
         infer_resources unis ftyp_r
       in
 
-      let@ () = 
-        let rec check_logical_variables = function
-          | [] -> return ()
-          | (s, expect) :: lspec ->
-             let Uni.{resolved} = SymMap.find s unis in
-             match resolved with
-             | Some solution ->
-                if LS.equal (IT.bt solution) expect 
-                then check_logical_variables lspec
-                else fail loc (lazy (Mismatch { has = IT.bt solution; expect }))
-             | None -> 
-                Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
-        in
-        check_logical_variables lspec
+      let () = match SymMap.min_binding_opt unis with
+        | Some (s, _) ->
+           Debug_ocaml.error ("Unconstrained_logical_variable " ^ Sym.pp_string s)
+        | None ->
+           ()
       in
 
       let@ rt = 
@@ -573,9 +638,13 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       spine False.subst_var False.subst_it False.pp 
         ui_info arguments ft
 
-    and spine_packing ui_info arguments ft =
-      spine OutputDef.subst_var OutputDef.subst_it OutputDef.pp 
-        ui_info arguments ft
+    and spine_lft ui_info ft = 
+      spine LRT.subst_var LRT.subst_it LRT.pp 
+        ui_info [] ft
+
+    (* and spine_packing ui_info arguments ft =
+     *   spine OutputDef.subst_var OutputDef.subst_it OutputDef.pp 
+     *     ui_info arguments ft *)
 
 
     and point_request ui_info (requested : Resources.Requests.point) = 
@@ -586,8 +655,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
         map_and_fold_resources (fun re (needed, value, init) ->
             match re with
             | Point p' 
-                 when Z.equal requested.size p'.size &&
-                      BT.equal requested.value (IT.bt p'.value) &&
+                 when Sctypes.equal requested.ct p'.ct &&
                       S.provable solver (t_ (eq_ (requested.pointer, p'.pointer))) ->
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -597,8 +665,9 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                let permission' = sub_ (p'.permission, can_take) in
                Point {p' with permission = permission'}, (needed, value, init)
             | QPoint p' 
-                 when Z.equal requested.size p'.size &&
-                      BT.equal requested.value (IT.bt p'.value) ->
+                 when Sctypes.equal requested.ct p'.ct &&
+                      let subst = {before=p'.qpointer; after = requested.pointer} in
+                      S.provable solver (t_ (gt_ (IT.subst_it subst p'.permission, q_ (0, 1)))) ->
                let subst = {before=p'.qpointer; after = requested.pointer} in
                let can_take = min_ (IT.subst_it subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -618,14 +687,29 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       let holds = S.provable solver (t_ (eq_ (needed, q_ (0, 1)))) in
       if holds then
         let r = 
-          { pointer = requested.pointer;
-            size = requested.size;
+          { ct = requested.ct;
+            pointer = requested.pointer;
             value = Simplify.simp all_lcs value;
             init = Simplify.simp all_lcs init;
             permission = requested.permission }
         in
         return r
-      else resource_request_missing ui_info solver (Point requested)
+      else 
+        match requested.ct with
+        | Sctype (_, Array (act, Some length)) ->
+           let@ lrt = 
+             fold_array ui_info act requested.pointer length (q_ (1, 1))
+           in
+           let@ () = bind_logical_return_type (Some (Loc ui_info.loc)) lrt in
+           point_request ui_info requested
+        | Sctype (_, Struct tag) ->
+           let@ lrt = 
+             spine_lft ui_info (fold_struct tag requested.pointer (q_ (1, 1)))
+           in
+           let@ () = bind_logical_return_type (Some (Loc ui_info.loc)) lrt in
+           point_request ui_info requested
+        | _ -> 
+           resource_request_missing ui_info solver (Point requested)
 
     and qpoint_request ui_info (requested : Resources.Requests.qpoint) = 
       let needed = requested.permission in
@@ -635,8 +719,9 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
         map_and_fold_resources (fun re (needed, value, init) ->
             match re with
             | Point p' 
-                 when Z.equal requested.size p'.size &&
-                      BT.equal requested.value (IT.bt p'.value) ->
+                 when Sctypes.equal requested.ct p'.ct &&
+                      let subst = {before=requested.qpointer; after = p'.pointer} in
+                      S.provable solver (t_ (gt_ (IT.subst_it subst needed, q_ (0, 1)))) ->
                let subst = {before=requested.qpointer; after = p'.pointer} in
                let can_take = min_ (p'.permission, IT.subst_it subst needed) in
                let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
@@ -647,8 +732,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                let permission' = sub_ (p'.permission, can_take) in
                (Point {p' with permission = permission'}, (needed, value, init))
             | QPoint p' 
-                 when Z.equal requested.size p'.size &&
-                      BT.equal requested.value (IT.bt p'.value) ->
+                 when Sctypes.equal requested.ct p'.ct ->
                let subst = {before=p'.qpointer; after = requested.qpointer} in
                let can_take = min_ (IT.subst_var subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -672,8 +756,8 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       in
       if holds then
         let r = 
-          { qpointer = requested.qpointer;
-            size = requested.size;
+          { ct = requested.ct;
+            qpointer = requested.qpointer;
             value = Simplify.simp all_lcs value; 
             init = Simplify.simp all_lcs init;
             permission = requested.permission;
@@ -683,195 +767,119 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       else 
         resource_request_missing ui_info solver (QPoint requested)
 
-    and predicate_request ui_info (p : Resources.Requests.predicate) = 
-      if p.unused = false then
-        let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
+    and predicate_request ui_info (requested : Resources.Requests.predicate) = 
+      let needed = requested.permission in 
+      let@ all_lcs = all_constraints () in
+      let@ solver = solver () in
+      let@ (needed, oargs) =
+        map_and_fold_resources (fun re (needed, oargs) ->
+            match re with
+            | Predicate p' 
+                 when String.equal requested.name p'.name &&
+                      S.provable solver 
+                        (t_ (and_ (eq_ (requested.pointer, p'.pointer) ::
+                                     List.map2 eq__ requested.iargs p'.iargs))) ->
+               let can_take = min_ (p'.permission, needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
+               let needed = sub_ (needed, can_take) in
+               let permission' = sub_ (p'.permission, can_take) in
+               Predicate {p' with permission = permission'}, (needed, oargs)
+            | QPredicate p' 
+                 when String.equal requested.name p'.name && 
+                      let subst = {before=p'.qpointer; after = requested.pointer} in
+                      S.provable solver 
+                        (t_ (and_ (List.map2 (fun iarg iarg' -> 
+                                       eq__ iarg (IT.subst_it subst iarg')
+                                     ) requested.iargs p'.iargs))) ->
+               let subst = {before=p'.qpointer; after = requested.pointer} in
+               let can_take = min_ (IT.subst_it subst p'.permission, needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
+               let permission' =
+                 ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
+                       sub_ (IT.subst_it subst p'.permission, can_take),
+                       p'.permission)
+               in
+               QPredicate {p' with permission = permission'}, (needed, oargs)
+            | re ->
+               (re, (needed, oargs))
+          ) (needed, List.map (fun oarg -> default_ oarg) requested.oargs)
+      in
+      let holds = S.provable solver (t_ (eq_ (needed, q_ (0, 1)))) in
+      if holds then
         let r = 
-          { name = p.name;
-            pointer = p.pointer;
-            iargs = p.iargs;
-            oargs = oargs;
-            unused = p.unused;
+          { name = requested.name;
+            pointer = requested.pointer;
+            permission = requested.permission;
+            iargs = requested.iargs; 
+            oargs = List.map (Simplify.simp all_lcs) oargs
           }
         in
         return r
-      else
-        let@ solver = solver () in
-        let@ all_lcs = all_constraints () in
-        let@ found =
-          map_and_fold_resources (fun re found ->
-              match re, found with
-              | Predicate p', None ->
-                 if predicate_name_equal p.name p'.name &&
-                    p'.unused && 
-                    S.provable solver (t_ (
-                        and_ (IT.eq__ p.pointer p'.pointer ::
-                              List.map2 eq__ p.iargs p'.iargs)
-                      ))
-                 then (Predicate {p' with unused = false}, Some p'.oargs)
-                 else (re, found)
-              | QPredicate p', None ->
-                 let index = qpredicate_pointer_to_index p' p.pointer in
-                 if predicate_name_equal p.name p'.name &&
-                    p'.unused && 
-                    S.provable solver (
-                        let iargs' = List.map (IT.subst_it {before=p'.i; after=index}) p'.iargs in
-                        t_ (and_ (is_qpredicate_instance_pointer p' p.pointer ::
-                                    List.map2 eq__ p.iargs iargs'))
-                      )
-                 then
-                   let oargs = List.map (IT.subst_it {before=p'.i; after=index}) p'.oargs in
-                   let moved = p.pointer :: p'.moved in
-                   (QPredicate {p' with moved}, Some oargs)
-                 else
-                   (re, found)
-              | _ ->
-                 (re, found)
-            ) None
-        in
-        begin match found with
-        (* we've already got the right resource *)
-        | Some oargs ->
-           let r = 
-             { name = p.name;
-               pointer = p.pointer;
-               iargs = p.iargs;
-               oargs = oargs;
-               unused = p.unused;
-             }
-           in
-           return r
-        | None ->
-           (* we haven't and will try to get it by packing *)
-           (* (we've eagerly unpacked, so no need to try to get it by unpacking) *)
-           let def = Option.get (Global.get_predicate_def G.global p.name) in
-           let substs = 
-             (* only input arguments! *)
-             {before = def.pointer; after = p.pointer} ::
-               List.map2 (fun (before, _) after -> {before; after}) 
-                 def.iargs p.iargs 
-           in
-           let attempts = 
-             List.map (fun (_, guard, clause) ->
-                 lazy begin
-                     let packing_function = 
-                       subst_its_clause substs 
-                         (Constraint (guard, clause))
-                     in
-                     spine_packing ui_info [] packing_function
-                   end
-               ) def.clauses
-           in
-           let@ solver = Typing.solver () in
-           let error = 
-             lazy begin        
-                 let _ = S.provable solver (T (bool_ false)) in
-                 resource_request_missing ui_info solver (Predicate p)
-               end
-           in
-           let choices = attempts @ [error] in
-           let choices1 = List1.make (List.hd choices, List.tl choices) in
-           let@ assignment = attempt choices1 in
-           let r = 
-             { pointer = p.pointer;
-               name = p.name;
-               iargs = p.iargs;
-               oargs = List.map snd assignment;
-               unused = p.unused;
-             }
-           in
-           return r
-        end
+      else resource_request_missing ui_info solver (Predicate requested)
 
-    and qpredicate_request ui_info (p : Resources.Requests.qpredicate) = 
-      assert ([] = p.moved); (* todo? *)
-      if p.unused = false then
-        let oargs = List.map (fun oa_bt -> default_ oa_bt) p.oargs in
+    and qpredicate_request ui_info (requested : Resources.Requests.qpredicate) = 
+      let needed = requested.permission in
+      let@ all_lcs = all_constraints () in
+      let@ solver = solver () in
+      let@ (needed, oargs) =
+        map_and_fold_resources (fun re (needed, oargs) ->
+            match re with
+            | Predicate p' 
+                 when String.equal requested.name p'.name &&
+                      let subst = {before=requested.qpointer; after = p'.pointer} in
+                      S.provable solver 
+                        (t_ (and_ (List.map2 (fun iarg iarg' -> 
+                                       eq__ (IT.subst_it subst iarg) iarg'
+                                     ) requested.iargs p'.iargs))) ->
+               let subst = {before=requested.qpointer; after = p'.pointer} in
+               let can_take = min_ (p'.permission, IT.subst_it subst needed) in
+               let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+               let needed = ite_ (pmatch, sub_ (IT.subst_it subst needed, can_take), needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let oargs = List.map2 (fun oarg oarg' -> ite_ (and_ [pmatch;took], oarg', oarg)) oargs p'.oargs in
+               let permission' = sub_ (p'.permission, can_take) in
+               (Predicate {p' with permission = permission'}, (needed, oargs))
+            | QPredicate p' 
+                 when String.equal requested.name p'.name &&
+                      let subst = {before=p'.qpointer; after = requested.qpointer} in
+                      S.provable solver 
+                        (t_ (and_ (List.map2 (fun iarg iarg' -> 
+                                       eq__ iarg (IT.subst_var subst iarg')
+                                     ) requested.iargs p'.iargs))) ->
+               let subst = {before=p'.qpointer; after = requested.qpointer} in
+               let can_take = min_ (IT.subst_var subst p'.permission, needed) in
+               let took = gt_ (can_take, q_ (0, 1)) in
+               let needed = sub_ (needed, can_take) in
+               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, IT.subst_var subst oarg', oarg)) oargs p'.oargs in
+               let permission' = 
+                 sub_ (p'.permission, 
+                       IT.subst_var {before=requested.qpointer; after=p'.qpointer} can_take)
+               in
+               (QPredicate {p' with permission = permission'}, (needed, oargs))
+            | re ->
+               (re, (needed, oargs))
+          ) (needed, List.map default_ requested.oargs)
+      in
+      let holds =
+        S.provable solver
+          (forall_ (requested.qpointer, BT.Loc) None
+             (eq_ (needed, q_ (0, 1))))
+      in
+      if holds then
         let r = 
-          { name = p.name;
-            element_size = p.element_size;
-            istart = p.istart;
-            iend = p.iend;
-            i = p.i;
-            pointer = p.pointer;
-            iargs = p.iargs;
-            oargs = oargs;
-            unused = p.unused;
-            moved = p.moved;
-          }
+          { name = requested.name;
+            qpointer = requested.qpointer;
+            permission = requested.permission;
+            iargs = requested.iargs; 
+            oargs = List.map (Simplify.simp all_lcs) oargs;
+          } 
         in
         return r
-      else
-        let@ solver = solver () in
-        let@ found =
-          map_and_fold_resources (fun re found ->
-              match re, found with
-              | QPredicate p', None ->
-                 if predicate_name_equal p.name p'.name &&
-                    p.unused = p'.unused &&
-                      S.provable solver
-                        (forall_ (p.i, BT.Integer) None
-                           (and_ [eq_ (p.pointer, p'.pointer);
-                                  eq_ (p.element_size, p'.element_size);
-                                  eq_ (p.istart, p'.istart);
-                                  eq_ (p.iend, p'.iend);
-                                  impl_ 
-                                    (RER.is_qpredicate_instance_index {p with moved = p'.moved} (sym_ (p.i, Integer)),
-                                     let iargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.iargs in
-                                     and_ (List.map2 eq__ p.iargs iargs'))]
-                        ))
-                 then 
-                   let oargs' = List.map (IT.subst_var {before=p'.i;after=p.i}) p'.oargs in
-                   (QPredicate {p' with unused = false}, Some (oargs', p'.moved))
-                 else 
-                   (re, found)
-              | _ ->
-                 (re, found)
-            ) None
-        in
-        match found with
-        | Some (oargs, moved) ->
-           (* fill in moved ownership *)
-           let@ oargs = 
-             ListM.fold_leftM (fun oargs moved_pointer ->
-                 (* moved_pointer assumed to satisfy
-                    pointer-start-element_size-length condition *)
-                 let index = RER.qpredicate_pointer_to_index p moved_pointer in
-                 let request = RER.{
-                     name = p.name; 
-                     pointer = moved_pointer;
-                     iargs = List.map (IT.subst_it{before=p.i;after=index}) p.iargs;
-                     oargs = p.oargs; 
-                     unused = true
-                   }
-                 in
-                 let@ packed = predicate_request ui_info request in
-                 let oargs = 
-                   List.map2 (fun oa oa' ->
-                       ite_ (eq_ (sym_ (p.i, Integer), index), oa', oa)
-                     ) oargs packed.oargs
-                 in
-                 return oargs
-               ) oargs moved
-           in
-           let r = 
-             { pointer = p.pointer;
-               element_size = p.element_size;
-               istart = p.istart;
-               iend = p.iend;
-               moved = []; 
-               unused = p.unused;
-               name = p.name;
-               i = p.i;
-               iargs = p.iargs;
-               oargs = oargs 
-             }
-           in
-           return r
-        | None ->
-           let@ solver = Typing.solver () in
-           let _ = S.provable solver (T (bool_ false)) in
-           resource_request_missing ui_info solver (QPredicate p)
+      else 
+        resource_request_missing ui_info solver (QPredicate requested)
+
 
     and resource_request ui_info (request : Resources.Requests.t) : RE.t m = 
       match request with
@@ -889,11 +897,96 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          return (QPredicate qpredicate)
 
 
+    and fold_array ui_info ct base_pointer_t length_t permission_t =
+      let element_size = int_ (Memory.size_of_ctype ct) in
+      let@ qpoint = 
+        let qp_s, qp_t = IT.fresh Loc in
+        qpoint_request ui_info {
+          ct = ct;
+          qpointer = qp_s;
+          value = BT.of_sct ct;
+          init = BT.Bool;
+          permission = 
+            array_permission qp_t base_pointer_t (int_ length_t) 
+              element_size permission_t;
+        }
+      in
+      let@ solver = solver () in
+      let folded_init_t = 
+        bool_ (S.provable solver (
+          forall_ (qpoint.qpointer, Loc) None
+            (impl_ (gt_ (qpoint.permission, q_ (0, 1)), qpoint.init))
+          ))
+      in
+      let folded_value_s, folded_value_t = 
+        IT.fresh (Array (Integer, BT.of_sct ct)) in
+      let folded_resource = 
+        Point {
+            ct = Sctype ([], Array (ct, Some length_t));
+            pointer = base_pointer_t;
+            value = folded_value_t;
+            init = folded_init_t;
+            permission = permission_t;
+          }
+      in
+      let fold_value_constr = 
+        let i_s, i_t = IT.fresh Integer in
+        let i_pointer = 
+          array_index_to_pointer base_pointer_t element_size i_t in
+        forall_ (i_s, IT.bt i_t) None
+          (impl_ 
+             (array_index_in_range i_t (int_ length_t),
+              eq__ 
+                (app_ folded_value_t i_t)
+                (IT.subst_it {before=qpoint.qpointer; after = i_pointer} 
+                   qpoint.value)))
+      in
+      let lrt = 
+        LRT.Logical ((folded_value_s, IT.bt folded_value_t),
+        LRT.Resource (folded_resource, 
+        LRT.Constraint (fold_value_constr,
+        LRT.I)))
+      in
+      return lrt
+
+    and unfold_array ui_info ct base_pointer_t length_t permission_t =   
+      let element_size = int_ (Memory.size_of_ctype ct) in
+      let@ point =
+        point_request ui_info {
+            ct = Sctype ([], Array (ct, Some length_t));
+            pointer = base_pointer_t;
+            value = BT.Array (Integer, of_sct ct);
+            init = BT.Bool;
+            permission = permission_t;
+          }
+      in
+      let unfolded_resource = 
+        let qp_s, qp_t = IT.fresh Loc in
+        QPoint {
+            ct = ct;
+            qpointer = qp_s;
+            value = 
+              app_ point.value 
+                (array_pointer_to_index base_pointer_t element_size qp_t); 
+            init = point.init;
+            permission = 
+              array_permission qp_t base_pointer_t (int_ length_t) 
+                element_size permission_t;
+          }
+      in
+      let lrt = LRT.Resource (unfolded_resource, LRT.I) in
+      return lrt
+
 
     let calltype_ft loc args (ftyp : AT.ft) : RT.t m =
       let@ original_local = get () in
       let ui_info = { loc; situation = FunctionCall; original_local } in
       spine_ft ui_info args ftyp
+
+    let calltype_lft loc (ftyp : AT.lft) : LRT.t m =
+      let@ original_local = get () in
+      let ui_info = { loc; situation = FunctionCall; original_local } in
+      spine_lft ui_info ftyp
 
     let calltype_lt loc args ((ltyp : AT.lt), label_kind) : unit m =
       let@ original_local = get () in
@@ -920,11 +1013,35 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       let ui_info = { loc; situation; original_local } in
       resource_request ui_info request
 
+    let point_request (loc: loc) situation (request : RER.point) : RE.point m = 
+      let@ original_local = get () in
+      let ui_info = { loc; situation; original_local } in
+      point_request ui_info request
+
+    let qpoint_request (loc: loc) situation (request : RER.qpoint) : RE.qpoint m = 
+      let@ original_local = get () in
+      let ui_info = { loc; situation; original_local } in
+      qpoint_request ui_info request
 
     let predicate_request (loc: loc) situation (request : RER.predicate) : RE.predicate m = 
       let@ original_local = get () in
       let ui_info = { loc; situation; original_local } in
       predicate_request ui_info request
+
+    let qpredicate_request (loc: loc) situation (request : RER.qpredicate) : RE.qpredicate m = 
+      let@ original_local = get () in
+      let ui_info = { loc; situation; original_local } in
+      qpredicate_request ui_info request
+
+    let fold_array (loc: loc) situation ct base_pointer_t length_t permission_t  : LRT.t m = 
+      let@ original_local = get () in
+      let ui_info = { loc; situation; original_local } in
+      fold_array ui_info ct base_pointer_t length_t permission_t
+
+    let unfold_array (loc: loc) situation ct base_pointer_t length_t permission_t  : LRT.t m = 
+      let@ original_local = get () in
+      let ui_info = { loc; situation; original_local } in
+      unfold_array ui_info ct base_pointer_t length_t permission_t
 
 
   end
@@ -933,7 +1050,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
   (*** pure value inference *****************************************************)
 
   type vt = BT.t * IT.t
-  let it_of_arg arg = sym_ (arg.lname, arg.bt)
   let vt_of_arg arg = (arg.bt, it_of_arg arg)
 
   let rt_of_vt (bt,it) = 
@@ -1099,6 +1215,9 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
 
 
 
+
+
+
   (*** pure expression inference ************************************************)
 
   (* infer_pexpr: the raw type inference logic for pure expressions;
@@ -1108,17 +1227,38 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
      inference returns, all logical (logical variables, resources,
      constraints) in the local environment *)
 
-  let infer_array_shift asym1 ct asym2 =
+  let infer_array_shift loc asym1 ct asym2 =
     let@ arg1 = arg_of_asym asym1 in
     let@ arg2 = arg_of_asym asym2 in
     let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
     let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
+    let@ solver = solver () in
+    let@ olength =
+      map_and_fold_resources (fun re found ->
+          match found, re with
+          | Some _, _ -> 
+             (re, found)
+          | None, Point {ct = Sctype (_, Array (_, Some length)); pointer; _} 
+               when S.provable solver (t_ (eq__ pointer (it_of_arg arg1))) ->
+             (re, Some length)
+          | _ -> 
+             (re, found)
+        ) None
+    in
+    let@ lrt = match olength with
+      | None -> 
+         return LRT.I
+      | Some length ->
+         Spine.unfold_array loc ArrayShift ct (it_of_arg arg1) 
+           length (q_ (1, 1))
+    in
     let element_size = Memory.size_of_ctype ct in
     let v = 
       addPointer_ (it_of_arg arg1, 
-                   mul_ (z_ element_size, it_of_arg arg2))
+                   mul_ (int_ element_size, it_of_arg arg2))
     in
-    return (Loc, v)
+    let rt = RT.concat (rt_of_vt (BT.Loc, v)) lrt in
+    return rt
 
   let wrapI ity arg =
     (* try to follow wrapI from runtime/libcore/std.core *)
@@ -1164,29 +1304,22 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       | M_Civfromfloat _ -> 
          unsupported loc !^"floats"
       | M_PEarray_shift (asym1, ct, asym2) ->
-         let@ vt = infer_array_shift asym1 ct asym2 in
-         return (rt_of_vt vt)
+         infer_array_shift loc asym1 ct asym2
       | M_PEmember_shift (asym, tag, member) ->
          let@ arg = arg_of_asym asym in
          let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-         let@ () = unpack_resources_for loc (it_of_arg arg) in
-         let@ predicate = 
-           Spine.predicate_request loc (Access (Load None))
-             { name = Ctype (Sctype ([], Struct tag)) ;
-               pointer = it_of_arg arg;
-               iargs = [];
-               oargs = [Struct tag ; BT.Bool];
-               unused = true;
-             }
-         in
+         let@ lrt = 
+           Spine.calltype_lft loc 
+             (unfold_struct tag (it_of_arg arg) (q_ (1, 1)))
+          in
          let@ layout = get_struct_decl loc tag in
          let@ _member_bt = get_member_type loc tag member layout in
          let@ offset = match Memory.member_offset layout member with
            | Some offset -> return offset
            | None -> fail loc (lazy (Missing_member (tag, member)))
          in
-         let vt = (Loc, IT.addPointer_ (it_of_arg arg, z_ offset)) in
-         return (RT.concat (rt_of_vt vt) (Resource (Predicate predicate, LRT.I)))
+         let vt = (Loc, IT.addPointer_ (it_of_arg arg, int_ offset)) in
+         return (RT.concat (rt_of_vt vt) lrt)
       | M_PEnot asym ->
          let@ arg = arg_of_asym asym in
          let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
@@ -1334,7 +1467,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
        let@ arg = arg_of_asym asym in
        ListM.iterM (fun (pat, pe) ->
            pure begin 
-               let@ () = pattern_match (sym_ (arg.lname, arg.bt)) pat in
+               let@ () = pattern_match (it_of_arg arg) pat in
                let@ solver = solver () in
                if S.provably_inconsistent solver
                then return ()
@@ -1426,7 +1559,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
           match resource with
           | Point p ->
              let holds = 
-               S.provable solver
+               S.provable solver 
                  (t_ (le_ (p.permission, q_ (0, 1)))) 
              in
              if holds then return () else error resource solver
@@ -1438,12 +1571,18 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
              in
              if holds then return () else error resource solver
           | Predicate p ->
-             if not p.unused then return () else
-               let _ = S.provable solver (T (bool_ false)) in
-               error resource solver
+             let holds = 
+               S.provable solver 
+                 (t_ (le_ (p.permission, q_ (0, 1)))) 
+             in
+             if holds then return () else error resource solver
           | QPredicate p ->
-             let holds = S.provable solver (t_ (eq_ (p.istart, p.iend))) in
-             if not p.unused && holds then return () else error resource solver
+             let holds = 
+               S.provable solver
+                 (forall_ (p.qpointer, BT.Loc) None
+                    (le_ (p.permission, q_ (0, 1))))
+             in
+             if holds then return () else error resource solver
         ) all_resources
     in
     return ()
@@ -1499,17 +1638,15 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
             (* check *)
             let@ arg = arg_of_asym asym in
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let@ () = unpack_resources loc in
-            let request = 
-              RER.Predicate {
-                  name = Ctype act.ct; 
-                  pointer = it_of_arg arg;
-                  iargs = [];
-                  oargs = [BT.of_sct act.ct; BT.Bool];
-                  unused = true;
-                }
+            let request = ({
+                ct = act.ct; 
+                pointer = it_of_arg arg;
+                permission = q_ (1, 1);
+                value = BT.of_sct act.ct;
+                init = BT.Bool;
+              } : RER.point)
             in
-            let@ _ = pure (Spine.resource_request loc (Access Deref) request) in
+            let@ _ = pure (Spine.point_request loc (Access Deref) request) in
             let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
             return (rt_of_vt vt)
          | M_PtrWellAligned (act, asym) ->
@@ -1518,8 +1655,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
             let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
             return (rt_of_vt vt)
          | M_PtrArrayShift (asym1, act, asym2) ->
-            let@ vt = infer_array_shift asym1 act.ct asym2 in
-            return (rt_of_vt vt)
+            infer_array_shift loc asym1 act.ct asym2
          | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
             Debug_ocaml.error "todo: M_Memcpy"
          | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1536,7 +1672,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
             Debug_ocaml.error "todo: M_Va_end"
          end
       | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
-         let@ () = unpack_resources loc in
          begin match action_ with
          | M_Create (asym, act, _prefix) -> 
             let@ arg = arg_of_asym asym in
@@ -1544,12 +1679,12 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
             let ret = Sym.fresh () in
             let value_s, value_t = IT.fresh (BT.of_sct act.ct) in
             let resource = 
-              RE.Predicate {
-                  name = Ctype act.ct; 
+              RE.Point {
+                  ct = act.ct; 
                   pointer = sym_ (ret, Loc);
-                  iargs = [];
-                  oargs = [value_t; (bool_ false)];
-                  unused = true;
+                  permission = q_ (1, 1);
+                  value = value_t; 
+                  init = bool_ false;
                 }
             in
             let rt = 
@@ -1569,17 +1704,14 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          | M_Kill (M_Static ct, asym) -> 
             let@ arg = arg_of_asym asym in
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let@ () = unpack_resources_for loc (it_of_arg arg) in
             let@ _ = 
-              Spine.resource_request loc (Access Kill)
-                (RER.Predicate {
-                     name = Ctype ct;
-                     pointer = it_of_arg arg;
-                     iargs = [];
-                     oargs = [BT.of_sct ct; BT.Bool];
-                     unused = true;
-                   }
-                )
+              Spine.point_request loc (Access Kill) {
+                  ct = ct;
+                  pointer = it_of_arg arg;
+                  permission = q_ (1, 1);
+                  value = BT.of_sct ct; 
+                  init = BT.Bool;
+                }
             in
             let rt = RT.Computational ((Sym.fresh (), Unit), I) in
             return rt
@@ -1609,24 +1741,22 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                 in
                 fail loc err
             in
-            let@ () = unpack_resources_for loc (it_of_arg parg) in
             let@ _ = 
-              Spine.resource_request loc (Access (Store None))
-                (RER.Predicate {
-                     name = Ctype act.ct; 
-                     pointer = it_of_arg parg;
-                     iargs = [];
-                     oargs = [BT.of_sct act.ct; BT.Bool];
-                     unused = true;
-                })
+              Spine.point_request loc (Access (Store None)) {
+                  ct = act.ct; 
+                  pointer = it_of_arg parg;
+                  permission = q_ (1, 1);
+                  value = BT.of_sct act.ct; 
+                  init = BT.Bool;
+                }
             in
             let resource = 
-              RE.Predicate {
-                  name = Ctype act.ct;
+              RE.Point {
+                  ct = act.ct;
                   pointer = it_of_arg parg;
-                  iargs = [];
-                  oargs = [(it_of_arg varg); (bool_ true)];
-                  unused = true;
+                  permission = q_ (1, 1);
+                  value = it_of_arg varg; 
+                  init = bool_ true;
                 }
             in
             let rt = RT.Computational ((Sym.fresh (), Unit), Resource (resource, LRT.I)) in
@@ -1634,36 +1764,34 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          | M_Load (act, pasym, _mo) -> 
             let@ parg = arg_of_asym pasym in
             let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
-            let@ () = unpack_resources_for loc (it_of_arg parg) in
-            let@ predicate = 
+            let@ point = 
               pure begin
-                  Spine.predicate_request loc (Access (Load None)) 
-                    { name = Ctype act.ct ;
+                  Spine.point_request loc (Access (Load None)) 
+                    { ct = act.ct;
                       pointer = it_of_arg parg;
-                      iargs = [];
-                      oargs = [BT.of_sct act.ct ; BT.Bool];
-                      unused = true;
+                      permission = q_ (1, 1); (* fix *)
+                      value = BT.of_sct act.ct; 
+                      init = BT.Bool;
                     }
                 end
             in
-            let value, init = List.hd predicate.oargs, List.hd (List.tl predicate.oargs) in
             let@ () = 
               let@ solver = solver () in
-              let holds = S.provable solver (t_ init) in
+              let holds = S.provable solver (t_ point.init) in
               if holds then return () else
                 let@ explain_local = get () in
                 let err = 
                   lazy begin
                       let (state, _) = 
-                        E.unsatisfied_constraint explain_local (S.get_model solver) (t_ init) in
+                        E.unsatisfied_constraint explain_local (S.get_model solver) (t_ point.init) in
                       (Uninitialised_read {is_member = None; state})
                     end
                 in
                 fail loc err
             in
             let ret = Sym.fresh () in
-            let constr = def_ ret value in
-            let rt = RT.Computational ((ret, IT.bt value), 
+            let constr = def_ ret point.value in
+            let rt = RT.Computational ((ret, IT.bt point.value), 
                      Constraint (t_ constr, LRT.I)) 
             in
             return rt
@@ -1688,7 +1816,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          let rt = RT.Computational ((Sym.fresh (), Unit), I) in
          return rt
       | M_Eccall (_ctype, afsym, asyms) ->
-         let@ () = unpack_resources loc in
          let@ args = args_of_asyms asyms in
          let@ (_loc, ft) = match Global.get_fun_decl G.global afsym.sym with
            | Some (loc, ft) -> return (loc, ft)
@@ -1696,7 +1823,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          in
          Spine.calltype_ft loc args ft
       | M_Eproc (fname, asyms) ->
-         let@ () = unpack_resources loc in
          let@ decl_typ = match fname with
            | CF.Core.Impl impl -> 
               return (Global.get_impl_fun_decl G.global impl)
@@ -1744,7 +1870,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          let@ arg = arg_of_asym asym in
          ListM.iterM (fun (pat, pe) ->
              pure begin 
-                 let@ () = pattern_match (sym_ (arg.lname, arg.bt)) pat in
+                 let@ () = pattern_match (it_of_arg arg) pat in
                  let@ solver = solver () in
                  if S.provably_inconsistent solver
                  then return ()
@@ -1798,7 +1924,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
          in
          fail loc err
       | M_Erun (label_sym, asyms) ->
-         let@ () = unpack_resources loc in
          let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
            | None -> fail loc (lazy (Generic (!^"undefined code label" ^/^ Sym.pp label_sym)))
            | Some (lt,lkind) -> return (lt,lkind)

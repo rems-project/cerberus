@@ -170,8 +170,6 @@ module Make (S : Solver.S) : S = struct
          let old = match owhere, r with
            | Some where, Point p -> 
               { address = p.pointer; value = p.value; where } :: local.old
-           | Some where, Predicate ({oargs = [value; _init]; _} as p) -> 
-              { address = p.pointer; value = value; where } :: local.old
            | _ -> 
               local.old
          in
