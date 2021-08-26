@@ -195,14 +195,14 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
     in
     let unpackable = 
       List.find_opt (fun (_, guard, _) -> 
-          S.provable solver (LC.subst_its substs guard)
+          S.provable solver (LC.substs substs guard)
         ) def.clauses 
     in
     match unpackable with
     | None -> return false
     | Some (_, guard, clause) ->
        let@ () = remove_resource (Predicate p) in
-       let clause = AT.subst_its OutputDef.subst_it substs clause in 
+       let clause = AT.substs OutputDef.subst substs clause in 
        let condition, outputs = AT.logical_arguments_and_return clause in
        let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') p.oargs outputs) in
        let lrt = LRT.concat condition (Constraint (t_ lc, I)) in
@@ -387,7 +387,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       in
 
       let unify_or_constrain (unis, substs, constrs) (output_spec, output_have) =
-        match IT.subst_its substs output_spec with
+        match IT.substs substs output_spec with
         | IT (Lit (Sym s), _) when SymMap.mem s unis ->
            let@ () = ls_matches_spec unis s output_have in
            return (SymMap.remove s unis, {before = s; after= output_have} :: substs, constrs)
@@ -398,7 +398,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
 
       (* ASSUMES unification variables and quantifier q_s are disjoint  *)
       let unify_or_constrain_q (q_s,q_bt) (unis, substs, constrs) (output_spec, output_have) = 
-        match IT.subst_its substs output_spec with
+        match IT.substs substs output_spec with
         | IT (Array_op (App (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
              when Sym.equal q' q_s && SymMap.mem s unis ->
            let@ output_have_body = make_array (q_s, q_bt) output_have in
@@ -515,7 +515,6 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
 
     let rec spine :
               'rt. 
-              ((Sym.t, Sym.t) Subst.t -> 'rt -> 'rt) ->
               ((Sym.t, IT.t) Subst.t -> 'rt -> 'rt) ->
               ('rt -> Pp.doc) ->
               request_ui_info ->
@@ -523,7 +522,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
               'rt AT.t ->
               'rt m
       =
-      fun rt_subst_var rt_subst_it rt_pp
+      fun rt_subst rt_pp
           ui_info arguments ftyp ->
 
       let open NormalisedArgumentTypes in
@@ -545,7 +544,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
           | (arg :: args), (Computational ((s, bt), ftyp))
                when BT.equal arg.bt bt ->
              check_computational args 
-               (subst_var rt_subst_var {before = s; after = arg.lname} ftyp)
+               (subst rt_subst {before = s; after = sym_ (arg.lname, bt)} ftyp)
           | (arg :: _), (Computational ((_, bt), _))  ->
              fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
           | [], (L ftyp) -> 
@@ -567,7 +566,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
           | Logical ((s, ls), ftyp) ->
              let s' = Sym.fresh () in
              delay_logical (SymMap.add s' ls unis) 
-               (subst_var_l rt_subst_var {before = s; after = s'} ftyp)
+               (subst_l rt_subst {before = s; after = sym_ (s', ls)} ftyp)
           | R ftyp -> 
              return (unis, ftyp)
         in
@@ -593,7 +592,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                  end
              in
              let@ (unis, new_substs) = match_resources loc mismatch unis resource resource' in
-             infer_resources unis (subst_its_r rt_subst_it new_substs ftyp)
+             infer_resources unis (substs_r rt_subst new_substs ftyp)
           | C ftyp ->
              return (unis, ftyp)
         in
@@ -631,15 +630,14 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       return rt
 
     and spine_ft ui_info arguments ft = 
-      spine RT.subst_var RT.subst_it RT.pp 
-        ui_info arguments ft
+      spine RT.subst RT.pp ui_info arguments ft
 
     and spine_lt ui_info arguments ft = 
-      spine False.subst_var False.subst_it False.pp 
+      spine False.subst False.pp 
         ui_info arguments ft
 
     and spine_lft ui_info ft = 
-      spine LRT.subst_var LRT.subst_it LRT.pp 
+      spine LRT.subst LRT.pp 
         ui_info [] ft
 
     (* and spine_packing ui_info arguments ft =
@@ -667,16 +665,16 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
             | QPoint p' 
                  when Sctypes.equal requested.ct p'.ct &&
                       let subst = {before=p'.qpointer; after = requested.pointer} in
-                      S.provable solver (t_ (gt_ (IT.subst_it subst p'.permission, q_ (0, 1)))) ->
+                      S.provable solver (t_ (gt_ (IT.subst subst p'.permission, q_ (0, 1)))) ->
                let subst = {before=p'.qpointer; after = requested.pointer} in
-               let can_take = min_ (IT.subst_it subst p'.permission, needed) in
+               let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
-               let value =  ite_ (took, IT.subst_it subst p'.value, value) in
-               let init = ite_ (took, IT.subst_it subst p'.init, init) in
+               let value =  ite_ (took, IT.subst subst p'.value, value) in
+               let init = ite_ (took, IT.subst subst p'.init, init) in
                let needed = sub_ (needed, can_take) in
                let permission' =
                  ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                       sub_ (IT.subst_it subst p'.permission, can_take),
+                       sub_ (IT.subst subst p'.permission, can_take),
                        p'.permission)
                in
                QPoint {p' with permission = permission'}, (needed, value, init)
@@ -721,11 +719,11 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
             | Point p' 
                  when Sctypes.equal requested.ct p'.ct &&
                       let subst = {before=requested.qpointer; after = p'.pointer} in
-                      S.provable solver (t_ (gt_ (IT.subst_it subst needed, q_ (0, 1)))) ->
+                      S.provable solver (t_ (gt_ (IT.subst subst needed, q_ (0, 1)))) ->
                let subst = {before=requested.qpointer; after = p'.pointer} in
-               let can_take = min_ (p'.permission, IT.subst_it subst needed) in
+               let can_take = min_ (p'.permission, IT.subst subst needed) in
                let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-               let needed = ite_ (pmatch, sub_ (IT.subst_it subst needed, can_take), needed) in
+               let needed = ite_ (pmatch, sub_ (IT.subst subst needed, can_take), needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let value = ite_ (and_ [pmatch;took], p'.value, value) in
                let init = ite_ (and_ [pmatch;took], p'.init, init) in
@@ -733,15 +731,15 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                (Point {p' with permission = permission'}, (needed, value, init))
             | QPoint p' 
                  when Sctypes.equal requested.ct p'.ct ->
-               let subst = {before=p'.qpointer; after = requested.qpointer} in
-               let can_take = min_ (IT.subst_var subst p'.permission, needed) in
+               let subst = {before=p'.qpointer; after = sym_ (requested.qpointer, Loc)} in
+               let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let needed = sub_ (needed, can_take) in
-               let value = ite_ (took, IT.subst_var subst p'.value, value) in
-               let init = ite_ (took, IT.subst_var subst p'.init, init) in
+               let value = ite_ (took, IT.subst subst p'.value, value) in
+               let init = ite_ (took, IT.subst subst p'.init, init) in
                let permission' = 
                  sub_ (p'.permission, 
-                       IT.subst_var {before=requested.qpointer; after = p'.qpointer} 
+                       IT.subst {before=requested.qpointer; after = sym_ (p'.qpointer, Loc)} 
                          can_take)
                in
                (QPoint {p' with permission = permission'}, (needed, value, init))
@@ -790,15 +788,15 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                       let subst = {before=p'.qpointer; after = requested.pointer} in
                       S.provable solver 
                         (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                       eq__ iarg (IT.subst_it subst iarg')
+                                       eq__ iarg (IT.subst subst iarg')
                                      ) requested.iargs p'.iargs))) ->
                let subst = {before=p'.qpointer; after = requested.pointer} in
-               let can_take = min_ (IT.subst_it subst p'.permission, needed) in
+               let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
                let permission' =
                  ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                       sub_ (IT.subst_it subst p'.permission, can_take),
+                       sub_ (IT.subst subst p'.permission, can_take),
                        p'.permission)
                in
                QPredicate {p' with permission = permission'}, (needed, oargs)
@@ -831,31 +829,31 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                       let subst = {before=requested.qpointer; after = p'.pointer} in
                       S.provable solver 
                         (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                       eq__ (IT.subst_it subst iarg) iarg'
+                                       eq__ (IT.subst subst iarg) iarg'
                                      ) requested.iargs p'.iargs))) ->
                let subst = {before=requested.qpointer; after = p'.pointer} in
-               let can_take = min_ (p'.permission, IT.subst_it subst needed) in
+               let can_take = min_ (p'.permission, IT.subst subst needed) in
                let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-               let needed = ite_ (pmatch, sub_ (IT.subst_it subst needed, can_take), needed) in
+               let needed = ite_ (pmatch, sub_ (IT.subst subst needed, can_take), needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (and_ [pmatch;took], oarg', oarg)) oargs p'.oargs in
                let permission' = sub_ (p'.permission, can_take) in
                (Predicate {p' with permission = permission'}, (needed, oargs))
             | QPredicate p' 
                  when String.equal requested.name p'.name &&
-                      let subst = {before=p'.qpointer; after = requested.qpointer} in
+                      let subst = {before=p'.qpointer; after = sym_ (requested.qpointer, Loc)} in
                       S.provable solver 
                         (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                       eq__ iarg (IT.subst_var subst iarg')
+                                       eq__ iarg (IT.subst subst iarg')
                                      ) requested.iargs p'.iargs))) ->
-               let subst = {before=p'.qpointer; after = requested.qpointer} in
-               let can_take = min_ (IT.subst_var subst p'.permission, needed) in
+               let subst = {before=p'.qpointer; after = sym_ (requested.qpointer, Loc)} in
+               let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let needed = sub_ (needed, can_take) in
-               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, IT.subst_var subst oarg', oarg)) oargs p'.oargs in
+               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, IT.subst subst oarg', oarg)) oargs p'.oargs in
                let permission' = 
                  sub_ (p'.permission, 
-                       IT.subst_var {before=requested.qpointer; after=p'.qpointer} can_take)
+                       IT.subst {before=requested.qpointer; after=sym_ (p'.qpointer, Loc)} can_take)
                in
                (QPredicate {p' with permission = permission'}, (needed, oargs))
             | re ->
@@ -938,7 +936,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
              (array_index_in_range i_t (int_ length_t),
               eq__ 
                 (app_ folded_value_t i_t)
-                (IT.subst_it {before=qpoint.qpointer; after = i_pointer} 
+                (IT.subst {before=qpoint.qpointer; after = i_pointer} 
                    qpoint.value)))
       in
       let lrt = 
@@ -1001,11 +999,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
       let@ original_local = get () in
       let ui_info = { loc; situation = Subtyping; original_local } in
       let ft = AT.of_rt rtyp (AT.I False.False) in
-      let@ False.False = 
-        spine 
-          False.subst_var False.subst_it False.pp
-          ui_info [arg] ft 
-      in
+      let@ False.False = spine False.subst False.pp ui_info [arg] ft in
       return ()
 
     let resource_request (loc: loc) situation (request : RER.t) : RE.t m = 
@@ -1953,14 +1947,14 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
   (* the code is parameterised so it can be used uniformly for
      functions and procedures (with return type) and labels with
      no-return (False) type. *)
-  let check_and_bind_arguments rt_subst_var loc arguments (function_typ : 'rt AT.t) = 
+  let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) = 
     let rec check acc_substs resources args (ftyp : 'rt AT.t) =
       match args, ftyp with
       | ((aname,abt) :: args), (AT.Computational ((lname, sbt), ftyp))
            when BT.equal abt sbt ->
          let new_lname = Sym.fresh () in
-         let subst = {before=lname;after=new_lname} in
-         let ftyp' = AT.subst_var rt_subst_var subst ftyp in
+         let subst = {before=lname;after=sym_ (new_lname, sbt)} in
+         let ftyp' = AT.subst rt_subst subst ftyp in
          let@ () = add_l new_lname abt in
          let@ () = add_a aname (abt,new_lname) in
          check (acc_substs@[subst]) resources args ftyp'
@@ -1994,7 +1988,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
     debug 2 (lazy (headline ("checking function " ^ info)));
     pure begin 
         let@ (rt, resources, substs) = 
-          check_and_bind_arguments RT.subst_var loc arguments function_typ 
+          check_and_bind_arguments RT.subst loc arguments function_typ 
         in
         let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
         (* rbt consistency *)
@@ -2019,7 +2013,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
     pure begin 
         (* check and bind the function arguments *)
         let@ (rt, resources, substs) = 
-          check_and_bind_arguments RT.subst_var loc arguments function_typ 
+          check_and_bind_arguments RT.subst loc arguments function_typ 
         in
         (* rbt consistency *)
         let@ () = 
@@ -2031,9 +2025,9 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
           Pmap.map (fun def ->
               match def with
               | M_Return (loc, lt) -> 
-                 M_Return (loc, AT.subst_vars False.subst_var substs lt)
+                 M_Return (loc, AT.substs False.subst substs lt)
               | M_Label (loc, lt, args, body, annots) -> 
-                 M_Label (loc, AT.subst_vars False.subst_var substs lt, 
+                 M_Label (loc, AT.substs False.subst substs lt, 
                           args, body, annots)
             ) label_defs 
         in
@@ -2072,7 +2066,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                  | _ -> Debug_ocaml.error "label without name"
                in
                let@ (rt, resources, lsubsts) = 
-                 check_and_bind_arguments False.subst_var loc args lt 
+                 check_and_bind_arguments False.subst loc args lt 
                in
                let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
                let@ local_or_false = check_texpr labels body False in

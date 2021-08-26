@@ -147,7 +147,7 @@ type vclass_explanation = {
   }
 
 type explanation = {
-    substitutions : (Sym.t, Sym.t) Subst.t list;
+    substitutions : (Sym.t, IT.t) Subst.t list;
     vclasses : (vclass * vclass_explanation) list;
     relevant : SymSet.t
   }
@@ -264,7 +264,7 @@ module Make
           let to_substitute = SymSet.union vclass.computational vclass.logical in
           let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
           SymSet.fold (fun sym substs ->
-              Subst.{ before = sym; after = named_symbol } :: substs
+              Subst.{ before = sym; after = sym_ (named_symbol, vclass.sort) } :: substs
             ) to_substitute substs 
         ) vclass_explanations []
     in
@@ -327,7 +327,7 @@ module Make
           match resource with
           | Point p ->
              let loc_val = !^(evaluate o_model p.pointer) in
-             let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
+             let loc_expr = IT.pp (IT.substs substitutions p.pointer) in
              let permission_v = evaluate o_model p.permission in
              let init_v = evaluate_bool o_model p.init in
              let state = 
@@ -342,7 +342,7 @@ module Make
              in
              let value = 
                (BT.pp (IT.bt p.value)) ^^^ 
-               IT.pp (IT.subst_vars substitutions p.value) ^^^ 
+               IT.pp (IT.substs substitutions p.value) ^^^ 
                equals ^^^
                !^(evaluate o_model p.value) 
              in
@@ -363,8 +363,8 @@ module Make
              (entry :: acc_table, SymSet.add p.qpointer acc_reported)
           | Predicate p ->
              let loc_val = !^(evaluate o_model p.pointer) in
-             let loc_expr = IT.pp (IT.subst_vars substitutions p.pointer) in
-             let state = (RE.pp (RE.subst_vars substitutions (Predicate p))) in
+             let loc_expr = IT.pp (IT.substs substitutions p.pointer) in
+             let state = (RE.pp (RE.substs substitutions (Predicate p))) in
              let entry = (Some loc_expr, Some loc_val, Some state, None) in
              (entry :: acc_table, symbol_it p.pointer)
           | QPredicate p ->
@@ -451,41 +451,41 @@ module Make
     let _ = S.provable (L.solver local) (t_ (bool_ false)) in
     let model = S.get_model (L.solver local) in
     let (explanation, local) = explanation local model (IT.free_vars it) in
-    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
+    let it_pp = IT.pp (IT.substs explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation model)
 
   let missing_ownership local model it = 
     let (explanation, local) = explanation local model (IT.free_vars it) in
-    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
+    let it_pp = IT.pp (IT.substs explanation.substitutions it) in
     (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
     let _ = S.provable (L.solver local) (t_ (bool_ false)) in
     let model = S.get_model (L.solver local) in
     let (explanation, local) = explanation local model (IT.free_vars it) in
-    let it_pp = IT.pp (IT.subst_vars explanation.substitutions it) in
+    let it_pp = IT.pp (IT.substs explanation.substitutions it) in
     it_pp
 
   let unsatisfied_constraint local model lc = 
     let (explanation, local) = explanation local model (LC.free_vars lc) in
-    let lc_pp = LC.pp (LC.subst_vars explanation.substitutions lc) in
+    let lc_pp = LC.pp (LC.substs explanation.substitutions lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
   let resource local model re = 
     let (explanation, local) = explanation local model (RE.free_vars re) in
-    let re_pp = RE.pp (RE.subst_vars explanation.substitutions re) in
+    let re_pp = RE.pp (RE.substs explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation model)
 
   let resource_request local model re = 
     let (explanation, local) = explanation local model (RER.free_vars re) in
-    let re_pp = RER.pp (RER.subst_vars explanation.substitutions re) in
+    let re_pp = RER.pp (RER.substs explanation.substitutions re) in
     (re_pp, pp_state_with_model local explanation model)
 
   let resources local model (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
     let (explanation, local) = explanation local model relevant in
-    let re1 = RE.pp (RE.subst_vars explanation.substitutions re1) in
-    let re2 = RE.pp (RE.subst_vars explanation.substitutions re2) in
+    let re1 = RE.pp (RE.substs explanation.substitutions re1) in
+    let re2 = RE.pp (RE.substs explanation.substitutions re2) in
     ((re1, re2), pp_state_with_model local explanation model)
 
 
@@ -496,8 +496,8 @@ module Make
     let (explanation, local) = 
       explanation local model (IT.free_vars_list [it; context])
     in
-    let it = IT.pp (IT.subst_vars explanation.substitutions it) in
-    let context = IT.pp (IT.subst_vars explanation.substitutions context) in
+    let it = IT.pp (IT.substs explanation.substitutions it) in
+    let context = IT.pp (IT.substs explanation.substitutions context) in
     (context, it)
 
 end

@@ -22,14 +22,12 @@ let pp_clause (loc, lc, c) =
   item "condition" (LC.pp lc) ^^ comma ^^^
   item "return type" (AT.pp OutputDef.pp c)
 
-let subst_it_clause subst c = AT.subst_it OutputDef.subst_it subst c
-let subst_var_clause subst c = AT.subst_var OutputDef.subst_var subst c
+let subst_clause subst c = 
+  AT.subst OutputDef.subst subst c
 
-let subst_its_clause substs = 
-  Subst.make_substs subst_it_clause substs
+let substs_clause substs = 
+  Subst.make_substs subst_clause substs
 
-let subst_vars_clause substs = 
-  Subst.make_substs subst_var_clause substs
 
 
 

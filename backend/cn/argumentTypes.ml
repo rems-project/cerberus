@@ -31,81 +31,43 @@ let mResources t  = List.fold_right mResource t
 
 
 
-let rec subst_var i_subst_var (substitution: (Sym.t, Sym.t) Subst.t) = function
-  | Computational ((name,bt),t) -> 
-     if Sym.equal name substitution.before then 
-       Computational ((name,bt),t) 
-     else if Sym.equal name substitution.after then
-       let newname = Sym.fresh () in
-       let t' = subst_var i_subst_var {before=name; after=newname} t in
-       let t'' = subst_var i_subst_var substitution t' in
-       Computational ((newname,bt), t'')
-     else
-       let t' = subst_var i_subst_var substitution t in
-       Computational ((name,bt), t')
-  | Logical ((name,ls),t) -> 
-     if Sym.equal name substitution.before then 
-       Logical ((name,ls),t) 
-     else if Sym.equal name substitution.after then
-       let newname = Sym.fresh () in
-       let t' = subst_var i_subst_var {before=name; after=newname} t in
-       let t'' = subst_var i_subst_var substitution t' in
-       Logical ((newname,ls), t'')
-     else
-       let t' = subst_var i_subst_var substitution t in
-       Logical ((name,ls), t')
-  | Resource (re,t) -> 
-     let re = RE.subst_var substitution re in
-     let t = subst_var i_subst_var substitution t in
-     Resource (re, t)
-  | Constraint (lc,t) -> 
-     let lc = LC.subst_var substitution lc in
-     let t = subst_var i_subst_var substitution t in
-     Constraint (lc,t)
-  | I i -> 
-     let i' = i_subst_var substitution i in
-     I (i')
-
-let subst_vars i_subst_var = make_substs (subst_var i_subst_var)
-
-
-let rec subst_it i_subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) at =
+let rec subst i_subst (substitution: (Sym.t, IT.t) Subst.t) at =
   match at with
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
        Computational ((name,bt),t)
      else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
        let newname = Sym.fresh () in
-       let t' = subst_it i_subst_it {before=name; after=IT.sym_ (newname, bt)} t in
-       let t'' = subst_it i_subst_it substitution t' in
+       let t' = subst i_subst {before=name; after=IT.sym_ (newname, bt)} t in
+       let t'' = subst i_subst substitution t' in
        Computational ((newname,bt),t'')
      else
-       let t = subst_it i_subst_it substitution t in
+       let t = subst i_subst substitution t in
        Computational ((name,bt),t)
   | Logical ((name,ls),t) -> 
      if Sym.equal name substitution.before then 
        Logical ((name,ls),t)
      else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
        let newname = Sym.fresh () in
-       let t' = subst_it i_subst_it {before=name; after=IT.sym_ (newname, ls)} t in
-       let t'' = subst_it i_subst_it substitution t' in
+       let t' = subst i_subst {before=name; after=IT.sym_ (newname, ls)} t in
+       let t'' = subst i_subst substitution t' in
        Logical ((newname,ls),t'')
      else
-       let t' = subst_it i_subst_it substitution t in
+       let t' = subst i_subst substitution t in
        Logical ((name,ls),t')
   | Resource (re,t) -> 
-     let re = RE.subst_it substitution re in
-     let t = subst_it i_subst_it substitution t in
+     let re = RE.subst substitution re in
+     let t = subst i_subst substitution t in
      Resource (re,t)
   | Constraint (lc,t) -> 
-     let lc = LC.subst_it substitution lc in
-     let t = subst_it i_subst_it substitution t in
+     let lc = LC.subst substitution lc in
+     let t = subst i_subst substitution t in
      Constraint (lc,t)
   | I i -> 
-     let i = i_subst_it substitution i in
+     let i = i_subst substitution i in
      I i
 
-let subst_its i_subst_it = Subst.make_substs (subst_it i_subst_it)
+let substs i_subst_it = Subst.make_substs (subst i_subst_it)
 
 
 let pp i_pp ft = 

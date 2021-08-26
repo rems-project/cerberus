@@ -24,63 +24,36 @@ let json c : Yojson.Safe.t =
   `String (Pp.plain (pp c))
 
 
-let rec subst_var_trigger substitution t = 
+let rec subst_trigger substitution t = 
   match t with
   | T_Term it ->
-     let it = IT.subst_var substitution it in
+     let it = IT.subst substitution it in
      T_Term it
   | T_App (t, t') -> 
-     let t = subst_var_trigger substitution t in
-     let t' = subst_var_trigger substitution t' in
+     let t = subst_trigger substitution t in
+     let t' = subst_trigger substitution t' in
      T_App (t, t')
   | T_Member (t, member) ->
-     let t = subst_var_trigger substitution t in
-     T_Member (t, member)
-
-let rec subst_it_trigger substitution t = 
-  match t with
-  | T_Term it ->
-     let it = IT.subst_it substitution it in
-     T_Term it
-  | T_App (t, t') -> 
-     let t = subst_it_trigger substitution t in
-     let t' = subst_it_trigger substitution t' in
-     T_App (t, t')
-  | T_Member (t, member) ->
-     let t = subst_it_trigger substitution t in
+     let t = subst_trigger substitution t in
      T_Member (t, member)
 
 
-let subst_var substitution c = 
+let subst substitution c = 
   match c with
   | T it -> 
-     T (IT.subst_var substitution it)
+     T (IT.subst substitution it)
   | Forall ((s, bt), trigger, body) ->
      let s' = Sym.fresh_same s in 
-     let substitution' = Subst.{before = s; after = s'} in
-     let trigger = Option.map (subst_var_trigger substitution') trigger in
-     let trigger = Option.map (subst_var_trigger substitution) trigger in
-     let body = IT.subst_var substitution' body in
-     let body = IT.subst_var substitution body in
-     Forall ((s', bt), trigger, body)
-
-let subst_it substitution c = 
-  match c with
-  | T it -> 
-     T (IT.subst_it substitution it)
-  | Forall ((s, bt), trigger, body) ->
-     let s' = Sym.fresh_same s in 
-     let substitution' = Subst.{before = s; after = s'} in
-     let trigger = Option.map (subst_var_trigger substitution') trigger in
-     let trigger = Option.map (subst_it_trigger substitution) trigger in
-     let body = IT.subst_var substitution' body in
-     let body = IT.subst_it substitution body in
+     let substitution' = Subst.{before = s; after = IT.sym_ (s', bt)} in
+     let trigger = Option.map (subst_trigger substitution') trigger in
+     let trigger = Option.map (subst_trigger substitution) trigger in
+     let body = IT.subst substitution' body in
+     let body = IT.subst substitution body in
      Forall ((s', bt), trigger, body)
 
 
 
-let subst_vars c = Subst.make_substs subst_var c
-let subst_its c = Subst.make_substs subst_it c
+let substs c = Subst.make_substs subst c
 
 let rec free_vars_trigger = function
   | T_Term it ->

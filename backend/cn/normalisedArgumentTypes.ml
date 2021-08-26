@@ -28,110 +28,56 @@ let mconstraint bound t = Constraint (bound,t)
 let mresource bound t = Resource (bound,t)
 
 
-let rec subst_var_c i_subst_var substitution = function
+
+let rec subst_c i_subst substitution = function
   | Constraint (lc, t) -> 
-     Constraint (LC.subst_var substitution lc, 
-                 subst_var_c i_subst_var substitution t)
+     Constraint (LC.subst substitution lc, 
+                 subst_c i_subst substitution t)
   | I rt -> 
-     I (i_subst_var substitution rt)
+     I (i_subst substitution rt)
 
-let rec subst_var_r i_subst_var substitution = function
+let rec subst_r i_subst substitution = function
   | Resource (re, t) ->
-     Resource (RE.subst_var substitution re, 
-               subst_var_r i_subst_var substitution t)
+     Resource (RE.subst substitution re, 
+               subst_r i_subst substitution t)
   | C c -> 
-     C (subst_var_c i_subst_var substitution c)
+     C (subst_c i_subst substitution c)
 
-let rec subst_var_l i_subst_var substitution = function
-  | Logical ((name,ls),t) -> 
-     if Sym.equal name substitution.before then 
-       Logical ((name,ls),t) 
-     else if Sym.equal name substitution.after then
-       let newname = Sym.fresh () in
-       let t' = subst_var_l i_subst_var {before=name; after=newname} t in
-       let t'' = subst_var_l i_subst_var substitution t' in
-       Logical ((newname,ls),t'')
-     else
-       let t' = subst_var_l i_subst_var substitution t in
-       Logical ((name,ls),t')
-  | R r -> 
-     R (subst_var_r i_subst_var substitution r)
-
-let rec subst_var_a i_subst_var substitution = function
-  | Computational ((name,bt),t) -> 
-     if Sym.equal name substitution.before then 
-       Computational ((name,bt),t) 
-     else if Sym.equal name substitution.after then
-       let newname = Sym.fresh () in
-       let t' = subst_var_a i_subst_var {before=name; after=newname} t in
-       let t'' = subst_var_a i_subst_var substitution t' in
-       Computational ((newname,bt),t'')
-     else
-       Computational ((name,bt),subst_var_a i_subst_var substitution t)
-  | L l -> L (subst_var_l i_subst_var substitution l)
-
-let subst_vars_l i_subst_var = Subst.make_substs (subst_var_l i_subst_var)
-let subst_vars_r i_subst_var = Subst.make_substs (subst_var_r i_subst_var)
-let subst_vars_c i_subst_var = Subst.make_substs (subst_var_c i_subst_var)
-let subst_vars_a i_subst_var = Subst.make_substs (subst_var_a i_subst_var)
-
-let subst_var = subst_var_a
-let subst_vars = subst_vars_a
-
-
-
-
-
-
-let rec subst_it_c i_subst_it substitution = function
-  | Constraint (lc, t) -> 
-     Constraint (LC.subst_it substitution lc, 
-                 subst_it_c i_subst_it substitution t)
-  | I rt -> 
-     I (i_subst_it substitution rt)
-
-let rec subst_it_r i_subst_it substitution = function
-  | Resource (re, t) ->
-     Resource (RE.subst_it substitution re, 
-               subst_it_r i_subst_it substitution t)
-  | C c -> 
-     C (subst_it_c i_subst_it substitution c)
-
-let rec subst_it_l i_subst_it substitution = function
+let rec subst_l i_subst substitution = function
   | Logical ((name,ls),t) -> 
      if Sym.equal name substitution.before then 
        Logical ((name,ls),t) 
      else if SymSet.mem name (IT.free_vars substitution.after) then
        let newname = Sym.fresh () in
-       let t' = subst_it_l i_subst_it {before=name; after=IT.sym_ (newname, ls)} t in
-       let t'' = subst_it_l i_subst_it substitution t' in
+       let t' = subst_l i_subst {before=name; after=IT.sym_ (newname, ls)} t in
+       let t'' = subst_l i_subst substitution t' in
        Logical ((newname,ls),t'')
      else
-       let t' = subst_it_l i_subst_it substitution t in
+       let t' = subst_l i_subst substitution t in
        Logical ((name,ls),t')
   | R r -> 
-     R (subst_it_r i_subst_it substitution r)
+     R (subst_r i_subst substitution r)
 
-let rec subst_it_a i_subst_it substitution = function
+let rec subst_a i_subst substitution = function
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
        Computational ((name,bt),t) 
      else if SymSet.mem name (IT.free_vars substitution.after) then
        let newname = Sym.fresh () in
-       let t' = subst_it_a i_subst_it {before=name; after=IT.sym_ (newname, bt)} t in
-       let t'' = subst_it_a i_subst_it substitution t' in
+       let t' = subst_a i_subst {before=name; after=IT.sym_ (newname, bt)} t in
+       let t'' = subst_a i_subst substitution t' in
        Computational ((newname,bt),t'')
      else
-       Computational ((name,bt),subst_it_a i_subst_it substitution t)
-  | L l -> L (subst_it_l i_subst_it substitution l)
+       Computational ((name,bt),subst_a i_subst substitution t)
+  | L l -> L (subst_l i_subst substitution l)
 
-let subst_its_l i_subst_it = Subst.make_substs (subst_it_l i_subst_it)
-let subst_its_r i_subst_it = Subst.make_substs (subst_it_r i_subst_it)
-let subst_its_c i_subst_it = Subst.make_substs (subst_it_c i_subst_it)
-let subst_its_a i_subst_it = Subst.make_substs (subst_it_a i_subst_it)
+let substs_l i_subst = Subst.make_substs (subst_l i_subst)
+let substs_r i_subst = Subst.make_substs (subst_r i_subst)
+let substs_c i_subst = Subst.make_substs (subst_c i_subst)
+let substs_a i_subst = Subst.make_substs (subst_a i_subst)
 
-let subst_it = subst_it_a
-let subst_its = subst_its_a
+let subst = subst_a
+let substs = substs_a
 
 
 

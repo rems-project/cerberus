@@ -25,8 +25,7 @@ module type Output = sig
 
   type t
   val pp : t -> document
-  val subst_var : (Sym.t, Sym.t) Subst.t -> t -> t
-  val subst_it : (Sym.t, IT.t) Subst.t -> t -> t
+  val subst : (Sym.t, IT.t) Subst.t -> t -> t
   val equal : t -> t -> bool
   val free_vars : t -> SymSet.t
   val free_vars_list : t list -> SymSet.t
@@ -141,38 +140,35 @@ module Make (O : Output) = struct
 
 
   let alpha_rename_qpoint qpointer' (qp : qpoint) = 
-    let subst = {before=qp.qpointer;after=qpointer'} in
+    let subst = {before=qp.qpointer;after=sym_ (qpointer', BT.Loc)} in
     { ct = qp.ct;
       qpointer = qpointer';
-      permission = IT.subst_var subst qp.permission;
-      value = O.subst_var subst qp.value;
-      init = O.subst_var subst qp.init;
+      permission = IT.subst subst qp.permission;
+      value = O.subst subst qp.value;
+      init = O.subst subst qp.init;
     }
 
 
   let alpha_rename_qpredicate qpointer' (qp : qpredicate) = 
-    let subst = {before=qp.qpointer;after=qpointer'} in
+    let subst = {before=qp.qpointer;after=sym_ (qpointer', BT.Loc)} in
     { name = qp.name;
       qpointer = qpointer';
-      permission = IT.subst_var subst qp.permission;
-      iargs = List.map (IT.subst_var subst) qp.iargs;
-      oargs = List.map (O.subst_var subst) qp.oargs;
+      permission = IT.subst subst qp.permission;
+      iargs = List.map (IT.subst subst) qp.iargs;
+      oargs = List.map (O.subst subst) qp.oargs;
     }
 
 
 
-  let substitute
-        it_subst
-        o_subst
-        (subst : (Sym.t, 'a) Subst.t) resource =
+  let subst (substitution : (Sym.t, IT.t) Subst.t) resource =
     match resource with
     | Point p ->
        Point {
            ct = p.ct;
-           pointer = it_subst subst p.pointer;
-           permission = it_subst subst p.permission;
-           value = o_subst subst p.value;
-           init = o_subst subst p.init;
+           pointer = IT.subst substitution p.pointer;
+           permission = IT.subst substitution p.permission;
+           value = O.subst substitution p.value;
+           init = O.subst substitution p.init;
          }
     | QPoint qp ->
        let qp = alpha_rename_qpoint 
@@ -180,17 +176,17 @@ module Make (O : Output) = struct
        QPoint {
            ct = qp.ct;
            qpointer = qp.qpointer;
-           permission = it_subst subst qp.permission;
-           value = o_subst subst qp.value;
-           init = o_subst subst qp.init;
+           permission = IT.subst substitution qp.permission;
+           value = O.subst substitution qp.value;
+           init = O.subst substitution qp.init;
          }
     | Predicate p -> 
        Predicate {
            name = p.name;
-           pointer = it_subst subst p.pointer;
-           permission = it_subst subst p.permission;
-           iargs = List.map (it_subst subst) p.iargs;
-           oargs = List.map (o_subst subst) p.oargs;
+           pointer = IT.subst substitution p.pointer;
+           permission = IT.subst substitution p.permission;
+           iargs = List.map (IT.subst substitution) p.iargs;
+           oargs = List.map (O.subst substitution) p.oargs;
          }
     | QPredicate qp ->
        let qp = alpha_rename_qpredicate 
@@ -198,21 +194,13 @@ module Make (O : Output) = struct
        QPredicate {
            name = qp.name;
            qpointer = qp.qpointer;
-           permission = it_subst subst qp.permission;
-           iargs = List.map (it_subst subst) qp.iargs;
-           oargs = List.map (o_subst subst) qp.oargs;
+           permission = IT.subst substitution qp.permission;
+           iargs = List.map (IT.subst substitution) qp.iargs;
+           oargs = List.map (O.subst substitution) qp.oargs;
          }
 
 
-
-  let subst_var (subst: (Sym.t,Sym.t) Subst.t) resource = 
-    substitute IT.subst_var O.subst_var subst resource
-
-  let subst_it (subst: (Sym.t,IT.t) Subst.t) resource = 
-    substitute IT.subst_it O.subst_it subst resource
-
-
-  let subst_vars = Subst.make_substs subst_var
+  let substs = Subst.make_substs subst
 
 
 
@@ -286,8 +274,7 @@ module Requests =
   Make (struct
       type t = BT.t
       let pp _ = underscore
-      let subst_var _ o = o
-      let subst_it _ o = o
+      let subst _ o = o
       let equal = BT.equal
       let free_vars _ = SymSet.empty
       let free_vars_list _ = SymSet.empty

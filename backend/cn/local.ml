@@ -250,7 +250,7 @@ module Make (S : Solver.S) : S = struct
     match lrt with
     | Logical ((s, ls), rt) ->
        let s' = Sym.fresh () in
-       let rt' = LRT.subst_var {before=s; after=s'} rt in
+       let rt' = LRT.subst {before=s; after=IT.sym_ (s', ls)} rt in
        bind_logical where (add_l s' ls local) rt'
     | Resource (re, rt) -> bind_logical where (add_r where re local) rt
     | Constraint (lc, rt) -> bind_logical where (add_c lc local) rt
@@ -259,7 +259,7 @@ module Make (S : Solver.S) : S = struct
   let bind_computational where (local : t) (name : Sym.t) (rt : RT.t) : t =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
-    let rt' = LRT.subst_var {before = s; after = s'} rt in
+    let rt' = LRT.subst {before = s; after = IT.sym_ (s', bt)} rt in
     bind_logical where (add_a name (bt, s') (add_l s' bt local)) rt'
 
 
@@ -269,7 +269,7 @@ module Make (S : Solver.S) : S = struct
   let bind_logically where (local : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
     let Computational ((s, bt), rt) = rt in
     let s' = Sym.fresh () in
-    let rt' = LRT.subst_var {before = s; after = s'} rt in
+    let rt' = LRT.subst {before = s; after = IT.sym_ (s', bt)} rt in
     ((bt, s'), bind_logical where (add_l s' bt local) rt')
 
 

@@ -3,11 +3,8 @@ module SymSet = Set.Make(Sym)
 
 type entry = string * IndexTerms.t
 
-let subst_it_entry substitution (name,it) = 
-  (name, IT.subst_it substitution it)
-
-let subst_var_entry substitution (name, it) = 
-  (name, IT.subst_var substitution it)
+let subst_entry substitution (name,it) = 
+  (name, IT.subst substitution it)
   
 let pp_entry (name, it) = 
   let open Pp in
@@ -16,19 +13,11 @@ let pp_entry (name, it) =
 
 type t = entry list
 
-let subst_it substitution assignment = 
-  List.map (subst_it_entry substitution) assignment
+let subst substitution assignment = 
+  List.map (subst_entry substitution) assignment
 
-let subst_var substitution assignment = 
-  List.map (subst_var_entry substitution) assignment
-
-
-let subst_its substs assignment = 
-  Subst.make_substs subst_it substs assignment
-
-
-let subst_vars substs assignment = 
-  Subst.make_substs subst_var substs assignment
+let substs substs assignment = 
+  Subst.make_substs subst substs assignment
 
 
 let pp assignment =

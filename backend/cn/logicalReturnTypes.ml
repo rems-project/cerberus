@@ -1,6 +1,7 @@
 open Subst
 module SymSet = Set.Make(Sym)
 module Resources = Resources.RE
+module IT = IndexTerms
 
 
 type t = 
@@ -28,68 +29,38 @@ let mConstraints = List.fold_right mConstraint
 let mResources = List.fold_right mResource
 
 
-let subst_var (substitution: (Sym.t, Sym.t) Subst.t) lrt = 
-  let rec aux substitution = function
-    | I -> I
-    | Logical ((name,ls),t) -> 
-       if Sym.equal name substitution.before then 
-         Logical ((name,ls),t) 
-       else if Sym.equal name substitution.after then
-         let newname = Sym.fresh () in
-         let t' = aux {before=name;after=newname} t in
-         let t'' = aux substitution t' in
-         Logical ((newname,ls),t'')
-       else
-         let t' = aux substitution t in
-         Logical ((name,ls),t')
-    | Resource (re,t) -> 
-       let re = Resources.subst_var substitution re in
-       let t = aux substitution t in
-       Resource (re,t)
-    | Constraint (lc,t) -> 
-       let lc = LogicalConstraints.subst_var substitution lc in
-       let t = aux substitution t in
-       Constraint (lc,t)
-  in
-  aux substitution lrt
+let rec subst (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt = 
+  match lrt with
+  | I -> 
+     I
+  | Logical ((name,ls),t) -> 
+     if Sym.equal name substitution.before then 
+       Logical ((name,ls),t)
+     else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
+       let newname = Sym.fresh () in
+       let t' = subst {before=name;after=IT.sym_ (newname, ls)} t in
+       let t'' = subst substitution t' in
+       Logical ((newname,ls),t'')
+     else
+       let t' = subst substitution t in
+       Logical ((name,ls),t')
+  | Resource (re,t) -> 
+     let re = Resources.subst substitution re in
+     let t = subst substitution t in
+     Resource (re,t)
+  | Constraint (lc,t) -> 
+     let lc = LogicalConstraints.subst substitution lc in
+     let t = subst substitution t in
+     Constraint (lc,t)
 
-let subst_vars = Subst.make_substs subst_var
-
-
-let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt = 
-  let rec aux substitution = function
-    | I -> 
-       I
-    | Logical ((name,ls),t) -> 
-       if Sym.equal name substitution.before then 
-         Logical ((name,ls),t)
-       else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
-         let newname = Sym.fresh () in
-         let t' = subst_var {before=name;after=newname} t in
-         let t'' = aux substitution t' in
-         Logical ((newname,ls),t'')
-       else
-         let t' = aux substitution t in
-         Logical ((name,ls),t')
-    | Resource (re,t) -> 
-       let re = Resources.subst_it substitution re in
-       let t = aux substitution t in
-       Resource (re,t)
-    | Constraint (lc,t) -> 
-       let lc = LogicalConstraints.subst_it substitution lc in
-       let t = aux substitution t in
-       Constraint (lc,t)
-  in
-  aux substitution lrt
-
-let subst_its = Subst.make_substs subst_it
+let substs = Subst.make_substs subst
 
 
 
 let rec freshify = function
   | Logical ((s,ls),t) ->
      let s' = Sym.fresh () in
-     let t' = subst_var {before=s;after=s'} t in
+     let t' = subst {before=s;after=IT.sym_ (s', ls)} t in
      Logical ((s',ls), freshify t')
   | Resource (re,t) ->
      Resource (re, freshify t)

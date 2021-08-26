@@ -462,7 +462,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
               Z3.Solver.check solver [Z3.Boolean.mk_not context t]
            | Forall ((s, bt), _trigger, t) -> 
               let s' = Sym.fresh () in
-              let t = IndexTerms.subst_var Subst.{before=s; after=s'} t in
+              let t = IT.subst Subst.{before=s; after=sym_ (s', bt)} t in
               let t = of_index_term t in
               Z3.Solver.check solver [Z3.Boolean.mk_not context t]
          in

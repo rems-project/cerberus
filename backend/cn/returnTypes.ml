@@ -1,5 +1,6 @@
 open Subst
 module SymSet = Set.Make(Sym)
+module IT = IndexTerms
 
 module LRT = LogicalReturnTypes
 
@@ -24,34 +25,18 @@ let concat (t1: t) (t2: LRT.t) : t =
 
 
 
-
-let subst_var (substitution: (Sym.t, Sym.t) Subst.t) = function
-  | Computational ((name,bt),t) -> 
-     if Sym.equal name substitution.before then 
-       Computational ((name,bt),t) 
-     else if Sym.equal name substitution.after then
-       let newname = Sym.fresh () in
-       let t' = LRT.subst_var {before=name; after=newname} t in
-       let t'' = LRT.subst_var substitution t' in
-       Computational ((newname,bt),t'')
-     else
-       Computational ((name,bt), LRT.subst_var substitution t)
-
-let subst_vars = Subst.make_substs subst_var
-
-
-let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) rt = 
+let subst (substitution: (Sym.t, IT.t) Subst.t) rt = 
   match rt with
   | Computational ((name,bt),t) -> 
      if Sym.equal name substitution.before then 
        Computational ((name,bt),t)
      else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
        let newname = Sym.fresh () in
-       let t' = LRT.subst_var {before=name; after=newname} t in
-       let t'' = LRT.subst_it substitution t' in
+       let t' = LRT.subst {before=name; after=IT.sym_ (newname, bt)} t in
+       let t'' = LRT.subst substitution t' in
        Computational ((newname,bt), t'')
      else
-       let t = LRT.subst_it substitution t in
+       let t = LRT.subst substitution t in
        Computational ((name,bt), t)
 
 
@@ -60,7 +45,7 @@ let subst_it (substitution: (Sym.t, IndexTerms.t) Subst.t) rt =
 let freshify = function
   | Computational ((s,bt),t) ->
      let s' = Sym.fresh () in
-     let t' = LRT.subst_var {before = s; after=s'} t in
+     let t' = LRT.subst {before = s; after=IT.sym_ (s', bt)} t in
      Computational ((s',bt), LRT.freshify t')
      
 

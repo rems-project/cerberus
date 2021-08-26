@@ -678,14 +678,14 @@ and free_vars_list l =
 let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 
-let subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
+let subst (substitution : (Sym.t, typed) Subst.t) =
 
   let rec aux = 
 
     let lit it bt = 
       match it with
       | Sym symbol when Sym.equal symbol substitution.before ->
-         substitution.after bt
+         substitution.after
       | it -> IT (Lit it, bt)
     in
 
@@ -846,59 +846,7 @@ let subst (substitution : (Sym.t, 'bt -> 'bt term) Subst.t) =
   fun it -> aux it
 
 
-let subst_var (substitution : (Sym.t, Sym.t) Subst.t) it =
-  let substitution = 
-    {before = substitution.before;
-     after = 
-       fun bt ->
-       IT (Lit (Sym (substitution.after)), bt)}
-  in
-  subst substitution it
-
-
-let subst_it (substitution : (Sym.t, 'bt term) Subst.t) it =
-  let substitution = 
-    {before = substitution.before;
-     after = fun bt -> substitution.after}
-  in
-  subst substitution it
-
-
-let subst_vars it = make_substs subst_var it
-
-let subst_its it = make_substs subst_it it
-
-
-(* (\* not general unification: match left-hand side against right-hand
- *    side, where right-hand side is fully concrete *\)
- * let rec unify it it' res = 
- *   let equal_it = equal in
- *   let open Option in
- *   let open Uni in
- *   let match_symbol s it' res = 
- *     let@ uni = SymMap.find_opt s res in
- *     match uni.resolved with
- *     | Some it_res when equal_it it_res it' -> return res 
- *     | Some _ -> fail
- *     | None -> return (SymMap.add s {resolved = Some it'} res)
- *   in
- *   if equal_it it it' then return res else
- *     match it, it' with
- *     | IT (Lit (Sym s), _), _ -> 
- *        match_symbol s it' res
- *     | IT (Array_op (App (IT (Lit (Sym f), _), arg)), _), 
- *       IT (Array_op (App (f_it', arg')), _) ->
- *        let@ res = match_symbol f f_it' res in
- *        unify arg arg' res
- *     | _ -> fail
- * 
- * 
- * 
- * 
- * let rec unifiable = function
- *   | IT (Lit (Sym s), _) -> Some s
- *   | IT (Array_op (App (it, args)), _) -> unifiable it
- *   | _ -> None *)
+let substs it = make_substs subst it
 
 
 
