@@ -1776,7 +1776,7 @@ let unpack_predicate (loc : Loc.t) (p : predicate) =
                 let@ explain_local = get () in
                 let err = 
                   lazy begin
-                      let (state, _) = 
+                      let (_, state) = 
                         E.unsatisfied_constraint explain_local (S.get_model solver) (t_ point.init) in
                       (Uninitialised_read {is_member = None; state})
                     end

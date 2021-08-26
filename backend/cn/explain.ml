@@ -275,7 +275,7 @@ module Make
 
 
   let rec evaluate model expr : string = 
-    match Z3.Model.evaluate model (S.expr expr) true with
+    match Z3.Model.evaluate model (S.term expr) true with
     | None -> "(not evaluated)"
     | Some evaluated_expr -> 
        match IT.bt expr with
