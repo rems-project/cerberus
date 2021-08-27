@@ -37,14 +37,11 @@ let fresh_same (s : t) : t =
   fresh_description (S.symbol_description s)
 
 
-open Subst
 
-let subst (subst: (sym, sym) Subst.t) symbol = 
-  if equal symbol subst.before then subst.after else symbol
-
-
-
-let substs = make_substs subst
 
 
 let json sym = `String (pp_string sym)
+
+
+
+

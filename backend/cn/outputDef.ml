@@ -16,8 +16,6 @@ type t = entry list
 let subst substitution assignment = 
   List.map (subst_entry substitution) assignment
 
-let substs substs assignment = 
-  Subst.make_substs subst substs assignment
 
 
 let pp assignment =

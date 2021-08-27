@@ -590,7 +590,7 @@ module Make
         | Logical ((s,ls), lrt) -> 
            let lname = Sym.fresh_same s in
            let@ () = add_l lname ls in
-           let lrt = subst Subst.{before = s; after = IT.sym_ (lname, ls)} lrt in
+           let lrt = subst [(s, IT.sym_ (lname, ls))] lrt in
            welltyped loc lrt
         | Resource (re, lrt) -> 
            let@ () = WRE.welltyped loc re in
@@ -644,7 +644,7 @@ module Make
            let lname = Sym.fresh () in
            let@ () = add_l lname bt in
            let@ () = add_a name' (bt, lname) in
-           let lrt = LRT.subst Subst.{before = name; after = IT.sym_ (lname, bt)} lrt in
+           let lrt = LRT.subst [(name, IT.sym_ (lname, bt))] lrt in
            WLRT.welltyped loc lrt
         end
 
@@ -697,7 +697,7 @@ end
 
   module type WI_Sig = sig
     type t
-    val subst : (Sym.t, IndexTerms.t) Subst.t -> t -> t
+    val subst : IndexTerms.t Subst.t -> t -> t
     val pp : t -> Pp.document
     val mode_check : Loc.t -> SymSet.t -> t -> unit m
     val welltyped : Loc.t -> t -> unit m
@@ -718,12 +718,12 @@ end
            let lname = Sym.fresh () in
            let@ () = add_l lname bt in
            let@ () = add_a name' (bt, lname) in
-           let at = AT.subst WI.subst Subst.{before = name; after = IT.sym_ (lname, bt)} at in
+           let at = AT.subst WI.subst [(name, IT.sym_ (lname, bt))] at in
            welltyped kind loc at
         | AT.Logical ((s,ls), at) -> 
            let lname = Sym.fresh_same s in
            let@ () = add_l lname ls in
-           let at = AT.subst WI.subst Subst.{before = s; after = IT.sym_ (lname, ls)} at in
+           let at = AT.subst WI.subst [(s, IT.sym_ (lname, ls))] at in
            welltyped kind loc at
         | AT.Resource (re, at) -> 
            let@ () = WRE.welltyped loc re in
@@ -785,9 +785,9 @@ end
           let@ () = add_l pd.permission BT.Real in
           let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
           let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-          ListM.iterM (fun (loc, lc, clause) ->
-              let@ () = WLC.welltyped loc lc in
-              WPackingFT.welltyped "clause" pd.loc clause
+          ListM.iterM (fun {loc; guard; packing_ft} ->
+              let@ _ = WIT.check loc BT.Bool guard in
+              WPackingFT.welltyped "clause" pd.loc packing_ft
             ) pd.clauses
         end
 
@@ -799,8 +799,8 @@ end
           ) determined pd.iargs
       in
       let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-      ListM.iterM (fun (loc, lc, clause) ->
-          WPackingFT.mode_check pd.loc determined clause
+      ListM.iterM (fun {loc; guard; packing_ft} ->
+          WPackingFT.mode_check pd.loc determined packing_ft
         ) pd.clauses
 
     let good pd =

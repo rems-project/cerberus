@@ -1,5 +1,3 @@
-open Subst
-
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
@@ -31,30 +29,18 @@ let mResources t  = List.fold_right mResource t
 
 
 
-let rec subst i_subst (substitution: (Sym.t, IT.t) Subst.t) at =
+let rec subst i_subst (substitution: IT.t Subst.t) at =
   match at with
-  | Computational ((name,bt),t) -> 
-     if Sym.equal name substitution.before then 
-       Computational ((name,bt),t)
-     else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
-       let newname = Sym.fresh () in
-       let t' = subst i_subst {before=name; after=IT.sym_ (newname, bt)} t in
-       let t'' = subst i_subst substitution t' in
-       Computational ((newname,bt),t'')
-     else
-       let t = subst i_subst substitution t in
-       Computational ((name,bt),t)
-  | Logical ((name,ls),t) -> 
-     if Sym.equal name substitution.before then 
-       Logical ((name,ls),t)
-     else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
-       let newname = Sym.fresh () in
-       let t' = subst i_subst {before=name; after=IT.sym_ (newname, ls)} t in
-       let t'' = subst i_subst substitution t' in
-       Logical ((newname,ls),t'')
-     else
-       let t' = subst i_subst substitution t in
-       Logical ((name,ls),t')
+  | Computational ((name, bt), t) -> 
+     let name' = Sym.fresh_same name in
+     let t' = subst i_subst [(name, IT.sym_ (name', bt))] t in
+     let t'' = subst i_subst substitution t' in
+     Computational ((name', bt), t'')
+  | Logical ((name, ls), t) -> 
+     let name' = Sym.fresh_same name in
+     let t' = subst i_subst [(name, IT.sym_ (name', ls))] t in
+     let t'' = subst i_subst substitution t' in
+     Logical ((name', ls), t'')
   | Resource (re,t) -> 
      let re = RE.subst substitution re in
      let t = subst i_subst substitution t in
@@ -66,8 +52,6 @@ let rec subst i_subst (substitution: (Sym.t, IT.t) Subst.t) at =
   | I i -> 
      let i = i_subst substitution i in
      I i
-
-let substs i_subst_it = Subst.make_substs (subst i_subst_it)
 
 
 let pp i_pp ft = 
@@ -140,6 +124,21 @@ let rec logical_arguments_and_return (at : 'i t) : LRT.t * 'i =
 let of_rt (rt : RT.t) (rest : 'i t) : 'i t = 
   let (RT.Computational ((name, t), lrt)) = rt in
   Computational ((name, t), of_lrt lrt rest)
+
+
+
+let rec map (f : 'i -> 'j) (at : 'i at) : 'j at =
+  match at with
+  | Computational (bound, at) -> 
+     Computational (bound, map f at)
+  | Logical (bound, at) -> 
+     Logical (bound, map f at)
+  | Resource (re, at) -> 
+     Resource (re, map f at)
+  | Constraint (lc, at) -> 
+     Constraint (lc, map f at)
+  | I i ->
+     I (f i)
 
 
 

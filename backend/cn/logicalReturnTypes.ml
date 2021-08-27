@@ -1,4 +1,3 @@
-open Subst
 module SymSet = Set.Make(Sym)
 module Resources = Resources.RE
 module IT = IndexTerms
@@ -29,52 +28,26 @@ let mConstraints = List.fold_right mConstraint
 let mResources = List.fold_right mResource
 
 
-let rec subst (substitution: (Sym.t, IndexTerms.t) Subst.t) lrt = 
+let rec subst (substitution: IT.t Subst.t) lrt = 
   match lrt with
   | I -> 
      I
-  | Logical ((name,ls),t) -> 
-     if Sym.equal name substitution.before then 
-       Logical ((name,ls),t)
-     else if SymSet.mem name (IndexTerms.free_vars substitution.after) then
-       let newname = Sym.fresh () in
-       let t' = subst {before=name;after=IT.sym_ (newname, ls)} t in
-       let t'' = subst substitution t' in
-       Logical ((newname,ls),t'')
-     else
-       let t' = subst substitution t in
-       Logical ((name,ls),t')
-  | Resource (re,t) -> 
+  | Logical ((name, ls), t) -> 
+     let name' = Sym.fresh_same name in
+     let t' = subst [(name, IT.sym_ (name', ls))] t in
+     let t'' = subst substitution t' in
+     Logical ((name', ls), t'')
+  | Resource (re, t) -> 
      let re = Resources.subst substitution re in
      let t = subst substitution t in
-     Resource (re,t)
-  | Constraint (lc,t) -> 
+     Resource (re, t)
+  | Constraint (lc, t) -> 
      let lc = LogicalConstraints.subst substitution lc in
      let t = subst substitution t in
-     Constraint (lc,t)
-
-let substs = Subst.make_substs subst
+     Constraint (lc, t)
 
 
 
-let rec freshify = function
-  | Logical ((s,ls),t) ->
-     let s' = Sym.fresh () in
-     let t' = subst {before=s;after=IT.sym_ (s', ls)} t in
-     Logical ((s',ls), freshify t')
-  | Resource (re,t) ->
-     Resource (re, freshify t)
-  | Constraint (lc,t) ->
-     Constraint (lc, freshify t)
-  | I -> 
-     I
-
-
-let rec free_vars = function
-  | Logical ((sym,_),t) -> SymSet.remove sym (free_vars t)
-  | Resource (r,t) -> SymSet.union (Resources.free_vars r) (free_vars t)
-  | Constraint (c,t) -> SymSet.union (LogicalConstraints.free_vars c) (free_vars t)
-  | I -> SymSet.empty
 
 
 

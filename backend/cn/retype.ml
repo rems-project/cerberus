@@ -363,6 +363,10 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
        return (New.M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (New.M_Eproc (name,asyms))
+    | M_predicate (Fold, name, asyms) ->
+       return (New.M_predicate (Fold, name, asyms))
+    | M_predicate (Unfold, name, asyms) ->
+       return (New.M_predicate (Unfold, name, asyms))
   in
 
   return (New.M_Expr (loc, annots,expr_))

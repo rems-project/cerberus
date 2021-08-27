@@ -1,17 +1,13 @@
 open Pp
 
-type ('a,'b) t = { before: 'a; after: 'b }
-
-let pp app bpp {before; after} = 
-  parens (!^"substitute" ^^^ app before ^^^ !^"with" ^^^ bpp after)
+type 'a t = (Sym.t * 'a) list
+type 'a subst = 'a t
 
 
-let make_substs
-      (substitution_function : ('a,'b) t -> 'c -> 'c)
-      (substs : (('a,'b) t) list)
-      (c : 'c) : 'c 
-  =
-  List.fold_left (fun c substitution -> substitution_function substitution c)
-    c substs
+let pp ppf subst = 
+  Pp.list (fun (before, after) ->
+      !^"replace" ^^^ Sym.pp before ^^^ !^"with" ^^^ ppf after
+    ) subst
+
 
 

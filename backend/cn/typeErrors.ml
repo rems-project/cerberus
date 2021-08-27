@@ -25,6 +25,8 @@ type situation =
   | LabelCall of label_kind
   | Subtyping
   | ArrayShift
+  | Fold of Resources.predicate_name
+  | Unfold of Resources.predicate_name
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -43,6 +45,8 @@ let checking_situation = function
   | LabelCall Other -> !^"checking label call"
   | Subtyping -> !^"checking subtyping"
   | ArrayShift -> !^"array shifting"
+  | Fold name -> !^"folding predicate" ^^^ Resources.pp_predicate_name name
+  | Unfold name -> !^"folding predicate" ^^^ Resources.pp_predicate_name name
 
 let for_situation = function
   | Access access -> for_access access
@@ -52,6 +56,8 @@ let for_situation = function
   | LabelCall Other -> !^"for calling label"
   | Subtyping -> !^"for subtyping"
   | ArrayShift -> !^"for array shifting"
+  | Fold name -> !^"for folding predicate" ^^^ Resources.pp_predicate_name name
+  | Unfold name -> !^"for folding predicate" ^^^ Resources.pp_predicate_name name
 
 
 

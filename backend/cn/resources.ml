@@ -4,7 +4,6 @@ module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IT = IndexTerms
 open IT
-open Subst
 module LC = LogicalConstraints
 
 
@@ -25,7 +24,7 @@ module type Output = sig
 
   type t
   val pp : t -> document
-  val subst : (Sym.t, IT.t) Subst.t -> t -> t
+  val subst : IT.t Subst.t -> t -> t
   val equal : t -> t -> bool
   val free_vars : t -> SymSet.t
   val free_vars_list : t list -> SymSet.t
@@ -140,7 +139,7 @@ module Make (O : Output) = struct
 
 
   let alpha_rename_qpoint qpointer' (qp : qpoint) = 
-    let subst = {before=qp.qpointer;after=sym_ (qpointer', BT.Loc)} in
+    let subst = [(qp.qpointer, sym_ (qpointer', BT.Loc))] in
     { ct = qp.ct;
       qpointer = qpointer';
       permission = IT.subst subst qp.permission;
@@ -150,7 +149,7 @@ module Make (O : Output) = struct
 
 
   let alpha_rename_qpredicate qpointer' (qp : qpredicate) = 
-    let subst = {before=qp.qpointer;after=sym_ (qpointer', BT.Loc)} in
+    let subst = [(qp.qpointer, sym_ (qpointer', BT.Loc))] in
     { name = qp.name;
       qpointer = qpointer';
       permission = IT.subst subst qp.permission;
@@ -160,7 +159,7 @@ module Make (O : Output) = struct
 
 
 
-  let subst (substitution : (Sym.t, IT.t) Subst.t) resource =
+  let subst (substitution : IT.t Subst.t) resource =
     match resource with
     | Point p ->
        Point {
@@ -198,9 +197,6 @@ module Make (O : Output) = struct
            iargs = List.map (IT.subst substitution) qp.iargs;
            oargs = List.map (O.subst substitution) qp.oargs;
          }
-
-
-  let substs = Subst.make_substs subst
 
 
 

@@ -16,17 +16,21 @@ open BT
 open IT
 open LC
 
-type clause = Loc.t * LC.t * AT.packing_ft
+type clause = {
+    loc : Loc.t;
+    guard : IT.t;
+    packing_ft : AT.packing_ft
+  }
 
-let pp_clause (loc, lc, c) = 
-  item "condition" (LC.pp lc) ^^ comma ^^^
-  item "return type" (AT.pp OutputDef.pp c)
+let pp_clause {loc; guard; packing_ft} = 
+  item "condition" (IT.pp guard) ^^ comma ^^^
+  item "return type" (AT.pp OutputDef.pp packing_ft)
 
-let subst_clause subst c = 
-  AT.subst OutputDef.subst subst c
+let subst_clause subst {loc; guard; packing_ft} = 
+  { loc = loc;
+    guard = IT.subst subst guard; 
+    packing_ft = AT.subst OutputDef.subst subst packing_ft }
 
-let substs_clause substs = 
-  Subst.make_substs subst_clause substs
 
 
 
@@ -84,10 +88,11 @@ let region =
     LRT.Constraint (t_ (IT.good_pointer pointer_t char_ct),
     LRT.I))))
   in
-  let clause = 
-    (loc,
-     t_ (bool_ true),
-     AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]))
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]) 
+    }
   in
   let predicate = {
       loc = loc;
@@ -143,10 +148,11 @@ let part_zero_region =
     LRT.Constraint (init_constr,
     LRT.I)))))
   in
-  let clause = 
-    (loc, 
-     t_ (bool_ true),
-     AT.of_lrt lrt (AT.I []))
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I []);
+    }
   in
   let predicate = {
       loc = loc;
@@ -179,10 +185,11 @@ let zero_region =
     in
     LRT.Resource (Predicate p, LRT.I) 
   in
-  let clause =
-    (loc, 
-     t_ (bool_ true),
-     AT.of_lrt lrt (AT.I []))
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I []);
+    }
   in
   let predicate = {
       loc = loc;
@@ -226,10 +233,11 @@ let early =
     LRT.Constraint (t_ (IT.good_pointer end_t char_ct),
     LRT.I)))))
   in
-  let clause =
-    (loc, 
-     t_ (bool_ true),
-     AT.of_lrt lrt (AT.I []))
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I [])
+    }
   in
   let predicate = {
       loc = loc;
@@ -456,12 +464,7 @@ let page_alloc_predicates struct_decls =
         (AT.I [("page", page_t)])
     in
 
-    let clause =
-      (loc, 
-       t_ (bool_ true),
-       lrt)
-    in
-
+    let clause = { loc; guard = bool_ true; packing_ft = lrt } in
     
     let predicate = 
       {
@@ -687,12 +690,14 @@ let page_alloc_predicates struct_decls =
       (* @@ Tools.skip (LRT.I) page_group_ownership *)
     in
 
-    let clause =
-      (loc, 
-       t_ (bool_ true),
-       AT.of_lrt lrt 
-         (AT.I [("pool", pool_t);
-                ("vmemmap", vmemmap_t)]))
+    let clause = {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = 
+          AT.of_lrt lrt 
+            (AT.I [("pool", pool_t);
+                   ("vmemmap", vmemmap_t)])
+      }
     in
 
     let predicate = 

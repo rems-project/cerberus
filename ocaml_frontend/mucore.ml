@@ -217,6 +217,10 @@ module Make(T : TYPES) = struct
     | M_Va_end of ('TY asym)
 
 
+  type fold_unfold =
+    | Fold
+    | Unfold
+
   type 'TY mu_expr_ =  (* (effectful) expression *)
    | M_Epure of ('TY mu_pexpr)
    | M_Ememop of 'TY mu_memop
@@ -224,6 +228,7 @@ module Make(T : TYPES) = struct
    | M_Eskip
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
+   | M_predicate of fold_unfold * string * ('TY asym) list
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
@@ -266,6 +271,20 @@ module Make(T : TYPES) = struct
     | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_texpr * annot list
 
   type 'TY mu_label_defs = (symbol, ('TY mu_label_def)) Pmap.map
+
+  let subst_label_def lt_subst substitution label_def =
+    match label_def with
+    | M_Return (loc, lt) -> 
+       let lt = lt_subst substitution lt in
+       M_Return (loc, lt)
+    | M_Label (loc, lt, args, body, annots) ->
+       let lt = lt_subst substitution lt in
+       M_Label (loc, lt, args, body, annots)
+
+  let subst_label_defs lt_subst substitution (label_defs : 'TY mu_label_defs) =
+    Pmap.map (fun def ->
+      subst_label_def lt_subst substitution def
+    ) label_defs
 
 
   type 'TY mu_fun_map_decl =

@@ -1,4 +1,3 @@
-open Subst
 open List
 open Pp
 module BT=BaseTypes
@@ -6,6 +5,7 @@ module CT = Sctypes
 module CF=Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
+open Subst
 
 
 type lit = 
@@ -678,14 +678,17 @@ and free_vars_list l =
 let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
 
 
-let subst (substitution : (Sym.t, typed) Subst.t) =
+let subst (substitution : typed subst) =
 
   let rec aux = 
 
     let lit it bt = 
       match it with
-      | Sym symbol when Sym.equal symbol substitution.before ->
-         substitution.after
+      | Sym s ->
+         begin match List.assoc_opt Sym.equal s substitution with
+         | Some after -> after
+         | None -> IT (Lit it, bt)
+         end
       | it -> IT (Lit it, bt)
     in
 
@@ -845,8 +848,6 @@ let subst (substitution : (Sym.t, typed) Subst.t) =
 
   fun it -> aux it
 
-
-let substs it = make_substs subst it
 
 
 

@@ -437,9 +437,8 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
               Z3.Solver.check solver [Z3.Boolean.mk_not context t]
            | Forall ((s, bt), _trigger, t) -> 
               let s' = Sym.fresh () in
-              let t = IT.subst Subst.{before=s; after=sym_ (s', bt)} t in
-              let t = term t in
-              Z3.Solver.check solver [Z3.Boolean.mk_not context t]
+              let t = IT.subst [(s, sym_ (s', bt))] t in
+              Z3.Solver.check solver [Z3.Boolean.mk_not context (term t)]
          in
          match result with
          | Z3.Solver.UNSATISFIABLE -> (`YES, solver)

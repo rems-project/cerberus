@@ -1,5 +1,3 @@
-open Subst
-
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
@@ -44,40 +42,25 @@ let rec subst_r i_subst substitution = function
      C (subst_c i_subst substitution c)
 
 let rec subst_l i_subst substitution = function
-  | Logical ((name,ls),t) -> 
-     if Sym.equal name substitution.before then 
-       Logical ((name,ls),t) 
-     else if SymSet.mem name (IT.free_vars substitution.after) then
-       let newname = Sym.fresh () in
-       let t' = subst_l i_subst {before=name; after=IT.sym_ (newname, ls)} t in
-       let t'' = subst_l i_subst substitution t' in
-       Logical ((newname,ls),t'')
-     else
-       let t' = subst_l i_subst substitution t in
-       Logical ((name,ls),t')
+  | Logical ((name, ls), t) -> 
+     let name' = Sym.fresh () in
+     let t' = subst_l i_subst [(name, IT.sym_ (name', ls))] t in
+     let t'' = subst_l i_subst substitution t' in
+     Logical ((name', ls), t'')
   | R r -> 
      R (subst_r i_subst substitution r)
 
 let rec subst_a i_subst substitution = function
   | Computational ((name,bt),t) -> 
-     if Sym.equal name substitution.before then 
-       Computational ((name,bt),t) 
-     else if SymSet.mem name (IT.free_vars substitution.after) then
-       let newname = Sym.fresh () in
-       let t' = subst_a i_subst {before=name; after=IT.sym_ (newname, bt)} t in
-       let t'' = subst_a i_subst substitution t' in
-       Computational ((newname,bt),t'')
-     else
-       Computational ((name,bt),subst_a i_subst substitution t)
-  | L l -> L (subst_l i_subst substitution l)
+     let name' = Sym.fresh () in
+     let t' = subst_a i_subst [(name, IT.sym_ (name', bt))] t in
+     let t'' = subst_a i_subst substitution t' in
+     Computational ((name',bt),t'')
+  | L l -> 
+     L (subst_l i_subst substitution l)
 
-let substs_l i_subst = Subst.make_substs (subst_l i_subst)
-let substs_r i_subst = Subst.make_substs (subst_r i_subst)
-let substs_c i_subst = Subst.make_substs (subst_c i_subst)
-let substs_a i_subst = Subst.make_substs (subst_a i_subst)
 
 let subst = subst_a
-let substs = substs_a
 
 
 

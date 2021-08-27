@@ -44,7 +44,7 @@ let subst substitution c =
      T (IT.subst substitution it)
   | Forall ((s, bt), trigger, body) ->
      let s' = Sym.fresh_same s in 
-     let substitution' = Subst.{before = s; after = IT.sym_ (s', bt)} in
+     let substitution' = [(s, IT.sym_ (s', bt))] in
      let trigger = Option.map (subst_trigger substitution') trigger in
      let trigger = Option.map (subst_trigger substitution) trigger in
      let body = IT.subst substitution' body in
@@ -53,7 +53,6 @@ let subst substitution c =
 
 
 
-let substs c = Subst.make_substs subst c
 
 let rec free_vars_trigger = function
   | T_Term it ->
