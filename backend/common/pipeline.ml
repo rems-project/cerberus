@@ -479,8 +479,9 @@ let print_core (conf, io) ~filename core_file =
       io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file core_file)
   end >>= fun () ->
   whenM (List.mem Core conf.pprints) begin
-    fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
+      fun () ->
+      let pp_file = if List.mem Annot conf.ppflags then Pp_core.WithLocations.pp_file else Pp_core.Basic.pp_file in
+      io.run_pp (wrap_fout (Some (filename, "core"))) (pp_file core_file)
   end >>= fun () ->
   return core_file
 
