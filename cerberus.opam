@@ -14,7 +14,7 @@ authors: [
   "Rodolphe Lepigre"
   "James Lingard"
 ]
-license: "BSD2"
+license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
