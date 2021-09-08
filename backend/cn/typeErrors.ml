@@ -106,7 +106,7 @@ type type_error =
   | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_pp
   | Implementation_defined_behaviour of document * state_pp
   | Unspecified of CF.Ctype.ctype
-  | StaticError of string
+  | StaticError of string * state_pp
 
   | Generic of Pp.document
 
@@ -251,8 +251,8 @@ let pp_type_error te =
      (!^"Implementation defined behaviour:" ^^^ impl, [consider_state state])
   | Unspecified _ctype ->
      (!^"Unspecified value", [])
-  | StaticError err ->
-     (!^("Static error: " ^ err), [])
+  | StaticError (err, state) ->
+     (!^("Static error: " ^ err), [consider_state state])
 
   | Generic err ->
      (err, [])

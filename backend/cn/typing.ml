@@ -29,10 +29,10 @@ module Make(L : Local.S) : sig
   val get_l : Sym.t -> LogicalSorts.t m
   val add_a : Sym.t -> (BaseTypes.t * Sym.t) -> unit m
   val add_l : Sym.t -> LogicalSorts.t -> unit m
+  val add_ls : (Sym.t * LogicalSorts.t) list -> unit m
   val add_c : LogicalConstraints.t -> unit m
   val add_cs : LogicalConstraints.t list -> unit m
   val add_r : Local.where option -> Resources.RE.t -> unit m
-  val remove_resource : Resources.RE.t -> unit m
   val map_and_fold_resources : 
     (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
     'acc -> 'acc m
@@ -142,6 +142,11 @@ end = struct
     let@ l = get () in
     set (L.add_l s ls l)
 
+  let add_ls lvars = 
+    let@ l = get () in
+    let l = List.fold_left (fun l (s, ls) -> L.add_l s ls l) l lvars in
+    set l
+
   let add_c lc = 
     let@ l = get () in
     set (L.add_c lc l)
@@ -153,10 +158,6 @@ end = struct
   let add_r oloc r = 
     let@ l = get () in
     set (L.add_r oloc r l)
-
-  let remove_resource re = 
-    let@ l = get () in
-    set (L.remove_resource re l)
 
   let map_and_fold_resources f acc =
     let@ l = get () in

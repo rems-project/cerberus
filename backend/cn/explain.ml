@@ -326,7 +326,16 @@ module Make
     | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
     | _ -> SymSet.empty
 
-  let pp_state_aux local {substitution; vclasses; relevant} o_model =
+  let pp_state_aux local {substitution; vclasses; relevant} model =
+
+    let evaluate = evaluate model in
+    let evaluate_array (q_s, q_bt) it = 
+      match is_app it with
+      | Some (f, arg) when IT.equal arg ((sym_ (q_s, q_bt))) ->
+         evaluate f
+      | _ -> Debug_ocaml.error "resource not normalised"
+    in
+             
 
     let (points, predicates, predicate_oargs, reported) = 
       List.fold_right (fun resource acc ->
@@ -340,9 +349,9 @@ module Make
           match resource with
           | Point p ->
              let loc_expr = IT.pp (IT.subst substitution p.pointer) in
-             let loc_val = !^(evaluate o_model p.pointer) in
-             let permission_v = evaluate o_model p.permission in
-             let init_v = evaluate o_model p.init in
+             let loc_val = !^(evaluate p.pointer) in
+             let permission_v = evaluate p.permission in
+             let init_v = evaluate p.init in
              let state = 
                Sctypes.pp p.ct ^^^
                  parens (
@@ -352,8 +361,7 @@ module Make
              in
              let value = 
                IT.pp (IT.subst substitution p.value) ^^^ 
-               equals ^^^
-               !^(evaluate o_model p.value) 
+                 equals ^^^ !^(evaluate p.value) 
              in
              let entry = (Some loc_expr, Some loc_val, Some state, Some value) in
              let reported = 
@@ -371,8 +379,8 @@ module Make
           | QPoint p ->
              let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = evaluate o_model p.permission in
-             let init_v = evaluate o_model p.init in
+             let permission_v = evaluate_array (p.qpointer, BT.Loc) p.permission in
+             let init_v = evaluate_array (p.qpointer, BT.Loc) p.init in
              let state = 
                Sctypes.pp p.ct ^^^
                  parens (
@@ -383,7 +391,7 @@ module Make
              let value = 
                IT.pp (IT.subst substitution p.value) ^^^ 
                equals ^^^
-               !^(evaluate o_model p.value) 
+               !^(evaluate_array (p.qpointer, BT.Loc) p.value) 
              in
              let entry = (Some loc_expr, None, Some state, Some value) in
              let reported = 
@@ -401,8 +409,8 @@ module Make
           | Predicate p ->
              let id = make_predicate_name () in
              let loc_expr = IT.pp (IT.subst substitution p.pointer) in
-             let loc_val = !^(evaluate o_model p.pointer) in
-             let permission_v = evaluate o_model p.permission in
+             let loc_val = !^(evaluate p.pointer) in
+             let permission_v = evaluate p.permission in
              let state = 
                !^id ^^^ equals ^^^
                Pp.string p.name ^^
@@ -415,7 +423,7 @@ module Make
              let oargs = 
                List.map2 (fun oarg (name, _) ->
                    let var = !^id ^^ dot ^^ dot ^^ !^name in
-                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate o_model oarg) in
+                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate oarg) in
                    (Some var, Some value)
                  ) p.oargs predicate_def.oargs
              in
@@ -427,7 +435,7 @@ module Make
              let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
              let id = make_predicate_name () in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = evaluate o_model p.permission in
+             let permission_v = evaluate_array (p.qpointer, Loc) p.permission in
              let state = 
                !^id ^^^ equals ^^^
                Pp.string p.name ^^
@@ -440,7 +448,7 @@ module Make
              let oargs = 
                List.map2 (fun oarg (name, _) ->
                    let var = !^id ^^ dot ^^ dot ^^ !^name in
-                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate o_model oarg) in
+                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate_array (p.qpointer, Loc) oarg) in
                    (Some var, Some value)
                  ) p.oargs predicate_def.oargs
              in
@@ -460,7 +468,7 @@ module Make
     let memory_var_lines = 
       List.filter_map (fun (vclass,c) ->
           if report vclass && BT.equal vclass.sort Loc then
-               let loc_val = !^(evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
+               let loc_val = !^(evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
                let loc_expr = Ast.Terms.pp false c.path in
                let entry = (Some loc_expr, Some loc_val, None, None) in
                Some entry
@@ -471,7 +479,7 @@ module Make
       List.filter_map (fun (vclass,c) ->
           if report vclass && not (BT.equal vclass.sort Loc) then
             let expr = Ast.Terms.pp false c.path in
-            let state = !^(evaluate o_model (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
+            let state = !^(evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
             let entry = (Some expr, Some state) in
             Some entry
           else
@@ -485,8 +493,8 @@ module Make
 
 
 
-  let pp_state_with_model local explanation o_model =
-    let (memory, predicates, variables) = (pp_state_aux local explanation o_model) in
+  let pp_state_with_model local explanation model =
+    let (memory, predicates, variables) = (pp_state_aux local explanation model) in
     table4 ("pointer", "location", "state", "value") 
       (List.map (fun (a, b, c, d) -> ((L, a), (R, b), (R, c), (L, d))) memory) ^/^
     table3 ("pointer", "location", "predicate") 
@@ -522,13 +530,15 @@ module Make
    *   pp_state local explanation *)
 
   let undefined_behaviour local = 
-    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
+    assert (not provable);
     let model = S.get_model (L.solver local) in
     let explanation = explanation local model SymSet.empty in
     pp_state_with_model local explanation model
 
   let implementation_defined_behaviour local it = 
-    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
+    assert (not provable);
     let model = S.get_model (L.solver local) in
     let explanation = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
@@ -540,7 +550,8 @@ module Make
     (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
-    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
+    assert (not provable);
     let model = S.get_model (L.solver local) in
     let explanation = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
@@ -570,7 +581,8 @@ module Make
 
 
   let illtyped_index_term local context it =
-    let _ = S.provable (L.solver local) (t_ (bool_ false)) in
+    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
+    assert (not provable);
     let model = S.get_model (L.solver local) in
     let explanation = explanation local model (IT.free_vars_list [it; context]) in
     let it = IT.pp (IT.subst explanation.substitution it) in

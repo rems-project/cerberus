@@ -24,11 +24,11 @@ let pp_where = function
   | Label l -> !^l
   | Loc loc -> !^(Loc.simple_location loc)
 
-type old = { address : IT.t; value : IT.t; where : where }
-
-let pp_old old = 
-  parens (IT.pp old.address ^^^ !^"->" ^^^ IT.pp old.value) ^^ at ^^ 
-    pp_where old.where
+(* type old = { address : IT.t; value : IT.t; where : where }
+ * 
+ * let pp_old old = 
+ *   parens (IT.pp old.address ^^^ !^"->" ^^^ IT.pp old.value) ^^ at ^^ 
+ *     pp_where old.where *)
 
 module type S = sig
 
@@ -49,9 +49,8 @@ module type S = sig
   val add_cs : LC.t list -> t -> t
   val add_r : where option -> RE.t -> t -> t
   val solver : t -> Z3.Solver.solver
-  val old : t -> old list
+  (* val old : t -> old list *)
 
-  val remove_resource : RE.t -> t -> t
   val map_and_fold_resources : 
     (RE.t -> 'acc -> RE.t * 'acc) -> 
     t -> 'acc -> t * 'acc
@@ -77,7 +76,7 @@ module Make (S : Solver.S) : S = struct
       resources : RE.t list;
       constraints : LC.t list;
       solver : Z3.Solver.solver;
-      old : old list;
+      (* old : old list; *)
     }
 
 
@@ -87,7 +86,7 @@ module Make (S : Solver.S) : S = struct
       resources = [];
       constraints = [];
       solver = Z3.Solver.mk_simple_solver Solver.context;
-      old = [];
+      (* old = []; *)
     }
 
 
@@ -107,9 +106,9 @@ module Make (S : Solver.S) : S = struct
     item "resources" 
       (Pp.list RE.pp local.resources) ^/^
     item "constraints" 
-      (Pp.list LC.pp local.constraints) ^/^
-    item "old" 
-      (Pp.list pp_old local.old)
+      (Pp.list LC.pp local.constraints) (* ^/^
+     * item "old" 
+     *   (Pp.list pp_old local.old) *)
 
 
   let all_computational (local : t) = SymMap.bindings local.computational
@@ -119,7 +118,7 @@ module Make (S : Solver.S) : S = struct
 
   let solver local = local.solver
 
-  let old local = local.old
+  (* let old local = local.old *)
 
 
   let bound sym kind local = 
@@ -141,6 +140,9 @@ module Make (S : Solver.S) : S = struct
   let add_l lname ls (local : t) = 
     {local with logical = SymMap.add lname ls local.logical}
 
+  let add_ls lvars local = 
+    List.fold_left (fun local (s,ls) -> add_l s ls local) local lvars
+
   let add_c lc (local : t) = 
     let lcs = Simplify.simp_lc_flatten local.constraints lc in
     let scs = List.concat_map S.constr lcs in
@@ -158,51 +160,39 @@ module Make (S : Solver.S) : S = struct
   let add_r owhere r (local : t) = 
     match RE.simp_or_empty local.constraints r with
     | Some r -> 
-       (* let r, (l, lcs1) = RE.normalise r in *)
-       let resources = r :: local.resources in
+       let (r, lvars, lcs1) = RE.normalise r in
        let lcs2 = 
          RE.derived_constraint r ::
            List.map (fun r' -> RE.derived_constraints r r') 
              (all_resources local)
        in
-       let local = {local with resources} in
-       let local = add_cs lcs2 local in
-       let local = 
-         let old = match owhere, r with
-           | Some where, Point p -> 
-              { address = p.pointer; value = p.value; where } :: local.old
-           | _ -> 
-              local.old
-         in
-         { local with old }
-       in
+       let local = add_ls lvars local in
+       let local = {local with resources = r :: local.resources} in
+       let local = add_cs (lcs1 @ lcs2) local in
        local
     | None ->
        local
-
-
-  let remove_resource resource local = 
-    let resources = 
-      List.filter (fun r -> 
-          not (RE.equal r resource)
-        ) local.resources
-    in
-    { local with resources }
 
 
 
 
   let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
         (local : t) (acc : 'acc) = 
-    let resources, acc =
-      List.fold_right (fun re (resources, acc) ->
+    let (resources, lvars, lcs), acc =
+      List.fold_right (fun re ((resources, lvars, lcs), acc) ->
           let (re, acc) = f re acc in
           match RE.simp_or_empty local.constraints re with
-          | Some re -> (re :: resources, acc)
-          | None -> (resources, acc)
-        ) local.resources ([], acc)
+          | Some re -> 
+             let (re, lvars', lcs') = RE.normalise re in
+             ((re :: resources, lvars' @ lvars, lcs' @ lcs), acc)
+          | None -> 
+             ((resources, lvars, lcs), acc)
+        ) local.resources (([],[],[]), acc)
     in
-    ({local with resources}, acc)
+    let local = {local with resources} in
+    let local = add_ls lvars local in
+    let local = add_cs lcs local in
+    (local, acc)
 
 
 

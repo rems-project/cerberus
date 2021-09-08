@@ -712,17 +712,11 @@ module Make
     (* could optimise to delay checking the constraints until later *)
     let match_resources loc failure =
 
-      let make_array (x_s, x_bt) body =
-        let x_t = sym_ (x_s, x_bt) in
-        match body with
-        | IT (Array_op (App (array, x')), _) when IT.equal x_t x' ->
-           return array
-        | _ ->
-           let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
-           let f_def = forall_ (x_s, x_bt) None (eq_ (app_ f_t x_t, body)) in
-           let@ () = add_l f_s (IT.bt f_t) in
-           let@ () = add_c f_def in
-           return f_t
+      let make_array quantifier body = 
+        let body, ls, cs = RE.make_array quantifier body in
+        let@ () = add_ls ls in
+        let@ cs = add_cs cs in
+        return body
       in
 
       let ls_matches_spec unis uni_var instantiation = 
@@ -1230,7 +1224,10 @@ module Make
          Debug_ocaml.error "todo: PEconstrained"
       | M_PEerror (err, asym) ->
          let@ arg = arg_of_asym asym in
-         fail arg.loc (lazy (StaticError err))
+         failS loc (fun local ->
+             let expl = E.undefined_behaviour local in
+             (StaticError (err, expl))
+           )
       | M_PEctor (ctor, asyms) ->
          let@ args = args_of_asyms asyms in
          let@ vt = infer_constructor loc ctor args in

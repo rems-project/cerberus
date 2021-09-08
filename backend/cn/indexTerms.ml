@@ -851,6 +851,9 @@ let subst (substitution : typed subst) =
 
 
 
+let is_lit = function
+  | IT (Lit lit, bt) -> Some (lit, bt)
+  | _ -> None
 
 
 let is_sym = function

@@ -9,7 +9,7 @@ open LogicalConstraints
 let context = 
   Z3.mk_context [
       ("model", "true");
-      ("well_sorted_check","false");
+      ("well_sorted_check","true");
       (* ("trace", "true");
        * ("trace_file_name", "trace.smt") *)
     ] 
@@ -20,6 +20,8 @@ let () = Z3.set_global_param "smt.auto-config" "false"
 let () = Z3.set_global_param "smt.mbqi" "false"
 let () = Z3.set_global_param "smt.pull-nested-quantifiers" "true"
 let () = Z3.set_global_param "smt.macro_finder" "true"
+let () = Z3.set_global_param "smt.arith.solver" "2"
+
 
 
 
@@ -425,10 +427,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let check solver (lc : LC.t) =  
     let () = Debug_ocaml.begin_csv_timing "solver" in
     let result = match lc with
-      (* as similarly suggested by Robbert *)
-      | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-         let solver = Z3.Solver.mk_simple_solver context in
-         (`YES, solver)
+      (* (\* as similarly suggested by Robbert *\)
+       * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
+       *    (`YES, solver) *)
       | _ ->
          let result = match lc with
            | T t ->
