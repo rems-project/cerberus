@@ -65,6 +65,10 @@ let rec sequentialise_expr (Expr annot expr_) =
         Epar (List.map sequentialise_expr es)
     | Ewait _ ->
         expr_
+    | Epack _ _ ->
+        expr_
+    | Eunpack _ _ ->
+        expr_
   end
 
 

@@ -1491,6 +1491,10 @@ let rec collect_labels env (Expr _ expr_) =
         ) env es
     | Ewait _ ->
         E.return env
+    | Epack _ _ ->
+        E.return env
+    | Eunpack _ _ ->
+        E.return env
   end
 
 
@@ -1673,6 +1677,18 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         end
     | Ewait id ->
         error "typecheck_expr, Ewait"
+
+    (* just check that pure arguments are fine *)
+    | Epack id pes ->
+       E.mapM (infer_pexpr tagDefs env) pes >>= fun pes' ->
+       E.mapM export_pexpr pes' >>= fun pes' ->
+       E.return (Epack id pes')
+    (* just check that pure arguments are fine *)
+    | Eunpack id pes ->
+       E.mapM (infer_pexpr tagDefs env) pes >>= fun pes' ->
+       E.mapM export_pexpr pes' >>= fun pes' ->
+       E.return (Eunpack id pes')
+
   end
 
 

@@ -2,25 +2,28 @@ module Loc = Locations
 
 module Make(L : Local.S) : sig
 
-  type error = 
-    Locations.loc * Tools.stacktrace option * TypeErrors.type_error Lazy.t
+
+  type e = TypeErrors.type_error
+  type error = (Locations.loc * e Lazy.t) * string option (* stack trace*)
 
 
   type 'a t
   type 'a m = 'a t
-  val run : 'a m -> L.t -> ('a * L.t, error) Result.t
+  type failure = L.t -> TypeErrors.type_error 
   val return : 'a -> 'a m
   val bind : 'a m -> ('a -> 'b m) -> 'b m
-  val (let@) : 'a m -> ('a -> 'b m) -> 'b m
-  val fail : Locations.t -> TypeErrors.type_error Lazy.t -> 'a m
-  val attempt : (('a m) Lazy.t) List1.t -> 'a m
-  val get: unit -> L.t m
   val pure : 'a m -> 'a m
-  val all_computational : unit -> ((Sym.t * (BaseTypes.t * Sym.t)) list) m
-  val all_logical : unit -> ((Sym.t * LogicalSorts.t) list) m
+  val (let@) : 'a m -> ('a -> 'b m) -> 'b m
+  val fail : Loc.t -> TypeErrors.type_error Lazy.t -> 'a m
+  val failS : Loc.t -> failure -> 'a m
+  val run : 'a m -> L.t -> ('a * L.t, error) Result.t
+
+  (* val get: unit -> L.t m *)
+  val print_with_local : (L.t -> unit) -> unit m
   val all_constraints : unit -> (LogicalConstraints.t list) m
   val all_resources : unit -> (Resources.RE.t list) m
-  val solver : unit -> Z3.Solver.solver m
+  val provable : (LogicalConstraints.t -> bool) m
+  val model : unit -> Z3.Model.model m
   val bound : Sym.t -> Kind.t -> bool m
   val get_a : Sym.t -> (BaseTypes.t * Sym.t) m
   val get_l : Sym.t -> LogicalSorts.t m
@@ -43,14 +46,12 @@ end = struct
   type e = TypeErrors.type_error
   type s = L.t
 
-  type error = 
-    Locations.loc * Tools.stacktrace option * e Lazy.t
+  type error = (Locations.loc * e Lazy.t) * string option 
 
-  type 'a t = 
-    { c : s -> ('a * s, error) Result.t }
+  type 'a t = { c : s -> ('a * s, error) Result.t }
+  type 'a m = 'a t
+  type failure = L.t -> TypeErrors.type_error
 
-  type 'a m = 
-    'a t
 
   let run m s = 
     m.c s
@@ -76,26 +77,13 @@ end = struct
 
 
   let error loc e = 
-    (loc, Tools.do_stack_trace (),  e)
+    ((loc, e), Tools.do_stack_trace ())
 
-  let fail (loc: Locations.loc) (e: 'e Lazy.t) : 'a t = 
+  let fail (loc: Loc.loc) (e: 'e Lazy.t) : 'a t = 
     { c = fun _ -> Error (error loc e) }
 
-
-  let rec attempt (fs : (('a t) Lazy.t) List1.t) : 'a t = 
-    let c s = 
-      let (hd, tl) = List1.dest fs in
-      let hd_run = Lazy.force hd in
-      match hd_run.c s, tl with
-      | Ok (a, s'), _ -> 
-         Ok (a, s')
-      | Error _, hd' :: tl' -> 
-         (attempt (List1.make (hd', tl'))).c s
-      | Error err, _ -> 
-         Error err
-    in
-    { c }
-
+  let failS (loc : Loc.loc) (f : failure) : 'a t = 
+    { c = fun s -> Error (error loc (lazy (f s))) }
 
 
   let pure (m : 'a t) : 'a t =
@@ -113,13 +101,10 @@ end = struct
 
 
 
-  let all_computational () = 
+  let print_with_local printer = 
     let@ l = get () in
-    return (L.all_computational l)
-
-  let all_logical () = 
-    let@ l = get () in
-    return (L.all_logical l)
+    let () = printer l in
+    return ()
 
   let all_constraints () = 
     let@ l = get () in
@@ -129,9 +114,13 @@ end = struct
     let@ l = get () in
     return (L.all_resources l)
 
-  let solver () =
+  let provable =
     let@ l = get () in
-    return (L.solver l)
+    return (fun lc -> L.provable (L.solver l) lc)
+
+  let model () =
+    let@ l = get () in
+    return (L.get_model (L.solver l))
 
   let bound s kind = 
     let@ l = get () in

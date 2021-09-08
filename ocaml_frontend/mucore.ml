@@ -217,9 +217,9 @@ module Make(T : TYPES) = struct
     | M_Va_end of ('TY asym)
 
 
-  type fold_unfold =
-    | Fold
-    | Unfold
+  type pack_unpack =
+    | Pack
+    | Unpack
 
   type 'TY mu_expr_ =  (* (effectful) expression *)
    | M_Epure of ('TY mu_pexpr)
@@ -228,7 +228,7 @@ module Make(T : TYPES) = struct
    | M_Eskip
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
-   | M_predicate of fold_unfold * string * ('TY asym) list
+   | M_Epredicate of pack_unpack * Symbol.identifier * ('TY asym) list
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)

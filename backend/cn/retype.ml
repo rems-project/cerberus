@@ -363,10 +363,12 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
        return (New.M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (New.M_Eproc (name,asyms))
-    | M_predicate (Fold, name, asyms) ->
-       return (New.M_predicate (Fold, name, asyms))
-    | M_predicate (Unfold, name, asyms) ->
-       return (New.M_predicate (Unfold, name, asyms))
+    | M_Epredicate (pack_unpack, name, asyms) ->
+       let pack_unpack = match pack_unpack with
+         | Pack -> New.Pack
+         | Unpack -> New.Unpack
+       in
+       return (New.M_Epredicate (pack_unpack, name, asyms))
   in
 
   return (New.M_Expr (loc, annots,expr_))
@@ -483,7 +485,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       | Old.M_Def (ict,cbt,pexpr) ->
          let@ ict = 
            let@ bt = Conversions.bt_of_core_base_type Loc.unknown ict in
-           return (RT.Computational ((Sym.fresh (), bt), LRT.I))
+           return (RT.Computational ((Sym.fresh (), bt), (Loc.unknown, None), LRT.I))
          in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
          let@ pexpr = retype_tpexpr pexpr in
@@ -495,11 +497,11 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
            let@ args = 
              ListM.mapM (fun bt -> 
                  let@ bt = Conversions.bt_of_core_base_type Loc.unknown bt in
-                 return (Sym.fresh (), bt)
+                 return (Sym.fresh (), bt, (Loc.unknown, None))
                ) argbts 
            in
            let ft = (AT.mComputationals args) 
-                      (AT.I (RT.Computational ((Sym.fresh (), rbt), LRT.I)))
+                      (AT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I)))
            in
            return ft
          in

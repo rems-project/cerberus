@@ -29,8 +29,6 @@ let pair_equal equalityA equalityB (a,b) (a',b') =
  *   | _ -> Debug_ocaml.error err_str *)
 
 
-type stacktrace = string
-
 
 
 let unsupported (loc : Locations.t) (err : Pp.document) : 'a = 

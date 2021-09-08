@@ -4164,6 +4164,10 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
           (* TODO: erasing inline assembly for now *)
           E.return AilSskip
+      | CabsSpack id es ->
+          AilSpack id <$> E.mapM desugar_expression es
+      | CabsSunpack id es ->
+          AilSunpack id <$> E.mapM desugar_expression es
     end
 
 val desugar_statement: cabs_statement -> E.desugM (statement unit)
@@ -4214,6 +4218,10 @@ let rec register_labels (CabsStatement _ _ stmt_) =
     | CabsSasm _ _ _ ->
         (* TODO: check whether labels can declared here *)
         E.return ()
+    | CabsSpack _ _ ->
+       E.return ()
+    | CabsSunpack _ _ ->
+       E.return ()
   end
 
 

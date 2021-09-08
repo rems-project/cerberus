@@ -3158,6 +3158,10 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         St.mapM_ collect_cases_ ss
     | A.AilSreg_store _ _ ->
         St.return ()
+    | A.AilSpack _ _ ->
+        St.return ()
+    | A.AilSunpack _ _ ->
+        St.return ()
   end
 let collect_cases s =
   snd $ St.runStateM (collect_cases_ s) <| found_default= false; case_csts= [] |>
@@ -3251,6 +3255,10 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
         A.AilSpar <$> St.mapM erase_loop_control_aux ss
     | A.AilSreg_store _ _ ->
         St.return stmt_
+    | A.AilSpack _ _ ->
+        St.return stmt_
+    | A.AilSunpack _ _ ->
+        St.return stmt_
   end
 
 
@@ -3312,6 +3320,10 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
         (* TODO: check *)
         St.mapM_ collect_visibles_ ss
     | A.AilSreg_store _ _ ->
+        St.return ()
+    | A.AilSpack _ _ ->
+        St.return ()
+    | A.AilSunpack _ _ ->
         St.return ()
   end
 
@@ -3771,6 +3783,41 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
 
     | A.AilSreg_store _ _ ->
         error "TODO: translate_stmt AilSreg_store"
+    | A.AilSpack id es ->
+       (* copying and adapting code from that for AilEcall *)
+        E.foldlM (fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) arg_e ->
+          let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
+          E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
+          translate_expression arg_e >>= fun arg_core_e ->
+          E.return ((arg_sym_pat, arg_core_e) :: arg_sym_pats_and_arg_core_es, 
+                    arg_sym_pe :: arg_sym_pes)
+          ) ([],[]) es >>= fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) ->
+        let e = 
+          List.foldr (fun (arg_sym_pat, arg_core_e) e ->
+              Caux.mk_sseq_e arg_sym_pat arg_core_e e
+            ) 
+            (C.Expr [Annot.Aloc loc] (C.Epack id arg_sym_pes))
+            arg_sym_pats_and_arg_core_es
+        in
+        E.return e
+    | A.AilSunpack id es ->
+       (* copying and adapting code from that for AilEcall *)
+        E.foldlM (fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) arg_e ->
+          let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
+          E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
+          translate_expression arg_e >>= fun arg_core_e ->
+          E.return ((arg_sym_pat, arg_core_e) :: arg_sym_pats_and_arg_core_es, 
+                    arg_sym_pe :: arg_sym_pes)
+          ) ([],[]) es >>= fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) ->
+        let e = 
+          List.foldr (fun (arg_sym_pat, arg_core_e) e ->
+              Caux.mk_sseq_e arg_sym_pat arg_core_e e
+            ) 
+            (C.Expr [Annot.Aloc loc] (C.Eunpack id arg_sym_pes))
+            arg_sym_pats_and_arg_core_es
+        in
+        E.return e
+        
   end
 
 

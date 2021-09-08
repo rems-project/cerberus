@@ -334,6 +334,10 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Epar (List.map self es))
     | Ewait _ ->
         expr
+    | Epack _ _ ->
+        expr
+    | Eunpack _ _ ->
+        expr
   end
 
 

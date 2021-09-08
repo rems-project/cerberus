@@ -25,8 +25,21 @@ type situation =
   | LabelCall of label_kind
   | Subtyping
   | ArrayShift
-  | Fold of Resources.predicate_name
-  | Unfold of Resources.predicate_name
+  | MemberShift
+  | Pack of Id.t
+  | Unpack of Id.t
+
+let checking_situation = function
+  | Access access -> !^"checking access"
+  | FunctionCall -> !^"checking function call"
+  | LabelCall Return -> !^"checking return"
+  | LabelCall Loop -> !^"checking loop entry"
+  | LabelCall Other -> !^"checking label call"
+  | Subtyping -> !^"checking subtyping"
+  | ArrayShift -> !^"array shifting"
+  | MemberShift -> !^"member shifting"
+  | Pack name -> !^"packing predicate" ^^^ Id.pp name
+  | Unpack name -> !^"unpacking predicate" ^^^ Id.pp name
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -37,17 +50,6 @@ let for_access = function
   | Store (Some m) -> !^"struct member" ^^^ Id.pp m
   | Free -> !^"for free-ing"
 
-let checking_situation = function
-  | Access access -> !^"checking access"
-  | FunctionCall -> !^"checking function call"
-  | LabelCall Return -> !^"checking return"
-  | LabelCall Loop -> !^"checking loop entry"
-  | LabelCall Other -> !^"checking label call"
-  | Subtyping -> !^"checking subtyping"
-  | ArrayShift -> !^"array shifting"
-  | Fold name -> !^"folding predicate" ^^^ Resources.pp_predicate_name name
-  | Unfold name -> !^"folding predicate" ^^^ Resources.pp_predicate_name name
-
 let for_situation = function
   | Access access -> for_access access
   | FunctionCall -> !^"for calling function"
@@ -56,8 +58,9 @@ let for_situation = function
   | LabelCall Other -> !^"for calling label"
   | Subtyping -> !^"for subtyping"
   | ArrayShift -> !^"for array shifting"
-  | Fold name -> !^"for folding predicate" ^^^ Resources.pp_predicate_name name
-  | Unfold name -> !^"for folding predicate" ^^^ Resources.pp_predicate_name name
+  | MemberShift -> !^"for member shifting"
+  | Pack name -> !^"for packing predicate" ^^^ Id.pp name
+  | Unpack name -> !^"for unpacking predicate" ^^^ Id.pp name
 
 
 
@@ -80,26 +83,23 @@ type type_error =
   | Missing_ctype_predicate of Sctypes.t
   | Missing_member of BT.tag * BT.member
 
-  | Missing_global_ownership of {addr : doc; used : (loc list) option; situation : situation}   
-  | Missing_ownership of {addr : doc; state : state_pp; used : (loc list) option; situation : situation}   
-  | Unknown_resource_size of {resource: doc; state : state_pp; situation : situation}
-  | Missing_resource of {resource : doc; state : state_pp; used: (loc list) option; situation : situation}
+  | Missing_resource of {resource : doc; state : state_pp; situation : situation; oinfo : info option}
   | Resource_mismatch of {has: doc; state : state_pp; expect: doc; situation : situation}
-  | Cannot_unpack of {resource : doc; state : state_pp; situation : situation}
   | Uninitialised_read of {is_member : BT.member option; state : state_pp}
   | Unused_resource of {resource: doc; state : state_pp}
-  | Misaligned of access
 
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
+  | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Unsat_constraint of {constr : doc; hint : doc option; state : state_pp; situation : situation}
-  | Unconstrained_logical_variable of Sym.t
-  | Logical_variable_not_good_for_unification of Sym.t
+  | Write_value_unrepresentable of {state : state_pp}
+  | Unsat_constraint of {constr : doc; state : state_pp; info : info}
+  | Unconstrained_logical_variable of Sym.t * string option
+  | Logical_variable_not_good_for_unification of Sym.t * string option
 
   | Kind_mismatch of {has: Kind.t; expect: Kind.t}
 
@@ -124,11 +124,6 @@ type type_error =
 
 let pp_type_error te = 
 
-  let pp_o_used locs = 
-    !^"Maybe last used in the following places:" ^^^
-      Pp.list Loc.pp locs
-  in
-  let pp_used = Option.map pp_o_used in
   let consider_state s = !^"Consider the state:" ^/^ s in
 
 
@@ -157,33 +152,21 @@ let pp_type_error te =
      (!^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ 
         Id.pp member, [])
 
-  | Missing_global_ownership {addr; used; situation} ->
-     let msg = 
-       !^"Missing ownership of global location" ^^^ 
-         addr ^^^ for_situation situation ^^ hardline ^^
-       !^"Maybe missing an 'accesses' specification?"
+  | Missing_resource {resource; state; situation; oinfo} ->
+     let msg = match oinfo with
+       | Some (spec_loc, odescr) ->
+          let (_, pos) = Locations.head_pos_of_location spec_loc in
+          !^"Missing resource from" ^^^ !^pos ^^^
+            (match odescr with
+             | Some descr -> parens !^descr ^^ space
+             | None -> Pp.empty
+            ) ^^^ for_situation situation 
+       | None ->
+          !^"Missing resource" ^^^ resource ^^^ for_situation situation 
      in
-     (msg, Option.list [pp_used used])
-  | Missing_ownership {addr; state; used; situation} ->
-     let msg = 
-       !^"Missing ownership of location" ^^^ 
-         addr ^^^ for_situation situation 
-     in
-     (msg, consider_state state :: Option.list [pp_used used])
-  | Unknown_resource_size {resource; state; situation} ->
-     let msg = 
-       !^"Cannot tell size of resource" ^^^ 
-         resource ^^^ for_situation situation 
-     in
-     (msg, [consider_state state])
-  | Missing_resource {resource; state; used; situation} ->
-     let msg = !^"Missing resource" ^^^ resource ^^^ for_situation situation in
-     (msg, consider_state state :: Option.list [pp_used used] )
+     (msg, [consider_state state] )
   | Resource_mismatch {has; state; expect; situation} ->
      let msg = !^"Need a resource" ^^^ expect ^^^ !^"but have resource" ^^^ has in
-     (msg, [consider_state state])
-  | Cannot_unpack {resource; state; situation} ->
-     let msg = !^"Cannot unpack resource" ^^^ resource ^^^ for_situation situation in
      (msg, [consider_state state])
 
   | Uninitialised_read {is_member; state} ->
@@ -195,16 +178,6 @@ let pp_type_error te =
   | Unused_resource {resource;state} ->
      let msg = !^"Left-over unused resource" ^^^ resource in
      (msg, [consider_state state])
-  | Misaligned access ->
-     let msg = match access with
-     | Kill -> !^"Misaligned de-allocation operation"
-     | Deref -> !^"Misaligned dereference operation"
-     | Load _ -> !^"Misaligned read"
-     | Store _ ->  !^"Misaligned write"
-     | Free ->  !^"Misaligned free"
-     in
-     (msg, [])
-
   | Number_members {has;expect} ->
      (!^"Wrong number of struct members:" ^^^
         !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
@@ -224,26 +197,49 @@ let pp_type_error te =
   | Mismatch {has; expect} ->
      (!^"Expected value of type" ^^^ LS.pp expect ^^^
         !^"but found value of type" ^^^ LS.pp has, [])
+  | Mismatch_lvar { has; expect; spec_info} ->
+     let (spec_loc, ospec_descr) = spec_info in
+     let (_, pos) = Locations.head_pos_of_location spec_loc in
+     (!^"Expected value of type" ^^^ LS.pp expect ^^^
+        !^"for logical variable from" ^^^ !^pos ^^^
+          (match ospec_descr with
+           | Some descr -> parens !^descr ^^ space
+           | None -> Pp.empty
+          ) ^^
+        !^"but found value of type" ^^^ LS.pp has, [])
+
   | Illtyped_it {context;it;has;expected} ->
      (!^"Illtyped expression" ^^ colon ^^^ context ^^ dot ^^^ 
         !^"Expected" ^^^ it ^^^ !^"to have" ^^^ !^expected ^^^ !^"type" ^^^
           !^"but has" ^^^ LS.pp has ^^^ !^"type",  [])
   | Polymorphic_it it ->
      (!^"Polymorphic index term" ^^ colon ^^^ (IndexTerms.pp it), [])
-  | Unsat_constraint {constr;hint; state; situation} ->
-     let msg = match hint with
-       | Some hint -> 
-          !^"Unsatisfied constraint" ^^^ for_situation situation ^^ colon ^^^
-            parens hint ^^^ constr 
-       | None -> 
-          !^"Unsatisfied constraint" ^^^ for_situation situation ^^ colon ^^^
-            constr 
+  | Write_value_unrepresentable {state : state_pp} ->
+     let msg = !^"Write value unrepresentable" in
+     (msg, [consider_state state])
+  | Unsat_constraint {constr; state; info} ->
+     let (spec_loc, odescr) = info in
+     let (_, pos) = Locations.head_pos_of_location spec_loc in
+     let msg = match odescr with
+       | None -> !^"Unsatisfied constraint" ^^^ parens (!^pos)
+       | Some descr -> !^"Unsatisfied constraint" ^^^ !^descr ^^^ parens (!^pos)
      in
      (msg, [consider_state state])
-  | Unconstrained_logical_variable name ->
-     (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
-  | Logical_variable_not_good_for_unification name ->
-     (!^"Logical variable not soluble by unification" ^^^ Sym.pp name, [])
+  | Unconstrained_logical_variable (name, odescr) ->
+     begin match odescr with
+     | Some descr ->
+        (!^"Unconstrained logical variable" ^^^ Sym.pp name ^^^ parens !^descr, [])
+     | None ->
+        (!^"Unconstrained logical variable" ^^^ Sym.pp name, [])
+     end
+  | Logical_variable_not_good_for_unification (name, odescr) ->
+     begin match odescr with
+     | Some descr ->
+        (!^"Logical variable not soluble by unification" ^^^ Sym.pp name ^^^ 
+           parens (!^descr), [])
+     | None ->
+        (!^"Logical variable not soluble by unification" ^^^ Sym.pp name, [])
+     end
   | Kind_mismatch {has; expect} ->
      (!^"Expected" ^^^ Kind.pp expect ^^^ 
         !^"but found" ^^^ Kind.pp has, [])

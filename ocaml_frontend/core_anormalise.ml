@@ -802,6 +802,12 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      error "core_anormalisation: Epar"
   | Ewait tid1 ->
      error "core_anormalisation: Ewait"
+  | Epack(id, pes) ->
+     n_pexpr_in_expr_names pes (fun pes ->
+     k (wrap (M_Epredicate(Pack, id, pes))))
+  | Eunpack(id, pes) ->
+     n_pexpr_in_expr_names pes (fun pes ->
+     k (wrap (M_Epredicate(Unpack, id, pes))))
 
 
 let rec normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =

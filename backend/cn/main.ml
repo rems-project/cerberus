@@ -210,7 +210,7 @@ let main filename mjsonfile debug_level print_level =
          match result with
          | Ok () -> 
             exit 0
-         | Error (loc,ostacktrace,err) ->
+         | Error ((loc,err),ostacktrace) ->
             TypeErrors.report loc ostacktrace (Lazy.force err);
             exit 1
        with

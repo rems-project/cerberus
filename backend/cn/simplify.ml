@@ -376,9 +376,9 @@ let rec simp (lcs : LC.t list) term =
 
   and array_op it bt = 
     match it with
-    | Const t ->
+    | Const (index_bt, t) ->
        let t = aux t in
-       IT (Array_op (Const t), bt)
+       IT (Array_op (Const (index_bt, t)), bt)
     | Mod (t1, t2, t3) ->
        let t1 = aux t1 in
        let t2 = aux t2 in

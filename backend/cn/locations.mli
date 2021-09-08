@@ -4,6 +4,9 @@
 type t = Location_ocaml.t
 
 type loc = t
+
+type info = loc * string option
+
 type path = t List1.t
 
 val unknown : t

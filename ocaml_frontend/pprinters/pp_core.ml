@@ -125,7 +125,9 @@ let rec precedence_expr = function
   | End _
   | Erun _
   | Epar _
-  | Ewait _ ->
+  | Ewait _ 
+  | Epack _
+  | Eunpack _ ->
       None
 
   | Eif _ ->
@@ -665,6 +667,10 @@ let rec pp_expr expr =
             pp_keyword "par" ^^ P.parens (comma_list pp es)
         | Ewait tid ->
             pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
+        | Epack (Symbol.Identifier (_, ident), pes) ->
+            pp_keyword "pack" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
+        | Eunpack (Symbol.Identifier (_, ident), pes) ->
+            pp_keyword "unpack" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
         | Ebound (i, e) ->

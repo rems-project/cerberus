@@ -373,7 +373,11 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
             | Epar es ->
                 Epar (List.map (subst_sym_expr2 sym z) es)
             | Ewait _ ->
-                expr_ )
+                expr_ 
+            | Epack (id, pes) ->
+                Epack (id, List.map (subst_sym_pexpr2 sym z) pes)
+            | Eunpack (id, pes) ->
+                Eunpack (id, List.map (subst_sym_pexpr2 sym z) pes))
 
 and subst_sym_action_2 sym z = function
   | Create (pe1, pe2, pref) ->

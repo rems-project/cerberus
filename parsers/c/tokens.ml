@@ -50,6 +50,9 @@ type token =
   | NORETURN
   | STATIC_ASSERT
   | THREAD_LOCAL
+  (* for CN *)
+  | PACK
+  | UNPACK
 
   (* §6.4.2 Identifiers *)
   | NAME of string
@@ -242,3 +245,5 @@ let string_of_token = function
   | ASM -> "ASM"
   | ASM_VOLATILE -> "ASM_VOLATILE"
   | EOF -> "EOF"
+  | PACK -> "PACK"
+  | UNPACK -> "UNPACK"

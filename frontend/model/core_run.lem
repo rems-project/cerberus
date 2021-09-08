@@ -1609,4 +1609,31 @@ BEFORE EVAL_PEXPR2
         one $ Step_bound (
           E.return <| th_st with arena= e |>
         )
+
+    (* Epack _ _ = Eskip *)
+    | (Epack _ _, Stack_empty) ->
+        error "reached empty stack with an Epack"
+    | (Epack _ _, Stack_cons current_proc_opt cont sk') ->
+(* -----------------------------------------
+   <pack, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
+        one $ Step_tau "Epack" TSK_Misc (
+          E.return <| th_st with
+            arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
+            stack= Stack_cons current_proc_opt [] sk'
+          |>
+        )
+
+    (* Eunpack _ _ = Eskip *)
+    | (Eunpack _ _, Stack_empty) ->
+        error "reached empty stack with an Eunpack"
+    | (Eunpack _ _, Stack_cons current_proc_opt cont sk') ->
+(* -----------------------------------------
+   <unpack, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
+        one $ Step_tau "Eunpack" TSK_Misc (
+          E.return <| th_st with
+            arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
+            stack= Stack_cons current_proc_opt [] sk'
+          |>
+        )
+
   end

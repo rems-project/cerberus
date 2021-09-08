@@ -1946,6 +1946,12 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSreg_store r e ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilSreg_store r e')
+    | AilSpack id es ->
+        E.mapM annotate_expression es >>= fun es' ->
+        E.return (AilSpack id es')
+    | AilSunpack id es ->
+        E.mapM annotate_expression es >>= fun es' ->
+        E.return (AilSunpack id es')
   end
 
 and annotate_statement sigm gamm ty (AnnotatedStatement loc attrs stmt) =

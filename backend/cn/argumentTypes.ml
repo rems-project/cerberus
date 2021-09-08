@@ -1,3 +1,4 @@
+open Locations
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
@@ -7,19 +8,23 @@ module SymSet = Set.Make(Sym)
 
 
 type 'i at = 
-  | Computational of (Sym.t * BT.t) * 'i at
-  | Logical of (Sym.t * LS.t) * 'i at
-  | Resource of RE.t * 'i at
-  | Constraint of LC.t * 'i at
+  | Computational of (Sym.t * BT.t) * info * 'i at
+  | Logical of (Sym.t * LS.t) * info * 'i at
+  | Resource of RE.t * info * 'i at
+  | Constraint of LC.t * info * 'i at
   | I of 'i
 
 
 type 'i t = 'i at
 
-let mComputational (name, bound) t = Computational ((name,bound),t)
-let mLogical (name, bound) t = Logical ((name,bound),t)
-let mConstraint bound t = Constraint (bound,t)
-let mResource bound t = Resource (bound,t)
+let mComputational (name, bound, info) t = 
+  Computational ((name, bound), info, t)
+let mLogical (name, bound, info) t = 
+  Logical ((name, bound), info, t)
+let mConstraint (bound, info) t = 
+  Constraint (bound, info, t)
+let mResource (bound, info) t = 
+  Resource (bound, info, t)
 
 
 let mComputationals t = List.fold_right mComputational t
@@ -31,24 +36,24 @@ let mResources t  = List.fold_right mResource t
 
 let rec subst i_subst (substitution: IT.t Subst.t) at =
   match at with
-  | Computational ((name, bt), t) -> 
+  | Computational ((name, bt), info, t) -> 
      let name' = Sym.fresh_same name in
      let t' = subst i_subst [(name, IT.sym_ (name', bt))] t in
      let t'' = subst i_subst substitution t' in
-     Computational ((name', bt), t'')
-  | Logical ((name, ls), t) -> 
+     Computational ((name', bt), info, t'')
+  | Logical ((name, ls), info, t) -> 
      let name' = Sym.fresh_same name in
      let t' = subst i_subst [(name, IT.sym_ (name', ls))] t in
      let t'' = subst i_subst substitution t' in
-     Logical ((name', ls), t'')
-  | Resource (re,t) -> 
+     Logical ((name', ls), info, t'')
+  | Resource (re, info, t) -> 
      let re = RE.subst substitution re in
      let t = subst i_subst substitution t in
-     Resource (re,t)
-  | Constraint (lc,t) -> 
+     Resource (re, info, t)
+  | Constraint (lc, info, t) -> 
      let lc = LC.subst substitution lc in
      let t = subst i_subst substitution t in
-     Constraint (lc,t)
+     Constraint (lc, info, t)
   | I i -> 
      let i = i_subst substitution i in
      I i
@@ -57,16 +62,16 @@ let rec subst i_subst (substitution: IT.t Subst.t) at =
 let pp i_pp ft = 
   let open Pp in
   let rec aux = function
-    | Computational ((name,bt),t) ->
+    | Computational ((name, bt), _info, t) ->
        let op = if !unicode then utf8string "\u{03A0}" else !^"AC" in
        group (op ^^^ typ (Sym.pp name) (BT.pp bt) ^^ dot) :: aux t
-    | Logical ((name,ls),t) ->
+    | Logical ((name,ls), _info, t) ->
        let op = if !unicode then utf8string "\u{2200}" else !^"AL" in
        group (op ^^^ typ (Sym.pp name) (LS.pp ls) ^^ dot) :: aux t
-    | Resource (re,t) ->
+    | Resource (re, _info, t) ->
        let op = minus ^^ star in
        group (RE.pp re ^^^ op) :: aux t
-    | Constraint (lc,t) ->
+    | Constraint (lc, _info, t) ->
        let op = equals ^^ rangle in
        group (LC.pp lc ^^^ op) :: aux t
     | I i -> 
@@ -76,19 +81,21 @@ let pp i_pp ft =
 
 
 let rec get_return = function
-  | Computational (_,ft) -> get_return ft
-  | Logical (_,ft) -> get_return ft
-  | Resource (_,ft) -> get_return ft
-  | Constraint (_,ft) -> get_return ft
+  | Computational (_, _, ft) -> get_return ft
+  | Logical (_, _, ft) -> get_return ft
+  | Resource (_, _, ft) -> get_return ft
+  | Constraint (_, _, ft) -> get_return ft
   | I rt -> rt
 
 
 let rec count_computational = function
-  | Computational (_,ft) -> 
+  | Computational (_, _, ft) -> 
      1 + count_computational ft
-  | Logical (_,ft) 
-    | Resource (_,ft)
-    | Constraint (_,ft) -> 
+  | Logical (_, _, ft) ->
+     count_computational ft
+  | Resource (_, _, ft) ->
+     count_computational ft
+  | Constraint (_, _, ft) -> 
      count_computational ft
   | I _ -> 0
 
@@ -98,45 +105,49 @@ module RT = ReturnTypes
 
 let rec of_lrt (lrt : LRT.t) (rest : 'i t) : 'i t = 
   match lrt with
-  | LRT.I -> rest
-  | LRT.Logical ((name, t), args) -> Logical ((name, t), of_lrt args rest)
-  | LRT.Resource (t, args) -> Resource (t, of_lrt args rest)
-  | LRT.Constraint (t, args) -> Constraint (t, of_lrt args rest)
+  | LRT.I -> 
+     rest
+  | LRT.Logical ((name, t), info, args) -> 
+     Logical ((name, t), info, of_lrt args rest)
+  | LRT.Resource (t, info, args) -> 
+     Resource (t, info, of_lrt args rest)
+  | LRT.Constraint (t, info, args) -> 
+     Constraint (t, info, of_lrt args rest)
 
 
 let rec logical_arguments_and_return (at : 'i t) : LRT.t * 'i =
   match at with
   | I r -> (LRT.I, r)
-  | Logical ((name, t), args) -> 
+  | Logical ((name, t), info, args) -> 
      let (lrt, r) = logical_arguments_and_return args in
-     (LRT.Logical ((name, t), lrt), r)
-  | Resource (t, args) -> 
+     (LRT.Logical ((name, t), info, lrt), r)
+  | Resource (t, info, args) -> 
      let (lrt, r) = logical_arguments_and_return args in
-     (LRT.Resource (t, lrt), r)
-  | Constraint (t, args) -> 
+     (LRT.Resource (t, info, lrt), r)
+  | Constraint (t, info, args) -> 
      let (lrt, r) = logical_arguments_and_return args in
-     (LRT.Constraint (t, lrt), r)
-  | Computational (_, args) ->
+     (LRT.Constraint (t, info, lrt), r)
+  | Computational (_, info, args) ->
      let (lrt, r) = logical_arguments_and_return args in
      (lrt, r)
 
 
 let of_rt (rt : RT.t) (rest : 'i t) : 'i t = 
-  let (RT.Computational ((name, t), lrt)) = rt in
-  Computational ((name, t), of_lrt lrt rest)
+  let (RT.Computational ((name, t), info, lrt)) = rt in
+  Computational ((name, t), info, of_lrt lrt rest)
 
 
 
 let rec map (f : 'i -> 'j) (at : 'i at) : 'j at =
   match at with
-  | Computational (bound, at) -> 
-     Computational (bound, map f at)
-  | Logical (bound, at) -> 
-     Logical (bound, map f at)
-  | Resource (re, at) -> 
-     Resource (re, map f at)
-  | Constraint (lc, at) -> 
-     Constraint (lc, map f at)
+  | Computational (bound, info, at) -> 
+     Computational (bound, info, map f at)
+  | Logical (bound, info, at) -> 
+     Logical (bound, info, map f at)
+  | Resource (re, info, at) -> 
+     Resource (re, info, map f at)
+  | Constraint (lc, info, at) -> 
+     Constraint (lc, info, map f at)
   | I i ->
      I (f i)
 

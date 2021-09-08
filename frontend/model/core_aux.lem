@@ -961,6 +961,10 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         Epar (List.map (subst_sym_expr sym cval) es)
     | Ewait _ ->
       expr_
+    | Epack id es ->
+       Epack id (List.map (subst_sym_pexpr sym cval) es)
+    | Eunpack id es ->
+       Eunpack id (List.map (subst_sym_pexpr sym cval) es)
 (*
     | Eloc loc e ->
         Eloc loc (subst_sym_expr sym cval e)
@@ -1222,6 +1226,10 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Epar (List.map (unsafe_subst_sym_expr sym pe') es)
     | Ewait _ ->
         expr_
+    | Epack id es ->
+       Epack id (List.map (unsafe_subst_sym_pexpr sym pe') es)
+    | Eunpack id es ->
+       Eunpack id (List.map (unsafe_subst_sym_pexpr sym pe') es)
 (*
     | Eloc loc e ->
         Eloc loc (unsafe_subst_sym_expr sym pe' e)
@@ -1491,6 +1499,10 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing
     | Ewait _ ->
         Nothing
+    | Epack _ _ ->
+        Nothing
+    | Eunpack _ _ ->
+        Nothing
 (*
     | Eloc _ e ->
         to_pure e
@@ -1576,6 +1588,10 @@ let rec subst_wait tid v (Expr annot expr_) =
          end
        else
          Ewait tid'
+   | Epack _ _ ->
+       expr_
+   | Eunpack _ _ ->
+       expr_
 (*
    | Eloc loc e ->
        Eloc loc (subst_wait tid v e)
@@ -1692,6 +1708,10 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
         Nothing
     | Ewait _ ->
         Nothing
+    | Epack _ _ ->
+        Nothing
+    | Eunpack _ _ ->
+        Nothing
 (*
     | Eloc _ e ->
         find_labeled_continuation sym e
@@ -1768,6 +1788,10 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation2_aux assumes there are no Esave inside par()") in
         acc
     | Ewait _ ->
+        acc
+    | Epack _ _ ->
+        acc
+    | Eunpack _ _ ->
         acc
 (*
     | Eloc _ e ->
@@ -1937,6 +1961,10 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         (* TODO: check *)
         Map.empty
     | Ewait _ ->
+        Map.empty
+    | Epack _ _ ->
+        Map.empty
+    | Eunpack _ _ ->
         Map.empty
 (*
     | Eloc loc e ->
@@ -2227,6 +2255,10 @@ let rec collect_saves_aux st (Expr annots expr_) =
                       st.closed_acc |>
     | Ewait _ ->
         st
+    | Epack _ _ ->
+        st
+    | Eunpack _ _ ->
+        st
   end
 
 val collect_saves: forall 'a. expr 'a -> labeled_continuations 'a
@@ -2335,6 +2367,10 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
           Map.(union) (Map.(union) acc.m_tmp_acc acc.m_closed_acc)
                       st.m_closed_acc |>
     | Ewait _ ->
+        st
+    | Epack _ _ ->
+        st
+    | Eunpack _ _ ->
         st
   end
 

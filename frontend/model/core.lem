@@ -302,6 +302,9 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Erun of 'a * 'sym * list (generic_pexpr 'bty 'sym) (* run from label *)
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem-like thread creation *)
  | Ewait of Mem_common.thread_id (* wait for thread termination *)
+ (* for CN *)
+ | Epack of Symbol.identifier * list (generic_pexpr 'bty 'sym)
+ | Eunpack of Symbol.identifier * list (generic_pexpr 'bty 'sym)
 
 and generic_expr 'a 'bty 'sym = 
  | Expr of list annot * (generic_expr_ 'a 'bty 'sym)

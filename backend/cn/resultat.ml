@@ -2,7 +2,7 @@
 module Loc = Locations
 
 type ('a, 'e) t = 
-  ('a, Locations.loc * Tools.stacktrace option * 'e Lazy.t) Result.t
+  ('a, (Locations.loc * 'e Lazy.t) *  string option (* stack trace *)) Result.t
 
 type ('a, 'e) m = ('a, 'e) t
 
@@ -11,7 +11,7 @@ let return (a: 'a) : ('a,'e) t =
   Ok a
 
 let fail (loc: Locations.loc) (e: 'e Lazy.t) : ('a, 'e) t = 
-  Error (loc, Tools.do_stack_trace (),  e)
+  Error ((loc, e), Tools.do_stack_trace ())
 
 let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
   match m with

@@ -31,14 +31,11 @@ module Make
       else fail loc (lazy (TE.Unbound_name (Sym s)))
 
 
-    let illtyped_index_term loc context it has expected =
-      let@ explain_local = get () in
-      fail loc
-        (lazy begin 
-             let (context_pp, it_pp) = E.illtyped_index_term explain_local context it in
-             TypeErrors.Illtyped_it {context = context_pp; it = it_pp; 
-                                     has; expected = "integer or real type"}
-           end)
+    let illtyped_index_term context it has expected =
+      fun explain_local ->
+      let (context_pp, it_pp) = E.illtyped_index_term explain_local context it in
+      TypeErrors.Illtyped_it {context = context_pp; it = it_pp; 
+                              has; expected = "integer or real"}
 
 
     let ensure_integer_or_real_type loc context it = 
@@ -47,31 +44,31 @@ module Make
       | (Integer | Real) -> return ()
       | _ -> 
          let expect = "integer or real type" in
-         illtyped_index_term loc context it (IT.bt it) expect
+         failS loc (illtyped_index_term context it (IT.bt it) expect)
 
     let ensure_set_type loc context it = 
       let open BT in
       match IT.bt it with
       | Set bt -> return bt
-      | _ -> illtyped_index_term loc context it (IT.bt it) "set type"
+      | _ -> failS loc (illtyped_index_term context it (IT.bt it) "set type")
 
     let ensure_list_type loc context it = 
       let open BT in
       match IT.bt it with
       | List bt -> return bt
-      | _ -> illtyped_index_term loc context it (IT.bt it) "list type"
+      | _ -> failS loc (illtyped_index_term context it (IT.bt it) "list type")
 
     let ensure_array_type loc context it = 
       let open BT in
       match IT.bt it with
       | Array (abt, rbt) -> return (abt, rbt)
-      | _ -> illtyped_index_term loc context it (IT.bt it) "array type"
+      | _ -> failS loc (illtyped_index_term context it (IT.bt it) "array type")
 
     let ensure_option_type loc context it = 
       let open BT in
       match IT.bt it with
       | Option bt -> return bt
-      | _ -> illtyped_index_term loc context it (IT.bt it) "option type"
+      | _ -> failS loc (illtyped_index_term context it (IT.bt it) "option type")
 
     let get_struct_decl loc tag = 
       match SymMap.find_opt tag G.global.struct_decls with
@@ -194,30 +191,22 @@ module Make
                      begin match List.nth_opt bts n with
                      | Some t -> return t
                      | None -> 
-                        let@ explain_local = get () in
-                        let (context_pp, t'_pp) = E.illtyped_index_term explain_local context t' in
-                        let err = 
-                          lazy begin
-                              Generic
-                                (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                   !^"Expected" ^^^ t'_pp ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
-                                     !^"components, but has type" ^^^ BT.pp (Tuple bts))
-                            end
-                        in
-                        fail loc err
+                        failS loc (fun explain_local ->
+                            let (context_pp, t'_pp) = E.illtyped_index_term explain_local context t' in
+                            Generic
+                              (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                 !^"Expected" ^^^ t'_pp ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
+                                   !^"components, but has type" ^^^ BT.pp (Tuple bts))
+                          )
                      end
                   | _ -> 
-                     let@ explain_local = get () in
-                     let (context_pp, t'_pp) = E.illtyped_index_term explain_local context t' in
-                     let err = 
-                       lazy begin
-                           Generic
-                             (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                !^"Expected" ^^^ t'_pp ^^^ !^"to have tuple type, but has type" ^^^
-                                  BT.pp (IT.bt t'))
-                           end
-                     in
-                     fail loc err
+                     failS loc (fun explain_local ->
+                         let (context_pp, t'_pp) = E.illtyped_index_term explain_local context t' in
+                         Generic
+                           (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                              !^"Expected" ^^^ t'_pp ^^^ !^"to have tuple type, but has type" ^^^
+                                BT.pp (IT.bt t'))
+                       )
                 in
                 return (item_bt, NthTuple (n, t'))
            in
@@ -238,16 +227,12 @@ module Make
                       let@ bt = match List.assoc_opt Id.equal member decl_members with
                         | Some sct -> return (BT.of_sct sct)
                         | None -> 
-                           let@ explain_local = get () in
-                           let context_pp = E.index_term explain_local context in
-                           let err = 
-                             lazy begin
-                                 Generic
-                                   (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                      !^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ Id.pp member)
-                               end
-                           in
-                           fail loc err
+                           failS loc (fun explain_local ->
+                               let context_pp = E.index_term explain_local context in
+                               Generic
+                                 (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                    !^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ Id.pp member)
+                             )
                       in
                       let@ t = check loc ~context bt t in
                       return (member, t)
@@ -259,32 +244,24 @@ module Make
                 let@ tag = match IT.bt t with
                   | Struct tag -> return tag
                   | _ -> 
-                     let@ explain_local = get () in
-                     let (context_pp, t_pp) = E.illtyped_index_term explain_local context t in
-                     let err = 
-                       lazy begin
-                           Generic (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                      !^"Expected" ^^^ t_pp ^^^ !^"to have struct type" ^^^ 
-                                        !^"but has type" ^^^ BT.pp (IT.bt t))
-                         end
-                     in
-                     fail loc err
+                     failS loc (fun explain_local ->
+                         let (context_pp, t_pp) = E.illtyped_index_term explain_local context t in
+                         Generic (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                    !^"Expected" ^^^ t_pp ^^^ !^"to have struct type" ^^^ 
+                                      !^"but has type" ^^^ BT.pp (IT.bt t))
+                       )
                 in
                 let@ layout = get_struct_decl loc tag in
                 let decl_members = Memory.member_types layout in
                 let@ bt = match List.assoc_opt Id.equal member decl_members with
                   | Some sct -> return (BT.of_sct sct)
                   | None -> 
-                     let@ explain_local = get () in
-                     let (context_pp, t_pp) = E.illtyped_index_term explain_local context t in
-                     let err = 
-                       lazy begin
-                           Generic
-                             (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                t_pp ^^^ !^"does not have member" ^^^ Id.pp member)
-                         end
-                     in
-                     fail loc err
+                     failS loc (fun explain_local ->
+                         let (context_pp, t_pp) = E.illtyped_index_term explain_local context t in
+                         Generic
+                           (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                              t_pp ^^^ !^"does not have member" ^^^ Id.pp member)
+                       )
                 in
                 return (bt, StructMember (t, member))
            in
@@ -418,9 +395,9 @@ module Make
            return (IT (Option_op option_op, bt))
         | Array_op array_op -> 
            let@ (bt, array_op) = match array_op with
-             | Const t ->
+             | Const (index_bt, t) ->
                 let@ t = infer loc ~context t in
-                return (BT.Array (BT.Integer, IT.bt t), Const t)
+                return (BT.Array (index_bt, IT.bt t), Const (index_bt, t))
              | Mod (t1, t2, t3) ->
                 let@ t2 = infer loc ~context t2 in
                 let@ t3 = infer loc ~context t3 in
@@ -445,15 +422,11 @@ module Make
            if LS.equal ls (IT.bt it) then
              return it
            else
-             let@ explain_local = get () in
-             let err =
-               lazy begin
-                   let (context_pp, it_pp) = E.illtyped_index_term explain_local context it in
-                   Illtyped_it {context = context_pp; it = it_pp; 
-                                has = IT.bt it; expected = Pp.plain (LS.pp ls)}
-                 end
-             in
-             fail loc  err
+             failS loc (fun explain_local ->
+                 let (context_pp, it_pp) = E.illtyped_index_term explain_local context it in
+                 Illtyped_it {context = context_pp; it = it_pp; 
+                              has = IT.bt it; expected = Pp.plain (LS.pp ls)}
+               )
 
     let infer loc it = 
       pure (infer loc ~context:it it)
@@ -526,14 +499,16 @@ module Make
         end
 
 
-    let resource_mode_check loc undetermined resource = 
+    let resource_mode_check loc infos undetermined resource = 
       let free_inputs = 
         SymSet.diff (IT.free_vars_list (RE.inputs resource)) 
           (RE.bound resource)
       in
       let@ () = match SymSet.elements (SymSet.inter free_inputs undetermined) with
         | [] -> return ()
-        | lvar :: _ -> fail loc (lazy (Unconstrained_logical_variable lvar))
+        | lvar :: _ -> 
+           let (loc, odescr) = SymMap.find lvar infos in
+           fail loc (lazy (Unconstrained_logical_variable (lvar, odescr)))
       in
       let@ fixed = 
         ListM.fold_leftM (fun fixed output ->
@@ -553,7 +528,8 @@ module Make
               (* otherwise, fail *)
               | _ ->
                  let bad = List.hd (SymSet.elements undetermined) in
-                 fail loc (lazy (Logical_variable_not_good_for_unification bad))
+                 let (loc, odescr) = SymMap.find bad infos in
+                 fail loc (lazy (Logical_variable_not_good_for_unification (bad, odescr)))
           ) SymSet.empty (RE.outputs resource)
       in
       return fixed
@@ -587,17 +563,17 @@ module Make
 
     let rec welltyped loc lrt = 
       pure begin match lrt with
-        | Logical ((s,ls), lrt) -> 
+        | Logical ((s,ls), info, lrt) -> 
            let lname = Sym.fresh_same s in
            let@ () = add_l lname ls in
            let lrt = subst [(s, IT.sym_ (lname, ls))] lrt in
            welltyped loc lrt
-        | Resource (re, lrt) -> 
-           let@ () = WRE.welltyped loc re in
+        | Resource (re, info, lrt) -> 
+           let@ () = WRE.welltyped (fst info) re in
            let@ () = add_r None re in
            welltyped loc lrt
-        | Constraint (lc, lrt) ->
-           let@ () = WLC.welltyped loc lc in
+        | Constraint (lc, info, lrt) ->
+           let@ () = WLC.welltyped (fst info) lc in
            let@ () = add_c lc in
            welltyped loc lrt
         | I -> 
@@ -605,23 +581,26 @@ module Make
         end
 
     let mode_check loc determined lrt = 
-      let rec aux determined undetermined lrt = 
+      let rec aux determined undetermined infos lrt = 
       match lrt with
-      | Logical ((s, _), lrt) ->
-         aux determined (SymSet.add s undetermined) lrt
-      | Resource (re, lrt) ->
-         let@ fixed = WRE.resource_mode_check loc undetermined re in
+      | Logical ((s, _), info, lrt) ->
+         aux determined (SymSet.add s undetermined) 
+           (SymMap.add s info infos) lrt
+      | Resource (re, info, lrt) ->
+         let@ fixed = WRE.resource_mode_check (fst info) infos undetermined re in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
-         aux determined undetermined lrt
-      | Constraint (_, lrt) ->
-         aux determined undetermined lrt
+         aux determined undetermined infos lrt
+      | Constraint (_, _info, lrt) ->
+         aux determined undetermined infos lrt
       | I ->
          match SymSet.elements undetermined with
          | [] -> return ()
-         | s :: _ ->  fail loc (lazy (Unconstrained_logical_variable s))
+         | s :: _ -> 
+            let (loc, odescr) = SymMap.find s infos in
+            fail loc (lazy (Unconstrained_logical_variable (s, odescr)))
       in
-      aux determined SymSet.empty lrt
+      aux determined SymSet.empty SymMap.empty lrt 
 
     let good loc lrt = 
       let@ () = welltyped loc lrt in
@@ -639,7 +618,7 @@ module Make
 
     let welltyped loc rt = 
       pure begin match rt with 
-        | Computational ((name,bt), lrt) ->
+        | Computational ((name,bt), _info, lrt) ->
            let name' = Sym.fresh_same name in
            let lname = Sym.fresh () in
            let@ () = add_l lname bt in
@@ -650,7 +629,7 @@ module Make
 
     let mode_check loc determined rt = 
       match rt with
-      | Computational ((s, _), lrt) ->
+      | Computational ((s, _), _info, lrt) ->
          WLRT.mode_check loc (SymSet.add s determined) lrt
 
     
@@ -713,54 +692,57 @@ end
 
     let rec welltyped kind loc (at : t) : unit m = 
       pure begin match at with
-        | AT.Computational ((name,bt), at) ->
+        | AT.Computational ((name,bt), _info, at) ->
            let name' = Sym.fresh_same name in
            let lname = Sym.fresh () in
            let@ () = add_l lname bt in
            let@ () = add_a name' (bt, lname) in
            let at = AT.subst WI.subst [(name, IT.sym_ (lname, bt))] at in
            welltyped kind loc at
-        | AT.Logical ((s,ls), at) -> 
+        | AT.Logical ((s,ls), _info, at) -> 
            let lname = Sym.fresh_same s in
            let@ () = add_l lname ls in
            let at = AT.subst WI.subst [(s, IT.sym_ (lname, ls))] at in
            welltyped kind loc at
-        | AT.Resource (re, at) -> 
-           let@ () = WRE.welltyped loc re in
+        | AT.Resource (re, info, at) -> 
+           let@ () = WRE.welltyped (fst info) re in
            let@ () = add_r None re in
            welltyped kind loc at
-        | AT.Constraint (lc, at) ->
-           let@ () = WLC.welltyped loc lc in
+        | AT.Constraint (lc, info, at) ->
+           let@ () = WLC.welltyped (fst info) lc in
            let@ () = add_c lc in
            welltyped kind loc at
         | AT.I i -> 
-           let@ solver = solver () in
-           if S.provably_inconsistent solver
+           let@ provable = provable in
+           if provable (LC.t_ (IT.bool_ false))
            then fail loc (lazy (Generic !^("this "^kind^" makes inconsistent assumptions")))
            else WI.welltyped loc i
         end
 
 
     let mode_check loc determined ft = 
-      let rec aux determined undetermined ft = 
+      let rec aux determined undetermined infos ft = 
       match ft with
-      | AT.Computational ((s, _), ft) ->
-         aux (SymSet.add s determined) undetermined ft
-      | AT.Logical ((s, _), ft) ->
-         aux determined (SymSet.add s undetermined) ft
-      | AT.Resource (re, ft) ->
-         let@ fixed = WRE.resource_mode_check loc undetermined re in
+      | AT.Computational ((s, _), _info, ft) ->
+         aux (SymSet.add s determined) undetermined infos ft
+      | AT.Logical ((s, _), info, ft) ->
+         aux determined (SymSet.add s undetermined) 
+           (SymMap.add s info infos) ft
+      | AT.Resource (re, _info, ft) ->
+         let@ fixed = WRE.resource_mode_check loc infos undetermined re in
          let determined = SymSet.union determined fixed in
          let undetermined = SymSet.diff undetermined fixed in
-         aux determined undetermined ft
-      | AT.Constraint (_, ft) ->
-         aux determined undetermined ft
+         aux determined undetermined infos ft
+      | AT.Constraint (_, _info, ft) ->
+         aux determined undetermined infos ft
       | AT.I rt ->
          match SymSet.elements undetermined with
          | [] -> WI.mode_check loc determined rt
-         | s :: _ -> fail loc (lazy (Unconstrained_logical_variable s))
+         | s :: _ -> 
+            let (loc, odescr) = SymMap.find s infos in
+            fail loc (lazy (Unconstrained_logical_variable (s, odescr)))
       in
-      aux determined SymSet.empty ft
+      aux determined SymSet.empty SymMap.empty ft
 
 
     let good kind loc ft = 

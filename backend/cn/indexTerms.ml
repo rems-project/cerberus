@@ -94,7 +94,7 @@ and 'bt option_op =
   | Value_of_some of 'bt term
 
 and 'bt array_op = 
-  | Const of 'bt term
+  | Const of BT.t * 'bt term
   | Mod of 'bt term * 'bt term * 'bt term
   | App of 'bt term * 'bt term
 
@@ -336,8 +336,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
 
   let array_op it it' = 
     match it, it' with
-    | Const t, Const t' ->
-       equal t t'
+    | Const (bt, t), Const (bt', t') ->
+       BT.equal bt bt' && equal t t'
     | Mod (t1,t2,t3), Mod (t1',t2',t3') ->
        equal t1 t1' && equal t2 t2' && equal t3 t3'
     | App (t, args), App (t', args') ->
@@ -422,9 +422,9 @@ let pp (it : 'bt term) : PPrint.document =
 
     let bool_op = function
       | And o -> 
-         Pp.group (mparens (flow_map (break 1 ^^ !^"&&" ^^ break 1) (aux false) o))
+         Pp.group (mparens (flow_map (break 1 ^^ !^"&&" ^^ break 1) (aux true) o))
       | Or o -> 
-         Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux false) o))
+         Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux true) o))
       | Impl (o1,o2) -> 
          mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
       | Not (o1) -> 
@@ -528,7 +528,7 @@ let pp (it : 'bt term) : PPrint.document =
     in
 
     let array_op = function
-      | Const t ->
+      | Const (_, t) ->
          c_app !^"const" [aux false t]
       | Mod (t1,t2,t3) ->
          aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
@@ -648,7 +648,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   in
 
   let array_op = function
-    | Const t -> free_vars t
+    | Const (_, t) -> free_vars t
     | Mod (t1,t2,t3) -> free_vars_list [t1;t2;t3]
     | App (t, arg) -> free_vars_list ([t; arg])
   in
@@ -819,8 +819,8 @@ let subst (substitution : typed subst) =
 
     let array_op it bt =
       let it = match it with
-        | Const t ->
-           Const (aux t)
+        | Const (bt, t) ->
+           Const (bt, aux t)
         | Mod (t1, t2, t3) ->
            Mod (aux t1, aux t2, aux t3)
         | App (it, arg) ->
@@ -1038,8 +1038,8 @@ let value_of_some_ v =
      IT (Option_op (Value_of_some v), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
 
-let const_ t = 
-  IT (Array_op (Const t), BT.Array (Integer, bt t))
+let const_ index_bt t = 
+  IT (Array_op (Const (index_bt, t)), BT.Array (index_bt, bt t))
 let mod_ (t1, t2, t3) = 
   IT (Array_op (Mod (t1, t2, t3)), bt t1)
 let app_ v arg = 

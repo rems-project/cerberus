@@ -76,6 +76,19 @@ let has_good_description s =
   Option.is_some (good_description s)
 
 
+
+
+let counter_and_increment (ref : int ref) = 
+  let c = !ref in
+  let () = ref := (c + 1) in
+  c
+
+
+let make_predicate_name = 
+  let c = ref 0 in
+  fun () ->
+  "?pred" ^ string_of_int (counter_and_increment c)
+
 let make_name = 
   let unit_c = ref 0 in
   let bool_c = ref 0 in
@@ -118,15 +131,9 @@ let make_name =
     | Option _ -> option_c
     | Array _ -> array_c
   in
-
-  let counter_and_increment bt = 
-    let c = !(bt_counter bt) in
-    let () = (bt_counter bt) := (c + 1) in
-    c
-  in
   fun sort ->
   "?" ^ bt_prefix sort ^ 
-    string_of_int (counter_and_increment sort)
+    string_of_int (counter_and_increment (bt_counter sort))
 
 
 
@@ -203,7 +210,6 @@ module Make
          relevant]
     in
 
-
     (* add 'Pointee' edges between nodes whenever the resources indicate that *)
     let graph = 
       VClassSet.fold VClassGraph.add_node (veclasses local model) 
@@ -269,7 +275,7 @@ module Make
         ) vclass_explanations []
     in
 
-    ({substitution; vclasses = vclass_explanations; relevant}, local)
+    {substitution; vclasses = vclass_explanations; relevant}
 
 
 
@@ -322,26 +328,29 @@ module Make
 
   let pp_state_aux local {substitution; vclasses; relevant} o_model =
 
-    let (resource_lines, reported) = 
-      List.fold_right (fun resource (acc_table, acc_reported) ->
+    let (points, predicates, predicate_oargs, reported) = 
+      List.fold_right (fun resource acc ->
+
+          let (points, 
+               predicates, 
+               predicate_oargs, 
+               acc_reported) = acc 
+          in
+
           match resource with
           | Point p ->
-             let loc_val = !^(evaluate o_model p.pointer) in
              let loc_expr = IT.pp (IT.subst substitution p.pointer) in
+             let loc_val = !^(evaluate o_model p.pointer) in
              let permission_v = evaluate o_model p.permission in
-             let init_v = evaluate_bool o_model p.init in
+             let init_v = evaluate o_model p.init in
              let state = 
-               !^"owned" ^^
-                 begin match permission_v with
-                 | "1.0" -> 
-                    Pp.empty
-                 | _ ->
-                    Pp.space ^^ comma ^^^ !^"permission" ^^ colon ^^^ !^permission_v
-                 end ^^ comma ^^^
-                   !^(if init_v then "init" else "uninit")
+               Sctypes.pp p.ct ^^^
+                 parens (
+                   !^"permission" ^^ colon ^^^ !^permission_v ^^ comma ^^^
+                   !^"init" ^^ colon ^^ !^init_v
+                   )
              in
              let value = 
-               (BT.pp (IT.bt p.value)) ^^^ 
                IT.pp (IT.subst substitution p.value) ^^^ 
                equals ^^^
                !^(evaluate o_model p.value) 
@@ -355,29 +364,98 @@ module Make
                   IT.free_vars p.permission;
                  ]
              in
-             (entry :: acc_table, SymSet.union reported acc_reported)
+             (entry :: points, 
+              predicates, 
+              predicate_oargs,
+              SymSet.union reported acc_reported)
           | QPoint p ->
+             let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let value = (BT.pp (IT.bt p.value)) ^^^ !^(evaluate o_model p.value) in
-             let entry = (Some loc_expr, None, None, Some value) in
-             (entry :: acc_table, SymSet.add p.qpointer acc_reported)
+             let permission_v = evaluate o_model p.permission in
+             let init_v = evaluate o_model p.init in
+             let state = 
+               Sctypes.pp p.ct ^^^
+                 parens (
+                   !^"permission" ^^ colon ^^^ !^permission_v ^^ comma ^^^
+                   !^"init" ^^ colon ^^ !^init_v
+                   )
+             in
+             let value = 
+               IT.pp (IT.subst substitution p.value) ^^^ 
+               equals ^^^
+               !^(evaluate o_model p.value) 
+             in
+             let entry = (Some loc_expr, None, Some state, Some value) in
+             let reported = 
+               SymSet.remove p.qpointer
+                 (List.fold_left SymSet.union SymSet.empty
+                    [IT.free_vars p.value;
+                     IT.free_vars p.init;
+                     IT.free_vars p.permission;
+                    ])
+             in
+             (entry :: points, 
+              predicates,
+              predicate_oargs,
+              SymSet.union reported acc_reported)
           | Predicate p ->
-             let loc_val = !^(evaluate o_model p.pointer) in
+             let id = make_predicate_name () in
              let loc_expr = IT.pp (IT.subst substitution p.pointer) in
-             let state = (RE.pp (RE.subst substitution (Predicate p))) in
-             let entry = (Some loc_expr, Some loc_val, Some state, None) in
-             (entry :: acc_table, symbol_it p.pointer)
+             let loc_val = !^(evaluate o_model p.pointer) in
+             let permission_v = evaluate o_model p.permission in
+             let state = 
+               !^id ^^^ equals ^^^
+               Pp.string p.name ^^
+                 parens (separate comma (List.map (fun i -> IT.pp (IT.subst substitution i)) 
+                                           (p.pointer :: p.iargs))) ^^^
+                   parens (!^"permission" ^^ colon ^^^ !^permission_v)
+             in
+             let entry = (Some loc_expr, Some loc_val, Some state) in
+             let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
+             let oargs = 
+               List.map2 (fun oarg (name, _) ->
+                   let var = !^id ^^ dot ^^ dot ^^ !^name in
+                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate o_model oarg) in
+                   (Some var, Some value)
+                 ) p.oargs predicate_def.oargs
+             in
+             (points, 
+              entry :: predicates,
+              oargs @ predicate_oargs,
+              SymSet.union (symbol_it p.pointer) acc_reported)
           | QPredicate p ->
+             let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
+             let id = make_predicate_name () in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let entry = (Some loc_expr, None, Some (RE.pp_qpredicate p), None) in
-             (entry :: acc_table, SymSet.add p.qpointer acc_reported)
+             let permission_v = evaluate o_model p.permission in
+             let state = 
+               !^id ^^^ equals ^^^
+               Pp.string p.name ^^
+                 parens (separate comma (List.map (fun i -> IT.pp (IT.subst substitution i)) 
+                                           (sym_ (p.qpointer, BT.Loc) :: p.iargs))) ^^^
+                   parens (!^"permission" ^^ colon ^^^ !^permission_v)
+             in
+             let entry = (Some loc_expr, None, Some state) in
+             let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
+             let oargs = 
+               List.map2 (fun oarg (name, _) ->
+                   let var = !^id ^^ dot ^^ dot ^^ !^name in
+                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate o_model oarg) in
+                   (Some var, Some value)
+                 ) p.oargs predicate_def.oargs
+             in
+             (points, 
+              entry :: predicates,
+              oargs @ predicate_oargs,
+              acc_reported)
 
-        ) (L.all_resources local) ([], SymSet.empty)
+        ) (L.all_resources local) ([], [], [], SymSet.empty)
     in
-    let relevant_unreported = SymSet.diff relevant reported in
     let report vclass = 
-      not (SymSet.is_empty (SymSet.inter vclass.logical relevant_unreported)) ||
-      not (SymSet.is_empty (SymSet.inter vclass.computational relevant_unreported))
+      let syms = SymSet.union vclass.logical vclass.computational in
+      let relevant = not (SymSet.is_empty (SymSet.inter syms relevant)) in
+      let unreported = SymSet.is_empty (SymSet.inter syms reported) in
+      relevant && unreported
     in
     let memory_var_lines = 
       List.filter_map (fun (vclass,c) ->
@@ -403,14 +481,16 @@ module Make
 
     (* let () = print stdout (list Local.pp_old (L.old local)) in *)
 
-    (resource_lines @ memory_var_lines, logical_var_lines)
+    (points @ memory_var_lines, predicates, predicate_oargs @ logical_var_lines)
 
 
 
   let pp_state_with_model local explanation o_model =
-    let (memory, variables) = (pp_state_aux local explanation o_model) in
+    let (memory, predicates, variables) = (pp_state_aux local explanation o_model) in
     table4 ("pointer", "location", "state", "value") 
       (List.map (fun (a, b, c, d) -> ((L, a), (R, b), (R, c), (L, d))) memory) ^/^
+    table3 ("pointer", "location", "predicate") 
+      (List.map (fun (a, b, c) -> ((L, a), (R, b), (R, c))) predicates) ^/^
     table2 ("expression", "value") 
       (List.map (fun (a, b) -> ((L, a), (L, b))) variables)
       
@@ -444,58 +524,55 @@ module Make
   let undefined_behaviour local = 
     let _ = S.provable (L.solver local) (t_ (bool_ false)) in
     let model = S.get_model (L.solver local) in
-    let (explanation, local) = explanation local model SymSet.empty in
+    let explanation = explanation local model SymSet.empty in
     pp_state_with_model local explanation model
 
   let implementation_defined_behaviour local it = 
     let _ = S.provable (L.solver local) (t_ (bool_ false)) in
     let model = S.get_model (L.solver local) in
-    let (explanation, local) = explanation local model (IT.free_vars it) in
+    let explanation = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
     (it_pp, pp_state_with_model local explanation model)
 
   let missing_ownership local model it = 
-    let (explanation, local) = explanation local model (IT.free_vars it) in
+    let explanation = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
     (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
     let _ = S.provable (L.solver local) (t_ (bool_ false)) in
     let model = S.get_model (L.solver local) in
-    let (explanation, local) = explanation local model (IT.free_vars it) in
+    let explanation = explanation local model (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
     it_pp
 
   let unsatisfied_constraint local model lc = 
-    let (explanation, local) = explanation local model (LC.free_vars lc) in
+    let explanation = explanation local model (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst explanation.substitution lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
   let resource local model re = 
-    let (explanation, local) = explanation local model (RE.free_vars re) in
+    let explanation = explanation local model (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst explanation.substitution re) in
     (re_pp, pp_state_with_model local explanation model)
 
   let resource_request local model re = 
-    let (explanation, local) = explanation local model (RER.free_vars re) in
+    let explanation = explanation local model (RER.free_vars re) in
     let re_pp = RER.pp (RER.subst explanation.substitution re) in
     (re_pp, pp_state_with_model local explanation model)
 
   let resources local model (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
-    let (explanation, local) = explanation local model relevant in
+    let explanation = explanation local model relevant in
     let re1 = RE.pp (RE.subst explanation.substitution re1) in
     let re2 = RE.pp (RE.subst explanation.substitution re2) in
     ((re1, re2), pp_state_with_model local explanation model)
 
 
-
   let illtyped_index_term local context it =
     let _ = S.provable (L.solver local) (t_ (bool_ false)) in
     let model = S.get_model (L.solver local) in
-    let (explanation, local) = 
-      explanation local model (IT.free_vars_list [it; context])
-    in
+    let explanation = explanation local model (IT.free_vars_list [it; context]) in
     let it = IT.pp (IT.subst explanation.substitution it) in
     let context = IT.pp (IT.subst explanation.substitution context) in
     (context, it)

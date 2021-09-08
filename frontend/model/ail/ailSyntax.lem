@@ -201,6 +201,9 @@ type statement_ 'a [name="s*"] =
   | AilSdeclaration of list (ail_identifier * expression 'a)
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
+(* for CN *)
+  | AilSpack of Symbol.identifier * list (expression 'a)
+  | AilSunpack of Symbol.identifier * list (expression 'a)
 and statement 'a [name="s*"] =
   | AnnotatedStatement of Loc.t * Annot.attributes * statement_ 'a
 

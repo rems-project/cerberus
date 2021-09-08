@@ -127,6 +127,38 @@ let struct_decl loc fields (tag : BT.tag) =
 
 
 
+let make_owned_funarg floc i (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) path sct =
+  let open Sctypes in
+  match sct with
+  | Sctype (_, Void) ->
+     Debug_ocaml.error "void argument"
+  | _ ->
+     let descr = "ARG" ^ string_of_int i in
+     let pointee = Sym.fresh () in
+     let pointee_bt = BT.of_sct sct in
+     let pointee_t = sym_ (pointee, pointee_bt) in
+     let l = [(pointee, pointee_bt, (floc, Some (descr ^ "value")))] in
+     let mapping = {
+         path = Ast.pointee path; 
+         it = pointee_t;
+         o_sct = Some sct;
+       } 
+     in
+     let c = (LC.t_ (good_value layouts sct pointee_t), 
+              (floc, Some (descr ^ "value constraint"))) in
+     let r = 
+       (RE.Point {
+           ct = sct; 
+           pointer; 
+           permission = q_ (1, 1); 
+           value = pointee_t; 
+           init = bool_ true
+           },
+        (floc, Some "ownership of function argument location"))
+     in
+     (l, [r], [c], [mapping])
+
+
 let make_owned loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
@@ -136,22 +168,24 @@ let make_owned loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let pointee = Sym.fresh () in
      let pointee_bt = BT.of_sct sct in
      let pointee_t = sym_ (pointee, pointee_bt) in
-     let l = [(pointee, pointee_bt)] in
+     let l = [(pointee, pointee_bt, (loc, Some "pointee"))] in
      let mapping = {
          path = Ast.pointee path; 
          it = pointee_t;
          o_sct = Some sct;
        } 
      in
-     let c = good_value layouts sct pointee_t in
+     let c = (LC.t_ (good_value layouts sct pointee_t), 
+              (loc, Some "value constraint")) in
      let r = 
-       RE.Point {
+       (RE.Point {
            ct = sct; 
            pointer; 
            permission = q_ (1, 1); 
            value = pointee_t; 
            init = bool_ true
-           }
+           },
+        (loc, Some "ownership"))
      in
      return (l, [r], [c], [mapping])
 
@@ -171,16 +205,20 @@ let make_block loc (layouts : Sym.t -> Memory.struct_layout) (pointer : IT.t) pa
      let init_bt = BT.Bool in
      let pointee_t = sym_ (pointee, pointee_bt) in
      let init_t = sym_ (init, init_bt) in
-     let l = [(pointee, pointee_bt); (init, init_bt)] in
+     let l = 
+       [(pointee, pointee_bt, (loc, Some "uninitialised value")); 
+        (init, init_bt, (loc, Some "initialisedness"))] 
+     in
      let mapping = [] in
      let r = 
-       RE.Point {
-           ct = sct; 
-           pointer;
-           permission = q_ (1, 1);
-           value = pointee_t;
-           init = init_t
-         } 
+       (RE.Point {
+            ct = sct; 
+            pointer;
+            permission = q_ (1, 1);
+            value = pointee_t;
+            init = init_t
+          },
+        (loc, Some "ownership"))
      in
      return (l, [r], [], mapping)
 
@@ -193,7 +231,7 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
         let s, it = IT.fresh bt in
-        let l = (s, bt) :: l in
+        let l = (s, bt, (loc, Some ("output argument " ^ oarg))) :: l in
         let mapping = match oname with
           | Some name ->
              let item = {path = Ast.predarg name oarg; it; o_sct = None } in
@@ -204,15 +242,16 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
         (mapping, l)
       ) def.oargs ([], [])
   in
-  let oargs = List.map sym_ l in
+  let oargs = List.map (fun (s, ls, _) -> sym_ (s, ls)) l in
   let r = 
-    RE.Predicate {
-        name = pred; 
-        pointer = pointer;
-        iargs; 
-        oargs;
-        permission = q_ (1, 1);
-      } 
+    (RE.Predicate {
+         name = pred; 
+         pointer = pointer;
+         iargs; 
+         oargs;
+         permission = q_ (1, 1);
+       },
+     (loc, None))
   in
   return (l, [r], [], mapping)
 
@@ -373,7 +412,7 @@ let resolve_index_term loc layouts
 
 let resolve_constraint loc layouts default_mapping_name mappings lc = 
   let@ (lc, _) = resolve_index_term loc layouts default_mapping_name mappings lc in
-  return lc
+  return (LC.t_ lc)
 
 
 
@@ -428,38 +467,6 @@ let error_with_loc loc msg =
   failwith "internal error"
   
 
-(* let aarg_item loc (aarg : aarg) =
- *   match Sym.description aarg.asym with
- *     | SD_ObjectAddress name -> 
- *        {path = Ast.addr name; 
- *         it = sym_ (aarg.asym, BT.Loc); 
- *         o_sct = Some (Sctypes.pointer_sct aarg.typ) }
- *     | sd -> 
- *        error_with_loc loc
- *          ("address argument " ^ Sym.pp_string aarg.asym ^
- *             " without SD_ObjectAddress, but " ^ Sym.show_symbol_description sd)
- * 
- * let varg_item loc (varg : varg) =
- *   match Sym.description varg.vsym with
- *   | SD_ObjectValue name -> 
- *      {path = Ast.var name; 
- *       it = sym_ (varg.vsym, BT.of_sct varg.typ);
- *       o_sct = Some varg.typ} 
- *   | sd -> 
- *      error_with_loc loc
- *        ("value argument " ^ Sym.pp_string varg.vsym ^ 
- *           " without SD_ObjectValue, but " ^ Sym.show_symbol_description sd)
- * 
- * let garg_item loc (garg : garg) =
- *   match Sym.description garg.asym with
- *   | SD_ObjectAddress name -> 
- *      {path = Ast.addr name; 
- *       it = sym_ (garg.lsym, BT.Loc);
- *       o_sct = Some (Sctypes.pointer_sct garg.typ) } 
- *   | sd -> 
- *      error_with_loc loc
- *        ("global argument " ^ Sym.pp_string garg.asym ^ 
- *           " without SD_ObjectAddress, but " ^ Sym.show_symbol_description sd) *)
 
 let aarg_item loc (aarg : aarg) =
   let path = match Sym.description aarg.asym with
@@ -540,20 +547,23 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   in
 
   (* fargs *)
-  let@ (iA, iL, iR, iC, mappings) = 
-    ListM.fold_leftM (fun (iA, iL, iR, iC, mappings) (aarg : aarg) ->
-        let a = [(aarg.asym, BT.Loc)] in
+  let@ (iA, iL, iR, iC, mappings, _) = 
+    ListM.fold_leftM (fun (iA, iL, iR, iC, mappings, i) (aarg : aarg) ->
+        let descr = "&ARG" ^ string_of_int i in
+        let a = [(aarg.asym, BT.Loc, (loc, Some descr))] in
         let item = aarg_item loc aarg in
-        let@ (l, r, c, mapping') = 
-          make_owned loc layouts item.it item.path aarg.typ in
-        let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
+        let (l, r, c, mapping') = 
+          make_owned_funarg loc i layouts item.it item.path aarg.typ in
+        let c = (LC.t_ (good_value layouts (pointer_sct aarg.typ) item.it), 
+                 (loc, Some (descr ^ " constraint"))) :: c 
+        in
         let mappings = 
           mod_mapping "start" mappings
             (fun mapping -> (item :: mapping') @ mapping)
         in
-        return (iA @ a, iL @ l, iR @ r, iC @ c, mappings)
+        return (iA @ a, iL @ l, iR @ r, iC @ c, mappings, i+1)
       )
-      (iA, iL, iR, iC, mappings) fspec.function_arguments
+      (iA, iL, iR, iC, mappings, 0) fspec.function_arguments
   in
 
   let@ (iL, iR, iC, mappings) = 
@@ -571,7 +581,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts 
                       "start" mappings cond in
-           return (iL, iR, iC @ [c], mappings)
+           return (iL, iR, iC @ [(c, (loc, None))], mappings)
       )
       (iL, iR, iC, mappings) fspec.pre_condition
   in
@@ -580,12 +590,13 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   let (oA, oC, mappings) = 
     let ret = fspec.function_return in
     let item = varg_item loc ret in
-    let c = [good_value layouts ret.typ item.it] in
+    let c = [(LC.t_ (good_value layouts ret.typ item.it), 
+              (loc, Some "return value constraint"))] in
     let mappings =
       mod_mapping "end" mappings
         (fun mapping -> item :: mapping) 
     in
-    ((ret.vsym, IT.bt item.it), c, mappings)
+    ((ret.vsym, IT.bt item.it, (loc, Some "return")), c, mappings)
   in
 
   (* globs *)
@@ -608,19 +619,21 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
   in
 
   (* fargs *)
-  let@ (oL, oR, oC, mappings) = 
-    ListM.fold_leftM (fun (oL, oR, oC, mappings) aarg ->
+  let@ (oL, oR, oC, mappings, _) = 
+    ListM.fold_leftM (fun (oL, oR, oC, mappings, i) aarg ->
         let item = aarg_item loc aarg in
-        let@ (l, r, c, mapping') = 
-          make_owned loc layouts item.it item.path aarg.typ in
-        let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
+        let (l, r, c, mapping') = 
+          make_owned_funarg loc i layouts item.it item.path aarg.typ in
+        let c = (LC.t_ (good_value layouts (pointer_sct aarg.typ) item.it), 
+                 (loc, Some ("&ARG" ^ string_of_int i ^ " constraint"))) :: c 
+        in
         let mappings = 
           mod_mapping "end" mappings
             (fun mapping -> (item :: mapping') @ mapping)
         in
-        return (oL @ l, oR @ r, oC @ c, mappings)
+        return (oL @ l, oR @ r, oC @ c, mappings, i+1)
       )
-      (oL, oR, oC, mappings) fspec.function_arguments
+      (oL, oR, oC, mappings, 0) fspec.function_arguments
   in
 
   let@ (oL, oR, oC, mappings) = 
@@ -638,13 +651,11 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
            return (oL @ l, oR @ r, oC @ c, mappings)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts "end" mappings cond in
-           return (oL, oR, oC @ [c], mappings)
+           return (oL, oR, oC @ [(c, (loc, None))], mappings)
       )
       (oL, oR, oC, mappings) fspec.post_condition
   in
 
-  let oC = List.map LC.t_ oC in
-  let iC = List.map LC.t_ iC in
   let lrt = LRT.mLogicals oL (LRT.mResources oR (LRT.mConstraints oC LRT.I)) in
   let rt = RT.mComputational oA lrt in
   let lft = AT.mLogicals iL (AT.mResources iR (AT.mConstraints iC (AT.I rt))) in
@@ -712,11 +723,14 @@ let make_label_spec
        that are inner-most scoped-wise to be left-most. *)
     let@ (ia, iL, iR, iC, mapping') = 
       ListM.fold_leftM (fun (iA, iL, iR, iC, mapping) (aarg : aarg) ->
-          let a = [(aarg.asym, BT.Loc)] in
+          let a = [(aarg.asym, BT.Loc, (loc, None))] in
           let item = aarg_item loc aarg in
           let@ (l, r, c, mapping') = 
             make_owned loc layouts item.it item.path aarg.typ in
-          let c = good_value layouts (pointer_sct aarg.typ) item.it :: c in
+          let c = 
+            (LC.t_ (good_value layouts (pointer_sct aarg.typ) item.it),
+             (loc, None)) :: c
+          in
           return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)
         )
         (iA, iL, iR, iC, []) lspec.label_arguments
@@ -743,12 +757,11 @@ let make_label_spec
            return (iL @ l, iR @ r, iC @ c, mappings)
         | Ast.Logical cond ->
            let@ c = resolve_constraint loc layouts lname mappings cond in
-           return (iL, iR, iC @ [c], mappings)
+           return (iL, iR, iC @ [(c, (loc, None))], mappings)
       )
       (iL, iR, iC, mappings) lspec.invariant
   in
 
-  let iC = List.map LC.t_ iC in
   let llt = AT.mLogicals iL (AT.mResources iR (AT.mConstraints iC (AT.I False.False))) in
   let lt = AT.mComputationals iA llt in
   return (lt, StringMap.find lname mappings)

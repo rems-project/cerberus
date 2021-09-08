@@ -1,43 +1,44 @@
+open Locations
 module SymSet = Set.Make(Sym)
 module IT = IndexTerms
 
 module LRT = LogicalReturnTypes
 
-type t = Computational of (Sym.t * BaseTypes.t) * LRT.t
+type t = Computational of (Sym.t * BaseTypes.t) * info * LRT.t
 
-let lrt (Computational (_, lrt)) = lrt
+let lrt (Computational (_, _, lrt)) = lrt
 
 
 let to_logical = function
-  | Computational ((name, bt), lrt) ->
-     LRT.Logical ((name, bt), lrt)
+  | Computational ((name, bt), info, lrt) ->
+     LRT.Logical ((name, bt), info, lrt)
 
 
-let mComputational (name,bound) t = 
-  Computational ((name,bound),t)
+let mComputational (name, bound, oinfo) t = 
+  Computational ((name, bound), oinfo, t)
 
 
 let concat (t1: t) (t2: LRT.t) : t = 
   match t1 with
-  | Computational (bound, t1') -> 
-     Computational (bound, LRT.concat t1' t2)
+  | Computational (bound, oinfo, t1') -> 
+     Computational (bound, oinfo, LRT.concat t1' t2)
 
 
 
 let subst (substitution: IT.t Subst.t) rt = 
   match rt with
-  | Computational ((name, bt), t) -> 
+  | Computational ((name, bt), oinfo, t) -> 
      let name' = Sym.fresh_same name in
      let t' = LRT.subst [(name, IT.sym_ (name', bt))] t in
      let t'' = LRT.subst substitution t' in
-     Computational ((name', bt), t'')
+     Computational ((name', bt), oinfo, t'')
 
 
 
 let pp_aux rt = 
   let open Pp in
   match rt with
-  | Computational ((name,bt),t) ->
+  | Computational ((name, bt), oinfo, t) ->
      let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
      (op ^^^ typ (Sym.pp name) (BaseTypes.pp bt) ^^ dot) :: LRT.pp_aux t
 
@@ -47,7 +48,7 @@ let pp rt =
 
 
 let json = function
-  | Computational ((s, bt), t) ->
+  | Computational ((s, bt), oinfo, t) ->
      let args = [
          ("symbol", Sym.json s);
          ("basetype", BaseTypes.json bt);

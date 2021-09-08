@@ -6,6 +6,8 @@ type t = Location_ocaml.t
 
 type loc = t
 
+type info = loc * string option
+
 type path = t List1.t
 
 let unknown = Location_ocaml.unknown
@@ -35,7 +37,8 @@ let good_location (loc : Location_ocaml.t) =
 
 
 let updateB (loc : t) (loc2 : Location_ocaml.t) = 
-  if good_location loc2 then (loc2, true) else (loc, false)
+  if good_location loc2 then (loc2, true) 
+  else (loc, false)
 
 let update (loc : t) (loc2 : Location_ocaml.t) = 
   if good_location loc2 then loc2 
@@ -130,3 +133,9 @@ let regions = Location_ocaml.regions
 
 
 let simple_location = Location_ocaml.simple_location
+
+
+
+
+
+

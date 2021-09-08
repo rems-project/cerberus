@@ -32,6 +32,7 @@ let pp_old old =
 
 module type S = sig
 
+  include Solver.S
   type t 
   val empty : unit -> t
   val pp : t -> Pp.document
@@ -68,7 +69,7 @@ end
 
 module Make (S : Solver.S) : S = struct
 
-
+  include S
 
   type t = {
       computational : (BT.t * Sym.t) SymMap.t;
@@ -248,16 +249,18 @@ module Make (S : Solver.S) : S = struct
 
   let rec bind_logical where (local : t) (lrt : LRT.t) : t = 
     match lrt with
-    | Logical ((s, ls), rt) ->
+    | Logical ((s, ls), _oinfo, rt) ->
        let s' = Sym.fresh () in
        let rt' = LRT.subst [(s, IT.sym_ (s', ls))] rt in
        bind_logical where (add_l s' ls local) rt'
-    | Resource (re, rt) -> bind_logical where (add_r where re local) rt
-    | Constraint (lc, rt) -> bind_logical where (add_c lc local) rt
+    | Resource (re, _oinfo, rt) -> 
+       bind_logical where (add_r where re local) rt
+    | Constraint (lc, _oinfo, rt) -> 
+       bind_logical where (add_c lc local) rt
     | I -> local
 
   let bind_computational where (local : t) (name : Sym.t) (rt : RT.t) : t =
-    let Computational ((s, bt), rt) = rt in
+    let Computational ((s, bt), _oinfo, rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst [(s, IT.sym_ (s', bt))] rt in
     bind_logical where (add_a name (bt, s') (add_l s' bt local)) rt'
@@ -267,7 +270,7 @@ module Make (S : Solver.S) : S = struct
     bind_computational where local name rt
 
   let bind_logically where (local : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
-    let Computational ((s, bt), rt) = rt in
+    let Computational ((s, bt), _oinfo, rt) = rt in
     let s' = Sym.fresh () in
     let rt' = LRT.subst [(s, IT.sym_ (s', bt))] rt in
     ((bt, s'), bind_logical where (add_l s' bt local) rt')

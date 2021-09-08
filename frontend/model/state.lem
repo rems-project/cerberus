@@ -78,6 +78,16 @@ let rec foldlM f a = function
 end
 
 
+val     foldrM: forall 'a 'b 's. ('a -> 'b -> stateM 'b 's) -> list 'a -> 'b -> stateM 'b 's
+let rec foldrM f xs y = 
+  match xs with
+  | [] ->
+      return y
+  | x::xs ->
+     bind (foldrM f xs y) (fun y' -> f x y')
+  end
+
+
 val get: forall 's. stateM 's 's
 let get =
   fun st -> (st, st)

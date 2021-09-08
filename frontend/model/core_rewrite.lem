@@ -225,6 +225,12 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Ewait _ ->
         (* unchanged *)
         expr
+    | Epack _ _ ->
+        (* unchanged *)
+        expr
+    | Eunpack _ _ ->
+        (* unchanged *)
+        expr
   end
 
 
@@ -345,6 +351,12 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
         (* just traversing *)
         Expr annot (Epar (List.map remove_unseqs es))
     | Ewait _ ->
+        (* unchanged *)
+        expr
+    | Epack _ _ ->
+        (* unchanged *)
+        expr
+    | Eunpack _ _ ->
         (* unchanged *)
         expr
   end
@@ -565,6 +577,10 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         end
     | Ewait _ ->
         Left expr
+    | Epack _ _ ->
+        Left expr
+    | Eunpack _ _ ->
+        Left expr
   end
 
 let remove_dead expr =
@@ -637,6 +653,10 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
     | Epar es ->
         Expr annot (Epar (List.map flatten_seqs es))
     | Ewait _ ->
+        expr
+    | Epack _ _ ->
+        expr
+    | Eunpack _ _ ->
         expr
   end
 
@@ -816,6 +836,10 @@ let rec remove_conv_int (Expr annot expr_) =
         Epar (List.map remove_conv_int es)
     | Ewait _ ->
         expr_
+    | Epack _ _ ->
+        expr_
+    | Eunpack _ _ ->
+        expr_
   end
 
 and remove_conv_int_action_ act_ =
@@ -938,6 +962,10 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
     | Epar es ->
         Epar (List.map sequentialise_creates_kills es)
     | Ewait _ ->
+        expr_
+    | Epack _ _ ->
+        expr_
+    | Eunpack _ _ ->
         expr_
   end
 
@@ -1229,6 +1257,10 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         Expr annot (Epar (List.map pure_propagation2 es))
     | Ewait _ ->
         expr
+    | Epack _ _ ->
+        expr
+    | Eunpack _ _ ->
+        expr
   end
 
 
@@ -1418,6 +1450,10 @@ let rec simpl_case (Expr annot expr_ as expr) =
     | Epar es ->
         wrap $ Epar (List.map simpl_case es)
     | Ewait _ ->
+        expr
+    | Epack _ _ ->
+        expr
+    | Eunpack _ _ ->
         expr
   end
 

@@ -30,7 +30,6 @@ module ITtbl = Hashtbl.Make(IndexTerms)
 module type S = sig
 
   val provable : Z3.Solver.solver -> LC.t -> bool
-  val provably_inconsistent : Z3.Solver.solver -> bool
   val get_model : Z3.Solver.solver -> Z3.Model.model
   val term : IT.t -> Z3.Expr.expr
   val constr : LC.t -> Z3.Expr.expr list
@@ -343,9 +342,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          end
       | Array_op array_op -> 
          begin match array_op with
-         | Const t ->
+         | Const (index_bt, t) ->
             let t = term t in
-            Z3.Z3Array.mk_const_array context (sort Integer) t
+            Z3.Z3Array.mk_const_array context (sort index_bt) t
          | Mod (t1, t2, t3) ->
             let t1 = term t1 in
             let t2 = term t2 in
@@ -459,8 +458,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     | `NO -> false
     | `MAYBE -> false
 
-
-  let provably_inconsistent assumptions = provable assumptions (t_ (bool_ false))
 
   let get_model solver = 
     Option.value_err "Z3 did not produce a counter model"

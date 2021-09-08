@@ -916,6 +916,10 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
   | Ewait _ ->
     (* NOTE: not sure about this *)
     add (in_v, out_v) Tskip
+  | Epack _ ->
+     return `OK
+  | Eunpack _ ->
+     return `OK
 
 let rec collect_saves (Expr (_, e_)) =
   let open GraphM in
@@ -951,6 +955,10 @@ let rec collect_saves (Expr (_, e_)) =
     mapM self es >>= fun _ ->
     return ()
   | Ewait _ ->
+    return ()
+  | Epack _ ->
+    return ()
+  | Eunpack _ ->
     return ()
 
 let mk_cfg_pe pe =
