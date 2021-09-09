@@ -623,6 +623,9 @@ module BmcInline = struct
         mapM inline_e es >>= fun inlined_es ->
         return (Epar inlined_es)
     | Ewait _       -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
     ) >>= fun inlined_e ->
     return (Expr(Abmc (Abmc_id id)::annots, inlined_e))
 
@@ -747,8 +750,8 @@ module BmcSSA = struct
   (* Core functions*)
   let rename_sym (Symbol(_, n, stropt) as sym: sym_ty) : sym_ty eff =
     let str = match stropt with
-              | None -> "_" ^ (string_of_int n)
-              | Some s -> s ^ "_" ^ (string_of_int n) in
+              | SD_Id s -> s ^ "_" ^ (string_of_int n)
+              | _ -> "_" ^ (string_of_int n) in
     get_fresh_sym (Some str) >>= fun new_sym ->
     add_to_sym_table sym new_sym >>
     return new_sym
@@ -1024,6 +1027,9 @@ module BmcSSA = struct
         mapM ssa_e elist >>= fun ssad_elist ->
         return (Epar ssad_elist)
     | Ewait _       ->
+        assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
         assert false
     ) >>= fun ssad_e ->
       put_sym_table original_table >>
@@ -1869,6 +1875,9 @@ module BmcZ3 = struct
         mapM z3_e elist >>= fun z3d_elist ->
         return (ctor_to_z3 Ctuple z3d_elist None uid file)
     | Ewait _  -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
     ) >>= fun ret ->
     add_expr uid ret >>
     return ret
@@ -2028,6 +2037,9 @@ module BmcDropCont = struct
         (* TODO: Erun within Epar? *)
         return mk_false
     | Ewait _       -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
     ) >>= fun drop_expr ->
     add_to_drop_cont_map uid drop_expr >>
     return drop_expr
@@ -2506,6 +2518,9 @@ module BmcBind = struct
         mapM bind_e es >>= fun bound_es ->
         return (List.concat bound_es)
     | Ewait _       -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
     )
 
     let bind_globs(gname, glb) : (binding list) eff =
@@ -2926,6 +2941,9 @@ module BmcVC = struct
         mapM vcs_e es >>= fun vcss_es ->
         return (List.concat vcss_es)
     | Ewait _       -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
 
     let vcs_globs(_, glb) : (bmc_vc list) eff =
       match glb with
@@ -3097,6 +3115,9 @@ module BmcRet = struct
         (* TODO: check this. Really want to assert can't jump out of par... *)
         return (List.concat ret_es)
     | Ewait _       -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
               : (Expr.expr * Expr.expr list) eff =
@@ -4226,6 +4247,9 @@ module BmcSeqMem = struct
     | Epar es ->
         failwith "Error: Epar in sequentialised; concurrent mode only"
     | Ewait _       -> assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
 
   let do_globs (gname, glb) =
     match glb with
@@ -4904,6 +4928,9 @@ module BmcConcActions = struct
         return (List.concat elist_actions)
     | Ewait _       ->
         assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
+        assert false
     ) >>= fun actions ->
     let aids = List.map aid_of_bmcaction actions in
     add_aids_to_bmc_actions uid aids >>
@@ -5036,6 +5063,9 @@ module BmcConcActions = struct
         mapM do_po_e es >>= fun po_es ->
         return (List.concat po_es)
     | Ewait _       ->
+        assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
         assert false
     )
 
@@ -5371,6 +5401,9 @@ module BmcConcActions = struct
         return (union_taints (List.map fst taint_es),
                 union_deps (List.map snd taint_es))
     | Ewait _       ->
+        assert false
+    | Epack _ | Eunpack _ ->
+        (* these two are CN specific contructors *)
         assert false
     )
 

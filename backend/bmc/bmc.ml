@@ -506,7 +506,7 @@ let find_function (f_name: string)
                   (fun_map: unit typed_fun_map) =
   let is_f_name = (fun (sym, decl) ->
       match sym with
-      | Sym.Symbol(_, i, Some s) -> String.equal s f_name
+      | Sym.Symbol(_, i, SD_Id s) -> String.equal s f_name
       | _ -> false
     ) in
   match (List.find_opt is_f_name (Pmap.bindings_list fun_map)) with

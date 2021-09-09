@@ -1120,7 +1120,8 @@ module CtypeToZ3 = struct
     | Basic _ -> assert false
     | Array(ty', _) ->
         mk_array_sort_from_ctype ty' file
-    | Function _ -> assert false
+    | Function _
+    | FunctionNoParams _ -> assert false
     | Pointer _ -> LoadedPointer.mk_sort
     | Atomic (Ctype (_, Basic _) as _ty) (* fall through *)
     | Atomic (Ctype (_, Pointer _) as _ty) ->

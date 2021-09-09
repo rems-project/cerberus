@@ -142,17 +142,17 @@ let sym_eq sym1 sym2 = sym_cmp sym1 sym2 = 0
 
 let symbol_to_string (sym: sym_ty) =
   match sym with
-  | Symbol (_, num, Some str) ->
+  | Symbol (_, num, SD_Id str) ->
       (str ^ "_" ^ (string_of_int num))
-  | Symbol (_, num, None) ->
+  | Symbol (_, num, _) ->
       ("?_" ^ (string_of_int num))
 
 let symbol_to_int (Symbol(_, num, _): sym_ty) = num
 
 let symbol_to_string_simple (sym: sym_ty) =
   match sym with
-  | Symbol (_, _, Some str) -> str
-  | Symbol (_, num, None) ->
+  | Symbol (_, _, SD_Id str) -> str
+  | Symbol (_, num, _) ->
       ("?_" ^ (string_of_int num))
 
 let prefix_to_string (prefix: Sym.prefix) =
@@ -384,6 +384,9 @@ let rec set_uid_e uid n (Expr( annots1, e_)) =
   | Erun( x, lab, pes) -> Erun( x, lab, (pure_uids pes))
   | Epar es -> Epar (selfs es)
   | Ewait thid -> Ewait thid
+  | Epack _ | Eunpack _ ->
+      (* these two are CN specific contructors *)
+      assert false
   )))
 
 (*val string_of_symbol: Symbol.sym -> string*)

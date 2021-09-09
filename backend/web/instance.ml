@@ -296,6 +296,9 @@ let set_uid file =
       | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
       | Epar es -> Epar (List.map set_e es)
       | Ewait thid -> Ewait thid
+      | Epack _ | Eunpack _ ->
+          (* these two are CN specific contructors *)
+          assert false  
     in Expr (Annot.Auid (fresh ()) :: annots, e_')
   in
   let set_fun fname = function
@@ -474,7 +477,43 @@ let multiple_steps step_state (m, st) =
                     None, "error array shilft"
                   | MerrWIP str ->
                     None, "wip: " ^ str
-              end
+                  | MerrVIP err ->
+                      let kind_str = function
+                        | VIP_null ->
+                            "null pointer"
+                        | VIP_empty ->
+                            "pointer wit @empty provenance"
+                        | VIP_killed ->
+                            "pointer to dead allocation"
+                        | VIP_out_of_bound ->
+                            "out-of-bound pointer"
+                        | VIP_funptr ->
+                            "function pointer" in
+                      begin match err with
+                        | VIP_free_invalid_pointer loc ->
+                            Some loc, "freeing an invalid pointer"
+                        | VIP_relop_killed ->
+                            None, "relational operator on pointer to dead allocation"
+                        | VIP_relop_out_of_bound ->
+                            None, "relational operator on out-of-bound pointer"
+                        | VIP_relop_invalid ->
+                            None, "relational operator on invalid pointer"
+                        | VIP_diffptr_out_of_bound ->
+                            None, "subtraction operator on out-of-bound pointer"
+                        | VIP_ptrcast_empty ->
+                            None, "cast operator on pointer with @empty provenance"
+                        | VIP_intcast kind ->
+                            None, "cast on " ^ kind_str kind
+                        | VIP_intcast_not_in_range ->
+                            None, "cast from pointer results in out of range integer"
+                        | VIP_array_shift kind ->
+                            None, "arithmetic operator on " ^ kind_str kind
+                        | VIP_copy_alloc_id kind ->
+                            None, "copy_alloc_id() on " ^ kind_str kind
+                        | VIP_copy_alloc_id_invalid ->
+                            None, "copy_alloc_id () on invalid pointer"
+                      end
+                    end
             | Driver.DErr_concurrency str ->
                 None, "Concurrency error: " ^ str
             | Driver.DErr_other str ->
