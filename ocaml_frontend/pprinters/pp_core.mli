@@ -40,5 +40,6 @@ module Make (C : CONFIG) : PP_CORE
 module Basic : PP_CORE
 module All : PP_CORE
 module WithLocations : PP_CORE
+module WithLocationsAndStd: PP_CORE
 module WithExplode : PP_CORE
 
