@@ -83,7 +83,7 @@ module Make
   let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : unit m =
     if LS.equal has expect 
     then return () 
-    else fail loc (lazy (Mismatch {has; expect}))
+    else fail loc (Mismatch {has; expect})
 
   let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : unit m =
     ensure_logical_sort loc ~expect has
@@ -92,18 +92,18 @@ module Make
   let check_computational_bound loc s = 
     let@ is_bound = bound s KComputational in
     if is_bound then return ()
-    else fail loc (lazy (Unbound_name (Sym s)))
+    else fail loc (Unbound_name (Sym s))
 
   let get_struct_decl loc tag = 
     let open Global in
     match SymMap.find_opt tag G.global.struct_decls with
       | Some decl -> return decl
-      | None -> fail loc (lazy (Missing_struct tag))
+      | None -> fail loc (Missing_struct tag)
 
   let get_member_type loc tag member layout = 
     match List.assoc_opt Id.equal member (Memory.member_types layout) with
     | Some membertyp -> return membertyp
-    | None -> fail loc (lazy (Missing_member (tag, member)))
+    | None -> fail loc (Missing_member (tag, member))
 
 
 
@@ -125,7 +125,7 @@ module Make
          | Some s -> 
             (* let@ is_bound = bound s KComputational in
              * if is_bound 
-             * then fail loc (lazy (Name_bound_twice (Sym s)))
+             * then fail loc (Name_bound_twice (Sym s))
              * else *)
             let@ () = add_a s (has_bt, lsym) in
             return (sym_ (lsym, has_bt))
@@ -137,21 +137,21 @@ module Make
          | M_Cnil item_bt, [] ->
             return (IT.nil_ ~item_bt)
          | M_Cnil item_bt, _ ->
-            fail loc (lazy (Number_arguments {has = List.length pats; expect = 0}))
+            fail loc (Number_arguments {has = List.length pats; expect = 0})
          | M_Ccons, [p1; p2] ->
             let@ it1 = aux p1 in
             let@ it2 = aux p2 in
             let@ () = ensure_base_type loc ~expect:(List (IT.bt it1)) (IT.bt it2) in
             return (cons_ (it1, it2))
          | M_Ccons, _ -> 
-            fail loc (lazy (Number_arguments {has = List.length pats; expect = 2}))
+            fail loc (Number_arguments {has = List.length pats; expect = 2})
          | M_Ctuple, pats ->
             let@ its = ListM.mapM aux pats in
             return (tuple_ its)
          | M_Cspecified, [pat] ->
             aux pat
          | M_Cspecified, _ ->
-            fail loc (lazy (Number_arguments {expect = 1; has = List.length pats}))
+            fail loc (Number_arguments {expect = 1; has = List.length pats})
          | M_Carray, _ ->
             Debug_ocaml.error "todo: array types"
     in
@@ -723,7 +723,7 @@ module Make
         let (expect, info) = SymMap.find uni_var unis in
         if LS.equal (IT.bt instantiation) expect 
         then return ()
-        else fail loc (lazy (Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}))
+        else fail loc (Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info})
       in
 
       let unify_or_constrain (unis, subst, constrs) (output_spec, output_have) =
@@ -871,13 +871,13 @@ module Make
              check_computational args 
                (subst rt_subst [(s, sym_ (arg.lname, bt))] ftyp)
           | (arg :: _), (Computational ((_, bt), _info, _))  ->
-             fail arg.loc (lazy (Mismatch {has = arg.bt; expect = bt}))
+             fail arg.loc (Mismatch {has = arg.bt; expect = bt})
           | [], (L ftyp) -> 
              return ftyp
           | _ -> 
              let expect = count_computational ftyp in
              let has = List.length arguments in
-             fail loc (lazy (Number_arguments {expect; has}))
+             fail loc (Number_arguments {expect; has})
         in
         check_computational arguments ftyp 
       in
@@ -1019,19 +1019,19 @@ module Make
     | M_Cspecified, [arg] ->
        return (vt_of_arg arg)
     | M_Cspecified, _ ->
-       fail loc (lazy (Number_arguments {has = List.length args; expect = 1}))
+       fail loc (Number_arguments {has = List.length args; expect = 1})
     | M_Cnil item_bt, [] -> 
        let bt = List item_bt in
        return (bt, nil_ ~item_bt)
     | M_Cnil item_bt, _ -> 
-       fail loc (lazy (Number_arguments {has = List.length args; expect=0}))
+       fail loc (Number_arguments {has = List.length args; expect=0})
     | M_Ccons, [arg1; arg2] -> 
        let bt = List arg1.bt in
        let@ () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
        let list_it = cons_ (it_of_arg arg1, it_of_arg arg2) in
        return (arg2.bt, list_it)
     | M_Ccons, _ ->
-       fail loc (lazy (Number_arguments {has = List.length args; expect = 2}))
+       fail loc (Number_arguments {has = List.length args; expect = 2})
 
 
 
@@ -1050,7 +1050,7 @@ module Make
     let open BT in
     CF.Impl_mem.case_mem_value mem
       ( fun ct -> 
-        fail loc (lazy (Unspecified ct)) )
+        fail loc (Unspecified ct) )
       ( fun _ _ -> 
         unsupported loc !^"infer_mem_value: concurrent read case" )
       ( fun it iv -> 
@@ -1086,9 +1086,9 @@ module Make
       | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
          Debug_ocaml.error "mismatch in fields in infer_struct"
       | [], ((member, _) :: _) ->
-         fail loc (lazy (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")))
+         fail loc (Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing"))
       | ((member,_) :: _), [] ->
-         fail loc (lazy (Generic (!^"supplying unexpected field" ^^^ Id.pp member)))
+         fail loc (Generic (!^"supplying unexpected field" ^^^ Id.pp member))
     in
     let@ it = check member_values (Memory.member_types layout) in
     return (BT.Struct tag, IT.struct_ (tag, it))
@@ -1255,7 +1255,7 @@ module Make
          let@ _member_bt = get_member_type loc tag member layout in
          let@ offset = match Memory.member_offset layout member with
            | Some offset -> return offset
-           | None -> fail loc (lazy (Missing_member (tag, member)))
+           | None -> fail loc (Missing_member (tag, member))
          in
          let vt = (Loc, IT.addPointer_ (it_of_arg arg, int_ offset)) in
          return (RT.concat (rt_of_vt loc vt) lrt)
@@ -1302,7 +1302,7 @@ module Make
            | CF.Core.Sym sym -> 
               let@ (_, t) = match Global.get_fun_decl G.global sym with
                 | Some t -> return t
-                | None -> fail loc (lazy (Missing_function sym))
+                | None -> fail loc (Missing_function sym)
               in
               return t
          in
@@ -1737,7 +1737,7 @@ module Make
          let@ args = args_of_asyms asyms in
          let@ (_loc, ft) = match Global.get_fun_decl G.global afsym.sym with
            | Some (loc, ft) -> return (loc, ft)
-           | None -> fail loc (lazy (Missing_function afsym.sym))
+           | None -> fail loc (Missing_function afsym.sym)
          in
          Spine.calltype_ft loc args ft
       | M_Eproc (fname, asyms) ->
@@ -1747,18 +1747,18 @@ module Make
            | CF.Core.Sym sym ->
               match Global.get_fun_decl G.global sym with
               | Some (loc, ft) -> return ft
-              | None -> fail loc (lazy (Missing_function sym))
+              | None -> fail loc (Missing_function sym)
          in
          let@ args = args_of_asyms asyms in
          Spine.calltype_ft loc args decl_typ
       | M_Epredicate (pack_unpack, pname, asyms) ->
          let@ def = match Global.get_predicate_def G.global (Id.s pname) with
            | Some def -> return def
-           | None -> fail loc (lazy (Missing_predicate (Id.s pname)))
+           | None -> fail loc (Missing_predicate (Id.s pname))
          in
          let@ pointer_asym, iarg_asyms = match asyms with
            | pointer_asym :: iarg_asyms -> return (pointer_asym, iarg_asyms)
-           | _ -> fail loc (lazy (Generic !^"pointer argument to predicate missing"))
+           | _ -> fail loc (Generic !^"pointer argument to predicate missing")
          in
          let@ pointer_arg = arg_of_asym pointer_asym in
          (* todo: allow other permission amounts *)
@@ -1768,7 +1768,7 @@ module Make
            (* "+1" because of pointer argument *)
            let has, expect = List.length iargs + 1, List.length def.iargs + 1 in
            if has = expect then return ()
-           else fail loc (lazy (Number_arguments {has; expect}))
+           else fail loc (Number_arguments {has; expect})
          in
          let@ () = ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
          let@ () = ensure_base_type loc ~expect:Real (IT.bt permission) in
@@ -1799,7 +1799,7 @@ module Make
                   (match pack_unpack with Pack -> !^"packing" | Unpack -> !^"unpacking") ^^^
                   Id.pp pname
                 in
-                fail loc (lazy (Generic err))
+                fail loc (Generic err)
            in
            try_clauses [] instantiated_clauses
          in
@@ -1916,7 +1916,7 @@ module Make
               "This expression returns but is expected "^
                 "to have non-return type."
             in
-            fail loc (lazy (Generic !^err))
+            fail loc (Generic !^err)
          end
       | M_Eundef (_loc, undef) ->
          failS loc (fun local ->
@@ -1925,7 +1925,7 @@ module Make
            )
       | M_Erun (label_sym, asyms) ->
          let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
-           | None -> fail loc (lazy (Generic (!^"undefined code label" ^/^ Sym.pp label_sym)))
+           | None -> fail loc (Generic (!^"undefined code label" ^/^ Sym.pp label_sym))
            | Some (lt,lkind) -> return (lt,lkind)
          in
          let@ args = args_of_asyms asyms in
@@ -1965,12 +1965,12 @@ module Make
          let@ () = add_a aname (abt,new_lname) in
          check resources args ftyp'
       | ((aname, abt) :: args), (AT.Computational ((sname, sbt), _info, ftyp)) ->
-         fail loc (lazy (Mismatch {has = abt; expect = sbt}))
+         fail loc (Mismatch {has = abt; expect = sbt})
       | [], (AT.Computational (_, _, _))
       | (_ :: _), (AT.I _) ->
          let expect = AT.count_computational function_typ in
          let has = List.length arguments in
-         fail loc (lazy (Number_arguments {expect; has}))
+         fail loc (Number_arguments {expect; has})
       | args, (AT.Logical ((sname, sls), _, ftyp)) ->
          let@ () = add_l sname sls in
          check resources args ftyp
@@ -2109,7 +2109,7 @@ let check mu_file =
                  match piece.member_or_padding with
                  | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
                     if SymMap.mem sym2 global.struct_decls then return ()
-                    else fail Loc.unknown (lazy (Missing_struct sym2))
+                    else fail Loc.unknown (Missing_struct sym2)
                  | _ -> return ()
                ) layout
            in
@@ -2230,14 +2230,14 @@ let check mu_file =
           | M_Fun (rbt, args, body) ->
              let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
                | Some t -> return t
-               | None -> fail Loc.unknown (lazy (Missing_function fsym))
+               | None -> fail Loc.unknown (Missing_function fsym)
              in
              Typing.run (C.check_function loc
                 (Sym.pp_string fsym) args rbt body ftyp) local
           | M_Proc (loc, rbt, args, body, labels) ->
              let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
                | Some t -> return t
-               | None -> fail loc (lazy (Missing_function fsym))
+               | None -> fail loc (Missing_function fsym)
              in
              Typing.run (C.check_procedure loc'
                fsym args rbt body ftyp labels) local

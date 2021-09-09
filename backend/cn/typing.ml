@@ -4,7 +4,7 @@ module Make(L : Local.S) : sig
 
 
   type e = TypeErrors.type_error
-  type error = (Locations.loc * e Lazy.t) * string option (* stack trace*)
+  type error = (Locations.loc * e) * string option (* stack trace*)
 
 
   type 'a t
@@ -14,7 +14,7 @@ module Make(L : Local.S) : sig
   val bind : 'a m -> ('a -> 'b m) -> 'b m
   val pure : 'a m -> 'a m
   val (let@) : 'a m -> ('a -> 'b m) -> 'b m
-  val fail : Loc.t -> TypeErrors.type_error Lazy.t -> 'a m
+  val fail : Loc.t -> e -> 'a m
   val failS : Loc.t -> failure -> 'a m
   val run : 'a m -> L.t -> ('a * L.t, error) Result.t
 
@@ -46,7 +46,7 @@ end = struct
   type e = TypeErrors.type_error
   type s = L.t
 
-  type error = (Locations.loc * e Lazy.t) * string option 
+  type error = (Locations.loc * e) * string option 
 
   type 'a t = { c : s -> ('a * s, error) Result.t }
   type 'a m = 'a t
@@ -79,11 +79,11 @@ end = struct
   let error loc e = 
     ((loc, e), Tools.do_stack_trace ())
 
-  let fail (loc: Loc.loc) (e: 'e Lazy.t) : 'a t = 
+  let fail (loc: Loc.loc) (e: e) : 'a t = 
     { c = fun _ -> Error (error loc e) }
 
   let failS (loc : Loc.loc) (f : failure) : 'a t = 
-    { c = fun s -> Error (error loc (lazy (f s))) }
+    { c = fun s -> Error (error loc (f s)) }
 
 
   let pure (m : 'a t) : 'a t =

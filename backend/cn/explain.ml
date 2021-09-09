@@ -169,7 +169,7 @@ module Make
 
   module VClassGraph = Graph.Make(VClass)
 
-  let veclasses local model = 
+  let veclasses local = 
     let with_logical = 
       List.fold_right (fun (l, sort) g ->
           VClassSet.add (make (l, sort)) g
@@ -198,7 +198,14 @@ module Make
       ) (L.all_constraints local) with_all
 
 
-  let explanation local model relevant =
+  let explanation local relevant =
+
+    print_endline "\n";
+    List.iter (fun expr -> 
+        print_endline (Z3.Expr.to_string expr)
+      ) (Z3.Solver.get_assertions (L.solver local));
+    print_endline "\n";
+
 
     print stdout !^"producing error report";
 
@@ -212,7 +219,7 @@ module Make
 
     (* add 'Pointee' edges between nodes whenever the resources indicate that *)
     let graph = 
-      VClassSet.fold VClassGraph.add_node (veclasses local model) 
+      VClassSet.fold VClassGraph.add_node (veclasses local) 
         VClassGraph.empty 
     in
     let graph = 
@@ -281,7 +288,7 @@ module Make
 
 
   let rec evaluate model expr : string = 
-    match Z3.Model.evaluate model (S.term expr) true with
+    match Z3.Model.eval model (S.term expr) true with
     | None -> "(not evaluated)"
     | Some evaluated_expr -> 
        match IT.bt expr with
@@ -332,7 +339,7 @@ module Make
     let evaluate_array (q_s, q_bt) it = 
       match is_app it with
       | Some (f, arg) when IT.equal arg ((sym_ (q_s, q_bt))) ->
-         evaluate f
+         evaluate f ^ "(" ^ Sym.pp_string q_s ^ ")"
       | _ -> Debug_ocaml.error "resource not normalised"
     in
              
@@ -350,13 +357,13 @@ module Make
           | Point p ->
              let loc_expr = IT.pp (IT.subst substitution p.pointer) in
              let loc_val = !^(evaluate p.pointer) in
-             let permission_v = evaluate p.permission in
-             let init_v = evaluate p.init in
+             let permission_v = !^(evaluate p.permission) in
+             let init_v = !^(evaluate p.init) in
              let state = 
                Sctypes.pp p.ct ^^^
                  parens (
-                   !^"permission" ^^ colon ^^^ !^permission_v ^^ comma ^^^
-                   !^"init" ^^ colon ^^ !^init_v
+                   !^"permission" ^^ colon ^^^ permission_v ^^ comma ^^^
+                   !^"init" ^^ colon ^^^ init_v
                    )
              in
              let value = 
@@ -379,13 +386,13 @@ module Make
           | QPoint p ->
              let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = evaluate_array (p.qpointer, BT.Loc) p.permission in
-             let init_v = evaluate_array (p.qpointer, BT.Loc) p.init in
+             let permission_v = !^(evaluate_array (p.qpointer, BT.Loc) p.permission) in
+             let init_v = !^(evaluate_array (p.qpointer, BT.Loc) p.init) in
              let state = 
                Sctypes.pp p.ct ^^^
                  parens (
-                   !^"permission" ^^ colon ^^^ !^permission_v ^^ comma ^^^
-                   !^"init" ^^ colon ^^ !^init_v
+                   !^"permission" ^^ colon ^^^ permission_v ^^ comma ^^^
+                   !^"init" ^^ colon ^^^ init_v
                    )
              in
              let value = 
@@ -410,13 +417,13 @@ module Make
              let id = make_predicate_name () in
              let loc_expr = IT.pp (IT.subst substitution p.pointer) in
              let loc_val = !^(evaluate p.pointer) in
-             let permission_v = evaluate p.permission in
+             let permission_v = !^(evaluate p.permission) in
              let state = 
                !^id ^^^ equals ^^^
                Pp.string p.name ^^
                  parens (separate comma (List.map (fun i -> IT.pp (IT.subst substitution i)) 
                                            (p.pointer :: p.iargs))) ^^^
-                   parens (!^"permission" ^^ colon ^^^ !^permission_v)
+                   parens (!^"permission" ^^ colon ^^^ permission_v)
              in
              let entry = (Some loc_expr, Some loc_val, Some state) in
              let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
@@ -435,13 +442,13 @@ module Make
              let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
              let id = make_predicate_name () in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = evaluate_array (p.qpointer, Loc) p.permission in
+             let permission_v = !^(evaluate_array (p.qpointer, Loc) p.permission) in
              let state = 
                !^id ^^^ equals ^^^
                Pp.string p.name ^^
                  parens (separate comma (List.map (fun i -> IT.pp (IT.subst substitution i)) 
                                            (sym_ (p.qpointer, BT.Loc) :: p.iargs))) ^^^
-                   parens (!^"permission" ^^ colon ^^^ !^permission_v)
+                   parens (!^"permission" ^^ colon ^^^ permission_v)
              in
              let entry = (Some loc_expr, None, Some state) in
              let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
@@ -532,59 +539,53 @@ module Make
   let undefined_behaviour local = 
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in
     assert (not provable);
+    let explanation = explanation local SymSet.empty in
     let model = S.get_model (L.solver local) in
-    let explanation = explanation local model SymSet.empty in
     pp_state_with_model local explanation model
 
   let implementation_defined_behaviour local it = 
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in
     assert (not provable);
-    let model = S.get_model (L.solver local) in
-    let explanation = explanation local model (IT.free_vars it) in
+    let explanation = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
+    let model = S.get_model (L.solver local) in
     (it_pp, pp_state_with_model local explanation model)
 
   let missing_ownership local model it = 
-    let explanation = explanation local model (IT.free_vars it) in
+    let explanation = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
     (it_pp, pp_state_with_model local explanation model)
 
   let index_term local it = 
-    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
-    assert (not provable);
-    let model = S.get_model (L.solver local) in
-    let explanation = explanation local model (IT.free_vars it) in
+    let explanation = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
     it_pp
 
   let unsatisfied_constraint local model lc = 
-    let explanation = explanation local model (LC.free_vars lc) in
+    let explanation = explanation local (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst explanation.substitution lc) in
     (lc_pp, pp_state_with_model local explanation model)
 
   let resource local model re = 
-    let explanation = explanation local model (RE.free_vars re) in
+    let explanation = explanation local (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst explanation.substitution re) in
     (re_pp, pp_state_with_model local explanation model)
 
   let resource_request local model re = 
-    let explanation = explanation local model (RER.free_vars re) in
+    let explanation = explanation local (RER.free_vars re) in
     let re_pp = RER.pp (RER.subst explanation.substitution re) in
     (re_pp, pp_state_with_model local explanation model)
 
   let resources local model (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
-    let explanation = explanation local model relevant in
+    let explanation = explanation local relevant in
     let re1 = RE.pp (RE.subst explanation.substitution re1) in
     let re2 = RE.pp (RE.subst explanation.substitution re2) in
     ((re1, re2), pp_state_with_model local explanation model)
 
 
   let illtyped_index_term local context it =
-    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
-    assert (not provable);
-    let model = S.get_model (L.solver local) in
-    let explanation = explanation local model (IT.free_vars_list [it; context]) in
+    let explanation = explanation local (IT.free_vars_list [it; context]) in
     let it = IT.pp (IT.subst explanation.substitution it) in
     let context = IT.pp (IT.subst explanation.substitution context) in
     (context, it)

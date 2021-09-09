@@ -28,7 +28,7 @@ module Make
     let check_bound loc kind s = 
       let@ is_bound = bound s kind in
       if is_bound then return ()
-      else fail loc (lazy (TE.Unbound_name (Sym s)))
+      else fail loc (TE.Unbound_name (Sym s))
 
 
     let illtyped_index_term context it has expected =
@@ -73,7 +73,7 @@ module Make
     let get_struct_decl loc tag = 
       match SymMap.find_opt tag G.global.struct_decls with
       | Some decl -> return decl
-      | None -> fail loc (lazy (Missing_struct tag))
+      | None -> fail loc (Missing_struct tag)
 
     open BaseTypes
     open LogicalSorts
@@ -220,7 +220,7 @@ module Make
                   let has = List.length members in
                   let expect = List.length decl_members in
                   if has = expect then return ()
-                  else fail loc (lazy (Number_members {has; expect}))
+                  else fail loc (Number_members {has; expect})
                 in
                 let@ members = 
                   ListM.mapM (fun (member,t) ->
@@ -320,13 +320,13 @@ module Make
         | List_op list_op ->
            let@ (bt, list_op) = match list_op with
              | Nil -> 
-                fail loc (lazy (Polymorphic_it context))
+                fail loc (Polymorphic_it context)
              | Cons (t1,t2) ->
                 let@ t1 = infer loc ~context t1 in
                 let@ t2 = check loc ~context (List (IT.bt t1)) t2 in
                 return (BT.List (IT.bt t1), Cons (t1, t2))
              | List [] ->
-                fail loc (lazy (Polymorphic_it context))
+                fail loc (Polymorphic_it context)
              | List (t :: ts) ->
                 let@ t = infer loc ~context t in
                 let@ ts = ListM.mapM (check loc ~context (IT.bt t)) ts in
@@ -444,13 +444,13 @@ module Make
     let get_predicate_def loc name = 
       match Global.get_predicate_def G.global name with
       | Some def -> return def
-      | None -> fail loc (lazy (Missing_predicate name))
+      | None -> fail loc (Missing_predicate name)
       
     let ensure_same_argument_number loc input_output has ~expect =
       if has = expect then return () else 
         match input_output with
-        | `Input -> fail loc (lazy (Number_input_arguments {has; expect}))
-        | `Output -> fail loc (lazy (Number_input_arguments {has; expect}))
+        | `Input -> fail loc (Number_input_arguments {has; expect})
+        | `Output -> fail loc (Number_input_arguments {has; expect})
         
     let welltyped loc resource = 
       pure begin match resource with
@@ -508,7 +508,7 @@ module Make
         | [] -> return ()
         | lvar :: _ -> 
            let (loc, odescr) = SymMap.find lvar infos in
-           fail loc (lazy (Unconstrained_logical_variable (lvar, odescr)))
+           fail loc (Unconstrained_logical_variable (lvar, odescr))
       in
       let@ fixed = 
         ListM.fold_leftM (fun fixed output ->
@@ -529,7 +529,7 @@ module Make
               | _ ->
                  let bad = List.hd (SymSet.elements undetermined) in
                  let (loc, odescr) = SymMap.find bad infos in
-                 fail loc (lazy (Logical_variable_not_good_for_unification (bad, odescr)))
+                 fail loc (Logical_variable_not_good_for_unification (bad, odescr))
           ) SymSet.empty (RE.outputs resource)
       in
       return fixed
@@ -598,7 +598,7 @@ module Make
          | [] -> return ()
          | s :: _ -> 
             let (loc, odescr) = SymMap.find s infos in
-            fail loc (lazy (Unconstrained_logical_variable (s, odescr)))
+            fail loc (Unconstrained_logical_variable (s, odescr))
       in
       aux determined SymSet.empty SymMap.empty lrt 
 
@@ -663,8 +663,8 @@ module Make
         | (name, bt) :: name_bts, (name', it) :: assignment when String.equal name name' ->
            let@ _ = WIT.check loc bt it in
            aux name_bts assignment
-        | (name, _) :: _, _ -> fail loc (lazy (Generic !^("missing output argument " ^ name)))
-        | _, (name, _) :: _ -> fail loc (lazy (Generic !^("surplus output argument " ^ name)))
+        | (name, _) :: _, _ -> fail loc (Generic !^("missing output argument " ^ name))
+        | _, (name, _) :: _ -> fail loc (Generic !^("surplus output argument " ^ name))
       in
       aux name_bts assignment
     let mode_check _ _ _ = return ()
@@ -715,7 +715,7 @@ end
         | AT.I i -> 
            let@ provable = provable in
            if provable (LC.t_ (IT.bool_ false))
-           then fail loc (lazy (Generic !^("this "^kind^" makes inconsistent assumptions")))
+           then fail loc (Generic !^("this "^kind^" makes inconsistent assumptions"))
            else WI.welltyped loc i
         end
 
@@ -740,7 +740,7 @@ end
          | [] -> WI.mode_check loc determined rt
          | s :: _ -> 
             let (loc, odescr) = SymMap.find s infos in
-            fail loc (lazy (Unconstrained_logical_variable (s, odescr)))
+            fail loc (Unconstrained_logical_variable (s, odescr))
       in
       aux determined SymSet.empty SymMap.empty ft
 

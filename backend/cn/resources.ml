@@ -406,14 +406,6 @@ module RE = struct
     | Point p -> 
        LC.T (impl_ (gt_ (p.permission, q_ (0, 1)), 
                     not_ (eq_ (null_, p.pointer))))
-    (* | Predicate ({ name = Ctype ct; _} as p) ->
-     *    begin match Memory.size_of_ctype_opt ct with
-     *    | Some sz -> 
-     *       LC.T (impl_ (bool_ p.unused, 
-     *                    not_ (eq_ (null_, p.pointer))))
-     *    | None -> 
-     *       LC.T (bool_ true)
-     *    end *)
     (* | QPoint p ->
      *    LC.forall_ (p.qpointer, BT.Loc) None
      *      (impl_ (gt_ (p.permission, q_ (0, 1)),

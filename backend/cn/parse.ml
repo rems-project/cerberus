@@ -38,10 +38,10 @@ let parse_condition default_label (loc, string) =
     try return (Assertion_parser.start Assertion_lexer.main lexbuf) with
     | Assertion_lexer.Error ->
        let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
-       fail loc (lazy (Generic !^"invalid symbol"))
+       fail loc (Generic !^"invalid symbol")
     | Assertion_parser.Error ->
        let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
-       fail loc (lazy (Generic !^ ("Unexpected token " ^ Lexing.lexeme lexbuf)))
+       fail loc (Generic !^ ("Unexpected token " ^ Lexing.lexeme lexbuf))
   in
   return (loc, parsed_spec)
 
@@ -70,13 +70,13 @@ let cn_attributes attributes =
 let make_accessed globals (loc, name) =
   let rec aux = function
     | [] -> 
-       fail loc (lazy (Generic !^("'"^name^"' is not a global variable")))
+       fail loc (Generic !^("'"^name^"' is not a global variable"))
     | garg :: gargs ->
       match CF.Symbol.symbol_description garg.asym with
       | SD_ObjectAddress name' when String.equal name name' ->
          begin match garg.accessed with
          | Some _ -> 
-            fail loc (lazy (Generic !^("already specified '"^name^"' as accessed")))
+            fail loc (Generic !^("already specified '"^name^"' as accessed"))
          | None -> 
             return ({ garg with accessed = Some loc } :: gargs)
          end
@@ -118,9 +118,9 @@ let parse_function
            let@ new_post = ListM.mapM (parse_condition "end") attr.arguments in
            return (globals, pre, post @ new_post)
         | "inv" ->
-           fail (fst attr.keyword) (lazy (Generic !^"'inv' is for loop specifications"))
+           fail (fst attr.keyword) (Generic !^"'inv' is for loop specifications")
         | other ->
-           fail (fst attr.keyword) (lazy (Generic !^("unknown keyword '"^other^"'")))
+           fail (fst attr.keyword) (Generic !^("unknown keyword '"^other^"'"))
       ) (globals, [], []) cn_attributes
   in
   let global_arguments = globals in
@@ -154,16 +154,16 @@ let parse_label
     ListM.fold_leftM (fun inv attr ->
         match snd attr.keyword with
         | "accesses" -> 
-           fail (fst attr.keyword) (lazy (Generic !^"'accesses' is for function specifications"))
+           fail (fst attr.keyword) (Generic !^"'accesses' is for function specifications")
         | "requires" -> 
-           fail (fst attr.keyword) (lazy (Generic !^"'requires' is for function specifications"))
+           fail (fst attr.keyword) (Generic !^"'requires' is for function specifications")
         | "ensures" -> 
-           fail (fst attr.keyword) (lazy (Generic !^"'ensures' is for function specifications"))
+           fail (fst attr.keyword) (Generic !^"'ensures' is for function specifications")
         | "inv" ->
            let@ new_inv = ListM.mapM (parse_condition lname) attr.arguments in
            return (inv @ new_inv)
         | other ->
-           fail (fst attr.keyword) (lazy (Generic !^("unknown keyword '"^other^"'")))
+           fail (fst attr.keyword) (Generic !^("unknown keyword '"^other^"'"))
       ) [] cn_attributes
   in
   return { 

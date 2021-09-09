@@ -15,12 +15,17 @@ let context =
     ] 
 
 
-let params = Z3.Params.mk_params context 
-let () = Z3.set_global_param "smt.auto-config" "false"
-let () = Z3.set_global_param "smt.mbqi" "false"
-let () = Z3.set_global_param "smt.pull-nested-quantifiers" "true"
-let () = Z3.set_global_param "smt.macro_finder" "true"
-let () = Z3.set_global_param "smt.arith.solver" "2"
+let params = Z3.Params.mk_params context
+let () =
+  Z3.set_global_param "smt.auto-config" "false";
+  Z3.set_global_param "smt.mbqi" "false";
+  Z3.set_global_param "smt.pull-nested-quantifiers" "true";
+  Z3.set_global_param "smt.macro_finder" "true";
+  Z3.set_global_param "smt.arith.solver" "2";
+  Z3.set_global_param "model.compact" "false";
+  Z3.set_global_param "model.completion" "true";
+  Z3.set_global_param "model_evaluator.completion" "true";
+
 
 
 
@@ -427,6 +432,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let check solver (lc : LC.t) =  
     let () = Debug_ocaml.begin_csv_timing "solver" in
     let result = match lc with
+      (* problematic for getting a model out *)
       (* (\* as similarly suggested by Robbert *\)
        * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
        *    (`YES, solver) *)

@@ -2,7 +2,7 @@
 module Loc = Locations
 
 type ('a, 'e) t = 
-  ('a, (Locations.loc * 'e Lazy.t) *  string option (* stack trace *)) Result.t
+  ('a, (Locations.loc * 'e) *  string option (* stack trace *)) Result.t
 
 type ('a, 'e) m = ('a, 'e) t
 
@@ -10,7 +10,7 @@ type ('a, 'e) m = ('a, 'e) t
 let return (a: 'a) : ('a,'e) t = 
   Ok a
 
-let fail (loc: Locations.loc) (e: 'e Lazy.t) : ('a, 'e) t = 
+let fail (loc: Locations.loc) (e: 'e) : ('a, 'e) t = 
   Error ((loc, e), Tools.do_stack_trace ())
 
 let bind (m : ('a,'e) t) (f: 'a -> ('b,'e) t) : ('b,'e) t = 
@@ -25,18 +25,6 @@ let (let@) = bind
 
 
 
-
-
-let rec attempt (fs : ((('a, 'e) t) Lazy.t) List1.t) : ('a,'e) t = 
-  let (hd, tl) = List1.dest fs in
-  let hd_run = Lazy.force hd in
-  match hd_run, tl with
-  | Ok a, _ -> 
-     Ok a
-  | Error _, hd' :: tl' -> 
-     attempt (List1.make (hd', tl'))
-  | Error err, _ -> 
-     Error err
 
 
 
