@@ -200,12 +200,6 @@ module Make
 
   let explanation local relevant =
 
-    print_endline "\n";
-    List.iter (fun expr -> 
-        print_endline (Z3.Expr.to_string expr)
-      ) (Z3.Solver.get_assertions (L.solver local));
-    print_endline "\n";
-
 
     print stdout !^"producing error report";
 
