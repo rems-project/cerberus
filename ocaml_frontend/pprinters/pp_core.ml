@@ -959,9 +959,17 @@ module All = Make (struct
   let handle_uid _ _ = ()
 end)
 
-
 module WithLocations = Make (struct
   let show_std = false
+  let show_include = false
+  let show_locations = true
+  let show_explode_annot = false
+  let handle_location _ _ = ()
+  let handle_uid _ _ = ()
+end)
+
+module WithLocationsAndStd = Make (struct
+  let show_std = true
   let show_include = false
   let show_locations = true
   let show_explode_annot = false
