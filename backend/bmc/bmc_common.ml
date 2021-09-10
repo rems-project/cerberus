@@ -54,7 +54,8 @@ let rec base_ctype (Ctype (_, ty) as cty) : ctype =
   | Basic _ -> cty
   | Array (ty2, _) ->
       base_ctype ty2
-  | Function _ -> assert false
+  | Function _
+  | FunctionNoParams _ -> assert false
   | Pointer _ -> cty
   | Atomic ty2 ->
       base_ctype ty2
@@ -78,7 +79,8 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
   | Array(_, None) ->
       assert false
-  | Function _ -> assert false
+  | Function _
+  | FunctionNoParams _ -> assert false
   | Pointer _ ->
       CaseSortBase (cty, LoadedPointer.mk_sort)
   | Atomic (Ctype (_, Basic _) as _ty) (* fall through *)
