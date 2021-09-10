@@ -134,19 +134,19 @@ let part_zero_region =
   in
   let v_constr = 
     forall_ (p_s, IT.bt p_t) 
-      None
+      (Some (T_App (T_Term v_t, T_Term p_t)))
       (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, up_to_t))],
-              and_ [eq_ (app_ v_t p_t, int_ 0)]))
+              eq_ (app_ v_t p_t, int_ 0)))
   in
   let init_constr = 
     forall_ (p_s, IT.bt p_t)
-      None
+      (Some (T_App (T_Term init_t, T_Term p_t)))
       (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, up_to_t))],
-              and_ [app_ init_t p_t]))
+              app_ init_t p_t))
   in
   let lrt =
     LRT.Logical ((v_s, IT.bt v_t), (loc, None),
@@ -203,15 +203,15 @@ let zero_region =
   in
   let v_constr = 
     forall_ (p_s, IT.bt p_t) 
-      None
+      (Some (T_App (T_Term v_t, T_Term p_t)))
       (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, length_t))],
-              and_ [eq_ (app_ v_t p_t, int_ 0)]))
+              eq_ (app_ v_t p_t, int_ 0)))
   in
   let init_constr = 
     forall_ (p_s, IT.bt p_t)
-      None
+      (Some (T_App (T_Term init_t, T_Term p_t)))
       (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, length_t))],
@@ -593,11 +593,17 @@ let page_alloc_predicates struct_decls =
     in
 
     let vmemmap_metadata_owned =
-      let element_size = Memory.size_of_struct hyp_page_tag in
+      let element_size = int_ (Memory.size_of_struct hyp_page_tag) in
       let p_s, p_t = IT.fresh_named Loc "p" in
       let point_permission = 
-        array_permission p_t vmemmap_pointer_t 
-          (sub_ (end_t, start_t)) (int_ element_size) permission_t 
+        let condition = 
+          and_ [
+              lePointer_ (addPointer_ (vmemmap_pointer_t, mul_ (start_t, element_size)), p_t);
+              ltPointer_ (p_t, addPointer_ (vmemmap_pointer_t, mul_ (end_t, element_size)));
+              eq_ (rem_ (pointerToIntegerCast_ p_t, element_size), int_ 0);
+          ]
+        in
+        ite_ (condition, permission_t, q_ (0, 1))
       in
       let vmemmap_array = 
         QPredicate {
@@ -748,19 +754,11 @@ let page_alloc_predicates struct_decls =
     let predicate = 
       {
         loc = loc;
-        pointer = 
-          pool_pointer_s;
-        iargs = [
-            (vmemmap_pointer_s, IT.bt vmemmap_pointer_t);
-          ];
-        oargs = [
-            ("pool", IT.bt pool_t);
-            ("vmemmap", IT.bt vmemmap_t);
-          ];
-        clauses = 
-          [clause;]; 
-        permission = 
-          permission_s;
+        pointer = pool_pointer_s;
+        permission = permission_s;
+        iargs = [(vmemmap_pointer_s, IT.bt vmemmap_pointer_t)];
+        oargs = [("pool", IT.bt pool_t); ("vmemmap", IT.bt vmemmap_t)];
+        clauses = [clause;]; 
       } 
     in
     (id, predicate)

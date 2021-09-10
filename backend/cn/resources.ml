@@ -337,9 +337,12 @@ module RE = struct
        (array, [], [])
     | _ ->
        let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
-       (f_t, 
-        [(f_s, IT.bt f_t)], 
-        [(LC.forall_ (x_s, x_bt) None (eq_ (app_ f_t x_t, body)))])
+       let lc = 
+         (LC.forall_ (x_s, x_bt) 
+            (Some (LC.T_App (T_Term f_t, T_Term x_t)))
+            (eq_ (app_ f_t x_t, body)))
+       in
+       (f_t, [(f_s, IT.bt f_t)], [lc])
 
 
   let make_app (x_s, x_bt) body = 
@@ -347,55 +350,55 @@ module RE = struct
     (app_ array (sym_ (x_s, x_bt)), l, c)
 
 
-  let normalise = function
-    | Point p ->
-       let (pointer, l1, c1) = make_lit p.pointer in
-       let (permission, l2, c2) = make_lit p.permission in
-       let (value, l3, c3) = make_lit p.value in
-       let (init, l4, c4) = make_lit p.init in
-       let re = Point { ct = p.ct; pointer; permission; value; init } in
-       (re, l1 @ l2 @ l3 @ l4, c1 @ c2 @ c3 @ c4)
-    | QPoint p ->
-       let qpointer = p.qpointer in
-       let (permission, l2, c2) = make_app (qpointer, Loc) p.permission in
-       let (value, l3, c3) = make_app (qpointer, Loc) p.value in
-       let (init, l4, c4) = make_app (qpointer, Loc) p.init in
-       let re = QPoint { ct = p.ct; qpointer; permission; value; init } in
-       (re, l2 @ l3 @ l4, c2 @ c3 @ c4)
-    | Predicate p ->
-       let (pointer, l1, c1) = make_lit p.pointer in
-       let (permission, l2, c2) = make_lit p.permission in
-       let (iargs, l3, c3) = 
-         List.fold_right (fun iarg (iargs, l3, c3) ->
-             let (iarg, l3', c3') = make_lit iarg in
-             (iarg :: iargs, l3' @ l3, c3' @ c3)
-           ) p.iargs ([], [], [])
-       in
-       let (oargs, l4, c4) = 
-         List.fold_right (fun oarg (oargs, l4, c4) ->
-             let (oarg, l4', c4') = make_lit oarg in
-             (oarg :: oargs, l4' @ l4, c4' @ c4)
-           ) p.oargs ([], [], [])
-       in
-       let re = Predicate { name = p.name; pointer; permission; iargs; oargs } in
-       (re, l1 @ l2 @ l3 @ l4, c1 @ c2 @ c3 @ c4)
-    | QPredicate p ->
-       let qpointer = p.qpointer in
-       let (permission, l2, c2) = make_app (qpointer, Loc) p.permission in
-       let (iargs, l3, c3) = 
-         List.fold_right (fun iarg (iargs, l3, c3) ->
-             let (iarg, l3', c3') = make_app (qpointer, Loc) iarg in
-             (iarg :: iargs, l3' @ l3, c3' @ c3)
-           ) p.iargs ([], [], [])
-       in
-       let (oargs, l4, c4) = 
-         List.fold_right (fun oarg (oargs, l4, c4) ->
-             let (oarg, l4', c4') = make_app (qpointer, Loc) oarg in
-             (oarg :: oargs, l4' @ l4, c4' @ c4)
-           ) p.oargs ([], [], [])
-       in
-       let re = QPredicate { name = p.name; qpointer; permission; iargs; oargs } in
-       (re, l2 @ l3 @ l4, c2 @ c3 @ c4)
+  let normalise re = (re, [], []) (* function
+     * | Point p ->
+     *    let (pointer, l1, c1) = make_lit p.pointer in
+     *    let (permission, l2, c2) = make_lit p.permission in
+     *    let (value, l3, c3) = make_lit p.value in
+     *    let (init, l4, c4) = make_lit p.init in
+     *    let re = Point { ct = p.ct; pointer; permission; value; init } in
+     *    (re, l1 @ l2 @ l3 @ l4, c1 @ c2 @ c3 @ c4)
+     * | QPoint p ->
+     *    let qpointer = p.qpointer in
+     *    let (permission, l2, c2) = make_app (qpointer, Loc) p.permission in
+     *    let (value, l3, c3) = make_app (qpointer, Loc) p.value in
+     *    let (init, l4, c4) = make_app (qpointer, Loc) p.init in
+     *    let re = QPoint { ct = p.ct; qpointer; permission; value; init } in
+     *    (re, l2 @ l3 @ l4, c2 @ c3 @ c4)
+     * | Predicate p ->
+     *    let (pointer, l1, c1) = make_lit p.pointer in
+     *    let (permission, l2, c2) = make_lit p.permission in
+     *    let (iargs, l3, c3) = 
+     *      List.fold_right (fun iarg (iargs, l3, c3) ->
+     *          let (iarg, l3', c3') = make_lit iarg in
+     *          (iarg :: iargs, l3' @ l3, c3' @ c3)
+     *        ) p.iargs ([], [], [])
+     *    in
+     *    let (oargs, l4, c4) = 
+     *      List.fold_right (fun oarg (oargs, l4, c4) ->
+     *          let (oarg, l4', c4') = make_lit oarg in
+     *          (oarg :: oargs, l4' @ l4, c4' @ c4)
+     *        ) p.oargs ([], [], [])
+     *    in
+     *    let re = Predicate { name = p.name; pointer; permission; iargs; oargs } in
+     *    (re, l1 @ l2 @ l3 @ l4, c1 @ c2 @ c3 @ c4)
+     * | QPredicate p ->
+     *    let qpointer = p.qpointer in
+     *    let (permission, l2, c2) = make_app (qpointer, Loc) p.permission in
+     *    let (iargs, l3, c3) = 
+     *      List.fold_right (fun iarg (iargs, l3, c3) ->
+     *          let (iarg, l3', c3') = make_app (qpointer, Loc) iarg in
+     *          (iarg :: iargs, l3' @ l3, c3' @ c3)
+     *        ) p.iargs ([], [], [])
+     *    in
+     *    let (oargs, l4, c4) = 
+     *      List.fold_right (fun oarg (oargs, l4, c4) ->
+     *          let (oarg, l4', c4') = make_app (qpointer, Loc) oarg in
+     *          (oarg :: oargs, l4' @ l4, c4' @ c4)
+     *        ) p.oargs ([], [], [])
+     *    in
+     *    let re = QPredicate { name = p.name; qpointer; permission; iargs; oargs } in
+     *    (re, l2 @ l3 @ l4, c2 @ c3 @ c4) *)
 
 
 

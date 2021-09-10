@@ -473,13 +473,11 @@ module Make
         let i_s, i_t = IT.fresh Integer in
         let i_pointer = 
           array_index_to_pointer base_pointer_t element_size i_t in
-        forall_ (i_s, IT.bt i_t) None
-          (impl_ 
-             (array_index_in_range i_t (int_ length_t),
-              eq__ 
-                (app_ folded_value_t i_t)
-                (IT.subst [(qpoint.qpointer, i_pointer)] 
-                   qpoint.value)))
+        forall_ (i_s, IT.bt i_t) 
+          (T_App (T_Term folded_value_t, T_Term i_t))
+          (eq__ 
+             (app_ folded_value_t i_t)
+             (IT.subst [(qpoint.qpointer, i_pointer)] qpoint.value))
       in
       let lrt = 
         LRT.Logical ((folded_value_s, IT.bt folded_value_t), (loc, None),

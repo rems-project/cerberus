@@ -18,13 +18,16 @@ let context =
 let params = Z3.Params.mk_params context
 let () =
   Z3.set_global_param "smt.auto-config" "false";
-  Z3.set_global_param "smt.mbqi" "false";
+  Z3.set_global_param "smt.mbqi" "true";
+  Z3.set_global_param "smt.ematching" "true";
   Z3.set_global_param "smt.pull-nested-quantifiers" "true";
   Z3.set_global_param "smt.macro_finder" "true";
   Z3.set_global_param "smt.arith.solver" "2";
   Z3.set_global_param "model.compact" "false";
   Z3.set_global_param "model.completion" "true";
   Z3.set_global_param "model_evaluator.completion" "true";
+  Z3.set_global_param "model_evaluator.array_as_stores" "true";
+
 
 
 
@@ -54,13 +57,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let tuple_field_symbol i = Z3.Symbol.mk_string context (tuple_field_name i)
   let member_name id = Id.s id
   let member_symbol bt id = Z3.Symbol.mk_string context (bt_name bt ^ "_" ^ member_name id)
-  let sym_to_sym s = 
-    let (digest, id, _) = Sym.dest s in
-    let str = string_of_int id ^"." ^ digest in
-    Z3.Symbol.mk_string context str
-
-
-
+  let sym_to_sym s = Z3.Symbol.mk_string context (CF.Pp_symbol.to_string_pretty s)
 
   let sort =
 
@@ -447,9 +444,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
               Z3.Solver.check solver [Z3.Boolean.mk_not context (term t)]
          in
          match result with
-         | Z3.Solver.UNSATISFIABLE -> (`YES, solver)
-         | Z3.Solver.SATISFIABLE -> (`NO, solver)
-         | Z3.Solver.UNKNOWN -> (`MAYBE, solver)
+         | Z3.Solver.UNSATISFIABLE -> `YES
+         | Z3.Solver.SATISFIABLE -> `NO
+         | Z3.Solver.UNKNOWN -> `MAYBE
     in
     let () = Debug_ocaml.end_csv_timing "solver" in
     result
@@ -458,12 +455,16 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let constr = of_logical_constraint
 
 
-  let provable assumptions lc = 
-    let (result, _solver) = check assumptions lc in
+  let provable solver lc = 
+    let result = check solver lc in
     match result with
     | `YES -> true
     | `NO -> false
-    | `MAYBE -> false
+    | `MAYBE -> 
+       print_endline (
+           "MAYBE: " ^ Z3.Solver.get_reason_unknown solver ^ ", LC = " ^ Pp.plain (LC.pp lc)
+         ); 
+       false
 
 
   let get_model solver = 
