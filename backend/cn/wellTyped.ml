@@ -356,18 +356,18 @@ module Make
                 let@ t = infer loc ~context t in
                 let@ itembt = ensure_set_type loc context t in
                 let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
-                return (Set itembt, SetUnion (List1.make (t, ts)))
+                return (BT.Set itembt, SetUnion (List1.make (t, ts)))
              | SetIntersection its ->
                 let (t, ts) = List1.dest its in
                 let@ t = infer loc ~context t in
                 let@ itembt = ensure_set_type loc context t in
                 let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
-                return (Set itembt, SetIntersection (List1.make (t, ts)))
+                return (BT.Set itembt, SetIntersection (List1.make (t, ts)))
              | SetDifference (t, t') ->
                 let@ t  = infer loc ~context t in
                 let@ itembt = ensure_set_type loc context t in
                 let@ t' = check loc ~context (Set itembt) t' in
-                return (Set itembt, SetDifference (t, t'))
+                return (BT.Set itembt, SetDifference (t, t'))
              | Subset (t, t') ->
                 let@ t = infer loc ~context t in
                 let@ itembt = ensure_set_type loc context t in
@@ -398,17 +398,17 @@ module Make
              | Const (index_bt, t) ->
                 let@ t = infer loc ~context t in
                 return (BT.Array (index_bt, IT.bt t), Const (index_bt, t))
-             | Mod (t1, t2, t3) ->
+             | Set (t1, t2, t3) ->
                 let@ t2 = infer loc ~context t2 in
                 let@ t3 = infer loc ~context t3 in
                 let bt = BT.Array (IT.bt t2, IT.bt t3) in
                 let@ t1 = check loc ~context bt t1 in
-                return (bt, Mod (t1, t2, t3))
-             | App (t, arg) -> 
+                return (bt, Set (t1, t2, t3))
+             | Get (t, arg) -> 
                 let@ t = infer loc ~context t in
                 let@ (abt, bt) = ensure_array_type loc context t in
                 let@ arg = check loc ~context abt arg in
-                return (bt, App (t, arg))
+                return (bt, Get (t, arg))
            in
            return (IT (Array_op array_op, bt))
 
@@ -522,7 +522,7 @@ module Make
                 IT (Lit (Sym s), _) -> 
                  return (SymSet.add s fixed)
               | Some (q, _), 
-                IT (Array_op (App (IT (Lit (Sym s), _), IT (Lit (Sym s'), _))), _)
+                IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym s'), _))), _)
                    when Sym.equal s' q ->
                  return (SymSet.add s fixed)
               (* otherwise, fail *)

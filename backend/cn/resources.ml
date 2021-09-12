@@ -333,21 +333,21 @@ module RE = struct
   let make_array (x_s, x_bt) body =
     let x_t = sym_ (x_s, x_bt) in
     match body with
-    | IT (Array_op (App (array, x')), _) when IT.equal x_t x' ->
+    | IT (Array_op (Get (array, x')), _) when IT.equal x_t x' ->
        (array, [], [])
     | _ ->
        let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
        let lc = 
          (LC.forall_ (x_s, x_bt) 
-            (Some (LC.T_App (T_Term f_t, T_Term x_t)))
-            (eq_ (app_ f_t x_t, body)))
+            (Some (LC.T_Get (T_Term f_t, T_Term x_t)))
+            (eq_ (get_ f_t x_t, body)))
        in
        (f_t, [(f_s, IT.bt f_t)], [lc])
 
 
   let make_app (x_s, x_bt) body = 
     let (array, l, c) = make_array (x_s, x_bt) body in
-    (app_ array (sym_ (x_s, x_bt)), l, c)
+    (get_ array (sym_ (x_s, x_bt)), l, c)
 
 
   let normalise re = (re, [], []) (* function

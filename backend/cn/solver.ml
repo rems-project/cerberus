@@ -349,12 +349,12 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          | Const (index_bt, t) ->
             let t = term t in
             Z3.Z3Array.mk_const_array context (sort index_bt) t
-         | Mod (t1, t2, t3) ->
+         | Set (t1, t2, t3) ->
             let t1 = term t1 in
             let t2 = term t2 in
             let t3 = term t3 in
             Z3.Z3Array.mk_store context t1 t2 t3
-         | App (f, arg) ->
+         | Get (f, arg) ->
             let f = term f in
             let a = term arg in
             Z3.Z3Array.mk_select context f a
@@ -385,7 +385,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
        let t1 = term t1 in
        let t2 = term it in
        (IT.bt it, t1, [Z3.Boolean.mk_eq context t1 t2])
-    | T_App (t, t') ->
+    | T_Get (t, t') ->
        let (bt, t, cs) = make_trigger t in
        let (_, t', cs') = make_trigger t' in
        let (_, rbt) = BT.array_bt bt in

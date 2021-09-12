@@ -77,8 +77,8 @@ let region =
             permission_t, 
             q_ (0, 1)
           );
-      value = app_ v_t p_t;
-      init = app_ init_t p_t;
+      value = get_ v_t p_t;
+      init = get_ init_t p_t;
     }
   in
   let lrt =
@@ -128,25 +128,25 @@ let part_zero_region =
             permission_t, 
             q_ (0, 1)
           );
-      value = app_ v_t p_t;
-      init = app_ init_t p_t;
+      value = get_ v_t p_t;
+      init = get_ init_t p_t;
     }
   in
   let v_constr = 
     forall_ (p_s, IT.bt p_t) 
-      (Some (T_App (T_Term v_t, T_Term p_t)))
+      (Some (T_Get (T_Term v_t, T_Term p_t)))
       (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, up_to_t))],
-              eq_ (app_ v_t p_t, int_ 0)))
+              eq_ (get_ v_t p_t, int_ 0)))
   in
   let init_constr = 
     forall_ (p_s, IT.bt p_t)
-      (Some (T_App (T_Term init_t, T_Term p_t)))
+      (Some (T_Get (T_Term init_t, T_Term p_t)))
       (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, up_to_t))],
-              app_ init_t p_t))
+              get_ init_t p_t))
   in
   let lrt =
     LRT.Logical ((v_s, IT.bt v_t), (loc, None),
@@ -197,25 +197,25 @@ let zero_region =
             permission_t, 
             q_ (0, 1)
           );
-      value = app_ v_t p_t;
-      init = app_ init_t p_t;
+      value = get_ v_t p_t;
+      init = get_ init_t p_t;
     }
   in
   let v_constr = 
     forall_ (p_s, IT.bt p_t) 
-      (Some (T_App (T_Term v_t, T_Term p_t)))
+      (Some (T_Get (T_Term v_t, T_Term p_t)))
       (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, length_t))],
-              eq_ (app_ v_t p_t, int_ 0)))
+              eq_ (get_ v_t p_t, int_ 0)))
   in
   let init_constr = 
     forall_ (p_s, IT.bt p_t)
-      (Some (T_App (T_Term init_t, T_Term p_t)))
+      (Some (T_Get (T_Term init_t, T_Term p_t)))
       (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, length_t))],
-              and_ [app_ init_t p_t]))
+              and_ [get_ init_t p_t]))
   in
   let lrt =
     LRT.Logical ((v_s, IT.bt v_t), (loc, None),
@@ -615,7 +615,7 @@ let page_alloc_predicates struct_decls =
                 range_start_t;
                 range_end_t;
               ];
-            oargs = [app_ vmemmap_t p_t];
+            oargs = [get_ vmemmap_t p_t];
             permission = point_permission;
           }
       in
@@ -640,7 +640,7 @@ let page_alloc_predicates struct_decls =
                        o_t) 
         in
         forall_ (o_s, IT.bt o_t) 
-          (Some (T_Member (T_App (T_Term free_area_t, T_Term o_t), Id.id prev_next)))
+          (Some (T_Member (T_Get (T_Term free_area_t, T_Term o_t), Id.id prev_next)))
           begin
             and_ [
                 good_pointer prev_next_t (Sctype ([], Struct list_head_tag));

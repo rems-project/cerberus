@@ -398,7 +398,7 @@ let resolve_index_term loc layouts
             let ppf () = Ast.Terms.pp false t1 in
             fail loc (Generic (ppf () ^^^ !^"is not an array"))
        in
-       return (IT (Array_op (App (it1, it2)), result_bt), None)
+       return (IT (Array_op (Get (it1, it2)), result_bt), None)
     | Env (t, mapping_name) ->
        match StringMap.find_opt mapping_name mappings with
        | Some mapping -> 

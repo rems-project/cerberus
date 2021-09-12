@@ -377,15 +377,15 @@ let rec simp (lcs : LC.t list) term =
     | Const (index_bt, t) ->
        let t = aux t in
        IT (Array_op (Const (index_bt, t)), bt)
-    | Mod (t1, t2, t3) ->
+    | Set (t1, t2, t3) ->
        let t1 = aux t1 in
        let t2 = aux t2 in
        let t3 = aux t3 in
-       IT (Array_op (Mod (t1, t2, t3)), bt)
-    | App (it, arg) ->
+       IT (Array_op (Set (t1, t2, t3)), bt)
+    | Get (it, arg) ->
        let it = aux it in
        let arg = aux arg in
-       IT (Array_op (App (it, arg)), bt)
+       IT (Array_op (Get (it, arg)), bt)
   in
   
   aux term

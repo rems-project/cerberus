@@ -189,9 +189,9 @@ module Make
       Missing_resource {resource; state; situation; oinfo}
     
 
-    let unfold_array_request ct base_pointer_t length_t permission_t = 
+    let unfold_array_request ct base_pointer_t length permission_t = 
       Resources.Requests.{
-          ct = Sctype ([], Array (ct, Some length_t));
+          ct = Sctype ([], Array (ct, Some length));
           pointer = base_pointer_t;
           value = BT.Array (Integer, of_sct ct);
           init = BT.Bool;
@@ -437,7 +437,7 @@ module Make
         failS loc failure
 
 
-    and fold_array loc failure ct base_pointer_t length_t permission_t =
+    and fold_array loc failure ct base_pointer_t length permission_t =
       let element_size = int_ (Memory.size_of_ctype ct) in
       let@ qpoint = 
         let qp_s, qp_t = IT.fresh Loc in
@@ -447,7 +447,7 @@ module Make
           value = BT.of_sct ct;
           init = BT.Bool;
           permission = 
-            array_permission qp_t base_pointer_t (int_ length_t)
+            array_permission qp_t base_pointer_t (int_ length)
               element_size permission_t;
         }
       in
@@ -462,7 +462,7 @@ module Make
         IT.fresh (Array (Integer, BT.of_sct ct)) in
       let folded_resource = 
         Point {
-             ct = Sctype ([], Array (ct, Some length_t));
+             ct = Sctype ([], Array (ct, Some length));
              pointer = base_pointer_t;
              value = folded_value_t;
              init = folded_init_t;
@@ -474,9 +474,9 @@ module Make
         let i_pointer = 
           array_index_to_pointer base_pointer_t element_size i_t in
         forall_ (i_s, IT.bt i_t) 
-          (T_App (T_Term folded_value_t, T_Term i_t))
+          (T_Get (T_Term folded_value_t, T_Term i_t))
           (eq__ 
-             (app_ folded_value_t i_t)
+             (get_ folded_value_t i_t)
              (IT.subst [(qpoint.qpointer, i_pointer)] qpoint.value))
       in
       let lrt = 
@@ -487,12 +487,12 @@ module Make
       in
       return lrt
 
-    and unfold_array loc failure ct base_pointer_t length_t permission_t =   
+    and unfold_array loc failure ct base_pointer_t length permission_t =   
       let element_size = int_ (Memory.size_of_ctype ct) in
       let@ point = 
         point_request loc failure 
           (unfold_array_request
-             ct base_pointer_t length_t permission_t) 
+             ct base_pointer_t length permission_t) 
       in
       let unfolded_resource = 
         let qp_s, qp_t = IT.fresh Loc in
@@ -500,11 +500,11 @@ module Make
             ct = ct;
             qpointer = qp_s;
             value = 
-              app_ point.value 
+              get_ point.value 
                 (array_pointer_to_index base_pointer_t element_size qp_t); 
             init = point.init;
             permission = 
-              array_permission qp_t base_pointer_t (int_ length_t) 
+              array_permission qp_t base_pointer_t (int_ length) 
                 element_size permission_t;
           }
       in
@@ -644,11 +644,11 @@ module Make
          let@ qpredicate = qpredicate_request loc situation (requested, oinfo) in
          return (QPredicate qpredicate)
 
-    let unfold_array loc situation ct base_pointer_t length_t permission_t = 
+    let unfold_array loc situation ct base_pointer_t length permission_t = 
       unfold_array loc 
         (missing_resource_failure situation 
-           (Point (unfold_array_request ct base_pointer_t length_t permission_t), None))
-         ct base_pointer_t length_t permission_t
+           (Point (unfold_array_request ct base_pointer_t length permission_t), None))
+         ct base_pointer_t length permission_t
 
     let unfold_struct loc situation tag pointer_t permission_t = 
       unfold_struct loc 
@@ -737,7 +737,7 @@ module Make
       (* ASSUMES unification variables and quantifier q_s are disjoint  *)
       let unify_or_constrain_q (q_s,q_bt) (unis, subst, constrs) (output_spec, output_have) = 
         match IT.subst subst output_spec with
-        | IT (Array_op (App (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
+        | IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
              when Sym.equal q' q_s && SymMap.mem s unis ->
            let@ output_have_body = make_array (q_s, q_bt) output_have in
            let@ () = ls_matches_spec unis s output_have_body in
@@ -1001,7 +1001,7 @@ module Make
     let@ (_, it) = 
       ListM.fold_leftM (fun (index,it) (arg_bt, arg_it) -> 
           let@ () = ensure_base_type loc ~expect:item_bt arg_bt in
-          return (index + 1, mod_ (it, int_ index, arg_it))
+          return (index + 1, set_ (it, int_ index, arg_it))
            ) (0, const_ Integer (default_ item_bt)) vts
     in
     return (BT.Array (Integer, item_bt), it)

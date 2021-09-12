@@ -6,7 +6,7 @@ open Pp
 
 type trigger = 
   | T_Term of IT.t
-  | T_App of trigger * trigger
+  | T_Get of trigger * trigger
   | T_Member of trigger * BT.member
 
 type t = 
@@ -29,10 +29,10 @@ let rec subst_trigger substitution t =
   | T_Term it ->
      let it = IT.subst substitution it in
      T_Term it
-  | T_App (t, t') -> 
+  | T_Get (t, t') -> 
      let t = subst_trigger substitution t in
      let t' = subst_trigger substitution t' in
-     T_App (t, t')
+     T_Get (t, t')
   | T_Member (t, member) ->
      let t = subst_trigger substitution t in
      T_Member (t, member)
@@ -57,7 +57,7 @@ let subst substitution c =
 let rec free_vars_trigger = function
   | T_Term it ->
      IT.free_vars it
-  | T_App (t, t') -> 
+  | T_Get (t, t') -> 
      SymSet.union (free_vars_trigger t) (free_vars_trigger t')
   | T_Member (t, member) -> 
      free_vars_trigger t
@@ -77,13 +77,13 @@ let rec equal_trigger t t' =
   match t, t' with
   | T_Term it, T_Term it' ->
      IT.equal it it'
-  | T_App (t1, t2), T_App (t1', t2') ->
+  | T_Get (t1, t2), T_Get (t1', t2') ->
      equal_trigger t1 t1' && equal_trigger t2 t2'
   | T_Member (t, member), T_Member (t', member') ->
      equal_trigger t t' && Id.equal member member'
   | T_Term _, _ ->
      false
-  | T_App _, _ -> 
+  | T_Get _, _ -> 
      false
   | T_Member _, _ ->
      false

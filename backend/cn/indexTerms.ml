@@ -27,8 +27,6 @@ type 'bt arith_op =
   | Div of 'bt term * 'bt term
   | Exp of 'bt term * 'bt term
   | Rem of 'bt term * 'bt term
-  (* | Min of 'bt term * 'bt term
-   * | Max of 'bt term * 'bt term *)
 
 (* over integers and reals *)
 and 'bt cmp_op =
@@ -79,10 +77,7 @@ and 'bt set_op =
   | Subset of 'bt term * 'bt term
 
 
-
 and 'bt ct_pred = 
-  (* | MinInteger of CF.Ctype.integerType
-   * | MaxInteger of CF.Ctype.integerType *)
   | Representable of CT.t * 'bt term
   | AlignedI of {t : 'bt term; align : 'bt term}
   | Aligned of 'bt term * CT.t
@@ -95,8 +90,11 @@ and 'bt option_op =
 
 and 'bt array_op = 
   | Const of BT.t * 'bt term
-  | Mod of 'bt term * 'bt term * 'bt term
-  | App of 'bt term * 'bt term
+  | Set of 'bt term * 'bt term * 'bt term
+  | Get of 'bt term * 'bt term
+
+(* and 'bt lambda_op = 
+ *   |  *)
 
 and 'bt term_ =
   | Lit of lit
@@ -111,9 +109,14 @@ and 'bt term_ =
   | CT_pred of 'bt ct_pred
   | Option_op of 'bt option_op
   | Array_op of 'bt array_op
+  (* | Lambda_op of 'bt lambda_op  *)
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
+
+
+(* and 'bt lambda_term = 
+ *   | LT of (Sym.t * BT.t) * 'bt term *)
 
 
 
@@ -338,13 +341,13 @@ let rec equal (IT (it, _)) (IT (it', _)) =
     match it, it' with
     | Const (bt, t), Const (bt', t') ->
        BT.equal bt bt' && equal t t'
-    | Mod (t1,t2,t3), Mod (t1',t2',t3') ->
+    | Set (t1,t2,t3), Set (t1',t2',t3') ->
        equal t1 t1' && equal t2 t2' && equal t3 t3'
-    | App (t, args), App (t', args') ->
+    | Get (t, args), Get (t', args') ->
        equal t t' && (* List.equal *) equal args args'
     | Const _, _ -> false
-    | Mod _, _ -> false
-    | App _, _ -> false
+    | Set _, _ -> false
+    | Get _, _ -> false
   in
 
   match it, it' with
@@ -530,9 +533,9 @@ let pp (it : 'bt term) : PPrint.document =
     let array_op = function
       | Const (_, t) ->
          c_app !^"const" [aux false t]
-      | Mod (t1,t2,t3) ->
+      | Set (t1,t2,t3) ->
          aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
-      | App (t, args) ->
+      | Get (t, args) ->
          c_app (aux true t) [aux false args]
     in
 
@@ -649,8 +652,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
 
   let array_op = function
     | Const (_, t) -> free_vars t
-    | Mod (t1,t2,t3) -> free_vars_list [t1;t2;t3]
-    | App (t, arg) -> free_vars_list ([t; arg])
+    | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
+    | Get (t, arg) -> free_vars_list ([t; arg])
   in
 
   fun (IT (it, _)) ->
@@ -821,10 +824,10 @@ let subst (substitution : typed subst) =
       let it = match it with
         | Const (bt, t) ->
            Const (bt, aux t)
-        | Mod (t1, t2, t3) ->
-           Mod (aux t1, aux t2, aux t3)
-        | App (it, arg) ->
-           App (aux it, aux arg)
+        | Set (t1, t2, t3) ->
+           Set (aux t1, aux t2, aux t3)
+        | Get (it, arg) ->
+           Get (aux it, aux arg)
       in
       IT (Array_op it, bt)
     in
@@ -861,7 +864,7 @@ let is_sym = function
   | _ -> None
 
 let is_app = function
-  | IT (Array_op (App (f,arg)), _) -> Some (f, arg)
+  | IT (Array_op (Get (f,arg)), _) -> Some (f, arg)
   | _ -> None
 
 
@@ -1043,15 +1046,15 @@ let value_of_some_ v =
 
 let const_ index_bt t = 
   IT (Array_op (Const (index_bt, t)), BT.Array (index_bt, bt t))
-let mod_ (t1, t2, t3) = 
-  IT (Array_op (Mod (t1, t2, t3)), bt t1)
-let app_ v arg = 
+let set_ (t1, t2, t3) = 
+  IT (Array_op (Set (t1, t2, t3)), bt t1)
+let get_ v arg = 
   match bt v with
   | BT.Array (_, bt) ->
-     IT (Array_op (App (v, arg)), bt)
+     IT (Array_op (Get (v, arg)), bt)
   | _ -> Debug_ocaml.error "illtyped index term"
 
-let (%@) it it' = app_ it it'
+let (%@) it it' = get_ it it'
 
 
 
@@ -1133,7 +1136,7 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
      let lcs = 
        List.init n (fun i ->
            (representable_ctype struct_layouts ct
-              (app_ about (int_ i)))
+              (get_ about (int_ i)))
          )
      in
      and_ lcs
@@ -1186,7 +1189,7 @@ let rec good_value struct_layouts ct about =
      let lcs = 
        List.init n (fun i ->
            good_value struct_layouts ct
-             (app_ about (int_ i))
+             (get_ about (int_ i))
          )
      in
      and_ lcs
