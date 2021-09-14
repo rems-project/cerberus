@@ -305,7 +305,7 @@ module Make
           ) (needed, default_ requested.value, default_ BT.Bool)
       in
       let holds =
-        provable (forall_ (requested.qpointer, BT.Loc) None
+        provable (forall_ (requested.qpointer, BT.Loc)
                     (eq_ (needed, q_ (0, 1))))
       in
       if holds then
@@ -420,7 +420,7 @@ module Make
       in
       let holds =
         provable
-          (forall_ (requested.qpointer, BT.Loc) None
+          (forall_ (requested.qpointer, BT.Loc)
              (eq_ (needed, q_ (0, 1))))
       in
       if holds then
@@ -438,6 +438,7 @@ module Make
 
 
     and fold_array loc failure ct base_pointer_t length permission_t =
+      if length > 20 then print stdout !^"generating point-wise constraints for big array";
       let element_size = int_ (Memory.size_of_ctype ct) in
       let@ qpoint = 
         let qp_s, qp_t = IT.fresh Loc in
@@ -451,13 +452,7 @@ module Make
               element_size permission_t;
         }
       in
-      let@ provable = provable in
-      let folded_init_t = 
-        bool_ (provable (
-          forall_ (qpoint.qpointer, Loc) None
-            (impl_ (gt_ (qpoint.permission, q_ (0, 1)), qpoint.init))
-          ))
-      in
+      let folded_init_s, folded_init_t = IT.fresh Bool in
       let folded_value_s, folded_value_t = 
         IT.fresh (Array (Integer, BT.of_sct ct)) in
       let folded_resource = 
@@ -469,21 +464,26 @@ module Make
              permission = permission_t;
            }
       in
+      let pointer i = array_index_to_pointer base_pointer_t element_size (int_ i) in
       let fold_value_constr = 
-        let i_s, i_t = IT.fresh Integer in
-        let i_pointer = 
-          array_index_to_pointer base_pointer_t element_size i_t in
-        forall_ (i_s, IT.bt i_t) 
-          (T_Get (T_Term folded_value_t, T_Term i_t))
-          (eq__ 
-             (get_ folded_value_t i_t)
-             (IT.subst [(qpoint.qpointer, i_pointer)] qpoint.value))
+        let values = 
+          List.init length (fun i -> (int_ i, IT.subst [(qpoint.qpointer, pointer i)] qpoint.value))
+        in
+        let value = List.fold_left set_ (const_ Integer (default_ (BT.of_sct ct))) values in
+        t_ (eq_ (folded_value_t, value))
+      in
+      let fold_init_constr = 
+        let inits = 
+          List.init length (fun i -> IT.subst [(qpoint.qpointer, pointer i)] qpoint.init)
+        in
+        t_ (eq_ (folded_init_t, and_ inits))
       in
       let lrt = 
         LRT.Logical ((folded_value_s, IT.bt folded_value_t), (loc, None),
         LRT.Resource (folded_resource, (loc, None),
         LRT.Constraint (fold_value_constr, (loc, None),
-        LRT.I)))
+        LRT.Constraint (fold_init_constr, (loc, None),
+        LRT.I))))
       in
       return lrt
 
@@ -710,18 +710,15 @@ module Make
     (* could optimise to delay checking the constraints until later *)
     let match_resources loc failure =
 
-      let make_array quantifier body = 
-        let body, ls, cs = RE.make_array quantifier body in
-        let@ () = add_ls ls in
-        let@ cs = add_cs cs in
-        return body
-      in
-
       let ls_matches_spec unis uni_var instantiation = 
         let (expect, info) = SymMap.find uni_var unis in
         if LS.equal (IT.bt instantiation) expect 
         then return ()
-        else fail loc (Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info})
+        else 
+          let () = print stdout (item "spec" (LS.pp expect)) in
+          let () = print stdout (item "instantiation" (IT.pp instantiation)) in
+          let () = print stdout (item "with bt" (BT.pp (IT.bt instantiation))) in
+          fail loc (Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info})
       in
 
       let unify_or_constrain (unis, subst, constrs) (output_spec, output_have) =
@@ -739,7 +736,7 @@ module Make
         match IT.subst subst output_spec with
         | IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
              when Sym.equal q' q_s && SymMap.mem s unis ->
-           let@ output_have_body = make_array (q_s, q_bt) output_have in
+           let output_have_body = array_def_ (q_s, q_bt) output_have in
            let@ () = ls_matches_spec unis s output_have_body in
            return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
         | _ ->
@@ -781,7 +778,7 @@ module Make
          let@ provable = provable in
          let result = 
            provable
-              (forall_ (p_have.qpointer, BT.Loc) None
+              (forall_ (p_have.qpointer, BT.Loc)
                  (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
          if result then return (unis, subst) else failS loc failure
@@ -815,7 +812,7 @@ module Make
          let@ provable = provable in
          let result =
            provable
-             (forall_ (p_have.qpointer, BT.Loc) None
+             (forall_ (p_have.qpointer, BT.Loc)
                 (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
          if result then return (unis, subst) else failS loc failure
@@ -1001,7 +998,7 @@ module Make
     let@ (_, it) = 
       ListM.fold_leftM (fun (index,it) (arg_bt, arg_it) -> 
           let@ () = ensure_base_type loc ~expect:item_bt arg_bt in
-          return (index + 1, set_ (it, int_ index, arg_it))
+          return (index + 1, set_ it (int_ index, arg_it))
            ) (0, const_ Integer (default_ item_bt)) vts
     in
     return (BT.Array (Integer, item_bt), it)
@@ -1486,7 +1483,7 @@ module Make
           | QPoint p ->
              let holds = 
                provable
-                 (forall_ (p.qpointer, BT.Loc) None
+                 (forall_ (p.qpointer, BT.Loc)
                     (le_ (p.permission, q_ (0, 1))))
              in
              if holds then return () else failure resource
@@ -1496,7 +1493,7 @@ module Make
           | QPredicate p ->
              let holds = 
                provable
-                 (forall_ (p.qpointer, BT.Loc) None
+                 (forall_ (p.qpointer, BT.Loc)
                     (le_ (p.permission, q_ (0, 1))))
              in
              if holds then return () else failure resource
@@ -1813,7 +1810,7 @@ module Make
                 }, None)
             in
             let condition, outputs = AT.logical_arguments_and_return right_clause in
-            let lc = and_ (List.map2 (fun it (_, it') -> eq__ it it') pred.oargs outputs) in
+            let lc = and_ (List.map2 (fun it (o : OutputDef.entry) -> eq__ it o.value) pred.oargs outputs) in
             let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
             return (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt))
          | Pack ->
@@ -1824,7 +1821,7 @@ module Make
                 pointer = it_of_arg pointer_arg;
                 permission = q_ (1, 1);
                 iargs = List.map it_of_arg iargs;
-                oargs = List.map snd output_assignment;
+                oargs = List.map (fun (o : OutputDef.entry) -> o.value) output_assignment;
               }
             in
             let rt =
@@ -2132,7 +2129,7 @@ let check mu_file =
         let descr = CF.Implementation.string_of_implementation_constant impl in
         match impl_decl with
         | M_Def (rt, rbt, pexpr) -> 
-           let@ ((), _) = Typing.run (WT.WRT.welltyped Loc.unknown rt) (L.empty ()) in
+           let@ ((), _) = Typing.run (WT.WRT.good Loc.unknown rt) (L.empty ()) in
            let@ ((), _) = 
              Typing.run (C.check_function Loc.unknown
                descr [] rbt pexpr (AT.I rt)) (L.empty ()) in
@@ -2144,7 +2141,7 @@ let check mu_file =
         | M_IFun (ft, rbt, args, pexpr) ->
            let@ ((), _) = 
              Typing.run 
-               (WT.WFT.welltyped "implementation-defined function" Loc.unknown ft) 
+               (WT.WFT.good "implementation-defined function" Loc.unknown ft) 
                (L.empty ())
            in
            let@ ((), _) = 
@@ -2164,7 +2161,7 @@ let check mu_file =
     (* check and record predicate defs *)
     ListM.fold_leftM (fun global (name,def) -> 
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
-        let@ ((), _) = Typing.run (WT.WPD.welltyped def) (L.empty ()) in
+        let@ ((), _) = Typing.run (WT.WPD.good def) (L.empty ()) in
         let resource_predicates =
           StringMap.add name def global.resource_predicates in
         return {global with resource_predicates}

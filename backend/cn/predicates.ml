@@ -89,17 +89,18 @@ let region =
     LRT.Constraint (t_ (IT.good_pointer (subPointer_ (addPointer_ (pointer_t, length_t), int_ 1)) char_ct), (loc, None),
     LRT.I)))))
   in
+  let assignment = [] in
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]) 
+      packing_ft = AT.of_lrt lrt (AT.I assignment) 
     }
   in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t)]; 
-      oargs = [("value", IT.bt v_t); ("init", IT.bt init_t)]; 
+      oargs = []; 
       permission = permission_s;
       clauses = [clause]; 
     } 
@@ -134,7 +135,6 @@ let part_zero_region =
   in
   let v_constr = 
     forall_ (p_s, IT.bt p_t) 
-      (Some (T_Get (T_Term v_t, T_Term p_t)))
       (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, up_to_t))],
@@ -142,7 +142,6 @@ let part_zero_region =
   in
   let init_constr = 
     forall_ (p_s, IT.bt p_t)
-      (Some (T_Get (T_Term init_t, T_Term p_t)))
       (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, up_to_t))],
@@ -158,17 +157,18 @@ let part_zero_region =
     LRT.Constraint (t_ (IT.good_pointer (subPointer_ (addPointer_ (pointer_t, length_t), int_ 1)) char_ct), (loc, None),
     LRT.I)))))))
   in
+  let assignment = [] in
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I [("value",v_t); ("init", init_t)]) 
+      packing_ft = AT.of_lrt lrt (AT.I assignment) 
     }
   in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = [(length_s, IT.bt length_t); (up_to_s, IT.bt up_to_t)]; 
-      oargs = [("value", IT.bt v_t); ("init", IT.bt init_t)]; 
+      oargs = []; 
       permission = permission_s;
       clauses = [clause]; 
     } 
@@ -203,7 +203,6 @@ let zero_region =
   in
   let v_constr = 
     forall_ (p_s, IT.bt p_t) 
-      (Some (T_Get (T_Term v_t, T_Term p_t)))
       (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, length_t))],
@@ -211,7 +210,6 @@ let zero_region =
   in
   let init_constr = 
     forall_ (p_s, IT.bt p_t)
-      (Some (T_Get (T_Term init_t, T_Term p_t)))
       (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
       (impl_ (and_ [lePointer_ (pointer_t, p_t); 
                     ltPointer_ (p_t, addPointer_ (pointer_t, length_t))],
@@ -257,23 +255,19 @@ let early_alloc =
                 pointerToIntegerCast_ start_t), 
           int_ 1)
   in
-  let v_s, v_t = IT.fresh_named (BT.Array (Loc, Integer)) "v" in
-  let init_s, init_t = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
   let region = {
       name = "Region";
       pointer = start_t; 
       iargs = [length_t];
-      oargs = [v_t; init_t];
+      oargs = [];
       permission = permission_t;
     }
   in
   let lrt =
-    LRT.Logical ((v_s, IT.bt v_t), (loc, None),
-    LRT.Logical ((init_s, IT.bt init_t), (loc, None),
     LRT.Resource (Predicate region, (loc, None),
     LRT.Constraint (t_ (IT.good_pointer start_t char_ct), (loc, None),
     LRT.Constraint (t_ (IT.good_pointer end_t char_ct), (loc, None),
-    LRT.I)))))
+    LRT.I)))
   in
   let clause = {
       loc = loc;
@@ -507,7 +501,8 @@ let page_alloc_predicates struct_decls =
         LRT.Resource (resource, (loc, None),
         LRT.mConstraints wellformedness
         LRT.I)))
-        (AT.I [("page", page_t)])
+        (AT.I 
+        OutputDef.[{loc; name = "page"; value= page_t}])
     in
 
     let clause = { loc; guard = bool_ true; packing_ft = lrt } in
@@ -640,7 +635,7 @@ let page_alloc_predicates struct_decls =
                        o_t) 
         in
         forall_ (o_s, IT.bt o_t) 
-          (Some (T_Member (T_Get (T_Term free_area_t, T_Term o_t), Id.id prev_next)))
+          (* (Some (T_Member (T_Get (T_Term free_area_t, T_Term o_t), Id.id prev_next))) *)
           begin
             and_ [
                 good_pointer prev_next_t (Sctype ([], Struct list_head_tag));
@@ -650,8 +645,8 @@ let page_alloc_predicates struct_decls =
                         vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t :: []
                       (* (let p_t = vmemmap_node_pointer_to_cell_pointer vmemmap_pointer_t prev_next_t in
                        *  [range_start_t %<= p_t; p_t %< range_end_t;
-                       *   ((vmemmap_t %@ p_t) %. "order") %== o_t;
-                       *   ((vmemmap_t %@ p_t) %. "refcount") %== int_ 0] *)
+                       *   ((get_ vmemmap_t p_t) %. "order") %== o_t;
+                       *   ((get_ vmemmap_t p_t) %. "refcount") %== int_ 0] *)
                       )
                   ]
               ]
@@ -723,7 +718,7 @@ let page_alloc_predicates struct_decls =
      *         qpointer = qp_s;
      *         size = Z.of_int 1;
      *         permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
-     *         value = app_ bytes_t qp_t;
+     *         value = get_ bytes_t qp_t;
      *         init = bool_ false;
      *       }
      *   in
@@ -740,24 +735,27 @@ let page_alloc_predicates struct_decls =
       @@ vmemmap_well_formedness2
       (* @@ Tools.skip (LRT.I) page_group_ownership *)
     in
-
+    let assignment = OutputDef.[
+          {loc; name = "pool"; value = pool_t};
+          (* {loc; name = "vmemmap"; value = vmemmap_t}; *)
+      ]
+    in
     let clause = {
         loc = loc;
         guard = bool_ true;
-        packing_ft = 
-          AT.of_lrt lrt 
-            (AT.I [("pool", pool_t);
-                   ("vmemmap", vmemmap_t)])
+        packing_ft = AT.of_lrt lrt (AT.I assignment)
       }
     in
 
-    let predicate = 
-      {
+    let predicate = {
         loc = loc;
         pointer = pool_pointer_s;
         permission = permission_s;
         iargs = [(vmemmap_pointer_s, IT.bt vmemmap_pointer_t)];
-        oargs = [("pool", IT.bt pool_t); ("vmemmap", IT.bt vmemmap_t)];
+        oargs = [
+            ("pool", IT.bt pool_t); 
+            (* ("vmemmap", IT.bt vmemmap_t) *)
+          ];
         clauses = [clause;]; 
       } 
     in

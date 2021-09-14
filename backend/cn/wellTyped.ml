@@ -399,16 +399,20 @@ module Make
                 let@ t = infer loc ~context t in
                 return (BT.Array (index_bt, IT.bt t), Const (index_bt, t))
              | Set (t1, t2, t3) ->
-                let@ t2 = infer loc ~context t2 in
-                let@ t3 = infer loc ~context t3 in
-                let bt = BT.Array (IT.bt t2, IT.bt t3) in
-                let@ t1 = check loc ~context bt t1 in
-                return (bt, Set (t1, t2, t3))
+                let@ t1 = infer loc ~context t1 in
+                let@ (abt, rbt) = ensure_array_type loc context t1 in
+                let@ t2 = check loc ~context abt t2 in
+                let@ t3 = check loc ~context rbt t3 in
+                return (IT.bt t1, Set (t1, t2, t3))
              | Get (t, arg) -> 
                 let@ t = infer loc ~context t in
                 let@ (abt, bt) = ensure_array_type loc context t in
                 let@ arg = check loc ~context abt arg in
                 return (bt, Get (t, arg))
+             | Def ((s, abt), body) ->
+                let@ () = add_l s abt in
+                let@ body = infer loc ~context body in
+                return (Array (abt, IT.bt body), Def ((s, abt), body))
            in
            return (IT (Array_op array_op, bt))
 
@@ -434,7 +438,145 @@ module Make
     let check loc ls it = 
       pure (check loc ~context:it ls it)
 
+
+
+
+    let rec bad_value_check loc ~infos ~bad_as_value (IT (it, _)) =
+      let aux = bad_value_check loc ~infos ~bad_as_value in
+      match it with
+      | Lit lit ->
+         begin match lit with
+         | Sym s when SymSet.mem s bad_as_value -> 
+            let (_, odescr) = SymMap.find s infos in
+            fail loc (Array_as_value (s, odescr))
+         | _ ->
+            return ()
+         end
+      | Arith_op arith_op ->
+         begin match arith_op with
+         | Add (t,t')
+         | Sub (t,t')
+         | Mul (t,t')
+         | Div (t,t')
+         | Exp (t,t')
+         | Rem (t,t') ->
+            ListM.iterM aux [t; t']
+         end
+      | Cmp_op cmp_op ->
+         begin match cmp_op with
+         | LT (t,t') 
+         | LE (t,t') ->
+            ListM.iterM aux [t; t']
+         end
+      | Bool_op bool_op ->
+         begin match bool_op with
+         | And ts
+         | Or ts ->
+            ListM.iterM aux ts
+         | Impl (t,t') ->
+            ListM.iterM aux [t; t']
+         | Not t ->
+            aux t
+         | ITE (t,t',t'') ->
+            ListM.iterM aux [t; t'; t'']
+         | EQ (t,t') ->
+            ListM.iterM aux [t; t']
+         end
+      | Tuple_op tuple_op ->
+         begin match tuple_op with
+         | Tuple ts ->
+            ListM.iterM aux ts
+         | NthTuple (n, t') ->
+            aux t'
+         end
+      | Struct_op struct_op ->
+         begin match struct_op with
+         | Struct (tag, members) ->
+            ListM.iterM (fun (_,t) -> aux t) members
+         | StructMember (t, member) ->
+            aux t
+         end
+      | Pointer_op pointer_op ->
+         begin match pointer_op with 
+         | Null -> 
+            return ()
+         | AddPointer (t, t')
+         | SubPointer (t, t')
+         | MulPointer (t, t')
+         | LTPointer (t, t')
+         | LEPointer (t, t') ->
+            ListM.iterM aux [t; t']
+         | IntegerToPointerCast t
+         | PointerToIntegerCast t ->
+            aux t
+         | MemberOffset (tag, member) ->
+            return ()
+         | ArrayOffset (ct, t) ->
+            aux t
+         end
+      | CT_pred ct_pred ->
+         begin match ct_pred with
+         | AlignedI t ->
+            ListM.iterM aux [t.t; t.align]
+         | Aligned (t, ct) ->
+            aux t
+         | Representable (ct, t) ->
+            aux t
+         end
+      | List_op list_op ->
+         begin match list_op with
+         | Nil -> 
+            return ()
+         | Cons (t1,t2) ->
+            ListM.iterM aux [t1; t2]
+         | List ts ->
+            ListM.iterM aux ts
+         | Head t
+         | Tail t
+         | NthList (_, t) ->
+            aux t
+         end
+      | Set_op set_op ->
+         begin match set_op with
+         | SetMember (t,t') ->
+            ListM.iterM aux [t; t']
+         | SetUnion its
+         | SetIntersection its ->
+            ListM.iterM aux (List1.to_list its)
+         | SetDifference (t, t')
+         | Subset (t, t') ->
+            ListM.iterM aux [t; t']
+         end
+      | Option_op option_op ->
+         begin match option_op with
+         | Something t -> aux t
+         | Nothing bt -> return ()
+         | Is_some t -> aux t
+         | Value_of_some t -> aux t
+         end
+      | Array_op array_op -> 
+         begin match array_op with
+         | Const (_, t) ->
+            aux t
+         | Set (t1, t2, t3) ->
+            ListM.iterM aux [t1; t2; t3]
+         | Get (IT (Lit (Sym _), _), t2) -> 
+            aux t2
+         | Get (t1, t2) -> 
+            ListM.iterM aux [t1; t2]
+         | Def (_, body) -> 
+            aux body
+         end
+
   end
+
+
+
+
+
+  let unconstrained_lvar loc infos lvar = 
+    let (loc, odescr) = SymMap.find lvar infos in
+    fail loc (Unconstrained_logical_variable (lvar, odescr))
 
 
   module WRE = struct
@@ -498,75 +640,77 @@ module Make
            return ()
         end
 
-
-    let resource_mode_check loc infos undetermined resource = 
-      let free_inputs = 
-        SymSet.diff (IT.free_vars_list (RE.inputs resource)) 
-          (RE.bound resource)
+    let mode_and_bad_value_check loc ~infos ~undetermined ~bad_as_value resource = 
+      let undetermined = SymSet.diff undetermined (RE.bound resource) in
+      let free_inputs = SymSet.diff (IT.free_vars_list (RE.inputs resource)) (RE.bound resource) in
+      let@ () = match SymSet.choose_opt (SymSet.inter free_inputs undetermined) with
+        | None -> return ()
+        | Some lvar -> unconstrained_lvar loc infos lvar 
       in
-      let@ () = match SymSet.elements (SymSet.inter free_inputs undetermined) with
-        | [] -> return ()
-        | lvar :: _ -> 
-           let (loc, odescr) = SymMap.find lvar infos in
-           fail loc (Unconstrained_logical_variable (lvar, odescr))
-      in
-      let@ fixed = 
-        ListM.fold_leftM (fun fixed output ->
-            (* if the logical variables in the outputs are already determined, ok *)
-            if SymSet.is_empty (SymSet.inter (IT.free_vars output) undetermined) 
-            then return fixed else
+      let@ fixed, bad_as_value = 
+        ListM.fold_leftM (fun (fixed, bad_as_value) output ->
+            let undetermined_output = SymSet.inter undetermined (IT.free_vars output) in
+            if SymSet.is_empty undetermined_output then 
+              (* If the logical variables in the outputs are already
+                 determined, ok. *)
+              return (fixed, bad_as_value)
+            else
               (* otherwise, check that there is a single unification
                  variable that can be resolved by unification *)
               match RE.quantifier resource, output with
               | None, 
                 IT (Lit (Sym s), _) -> 
-                 return (SymSet.add s fixed)
+                 return (SymSet.add s fixed, bad_as_value)
               | Some (q, _), 
-                IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym s'), _))), _)
-                   when Sym.equal s' q ->
-                 return (SymSet.add s fixed)
+                IT (Array_op (Get (IT (Lit (Sym arr_s), _), IT (Lit (Sym arg_s), _))), _)
+                   when Sym.equal arg_s q ->
+                 return (SymSet.add arr_s fixed, SymSet.add arr_s bad_as_value)
               (* otherwise, fail *)
               | _ ->
-                 let bad = List.hd (SymSet.elements undetermined) in
-                 let (loc, odescr) = SymMap.find bad infos in
-                 fail loc (Logical_variable_not_good_for_unification (bad, odescr))
-          ) SymSet.empty (RE.outputs resource)
+                 let u = SymSet.choose undetermined_output in
+                 let (loc, odescr) = SymMap.find u infos in
+                 fail loc (Logical_variable_not_good_for_unification (u, odescr))
+          ) (SymSet.empty, bad_as_value) (RE.outputs resource)
       in
-      return fixed
+      return (fixed, bad_as_value)
 
   end
 
   module WLC = struct
     type t = LogicalConstraints.t
 
-
     let welltyped loc lc =
       pure begin match lc with
         | LC.T it -> 
            let@ _ = WIT.check loc BT.Bool it in
            return ()
-        | LC.Forall ((s,bt), trigger, it) ->
+        | LC.Forall ((s,bt), it) ->
            let@ () = add_l s bt in
            let@ _ = WIT.check loc BT.Bool it in
-           match trigger with
-           | None -> return ()
-           | Some trigger -> 
-              (* let@ _ = WIT.infer loc local trigger in *)
-              return ()
+           return ()
         end
+
+    let bad_value_check loc ~bad_as_value ~infos lc =
+      match lc with
+      | LC.T it ->
+         WIT.bad_value_check loc ~infos ~bad_as_value it
+      | LC.Forall (_, it) ->
+         WIT.bad_value_check loc ~infos ~bad_as_value it
+
   end
 
   module WLRT = struct
 
-    open LogicalReturnTypes
+    module LRT = LogicalReturnTypes
+    open LRT
     type t = LogicalReturnTypes.t
 
     let rec welltyped loc lrt = 
       pure begin match lrt with
         | Logical ((s,ls), info, lrt) -> 
-           let lname = Sym.fresh_same s in
-           let@ () = add_l lname ls in
-           let lrt = subst [(s, IT.sym_ (lname, ls))] lrt in
+           let s' = Sym.fresh_same s in
+           let@ () = add_l s' ls in
+           let lrt = subst [(s, IT.sym_ (s', ls))] lrt in
            welltyped loc lrt
         | Resource (re, info, lrt) -> 
            let@ () = WRE.welltyped (fst info) re in
@@ -580,32 +724,47 @@ module Make
            return ()
         end
 
-    let mode_check loc determined lrt = 
-      let rec aux determined undetermined infos lrt = 
-      match lrt with
-      | Logical ((s, _), info, lrt) ->
-         aux determined (SymSet.add s undetermined) 
-           (SymMap.add s info infos) lrt
-      | Resource (re, info, lrt) ->
-         let@ fixed = WRE.resource_mode_check (fst info) infos undetermined re in
-         let determined = SymSet.union determined fixed in
-         let undetermined = SymSet.diff undetermined fixed in
-         aux determined undetermined infos lrt
-      | Constraint (_, _info, lrt) ->
-         aux determined undetermined infos lrt
-      | I ->
-         match SymSet.elements undetermined with
-         | [] -> return ()
-         | s :: _ -> 
-            let (loc, odescr) = SymMap.find s infos in
-            fail loc (Unconstrained_logical_variable (s, odescr))
+    let mode_and_bad_value_check loc ~infos ~bad_as_value lrt = 
+      let rec aux ~infos ~undetermined ~bad_as_value constraints lrt = 
+        match lrt with
+        | Logical ((s, ls), info, lrt) ->
+           let s' = Sym.fresh_same s in
+           let lrt = LRT.subst [(s, IT.sym_ (s', ls))] lrt in
+           let undetermined = SymSet.add s' undetermined in
+           let infos = SymMap.add s' info infos in
+           aux ~infos ~undetermined ~bad_as_value constraints lrt
+        | Resource (re, info, lrt) ->
+           let@ (fixed, new_bad_as_value) = 
+             WRE.mode_and_bad_value_check (fst info) ~infos ~undetermined ~bad_as_value re in
+           let undetermined = SymSet.diff undetermined fixed in
+           let bad_as_value = SymSet.union new_bad_as_value bad_as_value in
+           aux ~infos ~undetermined ~bad_as_value constraints lrt
+        | Constraint (lc, info, lrt) ->
+           aux ~infos ~undetermined ~bad_as_value ((lc, info) :: constraints) lrt
+        | I ->
+           let@ () = match SymSet.choose_opt undetermined with
+             | Some s -> 
+                let (loc, odescr) = SymMap.find s infos in
+                fail loc (Unconstrained_logical_variable (s, odescr))
+             | None -> return ()
+           in
+           let@ () = 
+             ListM.iterM (fun (lc, (loc, _odescr)) ->
+                 (* todo: use odescr *)
+                 WLC.bad_value_check loc ~bad_as_value ~infos lc
+               ) (List.rev constraints)
+           in
+           return ()
       in
-      aux determined SymSet.empty SymMap.empty lrt 
+      aux ~infos ~undetermined:SymSet.empty ~bad_as_value [] lrt
 
     let good loc lrt = 
       let@ () = welltyped loc lrt in
-      let@ all_vars = all_vars () in
-      let@ () = mode_check loc (SymSet.of_list all_vars) lrt in
+      let@ () = 
+        let infos = SymMap.empty in
+        let bad_as_value = SymSet.empty in
+        mode_and_bad_value_check loc ~infos ~bad_as_value lrt
+      in
       return ()
 
   end
@@ -627,16 +786,21 @@ module Make
            WLRT.welltyped loc lrt
         end
 
-    let mode_check loc determined rt = 
+    let mode_and_bad_value_check loc ~infos ~bad_as_value rt = 
       match rt with
-      | Computational ((s, _), _info, lrt) ->
-         WLRT.mode_check loc (SymSet.add s determined) lrt
+      | Computational ((s, bt), _info, lrt) ->
+         let s' = Sym.fresh_same s in
+         let lrt = LRT.subst [(s, IT.sym_ (s', bt))] lrt in
+         WLRT.mode_and_bad_value_check loc ~infos ~bad_as_value lrt
 
     
     let good loc rt =
       let@ () = welltyped loc rt in
-      let@ all_vars = all_vars () in
-      let@ () = mode_check loc (SymSet.of_list all_vars) rt in
+      let@ () = 
+        let infos = SymMap.empty in
+        let bad_as_value = SymSet.empty in
+        mode_and_bad_value_check loc ~infos ~bad_as_value rt
+      in
       return ()
 
   end
@@ -647,7 +811,7 @@ module Make
     include False
     type t = False.t
     let welltyped _ _ = return ()
-    let mode_check _ _ _ = return ()
+    let mode_and_bad_value_check _ ~infos:_ ~bad_as_value:_ _ = return ()
   end
 
   module type WOutputSpec = sig val name_bts : (string * LS.t) list end
@@ -656,18 +820,27 @@ module Make
     type t = OutputDef.t
     let check loc assignment =
       let name_bts = List.sort (fun (s, _) (s', _) -> String.compare s s') Spec.name_bts in
-      let assignment = List.sort (fun (s, _) (s', _) -> String.compare s s') assignment in
+      let assignment = List.sort (fun o o' -> String.compare o.name o'.name) assignment in
       let rec aux name_bts assignment =
         match name_bts, assignment with
-        | [], [] -> return ()
-        | (name, bt) :: name_bts, (name', it) :: assignment when String.equal name name' ->
+        | [], [] -> 
+           return ()
+        | (name, bt) :: name_bts, {loc; name = name'; value = it} :: assignment 
+             when String.equal name name' ->
            let@ _ = WIT.check loc bt it in
            aux name_bts assignment
-        | (name, _) :: _, _ -> fail loc (Generic !^("missing output argument " ^ name))
-        | _, (name, _) :: _ -> fail loc (Generic !^("surplus output argument " ^ name))
+        | (name, _) :: _, _ -> 
+           fail loc (Generic !^("missing output argument " ^ name))
+        | _, {loc = loc'; name = name'; _} :: _ -> 
+           fail loc (Generic !^("surplus output argument " ^ name'))
       in
       aux name_bts assignment
-    let mode_check _ _ _ = return ()
+
+    let mode_and_bad_value_check loc ~infos ~bad_as_value assignment = 
+      ListM.iterM (fun {loc; name; value} ->
+          WIT.bad_value_check loc ~infos ~bad_as_value value
+        ) assignment
+      
     let welltyped loc assignment = 
       check loc assignment
 
@@ -675,10 +848,20 @@ end
 
 
   module type WI_Sig = sig
+
     type t
+
     val subst : IndexTerms.t Subst.t -> t -> t
+
     val pp : t -> Pp.document
-    val mode_check : Loc.t -> SymSet.t -> t -> unit m
+
+    val mode_and_bad_value_check : 
+      Loc.t -> 
+      infos:(Loc.info SymMap.t) -> 
+      bad_as_value:SymSet.t ->
+      t -> 
+      unit m
+
     val welltyped : Loc.t -> t -> unit m
   end
 
@@ -720,35 +903,50 @@ end
         end
 
 
-    let mode_check loc determined ft = 
-      let rec aux determined undetermined infos ft = 
-      match ft with
-      | AT.Computational ((s, _), _info, ft) ->
-         aux (SymSet.add s determined) undetermined infos ft
-      | AT.Logical ((s, _), info, ft) ->
-         aux determined (SymSet.add s undetermined) 
-           (SymMap.add s info infos) ft
-      | AT.Resource (re, _info, ft) ->
-         let@ fixed = WRE.resource_mode_check loc infos undetermined re in
-         let determined = SymSet.union determined fixed in
-         let undetermined = SymSet.diff undetermined fixed in
-         aux determined undetermined infos ft
-      | AT.Constraint (_, _info, ft) ->
-         aux determined undetermined infos ft
-      | AT.I rt ->
-         match SymSet.elements undetermined with
-         | [] -> WI.mode_check loc determined rt
-         | s :: _ -> 
-            let (loc, odescr) = SymMap.find s infos in
-            fail loc (Unconstrained_logical_variable (s, odescr))
+    let mode_and_bad_value_check loc ~infos ~bad_as_value ft = 
+      let rec aux ~infos ~undetermined ~bad_as_value constraints ft = 
+        match ft with
+        | AT.Computational ((s, bt), _info, ft) ->
+           let s' = Sym.fresh_same s in
+           let ft = AT.subst WI.subst [(s, IT.sym_ (s', bt))] ft in
+           aux ~infos ~undetermined ~bad_as_value constraints ft
+        | AT.Logical ((s, _), info, ft) ->
+           let infos = SymMap.add s info infos in
+           let undetermined = SymSet.add s undetermined in
+           aux ~infos ~undetermined ~bad_as_value constraints ft
+        | AT.Resource (re, info, ft) ->
+           let@ (fixed, new_bad_as_value) = 
+             WRE.mode_and_bad_value_check (fst info) ~infos ~undetermined ~bad_as_value re in
+           let undetermined = SymSet.diff undetermined fixed in
+           let bad_as_value = SymSet.union new_bad_as_value bad_as_value in
+           aux ~infos ~undetermined ~bad_as_value constraints ft
+        | AT.Constraint (lc, info, ft) ->
+           let constraints = (lc, info) :: constraints in
+           aux ~infos ~undetermined ~bad_as_value constraints ft
+        | AT.I rt ->
+           let@ () = match SymSet.choose_opt undetermined with
+             | Some s -> 
+                let (loc, odescr) = SymMap.find s infos in
+                fail loc (Unconstrained_logical_variable (s, odescr))
+             | None -> return ()
+           in 
+           let@ () = 
+             ListM.iterM (fun (lc, (loc, _odescr)) ->
+                 (* todo: use odescr *)
+                 WLC.bad_value_check loc ~bad_as_value ~infos lc
+               ) (List.rev constraints)
+           in
+           WI.mode_and_bad_value_check loc ~infos ~bad_as_value rt
       in
-      aux determined SymSet.empty SymMap.empty ft
+      aux ~infos ~undetermined:SymSet.empty ~bad_as_value [] ft
 
 
     let good kind loc ft = 
       let@ () = welltyped kind loc ft in
-      let@ all_vars = all_vars () in
-      let@ () = mode_check loc (SymSet.of_list all_vars) ft in
+      let@ () = 
+        let infos = SymMap.empty in
+        let bad_as_value = SymSet.empty in
+        mode_and_bad_value_check loc ~infos ~bad_as_value ft in
       return ()
 
   end
@@ -773,22 +971,21 @@ end
             ) pd.clauses
         end
 
-    let mode_check determined pd = 
+    let mode_and_bad_value_check loc ~infos ~bad_as_value pd = 
       let open Predicates in
-      let determined = 
-        List.fold_left (fun determined (s, _) -> 
-            SymSet.add s determined
-          ) determined pd.iargs
-      in
       let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
       ListM.iterM (fun {loc; guard; packing_ft} ->
-          WPackingFT.mode_check pd.loc determined packing_ft
+          let@ () = WIT.bad_value_check loc ~infos ~bad_as_value guard in
+          WPackingFT.mode_and_bad_value_check loc ~infos ~bad_as_value packing_ft
         ) pd.clauses
 
     let good pd =
       let@ () = welltyped pd in
-      let@ all_vars = all_vars () in
-      let@ () = mode_check (SymSet.of_list all_vars) pd in
+      let@ () = 
+        let infos = SymMap.empty in
+        let bad_as_value = SymSet.empty in
+        mode_and_bad_value_check pd.loc ~infos ~bad_as_value pd 
+      in
       return ()
 
   end

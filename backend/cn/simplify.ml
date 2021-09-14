@@ -386,6 +386,13 @@ let rec simp (lcs : LC.t list) term =
        let it = aux it in
        let arg = aux arg in
        IT (Array_op (Get (it, arg)), bt)
+    | Def ((s, abt), body) ->
+       let s' = Sym.fresh_same s in 
+       let body = IndexTerms.subst [(s, sym_ (s', abt))] body in
+       let body = simp lcs body in
+       IT (Array_op (Def ((s', abt), body)), bt)
+
+
   in
   
   aux term
@@ -403,21 +410,21 @@ let simp_lc lcs lc =
   match lc with
   | LC.T it -> 
      LC.T (simp lcs it)
-  | LC.Forall ((s, bt), trigger, it) -> 
+  | LC.Forall ((s, bt), it) -> 
      let s' = Sym.fresh_same s in 
      let it = IndexTerms.subst [(s, sym_ (s', bt))] it in
-     let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in
+     (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
      let it = simp lcs it in
-     LC.Forall ((s', bt), trigger, it)
+     LC.Forall ((s', bt), it)
 
 
 let simp_lc_flatten lcs c = 
   match c with
   | LC.T it ->
      List.map (fun c -> LC.T c) (simp_flatten lcs it)
-  | LC.Forall ((s, bt), trigger, it) -> 
+  | LC.Forall ((s, bt), it) -> 
      let s' = Sym.fresh_same s in 
      let it = IndexTerms.subst [(s, sym_ (s', bt))] it in
-     let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in
+     (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
      let it = simp lcs it in
-     [LC.Forall ((s', bt), trigger, it)]
+     [LC.Forall ((s', bt), it)]

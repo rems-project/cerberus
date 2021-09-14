@@ -354,10 +354,15 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
             let t2 = term t2 in
             let t3 = term t3 in
             Z3.Z3Array.mk_store context t1 t2 t3
+         | Get (IT (Array_op (Def ((s, bt), body)), _), arg) ->
+            term (IT.subst [(s, arg)] body)
          | Get (f, arg) ->
             let f = term f in
             let a = term arg in
             Z3.Z3Array.mk_select context f a
+         | Def _ ->
+            let it_pp = Pp.plain (IT.pp (IT (it_, bt))) in
+            Debug_ocaml.error ("uninstantiated array definition: " ^ it_pp)
          end
       end
   
@@ -376,45 +381,46 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
 
 
-  let rec make_trigger = function
-    | T_Term (IT (Lit (Sym s), bt)) -> 
-       let t = Z3.Expr.mk_const context (sym_to_sym s) (sort bt) in
-       (bt, t, [])
-    | T_Term it -> 
-       let _, t1 = IT.fresh (IT.bt it) in
-       let t1 = term t1 in
-       let t2 = term it in
-       (IT.bt it, t1, [Z3.Boolean.mk_eq context t1 t2])
-    | T_Get (t, t') ->
-       let (bt, t, cs) = make_trigger t in
-       let (_, t', cs') = make_trigger t' in
-       let (_, rbt) = BT.array_bt bt in
-       (rbt, Z3.Z3Array.mk_select context t t', cs @ cs')
-    | T_Member (t, member) ->
-       let (sbt, t, cs) = make_trigger t in
-       let tag = match sbt with
-         | Struct tag -> tag
-         | _ -> Debug_ocaml.error "illtyped index term: not a struct"
-       in
-       let layout = SymMap.find tag SD.struct_decls in
-       let members = List.map fst (Memory.member_types layout) in
-       let bt = BT.of_sct (List.assoc Id.equal member (Memory.member_types layout)) in
-       let destructors = Z3.Tuple.get_field_decls (sort (Struct tag)) in
-       let member_destructors = List.combine members destructors in
-       let destructor = List.assoc Id.equal member member_destructors in
-       (bt, Z3.Expr.mk_app context destructor [t], cs)
+  (* let rec make_trigger = function
+   *   | T_Term (IT (Lit (Sym s), bt)) -> 
+   *      let t = Z3.Expr.mk_const context (sym_to_sym s) (sort bt) in
+   *      (bt, t, [])
+   *   | T_Term it -> 
+   *      let _, t1 = IT.fresh (IT.bt it) in
+   *      let t1 = term t1 in
+   *      let t2 = term it in
+   *      (IT.bt it, t1, [Z3.Boolean.mk_eq context t1 t2])
+   *   | T_Get (t, t') ->
+   *      let (bt, t, cs) = make_trigger t in
+   *      let (_, t', cs') = make_trigger t' in
+   *      let (_, rbt) = BT.array_bt bt in
+   *      (rbt, Z3.Z3Array.mk_select context t t', cs @ cs')
+   *   | T_Member (t, member) ->
+   *      let (sbt, t, cs) = make_trigger t in
+   *      let tag = match sbt with
+   *        | Struct tag -> tag
+   *        | _ -> Debug_ocaml.error "illtyped index term: not a struct"
+   *      in
+   *      let layout = SymMap.find tag SD.struct_decls in
+   *      let members = List.map fst (Memory.member_types layout) in
+   *      let bt = BT.of_sct (List.assoc Id.equal member (Memory.member_types layout)) in
+   *      let destructors = Z3.Tuple.get_field_decls (sort (Struct tag)) in
+   *      let member_destructors = List.combine members destructors in
+   *      let destructor = List.assoc Id.equal member member_destructors in
+   *      (bt, Z3.Expr.mk_app context destructor [t], cs) *)
 
 
   let of_logical_constraint c = 
     match c with
     | T it -> 
        [term it]
-    | Forall ((s, bt), trigger, body) ->
-       let (triggers, cs) = match trigger with
-         | Some trigger -> 
-            let (_, t, cs) = make_trigger trigger in
-            ([Z3.Quantifier.mk_pattern context [t]], cs)
-         | None ->
+    | Forall ((s, bt), body) ->
+       let (triggers, cs) = 
+         (* match trigger with
+          * | Some trigger -> 
+          *    let (_, t, cs) = make_trigger trigger in
+          *    ([Z3.Quantifier.mk_pattern context [t]], cs)
+          * | None -> *)
             ([], [])
        in
        let q = 
@@ -438,7 +444,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
            | T t ->
               let t = term t in
               Z3.Solver.check solver [Z3.Boolean.mk_not context t]
-           | Forall ((s, bt), _trigger, t) -> 
+           | Forall ((s, bt), t) -> 
               let s' = Sym.fresh () in
               let t = IT.subst [(s, sym_ (s', bt))] t in
               Z3.Solver.check solver [Z3.Boolean.mk_not context (term t)]
@@ -461,9 +467,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     | `YES -> true
     | `NO -> false
     | `MAYBE -> 
-       print_endline (
-           "MAYBE: " ^ Z3.Solver.get_reason_unknown solver ^ ", LC = " ^ Pp.plain (LC.pp lc)
-         ); 
+       let open Pp in
+       print stdout (item "MAYBE" !^(Z3.Solver.get_reason_unknown solver) ^^ comma ^^^ item "LC" (LC.pp lc));
+       (* print stdout (item "ASSUMPTIONS:" (list (fun e -> string (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solver))); *)
        false
 
 

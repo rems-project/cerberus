@@ -231,7 +231,7 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
         let s, it = IT.fresh bt in
-        let l = (s, bt, (loc, Some ("output argument " ^ oarg))) :: l in
+        let l = (s, bt, (loc, Some ("output argument '" ^ oarg ^"'"))) :: l in
         let mapping = match oname with
           | Some name ->
              let item = {path = Ast.predarg name oarg; it; o_sct = None } in
@@ -392,19 +392,20 @@ let resolve_index_term loc layouts
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping in
        let@ (it2, _) = resolve t2 mapping in
-       let@ result_bt = match IT.bt it1 with
-         | BT.Array (_, bt) -> return bt
-         | _ -> 
-            let ppf () = Ast.Terms.pp false t1 in
-            fail loc (Generic (ppf () ^^^ !^"is not an array"))
-       in
-       return (IT (Array_op (Get (it1, it2)), result_bt), None)
+       let ppf () = Ast.Terms.pp false t1 in
+       begin match IT.bt it1 with
+       | BT.Array (_, bt) -> 
+          return (IT (Array_op (Get (it1, it2)), bt), None)
+       | _ -> 
+          fail loc (Generic (ppf () ^^^ !^"is not an array"))
+       end
     | Env (t, mapping_name) ->
-       match StringMap.find_opt mapping_name mappings with
+       begin match StringMap.find_opt mapping_name mappings with
        | Some mapping -> 
           resolve t mapping
        | None ->
           fail loc (Generic (!^"label" ^^^ !^mapping_name ^^^ !^"does not apply"))
+       end
   in
   resolve term (StringMap.find default_mapping_name mappings)
      

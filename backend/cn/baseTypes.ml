@@ -17,6 +17,7 @@ type t =
   | Option of t
   | Array of t * t
 
+
 let is_struct = function
   | Struct tag -> Some tag
   | _ -> None
@@ -56,8 +57,7 @@ let rec equal t t' =
 
 
 
-let rec pp bt = 
-  match bt with
+let rec pp = function
   | Unit -> !^"void"
   | Bool -> !^"bool"
   | Integer -> !^"integer"
@@ -68,11 +68,7 @@ let rec pp bt =
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Set t -> !^"set" ^^ angles (pp t)
   | Option t -> !^"option" ^^ angles (pp t)
-  | Array (abt,rbt) -> 
-     begin match abt with
-     | Integer -> pp rbt ^^ lbracket ^^ rbracket
-     | _ -> pp rbt ^^ parens (pp abt)
-     end
+  | Array (abt, rbt) -> !^"array" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
 
 
 

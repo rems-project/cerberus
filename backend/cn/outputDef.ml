@@ -1,14 +1,18 @@
 module IT = IndexTerms
 module SymSet = Set.Make(Sym)
 
-type entry = string * IndexTerms.t
+type entry = {
+    loc : Locations.t;
+    name : string;
+    value : IndexTerms.t;
+  }
 
-let subst_entry substitution (name,it) = 
-  (name, IT.subst substitution it)
+let subst_entry substitution {loc; name; value} = 
+  {loc; name; value = IT.subst substitution value}
   
-let pp_entry (name, it) = 
+let pp_entry {loc; name; value} = 
   let open Pp in
-  Pp.string name ^^^ !^"==" ^^^ IT.pp it
+  Pp.string name ^^^ !^"==" ^^^ IT.pp value
 
 
 type t = entry list

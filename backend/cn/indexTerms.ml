@@ -92,9 +92,7 @@ and 'bt array_op =
   | Const of BT.t * 'bt term
   | Set of 'bt term * 'bt term * 'bt term
   | Get of 'bt term * 'bt term
-
-(* and 'bt lambda_op = 
- *   |  *)
+  | Def of (Sym.t * BT.t) * 'bt term
 
 and 'bt term_ =
   | Lit of lit
@@ -109,14 +107,11 @@ and 'bt term_ =
   | CT_pred of 'bt ct_pred
   | Option_op of 'bt option_op
   | Array_op of 'bt array_op
-  (* | Lambda_op of 'bt lambda_op  *)
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
 
 
-(* and 'bt lambda_term = 
- *   | LT of (Sym.t * BT.t) * 'bt term *)
 
 
 
@@ -127,242 +122,200 @@ type it = typed
 type t = typed
 
 
+
 let bt (IT (_, bt)) : BT.t = bt
 
 
 let rec equal (IT (it, _)) (IT (it', _)) = 
-
-  let lit it it' =
-    match it, it' with
-    | Sym sym, Sym sym' -> Sym.equal sym sym'
-    | Z n, Z n' -> Z.equal n n'
-    | Q (n1,n2), Q (n1',n2') -> n1 = n1' && n2 = n2'
-    | Pointer p, Pointer p' -> Z.equal p p'
-    | Bool b, Bool b' -> b = b'
-    | Unit, Unit -> true
-    | Default bt, Default bt' -> BT.equal bt bt'
-    | Sym _, _ -> false
-    | Z _, _ -> false
-    | Q _, _ -> false
-    | Pointer _, _ -> false
-    | Bool _, _ -> false
-    | Unit, _ -> false
-    | Default _, _ -> false
-  in
-
-  let arith_op it it' =
-    match it, it' with
-    | Add (t1,t2), Add (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Sub (t1,t2), Sub (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Mul (t1,t2), Mul (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Div (t1,t2), Div (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Exp (t1,t2), Exp (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | Rem (t1,t2), Rem (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    (* | Min (t1,t2), Min (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     * | Max (t1,t2), Max (t1',t2') -> equal t1 t1' && equal t2 t2'  *)
-    | Add _, _ -> false
-    | Sub _, _ -> false
-    | Mul _, _ -> false 
-    | Div _, _ -> false
-    | Exp _, _ -> false
-    | Rem _, _ -> false
-    (* | Min _, _ -> false
-     * | Max _, _ -> false *)
-  in
-
-  let cmp_op it it' = 
-    match it, it' with
-    | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
-    | LT _, _ -> false
-    | LE _, _ -> false
-  in
-
-  let bool_op it it' = 
-    match it, it' with
-    | And ts, And ts' -> 
-       List.equal equal ts ts'
-    | Or ts, Or ts' -> 
-       List.equal equal ts ts'
-    | Impl (t1,t2), Impl (t1',t2') -> 
-       equal t1 t1' && equal t2 t2' 
-    | Not t, Not t' -> 
-       equal t t' 
-    | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
-       equal t1 t1' && equal t2 t2' && equal t3 t3'
-    | EQ (t1,t2), EQ (t1',t2') -> 
-       equal t1 t1' && equal t2 t2' 
-    | And _, _ -> 
-       false
-    | Or _, _ -> 
-       false
-    | Impl _, _ -> 
-       false
-    | Not _, _ ->
-       false
-    | ITE _, _ ->
-       false
-    | EQ _, _ -> 
-       false
-  in
-
-  let tuple_op it it' =
-    match it, it' with
-    | Tuple its, Tuple its' -> 
-       List.equal equal its its'
-    | NthTuple (n,t), NthTuple (n',t') -> 
-       n = n' && equal t t' 
-    | Tuple _, _ -> false
-    | NthTuple _, _ -> false
-  in
-
-  let struct_op it it' =
-    match it, it' with
-    | Struct (tag, members), Struct (tag2, members2) ->
-       Sym.equal tag tag2 && 
-         List.equal (fun (m,t) (m',t') -> Id.equal m m' && equal t t') 
-           members members2
-    | StructMember (t,member), StructMember (t',member') ->
-       equal t t' && Id.equal member member'
-    | Struct _, _ -> false
-    | StructMember _, _ -> false
-  in
-
-  let pointer_op it it' =
-    match it, it' with
-    | Null, Null -> 
-       true
-    | AddPointer (t1, t2), AddPointer (t1', t2') -> 
-       equal t1 t1' && equal t2 t2'
-    | SubPointer (t1, t2), SubPointer (t1', t2') -> 
-       equal t1 t1' && equal t2 t2'
-    | MulPointer (t1, t2), MulPointer (t1', t2') -> 
-       equal t1 t1' && equal t2 t2'
-    | LTPointer (t1, t2), LTPointer (t1', t2') -> 
-       equal t1 t1' && equal t2 t2'
-    | LEPointer (t1, t2), LEPointer (t1', t2') -> 
-       equal t1 t1' && equal t2 t2'
-    | IntegerToPointerCast t1, IntegerToPointerCast t2 -> 
-       equal t1 t2
-    | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
-       equal t1 t2
-    | MemberOffset (s, m), MemberOffset (s', m') ->
-       Sym.equal s s' && Id.equal m m'
-    | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
-       Sctypes.equal ct ct' && equal t t'
-    | Null, _ -> false
-    | AddPointer _, _ -> false
-    | SubPointer _, _ -> false
-    | MulPointer _, _ -> false
-    | LTPointer _, _ -> false
-    | LEPointer _, _ -> false
-    | IntegerToPointerCast _, _ -> false
-    | PointerToIntegerCast _, _ -> false
-    | MemberOffset _, _ -> false
-    | ArrayOffset _, _ -> false
-  in
-
-  let list_op it it' = 
-    match it, it' with
-    | Nil, Nil -> 
-       true
-    | Cons (t1,t2), Cons (t1',t2') -> 
-       equal t1 t1' && equal t2 t2'
-    | List its, List its' ->
-       List.equal equal its its'
-    | Head t, Head t' ->
-       equal t t'
-    | Tail t, Tail t' ->
-       equal t t'
-    | NthList (n,t), NthList (n',t') ->
-       n = n' && equal t t'
-    | Nil, _ -> false
-    | Cons _, _ -> false
-    | List _, _ -> false
-    | Head _, _ -> false
-    | Tail _, _ -> false
-    | NthList _, _ -> false
-  in
-
-
-  let set_op it it' =
-    match it, it' with
-    | SetMember (t1,t2), SetMember (t1',t2') ->
-       equal t1 t1' && equal t1' t2'
-    | SetUnion ts, SetUnion ts' ->
-       List1.equal equal ts ts'
-    | SetIntersection ts, SetIntersection ts' ->
-       List1.equal equal ts ts'
-    | SetDifference (t1, t2), SetDifference (t1', t2') ->
-       equal t1 t1' && equal t1' t2'
-    | Subset (t1, t2), Subset (t1', t2') ->
-       equal t1 t1' && equal t1' t2'
-    | SetMember _, _ -> false
-    | SetUnion _, _ -> false
-    | SetIntersection _, _ -> false
-    | SetDifference _, _ -> false
-    | Subset _, _ -> false
-  in
-
-
-
-  let ct_pred it it' = 
-    match it, it' with
-    | Aligned (t, ct), Aligned (t', ct') ->
-       equal t t' && CT.equal ct ct'
-    | AlignedI t1, AlignedI t2 ->
-       equal t1.t t2.t && equal t1.align t2.align
-    | Representable (rt, t), Representable (rt', t') ->
-       CT.equal rt rt' && equal t t'
-    (* | MinInteger it, MinInteger it' ->
-     *    CF.Ctype.integerTypeEqual it it'
-     * | MaxInteger it, MaxInteger it' ->
-     *    CF.Ctype.integerTypeEqual it it' *)
-    | Aligned _, _ -> false
-    | AlignedI _, _ -> false
-    | Representable _, _ -> false
-    (* | MinInteger _, _ -> false
-     * | MaxInteger _, _ -> false *)
-  in
-
-  let option_op it it' = 
-    match it, it' with
-    | Something it, Something it' -> equal it it'
-    | Nothing bt, Nothing bt' -> BT.equal bt bt'
-    | Is_some it, Is_some it' -> equal it it'
-    | Value_of_some it, Value_of_some it' -> equal it it'
-    | Something _, _ -> false
-    | Nothing _, _ -> false
-    | Is_some _, _ -> false
-    | Value_of_some _, _ ->false
-  in
-
-  let array_op it it' = 
-    match it, it' with
-    | Const (bt, t), Const (bt', t') ->
-       BT.equal bt bt' && equal t t'
-    | Set (t1,t2,t3), Set (t1',t2',t3') ->
-       equal t1 t1' && equal t2 t2' && equal t3 t3'
-    | Get (t, args), Get (t', args') ->
-       equal t t' && (* List.equal *) equal args args'
-    | Const _, _ -> false
-    | Set _, _ -> false
-    | Get _, _ -> false
-  in
-
   match it, it' with
-  | Lit it, Lit it' -> lit it it'
-  | Arith_op it, Arith_op it' -> arith_op it it'
-  | Bool_op it, Bool_op it' -> bool_op it it'
-  | Cmp_op it, Cmp_op it' -> cmp_op it it'
-  | Tuple_op it, Tuple_op it' -> tuple_op it it'
-  | Struct_op it, Struct_op it' -> struct_op it it'
-  | Pointer_op it, Pointer_op it' -> pointer_op it it'
-  | List_op it, List_op it' -> list_op it it'
-  | Set_op it, Set_op it' -> set_op it it'
-  | CT_pred it, CT_pred it' -> ct_pred it it'
-  | Option_op it, Option_op it' -> option_op it it'
-  | Array_op it, Array_op it' -> array_op it it'
+  | Lit lit, Lit lit' -> 
+     begin match lit, lit' with
+     | Sym sym, Sym sym' -> Sym.equal sym sym'
+     | Z n, Z n' -> Z.equal n n'
+     | Q (n1,n2), Q (n1',n2') -> n1 = n1' && n2 = n2'
+     | Pointer p, Pointer p' -> Z.equal p p'
+     | Bool b, Bool b' -> b = b'
+     | Unit, Unit -> true
+     | Default bt, Default bt' -> BT.equal bt bt'
+     | Sym _, _ -> false
+     | Z _, _ -> false
+     | Q _, _ -> false
+     | Pointer _, _ -> false
+     | Bool _, _ -> false
+     | Unit, _ -> false
+     | Default _, _ -> false
+     end
+  | Arith_op arith_op, Arith_op arith_op' -> 
+     begin match arith_op, arith_op' with
+     | Add (t1,t2), Add (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Sub (t1,t2), Sub (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Mul (t1,t2), Mul (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Div (t1,t2), Div (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Exp (t1,t2), Exp (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Rem (t1,t2), Rem (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Add _, _ -> false
+     | Sub _, _ -> false
+     | Mul _, _ -> false 
+     | Div _, _ -> false
+     | Exp _, _ -> false
+     | Rem _, _ -> false
+     end
+  | Bool_op bool_op, Bool_op bool_op' -> 
+     begin match bool_op, bool_op' with
+     | And ts, And ts' -> 
+        List.equal equal ts ts'
+     | Or ts, Or ts' -> 
+        List.equal equal ts ts'
+     | Impl (t1,t2), Impl (t1',t2') -> 
+        equal t1 t1' && equal t2 t2' 
+     | Not t, Not t' -> 
+        equal t t' 
+     | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
+        equal t1 t1' && equal t2 t2' && equal t3 t3'
+     | EQ (t1,t2), EQ (t1',t2') -> 
+        equal t1 t1' && equal t2 t2' 
+     | And _, _ -> 
+        false
+     | Or _, _ -> 
+        false
+     | Impl _, _ -> 
+        false
+     | Not _, _ ->
+        false
+     | ITE _, _ ->
+        false
+     | EQ _, _ -> 
+        false
+     end
+  | Cmp_op cmp_op, Cmp_op cmp_op' -> 
+     begin match cmp_op, cmp_op' with
+     | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | LT _, _ -> false
+     | LE _, _ -> false
+     end
+  | Tuple_op tuple_op, Tuple_op tuple_op' -> 
+     begin match tuple_op, tuple_op' with
+     | Tuple ts, Tuple ts' -> List.equal equal ts ts'
+     | NthTuple (n,t), NthTuple (n',t') -> n = n' && equal t t' 
+     | Tuple _, _ -> false
+     | NthTuple _, _ -> false
+     end
+  | Struct_op struct_op, Struct_op struct_op' -> 
+     begin match struct_op, struct_op' with
+     | Struct (tag, members), Struct (tag2, members2) ->
+        Sym.equal tag tag2 && 
+          List.equal (fun (m,t) (m',t') -> Id.equal m m' && equal t t') 
+            members members2
+     | StructMember (t,member), StructMember (t',member') ->
+        equal t t' && Id.equal member member'
+     | Struct _, _ -> false
+     | StructMember _, _ -> false
+     end
+  | Pointer_op pointer_op, Pointer_op pointer_op' -> 
+     begin match pointer_op, pointer_op' with
+     | Null, Null -> 
+        true
+     | AddPointer (t1, t2), AddPointer (t1', t2') -> 
+        equal t1 t1' && equal t2 t2'
+     | SubPointer (t1, t2), SubPointer (t1', t2') -> 
+        equal t1 t1' && equal t2 t2'
+     | MulPointer (t1, t2), MulPointer (t1', t2') -> 
+        equal t1 t1' && equal t2 t2'
+     | LTPointer (t1, t2), LTPointer (t1', t2') -> 
+        equal t1 t1' && equal t2 t2'
+     | LEPointer (t1, t2), LEPointer (t1', t2') -> 
+        equal t1 t1' && equal t2 t2'
+     | IntegerToPointerCast t1, IntegerToPointerCast t2 -> 
+        equal t1 t2
+     | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
+        equal t1 t2
+     | MemberOffset (s, m), MemberOffset (s', m') ->
+        Sym.equal s s' && Id.equal m m'
+     | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
+        Sctypes.equal ct ct' && equal t t'
+     | Null, _ -> false
+     | AddPointer _, _ -> false
+     | SubPointer _, _ -> false
+     | MulPointer _, _ -> false
+     | LTPointer _, _ -> false
+     | LEPointer _, _ -> false
+     | IntegerToPointerCast _, _ -> false
+     | PointerToIntegerCast _, _ -> false
+     | MemberOffset _, _ -> false
+     | ArrayOffset _, _ -> false
+     end
+  | List_op list_op, List_op list_op' -> 
+     begin match list_op, list_op' with
+     | Nil, Nil -> true
+     | Cons (t1,t2), Cons (t1',t2') -> equal t1 t1' && equal t2 t2'
+     | List its, List its' -> List.equal equal its its'
+     | Head t, Head t' -> equal t t'
+     | Tail t, Tail t' -> equal t t'
+     | NthList (n,t), NthList (n',t') -> n = n' && equal t t'
+     | Nil, _ -> false
+     | Cons _, _ -> false
+     | List _, _ -> false
+     | Head _, _ -> false
+     | Tail _, _ -> false
+     | NthList _, _ -> false
+     end
+  | Set_op set_op, Set_op set_op' -> 
+     begin match set_op, set_op' with
+     | SetMember (t1,t2), SetMember (t1',t2') ->
+        equal t1 t1' && equal t1' t2'
+     | SetUnion ts, SetUnion ts' ->
+        List1.equal equal ts ts'
+     | SetIntersection ts, SetIntersection ts' ->
+        List1.equal equal ts ts'
+     | SetDifference (t1, t2), SetDifference (t1', t2') ->
+        equal t1 t1' && equal t1' t2'
+     | Subset (t1, t2), Subset (t1', t2') ->
+        equal t1 t1' && equal t1' t2'
+     | SetMember _, _ -> false
+     | SetUnion _, _ -> false
+     | SetIntersection _, _ -> false
+     | SetDifference _, _ -> false
+     | Subset _, _ -> false
+     end
+  | CT_pred ct_pred, CT_pred ct_pred' -> 
+     begin match ct_pred, ct_pred' with
+     | Aligned (t, ct), Aligned (t', ct') ->
+        equal t t' && CT.equal ct ct'
+     | AlignedI t1, AlignedI t2 ->
+        equal t1.t t2.t && equal t1.align t2.align
+     | Representable (rt, t), Representable (rt', t') ->
+        CT.equal rt rt' && equal t t'
+     | Aligned _, _ -> false
+     | AlignedI _, _ -> false
+     | Representable _, _ -> false
+     end
+  | Option_op option_op, Option_op option_op' -> 
+     begin match option_op, option_op' with
+     | Something it, Something it' -> equal it it'
+     | Nothing bt, Nothing bt' -> BT.equal bt bt'
+     | Is_some it, Is_some it' -> equal it it'
+     | Value_of_some it, Value_of_some it' -> equal it it'
+     | Something _, _ -> false
+     | Nothing _, _ -> false
+     | Is_some _, _ -> false
+     | Value_of_some _, _ ->false
+     end
+  | Array_op array_op, Array_op array_op' -> 
+     begin match array_op, array_op' with
+     | Const (bt, t), Const (bt', t') ->
+        BT.equal bt bt' && equal t t'
+     | Set (t1,t2,t3), Set (t1',t2',t3') ->
+        equal t1 t1' && equal t2 t2' && equal t3 t3'
+     | Get (t, args), Get (t', args') ->
+        equal t t' && equal args args'
+     | Def ((s, abt), body), Def ((s', abt'), body') ->
+        Sym.equal s s' && BT.equal abt abt' && equal body body'
+     | Const _, _ -> false
+     | Set _, _ -> false
+     | Get _, _ -> false
+     | Def _, _ -> false
+     end
   | Lit _, _ -> false
   | Arith_op _, _ -> false
   | Bool_op _, _ -> false
@@ -380,297 +333,258 @@ let rec equal (IT (it, _)) (IT (it', _)) =
 
 
 
-let pp (it : 'bt term) : PPrint.document = 
 
+let pp = 
   let rec aux atomic (IT (it, bt)) = 
-
-    let mparens pped = if atomic then parens pped else pped in
-    
-    let lit = function
-      | Sym sym -> Sym.pp sym
-      | Z i -> Z.pp i
-      | Q (i,i') -> c_app !^"frac" [!^(string_of_int i); !^(string_of_int i')]
-      | Pointer i -> Z.pp i
-      | Bool true -> !^"true"
-      | Bool false -> !^"false"
-      | Unit -> !^"void"
-      | Default bt -> c_app !^"default" [BT.pp bt]
-    in
-
-    let arith_op = function
-      | Add (it1,it2) -> 
-         mparens (flow (break 1) [aux true it1; plus; aux true it2])
-      | Sub (it1,it2) -> 
-         mparens (flow (break 1) [aux true it1; minus; aux true it2])
-      | Mul (it1,it2) -> 
-         mparens (flow (break 1) [aux true it1; star; aux true it2])
-      | Div (it1,it2) -> 
-         mparens (flow (break 1) [aux true it1; slash; aux true it2])
-      | Exp (it1,it2) -> 
-         c_app !^"power" [aux true it1; aux true it2]
-      | Rem (it1,it2) -> 
-         c_app !^"rem" [aux true it1; aux true it2]
-      (* | Min (it1,it2) -> 
-       *    c_app !^"min" [aux true it1; aux true it2]
-       * | Max (it1,it2) -> 
-       *    c_app !^ "max" [aux true it1; aux true it2] *)
-    in
-
-    let cmp_op = function
-      | LT (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle; aux true o2])
-      | LE (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; (langle ^^ equals); aux true o2])
-    in
-
-    let bool_op = function
-      | And o -> 
-         Pp.group (mparens (flow_map (break 1 ^^ !^"&&" ^^ break 1) (aux true) o))
-      | Or o -> 
-         Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux true) o))
-      | Impl (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
-      | Not (o1) -> 
-         mparens (!^"not" ^^^ aux true o1)
-      | ITE (o1,o2,o3) -> 
-         mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
-      | EQ (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
-    in
-
-    let tuple_op = function
-      | NthTuple (n,it2) -> 
-         mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
-      | Tuple its -> 
-         braces (separate_map (semi ^^ space) (aux false) its)
-    in
-
-    let struct_op = function
-      | Struct (_tag, members) ->
-         braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
-                     Id.pp member ^^^ equals ^^^ aux false it 
-                   ) members)
-      | StructMember (t, member) ->
-         aux true t ^^ dot ^^ Id.pp member
-    in
-
-    let pointer_op = function    
-      | Null -> 
-         !^"null"
-      | AddPointer (t1, t2) ->
-         mparens (flow (break 1) [aux true t1; plus; aux true t2])
-      | SubPointer (t1, t2) ->
-         mparens (flow (break 1) [aux true t1; minus; aux true t2])
-      | MulPointer (t1, t2) ->
-         mparens (flow (break 1) [aux true t1; star; aux true t2])
-      | LTPointer (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle; aux true o2])
-      | LEPointer (o1,o2) -> 
-         mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
-      | IntegerToPointerCast t ->
-         mparens (parens(!^"pointer") ^^ aux true t)
-      | PointerToIntegerCast t ->
-         mparens (parens(!^"integer") ^^ aux true t)
-      | MemberOffset (tag, member) ->
-         mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
-      | ArrayOffset (ct, t) ->
-         mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
-         
-    in
-
-    let ct_pred = function
-      | Aligned (t, rt) ->
-         c_app !^"aligned" [aux false t; CT.pp rt]
-      | AlignedI t ->
-         c_app !^"aligned" [aux false t.t; aux false t.align]
-      (* | MinInteger it ->
-       *    c_app !^"min" [CF.Pp_core_ctype.pp_integer_ctype it]
-       * | MaxInteger it ->
-       *    c_app !^"max" [CF.Pp_core_ctype.pp_integer_ctype it] *)
-      | Representable (rt, t) ->
-         c_app !^"repr" [CT.pp rt; aux false t]
-    in
-
-    let list_op = function    
-      | Head (o1) -> 
-         c_app !^"hd" [aux false o1]
-      | Tail (o1) -> 
-         c_app !^"tl" [aux false o1]
-      | Nil -> 
-         brackets empty
-      | Cons (t1,t2) -> 
-         mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-      | List its -> 
-         mparens (brackets (separate_map (comma ^^ space) (aux false) its))
-      | NthList (n, t) ->
-         mparens (aux true t ^^ brackets !^(string_of_int n))
-    in
-
-    let set_op = function
-      | SetMember (t1,t2) ->
-         c_app !^"member" [aux false t1; aux false t2]
-      | SetUnion ts ->
-         c_app !^"union" (List.map (aux false) (List1.to_list ts))
-      | SetIntersection ts ->
-         c_app !^"intersection" (List.map (aux false) (List1.to_list ts))
-      | SetDifference (t1, t2) ->
-         c_app !^"difference" [aux false t1; aux false t2]
-      | Subset (t1, t2) ->
-         c_app !^"subset" [aux false t1; aux false t2]
-    in
-
-    let option_op = function
-      | Something it -> 
-         c_app !^"something" [aux atomic it]
-      | Nothing bt ->
-         c_app !^"nothing" [BT.pp bt]
-      | Is_some it ->
-         c_app !^"is_some" [aux false it]
-      | Value_of_some it ->
-         c_app !^"value_of_some" [aux false it]
-    in
-
-    let array_op = function
-      | Const (_, t) ->
-         c_app !^"const" [aux false t]
-      | Set (t1,t2,t3) ->
-         aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
-      | Get (t, args) ->
-         c_app (aux true t) [aux false args]
-    in
-
+    let mparens pped = if atomic then parens pped else pped in    
     match it with
-    | Lit it -> lit it
-    | Arith_op it -> arith_op it
-    | Cmp_op it -> cmp_op it
-    | Bool_op it -> bool_op it
-    | Tuple_op it -> tuple_op it
-    | Struct_op it -> struct_op it
-    | Pointer_op it -> pointer_op it
-    | CT_pred it -> ct_pred it
-    | List_op it -> list_op it
-    | Set_op it -> set_op it
-    | Option_op it -> option_op it
-    | Array_op it -> array_op it
-
+    | Lit lit -> 
+       begin match lit with
+       | Sym sym -> Sym.pp sym
+       | Z i -> Z.pp i
+       | Q (i,i') -> c_app !^"frac" [!^(string_of_int i); !^(string_of_int i')]
+       | Pointer i -> Z.pp i
+       | Bool true -> !^"true"
+       | Bool false -> !^"false"
+       | Unit -> !^"void"
+       | Default bt -> c_app !^"default" [BT.pp bt]
+       end
+    | Arith_op arith_op -> 
+       begin match arith_op with 
+       | Add (it1,it2) -> 
+          mparens (flow (break 1) [aux true it1; plus; aux true it2])
+       | Sub (it1,it2) -> 
+          mparens (flow (break 1) [aux true it1; minus; aux true it2])
+       | Mul (it1,it2) -> 
+          mparens (flow (break 1) [aux true it1; star; aux true it2])
+       | Div (it1,it2) -> 
+          mparens (flow (break 1) [aux true it1; slash; aux true it2])
+       | Exp (it1,it2) -> 
+          c_app !^"power" [aux true it1; aux true it2]
+       | Rem (it1,it2) -> 
+          c_app !^"rem" [aux true it1; aux true it2]
+       end
+    | Cmp_op cmp_op -> 
+       begin match cmp_op with
+       | LT (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; langle; aux true o2])
+       | LE (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; (langle ^^ equals); aux true o2])
+       end
+    | Bool_op bool_op -> 
+       begin match bool_op with
+       | And o -> 
+          Pp.group (mparens (flow_map (break 1 ^^ !^"&&" ^^ break 1) (aux true) o))
+       | Or o -> 
+          Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux true) o))
+       | Impl (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
+       | Not (o1) -> 
+          mparens (!^"not" ^^^ aux true o1)
+       | ITE (o1,o2,o3) -> 
+          mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
+       | EQ (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
+       end
+    | Tuple_op tuple_op -> 
+       begin match tuple_op with
+       | NthTuple (n,it2) -> 
+          mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
+       | Tuple its -> 
+          braces (separate_map (semi ^^ space) (aux false) its)
+       end
+    | Struct_op struct_op -> 
+       begin match struct_op with
+       | Struct (_tag, members) ->
+          braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
+                      Id.pp member ^^^ equals ^^^ aux false it 
+                    ) members)
+       | StructMember (t, member) ->
+          aux true t ^^ dot ^^ Id.pp member
+       end
+    | Pointer_op pointer_op -> 
+       begin match pointer_op with
+       | Null -> 
+          !^"null"
+       | AddPointer (t1, t2) ->
+          mparens (flow (break 1) [aux true t1; plus; aux true t2])
+       | SubPointer (t1, t2) ->
+          mparens (flow (break 1) [aux true t1; minus; aux true t2])
+       | MulPointer (t1, t2) ->
+          mparens (flow (break 1) [aux true t1; star; aux true t2])
+       | LTPointer (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; langle; aux true o2])
+       | LEPointer (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
+       | IntegerToPointerCast t ->
+          mparens (parens(!^"pointer") ^^ aux true t)
+       | PointerToIntegerCast t ->
+          mparens (parens(!^"integer") ^^ aux true t)
+       | MemberOffset (tag, member) ->
+          mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
+       | ArrayOffset (ct, t) ->
+          mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+       end
+    | CT_pred ct_pred -> 
+       begin match ct_pred with
+       | Aligned (t, rt) ->
+          c_app !^"aligned" [aux false t; CT.pp rt]
+       | AlignedI t ->
+          c_app !^"aligned" [aux false t.t; aux false t.align]
+       | Representable (rt, t) ->
+          c_app !^"repr" [CT.pp rt; aux false t]
+       end
+    | List_op list_op -> 
+       begin match list_op with
+       | Head (o1) -> 
+          c_app !^"hd" [aux false o1]
+       | Tail (o1) -> 
+          c_app !^"tl" [aux false o1]
+       | Nil -> 
+          brackets empty
+       | Cons (t1,t2) -> 
+          mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
+       | List its -> 
+          mparens (brackets (separate_map (comma ^^ space) (aux false) its))
+       | NthList (n, t) ->
+          mparens (aux true t ^^ brackets !^(string_of_int n))
+       end
+    | Set_op set_op -> 
+       begin match set_op with
+       | SetMember (t1,t2) ->
+          c_app !^"member" [aux false t1; aux false t2]
+       | SetUnion ts ->
+          c_app !^"union" (List.map (aux false) (List1.to_list ts))
+       | SetIntersection ts ->
+          c_app !^"intersection" (List.map (aux false) (List1.to_list ts))
+       | SetDifference (t1, t2) ->
+          c_app !^"difference" [aux false t1; aux false t2]
+       | Subset (t1, t2) ->
+          c_app !^"subset" [aux false t1; aux false t2]
+       end
+    | Option_op option_op -> 
+       begin match option_op with
+       | Something it -> 
+          c_app !^"something" [aux atomic it]
+       | Nothing bt ->
+          c_app !^"nothing" [BT.pp bt]
+       | Is_some it ->
+          c_app !^"is_some" [aux false it]
+       | Value_of_some it ->
+          c_app !^"value_of_some" [aux false it]
+       end
+    | Array_op array_op -> 
+       begin match array_op with
+       | Const (_, t) ->
+          c_app !^"const" [aux false t]
+       | Set (t1,t2,t3) ->
+          aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
+       | Get (t, args) ->
+          c_app (aux true t) [aux false args]
+       | Def ((s, abt), body) ->
+          parens (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
+       end
   in
+  fun (it : 'bt term) -> aux false it
 
-  aux false it
 
 
 let rec free_vars : 'bt. 'bt term -> SymSet.t =
-
-  let lit : lit -> SymSet.t = function
-    | Sym symbol -> SymSet.singleton symbol
-    | Z _ -> SymSet.empty
-    | Q _ -> SymSet.empty
-    | Pointer _ -> SymSet.empty
-    | Bool _ -> SymSet.empty
-    | Unit -> SymSet.empty
-    | Default _ -> SymSet.empty
-  in
-
-  let arith_op : 'bt arith_op -> SymSet.t = function
-    | Add (it, it') -> free_vars_list [it; it']
-    | Sub (it, it') -> free_vars_list [it; it']
-    | Mul (it, it') -> free_vars_list [it; it']
-    | Div (it, it') -> free_vars_list [it; it']
-    | Exp (it, it') -> free_vars_list [it; it']
-    | Rem (it, it') -> free_vars_list [it; it']
-    (* | Min (it, it') -> free_vars_list [it; it']
-     * | Max (it, it') -> free_vars_list [it; it'] *)
-  in
-
-  let cmp_op : 'bt cmp_op -> SymSet.t = function
-    | LT (it, it') -> free_vars_list [it; it']
-    | LE (it, it') -> free_vars_list [it; it']
-  in
-
-  let bool_op : 'bt bool_op -> SymSet.t = function
-    | And its -> free_vars_list its
-    | Or its -> free_vars_list its
-    | Impl (it, it') -> free_vars_list [it; it']
-    | Not it -> free_vars it
-    | ITE (it,it',it'') -> free_vars_list [it;it';it'']
-    | EQ (it, it') -> free_vars_list [it; it']
-  in
-
-  let tuple_op : 'bt tuple_op -> SymSet.t = function
-    | Tuple its -> free_vars_list its
-    | NthTuple ( _, it) -> free_vars it
-  in
-  
-  let struct_op : 'bt struct_op -> SymSet.t = function
-    | Struct (_tag, members) -> free_vars_list (map snd members)
-    | StructMember (it, s) -> free_vars_list [it;it]
-  in
-
-  let pointer_op : 'bt pointer_op -> SymSet.t = function
-    | Null -> SymSet.empty
-    | AddPointer (it, it') -> free_vars_list [it; it']
-    | SubPointer (it, it') -> free_vars_list [it; it']
-    | MulPointer (it, it') -> free_vars_list [it; it']
-    | LTPointer (it, it')  -> free_vars_list [it; it']
-    | LEPointer (it, it') -> free_vars_list [it; it']
-    | IntegerToPointerCast t -> free_vars t
-    | PointerToIntegerCast t -> free_vars t
-    | MemberOffset (_, _) -> SymSet.empty
-    | ArrayOffset (_, t) -> free_vars t
-  in
-
-  let ct_pred : 'bt ct_pred -> SymSet.t = function
-    | Aligned (t, _rt) -> free_vars t
-    | AlignedI t -> free_vars_list [t.t; t.align]
-    (* | MinInteger _ -> SymSet.empty
-     * | MaxInteger _ -> SymSet.empty *)
-    | Representable (_rt,t) -> free_vars t
-  in
-
-  let list_op : 'bt list_op -> SymSet.t = function
-    | Nil  -> SymSet.empty
-    | Cons (it, it') -> free_vars_list [it; it']
-    | List its -> free_vars_list its
-    | Head it -> free_vars it
-    | Tail it -> free_vars it
-    | NthList (_,it) -> free_vars it
-  in
-
-  let set_op : 'bt set_op -> SymSet.t = function
-    | SetMember (t1,t2) -> free_vars_list [t1;t2]
-    | SetUnion ts -> free_vars_list (List1.to_list ts)
-    | SetIntersection ts -> free_vars_list (List1.to_list ts)
-    | SetDifference (t1, t2) -> free_vars_list [t1;t2]
-    | Subset (t1, t2) -> free_vars_list [t1;t2]
-  in
-  
-  let option_op = function
-    | Something it -> free_vars it
-    | Nothing _ -> SymSet.empty
-    | Is_some it -> free_vars it
-    | Value_of_some it -> free_vars it
-  in
-
-  let array_op = function
-    | Const (_, t) -> free_vars t
-    | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
-    | Get (t, arg) -> free_vars_list ([t; arg])
-  in
-
   fun (IT (it, _)) ->
   match it with
-  | Lit it -> lit it
-  | Arith_op it -> arith_op it
-  | Cmp_op it -> cmp_op it
-  | Bool_op it -> bool_op it
-  | Tuple_op it -> tuple_op it
-  | Struct_op it -> struct_op it
-  | Pointer_op it -> pointer_op it
-  | CT_pred it -> ct_pred it
-  | List_op it -> list_op it
-  | Set_op it -> set_op it
-  | Option_op it -> option_op it
-  | Array_op it -> array_op it
-
+  | Lit lit -> 
+     begin match lit with
+     | Sym symbol -> SymSet.singleton symbol
+     | Z _ -> SymSet.empty
+     | Q _ -> SymSet.empty
+     | Pointer _ -> SymSet.empty
+     | Bool _ -> SymSet.empty
+     | Unit -> SymSet.empty
+     | Default _ -> SymSet.empty
+     end
+  | Arith_op arith_op -> 
+     begin match arith_op with
+     | Add (it, it') -> free_vars_list [it; it']
+     | Sub (it, it') -> free_vars_list [it; it']
+     | Mul (it, it') -> free_vars_list [it; it']
+     | Div (it, it') -> free_vars_list [it; it']
+     | Exp (it, it') -> free_vars_list [it; it']
+     | Rem (it, it') -> free_vars_list [it; it']
+     end
+  | Cmp_op cmp_op ->
+     begin match cmp_op with
+     | LT (it, it') -> free_vars_list [it; it']
+     | LE (it, it') -> free_vars_list [it; it']
+     end
+  | Bool_op bool_op ->
+     begin match bool_op with
+     | And its -> free_vars_list its
+     | Or its -> free_vars_list its
+     | Impl (it, it') -> free_vars_list [it; it']
+     | Not it -> free_vars it
+     | ITE (it,it',it'') -> free_vars_list [it;it';it'']
+     | EQ (it, it') -> free_vars_list [it; it']
+     end
+  | Tuple_op tuple_op -> 
+     begin match tuple_op with
+     | Tuple its -> free_vars_list its
+     | NthTuple ( _, it) -> free_vars it
+     end
+  | Struct_op struct_op -> 
+     begin match struct_op with
+     | Struct (_tag, members) -> free_vars_list (map snd members)
+     | StructMember (it, s) -> free_vars_list [it;it]
+     end
+  | Pointer_op pointer_op ->
+     begin match pointer_op with
+     | Null -> SymSet.empty
+     | AddPointer (it, it') -> free_vars_list [it; it']
+     | SubPointer (it, it') -> free_vars_list [it; it']
+     | MulPointer (it, it') -> free_vars_list [it; it']
+     | LTPointer (it, it')  -> free_vars_list [it; it']
+     | LEPointer (it, it') -> free_vars_list [it; it']
+     | IntegerToPointerCast t -> free_vars t
+     | PointerToIntegerCast t -> free_vars t
+     | MemberOffset (_, _) -> SymSet.empty
+     | ArrayOffset (_, t) -> free_vars t
+     end
+  | CT_pred ct_pred ->
+     begin match ct_pred with
+     | Aligned (t, _rt) -> free_vars t
+     | AlignedI t -> free_vars_list [t.t; t.align]
+     | Representable (_rt,t) -> free_vars t
+     end
+  | List_op list_op ->
+     begin match list_op with
+     | Nil  -> SymSet.empty
+     | Cons (it, it') -> free_vars_list [it; it']
+     | List its -> free_vars_list its
+     | Head it -> free_vars it
+     | Tail it -> free_vars it
+     | NthList (_,it) -> free_vars it
+     end
+  | Set_op set_op ->
+     begin match set_op with
+     | SetMember (t1,t2) -> free_vars_list [t1;t2]
+     | SetUnion ts -> free_vars_list (List1.to_list ts)
+     | SetIntersection ts -> free_vars_list (List1.to_list ts)
+     | SetDifference (t1, t2) -> free_vars_list [t1;t2]
+     | Subset (t1, t2) -> free_vars_list [t1;t2]
+     end
+  | Option_op option_op ->
+     begin match option_op with
+     | Something it -> free_vars it
+     | Nothing _ -> SymSet.empty
+     | Is_some it -> free_vars it
+     | Value_of_some it -> free_vars it
+     end
+  | Array_op array_op -> 
+     begin match array_op with
+     | Const (_, t) -> free_vars t
+     | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
+     | Get (t, arg) -> free_vars_list ([t; arg])
+     | Def ((s, _), body) -> SymSet.remove s (free_vars body)
+     end
 
 and free_vars_list l = 
   List.fold_left (fun acc sym -> 
@@ -678,178 +592,145 @@ and free_vars_list l =
     ) SymSet.empty l
 
 
-let json it : Yojson.Safe.t = `String (Pp.plain (pp it))
+
+let json it : Yojson.Safe.t = 
+  `String (Pp.plain (pp it))
 
 
-let subst (substitution : typed subst) =
-
-  let rec aux = 
-
-    let lit it bt = 
-      match it with
-      | Sym s ->
-         begin match List.assoc_opt Sym.equal s substitution with
-         | Some after -> after
-         | None -> IT (Lit it, bt)
-         end
-      | it -> IT (Lit it, bt)
+let rec subst (su : typed subst) (IT (it, bt)) =
+  match it with
+  | Lit lit -> 
+     begin match lit with
+     | Sym sym ->
+        begin match List.assoc_opt Sym.equal sym su with
+        | Some after -> after
+        | None -> IT (Lit lit, bt)
+        end
+     | lit -> IT (Lit lit, bt)
+     end
+  | Arith_op arith_op -> 
+     let arith_op = match arith_op with
+       | Add (it, it') -> Add (subst su it, subst su it')
+       | Sub (it, it') -> Sub (subst su it, subst su it')
+       | Mul (it, it') -> Mul (subst su it, subst su it')
+       | Div (it, it') -> Div (subst su it, subst su it')
+       | Exp (it, it') -> Exp (subst su it, subst su it')
+       | Rem (it, it') -> Rem (subst su it, subst su it')
     in
-
-    let arith_op it bt = 
-      let it = match it with
-        | Add (it, it') -> Add (aux it, aux it')
-        | Sub (it, it') -> Sub (aux it, aux it')
-        | Mul (it, it') -> Mul (aux it, aux it')
-        | Div (it, it') -> Div (aux it, aux it')
-        | Exp (it, it') -> Exp (aux it, aux it')
-        | Rem (it, it') -> Rem (aux it, aux it')
-        (* | Min (it, it') -> Min (aux it, aux it')
-         * | Max (it, it') -> Max (aux it, aux it') *)
-      in
-      IT (Arith_op it, bt)
+    IT (Arith_op arith_op, bt)
+  | Cmp_op cmp_op ->        
+     let cmp_op = match cmp_op with
+       | LT (it, it') -> LT (subst su it, subst su it')
+       | LE (it, it') -> LE (subst su it, subst su it')
+     in
+     IT (Cmp_op cmp_op, bt)
+  | Bool_op bool_op -> 
+     let bool_op = match bool_op with
+       | And its -> And (map (subst su) its)
+       | Or its -> Or (map (subst su) its)
+       | Impl (it, it') -> Impl (subst su it, subst su it')
+       | Not it -> Not (subst su it)
+       | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
+       | EQ (it, it') -> EQ (subst su it, subst su it')
+     in
+     IT (Bool_op bool_op, bt)
+  | Tuple_op tuple_op -> 
+     let tuple_op = match tuple_op with
+       | Tuple its ->
+          Tuple (map (subst su) its)
+       | NthTuple (n, it') ->
+          NthTuple (n, subst su it')
+     in
+     IT (Tuple_op tuple_op, bt)
+  | Struct_op struct_op -> 
+     let struct_op = match struct_op with
+       | Struct (tag, members) ->
+          let members = 
+            map (fun (member,it) -> 
+                (member,subst su it)
+              ) members 
+          in
+          Struct (tag, members)
+       | StructMember (t, f) ->
+          StructMember (subst su t, f)
+     in
+     IT (Struct_op struct_op, bt)
+  | Pointer_op pointer_op -> 
+     let pointer_op = match pointer_op with
+       | Null -> 
+          Null
+       | AddPointer (it, it') -> 
+          AddPointer (subst su it, subst su it')
+       | SubPointer (it, it') -> 
+          SubPointer (subst su it, subst su it')
+       | MulPointer (it, it') -> 
+          MulPointer (subst su it, subst su it')
+       | LTPointer (it, it') -> 
+          LTPointer (subst su it, subst su it')
+       | LEPointer (it, it') -> 
+          LEPointer (subst su it, subst su it')
+       | IntegerToPointerCast t -> 
+          IntegerToPointerCast (subst su t)
+       | PointerToIntegerCast t -> 
+          PointerToIntegerCast (subst su t)
+       | MemberOffset (tag, member) ->
+          MemberOffset (tag, member)
+       | ArrayOffset (tag, t) ->
+          ArrayOffset (tag, subst su t)
+     in
+     IT (Pointer_op pointer_op, bt)
+  | CT_pred ct_pred -> 
+     let ct_pred = match ct_pred with
+       | Aligned (t, ct) -> Aligned (subst su t, ct)
+       | AlignedI t -> AlignedI {t= subst su t.t; align= subst su t.align}
+       | Representable (rt,t) -> Representable (rt,subst su t)
+     in
+     IT (CT_pred ct_pred, bt)
+  | List_op list_op -> 
+     let list_op = match list_op with
+       | Nil -> Nil
+       | Cons (it1,it2) -> Cons (subst su it1, subst su it2)
+       | List its -> List (map (subst su) its)
+       | Head it -> Head (subst su it)
+       | Tail it -> Tail (subst su it)
+       | NthList (i, it) -> NthList (i, subst su it)
+     in
+     IT (List_op list_op, bt)
+  | Set_op set_op -> 
+     let set_op = match set_op with
+       | SetMember (t1,t2) -> SetMember (subst su t1, subst su t2)
+       | SetUnion ts -> SetUnion (List1.map (subst su) ts)
+       | SetIntersection ts -> SetIntersection (List1.map (subst su) ts)
+       | SetDifference (t1, t2) -> SetDifference (subst su t1, subst su t2)
+       | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
+     in
+     IT (Set_op set_op, bt)
+  | Option_op option_op -> 
+    let option_op = match option_op with
+      | Something it -> Something (subst su it)
+      | Nothing bt' -> Nothing bt'
+      | Is_some it -> Is_some (subst su it)
+      | Value_of_some it -> Value_of_some (subst su it)
     in
-
-    let cmp_op it bt = 
-      let it = match it with
-        | LT (it, it') -> LT (aux it, aux it')
-        | LE (it, it') -> LE (aux it, aux it')
-      in
-      IT (Cmp_op it, bt)
-    in
-
-    let bool_op it bt = 
-      let it = match it with
-        | And its -> And (map (aux) its)
-        | Or its -> Or (map (aux) its)
-        | Impl (it, it') -> Impl (aux it, aux it')
-        | Not it -> Not (aux it)
-        | ITE (it,it',it'') -> ITE (aux it, aux it', aux it'')
-        | EQ (it, it') -> EQ (aux it, aux it')
-      in
-      IT (Bool_op it, bt)
-    in
-
-    let tuple_op it bt = 
-      let it = match it with
-        | Tuple its ->
-           Tuple (map aux its)
-        | NthTuple (n, it') ->
-           NthTuple (n, aux it')
-      in
-      IT (Tuple_op it, bt)
-    in
-    
-    let struct_op it bt =
-      let it = match it with
-        | Struct (tag, members) ->
-           let members = map (fun (member,it) -> (member,aux it)) members in
-           Struct (tag, members)
-        | StructMember (t, f) ->
-           StructMember (aux t, f)
-      in
-      IT (Struct_op it, bt)
-    in
-
-    let pointer_op it bt =
-      let it = match it with
-        | Null -> 
-           Null
-        | AddPointer (it, it') -> 
-           AddPointer (aux it, aux it')
-        | SubPointer (it, it') -> 
-           SubPointer (aux it, aux it')
-        | MulPointer (it, it') -> 
-           MulPointer (aux it, aux it')
-        | LTPointer (it, it') -> 
-           LTPointer (aux it, aux it')
-        | LEPointer (it, it') -> 
-           LEPointer (aux it, aux it')
-        | IntegerToPointerCast t -> 
-           IntegerToPointerCast (aux t)
-        | PointerToIntegerCast t -> 
-           PointerToIntegerCast (aux t)
-        | MemberOffset (tag, member) ->
-           MemberOffset (tag, member)
-        | ArrayOffset (tag, t) ->
-           ArrayOffset (tag, aux t)
-      in
-      IT (Pointer_op it, bt)
-    in
-
-    let ct_pred it bt =
-      let it = match it with
-        | Aligned (t, ct) -> Aligned (aux t, ct)
-        | AlignedI t -> AlignedI {t= aux t.t; align= aux t.align}
-        (* | MinInteger it -> MinInteger it
-         * | MaxInteger it -> MaxInteger it *)
-        | Representable (rt,t) -> Representable (rt,aux t)
-      in
-      IT (CT_pred it, bt)
-    in
-
-    let list_op it bt =
-      let it = match it with
-        | Nil -> Nil
-        | Cons (it1,it2) -> Cons (aux it1, aux it2)
-        | List its -> List (map aux its)
-        | Head it -> Head (aux it)
-        | Tail it -> Tail (aux it)
-        | NthList (i, it) -> NthList (i, aux it)
-      in
-      IT (List_op it, bt)
-    in
-
-    let set_op it bt = 
-      let it = match it with
-        | SetMember (t1,t2) -> SetMember (aux t1, aux t2)
-        | SetUnion ts -> SetUnion (List1.map aux ts)
-        | SetIntersection ts -> SetIntersection (List1.map aux ts)
-        | SetDifference (t1, t2) -> SetDifference (aux t1, aux t2)
-        | Subset (t1, t2) -> Subset (aux t1, aux t2)
-      in
-      IT (Set_op it, bt)
-    in
-
-    let option_op it bt = 
-      let it = match it with
-        | Something it -> Something (aux it)
-        | Nothing bt' -> Nothing bt'
-        | Is_some it -> Is_some (aux it)
-        | Value_of_some it -> Value_of_some (aux it)
-      in
-      IT (Option_op it, bt)
-    in
-
-    let array_op it bt =
-      let it = match it with
-        | Const (bt, t) ->
-           Const (bt, aux t)
-        | Set (t1, t2, t3) ->
-           Set (aux t1, aux t2, aux t3)
-        | Get (it, arg) ->
-           Get (aux it, aux arg)
-      in
-      IT (Array_op it, bt)
-    in
+    IT (Option_op option_op, bt)
+  | Array_op array_op -> 
+     let array_op = match array_op with
+       | Const (bt, t) -> 
+          Const (bt, subst su t)
+       | Set (t1, t2, t3) -> 
+          Set (subst su t1, subst su t2, subst su t3)
+       | Get (it, arg) -> 
+          Get (subst su it, subst su arg)
+       | Def ((s, abt), body) ->
+          let s' = Sym.fresh_same s in 
+          let su' = [(s, IT (Lit (Sym s'), abt))] in
+          let body = subst su' body in
+          let body = subst su body in
+          Def ((s', abt), body)
+     in
+     IT (Array_op array_op, bt)
 
 
-    fun (IT (it, bt)) ->
-    match it with
-    | Lit it -> lit it bt
-    | Arith_op it -> arith_op it bt
-    | Cmp_op it -> cmp_op it bt
-    | Bool_op it -> bool_op it bt
-    | Tuple_op it -> tuple_op it bt
-    | Struct_op it -> struct_op it bt
-    | Pointer_op it -> pointer_op it bt
-    | CT_pred it -> ct_pred it bt
-    | List_op it -> list_op it bt
-    | Set_op it -> set_op it bt
-    | Option_op it -> option_op it bt
-    | Array_op it -> array_op it bt
-  in
-
-  fun it -> aux it
 
 
 
@@ -858,7 +739,6 @@ let is_lit = function
   | IT (Lit lit, bt) -> Some (lit, bt)
   | _ -> None
 
-
 let is_sym = function
   | IT (Lit (Sym sym), bt) -> Some (sym, bt)
   | _ -> None
@@ -866,10 +746,6 @@ let is_sym = function
 let is_app = function
   | IT (Array_op (Get (f,arg)), _) -> Some (f, arg)
   | _ -> None
-
-
-
-
 
 let zero_frac = function
   | IT (Lit (Q (i,j)), _) when i = 0 -> true
@@ -1046,13 +922,17 @@ let value_of_some_ v =
 
 let const_ index_bt t = 
   IT (Array_op (Const (index_bt, t)), BT.Array (index_bt, bt t))
-let set_ (t1, t2, t3) = 
+let set_ t1 (t2, t3) = 
   IT (Array_op (Set (t1, t2, t3)), bt t1)
 let get_ v arg = 
   match bt v with
-  | BT.Array (_, bt) ->
-     IT (Array_op (Get (v, arg)), bt)
+  | BT.Array (_, rbt) ->
+     IT (Array_op (Get (v, arg)), rbt)
   | _ -> Debug_ocaml.error "illtyped index term"
+let array_def_ (s, abt) body = 
+  IT (Array_op (Def ((s, abt), body)), BT.Array (abt, bt body))
+
+
 
 let (%@) it it' = get_ it it'
 
@@ -1097,18 +977,17 @@ let disjoint_from fp fps =
 (* rubbish hash function *)
 let hash (IT (it, _bt)) =
   match it with
-  | Arith_op it -> 1
-  | Cmp_op it -> 2
-  | Bool_op it -> 3
-  | Tuple_op it -> 4
-  | Struct_op it -> 5
-  | Pointer_op it -> 6
-  | CT_pred it -> 7
-  | List_op it -> 8
-  | Set_op it -> 9
-  (* | Array_op it -> 10 *)
-  | Option_op it -> 11
-  | Array_op it -> 12
+  | Arith_op _ -> 1
+  | Cmp_op _ -> 2
+  | Bool_op _ -> 3
+  | Tuple_op _ -> 4
+  | Struct_op _ -> 5
+  | Pointer_op _ -> 6
+  | CT_pred _ -> 7
+  | List_op _ -> 8
+  | Set_op _ -> 9
+  | Option_op _ -> 10
+  | Array_op _ -> 11
   | Lit lit ->
      begin match lit with
      | Z z -> 20

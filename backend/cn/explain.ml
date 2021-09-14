@@ -331,12 +331,12 @@ module Make
   let pp_state_aux local {substitution; vclasses; relevant} model =
 
     let evaluate = evaluate model in
-    let evaluate_array (q_s, q_bt) it = 
-      match is_app it with
-      | Some (f, arg) when IT.equal arg ((sym_ (q_s, q_bt))) ->
-         evaluate f ^ "(" ^ Sym.pp_string q_s ^ ")"
-      | _ -> Debug_ocaml.error "resource not normalised"
-    in
+    (* let evaluate_array (q_s, q_bt) it = 
+     *   match is_app it with
+     *   | Some (f, arg) when IT.equal arg ((sym_ (q_s, q_bt))) ->
+     *      evaluate f ^ "(" ^ Sym.pp_string q_s ^ ")"
+     *   | _ -> Debug_ocaml.error "resource not normalised"
+     * in *)
              
 
     let (points, predicates, predicate_oargs, reported) = 
@@ -381,8 +381,8 @@ module Make
           | QPoint p ->
              let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = !^(evaluate_array (p.qpointer, BT.Loc) p.permission) in
-             let init_v = !^(evaluate_array (p.qpointer, BT.Loc) p.init) in
+             let permission_v = !^(evaluate (* (p.qpointer, BT.Loc) *) p.permission) in
+             let init_v = !^(evaluate (* (p.qpointer, BT.Loc) *) p.init) in
              let state = 
                Sctypes.pp p.ct ^^^
                  parens (
@@ -393,7 +393,7 @@ module Make
              let value = 
                IT.pp (IT.subst substitution p.value) ^^^ 
                equals ^^^
-               !^(evaluate_array (p.qpointer, BT.Loc) p.value) 
+               !^(evaluate (* (p.qpointer, BT.Loc) *) p.value) 
              in
              let entry = (Some loc_expr, None, Some state, Some value) in
              let reported = 
@@ -437,7 +437,7 @@ module Make
              let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
              let id = make_predicate_name () in
              let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = !^(evaluate_array (p.qpointer, Loc) p.permission) in
+             let permission_v = !^(evaluate (* (p.qpointer, Loc) *) p.permission) in
              let state = 
                !^id ^^^ equals ^^^
                Pp.string p.name ^^
@@ -450,7 +450,7 @@ module Make
              let oargs = 
                List.map2 (fun oarg (name, _) ->
                    let var = !^id ^^ dot ^^ dot ^^ !^name in
-                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate_array (p.qpointer, Loc) oarg) in
+                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate (* (p.qpointer, Loc) *) oarg) in
                    (Some var, Some value)
                  ) p.oargs predicate_def.oargs
              in
