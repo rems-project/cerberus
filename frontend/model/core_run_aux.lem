@@ -182,6 +182,9 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
       | Eunpack _ _ ->
           (* no change *)
           expr_
+      | Eqfacts _ ->
+          (* no change *)
+          expr_
     end
   else
     expr
@@ -274,6 +277,9 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           (* no change *)
           expr_
       | Eunpack _ _ ->
+          (* no change *)
+          expr_
+      | Eqfacts _ ->
           (* no change *)
           expr_
     end
@@ -480,6 +486,8 @@ let rec convert_expr (Expr annot expr_) =
         Epack id (List.map convert_pexpr pes)
     | Eunpack id pes ->
         Eunpack id (List.map convert_pexpr pes)
+    | Eqfacts pe ->
+        Eqfacts (convert_pexpr pe)
 (*
     | Eloc loc e ->
         Eloc loc (convert_expr e)

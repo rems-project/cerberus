@@ -369,6 +369,8 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
          | Unpack -> New.Unpack
        in
        return (New.M_Epredicate (pack_unpack, name, asyms))
+    | M_Eqfacts asym ->
+       return (New.M_Eqfacts asym)
   in
 
   return (New.M_Expr (loc, annots,expr_))

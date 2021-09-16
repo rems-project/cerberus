@@ -91,7 +91,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
   let member_offset tag member = 
     let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
-    Z.int_of_big_int (Memory.integer_value_to_num iv)
+    Z.to_int (Memory.integer_value_to_num iv)
   in
 
   let struct_layout loc members tag = 
@@ -226,7 +226,7 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
       pred ~oname pointer iargs = 
   let@ def = match List.assoc_opt String.equal pred predicates with
     | Some def -> return def
-    | None -> fail loc (Missing_predicate pred)
+    | None -> fail loc (Unknown_predicate pred)
   in
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
@@ -480,7 +480,7 @@ let aarg_item loc (aarg : aarg) =
   in
   { path = path;
     it = sym_ (aarg.asym, BT.Loc); 
-    o_sct = Some (Sctypes.pointer_sct aarg.typ) }
+    o_sct = Some (pointer_ct aarg.typ) }
 
 let varg_item loc (varg : varg) =
   match Sym.description varg.vsym with
@@ -498,7 +498,7 @@ let garg_item loc (garg : garg) =
   | SD_ObjectAddress name -> 
      {path = Ast.addr name; 
       it = sym_ (garg.lsym, BT.Loc);
-      o_sct = Some (Sctypes.pointer_sct garg.typ) } 
+      o_sct = Some (pointer_ct garg.typ) } 
   | sd -> 
      error_with_loc loc
        ("global argument " ^ Sym.pp_string garg.asym ^ 
@@ -555,7 +555,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
         let item = aarg_item loc aarg in
         let (l, r, c, mapping') = 
           make_owned_funarg loc i layouts item.it item.path aarg.typ in
-        let c = (LC.t_ (good_value layouts (pointer_sct aarg.typ) item.it), 
+        let c = (LC.t_ (good_value layouts (pointer_ct aarg.typ) item.it), 
                  (loc, Some (descr ^ " constraint"))) :: c 
         in
         let mappings = 
@@ -625,7 +625,7 @@ let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
         let item = aarg_item loc aarg in
         let (l, r, c, mapping') = 
           make_owned_funarg loc i layouts item.it item.path aarg.typ in
-        let c = (LC.t_ (good_value layouts (pointer_sct aarg.typ) item.it), 
+        let c = (LC.t_ (good_value layouts (pointer_ct aarg.typ) item.it), 
                  (loc, Some ("&ARG" ^ string_of_int i ^ " constraint"))) :: c 
         in
         let mappings = 
@@ -729,7 +729,7 @@ let make_label_spec
           let@ (l, r, c, mapping') = 
             make_owned loc layouts item.it item.path aarg.typ in
           let c = 
-            (LC.t_ (good_value layouts (pointer_sct aarg.typ) item.it),
+            (LC.t_ (good_value layouts (pointer_ct aarg.typ) item.it),
              (loc, None)) :: c
           in
           return (iA @ a, iL @ l, iR @ r, iC @ c, (item :: mapping') @ mapping)

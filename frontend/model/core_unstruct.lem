@@ -338,6 +338,8 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         expr
     | Eunpack _ _ ->
         expr
+    | Eqfacts _ ->
+        expr
   end
 
 

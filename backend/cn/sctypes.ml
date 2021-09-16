@@ -31,8 +31,25 @@ let is_unsigned_integer_ctype = function
      
 
 
-let pointer_sct sct = 
-  Sctype ([], Pointer (Ctype.no_qualifiers, sct))
+let void_ct = 
+  Sctype ([], Void)
+
+let integer_ct it = 
+  Sctype ([], Integer it)
+
+let array_ct ct olength = 
+  Sctype ([], Array (ct, olength))
+
+let pointer_ct ct = 
+  Sctype ([], Pointer (Ctype.no_qualifiers, ct))
+
+let struct_ct tag = 
+  Sctype ([], Struct tag)
+
+let char_ct = 
+  Sctype ([], Integer Char)
+
+
 
 
 let rec to_ctype (Sctype (annots, ct_)) =
@@ -70,7 +87,7 @@ let rec of_ctype (Ctype.Ctype (annots,ct_)) =
      fail
   | Ctype.Array (ct,nopt) -> 
      let@ ct = of_ctype ct in
-     return (Array (ct, Option.map Z.int_of_big_int nopt))
+     return (Array (ct, Option.map Z.to_int nopt))
   | Ctype.Function (has_proto, (ret_q,ret_ct), args, variadic) ->
      let@ args = 
        ListM.mapM (fun (arg_q, arg_ct, is_reg) -> 

@@ -24,7 +24,8 @@ module Make(L : Local.S) : sig
   val all_resources : unit -> (Resources.RE.t list) m
   val provable : (LogicalConstraints.t -> bool) m
   val model : unit -> Z3.Model.model m
-  val bound : Sym.t -> Kind.t -> bool m
+  val bound_a : Sym.t -> bool m
+  val bound_l : Sym.t -> bool m
   val get_a : Sym.t -> (BaseTypes.t * Sym.t) m
   val get_l : Sym.t -> LogicalSorts.t m
   val add_a : Sym.t -> (BaseTypes.t * Sym.t) -> unit m
@@ -122,9 +123,13 @@ end = struct
     let@ l = get () in
     return (L.get_model (L.solver l))
 
-  let bound s kind = 
+  let bound_a s = 
     let@ l = get () in
-    return (L.bound s kind l)
+    return (L.bound_a s l)
+
+  let bound_l s = 
+    let@ l = get () in
+    return (L.bound_l s l)
 
   let get_a s = 
     let@ l = get () in

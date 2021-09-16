@@ -229,6 +229,7 @@ module Make(T : TYPES) = struct
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
    | M_Epredicate of pack_unpack * Symbol.identifier * ('TY asym) list
+   | M_Eqfacts of 'TY asym
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)

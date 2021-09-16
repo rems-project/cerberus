@@ -200,8 +200,6 @@ module Make
 
   let explanation local relevant =
 
-
-
     print stdout !^"producing error report";
 
     (* only report the state of the relevant variables *)
@@ -282,184 +280,258 @@ module Make
 
 
 
-  let rec evaluate model expr : string = 
-    match Z3.Model.eval model (S.term expr) true with
-    | None -> "(not evaluated)"
-    | Some evaluated_expr -> 
-       match IT.bt expr with
-       | BT.Integer -> 
-          Z3.Expr.to_string evaluated_expr
-       | BT.Real -> 
-          Z3.Expr.to_string evaluated_expr
-       | BT.Loc ->
-          (* adapting from core_parser_driver.ml *)
-          let str = Z3.Expr.to_string evaluated_expr in
-          let lexbuf = Lexing.from_string str in
-          let z = try Assertion_parser.integer Assertion_lexer.main lexbuf with
-                  | _ -> Debug_ocaml.error ("error parsing string: " ^ str)
-          in
-          Pp.plain (Z.pp_hex 16 z)
-       | BT.Bool ->
-          Z3.Expr.to_string evaluated_expr
-       | BT.Array _ ->
-          Z3.Expr.to_string evaluated_expr
-       | BT.Unit ->
-          Pp.plain (BT.pp BT.Unit)
-       | BT.Struct tag ->
+  let evaluate model it = 
+    let open Option in
+    let rec aux (unevaluated_expr : Z3.Expr.expr) (bt : BT.t) : IT.t option = 
+      let@ expr = Z3.Model.eval model unevaluated_expr true in
+      match bt with
+      | BT.Unit ->
+         return unit_
+      | BT.Bool ->
+         let b = 
+           if Z3.Boolean.is_true expr then true
+           else if Z3.Boolean.is_false expr then false
+           else Debug_ocaml.error "non-true/false boolean"
+         in
+         return (bool_ b)
+      | BT.Integer -> 
+         let i = Z3.Arithmetic.Integer.get_big_int expr in
+         return (z_ i)
+      | BT.Real ->
+         let n = 
+           Z3.Arithmetic.Integer.get_big_int
+             (Z3.Arithmetic.Real.get_numerator expr)
+         in
+         let d = 
+           Z3.Arithmetic.Integer.get_big_int
+             (Z3.Arithmetic.Real.get_denominator expr)
+         in
+         return (q_ (Z.to_int n, Z.to_int d))
+      | BT.Loc ->
+         let i = Z3.Arithmetic.Integer.get_big_int expr in
+         return (pointer_ i)
+      | BT.List _ ->
+         fail
+      | BT.Tuple _ ->
+         fail
+      | BT.Struct tag ->
          let layout = Global.SymMap.find tag G.global.struct_decls in
          let members = Memory.member_types layout in
-         let members = 
-           List.map (fun (member, sct) -> 
-               let s = evaluate model (IT.member_ ~member_bt:(BT.of_sct sct) (tag, expr, member)) in
-               "." ^ Id.pp_string member ^ " = " ^ s
-             ) members 
+         let destructors = Z3.Tuple.get_field_decls (S.sort (Struct tag)) in
+         let members_destructors = List.combine members destructors in
+         let@ members = 
+           ListM.mapM (fun ((member, sct), destructor) -> 
+               let member_bt = BT.of_sct sct in
+               let member_term = Z3.Expr.mk_app Solver.context destructor [expr] in
+               let@ member_value = aux member_term member_bt in
+               return (member, member_value)
+             ) members_destructors
          in
-         "{" ^ (String.concat ", " members) ^ "}"
-       | _ -> 
-          "(not evaluated)"
+        return (IT.struct_ (tag, members))
+      | BT.Set _ ->
+         fail
+      | BT.Option _ ->
+         fail
+      | BT.Array (abt, rbt) ->
+         if Z3.Z3Array.is_constant_array expr then
+           match Z3.Expr.get_args expr with
+           | [constant] ->
+              let@ constant = aux constant rbt in
+              return (const_ abt constant)
+           | _ ->
+              Debug_ocaml.error "constant array: unexpected argument list"
+         else if Z3.Z3Array.is_store expr then
+           match Z3.Expr.get_args expr with
+           | [arr; index; value] ->
+              let@ arr = aux arr (Array (abt, rbt)) in
+              let@ index = aux index abt in
+              let@ value = aux value rbt in
+              return (set_ arr (index, value))
+           | _ ->
+              Debug_ocaml.error "store: unexpected argument list"
+         else
+           let str = Z3.Expr.to_string expr in
+           Debug_ocaml.error ("unhandled array value case: " ^ str)
+    in
+    aux (S.term it) (IT.bt it)
 
-  let evaluate_bool model expr = 
-    match evaluate model expr with
-    | "true" -> true
-    | "false" -> false
-    | str -> Debug_ocaml.error ("error parsing string: " ^ str)
+
 
   let symbol_it = function
     | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
     | _ -> SymSet.empty
 
-  let pp_state_aux local {substitution; vclasses; relevant} model =
+
+
+  let state local {substitution; vclasses; relevant} model =
+
+    let open Report in
 
     let evaluate = evaluate model in
-    (* let evaluate_array (q_s, q_bt) it = 
-     *   match is_app it with
-     *   | Some (f, arg) when IT.equal arg ((sym_ (q_s, q_bt))) ->
-     *      evaluate f ^ "(" ^ Sym.pp_string q_s ^ ")"
-     *   | _ -> Debug_ocaml.error "resource not normalised"
-     * in *)
-             
 
-    let (points, predicates, predicate_oargs, reported) = 
+    let maybe_evaluated = function
+      | Some v -> IT.pp v
+      | None -> parens !^"not evaluated"
+    in
+    
+    let name_subst = IT.subst substitution in
+
+    let entry = function
+      | Point p ->
+         let loc_e, permission_e, init_e, value_e = 
+           IT.pp (name_subst p.pointer),
+           IT.pp (name_subst p.permission),
+           IT.pp (name_subst p.init), 
+           IT.pp (name_subst p.value)
+         in
+         let loc_v, permission_v, init_v, value_v = 
+           evaluate p.pointer,
+           evaluate p.permission,
+           evaluate p.init,
+           evaluate p.value
+         in
+         let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
+           | Some (1, 1), Some true ->
+              Sctypes.pp p.ct ^^ colon ^^^
+              value_e ^^^ equals ^^^ maybe_evaluated value_v
+           | _ -> 
+              let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
+              let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
+              Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
+              value_e ^^^ equals ^^^ maybe_evaluated value_v
+         in
+         let entry = {
+             loc_e = Some loc_e; 
+             loc_v = Some (maybe_evaluated loc_v); 
+             state = Some state;
+           } 
+         in
+         let reported = 
+           List.fold_left SymSet.union SymSet.empty
+             [symbol_it p.pointer; 
+              IT.free_vars p.value;
+              IT.free_vars p.init;
+              IT.free_vars p.permission;
+             ]
+         in
+         (entry, [], reported)
+      | QPoint p ->
+         let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
+         let loc_e, permission_e, init_e, value_e = 
+           !^"each" ^^^ Sym.pp p.qpointer,
+           IT.pp (name_subst p.permission),
+           IT.pp (name_subst p.init), 
+           IT.pp (name_subst p.value)
+         in
+         let permission_v, init_v, value_v = 
+           evaluate p.permission,
+           evaluate p.init,
+           evaluate p.value
+         in
+         let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
+           | Some (1, 1), Some true ->
+              Sctypes.pp p.ct ^^ colon ^^^
+              value_e ^^^ equals ^^^ maybe_evaluated value_v
+           | _ ->
+              let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
+              let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
+              Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
+              value_e ^^^ equals ^^^ maybe_evaluated value_v
+         in
+         let entry = {
+             loc_e = Some loc_e;
+             loc_v = None;
+             state = Some state;
+           } 
+         in
+         let reported = 
+           SymSet.remove p.qpointer
+             (List.fold_left SymSet.union SymSet.empty
+                [IT.free_vars p.value;
+                 IT.free_vars p.init;
+                 IT.free_vars p.permission;
+                ])
+         in
+         (entry, [], reported)
+      | Predicate p ->
+         let id = make_predicate_name () in
+         let loc_e, permission_e, iargs_e = 
+           IT.pp (name_subst p.pointer),
+           IT.pp (name_subst p.permission), 
+           (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
+         in
+         let loc_v, permission_v = 
+           evaluate p.pointer,
+           evaluate p.permission
+         in
+         let state = match Option.bind permission_v is_q with
+           | Some (1, 1) ->
+              !^id ^^^ equals ^^^
+              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
+           | _ ->
+              !^id ^^^ equals ^^^
+              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
+              parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
+         in
+         let entry = {
+             loc_e = Some loc_e;
+             loc_v = Some (maybe_evaluated loc_v);
+             state = Some state
+             } 
+         in
+         let oargs = 
+           let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
+           List.map2 (fun oarg (name, _) ->
+               let var = !^id ^^ dot ^^ dot ^^ !^name in
+               let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
+               {var; value}
+             ) p.oargs predicate_def.oargs
+         in
+         let reported = symbol_it p.pointer in
+         (entry, oargs, reported)
+      | QPredicate p ->
+         let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
+         let id = make_predicate_name () in
+         let loc_e, permission_e, iargs_e = 
+           !^"each" ^^^ Sym.pp p.qpointer,
+           IT.pp (name_subst p.permission), 
+           (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
+         in
+         let permission_v = evaluate p.permission in
+         let state = match Option.bind permission_v is_q with
+           | Some (1, 1) ->
+              !^id ^^^ equals ^^^
+              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
+           | _ ->
+              !^id ^^^ equals ^^^
+              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
+              parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
+         in
+         let entry = {
+             loc_e = Some loc_e;
+             loc_v = None;
+             state = Some state
+             } 
+         in
+         let oargs = 
+           let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
+           List.map2 (fun oarg (name, _) ->
+               let var = !^id ^^ dot ^^ dot ^^ !^name in
+               let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate oarg) in
+               {var; value}
+             ) p.oargs predicate_def.oargs
+         in
+         (entry, oargs, SymSet.empty)
+    in
+
+    let (memory, predicate_oargs, reported) = 
       List.fold_right (fun resource acc ->
-
-          let (points, 
-               predicates, 
-               predicate_oargs, 
-               acc_reported) = acc 
-          in
-
-          match resource with
-          | Point p ->
-             let loc_expr = IT.pp (IT.subst substitution p.pointer) in
-             let loc_val = !^(evaluate p.pointer) in
-             let permission_v = !^(evaluate p.permission) in
-             let init_v = !^(evaluate p.init) in
-             let state = 
-               Sctypes.pp p.ct ^^^
-                 parens (
-                   !^"permission" ^^ colon ^^^ permission_v ^^ comma ^^^
-                   !^"init" ^^ colon ^^^ init_v
-                   )
-             in
-             let value = 
-               IT.pp (IT.subst substitution p.value) ^^^ 
-                 equals ^^^ !^(evaluate p.value) 
-             in
-             let entry = (Some loc_expr, Some loc_val, Some state, Some value) in
-             let reported = 
-               List.fold_left SymSet.union SymSet.empty
-                 [symbol_it p.pointer; 
-                  IT.free_vars p.value;
-                  IT.free_vars p.init;
-                  IT.free_vars p.permission;
-                 ]
-             in
-             (entry :: points, 
-              predicates, 
-              predicate_oargs,
-              SymSet.union reported acc_reported)
-          | QPoint p ->
-             let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
-             let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = !^(evaluate (* (p.qpointer, BT.Loc) *) p.permission) in
-             let init_v = !^(evaluate (* (p.qpointer, BT.Loc) *) p.init) in
-             let state = 
-               Sctypes.pp p.ct ^^^
-                 parens (
-                   !^"permission" ^^ colon ^^^ permission_v ^^ comma ^^^
-                   !^"init" ^^ colon ^^^ init_v
-                   )
-             in
-             let value = 
-               IT.pp (IT.subst substitution p.value) ^^^ 
-               equals ^^^
-               !^(evaluate (* (p.qpointer, BT.Loc) *) p.value) 
-             in
-             let entry = (Some loc_expr, None, Some state, Some value) in
-             let reported = 
-               SymSet.remove p.qpointer
-                 (List.fold_left SymSet.union SymSet.empty
-                    [IT.free_vars p.value;
-                     IT.free_vars p.init;
-                     IT.free_vars p.permission;
-                    ])
-             in
-             (entry :: points, 
-              predicates,
-              predicate_oargs,
-              SymSet.union reported acc_reported)
-          | Predicate p ->
-             let id = make_predicate_name () in
-             let loc_expr = IT.pp (IT.subst substitution p.pointer) in
-             let loc_val = !^(evaluate p.pointer) in
-             let permission_v = !^(evaluate p.permission) in
-             let state = 
-               !^id ^^^ equals ^^^
-               Pp.string p.name ^^
-                 parens (separate comma (List.map (fun i -> IT.pp (IT.subst substitution i)) 
-                                           (p.pointer :: p.iargs))) ^^^
-                   parens (!^"permission" ^^ colon ^^^ permission_v)
-             in
-             let entry = (Some loc_expr, Some loc_val, Some state) in
-             let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
-             let oargs = 
-               List.map2 (fun oarg (name, _) ->
-                   let var = !^id ^^ dot ^^ dot ^^ !^name in
-                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate oarg) in
-                   (Some var, Some value)
-                 ) p.oargs predicate_def.oargs
-             in
-             (points, 
-              entry :: predicates,
-              oargs @ predicate_oargs,
-              SymSet.union (symbol_it p.pointer) acc_reported)
-          | QPredicate p ->
-             let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
-             let id = make_predicate_name () in
-             let loc_expr = !^"each" ^^^ Sym.pp p.qpointer in
-             let permission_v = !^(evaluate (* (p.qpointer, Loc) *) p.permission) in
-             let state = 
-               !^id ^^^ equals ^^^
-               Pp.string p.name ^^
-                 parens (separate comma (List.map (fun i -> IT.pp (IT.subst substitution i)) 
-                                           (sym_ (p.qpointer, BT.Loc) :: p.iargs))) ^^^
-                   parens (!^"permission" ^^ colon ^^^ permission_v)
-             in
-             let entry = (Some loc_expr, None, Some state) in
-             let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
-             let oargs = 
-               List.map2 (fun oarg (name, _) ->
-                   let var = !^id ^^ dot ^^ dot ^^ !^name in
-                   let value = IT.pp oarg ^^^ equals ^^^ !^(evaluate (* (p.qpointer, Loc) *) oarg) in
-                   (Some var, Some value)
-                 ) p.oargs predicate_def.oargs
-             in
-             (points, 
-              entry :: predicates,
-              oargs @ predicate_oargs,
-              acc_reported)
-
-        ) (L.all_resources local) ([], [], [], SymSet.empty)
+          let (memory, vars, reported) = acc in
+          let (entry', vars', reported') = entry resource in
+          let vars = vars' @ vars in
+          let reported = SymSet.union reported' reported in
+          (entry' :: memory, vars, reported)
+        ) (L.all_resources local) ([], [], SymSet.empty)
     in
     let report vclass = 
       let syms = SymSet.union vclass.logical vclass.computational in
@@ -470,9 +542,13 @@ module Make
     let memory_var_lines = 
       List.filter_map (fun (vclass,c) ->
           if report vclass && BT.equal vclass.sort Loc then
-               let loc_val = !^(evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
+               let loc_val = evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort)) in
                let loc_expr = Ast.Terms.pp false c.path in
-               let entry = (Some loc_expr, Some loc_val, None, None) in
+               let entry = 
+                 { loc_e = Some loc_expr;
+                   loc_v = Some (maybe_evaluated loc_val);
+                   state = None } 
+               in
                Some entry
           else None
         ) vclasses
@@ -481,8 +557,8 @@ module Make
       List.filter_map (fun (vclass,c) ->
           if report vclass && not (BT.equal vclass.sort Loc) then
             let expr = Ast.Terms.pp false c.path in
-            let state = !^(evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort))) in
-            let entry = (Some expr, Some state) in
+            let value = evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort)) in
+            let entry = {var = expr; value = maybe_evaluated value} in
             Some entry
           else
             None)
@@ -491,18 +567,8 @@ module Make
 
     (* let () = print stdout (list Local.pp_old (L.old local)) in *)
 
-    (points @ memory_var_lines, predicates, predicate_oargs @ logical_var_lines)
-
-
-
-  let pp_state_with_model local explanation model =
-    let (memory, predicates, variables) = (pp_state_aux local explanation model) in
-    table4 ("pointer", "location", "state", "value") 
-      (List.map (fun (a, b, c, d) -> ((L, a), (R, b), (R, c), (L, d))) memory) ^/^
-    table3 ("pointer", "location", "predicate") 
-      (List.map (fun (a, b, c) -> ((L, a), (R, b), (R, c))) predicates) ^/^
-    table2 ("expression", "value") 
-      (List.map (fun (a, b) -> ((L, a), (L, b))) variables)
+    { memory = memory @ memory_var_lines;
+      variables = predicate_oargs @ logical_var_lines }
       
 
   (* let pp_state local explanation =
@@ -536,7 +602,7 @@ module Make
     assert (not provable);
     let explanation = explanation local SymSet.empty in
     let model = S.get_model (L.solver local) in
-    pp_state_with_model local explanation model
+    state local explanation model
 
   let implementation_defined_behaviour local it = 
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in
@@ -544,12 +610,12 @@ module Make
     let explanation = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
     let model = S.get_model (L.solver local) in
-    (it_pp, pp_state_with_model local explanation model)
+    (it_pp, state local explanation model)
 
   let missing_ownership local model it = 
     let explanation = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
-    (it_pp, pp_state_with_model local explanation model)
+    (it_pp, state local explanation model)
 
   let index_term local it = 
     let explanation = explanation local (IT.free_vars it) in
@@ -559,24 +625,24 @@ module Make
   let unsatisfied_constraint local model lc = 
     let explanation = explanation local (LC.free_vars lc) in
     let lc_pp = LC.pp (LC.subst explanation.substitution lc) in
-    (lc_pp, pp_state_with_model local explanation model)
+    (lc_pp, state local explanation model)
 
   let resource local model re = 
     let explanation = explanation local (RE.free_vars re) in
     let re_pp = RE.pp (RE.subst explanation.substitution re) in
-    (re_pp, pp_state_with_model local explanation model)
+    (re_pp, state local explanation model)
 
   let resource_request local model re = 
     let explanation = explanation local (RER.free_vars re) in
     let re_pp = RER.pp (RER.subst explanation.substitution re) in
-    (re_pp, pp_state_with_model local explanation model)
+    (re_pp, state local explanation model)
 
   let resources local model (re1, re2) = 
     let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
     let explanation = explanation local relevant in
     let re1 = RE.pp (RE.subst explanation.substitution re1) in
     let re2 = RE.pp (RE.subst explanation.substitution re2) in
-    ((re1, re2), pp_state_with_model local explanation model)
+    ((re1, re2), state local explanation model)
 
 
   let illtyped_index_term local context it =

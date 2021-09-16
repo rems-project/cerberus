@@ -102,7 +102,7 @@ module Make (O : Output) = struct
       ] 
     in
     flow (break 1)
-      [!^"forall" ^^^ Sym.pp p.qpointer ^^ dot; c_app !^"Points" args]
+      [!^"each" ^^^ Sym.pp p.qpointer ^^ dot; c_app !^"Points" args]
 
 
   let pp_predicate (p : predicate) =
@@ -158,45 +158,55 @@ module Make (O : Output) = struct
     }
 
 
+  let subst_point substitution (p : point) = 
+    {
+      ct = p.ct;
+      pointer = IT.subst substitution p.pointer;
+      permission = IT.subst substitution p.permission;
+      value = O.subst substitution p.value;
+      init = O.subst substitution p.init;
+    }
 
-  let subst (substitution : IT.t Subst.t) resource =
+  let subst_qpoint substitution (qp : qpoint) = 
+    let qp = alpha_rename_qpoint 
+               (Sym.fresh_same qp.qpointer) qp in
+    {
+      ct = qp.ct;
+      qpointer = qp.qpointer;
+      permission = IT.subst substitution qp.permission;
+      value = O.subst substitution qp.value;
+      init = O.subst substitution qp.init;
+    }
+
+
+  let subst_predicate substitution (p : predicate) = 
+    {
+      name = p.name;
+      pointer = IT.subst substitution p.pointer;
+      permission = IT.subst substitution p.permission;
+      iargs = List.map (IT.subst substitution) p.iargs;
+      oargs = List.map (O.subst substitution) p.oargs;
+    }
+
+  let subst_qpredicate substitution (qp : qpredicate) =
+    let qp = alpha_rename_qpredicate 
+               (Sym.fresh_same qp.qpointer) qp in
+    {
+      name = qp.name;
+      qpointer = qp.qpointer;
+      permission = IT.subst substitution qp.permission;
+      iargs = List.map (IT.subst substitution) qp.iargs;
+      oargs = List.map (O.subst substitution) qp.oargs;
+    }
+
+
+let subst (substitution : IT.t Subst.t) resource =
     match resource with
-    | Point p ->
-       Point {
-           ct = p.ct;
-           pointer = IT.subst substitution p.pointer;
-           permission = IT.subst substitution p.permission;
-           value = O.subst substitution p.value;
-           init = O.subst substitution p.init;
-         }
-    | QPoint qp ->
-       let qp = alpha_rename_qpoint 
-                  (Sym.fresh_same qp.qpointer) qp in
-       QPoint {
-           ct = qp.ct;
-           qpointer = qp.qpointer;
-           permission = IT.subst substitution qp.permission;
-           value = O.subst substitution qp.value;
-           init = O.subst substitution qp.init;
-         }
-    | Predicate p -> 
-       Predicate {
-           name = p.name;
-           pointer = IT.subst substitution p.pointer;
-           permission = IT.subst substitution p.permission;
-           iargs = List.map (IT.subst substitution) p.iargs;
-           oargs = List.map (O.subst substitution) p.oargs;
-         }
-    | QPredicate qp ->
-       let qp = alpha_rename_qpredicate 
-                  (Sym.fresh_same qp.qpointer) qp in
-       QPredicate {
-           name = qp.name;
-           qpointer = qp.qpointer;
-           permission = IT.subst substitution qp.permission;
-           iargs = List.map (IT.subst substitution) qp.iargs;
-           oargs = List.map (O.subst substitution) qp.oargs;
-         }
+    | Point p -> Point (subst_point substitution p)
+    | QPoint qp -> QPoint (subst_qpoint substitution qp)
+    | Predicate p -> Predicate (subst_predicate substitution p)
+    | QPredicate qp -> QPredicate (subst_qpredicate substitution qp)
+
 
 
 
@@ -330,91 +340,19 @@ module RE = struct
        let bt = IT.bt it in
        (sym_ (s, bt), [(s, bt)], [LC.t_ (def_ s it)])
 
-  (* let make_array (x_s, x_bt) body =
-   *   let x_t = sym_ (x_s, x_bt) in
-   *   match body with
-   *   | IT (Array_op (Get (array, x')), _) when IT.equal x_t x' ->
-   *      (array, [], [])
-   *   | _ ->
-   *      let f_s, f_t = IT.fresh (BT.Array (x_bt, IT.bt body)) in
-   *      let lc = 
-   *        (LC.forall_ (x_s, x_bt) 
-   *           (Some (LC.T_Get (T_Term f_t, T_Term x_t)))
-   *           (eq_ (get_ f_t x_t, body)))
-   *      in
-   *      (f_t, [(f_s, IT.bt f_t)], [lc]) *)
-
-
-  (* let make_app (x_s, x_bt) body = 
-   *   let (array, l, c) = make_array (x_s, x_bt) body in
-   *   (get_ array (sym_ (x_s, x_bt)), l, c) *)
-
-
-  let normalise re = (re, [], []) (* function
-     * | Point p ->
-     *    let (pointer, l1, c1) = make_lit p.pointer in
-     *    let (permission, l2, c2) = make_lit p.permission in
-     *    let (value, l3, c3) = make_lit p.value in
-     *    let (init, l4, c4) = make_lit p.init in
-     *    let re = Point { ct = p.ct; pointer; permission; value; init } in
-     *    (re, l1 @ l2 @ l3 @ l4, c1 @ c2 @ c3 @ c4)
-     * | QPoint p ->
-     *    let qpointer = p.qpointer in
-     *    let (permission, l2, c2) = make_app (qpointer, Loc) p.permission in
-     *    let (value, l3, c3) = make_app (qpointer, Loc) p.value in
-     *    let (init, l4, c4) = make_app (qpointer, Loc) p.init in
-     *    let re = QPoint { ct = p.ct; qpointer; permission; value; init } in
-     *    (re, l2 @ l3 @ l4, c2 @ c3 @ c4)
-     * | Predicate p ->
-     *    let (pointer, l1, c1) = make_lit p.pointer in
-     *    let (permission, l2, c2) = make_lit p.permission in
-     *    let (iargs, l3, c3) = 
-     *      List.fold_right (fun iarg (iargs, l3, c3) ->
-     *          let (iarg, l3', c3') = make_lit iarg in
-     *          (iarg :: iargs, l3' @ l3, c3' @ c3)
-     *        ) p.iargs ([], [], [])
-     *    in
-     *    let (oargs, l4, c4) = 
-     *      List.fold_right (fun oarg (oargs, l4, c4) ->
-     *          let (oarg, l4', c4') = make_lit oarg in
-     *          (oarg :: oargs, l4' @ l4, c4' @ c4)
-     *        ) p.oargs ([], [], [])
-     *    in
-     *    let re = Predicate { name = p.name; pointer; permission; iargs; oargs } in
-     *    (re, l1 @ l2 @ l3 @ l4, c1 @ c2 @ c3 @ c4)
-     * | QPredicate p ->
-     *    let qpointer = p.qpointer in
-     *    let (permission, l2, c2) = make_app (qpointer, Loc) p.permission in
-     *    let (iargs, l3, c3) = 
-     *      List.fold_right (fun iarg (iargs, l3, c3) ->
-     *          let (iarg, l3', c3') = make_app (qpointer, Loc) iarg in
-     *          (iarg :: iargs, l3' @ l3, c3' @ c3)
-     *        ) p.iargs ([], [], [])
-     *    in
-     *    let (oargs, l4, c4) = 
-     *      List.fold_right (fun oarg (oargs, l4, c4) ->
-     *          let (oarg, l4', c4') = make_app (qpointer, Loc) oarg in
-     *          (oarg :: oargs, l4' @ l4, c4' @ c4)
-     *        ) p.oargs ([], [], [])
-     *    in
-     *    let re = QPredicate { name = p.name; qpointer; permission; iargs; oargs } in
-     *    (re, l2 @ l3 @ l4, c2 @ c3 @ c4) *)
-
 
 
   (* assumption: resource is owned *)
   let derived_constraint resource = 
     let open IT in
-    match resource with
-    | Point p -> 
-       LC.T (impl_ (gt_ (p.permission, q_ (0, 1)), 
-                    not_ (eq_ (null_, p.pointer))))
-    (* | QPoint p ->
-     *    LC.forall_ (p.qpointer, BT.Loc) None
-     *      (impl_ (gt_ (p.permission, q_ (0, 1)),
-     *              not_ (eq_ (null_, sym_ (p.qpointer, BT.Loc))))) *)
-    | _ ->
-       LC.T (bool_ true)
+    let lc = match resource with
+      | Point p -> 
+         impl_ (gt_ (p.permission, q_ (0, 1)), 
+                not_ (eq_ (null_, p.pointer)))
+      | _ ->
+         bool_ true
+    in
+    LC.t_ lc
   
   
   (* assumption: resource owned at the same time as resources' *)

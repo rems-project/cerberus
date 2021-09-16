@@ -19,14 +19,14 @@ let params = Z3.Params.mk_params context
 let () =
   Z3.set_global_param "smt.auto-config" "false";
   Z3.set_global_param "smt.mbqi" "true";
-  Z3.set_global_param "smt.ematching" "true";
-  Z3.set_global_param "smt.pull-nested-quantifiers" "true";
-  Z3.set_global_param "smt.macro_finder" "true";
+  (* Z3.set_global_param "smt.ematching" "true"; *)
+  (* Z3.set_global_param "smt.pull-nested-quantifiers" "true";
+   * Z3.set_global_param "smt.macro_finder" "true"; *)
   Z3.set_global_param "smt.arith.solver" "2";
   Z3.set_global_param "model.compact" "false";
   Z3.set_global_param "model.completion" "true";
   Z3.set_global_param "model_evaluator.completion" "true";
-  Z3.set_global_param "model_evaluator.array_as_stores" "true";
+  (* Z3.set_global_param "model_evaluator.array_as_stores" "true"; *)
 
 
 
@@ -39,6 +39,7 @@ module ITtbl = Hashtbl.Make(IndexTerms)
 
 module type S = sig
 
+  val sort : BT.t -> Z3.Sort.sort
   val provable : Z3.Solver.solver -> LC.t -> bool
   val get_model : Z3.Solver.solver -> Z3.Model.model
   val term : IT.t -> Z3.Expr.expr

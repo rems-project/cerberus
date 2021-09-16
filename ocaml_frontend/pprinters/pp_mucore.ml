@@ -134,6 +134,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Eproc _
     | M_Eccall _
     | M_Epredicate _
+    | M_Eqfacts _
     (* | M_Eunseq _ *)
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
@@ -670,6 +671,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_Epredicate (pack_unpack, id, pes) ->
               pp_keyword (match pack_unpack with Pack -> "pack"  | Unpack -> "unpack") ^^^
                 P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_asym pes)
+          | M_Eqfacts pe ->
+              pp_keyword "qfacts" ^^^ pp_asym pe
           (* | M_Eunseq [] ->
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] ->

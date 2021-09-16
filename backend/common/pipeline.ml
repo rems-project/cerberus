@@ -419,6 +419,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Epack (id, List.map untype_pexpr pes)
       | Eunpack (id, pes) ->
           Eunpack (id, List.map untype_pexpr pes)
+      | Eqfacts pe ->
+          Eqfacts (untype_pexpr pe)
     in Expr (annots, aux expr_) in
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->

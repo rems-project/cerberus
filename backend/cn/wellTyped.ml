@@ -25,10 +25,10 @@ module Make
   module WIT = struct
 
 
-    let check_bound loc kind s = 
-      let@ is_bound = bound s kind in
+    let check_bound_l loc s = 
+      let@ is_bound = bound_l s in
       if is_bound then return ()
-      else fail loc (TE.Unbound_name (Sym s))
+      else fail loc (TE.Unknown_variable s)
 
 
     let illtyped_index_term context it has expected =
@@ -73,7 +73,7 @@ module Make
     let get_struct_decl loc tag = 
       match SymMap.find_opt tag G.global.struct_decls with
       | Some decl -> return decl
-      | None -> fail loc (Missing_struct tag)
+      | None -> fail loc (Unknown_struct tag)
 
     open BaseTypes
     open LogicalSorts
@@ -88,7 +88,7 @@ module Make
         | Lit lit ->
            let@ (bt, lit) = match lit with
              | Sym s ->
-                let@ () = check_bound loc KLogical s in
+                let@ () = check_bound_l loc s in
                 let@ bt = get_l s in
                 return (bt, Sym s)
              | Z z -> 
@@ -586,7 +586,7 @@ module Make
     let get_predicate_def loc name = 
       match Global.get_predicate_def G.global name with
       | Some def -> return def
-      | None -> fail loc (Missing_predicate name)
+      | None -> fail loc (Unknown_predicate name)
       
     let ensure_same_argument_number loc input_output has ~expect =
       if has = expect then return () else 

@@ -11,6 +11,7 @@ module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 open Tools
+open Sctypes
 
 open IT
 open TypeErrors
@@ -90,20 +91,19 @@ module Make
 
 
   let check_computational_bound loc s = 
-    let@ is_bound = bound s KComputational in
-    if is_bound then return ()
-    else fail loc (Unbound_name (Sym s))
+    let@ is_bound = bound_a s in
+    if is_bound then return () else fail loc (Unknown_variable s)
 
   let get_struct_decl loc tag = 
     let open Global in
     match SymMap.find_opt tag G.global.struct_decls with
       | Some decl -> return decl
-      | None -> fail loc (Missing_struct tag)
+      | None -> fail loc (Unknown_struct tag)
 
   let get_member_type loc tag member layout = 
     match List.assoc_opt Id.equal member (Memory.member_types layout) with
     | Some membertyp -> return membertyp
-    | None -> fail loc (Missing_member (tag, member))
+    | None -> fail loc (Unknown_member (tag, member))
 
 
 
@@ -123,10 +123,6 @@ module Make
          let@ () = add_l lsym has_bt in
          begin match o_s with
          | Some s -> 
-            (* let@ is_bound = bound s KComputational in
-             * if is_bound 
-             * then fail loc (Name_bound_twice (Sym s))
-             * else *)
             let@ () = add_a s (has_bt, lsym) in
             return (sym_ (lsym, has_bt))
          | None -> 
@@ -191,7 +187,7 @@ module Make
 
     let unfold_array_request ct base_pointer_t length permission_t = 
       Resources.Requests.{
-          ct = Sctype ([], Array (ct, Some length));
+          ct = array_ct ct (Some length);
           pointer = base_pointer_t;
           value = BT.Array (Integer, of_sct ct);
           init = BT.Bool;
@@ -200,7 +196,7 @@ module Make
 
     let unfold_struct_request tag pointer_t permission_t = 
       Resources.Requests.{
-          ct = Sctype ([], Struct tag);
+          ct = struct_ct tag;
           pointer = pointer_t;
           value = Struct tag;
           init = BT.Bool;
@@ -341,7 +337,9 @@ module Make
                let permission' = sub_ (p'.permission, can_take) in
                Predicate {p' with permission = permission'}, (needed, oargs)
             | QPredicate p' 
-                 when String.equal requested.name p'.name && 
+                 when 
+
+                      String.equal requested.name p'.name && 
                       let subst = [(p'.qpointer, requested.pointer)] in
                       provable
                         (t_ (and_ (List.map2 (fun iarg iarg' -> 
@@ -351,6 +349,7 @@ module Make
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
+
                let permission' =
                  ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
                        sub_ (IT.subst subst p'.permission, can_take),
@@ -373,6 +372,7 @@ module Make
         in
         return r
       else 
+        let () = print_endline "\n\nHERE\n\n" in
         failS loc failure
 
     and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
@@ -457,7 +457,7 @@ module Make
         IT.fresh (Array (Integer, BT.of_sct ct)) in
       let folded_resource = 
         Point {
-             ct = Sctype ([], Array (ct, Some length));
+             ct = array_ct ct (Some length);
              pointer = base_pointer_t;
              value = folded_value_t;
              init = folded_init_t;
@@ -535,7 +535,7 @@ module Make
                  if i = size then return () else
                    let@ _ = 
                      point_request loc failure {
-                         ct = Sctype ([], Integer Char);
+                         ct = integer_ct Char;
                          pointer = addPointer_ (member_p, int_ i);
                          permission = permission_t;
                          value = BT.Integer;
@@ -550,7 +550,7 @@ module Make
       in
       let folded_resource = 
         Point {
-            ct = Sctype ([], Struct tag);
+            ct = struct_ct tag;
             pointer = pointer_t;
             value = IT.struct_ (tag, values); 
             init = and_ inits;
@@ -589,7 +589,7 @@ module Make
                    let padding_s, padding_t = IT.fresh BT.Integer in
                    let resource = 
                      Point {
-                         ct = Sctype ([], Integer Char);
+                         ct = integer_ct Char;
                          pointer = member_p;
                          permission = permission_t;
                          value = padding_t;
@@ -1250,7 +1250,7 @@ module Make
          let@ _member_bt = get_member_type loc tag member layout in
          let@ offset = match Memory.member_offset layout member with
            | Some offset -> return offset
-           | None -> fail loc (Missing_member (tag, member))
+           | None -> fail loc (Unknown_member (tag, member))
          in
          let vt = (Loc, IT.addPointer_ (it_of_arg arg, int_ offset)) in
          return (RT.concat (rt_of_vt loc vt) lrt)
@@ -1297,7 +1297,7 @@ module Make
            | CF.Core.Sym sym -> 
               let@ (_, t) = match Global.get_fun_decl G.global sym with
                 | Some t -> return t
-                | None -> fail loc (Missing_function sym)
+                | None -> fail loc (Unknown_function sym)
               in
               return t
          in
@@ -1605,7 +1605,7 @@ module Make
             in
             let rt = 
               RT.Computational ((ret, Loc), (loc, None),
-              LRT.Constraint (t_ (representable_ (Sctypes.pointer_sct act.ct, sym_ (ret, Loc))), (loc, None),
+              LRT.Constraint (t_ (representable_ (pointer_ct act.ct, sym_ (ret, Loc))), (loc, None),
               LRT.Constraint (t_ (alignedI_ ~align:(it_of_arg arg) ~t:(sym_ (ret, Loc))), (loc, None),
               LRT.Logical ((value_s, BT.of_sct act.ct), (loc, None), 
               LRT.Resource (resource, (loc, None), 
@@ -1732,7 +1732,7 @@ module Make
          let@ args = args_of_asyms asyms in
          let@ (_loc, ft) = match Global.get_fun_decl G.global afsym.sym with
            | Some (loc, ft) -> return (loc, ft)
-           | None -> fail loc (Missing_function afsym.sym)
+           | None -> fail loc (Unknown_function afsym.sym)
          in
          Spine.calltype_ft loc args ft
       | M_Eproc (fname, asyms) ->
@@ -1742,14 +1742,14 @@ module Make
            | CF.Core.Sym sym ->
               match Global.get_fun_decl G.global sym with
               | Some (loc, ft) -> return ft
-              | None -> fail loc (Missing_function sym)
+              | None -> fail loc (Unknown_function sym)
          in
          let@ args = args_of_asyms asyms in
          Spine.calltype_ft loc args decl_typ
       | M_Epredicate (pack_unpack, pname, asyms) ->
          let@ def = match Global.get_predicate_def G.global (Id.s pname) with
            | Some def -> return def
-           | None -> fail loc (Missing_predicate (Id.s pname))
+           | None -> fail loc (Unknown_predicate (Id.s pname))
          in
          let@ pointer_asym, iarg_asyms = match asyms with
            | pointer_asym :: iarg_asyms -> return (pointer_asym, iarg_asyms)
@@ -1798,7 +1798,7 @@ module Make
            in
            try_clauses [] instantiated_clauses
          in
-         match pack_unpack with
+         begin match pack_unpack with
          | Unpack ->
             let@ pred =
               RI.predicate_request loc (Unpack pname) ({
@@ -1830,6 +1830,29 @@ module Make
                LRT.I)))
             in
             return rt
+         end
+      | M_Eqfacts asym ->
+         let@ arg = arg_of_asym asym in
+         let@ all_constraints = all_constraints () in
+         let new_constraints = 
+           List.filter_map (function
+               | Forall ((s, bt), body) when BT.equal arg.bt bt ->
+                  let inst = IT.subst [(s, it_of_arg arg)] body in
+                  Some (LC.t_ inst, (loc, None))
+               | (Forall _ | T _) -> 
+                  None
+             ) all_constraints
+         in
+         let@ () = match new_constraints with
+           | [] -> fail loc (Generic !^"no matching all-quantified constraints found")
+           | _ -> return ()
+         in
+         let rt = 
+           RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
+           LRT.mConstraints new_constraints
+           LRT.I)
+         in
+         return rt
     in
     debug 3 (lazy (RT.pp result));
     return result
@@ -2104,7 +2127,7 @@ let check mu_file =
                  match piece.member_or_padding with
                  | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
                     if SymMap.mem sym2 global.struct_decls then return ()
-                    else fail Loc.unknown (Missing_struct sym2)
+                    else fail Loc.unknown (Unknown_struct sym2)
                  | _ -> return ()
                ) layout
            in
@@ -2197,9 +2220,8 @@ let check mu_file =
           { global with fun_decls = SymMap.add fsym (loc, ftyp) global.fun_decls }
         in
         let local = 
-          let voidstar = Sctypes.pointer_sct (Sctype ([], Void)) in
           let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
-          let lc2 = t_ (representable_ (voidstar, sym_ (fsym, Loc))) in
+          let lc2 = t_ (representable_ (pointer_ct void_ct, sym_ (fsym, Loc))) in
           L.add_l fsym Loc (L.add_cs [lc1; lc2] local)
         in
         return (global, local)
@@ -2225,14 +2247,14 @@ let check mu_file =
           | M_Fun (rbt, args, body) ->
              let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
                | Some t -> return t
-               | None -> fail Loc.unknown (Missing_function fsym)
+               | None -> fail Loc.unknown (Unknown_function fsym)
              in
              Typing.run (C.check_function loc
                 (Sym.pp_string fsym) args rbt body ftyp) local
           | M_Proc (loc, rbt, args, body, labels) ->
              let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
                | Some t -> return t
-               | None -> fail loc (Missing_function fsym)
+               | None -> fail loc (Unknown_function fsym)
              in
              Typing.run (C.check_procedure loc'
                fsym args rbt body ftyp labels) local

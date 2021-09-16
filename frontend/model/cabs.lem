@@ -311,8 +311,10 @@ and cabs_statement_ =
   (* GCC inline assembly extension *)
   | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
 
+  (* for CN *)
   | CabsSpack of Symbol.identifier * list cabs_expression
   | CabsSunpack of Symbol.identifier * list cabs_expression
+  | CabsSqfacts of cabs_expression
 
 and cabs_statement =
   | CabsStatement of Loc.t * Annot.attributes * cabs_statement_

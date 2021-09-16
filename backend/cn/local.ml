@@ -40,7 +40,8 @@ module type S = sig
   val all_logical : t -> (SymMap.key * LS.t) list
   val all_constraints : t -> LC.t list
   val all_resources : t -> RE.t list
-  val bound : Sym.t -> Kind.t -> t -> bool
+  val bound_a : Sym.t -> t -> bool
+  val bound_l : Sym.t -> t -> bool
   val get_a : Sym.t -> t -> BT.t * SymMap.key
   val get_l : Sym.t -> t -> LS.t
   val add_a : Sym.t -> BT.t * Sym.t -> t -> t
@@ -121,10 +122,10 @@ module Make (S : Solver.S) : S = struct
   (* let old local = local.old *)
 
 
-  let bound sym kind local = 
-    match kind with
-    | Kind.KComputational -> SymMap.mem sym local.computational
-    | Kind.KLogical -> SymMap.mem sym local.logical
+  let bound_a sym local = 
+    SymMap.mem sym local.computational
+  let bound_l sym local = 
+    SymMap.mem sym local.logical
 
 
 
@@ -140,11 +141,17 @@ module Make (S : Solver.S) : S = struct
   let add_l lname ls (local : t) = 
     {local with logical = SymMap.add lname ls local.logical}
 
-  let add_ls lvars local = 
-    List.fold_left (fun local (s,ls) -> add_l s ls local) local lvars
+  (* let add_ls lvars local = 
+   *   List.fold_left (fun local (s,ls) -> add_l s ls local) local lvars *)
 
   let add_c lc (local : t) = 
     let lcs = Simplify.simp_lc_flatten local.constraints lc in
+    (* let scs = 
+     *   List.concat_map (function
+     *       | LC.T lc -> S.constr (LC.T lc)
+     *       | LC.Forall _ -> []
+     *     ) lcs
+     * in *)
     let scs = List.concat_map S.constr lcs in
     let () = 
       Z3.Solver.add local.solver 
@@ -160,15 +167,13 @@ module Make (S : Solver.S) : S = struct
   let add_r owhere r (local : t) = 
     match RE.simp_or_empty local.constraints r with
     | Some r -> 
-       let (r, lvars, lcs1) = RE.normalise r in
-       let lcs2 = 
+       let lcs = 
          RE.derived_constraint r ::
            List.map (fun r' -> RE.derived_constraints r r') 
              (all_resources local)
        in
-       let local = add_ls lvars local in
        let local = {local with resources = r :: local.resources} in
-       let local = add_cs (lcs1 @ lcs2) local in
+       let local = add_cs lcs local in
        local
     | None ->
        local
@@ -178,20 +183,17 @@ module Make (S : Solver.S) : S = struct
 
   let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
         (local : t) (acc : 'acc) = 
-    let (resources, lvars, lcs), acc =
-      List.fold_right (fun re ((resources, lvars, lcs), acc) ->
+    let resources, acc =
+      List.fold_right (fun re (resources, acc) ->
           let (re, acc) = f re acc in
           match RE.simp_or_empty local.constraints re with
           | Some re -> 
-             let (re, lvars', lcs') = RE.normalise re in
-             ((re :: resources, lvars' @ lvars, lcs' @ lcs), acc)
+             (re :: resources, acc)
           | None -> 
-             ((resources, lvars, lcs), acc)
-        ) local.resources (([],[],[]), acc)
+             (resources, acc)
+        ) local.resources ([], acc)
     in
     let local = {local with resources} in
-    let local = add_ls lvars local in
-    let local = add_cs lcs local in
     (local, acc)
 
 

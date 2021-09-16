@@ -76,8 +76,9 @@ let keywords: (string * Tokens.token) list = [
     "__asm__", ASM;
     "__volatile__", ASM_VOLATILE;
     (* for CN *)
-    "pack"   , PACK;
+    "pack"    , PACK;
     "unpack"  , UNPACK;
+    "qfacts"  , QFACTS;
   ]
 
 let lexicon: (string, token) Hashtbl.t =

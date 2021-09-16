@@ -341,9 +341,9 @@ let pp =
     | Lit lit -> 
        begin match lit with
        | Sym sym -> Sym.pp sym
-       | Z i -> Z.pp i
-       | Q (i,i') -> c_app !^"frac" [!^(string_of_int i); !^(string_of_int i')]
-       | Pointer i -> Z.pp i
+       | Z i -> !^(Z.to_string i)
+       | Q (i,i') -> !^(Q.to_string (Q.make (Z.of_int i) (Z.of_int i')))
+       | Pointer i -> !^("0X" ^ (Z.format "016X" i))
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"
@@ -476,9 +476,9 @@ let pp =
     | Array_op array_op -> 
        begin match array_op with
        | Const (_, t) ->
-          c_app !^"const" [aux false t]
+          braces (aux false t)
        | Set (t1,t2,t3) ->
-          aux false t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket
+          mparens (aux true t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket)
        | Get (t, args) ->
           c_app (aux true t) [aux false args]
        | Def ((s, abt), body) ->
@@ -741,6 +741,14 @@ let is_lit = function
 
 let is_sym = function
   | IT (Lit (Sym sym), bt) -> Some (sym, bt)
+  | _ -> None
+
+let is_bool = function
+  | IT (Lit (Bool b), _) -> Some b
+  | _ -> None
+
+let is_q = function
+  | IT (Lit (Q (i, i')), _) -> Some (i, i')
   | _ -> None
 
 let is_app = function
@@ -1021,8 +1029,8 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
      and_ lcs
   | Pointer _ -> 
      let pointer_byte_size = size_of_pointer in
-     let pointer_size = Z.mult_big_int pointer_byte_size (Z.of_int 8) in
-     let max = Z.power_int_positive_big_int 2 pointer_size in
+     let pointer_size = pointer_byte_size * 8 in
+     let max = Z.pow (Z.of_int 2) pointer_size in
      and_ [lePointer_ (pointer_ Z.zero, about); 
            ltPointer_ (about, pointer_ max)]
   | Struct tag -> 
@@ -1046,10 +1054,10 @@ let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
 let good_pointer pointer_it pointee_sct = 
   match pointee_sct with
   | CT.Sctype (_, Void) ->
-     representable_ (CT.pointer_sct pointee_sct, pointer_it);
+     representable_ (CT.pointer_ct pointee_sct, pointer_it);
   | _ -> 
      and_ [
-         representable_ (CT.pointer_sct pointee_sct, pointer_it);
+         representable_ (CT.pointer_ct pointee_sct, pointer_it);
          aligned_ (pointer_it, pointee_sct);
        ]
 

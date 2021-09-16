@@ -152,8 +152,7 @@ module Terms = struct
        !^p ^^ dot ^^ dot ^^ !^a
     | Member (p, m) -> 
        pp true p ^^ dot ^^ Id.pp m
-    | Integer z -> 
-       Z.pp z
+    | Integer z -> !^(Z.to_string z)
     | Addition (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ plus ^^^ pp true t2)
     | Subtraction (t1, t2) -> 

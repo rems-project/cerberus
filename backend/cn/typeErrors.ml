@@ -5,6 +5,7 @@ module IT=IndexTerms
 module LS=LogicalSorts
 module CF=Cerb_frontend
 module Loc = Locations
+open Report
 
 type label_kind = 
   | Return
@@ -71,22 +72,20 @@ type sym_or_string =
   | String of string
 
 
-type state_pp = doc
+
 
 
 type type_error = 
-  | Unbound_name of sym_or_string
-  | Name_bound_twice of sym_or_string
-  | Missing_function of Sym.t
-  | Missing_struct of BT.tag
-  | Missing_predicate of string
-  | Missing_ctype_predicate of Sctypes.t
-  | Missing_member of BT.tag * BT.member
+  | Unknown_variable of Sym.t
+  | Unknown_function of Sym.t
+  | Unknown_struct of BT.tag
+  | Unknown_predicate of string
+  | Unknown_member of BT.tag * BT.member
 
-  | Missing_resource of {resource : doc; state : state_pp; situation : situation; oinfo : info option}
-  | Resource_mismatch of {has: doc; state : state_pp; expect: doc; situation : situation}
-  | Uninitialised_read of {is_member : BT.member option; state : state_pp}
-  | Unused_resource of {resource: doc; state : state_pp}
+  | Missing_resource of {resource : doc; state : state_report; situation : situation; oinfo : info option}
+  | Resource_mismatch of {has: doc; state : state_report; expect: doc; situation : situation}
+  | Uninitialised_read of {is_member : BT.member option; state : state_report}
+  | Unused_resource of {resource: doc; state : state_report}
 
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
@@ -96,18 +95,16 @@ type type_error =
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Write_value_unrepresentable of {state : state_pp}
-  | Unsat_constraint of {constr : doc; state : state_pp; info : info}
+  | Write_value_unrepresentable of {state : state_report}
+  | Unsat_constraint of {constr : doc; state : state_report; info : info}
   | Unconstrained_logical_variable of Sym.t * string option
   | Array_as_value of Sym.t * string option
   | Logical_variable_not_good_for_unification of Sym.t * string option
 
-  | Kind_mismatch of {has: Kind.t; expect: Kind.t}
-
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_pp
-  | Implementation_defined_behaviour of document * state_pp
+  | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_report
+  | Implementation_defined_behaviour of document * state_report
   | Unspecified of CF.Ctype.ctype
-  | StaticError of string * state_pp
+  | StaticError of string * state_report
 
   | Generic of Pp.document
 
@@ -118,164 +115,208 @@ type type_error =
 
 
 
-
-
-
-
+type report = { 
+    short : Pp.doc; 
+    descr : Pp.doc option;
+    state : state_report option;
+  }
 
 let pp_type_error te = 
-
-  let consider_state s = !^"Consider the state:" ^/^ s in
-
-
   match te with
-  | Unbound_name unbound ->
-     let name_pp = match unbound with
-       | Sym s -> Sym.pp s
-       | String str -> !^str
+  | Unknown_variable s -> 
+     let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
+     { short; descr = None; state = None }
+  | Unknown_function sym -> 
+     let short = !^"Unknown function" ^^^ squotes (Sym.pp sym) in
+     { short; descr = None; state = None }
+  | Unknown_struct tag -> 
+     let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
+     { short; descr = None; state = None }
+  | Unknown_predicate id -> 
+     let short = !^"Unknown predicate" ^^^ squotes (!^id) in
+     { short; descr = None; state = None }
+  | Unknown_member (tag, member) -> 
+     let short = !^"Unknown member" ^^^ Id.pp member in
+     let descr = 
+       !^"struct" ^^^ squotes (Sym.pp tag) ^^^ 
+         !^"does not have member" ^^^ 
+           Id.pp member
      in
-     (!^"Unbound name" ^^ colon ^^^ squotes (name_pp), [])
-  | Name_bound_twice name ->
-     let name_pp = match name with
-       | Sym s -> Sym.pp s
-       | String str -> !^str
-     in
-     (!^"Name bound twice" ^^ colon ^^^ squotes name_pp, [])
-  | Missing_function sym ->
-     (!^"function" ^^^ squotes (Sym.pp sym) ^^^ !^"not defined", [])
-  | Missing_struct tag ->
-     (!^"struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined", [])
-  | Missing_predicate id ->
-     (!^"predicate" ^^^ squotes (!^id) ^^^ !^"not defined", [])
-  | Missing_ctype_predicate ct ->
-     (!^"predicate for ctype" ^^^ squotes (Sctypes.pp ct) ^^^ !^"not defined", [])
-  | Missing_member (tag, member) ->
-     (!^"struct" ^^^ squotes (Sym.pp tag) ^^^ !^"does not have member" ^^^ 
-        Id.pp member, [])
-
+     { short; descr = Some descr; state = None }
   | Missing_resource {resource; state; situation; oinfo} ->
-     let msg = match oinfo with
-       | Some (spec_loc, odescr) ->
+     let short = !^"Missing resource" ^^^ for_situation situation in
+     let descr = match oinfo with
+       | Some (spec_loc, Some descr) ->
           let (head, _) = Locations.head_pos_of_location spec_loc in
-          !^"Missing resource from" ^^^ !^head ^^^
-            (match odescr with
-             | Some descr -> parens !^descr ^^ space
-             | None -> Pp.empty
-            ) ^^^ for_situation situation 
+          !^"Missing resource from" ^^^ !^head ^^^ parens !^descr
+       | Some (spec_loc, None) ->
+          let (head, _) = Locations.head_pos_of_location spec_loc in
+          !^"Missing resource from" ^^^ !^head
        | None ->
-          !^"Missing resource" ^^^ squotes (resource) ^^^ for_situation situation 
+          !^"Missing resource" ^^^ squotes (resource)
      in
-     (msg, [consider_state state] )
+     { short; descr = Some descr; state = Some state }
   | Resource_mismatch {has; state; expect; situation} ->
-     let msg = !^"Need a resource" ^^^ squotes expect ^^^ 
-                 !^"but have resource" ^^^ squotes has in
-     (msg, [consider_state state])
-
+     let short = !^"Resource mismatch" ^^^ for_situation situation in
+     let descr = 
+       !^"Need a resource" ^^^ squotes expect ^^^ 
+         !^"but have resource" ^^^ squotes has 
+     in
+     { short; descr = Some descr; state = Some state }
   | Uninitialised_read {is_member; state} ->
-     let msg = match is_member with
+     let short = match is_member with
        | None -> !^"Trying to read uninitialised data"
        | Some m -> !^"Trying to read uninitialised struct member" ^^^ squotes (Id.pp m)
      in
-     (msg, [consider_state state])
-  | Unused_resource {resource;state} ->
-     let msg = !^"Left-over unused resource" ^^^ squotes resource in
-     (msg, [consider_state state])
+     { short; descr = None; state = Some state }
+  | Unused_resource {resource; state} ->
+     let short = !^"Left-over unused resource" ^^^ squotes resource in
+     { short; descr = None; state = Some state}
   | Number_members {has;expect} ->
-     (!^"Wrong number of struct members:" ^^^
-        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
-          !^"has" ^^^ !^(string_of_int has), [])
-  | Number_arguments {has;expect} ->
-     (!^"Wrong number of arguments:" ^^^
-        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
-          !^"has" ^^^ !^(string_of_int has), [])
-  | Number_input_arguments {has;expect} ->
-     (!^"Wrong number of input arguments:" ^^^
-        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
-          !^"has" ^^^ !^(string_of_int has), [])
-  | Number_output_arguments {has;expect} ->
-     (!^"Wrong number of output arguments:" ^^^
-        !^"expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
-          !^"has" ^^^ !^(string_of_int has), [])
-  | Mismatch {has; expect} ->
-     (!^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
-        !^"but found value of type" ^^^ squotes (LS.pp has), [])
-  | Mismatch_lvar { has; expect; spec_info} ->
-     let (spec_loc, ospec_descr) = spec_info in
-     let (head, _) = Locations.head_pos_of_location spec_loc in
-     (!^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
-        !^"for logical variable from" ^^^ !^head ^^^
-          (match ospec_descr with
-           | Some descr -> parens !^descr ^^ space
-           | None -> Pp.empty
-          ) ^^
-        !^"but found value of type" ^^^ squotes (LS.pp has), [])
-
-  | Illtyped_it {context;it;has;expected} ->
-     (!^"Illtyped expression" ^^ squotes context ^^ dot ^^^ 
-        !^"Expected" ^^^ it ^^^ !^"to have" ^^^ squotes !^expected ^^^ !^"type" ^^^
-          !^"but has" ^^^ squotes (LS.pp has) ^^^ !^"type",  [])
-  | Polymorphic_it it ->
-     (!^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it), [])
-  | Write_value_unrepresentable {state : state_pp} ->
-     let msg = !^"Write value unrepresentable" in
-     (msg, [consider_state state])
-  | Unsat_constraint {constr; state; info} ->
-     let (spec_loc, odescr) = info in
-     let (head, _) = Locations.head_pos_of_location spec_loc in
-     let msg = match odescr with
-       | None -> !^"Unsatisfied constraint" ^^^ parens (!^head)
-       | Some descr -> !^"Unsatisfied constraint" ^^^ !^descr ^^^ parens (!^head)
+     let short = !^"Wrong number of struct members" in
+     let descr = 
+       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+         !^"has" ^^^ !^(string_of_int has)
      in
-     (msg, [consider_state state])
+     { short; descr = Some descr; state = None}
+  | Number_arguments {has;expect} ->
+     let short = !^"Wrong number of arguments" in
+     let descr = 
+       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+         !^"has" ^^^ !^(string_of_int has)
+     in
+     { short; descr = Some descr; state = None }
+  | Number_input_arguments {has;expect} ->
+     let short = !^"Wrong number of input arguments" in
+     let descr = 
+       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+         !^"has" ^^^ !^(string_of_int has)
+     in
+     { short; descr = Some descr; state = None }
+  | Number_output_arguments {has;expect} ->
+     let short = !^"Wrong number of output arguments" in
+     let descr = 
+       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+         !^"has" ^^^ !^(string_of_int has)
+     in
+     { short; descr = Some descr; state = None }
+  | Mismatch {has; expect} ->
+     let short = !^"Type error" in
+     let descr =
+       !^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
+         !^"but found value of type" ^^^ squotes (LS.pp has)
+     in
+     { short; descr = Some descr; state = None }
+  | Mismatch_lvar { has; expect; spec_info} ->
+     let short = !^"Type error" in
+     let descr = 
+       let (spec_loc, ospec_descr) = spec_info in
+       let (head, _) = Locations.head_pos_of_location spec_loc in
+       !^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
+         !^"for logical variable from" ^^^ !^head ^^^
+           (match ospec_descr with
+            | Some descr -> parens !^descr ^^ space
+            | None -> Pp.empty
+           ) ^^
+             !^"but found value of type" ^^^ squotes (LS.pp has)
+     in
+     { short; descr = Some descr; state = None }
+  | Illtyped_it {context;it;has;expected} ->
+     let short = !^"Type error" in
+     let descr = 
+       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^ 
+         !^"Expected" ^^^ it ^^^ !^"to have" ^^^ squotes !^expected ^^^ !^"type" ^^^
+           !^"but has" ^^^ squotes (LS.pp has) ^^^ !^"type"
+     in
+     { short; descr = Some descr; state = None }
+  | Polymorphic_it it ->
+     let short = !^"Type inference failed" in
+     let descr = !^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it) in
+     { short; descr = Some descr; state = None }
+  | Write_value_unrepresentable {state : state_report} ->
+     let short = !^"Write value unrepresentable" in
+     { short; descr = None; state = Some state }
+  | Unsat_constraint {constr; state; info} ->
+     let short = !^"Unsatisfied constraint" in
+     let descr = 
+       let (spec_loc, odescr) = info in
+       let (head, _) = Locations.head_pos_of_location spec_loc in
+       match odescr with
+       | None -> !^"Constraint from " ^^^ parens (!^head)
+       | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
+     in
+     { short; descr = Some descr; state = Some state }                                  
   | Unconstrained_logical_variable (name, odescr) ->
-     begin match odescr with
-     | Some descr ->
-        (!^"Unconstrained logical variable" ^^^ squotes (Sym.pp name) ^^^ parens !^descr, [])
-     | None ->
-        (!^"Unconstrained logical variable" ^^^ squotes (Sym.pp name), [])
-     end
+     let short = !^"Problematic specification" in
+     let descr = match odescr with
+       | Some descr ->
+          !^"Unconstrained logical variable" ^^^ 
+            squotes (Sym.pp name) ^^^ parens !^descr
+       | None ->
+          !^"Unconstrained logical variable" ^^^ 
+            squotes (Sym.pp name)
+     in
+     { short; descr = Some descr; state = None }
   | Array_as_value (name, odescr) ->
-     begin match odescr with
-     | Some descr ->
-        (!^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^ !^"as value" ^^^ parens !^descr, [])
-     | None ->
-        (!^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^ !^"as value", [])
-     end
+     let short = !^"Problematic specification" in
+     let descr = match odescr with
+       | Some descr ->
+          !^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^ 
+            !^"as value" ^^^ parens !^descr
+       | None ->
+          !^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^ 
+            !^"as value"
+     in
+     { short; descr = Some descr; state = None }
   | Logical_variable_not_good_for_unification (name, odescr) ->
-     begin match odescr with
-     | Some descr ->
-        (!^"Logical variable not soluble by unification" ^^^ squotes (Sym.pp name) ^^^ 
-           parens (!^descr), [])
-     | None ->
-        (!^"Logical variable not soluble by unification" ^^^ squotes (Sym.pp name), [])
-     end
-  | Kind_mismatch {has; expect} ->
-     (!^"Expected" ^^^ squotes (Kind.pp expect) ^^^ 
-        !^"but found" ^^^ squotes (Kind.pp has), [])
-
+     let short = !^"Problematic specification" in
+     let descr = match odescr with
+       | Some descr ->
+          !^"Logical variable not soluble by unification" ^^^ 
+            squotes (Sym.pp name) ^^^ parens (!^descr)
+       | None ->
+          !^"Logical variable not soluble by unification" ^^^ 
+            squotes (Sym.pp name)
+     in
+     { short; descr = Some descr; state = None }
   | Undefined_behaviour (undef, state) -> 
-     let ub = CF.Undefined.pretty_string_of_undefined_behaviour undef in
-     (!^"Undefined behaviour", [!^ub; consider_state state])
+     let short = !^"Undefined behaviour" in
+     let descr = !^(CF.Undefined.pretty_string_of_undefined_behaviour undef) in
+     { short; descr = Some descr; state = Some state }
   | Implementation_defined_behaviour (impl, state) -> 
-     (!^"Implementation defined behaviour:" ^^^ impl, [consider_state state])
-  | Unspecified _ctype ->
-     (!^"Unspecified value", [])
+     let short = !^"Implementation defined behaviour" in
+     let descr = impl in
+     { short; descr = Some descr; state = Some state }
+  | Unspecified ctype ->
+     let short = !^"Unspecified value of C-type" ^^^ CF.Pp_core_ctype.pp_ctype ctype in
+     { short; descr = None; state = None }
   | StaticError (err, state) ->
-     (!^("Static error: " ^ err), [consider_state state])
-
+     let short = !^"Static error" in
+     let descr = !^err in
+     { short; descr = Some descr; state = Some state }
   | Generic err ->
-     (err, [])
+     let short = err in
+     { short; descr = None; state = None }
 
 
 type t = type_error
 
 
+let state_error_file = "state.html"
+
 
 (* stealing some logic from pp_errors *)
 let report (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
-  let (msg, extras) = pp_type_error err in
-  let extras = match ostacktrace with
-    | Some stacktrace -> extras @ [Pp.item "stacktrace" (Pp.string stacktrace)]
-    | None -> extras
+  let report = pp_type_error err in
+  let consider = match report.state with
+    | Some state -> 
+       let channel = open_out state_error_file in
+       let () = Printf.fprintf channel "%s" (Report.print_report state) in
+       let () = close_out channel in
+       Some (!^"Consider state in" ^^^ !^state_error_file)
+    | None -> 
+       None
   in
-  Pp.error loc msg extras
+  Pp.error loc report.short 
+    ((Option.to_list report.descr) @
+       (Option.to_list consider))

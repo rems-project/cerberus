@@ -920,6 +920,8 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
      return `OK
   | Eunpack _ ->
      return `OK
+  | Eqfacts _ ->
+     return `OK
 
 let rec collect_saves (Expr (_, e_)) =
   let open GraphM in
@@ -959,6 +961,8 @@ let rec collect_saves (Expr (_, e_)) =
   | Epack _ ->
     return ()
   | Eunpack _ ->
+    return ()
+  | Eqfacts _ ->
     return ()
 
 let mk_cfg_pe pe =

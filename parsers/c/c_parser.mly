@@ -74,7 +74,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
   STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
-  THREAD_LOCAL (* FOR CN *) PACK UNPACK
+  THREAD_LOCAL (* FOR CN *) PACK UNPACK QFACTS
 
 (* §6.4.2 Identifiers *)
 %token<string> NAME (* NAME is either an variable identifier or a type name *)
@@ -241,7 +241,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 %type<Cabs.cabs_statement>
   statement labeled_statement compound_statement expression_statement
   selection_statement iteration_statement jump_statement 
-  pack_statement unpack_statement
+  pack_statement unpack_statement qfacts_statement 
 
 %type<Cabs.cabs_statement list>
   block_item_list
@@ -1246,6 +1246,8 @@ statement:
     { stmt }
 | stmt= unpack_statement
     { stmt }
+| stmt= qfacts_statement
+    { stmt }
 ;
 
 (* §6.8.1 Labeled statements *)
@@ -1452,11 +1454,14 @@ asm_statement:
 
 
 pack_statement:
-  | PACK name= general_identifier LPAREN args= argument_expression_list RPAREN
+  | PACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSpack (name, args)) }
 unpack_statement:
-  | UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN
+  | UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSunpack (name, args)) }
+qfacts_statement:
+  | QFACTS arg= expression SEMICOLON
+    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSqfacts arg) }
 
 (* §6.9 External definitions *)
 external_declaration_list: (* NOTE: the list is in reverse *)

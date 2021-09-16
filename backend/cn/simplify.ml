@@ -107,7 +107,7 @@ let rec simp (lcs : LC.t list) term =
        let b = aux b in
        begin match a, b with
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
-          IT (Lit (Z (Z.add_big_int i1 i2)), bt)
+          IT (Lit (Z (Z.add i1 i2)), bt)
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
           simp_q (i1 * j2 + i2 * j1, j1 * j2)
        | _, IT (Lit (Q (0, _)), _) -> 
@@ -124,7 +124,7 @@ let rec simp (lcs : LC.t list) term =
        | _, _, BT.Real when IT.equal a b ->
           q_ (0, 1)
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _), _ ->
-          IT (Lit (Z (Z.sub_big_int i1 i2)), bt)
+          IT (Lit (Z (Z.sub i1 i2)), bt)
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _), _ ->
           simp_q (i1 * j2 - i2 * j1, j1 * j2)
        | _, IT (Lit (Q (0, _)), _), _ -> 
@@ -250,7 +250,7 @@ let rec simp (lcs : LC.t list) term =
       let b = aux b in
       begin match a, b with
       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-         IT (Lit (Bool (Z.lt_big_int z1 z2)), bt)
+         IT (Lit (Bool (Z.lt z1 z2)), bt)
       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
          IT (Lit (Bool ((i1*j2) < (i2*j1))), bt)
       | _, _ ->
@@ -261,16 +261,16 @@ let rec simp (lcs : LC.t list) term =
       let b = aux b in
        match a, b with
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-          IT (Lit (Bool (Z.le_big_int z1 z2)), bt)
+          IT (Lit (Bool (Z.leq z1 z2)), bt)
        | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
           IT (Lit (Bool ((i1*j2) <= (i2*j1))), bt)
        | _, _ when equal a b ->
           bool_ true
        | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
          IT (Lit (Z z2), _) when
-              Z.gt_big_int z1 Z.zero &&
-              Z.gt_big_int z2 Z.zero &&
-              Z.le_big_int z1 (Z.add_big_int z2 (Z.of_int 1)) ->
+              Z.gt z1 Z.zero &&
+              Z.gt z2 Z.zero &&
+              Z.leq z1 (Z.add z2 (Z.of_int 1)) ->
           bool_ true
        | _, _ ->
           IT (Cmp_op (LE (a, b)), bt)
@@ -315,7 +315,7 @@ let rec simp (lcs : LC.t list) term =
           a
        | IT (Pointer_op (AddPointer (aa, IT (Lit (Z i), _))), _), 
          IT (Lit (Pointer j), _) ->
-          IT (Pointer_op (AddPointer (aa, IT (Lit (Pointer (Z.add_big_int i j)), Integer))), bt)
+          IT (Pointer_op (AddPointer (aa, IT (Lit (Pointer (Z.add i j)), Integer))), bt)
        | _ ->
           IT (Pointer_op (AddPointer (a, b)), bt)
        end
@@ -341,7 +341,7 @@ let rec simp (lcs : LC.t list) term =
        | IT (Pointer_op (AddPointer (base1, IT (Lit (Z offset1), _))), _),  
          IT (Pointer_op (AddPointer (base2, IT (Lit (Z offset2), _))), _) when
               equal base1 base2 ->
-          if Z.le_big_int offset1 offset2 then 
+          if Z.leq offset1 offset2 then 
             IT (Lit (Bool true), bt)
           else
             IT (Lit (Bool false), bt)

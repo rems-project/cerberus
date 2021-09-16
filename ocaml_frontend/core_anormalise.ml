@@ -808,6 +808,9 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | Eunpack(id, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Epredicate(Unpack, id, pes))))
+  | Eqfacts pe ->
+     n_pexpr_in_expr_name pe (fun pe ->
+     k (wrap (M_Eqfacts pe)))
 
 
 let rec normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =

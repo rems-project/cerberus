@@ -74,7 +74,7 @@ start:
 
 integer:
   | MINUS z=Z
-      { Z.minus_big_int z }
+      { Z.neg z }
   | z=Z
       { z }
   | LPAREN z=integer RPAREN

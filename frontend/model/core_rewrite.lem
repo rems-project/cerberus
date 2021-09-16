@@ -231,6 +231,9 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Eunpack _ _ ->
         (* unchanged *)
         expr
+    | Eqfacts _ ->
+        (* unchanged *)
+        expr
   end
 
 
@@ -357,6 +360,9 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
         (* unchanged *)
         expr
     | Eunpack _ _ ->
+        (* unchanged *)
+        expr
+    | Eqfacts _ ->
         (* unchanged *)
         expr
   end
@@ -581,6 +587,8 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         Left expr
     | Eunpack _ _ ->
         Left expr
+    | Eqfacts _ ->
+        Left expr
   end
 
 let remove_dead expr =
@@ -657,6 +665,8 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
     | Epack _ _ ->
         expr
     | Eunpack _ _ ->
+        expr
+    | Eqfacts _ ->
         expr
   end
 
@@ -840,6 +850,8 @@ let rec remove_conv_int (Expr annot expr_) =
         expr_
     | Eunpack _ _ ->
         expr_
+    | Eqfacts _ ->
+        expr_
   end
 
 and remove_conv_int_action_ act_ =
@@ -966,6 +978,8 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
     | Epack _ _ ->
         expr_
     | Eunpack _ _ ->
+        expr_
+    | Eqfacts _ ->
         expr_
   end
 
@@ -1261,6 +1275,8 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         expr
     | Eunpack _ _ ->
         expr
+    | Eqfacts _ ->
+        expr
   end
 
 
@@ -1454,6 +1470,8 @@ let rec simpl_case (Expr annot expr_ as expr) =
     | Epack _ _ ->
         expr
     | Eunpack _ _ ->
+        expr
+    | Eqfacts _ ->
         expr
   end
 

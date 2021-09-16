@@ -23,7 +23,7 @@ let size_of_integer_type it =
   try
     let impl = CF.Ocaml_implementation.get () in
     match impl.sizeof_ity it with
-    | Some n -> Z.of_int n
+    | Some n -> n
     | None -> Debug_ocaml.error "sizeof_pointer returned None"
   with
   | exn -> report "size_of_integer_type" exn
@@ -36,7 +36,7 @@ let align_of_integer_type it =
   try
     let impl = CF.Ocaml_implementation.get () in
     match impl.alignof_ity it with
-    | Some n -> Z.of_int n
+    | Some n -> n
     | None -> Debug_ocaml.error "alignof_pointer returned None"
   with
   | exn -> report "align_of_integer_type" exn
@@ -61,7 +61,7 @@ let size_of_pointer =
   try 
     let impl = CF.Ocaml_implementation.get () in
     match impl.sizeof_pointer with
-    | Some n -> Z.of_int n
+    | Some n -> n
     | None -> Debug_ocaml.error "sizeof_pointer returned None"
   with
   | exn -> report "size_of_pointer" exn
@@ -71,7 +71,7 @@ let align_of_pointer =
   try
     let impl = CF.Ocaml_implementation.get () in
     match impl.alignof_pointer with
-    | Some n -> Z.of_int n
+    | Some n -> n
     | None -> Debug_ocaml.error "alignof_pointer returned None"
   with
   | exn -> report "align_of_pointer" exn
@@ -85,7 +85,7 @@ let size_of_ctype (ct : Sctypes.t) =
   | _ -> 
      try
        let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
-       Z.int_of_big_int (integer_value_to_num s)
+       Z.to_int (integer_value_to_num s)
      with
      | exn -> report "size_of_ctype" exn
 
@@ -101,7 +101,7 @@ let align_of_ctype (ct : Sctypes.t) =
   | _ -> 
      try
        let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in
-       Z.int_of_big_int (integer_value_to_num s)
+       Z.to_int (integer_value_to_num s)
      with
      | exn -> report "align_of_ctype" exn
 

@@ -69,6 +69,8 @@ let rec sequentialise_expr (Expr annot expr_) =
         expr_
     | Eunpack _ _ ->
         expr_
+    | Eqfacts _ ->
+        expr_
   end
 
 

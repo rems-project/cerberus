@@ -204,6 +204,7 @@ type statement_ 'a [name="s*"] =
 (* for CN *)
   | AilSpack of Symbol.identifier * list (expression 'a)
   | AilSunpack of Symbol.identifier * list (expression 'a)
+  | AilSqfacts of expression 'a
 and statement 'a [name="s*"] =
   | AnnotatedStatement of Loc.t * Annot.attributes * statement_ 'a
 
