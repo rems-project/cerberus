@@ -180,7 +180,7 @@ module Make
 
     let missing_resource_failure situation (request, oinfo) = 
       fun local ->
-      let model = S.get_model (L.solver local) in
+      let model = S.model (L.solver local) in
       let (resource, state) = E.resource_request local model request in
       Missing_resource {resource; state; situation; oinfo}
     
@@ -828,7 +828,7 @@ module Make
 
     let resource_mismatch_failure situation resource resource' =
       fun local ->
-      let model = S.get_model (L.solver local) in
+      let model = S.model (L.solver local) in
       let ((expect,has), state) = 
         E.resources local model (resource, resource') in
       (Resource_mismatch {expect; has; state; situation})
@@ -932,7 +932,7 @@ module Make
                failS loc (fun local ->
                    let (constr,state) = 
                      E.unsatisfied_constraint local 
-                       (L.get_model (L.solver local)) c
+                       (L.model (L.solver local)) c
                    in
                    (Unsat_constraint {constr; state; info})
                  )
@@ -1467,7 +1467,7 @@ module Make
     let failure resource = 
       failS loc (fun local ->
           let (resource, state) = 
-            E.resource local (S.get_model (L.solver local)) resource in
+            E.resource local (S.model (L.solver local)) resource in
           (Unused_resource {resource; state})
         )
     in
@@ -1649,7 +1649,7 @@ module Make
                 failS loc (fun local ->
                     let (constr,state) = 
                       E.unsatisfied_constraint local 
-                        (S.get_model (L.solver local)) (t_ in_range_lc)
+                        (S.model (L.solver local)) (t_ in_range_lc)
                     in
                     (Write_value_unrepresentable {state})
                   )
@@ -1696,7 +1696,7 @@ module Make
                 failS loc (fun local ->
                     let (_, state) = 
                       E.unsatisfied_constraint local 
-                        (S.get_model (L.solver local)) (t_ point.init) in
+                        (S.model (L.solver local)) (t_ point.init) in
                     (Uninitialised_read {is_member = None; state})
                   )
             in

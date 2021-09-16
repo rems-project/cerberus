@@ -76,17 +76,10 @@ and 'bt set_op =
   | SetDifference of 'bt term * 'bt term
   | Subset of 'bt term * 'bt term
 
-
 and 'bt ct_pred = 
   | Representable of CT.t * 'bt term
   | AlignedI of {t : 'bt term; align : 'bt term}
   | Aligned of 'bt term * CT.t
-
-and 'bt option_op = 
-  | Something of 'bt term
-  | Nothing of BT.t
-  | Is_some of 'bt term
-  | Value_of_some of 'bt term
 
 and 'bt array_op = 
   | Const of BT.t * 'bt term
@@ -105,7 +98,6 @@ and 'bt term_ =
   | List_op of 'bt list_op
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
-  | Option_op of 'bt option_op
   | Array_op of 'bt array_op
 
 and 'bt term =
@@ -290,17 +282,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | AlignedI _, _ -> false
      | Representable _, _ -> false
      end
-  | Option_op option_op, Option_op option_op' -> 
-     begin match option_op, option_op' with
-     | Something it, Something it' -> equal it it'
-     | Nothing bt, Nothing bt' -> BT.equal bt bt'
-     | Is_some it, Is_some it' -> equal it it'
-     | Value_of_some it, Value_of_some it' -> equal it it'
-     | Something _, _ -> false
-     | Nothing _, _ -> false
-     | Is_some _, _ -> false
-     | Value_of_some _, _ ->false
-     end
   | Array_op array_op, Array_op array_op' -> 
      begin match array_op, array_op' with
      | Const (bt, t), Const (bt', t') ->
@@ -326,7 +307,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | List_op _, _ -> false
   | Set_op _, _ -> false
   | CT_pred _, _ -> false
-  | Option_op _, _ -> false
   | Array_op _, _ -> false
 
 
@@ -462,17 +442,6 @@ let pp =
        | Subset (t1, t2) ->
           c_app !^"subset" [aux false t1; aux false t2]
        end
-    | Option_op option_op -> 
-       begin match option_op with
-       | Something it -> 
-          c_app !^"something" [aux atomic it]
-       | Nothing bt ->
-          c_app !^"nothing" [BT.pp bt]
-       | Is_some it ->
-          c_app !^"is_some" [aux false it]
-       | Value_of_some it ->
-          c_app !^"value_of_some" [aux false it]
-       end
     | Array_op array_op -> 
        begin match array_op with
        | Const (_, t) ->
@@ -570,13 +539,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | SetIntersection ts -> free_vars_list (List1.to_list ts)
      | SetDifference (t1, t2) -> free_vars_list [t1;t2]
      | Subset (t1, t2) -> free_vars_list [t1;t2]
-     end
-  | Option_op option_op ->
-     begin match option_op with
-     | Something it -> free_vars it
-     | Nothing _ -> SymSet.empty
-     | Is_some it -> free_vars it
-     | Value_of_some it -> free_vars it
      end
   | Array_op array_op -> 
      begin match array_op with
@@ -705,14 +667,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
      in
      IT (Set_op set_op, bt)
-  | Option_op option_op -> 
-    let option_op = match option_op with
-      | Something it -> Something (subst su it)
-      | Nothing bt' -> Nothing bt'
-      | Is_some it -> Is_some (subst su it)
-      | Value_of_some it -> Value_of_some (subst su it)
-    in
-    IT (Option_op option_op, bt)
   | Array_op array_op -> 
      let array_op = match array_op with
        | Const (bt, t) -> 
@@ -915,19 +869,6 @@ let aligned_ (t, it) =
 let alignedI_ ~t ~align = 
   IT (CT_pred (AlignedI {t; align}), BT.Bool)
 
-(* point_value *)
-let something_ v = 
-  IT (Option_op (Something v), BT.Option (bt v))
-let nothing_ bt = 
-  IT (Option_op (Nothing bt), BT.Option bt)
-let is_some_ v = 
-  IT (Option_op (Is_some v), BT.Bool)
-let value_of_some_ v = 
-  match bt v with
-  | BT.Option bt -> 
-     IT (Option_op (Value_of_some v), bt)
-  | _ -> Debug_ocaml.error "illtyped index term"
-
 let const_ index_bt t = 
   IT (Array_op (Const (index_bt, t)), BT.Array (index_bt, bt t))
 let set_ t1 (t2, t3) = 
@@ -994,8 +935,7 @@ let hash (IT (it, _bt)) =
   | CT_pred _ -> 7
   | List_op _ -> 8
   | Set_op _ -> 9
-  | Option_op _ -> 10
-  | Array_op _ -> 11
+  | Array_op _ -> 10
   | Lit lit ->
      begin match lit with
      | Z z -> 20

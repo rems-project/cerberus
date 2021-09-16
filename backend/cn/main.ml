@@ -179,6 +179,50 @@ let z3_log_file_path =
 
 
 
+(* let test () = 
+ *   let context = Solver.context in
+ *   let solver = Z3.Solver.mk_simple_solver context in
+ *   let result = Z3.Solver.check solver [] in
+ *   assert (result = Z3.Solver.SATISFIABLE);
+ *   let model = Option.get (Z3.Solver.get_model solver) in
+ * 
+ * 
+ *   let int_sort = (Z3.Arithmetic.Integer.mk_sort context) in
+ *   let x_s = Z3.Symbol.mk_string context "variable_x" in
+ *   let x_const = Z3.Expr.mk_const context x_s int_sort in
+ *   let lambda = 
+ *     Z3.Quantifier.mk_lambda_const context
+ *       [x_const] 
+ *       (Z3.Arithmetic.mk_add context
+ *          [Z3.Arithmetic.Integer.mk_numeral_i context 123;
+ *           x_const]
+ *       )
+ *   in
+ *   let lambda_expr = Z3.Quantifier.expr_of_quantifier lambda in
+ * 
+ *   (\* let f = Z3.FuncDecl.mk_func_decl_s context "f" [int_sort] int_sort in
+ *    * 
+ *    * let q = 
+ *    *   Z3.Quantifier.mk_forall_const context 
+ *    *     [Z3.Expr.mk_const context x_s int_sort] 
+ *    *     (Z3.Boolean.mk_eq context 
+ *    *        (Z3.Expr.mk_app context f [x])
+ *    *        (Z3.Expr.mk_app context f [expr])
+ *    *     )
+ *    *     None [] [] None None 
+ *    * in
+ *    * let _q_expr = Z3.Quantifier.expr_of_quantifier q in *\)
+ * 
+ * 
+ *   begin match Z3.Model.evaluate model lambda_expr true with
+ *   | Some value ->
+ *      print_endline ("\n\n\n" ^ Z3.Expr.to_string value ^ "\n\n\n")
+ *   | None ->
+ *      Debug_ocaml.error "no model"
+ *   end *)
+
+
+
 let main filename mjsonfile debug_level print_level =
   Debug_ocaml.debug_level := debug_level;
   Pp.print_level := print_level;

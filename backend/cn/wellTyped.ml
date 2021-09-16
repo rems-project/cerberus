@@ -64,12 +64,6 @@ module Make
       | Array (abt, rbt) -> return (abt, rbt)
       | _ -> failS loc (illtyped_index_term context it (IT.bt it) "array type")
 
-    let ensure_option_type loc context it = 
-      let open BT in
-      match IT.bt it with
-      | Option bt -> return bt
-      | _ -> failS loc (illtyped_index_term context it (IT.bt it) "option type")
-
     let get_struct_decl loc tag = 
       match SymMap.find_opt tag G.global.struct_decls with
       | Some decl -> return decl
@@ -375,24 +369,6 @@ module Make
                 return (BT.Bool, Subset (t,t'))
            in
            return (IT (Set_op set_op, bt))
-        | Option_op option_op ->
-           let@ (bt, option_op) = match option_op with
-             | Something t ->
-                let@ t = infer loc ~context t in
-                let@ bt = ensure_option_type loc context t in
-                return (BT.Option bt, Something t)
-             | Nothing bt ->
-                return (BT.Option bt, Nothing bt)
-             | Is_some t ->
-                let@ t = infer loc ~context t in
-                let@ bt = ensure_option_type loc context t in
-                return (BT.Bool, Is_some t)
-             | Value_of_some t ->
-                let@ t = infer loc ~context t in
-                let@ bt = ensure_option_type loc context t in
-                return (bt, Value_of_some t)
-           in
-           return (IT (Option_op option_op, bt))
         | Array_op array_op -> 
            let@ (bt, array_op) = match array_op with
              | Const (index_bt, t) ->
@@ -546,13 +522,6 @@ module Make
          | SetDifference (t, t')
          | Subset (t, t') ->
             ListM.iterM aux [t; t']
-         end
-      | Option_op option_op ->
-         begin match option_op with
-         | Something t -> aux t
-         | Nothing bt -> return ()
-         | Is_some t -> aux t
-         | Value_of_some t -> aux t
          end
       | Array_op array_op -> 
          begin match array_op with

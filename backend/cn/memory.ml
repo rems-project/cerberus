@@ -131,28 +131,40 @@ type struct_decls = struct_layout SymMap.t
 
 
 
-let members = 
-  List.filter_map (fun {member_or_padding; offset; size} ->
-      Option.bind member_or_padding (fun (member, sctype) ->
-          Some {offset; size; member = (member, sctype)}
-        )
+
+let members =
+  List.filter_map (fun {member_or_padding; _} ->
+      Option.map fst member_or_padding
     )
+
 
 let member_types =
   List.filter_map (fun {member_or_padding; _} ->
-      Option.bind member_or_padding (fun (member, sctype) ->
-          Some (member, sctype)
-        )
+      member_or_padding
     )
+
+let member_number layout member =
+  let rec aux i layout = 
+    match layout with
+    | [] -> None
+    | sp :: layout ->
+       begin match sp.member_or_padding with
+       | Some (member', _) when Id.equal member member' -> Some i
+       | Some (_, _) -> aux (i + 1) layout
+       | None -> aux i layout
+       end 
+  in
+  aux 0 layout 
+
 
 
 
 
 let member_offset (layout : struct_layout) member = 
-  let members = members layout in
-  Option.map 
-    (fun struct_member -> struct_member.offset)
-    (List.find_opt (fun piece -> Id.equal (fst piece.member) member) members)
-
+  List.find_map (fun sp -> 
+      match sp.member_or_padding with
+      | Some (member', _) when Id.equal member member' -> Some sp.offset
+      | _ -> None
+    ) layout
 
 

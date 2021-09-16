@@ -40,3 +40,14 @@ let assoc (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v =
 
 let json jsonf list = 
   `List (map jsonf list)
+
+
+
+
+
+let map_split (f : 'a -> 'b * 'c) (xs : 'a list) : 'b list * 'c list =
+  fold_right (fun x (ys, zs) ->
+      let (y, z) = f x in
+      (y :: ys, z :: zs)
+    ) xs ([], [])
+

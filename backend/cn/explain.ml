@@ -99,7 +99,6 @@ let make_name =
   let tuple_c = ref 0 in
   let struct_c = ref 0 in
   let set_c = ref 0 in
-  let option_c = ref 0 in
   let array_c = ref 0 in
   
   let bt_prefix (bt : BT.t) = 
@@ -113,7 +112,6 @@ let make_name =
     | Tuple _ -> "tuple"
     | Struct _ -> "s"
     | Set _ -> "set"
-    | Option _ -> "option"
     | Array _ -> "a"
   in
   
@@ -128,7 +126,6 @@ let make_name =
     | Tuple _ -> tuple_c
     | Struct _ -> struct_c
     | Set _ -> set_c
-    | Option _ -> option_c
     | Array _ -> array_c
   in
   fun sort ->
@@ -278,11 +275,9 @@ module Make
     {substitution; vclasses = vclass_explanations; relevant}
 
 
-
-
-  let evaluate model it = 
-    let open Option in
-    let rec aux (unevaluated_expr : Z3.Expr.expr) (bt : BT.t) : IT.t option = 
+  let evaluate_z3_expr model unevaluated_expr bt : IT.t option = 
+    let rec aux unevaluated_expr bt = 
+      let open Option in
       let@ expr = Z3.Model.eval model unevaluated_expr true in
       match bt with
       | BT.Unit ->
@@ -330,8 +325,6 @@ module Make
         return (IT.struct_ (tag, members))
       | BT.Set _ ->
          fail
-      | BT.Option _ ->
-         fail
       | BT.Array (abt, rbt) ->
          if Z3.Z3Array.is_constant_array expr then
            match Z3.Expr.get_args expr with
@@ -349,11 +342,17 @@ module Make
               return (set_ arr (index, value))
            | _ ->
               Debug_ocaml.error "store: unexpected argument list"
-         else
+         else 
            let str = Z3.Expr.to_string expr in
            Debug_ocaml.error ("unhandled array value case: " ^ str)
     in
-    aux (S.term it) (IT.bt it)
+    aux unevaluated_expr bt
+
+  let evaluate model it = 
+    evaluate_z3_expr model (S.term it) (IT.bt it)
+  let evaluate_lambda model (q_s, q_bt) it = 
+    evaluate_z3_expr model (S.lambda (q_s, q_bt) it) 
+      (BT.Array (q_bt, IT.bt it))
 
 
 
@@ -368,6 +367,7 @@ module Make
     let open Report in
 
     let evaluate = evaluate model in
+    let evaluate_lambda = evaluate_lambda model in
 
     let maybe_evaluated = function
       | Some v -> IT.pp v
@@ -491,13 +491,14 @@ module Make
          (entry, oargs, reported)
       | QPredicate p ->
          let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
+         let q = (p.qpointer, BT.Loc) in
          let id = make_predicate_name () in
          let loc_e, permission_e, iargs_e = 
            !^"each" ^^^ Sym.pp p.qpointer,
            IT.pp (name_subst p.permission), 
            (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
          in
-         let permission_v = evaluate p.permission in
+         let permission_v = evaluate_lambda q p.permission in
          let state = match Option.bind permission_v is_q with
            | Some (1, 1) ->
               !^id ^^^ equals ^^^
@@ -601,7 +602,7 @@ module Make
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in
     assert (not provable);
     let explanation = explanation local SymSet.empty in
-    let model = S.get_model (L.solver local) in
+    let model = S.model (L.solver local) in
     state local explanation model
 
   let implementation_defined_behaviour local it = 
@@ -609,7 +610,7 @@ module Make
     assert (not provable);
     let explanation = explanation local (IT.free_vars it) in
     let it_pp = IT.pp (IT.subst explanation.substitution it) in
-    let model = S.get_model (L.solver local) in
+    let model = S.model (L.solver local) in
     (it_pp, state local explanation model)
 
   let missing_ownership local model it = 

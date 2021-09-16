@@ -77,7 +77,6 @@ let rec simp (lcs : LC.t list) term =
     | List_op it -> IT (List_op it, bt)
     | Set_op it -> IT (Set_op it, bt)
     | CT_pred it -> IT (CT_pred it, bt)
-    | Option_op it -> option_op it bt
     | Array_op it -> array_op it bt
   
   and lit it bt = 
@@ -363,14 +362,6 @@ let rec simp (lcs : LC.t list) term =
        IT (Pointer_op (MemberOffset (tag, member)), bt)
     | ArrayOffset (ct, t) ->
        aux (mul_ (int_ (Memory.size_of_ctype ct), t))
-  
-  
-  and option_op it bt =
-    match it with
-    | Something it -> IT (Option_op (Something (aux it)), bt)
-    | Nothing bt' -> IT (Option_op (Nothing bt'), bt)
-    | Is_some it -> IT (Option_op (Is_some (aux it)), bt)
-    | Value_of_some it -> IT (Option_op (Value_of_some (aux it)), bt)
   
   and array_op it bt = 
     match it with

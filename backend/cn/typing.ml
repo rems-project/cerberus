@@ -121,7 +121,7 @@ end = struct
 
   let model () =
     let@ l = get () in
-    return (L.get_model (L.solver l))
+    return (L.model (L.solver l))
 
   let bound_a s = 
     let@ l = get () in

@@ -10,21 +10,16 @@ type t =
   | Integer
   | Real
   | Loc
+  | Struct of tag
+  | Array of t * t
   | List of t
   | Tuple of t list
-  | Struct of tag
   | Set of t
-  | Option of t
-  | Array of t * t
 
 
 let is_struct = function
   | Struct tag -> Some tag
   | _ -> None
-
-let get_option_type = function
-  | Option bt -> bt
-  | _ -> Debug_ocaml.error "not an option type"
 
 let rec equal t t' = 
   match t, t' with
@@ -33,25 +28,22 @@ let rec equal t t' =
   | Integer, Integer -> true
   | Real, Real -> true
   | Loc, Loc -> true
+  | Struct t, Struct t' -> Sym.equal t t'
+  | Array (t1,t2), Array (t1',t2') -> equal t1 t1' && equal t2 t2'
   | List t, List t' -> equal t t'
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
-  | Struct t, Struct t' -> Sym.equal t t'
   | Set t, Set t' -> equal t t'
-  | Option t, Option t' -> equal t t'
-  | Array (ts,t), Array (ts',t') -> 
-     equal ts ts' && equal t t'
 
   | Unit, _
   | Bool, _
   | Integer, _
   | Real, _
   | Loc, _
+  | Struct _, _
+  | Array _, _
   | List _, _
   | Tuple _, _
-  | Struct _, _
   | Set _, _
-  | Option _, _ 
-  | Array _, _
     ->
      false
 
@@ -63,12 +55,11 @@ let rec pp = function
   | Integer -> !^"integer"
   | Real -> !^"real"
   | Loc -> !^"pointer"
+  | Struct sym -> !^"struct" ^^^ Sym.pp sym
+  | Array (abt, rbt) -> !^"array" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
-  | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Set t -> !^"set" ^^ angles (pp t)
-  | Option t -> !^"option" ^^ angles (pp t)
-  | Array (abt, rbt) -> !^"array" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
 
 
 
@@ -88,9 +79,7 @@ let array_bt = function
 
 
 
-open Sctypes
-
-let rec of_sct (Sctype (_, sct_)) = 
+let rec of_sct (Sctypes.Sctype (_, sct_)) = 
   match sct_ with
   | Void -> Unit
   | Integer _ -> Integer
@@ -101,7 +90,7 @@ let rec of_sct (Sctype (_, sct_)) =
 
 
 
-let hash = function
+let rec hash = function
   | Unit -> 0
   | Bool -> 1
   | Integer -> 2
@@ -109,7 +98,6 @@ let hash = function
   | Loc -> 4
   | List _ -> 5
   | Tuple _ -> 6
-  | Struct _ -> 7
-  | Set _ -> 8
-  | Option _ -> 9
-  | Array _ -> 10
+  | Set _ -> 7
+  | Struct tag -> 1000 + Sym.num tag
+  | Array (abt,rbt) -> 2000 + hash abt + hash rbt

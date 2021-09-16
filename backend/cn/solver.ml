@@ -6,43 +6,58 @@ module LC = LogicalConstraints
 open LogicalConstraints
 
 
-let context = 
-  Z3.mk_context [
-      ("model", "true");
-      ("well_sorted_check","true");
-      (* ("trace", "true");
-       * ("trace_file_name", "trace.smt") *)
-    ] 
+let context_params = [
+    ("model", "true");
+    ("well_sorted_check","true");
+    (* ("trace", "true");
+     * ("trace_file_name", "trace.smt") *)
+  ]
 
-
-let params = Z3.Params.mk_params context
-let () =
-  Z3.set_global_param "smt.auto-config" "false";
-  Z3.set_global_param "smt.mbqi" "true";
-  (* Z3.set_global_param "smt.ematching" "true"; *)
-  (* Z3.set_global_param "smt.pull-nested-quantifiers" "true";
-   * Z3.set_global_param "smt.macro_finder" "true"; *)
-  Z3.set_global_param "smt.arith.solver" "2";
-  Z3.set_global_param "model.compact" "false";
-  Z3.set_global_param "model.completion" "true";
-  Z3.set_global_param "model_evaluator.completion" "true";
-  (* Z3.set_global_param "model_evaluator.array_as_stores" "true"; *)
-
-
-
+let global_params = [
+    ("smt.auto-config", "false");
+    ("smt.mbqi", "true");
+    (* ("smt.ematching", "true");
+     * ("smt.pull-nested-quantifiers", "true");
+     * ("smt.macro_finder", "true"); *)
+    ("smt.arith.solver", "2");
+    (* ("model.compact", "true"); *)
+    ("model.completion", "true");
+    (* ("model.inline_def", "true"); *)
+    ("model_evaluator.completion", "true");
+    (* ("model_evaluator.array_as_stores", "true"); *)
+    (* ("model_evaluator.array_equalities", "false"); *)
+  ]
 
 
 
-module BTtbl = Hashtbl.Make(BaseTypes)
+let context = Z3.mk_context context_params 
+
+let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
+
+
+
+module Sort_HashedType = struct
+  type t = Z3.Sort.sort
+  let equal = Z3.Sort.equal
+  let hash s = Z3.Sort.get_id s
+end
+
+
+
+module BT_Sort_Table = TwoMap.Make(BT)(Sort_HashedType)
 module ITtbl = Hashtbl.Make(IndexTerms)
+
+
+
 
 
 module type S = sig
 
   val sort : BT.t -> Z3.Sort.sort
   val provable : Z3.Solver.solver -> LC.t -> bool
-  val get_model : Z3.Solver.solver -> Z3.Model.model
+  val model : Z3.Solver.solver -> Z3.Model.model
   val term : IT.t -> Z3.Expr.expr
+  val lambda : (Sym.t * BT.t) -> IT.t -> Z3.Expr.expr
   val constr : LC.t -> Z3.Expr.expr list
 
 end
@@ -52,13 +67,25 @@ end
 
 module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
-  let bt_name bt = Pp.plain (BT.pp bt)
-  let bt_symbol bt = Z3.Symbol.mk_string context (bt_name bt)
-  let tuple_field_name i = "comp" ^ string_of_int i
-  let tuple_field_symbol i = Z3.Symbol.mk_string context (tuple_field_name i)
-  let member_name id = Id.s id
-  let member_symbol bt id = Z3.Symbol.mk_string context (bt_name bt ^ "_" ^ member_name id)
+  let bt_sort_table = BT_Sort_Table.create 1000
+
+  let bt_name bt = 
+    Pp.plain (BT.pp bt)
+  let bt_symbol bt = 
+    Z3.Symbol.mk_string context (bt_name bt)
+
+  let tuple_field_name i = 
+    "comp" ^ string_of_int i
+  let tuple_field_symbol i = 
+    Z3.Symbol.mk_string context (tuple_field_name i)
+
+  let member_name tag id = 
+    bt_name (BT.Struct tag) ^ "_" ^ Id.s id
+  let member_symbol tag id = 
+    Z3.Symbol.mk_string context (member_name tag id)
+
   let sym_to_sym s = Z3.Symbol.mk_string context (CF.Pp_symbol.to_string_pretty s)
+
 
   let sort =
 
@@ -86,43 +113,25 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          Z3.Tuple.mk_sort context (bt_symbol (Tuple bts)) field_symbols sorts
       | Struct tag ->
          let layout = SymMap.find tag SD.struct_decls in
-         let members = Memory.member_types layout in
-         let member_symbols = List.map (fun (id,_) -> member_symbol (BT.Struct tag) id) members in
-         let member_sorts = 
-           List.map (fun (_, sct) -> 
-               translate (BT.of_sct sct)
-             ) members 
+         let member_symbols, member_sorts = 
+           List.map_split (fun (id,sct) -> 
+               (member_symbol tag id, translate (BT.of_sct sct))
+             ) (Memory.member_types layout)
          in
          Z3.Tuple.mk_sort context (bt_symbol (Struct tag)) 
            member_symbols member_sorts
       | Set bt ->
          Z3.Set.mk_sort context (translate bt)
-      | Option bt ->
-         let a_sort = translate bt in
-         let some_c = 
-           let recognizer = Z3.Symbol.mk_string context ("some_" ^ bt_name bt ^ "_recognizer") in
-           let value_field = Z3.Symbol.mk_string context ("some_" ^ bt_name bt ^ "_value") in
-           Z3.Datatype.mk_constructor_s context ("some_" ^ bt_name bt) 
-             recognizer [value_field] [Some a_sort] [1 (*?*)]
-         in
-         let none_c = 
-           let recognizer = Z3.Symbol.mk_string context ("none_" ^ bt_name bt ^ "_recognizer") in
-           Z3.Datatype.mk_constructor_s context ("none_" ^ bt_name bt) 
-             recognizer [] [] []
-         in
-         Z3.Datatype.mk_sort_s context (bt_name (BT.Option bt)) [some_c; none_c]
       | Array (abt, rbt) ->
          Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
-    in    
+    in
 
-    let sort = 
-      let tbl = BTtbl.create 10 in
-      fun bt ->
-      match BTtbl.find_opt tbl bt with
+    let sort bt = 
+      match BT_Sort_Table.left_to_right bt_sort_table bt with
       | Some sort -> sort
       | None ->
          let sort = translate bt in
-         let () = BTtbl.add tbl bt sort in
+         let () = BT_Sort_Table.add bt_sort_table (bt, sort) in
          sort
     in
 
@@ -224,13 +233,12 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
       | Tuple_op tuple_op -> 
          begin match tuple_op with
          | Tuple ts ->
-            let ts = List.map term ts in
             let constructor = Z3.Tuple.get_mk_decl (sort bt) in
+            let ts = List.map term ts in
             Z3.Expr.mk_app context constructor ts
          | NthTuple (n, t) ->
             let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
-            let t = term t in
-            Z3.Expr.mk_app context (List.nth destructors n) [t]
+            Z3.Expr.mk_app context (List.nth destructors n) [term t]
          end
       | Struct_op struct_op -> 
          begin match struct_op with
@@ -239,14 +247,10 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
             let mts = (List.map (fun (_, t) -> term t) mts) in
             Z3.Expr.mk_app context constructor mts
          | StructMember (t, member) ->
-            let tag = BT.struct_bt (IT.bt t) in
-            let layout = SymMap.find tag SD.struct_decls in
-            let members = List.map fst (Memory.member_types layout) in
-            let destructors = Z3.Tuple.get_field_decls (sort (Struct tag)) in
-            let member_destructors = List.combine members destructors in
-            let destructor = List.assoc Id.equal member member_destructors in
-            let t = term t in
-            Z3.Expr.mk_app context destructor [t]
+            let layout = SymMap.find (struct_bt (IT.bt t)) SD.struct_decls in
+            let n = Option.get (Memory.member_number layout member) in
+            let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
+            Z3.Expr.mk_app context (List.nth destructors n) [term t]
          end
       | Pointer_op pointer_op -> 
          begin match pointer_op with
@@ -326,25 +330,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
             in
             term (eq_ (rem_ (t, alignment), int_ 0))
          end
-      | Option_op option_op -> 
-         begin match option_op with
-         | Something t ->
-            let option_sort = sort bt in
-            let constructors = Z3.Datatype.get_constructors option_sort in
-            Z3.Expr.mk_app context (List.hd constructors) [term t]
-         | Nothing _ ->
-            let option_sort = sort bt in
-            let constructors = Z3.Datatype.get_constructors option_sort in
-            Z3.Expr.mk_app context (List.hd (List.tl constructors)) []
-         | Is_some t -> 
-            let option_sort = sort (IT.bt t) in
-            let recognisers = Z3.Datatype.get_recognizers option_sort in
-            Z3.Expr.mk_app context (List.hd recognisers) [term t]
-         | Value_of_some t -> 
-            let option_sort = sort (IT.bt t) in
-            let accessors = Z3.Datatype.get_accessors option_sort in
-            Z3.Expr.mk_app context (List.hd (List.hd accessors)) [term t]
-         end
       | Array_op array_op -> 
          begin match array_op with
          | Const (index_bt, t) ->
@@ -381,6 +366,14 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     term
 
 
+  let lambda (q_s, q_bt) body = 
+    let q = term (sym_ (q_s, q_bt)) in
+    Z3.Quantifier.expr_of_quantifier
+      (Z3.Quantifier.mk_lambda_const context
+         [q] (term body))
+      
+
+
 
   (* let rec make_trigger = function
    *   | T_Term (IT (Lit (Sym s), bt)) -> 
@@ -411,7 +404,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
    *      (bt, Z3.Expr.mk_app context destructor [t], cs) *)
 
 
-  let of_logical_constraint c = 
+  let constr c = 
     match c with
     | T it -> 
        [term it]
@@ -459,8 +452,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     result
 
   
-  let constr = of_logical_constraint
-
 
   let provable solver lc = 
     let result = check solver lc in
@@ -474,9 +465,20 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
        false
 
 
-  let get_model solver = 
+  let model solver = 
     Option.value_err "Z3 did not produce a counter model"
       (Z3.Solver.get_model solver)
+
+
+
+
+
+
+
+
+
+
+  
 
 
 end
