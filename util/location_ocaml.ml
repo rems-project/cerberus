@@ -174,7 +174,7 @@ let location_to_string ?(charon=false) loc =
         begin if pos1.pos_lnum = pos2.pos_lnum then
           ""
         else
-          string_of_int pos2.pos_lnum
+          string_of_int pos2.pos_lnum ^ ":"
         end ^
         string_of_int (1+pos2.pos_cnum-pos2.pos_bol)
     | Loc_regions (xs, _) ->
@@ -188,7 +188,7 @@ let location_to_string ?(charon=false) loc =
         begin if pos1.pos_lnum = pos2.pos_lnum then
           ""
         else
-          string_of_int pos2.pos_lnum
+          string_of_int pos2.pos_lnum ^ ":"
         end ^
         string_of_int (1+pos2.pos_cnum-pos2.pos_bol)
 
