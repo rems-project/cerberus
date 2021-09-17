@@ -683,6 +683,14 @@ let is_lit = function
   | IT (Lit lit, bt) -> Some (lit, bt)
   | _ -> None
 
+let is_z = function
+  | IT (Lit (Z z), bt) -> Some z
+  | _ -> None
+
+let is_pointer = function
+  | IT (Lit (Pointer z), bt) -> Some z
+  | _ -> None
+
 let is_sym = function
   | IT (Lit (Sym sym), bt) -> Some (sym, bt)
   | _ -> None

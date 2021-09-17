@@ -98,6 +98,9 @@ let align_of_ctype (ct : Sctypes.t) =
   match ct with
   | Sctypes.Sctype (_, Void) -> 
      Debug_ocaml.error "align_of_ctype applied to void"
+  (* check this. This is for early alloc *)
+  | Sctypes.Sctype (_, Function _) -> 
+     1
   | _ -> 
      try
        let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in

@@ -55,15 +55,8 @@ module Z3Symbol_HashedType = struct
     String.length (Z3.Symbol.get_string s)
 end
 
-module Int_HashedType = struct
-  type t = int
-  let equal = (=)
-  let hash i = i
-end
-
 module BT_Sort_Table = TwoMap.Make(BT)(Sort_HashedType)
 module IT_Table = Hashtbl.Make(IndexTerms)
-module Int_Table = Hashtbl.Make(Int_HashedType)
 module Z3Symbol_Table = Hashtbl.Make(Z3Symbol_HashedType)
 
 
@@ -90,7 +83,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let bt_sort_table = BT_Sort_Table.create 1000
   let member_funcdecl_table = Z3Symbol_Table.create 100
   let struct_funcdecl_table = Z3Symbol_Table.create 100
-  let variable_table = Z3Symbol_Table.create 10000
+
 
   let bt_name bt = 
     Pp.plain (BT.pp bt)
@@ -108,19 +101,33 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     Z3.Symbol.mk_string context (member_name tag id)
 
 
+
+  let unit_sort = Z3.Sort.mk_uninterpreted_s context "unit"
+  let bool_sort = Z3.Boolean.mk_sort context
+  let integer_sort = Z3.Arithmetic.Integer.mk_sort context
+  let real_sort = Z3.Arithmetic.Real.mk_sort context
+
+  let loc_to_integer_symbol = Z3.Symbol.mk_string context "loc_to_integer"
+  let loc_sort_symbol = bt_symbol Loc
+  let loc_sort = Z3.Tuple.mk_sort context loc_sort_symbol [loc_to_integer_symbol] [integer_sort]
+
+  let loc_to_integer_fundecl = nth (Z3.Tuple.get_field_decls loc_sort) 0
+  let integer_to_loc_fundecl = Z3.Tuple.get_mk_decl loc_sort
+  let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl
+
+  let loc_to_integer l = Z3.Expr.mk_app context loc_to_integer_fundecl [l]
+  let integer_to_loc i = Z3.Expr.mk_app context integer_to_loc_fundecl [i]
+
+
   let sort =
 
-    let unit_sort = Z3.Sort.mk_uninterpreted_s context "unit" in
-    let bool_sort = Z3.Boolean.mk_sort context in
-    let integer_sort = Z3.Arithmetic.Integer.mk_sort context in
-    let real_sort = Z3.Arithmetic.Real.mk_sort context in
 
     let rec translate = function
       | Unit -> unit_sort
       | Bool -> bool_sort
       | Integer -> integer_sort
       | Real -> real_sort
-      | Loc -> integer_sort
+      | Loc -> loc_sort
       | List bt -> Z3.Z3List.mk_sort context (bt_symbol bt) (translate bt) 
       | Set bt -> Z3.Set.mk_sort context (translate bt)
       | Array (abt, rbt) -> Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
@@ -135,7 +142,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          let member_symbols, member_sorts = 
            map_split (fun (id,sct) -> 
                let s = member_symbol tag id in
-               Z3Symbol_Table.add member_funcdecl_table s (tag, id);    
+               Z3Symbol_Table.add member_funcdecl_table s (tag, id);
                (s, translate (BT.of_sct sct))
              ) (Memory.member_types layout)
          in
@@ -171,15 +178,20 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
       | Lit lit -> 
          begin match lit with
          | Sym s -> 
-            let symbol = sym_to_sym s in
-            let () = Z3Symbol_Table.add variable_table symbol (s, bt) in
-            Z3.Expr.mk_const context symbol (sort bt)
-         | Z z -> Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-         | Q q -> Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
-         | Pointer z -> Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-         | Bool true -> true_term
-         | Bool false -> false_term
-         | Unit -> unit_term
+            Z3.Expr.mk_const context (sym_to_sym s) (sort bt)
+         | Z z -> 
+            Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
+         | Q q -> 
+            Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
+         | Pointer z -> 
+            integer_to_loc
+              (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
+         | Bool true -> 
+            true_term
+         | Bool false -> 
+            false_term
+         | Unit -> 
+            unit_term
          | Default bt -> 
             let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
             Z3.Expr.mk_const context sym (sort bt)
@@ -230,19 +242,34 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in
          begin match pointer_op with
-         | Null -> term (int_ 0)
-         | AddPointer (t1, t2) -> mk_add context [term t1; term t2]
-         | SubPointer (t1, t2) -> mk_sub context [term t1; term t2]
-         | MulPointer (t1, t2) -> mk_mul context [term t1; term t2]
-         | LTPointer (t1, t2) -> mk_lt context (term t1) (term t2)
-         | LEPointer (t1, t2) -> mk_le context (term t1) (term t2)
-         | IntegerToPointerCast t -> term t
-         | PointerToIntegerCast t -> term t
+         | Null -> 
+            integer_to_loc
+              (term (int_ 0))
+         | AddPointer (t1, t2) -> 
+            integer_to_loc
+              (mk_add context [loc_to_integer (term t1); term t2])
+         | SubPointer (t1, t2) -> 
+            integer_to_loc
+              (mk_sub context [loc_to_integer (term t1); term t2])
+         | MulPointer (t1, t2) -> 
+            integer_to_loc
+              (mk_mul context [loc_to_integer (term t1); term t2])
+         | LTPointer (t1, t2) -> 
+            mk_lt context (loc_to_integer (term t1)) 
+              (loc_to_integer (term t2))
+         | LEPointer (t1, t2) -> 
+            mk_le context (loc_to_integer (term t1))
+              (loc_to_integer (term t2))
+         | IntegerToPointerCast t -> 
+            integer_to_loc (term t)
+         | PointerToIntegerCast t -> 
+            loc_to_integer (term t)
          | MemberOffset (tag, member) ->
             let decl = SymMap.find tag SD.struct_decls in
             let offset = Option.get (Memory.member_offset decl member) in
             term (int_ offset)
-         | ArrayOffset (ct, t) -> term (mul_ (int_ (Memory.size_of_ctype ct), t))
+         | ArrayOffset (ct, t) -> 
+            term (mul_ (int_ (Memory.size_of_ctype ct), t))
          end
       | List_op t -> 
          Debug_ocaml.error "todo: SMT mapping for list operations"
@@ -261,13 +288,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
             let sdecl_lookup tag = SymMap.find tag SD.struct_decls in
             term (representable_ctype sdecl_lookup ct t)
          | AlignedI t ->
-            term (eq_ (rem_ (t.t, t.align), int_ 0))
+            term (eq_ (rem_ (pointerToIntegerCast_ t.t, t.align), int_ 0))
          | Aligned (t, ct) ->
             let align = int_ (Memory.align_of_ctype ct) in
-            (* let alignment = match ct with
-             *   | Sctype (_, Function _) -> int_ 1
-             *   | _ -> int_ (Memory.align_of_ctype ct)
-             * in *)
             term (alignedI_ ~t ~align)
          end
       | Array_op array_op -> 
@@ -526,7 +549,17 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
       else
         let func_decl = Z3.Expr.get_func_decl expr in
         let func_name = Z3.FuncDecl.get_name func_decl in
-      if Z3Symbol_Table.mem member_funcdecl_table func_name then
+      if Z3Symbol_HashedType.equal func_name loc_to_integer_symbol then
+        let p = nth args 0 in
+        match IT.is_pointer p with
+        | Some z -> z_ z
+        | _ -> pointerToIntegerCast_ (nth args 0)
+      else if Z3Symbol_HashedType.equal func_name integer_to_loc_symbol then
+        let i = nth args 0 in
+        match IT.is_z i with
+        | Some z -> pointer_ z
+        | _ -> integerToPointerCast_ i
+      else if Z3Symbol_Table.mem member_funcdecl_table func_name then
         let (tag, member) = Z3Symbol_Table.find member_funcdecl_table func_name in
         let sd = Memory.member_types (SymMap.find tag SD.struct_decls) in
         let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
