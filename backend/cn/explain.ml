@@ -275,84 +275,85 @@ module Make
     {substitution; vclasses = vclass_explanations; relevant}
 
 
-  let evaluate_z3_expr model unevaluated_expr bt : IT.t option = 
-    let rec aux unevaluated_expr bt = 
-      let open Option in
-      let@ expr = Z3.Model.eval model unevaluated_expr true in
-      match bt with
-      | BT.Unit ->
-         return unit_
-      | BT.Bool ->
-         let b = 
-           if Z3.Boolean.is_true expr then true
-           else if Z3.Boolean.is_false expr then false
-           else Debug_ocaml.error "non-true/false boolean"
-         in
-         return (bool_ b)
-      | BT.Integer -> 
-         let i = Z3.Arithmetic.Integer.get_big_int expr in
-         return (z_ i)
-      | BT.Real ->
-         let n = 
-           Z3.Arithmetic.Integer.get_big_int
-             (Z3.Arithmetic.Real.get_numerator expr)
-         in
-         let d = 
-           Z3.Arithmetic.Integer.get_big_int
-             (Z3.Arithmetic.Real.get_denominator expr)
-         in
-         return (q_ (Z.to_int n, Z.to_int d))
-      | BT.Loc ->
-         let i = Z3.Arithmetic.Integer.get_big_int expr in
-         return (pointer_ i)
-      | BT.List _ ->
-         fail
-      | BT.Tuple _ ->
-         fail
-      | BT.Struct tag ->
-         let layout = Global.SymMap.find tag G.global.struct_decls in
-         let members = Memory.member_types layout in
-         let destructors = Z3.Tuple.get_field_decls (S.sort (Struct tag)) in
-         let members_destructors = List.combine members destructors in
-         let@ members = 
-           ListM.mapM (fun ((member, sct), destructor) -> 
-               let member_bt = BT.of_sct sct in
-               let member_term = Z3.Expr.mk_app Solver.context destructor [expr] in
-               let@ member_value = aux member_term member_bt in
-               return (member, member_value)
-             ) members_destructors
-         in
-        return (IT.struct_ (tag, members))
-      | BT.Set _ ->
-         fail
-      | BT.Array (abt, rbt) ->
-         if Z3.Z3Array.is_constant_array expr then
-           match Z3.Expr.get_args expr with
-           | [constant] ->
-              let@ constant = aux constant rbt in
-              return (const_ abt constant)
-           | _ ->
-              Debug_ocaml.error "constant array: unexpected argument list"
-         else if Z3.Z3Array.is_store expr then
-           match Z3.Expr.get_args expr with
-           | [arr; index; value] ->
-              let@ arr = aux arr (Array (abt, rbt)) in
-              let@ index = aux index abt in
-              let@ value = aux value rbt in
-              return (set_ arr (index, value))
-           | _ ->
-              Debug_ocaml.error "store: unexpected argument list"
-         else 
-           let str = Z3.Expr.to_string expr in
-           Debug_ocaml.error ("unhandled array value case: " ^ str)
-    in
-    aux unevaluated_expr bt
+  (* let evaluate_z3_expr model unevaluated_expr bt : IT.t option = 
+   *   let rec aux unevaluated_expr bt = 
+   *     let open Option in
+   *     let@ expr = Z3.Model.eval model unevaluated_expr true in
+   *     match bt with
+   *     | BT.Unit ->
+   *        return unit_
+   *     | BT.Bool ->
+   *        let b = 
+   *          if Z3.Boolean.is_true expr then true
+   *          else if Z3.Boolean.is_false expr then false
+   *          else Debug_ocaml.error "non-true/false boolean"
+   *        in
+   *        return (bool_ b)
+   *     | BT.Integer -> 
+   *        let i = Z3.Arithmetic.Integer.get_big_int expr in
+   *        return (z_ i)
+   *     | BT.Real ->
+   *        let n = 
+   *          Z3.Arithmetic.Integer.get_big_int
+   *            (Z3.Arithmetic.Real.get_numerator expr)
+   *        in
+   *        let d = 
+   *          Z3.Arithmetic.Integer.get_big_int
+   *            (Z3.Arithmetic.Real.get_denominator expr)
+   *        in
+   *        return (q_ (Z.to_int n, Z.to_int d))
+   *     | BT.Loc ->
+   *        let i = Z3.Arithmetic.Integer.get_big_int expr in
+   *        return (pointer_ i)
+   *     | BT.List _ ->
+   *        fail
+   *     | BT.Tuple _ ->
+   *        fail
+   *     | BT.Struct tag ->
+   *        let layout = Global.SymMap.find tag G.global.struct_decls in
+   *        let members = Memory.member_types layout in
+   *        let destructors = Z3.Tuple.get_field_decls (S.sort (Struct tag)) in
+   *        let members_destructors = List.combine members destructors in
+   *        let@ members = 
+   *          ListM.mapM (fun ((member, sct), destructor) -> 
+   *              let member_bt = BT.of_sct sct in
+   *              let member_term = Z3.Expr.mk_app Solver.context destructor [expr] in
+   *              let@ member_value = aux member_term member_bt in
+   *              return (member, member_value)
+   *            ) members_destructors
+   *        in
+   *       return (IT.struct_ (tag, members))
+   *     | BT.Set _ ->
+   *        fail
+   *     | BT.Array (abt, rbt) ->
+   *        if Z3.Z3Array.is_constant_array expr then
+   *          match Z3.Expr.get_args expr with
+   *          | [constant] ->
+   *             let@ constant = aux constant rbt in
+   *             return (const_ abt constant)
+   *          | _ ->
+   *             Debug_ocaml.error "constant array: unexpected argument list"
+   *        else if Z3.Z3Array.is_store expr then
+   *          match Z3.Expr.get_args expr with
+   *          | [arr; index; value] ->
+   *             let@ arr = aux arr (Array (abt, rbt)) in
+   *             let@ index = aux index abt in
+   *             let@ value = aux value rbt in
+   *             return (set_ arr (index, value))
+   *          | _ ->
+   *             Debug_ocaml.error "store: unexpected argument list"
+   *        else 
+   *          let str = Z3.Expr.to_string expr in
+   *          Debug_ocaml.error ("unhandled array value case: " ^ str)
+   *   in
+   *   aux unevaluated_expr bt *)
 
   let evaluate model it = 
-    evaluate_z3_expr model (S.term it) (IT.bt it)
+    Option.map S.z3_expr (Z3.Model.eval model (S.term it) true)
+
   let evaluate_lambda model (q_s, q_bt) it = 
-    evaluate_z3_expr model (S.lambda (q_s, q_bt) it) 
-      (BT.Array (q_bt, IT.bt it))
+    Option.map S.z3_expr (Z3.Model.eval model (S.lambda (q_s, q_bt) it) true)
+
 
 
 
@@ -391,7 +392,7 @@ module Make
            evaluate p.value
          in
          let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
-           | Some (1, 1), Some true ->
+           | Some q, Some true when Q.equal q Q.one ->
               Sctypes.pp p.ct ^^ colon ^^^
               value_e ^^^ equals ^^^ maybe_evaluated value_v
            | _ -> 
@@ -429,7 +430,7 @@ module Make
            evaluate p.value
          in
          let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
-           | Some (1, 1), Some true ->
+           | Some q, Some true when Q.equal q Q.one ->
               Sctypes.pp p.ct ^^ colon ^^^
               value_e ^^^ equals ^^^ maybe_evaluated value_v
            | _ ->
@@ -465,7 +466,7 @@ module Make
            evaluate p.permission
          in
          let state = match Option.bind permission_v is_q with
-           | Some (1, 1) ->
+           | Some q when Q.equal q Q.one ->
               !^id ^^^ equals ^^^
               Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
            | _ ->
@@ -500,7 +501,7 @@ module Make
          in
          let permission_v = evaluate_lambda q p.permission in
          let state = match Option.bind permission_v is_q with
-           | Some (1, 1) ->
+           | Some q when Q.equal q Q.one ->
               !^id ^^^ equals ^^^
               Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
            | _ ->

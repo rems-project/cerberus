@@ -7,6 +7,9 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   | f :: fs -> f (comps fs a)
 
 
+let curry f a b = f (a, b)
+let uncurry f (a, b) = f a b
+
 
 let do_stack_trace () = 
   let open Debug_ocaml in

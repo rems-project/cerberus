@@ -87,8 +87,8 @@ module Make
                 return (bt, Sym s)
              | Z z -> 
                 return (Integer, Z z)
-             | Q (n,n') -> 
-                return (Real, Q (n,n'))
+             | Q q -> 
+                return (Real, Q q)
              | Pointer p -> 
                 return (Loc, Pointer p)
              | Bool b -> 
@@ -130,10 +130,10 @@ module Make
                 let@ t = check loc ~context Integer t in
                 let@ t' = check loc ~context Integer t' in
                 return (Integer, Rem (t, t'))
-           in
-           return (IT (Arith_op arith_op, bt))
-        | Cmp_op cmp_op ->
-           let@ (bt, cmp_op) = match cmp_op with
+             | Mod (t,t') ->
+                let@ t = check loc ~context Integer t in
+                let@ t' = check loc ~context Integer t' in
+                return (Integer, Mod (t, t'))
              | LT (t,t') ->
                 let@ t = infer loc ~context t in
                 let@ () = ensure_integer_or_real_type loc context t in
@@ -145,7 +145,7 @@ module Make
                 let@ t' = check loc ~context (IT.bt t) t' in
                 return (BT.Bool, LE (t, t'))
            in
-           return (IT (Cmp_op cmp_op, bt))
+           return (IT (Arith_op arith_op, bt))
         | Bool_op bool_op ->
            let@ (bt, bool_op) = match bool_op with
              | And ts ->
@@ -435,11 +435,8 @@ module Make
          | Mul (t,t')
          | Div (t,t')
          | Exp (t,t')
-         | Rem (t,t') ->
-            ListM.iterM aux [t; t']
-         end
-      | Cmp_op cmp_op ->
-         begin match cmp_op with
+         | Rem (t,t')
+         | Mod (t,t')
          | LT (t,t') 
          | LE (t,t') ->
             ListM.iterM aux [t; t']

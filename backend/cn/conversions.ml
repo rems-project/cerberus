@@ -348,19 +348,19 @@ let resolve_index_term loc layouts
     | LessThan (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Cmp_op (LT (it, it')), Bool), None)
+       return (IT (Arith_op (LT (it, it')), Bool), None)
     | GreaterThan (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Cmp_op (LT (it', it)), Bool), None)
+       return (IT (Arith_op (LT (it', it)), Bool), None)
     | LessOrEqual (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Cmp_op (LE (it, it')), Bool), None)
+       return (IT (Arith_op (LE (it, it')), Bool), None)
     | GreaterOrEqual (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Cmp_op (LE (it', it)), Bool), None)
+       return (IT (Arith_op (LE (it', it)), Bool), None)
     | Member (t, member) ->
        let@ (st, _) = resolve t mapping in
        let ppf () = Ast.Terms.pp false term in

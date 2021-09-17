@@ -11,7 +11,7 @@ open Subst
 type lit = 
   | Sym of Sym.t
   | Z of Z.t
-  | Q of int * int
+  | Q of Q.t
   | Pointer of Z.t
   | Bool of bool
   | Unit
@@ -27,9 +27,7 @@ type 'bt arith_op =
   | Div of 'bt term * 'bt term
   | Exp of 'bt term * 'bt term
   | Rem of 'bt term * 'bt term
-
-(* over integers and reals *)
-and 'bt cmp_op =
+  | Mod of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
 
@@ -40,6 +38,7 @@ and 'bt bool_op =
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EQ of 'bt term * 'bt term
+  (* add Z3's Distinct for separation facts  *)
 
 and 'bt tuple_op = 
   | Tuple of 'bt term list
@@ -91,7 +90,6 @@ and 'bt term_ =
   | Lit of lit
   | Arith_op of 'bt arith_op
   | Bool_op of 'bt bool_op
-  | Cmp_op of 'bt cmp_op
   | Tuple_op of 'bt tuple_op
   | Struct_op of 'bt struct_op
   | Pointer_op of 'bt pointer_op
@@ -124,7 +122,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      begin match lit, lit' with
      | Sym sym, Sym sym' -> Sym.equal sym sym'
      | Z n, Z n' -> Z.equal n n'
-     | Q (n1,n2), Q (n1',n2') -> n1 = n1' && n2 = n2'
+     | Q q, Q q' -> Q.equal q q'
      | Pointer p, Pointer p' -> Z.equal p p'
      | Bool b, Bool b' -> b = b'
      | Unit, Unit -> true
@@ -145,12 +143,18 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Div (t1,t2), Div (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | Exp (t1,t2), Exp (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | Rem (t1,t2), Rem (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Mod (t1,t2), Mod (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | Add _, _ -> false
      | Sub _, _ -> false
      | Mul _, _ -> false 
      | Div _, _ -> false
      | Exp _, _ -> false
      | Rem _, _ -> false
+     | Mod _, _ -> false
+     | LT _, _ -> false
+     | LE _, _ -> false
      end
   | Bool_op bool_op, Bool_op bool_op' -> 
      begin match bool_op, bool_op' with
@@ -178,13 +182,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         false
      | EQ _, _ -> 
         false
-     end
-  | Cmp_op cmp_op, Cmp_op cmp_op' -> 
-     begin match cmp_op, cmp_op' with
-     | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | LT _, _ -> false
-     | LE _, _ -> false
      end
   | Tuple_op tuple_op, Tuple_op tuple_op' -> 
      begin match tuple_op, tuple_op' with
@@ -300,7 +297,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Lit _, _ -> false
   | Arith_op _, _ -> false
   | Bool_op _, _ -> false
-  | Cmp_op _, _ -> false
   | Tuple_op _, _ -> false
   | Struct_op _, _ -> false
   | Pointer_op _, _ -> false
@@ -322,7 +318,7 @@ let pp =
        begin match lit with
        | Sym sym -> Sym.pp sym
        | Z i -> !^(Z.to_string i)
-       | Q (i,i') -> !^(Q.to_string (Q.make (Z.of_int i) (Z.of_int i')))
+       | Q q -> !^(Q.to_string q)
        | Pointer i -> !^("0X" ^ (Z.format "016X" i))
        | Bool true -> !^"true"
        | Bool false -> !^"false"
@@ -343,9 +339,8 @@ let pp =
           c_app !^"power" [aux true it1; aux true it2]
        | Rem (it1,it2) -> 
           c_app !^"rem" [aux true it1; aux true it2]
-       end
-    | Cmp_op cmp_op -> 
-       begin match cmp_op with
+       | Mod (it1,it2) -> 
+          c_app !^"mod" [aux true it1; aux true it2]
        | LT (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; langle; aux true o2])
        | LE (o1,o2) -> 
@@ -479,9 +474,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Div (it, it') -> free_vars_list [it; it']
      | Exp (it, it') -> free_vars_list [it; it']
      | Rem (it, it') -> free_vars_list [it; it']
-     end
-  | Cmp_op cmp_op ->
-     begin match cmp_op with
+     | Mod (it, it') -> free_vars_list [it; it']
      | LT (it, it') -> free_vars_list [it; it']
      | LE (it, it') -> free_vars_list [it; it']
      end
@@ -578,14 +571,11 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Div (it, it') -> Div (subst su it, subst su it')
        | Exp (it, it') -> Exp (subst su it, subst su it')
        | Rem (it, it') -> Rem (subst su it, subst su it')
-    in
-    IT (Arith_op arith_op, bt)
-  | Cmp_op cmp_op ->        
-     let cmp_op = match cmp_op with
+       | Mod (it, it') -> Mod (subst su it, subst su it')
        | LT (it, it') -> LT (subst su it, subst su it')
        | LE (it, it') -> LE (subst su it, subst su it')
      in
-     IT (Cmp_op cmp_op, bt)
+     IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
      let bool_op = match bool_op with
        | And its -> And (map (subst su) its)
@@ -702,7 +692,7 @@ let is_bool = function
   | _ -> None
 
 let is_q = function
-  | IT (Lit (Q (i, i')), _) -> Some (i, i')
+  | IT (Lit (Q q), _) -> Some q
   | _ -> None
 
 let is_app = function
@@ -710,7 +700,7 @@ let is_app = function
   | _ -> None
 
 let zero_frac = function
-  | IT (Lit (Q (i,j)), _) when i = 0 -> true
+  | IT (Lit (Q q), _) when Q.equal Q.zero q -> true
   | _ -> false
 
 let is_true = function
@@ -728,7 +718,8 @@ let is_false = function
 (* lit *)
 let sym_ (sym, bt) = IT (Lit (Sym sym), bt)
 let z_ n = IT (Lit (Z n), BT.Integer)
-let q_ (n,n') = IT (Lit (Q (n,n')), BT.Real)
+let q_ (n,n') = IT (Lit (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
+let q1_ q = IT (Lit (Q q), BT.Real)
 let pointer_ n = IT (Lit (Pointer n), BT.Loc)
 let bool_ b = IT (Lit (Bool b), BT.Bool)
 let unit_ = IT (Lit Unit, BT.Unit)
@@ -736,8 +727,8 @@ let int_ n = z_ (Z.of_int n)
 let default_ bt = IT (Lit (Default bt), bt)
 
 (* cmp_op *)
-let lt_ (it, it') = IT (Cmp_op (LT (it, it')), BT.Bool)
-let le_ (it, it') = IT (Cmp_op (LE (it, it')), BT.Bool)
+let lt_ (it, it') = IT (Arith_op (LT (it, it')), BT.Bool)
+let le_ (it, it') = IT (Arith_op (LE (it, it')), BT.Bool)
 let gt_ (it, it') = lt_ (it', it)
 let ge_ (it, it') = le_ (it', it)
 
@@ -759,6 +750,7 @@ let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
 let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
+let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let rem_t___ (it, it') = rem_ (it, it')
 let rem_f___ (it, it') = rem_ (it, it')
 let min_ (it, it') = ite_ (le_ (it, it'), it, it')
@@ -927,19 +919,18 @@ let disjoint_from fp fps =
 let hash (IT (it, _bt)) =
   match it with
   | Arith_op _ -> 1
-  | Cmp_op _ -> 2
-  | Bool_op _ -> 3
-  | Tuple_op _ -> 4
-  | Struct_op _ -> 5
-  | Pointer_op _ -> 6
-  | CT_pred _ -> 7
-  | List_op _ -> 8
-  | Set_op _ -> 9
-  | Array_op _ -> 10
+  | Bool_op _ -> 2
+  | Tuple_op _ -> 3
+  | Struct_op _ -> 4
+  | Pointer_op _ -> 5
+  | CT_pred _ -> 6
+  | List_op _ -> 7
+  | Set_op _ -> 8
+  | Array_op _ -> 9
   | Lit lit ->
      begin match lit with
      | Z z -> 20
-     | Q (i, j) -> 21
+     | Q q -> 21
      | Pointer p -> 22
      | Bool b -> 23
      | Unit -> 24

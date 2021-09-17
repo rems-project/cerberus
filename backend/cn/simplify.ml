@@ -55,22 +55,11 @@ let rec simp (lcs : LC.t list) term =
       ) lcs SymPairMap.empty
   in
   
-  (* fix later *)
-  let rec simp_q (i,j) = 
-    if i = 0 then 
-      q_ (0, 1) 
-    else if i mod 2 = 0 && j mod 2 = 0 then
-      simp_q (i/2,j/2) 
-    else
-      q_ (i,j) 
-  in
-  
   let rec aux (IT (it, bt)) =
     match it with
     | Lit it -> lit it bt
     | Arith_op it -> arith_op it bt
     | Bool_op it -> bool_op it bt
-    | Cmp_op it -> cmp_op it bt
     | Tuple_op it -> tuple_op it bt
     | Struct_op it -> struct_op it bt
     | Pointer_op it -> pointer_op it bt
@@ -88,8 +77,8 @@ let rec simp (lcs : LC.t list) term =
        end
     | Z z ->
        IT (Lit (Z z), bt)
-    | Q (i1, i2) ->
-       IT (Lit (Q (i1, i2)), bt)
+    | Q q ->
+       IT (Lit (Q q), bt)
     | Pointer z ->
        IT (Lit (Pointer z), bt)
     | Bool b ->
@@ -107,10 +96,8 @@ let rec simp (lcs : LC.t list) term =
        begin match a, b with
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
           IT (Lit (Z (Z.add i1 i2)), bt)
-       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
-          simp_q (i1 * j2 + i2 * j1, j1 * j2)
-       | _, IT (Lit (Q (0, _)), _) -> 
-          a
+       | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
+          IT (Lit (Q (Q.add q1 q2)), bt) 
        | _, _ ->
           IT (Arith_op (Add (a, b)), bt)
        end
@@ -124,10 +111,8 @@ let rec simp (lcs : LC.t list) term =
           q_ (0, 1)
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _), _ ->
           IT (Lit (Z (Z.sub i1 i2)), bt)
-       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _), _ ->
-          simp_q (i1 * j2 - i2 * j1, j1 * j2)
-       | _, IT (Lit (Q (0, _)), _), _ -> 
-          a
+       | IT (Lit (Q q1), _), IT (Lit (Q q2), _), _ ->
+          IT (Lit (Q (Q.sub q1 q2)), bt)
        | _, _, _ ->
           IT (Arith_op (Sub (a, b)), bt) 
        end
@@ -166,6 +151,39 @@ let rec simp (lcs : LC.t list) term =
        | _ ->
           IT (Arith_op (Rem (a, b)), bt) 
        end
+    | Mod (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       IT (Arith_op (Mod (a, b)), bt) 
+    | LT (a, b) -> 
+      let a = aux a in
+      let b = aux b in
+      begin match a, b with
+      | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+         IT (Lit (Bool (Z.lt z1 z2)), bt)
+      | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
+         IT (Lit (Bool (Q.lt q1 q2)), bt)
+      | _, _ ->
+         IT (Arith_op (LT (a, b)), bt)
+      end
+    | LE (a, b) -> 
+      let a = aux a in
+      let b = aux b in
+       match a, b with
+       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+          IT (Lit (Bool (Z.leq z1 z2)), bt)
+       | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
+          IT (Lit (Bool (Q.leq q1 q2)), bt)
+       | _, _ when equal a b ->
+          bool_ true
+       | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
+         IT (Lit (Z z2), _) when
+              Z.gt z1 Z.zero &&
+              Z.gt z2 Z.zero &&
+              Z.leq z1 (Z.add z2 (Z.of_int 1)) ->
+          bool_ true
+       | _, _ ->
+          IT (Arith_op (LE (a, b)), bt)
   
   and bool_op it bt = 
     match it with
@@ -239,41 +257,8 @@ let rec simp (lcs : LC.t list) term =
        | _, _ ->
           eq_ (a, b)
        end
-  
-        
-  
-  and cmp_op it bt = 
-    match it with
-    | LT (a, b) -> 
-      let a = aux a in
-      let b = aux b in
-      begin match a, b with
-      | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-         IT (Lit (Bool (Z.lt z1 z2)), bt)
-      | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
-         IT (Lit (Bool ((i1*j2) < (i2*j1))), bt)
-      | _, _ ->
-         IT (Cmp_op (LT (a, b)), bt)
-      end
-    | LE (a, b) -> 
-      let a = aux a in
-      let b = aux b in
-       match a, b with
-       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-          IT (Lit (Bool (Z.leq z1 z2)), bt)
-       | IT (Lit (Q (i1, j1)), _), IT (Lit (Q (i2, j2)), _) ->
-          IT (Lit (Bool ((i1*j2) <= (i2*j1))), bt)
-       | _, _ when equal a b ->
-          bool_ true
-       | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
-         IT (Lit (Z z2), _) when
-              Z.gt z1 Z.zero &&
-              Z.gt z2 Z.zero &&
-              Z.leq z1 (Z.add z2 (Z.of_int 1)) ->
-          bool_ true
-       | _, _ ->
-          IT (Cmp_op (LE (a, b)), bt)
-  
+
+
   and tuple_op it bt = 
     match it with
     | Tuple its ->
