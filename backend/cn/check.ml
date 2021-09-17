@@ -372,7 +372,6 @@ module Make
         in
         return r
       else 
-        let () = print_endline "\n\nHERE\n\n" in
         failS loc failure
 
     and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 

@@ -418,16 +418,17 @@ module Make
          (entry, [], reported)
       | QPoint p ->
          let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
+         let q = (p.qpointer, BT.Loc) in
          let loc_e, permission_e, init_e, value_e = 
-           !^"each" ^^^ Sym.pp p.qpointer,
+           Sym.pp p.qpointer,
            IT.pp (name_subst p.permission),
            IT.pp (name_subst p.init), 
            IT.pp (name_subst p.value)
          in
          let permission_v, init_v, value_v = 
-           evaluate p.permission,
-           evaluate p.init,
-           evaluate p.value
+           evaluate_lambda q p.permission,
+           evaluate_lambda q p.init,
+           evaluate_lambda q p.value
          in
          let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
            | Some q, Some true when Q.equal q Q.one ->
@@ -440,7 +441,7 @@ module Make
               value_e ^^^ equals ^^^ maybe_evaluated value_v
          in
          let entry = {
-             loc_e = Some loc_e;
+             loc_e = Some (!^"each" ^^^ loc_e);
              loc_v = None;
              state = Some state;
            } 
@@ -495,7 +496,7 @@ module Make
          let q = (p.qpointer, BT.Loc) in
          let id = make_predicate_name () in
          let loc_e, permission_e, iargs_e = 
-           !^"each" ^^^ Sym.pp p.qpointer,
+           Sym.pp p.qpointer,
            IT.pp (name_subst p.permission), 
            (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
          in
@@ -510,7 +511,7 @@ module Make
               parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
          in
          let entry = {
-             loc_e = Some loc_e;
+             loc_e = Some (!^"each" ^^^ loc_e);
              loc_v = None;
              state = Some state
              } 
@@ -519,7 +520,7 @@ module Make
            let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
            List.map2 (fun oarg (name, _) ->
                let var = !^id ^^ dot ^^ dot ^^ !^name in
-               let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate oarg) in
+               let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
                {var; value}
              ) p.oargs predicate_def.oargs
          in

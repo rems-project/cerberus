@@ -223,8 +223,10 @@ let z3_log_file_path =
 
 
 
-let main filename mjsonfile debug_level print_level =
+let main filename (* mjsonfile *) loc_pp debug_level print_level =
+  let mjsonfile = None in
   Debug_ocaml.debug_level := debug_level;
+  Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   if debug_level > 0 then Printexc.record_backtrace true else ();
   if not (Sys.file_exists filename) then
@@ -274,6 +276,12 @@ let file =
   let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
+
+let loc_pp =
+  let doc = "Print pointer values as hexadecimal or as decimal values (hex | dec)" in
+  Arg.(value & opt (enum ["hex", Pp.Hex; "dec", Pp.Dec]) !Pp.loc_pp &
+       info ["locs"] ~docv:"HEX" ~doc)
+
 let debug_level =
   let doc = "Set the debug message level for cerberus to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
@@ -282,11 +290,11 @@ let print_level =
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
-let json_file =
-  let doc = "Output typing context information to JSON file" in
-  Arg.(value & opt (some string) None & info ["json"] ~doc)
+(* let json_file =
+ *   let doc = "Output typing context information to JSON file" in
+ *   Arg.(value & opt (some string) None & info ["json"] ~doc) *)
 
 
 let () =
-  let check_t = Term.(pure main $ file $ json_file $ debug_level $ print_level) in
+  let check_t = Term.(pure main $ file $ (* json_file $  *)loc_pp $ debug_level $ print_level) in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

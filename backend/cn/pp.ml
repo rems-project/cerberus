@@ -13,6 +13,14 @@ let term_col = match get_terminal_size () with
   | _ -> 80 - 1
 
 
+type loc_pp = 
+  | Hex
+  | Dec
+
+let loc_pp = ref Hex
+
+
+
 let int i = string (string_of_int i)
 
 
