@@ -96,6 +96,7 @@ type type_error =
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
   | Write_value_unrepresentable of {state : state_report}
+  | IntFromPtr_unrepresentable of {ict : Sctypes.t; state : state_report}
   | Unsat_constraint of {constr : doc; state : state_report; info : info}
   | Unconstrained_logical_variable of Sym.t * string option
   | Array_as_value of Sym.t * string option
@@ -235,6 +236,12 @@ let pp_type_error te =
      { short; descr = Some descr; state = None }
   | Write_value_unrepresentable {state : state_report} ->
      let short = !^"Write value unrepresentable" in
+     { short; descr = None; state = Some state }
+  | IntFromPtr_unrepresentable {ict; state : state_report} ->
+     let short = 
+       !^"pointer value not representable at type" ^^^
+         Sctypes.pp ict
+     in
      { short; descr = None; state = Some state }
   | Unsat_constraint {constr; state; info} ->
      let short = !^"Unsatisfied constraint" in

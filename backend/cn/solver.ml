@@ -45,11 +45,13 @@ module Sort_HashedType = struct
   let hash s = Z3.Sort.get_id s
 end
 
+(* all our symbols are created with strings *)
+let z3_symbol_equal s s' = 
+  String.equal (Z3.Symbol.get_string s) (Z3.Symbol.get_string s')
+
 module Z3Symbol_HashedType = struct
   type t = Z3.Symbol.symbol
-  let equal s s' = 
-    (* all our symbols are created with strings *)
-    String.equal (Z3.Symbol.get_string s) (Z3.Symbol.get_string s')
+  let equal = z3_symbol_equal
   let hash s = 
     (* rubbish hash function *)
     String.length (Z3.Symbol.get_string s)
@@ -266,8 +268,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
             loc_to_integer (term t)
          | MemberOffset (tag, member) ->
             let decl = SymMap.find tag SD.struct_decls in
-            let offset = Option.get (Memory.member_offset decl member) in
-            term (int_ offset)
+            term (int_ (Option.get (Memory.member_offset decl member)))
          | ArrayOffset (ct, t) -> 
             term (mul_ (int_ (Memory.size_of_ctype ct), t))
          end
@@ -286,12 +287,11 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          begin match ct_pred with
          | Representable (ct, t) ->
             let sdecl_lookup tag = SymMap.find tag SD.struct_decls in
-            term (representable_ctype sdecl_lookup ct t)
+            term (representable sdecl_lookup ct t)
          | AlignedI t ->
             term (eq_ (rem_ (pointerToIntegerCast_ t.t, t.align), int_ 0))
          | Aligned (t, ct) ->
-            let align = int_ (Memory.align_of_ctype ct) in
-            term (alignedI_ ~t ~align)
+            term (alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct)))
          end
       | Array_op array_op -> 
          let open Z3.Z3Array in
@@ -450,127 +450,153 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
         in
         Debug_ocaml.error err
       in
-      if Z3.AST.is_quantifier (Z3.Expr.ast_of_expr expr) then
-        let qexpr = Z3.Quantifier.quantifier_of_expr expr in
-        let body = Z3.Quantifier.get_body qexpr in
-        let quantifier_sorts = 
-          (* List.combine 
-           *   (Z3.Quantifier.get_bound_variable_names qexpr) *)
-            (Z3.Quantifier.get_bound_variable_sorts qexpr)
-        in
-        let q_bt = match quantifier_sorts with
-          | [q_sort] -> z3_sort q_sort
-          | _ -> unsupported "z3 quantifier list"
-        in
-        let q_s = new_q () in
-        array_def_ (q_s, q_bt) (aux ((q_s, q_bt) :: binders) body)
-      else 
-        let args = try Z3.Expr.get_args expr with | _ -> [] in
-        let args = List.map (aux binders) args in
-      if Z3.Arithmetic.is_add expr then
-        List.fold_left (Tools.curry add_) (hd args) (tl args)
-      else if Z3.Boolean.is_and expr then
-        and_ args
-      else if Z3.Z3Array.is_constant_array expr then
-        let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
-        const_ abt (hd args)
-      else if Z3.Z3Array.is_default_array expr then
-        unsupported "z3 array default"
-      else if Z3.Set.is_difference expr then
-        setDifference_ (nth args 0, nth args 1)
-      else if Z3.Boolean.is_distinct expr then
-        unsupported "z3 is_distinct"
-      else if Z3.Arithmetic.is_div expr then
-        div_ (nth args 0, nth args 1)
-      else if Z3.Boolean.is_eq expr then
-        eq_ (nth args 0, nth args 1)
-      else if Z3.Boolean.is_false expr then
-        bool_ false
-      else if Z3.Arithmetic.is_ge expr then
-        ge_ (nth args 0, nth args 1)
-      else if Z3.Arithmetic.is_gt expr then
-        gt_ (nth args 0, nth args 1)
-      else if Z3.Boolean.is_implies expr then
-        impl_ (nth args 0, nth args 1)
-      else if Z3.Arithmetic.is_int_numeral expr then
-        z_ (Z3.Arithmetic.Integer.get_big_int expr)
-      else if Z3.Set.is_intersect expr then
-        setIntersection_ (List1.make (hd args, tl args))
-      else if Z3.Boolean.is_ite expr then
-        ite_ (nth args 0, nth args 1, nth args 2)
-      else if Z3.Arithmetic.is_le expr then
-        le_ (nth args 0, nth args 1)
-      else if Z3.Arithmetic.is_lt expr then
-        lt_ (nth args 0, nth args 1)
-      else if Z3.Arithmetic.is_modulus expr then
-        mod_ (nth args 0, nth args 1)
-      else if Z3.Arithmetic.is_mul expr then
-        mul_ (nth args 0, nth args 1)
-      else if Z3.Boolean.is_not expr then
-        not_ (nth args 0)
-      else if Z3.Boolean.is_or expr then
-        or_ args
-      else if Z3.Arithmetic.is_rat_numeral expr then
-        q1_ (Z3.Arithmetic.Real.get_ratio expr)
-        (* let i = 
-         *   Z3.Arithmetic.Integer.get_big_int
-         *     (Z3.Arithmetic.Real.get_numerator expr)
-         * in
-         * let j = 
-         *   Z3.Arithmetic.Integer.get_big_int
-         *     (Z3.Arithmetic.Real.get_denominator expr)
-         * in
-         * q_ (Z.to_int i, Z.to_int j) *)
-      else if Z3.Arithmetic.is_remainder expr then
-        rem_ (nth args 0, nth args 1)
-      else if Z3.Z3Array.is_select expr then
-        get_ (nth args 0) (nth args 1)
-      else if Z3.Z3Array.is_store expr then
-        set_ (nth args 0) (nth args 1, nth args 2)
-      (* else if Z3.Symbol.is_string_symbol expr then
-       *   Debug_ocaml.error "unsupported z3 string symbol" *)
-      else if Z3.Arithmetic.is_sub expr then
-        sub_ (nth args 0, nth args 1)
-      else if Z3.Set.is_subset expr then
-        subset_ (nth args 0, nth args 1)
-      else if Z3.Boolean.is_true expr then
-        bool_ true
-      else if Z3.Arithmetic.is_uminus expr then
-        let arg = nth args 0 in
-        begin match IT.bt arg with
-        | Integer -> sub_ (int_ 0, arg)
-        | Real -> sub_ (q_ (0, 1), arg)
-        | _ -> Debug_ocaml.error "illtyped index term"
-        end
-      else if Z3.Set.is_union expr then
-        setUnion_ (List1.make (hd args, tl args))
-      else if Z3.AST.is_var (Z3.Expr.ast_of_expr expr) then
-        sym_ (nth binders (Z3.Quantifier.get_index expr))
-      else
+      let args = try Z3.Expr.get_args expr with | _ -> [] in
+      let args = List.map (aux binders) args in
+      match () with
+
+      | () when Z3.AST.is_quantifier (Z3.Expr.ast_of_expr expr) ->
+         let qexpr = Z3.Quantifier.quantifier_of_expr expr in
+         let body = Z3.Quantifier.get_body qexpr in
+         let quantifier_sorts = Z3.Quantifier.get_bound_variable_sorts qexpr in
+         let q_bt = match quantifier_sorts with
+           | [q_sort] -> z3_sort q_sort
+           | _ -> unsupported "z3 quantifier list"
+         in
+         let q_s = new_q () in
+         array_def_ (q_s, q_bt) (aux ((q_s, q_bt) :: binders) body)
+
+      | () when Z3.Arithmetic.is_add expr ->
+         List.fold_left (Tools.curry add_) (hd args) (tl args)
+
+      | () when Z3.Boolean.is_and expr ->
+         and_ args
+
+      | () when Z3.Z3Array.is_constant_array expr ->
+         let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
+         const_ abt (hd args)
+
+      | () when Z3.Z3Array.is_default_array expr ->
+         unsupported "z3 array default"
+
+      | () when Z3.Set.is_difference expr ->
+         setDifference_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_distinct expr ->
+         unsupported "z3 is_distinct"
+
+      | () when Z3.Arithmetic.is_div expr ->
+         div_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_eq expr ->
+         eq_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_false expr ->
+         bool_ false
+
+      | () when Z3.Arithmetic.is_ge expr ->
+         ge_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_gt expr ->
+         gt_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_implies expr ->
+         impl_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_int_numeral expr ->
+         z_ (Z3.Arithmetic.Integer.get_big_int expr)
+
+      | () when  Z3.Set.is_intersect expr ->
+         setIntersection_ (List1.make (hd args, tl args))
+
+      | () when Z3.Boolean.is_ite expr ->
+         ite_ (nth args 0, nth args 1, nth args 2)
+
+      | () when Z3.Arithmetic.is_le expr ->
+         le_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_lt expr ->
+         lt_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_modulus expr ->
+         mod_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_mul expr ->
+         mul_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_not expr ->
+         not_ (nth args 0)
+
+      | () when Z3.Boolean.is_or expr ->
+         or_ args
+
+      | () when Z3.Arithmetic.is_rat_numeral expr ->
+         q1_ (Z3.Arithmetic.Real.get_ratio expr)
+
+      | () when Z3.Arithmetic.is_remainder expr ->
+         rem_ (nth args 0, nth args 1)
+
+      | () when Z3.Z3Array.is_select expr ->
+         get_ (nth args 0) (nth args 1)
+
+      | () when Z3.Z3Array.is_store expr ->
+         set_ (nth args 0) (nth args 1, nth args 2)
+
+      | () when Z3.Arithmetic.is_sub expr ->
+         sub_ (nth args 0, nth args 1)
+
+      | () when Z3.Set.is_subset expr ->
+         subset_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_true expr ->
+         bool_ true
+
+      | () when Z3.Arithmetic.is_uminus expr ->
+         let arg = nth args 0 in
+         begin match IT.bt arg with
+         | Integer -> sub_ (int_ 0, arg)
+         | Real -> sub_ (q_ (0, 1), arg)
+         | _ -> Debug_ocaml.error "illtyped index term"
+         end
+
+      | () when Z3.Set.is_union expr ->
+         setUnion_ (List1.make (hd args, tl args))
+
+      | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
+         sym_ (nth binders (Z3.Quantifier.get_index expr))
+
+      | () ->
         let func_decl = Z3.Expr.get_func_decl expr in
         let func_name = Z3.FuncDecl.get_name func_decl in
-      if Z3Symbol_HashedType.equal func_name loc_to_integer_symbol then
-        let p = nth args 0 in
-        match IT.is_pointer p with
-        | Some z -> z_ z
-        | _ -> pointerToIntegerCast_ (nth args 0)
-      else if Z3Symbol_HashedType.equal func_name integer_to_loc_symbol then
-        let i = nth args 0 in
-        match IT.is_z i with
-        | Some z -> pointer_ z
-        | _ -> integerToPointerCast_ i
-      else if Z3Symbol_Table.mem member_funcdecl_table func_name then
-        let (tag, member) = Z3Symbol_Table.find member_funcdecl_table func_name in
-        let sd = Memory.member_types (SymMap.find tag SD.struct_decls) in
-        let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
-        member_ ~member_bt (tag, nth args 0, member)
-      else if Z3Symbol_Table.mem struct_funcdecl_table func_name then
-        let tag = Z3Symbol_Table.find struct_funcdecl_table func_name in
-        let sd = Memory.members (SymMap.find tag SD.struct_decls) in
-        struct_ (tag, List.combine sd args)
-      else
-        unsupported "z3 expression"
-        (* let abt = z3_sort (Z3.FuncDecl.get_range func_decl) in *)
+        match () with
+
+        | () when z3_symbol_equal func_name loc_to_integer_symbol ->
+           let p = nth args 0 in
+           begin match IT.is_pointer p with
+           | Some z -> z_ z
+           | _ -> pointerToIntegerCast_ (nth args 0)
+           end
+
+        | () when z3_symbol_equal func_name integer_to_loc_symbol ->
+           let i = nth args 0 in
+           begin match IT.is_z i with
+           | Some z -> pointer_ z
+           | _ -> integerToPointerCast_ i
+           end
+
+        | () when Z3Symbol_Table.mem member_funcdecl_table func_name ->
+           let (tag, member) = Z3Symbol_Table.find member_funcdecl_table func_name in
+           let sd = Memory.member_types (SymMap.find tag SD.struct_decls) in
+           let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
+           member_ ~member_bt (tag, nth args 0, member)
+
+        | () when Z3Symbol_Table.mem struct_funcdecl_table func_name ->
+           let tag = Z3Symbol_Table.find struct_funcdecl_table func_name in
+           let sd = Memory.members (SymMap.find tag SD.struct_decls) in
+           struct_ (tag, List.combine sd args)
+
+        | () ->
+           unsupported "z3 expression"
+
     in
     fun expr -> aux [] expr
 

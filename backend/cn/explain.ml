@@ -275,85 +275,11 @@ module Make
     {substitution; vclasses = vclass_explanations; relevant}
 
 
-  (* let evaluate_z3_expr model unevaluated_expr bt : IT.t option = 
-   *   let rec aux unevaluated_expr bt = 
-   *     let open Option in
-   *     let@ expr = Z3.Model.eval model unevaluated_expr true in
-   *     match bt with
-   *     | BT.Unit ->
-   *        return unit_
-   *     | BT.Bool ->
-   *        let b = 
-   *          if Z3.Boolean.is_true expr then true
-   *          else if Z3.Boolean.is_false expr then false
-   *          else Debug_ocaml.error "non-true/false boolean"
-   *        in
-   *        return (bool_ b)
-   *     | BT.Integer -> 
-   *        let i = Z3.Arithmetic.Integer.get_big_int expr in
-   *        return (z_ i)
-   *     | BT.Real ->
-   *        let n = 
-   *          Z3.Arithmetic.Integer.get_big_int
-   *            (Z3.Arithmetic.Real.get_numerator expr)
-   *        in
-   *        let d = 
-   *          Z3.Arithmetic.Integer.get_big_int
-   *            (Z3.Arithmetic.Real.get_denominator expr)
-   *        in
-   *        return (q_ (Z.to_int n, Z.to_int d))
-   *     | BT.Loc ->
-   *        let i = Z3.Arithmetic.Integer.get_big_int expr in
-   *        return (pointer_ i)
-   *     | BT.List _ ->
-   *        fail
-   *     | BT.Tuple _ ->
-   *        fail
-   *     | BT.Struct tag ->
-   *        let layout = Global.SymMap.find tag G.global.struct_decls in
-   *        let members = Memory.member_types layout in
-   *        let destructors = Z3.Tuple.get_field_decls (S.sort (Struct tag)) in
-   *        let members_destructors = List.combine members destructors in
-   *        let@ members = 
-   *          ListM.mapM (fun ((member, sct), destructor) -> 
-   *              let member_bt = BT.of_sct sct in
-   *              let member_term = Z3.Expr.mk_app Solver.context destructor [expr] in
-   *              let@ member_value = aux member_term member_bt in
-   *              return (member, member_value)
-   *            ) members_destructors
-   *        in
-   *       return (IT.struct_ (tag, members))
-   *     | BT.Set _ ->
-   *        fail
-   *     | BT.Array (abt, rbt) ->
-   *        if Z3.Z3Array.is_constant_array expr then
-   *          match Z3.Expr.get_args expr with
-   *          | [constant] ->
-   *             let@ constant = aux constant rbt in
-   *             return (const_ abt constant)
-   *          | _ ->
-   *             Debug_ocaml.error "constant array: unexpected argument list"
-   *        else if Z3.Z3Array.is_store expr then
-   *          match Z3.Expr.get_args expr with
-   *          | [arr; index; value] ->
-   *             let@ arr = aux arr (Array (abt, rbt)) in
-   *             let@ index = aux index abt in
-   *             let@ value = aux value rbt in
-   *             return (set_ arr (index, value))
-   *          | _ ->
-   *             Debug_ocaml.error "store: unexpected argument list"
-   *        else 
-   *          let str = Z3.Expr.to_string expr in
-   *          Debug_ocaml.error ("unhandled array value case: " ^ str)
-   *   in
-   *   aux unevaluated_expr bt *)
-
   let evaluate model it = 
     Option.map S.z3_expr (Z3.Model.eval model (S.term it) true)
 
   let evaluate_lambda model (q_s, q_bt) it = 
     Option.map S.z3_expr (Z3.Model.eval model (S.lambda (q_s, q_bt) it) true)
-
 
 
 
@@ -410,9 +336,7 @@ module Make
          let reported = 
            List.fold_left SymSet.union SymSet.empty
              [symbol_it p.pointer; 
-              IT.free_vars p.value;
-              IT.free_vars p.init;
-              IT.free_vars p.permission;
+              symbol_it p.value;
              ]
          in
          (entry, [], reported)
@@ -574,38 +498,13 @@ module Make
       variables = predicate_oargs @ logical_var_lines }
       
 
-  (* let pp_state local explanation =
-   *   let lines = 
-   *     List.map (fun (a,_,c,d,e,_) -> ((L,a), (R,c), (L,d), (L,e)))
-   *       (pp_state_aux local explanation None)
-   *   in
-   *   table4 ("pointer", "size", "state", "variable") lines *)
-
-
-  (* let json_state local : Yojson.Safe.t = 
-   *   let (explanation, local) = explanation local SymSet.empty in
-   *   let lines = 
-   *     List.map (fun (a,_,c,d,e,_) : Yojson.Safe.t ->
-   *         let jsonf doc = `String (Pp.plain doc) in
-   *         `Assoc [("pointer", Option.json jsonf a);
-   *                 ("size", Option.json jsonf c);
-   *                 ("state", Option.json jsonf d);
-   *                 ("variable", Option.json jsonf e)]
-   *       ) (pp_state_aux local explanation None)
-   *   in
-   *   `List lines *)
-
-
-  (* let state local = 
-   *   let (explanation, local) = explanation local SymSet.empty in
-   *   pp_state local explanation *)
-
   let undefined_behaviour local = 
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in
     assert (not provable);
     let explanation = explanation local SymSet.empty in
     let model = S.model (L.solver local) in
     state local explanation model
+
 
   let implementation_defined_behaviour local it = 
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in

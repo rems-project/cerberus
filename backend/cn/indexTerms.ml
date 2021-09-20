@@ -949,94 +949,48 @@ let hash (IT (it, _bt)) =
 
 
 
-let rec representable_ctype struct_layouts (Sctype (_, ct) : Sctypes.t) about =
+let value_check_pointer alignment ~pointee_ct about = 
+  let pointer_bits = Memory.size_of_pointer * Memory.bits_per_byte in
+  and_ [lePointer_ (pointer_ Z.zero, about); 
+        ltPointer_ (about, pointer_ (Z.pow (Z.of_int 2) pointer_bits));
+        if alignment then aligned_ (about, pointee_ct) else bool_ true]
+
+let value_check alignment struct_layouts ct about =
   let open Sctypes in
   let open Memory in
-  match ct with
-  | Void -> 
-     bool_ true
-  | Integer it -> 
-     in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
-  | Array (it, None) -> 
-     Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
-  | Array (ct, Some n) -> 
-     let lcs = 
-       List.init n (fun i ->
-           (representable_ctype struct_layouts ct
-              (get_ about (int_ i)))
-         )
-     in
-     and_ lcs
-  | Pointer _ -> 
-     let pointer_byte_size = size_of_pointer in
-     let pointer_size = pointer_byte_size * 8 in
-     let max = Z.pow (Z.of_int 2) pointer_size in
-     and_ [lePointer_ (pointer_ Z.zero, about); 
-           ltPointer_ (about, pointer_ max)]
-  | Struct tag -> 
-     let layout = struct_layouts tag in
-     and_ begin
-         List.filter_map (fun piece ->
-             match piece.member_or_padding with
-             | Some (member, sct) ->
-                let rangef = representable_ctype struct_layouts sct in
-                let bt = BT.of_sct sct in
-                let member_it = member_ ~member_bt:bt (tag, about, member) in
-                Some (rangef member_it)
-             | None -> 
-                None
-           ) layout
-       end
-  | Function _ -> 
-     Debug_ocaml.error "todo: function types"
+  let rec aux (Sctype (_, ct_) : Sctypes.t) about = 
+    match ct_ with
+    | Void -> 
+       bool_ true
+    | Integer it -> 
+       in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
+    | Array (it, None) -> 
+       Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
+    | Array (ict, Some n) -> 
+       and_ (List.init n (fun i -> (aux ict (get_ about (int_ i)))))
+    | Pointer (_, pointee_ct) -> 
+       value_check_pointer alignment ~pointee_ct about
+    | Struct tag -> 
+       and_ begin
+           List.filter_map (fun piece ->
+               match piece.member_or_padding with
+               | Some (member, mct) ->
+                  let member_bt = BT.of_sct mct in
+                  let member_it = member_ ~member_bt (tag, about, member) in
+                  Some (aux mct member_it)
+               | None -> 
+                  None
+             ) (struct_layouts tag)
+         end
+    | Function _ -> 
+       Debug_ocaml.error "todo: function types"
+  in
+  aux ct about
 
+let good_value = value_check true
+let representable = value_check false
 
-let good_pointer pointer_it pointee_sct = 
-  match pointee_sct with
-  | CT.Sctype (_, Void) ->
-     representable_ (CT.pointer_ct pointee_sct, pointer_it);
-  | _ -> 
-     and_ [
-         representable_ (CT.pointer_ct pointee_sct, pointer_it);
-         aligned_ (pointer_it, pointee_sct);
-       ]
-
-let rec good_value struct_layouts ct about =
-  let open Sctypes in
-  let open Memory in
-  let (Sctype (_, ct_)) = ct in
-  match ct_ with
-  | Void -> 
-     representable_ctype struct_layouts ct about
-  | Integer it -> 
-     representable_ctype struct_layouts ct about
-  | Array (it, None) -> 
-     Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
-  | Array (ct, Some n) -> 
-     let lcs = 
-       List.init n (fun i ->
-           good_value struct_layouts ct
-             (get_ about (int_ i))
-         )
-     in
-     and_ lcs
-  | Pointer (_, pointee_ct) -> 
-     good_pointer about pointee_ct
-  | Struct tag -> 
-     let layout = struct_layouts tag in
-     and_ begin
-         List.filter_map (fun piece ->
-             match piece.member_or_padding with
-             | Some (member, sct) ->
-                let bt = BT.of_sct sct in
-                let member_it = member_ ~member_bt:bt (tag, about, member) in
-                Some (good_value struct_layouts sct member_it)
-             | None -> 
-                None
-           ) layout
-       end
-  | Function _ -> 
-     Debug_ocaml.error "todo: function types"
+let good_pointer = value_check_pointer true 
 
 
 

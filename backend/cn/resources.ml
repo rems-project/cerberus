@@ -331,16 +331,6 @@ module RE = struct
 
 
 
-  let make_lit it = 
-    match IT.is_lit it with
-    | Some _ -> 
-       (it, [], [])
-    | None -> 
-       let s = Sym.fresh () in
-       let bt = IT.bt it in
-       (sym_ (s, bt), [(s, bt)], [LC.t_ (def_ s it)])
-
-
 
   (* assumption: resource is owned *)
   let derived_constraint resource = 
@@ -378,31 +368,27 @@ module RE = struct
   (* construction *)
 
 
-  let array_index_to_pointer base element_size index =
-    addPointer_ (base, mul_ (element_size, index))
-  
-  let array_pointer_to_index base element_size pointer =
-    div_ (sub_ (pointerToIntegerCast_ pointer, 
-                pointerToIntegerCast_ base), element_size)
-  
-  let array_index_in_range index length =
-    and_ [le_ (int_ 0, index); lt_ (index, length); ]
+  let array_offset_of_index ~item_ct ~index = 
+    mul_ (index, int_ (Memory.size_of_ctype item_ct))
 
-  let array_is_at_valid_index base element_size pointer =
-    eq_ (rem_ (sub_ (pointerToIntegerCast_ pointer, 
-                     pointerToIntegerCast_ base), element_size),
-         int_ 0)
+  let array_index_to_pointer ~base ~item_ct ~index =
+    addPointer_ (base, array_offset_of_index ~item_ct ~index)
   
+  let array_offset_of_pointer ~base ~pointer = 
+    sub_ (pointerToIntegerCast_ pointer, 
+          pointerToIntegerCast_ base)
+
+  let array_pointer_to_index ~base ~item_ct ~pointer =
+    div_ (array_offset_of_pointer ~base ~pointer, 
+          int_ (Memory.size_of_ctype item_ct))
   
   (* check this *)
-  let array_permission qpointer base_pointer length element_size permission =
-    let open IT in
-    let index = array_pointer_to_index base_pointer element_size qpointer in
+  let array_permission ~base ~item_ct ~length ~qpointer ~permission =
+    let offset = array_offset_of_pointer ~base ~pointer:qpointer in
+    let index = array_pointer_to_index ~base ~item_ct ~pointer:qpointer in
     let condition = 
-      and_ [
-          array_index_in_range index length;
-          array_is_at_valid_index base_pointer element_size qpointer
-        ]
+      and_ [eq_ (rem_ (offset, int_ (Memory.size_of_ctype item_ct)), int_ 0);
+            le_ (int_ 0, index); lt_ (index, length)]
     in
     ite_ (condition, permission, q_ (0,1))
 

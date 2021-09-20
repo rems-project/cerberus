@@ -9,8 +9,6 @@ module AT = ArgumentTypes
 module StringMap = Map.Make(String)
 module Loc = Locations
 open Pp
-
-
 open Resources.RE
 open BT
 open IT
@@ -57,173 +55,32 @@ let pp_predicate_definition def =
 
 
 
-let region = 
+let region () = 
   let id = "Region" in
   let loc = Loc.other "internal (Region)" in
-  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
+  let base_s, base = IT.fresh_named Loc "base" in
   let length_s, length = IT.fresh_named Integer "length" in
   let permission_s, permission = IT.fresh_named BT.Real "permission" in
-  let v_s, v = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
+  let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
   let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
-  let p_s, p = IT.fresh_named Loc "p" in
-  let qpoint = {
+  let qpoint = 
+    let qpointer_s, qpointer = IT.fresh Loc in {
       ct = char_ct; 
-      qpointer = p_s;
+      qpointer = qpointer_s;
       permission = 
-        ite_ (
-            and_ [lePointer_ (pointer, p); 
-                  ltPointer_ (p, addPointer_ (pointer, length));], 
-            permission, 
-            q_ (0, 1)
-          );
-      value = get_ v p;
-      init = get_ init p;
+        RE.array_permission ~base ~item_ct:char_ct
+          ~length ~qpointer ~permission;
+      value = get_ value qpointer;
+      init = get_ init qpointer;
     }
   in
   let lrt =
-    LRT.Logical ((v_s, IT.bt v), (loc, None),
+    LRT.Logical ((value_s, IT.bt value), (loc, None),
     LRT.Logical ((init_s, IT.bt init), (loc, None),
     LRT.Resource (QPoint qpoint, (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer pointer char_ct), (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer (subPointer_ (addPointer_ (pointer, length), int_ 1)) char_ct), (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct base), (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, length), int_ 1))), (loc, None),
     LRT.I)))))
-  in
-  let assignment = [] in
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I assignment) 
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = pointer_s;
-      iargs = [(length_s, IT.bt length)]; 
-      oargs = []; 
-      permission = permission_s;
-      clauses = [clause]; 
-    } 
-  in
-  (id, predicate)
-
-
-
-let part_zero_region = 
-  let id = "PartZeroRegion" in
-  let loc = Loc.other "internal (PartZeroRegion)" in
-  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let length_s, length = IT.fresh_named Integer "length" in
-  let permission_s, permission = IT.fresh_named BT.Real "permission" in
-  let v_s, v = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
-  let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
-  let up_to_s, up_to = IT.fresh_named Integer "up_to" in
-  let p_s, p = IT.fresh_named Loc "p" in
-  let qpoint = {
-      ct = char_ct; 
-      qpointer = p_s;
-      permission = 
-        ite_ (
-            and_ [lePointer_ (pointer, p); 
-                  ltPointer_ (p, addPointer_ (pointer, length));], 
-            permission, 
-            q_ (0, 1)
-          );
-      value = get_ v p;
-      init = get_ init p;
-    }
-  in
-  let v_constr = 
-    forall_ (p_s, IT.bt p) 
-      (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
-      (impl_ (and_ [lePointer_ (pointer, p); 
-                    ltPointer_ (p, addPointer_ (pointer, up_to))],
-              eq_ (get_ v p, int_ 0)))
-  in
-  let init_constr = 
-    forall_ (p_s, IT.bt p)
-      (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
-      (impl_ (and_ [lePointer_ (pointer, p); 
-                    ltPointer_ (p, addPointer_ (pointer, up_to))],
-              get_ init p))
-  in
-  let lrt =
-    LRT.Logical ((v_s, IT.bt v), (loc, None),
-    LRT.Logical ((init_s, IT.bt init), (loc, None),
-    LRT.Resource (QPoint qpoint, (loc, None),
-    LRT.Constraint (v_constr, (loc, None),
-    LRT.Constraint (init_constr, (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer pointer char_ct), (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer (subPointer_ (addPointer_ (pointer, length), int_ 1)) char_ct), (loc, None),
-    LRT.I)))))))
-  in
-  let assignment = [] in
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I assignment) 
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = pointer_s;
-      iargs = [(length_s, IT.bt length); (up_to_s, IT.bt up_to)]; 
-      oargs = []; 
-      permission = permission_s;
-      clauses = [clause]; 
-    } 
-  in
-  (id, predicate)
-
-
-
-
-let zero_region = 
-  let id = "ZeroRegion" in
-  let loc = Loc.other "internal (ZeroRegion)" in
-  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let length_s, length = IT.fresh_named Integer "length" in
-  let permission_s, permission = IT.fresh_named BT.Real "permission" in
-  let v_s, v = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
-  let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
-  let p_s, p = IT.fresh_named Loc "p" in
-  let qpoint = {
-      ct = char_ct; 
-      qpointer = p_s;
-      permission = 
-        ite_ (
-            and_ [lePointer_ (pointer, p); 
-                  ltPointer_ (p, addPointer_ (pointer, length));], 
-            permission, 
-            q_ (0, 1)
-          );
-      value = get_ v p;
-      init = get_ init p;
-    }
-  in
-  let v_constr = 
-    forall_ (p_s, IT.bt p) 
-      (* (Some (T_App (T_Term v_t, T_Term p_t))) *)
-      (impl_ (and_ [lePointer_ (pointer, p); 
-                    ltPointer_ (p, addPointer_ (pointer, length))],
-              eq_ (get_ v p, int_ 0)))
-  in
-  let init_constr = 
-    forall_ (p_s, IT.bt p)
-      (* (Some (T_App (T_Term init_t, T_Term p_t))) *)
-      (impl_ (and_ [lePointer_ (pointer, p); 
-                    ltPointer_ (p, addPointer_ (pointer, length))],
-              and_ [get_ init p]))
-  in
-  let lrt =
-    LRT.Logical ((v_s, IT.bt v), (loc, None),
-    LRT.Logical ((init_s, IT.bt init), (loc, None),
-    LRT.Resource (QPoint qpoint, (loc, None),
-    LRT.Constraint (v_constr, (loc, None),
-    LRT.Constraint (init_constr, (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer pointer char_ct), (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer (subPointer_ (addPointer_ (pointer, 
-length), int_ 1)) char_ct), (loc, None),
-    LRT.I)))))))
   in
   let clause = {
       loc = loc;
@@ -233,10 +90,10 @@ length), int_ 1)) char_ct), (loc, None),
   in
   let predicate = {
       loc = loc;
-      pointer = pointer_s;
+      pointer = base_s;
+      permission = permission_s;
       iargs = [(length_s, IT.bt length)]; 
       oargs = []; 
-      permission = permission_s;
       clauses = [clause]; 
     } 
   in
@@ -244,7 +101,105 @@ length), int_ 1)) char_ct), (loc, None),
 
 
 
-let early_alloc = 
+let part_zero_region () = 
+  let id = "PartZeroRegion" in
+  let loc = Loc.other "internal (PartZeroRegion)" in
+  let base_s, base = IT.fresh_named Loc "base" in
+  let permission_s, permission = IT.fresh_named BT.Real "permission" in
+  let length_s, length = IT.fresh_named Integer "length" in
+  let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
+  let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
+  let up_to_s, up_to = IT.fresh_named Integer "up_to" in
+  let qp_s, qp = IT.fresh Loc in 
+  let qpoint = {
+      ct = char_ct; 
+      qpointer = qp_s;
+      permission = array_permission ~item_ct:char_ct ~base
+                     ~length ~qpointer:qp ~permission;
+      value = get_ value qp;
+      init = get_ init qp;
+    }
+  in
+  let constr = 
+    forall_ (qp_s, IT.bt qp)
+      (impl_ (and_ [lePointer_ (base, qp); 
+                    ltPointer_ (qp, addPointer_ (base, up_to))],
+              and_ [eq_ (get_ value qp, int_ 0);
+                    get_ init qp]))
+  in
+  let lrt =
+    LRT.Logical ((value_s, IT.bt value), (loc, None), 
+    LRT.Logical ((init_s, IT.bt init), (loc, None), 
+    LRT.Resource (QPoint qpoint, (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct base), (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, length), int_ 1))), (loc, None),
+    LRT.Constraint (constr, (loc, None),
+    LRT.I))))))
+  in
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I []) 
+    }
+  in
+  let predicate = {
+      loc = loc;
+      pointer = base_s;
+      permission = permission_s;
+      iargs = [(length_s, IT.bt length); 
+               (up_to_s, IT.bt up_to);]; 
+      oargs = []; 
+      clauses = [clause]; 
+    } 
+  in
+  (id, predicate)
+
+
+
+
+let zero_region () = 
+  let id = "ZeroRegion" in
+  let loc = Loc.other "internal (ZeroRegion)" in
+  let base_s, base = IT.fresh_named Loc "base" in
+  let length_s, length = IT.fresh_named Integer "length" in
+  let permission_s, permission = IT.fresh_named BT.Real "permission" in
+  let qp_s, qp = IT.fresh_named Loc "p" in
+  let qpoint = {
+      ct = char_ct; 
+      qpointer = qp_s;
+      permission = array_permission ~item_ct:char_ct ~base ~length
+                     ~qpointer:qp ~permission;
+      value = int_ 0;
+      init = bool_ true;
+    }
+  in
+  let lrt =
+    LRT.Resource (QPoint qpoint, (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct base), (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, 
+length), int_ 1))), (loc, None),
+    LRT.I)))
+  in
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I []) 
+    }
+  in
+  let predicate = {
+      loc = loc;
+      pointer = base_s;
+      permission = permission_s;
+      iargs = [(length_s, IT.bt length)]; 
+      oargs = []; 
+      clauses = [clause]; 
+    } 
+  in
+  (id, predicate)
+
+
+
+let early_alloc () = 
   let id = "EarlyAlloc" in
   let loc = Loc.other "internal (EarlyAlloc)" in
   let start_s, start = IT.fresh_named Loc "start" in
@@ -265,8 +220,8 @@ let early_alloc =
   in
   let lrt =
     LRT.Resource (Predicate region, (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer start char_ct), (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer end_t char_ct), (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct start), (loc, None),
+    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct end_t), (loc, None),
     LRT.I)))
   in
   let clause = {
@@ -278,9 +233,9 @@ let early_alloc =
   let predicate = {
       loc = loc;
       pointer = start_s;
+      permission = permission_s;
       iargs = [(end_s, IT.bt end_t)]; 
       oargs = []; 
-      permission = permission_s;
       clauses = [clause]; 
     } 
   in
@@ -775,10 +730,10 @@ let page_alloc_predicates struct_decls =
 
 
 let predicate_list struct_decls = 
-  region ::
-  zero_region ::
-  part_zero_region ::
-  early_alloc ::
+  region () ::
+  zero_region () ::
+  part_zero_region () ::
+  early_alloc () ::
   (* for now: *)
   try page_alloc_predicates struct_decls with
   | Not_found -> []

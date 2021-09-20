@@ -1,135 +1,56 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
 module SymMap = Map.Make(Sym)
+module IM = CF.Impl_mem
+module OI = CF.Ocaml_implementation
+open Sctypes
+
+(* ... adapting from impl_mem *)
 
 
-let report fn exn = 
-  Debug_ocaml.error (fn ^ " error: " ^ (Printexc.to_string exn)) 
+let bits_per_byte = 8
+
+let z_of_ival iv = Option.get (IM.eval_integer_value iv)
+let int_of_ival iv = Z.to_int (Option.get (IM.eval_integer_value iv))
 
 
+let size_of_integer_type it = Option.get ((OI.get ()).sizeof_ity it)
+let align_of_integer_type it = Option.get ((OI.get ()).alignof_ity it)
 
-let integer_value_to_num iv = 
-  try
-    match CF.Impl_mem.eval_integer_value iv with
-    | Some v -> v
-    | None -> Debug_ocaml.error "integer_value_to_num returned None"
-  with
-  | exn -> report "integer_value_to_num" exn
+let max_integer_type it = z_of_ival (CF.Impl_mem.max_ival it) 
+let min_integer_type it = z_of_ival (CF.Impl_mem.min_ival it)
 
-
-
-(* adapting from impl_mem *)
-let size_of_integer_type it = 
-  try
-    let impl = CF.Ocaml_implementation.get () in
-    match impl.sizeof_ity it with
-    | Some n -> n
-    | None -> Debug_ocaml.error "sizeof_pointer returned None"
-  with
-  | exn -> report "size_of_integer_type" exn
+let size_of_pointer = Option.get ((OI.get ()).sizeof_pointer)
+let align_of_pointer = Option.get ((OI.get ()).alignof_pointer)
 
 
+let size_of_ctype = function
+  | Sctype (_, Void) -> Debug_ocaml.error "size_of_ctype applied to void"
+  | ct -> int_of_ival (IM.sizeof_ival (to_ctype ct))
+
+let align_of_ctype = function
+  | Sctype (_, Void) -> 1
+  | Sctype (_, Function _) -> 1
+  | ct -> int_of_ival (IM.alignof_ival (Sctypes.to_ctype ct))
 
 
-(* adapting from impl_mem *)
-let align_of_integer_type it =
-  try
-    let impl = CF.Ocaml_implementation.get () in
-    match impl.alignof_ity it with
-    | Some n -> n
-    | None -> Debug_ocaml.error "alignof_pointer returned None"
-  with
-  | exn -> report "align_of_integer_type" exn
+let size_of_struct tag = size_of_ctype (Sctype ([], Struct tag))
+let align_of_struct tag = align_of_ctype (Sctype ([], Struct tag))
 
 
-let max_integer_type it = 
-  try
-    integer_value_to_num (CF.Impl_mem.max_ival it) 
-  with
-  | exn -> report "max_integer_type" exn
-
-let min_integer_type it = 
-  try
-    integer_value_to_num (CF.Impl_mem.min_ival it)
-  with
-  | exn -> report "min_integer_type" exn
-
-
-
-(* adapting from impl_mem *)
-let size_of_pointer =
-  try 
-    let impl = CF.Ocaml_implementation.get () in
-    match impl.sizeof_pointer with
-    | Some n -> n
-    | None -> Debug_ocaml.error "sizeof_pointer returned None"
-  with
-  | exn -> report "size_of_pointer" exn
-
-(* from impl_mem *)
-let align_of_pointer =
-  try
-    let impl = CF.Ocaml_implementation.get () in
-    match impl.alignof_pointer with
-    | Some n -> n
-    | None -> Debug_ocaml.error "alignof_pointer returned None"
-  with
-  | exn -> report "align_of_pointer" exn
-
-
-
-let size_of_ctype (ct : Sctypes.t) = 
-  match ct with
-  | Sctypes.Sctype (_, Void) -> 
-     Debug_ocaml.error "size_of_ctype applied to void"
-  | _ -> 
-     try
-       let s = CF.Impl_mem.sizeof_ival (Sctypes.to_ctype ct) in
-       Z.to_int (integer_value_to_num s)
-     with
-     | exn -> report "size_of_ctype" exn
-
-let size_of_ctype_opt ct = 
-  try Some (size_of_ctype ct) with
-  | _ -> None
-
-let align_of_ctype (ct : Sctypes.t) = 
-  let open Pp in
-  match ct with
-  | Sctypes.Sctype (_, Void) -> 
-     Debug_ocaml.error "align_of_ctype applied to void"
-  (* check this. This is for early alloc *)
-  | Sctypes.Sctype (_, Function _) -> 
-     1
-  | _ -> 
-     try
-       let s = CF.Impl_mem.alignof_ival (Sctypes.to_ctype ct) in
-       Z.to_int (integer_value_to_num s)
-     with
-     | exn -> report "align_of_ctype" exn
-
-
-
-let size_of_struct tag =
-  size_of_ctype (Sctype ([], Struct tag))
-
-let align_of_struct tag =
-  align_of_ctype (Sctype ([], Struct tag))
-
-
-type struct_piece = 
-  { offset: int;
+type struct_piece = { 
+    offset: int;
     size: int;
-    member_or_padding: (BT.member * Sctypes.t) option }
+    member_or_padding: (BT.member * Sctypes.t) option 
+  }
+
+type struct_member = { 
+    offset: int;
+    size: int;
+    member: BT.member * Sctypes.t 
+  }
 
 type struct_layout = struct_piece list
-
-type struct_member = 
-  { offset: int;
-    size: int;
-    member: BT.member * Sctypes.t }
-
-
 type struct_decls = struct_layout SymMap.t
 
 
@@ -163,7 +84,7 @@ let member_number layout member =
 
 
 
-let member_offset (layout : struct_layout) member = 
+let member_offset (layout : struct_layout) member : int option = 
   List.find_map (fun sp -> 
       match sp.member_or_padding with
       | Some (member', _) when Id.equal member member' -> Some sp.offset

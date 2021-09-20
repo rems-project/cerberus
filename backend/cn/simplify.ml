@@ -65,7 +65,7 @@ let rec simp (lcs : LC.t list) term =
     | Pointer_op it -> pointer_op it bt
     | List_op it -> IT (List_op it, bt)
     | Set_op it -> IT (Set_op it, bt)
-    | CT_pred it -> IT (CT_pred it, bt)
+    | CT_pred it -> ct_pred it bt
     | Array_op it -> array_op it bt
   
   and lit it bt = 
@@ -348,6 +348,14 @@ let rec simp (lcs : LC.t list) term =
     | ArrayOffset (ct, t) ->
        aux (mul_ (int_ (Memory.size_of_ctype ct), t))
   
+  and ct_pred it bt = 
+    match it with
+    (* | Representable (ct, t) ->
+     *    let t = aux t in
+     *    aux (representable struct_layouts ct t) *)
+    | _ ->
+       IT (CT_pred it, bt)
+
   and array_op it bt = 
     match it with
     | Const (index_bt, t) ->

@@ -91,7 +91,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
   let member_offset tag member = 
     let iv = CF.Impl_mem.offsetof_ival (CF.Tags.tagDefs ()) tag member in
-    Z.to_int (Memory.integer_value_to_num iv)
+    Memory.int_of_ival iv
   in
 
   let struct_layout loc members tag = 

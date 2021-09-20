@@ -251,7 +251,7 @@ module Make
         in
         return r
       else 
-        let@ lrt = match requested.ct with
+        let@ folded_resource = match requested.ct with
           | Sctype (_, Array (act, Some length)) ->
              fold_array loc failure act requested.pointer length (q_ (1, 1))
           | Sctype (_, Struct tag) ->
@@ -259,7 +259,7 @@ module Make
           | _ -> 
              failS loc failure
         in
-        let@ () = bind_logical_return_type (Some (Local.Loc loc)) lrt in
+        let@ () = add_r (Some (Local.Loc loc)) folded_resource in
         point_request loc failure requested
 
 
@@ -436,79 +436,64 @@ module Make
         failS loc failure
 
 
-    and fold_array loc failure ct base_pointer_t length permission_t =
+    and fold_array loc failure item_ct base length permission =
       if length > 20 then print stdout !^"generating point-wise constraints for big array";
-      let element_size = int_ (Memory.size_of_ctype ct) in
       let@ qpoint = 
         let qp_s, qp_t = IT.fresh Loc in
         qpoint_request loc failure {
-          ct = ct;
+          ct = item_ct;
           qpointer = qp_s;
-          value = BT.of_sct ct;
+          value = BT.of_sct item_ct;
           init = BT.Bool;
           permission = 
-            array_permission qp_t base_pointer_t (int_ length)
-              element_size permission_t;
+            array_permission ~item_ct ~base ~length:(int_ length) 
+              ~permission ~qpointer:qp_t;
         }
       in
-      let folded_init_s, folded_init_t = IT.fresh Bool in
-      let folded_value_s, folded_value_t = 
-        IT.fresh (Array (Integer, BT.of_sct ct)) in
-      let folded_resource = 
-        Point {
-             ct = array_ct ct (Some length);
-             pointer = base_pointer_t;
-             value = folded_value_t;
-             init = folded_init_t;
-             permission = permission_t;
-           }
-      in
-      let pointer i = array_index_to_pointer base_pointer_t element_size (int_ i) in
-      let fold_value_constr = 
+      let pointer i = array_index_to_pointer ~base ~item_ct ~index:(int_ i) in
+      let folded_value = 
         let values = 
           List.init length (fun i -> (int_ i, IT.subst [(qpoint.qpointer, pointer i)] qpoint.value))
         in
-        let value = List.fold_left set_ (const_ Integer (default_ (BT.of_sct ct))) values in
-        t_ (eq_ (folded_value_t, value))
+        List.fold_left set_ (const_ Integer (default_ (BT.of_sct item_ct))) values
       in
-      let fold_init_constr = 
+      let folded_init = 
         let inits = 
           List.init length (fun i -> IT.subst [(qpoint.qpointer, pointer i)] qpoint.init)
         in
-        t_ (eq_ (folded_init_t, and_ inits))
+        and_ inits
       in
-      let lrt = 
-        LRT.Logical ((folded_value_s, IT.bt folded_value_t), (loc, None),
-        LRT.Resource (folded_resource, (loc, None),
-        LRT.Constraint (fold_value_constr, (loc, None),
-        LRT.Constraint (fold_init_constr, (loc, None),
-        LRT.I))))
+      let folded_resource = 
+        Point {
+             ct = array_ct item_ct (Some length);
+             pointer = base;
+             value = folded_value;
+             init = folded_init;
+             permission = permission;
+           }
       in
-      return lrt
+      return folded_resource
 
-    and unfold_array loc failure ct base_pointer_t length permission_t =   
-      let element_size = int_ (Memory.size_of_ctype ct) in
+    and unfold_array loc failure item_ct base length permission =   
       let@ point = 
         point_request loc failure 
-          (unfold_array_request
-             ct base_pointer_t length permission_t) 
+          (unfold_array_request item_ct base length permission) 
       in
       let unfolded_resource = 
         let qp_s, qp_t = IT.fresh Loc in
         QPoint {
-            ct = ct;
+            ct = item_ct;
             qpointer = qp_s;
             value = 
               get_ point.value 
-                (array_pointer_to_index base_pointer_t element_size qp_t); 
+                (array_pointer_to_index ~base ~item_ct ~pointer:qp_t); 
             init = point.init;
             permission = 
-              array_permission qp_t base_pointer_t (int_ length) 
-                element_size permission_t;
+              array_permission ~base ~item_ct ~length:(int_ length) 
+                ~permission ~qpointer:qp_t;
           }
       in
-      let lrt = LRT.Resource (unfolded_resource, (loc, None), LRT.I) in
-      return lrt
+      return unfolded_resource
 
 
     and fold_struct loc failure tag pointer_t permission_t =
@@ -556,7 +541,7 @@ module Make
             permission = permission_t;
           }
       in
-      return (LRT.Resource (folded_resource, (loc, None), LRT.I))
+      return folded_resource
 
     and unfold_struct loc failure tag pointer_t permission_t = 
       let@ point = 
@@ -1048,7 +1033,7 @@ module Make
       ( fun _ _ -> 
         unsupported loc !^"infer_mem_value: concurrent read case" )
       ( fun it iv -> 
-        return (Integer, z_ (Memory.integer_value_to_num iv)) )
+        return (Integer, int_ (Memory.int_of_ival iv)) )
       ( fun ft fv -> 
         unsupported loc !^"floats" )
       ( fun _ ptrval -> 
@@ -1095,8 +1080,8 @@ module Make
                          (ov : 'bty mu_object_value) : vt m =
     match ov with
     | M_OVinteger iv ->
-       let i = Memory.integer_value_to_num iv in
-       return (Integer, z_ i)
+       let i = Memory.int_of_ival iv in
+       return (Integer, int_ i)
     | M_OVpointer p -> 
        infer_ptrval loc p
     | M_OVarray items ->
@@ -1159,7 +1144,12 @@ module Make
     let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
     let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
     let@ provable = provable in
-    let@ olength =
+    let element_size = Memory.size_of_ctype ct in
+    let v = 
+      addPointer_ (it_of_arg arg1, 
+                   mul_ (int_ element_size, it_of_arg arg2))
+    in
+    let@ o_folded_length =
       map_and_fold_resources (fun re found ->
           match found, re with
           | Some _, _ -> 
@@ -1171,22 +1161,19 @@ module Make
              (re, found)
         ) None
     in
-    let@ lrt = match olength with
-      | None -> 
-         return LRT.I
-      | Some length ->
-         (* don't fail if array cannot be unfolded *)
-         RI.unfold_array loc ArrayShift
-           ct (it_of_arg arg1) 
-           length (q_ (1, 1))
-    in
-    let element_size = Memory.size_of_ctype ct in
-    let v = 
-      addPointer_ (it_of_arg arg1, 
-                   mul_ (int_ element_size, it_of_arg arg2))
-    in
-    let rt = RT.concat (rt_of_vt loc (BT.Loc, v)) lrt in
-    return rt
+    match o_folded_length with
+    | None -> 
+       return (rt_of_vt loc (BT.Loc, v))
+    | Some length ->
+       let@ unfolded_array = 
+         RI.unfold_array loc ArrayShift ct (it_of_arg arg1) 
+           length (q_ (1, 1)) 
+       in
+       return (
+         RT.concat (rt_of_vt loc (BT.Loc, v)) 
+         (LRT.Resource (unfolded_array, (loc, None), LRT.I))
+       )
+
 
   let wrapI ity arg =
     (* try to follow wrapI from runtime/libcore/std.core *)
@@ -1539,10 +1526,22 @@ module Make
             pointer_op gePointer_ asym1 asym2
          | M_Ptrdiff (act, asym1, asym2) -> 
             Debug_ocaml.error "todo: M_Ptrdiff"
-         | M_IntFromPtr (act_from, act2_to, asym) ->
+         | M_IntFromPtr (act_from, act_to, asym) ->
             let@ arg = arg_of_asym asym in
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-            let vt = (Integer, pointerToIntegerCast_ (it_of_arg arg)) in
+            let v = pointerToIntegerCast_ (it_of_arg arg) in
+            let@ () = 
+              (* after discussing with Kavyan *)
+              let@ provable = provable in
+              let lc = (t_ (representable_ (act_to.ct, v))) in
+              if provable lc then return () else
+                failS loc (fun local ->
+                    let (_, state) = 
+                      E.unsatisfied_constraint local (L.model (L.solver local)) lc in
+                    (IntFromPtr_unrepresentable {ict = act_to.ct; state})
+                  )
+            in
+            let vt = (Integer, v) in
             return (rt_of_vt loc vt)
          | M_PtrFromInt (act_from, act2_to, asym) ->
             let@ arg = arg_of_asym asym in
@@ -2204,7 +2203,7 @@ let check mu_file =
            let bt = Loc in
            let local = L.add_l lsym bt local in
            let local = L.add_a sym (bt, lsym) local in
-           let local = L.add_c (t_ (IT.good_pointer (sym_ (lsym, bt)) ct)) local in
+           let local = L.add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) local in
            return local
       ) (L.empty ()) mu_file.mu_globs 
   in
