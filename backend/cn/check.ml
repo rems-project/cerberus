@@ -337,9 +337,7 @@ module Make
                let permission' = sub_ (p'.permission, can_take) in
                Predicate {p' with permission = permission'}, (needed, oargs)
             | QPredicate p' 
-                 when 
-
-                      String.equal requested.name p'.name && 
+                 when String.equal requested.name p'.name && 
                       let subst = [(p'.qpointer, requested.pointer)] in
                       provable
                         (t_ (and_ (List.map2 (fun iarg iarg' -> 
@@ -349,7 +347,7 @@ module Make
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
-
+               let needed = sub_ (needed, can_take) in
                let permission' =
                  ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
                        sub_ (IT.subst subst p'.permission, can_take),

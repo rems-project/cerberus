@@ -447,7 +447,7 @@ let pp =
        | Get (t, args) ->
           c_app (aux true t) [aux false args]
        | Def ((s, abt), body) ->
-          parens (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
+          braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
   in
   fun (it : 'bt term) -> aux false it

@@ -484,7 +484,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
       | () when Z3.Boolean.is_distinct expr ->
          unsupported "z3 is_distinct"
 
-      | () when Z3.Arithmetic.is_div expr ->
+      | () when Z3.Arithmetic.is_idiv expr ->
          div_ (nth args 0, nth args 1)
 
       | () when Z3.Boolean.is_eq expr ->

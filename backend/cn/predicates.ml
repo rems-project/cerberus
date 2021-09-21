@@ -271,14 +271,15 @@ let page_alloc_predicates struct_decls =
 
   let hyp_page_size = int_ (Memory.size_of_struct hyp_page_tag) in
 
-  let vmemmap_offset_of_pointer vmemmap_pointer pointer = 
+  let vmemmap_offset_of_pointer ~vmemmap_pointer pointer = 
     pointerToIntegerCast_ pointer %-
       pointerToIntegerCast_ vmemmap_pointer
   in
   
-  let vmemmap_good_pointer vmemmap_pointer pointer range_start range_end = 
-    let offset = vmemmap_offset_of_pointer vmemmap_pointer pointer in
-    let phys = offset %* pPAGE_SIZE in
+  let vmemmap_good_pointer ~vmemmap_pointer pointer range_start range_end = 
+    let offset = vmemmap_offset_of_pointer ~vmemmap_pointer pointer in
+    let index = offset %/ hyp_page_size in
+    let phys = index %* pPAGE_SIZE in
     and_ [ lePointer_ (vmemmap_pointer, pointer);
            eq_ (rem_ (offset, hyp_page_size), int_ 0);
            range_start %<= phys; phys %< range_end; ]
@@ -330,7 +331,7 @@ let page_alloc_predicates struct_decls =
             (* or pointer to free_area cell *)
             prev_next %== pool_free_area_pointer;
             (* or pointer to other vmemmap cell, within the same range*)
-            vmemmap_good_pointer vmemmap_pointer 
+            vmemmap_good_pointer ~vmemmap_pointer 
               (container_of_ (prev_next, hyp_page_tag, Id.id "node"))
               range_start range_end
           ]
@@ -554,7 +555,7 @@ let page_alloc_predicates struct_decls =
       let p_s, p = IT.fresh_named Loc "p" in
       let point_permission = 
         let condition = 
-          vmemmap_good_pointer vmemmap_pointer p
+          vmemmap_good_pointer ~vmemmap_pointer p
             range_start range_end
         in
         ite_ (condition, permission, q_ (0, 1))

@@ -387,7 +387,8 @@ module RE = struct
     let offset = array_offset_of_pointer ~base ~pointer:qpointer in
     let index = array_pointer_to_index ~base ~item_ct ~pointer:qpointer in
     let condition = 
-      and_ [eq_ (rem_ (offset, int_ (Memory.size_of_ctype item_ct)), int_ 0);
+      and_ [lePointer_ (base, qpointer);
+            eq_ (rem_ (offset, int_ (Memory.size_of_ctype item_ct)), int_ 0);
             le_ (int_ 0, index); lt_ (index, length)]
     in
     ite_ (condition, permission, q_ (0,1))
