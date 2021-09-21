@@ -180,3 +180,30 @@ let print_json =
 
 
 
+
+(* let progress_bar name total_number = 
+ *   let module P = Progress in
+ *   P.Line.list [
+ *       P.Line.const "  "; P.Line.rpad 20 (P.Line.const name); 
+ *       P.Line.count_to total_number;
+ *       P.Line.bar ~color:(P.Color.ansi `cyan) total_number
+ *     ] *)
+
+
+
+let progress title total_number : (string -> unit) = 
+  let counter = ref 0 in
+  fun current ->
+  let msg = 
+    bold title ^^^ 
+    brackets (
+       !^(string_of_int !counter) ^^ slash ^^ 
+       !^(string_of_int total_number)
+      ) ^^
+    colon ^^^
+    !^current
+  in
+  let () = counter := !counter + 1 in
+  print stdout msg
+
+  

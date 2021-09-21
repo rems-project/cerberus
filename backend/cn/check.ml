@@ -32,7 +32,6 @@ open LogicalConstraints
 
 
 
-
 (* some of this is informed by impl_mem *)
 
 
@@ -105,6 +104,10 @@ module Make
     | Some membertyp -> return membertyp
     | None -> fail loc (Unknown_member (tag, member))
 
+  let get_fun_decl loc fsym = 
+    match Global.get_fun_decl G.global fsym with
+    | Some t -> return t
+    | None -> fail Loc.unknown (Unknown_function fsym)
 
 
 
@@ -435,7 +438,7 @@ module Make
 
 
     and fold_array loc failure item_ct base length permission =
-      if length > 20 then print stdout !^"generating point-wise constraints for big array";
+      if length > 20 then warn !^"generating point-wise constraints for big array";
       let@ qpoint = 
         let qp_s, qp_t = IT.fresh Loc in
         qpoint_request loc failure {
@@ -696,11 +699,7 @@ module Make
         let (expect, info) = SymMap.find uni_var unis in
         if LS.equal (IT.bt instantiation) expect 
         then return ()
-        else 
-          let () = print stdout (item "spec" (LS.pp expect)) in
-          let () = print stdout (item "instantiation" (IT.pp instantiation)) in
-          let () = print stdout (item "with bt" (BT.pp (IT.bt instantiation))) in
-          fail loc (Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info})
+        else fail loc (Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info})
       in
 
       let unify_or_constrain (unis, subst, constrs) (output_spec, output_have) =
@@ -1226,9 +1225,26 @@ module Make
       | M_PEmember_shift (asym, tag, member) ->
          let@ arg = arg_of_asym asym in
          let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+         let@ provable = provable in
+         let@ found =
+           map_and_fold_resources (fun re found ->
+               match found, re with
+               | true, _ -> 
+                  (re, found)
+               | false, Point {ct = Sctype (_, Struct tag'); pointer; _} 
+                    when Sym.equal tag tag' &&
+                         provable (t_ (eq__ pointer (it_of_arg arg))) ->
+                  (re, true)
+               | _ -> 
+                  (re, found)
+             ) false
+         in
          let@ lrt = 
-           RI.unfold_struct 
-             loc MemberShift tag (it_of_arg arg) (q_ (1, 1)) 
+           if found then
+             RI.unfold_struct 
+               loc MemberShift tag (it_of_arg arg) (q_ (1, 1)) 
+           else 
+             return LRT.I
          in
          let@ layout = get_struct_decl loc tag in
          let@ _member_bt = get_member_type loc tag member layout in
@@ -1279,10 +1295,7 @@ module Make
            | CF.Core.Impl impl -> 
               return (Global.get_impl_fun_decl G.global impl )
            | CF.Core.Sym sym -> 
-              let@ (_, t) = match Global.get_fun_decl G.global sym with
-                | Some t -> return t
-                | None -> fail loc (Unknown_function sym)
-              in
+              let@ (_, t) = get_fun_decl loc sym in
               return t
          in
          let@ args = args_of_asyms asyms in
@@ -1726,20 +1739,13 @@ module Make
          return rt
       | M_Eccall (_ctype, afsym, asyms) ->
          let@ args = args_of_asyms asyms in
-         let@ (_loc, ft) = match Global.get_fun_decl G.global afsym.sym with
-           | Some (loc, ft) -> return (loc, ft)
-           | None -> fail loc (Unknown_function afsym.sym)
-         in
+         let@ (_loc, ft) = get_fun_decl loc afsym.sym in
          Spine.calltype_ft loc args ft
       | M_Eproc (fname, asyms) ->
-         let@ decl_typ = match fname with
+         let@ (_, decl_typ) = match fname with
            | CF.Core.Impl impl -> 
-              return (Global.get_impl_fun_decl G.global impl)
-           | CF.Core.Sym sym ->
-              match Global.get_fun_decl G.global sym with
-              | Some (loc, ft) -> return ft
-              | None -> fail loc (Unknown_function sym)
-         in
+              return (loc, Global.get_impl_fun_decl G.global impl)
+           | CF.Core.Sym sym -> get_fun_decl loc sym in
          let@ args = args_of_asyms asyms in
          Spine.calltype_ft loc args decl_typ
       | M_Epredicate (pack_unpack, pname, asyms) ->
@@ -2026,7 +2032,6 @@ module Make
         (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
         (body : 'bty mu_texpr) (function_typ : AT.ft) 
         (label_defs : 'bty mu_label_defs) : unit m =
-    print stdout (!^("checking function " ^ Sym.pp_string fsym));
     debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
     debug 2 (lazy (item "type" (AT.pp RT.pp function_typ)));
 
@@ -2178,11 +2183,14 @@ let check mu_file =
   let () = Debug_ocaml.begin_csv_timing "predicate defs" in
   let@ global = 
     (* check and record predicate defs *)
+    let number_entries = List.length (Pmap.bindings_list mu_file.mu_funinfo) in
+    let ping = Pp.progress "predicate welltypedness" number_entries in
     ListM.fold_leftM (fun global (name,def) -> 
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
         let@ ((), _) = Typing.run (WT.WPD.good def) (L.empty ()) in
         let resource_predicates =
           StringMap.add name def global.resource_predicates in
+        let@ () = return (ping name) in
         return {global with resource_predicates}
       ) global mu_file.mu_predicates
   in
@@ -2225,49 +2233,58 @@ let check mu_file =
   in
   let () = Debug_ocaml.begin_csv_timing "welltypedness" in
   let@ () =
+    let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
+    let number_entries = List.length (Pmap.bindings_list mu_file.mu_funinfo) in
+    let ping = Pp.progress "function welltypedness" number_entries in
     PmapM.iterM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto))  ->
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto)) ->
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-        let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
-        let@ ((), _) = Typing.run (WT.WFT.welltyped "global" loc ftyp) local in
+        let@ ((), _) = Typing.run (WT.WFT.good "global" loc ftyp) local in
+        let@ () = return (ping (Sym.pp_string fsym)) in
         return ()
       ) mu_file.mu_funinfo
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in
 
-  let check_functions fns =
+  let () = Debug_ocaml.begin_csv_timing "functions" in
+  let check_function =
     let module C = Make(struct let global = global end)(S)(L) in
-    PmapM.iterM (fun fsym fn -> 
-        let@ ((), _) = match fn with
-          | M_Fun (rbt, args, body) ->
-             let@ (loc, ftyp) = match Global.get_fun_decl global fsym with
-               | Some t -> return t
-               | None -> fail Loc.unknown (Unknown_function fsym)
-             in
-             Typing.run (C.check_function loc
-                (Sym.pp_string fsym) args rbt body ftyp) local
-          | M_Proc (loc, rbt, args, body, labels) ->
-             let@ (loc', ftyp) = match Global.get_fun_decl global fsym with
-               | Some t -> return t
-               | None -> fail loc (Unknown_function fsym)
-             in
-             Typing.run (C.check_procedure loc'
-               fsym args rbt body ftyp labels) local
-          | M_ProcDecl _ -> 
-             return ((), local)
-          | M_BuiltinDecl _ -> 
-             return ((), local)
-        in
-        return ()
-      ) fns
+    fun fsym fn ->
+    let decl = Global.get_fun_decl global fsym in
+    let@ ((), _) = match fn, decl with
+      | M_Fun (rbt, args, body), Some (loc, ftyp) ->
+         Typing.run (C.check_function loc
+                       (Sym.pp_string fsym) args rbt body ftyp) local
+      | M_Fun (rbt, args, body), None ->
+         fail Loc.unknown (Unknown_function fsym)
+      | M_Proc (loc, rbt, args, body, labels), Some (loc', ftyp) ->
+         Typing.run (C.check_procedure loc'
+                       fsym args rbt body ftyp labels) local
+      | M_Proc (loc, rbt, args, body, labels), None ->
+         fail loc (Unknown_function fsym)
+      | M_ProcDecl _, _ -> 
+         return ((), local)
+      | M_BuiltinDecl _, _ -> 
+         return ((), local)
+    in
+    return ()
   in
+  let () = Debug_ocaml.end_csv_timing "functions" in
 
   let () = Debug_ocaml.begin_csv_timing "check stdlib" in
-  let@ () = check_functions mu_file.mu_stdlib in
+  let@ () = PmapM.iterM check_function mu_file.mu_stdlib in
   let () = Debug_ocaml.end_csv_timing "check stdlib" in
   let () = Debug_ocaml.begin_csv_timing "check functions" in
-  let@ () = check_functions mu_file.mu_funs in
+  let@ () = 
+    let number_entries = List.length (Pmap.bindings_list mu_file.mu_funs) in
+    let ping = Pp.progress "checking function" number_entries in
+    PmapM.iterM (fun fsym fn ->
+        let@ () = check_function fsym fn in
+        let@ () = return (ping (Sym.pp_string fsym)) in
+        return ()
+      ) mu_file.mu_funs 
+  in
   let () = Debug_ocaml.end_csv_timing "check functions" in
 
 

@@ -3,10 +3,12 @@ module CB=Cerb_backend
 open CB.Pipeline
 
 module CA=CF.Core_anormalise
+module CA_ = CA.Make(Locations)
 
 let (>>=) = CF.Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = CF.Exception.except_return
+let (let@) = CF.Exception.except_bind
 
 
 
@@ -18,9 +20,6 @@ type file =
   | CORE of core_file
   | MUCORE of mu_file
   | RETYPED_MUCORE of retyped_mu_file
-
-
-
 
 
 
@@ -83,6 +82,7 @@ end = struct
   let print_log_file filename file =
     if !Debug_ocaml.debug_level > 0 then 
       begin
+        Colour.do_colour := false;
         let count = !print_count in
         let file_path = 
           (Filename.get_temp_dir_name ()) ^ 
@@ -91,6 +91,7 @@ end = struct
         in
         print_file file_path file;
         print_count := 1 + !print_count;
+        Colour.do_colour := true;
       end
 end
 
@@ -101,73 +102,42 @@ type rewrite = core_file -> (core_file, CF.Errors.error) CF.Exception.exceptM
 type named_rewrite = string * rewrite
 
 
-let remove_unspecified : named_rewrite =
-  ("unspec_removal",
-   fun core_file -> 
-   return (CF.Remove_unspecs.rewrite_file core_file))
-
-let partial_evaluation : named_rewrite = 
-  ("partial_evaluation", 
-   fun core_file -> 
-   return (CF.Core_peval.rewrite_file core_file))
-
-let remove_unused : named_rewrite = 
-  ("unused_functions_removal",
-   fun core_file -> 
-   return (CF.Core_remove_unused_functions.remove_unused_functions true core_file))
-
-let hackish_order : named_rewrite = 
-  ("hackish_order",
-   fun core_file -> 
-   return (CF.Core_indet.hackish_order core_file))
-
-let sequentialise : named_rewrite = 
-  ("sequentialisation",
-   fun core_file -> 
-   CF.Core_typing.typecheck_program core_file >>= fun core_file ->
-   let core_file = CF.Core_sequentialise.sequentialise_file core_file in
-   return (CB.Pipeline.untype_file core_file)
-)
 
 
-let rec do_rewrites_and_log named_rewrites core_file =
-  match named_rewrites with
-  | [] -> return core_file
-  | (name,rw) :: named_rewrites ->
-     rw core_file >>= fun core_file -> 
-     print_log_file ("after_" ^ name) (CORE core_file);
-     do_rewrites_and_log named_rewrites core_file
-  
+let frontend filename =
 
-
-
-module CA_ = CA.Make(Locations)
-
-let rewrite core_file =
-  Colour.do_colour := false;
-  print_log_file "original" (CORE core_file);
-  do_rewrites_and_log
-    [ remove_unspecified
-    ; partial_evaluation
-    ; remove_unused
-    ; hackish_order
-    ; sequentialise ]
-    core_file >>= fun core_file -> 
-  let mu_file = CA_.normalise_file core_file in
-  print_log_file "after_anf" (MUCORE mu_file);
-  let mu_file = CF.Mucore_label_inline.ib_file mu_file in
-  print_log_file "after_inlining_break" (MUCORE mu_file);
-  Colour.do_colour := true;
-  return mu_file
-
-let frontend filename = 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
+
   c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
-  rewrite core_file
+  print_log_file "original" (CORE core_file);
+
+  let core_file = CF.Remove_unspecs.rewrite_file core_file in
+  let () = print_log_file "after_remove_unspecified" (CORE core_file) in
+
+  let core_file = CF.Core_peval.rewrite_file core_file in
+  let () = print_log_file "after_partial_evaluation" (CORE core_file) in
+
+  let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in
+  let () = print_log_file "after_removing_unused_functions" (CORE core_file) in
+
+  let core_file = CF.Core_indet.hackish_order core_file in
+  let () = print_log_file "after_hackish_order" (CORE core_file) in
+
+  let@ core_file = CF.Core_typing.typecheck_program core_file in
+  let core_file = CF.Core_sequentialise.sequentialise_file core_file in
+  let core_file = CB.Pipeline.untype_file core_file in
+  let () = print_log_file "after_sequentialisation" (CORE core_file) in
+
+  let mu_file = CA_.normalise_file core_file in
+  print_log_file "after_anf" (MUCORE mu_file);
+
+  let mu_file = CF.Mucore_label_inline.ib_file mu_file in
+  print_log_file "after_inlining_break" (MUCORE mu_file);
+  return mu_file
 
 
 
@@ -180,8 +150,7 @@ let z3_log_file_path =
 
 
 
-let main filename (* mjsonfile *) loc_pp debug_level print_level =
-  let mjsonfile = None in
+let main filename loc_pp debug_level print_level =
   Debug_ocaml.debug_level := debug_level;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
@@ -191,7 +160,6 @@ let main filename (* mjsonfile *) loc_pp debug_level print_level =
   else if not (String.equal (Filename.extension filename) ".c") then
     CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
   else
-    Pp.print stdout (Pp.string ("Cerberus frontend"));
     begin match frontend filename with
     | CF.Exception.Exception err ->
        prerr_endline (CF.Pp_errors.to_string err);
@@ -199,15 +167,12 @@ let main filename (* mjsonfile *) loc_pp debug_level print_level =
     | CF.Exception.Result file ->
        try
          let open Resultat in
-         Pp.maybe_open_json_output mjsonfile;
          assert (Z3.Log.open_ z3_log_file_path);
          Debug_ocaml.maybe_open_csv_timing_file ();
          let result = 
-           Pp.print stdout (Pp.string ("processing type assertions"));
            let@ file = Retype.retype_file file in
            Check.check file 
          in
-         Pp.maybe_close_json_output ();
          Z3.Log.close ();
          Debug_ocaml.maybe_close_csv_timing_file ();
          match result with
@@ -218,7 +183,6 @@ let main filename (* mjsonfile *) loc_pp debug_level print_level =
             exit 1
        with
        | exc -> 
-          Pp.maybe_close_json_output (); 
           Z3.Log.close ();
           Debug_ocaml.maybe_close_csv_timing_file ();
           Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
@@ -247,11 +211,15 @@ let print_level =
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
-(* let json_file =
- *   let doc = "Output typing context information to JSON file" in
- *   Arg.(value & opt (some string) None & info ["json"] ~doc) *)
 
 
 let () =
-  let check_t = Term.(pure main $ file $ (* json_file $  *)loc_pp $ debug_level $ print_level) in
+  let open Term in
+  let check_t = 
+    pure main $ 
+      file $ 
+      loc_pp $ 
+      debug_level $ 
+      print_level
+  in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

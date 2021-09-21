@@ -6,6 +6,7 @@ module LC = LogicalConstraints
 open LogicalConstraints
 open List1
 open List
+open Pp
 
 
 
@@ -23,8 +24,8 @@ let global_params = [
     ("model.completion", "true");
     ("model_evaluator.completion", "true");
     (* ("model.compact", "true"); *)
-    (* ("model.inline_def", "true"); *)
-    (* ("model_evaluator.array_as_stores", "true"); *)
+    ("model.inline_def", "true");
+    ("model_evaluator.array_as_stores", "true");
     (* ("model_evaluator.array_equalities", "false"); *)
     (* ("smt.ematching", "true"); *)
     (* ("smt.pull-nested-quantifiers", "true"); *)
@@ -304,10 +305,12 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
             term (IT.subst [(s, arg)] body)
          | Get (f, arg) -> 
             mk_select context (term f) (term arg)
-         | Def _ ->
-            let it_pp = Pp.plain (IT.pp (IT (it_, bt))) in
-            (* could choose to use lambdas? *)
-            Debug_ocaml.error ("uninstantiated array definition: " ^ it_pp)
+         | Def ((q_s, q_bt), body) ->
+            (* warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt))); *)
+            warn (!^"generating lambda");
+            Z3.Quantifier.expr_of_quantifier
+              (Z3.Quantifier.mk_lambda_const context
+                 [term (sym_ (q_s, q_bt))] (term body))
          end
       end
   
@@ -326,10 +329,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
 
   let lambda (q_s, q_bt) body = 
-    let q = term (sym_ (q_s, q_bt)) in
     Z3.Quantifier.expr_of_quantifier
       (Z3.Quantifier.mk_lambda_const context
-         [q] (term body))
+         [term (sym_ (q_s, q_bt))] (term body))
       
 
 
@@ -405,7 +407,9 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          match result with
          | Z3.Solver.UNSATISFIABLE -> `YES
          | Z3.Solver.SATISFIABLE -> `NO
-         | Z3.Solver.UNKNOWN -> `MAYBE
+         | Z3.Solver.UNKNOWN -> 
+            warn !^"solver returned unknown";
+            `MAYBE
     in
     let () = Debug_ocaml.end_csv_timing "solver" in
     result
@@ -470,6 +474,10 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
       | () when Z3.Boolean.is_and expr ->
          and_ args
+
+      | () when Z3.Z3Array.is_as_array expr ->
+         let () = print stdout (list IT.pp args) in
+         unsupported "z3 as-array"         
 
       | () when Z3.Z3Array.is_constant_array expr ->
          let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
@@ -601,14 +609,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
     fun expr -> aux [] expr
 
       
-      
-
-
-
-  
-
 
 end
-
-
 

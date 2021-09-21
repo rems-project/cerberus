@@ -625,12 +625,20 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
       return (New.M_BuiltinDecl (loc,bt,args))
  in
 
-  let retype_fun_map fun_map = 
-    PmapM.mapM (fun fsym decl -> retype_fun_map_decl fsym decl) fun_map Sym.compare
+  let@ stdlib = 
+    PmapM.mapM (fun fsym decl -> retype_fun_map_decl fsym decl
+      ) file.mu_stdlib Sym.compare
   in
-  
-  let@ stdlib = retype_fun_map file.mu_stdlib in
-  let@ funs = retype_fun_map file.mu_funs in
+
+  let@ funs = 
+    let number_entries = List.length (Pmap.bindings_list file.mu_funs) in
+    let ping = Pp.progress "processing specs" number_entries in
+    PmapM.mapM (fun fsym decl -> 
+        let@ result = retype_fun_map_decl fsym decl in
+        let@ () = return (ping (Sym.pp_string fsym)) in
+        return result
+      ) file.mu_funs Sym.compare
+  in
 
   let file = 
     New.{ mu_main = file.mu_main;

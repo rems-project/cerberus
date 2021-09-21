@@ -501,32 +501,6 @@ let page_alloc_predicates struct_decls =
     let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
 
 
-    let hyp_pool_metadata_owned =
-      let point : RE.point = {
-          ct = struct_ct hyp_pool_tag;
-          pointer = pool_pointer;
-          value = pool;
-          init = bool_ true;
-          permission = permission;
-        }
-      in
-      (* check whether this is needed *)
-      let pointer_good = 
-        let beyond_end_of_pool_struct = 
-          addPointer_ (pool_pointer, 
-                       int_ (Memory.size_of_struct hyp_pool_tag))
-        in
-        representable_ (pointer_ct void_ct,
-                        beyond_end_of_pool_struct)
-      in
-
-      LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
-      LRT.Constraint (T pointer_good, (loc, None), 
-      LRT.Resource (Point point, (loc, None), 
-      LRT.I)))
-    in
-
-    (* let pool_s, pool_t = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in *)
     let vmemmap_s, vmemmap = 
       IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
     let range_start = pool %. "range_start" in
@@ -690,8 +664,7 @@ let page_alloc_predicates struct_decls =
 
     let lrt = 
       let open LRT in
-      hyp_pool_metadata_owned 
-      @@ metadata_well_formedness
+      metadata_well_formedness
       @@ vmemmap_metadata_owned
       @@ free_area_well_formedness (* possibly inconsistent *)
       @@ vmemmap_well_formedness2
@@ -699,7 +672,7 @@ let page_alloc_predicates struct_decls =
     in
     let assignment = OutputDef.[
           {loc; name = "pool"; value = pool};
-          (* {loc; name = "vmemmap"; value = vmemmap_t}; *)
+          {loc; name = "vmemmap"; value = vmemmap};
       ]
     in
     let clause = {
@@ -713,10 +686,14 @@ let page_alloc_predicates struct_decls =
         loc = loc;
         pointer = pool_pointer_s;
         permission = permission_s;
-        iargs = [(vmemmap_pointer_s, IT.bt vmemmap_pointer)];
+        iargs = [
+            (pool_s, IT.bt pool);
+            (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+          ]
+        ;
         oargs = [
             ("pool", IT.bt pool); 
-            (* ("vmemmap", IT.bt vmemmap_t) *)
+            ("vmemmap", IT.bt vmemmap)
           ];
         clauses = [clause;]; 
       } 

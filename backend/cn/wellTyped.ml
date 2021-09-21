@@ -10,7 +10,6 @@ open TE
 open Pp
 
 
-
 module Make
          (G : sig val global : Global.t end)
          (S : Solver.S) 
@@ -409,10 +408,16 @@ module Make
                )
 
     let infer loc it = 
-      pure (infer loc ~context:it it)
+      let () = Debug_ocaml.begin_csv_timing "WIT.infer" in
+      let@ result = pure (infer loc ~context:it it) in
+      let () = Debug_ocaml.end_csv_timing "WIT.infer" in
+      return result
 
     let check loc ls it = 
-      pure (check loc ~context:it ls it)
+      let () = Debug_ocaml.begin_csv_timing "WIT.check" in
+      let@ result = pure (check loc ~context:it ls it) in
+      let () = Debug_ocaml.end_csv_timing "WIT.check" in
+      return result
 
 
 
@@ -422,9 +427,9 @@ module Make
       match it with
       | Lit lit ->
          begin match lit with
-         | Sym s when SymSet.mem s bad_as_value -> 
-            let (_, odescr) = SymMap.find s infos in
-            fail loc (Array_as_value (s, odescr))
+         (* | Sym s when SymSet.mem s bad_as_value -> 
+          *    let (_, odescr) = SymMap.find s infos in
+          *    fail loc (Array_as_value (s, odescr)) *)
          | _ ->
             return ()
          end
@@ -908,11 +913,18 @@ end
 
 
     let good kind loc ft = 
+      let () = Debug_ocaml.begin_csv_timing "WAT.good" in
+      let () = Debug_ocaml.begin_csv_timing "WAT.welltyped" in
       let@ () = welltyped kind loc ft in
+      let () = Debug_ocaml.end_csv_timing "WAT.welltyped" in
+      let () = Debug_ocaml.begin_csv_timing "WAT.mode_and_bad_value_check" in
       let@ () = 
         let infos = SymMap.empty in
         let bad_as_value = SymSet.empty in
-        mode_and_bad_value_check loc ~infos ~bad_as_value ft in
+        mode_and_bad_value_check loc ~infos ~bad_as_value ft 
+      in
+      let () = Debug_ocaml.end_csv_timing "WAT.mode_and_bad_value_check" in
+      let () = Debug_ocaml.end_csv_timing "WAT.good" in
       return ()
 
   end
@@ -946,12 +958,14 @@ end
         ) pd.clauses
 
     let good pd =
+      let () = Debug_ocaml.begin_csv_timing "WPD.good" in
       let@ () = welltyped pd in
       let@ () = 
         let infos = SymMap.empty in
         let bad_as_value = SymSet.empty in
         mode_and_bad_value_check pd.loc ~infos ~bad_as_value pd 
       in
+      let () = Debug_ocaml.end_csv_timing "WPD.good" in
       return ()
 
   end
