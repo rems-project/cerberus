@@ -167,7 +167,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
 
 
   let sym_to_sym s = 
-    Z3.Symbol.mk_string context (CF.Pp_symbol.to_string_pretty s)
+    Z3.Symbol.mk_string context (CF.Pp_symbol.to_string_pretty_cn s)
 
 
   let term : IT.t -> Z3.Expr.expr =
