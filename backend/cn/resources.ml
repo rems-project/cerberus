@@ -214,29 +214,29 @@ let subst (substitution : IT.t Subst.t) resource =
   let equal t1 t2 = 
     match t1, t2 with
     | Point b1, Point b2 ->
-       Sctypes.equal b1.ct b2.ct &&
-       IT.equal b1.pointer b2.pointer &&
-       IT.equal b1.permission b2.permission &&
-       O.equal b1.value b2.value &&
-       O.equal b1.init b2.init
+       Sctypes.equal b1.ct b2.ct
+       && IT.equal b1.pointer b2.pointer
+       && IT.equal b1.permission b2.permission
+       && O.equal b1.value b2.value
+       && O.equal b1.init b2.init
     | QPoint b1, QPoint b2 ->
-       Sctypes.equal b1.ct b2.ct &&
-       Sym.equal b1.qpointer b2.qpointer &&
-       IT.equal b1.permission b2.permission &&
-       O.equal b1.value b2.value &&
-       O.equal b1.init b2.init
+       Sctypes.equal b1.ct b2.ct
+       && Sym.equal b1.qpointer b2.qpointer
+       && IT.equal b1.permission b2.permission
+       && O.equal b1.value b2.value
+       && O.equal b1.init b2.init
     | Predicate p1, Predicate p2 ->
-       predicate_name_equal p1.name p2.name && 
-       IT.equal p1.pointer p2.pointer && 
-       IT.equal p1.permission p2.permission &&
-       List.equal IT.equal p1.iargs p2.iargs && 
-       List.equal O.equal p1.oargs p2.oargs
+       predicate_name_equal p1.name p2.name
+       && IT.equal p1.pointer p2.pointer
+       && IT.equal p1.permission p2.permission
+       && List.equal IT.equal p1.iargs p2.iargs
+       && List.equal O.equal p1.oargs p2.oargs
     | QPredicate p1, QPredicate p2 ->
-       predicate_name_equal p1.name p2.name && 
-       Sym.equal p1.qpointer p2.qpointer && 
-       IT.equal p1.permission p2.permission &&
-       List.equal IT.equal p1.iargs p2.iargs && 
-       List.equal O.equal p1.oargs p2.oargs
+       predicate_name_equal p1.name p2.name
+       && Sym.equal p1.qpointer p2.qpointer
+       && IT.equal p1.permission p2.permission
+       && List.equal IT.equal p1.iargs p2.iargs
+       && List.equal O.equal p1.oargs p2.oargs
     | Point _, _ -> false
     | QPoint _, _ -> false
     | Predicate _, _ -> false

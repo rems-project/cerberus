@@ -257,6 +257,11 @@ let rec simp (lcs : LC.t list) term =
        | _, _ ->
           eq_ (a, b)
        end
+    | EachI ((i1, s, i2), t) ->
+       let s' = Sym.fresh_same s in 
+       let t = IndexTerms.subst [(s, sym_ (s', bt))] t in
+       let t = aux t in
+       IT (Bool_op (EachI ((i1, s', i2), t)), bt)
 
 
   and tuple_op it bt = 
@@ -350,9 +355,6 @@ let rec simp (lcs : LC.t list) term =
   
   and ct_pred it bt = 
     match it with
-    (* | Representable (ct, t) ->
-     *    let t = aux t in
-     *    aux (representable struct_layouts ct t) *)
     | _ ->
        IT (CT_pred it, bt)
 

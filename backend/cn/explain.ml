@@ -276,10 +276,17 @@ module Make
 
 
   let evaluate model it = 
-    Option.map S.z3_expr (Z3.Model.eval model (S.term it) true)
+    Option.bind (Z3.Model.eval model (S.term it) true) S.z3_expr
 
   let evaluate_lambda model (q_s, q_bt) it = 
-    Option.map S.z3_expr (Z3.Model.eval model (S.lambda (q_s, q_bt) it) true)
+    let open Option in
+    let@ z3_val = Z3.Model.eval model (S.lambda (q_s, q_bt) it) true in
+    let@ it_val = S.z3_expr z3_val in
+    match it_val with
+    | IT (Array_op (Def ((s, _), body)), _) ->
+       return (IT.subst [(s, sym_ (q_s, q_bt))] body)
+    | _ ->
+       return (get_ it_val (sym_ (q_s, q_bt)))
 
 
 
@@ -341,7 +348,7 @@ module Make
          in
          (entry, [], reported)
       | QPoint p ->
-         let p = alpha_rename_qpoint (Sym.fresh_same p.qpointer) p in
+         let p = alpha_rename_qpoint (Sym.fresh_pretty "ptr") p in
          let q = (p.qpointer, BT.Loc) in
          let loc_e, permission_e, init_e, value_e = 
            Sym.pp p.qpointer,
@@ -416,7 +423,7 @@ module Make
          let reported = symbol_it p.pointer in
          (entry, oargs, reported)
       | QPredicate p ->
-         let p = alpha_rename_qpredicate (Sym.fresh_same p.qpointer) p in
+         let p = alpha_rename_qpredicate (Sym.fresh_pretty "ptr") p in
          let q = (p.qpointer, BT.Loc) in
          let id = make_predicate_name () in
          let loc_e, permission_e, iargs_e = 
@@ -491,12 +498,24 @@ module Make
             None)
         vclasses
     in
-
     (* let () = print stdout (list Local.pp_old (L.old local)) in *)
 
+    let constraints = 
+      let trivial = function
+        | T (IT (Lit (Bool true), _)) -> true
+        | T (IT (Bool_op (EQ (t, t')), _)) -> IT.equal t t'
+        | _ -> false
+      in
+      List.filter_map (fun lc ->
+          let lc = LC.subst substitution lc in
+          if trivial lc then None else Some (LC.pp lc)
+        ) (L.all_constraints local)
+    in
+
     { memory = memory @ memory_var_lines;
-      variables = predicate_oargs @ logical_var_lines }
-      
+      variables = predicate_oargs @ logical_var_lines;
+      constraints }
+
 
   let undefined_behaviour local = 
     let provable = S.provable (L.solver local) (t_ (bool_ false)) in
@@ -552,5 +571,12 @@ module Make
     let it = IT.pp (IT.subst explanation.substitution it) in
     let context = IT.pp (IT.subst explanation.substitution context) in
     (context, it)
+
+  let unrepresentable_write_value local model (location, value) = 
+    let relevant = (IT.free_vars_list [location; value]) in
+    let explanation = explanation local relevant in
+    let location_pp = IT.pp (IT.subst explanation.substitution location) in
+    let value_pp = IT.pp (IT.subst explanation.substitution value) in
+    ((location_pp, value_pp), state local explanation model)
 
 end

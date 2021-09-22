@@ -169,6 +169,11 @@ module Make
                 let@ t = infer loc ~context t in
                 let@ t' = check loc ~context (IT.bt t) t' in
                 return (BT.Bool, EQ (t,t')) 
+             | EachI ((i1, s, i2), t) ->
+                let@ () = add_l s Integer in
+                let@ t = check loc ~context Bool t in
+                return (BT.Bool, EachI ((i1, s, i2), t))
+                
            in
            return (IT (Bool_op bool_op, bt))
         | Tuple_op tuple_op ->
@@ -308,6 +313,9 @@ module Make
              | Representable (ct, t) ->
                 let@ t = check loc ~context (BT.of_sct ct) t in
                 return (BT.Bool, Representable (ct, t))
+             | Good (ct, t) ->
+                let@ t = check loc ~context (BT.of_sct ct) t in
+                return (BT.Bool, Good (ct, t))
            in
            return (IT (CT_pred ct_pred, bt))
         | List_op list_op ->
@@ -459,6 +467,8 @@ module Make
             ListM.iterM aux [t; t'; t'']
          | EQ (t,t') ->
             ListM.iterM aux [t; t']
+         | EachI (_, t) ->
+            aux t
          end
       | Tuple_op tuple_op ->
          begin match tuple_op with
@@ -499,6 +509,8 @@ module Make
          | Aligned (t, ct) ->
             aux t
          | Representable (ct, t) ->
+            aux t
+         | Good (ct, t) ->
             aux t
          end
       | List_op list_op ->

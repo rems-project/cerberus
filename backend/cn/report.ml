@@ -14,6 +14,7 @@ type var_entry = {
 type state_report = {
     memory : state_entry list;
     variables : var_entry list;
+    constraints: Pp.doc list;
   }
 
 
@@ -112,19 +113,30 @@ let to_html report =
     { header = false;
       classes = ["memory_entry"];
       columns = [
-        { classes = ["loc_e"]; content = o_sdoc loc_e; colspan = 1};
-        { classes = ["loc_v"]; content = o_sdoc loc_v; colspan = 1};
-        { classes = ["state"]; content = o_sdoc state; colspan = 1};
-    ]}
+          { classes = ["loc_e"]; content = o_sdoc loc_e; colspan = 1};
+          { classes = ["loc_v"]; content = o_sdoc loc_v; colspan = 1};
+          { classes = ["state"]; content = o_sdoc state; colspan = 1};
+        ]
+    }
   in
 
   let variable_entry {var; value} =
     { header = false;
       classes = ["variable_entry"];
       columns = [ 
-        { classes = ["var"]; content = sdoc var; colspan = 1 };
-        { classes = ["value"]; content = sdoc value; colspan = 3 };
-    ]}
+          { classes = ["expression"]; content = sdoc var; colspan = 1 };
+          { classes = ["value"]; content = sdoc value; colspan = 2 };
+        ]
+    }
+  in
+
+  let constraint_entry constr =
+    { header = false;
+      classes = ["constraint_entry"];
+      columns = [ 
+          { classes = ["contraint"]; content = sdoc constr; colspan = 3 };
+        ]
+    }
   in
 
 
@@ -147,7 +159,9 @@ let to_html report =
         header [("pointer",1); ("addr",1); ("state",1)] ::
         List.map state_entry report.memory @
         header [("expression",1); ("value",2)] ::
-        List.map variable_entry report.variables
+        List.map variable_entry report.variables @
+        header [("constraints",3)] ::
+        List.map constraint_entry report.constraints
     )}
   in
 

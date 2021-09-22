@@ -634,8 +634,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
     let number_entries = List.length (Pmap.bindings_list file.mu_funs) in
     let ping = Pp.progress "processing specs" number_entries in
     PmapM.mapM (fun fsym decl -> 
-        let@ result = retype_fun_map_decl fsym decl in
         let@ () = return (ping (Sym.pp_string fsym)) in
+        let@ result = retype_fun_map_decl fsym decl in
         return result
       ) file.mu_funs Sym.compare
   in

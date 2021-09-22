@@ -66,7 +66,6 @@ module Make
   module WT = WellTyped.Make(G)(S)(L)
   module E = Explain.Make(G)(S)(L)
 
-
   module Typing = Typing.Make(L)
   open Typing
   open Effectful.Make(Typing)
@@ -214,8 +213,8 @@ module Make
         map_and_fold_resources (fun re (needed, value, init) ->
             match re with
             | Point p' 
-                 when Sctypes.equal requested.ct p'.ct &&
-                        provable (t_ (eq_ (requested.pointer, p'.pointer))) ->
+                 when Sctypes.equal requested.ct p'.ct
+                      && provable (t_ (eq_ (requested.pointer, p'.pointer))) ->
                  let can_take = min_ (p'.permission, needed) in
                  let took = gt_ (can_take, q_ (0, 1)) in
                  let value = ite_ (took, p'.value, value) in
@@ -224,9 +223,9 @@ module Make
                  let permission' = sub_ (p'.permission, can_take) in
                  Point {p' with permission = permission'}, (needed, value, init)
             | QPoint p' 
-                 when Sctypes.equal requested.ct p'.ct &&
-                      let subst = [(p'.qpointer, requested.pointer)] in
-                      provable (t_ (gt_ (IT.subst subst p'.permission, q_ (0, 1)))) ->
+                 when Sctypes.equal requested.ct p'.ct
+                      && let subst = [(p'.qpointer, requested.pointer)] in
+                         provable (t_ (gt_ (IT.subst subst p'.permission, q_ (0, 1)))) ->
                let subst = [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -274,9 +273,9 @@ module Make
         map_and_fold_resources (fun re (needed, value, init) ->
             match re with
             | Point p' 
-                 when Sctypes.equal requested.ct p'.ct &&
-                      let subst = [(requested.qpointer, p'.pointer)] in
-                      provable (t_ (gt_ (IT.subst subst needed, q_ (0, 1)))) ->
+                 when Sctypes.equal requested.ct p'.ct
+                      && let subst = [(requested.qpointer, p'.pointer)] in
+                         provable (t_ (gt_ (IT.subst subst needed, q_ (0, 1)))) ->
                let subst = [(requested.qpointer, p'.pointer)] in
                let can_take = min_ (p'.permission, IT.subst subst needed) in
                let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
@@ -329,10 +328,10 @@ module Make
         map_and_fold_resources (fun re (needed, oargs) ->
             match re with
             | Predicate p' 
-                 when String.equal requested.name p'.name &&
-                      provable 
-                        (t_ (and_ (eq_ (requested.pointer, p'.pointer) ::
-                                     List.map2 eq__ requested.iargs p'.iargs)))  ->
+                 when String.equal requested.name p'.name
+                      && provable 
+                           (t_ (and_ (eq_ (requested.pointer, p'.pointer) ::
+                                        List.map2 eq__ requested.iargs p'.iargs)))  ->
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
@@ -340,12 +339,12 @@ module Make
                let permission' = sub_ (p'.permission, can_take) in
                Predicate {p' with permission = permission'}, (needed, oargs)
             | QPredicate p' 
-                 when String.equal requested.name p'.name && 
-                      let subst = [(p'.qpointer, requested.pointer)] in
-                      provable
-                        (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                       eq__ iarg (IT.subst subst iarg')
-                                     ) requested.iargs p'.iargs))) ->
+                 when String.equal requested.name p'.name 
+                      && let subst = [(p'.qpointer, requested.pointer)] in
+                         provable
+                           (t_ (and_ (List.map2 (fun iarg iarg' -> 
+                                          eq__ iarg (IT.subst subst iarg')
+                                        ) requested.iargs p'.iargs))) ->
                let subst = [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -383,12 +382,12 @@ module Make
         map_and_fold_resources (fun re (needed, oargs) ->
             match re with
             | Predicate p' 
-                 when String.equal requested.name p'.name &&
-                      let subst = [(requested.qpointer, p'.pointer)] in
-                      provable
-                        (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                       eq__ (IT.subst subst iarg) iarg'
-                                     ) requested.iargs p'.iargs))) ->
+                 when String.equal requested.name p'.name
+                      && let subst = [(requested.qpointer, p'.pointer)] in
+                         provable
+                           (t_ (and_ (List.map2 (fun iarg iarg' -> 
+                                          eq__ (IT.subst subst iarg) iarg'
+                                        ) requested.iargs p'.iargs))) ->
                let subst = [(requested.qpointer, p'.pointer)] in
                let can_take = min_ (p'.permission, IT.subst subst needed) in
                let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
@@ -398,12 +397,12 @@ module Make
                let permission' = sub_ (p'.permission, can_take) in
                (Predicate {p' with permission = permission'}, (needed, oargs))
             | QPredicate p' 
-                 when String.equal requested.name p'.name &&
-                      let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
-                      provable
-                        (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                       eq__ iarg (IT.subst subst iarg')
-                                     ) requested.iargs p'.iargs))) ->
+                 when String.equal requested.name p'.name
+                      && let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
+                         provable
+                           (t_ (and_ (List.map2 (fun iarg iarg' -> 
+                                          eq__ iarg (IT.subst subst iarg')
+                                        ) requested.iargs p'.iargs))) ->
                let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -451,18 +450,17 @@ module Make
               ~permission ~qpointer:qp_t;
         }
       in
-      let pointer i = array_index_to_pointer ~base ~item_ct ~index:(int_ i) in
+      let pointer index = array_index_to_pointer ~base ~item_ct ~index in
       let folded_value = 
         let values = 
-          List.init length (fun i -> (int_ i, IT.subst [(qpoint.qpointer, pointer i)] qpoint.value))
+          List.init length (fun i -> (int_ i, IT.subst [(qpoint.qpointer, pointer (int_ i))] qpoint.value))
         in
         List.fold_left set_ (const_ Integer (default_ (BT.of_sct item_ct))) values
       in
       let folded_init = 
-        let inits = 
-          List.init length (fun i -> IT.subst [(qpoint.qpointer, pointer i)] qpoint.init)
-        in
-        and_ inits
+        let i_s, i = IT.fresh Integer  in
+        eachI_ (0, i_s, length - 1)
+          (IT.subst [(qpoint.qpointer, pointer i)] qpoint.init)
       in
       let folded_resource = 
         Point {
@@ -729,9 +727,9 @@ module Make
 
       match r_spec, r_have with
       | Point p_spec, Point p_have
-           when Sctypes.equal p_spec.ct p_have.ct &&
-                IT.equal p_spec.pointer p_have.pointer &&
-                IT.equal p_spec.permission p_have.permission ->
+           when Sctypes.equal p_spec.ct p_have.ct
+                && IT.equal p_spec.pointer p_have.pointer
+                && IT.equal p_spec.permission p_have.permission ->
          let@ (unis, subst, constrs) = 
            unify_or_constrain_list (unis, [], []) 
              [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
@@ -742,9 +740,9 @@ module Make
          in
          if result then return (unis, subst) else failS loc failure
       | QPoint p_spec, QPoint p_have
-           when Sctypes.equal p_spec.ct p_have.ct &&
-                Sym.equal p_spec.qpointer p_have.qpointer &&
-                IT.equal p_spec.permission p_have.permission ->
+           when Sctypes.equal p_spec.ct p_have.ct
+                && Sym.equal p_spec.qpointer p_have.qpointer
+                && IT.equal p_spec.permission p_have.permission ->
          let p_spec, p_have = 
            let qpointer = Sym.fresh_same p_spec.qpointer in
            RE.alpha_rename_qpoint qpointer p_spec,
@@ -764,10 +762,10 @@ module Make
          in
          if result then return (unis, subst) else failS loc failure
       | Predicate p_spec, Predicate p_have 
-           when predicate_name_equal p_spec.name p_have.name &&
-                IT.equal p_spec.pointer p_have.pointer &&
-                IT.equal p_spec.permission p_have.permission &&
-                List.equal IT.equal p_spec.iargs p_have.iargs ->
+           when predicate_name_equal p_spec.name p_have.name
+                && IT.equal p_spec.pointer p_have.pointer
+                && IT.equal p_spec.permission p_have.permission
+                && List.equal IT.equal p_spec.iargs p_have.iargs ->
          let@ (unis, subst, constrs) = 
            unify_or_constrain_list (unis, [], [])
              (List.combine p_spec.oargs p_have.oargs) in
@@ -777,10 +775,10 @@ module Make
          in
          if result then return (unis, subst) else failS loc failure
       | QPredicate p_spec, QPredicate p_have 
-           when predicate_name_equal p_spec.name p_have.name &&
-                Sym.equal p_spec.qpointer p_have.qpointer &&
-                IT.equal p_spec.permission p_have.permission &&
-                List.equal IT.equal p_spec.iargs p_have.iargs ->
+           when predicate_name_equal p_spec.name p_have.name
+                && Sym.equal p_spec.qpointer p_have.qpointer
+                && IT.equal p_spec.permission p_have.permission
+                && List.equal IT.equal p_spec.iargs p_have.iargs ->
          let p_spec, p_have = 
            let qpointer = (Sym.fresh_same p_spec.qpointer) in
            RE.alpha_rename_qpredicate qpointer p_spec,
@@ -1232,8 +1230,8 @@ module Make
                | true, _ -> 
                   (re, found)
                | false, Point {ct = Sctype (_, Struct tag'); pointer; _} 
-                    when Sym.equal tag tag' &&
-                         provable (t_ (eq__ pointer (it_of_arg arg))) ->
+                    when Sym.equal tag tag'
+                         && provable (t_ (eq__ pointer (it_of_arg arg))) ->
                   (re, true)
                | _ -> 
                   (re, found)
@@ -1626,7 +1624,7 @@ module Make
          | M_Alloc (ct, sym, _prefix) -> 
             Debug_ocaml.error "todo: Alloc"
          | M_Kill (M_Dynamic, asym) -> 
-            Debug_ocaml.error "todo: free"
+            Debug_ocaml.error "todo: Free"
          | M_Kill (M_Static ct, asym) -> 
             let@ arg = arg_of_asym asym in
             let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1656,11 +1654,12 @@ module Make
               let holds = provable (t_ in_range_lc) in
               if holds then return () else 
                 failS loc (fun local ->
-                    let (constr,state) = 
-                      E.unsatisfied_constraint local 
-                        (S.model (L.solver local)) (t_ in_range_lc)
+                    let ((location,value), state) = 
+                      E.unrepresentable_write_value local 
+                        (S.model (L.solver local)) 
+                        (it_of_arg parg, it_of_arg varg)
                     in
-                    (Write_value_unrepresentable {state})
+                    (Write_value_unrepresentable {ct = act.ct; location; value; state})
                   )
             in
             let@ _ = 
@@ -2186,11 +2185,11 @@ let check mu_file =
     let number_entries = List.length (Pmap.bindings_list mu_file.mu_funinfo) in
     let ping = Pp.progress "predicate welltypedness" number_entries in
     ListM.fold_leftM (fun global (name,def) -> 
+        let@ () = return (ping name) in
         let module WT = WellTyped.Make(struct let global = global end)(S)(L) in
         let@ ((), _) = Typing.run (WT.WPD.good def) (L.empty ()) in
         let resource_predicates =
           StringMap.add name def global.resource_predicates in
-        let@ () = return (ping name) in
         return {global with resource_predicates}
       ) global mu_file.mu_predicates
   in
@@ -2238,10 +2237,10 @@ let check mu_file =
     let ping = Pp.progress "function welltypedness" number_entries in
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto)) ->
+        let@ () = return (ping (Sym.pp_string fsym)) in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
         let@ ((), _) = Typing.run (WT.WFT.good "global" loc ftyp) local in
-        let@ () = return (ping (Sym.pp_string fsym)) in
         return ()
       ) mu_file.mu_funinfo
   in
@@ -2280,8 +2279,8 @@ let check mu_file =
     let number_entries = List.length (Pmap.bindings_list mu_file.mu_funs) in
     let ping = Pp.progress "checking function" number_entries in
     PmapM.iterM (fun fsym fn ->
-        let@ () = check_function fsym fn in
         let@ () = return (ping (Sym.pp_string fsym)) in
+        let@ () = check_function fsym fn in
         return ()
       ) mu_file.mu_funs 
   in

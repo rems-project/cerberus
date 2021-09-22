@@ -194,16 +194,18 @@ let print_json =
 let progress title total_number : (string -> unit) = 
   let counter = ref 0 in
   fun current ->
+  let () = counter := !counter + 1 in
+  let total_number_str = string_of_int total_number in
+  let n = String.length total_number_str in
   let msg = 
-    bold title ^^^ 
+    format [Blue] title ^^^ 
     brackets (
-       !^(string_of_int !counter) ^^ slash ^^ 
-       !^(string_of_int total_number)
+       !^(Printf.sprintf "%0*d" n !counter) ^^ slash ^^ 
+       !^total_number_str
       ) ^^
     colon ^^^
     !^current
   in
-  let () = counter := !counter + 1 in
   print stdout msg
 
   

@@ -74,7 +74,7 @@ module type S = sig
   val constr : LC.t -> Z3.Expr.expr list
 
   val z3_sort : Z3.Sort.sort -> BT.t
-  val z3_expr : Z3.Expr.expr -> IT.t
+  val z3_expr : Z3.Expr.expr -> IT.t option
 
 end
 
@@ -221,6 +221,13 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          | Not t -> mk_not context (term t)
          | ITE (t1, t2, t3) -> mk_ite context (term t1) (term t2) (term t3)
          | EQ (t1, t2) -> mk_eq context (term t1) (term t2)
+         | EachI ((i1, s, i2), t) -> 
+             let rec aux i = 
+               if i <= i2 
+               then IT.subst [(s, int_ i)] t :: aux (i + 1)
+               else []
+             in
+             term (and_ (aux i1))
          end
       | Tuple_op tuple_op -> 
          begin match tuple_op with
@@ -286,13 +293,16 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          end
       | CT_pred ct_pred -> 
          begin match ct_pred with
-         | Representable (ct, t) ->
-            let sdecl_lookup tag = SymMap.find tag SD.struct_decls in
-            term (representable sdecl_lookup ct t)
          | AlignedI t ->
             term (eq_ (rem_ (pointerToIntegerCast_ t.t, t.align), int_ 0))
          | Aligned (t, ct) ->
             term (alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct)))
+         | Representable (ct, t) ->
+            let sdecl_lookup tag = SymMap.find tag SD.struct_decls in
+            term (representable sdecl_lookup ct t)
+         | Good (ct, t) ->
+            let sdecl_lookup tag = SymMap.find tag SD.struct_decls in
+            term (good_value sdecl_lookup ct t)
          end
       | Array_op array_op -> 
          let open Z3.Z3Array in
@@ -438,6 +448,8 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
   let z3_sort (sort : Z3.Sort.sort) = 
     Option.get (BT_Sort_Table.right_to_left bt_sort_table sort)
 
+  exception Unsupported of string
+
 
   let z3_expr = 
     let counter = ref 0 in
@@ -452,7 +464,7 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
           Printf.sprintf "unsupported %s. expr: %s"
             what (Z3.Expr.to_string expr)
         in
-        Debug_ocaml.error err
+        raise (Unsupported err)
       in
       let args = try Z3.Expr.get_args expr with | _ -> [] in
       let args = List.map (aux binders) args in
@@ -476,7 +488,6 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
          and_ args
 
       | () when Z3.Z3Array.is_as_array expr ->
-         let () = print stdout (list IT.pp args) in
          unsupported "z3 as-array"         
 
       | () when Z3.Z3Array.is_constant_array expr ->
@@ -606,7 +617,10 @@ module Make (SD : sig val struct_decls : Memory.struct_decls end) : S = struct
            unsupported "z3 expression"
 
     in
-    fun expr -> aux [] expr
+
+    fun expr -> 
+    try Some (aux [] expr) with
+    | Unsupported err -> None
 
       
 

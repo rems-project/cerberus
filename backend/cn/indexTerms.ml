@@ -38,6 +38,7 @@ and 'bt bool_op =
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EQ of 'bt term * 'bt term
+  | EachI of (int * Sym.t * int) * 'bt term
   (* add Z3's Distinct for separation facts  *)
 
 and 'bt tuple_op = 
@@ -77,6 +78,7 @@ and 'bt set_op =
 
 and 'bt ct_pred = 
   | Representable of CT.t * 'bt term
+  | Good of CT.t * 'bt term
   | AlignedI of {t : 'bt term; align : 'bt term}
   | Aligned of 'bt term * CT.t
 
@@ -170,6 +172,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         equal t1 t1' && equal t2 t2' && equal t3 t3'
      | EQ (t1,t2), EQ (t1',t2') -> 
         equal t1 t1' && equal t2 t2' 
+     | EachI ((i1, s, i2), t), EachI ((i1', s', i2'), t') ->
+        i1 = i1' && Sym.equal s s' && i2 = i2' && equal t t'
      | And _, _ -> 
         false
      | Or _, _ -> 
@@ -181,6 +185,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | ITE _, _ ->
         false
      | EQ _, _ -> 
+        false
+     | EachI _, _ ->
         false
      end
   | Tuple_op tuple_op, Tuple_op tuple_op' -> 
@@ -275,9 +281,12 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         equal t1.t t2.t && equal t1.align t2.align
      | Representable (rt, t), Representable (rt', t') ->
         CT.equal rt rt' && equal t t'
+     | Good (rt, t), Good (rt', t') ->
+        CT.equal rt rt' && equal t t'
      | Aligned _, _ -> false
      | AlignedI _, _ -> false
      | Representable _, _ -> false
+     | Good _, _ -> false
      end
   | Array_op array_op, Array_op array_op' -> 
      begin match array_op, array_op' with
@@ -361,6 +370,8 @@ let pp =
           mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
        | EQ (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
+       | EachI ((i1, s, i2), t) ->
+          mparens (c_app ((c_app !^"foreach" [!^(string_of_int i1); Sym.pp s; !^(string_of_int i2)])) [aux false t])
        end
     | Tuple_op tuple_op -> 
        begin match tuple_op with
@@ -373,7 +384,7 @@ let pp =
        begin match struct_op with
        | Struct (_tag, members) ->
           braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
-                      Id.pp member ^^^ equals ^^^ aux false it 
+                      dot ^^ Id.pp member ^^^ equals ^^^ aux false it 
                     ) members)
        | StructMember (t, member) ->
           aux true t ^^ dot ^^ Id.pp member
@@ -409,6 +420,8 @@ let pp =
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->
           c_app !^"repr" [CT.pp rt; aux false t]
+       | Good (rt, t) ->
+          c_app !^"good" [CT.pp rt; aux false t]
        end
     | List_op list_op -> 
        begin match list_op with
@@ -445,7 +458,7 @@ let pp =
        | Set (t1,t2,t3) ->
           mparens (aux true t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket)
        | Get (t, args) ->
-          c_app (aux true t) [aux false args]
+          mparens ((aux true t) ^^ brackets (aux false args))
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
@@ -487,6 +500,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Not it -> free_vars it
      | ITE (it,it',it'') -> free_vars_list [it;it';it'']
      | EQ (it, it') -> free_vars_list [it; it']
+     | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
      end
   | Tuple_op tuple_op -> 
      begin match tuple_op with
@@ -516,6 +530,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Aligned (t, _rt) -> free_vars t
      | AlignedI t -> free_vars_list [t.t; t.align]
      | Representable (_rt,t) -> free_vars t
+     | Good (_rt,t) -> free_vars t
      end
   | List_op list_op ->
      begin match list_op with
@@ -585,6 +600,11 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Not it -> Not (subst su it)
        | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
        | EQ (it, it') -> EQ (subst su it, subst su it')
+       | EachI ((i1, s, i2), t) ->
+          let s' = Sym.fresh_same s in
+          let t = subst [(s, IT (Lit (Sym s'), Integer))] t in
+          let t = subst su t in
+          EachI ((i1, s', i2), t)          
      in
      IT (Bool_op bool_op, bt)
   | Tuple_op tuple_op -> 
@@ -636,7 +656,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      let ct_pred = match ct_pred with
        | Aligned (t, ct) -> Aligned (subst su t, ct)
        | AlignedI t -> AlignedI {t= subst su t.t; align= subst su t.align}
-       | Representable (rt,t) -> Representable (rt,subst su t)
+       | Representable (rt, t) -> Representable (rt, subst su t)
+       | Good (rt, t) -> Good (rt, subst su t)
      in
      IT (CT_pred ct_pred, bt)
   | List_op list_op -> 
@@ -751,6 +772,7 @@ let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
+let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
@@ -865,6 +887,8 @@ let maxInteger_ t =
   z_ (Memory.max_integer_type t)
 let representable_ (t, it) = 
   IT (CT_pred (Representable (t, it)), BT.Bool)
+let good_ (t, it) = 
+  IT (CT_pred (Good (t, it)), BT.Bool)
 let aligned_ (t, it) = 
   IT (CT_pred (Aligned (t, it)), BT.Bool)
 let alignedI_ ~t ~align = 
@@ -949,10 +973,20 @@ let hash (IT (it, _bt)) =
 
 
 
-let value_check_pointer alignment ~pointee_ct about = 
+
+let in_pointer_range pointer =
   let pointer_bits = Memory.size_of_pointer * Memory.bits_per_byte in
-  and_ [lePointer_ (pointer_ Z.zero, about); 
-        ltPointer_ (about, pointer_ (Z.pow (Z.of_int 2) pointer_bits));
+  and_ [lePointer_ (pointer_ Z.zero, pointer); 
+        ltPointer_ (pointer, pointer_ (Z.pow (Z.of_int 2) pointer_bits))]
+
+let value_check_pointer alignment ~pointee_ct about = 
+  let pointee_size = match pointee_ct with
+    | Sctypes.Sctype (_, Void) -> 1
+    | Sctypes.Sctype (_, Function _) -> 1
+    | _ -> Memory.size_of_ctype pointee_ct 
+  in
+  and_ [in_pointer_range about;
+        in_pointer_range (subPointer_ (addPointer_ (about, int_ pointee_size), int_ 1));
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
 let value_check alignment struct_layouts ct about =
@@ -967,8 +1001,9 @@ let value_check alignment struct_layouts ct about =
     | Array (it, None) -> 
        Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
     | Array (ict, Some n) -> 
-       and_ (List.init n (fun i -> (aux ict (get_ about (int_ i)))))
-    | Pointer (_, pointee_ct) -> 
+       let i_s, i = fresh BT.Integer in
+       eachI_ (0, i_s, n - 1) (aux ict (get_ about i))
+    | Pointer pointee_ct -> 
        value_check_pointer alignment ~pointee_ct about
     | Struct tag -> 
        and_ begin

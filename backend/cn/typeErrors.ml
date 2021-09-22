@@ -95,7 +95,7 @@ type type_error =
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> type_error
-  | Write_value_unrepresentable of {state : state_report}
+  | Write_value_unrepresentable of {ct: Sctypes.t; location: doc; value: doc; state : state_report}
   | IntFromPtr_unrepresentable of {ict : Sctypes.t; state : state_report}
   | Unsat_constraint of {constr : doc; state : state_report; info : info}
   | Unconstrained_logical_variable of Sym.t * string option
@@ -234,9 +234,16 @@ let pp_type_error te =
      let short = !^"Type inference failed" in
      let descr = !^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it) in
      { short; descr = Some descr; state = None }
-  | Write_value_unrepresentable {state : state_report} ->
-     let short = !^"Write value unrepresentable" in
-     { short; descr = None; state = Some state }
+  | Write_value_unrepresentable {ct; location; value; state : state_report} ->
+     let short = 
+       !^"Write value not representable at type" ^^^ 
+         Sctypes.pp ct 
+     in
+     let descr = 
+       !^"Location" ^^ colon ^^^ location ^^ comma ^^^
+       !^"value" ^^ colon ^^^ value ^^ dot
+     in
+     { short; descr = Some descr; state = Some state }
   | IntFromPtr_unrepresentable {ict; state : state_report} ->
      let short = 
        !^"pointer value not representable at type" ^^^
