@@ -3,51 +3,70 @@ open Pp_prelude
 open Location_ocaml
 
 
+let to_string (Symbol (_, n, sd)) =
+  match sd with
+    | SD_Id str | SD_ObjectAddress str ->
+        str ^ "_" ^ string_of_int n
+    | _ ->
+        "a_" ^ string_of_int n
 
+let to_string_pretty (Symbol (_, n, sd)) =
+  let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
+  let maybe_add_number name = 
+   if !Debug_ocaml.debug_level > 4 then
+      add_number name
+     else
+      name
+  in
+  match sd with
+    | SD_Id str | SD_ObjectAddress str ->
+        maybe_add_number str
+    | _ ->
+        "a_" ^ string_of_int n
 
-
-let to_string (Symbol (dig, n, sd)) =
+(* enriched versions used by the CN backend *)
+let to_string_cn (Symbol (dig, n, sd)) =
   let symbol_description_to_string = function
     | SD_None -> 
-       "a" 
+        "a" 
     | SD_Id str -> 
-       str 
+        str 
     | SD_ObjectAddress name -> 
-       "&" ^ name
+        "&" ^ name
     | SD_Return -> 
-       "return"
+        "return"
     (* | SD_Pointee (env, descr) -> 
-     *    "(" ^ symbol_description_to_string descr ^ ")@" ^ env
-     * | SD_PredOutput (env, pred, output) ->
-     *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
+      *    "(" ^ symbol_description_to_string descr ^ ")@" ^ env
+      * | SD_PredOutput (env, pred, output) ->
+      *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
     | SD_FunArg (_, i) ->
-       "ARG" ^ string_of_int i
+        "ARG" ^ string_of_int i
   in
   let str = symbol_description_to_string sd in
   str ^ "_" ^ string_of_int n (*^ "_" ^ (try Digest.to_hex dig with _ -> "invalid")*)
-
-let to_string_pretty (Symbol (_, n, sd) as s) =
+  
+let to_string_pretty_cn (Symbol (_, n, sd) as s) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name = 
-     if !Debug_ocaml.debug_level > 4 
-     then add_number name
-     else name
+      if !Debug_ocaml.debug_level > 4 
+      then add_number name
+      else name
   in
   let symbol_description = function
     | SD_None -> 
-       to_string s
+        to_string s
     | SD_Id name -> 
-       name
+        name
     | SD_ObjectAddress name -> 
-       "&" ^ name
+        "&" ^ name
     | SD_Return -> 
-       "return"
+        "return"
     (* | SD_Pointee (env, descr) -> 
-     *    "(" ^ symbol_description descr ^ ")@" ^ env
-     * | SD_PredOutput (env, pred, output) ->
-     *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
+      *    "(" ^ symbol_description descr ^ ")@" ^ env
+      * | SD_PredOutput (env, pred, output) ->
+      *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
     | SD_FunArg (_, i) ->
-       "ARG" ^ string_of_int i
+        "ARG" ^ string_of_int i
   in
   match sd with
   | SD_None -> to_string s

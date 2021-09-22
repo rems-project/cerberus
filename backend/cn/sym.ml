@@ -22,7 +22,7 @@ let dest = function
   | CF.Symbol.Symbol (digest, nat, oname) ->
      (digest, nat, oname)
 
-let pp_string = CF.Pp_symbol.to_string_pretty
+let pp_string = CF.Pp_symbol.to_string_pretty_cn
 let pp sym = Pp.string (pp_string sym)
 let pp_debug sym = Pp.string (CF.Symbol.show_raw_less sym)
 
