@@ -1388,13 +1388,11 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : unit m =
        ) pats_es
   | M_PElet (p, e1, e2) ->
      let@ rt = infer_pexpr e1 in
-     pure begin
-         let@ () = match p with
-           | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
-           | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
-         in
-         check_tpexpr e2 typ
-       end
+     let@ () = match p with
+       | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
+       | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
+     in
+     check_tpexpr e2 typ
   | M_PEdone asym ->
      let@ arg = arg_of_asym asym in
      let@ () = Spine.subtype loc arg typ in
@@ -1872,28 +1870,22 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
          ) pats_es
     | M_Elet (p, e1, e2) ->
        let@ rt = infer_pexpr e1 in
-       pure begin
-           let@ () = match p with 
-             | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
-             | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
-           in
-           check_texpr labels e2 typ
-         end
+       let@ () = match p with 
+         | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
+         | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
+       in
+       check_texpr labels e2 typ
     | M_Ewseq (pat, e1, e2) ->
        let@ rt = infer_expr labels e1 in
-       pure begin
-           let@ () = pattern_match_rt (Loc (loc_of_expr e1)) pat rt in
-           check_texpr labels e2 typ
-         end
+       let@ () = pattern_match_rt (Loc (loc_of_expr e1)) pat rt in
+       check_texpr labels e2 typ
     | M_Esseq (pat, e1, e2) ->
        let@ rt = infer_expr labels e1 in
-       pure begin
-           let@ () = match pat with
-             | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_expr e1))) sym rt
-             | M_Pat pat -> pattern_match_rt (Loc (loc_of_expr e1)) pat rt
-           in
-           check_texpr labels e2 typ
-         end
+       let@ () = match pat with
+         | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_expr e1))) sym rt
+         | M_Pat pat -> pattern_match_rt (Loc (loc_of_expr e1)) pat rt
+       in
+       check_texpr labels e2 typ
     | M_Edone asym ->
        begin match typ with
        | Normal typ ->
@@ -1964,10 +1956,14 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
 let check_function 
       (loc : loc) 
       (info : string) 
-      (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-      (body : 'bty mu_tpexpr) (function_typ : AT.ft) : unit m =
+      (arguments : (Sym.t * BT.t) list) 
+      (rbt : BT.t) 
+      (body : 'bty mu_tpexpr) 
+      (function_typ : AT.ft)
+      (ctxt: Context.t)
+    : (unit, type_error) Resultat.t =
   debug 2 (lazy (headline ("checking function " ^ info)));
-  pure begin 
+  run ctxt begin
       let@ (rt, resources) = 
         check_and_bind_arguments RT.subst loc arguments function_typ 
       in
@@ -1983,14 +1979,19 @@ let check_function
 
 (* check_procedure: type check an (impure) procedure *)
 let check_procedure 
-      (loc : loc) (fsym : Sym.t)
-      (arguments : (Sym.t * BT.t) list) (rbt : BT.t) 
-      (body : 'bty mu_texpr) (function_typ : AT.ft) 
-      (label_defs : 'bty mu_label_defs) : unit m =
+      (loc : loc) 
+      (fsym : Sym.t)
+      (arguments : (Sym.t * BT.t) list)
+      (rbt : BT.t) 
+      (body : 'bty mu_texpr)
+      (function_typ : AT.ft) 
+      (label_defs : 'bty mu_label_defs)
+      (ctxt: Context.t)
+    : (unit, type_error) Resultat.t =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
   debug 2 (lazy (item "type" (AT.pp RT.pp function_typ)));
 
-  pure begin 
+  run ctxt begin 
       (* check and bind the function arguments *)
       let@ ((rt, label_defs), resources) = 
         let function_typ = AT.map (fun rt -> (rt, label_defs)) function_typ in
@@ -2006,7 +2007,6 @@ let check_procedure
         let Computational ((sname, sbt), _info, t) = rt in
         ensure_base_type loc ~expect:sbt rbt
       in
-
       (* check well-typedness of labels and record their types *)
       let@ labels = 
         PmapM.foldM (fun sym def acc ->
@@ -2026,7 +2026,6 @@ let check_procedure
               end
           ) label_defs SymMap.empty 
       in
-
       (* check each label *)
       let check_label lsym def () = 
         pure begin 
@@ -2049,17 +2048,13 @@ let check_procedure
           end
       in
       let@ () = PmapM.foldM check_label label_defs () in
-
       (* check the function body *)
       debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
       let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
-      let@ () = check_texpr labels body (Normal rt) in
-      return ()
+      check_texpr labels body (Normal rt)
     end
 
  
-
-
 
 
 let check mu_file = 
@@ -2102,13 +2097,8 @@ let check mu_file =
         let descr = CF.Implementation.string_of_implementation_constant impl in
         match impl_decl with
         | M_Def (rt, rbt, pexpr) -> 
-           let@ ((), _) = 
-             Typing.run (Typing.pure (WellTyped.WRT.good Loc.unknown rt)) ctxt in
-           let@ ((), _) = 
-             Typing.run 
-               (Typing.pure (check_function Loc.unknown descr [] rbt pexpr (AT.I rt)))
-               ctxt 
-           in
+           let@ () = Typing.run ctxt (WellTyped.WRT.good Loc.unknown rt) in
+           let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.I rt) ctxt in
            let ctxt = 
              let impl_constants = ImplMap.add impl rt ctxt.global.impl_constants in
              let global = { ctxt.global with impl_constants } in
@@ -2116,17 +2106,13 @@ let check mu_file =
            in
            return ctxt
         | M_IFun (ft, rbt, args, pexpr) ->
-           let@ ((), _) = 
+           let@ () = 
              let descr = "implementation-defined function" in
-             Typing.run 
-               (Typing.pure (WellTyped.WFT.good descr Loc.unknown ft)) 
-               ctxt
+             Typing.run ctxt (WellTyped.WFT.good descr Loc.unknown ft)
            in
-           let@ ((), _) = 
+           let@ () = 
              let descr = (CF.Implementation.string_of_implementation_constant impl) in
-             Typing.run 
-               (Typing.pure (check_function Loc.unknown descr args rbt pexpr ft))
-               ctxt
+             check_function Loc.unknown descr args rbt pexpr ft ctxt
            in
            let impl_fun_decls = ImplMap.add impl ft ctxt.global.impl_fun_decls in
            let global = { ctxt.global with impl_fun_decls } in
@@ -2143,7 +2129,7 @@ let check mu_file =
     let ping = Pp.progress "predicate welltypedness" number_entries in
     ListM.fold_leftM (fun ctxt (name,def) -> 
         let@ () = return (ping name) in
-        let@ ((), _) = Typing.run (Typing.pure (WellTyped.WPD.good def)) ctxt in
+        let@ () = Typing.run ctxt (WellTyped.WPD.good def) in
         let resource_predicates =
           StringMap.add name def ctxt.global.resource_predicates in
         let global = { ctxt.global with resource_predicates } in
@@ -2193,8 +2179,7 @@ let check mu_file =
         let@ () = return (ping (Sym.pp_string fsym)) in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-        let@ ((), _) = Typing.run (Typing.pure (WellTyped.WFT.good "global" loc ftyp)) ctxt in
-        return ()
+        Typing.run ctxt (WellTyped.WFT.good "global" loc ftyp)
       ) mu_file.mu_funinfo
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in
@@ -2205,23 +2190,11 @@ let check mu_file =
     let decl = Global.get_fun_decl ctxt.global fsym in
     let@ () = match fn, decl with
       | M_Fun (rbt, args, body), Some (loc, ftyp) ->
-         let@ ((), _) = 
-           Typing.run 
-             (Typing.pure (check_function loc
-                             (Sym.pp_string fsym) args rbt body ftyp))
-             ctxt
-         in
-         return ()
+         check_function loc (Sym.pp_string fsym) args rbt body ftyp ctxt
       | M_Fun (rbt, args, body), None ->
          fail Loc.unknown (Unknown_function fsym)
       | M_Proc (loc, rbt, args, body, labels), Some (loc', ftyp) ->
-         let@ ((), _) =
-           Typing.run 
-             (Typing.pure (check_procedure loc'
-                             fsym args rbt body ftyp labels))
-             ctxt
-         in
-         return ()
+         check_procedure loc' fsym args rbt body ftyp labels ctxt
       | M_Proc (loc, rbt, args, body, labels), None ->
          fail loc (Unknown_function fsym)
       | M_ProcDecl _, _ -> 

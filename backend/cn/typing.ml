@@ -10,8 +10,13 @@ type 'a m = 'a t
 type failure = Context.t -> TypeErrors.type_error
 
 
-let run m s = 
-  m.c s
+let run s m = 
+  let () = Z3.Solver.push s.solver in
+  let outcome = m.c s in
+  let () = Z3.Solver.pop s.solver 1 in
+  match outcome with
+  | Ok (a, _) -> Ok a
+  | Error e -> Error e
 
 
 let return (a : 'a) : 'a t =

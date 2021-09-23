@@ -11,7 +11,7 @@ val pure : 'a m -> 'a m
 val (let@) : 'a m -> ('a -> 'b m) -> 'b m
 val fail : Locations.t -> e -> 'a m
 val failS : Locations.t -> failure -> 'a m
-val run : 'a m -> Context.t -> ('a * Context.t, error) Result.t
+val run : Context.t -> 'a m -> ('a, error) Result.t
 
 (* val get: unit -> Context.t m *)
 val print_with_ctxt : (Context.t -> unit) -> unit m
