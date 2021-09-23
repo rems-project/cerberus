@@ -5,14 +5,14 @@ type s = Context.t
 
 type error = (Locations.loc * e) * string option 
 
-type 'a t = { c : s -> ('a * s, error) Result.t }
+type 'a t = s -> ('a * s, error) Result.t
 type 'a m = 'a t
 type failure = Context.t -> TypeErrors.type_error
 
 
 let run s m = 
   let () = Z3.Solver.push s.solver in
-  let outcome = m.c s in
+  let outcome = m s in
   let () = Z3.Solver.pop s.solver 1 in
   match outcome with
   | Ok (a, _) -> Ok a
@@ -20,45 +20,44 @@ let run s m =
 
 
 let return (a : 'a) : 'a t =
-  { c = fun s -> Ok (a, s) }
+  fun s -> Ok (a, s)
 
 let bind (m : 'a t) (f : 'a -> 'b t) : 'b t = 
-  let c s = match m.c s with
-    | Error e -> Error e
-    | Ok (x, s') -> (f x).c s'
-  in
-  { c }
+  fun s -> 
+  match m s with
+  | Error e -> Error e
+  | Ok (x, s') -> (f x) s'
+
+
 
 let (let@) = bind
 
 let get () : 'a t = 
-  { c = fun s -> Ok (s, s) }
+  fun s -> Ok (s, s)
 
 let set (s : 's) : unit t = 
-  { c = fun _ -> Ok ((), s) }
+  fun _ -> Ok ((), s)
 
 
 let error loc e = 
   ((loc, e), Tools.do_stack_trace ())
 
 let fail (loc: Loc.loc) (e: e) : 'a t = 
-  { c = fun _ -> Error (error loc e) }
+  fun _ -> Error (error loc e)
 
 let failS (loc : Loc.loc) (f : failure) : 'a t = 
-  { c = fun s -> Error (error loc (f s)) }
+  fun s -> Error (error loc (f s))
 
 
 let pure (m : 'a t) : 'a t =
-  let c s = 
-    Z3.Solver.push s.solver;
-    let outcome = match m.c s with
-      | Ok (a, _) -> Ok (a, s)
-      | Error e -> Error e
-    in
-    Z3.Solver.pop s.solver 1;
-    outcome
+  fun s ->
+  Z3.Solver.push s.solver;
+  let outcome = match m s with
+    | Ok (a, _) -> Ok (a, s)
+    | Error e -> Error e
   in
-  { c }
+  Z3.Solver.pop s.solver 1;
+  outcome
 
 
 
