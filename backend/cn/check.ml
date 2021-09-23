@@ -76,7 +76,7 @@ type pointer_value = CF.Impl_mem.pointer_value
 let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit, type_error) m =
   if LS.equal has expect 
   then return () 
-  else fail {loc; msg = Mismatch {has; expect}}
+  else fail (fun _ -> {loc; msg = Mismatch {has; expect}})
 
 let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_error) m =
   ensure_logical_sort loc ~expect has
@@ -85,24 +85,24 @@ let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_err
 let check_computational_bound loc s = 
   let@ is_bound = bound_a s in
   if is_bound then return () 
-  else fail {loc; msg = Unknown_variable s}
+  else fail (fun _ -> {loc; msg = Unknown_variable s})
 
 let get_struct_decl loc tag = 
   let@ global = get_global () in
   match SymMap.find_opt tag global.struct_decls with
   | Some decl -> return decl
-  | None -> fail {loc; msg = Unknown_struct tag}
+  | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
 
 let get_member_type loc tag member layout = 
   match List.assoc_opt Id.equal member (Memory.member_types layout) with
   | Some membertyp -> return membertyp
-  | None -> fail {loc; msg = Unknown_member (tag, member)}
+  | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
 
 let get_fun_decl loc fsym = 
   let@ global = get_global () in
   match Global.get_fun_decl global fsym with
   | Some t -> return t
-  | None -> fail {loc = Loc.unknown; msg = Unknown_function fsym}
+  | None -> fail (fun _ -> {loc = Loc.unknown; msg = Unknown_function fsym})
 
 
 
@@ -131,21 +131,21 @@ let pattern_match =
        | M_Cnil item_bt, [] ->
           return (IT.nil_ ~item_bt)
        | M_Cnil item_bt, _ ->
-          fail {loc; msg = Number_arguments {has = List.length pats; expect = 0}}
+          fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
        | M_Ccons, [p1; p2] ->
           let@ it1 = aux p1 in
           let@ it2 = aux p2 in
           let@ () = ensure_base_type loc ~expect:(List (IT.bt it1)) (IT.bt it2) in
           return (cons_ (it1, it2))
        | M_Ccons, _ -> 
-          fail {loc; msg = Number_arguments {has = List.length pats; expect = 2}}
+          fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
        | M_Ctuple, pats ->
           let@ its = ListM.mapM aux pats in
           return (tuple_ its)
        | M_Cspecified, [pat] ->
           aux pat
        | M_Cspecified, _ ->
-          fail {loc; msg = Number_arguments {expect = 1; has = List.length pats}}
+          fail (fun _ -> {loc; msg = Number_arguments {expect = 1; has = List.length pats}})
        | M_Carray, _ ->
           Debug_ocaml.error "todo: array types"
   in
@@ -256,7 +256,7 @@ module ResourceInference = struct
         | Sctype (_, Struct tag) ->
            fold_struct loc failure tag requested.pointer (q_ (1, 1))
         | _ -> 
-           failS failure
+           fail failure
       in
       let@ () = add_r (Some (Loc loc)) folded_resource in
       point_request loc failure requested
@@ -314,7 +314,7 @@ module ResourceInference = struct
       in
       return r
     else 
-      failS failure
+      fail failure
 
 
   and predicate_request loc failure (requested : Resources.Requests.predicate) = 
@@ -369,7 +369,7 @@ module ResourceInference = struct
       in
       return r
     else 
-      failS failure
+      fail failure
 
   and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
     let needed = requested.permission in
@@ -430,7 +430,7 @@ module ResourceInference = struct
       in
       return r
     else  
-      failS failure
+      fail failure
 
 
   and fold_array loc failure item_ct base length permission =
@@ -696,7 +696,7 @@ end = struct
       let (expect, info) = SymMap.find uni_var unis in
       if LS.equal (IT.bt instantiation) expect 
       then return ()
-      else fail {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}}
+      else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
     in
 
     let unify_or_constrain (unis, subst, constrs) (output_spec, output_have) =
@@ -737,7 +737,7 @@ end = struct
        let result = 
          provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
        in
-       if result then return (unis, subst) else failS failure
+       if result then return (unis, subst) else fail failure
     | QPoint p_spec, QPoint p_have
          when Sctypes.equal p_spec.ct p_have.ct
               && Sym.equal p_spec.qpointer p_have.qpointer
@@ -759,7 +759,7 @@ end = struct
             (forall_ (p_have.qpointer, BT.Loc)
                (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
        in
-       if result then return (unis, subst) else failS failure
+       if result then return (unis, subst) else fail failure
     | Predicate p_spec, Predicate p_have 
          when predicate_name_equal p_spec.name p_have.name
               && IT.equal p_spec.pointer p_have.pointer
@@ -772,7 +772,7 @@ end = struct
        let result =
          provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
        in
-       if result then return (unis, subst) else failS failure
+       if result then return (unis, subst) else fail failure
     | QPredicate p_spec, QPredicate p_have 
          when predicate_name_equal p_spec.name p_have.name
               && Sym.equal p_spec.qpointer p_have.qpointer
@@ -793,7 +793,7 @@ end = struct
            (forall_ (p_have.qpointer, BT.Loc)
               (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
        in
-       if result then return (unis, subst) else failS failure
+       if result then return (unis, subst) else fail failure
     | _ -> 
        Debug_ocaml.error "resource inference has inferred mismatched resources"
 
@@ -845,13 +845,13 @@ end = struct
            check_computational args 
              (subst rt_subst [(s, sym_ (arg.lname, bt))] ftyp)
         | (arg :: _), (Computational ((_, bt), _info, _))  ->
-           fail {loc = arg.loc; msg = Mismatch {has = arg.bt; expect = bt}}
+           fail (fun _ -> {loc = arg.loc; msg = Mismatch {has = arg.bt; expect = bt}})
         | [], (L ftyp) -> 
            return ftyp
         | _ -> 
            let expect = count_computational ftyp in
            let has = List.length arguments in
-           fail {loc; msg = Number_arguments {expect; has}}
+           fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
       in
       check_computational arguments ftyp 
     in
@@ -909,7 +909,7 @@ end = struct
       let rec check_logical_constraints = function
         | Constraint (c, info, ftyp) -> 
            if provable c then check_logical_constraints ftyp else
-             failS (fun ctxt ->
+             fail (fun ctxt ->
                  let (constr,state) = 
                    E.unsatisfied_constraint ctxt (S.model ctxt.solver) c
                  in
@@ -993,19 +993,19 @@ let infer_constructor (loc : loc) (constructor : mu_ctor)
   | M_Cspecified, [arg] ->
      return (vt_of_arg arg)
   | M_Cspecified, _ ->
-     fail {loc; msg = Number_arguments {has = List.length args; expect = 1}}
+     fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect = 1}})
   | M_Cnil item_bt, [] -> 
      let bt = List item_bt in
      return (bt, nil_ ~item_bt)
   | M_Cnil item_bt, _ -> 
-     fail {loc; msg = Number_arguments {has = List.length args; expect=0}}
+     fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect=0}})
   | M_Ccons, [arg1; arg2] -> 
      let bt = List arg1.bt in
      let@ () = ensure_base_type arg2.loc ~expect:bt arg2.bt in
      let list_it = cons_ (it_of_arg arg1, it_of_arg arg2) in
      return (arg2.bt, list_it)
   | M_Ccons, _ ->
-     fail {loc; msg = Number_arguments {has = List.length args; expect = 2}}
+     fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect = 2}})
 
 
 
@@ -1024,7 +1024,7 @@ let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
   let open BT in
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
-      fail {loc; msg = Unspecified ct} ) 
+      fail (fun _ -> {loc; msg = Unspecified ct}) )
     ( fun _ _ -> 
       unsupported loc !^"infer_mem_value: concurrent read case" )
     ( fun it iv -> 
@@ -1060,9 +1060,9 @@ and infer_struct (loc : loc) (tag : tag)
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
        Debug_ocaml.error "mismatch in fields in infer_struct"
     | [], ((member, _) :: _) ->
-       fail {loc; msg = Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")}
+       fail (fun _ -> {loc; msg = Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")})
     | ((member,_) :: _), [] ->
-       fail {loc; msg = Generic (!^"supplying unexpected field" ^^^ Id.pp member)}
+       fail (fun _ -> {loc; msg = Generic (!^"supplying unexpected field" ^^^ Id.pp member)})
   in
   let@ it = check member_values (Memory.member_types layout) in
   return (BT.Struct tag, IT.struct_ (tag, it))
@@ -1194,7 +1194,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        Debug_ocaml.error "todo: PEconstrained"
     | M_PEerror (err, asym) ->
        let@ arg = arg_of_asym asym in
-       failS (fun ctxt ->
+       fail (fun ctxt ->
            let expl = E.undefined_behaviour ctxt in
            {loc; msg = StaticError (err, expl) }
          )
@@ -1242,7 +1242,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ _member_bt = get_member_type loc tag member layout in
        let@ offset = match Memory.member_offset layout member with
          | Some offset -> return offset
-         | None -> fail {loc; msg = Unknown_member (tag, member) }
+         | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
        in
        let vt = (Loc, IT.addPointer_ (it_of_arg arg, int_ offset)) in
        return (RT.concat (rt_of_vt loc vt) lrt)
@@ -1300,7 +1300,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        if provable (t_ (it_of_arg arg)) then
          return (rt_of_vt loc (Unit, unit_))
        else
-         failS (fun ctxt ->
+         fail (fun ctxt ->
              let expl = E.undefined_behaviour ctxt in
              {loc; msg = Undefined_behaviour (undef, expl)}
            )
@@ -1335,7 +1335,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
           if provable (t_ (representable_ (act.ct, arg_it))) then
             return (rt_of_vt loc (Integer, arg_it))
           else
-            failS (fun ctxt ->
+            fail (fun ctxt ->
                 let (it_pp, state_pp) = E.implementation_defined_behaviour ctxt arg_it in
                 let msg = 
                   Implementation_defined_behaviour 
@@ -1404,7 +1404,7 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
      let@ () = Spine.subtype loc arg typ in
      return ()
   | M_PEundef (_loc, undef) ->
-     failS (fun ctxt ->
+     fail (fun ctxt ->
          let expl = E.undefined_behaviour ctxt in
          {loc; msg = Undefined_behaviour (undef, expl)}
        )
@@ -1432,7 +1432,7 @@ let pp_or_false (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document =
 
 let all_empty loc = 
   let failure resource = 
-    failS (fun ctxt ->
+    fail (fun ctxt ->
         let (resource, state) = 
           E.resource ctxt (S.model ctxt.solver) resource in
         {loc; msg = Unused_resource {resource; state}}
@@ -1516,7 +1516,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             let@ provable = provable in
             let lc = (t_ (representable_ (act_to.ct, v))) in
             if provable lc then return () else
-              failS (fun ctxt ->
+              fail (fun ctxt ->
                   let (_, state) = 
                     E.unsatisfied_constraint ctxt (S.model (ctxt.solver)) lc in
                   {loc; msg = IntFromPtr_unrepresentable {ict = act_to.ct; state}}
@@ -1625,7 +1625,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             let@ provable = provable in
             let holds = provable (t_ in_range_lc) in
             if holds then return () else 
-              failS (fun ctxt ->
+              fail (fun ctxt ->
                   let ((location,value), state) = 
                     E.unrepresentable_write_value ctxt 
                       (S.model ctxt.solver) 
@@ -1673,7 +1673,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ () = 
             let@ provable = provable in
             if provable (t_ point.init) then return () else
-              failS (fun ctxt ->
+              fail (fun ctxt ->
                   let (_, state) = 
                     E.unsatisfied_constraint ctxt
                       (S.model ctxt.solver) (t_ point.init) in
@@ -1724,11 +1724,11 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        let@ global = get_global () in
        let@ def = match Global.get_predicate_def global (Id.s pname) with
          | Some def -> return def
-         | None -> fail {loc; msg = Unknown_predicate (Id.s pname)}
+         | None -> fail (fun _ -> {loc; msg = Unknown_predicate (Id.s pname)})
        in
        let@ pointer_asym, iarg_asyms = match asyms with
          | pointer_asym :: iarg_asyms -> return (pointer_asym, iarg_asyms)
-         | _ -> fail {loc; msg = Generic !^"pointer argument to predicate missing"}
+         | _ -> fail (fun _ -> {loc; msg = Generic !^"pointer argument to predicate missing"})
        in
        let@ pointer_arg = arg_of_asym pointer_asym in
        (* todo: allow other permission amounts *)
@@ -1738,7 +1738,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          (* "+1" because of pointer argument *)
          let has, expect = List.length iargs + 1, List.length def.iargs + 1 in
          if has = expect then return ()
-         else fail {loc; msg = Number_arguments {has; expect}}
+         else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
        in
        let@ () = ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
        let@ () = ensure_base_type loc ~expect:Real (IT.bt permission) in
@@ -1769,7 +1769,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                 (match pack_unpack with Pack -> !^"packing" | Unpack -> !^"unpacking") ^^^
                 Id.pp pname
               in
-              fail {loc; msg = Generic err}
+              fail (fun _ -> {loc; msg = Generic err})
          in
          try_clauses [] instantiated_clauses
        in
@@ -1819,7 +1819,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
            ) all_constraints
        in
        let@ () = match new_constraints with
-         | [] -> fail {loc; msg = Generic !^"no matching all-quantified constraints found"}
+         | [] -> fail (fun _ -> {loc; msg = Generic !^"no matching all-quantified constraints found"})
          | _ -> return ()
        in
        let rt = 
@@ -1903,16 +1903,16 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
             "This expression returns but is expected "^
               "to have non-return type."
           in
-          fail {loc; msg = Generic !^err}
+          fail (fun _ -> {loc; msg = Generic !^err})
        end
     | M_Eundef (_loc, undef) ->
-       failS (fun ctxt ->
+       fail (fun ctxt ->
            let expl = E.undefined_behaviour ctxt in
            {loc; msg = Undefined_behaviour (undef, expl)}
          )
     | M_Erun (label_sym, asyms) ->
        let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
-         | None -> fail {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)}
+         | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
          | Some (lt,lkind) -> return (lt,lkind)
        in
        let@ args = args_of_asyms asyms in
@@ -1938,12 +1938,12 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
        let@ () = add_a aname (abt,new_lname) in
        check resources args ftyp'
     | ((aname, abt) :: args), (AT.Computational ((sname, sbt), _info, ftyp)) ->
-       fail {loc; msg = Mismatch {has = abt; expect = sbt}}
+       fail (fun _ -> {loc; msg = Mismatch {has = abt; expect = sbt}})
     | [], (AT.Computational (_, _, _))
     | (_ :: _), (AT.I _) ->
        let expect = AT.count_computational function_typ in
        let has = List.length arguments in
-       fail {loc; msg = Number_arguments {expect; has}}
+       fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
     | args, (AT.Logical ((sname, sls), _, ftyp)) ->
        let@ () = add_l sname sls in
        check resources args ftyp

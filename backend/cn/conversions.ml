@@ -26,15 +26,6 @@ module SymSet = Set.Make(Sym)
 
 
 
-let get_loc_ annots = Cerb_frontend.Annot.get_loc_ annots
-
-
-
-
-
-let annot_of_ct (CF.Ctype.Ctype (annot,_)) = annot
-
-
 
 let sct_of_ct loc ct = 
   match Sctypes.of_ctype ct with

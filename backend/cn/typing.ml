@@ -4,7 +4,7 @@ type s = Context.t
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
 type ('a, 'e) m = ('a, 'e) t
-type 'e failure = Context.t -> 'e
+type 'e failure = s -> 'e
 
 
 let run s m = 
@@ -36,10 +36,7 @@ let set (s : 's) : (unit, 'e) t =
   fun _ -> Ok ((), s)
 
 
-let fail (e: 'e) : ('a, 'e) t = 
-  fun _ -> Error e
-
-let failS (f : 'e failure) : ('a, 'e) t = 
+let fail (f : s -> 'e) : ('a, 'e) t = 
   fun s -> Error (f s)
 
 

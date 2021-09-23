@@ -1,12 +1,12 @@
 type ('a, 'e) t
 type ('a, 'e) m = ('a, 'e) t
 type 'e failure = Context.t -> 'e
+
 val return : 'a -> ('a, 'e) m
 val bind : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 val pure : ('a, 'e) m -> ('a, 'e) m
 val (let@) : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
-val fail : 'e -> ('a, 'e) m
-val failS : 'e failure -> ('a, 'e) m
+val fail : 'e failure -> ('a, 'e) m
 val run : Context.t -> ('a, 'e) m -> ('a, 'e) Result.t
 
 (* val get: unit -> Context.t m *)
