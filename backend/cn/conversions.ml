@@ -2,6 +2,7 @@ module CF=Cerb_frontend
 open List
 (* open Sym *)
 open Resultat
+open Effectful.Make(Resultat)
 open Pp
 (* open Tools *)
 module BT = BaseTypes
@@ -162,7 +163,7 @@ let make_owned loc (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
-     fail loc (Generic !^"cannot make owned void* pointer")
+     fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
      let pointee = Sym.fresh () in
      let pointee_bt = BT.of_sct sct in
@@ -196,7 +197,7 @@ let make_block loc (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
-     fail loc (Generic !^"cannot make owned void* pointer")
+     fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
      let pointee = Sym.fresh () in
      let init = Sym.fresh () in
@@ -225,7 +226,7 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
       pred ~oname pointer iargs = 
   let@ def = match List.assoc_opt String.equal pred predicates with
     | Some def -> return def
-    | None -> fail loc (Unknown_predicate pred)
+    | None -> fail {loc; msg = Unknown_predicate pred}
   in
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
@@ -276,7 +277,7 @@ let resolve_index_term loc layouts
     | Some {it; o_sct; _} -> 
        return (it, o_sct)
     | None -> 
-       fail loc (Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply"))
+       fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")}
   in
   let rec resolve (term : Ast.term) mapping 
         : (IT.typed * Sctypes.t option, type_error) m =
@@ -365,7 +366,7 @@ let resolve_index_term loc layouts
        let ppf () = Ast.Terms.pp false term in
        let@ tag = match IT.bt st with
          | Struct tag -> return tag
-         | _ -> fail loc (Generic (ppf () ^^^ !^"is not a struct"))
+         | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
        in
        let layout = layouts tag in
        let decl_members = Memory.member_types layout in
@@ -377,7 +378,7 @@ let resolve_index_term loc layouts
               !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
                 ppf () ^^^ !^"does not have member" ^^^ Id.pp member
             in
-            fail loc (Generic err)
+            fail {loc; msg = Generic err}
        in
        return (IT (Struct_op (StructMember (st, member)), BT.of_sct sct), Some sct)
     | IntegerToPointerCast t ->
@@ -396,14 +397,14 @@ let resolve_index_term loc layouts
        | BT.Array (_, bt) -> 
           return (IT (Array_op (Get (it1, it2)), bt), None)
        | _ -> 
-          fail loc (Generic (ppf () ^^^ !^"is not an array"))
+          fail {loc; msg = Generic (ppf () ^^^ !^"is not an array")}
        end
     | Env (t, mapping_name) ->
        begin match StringMap.find_opt mapping_name mappings with
        | Some mapping -> 
           resolve t mapping
        | None ->
-          fail loc (Generic (!^"label" ^^^ !^mapping_name ^^^ !^"does not apply"))
+          fail {loc; msg = Generic (!^"label" ^^^ !^mapping_name ^^^ !^"does not apply")}
        end
   in
   resolve term (StringMap.find default_mapping_name mappings)
@@ -423,26 +424,26 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
      let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings path in
      begin match sct with
      | None -> 
-        fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path)))
+        fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
      | Some Sctype (_, Pointer sct2) ->
         make_owned loc it path sct2
      | Some _ ->
-        fail loc (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer"))
+        fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
      end
   | "Owned", _ ->
-     fail loc (Generic !^"Owned predicate takes 1 argument, which has to be a path")
+     fail {loc; msg = Generic !^"Owned predicate takes 1 argument, which has to be a path"}
   | "Block", [path] ->
      let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings path in
      begin match sct with
      | None -> 
-        fail loc (Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path)))
+        fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
      | Some (Sctype (_, Pointer sct2)) -> 
         make_block loc it path sct2
      | Some _ ->
-        fail loc (Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer"))
+        fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
      end
   | "Block", _ ->
-     fail loc (Generic !^"Block predicate takes 1 argument, which has to be a path")
+     fail {loc; msg = Generic !^"Block predicate takes 1 argument, which has to be a path"}
   | _, pointer :: arguments ->
      let@ (pointer_resolved, _) = resolve_index_term loc layouts default_mapping_name mappings pointer in
      let@ iargs_resolved = 
@@ -454,7 +455,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
      let@ result = make_pred loc predicates predicate ~oname pointer_resolved iargs_resolved in
      return result
   | pred, _ ->
-     fail loc (Generic !^("predicates take at least one (pointer) argument"))
+     fail {loc; msg = Generic !^("predicates take at least one (pointer) argument")}
 
 
 

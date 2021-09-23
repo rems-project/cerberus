@@ -75,7 +75,7 @@ type sym_or_string =
 
 
 
-type type_error = 
+type message = 
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
   | Unknown_struct of BT.tag
@@ -94,7 +94,7 @@ type type_error =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
-  | Polymorphic_it : 'bt IndexTerms.term -> type_error
+  | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: doc; value: doc; state : state_report}
   | IntFromPtr_unrepresentable of {ict : Sctypes.t; state : state_report}
   | Unsat_constraint of {constr : doc; state : state_report; info : info}
@@ -110,7 +110,10 @@ type type_error =
   | Generic of Pp.document
 
 
-
+type type_error = {
+    loc : Locations.t;
+    msg : message;
+  }
 
 
 
@@ -122,7 +125,7 @@ type report = {
     state : state_report option;
   }
 
-let pp_type_error te = 
+let pp_message te = 
   match te with
   | Unknown_variable s -> 
      let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
@@ -320,8 +323,8 @@ let state_error_file = "state.html"
 
 
 (* stealing some logic from pp_errors *)
-let report (loc : Loc.t) (ostacktrace : string option) (err : type_error) = 
-  let report = pp_type_error err in
+let report {loc; msg} = 
+  let report = pp_message msg in
   let consider = match report.state with
     | Some state -> 
        let channel = open_out state_error_file in

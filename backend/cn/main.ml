@@ -178,8 +178,8 @@ let main filename loc_pp debug_level print_level =
          match result with
          | Ok () -> 
             exit 0
-         | Error ((loc,err),ostacktrace) ->
-            TypeErrors.report loc ostacktrace err;
+         | Error e ->
+            TypeErrors.report e;
             exit 1
        with
        | exc -> 

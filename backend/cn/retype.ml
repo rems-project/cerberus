@@ -1,5 +1,6 @@
 (* open Pp *)
 open Resultat
+open Effectful.Make(Resultat)
 module SymMap = Map.Make(Sym)
 module StringMap = Map.Make(String)
 module CF=Cerb_frontend

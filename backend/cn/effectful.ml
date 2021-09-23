@@ -1,7 +1,7 @@
-module type S = sig  type 'a t
-  type 'a m
-  val return : 'a -> 'a m
-  val bind : 'a m -> ('a -> 'b m) -> 'b m
+module type S = sig
+  type ('a, 'e) m
+  val return : 'a -> ('a, 'e) m
+  val bind : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 end
 
 
@@ -17,7 +17,7 @@ module Make(T : S) = struct
 
     open List
 
-    let rec mapM (f : 'a -> 'b m) (l : 'a list) : ('b list) m = 
+    let rec mapM (f : 'a -> ('b, 'e) m) (l : 'a list) : ('b list, 'e) m = 
       match l with
       | [] -> return []
       | x :: xs -> 
@@ -26,8 +26,8 @@ module Make(T : S) = struct
          return (y :: ys)
 
 
-    let mapiM (f : int -> 'a -> 'b m) 
-              (l : 'a list) : ('b list) m = 
+    let mapiM (f : int -> 'a -> ('b, 'e) m) 
+              (l : 'a list) : ('b list, 'e) m = 
       let rec aux i l =
         match l with
         | [] -> return []
@@ -38,7 +38,7 @@ module Make(T : S) = struct
       in
       aux 0 l
 
-    let iterM (f : ('a -> unit m)) (l : 'a list) : unit m = 
+    let iterM (f : ('a -> (unit, 'e) m)) (l : 'a list) : (unit, 'e) m = 
       let@ _ = mapM f l in 
       return ()
 
@@ -52,11 +52,11 @@ module Make(T : S) = struct
 
 
 
-    let fold_leftM (f : 'a -> 'b -> 'c m) (a : 'a) (bs : 'b list) =
+    let fold_leftM (f : 'a -> 'b -> ('c, 'e) m) (a : 'a) (bs : 'b list) =
       Stdlib.List.fold_left (fun aM b -> let@ a = aM in f a b) (return a) bs
 
     (* maybe from Exception.lem *)
-    let fold_rightM (f : 'b -> 'a -> 'c m) (bs : 'b list) (a : 'a) =
+    let fold_rightM (f : 'b -> 'a -> ('c, 'e) m) (bs : 'b list) (a : 'a) =
       Stdlib.List.fold_right (fun b aM -> let@ a = aM in f b a) bs (return a)
 
   end
@@ -65,13 +65,13 @@ module Make(T : S) = struct
 
     open List1
 
-    let mapM (f : 'a -> 'b m) (l : 'a list1) : ('b list1) m = 
+    let mapM (f : 'a -> ('b, 'e) m) (l : 'a list1) : ('b list1, 'e) m = 
       let (hd, tl) = dest l in
       let@ hd = f hd in
       let@ tl = ListM.mapM f tl in
       return (List1.make (hd, tl))
 
-    let iterM (f : ('a -> unit m)) (l : 'a list1) : unit m = 
+    let iterM (f : ('a -> (unit, 'e) m)) (l : 'a list1) : (unit, 'e) m = 
       let@ _ = mapM f l in 
       return ()  
 
@@ -81,8 +81,8 @@ module Make(T : S) = struct
   module PmapM = struct
 
     let foldM 
-          (f : 'k -> 'x -> 'y -> 'y m)
-          (map : ('k,'x) Pmap.map) (init: 'y) : 'y m =
+          (f : 'k -> 'x -> 'y -> ('y, 'e) m)
+          (map : ('k,'x) Pmap.map) (init: 'y) : ('y, 'e) m =
       Pmap.fold (fun k v aM -> let@ a = aM in f k v a) map (return init)
 
     let iterM f m = 
@@ -90,10 +90,10 @@ module Make(T : S) = struct
         m (return ())
 
     let mapM 
-          (f: 'k -> 'v -> 'w m)
+          (f: 'k -> 'v -> ('w, 'e) m)
           (m : ('k,'v) Pmap.map)
           (cmp: 'k -> 'k -> int)
-        : (('k,'w) Pmap.map) m
+        : (('k,'w) Pmap.map, 'e) m
       = 
       foldM (fun k v m -> 
           let@ v' = f k v in 

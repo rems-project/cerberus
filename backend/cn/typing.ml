@@ -1,13 +1,10 @@
 open Context
 
-type e = TypeErrors.type_error
 type s = Context.t
 
-type error = (Locations.loc * e) * string option 
-
-type 'a t = s -> ('a * s, error) Result.t
-type 'a m = 'a t
-type failure = Context.t -> TypeErrors.type_error
+type ('a, 'e) t = s -> ('a * s, 'e) Result.t
+type ('a, 'e) m = ('a, 'e) t
+type 'e failure = Context.t -> 'e
 
 
 let run s m = 
@@ -19,10 +16,10 @@ let run s m =
   | Error e -> Error e
 
 
-let return (a : 'a) : 'a t =
+let return (a : 'a) : ('a, 'e) t =
   fun s -> Ok (a, s)
 
-let bind (m : 'a t) (f : 'a -> 'b t) : 'b t = 
+let bind (m : ('a, 'e) t) (f : 'a -> ('b, 'e) t) : ('b, 'e) t = 
   fun s -> 
   match m s with
   | Error e -> Error e
@@ -32,24 +29,21 @@ let bind (m : 'a t) (f : 'a -> 'b t) : 'b t =
 
 let (let@) = bind
 
-let get () : 'a t = 
+let get () : ('a, 'e) t = 
   fun s -> Ok (s, s)
 
-let set (s : 's) : unit t = 
+let set (s : 's) : (unit, 'e) t = 
   fun _ -> Ok ((), s)
 
 
-let error loc e = 
-  ((loc, e), Tools.do_stack_trace ())
+let fail (e: 'e) : ('a, 'e) t = 
+  fun _ -> Error e
 
-let fail (loc: Loc.loc) (e: e) : 'a t = 
-  fun _ -> Error (error loc e)
-
-let failS (loc : Loc.loc) (f : failure) : 'a t = 
-  fun s -> Error (error loc (f s))
+let failS (f : 'e failure) : ('a, 'e) t = 
+  fun s -> Error (f s)
 
 
-let pure (m : 'a t) : 'a t =
+let pure (m : ('a, 'e) t) : ('a, 'e) t =
   fun s ->
   Z3.Solver.push s.solver;
   let outcome = match m s with

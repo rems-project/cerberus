@@ -9,6 +9,7 @@ open Context
 open Global
 open TE
 open Pp
+open Locations
 
 
 open Typing
@@ -20,47 +21,48 @@ module WIT = struct
   let check_bound_l loc s = 
     let@ is_bound = bound_l s in
     if is_bound then return ()
-    else fail loc (TE.Unknown_variable s)
+    else fail {loc; msg = TE.Unknown_variable s}
 
 
-  let illtyped_index_term context it has expected =
+  let illtyped_index_term (loc: loc) context it has expected =
     fun explain_ctxt ->
     let (context_pp, it_pp) = Explain.illtyped_index_term explain_ctxt context it in
-    TypeErrors.Illtyped_it {context = context_pp; it = it_pp; 
-                            has; expected = "integer or real"}
+    {loc = loc;
+     msg = TypeErrors.Illtyped_it {context = context_pp; it = it_pp; 
+                                   has; expected = "integer or real"}}
 
 
-  let ensure_integer_or_real_type loc context it = 
+  let ensure_integer_or_real_type (loc : loc) context it = 
     let open BT in
     match IT.bt it with
     | (Integer | Real) -> return ()
     | _ -> 
        let expect = "integer or real type" in
-       failS loc (illtyped_index_term context it (IT.bt it) expect)
+       failS (illtyped_index_term loc context it (IT.bt it) expect)
 
   let ensure_set_type loc context it = 
     let open BT in
     match IT.bt it with
     | Set bt -> return bt
-    | _ -> failS loc (illtyped_index_term context it (IT.bt it) "set type")
+    | _ -> failS (illtyped_index_term loc context it (IT.bt it) "set type")
 
   let ensure_list_type loc context it = 
     let open BT in
     match IT.bt it with
     | List bt -> return bt
-    | _ -> failS loc (illtyped_index_term context it (IT.bt it) "list type")
+    | _ -> failS (illtyped_index_term loc context it (IT.bt it) "list type")
 
   let ensure_array_type loc context it = 
     let open BT in
     match IT.bt it with
     | Array (abt, rbt) -> return (abt, rbt)
-    | _ -> failS loc (illtyped_index_term context it (IT.bt it) "array type")
+    | _ -> failS (illtyped_index_term loc context it (IT.bt it) "array type")
 
   let get_struct_decl loc tag = 
     let@ global = get_global () in
     match SymMap.find_opt tag global.struct_decls with
     | Some decl -> return decl
-    | None -> fail loc (Unknown_struct tag)
+    | None -> fail {loc; msg = Unknown_struct tag}
 
   open BaseTypes
   open LogicalSorts
@@ -69,7 +71,7 @@ module WIT = struct
   type t = IndexTerms.t
 
 
-  let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> IT.t m =
+  let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context (IT (it, _)) ->
       match it with
       | Lit lit ->
@@ -184,21 +186,27 @@ module WIT = struct
                    begin match List.nth_opt bts n with
                    | Some t -> return t
                    | None -> 
-                      failS loc (fun explain_ctxt ->
+                      failS (fun explain_ctxt ->
                           let (context_pp, t'_pp) = Explain.illtyped_index_term explain_ctxt context t' in
-                          Generic
-                            (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                               !^"Expected" ^^^ t'_pp ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
-                                 !^"components, but has type" ^^^ BT.pp (Tuple bts))
+                          let msg = 
+                            Generic
+                              (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                 !^"Expected" ^^^ t'_pp ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
+                                   !^"components, but has type" ^^^ BT.pp (Tuple bts))
+                          in
+                          {loc; msg}
                         )
                    end
                 | _ -> 
-                   failS loc (fun explain_ctxt ->
+                   failS (fun explain_ctxt ->
                        let (context_pp, t'_pp) = Explain.illtyped_index_term explain_ctxt context t' in
-                       Generic
-                         (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                            !^"Expected" ^^^ t'_pp ^^^ !^"to have tuple type, but has type" ^^^
-                              BT.pp (IT.bt t'))
+                       let msg = 
+                         Generic
+                           (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                              !^"Expected" ^^^ t'_pp ^^^ !^"to have tuple type, but has type" ^^^
+                                BT.pp (IT.bt t'))
+                       in
+                       {loc; msg}
                      )
               in
               return (item_bt, NthTuple (n, t'))
@@ -213,18 +221,21 @@ module WIT = struct
                 let has = List.length members in
                 let expect = List.length decl_members in
                 if has = expect then return ()
-                else fail loc (Number_members {has; expect})
+                else fail {loc; msg = Number_members {has; expect}}
               in
               let@ members = 
                 ListM.mapM (fun (member,t) ->
                     let@ bt = match List.assoc_opt Id.equal member decl_members with
                       | Some sct -> return (BT.of_sct sct)
                       | None -> 
-                         failS loc (fun explain_ctxt ->
+                         failS (fun explain_ctxt ->
                              let context_pp = Explain.index_term explain_ctxt context in
-                             Generic
-                               (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                  !^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ Id.pp member)
+                             let msg = 
+                               Generic
+                                 (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                    !^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ Id.pp member)
+                             in
+                             {loc; msg}
                            )
                     in
                     let@ t = check loc ~context bt t in
@@ -237,11 +248,14 @@ module WIT = struct
               let@ tag = match IT.bt t with
                 | Struct tag -> return tag
                 | _ -> 
-                   failS loc (fun explain_ctxt ->
+                   failS (fun explain_ctxt ->
                        let (context_pp, t_pp) = Explain.illtyped_index_term explain_ctxt context t in
-                       Generic (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                  !^"Expected" ^^^ t_pp ^^^ !^"to have struct type" ^^^ 
-                                    !^"but has type" ^^^ BT.pp (IT.bt t))
+                       let msg = 
+                         Generic (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                                    !^"Expected" ^^^ t_pp ^^^ !^"to have struct type" ^^^ 
+                                      !^"but has type" ^^^ BT.pp (IT.bt t))
+                       in
+                       {loc; msg}
                      )
               in
               let@ layout = get_struct_decl loc tag in
@@ -249,11 +263,14 @@ module WIT = struct
               let@ bt = match List.assoc_opt Id.equal member decl_members with
                 | Some sct -> return (BT.of_sct sct)
                 | None -> 
-                   failS loc (fun explain_ctxt ->
+                   failS (fun explain_ctxt ->
                        let (context_pp, t_pp) = Explain.illtyped_index_term explain_ctxt context t in
-                       Generic
-                         (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                            t_pp ^^^ !^"does not have member" ^^^ Id.pp member)
+                       let msg =
+                         Generic
+                           (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
+                              t_pp ^^^ !^"does not have member" ^^^ Id.pp member)
+                       in
+                       {loc; msg}
                      )
               in
               return (bt, StructMember (t, member))
@@ -316,13 +333,13 @@ module WIT = struct
       | List_op list_op ->
          let@ (bt, list_op) = match list_op with
            | Nil -> 
-              fail loc (Polymorphic_it context)
+              fail {loc; msg = Polymorphic_it context}
            | Cons (t1,t2) ->
               let@ t1 = infer loc ~context t1 in
               let@ t2 = check loc ~context (List (IT.bt t1)) t2 in
               return (BT.List (IT.bt t1), Cons (t1, t2))
            | List [] ->
-              fail loc (Polymorphic_it context)
+              fail {loc; msg = Polymorphic_it context}
            | List (t :: ts) ->
               let@ t = infer loc ~context t in
               let@ ts = ListM.mapM (check loc ~context (IT.bt t)) ts in
@@ -396,7 +413,7 @@ module WIT = struct
          in
          return (IT (Array_op array_op, bt))
 
-    and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> IT.t m =
+    and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context ls it ->
       match it, ls with
       | IT (List_op Nil, _), List bt ->
@@ -406,10 +423,13 @@ module WIT = struct
          if LS.equal ls (IT.bt it) then
            return it
          else
-           failS loc (fun explain_ctxt ->
+           failS (fun explain_ctxt ->
                let (context_pp, it_pp) = Explain.illtyped_index_term explain_ctxt context it in
-               Illtyped_it {context = context_pp; it = it_pp; 
-                            has = IT.bt it; expected = Pp.plain (LS.pp ls)}
+               let msg = 
+                 Illtyped_it {context = context_pp; it = it_pp; 
+                              has = IT.bt it; expected = Pp.plain (LS.pp ls)}
+               in
+               {loc; msg}
              )
 
   let infer loc it = infer loc ~context:it it
@@ -547,7 +567,7 @@ end
 
 let unconstrained_lvar loc infos lvar = 
   let (loc, odescr) = SymMap.find lvar infos in
-  fail loc (Unconstrained_logical_variable (lvar, odescr))
+  fail {loc; msg = Unconstrained_logical_variable (lvar, odescr)}
 
 
 module WRE = struct
@@ -558,13 +578,13 @@ module WRE = struct
     let@ global = get_global () in
     match Global.get_predicate_def global name with
     | Some def -> return def
-    | None -> fail loc (Unknown_predicate name)
+    | None -> fail {loc; msg = Unknown_predicate name}
 
   let ensure_same_argument_number loc input_output has ~expect =
     if has = expect then return () else 
       match input_output with
-      | `Input -> fail loc (Number_input_arguments {has; expect})
-      | `Output -> fail loc (Number_input_arguments {has; expect})
+      | `Input -> fail {loc; msg = Number_input_arguments {has; expect}}
+      | `Output -> fail {loc; msg = Number_input_arguments {has; expect}}
 
   let welltyped loc resource = 
     begin match resource with
@@ -645,7 +665,7 @@ module WRE = struct
             | _ ->
                let u = SymSet.choose undetermined_output in
                let (loc, odescr) = SymMap.find u infos in
-               fail loc (Logical_variable_not_good_for_unification (u, odescr))
+               fail {loc; msg = Logical_variable_not_good_for_unification (u, odescr)}
         ) (SymSet.empty, bad_as_value) (RE.outputs resource)
     in
     return (fixed, bad_as_value)
@@ -723,7 +743,7 @@ module WLRT = struct
          let@ () = match SymSet.choose_opt undetermined with
            | Some s -> 
               let (loc, odescr) = SymMap.find s infos in
-              fail loc (Unconstrained_logical_variable (s, odescr))
+              fail {loc; msg = Unconstrained_logical_variable (s, odescr)}
            | None -> return ()
          in
          let@ () = 
@@ -808,9 +828,9 @@ module WOutputDef (Spec : WOutputSpec) = struct
          let@ _ = WIT.check loc bt it in
          aux name_bts assignment
       | (name, _) :: _, _ -> 
-         fail loc (Generic !^("missing output argument " ^ name))
+         fail {loc; msg = Generic !^("missing output argument " ^ name)}
       | _, {loc = loc'; name = name'; _} :: _ -> 
-         fail loc (Generic !^("surplus output argument " ^ name'))
+         fail {loc; msg = Generic !^("surplus output argument " ^ name')}
     in
     aux name_bts assignment
 
@@ -838,9 +858,12 @@ module type WI_Sig = sig
     infos:(Loc.info SymMap.t) -> 
     bad_as_value:SymSet.t ->
     t -> 
-    unit m
+    (unit, type_error) m
 
-  val welltyped : Loc.t -> t -> unit m
+  val welltyped : 
+    Loc.t -> 
+    t -> 
+    (unit, type_error) m
 end
 
 
@@ -851,7 +874,7 @@ module WAT (WI: WI_Sig) = struct
 
   type t = WI.t AT.t
 
-  let welltyped kind loc (at : t) : unit m = 
+  let welltyped kind loc (at : t) : (unit, type_error) m = 
     let rec aux = function
       | AT.Computational ((name,bt), _info, at) ->
          let name' = Sym.fresh_same name in
@@ -876,7 +899,7 @@ module WAT (WI: WI_Sig) = struct
       | AT.I i -> 
          let@ provable = provable in
          if provable (LC.t_ (IT.bool_ false))
-         then fail loc (Generic !^("this "^kind^" makes inconsistent assumptions"))
+         then fail {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")}
          else WI.welltyped loc i
     in
     pure (aux at)
@@ -906,7 +929,7 @@ module WAT (WI: WI_Sig) = struct
          let@ () = match SymSet.choose_opt undetermined with
            | Some s -> 
               let (loc, odescr) = SymMap.find s infos in
-              fail loc (Unconstrained_logical_variable (s, odescr))
+              fail {loc; msg = Unconstrained_logical_variable (s, odescr)}
            | None -> return ()
          in 
          let@ () = 
