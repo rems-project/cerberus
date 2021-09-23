@@ -164,10 +164,11 @@ module WIT = struct
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, EQ (t,t')) 
            | EachI ((i1, s, i2), t) ->
-              let@ () = add_l s Integer in
-              let@ t = check loc ~context Bool t in
-              return (BT.Bool, EachI ((i1, s, i2), t))
-
+              pure begin 
+                  let@ () = add_l s Integer in
+                  let@ t = check loc ~context Bool t in
+                  return (BT.Bool, EachI ((i1, s, i2), t))
+                end
          in
          return (IT (Bool_op bool_op, bt))
       | Tuple_op tuple_op ->
@@ -387,9 +388,11 @@ module WIT = struct
               let@ arg = check loc ~context abt arg in
               return (bt, Get (t, arg))
            | Def ((s, abt), body) ->
-              let@ () = add_l s abt in
-              let@ body = infer loc ~context body in
-              return (Array (abt, IT.bt body), Def ((s, abt), body))
+              pure begin
+                  let@ () = add_l s abt in
+                  let@ body = infer loc ~context body in
+                  return (Array (abt, IT.bt body), Def ((s, abt), body))
+                end
          in
          return (IT (Array_op array_op, bt))
 
@@ -409,17 +412,8 @@ module WIT = struct
                             has = IT.bt it; expected = Pp.plain (LS.pp ls)}
              )
 
-  let infer loc it = 
-    let () = Debug_ocaml.begin_csv_timing "WIT.infer" in
-    let@ result = pure (infer loc ~context:it it) in
-    let () = Debug_ocaml.end_csv_timing "WIT.infer" in
-    return result
-
-  let check loc ls it = 
-    let () = Debug_ocaml.begin_csv_timing "WIT.check" in
-    let@ result = pure (check loc ~context:it ls it) in
-    let () = Debug_ocaml.end_csv_timing "WIT.check" in
-    return result
+  let infer loc it = infer loc ~context:it it
+  let check loc ls it = check loc ~context:it ls it
 
 
 
@@ -573,50 +567,54 @@ module WRE = struct
       | `Output -> fail loc (Number_input_arguments {has; expect})
 
   let welltyped loc resource = 
-    pure begin match resource with
-      | Point b -> 
-         let@ _ = WIT.check loc BT.Loc b.pointer in
-         let@ _ = WIT.infer loc b.value in
-         let@ _ = WIT.check loc BT.Bool b.init in
-         let@ _ = WIT.check loc BT.Real b.permission in
-         return ()
-      | QPoint b -> 
-         let@ () = add_l b.qpointer Loc in
-         let@ _ = WIT.infer loc b.value in
-         let@ _ = WIT.check loc BT.Bool b.init in
-         let@ _ = WIT.check loc BT.Real b.permission in
-         return ()
-      | Predicate p -> 
-         let@ def = get_predicate_def loc p.name in
-         let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
-         let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
-         let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
-         let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
-         let@ _ = WIT.check loc BT.Loc p.pointer in
-         let@ _ = 
-           ListM.mapM (fun (arg, expected_sort) ->
-               WIT.check loc expected_sort arg
-             ) (List.combine (p.iargs @ p.oargs) 
-               (List.map snd def.iargs @ List.map snd def.oargs))
-         in
-         let@ _ = WIT.check loc BT.Real p.permission in
-         return ()
-      | QPredicate p -> 
-         let@ def = get_predicate_def loc p.name in
-         let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
-         let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
-         let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
-         let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
-         let@ () = add_l p.qpointer Loc in
-         let@ _ = 
-           ListM.mapM (fun (arg, expected_sort) ->
-               WIT.check loc expected_sort arg
-             ) (List.combine (p.iargs @ p.oargs) 
-               (List.map snd def.iargs @ List.map snd def.oargs))
-         in
-         let@ _ = WIT.check loc BT.Real p.permission in
-         return ()
-      end
+    begin match resource with
+    | Point b -> 
+       let@ _ = WIT.check loc BT.Loc b.pointer in
+       let@ _ = WIT.infer loc b.value in
+       let@ _ = WIT.check loc BT.Bool b.init in
+       let@ _ = WIT.check loc BT.Real b.permission in
+       return ()
+    | QPoint b -> 
+       pure begin 
+           let@ () = add_l b.qpointer Loc in
+           let@ _ = WIT.infer loc b.value in
+           let@ _ = WIT.check loc BT.Bool b.init in
+           let@ _ = WIT.check loc BT.Real b.permission in
+           return ()
+         end
+    | Predicate p -> 
+       let@ def = get_predicate_def loc p.name in
+       let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
+       let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+       let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
+       let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+       let@ _ = WIT.check loc BT.Loc p.pointer in
+       let@ _ = 
+         ListM.mapM (fun (arg, expected_sort) ->
+             WIT.check loc expected_sort arg
+           ) (List.combine (p.iargs @ p.oargs) 
+             (List.map snd def.iargs @ List.map snd def.oargs))
+       in
+       let@ _ = WIT.check loc BT.Real p.permission in
+       return ()
+    | QPredicate p -> 
+       pure begin 
+           let@ def = get_predicate_def loc p.name in
+           let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
+           let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+           let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
+           let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+           let@ () = add_l p.qpointer Loc in
+           let@ _ = 
+             ListM.mapM (fun (arg, expected_sort) ->
+                 WIT.check loc expected_sort arg
+               ) (List.combine (p.iargs @ p.oargs) 
+                 (List.map snd def.iargs @ List.map snd def.oargs))
+           in
+           let@ _ = WIT.check loc BT.Real p.permission in
+           return ()
+         end
+    end
 
   let mode_and_bad_value_check loc ~infos ~undetermined ~bad_as_value resource = 
     let undetermined = SymSet.diff undetermined (RE.bound resource) in
@@ -658,15 +656,16 @@ module WLC = struct
   type t = LogicalConstraints.t
 
   let welltyped loc lc =
-    pure begin match lc with
-      | LC.T it -> 
-         let@ _ = WIT.check loc BT.Bool it in
-         return ()
-      | LC.Forall ((s,bt), it) ->
-         let@ () = add_l s bt in
-         let@ _ = WIT.check loc BT.Bool it in
-         return ()
-      end
+    match lc with
+    | LC.T it -> 
+       let@ _ = WIT.check loc BT.Bool it in
+       return ()
+    | LC.Forall ((s,bt), it) ->
+       pure begin
+           let@ () = add_l s bt in
+           let@ _ = WIT.check loc BT.Bool it in
+           return ()
+       end
 
   let bad_value_check loc ~bad_as_value ~infos lc =
     match lc with
@@ -683,24 +682,25 @@ module WLRT = struct
   open LRT
   type t = LogicalReturnTypes.t
 
-  let rec welltyped loc lrt = 
-    pure begin match lrt with
+  let welltyped loc lrt = 
+    let rec aux = function
       | Logical ((s,ls), info, lrt) -> 
          let s' = Sym.fresh_same s in
          let@ () = add_l s' ls in
          let lrt = subst [(s, IT.sym_ (s', ls))] lrt in
-         welltyped loc lrt
+         aux lrt
       | Resource (re, info, lrt) -> 
          let@ () = WRE.welltyped (fst info) re in
          let@ () = add_r None re in
-         welltyped loc lrt
+         aux lrt
       | Constraint (lc, info, lrt) ->
          let@ () = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
-         welltyped loc lrt
+         aux lrt
       | I -> 
          return ()
-      end
+    in
+    pure (aux lrt)
 
   let mode_and_bad_value_check loc ~infos ~bad_as_value lrt = 
     let rec aux ~infos ~undetermined ~bad_as_value constraints lrt = 
@@ -851,34 +851,35 @@ module WAT (WI: WI_Sig) = struct
 
   type t = WI.t AT.t
 
-  let rec welltyped kind loc (at : t) : unit m = 
-    pure begin match at with
+  let welltyped kind loc (at : t) : unit m = 
+    let rec aux = function
       | AT.Computational ((name,bt), _info, at) ->
          let name' = Sym.fresh_same name in
          let lname = Sym.fresh () in
          let@ () = add_l lname bt in
          let@ () = add_a name' (bt, lname) in
          let at = AT.subst WI.subst [(name, IT.sym_ (lname, bt))] at in
-         welltyped kind loc at
+         aux at
       | AT.Logical ((s,ls), _info, at) -> 
          let lname = Sym.fresh_same s in
          let@ () = add_l lname ls in
          let at = AT.subst WI.subst [(s, IT.sym_ (lname, ls))] at in
-         welltyped kind loc at
+         aux at
       | AT.Resource (re, info, at) -> 
          let@ () = WRE.welltyped (fst info) re in
          let@ () = add_r None re in
-         welltyped kind loc at
+         aux at
       | AT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
-         welltyped kind loc at
+         aux at
       | AT.I i -> 
          let@ provable = provable in
          if provable (LC.t_ (IT.bool_ false))
          then fail loc (Generic !^("this "^kind^" makes inconsistent assumptions"))
          else WI.welltyped loc i
-      end
+    in
+    pure (aux at)
 
 
   let mode_and_bad_value_check loc ~infos ~bad_as_value ft = 
