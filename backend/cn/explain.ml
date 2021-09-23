@@ -5,16 +5,18 @@ module RER = Resources.Requests
 module LC = LogicalConstraints
 module LS = LogicalSorts
 module SymSet = Set.Make(Sym)
+module SymMap = Map.Make(Sym)
 module StringMap = Map.Make(String)
 module SymPairMap = Map.Make(SymRel.SymPair)
-module L = Local
+module C = Context
 module Loc = Locations
+module S = Solver
 
 open Resources.RE
 open IndexTerms
 open LogicalConstraints
 open Pp
-
+open C
 
 
 
@@ -24,8 +26,8 @@ module VClass = struct
   type t = {
       id : int;
       sort : LS.t;
-      computational : SymSet.t;
-      logical : SymSet.t;
+      computational_vars : SymSet.t;
+      logical_vars : SymSet.t;
     }
 
   let compare vc1 vc2 = compare vc1.id vc2.id
@@ -36,17 +38,26 @@ module VClass = struct
   let make ((l, sort) : Sym.t * LS.t) : t = {
       id = Fresh.int (); 
       sort; 
-      computational = SymSet.empty; 
-      logical = SymSet.singleton l
+      computational_vars = SymSet.empty; 
+      logical_vars = SymSet.singleton l
     }
 
   let merge (c1 : t) (c2 : t) : t = 
-    let computational = SymSet.union c1.computational c2.computational in
-    let logical = SymSet.union c1.logical c2.logical in
-    { c1 with id = Fresh.int (); computational; logical }
+    assert (LS.equal c1.sort c2.sort);
+    let computational_vars = 
+      SymSet.union c1.computational_vars 
+        c2.computational_vars 
+    in
+    let logical_vars = 
+      SymSet.union c1.logical_vars c2.logical_vars 
+    in
+    { id = Fresh.int (); 
+      sort = c1.sort;
+      computational_vars; 
+      logical_vars }
 
   let in_class (lvar : Sym.t) (c : t) = 
-    SymSet.mem lvar c.logical
+    SymSet.mem lvar c.logical_vars
 
 
 end
@@ -157,426 +168,441 @@ type explanation = {
   }
 
 
-module Make 
-         (G : sig val global : Global.t end)
-         (S : Solver.S) 
-         (L : Local.S)
-  = struct 
+module VClassGraph = Graph.Make(VClass)
+
+let veclasses ctxt = 
+  let with_logical = 
+    SymMap.fold (fun l sort g ->
+        VClassSet.add (make (l, sort)) g
+      ) ctxt.logical VClassSet.empty
+  in
+  (* add computational variables into the classes *)
+  let with_all = 
+    SymMap.fold (fun s (bt, l) g ->
+        let c = find_class (in_class l) g in
+        let c' = { c with computational_vars = SymSet.add s c.computational_vars } in
+        VClassSet.add c' (VClassSet.remove c g)
+      ) ctxt.computational with_logical
+  in
+  (* merge classes based on variable equalities *)
+  List.fold_right (fun lc g ->
+      match is_sym_equality lc with
+      | Some (s, s') ->
+         let c = find_class (in_class s) g in
+         let c' = find_class (in_class s') g in
+         let merged = VClass.merge c c' in
+         VClassSet.add merged 
+           (VClassSet.remove c' 
+              (VClassSet.remove c g))
+      | None -> 
+         g
+    ) ctxt.constraints with_all
 
 
-  module VClassGraph = Graph.Make(VClass)
+let explanation ctxt relevant =
 
-  let veclasses local = 
-    let with_logical = 
-      List.fold_right (fun (l, sort) g ->
-          VClassSet.add (make (l, sort)) g
-        ) (L.all_logical local) VClassSet.empty
-    in
-    (* add computational variables into the classes *)
-    let with_all = 
-      List.fold_right (fun (s, (bt, l)) g ->
-          let c = find_class (in_class l) g in
-          let c' = { c with computational = SymSet.add s c.computational } in
-          VClassSet.add c' (VClassSet.remove c g)
-        ) (L.all_computational local) with_logical
-    in
-    (* merge classes based on variable equalities *)
-    List.fold_right (fun lc g ->
-        match is_sym_equality lc with
-        | Some (s, s') ->
-           let c = find_class (in_class s) g in
-           let c' = find_class (in_class s') g in
-           let merged = VClass.merge c c' in
-           VClassSet.add merged 
-             (VClassSet.remove c' 
-                (VClassSet.remove c g))
-        | None -> 
-           g
-      ) (L.all_constraints local) with_all
+  print stdout !^"producing error report";
 
+  (* only report the state of the relevant variables *)
+  let relevant = 
+    SymMap.fold (fun s _ acc -> 
+        if has_good_description s then SymSet.add s acc else acc
+      ) ctxt.computational relevant
+  in
+  let relevant = 
+    SymMap.fold (fun s _ acc -> 
+        if has_good_description s then SymSet.add s acc else acc
+      ) ctxt.logical relevant
+  in
+  let relevant = 
+    List.fold_right (fun re acc ->
+        SymSet.union (RE.free_vars re) acc
+      ) ctxt.resources relevant
+  in
 
-  let explanation local relevant =
+  (* add 'Pointee' edges between nodes whenever the resources indicate that *)
+  let graph = 
+    VClassSet.fold VClassGraph.add_node (veclasses ctxt) VClassGraph.empty 
+  in
+  let graph = 
+    List.fold_right (fun resource graph ->
+        match resource with
+        | RE.Point p ->
+           (* the 'not found' cases should not be fatal: e.g. the
+              resource might have 'x + 16' as a pointer *)
+           let ovc1 = 
+             Option.bind (IT.is_sym p.pointer) 
+               (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+           in
+           let ovc2 = 
+             Option.bind (IT.is_sym p.value)
+               (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+           in
+           begin match ovc1, ovc2 with
+           | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
+           | _ -> graph
+           end
+        | _ -> 
+           graph
+      ) ctxt.resources
+      graph
+  in
 
-    print stdout !^"producing error report";
-
-    (* only report the state of the relevant variables *)
-    let relevant =
-      List.fold_left SymSet.union SymSet.empty
-        [SymSet.of_list (List.filter has_good_description (L.all_vars local)); 
-         RE.free_vars_list (L.all_resources local); 
-         relevant]
-    in
-
-    (* add 'Pointee' edges between nodes whenever the resources indicate that *)
-    let graph = 
-      VClassSet.fold VClassGraph.add_node (veclasses local) 
-        VClassGraph.empty 
-    in
-    let graph = 
-      List.fold_right (fun resource graph ->
-          match resource with
-          | RE.Point p ->
-             (* the 'not found' cases should not be fatal: e.g. the
-                resource might have 'x + 16' as a pointer *)
-             let ovc1 = 
-               Option.bind (IT.is_sym p.pointer) 
-                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
-             in
-             let ovc2 = 
-               Option.bind (IT.is_sym p.value)
-                 (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
-             in
-             begin match ovc1, ovc2 with
-             | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
-             | _ -> graph
-             end
-          | _ -> 
-             graph
-        ) (L.all_resources local) 
-        graph
-    in
-
-    (* add an explanation to each equivalence class: either because one o *)
-    let vclass_explanations = 
-      List.fold_left (fun vclasses_explanation vclass ->
-          let has_description = 
-            let all = SymSet.elements (SymSet.union vclass.computational vclass.logical) in
-            List.find_map good_description all
-          in        
-          let has_derived_name =
-            List.find_map (fun (named_vclass, {path;_}) -> 
-                Option.bind 
-                  (VClassGraph.edge_label (named_vclass, vclass) graph)
-                  (function Pointee -> Some (Ast.pointee path))  
-              ) vclasses_explanation
+  (* add an explanation to each equivalence class: either because one o *)
+  let vclass_explanations = 
+    List.fold_left (fun vclasses_explanation vclass ->
+        let has_description = 
+          let all = 
+            SymSet.elements 
+              (SymSet.union vclass.computational_vars 
+                 vclass.logical_vars) 
           in
-          match has_description, has_derived_name with
-          | Some description, _ ->
-             vclasses_explanation @ [(vclass, {path = description; name_kind = Description})]
-          | None, Some derived_name ->
-             vclasses_explanation @ [(vclass, {path = derived_name; name_kind = Derived})]
-          | None, None ->
-             let name = make_name vclass.sort in
-             vclasses_explanation @ [(vclass, {path = Var name; name_kind = Default})]
-        ) [] (VClassGraph.linearise graph)
-    in
+          List.find_map good_description all
+        in        
+        let has_derived_name =
+          List.find_map (fun (named_vclass, {path;_}) -> 
+              Option.bind 
+                (VClassGraph.edge_label (named_vclass, vclass) graph)
+                (function Pointee -> Some (Ast.pointee path))  
+            ) vclasses_explanation
+        in
+        match has_description, has_derived_name with
+        | Some description, _ ->
+           vclasses_explanation @ [(vclass, {path = description; name_kind = Description})]
+        | None, Some derived_name ->
+           vclasses_explanation @ [(vclass, {path = derived_name; name_kind = Derived})]
+        | None, None ->
+           let name = make_name vclass.sort in
+           vclasses_explanation @ [(vclass, {path = Var name; name_kind = Default})]
+      ) [] (VClassGraph.linearise graph)
+  in
 
 
-    let substitution = 
-      List.fold_right (fun (vclass, {path;_}) subst ->
-          let to_substitute = SymSet.union vclass.computational vclass.logical in
-          let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
-          SymSet.fold (fun sym subst ->
-              (sym, sym_ (named_symbol, vclass.sort)) :: subst
-            ) to_substitute subst
-        ) vclass_explanations []
-    in
+  let substitution = 
+    List.fold_right (fun (vclass, {path;_}) subst ->
+        let to_substitute = 
+          SymSet.union vclass.computational_vars 
+            vclass.logical_vars 
+        in
+        let named_symbol = Sym.fresh_named (Pp.plain (Ast.Terms.pp false path)) in
+        SymSet.fold (fun sym subst ->
+            (sym, sym_ (named_symbol, vclass.sort)) :: subst
+          ) to_substitute subst
+      ) vclass_explanations []
+  in
 
-    {substitution; vclasses = vclass_explanations; relevant}
+  {substitution; vclasses = vclass_explanations; relevant}
 
 
-  let evaluate model it = 
-    Option.bind (Z3.Model.eval model (S.term it) true) S.z3_expr
 
-  let evaluate_lambda model (q_s, q_bt) it = 
+
+
+
+let symbol_it = function
+  | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
+  | _ -> SymSet.empty
+
+
+
+let state ctxt {substitution; vclasses; relevant} model =
+
+  let open Report in
+
+  let struct_decls = ctxt.global.struct_decls in
+
+  let evaluate it = 
+    Option.bind 
+      (Z3.Model.eval model (S.term struct_decls it) true) 
+      (S.z3_expr struct_decls ) 
+  in
+
+  let evaluate_lambda (q_s, q_bt) it = 
     let open Option in
-    let@ z3_val = Z3.Model.eval model (S.lambda (q_s, q_bt) it) true in
-    let@ it_val = S.z3_expr z3_val in
+    let@ z3_val = Z3.Model.eval model (S.lambda struct_decls (q_s, q_bt) it) true in
+    let@ it_val = S.z3_expr struct_decls z3_val in
     match it_val with
     | IT (Array_op (Def ((s, _), body)), _) ->
        return (IT.subst [(s, sym_ (q_s, q_bt))] body)
     | _ ->
        return (get_ it_val (sym_ (q_s, q_bt)))
+  in
 
 
+  let maybe_evaluated = function
+    | Some v -> IT.pp v
+    | None -> parens !^"not evaluated"
+  in
 
-  let symbol_it = function
-    | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
-    | _ -> SymSet.empty
+  let name_subst = IT.subst substitution in
 
-
-
-  let state local {substitution; vclasses; relevant} model =
-
-    let open Report in
-
-    let evaluate = evaluate model in
-    let evaluate_lambda = evaluate_lambda model in
-
-    let maybe_evaluated = function
-      | Some v -> IT.pp v
-      | None -> parens !^"not evaluated"
-    in
-    
-    let name_subst = IT.subst substitution in
-
-    let entry = function
-      | Point p ->
-         let loc_e, permission_e, init_e, value_e = 
-           IT.pp (name_subst p.pointer),
-           IT.pp (name_subst p.permission),
-           IT.pp (name_subst p.init), 
-           IT.pp (name_subst p.value)
-         in
-         let loc_v, permission_v, init_v, value_v = 
-           evaluate p.pointer,
-           evaluate p.permission,
-           evaluate p.init,
-           evaluate p.value
-         in
-         let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
-           | Some q, Some true when Q.equal q Q.one ->
-              Sctypes.pp p.ct ^^ colon ^^^
-              value_e ^^^ equals ^^^ maybe_evaluated value_v
-           | _ -> 
-              let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
-              let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
-              Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
-              value_e ^^^ equals ^^^ maybe_evaluated value_v
-         in
-         let entry = {
-             loc_e = Some loc_e; 
-             loc_v = Some (maybe_evaluated loc_v); 
-             state = Some state;
+  let entry = function
+    | Point p ->
+       let loc_e, permission_e, init_e, value_e = 
+         IT.pp (name_subst p.pointer),
+         IT.pp (name_subst p.permission),
+         IT.pp (name_subst p.init), 
+         IT.pp (name_subst p.value)
+       in
+       let loc_v, permission_v, init_v, value_v = 
+         evaluate p.pointer,
+         evaluate p.permission,
+         evaluate p.init,
+         evaluate p.value
+       in
+       let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
+         | Some q, Some true when Q.equal q Q.one ->
+            Sctypes.pp p.ct ^^ colon ^^^
+            value_e ^^^ equals ^^^ maybe_evaluated value_v
+         | _ -> 
+            let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
+            let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
+            Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
+            value_e ^^^ equals ^^^ maybe_evaluated value_v
+       in
+       let entry = {
+           loc_e = Some loc_e; 
+           loc_v = Some (maybe_evaluated loc_v); 
+           state = Some state;
+         } 
+       in
+       let reported = 
+         List.fold_left SymSet.union SymSet.empty
+           [symbol_it p.pointer; 
+            symbol_it p.value;
+           ]
+       in
+       (entry, [], reported)
+    | QPoint p ->
+       let p = alpha_rename_qpoint (Sym.fresh_pretty "ptr") p in
+       let q = (p.qpointer, BT.Loc) in
+       let loc_e, permission_e, init_e, value_e = 
+         Sym.pp p.qpointer,
+         IT.pp (name_subst p.permission),
+         IT.pp (name_subst p.init), 
+         IT.pp (name_subst p.value)
+       in
+       let permission_v, init_v, value_v = 
+         evaluate_lambda q p.permission,
+         evaluate_lambda q p.init,
+         evaluate_lambda q p.value
+       in
+       let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
+         | Some q, Some true when Q.equal q Q.one ->
+            Sctypes.pp p.ct ^^ colon ^^^
+            value_e ^^^ equals ^^^ maybe_evaluated value_v
+         | _ ->
+            let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
+            let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
+            Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
+            value_e ^^^ equals ^^^ maybe_evaluated value_v
+       in
+       let entry = {
+           loc_e = Some (!^"each" ^^^ loc_e);
+           loc_v = None;
+           state = Some state;
+         } 
+       in
+       let reported = 
+         SymSet.remove p.qpointer
+           (List.fold_left SymSet.union SymSet.empty
+              [IT.free_vars p.value;
+               IT.free_vars p.init;
+               IT.free_vars p.permission;
+              ])
+       in
+       (entry, [], reported)
+    | Predicate p ->
+       let id = make_predicate_name () in
+       let loc_e, permission_e, iargs_e = 
+         IT.pp (name_subst p.pointer),
+         IT.pp (name_subst p.permission), 
+         (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
+       in
+       let loc_v, permission_v = 
+         evaluate p.pointer,
+         evaluate p.permission
+       in
+       let state = match Option.bind permission_v is_q with
+         | Some q when Q.equal q Q.one ->
+            !^id ^^^ equals ^^^
+            Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
+         | _ ->
+            !^id ^^^ equals ^^^
+            Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
+            parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
+       in
+       let entry = {
+           loc_e = Some loc_e;
+           loc_v = Some (maybe_evaluated loc_v);
+           state = Some state
            } 
-         in
-         let reported = 
-           List.fold_left SymSet.union SymSet.empty
-             [symbol_it p.pointer; 
-              symbol_it p.value;
-             ]
-         in
-         (entry, [], reported)
-      | QPoint p ->
-         let p = alpha_rename_qpoint (Sym.fresh_pretty "ptr") p in
-         let q = (p.qpointer, BT.Loc) in
-         let loc_e, permission_e, init_e, value_e = 
-           Sym.pp p.qpointer,
-           IT.pp (name_subst p.permission),
-           IT.pp (name_subst p.init), 
-           IT.pp (name_subst p.value)
-         in
-         let permission_v, init_v, value_v = 
-           evaluate_lambda q p.permission,
-           evaluate_lambda q p.init,
-           evaluate_lambda q p.value
-         in
-         let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
-           | Some q, Some true when Q.equal q Q.one ->
-              Sctypes.pp p.ct ^^ colon ^^^
-              value_e ^^^ equals ^^^ maybe_evaluated value_v
-           | _ ->
-              let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
-              let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
-              Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
-              value_e ^^^ equals ^^^ maybe_evaluated value_v
-         in
-         let entry = {
-             loc_e = Some (!^"each" ^^^ loc_e);
-             loc_v = None;
-             state = Some state;
+       in
+       let oargs = 
+         let predicate_def = Option.get (Global.get_predicate_def ctxt.global p.name) in
+         List.map2 (fun oarg (name, _) ->
+             let var = !^id ^^ dot ^^ dot ^^ !^name in
+             let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
+             {var; value}
+           ) p.oargs predicate_def.oargs
+       in
+       let reported = symbol_it p.pointer in
+       (entry, oargs, reported)
+    | QPredicate p ->
+       let p = alpha_rename_qpredicate (Sym.fresh_pretty "ptr") p in
+       let q = (p.qpointer, BT.Loc) in
+       let id = make_predicate_name () in
+       let loc_e, permission_e, iargs_e = 
+         Sym.pp p.qpointer,
+         IT.pp (name_subst p.permission), 
+         (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
+       in
+       let permission_v = evaluate_lambda q p.permission in
+       let state = match Option.bind permission_v is_q with
+         | Some q when Q.equal q Q.one ->
+            !^id ^^^ equals ^^^
+            Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
+         | _ ->
+            !^id ^^^ equals ^^^
+            Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
+            parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
+       in
+       let entry = {
+           loc_e = Some (!^"each" ^^^ loc_e);
+           loc_v = None;
+           state = Some state
            } 
-         in
-         let reported = 
-           SymSet.remove p.qpointer
-             (List.fold_left SymSet.union SymSet.empty
-                [IT.free_vars p.value;
-                 IT.free_vars p.init;
-                 IT.free_vars p.permission;
-                ])
-         in
-         (entry, [], reported)
-      | Predicate p ->
-         let id = make_predicate_name () in
-         let loc_e, permission_e, iargs_e = 
-           IT.pp (name_subst p.pointer),
-           IT.pp (name_subst p.permission), 
-           (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
-         in
-         let loc_v, permission_v = 
-           evaluate p.pointer,
-           evaluate p.permission
-         in
-         let state = match Option.bind permission_v is_q with
-           | Some q when Q.equal q Q.one ->
-              !^id ^^^ equals ^^^
-              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
-           | _ ->
-              !^id ^^^ equals ^^^
-              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
-              parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
-         in
-         let entry = {
-             loc_e = Some loc_e;
-             loc_v = Some (maybe_evaluated loc_v);
-             state = Some state
-             } 
-         in
-         let oargs = 
-           let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
-           List.map2 (fun oarg (name, _) ->
-               let var = !^id ^^ dot ^^ dot ^^ !^name in
-               let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
-               {var; value}
-             ) p.oargs predicate_def.oargs
-         in
-         let reported = symbol_it p.pointer in
-         (entry, oargs, reported)
-      | QPredicate p ->
-         let p = alpha_rename_qpredicate (Sym.fresh_pretty "ptr") p in
-         let q = (p.qpointer, BT.Loc) in
-         let id = make_predicate_name () in
-         let loc_e, permission_e, iargs_e = 
-           Sym.pp p.qpointer,
-           IT.pp (name_subst p.permission), 
-           (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
-         in
-         let permission_v = evaluate_lambda q p.permission in
-         let state = match Option.bind permission_v is_q with
-           | Some q when Q.equal q Q.one ->
-              !^id ^^^ equals ^^^
-              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
-           | _ ->
-              !^id ^^^ equals ^^^
-              Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
-              parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
-         in
-         let entry = {
-             loc_e = Some (!^"each" ^^^ loc_e);
-             loc_v = None;
-             state = Some state
-             } 
-         in
-         let oargs = 
-           let predicate_def = Option.get (Global.get_predicate_def G.global p.name) in
-           List.map2 (fun oarg (name, _) ->
-               let var = !^id ^^ dot ^^ dot ^^ !^name in
-               let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
-               {var; value}
-             ) p.oargs predicate_def.oargs
-         in
-         (entry, oargs, SymSet.empty)
+       in
+       let oargs = 
+         let predicate_def = Option.get (Global.get_predicate_def ctxt.global p.name) in
+         List.map2 (fun oarg (name, _) ->
+             let var = !^id ^^ dot ^^ dot ^^ !^name in
+             let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
+             {var; value}
+           ) p.oargs predicate_def.oargs
+       in
+       (entry, oargs, SymSet.empty)
+  in
+
+  let (memory, predicate_oargs, reported) = 
+    List.fold_right (fun resource acc ->
+        let (memory, vars, reported) = acc in
+        let (entry', vars', reported') = entry resource in
+        let vars = vars' @ vars in
+        let reported = SymSet.union reported' reported in
+        (entry' :: memory, vars, reported)
+      ) ctxt.resources ([], [], SymSet.empty)
+  in
+  let report vclass = 
+    let syms = SymSet.union vclass.logical_vars vclass.computational_vars in
+    let relevant = not (SymSet.is_empty (SymSet.inter syms relevant)) in
+    let unreported = SymSet.is_empty (SymSet.inter syms reported) in
+    relevant && unreported
+  in
+  let memory_var_lines = 
+    List.filter_map (fun (vclass,c) ->
+        if report vclass && BT.equal vclass.sort Loc then
+             let loc_val = evaluate (IT.sym_ (SymSet.choose vclass.logical_vars, vclass.sort)) in
+             let loc_expr = Ast.Terms.pp false c.path in
+             let entry = 
+               { loc_e = Some loc_expr;
+                 loc_v = Some (maybe_evaluated loc_val);
+                 state = None } 
+             in
+             Some entry
+        else None
+      ) vclasses
+  in
+  let logical_var_lines = 
+    List.filter_map (fun (vclass,c) ->
+        if report vclass && not (BT.equal vclass.sort Loc) then
+          let expr = Ast.Terms.pp false c.path in
+          let value = evaluate (IT.sym_ (SymSet.choose vclass.logical_vars, vclass.sort)) in
+          let entry = {var = expr; value = maybe_evaluated value} in
+          Some entry
+        else
+          None)
+      vclasses
+  in
+
+  let constraints = 
+    let trivial = function
+      | T (IT (Lit (Bool true), _)) -> true
+      | T (IT (Bool_op (EQ (t, t')), _)) -> IT.equal t t'
+      | _ -> false
     in
+    List.filter_map (fun lc ->
+        let lc = LC.subst substitution lc in
+        if trivial lc then None else Some (LC.pp lc)
+      ) ctxt.constraints
+  in
 
-    let (memory, predicate_oargs, reported) = 
-      List.fold_right (fun resource acc ->
-          let (memory, vars, reported) = acc in
-          let (entry', vars', reported') = entry resource in
-          let vars = vars' @ vars in
-          let reported = SymSet.union reported' reported in
-          (entry' :: memory, vars, reported)
-        ) (L.all_resources local) ([], [], SymSet.empty)
-    in
-    let report vclass = 
-      let syms = SymSet.union vclass.logical vclass.computational in
-      let relevant = not (SymSet.is_empty (SymSet.inter syms relevant)) in
-      let unreported = SymSet.is_empty (SymSet.inter syms reported) in
-      relevant && unreported
-    in
-    let memory_var_lines = 
-      List.filter_map (fun (vclass,c) ->
-          if report vclass && BT.equal vclass.sort Loc then
-               let loc_val = evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort)) in
-               let loc_expr = Ast.Terms.pp false c.path in
-               let entry = 
-                 { loc_e = Some loc_expr;
-                   loc_v = Some (maybe_evaluated loc_val);
-                   state = None } 
-               in
-               Some entry
-          else None
-        ) vclasses
-    in
-    let logical_var_lines = 
-      List.filter_map (fun (vclass,c) ->
-          if report vclass && not (BT.equal vclass.sort Loc) then
-            let expr = Ast.Terms.pp false c.path in
-            let value = evaluate (IT.sym_ (SymSet.choose vclass.logical, vclass.sort)) in
-            let entry = {var = expr; value = maybe_evaluated value} in
-            Some entry
-          else
-            None)
-        vclasses
-    in
-    (* let () = print stdout (list Local.pp_old (L.old local)) in *)
-
-    let constraints = 
-      let trivial = function
-        | T (IT (Lit (Bool true), _)) -> true
-        | T (IT (Bool_op (EQ (t, t')), _)) -> IT.equal t t'
-        | _ -> false
-      in
-      List.filter_map (fun lc ->
-          let lc = LC.subst substitution lc in
-          if trivial lc then None else Some (LC.pp lc)
-        ) (L.all_constraints local)
-    in
-
-    { memory = memory @ memory_var_lines;
-      variables = predicate_oargs @ logical_var_lines;
-      constraints }
+  { memory = memory @ memory_var_lines;
+    variables = predicate_oargs @ logical_var_lines;
+    constraints }
 
 
-  let undefined_behaviour local = 
-    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
-    assert (not provable);
-    let explanation = explanation local SymSet.empty in
-    let model = S.model (L.solver local) in
-    state local explanation model
+let undefined_behaviour ctxt = 
+  let sd = ctxt.global.struct_decls in
+  let provable = S.provable sd ctxt.solver (t_ (bool_ false)) in
+  assert (not provable);
+  let explanation = explanation ctxt SymSet.empty in
+  let model = S.model ctxt.solver in
+  state ctxt explanation model
 
 
-  let implementation_defined_behaviour local it = 
-    let provable = S.provable (L.solver local) (t_ (bool_ false)) in
-    assert (not provable);
-    let explanation = explanation local (IT.free_vars it) in
-    let it_pp = IT.pp (IT.subst explanation.substitution it) in
-    let model = S.model (L.solver local) in
-    (it_pp, state local explanation model)
+let implementation_defined_behaviour ctxt it = 
+  let sd = ctxt.global.struct_decls in
+  let provable = S.provable sd ctxt.solver (t_ (bool_ false)) in
+  assert (not provable);
+  let explanation = explanation ctxt (IT.free_vars it) in
+  let it_pp = IT.pp (IT.subst explanation.substitution it) in
+  let model = S.model ctxt.solver in
+  (it_pp, state ctxt explanation model)
 
-  let missing_ownership local model it = 
-    let explanation = explanation local (IT.free_vars it) in
-    let it_pp = IT.pp (IT.subst explanation.substitution it) in
-    (it_pp, state local explanation model)
+let missing_ownership ctxt model it = 
+  let explanation = explanation ctxt (IT.free_vars it) in
+  let it_pp = IT.pp (IT.subst explanation.substitution it) in
+  (it_pp, state ctxt explanation model)
 
-  let index_term local it = 
-    let explanation = explanation local (IT.free_vars it) in
-    let it_pp = IT.pp (IT.subst explanation.substitution it) in
-    it_pp
+let index_term ctxt it = 
+  let explanation = explanation ctxt (IT.free_vars it) in
+  let it_pp = IT.pp (IT.subst explanation.substitution it) in
+  it_pp
 
-  let unsatisfied_constraint local model lc = 
-    let explanation = explanation local (LC.free_vars lc) in
-    let lc_pp = LC.pp (LC.subst explanation.substitution lc) in
-    (lc_pp, state local explanation model)
+let unsatisfied_constraint ctxt model lc = 
+  let explanation = explanation ctxt (LC.free_vars lc) in
+  let lc_pp = LC.pp (LC.subst explanation.substitution lc) in
+  (lc_pp, state ctxt explanation model)
 
-  let resource local model re = 
-    let explanation = explanation local (RE.free_vars re) in
-    let re_pp = RE.pp (RE.subst explanation.substitution re) in
-    (re_pp, state local explanation model)
+let resource ctxt model re = 
+  let explanation = explanation ctxt (RE.free_vars re) in
+  let re_pp = RE.pp (RE.subst explanation.substitution re) in
+  (re_pp, state ctxt explanation model)
 
-  let resource_request local model re = 
-    let explanation = explanation local (RER.free_vars re) in
-    let re_pp = RER.pp (RER.subst explanation.substitution re) in
-    (re_pp, state local explanation model)
+let resource_request ctxt model re = 
+  let explanation = explanation ctxt (RER.free_vars re) in
+  let re_pp = RER.pp (RER.subst explanation.substitution re) in
+  (re_pp, state ctxt explanation model)
 
-  let resources local model (re1, re2) = 
-    let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
-    let explanation = explanation local relevant in
-    let re1 = RE.pp (RE.subst explanation.substitution re1) in
-    let re2 = RE.pp (RE.subst explanation.substitution re2) in
-    ((re1, re2), state local explanation model)
+let resources ctxt model (re1, re2) = 
+  let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
+  let explanation = explanation ctxt relevant in
+  let re1 = RE.pp (RE.subst explanation.substitution re1) in
+  let re2 = RE.pp (RE.subst explanation.substitution re2) in
+  ((re1, re2), state ctxt explanation model)
 
 
-  let illtyped_index_term local context it =
-    let explanation = explanation local (IT.free_vars_list [it; context]) in
-    let it = IT.pp (IT.subst explanation.substitution it) in
-    let context = IT.pp (IT.subst explanation.substitution context) in
-    (context, it)
+let illtyped_index_term ctxt context it =
+  let explanation = explanation ctxt (IT.free_vars_list [it; context]) in
+  let it = IT.pp (IT.subst explanation.substitution it) in
+  let context = IT.pp (IT.subst explanation.substitution context) in
+  (context, it)
 
-  let unrepresentable_write_value local model (location, value) = 
-    let relevant = (IT.free_vars_list [location; value]) in
-    let explanation = explanation local relevant in
-    let location_pp = IT.pp (IT.subst explanation.substitution location) in
-    let value_pp = IT.pp (IT.subst explanation.substitution value) in
-    ((location_pp, value_pp), state local explanation model)
+let unrepresentable_write_value ctxt model (location, value) = 
+  let relevant = (IT.free_vars_list [location; value]) in
+  let explanation = explanation ctxt relevant in
+  let location_pp = IT.pp (IT.subst explanation.substitution location) in
+  let value_pp = IT.pp (IT.subst explanation.substitution value) in
+  ((location_pp, value_pp), state ctxt explanation model)
 
-end
+

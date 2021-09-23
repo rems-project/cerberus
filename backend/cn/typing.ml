@@ -1,193 +1,149 @@
-module Loc = Locations
+open Context
 
-module Make(L : Local.S) : sig
+type e = TypeErrors.type_error
+type s = Context.t
 
+type error = (Locations.loc * e) * string option 
 
-  type e = TypeErrors.type_error
-  type error = (Locations.loc * e) * string option (* stack trace*)
-
-
-  type 'a t
-  type 'a m = 'a t
-  type failure = L.t -> TypeErrors.type_error 
-  val return : 'a -> 'a m
-  val bind : 'a m -> ('a -> 'b m) -> 'b m
-  val pure : 'a m -> 'a m
-  val (let@) : 'a m -> ('a -> 'b m) -> 'b m
-  val fail : Loc.t -> e -> 'a m
-  val failS : Loc.t -> failure -> 'a m
-  val run : 'a m -> L.t -> ('a * L.t, error) Result.t
-
-  (* val get: unit -> L.t m *)
-  val print_with_local : (L.t -> unit) -> unit m
-  val all_constraints : unit -> (LogicalConstraints.t list) m
-  val all_resources : unit -> (Resources.RE.t list) m
-  val provable : (LogicalConstraints.t -> bool) m
-  val model : unit -> Z3.Model.model m
-  val bound_a : Sym.t -> bool m
-  val bound_l : Sym.t -> bool m
-  val get_a : Sym.t -> (BaseTypes.t * Sym.t) m
-  val get_l : Sym.t -> LogicalSorts.t m
-  val add_a : Sym.t -> (BaseTypes.t * Sym.t) -> unit m
-  val add_l : Sym.t -> LogicalSorts.t -> unit m
-  val add_ls : (Sym.t * LogicalSorts.t) list -> unit m
-  val add_c : LogicalConstraints.t -> unit m
-  val add_cs : LogicalConstraints.t list -> unit m
-  val add_r : Local.where option -> Resources.RE.t -> unit m
-  val map_and_fold_resources : 
-    (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
-    'acc -> 'acc m
-  val all_vars : unit -> (Sym.t list) m
-  val bind_return_type : Local.where option -> Sym.t -> ReturnTypes.t -> unit m
-  val bind_logical_return_type : Local.where option -> LogicalReturnTypes.t -> unit m
-  val logically_bind_return_type : Local.where option -> ReturnTypes.t -> (BaseTypes.t * Sym.t) m
-
-end = struct
-
-  type e = TypeErrors.type_error
-  type s = L.t
-
-  type error = (Locations.loc * e) * string option 
-
-  type 'a t = { c : s -> ('a * s, error) Result.t }
-  type 'a m = 'a t
-  type failure = L.t -> TypeErrors.type_error
+type 'a t = { c : s -> ('a * s, error) Result.t }
+type 'a m = 'a t
+type failure = Context.t -> TypeErrors.type_error
 
 
-  let run m s = 
-    m.c s
+let run m s = 
+  m.c s
 
 
-  let return (a : 'a) : 'a t =
-    { c = fun s -> Ok (a, s) }
+let return (a : 'a) : 'a t =
+  { c = fun s -> Ok (a, s) }
 
-  let bind (m : 'a t) (f : 'a -> 'b t) : 'b t = 
-    let c s = match m.c s with
+let bind (m : 'a t) (f : 'a -> 'b t) : 'b t = 
+  let c s = match m.c s with
+    | Error e -> Error e
+    | Ok (x, s') -> (f x).c s'
+  in
+  { c }
+
+let (let@) = bind
+
+let get () : 'a t = 
+  { c = fun s -> Ok (s, s) }
+
+let set (s : 's) : unit t = 
+  { c = fun _ -> Ok ((), s) }
+
+
+let error loc e = 
+  ((loc, e), Tools.do_stack_trace ())
+
+let fail (loc: Loc.loc) (e: e) : 'a t = 
+  { c = fun _ -> Error (error loc e) }
+
+let failS (loc : Loc.loc) (f : failure) : 'a t = 
+  { c = fun s -> Error (error loc (f s)) }
+
+
+let pure (m : 'a t) : 'a t =
+  let c s = 
+    Z3.Solver.push s.solver;
+    let outcome = match m.c s with
+      | Ok (a, _) -> Ok (a, s)
       | Error e -> Error e
-      | Ok (x, s') -> (f x).c s'
     in
-    { c }
-
-  let (let@) = bind
-
-  let get () : 'a t = 
-    { c = fun s -> Ok (s, s) }
-
-  let set (s : 's) : unit t = 
-    { c = fun _ -> Ok ((), s) }
-
-
-  let error loc e = 
-    ((loc, e), Tools.do_stack_trace ())
-
-  let fail (loc: Loc.loc) (e: e) : 'a t = 
-    { c = fun _ -> Error (error loc e) }
-
-  let failS (loc : Loc.loc) (f : failure) : 'a t = 
-    { c = fun s -> Error (error loc (f s)) }
-
-
-  let pure (m : 'a t) : 'a t =
-    let c s = 
-      Z3.Solver.push (L.solver s);
-      let outcome = match m.c s with
-        | Ok (a, _) -> Ok (a, s)
-        | Error e -> Error e
-      in
-      Z3.Solver.pop (L.solver s) 1;
-      outcome
-    in
-    { c }
+    Z3.Solver.pop s.solver 1;
+    outcome
+  in
+  { c }
 
 
 
 
-  let print_with_local printer = 
-    let@ l = get () in
-    let () = printer l in
-    return ()
+let print_with_ctxt printer = 
+  let@ s = get () in
+  let () = printer s in
+  return ()
 
-  let all_constraints () = 
-    let@ l = get () in
-    return (L.all_constraints l)
+let get_global () = 
+  let@ s = get () in
+  return (s.global)
 
-  let all_resources () = 
-    let@ l = get () in
-    return (L.all_resources l)
+let all_constraints () = 
+  let@ s = get () in
+  return s.constraints
 
-  let provable =
-    let@ l = get () in
-    return (fun lc -> L.provable (L.solver l) lc)
+let all_resources () = 
+  let@ s = get () in
+  return s.resources
 
-  let model () =
-    let@ l = get () in
-    return (L.model (L.solver l))
+let provable =
+  let@ s = get () in
+  return (fun lc -> Solver.provable s.global.struct_decls s.solver lc)
 
-  let bound_a s = 
-    let@ l = get () in
-    return (L.bound_a s l)
+let model () =
+  let@ s = get () in
+  return (Solver.model s.solver)
 
-  let bound_l s = 
-    let@ l = get () in
-    return (L.bound_l s l)
+let bound_a sym = 
+  let@ s = get () in
+  return (Context.bound_a sym s)
 
-  let get_a s = 
-    let@ l = get () in
-    return (L.get_a s l)
+let bound_l sym = 
+  let@ s = get () in
+  return (Context.bound_l sym s)
 
-  let get_l s = 
-    let@ l = get () in
-    return (L.get_l s l)
+let get_a sym = 
+  let@ s = get () in
+  return (Context.get_a sym s)
 
-  let add_a s (bt, s') = 
-    let@ l = get () in
-    set (L.add_a s (bt, s') l)
+let get_l sym = 
+  let@ s = get () in
+  return (Context.get_l sym s)
 
-  let add_l s ls =
-    let@ l = get () in
-    set (L.add_l s ls l)
+let add_a sym (bt, sym') = 
+  let@ s = get () in
+  set (Context.add_a sym (bt, sym') s)
 
-  let add_ls lvars = 
-    let@ l = get () in
-    let l = List.fold_left (fun l (s, ls) -> L.add_l s ls l) l lvars in
-    set l
+let add_l sym ls =
+  let@ s = get () in
+  set (Context.add_l sym ls s)
 
-  let add_c lc = 
-    let@ l = get () in
-    set (L.add_c lc l)
+let add_ls lvars = 
+  let@ s = get () in
+  set (Context.add_ls lvars s)
 
-  let add_cs lcs = 
-    let@ l = get () in
-    set (L.add_cs lcs l)
+let add_c lc = 
+  let@ s = get () in
+  set (Context.add_c lc s)
 
-  let add_r oloc r = 
-    let@ l = get () in
-    set (L.add_r oloc r l)
+let add_cs lcs = 
+  let@ s = get () in
+  set (Context.add_cs lcs s)
 
-  let map_and_fold_resources f acc =
-    let@ l = get () in
-    let (l', acc) = L.map_and_fold_resources f l acc in
-    let@ () = set l' in
-    return acc
+let add_r oloc r = 
+  let@ s = get () in
+  set (Context.add_r oloc r s)
 
-
-  let all_vars () = 
-    let@ l = get () in
-    return (L.all_vars l)
-
-  let bind_return_type oloc s rt = 
-    let@ l = get () in
-    set (L.bind oloc l s rt)
-
-  let bind_logical_return_type oloc lrt = 
-    let@ l = get () in
-    set (L.bind_logical oloc l lrt)
-
-  let logically_bind_return_type oloc rt = 
-    let@ l = get () in
-    let ((bt, s), l') = L.bind_logically oloc l rt in
-    let@ () = set l' in
-    return (bt, s)
+let map_and_fold_resources f acc =
+  let@ s = get () in
+  let (s, acc) = Context.map_and_fold_resources f s acc in
+  let@ () = set s in
+  return acc
 
 
-end
+let all_vars () = 
+  let@ s = get () in
+  return (Context.all_vars s)
+
+let bind_return_type oloc sym rt = 
+  let@ s = get () in
+  set (Context.bind oloc s sym rt)
+
+let bind_logical_return_type oloc lrt = 
+  let@ s = get () in
+  set (Context.bind_logical oloc s lrt)
+
+let logically_bind_return_type oloc rt = 
+  let@ s = get () in
+  let ((bt, sym), s) = Context.bind_logically oloc s rt in
+  let@ () = set s in
+  return (bt, sym)
