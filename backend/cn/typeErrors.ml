@@ -6,6 +6,9 @@ module LS=LogicalSorts
 module CF=Cerb_frontend
 module Loc = Locations
 open Report
+module RE = Resources.RE
+module LC = LogicalConstraints
+module RER = Resources.Requests
 
 type label_kind = 
   | Return
@@ -82,10 +85,10 @@ type message =
   | Unknown_predicate of string
   | Unknown_member of BT.tag * BT.member
 
-  | Missing_resource of {resource : doc; state : state_report; situation : situation; oinfo : info option}
-  | Resource_mismatch of {has: doc; state : state_report; expect: doc; situation : situation}
-  | Uninitialised_read of {is_member : BT.member option; state : state_report}
-  | Unused_resource of {resource: doc; state : state_report}
+  | Missing_resource_request of {request : RER.t; situation : situation; oinfo : info option; ctxt : Context.t; model: Z3.Model.model }
+  | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Z3.Model.model}
+  | Uninitialised_read of {ctxt : Context.t; model : Z3.Model.model}
+  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Z3.Model.model}
 
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
@@ -93,19 +96,19 @@ type message =
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
-  | Illtyped_it of {context: Pp.document; it: Pp.document; has: LS.t; expected: string} (* 'expected' as in Kayvan's Core type checker *)
+  | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> message
-  | Write_value_unrepresentable of {ct: Sctypes.t; location: doc; value: doc; state : state_report}
-  | IntFromPtr_unrepresentable of {ict : Sctypes.t; state : state_report}
-  | Unsat_constraint of {constr : doc; state : state_report; info : info}
+  | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Z3.Model.model }
+  | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Z3.Model.model}
+  | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Z3.Model.model}
   | Unconstrained_logical_variable of Sym.t * string option
   | Array_as_value of Sym.t * string option
   | Logical_variable_not_good_for_unification of Sym.t * string option
 
-  | Undefined_behaviour of CF.Undefined.undefined_behaviour * state_report
+  | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Z3.Model.model}
   | Implementation_defined_behaviour of document * state_report
   | Unspecified of CF.Ctype.ctype
-  | StaticError of string * state_report
+  | StaticError of {err : string; ctxt : Context.t; model : Z3.Model.model}
 
   | Generic of Pp.document
 
@@ -147,8 +150,10 @@ let pp_message te =
            Id.pp member
      in
      { short; descr = Some descr; state = None }
-  | Missing_resource {resource; state; situation; oinfo} ->
+  | Missing_resource_request {request; situation; oinfo; ctxt; model} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
+     let explanation = Explain.explanation ctxt (RER.free_vars request) in
+     let re_pp = RER.pp (RER.subst explanation.substitution request) in
      let descr = match oinfo with
        | Some (spec_loc, Some descr) ->
           let (head, _) = Locations.head_pos_of_location spec_loc in
@@ -157,24 +162,32 @@ let pp_message te =
           let (head, _) = Locations.head_pos_of_location spec_loc in
           !^"Missing resource from" ^^^ !^head
        | None ->
-          !^"Missing resource" ^^^ squotes (resource)
+          !^"Missing resource" ^^^ squotes re_pp
      in
+     let state = Explain.state ctxt explanation model in
      { short; descr = Some descr; state = Some state }
-  | Resource_mismatch {has; state; expect; situation} ->
+  | Resource_mismatch {has; expect; situation; ctxt; model} ->
      let short = !^"Resource mismatch" ^^^ for_situation situation in
+     let relevant = IT.SymSet.union (RE.free_vars has) (RE.free_vars expect) in
+     let explanation = Explain.explanation ctxt relevant in
+     let has = RE.pp (RE.subst explanation.substitution has) in
+     let expect = RE.pp (RE.subst explanation.substitution expect) in
+     let state = Explain.state ctxt explanation model in
      let descr = 
        !^"Need a resource" ^^^ squotes expect ^^^ 
          !^"but have resource" ^^^ squotes has 
      in
      { short; descr = Some descr; state = Some state }
-  | Uninitialised_read {is_member; state} ->
-     let short = match is_member with
-       | None -> !^"Trying to read uninitialised data"
-       | Some m -> !^"Trying to read uninitialised struct member" ^^^ squotes (Id.pp m)
-     in
+  | Uninitialised_read {ctxt; model} ->
+     let short = !^"Trying to read uninitialised data" in
+     let explanation = Explain.explanation ctxt IT.SymSet.empty in
+     let state = Explain.state ctxt explanation model in
      { short; descr = None; state = Some state }
-  | Unused_resource {resource; state} ->
+  | Unused_resource {resource; ctxt; model} ->
+     let explanation = Explain.explanation ctxt (RE.free_vars resource) in
+     let resource = RE.pp (RE.subst explanation.substitution resource) in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
+     let state = Explain.state ctxt explanation model in
      { short; descr = None; state = Some state}
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
@@ -225,36 +238,54 @@ let pp_message te =
              !^"but found value of type" ^^^ squotes (LS.pp has)
      in
      { short; descr = Some descr; state = None }
-  | Illtyped_it {context;it;has;expected} ->
+  | Illtyped_it {context; it; has; expected; ctxt} ->
+     let relevant = IT.free_vars_list [it; context] in
+     let explanation = Explain.explanation ctxt relevant in
+     let it = IT.pp (IT.subst explanation.substitution it) in
+     let context = IT.pp (IT.subst explanation.substitution context) in
      let short = !^"Type error" in
      let descr = 
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^ 
-         !^"Expected" ^^^ it ^^^ !^"to have" ^^^ squotes !^expected ^^^ !^"type" ^^^
-           !^"but has" ^^^ squotes (LS.pp has) ^^^ !^"type"
+         !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
+           !^"but is" ^^^ squotes (LS.pp has)
      in
      { short; descr = Some descr; state = None }
   | Polymorphic_it it ->
      let short = !^"Type inference failed" in
      let descr = !^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it) in
      { short; descr = Some descr; state = None }
-  | Write_value_unrepresentable {ct; location; value; state : state_report} ->
+  | Write_value_unrepresentable {ct; location; value; ctxt; model} ->
      let short = 
        !^"Write value not representable at type" ^^^ 
          Sctypes.pp ct 
      in
+     let explanation = 
+       Explain.explanation ctxt 
+         (IT.free_vars_list [value; location]) 
+     in
+     let location = IT.pp (IT.subst explanation.substitution location) in
+     let value = IT.pp (IT.subst explanation.substitution value) in
+     let state = Explain.state ctxt explanation model in
      let descr = 
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
      in
      { short; descr = Some descr; state = Some state }
-  | IntFromPtr_unrepresentable {ict; state : state_report} ->
+  | Int_unrepresentable {value; ict; ctxt; model} ->
      let short = 
-       !^"pointer value not representable at type" ^^^
+       !^"integer value not representable at type" ^^^
          Sctypes.pp ict
      in
-     { short; descr = None; state = Some state }
-  | Unsat_constraint {constr; state; info} ->
+     let explanation = Explain.explanation ctxt (IT.free_vars value) in
+     let value = IT.pp (IT.subst explanation.substitution value) in
+     let descr = !^"Value" ^^ colon ^^^ value in
+     let state = Explain.state ctxt explanation model in
+     { short; descr = Some descr; state = Some state }
+  | Unsat_constraint {constr; info; ctxt; model} ->
      let short = !^"Unsatisfied constraint" in
+     let explanation = Explain.explanation ctxt (LC.free_vars constr) in
+     let _constr = LC.pp (LC.subst explanation.substitution constr) in
+     let state = Explain.state ctxt explanation model in
      let descr = 
        let (spec_loc, odescr) = info in
        let (head, _) = Locations.head_pos_of_location spec_loc in
@@ -296,9 +327,11 @@ let pp_message te =
             squotes (Sym.pp name)
      in
      { short; descr = Some descr; state = None }
-  | Undefined_behaviour (undef, state) -> 
+  | Undefined_behaviour {ub; ctxt; model} -> 
      let short = !^"Undefined behaviour" in
-     let descr = !^(CF.Undefined.pretty_string_of_undefined_behaviour undef) in
+     let explanation = Explain.explanation ctxt IT.SymSet.empty in
+     let state = Explain.state ctxt explanation model in
+     let descr = !^(CF.Undefined.pretty_string_of_undefined_behaviour ub) in
      { short; descr = Some descr; state = Some state }
   | Implementation_defined_behaviour (impl, state) -> 
      let short = !^"Implementation defined behaviour" in
@@ -307,8 +340,10 @@ let pp_message te =
   | Unspecified ctype ->
      let short = !^"Unspecified value of C-type" ^^^ CF.Pp_core_ctype.pp_ctype ctype in
      { short; descr = None; state = None }
-  | StaticError (err, state) ->
+  | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
+     let explanation = Explain.explanation ctxt IT.SymSet.empty in
+     let state = Explain.state ctxt explanation model in
      let descr = !^err in
      { short; descr = Some descr; state = Some state }
   | Generic err ->

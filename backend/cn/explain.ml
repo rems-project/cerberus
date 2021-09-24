@@ -541,68 +541,8 @@ let state ctxt {substitution; vclasses; relevant} model =
     constraints }
 
 
-let undefined_behaviour ctxt = 
-  let sd = ctxt.global.struct_decls in
-  let provable = S.provable sd ctxt.solver (t_ (bool_ false)) in
-  assert (not provable);
-  let explanation = explanation ctxt SymSet.empty in
-  let model = S.model ctxt.solver in
-  state ctxt explanation model
 
 
-let implementation_defined_behaviour ctxt it = 
-  let sd = ctxt.global.struct_decls in
-  let provable = S.provable sd ctxt.solver (t_ (bool_ false)) in
-  assert (not provable);
-  let explanation = explanation ctxt (IT.free_vars it) in
-  let it_pp = IT.pp (IT.subst explanation.substitution it) in
-  let model = S.model ctxt.solver in
-  (it_pp, state ctxt explanation model)
 
-let missing_ownership ctxt model it = 
-  let explanation = explanation ctxt (IT.free_vars it) in
-  let it_pp = IT.pp (IT.subst explanation.substitution it) in
-  (it_pp, state ctxt explanation model)
-
-let index_term ctxt it = 
-  let explanation = explanation ctxt (IT.free_vars it) in
-  let it_pp = IT.pp (IT.subst explanation.substitution it) in
-  it_pp
-
-let unsatisfied_constraint ctxt model lc = 
-  let explanation = explanation ctxt (LC.free_vars lc) in
-  let lc_pp = LC.pp (LC.subst explanation.substitution lc) in
-  (lc_pp, state ctxt explanation model)
-
-let resource ctxt model re = 
-  let explanation = explanation ctxt (RE.free_vars re) in
-  let re_pp = RE.pp (RE.subst explanation.substitution re) in
-  (re_pp, state ctxt explanation model)
-
-let resource_request ctxt model re = 
-  let explanation = explanation ctxt (RER.free_vars re) in
-  let re_pp = RER.pp (RER.subst explanation.substitution re) in
-  (re_pp, state ctxt explanation model)
-
-let resources ctxt model (re1, re2) = 
-  let relevant = (SymSet.union (RE.free_vars re1) (RE.free_vars re2)) in
-  let explanation = explanation ctxt relevant in
-  let re1 = RE.pp (RE.subst explanation.substitution re1) in
-  let re2 = RE.pp (RE.subst explanation.substitution re2) in
-  ((re1, re2), state ctxt explanation model)
-
-
-let illtyped_index_term ctxt context it =
-  let explanation = explanation ctxt (IT.free_vars_list [it; context]) in
-  let it = IT.pp (IT.subst explanation.substitution it) in
-  let context = IT.pp (IT.subst explanation.substitution context) in
-  (context, it)
-
-let unrepresentable_write_value ctxt model (location, value) = 
-  let relevant = (IT.free_vars_list [location; value]) in
-  let explanation = explanation ctxt relevant in
-  let location_pp = IT.pp (IT.subst explanation.substitution location) in
-  let value_pp = IT.pp (IT.subst explanation.substitution value) in
-  ((location_pp, value_pp), state ctxt explanation model)
 
 

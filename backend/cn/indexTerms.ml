@@ -604,7 +604,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           let s' = Sym.fresh_same s in
           let t = subst [(s, IT (Lit (Sym s'), Integer))] t in
           let t = subst su t in
-          EachI ((i1, s', i2), t)          
+          EachI ((i1, s', i2), t)
      in
      IT (Bool_op bool_op, bt)
   | Tuple_op tuple_op -> 

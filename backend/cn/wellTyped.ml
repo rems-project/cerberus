@@ -5,7 +5,6 @@ module TE = TypeErrors
 module RE = Resources.RE
 module AT = ArgumentTypes
 
-open Context
 open Global
 open TE
 open Pp
@@ -24,12 +23,8 @@ module WIT = struct
     else fail (fun _ -> {loc; msg = TE.Unknown_variable s})
 
 
-  let illtyped_index_term (loc: loc) context it has expected =
-    fun explain_ctxt ->
-    let (context_pp, it_pp) = Explain.illtyped_index_term explain_ctxt context it in
-    {loc = loc;
-     msg = TypeErrors.Illtyped_it {context = context_pp; it = it_pp; 
-                                   has; expected = "integer or real"}}
+  let illtyped_index_term (loc: loc) context it has expected ctxt =
+    {loc = loc; msg = TypeErrors.Illtyped_it {context; it; has; expected; ctxt}}
 
 
   let ensure_integer_or_real_type (loc : loc) context it = 
@@ -186,28 +181,11 @@ module WIT = struct
                    begin match List.nth_opt bts n with
                    | Some t -> return t
                    | None -> 
-                      fail (fun explain_ctxt ->
-                          let (context_pp, t'_pp) = Explain.illtyped_index_term explain_ctxt context t' in
-                          let msg = 
-                            Generic
-                              (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                 !^"Expected" ^^^ t'_pp ^^^ !^"to be tuple with at least" ^^^ !^(string_of_int n) ^^^
-                                   !^"components, but has type" ^^^ BT.pp (Tuple bts))
-                          in
-                          {loc; msg}
-                        )
+                      let expected = "tuple with at least " ^ string_of_int n ^ "components" in
+                      fail (illtyped_index_term loc context t' (Tuple bts) expected)
                    end
-                | _ -> 
-                   fail (fun explain_ctxt ->
-                       let (context_pp, t'_pp) = Explain.illtyped_index_term explain_ctxt context t' in
-                       let msg = 
-                         Generic
-                           (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                              !^"Expected" ^^^ t'_pp ^^^ !^"to have tuple type, but has type" ^^^
-                                BT.pp (IT.bt t'))
-                       in
-                       {loc; msg}
-                     )
+                | has -> 
+                   fail (illtyped_index_term loc context t' has "tuple")
               in
               return (item_bt, NthTuple (n, t'))
          in
@@ -227,16 +205,7 @@ module WIT = struct
                 ListM.mapM (fun (member,t) ->
                     let@ bt = match List.assoc_opt Id.equal member decl_members with
                       | Some sct -> return (BT.of_sct sct)
-                      | None -> 
-                         fail (fun explain_ctxt ->
-                             let context_pp = Explain.index_term explain_ctxt context in
-                             let msg = 
-                               Generic
-                                 (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                    !^"struct" ^^^ Sym.pp tag ^^^ !^"does not have member" ^^^ Id.pp member)
-                             in
-                             {loc; msg}
-                           )
+                      | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
                     in
                     let@ t = check loc ~context bt t in
                     return (member, t)
@@ -247,31 +216,15 @@ module WIT = struct
               let@ t = infer loc ~context t in
               let@ tag = match IT.bt t with
                 | Struct tag -> return tag
-                | _ -> 
-                   fail (fun explain_ctxt ->
-                       let (context_pp, t_pp) = Explain.illtyped_index_term explain_ctxt context t in
-                       let msg = 
-                         Generic (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                                    !^"Expected" ^^^ t_pp ^^^ !^"to have struct type" ^^^ 
-                                      !^"but has type" ^^^ BT.pp (IT.bt t))
-                       in
-                       {loc; msg}
-                     )
+                | has -> fail (illtyped_index_term loc context t has "struct")
               in
               let@ layout = get_struct_decl loc tag in
               let decl_members = Memory.member_types layout in
               let@ bt = match List.assoc_opt Id.equal member decl_members with
                 | Some sct -> return (BT.of_sct sct)
                 | None -> 
-                   fail (fun explain_ctxt ->
-                       let (context_pp, t_pp) = Explain.illtyped_index_term explain_ctxt context t in
-                       let msg =
-                         Generic
-                           (!^"Illtyped expression" ^^^ context_pp ^^ dot ^^^
-                              t_pp ^^^ !^"does not have member" ^^^ Id.pp member)
-                       in
-                       {loc; msg}
-                     )
+                   let expected = "struct with member " ^ Id.s member in
+                   fail (illtyped_index_term loc context t (Struct tag) expected)
               in
               return (bt, StructMember (t, member))
          in
@@ -423,14 +376,8 @@ module WIT = struct
          if LS.equal ls (IT.bt it) then
            return it
          else
-           fail (fun explain_ctxt ->
-               let (context_pp, it_pp) = Explain.illtyped_index_term explain_ctxt context it in
-               let msg = 
-                 Illtyped_it {context = context_pp; it = it_pp; 
-                              has = IT.bt it; expected = Pp.plain (LS.pp ls)}
-               in
-               {loc; msg}
-             )
+           let expected = Pp.plain (LS.pp ls) in
+           fail (illtyped_index_term loc context it (IT.bt it) expected)
 
   let infer loc it = infer loc ~context:it it
   let check loc ls it = check loc ~context:it ls it

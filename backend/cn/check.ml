@@ -11,7 +11,6 @@ module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
-module E = Explain
 open Tools
 open Sctypes
 open Context
@@ -176,12 +175,10 @@ let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m =
 module ResourceInference = struct 
 
 
-  let missing_resource_failure loc situation (request, oinfo) = 
-    fun ctxt ->
+  let missing_resource_failure loc situation (request, oinfo) ctxt = 
     let model = S.model ctxt.solver in
-    let (resource, state) = E.resource_request ctxt model request in
-    {loc = loc;
-     msg = Missing_resource {resource; state; situation; oinfo}}
+    let msg = Missing_resource_request {request; situation; oinfo; model; ctxt} in
+    {loc; msg}
 
 
   let unfold_array_request ct base_pointer_t length permission_t = 
@@ -804,13 +801,9 @@ end = struct
 
 
 
-  let resource_mismatch_failure loc situation resource resource' =
-    fun ctxt ->
+  let resource_mismatch_failure loc situation ~expect ~has ctxt =
     let model = S.model ctxt.solver in
-    let ((expect,has), state) = 
-      E.resources ctxt model (resource, resource') in
-    {loc = loc;
-     msg = Resource_mismatch {expect; has; state; situation}}
+    {loc = loc; msg = Resource_mismatch {expect; has; situation; ctxt; model}}
 
 
   let spine :
@@ -888,7 +881,7 @@ end = struct
            let@ resource' = RI.resource_request loc situation (request, Some info) in
            let@ (unis, new_subst) = 
              match_resources loc 
-               (resource_mismatch_failure loc situation resource resource')
+               (resource_mismatch_failure loc situation ~expect:resource ~has:resource')
                unis resource resource' in
            infer_resources unis (subst_r rt_subst new_subst ftyp)
         | C ftyp ->
@@ -910,10 +903,8 @@ end = struct
         | Constraint (c, info, ftyp) -> 
            if provable c then check_logical_constraints ftyp else
              fail (fun ctxt ->
-                 let (constr,state) = 
-                   E.unsatisfied_constraint ctxt (S.model ctxt.solver) c
-                 in
-                 {loc; msg = Unsat_constraint {constr; state; info}}
+                 let model = S.model ctxt.solver in
+                 {loc; msg = Unsat_constraint {constr = c; info; ctxt; model}}
                )
         | I rt ->
            return rt
@@ -1194,9 +1185,11 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        Debug_ocaml.error "todo: PEconstrained"
     | M_PEerror (err, asym) ->
        let@ arg = arg_of_asym asym in
+       let@ provable = provable in
+       assert(not (provable (t_ (bool_ false))));
        fail (fun ctxt ->
-           let expl = E.undefined_behaviour ctxt in
-           {loc; msg = StaticError (err, expl) }
+           let model = S.model ctxt.solver in
+           {loc; msg = StaticError {err; ctxt; model} }
          )
     | M_PEctor (ctor, asyms) ->
        let@ args = args_of_asyms asyms in
@@ -1293,7 +1286,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        in
        let@ args = args_of_asyms asyms in
        Spine.calltype_ft loc args decl_typ
-    | M_PEassert_undef (asym, _uloc, undef) ->
+    | M_PEassert_undef (asym, _uloc, ub) ->
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
        let@ provable = provable in
@@ -1301,8 +1294,8 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          return (rt_of_vt loc (Unit, unit_))
        else
          fail (fun ctxt ->
-             let expl = E.undefined_behaviour ctxt in
-             {loc; msg = Undefined_behaviour (undef, expl)}
+             let model = S.model ctxt.solver in
+             {loc; msg = Undefined_behaviour {ub; ctxt; model}}
            )
     | M_PEbool_to_integer asym ->
        let@ arg = arg_of_asym asym in
@@ -1335,13 +1328,11 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
           if provable (t_ (representable_ (act.ct, arg_it))) then
             return (rt_of_vt loc (Integer, arg_it))
           else
+            let value = arg_it in
+            let ict = act.ct in
             fail (fun ctxt ->
-                let (it_pp, state_pp) = E.implementation_defined_behaviour ctxt arg_it in
-                let msg = 
-                  Implementation_defined_behaviour 
-                    (it_pp ^^^ !^"outside representable range for" ^^^ 
-                       Sctypes.pp act.ct, state_pp)
-                in
+                let model = S.model ctxt.solver in
+                let msg = Int_unrepresentable {value; ict; ctxt; model} in
                 {loc; msg}
               )
        end
@@ -1403,10 +1394,12 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
      let@ arg = arg_of_asym asym in
      let@ () = Spine.subtype loc arg typ in
      return ()
-  | M_PEundef (_loc, undef) ->
+  | M_PEundef (_loc, ub) ->
+     let@ provable = provable in
+     assert(not (provable (t_ (bool_ false))));
      fail (fun ctxt ->
-         let expl = E.undefined_behaviour ctxt in
-         {loc; msg = Undefined_behaviour (undef, expl)}
+         let model = S.model ctxt.solver in
+         {loc; msg = Undefined_behaviour {ub; ctxt; model}}
        )
 
 (*** impure expression inference **********************************************)
@@ -1433,12 +1426,10 @@ let pp_or_false (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document =
 let all_empty loc = 
   let failure resource = 
     fail (fun ctxt ->
-        let (resource, state) = 
-          E.resource ctxt (S.model ctxt.solver) resource in
-        {loc; msg = Unused_resource {resource; state}}
+        let model = S.model ctxt.solver in
+        {loc; msg = Unused_resource {resource; ctxt; model}}
       )
   in
-
   let@ provable = provable in
   let@ all_resources = all_resources () in
   let _ = 
@@ -1517,9 +1508,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             let lc = (t_ (representable_ (act_to.ct, v))) in
             if provable lc then return () else
               fail (fun ctxt ->
-                  let (_, state) = 
-                    E.unsatisfied_constraint ctxt (S.model (ctxt.solver)) lc in
-                  {loc; msg = IntFromPtr_unrepresentable {ict = act_to.ct; state}}
+                  let model = S.model ctxt.solver in
+                  let ict = act_to.ct in
+                  let value = it_of_arg arg in
+                  {loc; msg = Int_unrepresentable {value; ict; ctxt; model}}
                 )
           in
           let vt = (Integer, v) in
@@ -1626,12 +1618,16 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             let holds = provable (t_ in_range_lc) in
             if holds then return () else 
               fail (fun ctxt ->
-                  let ((location,value), state) = 
-                    E.unrepresentable_write_value ctxt 
-                      (S.model ctxt.solver) 
-                      (it_of_arg parg, it_of_arg varg)
+                  let model = S.model ctxt.solver in
+                  let msg = 
+                    Write_value_unrepresentable {
+                        ct = act.ct; 
+                        location = it_of_arg parg; 
+                        value = it_of_arg varg; 
+                        ctxt;
+                        model}
                   in
-                  {loc; msg = Write_value_unrepresentable {ct = act.ct; location; value; state}}
+                  {loc; msg}
                 )
           in
           let@ _ = 
@@ -1674,10 +1670,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             let@ provable = provable in
             if provable (t_ point.init) then return () else
               fail (fun ctxt ->
-                  let (_, state) = 
-                    E.unsatisfied_constraint ctxt
-                      (S.model ctxt.solver) (t_ point.init) in
-                  {loc; msg = Uninitialised_read {is_member = None; state}}
+                  let model = S.model ctxt.solver in
+                  {loc; msg = Uninitialised_read {ctxt; model}}
                 )
           in
           let ret = Sym.fresh () in
@@ -1905,10 +1899,12 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
           in
           fail (fun _ -> {loc; msg = Generic !^err})
        end
-    | M_Eundef (_loc, undef) ->
+    | M_Eundef (_loc, ub) ->
+       let@ provable = provable in
+       assert(not (provable (t_ (bool_ false))));
        fail (fun ctxt ->
-           let expl = E.undefined_behaviour ctxt in
-           {loc; msg = Undefined_behaviour (undef, expl)}
+           let model = S.model ctxt.solver in
+           {loc; msg = Undefined_behaviour {ub; ctxt; model}}
          )
     | M_Erun (label_sym, asyms) ->
        let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
