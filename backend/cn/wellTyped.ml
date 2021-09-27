@@ -134,6 +134,12 @@ module WIT = struct
               let@ () = ensure_integer_or_real_type loc context t in
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, LE (t, t'))
+           | IntToReal t ->
+              let@ t = check loc ~context Integer t in
+              return (BT.Real, IntToReal t)
+           | RealToInt t ->
+              let@ t = check loc ~context Real t in
+              return (BT.Integer, IntToReal t)
          in
          return (IT (Arith_op arith_op, bt))
       | Bool_op bool_op ->
@@ -408,6 +414,9 @@ module WIT = struct
        | LT (t,t') 
        | LE (t,t') ->
           ListM.iterM aux [t; t']
+       | IntToReal t
+       | RealToInt t ->
+          aux t
        end
     | Bool_op bool_op ->
        begin match bool_op with

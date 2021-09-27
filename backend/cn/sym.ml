@@ -44,4 +44,4 @@ let json sym = `String (pp_string sym)
 
 
 
-
+let hash = num

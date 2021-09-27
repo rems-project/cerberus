@@ -30,6 +30,8 @@ type 'bt arith_op =
   | Mod of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
+  | IntToReal of 'bt term
+  | RealToInt of 'bt term
 
 and 'bt bool_op = 
   | And of 'bt term list
@@ -148,6 +150,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Mod (t1,t2), Mod (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | IntToReal t, IntToReal t' -> equal t t'
+     | RealToInt t, RealToInt t' -> equal t t'
      | Add _, _ -> false
      | Sub _, _ -> false
      | Mul _, _ -> false 
@@ -157,6 +161,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Mod _, _ -> false
      | LT _, _ -> false
      | LE _, _ -> false
+     | IntToReal _, _ -> false
+     | RealToInt _, _ -> false
      end
   | Bool_op bool_op, Bool_op bool_op' -> 
      begin match bool_op, bool_op' with
@@ -355,6 +361,10 @@ let pp =
           mparens (flow (break 1) [aux true o1; langle; aux true o2])
        | LE (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; (langle ^^ equals); aux true o2])
+       | IntToReal t ->
+          c_app !^"intToReal" [aux false t]
+       | RealToInt t ->
+          c_app !^"realToInt" [aux false t]
        end
     | Bool_op bool_op -> 
        begin match bool_op with
@@ -491,6 +501,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Mod (it, it') -> free_vars_list [it; it']
      | LT (it, it') -> free_vars_list [it; it']
      | LE (it, it') -> free_vars_list [it; it']
+     | IntToReal t -> free_vars t
+     | RealToInt t -> free_vars t
      end
   | Bool_op bool_op ->
      begin match bool_op with
@@ -590,6 +602,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Mod (it, it') -> Mod (subst su it, subst su it')
        | LT (it, it') -> LT (subst su it, subst su it')
        | LE (it, it') -> LE (subst su it, subst su it')
+       | IntToReal it -> IntToReal (subst su it)
+       | RealToInt it -> RealToInt (subst su it)
      in
      IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
@@ -700,6 +714,96 @@ let rec subst (su : typed subst) (IT (it, bt)) =
 
 
 
+let rec size (IT (it_, bt)) =
+  match it_ with
+  | Lit _ -> 1
+  | Arith_op arith_op ->
+     begin match arith_op with
+     | Add (it, it')
+     | Sub (it, it')
+     | Mul (it, it')
+     | Div (it, it')
+     | Exp (it, it')
+     | Rem (it, it')
+     | Mod (it, it')
+     | LT (it, it')
+     | LE (it, it') 
+       -> 1 + size it + size it'
+     | IntToReal it
+     | RealToInt it ->
+        1 + size it
+     end
+  | Bool_op bool_op ->
+     begin match bool_op with
+     | And its -> 1 + size_list its
+     | Or its -> 1 + size_list its
+     | Impl (it, it') -> 1 + size it + size it'
+     | Not it -> 1 + size it
+     | ITE (it, it', it'') -> 1 + size_list [it; it'; it'']
+     | EQ (it, it') -> 1 + size it + size it'
+     | EachI (_, it) -> 1 + size it
+     end
+  | Tuple_op tuple_op ->
+     begin match tuple_op with
+     | Tuple its -> 1 + size_list its
+     | NthTuple (_, it) -> 1 + size it
+     end
+  | Struct_op struct_op ->
+     begin match struct_op with
+     | Struct (_, members) -> 1 + size_list (List.map snd members)
+     | StructMember (it, _) -> 1 + size it
+     end
+  | Pointer_op pointer_op ->
+     begin match pointer_op with
+     | Null -> 1
+     | AddPointer (it, it')
+     | SubPointer (it, it')
+     | MulPointer (it, it')
+     | LTPointer (it, it')
+     | LEPointer (it, it') ->
+        1 + size it + size it'
+     | IntegerToPointerCast it -> 1 + size it
+     | PointerToIntegerCast it -> 1 + size it
+     | MemberOffset _ -> 1
+     | ArrayOffset (_, it) -> 1 + size it
+     end
+  | List_op list_op ->
+     begin match list_op with
+     | Nil -> 1
+     | Cons (it, it') -> 1 + size it + size it'
+     | List its -> 1 + size_list its
+     | Head it -> 1 + size it
+     | Tail it -> 1 + size it
+     | NthList (_, it) -> 1 + size it
+     end
+  | Set_op set_op ->
+     begin match set_op with
+     | SetMember (it, it') -> 1 + size it + size it'
+     | SetUnion its -> 1 + size_list (List1.to_list its)
+     | SetIntersection its -> 1 + size_list (List1.to_list its)
+     | SetDifference (it, it') -> 1 + size it + size it'
+     | Subset (it, it') -> 1 + size it + size it'
+     end
+  | CT_pred ct_pred ->
+     begin match ct_pred with
+     | Representable (_, it) -> 1 + size it
+     | Good (_, it) -> 1 + size it
+     | AlignedI a -> 1 + size a.t + size a.align
+     | Aligned (it, _) -> 1 + size it
+     end
+  | Array_op array_op ->
+     begin match array_op with
+     | Const (_, it) -> 1 + size it
+     | Set (it, it', it'') -> 1 + size_list [it;it';it'']
+     | Get (it, it') -> 1 + size it + size it'
+     | Def (_, it) -> 1 + size it
+     end
+
+and size_list its = 
+  List.fold_right (fun it acc -> acc + size it) its 0
+
+
+
 
 let is_lit = function
   | IT (Lit lit, bt) -> Some (lit, bt)
@@ -786,6 +890,8 @@ let rem_t___ (it, it') = rem_ (it, it')
 let rem_f___ (it, it') = rem_ (it, it')
 let min_ (it, it') = ite_ (le_ (it, it'), it, it')
 let max_ (it, it') = ite_ (ge_ (it, it'), it, it')
+let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)
+let realToInt_ it = IT (Arith_op (RealToInt it), BT.Integer)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')

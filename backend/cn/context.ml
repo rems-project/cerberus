@@ -87,7 +87,7 @@ let add_ls lvars ctxt =
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
 let add_c lc (ctxt : t) = 
-  let lcs = Simplify.simp_lc_flatten ctxt.constraints lc in
+  let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
   let scs = List.concat_map (Solver.constr ctxt.global.struct_decls) lcs in
   let () = 
     Z3.Solver.add ctxt.solver 
@@ -101,7 +101,7 @@ let add_cs lcs (ctxt : t) =
 
 
 let add_r owhere r (ctxt : t) = 
-  match RE.simp_or_empty ctxt.constraints r with
+  match RE.simp_or_empty ctxt.global.struct_decls ctxt.constraints r with
   | Some r -> 
      let lcs = 
        RE.derived_constraint r ::
@@ -120,7 +120,7 @@ let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc)
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
         let (re, acc) = f re acc in
-        match RE.simp_or_empty ctxt.constraints re with
+        match RE.simp_or_empty ctxt.global.struct_decls ctxt.constraints re with
         | Some re -> 
            (re :: resources, acc)
         | None -> 

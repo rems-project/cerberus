@@ -14,6 +14,8 @@ module S = Solver
 open Tools
 open Sctypes
 open Context
+open Global
+
 
 open IT
 open TypeErrors
@@ -196,6 +198,7 @@ module ResourceInference = struct
       }
 
     let rec point_request loc (failure : 'e failure) (requested : Resources.Requests.point) = 
+      debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let needed = requested.permission in 
       let@ all_lcs = all_constraints () in
       let@ provable = provable in
@@ -234,11 +237,12 @@ module ResourceInference = struct
       in
       let holds = provable (t_ (eq_ (needed, q_ (0, 1)))) in
       if holds then
+        let@ global = get_global () in
         let r = 
           { ct = requested.ct;
             pointer = requested.pointer;
-            value = Simplify.simp all_lcs value;
-            init = Simplify.simp all_lcs init;
+            value = Simplify.simp global.struct_decls all_lcs value;
+            init = Simplify.simp global.struct_decls all_lcs init;
             permission = requested.permission }
         in
         return r
@@ -256,6 +260,7 @@ module ResourceInference = struct
 
 
     and qpoint_request loc failure (requested : Resources.Requests.qpoint) = 
+      debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
       let needed = requested.permission in
       let@ all_lcs = all_constraints () in
       let@ provable = provable in
@@ -297,11 +302,12 @@ module ResourceInference = struct
                     (eq_ (needed, q_ (0, 1))))
       in
       if holds then
+        let@ global = get_global () in
         let r = 
           { ct = requested.ct;
             qpointer = requested.qpointer;
-            value = Simplify.simp all_lcs value; 
-            init = Simplify.simp all_lcs init;
+            value = Simplify.simp global.struct_decls all_lcs value; 
+            init = Simplify.simp global.struct_decls all_lcs init;
             permission = requested.permission;
           } 
         in
@@ -311,6 +317,7 @@ module ResourceInference = struct
 
 
     and predicate_request loc failure (requested : Resources.Requests.predicate) = 
+      debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
       let needed = requested.permission in 
       let@ all_lcs = all_constraints () in
       let@ provable = provable in
@@ -319,9 +326,11 @@ module ResourceInference = struct
             match re with
             | Predicate p' 
                  when String.equal requested.name p'.name
-                      && provable 
+                      && 
+                      let () = print stdout !^"\n\nHERE1\n\n" in provable 
                            (t_ (and_ (eq_ (requested.pointer, p'.pointer) ::
                                         List.map2 eq__ requested.iargs p'.iargs)))  ->
+                      let () = print stdout !^"\n\nHERE2\n\n" in
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
@@ -352,12 +361,13 @@ module ResourceInference = struct
       in
       let holds = provable (t_ (eq_ (needed, q_ (0, 1)))) in
       if holds then
+        let@ global = get_global () in
         let r = 
           { name = requested.name;
             pointer = requested.pointer;
             permission = requested.permission;
             iargs = requested.iargs; 
-            oargs = List.map (Simplify.simp all_lcs) oargs
+            oargs = List.map (Simplify.simp global.struct_decls all_lcs) oargs
           }
         in
         return r
@@ -365,6 +375,7 @@ module ResourceInference = struct
         fail failure
 
     and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
+      debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let needed = requested.permission in
       let@ all_lcs = all_constraints () in
       let@ provable = provable in
@@ -390,9 +401,10 @@ module ResourceInference = struct
                  when String.equal requested.name p'.name
                       && let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
                          provable
-                           (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                          eq__ iarg (IT.subst subst iarg')
-                                        ) requested.iargs p'.iargs))) ->
+                           (forall_ (requested.qpointer, Loc) 
+                              (and_ (List.map2 (fun iarg iarg' -> 
+                                         eq__ iarg (IT.subst subst iarg')
+                                       ) requested.iargs p'.iargs))) ->
                let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
@@ -413,12 +425,13 @@ module ResourceInference = struct
              (eq_ (needed, q_ (0, 1))))
       in
       if holds then
+        let@ global = get_global () in
         let r = 
           { name = requested.name;
             qpointer = requested.qpointer;
             permission = requested.permission;
             iargs = requested.iargs; 
-            oargs = List.map (Simplify.simp all_lcs) oargs;
+            oargs = List.map (Simplify.simp global.struct_decls all_lcs) oargs;
           } 
         in
         return r
@@ -427,6 +440,11 @@ module ResourceInference = struct
 
 
     and fold_array loc failure item_ct base length permission =
+      debug 7 (lazy (item "fold array" Pp.empty));
+      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
+      debug 7 (lazy (item "base" (IT.pp base)));
+      debug 7 (lazy (item "length" (IT.pp (int_ length))));
+      debug 7 (lazy (item "permission" (IT.pp permission)));
       if length > 20 then warn !^"generating point-wise constraints for big array";
       let@ qpoint = 
         let qp_s, qp_t = IT.fresh Loc in
@@ -464,6 +482,11 @@ module ResourceInference = struct
       return folded_resource
 
     and unfold_array loc failure item_ct base length permission =   
+      debug 7 (lazy (item "unfold array" Pp.empty));
+      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
+      debug 7 (lazy (item "base" (IT.pp base)));
+      debug 7 (lazy (item "length" (IT.pp (int_ length))));
+      debug 7 (lazy (item "permission" (IT.pp permission)));
       let@ point = 
         point_request loc failure 
           (unfold_array_request item_ct base length permission) 
@@ -486,6 +509,10 @@ module ResourceInference = struct
 
 
     and fold_struct loc failure tag pointer_t permission_t =
+      debug 7 (lazy (item "fold struct" Pp.empty));
+      debug 7 (lazy (item "tag" (Sym.pp tag)));
+      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
+      debug 7 (lazy (item "permission" (IT.pp permission_t)));
       let open Memory in
       let@ global = get_global () in
       let layout = SymMap.find tag global.struct_decls in
@@ -534,6 +561,10 @@ module ResourceInference = struct
       return folded_resource
 
     and unfold_struct loc failure tag pointer_t permission_t = 
+      debug 7 (lazy (item "unfold struct" Pp.empty));
+      debug 7 (lazy (item "tag" (Sym.pp tag)));
+      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
+      debug 7 (lazy (item "permission" (IT.pp permission_t)));
       let@ global = get_global () in
       let@ point = 
         point_request loc failure 
@@ -614,7 +645,7 @@ module ResourceInference = struct
       General.qpoint_request loc failure request
 
     let predicate_request loc situation (request, oinfo) = 
-    let failure = missing_resource_failure loc situation (Predicate request, oinfo) in
+      let failure = missing_resource_failure loc situation (Predicate request, oinfo) in
       General.predicate_request loc failure request
 
     let qpredicate_request loc situation (request, oinfo) = 

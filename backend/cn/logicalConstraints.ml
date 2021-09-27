@@ -109,6 +109,10 @@ let forall_ (s,bt) it =
 
 
 
+
+
+
+
 let is_sym_equality = function
   | T (IT (Bool_op (EQ (a, b)), _)) ->
      begin match IT.is_sym a, IT.is_sym b with
@@ -117,8 +121,5 @@ let is_sym_equality = function
      | _ -> None
      end
   | _ -> None
-
-
-
-
-
+ 
+ 

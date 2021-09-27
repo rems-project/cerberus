@@ -396,8 +396,8 @@ module RE = struct
 
 
 
-  let simp lcs resource =
-    let simp_it = Simplify.simp lcs in
+  let simp struct_decls lcs resource =
+    let simp_it = Simplify.simp struct_decls lcs in
     match resource with
     | Point p ->
        Point {
@@ -439,8 +439,8 @@ module RE = struct
 
 
 
-  let simp_or_empty lcs resource = 
-    match simp lcs resource with
+  let simp_or_empty struct_decls lcs resource = 
+    match simp struct_decls lcs resource with
     | Point p when IT.zero_frac p.permission -> None
     | QPoint p when IT.zero_frac p.permission -> None
     | Predicate p when IT.is_false p.permission -> None

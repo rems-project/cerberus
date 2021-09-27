@@ -13,21 +13,15 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let rec simp (lcs : LC.t list) term =
+let rec simp struct_decls (lcs : LC.t list) =
 
   let values = 
     List.fold_right (fun c values ->
         match c with
-        | LC.T (IT (it, bt)) ->
-           begin match it with
-           | Bool_op (EQ (it, it')) ->
-              begin match is_sym it with
-              | Some (sym, _) -> SymMap.add sym it' values
-              | None -> values
-              end
-           | _ -> values
-           end
-        | Forall _ ->
+        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), _), it')), bt)) ->
+           (* when IT.size it' <= 10 -> *)
+             SymMap.add sym it' values
+        | _ ->
            values
       ) lcs SymMap.empty
   in
@@ -37,18 +31,12 @@ let rec simp (lcs : LC.t list) term =
         match c with
         | LC.T it ->
            begin match it with
-           | IT (Bool_op (EQ (it, it')), _) ->
-              begin match is_sym it, is_sym it' with
-              | Some (sym, _), Some (sym', _) -> 
-                 SymPairMap.add (sym, sym') true equalities
-              | _ -> equalities
-              end
-           | IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), _))), _) ->
-              begin match is_sym it, is_sym it' with
-              | Some (sym, _), Some (sym', _) -> 
-                 SymPairMap.add (sym, sym') false equalities
-              | _ -> equalities
-              end
+           | IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
+                              IT (Lit (Sym sym'), _))), _) ->
+              SymPairMap.add (sym, sym') true equalities
+           | IT (Bool_op (Not (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
+                                                IT (Lit (Sym sym'), _))), _))), _) ->
+              SymPairMap.add (sym, sym') false equalities
            | _ -> equalities
            end
         | _ -> equalities
@@ -124,6 +112,8 @@ let rec simp (lcs : LC.t list) term =
           int_ 0
        | _, IT (Lit (Z i2), _) when Z.equal i2 (Z.of_int 1) ->
           a
+       | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
+          IT (Lit (Z (Z.mul i1 i2)), bt)
        | _ ->
           IT (Arith_op (Mul (a, b)), bt)
        end
@@ -169,21 +159,28 @@ let rec simp (lcs : LC.t list) term =
     | LE (a, b) -> 
       let a = aux a in
       let b = aux b in
-       match a, b with
-       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-          IT (Lit (Bool (Z.leq z1 z2)), bt)
-       | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
-          IT (Lit (Bool (Q.leq q1 q2)), bt)
-       | _, _ when equal a b ->
-          bool_ true
-       | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
-         IT (Lit (Z z2), _) when
-              Z.gt z1 Z.zero &&
-              Z.gt z2 Z.zero &&
-              Z.leq z1 (Z.add z2 (Z.of_int 1)) ->
-          bool_ true
-       | _, _ ->
-          IT (Arith_op (LE (a, b)), bt)
+      begin match a, b with
+      | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+         IT (Lit (Bool (Z.leq z1 z2)), bt)
+      | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
+         IT (Lit (Bool (Q.leq q1 q2)), bt)
+      | _, _ when equal a b ->
+         bool_ true
+      | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
+        IT (Lit (Z z2), _) when
+             Z.gt z1 Z.zero &&
+               Z.gt z2 Z.zero &&
+                 Z.leq z1 (Z.add z2 (Z.of_int 1)) ->
+         bool_ true
+      | _, _ ->
+         IT (Arith_op (LE (a, b)), bt)
+      end
+    | IntToReal a ->
+       let a = aux a in
+       IT (Arith_op (IntToReal a), bt)
+    | RealToInt a ->
+       let a = aux a in
+       IT (Arith_op (RealToInt a), bt)
   
   and bool_op it bt = 
     match it with
@@ -226,8 +223,8 @@ let rec simp (lcs : LC.t list) term =
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = simp (LC.T a :: lcs) b in
-       let c = simp (LC.T (not_ a) :: lcs) c in
+       let b = simp struct_decls (LC.T a :: lcs) b in
+       let c = simp struct_decls (LC.T (not_ a) :: lcs) c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -375,42 +372,40 @@ let rec simp (lcs : LC.t list) term =
     | Def ((s, abt), body) ->
        let s' = Sym.fresh_same s in 
        let body = IndexTerms.subst [(s, sym_ (s', abt))] body in
-       let body = simp lcs body in
+       let body = aux body in
        IT (Array_op (Def ((s', abt), body)), bt)
-
-
   in
   
-  aux term
+  fun term -> aux term
 
 
-let simp_flatten lcs term =
-  match simp lcs term with
+let simp_flatten struct_decls lcs term =
+  match simp struct_decls lcs term with
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
 
 
 
 
-let simp_lc lcs lc = 
+let simp_lc struct_decls lcs lc = 
   match lc with
   | LC.T it -> 
-     LC.T (simp lcs it)
+     LC.T (simp struct_decls lcs it)
   | LC.Forall ((s, bt), it) -> 
      let s' = Sym.fresh_same s in 
      let it = IndexTerms.subst [(s, sym_ (s', bt))] it in
      (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
-     let it = simp lcs it in
+     let it = simp struct_decls lcs it in
      LC.Forall ((s', bt), it)
 
 
-let simp_lc_flatten lcs c = 
+let simp_lc_flatten struct_decls lcs c = 
   match c with
   | LC.T it ->
-     List.map (fun c -> LC.T c) (simp_flatten lcs it)
+     List.map (fun c -> LC.T c) (simp_flatten struct_decls lcs it)
   | LC.Forall ((s, bt), it) -> 
      let s' = Sym.fresh_same s in 
      let it = IndexTerms.subst [(s, sym_ (s', bt))] it in
      (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
-     let it = simp lcs it in
+     let it = simp struct_decls lcs it in
      [LC.Forall ((s', bt), it)]

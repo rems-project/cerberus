@@ -33,7 +33,6 @@ let rec equal t t' =
   | List t, List t' -> equal t t'
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
   | Set t, Set t' -> equal t t'
-
   | Unit, _
   | Bool, _
   | Integer, _

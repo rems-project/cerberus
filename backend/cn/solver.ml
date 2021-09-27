@@ -59,6 +59,7 @@ module Z3Symbol_HashedType = struct
 end
 
 module BT_Sort_Table = TwoMap.Make(BT)(Sort_HashedType)
+module BI_Sym_Table = TwoMap.Make(Sym)(Z3Symbol_HashedType)
 module IT_Table = Hashtbl.Make(IndexTerms)
 module Z3Symbol_Table = Hashtbl.Make(Z3Symbol_HashedType)
 
@@ -69,6 +70,7 @@ module Z3Symbol_Table = Hashtbl.Make(Z3Symbol_HashedType)
 let bt_sort_table = BT_Sort_Table.create 1000
 let member_funcdecl_table = Z3Symbol_Table.create 100
 let struct_funcdecl_table = Z3Symbol_Table.create 100
+let sym_table = Z3Symbol_Table.create 10000
 
 
 let bt_name bt = 
@@ -154,6 +156,7 @@ let sym_to_sym s =
 
 let term struct_decls : IT.t -> Z3.Expr.expr =
 
+
   let sort = sort struct_decls in
 
   let unit_term = Z3.Expr.mk_fresh_const context "unit" (sort Unit) in
@@ -165,7 +168,9 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
     | Lit lit -> 
        begin match lit with
        | Sym s -> 
-          Z3.Expr.mk_const context (sym_to_sym s) (sort bt)
+          let z3_sym = sym_to_sym s in
+          let () = Z3Symbol_Table.add sym_table z3_sym s in
+          Z3.Expr.mk_const context z3_sym (sort bt)
        | Z z -> 
           Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
        | Q q -> 
@@ -195,6 +200,8 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
        | LT (t1, t2) -> mk_lt context (term t1) (term t2)
        | LE (t1, t2) -> mk_le context (term t1) (term t2)
+       | IntToReal t -> Integer.mk_int2real context (term t)
+       | RealToInt t -> Real.mk_real2int context (term t)
        end
     | Bool_op bool_op -> 
        let open Z3.Boolean in
@@ -598,10 +605,26 @@ let z3_expr struct_decls =
          let sd = Memory.members (SymMap.find tag struct_decls) in
          struct_ (tag, List.combine sd args)
 
+      | () when Z3Symbol_Table.mem sym_table func_name ->
+         let bt = z3_sort (Z3.Expr.get_sort expr) in
+         sym_ (Z3Symbol_Table.find sym_table func_name, bt)
+
+      | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
+         exp_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_real2int expr ->
+         realToInt_ (nth args 0)
+
+      | () when Z3.Arithmetic.is_int2real expr ->
+         intToReal_ (nth args 0)
+
+
       | () ->
-         unsupported "z3 expression"
+         unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
 
   in
+
+  (* fun expr -> Some (aux [] expr) *)
 
   fun expr -> 
   try Some (aux [] expr) with
