@@ -326,11 +326,9 @@ module ResourceInference = struct
             match re with
             | Predicate p' 
                  when String.equal requested.name p'.name
-                      && 
-                      let () = print stdout !^"\n\nHERE1\n\n" in provable 
+                      && provable 
                            (t_ (and_ (eq_ (requested.pointer, p'.pointer) ::
-                                        List.map2 eq__ requested.iargs p'.iargs)))  ->
-                      let () = print stdout !^"\n\nHERE2\n\n" in
+                                        List.map2 eq__ requested.iargs p'.iargs))) ->
                let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
@@ -400,6 +398,8 @@ module ResourceInference = struct
             | QPredicate p' 
                  when String.equal requested.name p'.name
                       && let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
+                         (* todo: maybe relaxed to take needed and
+                            offered permission amount into account *)
                          provable
                            (forall_ (requested.qpointer, Loc) 
                               (and_ (List.map2 (fun iarg iarg' -> 

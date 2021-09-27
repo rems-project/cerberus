@@ -32,11 +32,11 @@ let global_params = [
     (* ("smt.macro_finder", "true"); *)
   ]
 
+let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
 
 
 let context = Z3.mk_context context_params 
 
-let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
 
 
 
@@ -58,19 +58,38 @@ module Z3Symbol_HashedType = struct
     String.length (Z3.Symbol.get_string s)
 end
 
-module BT_Sort_Table = TwoMap.Make(BT)(Sort_HashedType)
-module BI_Sym_Table = TwoMap.Make(Sym)(Z3Symbol_HashedType)
+(* for caching the translation *)
+module BT_Table = Hashtbl.Make(BT)
 module IT_Table = Hashtbl.Make(IndexTerms)
+
+(* for translating back *)
+module Sort_Table = Hashtbl.Make(Sort_HashedType)
 module Z3Symbol_Table = Hashtbl.Make(Z3Symbol_HashedType)
 
+let sort_table = Sort_Table.create 1000
+
+type z3sym_table_entry = 
+  | MemberFunc of { tag : Sym.t; member : Id.t }
+  | StructFunc of { tag : Sym.t }
+  | CompFunc of { bts : BT.t list; i : int }
+  | TupleFunc of  { bts : BT.t list }
+  | ConstFunc of { sym : Sym.t }
+  | DefaultFunc of { bt : BT.t }
+
+let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
+  Z3Symbol_Table.create 10000
+
+(* let member_funcdecl_table = Z3Symbol_Table.create 100
+ * let struct_funcdecl_table = Z3Symbol_Table.create 100
+ * let comp_funcdecl_table = Z3Symbol_Table.create 100
+ * let tuple_funcdecl_table = Z3Symbol_Table.create 100
+ * let sym_table = Z3Symbol_Table.create 10000
+ * let default_table = Z3Symbol_Table.create 20 *)
 
 
 
 
-let bt_sort_table = BT_Sort_Table.create 1000
-let member_funcdecl_table = Z3Symbol_Table.create 100
-let struct_funcdecl_table = Z3Symbol_Table.create 100
-let sym_table = Z3Symbol_Table.create 10000
+
 
 
 let bt_name bt = 
@@ -107,7 +126,11 @@ let loc_to_integer l = Z3.Expr.mk_app context loc_to_integer_fundecl [l]
 let integer_to_loc i = Z3.Expr.mk_app context integer_to_loc_fundecl [i]
 
 
-let sort struct_decls =
+let sort =
+
+  let bt_table = BT_Table.create 1000 in
+
+  fun struct_decls ->
 
   let rec translate = function
     | Unit -> unit_sort
@@ -119,17 +142,25 @@ let sort struct_decls =
     | Set bt -> Z3.Set.mk_sort context (translate bt)
     | Array (abt, rbt) -> Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
     | Tuple bts ->
-       let field_symbols = mapi (fun i _ -> tuple_field_symbol i) bts in
+       let bt_symbol = bt_symbol (Tuple bts) in
+       Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
+       let field_symbols = 
+         mapi (fun i _ -> 
+             let sym = tuple_field_symbol i in
+             Z3Symbol_Table.add z3sym_table sym (CompFunc {bts; i});
+             sym
+           ) bts 
+       in
        let sorts = map translate bts in
-       Z3.Tuple.mk_sort context (bt_symbol (Tuple bts)) field_symbols sorts
+       Z3.Tuple.mk_sort context bt_symbol field_symbols sorts
     | Struct tag ->
        let struct_symbol = bt_symbol (Struct tag) in
-       Z3Symbol_Table.add struct_funcdecl_table struct_symbol tag;
+       Z3Symbol_Table.add z3sym_table struct_symbol (StructFunc {tag});
        let layout = SymMap.find tag struct_decls in
        let member_symbols, member_sorts = 
          map_split (fun (id,sct) -> 
              let s = member_symbol tag id in
-             Z3Symbol_Table.add member_funcdecl_table s (tag, id);
+             Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
              (s, translate (BT.of_sct sct))
            ) (Memory.member_types layout)
        in
@@ -138,11 +169,12 @@ let sort struct_decls =
   in
 
   let sort bt = 
-    match BT_Sort_Table.left_to_right bt_sort_table bt with
+    match BT_Table.find_opt bt_table bt with
     | Some sort -> sort
     | None ->
        let sort = translate bt in
-       let () = BT_Sort_Table.add bt_sort_table (bt, sort) in
+       let () = BT_Table.add bt_table bt sort in
+       let () = Sort_Table.add sort_table sort bt in
        sort
   in
 
@@ -159,7 +191,8 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
 
   let sort = sort struct_decls in
 
-  let unit_term = Z3.Expr.mk_fresh_const context "unit" (sort Unit) in
+  let unit_symbol = Z3.Symbol.mk_string context "unit" in
+  let unit_term = Z3.Expr.mk_const context unit_symbol unit_sort in
   let true_term = Z3.Boolean.mk_true context in
   let false_term = Z3.Boolean.mk_false context in
 
@@ -169,7 +202,7 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        begin match lit with
        | Sym s -> 
           let z3_sym = sym_to_sym s in
-          let () = Z3Symbol_Table.add sym_table z3_sym s in
+          let () = Z3Symbol_Table.add z3sym_table z3_sym (ConstFunc {sym=s}) in
           Z3.Expr.mk_const context z3_sym (sort bt)
        | Z z -> 
           Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
@@ -186,6 +219,7 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
           unit_term
        | Default bt -> 
           let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
+          let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
           Z3.Expr.mk_const context sym (sort bt)
        end
     | Arith_op arith_op -> 
@@ -438,7 +472,7 @@ let model solver =
 
 
 let z3_sort (sort : Z3.Sort.sort) = 
-  Option.get (BT_Sort_Table.right_to_left bt_sort_table sort)
+  Sort_Table.find sort_table sort
 
 exception Unsupported of string
 
@@ -594,20 +628,26 @@ let z3_expr struct_decls =
          | _ -> integerToPointerCast_ i
          end
 
-      | () when Z3Symbol_Table.mem member_funcdecl_table func_name ->
-         let (tag, member) = Z3Symbol_Table.find member_funcdecl_table func_name in
-         let sd = Memory.member_types (SymMap.find tag struct_decls) in
-         let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
-         member_ ~member_bt (tag, nth args 0, member)
-
-      | () when Z3Symbol_Table.mem struct_funcdecl_table func_name ->
-         let tag = Z3Symbol_Table.find struct_funcdecl_table func_name in
-         let sd = Memory.members (SymMap.find tag struct_decls) in
-         struct_ (tag, List.combine sd args)
-
-      | () when Z3Symbol_Table.mem sym_table func_name ->
-         let bt = z3_sort (Z3.Expr.get_sort expr) in
-         sym_ (Z3Symbol_Table.find sym_table func_name, bt)
+      | () when Z3Symbol_Table.mem z3sym_table func_name ->
+         begin match Z3Symbol_Table.find z3sym_table func_name with
+         | ConstFunc {sym} ->
+            let bt = z3_sort (Z3.Expr.get_sort expr) in
+            sym_ (sym, bt)
+         | DefaultFunc {bt} ->
+            default_ bt
+         | MemberFunc {tag; member} ->
+            let sd = Memory.member_types (SymMap.find tag struct_decls) in
+            let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
+            member_ ~member_bt (tag, nth args 0, member)
+         | StructFunc {tag} ->
+            let sd = Memory.members (SymMap.find tag struct_decls) in
+            struct_ (tag, List.combine sd args)
+         | CompFunc {bts; i} ->
+            let comp_bt = List.nth bts i in
+            nthTuple_ ~item_bt:comp_bt (i, nth args 0)
+         | TupleFunc {bts} ->
+            tuple_ args
+         end
 
       | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
          exp_ (nth args 0, nth args 1)
@@ -618,18 +658,24 @@ let z3_expr struct_decls =
       | () when Z3.Arithmetic.is_int2real expr ->
          intToReal_ (nth args 0)
 
-
+      | () when String.equal (Z3.Symbol.get_string func_name) "unit" ->
+         unit_
       | () ->
          unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
 
   in
 
-  (* fun expr -> Some (aux [] expr) *)
+  fun expr -> Some (aux [] expr)
 
-  fun expr -> 
-  try Some (aux [] expr) with
-  | Unsupported err -> None
+  (* fun expr -> 
+   * try Some (aux [] expr) with
+   * | Unsupported err -> None *)
 
 
+
+let simp struct_decls it =
+  let t = term struct_decls it in
+  let t = Z3.Expr.simplify t None in
+  z3_expr struct_decls t
 
 

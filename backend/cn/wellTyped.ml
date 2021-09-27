@@ -390,130 +390,132 @@ module WIT = struct
 
 
 
+  let bad_value_check _ ~infos:_ ~bad_as_value:_ _ = 
+    return ()
 
-  let rec bad_value_check loc ~infos ~bad_as_value (IT (it, _)) =
-    let aux = bad_value_check loc ~infos ~bad_as_value in
-    match it with
-    | Lit lit ->
-       begin match lit with
-       (* | Sym s when SymSet.mem s bad_as_value -> 
-        *    let (_, odescr) = SymMap.find s infos in
-        *    fail loc (Array_as_value (s, odescr)) *)
-       | _ ->
-          return ()
-       end
-    | Arith_op arith_op ->
-       begin match arith_op with
-       | Add (t,t')
-       | Sub (t,t')
-       | Mul (t,t')
-       | Div (t,t')
-       | Exp (t,t')
-       | Rem (t,t')
-       | Mod (t,t')
-       | LT (t,t') 
-       | LE (t,t') ->
-          ListM.iterM aux [t; t']
-       | IntToReal t
-       | RealToInt t ->
-          aux t
-       end
-    | Bool_op bool_op ->
-       begin match bool_op with
-       | And ts
-       | Or ts ->
-          ListM.iterM aux ts
-       | Impl (t,t') ->
-          ListM.iterM aux [t; t']
-       | Not t ->
-          aux t
-       | ITE (t,t',t'') ->
-          ListM.iterM aux [t; t'; t'']
-       | EQ (t,t') ->
-          ListM.iterM aux [t; t']
-       | EachI (_, t) ->
-          aux t
-       end
-    | Tuple_op tuple_op ->
-       begin match tuple_op with
-       | Tuple ts ->
-          ListM.iterM aux ts
-       | NthTuple (n, t') ->
-          aux t'
-       end
-    | Struct_op struct_op ->
-       begin match struct_op with
-       | Struct (tag, members) ->
-          ListM.iterM (fun (_,t) -> aux t) members
-       | StructMember (t, member) ->
-          aux t
-       end
-    | Pointer_op pointer_op ->
-       begin match pointer_op with 
-       | Null -> 
-          return ()
-       | AddPointer (t, t')
-       | SubPointer (t, t')
-       | MulPointer (t, t')
-       | LTPointer (t, t')
-       | LEPointer (t, t') ->
-          ListM.iterM aux [t; t']
-       | IntegerToPointerCast t
-       | PointerToIntegerCast t ->
-          aux t
-       | MemberOffset (tag, member) ->
-          return ()
-       | ArrayOffset (ct, t) ->
-          aux t
-       end
-    | CT_pred ct_pred ->
-       begin match ct_pred with
-       | AlignedI t ->
-          ListM.iterM aux [t.t; t.align]
-       | Aligned (t, ct) ->
-          aux t
-       | Representable (ct, t) ->
-          aux t
-       | Good (ct, t) ->
-          aux t
-       end
-    | List_op list_op ->
-       begin match list_op with
-       | Nil -> 
-          return ()
-       | Cons (t1,t2) ->
-          ListM.iterM aux [t1; t2]
-       | List ts ->
-          ListM.iterM aux ts
-       | Head t
-       | Tail t
-       | NthList (_, t) ->
-          aux t
-       end
-    | Set_op set_op ->
-       begin match set_op with
-       | SetMember (t,t') ->
-          ListM.iterM aux [t; t']
-       | SetUnion its
-       | SetIntersection its ->
-          ListM.iterM aux (List1.to_list its)
-       | SetDifference (t, t')
-       | Subset (t, t') ->
-          ListM.iterM aux [t; t']
-       end
-    | Array_op array_op -> 
-       begin match array_op with
-       | Const (_, t) ->
-          aux t
-       | Set (t1, t2, t3) ->
-          ListM.iterM aux [t1; t2; t3]
-       | Get (IT (Lit (Sym _), _), t2) -> 
-          aux t2
-       | Get (t1, t2) -> 
-          ListM.iterM aux [t1; t2]
-       | Def (_, body) -> 
-          aux body
-       end
+  (* let rec bad_value_check loc ~infos ~bad_as_value (IT (it, _)) =
+   *   let aux = bad_value_check loc ~infos ~bad_as_value in
+   *   match it with
+   *   | Lit lit ->
+   *      begin match lit with
+   *      | Sym s when SymSet.mem s bad_as_value -> 
+   *         let (_, odescr) = SymMap.find s infos in
+   *         fail (fun _ -> {loc; msg = Array_as_value (s, odescr)})
+   *      | _ ->
+   *         return ()
+   *      end
+   *   | Arith_op arith_op ->
+   *      begin match arith_op with
+   *      | Add (t,t')
+   *      | Sub (t,t')
+   *      | Mul (t,t')
+   *      | Div (t,t')
+   *      | Exp (t,t')
+   *      | Rem (t,t')
+   *      | Mod (t,t')
+   *      | LT (t,t') 
+   *      | LE (t,t') ->
+   *         ListM.iterM aux [t; t']
+   *      | IntToReal t
+   *      | RealToInt t ->
+   *         aux t
+   *      end
+   *   | Bool_op bool_op ->
+   *      begin match bool_op with
+   *      | And ts
+   *      | Or ts ->
+   *         ListM.iterM aux ts
+   *      | Impl (t,t') ->
+   *         ListM.iterM aux [t; t']
+   *      | Not t ->
+   *         aux t
+   *      | ITE (t,t',t'') ->
+   *         ListM.iterM aux [t; t'; t'']
+   *      | EQ (t,t') ->
+   *         ListM.iterM aux [t; t']
+   *      | EachI (_, t) ->
+   *         aux t
+   *      end
+   *   | Tuple_op tuple_op ->
+   *      begin match tuple_op with
+   *      | Tuple ts ->
+   *         ListM.iterM aux ts
+   *      | NthTuple (n, t') ->
+   *         aux t'
+   *      end
+   *   | Struct_op struct_op ->
+   *      begin match struct_op with
+   *      | Struct (tag, members) ->
+   *         ListM.iterM (fun (_,t) -> aux t) members
+   *      | StructMember (t, member) ->
+   *         aux t
+   *      end
+   *   | Pointer_op pointer_op ->
+   *      begin match pointer_op with 
+   *      | Null -> 
+   *         return ()
+   *      | AddPointer (t, t')
+   *      | SubPointer (t, t')
+   *      | MulPointer (t, t')
+   *      | LTPointer (t, t')
+   *      | LEPointer (t, t') ->
+   *         ListM.iterM aux [t; t']
+   *      | IntegerToPointerCast t
+   *      | PointerToIntegerCast t ->
+   *         aux t
+   *      | MemberOffset (tag, member) ->
+   *         return ()
+   *      | ArrayOffset (ct, t) ->
+   *         aux t
+   *      end
+   *   | CT_pred ct_pred ->
+   *      begin match ct_pred with
+   *      | AlignedI t ->
+   *         ListM.iterM aux [t.t; t.align]
+   *      | Aligned (t, ct) ->
+   *         aux t
+   *      | Representable (ct, t) ->
+   *         aux t
+   *      | Good (ct, t) ->
+   *         aux t
+   *      end
+   *   | List_op list_op ->
+   *      begin match list_op with
+   *      | Nil -> 
+   *         return ()
+   *      | Cons (t1,t2) ->
+   *         ListM.iterM aux [t1; t2]
+   *      | List ts ->
+   *         ListM.iterM aux ts
+   *      | Head t
+   *      | Tail t
+   *      | NthList (_, t) ->
+   *         aux t
+   *      end
+   *   | Set_op set_op ->
+   *      begin match set_op with
+   *      | SetMember (t,t') ->
+   *         ListM.iterM aux [t; t']
+   *      | SetUnion its
+   *      | SetIntersection its ->
+   *         ListM.iterM aux (List1.to_list its)
+   *      | SetDifference (t, t')
+   *      | Subset (t, t') ->
+   *         ListM.iterM aux [t; t']
+   *      end
+   *   | Array_op array_op -> 
+   *      begin match array_op with
+   *      | Const (_, t) ->
+   *         aux t
+   *      | Set (t1, t2, t3) ->
+   *         ListM.iterM aux [t1; t2; t3]
+   *      | Get (IT (Lit (Sym _), _), t2) -> 
+   *         aux t2
+   *      | Get (t1, t2) -> 
+   *         ListM.iterM aux [t1; t2]
+   *      | Def (_, body) -> 
+   *         aux body
+   *      end *)
 
 end
 

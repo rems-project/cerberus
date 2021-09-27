@@ -376,7 +376,18 @@ let rec simp struct_decls (lcs : LC.t list) =
        IT (Array_op (Def ((s', abt), body)), bt)
   in
   
+  (* fun term -> aux term *)
+
   fun term -> aux term
+
+  (* let term = aux term in
+   * if with_solver && IT.size term <= 50 then term else
+   *   match Solver.simp struct_decls term with
+   *   | Some term -> term
+   *   | None -> 
+   *      let open Pp in
+   *      Pp.warn !^"failed to simplify with SMT solver";
+   *      term *)
 
 
 let simp_flatten struct_decls lcs term =

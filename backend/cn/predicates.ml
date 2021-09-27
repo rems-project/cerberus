@@ -508,6 +508,22 @@ let page_alloc_predicates struct_decls =
     let max_order_t = pool %. "max_order" in
     let _free_area_t = pool %. "free_area" in
 
+    let metadata_ownership = 
+      let resource = 
+        Point {
+            ct = struct_ct hyp_pool_tag;
+            pointer = pool_pointer;
+            permission = permission;
+            init = bool_ true;
+            value = pool;
+          }
+      in
+      LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
+      LRT.Resource (resource, (loc, None), 
+      LRT.Constraint (t_ (good_ (struct_ct hyp_pool_tag, pool)), (loc, None), 
+      LRT.I)))
+    in
+
     let beyond_range_end_cell_pointer = 
       addPointer_ (vmemmap_pointer, (range_end %/ pPAGE_SIZE) %* hyp_page_size) in
     let metadata_well_formedness =
@@ -664,7 +680,8 @@ let page_alloc_predicates struct_decls =
 
     let lrt = 
       let open LRT in
-      metadata_well_formedness
+      metadata_ownership
+      @@ metadata_well_formedness
       @@ vmemmap_metadata_owned
       @@ free_area_well_formedness (* possibly inconsistent *)
       @@ vmemmap_well_formedness2
@@ -687,7 +704,6 @@ let page_alloc_predicates struct_decls =
         pointer = pool_pointer_s;
         permission = permission_s;
         iargs = [
-            (pool_s, IT.bt pool);
             (vmemmap_pointer_s, IT.bt vmemmap_pointer);
           ]
         ;

@@ -10,3 +10,5 @@ val z3_expr : Memory.struct_decls -> Z3.Expr.expr -> IndexTerms.t option
 
 
 val context : Z3.context
+
+val simp : Memory.struct_decls -> IndexTerms.t -> IndexTerms.t option
