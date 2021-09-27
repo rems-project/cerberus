@@ -150,7 +150,13 @@ let z3_log_file_path =
 
 
 
-let main filename loc_pp debug_level print_level =
+let main filename loc_pp debug_level print_level json =
+  if json then begin
+      if debug_level > 0 then
+        CF.Pp_errors.fatal ("debug level must be 0 for json output");
+      if print_level > 0 then
+        CF.Pp_errors.fatal ("print level must be 0 for json output");
+    end;
   Debug_ocaml.debug_level := debug_level;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
@@ -178,6 +184,9 @@ let main filename loc_pp debug_level print_level =
          match result with
          | Ok () -> 
             exit 0
+         | Error e when json ->
+            TypeErrors.report_json e;
+            exit 1
          | Error e ->
             TypeErrors.report e;
             exit 1
@@ -212,6 +221,10 @@ let print_level =
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
 
+let json =
+  let doc = "output in json format" in
+  Arg.(value & flag & info["json"] ~doc)
+
 
 let () =
   let open Term in
@@ -220,6 +233,7 @@ let () =
       file $ 
       loc_pp $ 
       debug_level $ 
-      print_level
+      print_level $
+      json
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

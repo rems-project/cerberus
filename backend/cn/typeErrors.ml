@@ -372,3 +372,29 @@ let report {loc; msg} =
   Pp.error loc report.short 
     ((Option.to_list report.descr) @
        (Option.to_list consider))
+
+
+(* stealing some logic from pp_errors *)
+let report_json {loc; msg} = 
+  let report = pp_message msg in
+  (* let consider = match report.state with
+   *   | Some state -> 
+   *      let channel = open_out state_error_file in
+   *      let () = Printf.fprintf channel "%s" (Report.print_report state) in
+   *      let () = close_out channel in
+   *      Some (!^"Consider state in" ^^^ !^state_error_file)
+   *   | None -> 
+   *      None
+   * in *)
+  let descr = match report.descr with
+    | None -> `Null
+    | Some descr -> `String (Pp.plain descr)
+  in 
+  let json = 
+    `Assoc [("loc", Loc.json_loc loc);
+            ("short", `String (Pp.plain report.short)); 
+            ("descr", descr)]
+  in
+  Yojson.Safe.to_channel ~std:true stderr json
+
+
