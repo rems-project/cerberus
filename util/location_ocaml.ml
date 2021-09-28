@@ -443,3 +443,16 @@ let is_unknown = function
 let is_other = function
   | Loc_other str -> Some str
   | _ -> None
+
+let is_library_location loc =
+  let excluded =
+    let tbl = Hashtbl.create 3 in
+    Hashtbl.add tbl (Cerb_runtime.in_runtime "libc/include") ();
+    Hashtbl.add tbl (Cerb_runtime.in_runtime "libcore") ();
+    Hashtbl.add tbl (Cerb_runtime.in_runtime "libcore/impls") ();
+    tbl in
+  match get_filename loc with
+    | Some path ->
+        Hashtbl.mem excluded (Filename.dirname path)
+    | None ->
+        false

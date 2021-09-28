@@ -1,3 +1,5 @@
+#error "Cerberus doesn't support pthread.h"
+/*
 #include <sys/types.h>
 
 // TODO HACK
@@ -16,3 +18,4 @@ int   pthread_mutex_unlock(pthread_mutex_t *);
 
 int   pthread_create(pthread_t *restrict, const pthread_attr_t *restrict, void *(*)(void*), void *restrict);
 int   pthread_join(pthread_t, void **);
+*/

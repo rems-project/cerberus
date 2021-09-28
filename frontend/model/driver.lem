@@ -610,7 +610,7 @@ let rec drive_core_thread tid =
     | Core_run.Step_action_request str _ ->
         ( SK_action_request str
         , ND.return () )
-    | Core_run.Step_memop_request _ _ _ _ ->
+    | Core_run.Step_memop_request _ _ _ _ _ ->
         ( SK_memop_request
         , ND.return () )
     | Core_run.Step_tau debug_str tsk step_m ->
@@ -1042,7 +1042,7 @@ let rec driver with_concurrency =
   | Core_run.Step_action_request _ request_m ->
       perform_action_request with_concurrency request_m >>
       driver with_concurrency
-  | Core_run.Step_memop_request memop cvals tid mk_th_st ->
+  | Core_run.Step_memop_request loc memop cvals tid mk_th_st ->
       match (memop, cvals) with
         | (Mem_common.Ptrdiff, [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
@@ -1105,7 +1105,7 @@ let rec driver with_concurrency =
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
         | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->
-            liftMem (Mem.eff_array_shift_ptrval ptrval ty n_ival) >>= fun res ->
+            liftMem (Mem.eff_array_shift_ptrval loc ptrval ty n_ival) >>= fun res ->
             ND.update (fun dr_st ->
               <| dr_st with
                 trace= ME_eff_array_shift_ptrval ptrval ty n_ival res :: dr_st.trace

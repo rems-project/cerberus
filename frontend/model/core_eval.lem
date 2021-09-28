@@ -491,8 +491,9 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
         end
     | PEval cval ->
         EU.return pexpr_
-    | PEundef loc ub ->
-        Exception.return (Undefined.undef loc [ub])
+    | PEundef undef_loc ub ->
+        let loc' = if Loc.is_library_location undef_loc then loc else undef_loc in
+        Exception.return (Undefined.undef loc' [ub])
     | PEerror str debug_pe ->
         let () = Debug.print_debug 2 [] (fun () -> "PEerror ==> " ^ Pp.stringFromCore_pexpr debug_pe) in
         Exception.return (Undefined.error loc str)

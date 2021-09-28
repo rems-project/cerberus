@@ -31,6 +31,9 @@ declare ocaml target_rep function stringFromLocation = `Location_ocaml.location_
 val get_filename: t -> maybe string
 declare ocaml target_rep function get_filename = `Location_ocaml.get_filename`
 
+val is_library_location: t -> bool
+declare ocaml target_rep function is_library_location = `Location_ocaml.is_library_location`
+
 
 (* Mapping this to unit for the theorem provers *)
 declare hol target_rep type t = `unit`

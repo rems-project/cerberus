@@ -244,7 +244,7 @@ type core_tau_step_kind =
 
 type core_step =
   | Step_action_request of string * core_runM action_request
-  | Step_memop_request of Mem_common.memop * list Core.value * Mem_common.thread_id * (Core.value -> thread_state)
+  | Step_memop_request of Loc.t * Mem_common.memop * list Core.value * Mem_common.thread_id * (Core.value -> thread_state)
   | Step_tau of string * core_tau_step_kind * core_runM thread_state
   | Step_eval of string * core_runM thread_state
   | Step_thread_done of Mem_common.thread_id * Core.value
@@ -445,7 +445,8 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
               Step_action_request "KillRequest" (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
-                  KillRequest loc sb_before dd_before asw_before
+                  KillRequest (if Loc.is_library_location loc then th_st.current_loc else loc)
+                    sb_before dd_before asw_before
                     kill_aid current_tid (is_dynamic kind) ptr_val
                     <| th_st with
                       arena= Expr arena_annots Eskip;
@@ -747,7 +748,10 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
     | Nothing ->
         th_st
     | Just loc ->
-        <| th_st with current_loc= loc; |>
+        if Loc.is_library_location loc then
+          th_st
+        else
+          <| th_st with current_loc= loc; |>
     end in
   match (expr_, th_st.stack) with
     | (Eskip, Stack_empty) ->
@@ -1314,7 +1318,7 @@ BEFORE EVAL_PEXPR2
     | (Ememop memop pes, _) ->
         one match valueFromPexprs pes with
           | Just bTy_cvals ->
-              Step_memop_request memop bTy_cvals current_tid (fun cval ->
+              Step_memop_request th_st.current_loc memop bTy_cvals current_tid (fun cval ->
                 <| th_st with arena= Expr arena_annots (Epure (Pexpr [] () (PEval cval))) |>
               )
           | Nothing ->

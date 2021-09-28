@@ -39,3 +39,5 @@ val is_other: t -> string option
 
 
 val simple_location : t -> string
+
+val is_library_location: t -> bool
