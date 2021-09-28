@@ -18,6 +18,7 @@ rule main = parse
   | '*'   { T.STAR }
   | '/'   { T.SLASH }
   | "power"   { T.POWER }
+  | "%"   { T.PERCENT }
 
   | "=="  { T.EQ }
   | "!="  { T.NE }
@@ -33,7 +34,10 @@ rule main = parse
   | ')'   { T.RPAREN }
   | '['   { T.LBRACKET }
   | ']'   { T.RBRACKET }
+  | '{'   { T.LBRACE }
+  | '}'   { T.RBRACE }
   | ','   { T.COMMA }
+  | ';'   { T.SEMICOLON }
 
   | '?'   { T.QUESTION }
   | ':'   { T.COLON }
@@ -44,6 +48,8 @@ rule main = parse
 
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }
+
+  | "each" {T.EACH }
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 

@@ -214,11 +214,7 @@ let make_block loc (pointer : IT.t) path sct =
      return (l, [r], [], mapping)
 
 let make_pred loc (predicates : (string * Predicates.predicate_definition) list) 
-      pred ~oname pointer iargs = 
-  let@ def = match List.assoc_opt String.equal pred predicates with
-    | Some def -> return def
-    | None -> fail {loc; msg = Unknown_predicate pred}
-  in
+      (pred, def) ~oname pointer iargs = 
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
         let s, it = IT.fresh bt in
@@ -248,6 +244,47 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
 
 
 
+let make_qpred loc (predicates : (string * Predicates.predicate_definition) list) 
+      (pred, def) ~oname ~qpointer:(qp,qbt) ~condition pointer iargs = 
+  assert (BT.equal qbt BT.Loc);
+  let@ () = match is_sym pointer with
+    | Some (s, sbt) when Sym.equal s qp && BT.equal sbt qbt -> return ()
+    | _ -> fail {loc; msg = Generic (!^"Predicate pointer argument must be the quantified variable")}
+  in
+  let (mapping, l) = 
+    List.fold_right (fun (oarg, bt) (mapping, l) ->
+        let lifted_bt = BT.Array (qbt, bt) in
+        let s, it = IT.fresh lifted_bt in
+        let l = (s, lifted_bt, (loc, Some ("output argument '" ^ oarg ^"'"))) :: l in
+        let mapping = match oname with
+          | Some name ->
+             let item = {path = Ast.predarg name oarg; it; o_sct = None } in
+             item :: mapping 
+          | None ->
+             mapping
+        in
+        (mapping, l)
+      ) def.oargs ([], [])
+  in
+  let oargs = 
+    List.map (fun (s, ls, _) -> 
+        get_ (sym_ (s, ls)) (sym_ (qp, qbt))
+      ) l 
+  in
+  let r = 
+    (RE.QPredicate {
+         name = pred; 
+         qpointer = qp;
+         iargs; 
+         oargs;
+         permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
+       },
+     (loc, None))
+  in
+  return (l, [r], [], mapping)
+
+
+
 
 
 
@@ -260,15 +297,20 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
 let resolve_index_term loc layouts 
       (default_mapping_name : string)
       (mappings : mapping StringMap.t)
+      (oquantifier : (string * (Sym.t * BT.t)) option)
       (term: Ast.term) 
         : (IT.typed * Sctypes.t option, type_error) m =
   let lookup term mapping = 
-    let found = List.find_opt (fun {path;_} -> Ast.term_equal path term) mapping in
-    match found with
-    | Some {it; o_sct; _} -> 
-       return (it, o_sct)
-    | None -> 
-       fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")}
+    match term, oquantifier with
+    | Var name, Some (name', (s, bt)) when String.equal name name' -> 
+       return (sym_ (s, bt), None)
+    | _ ->
+       let found = List.find_opt (fun {path;_} -> Ast.term_equal path term) mapping in
+       match found with
+       | Some {it; o_sct; _} -> 
+          return (it, o_sct)
+       | None -> 
+          fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")}
   in
   let rec resolve (term : Ast.term) mapping 
         : (IT.typed * Sctypes.t option, type_error) m =
@@ -315,6 +357,10 @@ let resolve_index_term loc layouts
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
        return (IT (Arith_op (Exp (it, it')), IT.bt it), None)
+    | Remainder (it, it') -> 
+       let@ (it, _) = resolve it mapping in
+       let@ (it', _) = resolve it' mapping in
+       return (IT (Arith_op (Rem (it, it')), IT.bt it), None)
     | Equality (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
@@ -403,50 +449,91 @@ let resolve_index_term loc layouts
 
 
 let resolve_constraint loc layouts default_mapping_name mappings lc = 
-  let@ (lc, _) = resolve_index_term loc layouts default_mapping_name mappings lc in
+  let@ (lc, _) = resolve_index_term loc layouts default_mapping_name mappings None lc in
   return (LC.t_ lc)
 
 
 
 
-let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {predicate; arguments; oname}) =
-  match predicate, arguments with
-  | "Owned", [path] ->
-     let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings path in
-     begin match sct with
-     | None -> 
-        fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
-     | Some Sctype (_, Pointer sct2) ->
-        make_owned loc it path sct2
-     | Some _ ->
-        fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
-     end
-  | "Owned", _ ->
-     fail {loc; msg = Generic !^"Owned predicate takes 1 argument, which has to be a path"}
-  | "Block", [path] ->
-     let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings path in
-     begin match sct with
-     | None -> 
-        fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
-     | Some (Sctype (_, Pointer sct2)) -> 
-        make_block loc it path sct2
-     | Some _ ->
-        fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
-     end
-  | "Block", _ ->
-     fail {loc; msg = Generic !^"Block predicate takes 1 argument, which has to be a path"}
-  | _, pointer :: arguments ->
-     let@ (pointer_resolved, _) = resolve_index_term loc layouts default_mapping_name mappings pointer in
+let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oqpointer; predicate; arguments; oname}) =
+  match predicate with
+  | "Owned" ->
+     if oqpointer <> None then
+       fail {loc; msg = Generic !^"cannot use 'Owned' with quantifier"}
+     else
+       begin match arguments with
+       | [path] ->
+          let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings None path in
+          begin match sct with
+          | None -> 
+             fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
+          | Some Sctype (_, Pointer sct2) ->
+             make_owned loc it path sct2
+          | Some _ ->
+             fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
+          end
+       | _ ->
+          fail {loc; msg = Generic !^"Owned predicate takes 1 argument, which has to be a path"}
+       end
+  | "Block" ->
+     if oqpointer <> None then
+       fail {loc; msg = Generic !^"cannot use 'Block' with quantifier"}
+     else
+       begin match arguments with
+       | [path] ->
+          let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings None path in
+          begin match sct with
+          | None -> 
+             fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
+          | Some (Sctype (_, Pointer sct2)) -> 
+             make_block loc it path sct2
+          | Some _ ->
+             fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
+          end
+       | _ ->
+          fail {loc; msg = Generic !^"Block predicate takes 1 argument, which has to be a path"}
+       end
+  | _ ->
+     let@ def = match List.assoc_opt String.equal predicate predicates with
+       | Some def -> return def
+       | None -> fail {loc; msg = Unknown_predicate predicate}
+     in
+     let@ (pointer, arguments) = match arguments with
+       | pointer :: arguments -> return (pointer, arguments)
+       | _ ->
+          fail {loc; msg = Generic !^("predicates take at least one (pointer) argument")}
+     in
+     let oqpointer = 
+       Option.bind oqpointer 
+         (fun (name, condition) -> 
+           Some ((name, (Sym.fresh_pretty name, BT.Loc)), condition))
+     in
+     let@ (pointer_resolved, _) = 
+       resolve_index_term loc layouts default_mapping_name mappings 
+         (Option.map fst oqpointer) pointer 
+     in
      let@ iargs_resolved = 
        ListM.mapM (fun arg ->
-           let@ (t, _) = resolve_index_term loc layouts default_mapping_name mappings arg in
+           let@ (t, _) = 
+             resolve_index_term loc layouts default_mapping_name mappings 
+               (Option.map fst oqpointer) arg in
            return t
          ) arguments
      in
-     let@ result = make_pred loc predicates predicate ~oname pointer_resolved iargs_resolved in
+     let@ result = match oqpointer with
+       | None ->
+          make_pred loc predicates (predicate, def) 
+            ~oname pointer_resolved iargs_resolved 
+       | Some ((name, (s, bt)), condition) -> 
+          let@ (condition, _) = 
+             resolve_index_term loc layouts default_mapping_name mappings 
+               (Some (name, (s, bt))) condition 
+          in
+          make_qpred loc predicates (predicate, def) 
+            ~oname ~qpointer:(s, bt) ~condition pointer_resolved iargs_resolved 
+     in
      return result
-  | pred, _ ->
-     fail {loc; msg = Generic !^("predicates take at least one (pointer) argument")}
+
 
 
 

@@ -15,6 +15,7 @@ open Assertion_parser_util
 %token STAR
 %token SLASH
 %token POWER
+%token PERCENT
 
 %token EQ
 %token NE
@@ -27,7 +28,10 @@ open Assertion_parser_util
 %token RPAREN
 %token LBRACKET
 %token RBRACKET
+%token LBRACE
+%token RBRACE
 %token COMMA
+%token SEMICOLON
 
 %token QUESTION
 %token COLON
@@ -41,11 +45,14 @@ open Assertion_parser_util
 %token AMPERSAND
 %token AT
 
+%token EACH
+
 %token EOF
 
 /* %left EQ NE GT LT GE LE */
+%left AND
 %left PLUS MINUS
-%left STAR SLASH
+%left STAR SLASH PERCENT
 /* %nonassoc POWER */
 /* %nonassoc POINTERCAST */
 %nonassoc MEMBER /* PREDARG */
@@ -111,6 +118,8 @@ arith_term:
       { Ast.Multiplication (a1, a2) }
   | a1=arith_or_atomic_term SLASH a2=arith_or_atomic_term
       { Ast.Division (a1, a2) }
+  | a1=arith_or_atomic_term PERCENT a2=arith_or_atomic_term
+      { Ast.Remainder (a1, a2) }
   | POWER LPAREN a1=term COMMA a2=term RPAREN
       { Ast.Exponentiation (a1, a2) }
 
@@ -139,7 +148,7 @@ term:
       { Ast.ITE (a1, a2, a3) }
   | a1=atomic_term OR a2=atomic_term
       { Ast.Or (a1, a2) }
-  | a1=atomic_term AND a2=atomic_term
+  | a1=term AND a2=term
       { Ast.And (a1, a2) }
   | POINTERCAST a1=atomic_term
       { Ast.IntegerToPointerCast a1 }
@@ -148,11 +157,17 @@ term:
   | a1=atomic_term LBRACKET a2=term RBRACKET
       { Ast.App (a1, a2) }
 
+
+
 resource_condition:
   | id_args=pred_with_args name=NAME
-      { Ast.{predicate=fst id_args; arguments = snd id_args; oname = Some name} }
+      { Ast.{oqpointer = None; predicate=fst id_args; arguments = snd id_args; oname = Some name} }
   | id_args=pred_with_args 
-      { Ast.{predicate=fst id_args; arguments = snd id_args; oname = None} }
+      { Ast.{oqpointer = None; predicate=fst id_args; arguments = snd id_args; oname = None} }
+  | EACH LPAREN qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE name=NAME
+      { Ast.{oqpointer = Some (qname,t); predicate=fst id_args; arguments = snd id_args; oname = Some name} }
+  | EACH LPAREN qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE
+      { Ast.{oqpointer = Some (qname,t); predicate=fst id_args; arguments = snd id_args; oname = None} }
 
 
 cond:

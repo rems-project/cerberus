@@ -16,6 +16,7 @@ module Terms = struct
     | Multiplication of term * term
     | Division of term * term
     | Exponentiation of term * term
+    | Remainder of term * term
     | Equality of term * term
     | Inequality of term * term
     | ITE of term * term * term
@@ -56,6 +57,8 @@ module Terms = struct
     | Division (a11,a12), Division (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
     | Exponentiation (a11,a12), Exponentiation (a21,a22) ->
+       term_equal a11 a21 && term_equal a12 a22
+    | Remainder (a11,a12), Remainder (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
     | Equality (a11,a12), Equality (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
@@ -106,6 +109,8 @@ module Terms = struct
     | Division _, _ -> 
        false
     | Exponentiation _, _ -> 
+       false
+    | Remainder _, _ -> 
        false
     | Equality _, _ ->
        false
@@ -163,6 +168,8 @@ module Terms = struct
        mparens atomic (pp true t1 ^^^ !^"/" ^^^ pp true t2)
     | Exponentiation (t1, t2) -> 
        c_app !^"power" [pp false t1; pp false t2]
+    | Remainder (t1, t2) -> 
+       mparens atomic (pp true t1 ^^^ !^"%" ^^^ pp true t2)
     | Equality (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"==" ^^^ pp true t2)
     | Inequality (t1, t2) -> 
@@ -234,6 +241,8 @@ module Terms = struct
          Division (aux t1, aux t2)
       | Exponentiation (t1, t2) -> 
          Exponentiation (aux t1, aux t2)
+      | Remainder (t1, t2) -> 
+         Remainder (aux t1, aux t2)
       | Equality (t1, t2) -> 
          Equality (aux t1, aux t2)
       | Inequality (t1, t2) -> 
@@ -277,6 +286,7 @@ include Terms
 
 
 type resource_condition = {
+    oqpointer : (string * Terms.term) option;
     predicate : string;
     arguments : term list;
     oname : string option;
@@ -292,9 +302,9 @@ type condition =
 let remove_labels = function
   | Logical cond -> 
      Logical (remove_labels cond)
-  | Resource {predicate; arguments; oname} ->
+  | Resource {oqpointer; predicate; arguments; oname} ->
      let arguments = List.map remove_labels arguments in
-     Resource { predicate; arguments; oname }
+     Resource { oqpointer; predicate; arguments; oname }
     
 
 type varg = { vsym : Sym.t; typ : Sctypes.t }

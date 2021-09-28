@@ -9,6 +9,7 @@ type token =
   | STAR
   | SLASH
   | POWER
+  | PERCENT
 
   | EQ
   | NE
@@ -21,7 +22,10 @@ type token =
   | RPAREN
   | LBRACKET
   | RBRACKET
+  | LBRACE
+  | RBRACE
   | COMMA
+  | SEMICOLON
 
   | QUESTION
   | COLON
@@ -39,5 +43,7 @@ type token =
 
   | AMPERSAND
   | AT
+
+  | EACH
 
   | EOF
