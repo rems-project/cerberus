@@ -200,44 +200,48 @@ module ResourceInference = struct
     let rec point_request loc (failure : 'e failure) (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let needed = requested.permission in 
-      let@ all_lcs = all_constraints () in
       let@ provable = provable in
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
+            let continue = (re, (needed, value, init)) in
             match re with
-            | Point p' 
-                 when Sctypes.equal requested.ct p'.ct
-                      && provable (t_ (eq_ (requested.pointer, p'.pointer))) ->
-                 let can_take = min_ (p'.permission, needed) in
-                 let took = gt_ (can_take, q_ (0, 1)) in
-                 let value = ite_ (took, p'.value, value) in
-                 let init = ite_ (took, p'.init, init) in
-                 let needed = sub_ (needed, can_take) in
-                 let permission' = sub_ (p'.permission, can_take) in
+            | Point p' when Sctypes.equal requested.ct p'.ct ->
+               let could_take = min_ (p'.permission, needed) in
+               let took = and_ [eq_ (requested.pointer, p'.pointer); 
+                                gt_ (could_take, q_ (0, 1))] in
+               if provable (t_ took) then
+                 let value = p'.value in
+                 let init = p'.init in
+                 let needed = sub_ (needed, could_take) in
+                 let permission' = sub_ (p'.permission, could_take) in
                  Point {p' with permission = permission'}, (needed, value, init)
-            | QPoint p' 
-                 when Sctypes.equal requested.ct p'.ct
-                      && let subst = [(p'.qpointer, requested.pointer)] in
-                         provable (t_ (gt_ (IT.subst subst p'.permission, q_ (0, 1)))) ->
+               else 
+                 continue
+            | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let subst = [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
-               let value =  ite_ (took, IT.subst subst p'.value, value) in
-               let init = ite_ (took, IT.subst subst p'.init, init) in
-               let needed = sub_ (needed, can_take) in
-               let permission' =
-                 ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                       sub_ (IT.subst subst p'.permission, can_take),
-                       p'.permission)
-               in
-               QPoint {p' with permission = permission'}, (needed, value, init)
-            | re ->
-               (re, (needed, value, init))
-          ) (needed, default_ requested.value, default_ BT.Bool)
+               if provable (t_ took) then
+                 let value = IT.subst subst p'.value in
+                 let init = IT.subst subst p'.init in
+                 let needed = sub_ (needed, can_take) in
+                 let permission' =
+                   sub_ (p'.permission, 
+                         ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
+                               can_take,
+                               q_ (0, 1))
+                     )
+                 in
+                 QPoint {p' with permission = permission'}, (needed, value, init)
+               else 
+                 continue
+            | _ ->
+               continue
+          ) (needed, default_ requested.value, default_ requested.init)
       in
-      let holds = provable (t_ (eq_ (needed, q_ (0, 1)))) in
-      if holds then
+      if provable (t_ (eq_ (needed, q_ (0, 1)))) then
         let@ global = get_global () in
+        let@ all_lcs = all_constraints () in
         let r = 
           { ct = requested.ct;
             pointer = requested.pointer;
@@ -249,9 +253,9 @@ module ResourceInference = struct
       else 
         let@ folded_resource = match requested.ct with
           | Sctype (_, Array (act, Some length)) ->
-             fold_array loc failure act requested.pointer length (q_ (1, 1))
+             fold_array loc failure act requested.pointer length requested.permission
           | Sctype (_, Struct tag) ->
-             fold_struct loc failure tag requested.pointer (q_ (1, 1))
+             fold_struct loc failure tag requested.pointer requested.permission
           | _ -> 
              fail failure
         in
@@ -262,40 +266,36 @@ module ResourceInference = struct
     and qpoint_request loc failure (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
       let needed = requested.permission in
-      let@ all_lcs = all_constraints () in
       let@ provable = provable in
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
+            let continue = (re, (needed, value, init)) in
             match re with
-            | Point p' 
-                 when Sctypes.equal requested.ct p'.ct
-                      && let subst = [(requested.qpointer, p'.pointer)] in
-                         provable (t_ (gt_ (IT.subst subst needed, q_ (0, 1)))) ->
+            | Point p' when Sctypes.equal requested.ct p'.ct ->
                let subst = [(requested.qpointer, p'.pointer)] in
                let can_take = min_ (p'.permission, IT.subst subst needed) in
-               let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-               let needed = ite_ (pmatch, sub_ (IT.subst subst needed, can_take), needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
-               let value = ite_ (and_ [pmatch;took], p'.value, value) in
-               let init = ite_ (and_ [pmatch;took], p'.init, init) in
-               let permission' = sub_ (p'.permission, can_take) in
-               (Point {p' with permission = permission'}, (needed, value, init))
-            | QPoint p' 
-                 when Sctypes.equal requested.ct p'.ct ->
-               let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
-               let can_take = min_ (IT.subst subst p'.permission, needed) in
+               if provable (t_ took) then
+                 let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+                 let needed = sub_ (needed, ite_ (pmatch, can_take, q_ (0, 1))) in
+                 let value = ite_ (pmatch, p'.value, value) in
+                 let init = ite_ (pmatch, p'.init, init) in
+                 let permission' = sub_ (p'.permission, can_take) in
+                 (Point {p' with permission = permission'}, (needed, value, init))
+               else
+                 continue
+            | QPoint p' when Sctypes.equal requested.ct p'.ct ->
+               let p' = RE.alpha_rename_qpoint requested.qpointer p' in
+               let can_take = min_ (p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                let needed = sub_ (needed, can_take) in
-               let value = ite_ (took, IT.subst subst p'.value, value) in
-               let init = ite_ (took, IT.subst subst p'.init, init) in
-               let permission' = 
-                 sub_ (p'.permission, 
-                       IT.subst [(requested.qpointer, sym_ (p'.qpointer, Loc))] can_take)
-               in
+               let value = ite_ (took, p'.value, value) in
+               let init = ite_ (took, p'.init, init) in
+               let permission' = sub_ (p'.permission, can_take) in
                (QPoint {p' with permission = permission'}, (needed, value, init))
             | re ->
-               (re, (needed, value, init))
-          ) (needed, default_ requested.value, default_ BT.Bool)
+               continue
+          ) (needed, default_ requested.value, default_ requested.init)
       in
       let holds =
         provable (forall_ (requested.qpointer, BT.Loc)
@@ -303,12 +303,15 @@ module ResourceInference = struct
       in
       if holds then
         let@ global = get_global () in
+        let@ all_lcs = all_constraints () in
+        let qpointer_s, qpointer = IT.fresh Loc in
+        let subst = [(requested.qpointer, qpointer)] in
         let r = 
           { ct = requested.ct;
-            qpointer = requested.qpointer;
-            value = Simplify.simp global.struct_decls all_lcs value; 
-            init = Simplify.simp global.struct_decls all_lcs init;
-            permission = requested.permission;
+            qpointer = qpointer_s;
+            value = Simplify.simp global.struct_decls all_lcs (IT.subst subst value); 
+            init = Simplify.simp global.struct_decls all_lcs (IT.subst subst init);
+            permission = IT.subst subst requested.permission;
           } 
         in
         return r
@@ -316,50 +319,57 @@ module ResourceInference = struct
         fail failure
 
 
+
+
     and predicate_request loc failure (requested : Resources.Requests.predicate) = 
       debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
       let needed = requested.permission in 
-      let@ all_lcs = all_constraints () in
       let@ provable = provable in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
+            let continue = (re, (needed, oargs)) in
             match re with
-            | Predicate p' 
-                 when String.equal requested.name p'.name
-                      && provable 
-                           (t_ (and_ (eq_ (requested.pointer, p'.pointer) ::
-                                        List.map2 eq__ requested.iargs p'.iargs))) ->
-               let can_take = min_ (p'.permission, needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
-               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
-               let needed = sub_ (needed, can_take) in
-               let permission' = sub_ (p'.permission, can_take) in
-               Predicate {p' with permission = permission'}, (needed, oargs)
-            | QPredicate p' 
-                 when String.equal requested.name p'.name 
-                      && let subst = [(p'.qpointer, requested.pointer)] in
-                         provable
-                           (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                          eq__ iarg (IT.subst subst iarg')
-                                        ) requested.iargs p'.iargs))) ->
+            | Predicate p' when String.equal requested.name p'.name ->
+               let could_take = min_ (p'.permission, needed) in
+               let took = 
+                 and_ (eq_ (requested.pointer, p'.pointer) ::
+                       List.map2 eq__ requested.iargs p'.iargs @
+                       [gt_ (could_take, q_ (0, 1))])
+               in
+               if provable (t_ took) then
+                 let oargs = p'.oargs in
+                 let needed = sub_ (needed, could_take) in
+                 let permission' = sub_ (p'.permission, could_take) in
+                 Predicate {p' with permission = permission'}, (needed, oargs)
+               else
+                 continue
+            | QPredicate p' when String.equal requested.name p'.name ->
                let subst = [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
-               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, oarg', oarg)) oargs p'.oargs in
-               let needed = sub_ (needed, can_take) in
-               let permission' =
-                 ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                       sub_ (IT.subst subst p'.permission, can_take),
-                       p'.permission)
+               let took = 
+                 and_ ((List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs) @
+                       [gt_ (can_take, q_ (0, 1))])
                in
-               QPredicate {p' with permission = permission'}, (needed, oargs)
+               if provable (t_ took) then
+                 let oargs = p'.oargs in
+                 let needed = sub_ (needed, can_take) in
+                 let permission' =
+                   sub_ (p'.permission,
+                         ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
+                               can_take, q_ (0, 1))
+                     )
+                 in
+                 QPredicate {p' with permission = permission'}, (needed, oargs)
+               else
+                 continue
             | re ->
-               (re, (needed, oargs))
-          ) (needed, List.map (fun oarg -> default_ oarg) requested.oargs)
+               continue
+          ) (needed, List.map default_ requested.oargs)
       in
       let holds = provable (t_ (eq_ (needed, q_ (0, 1)))) in
       if holds then
         let@ global = get_global () in
+        let@ all_lcs = all_constraints () in
         let r = 
           { name = requested.name;
             pointer = requested.pointer;
@@ -375,63 +385,58 @@ module ResourceInference = struct
     and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let needed = requested.permission in
-      let@ all_lcs = all_constraints () in
       let@ provable = provable in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
+            let continue = (re, (needed, oargs)) in
             match re with
-            | Predicate p' 
-                 when String.equal requested.name p'.name
-                      && let subst = [(requested.qpointer, p'.pointer)] in
-                         provable
-                           (t_ (and_ (List.map2 (fun iarg iarg' -> 
-                                          eq__ (IT.subst subst iarg) iarg'
-                                        ) requested.iargs p'.iargs))) ->
+            | Predicate p' when String.equal requested.name p'.name ->
                let subst = [(requested.qpointer, p'.pointer)] in
-               let can_take = min_ (p'.permission, IT.subst subst needed) in
-               let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-               let needed = ite_ (pmatch, sub_ (IT.subst subst needed, can_take), needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
-               let oargs = List.map2 (fun oarg oarg' -> ite_ (and_ [pmatch;took], oarg', oarg)) oargs p'.oargs in
-               let permission' = sub_ (p'.permission, can_take) in
-               (Predicate {p' with permission = permission'}, (needed, oargs))
-            | QPredicate p' 
-                 when String.equal requested.name p'.name
-                      && let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
-                         (* todo: maybe relaxed to take needed and
-                            offered permission amount into account *)
-                         provable
-                           (forall_ (requested.qpointer, Loc) 
-                              (and_ (List.map2 (fun iarg iarg' -> 
-                                         eq__ iarg (IT.subst subst iarg')
-                                       ) requested.iargs p'.iargs))) ->
-               let subst = [(p'.qpointer, sym_ (requested.qpointer, Loc))] in
-               let can_take = min_ (IT.subst subst p'.permission, needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
-               let needed = sub_ (needed, can_take) in
-               let oargs = List.map2 (fun oarg oarg' -> ite_ (took, IT.subst subst oarg', oarg)) oargs p'.oargs in
-               let permission' = 
-                 sub_ (p'.permission, 
-                       IT.subst [(requested.qpointer, sym_ (p'.qpointer, Loc))] can_take)
+               let could_take = min_ (p'.permission, IT.subst subst needed) in
+               let took = 
+                 and_ ((List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs) @
+                         [gt_ (could_take, q_ (0, 1))])
                in
-               (QPredicate {p' with permission = permission'}, (needed, oargs))
+               if provable (t_ took) then
+                 let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+                 let needed = sub_ (needed, ite_ (pmatch, could_take, q_ (0, 1))) in
+                 let oargs = List.map2 (fun oarg oarg' -> ite_ (pmatch, oarg', oarg)) oargs p'.oargs in
+                 let permission' = sub_ (p'.permission, could_take) in
+                 (Predicate {p' with permission = permission'}, (needed, oargs))
+               else
+                 continue
+            | QPredicate p' when String.equal requested.name p'.name ->
+               let p' = RE.alpha_rename_qpredicate requested.qpointer p' in
+               let could_take = min_ (p'.permission, needed) in
+               let took = gt_ (could_take, q_ (0, 1)) in
+               if provable (forall_ (requested.qpointer, Loc) 
+                            (impl_ (took,
+                                    and_ (List.map2 eq__ requested.iargs p'.iargs)))) then
+                 let needed = sub_ (needed, could_take) in
+                 let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
+                 let permission' = sub_ (p'.permission, could_take) in
+                 (QPredicate {p' with permission = permission'}, (needed, oargs))
+               else
+                 continue
             | re ->
-               (re, (needed, oargs))
+               continue
           ) (needed, List.map default_ requested.oargs)
       in
       let holds =
-        provable
-          (forall_ (requested.qpointer, BT.Loc)
+        provable (forall_ (requested.qpointer, BT.Loc)
              (eq_ (needed, q_ (0, 1))))
       in
       if holds then
         let@ global = get_global () in
+        let@ all_lcs = all_constraints () in
+        let qpointer_s, qpointer = IT.fresh Loc in
+        let subst = [(requested.qpointer, qpointer)] in
         let r = 
           { name = requested.name;
-            qpointer = requested.qpointer;
-            permission = requested.permission;
-            iargs = requested.iargs; 
-            oargs = List.map (Simplify.simp global.struct_decls all_lcs) oargs;
+            qpointer = qpointer_s;
+            permission = IT.subst subst requested.permission;
+            iargs = List.map (IT.subst subst) requested.iargs; 
+            oargs = List.map (fun oa -> Simplify.simp global.struct_decls all_lcs (IT.subst subst oa)) oargs;
           } 
         in
         return r
@@ -755,75 +760,82 @@ end = struct
     fun (unis : (LS.t * Loc.info) SymMap.t) r_spec r_have ->
 
     match r_spec, r_have with
-    | Point p_spec, Point p_have
-         when Sctypes.equal p_spec.ct p_have.ct
-              && IT.equal p_spec.pointer p_have.pointer
-              && IT.equal p_spec.permission p_have.permission ->
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_list (unis, [], []) 
-           [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
-       in
-       let@ provable = provable in
-       let result = 
-         provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
-       in
-       if result then return (unis, subst) else fail failure
-    | QPoint p_spec, QPoint p_have
-         when Sctypes.equal p_spec.ct p_have.ct
-              && Sym.equal p_spec.qpointer p_have.qpointer
-              && IT.equal p_spec.permission p_have.permission ->
+    | Point p_spec, Point p_have ->
+       if Sctypes.equal p_spec.ct p_have.ct
+          && IT.equal p_spec.pointer p_have.pointer
+          && IT.equal p_spec.permission p_have.permission 
+       then
+         let@ (unis, subst, constrs) = 
+           unify_or_constrain_list (unis, [], []) 
+             [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
+         in
+         let@ provable = provable in
+         let result = 
+           provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+         in
+         if result then return (unis, subst) else fail failure
+       else fail failure
+    | QPoint p_spec, QPoint p_have ->
        let p_spec, p_have = 
          let qpointer = Sym.fresh_same p_spec.qpointer in
          RE.alpha_rename_qpoint qpointer p_spec,
          RE.alpha_rename_qpoint qpointer p_have
        in
-
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_q_list (p_have.qpointer, Loc) (unis, [], []) 
-           [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
-       in
-
-       let@ provable = provable in
-       let result = 
-         provable
-            (forall_ (p_have.qpointer, BT.Loc)
-               (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
-       in
-       if result then return (unis, subst) else fail failure
-    | Predicate p_spec, Predicate p_have 
-         when predicate_name_equal p_spec.name p_have.name
-              && IT.equal p_spec.pointer p_have.pointer
-              && IT.equal p_spec.permission p_have.permission
-              && List.equal IT.equal p_spec.iargs p_have.iargs ->
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_list (unis, [], [])
-           (List.combine p_spec.oargs p_have.oargs) in
-       let@ provable = provable in
-       let result =
-         provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
-       in
-       if result then return (unis, subst) else fail failure
-    | QPredicate p_spec, QPredicate p_have 
-         when predicate_name_equal p_spec.name p_have.name
-              && Sym.equal p_spec.qpointer p_have.qpointer
-              && IT.equal p_spec.permission p_have.permission
-              && List.equal IT.equal p_spec.iargs p_have.iargs ->
+       if Sctypes.equal p_spec.ct p_have.ct
+          && Sym.equal p_spec.qpointer p_have.qpointer
+          && IT.equal p_spec.permission p_have.permission 
+       then         
+         let@ (unis, subst, constrs) = 
+           unify_or_constrain_q_list (p_have.qpointer, Loc) (unis, [], []) 
+             [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
+         in         
+         let@ provable = provable in
+         let result = 
+           provable
+             (forall_ (p_have.qpointer, BT.Loc)
+                (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+         in
+         if result then return (unis, subst) else fail failure
+       else fail failure
+    | Predicate p_spec, Predicate p_have ->
+       if predicate_name_equal p_spec.name p_have.name
+          && IT.equal p_spec.pointer p_have.pointer
+          && IT.equal p_spec.permission p_have.permission
+          && List.equal IT.equal p_spec.iargs p_have.iargs
+       then
+         let@ (unis, subst, constrs) = 
+           unify_or_constrain_list (unis, [], [])
+             (List.combine p_spec.oargs p_have.oargs) 
+         in
+         let@ provable = provable in
+         let result =
+           provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+         in
+         if result then return (unis, subst) else fail failure
+       else fail failure
+    | QPredicate p_spec, QPredicate p_have ->
        let p_spec, p_have = 
          let qpointer = (Sym.fresh_same p_spec.qpointer) in
          RE.alpha_rename_qpredicate qpointer p_spec,
          RE.alpha_rename_qpredicate qpointer p_have 
        in
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_q_list (p_have.qpointer, Loc)
-           (unis, [], []) (List.combine p_spec.oargs p_have.oargs) 
-       in
-       let@ provable = provable in
-       let result =
-         provable
-           (forall_ (p_have.qpointer, BT.Loc)
-              (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
-       in
-       if result then return (unis, subst) else fail failure
+       if predicate_name_equal p_spec.name p_have.name
+          && Sym.equal p_spec.qpointer p_have.qpointer
+          && IT.equal p_spec.permission p_have.permission
+          && List.equal IT.equal p_spec.iargs p_have.iargs
+       then
+         let@ (unis, subst, constrs) = 
+           unify_or_constrain_q_list (p_have.qpointer, Loc)
+             (unis, [], []) (List.combine p_spec.oargs p_have.oargs) 
+         in
+         let@ provable = provable in
+         let result =
+           provable
+             (forall_ (p_have.qpointer, BT.Loc)
+                (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+         in
+         if result then return (unis, subst) else fail failure
+       else fail failure
     | _ -> 
        Debug_ocaml.error "resource inference has inferred mismatched resources"
 
