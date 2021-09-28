@@ -45,6 +45,7 @@ rule main = parse
   | "&&"  { T.AND }
 
   | "NULL" { T.NULL }
+  | "offsetof" { T.OFFSETOF }
 
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }

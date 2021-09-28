@@ -294,7 +294,8 @@ let make_qpred loc (predicates : (string * Predicates.predicate_definition) list
 
 (* change this to return unit IT.term, then apply index term type
    checker *)
-let resolve_index_term loc layouts 
+let resolve_index_term loc 
+      (layouts : Memory.struct_decls)
       (default_mapping_name : string)
       (mappings : mapping StringMap.t)
       (oquantifier : (string * (Sym.t * BT.t)) option)
@@ -405,7 +406,7 @@ let resolve_index_term loc layouts
          | Struct tag -> return tag
          | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
        in
-       let layout = layouts tag in
+       let layout = SymMap.find tag layouts in
        let decl_members = Memory.member_types layout in
        let@ sct = match List.assoc_opt Id.equal member decl_members with
          | Some sct -> 
@@ -426,6 +427,29 @@ let resolve_index_term loc layouts
        return (IT (Pointer_op (PointerToIntegerCast t), Integer), None)
     | Null ->
        return (IT (Lit Null, BT.Loc), None)
+    | OffsetOf {tag; member} ->
+       let (tag, layout) = 
+         (* todo: fix *)
+         SymMap.choose (SymMap.filter (fun sym _ -> 
+             match Sym.description sym with
+             | SD_Id tag' -> String.equal tag tag'
+             | _ -> false
+           ) layouts)
+       in
+       let decl_members = Memory.member_types layout in
+       let member = Id.id member in
+       let@ sct = match List.assoc_opt Id.equal member decl_members with
+         | Some sct -> 
+            return sct
+         | None -> 
+            let ppf () = Ast.Terms.pp false term in
+            let err = 
+              !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+                ppf () ^^^ !^"does not have member" ^^^ Id.pp member
+            in
+            fail {loc; msg = Generic err}
+       in
+       return (IT (Pointer_op (MemberOffset (tag, member)), BT.Integer), None)
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping in
        let@ (it2, _) = resolve t2 mapping in
@@ -594,7 +618,7 @@ let mod_mapping
     mappings
 
 
-let make_fun_spec loc layouts predicates fsym (fspec : function_spec)
+let make_fun_spec loc (layouts : Memory.struct_decls) predicates fsym (fspec : function_spec)
     : (AT.ft * mapping, type_error) m = 
   let open AT in
   let open RT in

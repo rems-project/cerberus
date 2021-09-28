@@ -322,11 +322,9 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | Aligned (t, ct) ->
           term (alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct)))
        | Representable (ct, t) ->
-          let sdecl_lookup tag = SymMap.find tag struct_decls in
-          term (representable sdecl_lookup ct t)
+          term (representable struct_decls ct t)
        | Good (ct, t) ->
-          let sdecl_lookup tag = SymMap.find tag struct_decls in
-          term (good_value sdecl_lookup ct t)
+          term (good_value struct_decls ct t)
        end
     | Array_op array_op -> 
        let open Z3.Z3Array in

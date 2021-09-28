@@ -1,4 +1,5 @@
 module Loc = Locations
+module BT = BaseTypes
 open Pp
 
 
@@ -29,6 +30,7 @@ module Terms = struct
     | IntegerToPointerCast of term
     | PointerToIntegerCast of term
     | Null
+    | OffsetOf of {tag:string; member:string}
     | App of term * term
     | Env of term * string
 
@@ -84,6 +86,8 @@ module Terms = struct
        term_equal t1 t2
     | Null, Null ->
        true
+    | OffsetOf {tag; member}, OffsetOf {tag=tag'; member=member'} ->
+       String.equal tag tag' && String.equal member member'
     | App (t11, t12), App (t21, t22) ->
        term_equal t11 t21 && term_equal t12 t22
     | Env (t1, e1), Env (t2, e2) ->
@@ -135,6 +139,8 @@ module Terms = struct
     | PointerToIntegerCast _, _ -> 
        false
     | Null, _ ->
+       false
+    | OffsetOf _, _ ->
        false
     | App _, _ ->
        false
@@ -195,6 +201,8 @@ module Terms = struct
        mparens atomic (parens !^"integer" ^^ (pp true t1))
     | Null ->
        !^"NULL"
+    | OffsetOf {tag; member} ->
+       mparens atomic (c_app !^"offsetof" [!^tag; !^member])
     | App (t1, t2) ->
        mparens atomic (pp true t1 ^^ brackets (pp false t2))
     | Env (t, e) ->
@@ -267,6 +275,8 @@ module Terms = struct
          PointerToIntegerCast (aux t)
       | Null ->
          Null
+      | OffsetOf {tag; member} ->
+         OffsetOf {tag; member}
       | App (t1, t2) ->
          App (aux t1, aux t2)
       | Env (t, _) ->

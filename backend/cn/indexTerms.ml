@@ -1091,7 +1091,7 @@ let value_check_pointer alignment ~pointee_ct about =
         in_pointer_range (subPointer_ (addPointer_ (about, int_ pointee_size), int_ 1));
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
-let value_check alignment struct_layouts ct about =
+let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
   let open Sctypes in
   let open Memory in
   let rec aux (Sctype (_, ct_) : Sctypes.t) about = 
@@ -1117,7 +1117,7 @@ let value_check alignment struct_layouts ct about =
                   Some (aux mct member_it)
                | None -> 
                   None
-             ) (struct_layouts tag)
+             ) (SymMap.find tag struct_layouts)
          end
     | Function _ -> 
        Debug_ocaml.error "todo: function types"

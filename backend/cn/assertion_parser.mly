@@ -39,6 +39,7 @@ open Assertion_parser_util
 %token AND
 
 %token NULL
+%token OFFSETOF
 %token POINTERCAST
 %token INTEGERCAST
 
@@ -106,6 +107,8 @@ atomic_term:
       { Ast.Pointee p }
   | NULL
       { Ast.Null }
+  | OFFSETOF LPAREN tag = NAME COMMA member= NAME RPAREN
+      { Ast.OffsetOf {tag; member} }
   | LPAREN a=term RPAREN AT l=NAME
       { Ast.Env (a, l) }
 

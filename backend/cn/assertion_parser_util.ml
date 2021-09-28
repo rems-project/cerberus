@@ -33,6 +33,7 @@ type token =
   | AND
 
   | NULL
+  | OFFSETOF
 
 
   | MEMBER of string
