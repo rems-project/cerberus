@@ -529,7 +529,7 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
     ))
     ; (Caux.mk_empty_pat (C.BTy_loaded C.OTy_pointer),
        (* TODO: check with Peter *)
-       Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY ("Elab. equality operator (ptr vs NULL) ==> " ^ Loc.stringFromLocation loc)))) ]
+       Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY ("Elab. equality operator (ptr vs NULL)")))) ]
     )
   )
   
