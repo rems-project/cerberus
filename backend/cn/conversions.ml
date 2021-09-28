@@ -379,7 +379,7 @@ let resolve_index_term loc layouts
        let@ (t, _) = resolve t mapping in
        return (IT (Pointer_op (PointerToIntegerCast t), Integer), None)
     | Null ->
-       return (IT (Pointer_op Null, BT.Loc), None)
+       return (IT (Lit Null, BT.Loc), None)
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping in
        let@ (it2, _) = resolve t2 mapping in

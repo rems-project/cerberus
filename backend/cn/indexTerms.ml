@@ -16,6 +16,7 @@ type lit =
   | Bool of bool
   | Unit
   | Default of BT.t
+  | Null
 (* Default bt: equivalent to a unique variable of base type bt, that
    we know nothing about other than Default bt = Default bt *)
 
@@ -52,7 +53,6 @@ and 'bt struct_op =
   | StructMember of 'bt term * BT.member
 
 and 'bt pointer_op = 
-  | Null
   | AddPointer of 'bt term * 'bt term
   | SubPointer of 'bt term * 'bt term
   | MulPointer of 'bt term * 'bt term
@@ -131,6 +131,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Bool b, Bool b' -> b = b'
      | Unit, Unit -> true
      | Default bt, Default bt' -> BT.equal bt bt'
+     | Null, Null -> true
      | Sym _, _ -> false
      | Z _, _ -> false
      | Q _, _ -> false
@@ -138,6 +139,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Bool _, _ -> false
      | Unit, _ -> false
      | Default _, _ -> false
+     | Null, _ -> false
      end
   | Arith_op arith_op, Arith_op arith_op' -> 
      begin match arith_op, arith_op' with
@@ -215,8 +217,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      end
   | Pointer_op pointer_op, Pointer_op pointer_op' -> 
      begin match pointer_op, pointer_op' with
-     | Null, Null -> 
-        true
      | AddPointer (t1, t2), AddPointer (t1', t2') -> 
         equal t1 t1' && equal t2 t2'
      | SubPointer (t1, t2), SubPointer (t1', t2') -> 
@@ -235,7 +235,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         Sym.equal s s' && Id.equal m m'
      | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
         Sctypes.equal ct ct' && equal t t'
-     | Null, _ -> false
      | AddPointer _, _ -> false
      | SubPointer _, _ -> false
      | MulPointer _, _ -> false
@@ -340,6 +339,7 @@ let pp =
        | Bool false -> !^"false"
        | Unit -> !^"void"
        | Default bt -> c_app !^"default" [BT.pp bt]
+       | Null -> !^"null"
        end
     | Arith_op arith_op -> 
        begin match arith_op with 
@@ -401,8 +401,6 @@ let pp =
        end
     | Pointer_op pointer_op -> 
        begin match pointer_op with
-       | Null -> 
-          !^"null"
        | AddPointer (t1, t2) ->
           mparens (flow (break 1) [aux true t1; plus; aux true t2])
        | SubPointer (t1, t2) ->
@@ -489,6 +487,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Bool _ -> SymSet.empty
      | Unit -> SymSet.empty
      | Default _ -> SymSet.empty
+     | Null -> SymSet.empty
      end
   | Arith_op arith_op -> 
      begin match arith_op with
@@ -526,7 +525,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
-     | Null -> SymSet.empty
      | AddPointer (it, it') -> free_vars_list [it; it']
      | SubPointer (it, it') -> free_vars_list [it; it']
      | MulPointer (it, it') -> free_vars_list [it; it']
@@ -644,8 +642,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Struct_op struct_op, bt)
   | Pointer_op pointer_op -> 
      let pointer_op = match pointer_op with
-       | Null -> 
-          Null
        | AddPointer (it, it') -> 
           AddPointer (subst su it, subst su it')
        | SubPointer (it, it') -> 
@@ -755,7 +751,6 @@ let rec size (IT (it_, bt)) =
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
-     | Null -> 1
      | AddPointer (it, it')
      | SubPointer (it, it')
      | MulPointer (it, it')
@@ -936,7 +931,7 @@ let (%.) struct_decls t member =
 
 
 (* pointer_op *)
-let null_ = IT (Pointer_op Null, BT.Loc)
+let null_ = IT (Lit Null, BT.Loc)
 let addPointer_ (it, it') = IT (Pointer_op (AddPointer (it, it')), BT.Loc)
 let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)
 let mulPointer_ (it, it') = IT (Pointer_op (MulPointer (it, it')), BT.Loc)
@@ -1074,6 +1069,7 @@ let hash (IT (it, _bt)) =
      | Bool b -> 23
      | Unit -> 24
      | Default _ -> 25
+     | Null -> 26
      | Sym (Symbol (_,i, _)) -> 100 + i
      end
 

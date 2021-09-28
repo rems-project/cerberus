@@ -75,6 +75,8 @@ let rec simp struct_decls (lcs : LC.t list) =
        IT (Lit Unit, bt)
     | Default bt' -> 
        IT (Lit (Default bt'), bt)
+    | Null -> 
+       IT (Lit Null, bt)
   
   and arith_op it bt = 
     match it with
@@ -291,8 +293,6 @@ let rec simp struct_decls (lcs : LC.t list) =
   (* revisit when memory model changes *)
   and pointer_op it bt = 
     match it with
-    | Null -> 
-       IT (Pointer_op Null, bt)
     | AddPointer (a, b) ->
        let a = aux a in
        let b = aux b in

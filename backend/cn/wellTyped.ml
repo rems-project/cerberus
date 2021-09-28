@@ -87,6 +87,8 @@ module WIT = struct
               return (BT.Unit, Unit)
            | Default bt -> 
               return (bt, Default bt)
+           | Null ->
+              return (BT.Loc, Null)
          in
          return (IT (Lit lit, bt))
       | Arith_op arith_op ->
@@ -237,8 +239,6 @@ module WIT = struct
          return (IT (Struct_op struct_op, bt))
       | Pointer_op pointer_op ->
          let@ (bt, pointer_op) = match pointer_op with 
-           | Null ->
-              return (BT.Loc, Null)
            | AddPointer (t, t') ->
               let@ t = check loc ~context Loc t in
               let@ t' = check loc ~context Integer t' in

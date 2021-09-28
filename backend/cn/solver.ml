@@ -221,6 +221,8 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
           let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
           let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
           Z3.Expr.mk_const context sym (sort bt)
+       | Null -> 
+          integer_to_loc (term (int_ 0))
        end
     | Arith_op arith_op -> 
        let open Z3.Arithmetic in
@@ -277,9 +279,6 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
     | Pointer_op pointer_op -> 
        let open Z3.Arithmetic in
        begin match pointer_op with
-       | Null -> 
-          integer_to_loc
-            (term (int_ 0))
        | AddPointer (t1, t2) -> 
           integer_to_loc
             (mk_add context [loc_to_integer (term t1); term t2])
