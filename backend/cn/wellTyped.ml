@@ -775,8 +775,6 @@ module WOutputDef (Spec : WOutputSpec) = struct
   include OutputDef
   type t = OutputDef.t
   let check loc assignment =
-    let name_bts = List.sort (fun (s, _) (s', _) -> String.compare s s') Spec.name_bts in
-    let assignment = List.sort (fun o o' -> String.compare o.name o'.name) assignment in
     let rec aux name_bts assignment =
       match name_bts, assignment with
       | [], [] -> 
@@ -786,11 +784,11 @@ module WOutputDef (Spec : WOutputSpec) = struct
          let@ _ = WIT.check loc bt it in
          aux name_bts assignment
       | (name, _) :: _, _ -> 
-         fail (fun _ -> {loc; msg = Generic !^("missing output argument " ^ name)})
+         fail (fun _ -> {loc; msg = Generic !^("expected output argument " ^ name)})
       | _, {loc = loc'; name = name'; _} :: _ -> 
-         fail (fun _ -> {loc; msg = Generic !^("surplus output argument " ^ name')})
+         fail (fun _ -> {loc; msg = Generic !^("unexpected output argument " ^ name')})
     in
-    aux name_bts assignment
+    aux Spec.name_bts assignment
 
   let mode_and_bad_value_check loc ~infos ~bad_as_value assignment = 
     ListM.iterM (fun {loc; name; value} ->
