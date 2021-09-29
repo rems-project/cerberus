@@ -198,10 +198,11 @@ module ResourceInference = struct
           permission = permission_t;
       }
 
-    let rec point_request loc (failure : 'e failure) (requested : Resources.Requests.point) = 
+    let rec point_request loc (failure : Z3.Model.model -> 'e failure) (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let needed = requested.permission in 
       let@ provable = provable in
+      let@ provable_or_model = provable_or_model in
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
@@ -210,64 +211,71 @@ module ResourceInference = struct
                let could_take = min_ (p'.permission, needed) in
                let took = and_ [eq_ (requested.pointer, p'.pointer); 
                                 gt_ (could_take, q_ (0, 1))] in
-               if provable (t_ took) then
-                 let value = p'.value in
-                 let init = p'.init in
-                 let needed = sub_ (needed, could_take) in
-                 let permission' = sub_ (p'.permission, could_take) in
-                 Point {p' with permission = permission'}, (needed, value, init)
-               else 
-                 continue
+               begin match provable (t_ took) with
+               | `True ->
+                  let value = p'.value in
+                  let init = p'.init in
+                  let needed = sub_ (needed, could_take) in
+                  let permission' = sub_ (p'.permission, could_take) in
+                  Point {p' with permission = permission'}, (needed, value, init)
+               | `False ->
+                  continue
+               end
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
-               if provable (t_ took) then
-                 let value = IT.subst subst p'.value in
-                 let init = IT.subst subst p'.init in
-                 let needed = sub_ (needed, can_take) in
-                 let permission' =
-                   sub_ (p'.permission, 
-                         ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                               can_take,
-                               q_ (0, 1))
-                     )
-                 in
-                 QPoint {p' with permission = permission'}, (needed, value, init)
-               else 
-                 continue
+               begin match provable (t_ took) with
+               | `True ->
+                  let value = IT.subst subst p'.value in
+                  let init = IT.subst subst p'.init in
+                  let needed = sub_ (needed, can_take) in
+                  let permission' =
+                    sub_ (p'.permission, 
+                          ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
+                                can_take,
+                                q_ (0, 1))
+                      )
+                  in
+                  QPoint {p' with permission = permission'}, (needed, value, init)
+               | `False ->
+                  continue
+               end
             | _ ->
                continue
           ) (needed, default_ requested.value, default_ requested.init)
       in
-      if provable (t_ (eq_ (needed, q_ (0, 1)))) then
-        let@ global = get_global () in
-        let@ all_lcs = all_constraints () in
-        let r = 
-          { ct = requested.ct;
-            pointer = requested.pointer;
-            value = Simplify.simp global.struct_decls all_lcs value;
-            init = Simplify.simp global.struct_decls all_lcs init;
-            permission = requested.permission }
-        in
-        return r
-      else 
-        let@ folded_resource = match requested.ct with
-          | Sctype (_, Array (act, Some length)) ->
-             fold_array loc failure act requested.pointer length requested.permission
-          | Sctype (_, Struct tag) ->
-             fold_struct loc failure tag requested.pointer requested.permission
-          | _ -> 
-             fail failure
-        in
-        let@ () = add_r (Some (Loc loc)) folded_resource in
-        point_request loc failure requested
+      begin match provable_or_model (t_ (eq_ (needed, q_ (0, 1)))) with
+      | `True ->
+         let@ global = get_global () in
+         let@ all_lcs = all_constraints () in
+         let r = 
+           { ct = requested.ct;
+             pointer = requested.pointer;
+             value = Simplify.simp global.struct_decls all_lcs value;
+             init = Simplify.simp global.struct_decls all_lcs init;
+             permission = requested.permission }
+         in
+         return r
+      | `False model ->
+         let@ folded_resource = match requested.ct with
+           | Sctype (_, Array (act, Some length)) ->
+              fold_array loc failure act requested.pointer length requested.permission
+           | Sctype (_, Struct tag) ->
+              fold_struct loc failure tag requested.pointer requested.permission
+           | _ -> 
+              fail (failure model)
+         in
+         let@ () = add_r (Some (Loc loc)) folded_resource in
+         point_request loc failure requested
+      end
 
 
     and qpoint_request loc failure (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
       let needed = requested.permission in
       let@ provable = provable in
+      let@ provable_or_model = provable_or_model in
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
@@ -276,15 +284,17 @@ module ResourceInference = struct
                let subst = make_subst [(requested.qpointer, p'.pointer)] in
                let can_take = min_ (p'.permission, IT.subst subst needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
-               if provable (t_ took) then
-                 let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-                 let needed = sub_ (needed, ite_ (pmatch, can_take, q_ (0, 1))) in
-                 let value = ite_ (pmatch, p'.value, value) in
-                 let init = ite_ (pmatch, p'.init, init) in
-                 let permission' = sub_ (p'.permission, can_take) in
-                 (Point {p' with permission = permission'}, (needed, value, init))
-               else
-                 continue
+               begin match provable (t_ took) with
+               | `True ->
+                  let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+                  let needed = sub_ (needed, ite_ (pmatch, can_take, q_ (0, 1))) in
+                  let value = ite_ (pmatch, p'.value, value) in
+                  let init = ite_ (pmatch, p'.init, init) in
+                  let permission' = sub_ (p'.permission, can_take) in
+                  (Point {p' with permission = permission'}, (needed, value, init))
+               | `False ->
+                  continue
+               end
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let p' = RE.alpha_rename_qpoint requested.qpointer p' in
                let can_take = min_ (p'.permission, needed) in
@@ -299,25 +309,27 @@ module ResourceInference = struct
           ) (needed, default_ requested.value, default_ requested.init)
       in
       let holds =
-        provable (forall_ (requested.qpointer, BT.Loc)
-                    (eq_ (needed, q_ (0, 1))))
+        provable_or_model (forall_ (requested.qpointer, BT.Loc)
+                             (eq_ (needed, q_ (0, 1))))
       in
-      if holds then
-        let@ global = get_global () in
-        let@ all_lcs = all_constraints () in
-        let qpointer_s, qpointer = IT.fresh Loc in
-        let subst = make_subst [(requested.qpointer, qpointer)] in
-        let r = 
-          { ct = requested.ct;
-            qpointer = qpointer_s;
-            value = Simplify.simp global.struct_decls all_lcs (IT.subst subst value); 
-            init = Simplify.simp global.struct_decls all_lcs (IT.subst subst init);
-            permission = IT.subst subst requested.permission;
-          } 
-        in
-        return r
-      else 
-        fail failure
+      begin match holds with
+      | `True ->
+         let@ global = get_global () in
+         let@ all_lcs = all_constraints () in
+         let qpointer_s, qpointer = IT.fresh Loc in
+         let subst = make_subst [(requested.qpointer, qpointer)] in
+         let r = 
+           { ct = requested.ct;
+             qpointer = qpointer_s;
+             value = Simplify.simp global.struct_decls all_lcs (IT.subst subst value); 
+             init = Simplify.simp global.struct_decls all_lcs (IT.subst subst init);
+             permission = IT.subst subst requested.permission;
+           } 
+         in
+         return r
+      | `False model ->
+         fail (failure model)
+      end
 
 
 
@@ -326,6 +338,7 @@ module ResourceInference = struct
       debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
       let needed = requested.permission in 
       let@ provable = provable in
+      let@ provable_or_model = provable_or_model in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
@@ -337,13 +350,15 @@ module ResourceInference = struct
                        List.map2 eq__ requested.iargs p'.iargs @
                        [gt_ (could_take, q_ (0, 1))])
                in
-               if provable (t_ took) then
-                 let oargs = p'.oargs in
-                 let needed = sub_ (needed, could_take) in
-                 let permission' = sub_ (p'.permission, could_take) in
-                 Predicate {p' with permission = permission'}, (needed, oargs)
-               else
-                 continue
+               begin match provable (t_ took) with
+               | `True ->
+                  let oargs = p'.oargs in
+                  let needed = sub_ (needed, could_take) in
+                  let permission' = sub_ (p'.permission, could_take) in
+                  Predicate {p' with permission = permission'}, (needed, oargs)
+               | `False ->
+                  continue
+               end
             | QPredicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
@@ -351,42 +366,47 @@ module ResourceInference = struct
                  and_ ((List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs) @
                        [gt_ (can_take, q_ (0, 1))])
                in
-               if provable (t_ took) then
-                 let oargs = p'.oargs in
-                 let needed = sub_ (needed, can_take) in
-                 let permission' =
-                   sub_ (p'.permission,
-                         ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                               can_take, q_ (0, 1))
-                     )
-                 in
-                 QPredicate {p' with permission = permission'}, (needed, oargs)
-               else
-                 continue
+               begin match provable (t_ took) with
+               | `True ->
+                  let oargs = p'.oargs in
+                  let needed = sub_ (needed, can_take) in
+                  let permission' =
+                    sub_ (p'.permission,
+                          ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
+                                can_take, q_ (0, 1))
+                      )
+                  in
+                  QPredicate {p' with permission = permission'}, (needed, oargs)
+               | `False ->
+                  continue
+               end
             | re ->
                continue
           ) (needed, List.map default_ requested.oargs)
       in
-      let holds = provable (t_ (eq_ (needed, q_ (0, 1)))) in
-      if holds then
-        let@ global = get_global () in
-        let@ all_lcs = all_constraints () in
-        let r = 
-          { name = requested.name;
-            pointer = requested.pointer;
-            permission = requested.permission;
-            iargs = requested.iargs; 
-            oargs = List.map (Simplify.simp global.struct_decls all_lcs) oargs
-          }
-        in
-        return r
-      else 
-        fail failure
+      let holds = provable_or_model (t_ (eq_ (needed, q_ (0, 1)))) in
+      begin match holds with
+      | `True ->
+         let@ global = get_global () in
+         let@ all_lcs = all_constraints () in
+         let r = 
+           { name = requested.name;
+             pointer = requested.pointer;
+             permission = requested.permission;
+             iargs = requested.iargs; 
+             oargs = List.map (Simplify.simp global.struct_decls all_lcs) oargs
+           }
+         in
+         return r
+      | `False model ->
+         fail (failure model)
+      end
 
     and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let needed = requested.permission in
       let@ provable = provable in
+      let@ provable_or_model = provable_or_model in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
@@ -398,51 +418,57 @@ module ResourceInference = struct
                  and_ ((List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs) @
                          [gt_ (could_take, q_ (0, 1))])
                in
-               if provable (t_ took) then
-                 let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-                 let needed = sub_ (needed, ite_ (pmatch, could_take, q_ (0, 1))) in
-                 let oargs = List.map2 (fun oarg oarg' -> ite_ (pmatch, oarg', oarg)) oargs p'.oargs in
-                 let permission' = sub_ (p'.permission, could_take) in
-                 (Predicate {p' with permission = permission'}, (needed, oargs))
-               else
-                 continue
+               begin match provable (t_ took) with
+               | `True ->
+                  let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+                  let needed = sub_ (needed, ite_ (pmatch, could_take, q_ (0, 1))) in
+                  let oargs = List.map2 (fun oarg oarg' -> ite_ (pmatch, oarg', oarg)) oargs p'.oargs in
+                  let permission' = sub_ (p'.permission, could_take) in
+                  (Predicate {p' with permission = permission'}, (needed, oargs))
+               | `False ->
+                  continue
+               end
             | QPredicate p' when String.equal requested.name p'.name ->
                let p' = RE.alpha_rename_qpredicate requested.qpointer p' in
                let could_take = min_ (p'.permission, needed) in
                let took = gt_ (could_take, q_ (0, 1)) in
-               if provable (forall_ (requested.qpointer, Loc) 
+               begin match provable (forall_ (requested.qpointer, Loc) 
                             (impl_ (took,
-                                    and_ (List.map2 eq__ requested.iargs p'.iargs)))) then
-                 let needed = sub_ (needed, could_take) in
-                 let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
-                 let permission' = sub_ (p'.permission, could_take) in
-                 (QPredicate {p' with permission = permission'}, (needed, oargs))
-               else
-                 continue
+                                    and_ (List.map2 eq__ requested.iargs p'.iargs)))) with
+               | `True ->
+                  let needed = sub_ (needed, could_take) in
+                  let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
+                  let permission' = sub_ (p'.permission, could_take) in
+                  (QPredicate {p' with permission = permission'}, (needed, oargs))
+               | `False ->
+                  continue
+               end
             | re ->
                continue
           ) (needed, List.map default_ requested.oargs)
       in
       let holds =
-        provable (forall_ (requested.qpointer, BT.Loc)
+        provable_or_model (forall_ (requested.qpointer, BT.Loc)
              (eq_ (needed, q_ (0, 1))))
       in
-      if holds then
-        let@ global = get_global () in
-        let@ all_lcs = all_constraints () in
-        let qpointer_s, qpointer = IT.fresh Loc in
-        let subst = make_subst [(requested.qpointer, qpointer)] in
-        let r = 
-          { name = requested.name;
-            qpointer = qpointer_s;
-            permission = IT.subst subst requested.permission;
-            iargs = List.map (IT.subst subst) requested.iargs; 
-            oargs = List.map (fun oa -> Simplify.simp global.struct_decls all_lcs (IT.subst subst oa)) oargs;
-          } 
-        in
-        return r
-      else  
-        fail failure
+      begin match holds with
+      | `True ->
+         let@ global = get_global () in
+         let@ all_lcs = all_constraints () in
+         let qpointer_s, qpointer = IT.fresh Loc in
+         let subst = make_subst [(requested.qpointer, qpointer)] in
+         let r = 
+           { name = requested.name;
+             qpointer = qpointer_s;
+             permission = IT.subst subst requested.permission;
+             iargs = List.map (IT.subst subst) requested.iargs; 
+             oargs = List.map (fun oa -> Simplify.simp global.struct_decls all_lcs (IT.subst subst oa)) oargs;
+           } 
+         in
+         return r
+      | `False model ->
+         fail (failure model)
+      end
 
 
     and fold_array loc failure item_ct base length permission =
@@ -640,8 +666,8 @@ module ResourceInference = struct
 
   module Special = struct
 
-    let missing_resource_failure loc situation (request, oinfo) ctxt = 
-      let model = S.model ctxt.solver in
+    let missing_resource_failure loc situation (request, oinfo) = 
+      fun model ctxt ->
       let msg = Missing_resource_request {request; situation; oinfo; model; ctxt} in
       {loc; msg}
 
@@ -707,6 +733,7 @@ let args_of_asyms (asyms : 'bty asyms) : (args, type_error) m =
 
 
 
+
 module Spine : sig
   val calltype_ft : 
     Loc.t -> args -> AT.ft -> (RT.t, type_error) m
@@ -761,6 +788,13 @@ end = struct
     in
     let unify_or_constrain_q_list q = ListM.fold_leftM (unify_or_constrain_q q) in
 
+    let non_model_fail () = 
+      let@ provable_or_model = provable_or_model in
+      match provable_or_model (t_ (bool_ false)) with
+      | `True -> assert false
+      | `False model -> fail (failure model)
+    in
+
     fun (unis : (LS.t * Locations.info) SymMap.t) r_spec r_have ->
 
     match r_spec, r_have with
@@ -773,12 +807,15 @@ end = struct
            unify_or_constrain_list (unis, [], []) 
              [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
          in
-         let@ provable = provable in
+         let@ provable_or_model = provable_or_model in
          let result = 
-           provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+           provable_or_model (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, make_subst subst) else fail failure
-       else fail failure
+         begin match result with
+         | `True -> return (unis, make_subst subst) 
+         | `False model -> fail (failure model)
+         end
+       else non_model_fail ()
     | QPoint p_spec, QPoint p_have ->
        let p_spec, p_have = 
          let qpointer = Sym.fresh_same p_spec.qpointer in
@@ -793,14 +830,17 @@ end = struct
            unify_or_constrain_q_list (p_have.qpointer, Loc) (unis, [], []) 
              [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
          in         
-         let@ provable = provable in
+         let@ provable_or_model = provable_or_model in
          let result = 
-           provable
+           provable_or_model
              (forall_ (p_have.qpointer, BT.Loc)
                 (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, make_subst subst) else fail failure
-       else fail failure
+         begin match result with
+         | `True -> return (unis, make_subst subst) 
+         | `False model -> fail (failure model)
+         end
+       else non_model_fail ()
     | Predicate p_spec, Predicate p_have ->
        if predicate_name_equal p_spec.name p_have.name
           && IT.equal p_spec.pointer p_have.pointer
@@ -811,12 +851,15 @@ end = struct
            unify_or_constrain_list (unis, [], [])
              (List.combine p_spec.oargs p_have.oargs) 
          in
-         let@ provable = provable in
+         let@ provable_or_model = provable_or_model in
          let result =
-           provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+           provable_or_model (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, make_subst subst) else fail failure
-       else fail failure
+         begin match result with
+         | `True -> return (unis, make_subst subst) 
+         | `False model -> fail (failure model)
+         end
+       else non_model_fail ()
     | QPredicate p_spec, QPredicate p_have ->
        let p_spec, p_have = 
          let qpointer = (Sym.fresh_same p_spec.qpointer) in
@@ -832,14 +875,17 @@ end = struct
            unify_or_constrain_q_list (p_have.qpointer, Loc)
              (unis, [], []) (List.combine p_spec.oargs p_have.oargs) 
          in
-         let@ provable = provable in
+         let@ provable_or_model = provable_or_model in
          let result =
-           provable
+           provable_or_model
              (forall_ (p_have.qpointer, BT.Loc)
                 (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, make_subst subst) else fail failure
-       else fail failure
+         begin match result with
+         | `True -> return (unis, make_subst subst) 
+         | `False model -> fail (failure model)
+         end
+       else non_model_fail ()
     | _ -> 
        Debug_ocaml.error "resource inference has inferred mismatched resources"
 
@@ -927,8 +973,7 @@ end = struct
         | Resource (resource, info, ftyp) -> 
            let request = RE.request resource in
            let@ resource' = 
-             let failure ctxt = 
-               let model = S.model ctxt.solver in
+             let failure model ctxt = 
                let ctxt = { ctxt with resources = original_resources } in
                let msg = Missing_resource_request {request; situation; oinfo = Some info; model; ctxt} in
                {loc; msg}
@@ -936,8 +981,7 @@ end = struct
              RI.General.resource_request loc failure request 
            in
            let@ (unis, new_subst) = 
-             let failure ctxt = 
-               let model = S.model ctxt.solver in
+             let failure model ctxt = 
                let ctxt = { ctxt with resources = original_resources } in
                let expect = resource in
                let has = resource' in
@@ -959,15 +1003,17 @@ end = struct
     in
 
     let@ rt = 
-      let@ provable = provable in
+      let@ provable_or_model = provable_or_model in
       let rec check_logical_constraints = function
         | Constraint (c, info, ftyp) -> 
-           if provable c then check_logical_constraints ftyp else
-             fail (fun ctxt ->
-                 let model = S.model ctxt.solver in
-                 let ctxt = { ctxt with resources = original_resources } in
-                 {loc; msg = Unsat_constraint {constr = c; info; ctxt; model}}
-               )
+           begin match provable_or_model c with
+           | `True -> check_logical_constraints ftyp 
+           | `False model ->
+              fail (fun ctxt ->
+                  let ctxt = { ctxt with resources = original_resources } in
+                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model}}
+                )
+           end
         | I rt ->
            return rt
       in
@@ -1195,9 +1241,11 @@ let infer_array_shift loc asym1 ct asym2 =
         match found, re with
         | Some _, _ -> 
            (re, found)
-        | None, Point {ct = Sctype (_, Array (_, Some length)); pointer; _} 
-             when provable (t_ (eq__ pointer (it_of_arg arg1))) ->
-           (re, Some length)
+        | None, Point {ct = Sctype (_, Array (_, Some length)); pointer; _} ->
+           begin match provable (t_ (eq__ pointer (it_of_arg arg1))) with
+           | `True -> (re, Some length)
+           | `False -> (re, found)
+           end
         | _ -> 
            (re, found)
       ) None
@@ -1247,12 +1295,12 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        Debug_ocaml.error "todo: PEconstrained"
     | M_PEerror (err, asym) ->
        let@ arg = arg_of_asym asym in
-       let@ provable = provable in
-       assert(not (provable (t_ (bool_ false))));
-       fail (fun ctxt ->
-           let model = S.model ctxt.solver in
-           {loc; msg = StaticError {err; ctxt; model} }
-         )
+       let@ provable_or_model = provable_or_model in
+       begin match provable_or_model (t_ (bool_ false)) with
+       | `True -> assert false
+       | `False model ->
+          fail (fun ctxt -> {loc; msg = StaticError {err; ctxt; model}})
+       end
     | M_PEctor (ctor, asyms) ->
        let@ args = args_of_asyms asyms in
        let@ vt = infer_constructor loc ctor args in
@@ -1279,9 +1327,11 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
              | true, _ -> 
                 (re, found)
              | false, Point {ct = Sctype (_, Struct tag'); pointer; _} 
-                  when Sym.equal tag tag'
-                       && provable (t_ (eq__ pointer (it_of_arg arg))) ->
-                (re, true)
+                  when Sym.equal tag tag' ->
+                begin match provable (t_ (eq__ pointer (it_of_arg arg))) with
+                | `True -> (re, true)
+                | `False -> (re, found)
+                end
              | _ -> 
                 (re, found)
            ) false
@@ -1350,14 +1400,12 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
     | M_PEassert_undef (asym, _uloc, ub) ->
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
-       let@ provable = provable in
-       if provable (t_ (it_of_arg arg)) then
-         return (rt_of_vt loc (Unit, unit_))
-       else
-         fail (fun ctxt ->
-             let model = S.model ctxt.solver in
-             {loc; msg = Undefined_behaviour {ub; ctxt; model}}
-           )
+       let@ provable_or_model = provable_or_model in
+       begin match provable_or_model (t_ (it_of_arg arg)) with
+       | `True -> return (rt_of_vt loc (Unit, unit_))
+       | `False model ->
+          fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+       end
     | M_PEbool_to_integer asym ->
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
@@ -1385,17 +1433,17 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
           in
           return (rt_of_vt loc (Integer, result))
        | _ ->
-          let@ provable = provable in
-          if provable (t_ (representable_ (act.ct, arg_it))) then
-            return (rt_of_vt loc (Integer, arg_it))
-          else
-            let value = arg_it in
-            let ict = act.ct in
-            fail (fun ctxt ->
-                let model = S.model ctxt.solver in
-                let msg = Int_unrepresentable {value; ict; ctxt; model} in
-                {loc; msg}
-              )
+          let@ provable_or_model = provable_or_model in
+          begin match provable_or_model (t_ (representable_ (act.ct, arg_it))) with
+          | `True -> return (rt_of_vt loc (Integer, arg_it))
+          | `False model ->
+             let value = arg_it in
+             let ict = act.ct in
+             fail (fun ctxt ->
+                 let msg = Int_unrepresentable {value; ict; ctxt; model} in
+                 {loc; msg}
+               )
+          end
        end
     | M_PEwrapI (act, asym) ->
        let@ arg = arg_of_asym asym in
@@ -1428,9 +1476,9 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
          pure begin
              let@ () = add_c (t_ lc) in
              let@ provable = provable in
-             if provable (t_ (bool_ false)) 
-             then return ()
-             else check_tpexpr e typ
+             match provable (t_ (bool_ false)) with
+             | `True -> return ()
+             | `False -> check_tpexpr e typ
            end
        ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
   | M_PEcase (asym, pats_es) ->
@@ -1439,9 +1487,9 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
          pure begin 
              let@ () = pattern_match (it_of_arg arg) pat in
              let@ provable = provable in
-             if provable (t_ (bool_ false))
-             then return ()
-             else check_tpexpr e typ
+             match provable (t_ (bool_ false)) with
+             | `True -> return ()
+             | `False -> check_tpexpr e typ
            end
        ) pats_es
   | M_PElet (p, e1, e2) ->
@@ -1456,12 +1504,12 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
      let@ () = Spine.subtype loc arg typ in
      return ()
   | M_PEundef (_loc, ub) ->
-     let@ provable = provable in
-     assert(not (provable (t_ (bool_ false))));
-     fail (fun ctxt ->
-         let model = S.model ctxt.solver in
-         {loc; msg = Undefined_behaviour {ub; ctxt; model}}
-       )
+     let@ provable_or_model = provable_or_model in
+     begin match provable_or_model (t_ (bool_ false)) with
+     | `True -> assert false;
+     | `False model ->
+        fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+     end
 
 (*** impure expression inference **********************************************)
 
@@ -1485,37 +1533,46 @@ let pp_or_false (ppf : 'a -> Pp.document) (m : 'a t) : Pp.document =
 
 
 let all_empty loc = 
-  let failure resource = 
-    fail (fun ctxt ->
-        let model = S.model ctxt.solver in
-        {loc; msg = Unused_resource {resource; ctxt; model}}
-      )
+  let failure resource model = 
+    fail (fun ctxt -> {loc; msg = Unused_resource {resource; ctxt; model}})
   in
-  let@ provable = provable in
+  let@ provable_or_model = provable_or_model in
   let@ all_resources = all_resources () in
   let _ = 
     ListM.mapM (fun resource ->
         match resource with
         | Point p ->
-           let holds = provable (t_ (le_ (p.permission, q_ (0, 1)))) in
-           if holds then return () else failure resource
+           let holds = provable_or_model (t_ (le_ (p.permission, q_ (0, 1)))) in
+           begin match holds with
+           | `True -> return () 
+           | `False model -> failure resource model
+           end
         | QPoint p ->
            let holds = 
-             provable
+             provable_or_model
                (forall_ (p.qpointer, BT.Loc)
                   (le_ (p.permission, q_ (0, 1))))
            in
-           if holds then return () else failure resource
+           begin match holds with
+           | `True -> return () 
+           | `False model -> failure resource model
+           end
         | Predicate p ->
-           let holds = provable (t_ (le_ (p.permission, q_ (0, 1)))) in
-           if holds then return () else failure resource
+           let holds = provable_or_model (t_ (le_ (p.permission, q_ (0, 1)))) in
+           begin match holds with
+           | `True -> return () 
+           | `False model -> failure resource model
+           end
         | QPredicate p ->
            let holds = 
-             provable
+             provable_or_model
                (forall_ (p.qpointer, BT.Loc)
                   (le_ (p.permission, q_ (0, 1))))
            in
-           if holds then return () else failure resource
+           begin match holds with
+           | `True -> return () 
+           | `False model -> failure resource model
+           end
       ) all_resources
   in
   return ()
@@ -1565,15 +1622,17 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let v = pointerToIntegerCast_ (it_of_arg arg) in
           let@ () = 
             (* after discussing with Kavyan *)
-            let@ provable = provable in
-            let lc = (t_ (representable_ (act_to.ct, v))) in
-            if provable lc then return () else
-              fail (fun ctxt ->
-                  let model = S.model ctxt.solver in
-                  let ict = act_to.ct in
-                  let value = it_of_arg arg in
-                  {loc; msg = Int_unrepresentable {value; ict; ctxt; model}}
-                )
+            let@ provable_or_model = provable_or_model in
+            let lc = t_ (representable_ (act_to.ct, v)) in
+            begin match provable_or_model lc with
+            | `True -> return () 
+            | `False model ->
+               fail (fun ctxt ->
+                   let ict = act_to.ct in
+                   let value = it_of_arg arg in
+                   {loc; msg = Int_unrepresentable {value; ict; ctxt; model}}
+                 )
+            end
           in
           let vt = (Integer, v) in
           return (rt_of_vt loc vt)
@@ -1675,21 +1734,22 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
              understand, are an exception. *)
           let@ () = 
             let in_range_lc = representable_ (act.ct, it_of_arg varg) in
-            let@ provable = provable in
-            let holds = provable (t_ in_range_lc) in
-            if holds then return () else 
-              fail (fun ctxt ->
-                  let model = S.model ctxt.solver in
-                  let msg = 
-                    Write_value_unrepresentable {
-                        ct = act.ct; 
-                        location = it_of_arg parg; 
-                        value = it_of_arg varg; 
-                        ctxt;
-                        model}
-                  in
-                  {loc; msg}
-                )
+            let@ provable_or_model = provable_or_model in
+            let holds = provable_or_model (t_ in_range_lc) in
+            match holds with
+            | `True -> return () 
+            | `False model ->
+               fail (fun ctxt ->
+                   let msg = 
+                     Write_value_unrepresentable {
+                         ct = act.ct; 
+                         location = it_of_arg parg; 
+                         value = it_of_arg varg; 
+                         ctxt;
+                         model}
+                   in
+                   {loc; msg}
+                 )
           in
           let@ _ = 
             RI.Special.point_request loc (Access (Store None)) ({
@@ -1728,12 +1788,11 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                   }, None))
           in
           let@ () = 
-            let@ provable = provable in
-            if provable (t_ point.init) then return () else
-              fail (fun ctxt ->
-                  let model = S.model ctxt.solver in
-                  {loc; msg = Uninitialised_read {ctxt; model}}
-                )
+            let@ provable_or_model = provable_or_model in
+            match provable_or_model (t_ point.init) with
+            | `True -> return () 
+            | `False model ->
+               fail (fun ctxt -> {loc; msg = Uninitialised_read {ctxt; model}})
           in
           let ret = Sym.fresh () in
           let constr = def_ ret point.value in
@@ -1817,9 +1876,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          let rec try_clauses negated_guards clauses = 
            match clauses with
            | clause :: clauses -> 
-              if provable (t_ (and_ (clause.guard :: negated_guards)))
-              then return clause.packing_ft
-              else try_clauses (not_ clause.guard :: negated_guards) clauses
+              begin match provable (t_ (and_ (clause.guard :: negated_guards))) with
+              | `True -> return clause.packing_ft
+              | `False -> try_clauses (not_ clause.guard :: negated_guards) clauses
+              end
            | [] -> 
               let err = 
                 !^"do not have enough information for" ^^^
@@ -1911,9 +1971,9 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
            pure begin 
                let@ () = add_c (t_ lc) in
                let@ provable = provable in
-               if provable (t_ (bool_ false))
-               then return ()
-               else check_texpr labels e typ 
+               match provable (t_ (bool_ false)) with
+               | `True -> return ()
+               | `False -> check_texpr labels e typ 
              end
          ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
     | M_Ebound (_, e) ->
@@ -1926,9 +1986,9 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
            pure begin 
                let@ () = pattern_match (it_of_arg arg) pat in
                let@ provable = provable in
-               if provable (t_ (bool_ false))
-               then return ()
-               else check_texpr labels e typ
+               match provable (t_ (bool_ false)) with
+               | `True -> return ()
+               | `False -> check_texpr labels e typ
              end
          ) pats_es
     | M_Elet (p, e1, e2) ->
@@ -1963,12 +2023,12 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
           fail (fun _ -> {loc; msg = Generic !^err})
        end
     | M_Eundef (_loc, ub) ->
-       let@ provable = provable in
-       assert(not (provable (t_ (bool_ false))));
-       fail (fun ctxt ->
-           let model = S.model ctxt.solver in
-           {loc; msg = Undefined_behaviour {ub; ctxt; model}}
-         )
+       let@ provable_or_model = provable_or_model in
+       begin match provable_or_model (t_ (bool_ false)) with
+       | `True -> assert false
+       | `False model ->
+          fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+       end
     | M_Erun (label_sym, asyms) ->
        let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
          | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})

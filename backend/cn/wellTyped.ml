@@ -854,9 +854,10 @@ module WAT (WI: WI_Sig) = struct
          aux at
       | AT.I i -> 
          let@ provable = provable in
-         if provable (LC.t_ (IT.bool_ false))
-         then fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
-         else WI.welltyped loc i
+         begin match provable (LC.t_ (IT.bool_ false)) with
+         | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
+         | `False -> WI.welltyped loc i
+         end
     in
     pure (aux at)
 

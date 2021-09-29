@@ -14,8 +14,8 @@ val print_with_ctxt : (Context.t -> unit) -> (unit, 'e) m
 val get_global : unit -> (Global.t, 'e) m
 val all_constraints : unit -> (LogicalConstraints.t list, 'e) m
 val all_resources : unit -> (Resources.RE.t list, 'e) m
-val provable : (LogicalConstraints.t -> bool, 'e) m
-val model : unit -> (Z3.Model.model, 'e) m
+val provable : (LogicalConstraints.t -> [> `True | `False], 'e) m
+val provable_or_model : (LogicalConstraints.t -> [> `True | `False of Z3.Model.model], 'e) m
 val bound_a : Sym.t -> (bool, 'e) m
 val bound_l : Sym.t -> (bool, 'e) m
 val get_a : Sym.t -> (BaseTypes.t * Sym.t, 'e) m

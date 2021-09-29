@@ -420,50 +420,69 @@ let constr struct_decls c =
      Z3.Quantifier.expr_of_quantifier q :: cs
 
 
-let check struct_decls solver (lc : LC.t) =  
-  let () = Debug_ocaml.begin_csv_timing "solver" in
+(* type provable = 
+ *   | True
+ *   | False
+ * 
+ * type provable_or_model = 
+ *   | True
+ *   | FalseB of Z3.Model.model *)
+
+
+
+
+let model solver = 
+  Option.value_err "Z3 did not produce a counter model"
+    (Z3.Solver.get_model solver)
+
+let constraint_to_check solver struct_decls lc = 
+  match lc with
+  | T t ->
+     let t = term struct_decls t in
+     Z3.Solver.check solver [Z3.Boolean.mk_not context t]
+  | Forall ((s, bt), t) -> 
+     let s' = Sym.fresh () in
+     let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
+     Z3.Solver.check solver [Z3.Boolean.mk_not context (term struct_decls t)]
+
+let provable struct_decls solver (lc : LC.t) =  
   let result = match lc with
     (* problematic for getting a model out *)
     (* (\* as similarly suggested by Robbert *\)
      * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
      *    (`YES, solver) *)
     | _ ->
-       let result = match lc with
-         | T t ->
-            let t = term struct_decls t in
-            Z3.Solver.check solver [Z3.Boolean.mk_not context t]
-         | Forall ((s, bt), t) -> 
-            let s' = Sym.fresh () in
-            let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
-            Z3.Solver.check solver [Z3.Boolean.mk_not context (term struct_decls t)]
-       in
+       let result = constraint_to_check solver struct_decls lc in
        match result with
-       | Z3.Solver.UNSATISFIABLE -> `YES
-       | Z3.Solver.SATISFIABLE -> `NO
+       | Z3.Solver.UNSATISFIABLE -> `True
+       | Z3.Solver.SATISFIABLE -> `False
        | Z3.Solver.UNKNOWN -> 
           warn !^"solver returned unknown";
-          `MAYBE
+          `False
   in
-  let () = Debug_ocaml.end_csv_timing "solver" in
+  result
+
+
+let provable_or_model struct_decls solver (lc : LC.t) =  
+  let result = match lc with
+    (* problematic for getting a model out *)
+    (* (\* as similarly suggested by Robbert *\)
+     * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
+     *    (`YES, solver) *)
+    | _ ->
+       let result = constraint_to_check solver struct_decls lc in
+       match result with
+       | Z3.Solver.UNSATISFIABLE -> `True
+       | Z3.Solver.SATISFIABLE -> `False (model solver)
+       | Z3.Solver.UNKNOWN -> 
+          warn !^"solver returned unknown";
+          `False (model solver)
+  in
   result
 
 
 
-let provable struct_decls solver lc = 
-  let result = check struct_decls solver lc in
-  match result with
-  | `YES -> true
-  | `NO -> false
-  | `MAYBE -> 
-     let open Pp in
-     print stdout (item "MAYBE" !^(Z3.Solver.get_reason_unknown solver) ^^ comma ^^^ item "LC" (LC.pp lc));
-     (* print stdout (item "ASSUMPTIONS:" (list (fun e -> string (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solver))); *)
-     false
 
-
-let model solver = 
-  Option.value_err "Z3 did not produce a counter model"
-    (Z3.Solver.get_model solver)
 
 
 

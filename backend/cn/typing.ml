@@ -74,9 +74,9 @@ let provable =
   let@ s = get () in
   return (fun lc -> Solver.provable s.global.struct_decls s.solver lc)
 
-let model () =
+let provable_or_model =
   let@ s = get () in
-  return (Solver.model s.solver)
+  return (fun lc -> Solver.provable_or_model s.global.struct_decls s.solver lc)
 
 let bound_a sym = 
   let@ s = get () in
