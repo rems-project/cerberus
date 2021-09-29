@@ -447,10 +447,9 @@ let constraint_to_check solver struct_decls lc =
 
 let provable struct_decls solver (lc : LC.t) =  
   let result = match lc with
-    (* problematic for getting a model out *)
     (* (\* as similarly suggested by Robbert *\)
      * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-     *    (`YES, solver) *)
+     *    `True *)
     | _ ->
        let result = constraint_to_check solver struct_decls lc in
        match result with
@@ -465,10 +464,9 @@ let provable struct_decls solver (lc : LC.t) =
 
 let provable_or_model struct_decls solver (lc : LC.t) =  
   let result = match lc with
-    (* problematic for getting a model out *)
     (* (\* as similarly suggested by Robbert *\)
      * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-     *    (`YES, solver) *)
+     *    `True *)
     | _ ->
        let result = constraint_to_check solver struct_decls lc in
        match result with

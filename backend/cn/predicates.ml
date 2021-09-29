@@ -695,7 +695,6 @@ let page_alloc_predicates struct_decls =
       @@ vmemmap_metadata_owned
       @@ free_area_owned
       @@ metadata_well_formedness
-      @@ vmemmap_metadata_owned
       (* @@ free_area_well_formedness (\* possibly inconsistent *\)
        * @@ vmemmap_well_formedness2 *)
       (* @@ Tools.skip (LRT.I) page_group_ownership *)
