@@ -178,8 +178,11 @@ let fail err =
   let loc = match err with
     | MC.MerrAccess (loc, _, _)
     | MerrWriteOnReadOnly loc
-    | MerrUndefinedFree (loc, _) ->
-        loc
+    | MerrReadUninit loc
+    | MerrUndefinedFree (loc, _)
+    | MerrFreeNullPtr loc
+    | MerrArrayShift loc ->
+      loc
     | MerrOutsideLifetime _
     | MerrInternal _
     | MerrOther _
@@ -188,7 +191,6 @@ let fail err =
     | MerrIntFromPtr
     | MerrPtrFromInt
     | MerrPtrComparison
-    | MerrArrayShift
     | MerrWIP _
     | MerrVIP _ ->
         Location_ocaml.other "VIP" in
@@ -553,6 +555,7 @@ let allocate_region tid pref al_ival sz_ival : pointer_value memM =
 
 
 let kill loc is_dyn ptrval : unit memM =
+  (* TODO: implement the forbid_nullptr_free switch *)
   match ptrval with
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
@@ -855,7 +858,7 @@ let member_shift_ptrval ptrval tag_sym membr_ident : pointer_value =
     | PVfunptr sym ->
         failwith "UB: member_offset ==> funptr"
 
-let eff_array_shift_ptrval ptrval ty ival : pointer_value memM =
+let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
   match ptrval with
     | PVnull ->
         fail (MerrVIP (VIP_array_shift VIP_null))

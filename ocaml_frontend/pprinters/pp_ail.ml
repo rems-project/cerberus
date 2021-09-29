@@ -233,7 +233,8 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
         0
     | Array _ ->
         1
-    | Function _ ->
+    | Function _
+    | FunctionNoParams _ ->
         2
     | Pointer _ ->
         3
@@ -255,6 +256,8 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
                      (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
                      (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                    ) ^^ k
+      | FunctionNoParams (_, (ret_qs, ret_ty)) ->
+          fun k -> aux ret_qs ret_ty P.empty ^^^ P.parens (P.empty) ^^ k
       | Pointer (ref_qs, ref_ty) ->
           fun k ->
             begin match ref_ty with

@@ -456,8 +456,11 @@ module Concrete : Memory = struct
     let loc = match err with
       | MerrAccess (loc, _, _)
       | MerrWriteOnReadOnly loc
-      | MerrUndefinedFree (loc, _) ->
-          loc
+      | MerrReadUninit loc
+      | MerrUndefinedFree (loc, _)
+      | MerrFreeNullPtr loc
+      | MerrArrayShift loc ->
+        loc
       | MerrOutsideLifetime _
       | MerrInternal _
       | MerrOther _
@@ -466,7 +469,6 @@ module Concrete : Memory = struct
       | MerrIntFromPtr
       | MerrPtrFromInt
       | MerrPtrComparison
-      | MerrArrayShift
       | MerrWIP _
       | MerrVIP _ ->
             Location_ocaml.other "Concrete" in
@@ -1292,7 +1294,7 @@ module Concrete : Memory = struct
   let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
         if Switches.(has_switch SW_forbid_nullptr_free) then
-          fail (MerrOther "attempted to kill with a null pointer")
+          fail (MerrFreeNullPtr loc)
         else
           return ()
     | PV (_, PVfunction _) ->
@@ -1403,7 +1405,7 @@ module Concrete : Memory = struct
             if Switches.(has_switch SW_strict_reads) then
               match mval with
                 | MVunspecified _ ->
-                    fail (MerrOther "load from uninitialised memory")
+                    fail (MerrReadUninit loc)
                 | _ ->
                     return (fp, mval)
             else
@@ -1998,7 +2000,7 @@ module Concrete : Memory = struct
       | PVconcrete addr ->
           PVconcrete (N.add addr offset))
   
-  let eff_array_shift_ptrval ptrval ty (IV (_, ival)) =
+  let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     match ptrval with
@@ -2053,7 +2055,7 @@ module Concrete : Memory = struct
                           | true ->
                               return (`Collapse alloc_id2)
                           | false ->
-                              fail MerrArrayShift
+                              fail (MerrArrayShift loc)
                         end
                   end >>= begin function
                     | `Collapse alloc_id ->
@@ -2074,7 +2076,7 @@ module Concrete : Memory = struct
                           | true ->
                               return ()
                           | false ->
-                              fail MerrArrayShift
+                              fail (MerrArrayShift loc)
                         end
                   end >>= fun () ->
                   return (PV (prov, PVconcrete shifted_addr))
@@ -2083,7 +2085,7 @@ module Concrete : Memory = struct
                   | true ->
                       return (PV (prov, PVconcrete shifted_addr))
                   | false ->
-                      fail MerrArrayShift
+                      fail (MerrArrayShift loc)
                 end
           end
       
@@ -2098,7 +2100,7 @@ module Concrete : Memory = struct
                                (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
               return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
             else
-              fail MerrArrayShift
+              fail (MerrArrayShift loc)
           else
             return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
       | PV (Prov_none, PVconcrete addr) ->

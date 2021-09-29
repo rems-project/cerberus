@@ -296,7 +296,7 @@ let set_uid file =
       | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
       | Epar es -> Epar (List.map set_e es)
       | Ewait thid -> Ewait thid
-      | Epack _ | Eunpack _ ->
+      | Epack _ | Eunpack _ | Eqfacts _ ->
           (* these two are CN specific contructors *)
           assert false  
     in Expr (Annot.Auid (fresh ()) :: annots, e_')
@@ -465,6 +465,8 @@ let multiple_steps step_state (m, st) =
                     None, "invalid cast pointer from integer"
                   | MerrWriteOnReadOnly _ ->
                     None, "writing read only memory"
+                  | MerrReadUninit loc ->
+                    Some loc, "reading from uninitialised memory"
                   | MerrUndefinedFree (loc, err) ->
                     Some loc, "freeing " ^ string_of_free_error err
                   | MerrUndefinedRealloc ->
@@ -473,8 +475,10 @@ let multiple_steps step_state (m, st) =
                     None, "invalid cast integer from pointer"
                   | MerrPtrComparison ->
                     None, "error pointer comparison"
-                  | MerrArrayShift ->
-                    None, "error array shilft"
+                  | MerrArrayShift loc ->
+                    Some loc, "error array shilft"
+                  | MerrFreeNullPtr loc ->
+                    Some loc, "free() called on a NULL pointer"
                   | MerrWIP str ->
                     None, "wip: " ^ str
                   | MerrVIP err ->

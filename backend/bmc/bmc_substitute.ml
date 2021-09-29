@@ -173,7 +173,7 @@ let rec unsafe_substitute_expr (map: substitute_map)
     | Epar _
     | Ewait _ ->
         assert false
-    | Epack _ | Eunpack _ ->
+    | Epack _ | Eunpack _ | Eqfacts _ ->
         (* these two are CN specific contructors *)
         assert false
   in
