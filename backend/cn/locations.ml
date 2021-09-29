@@ -111,7 +111,7 @@ let json_raw_loc loc : Yojson.Safe.t =
        in
        `Variant ("Region", Some (`Assoc args))
   in
-  `Variant ("Loc", Some json)
+  json
 
 let json_loc loc : Yojson.Safe.t =
   json_raw_loc (Location_ocaml.to_raw loc)
