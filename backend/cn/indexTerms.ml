@@ -578,12 +578,14 @@ let json it : Yojson.Safe.t =
   `String (Pp.plain (pp it))
 
 
+let make_subst = Subst.make free_vars
+
 let rec subst (su : typed subst) (IT (it, bt)) =
   match it with
   | Lit lit -> 
      begin match lit with
      | Sym sym ->
-        begin match List.assoc_opt Sym.equal sym su with
+        begin match List.assoc_opt Sym.equal sym su.replace with
         | Some after -> after
         | None -> IT (Lit lit, bt)
         end
@@ -613,10 +615,13 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
        | EQ (it, it') -> EQ (subst su it, subst su it')
        | EachI ((i1, s, i2), t) ->
-          let s' = Sym.fresh_same s in
-          let t = subst [(s, IT (Lit (Sym s'), Integer))] t in
-          let t = subst su t in
-          EachI ((i1, s', i2), t)
+          if SymSet.mem s su.relevant then
+            let s' = Sym.fresh_same s in
+            let t = subst (make_subst [(s, IT (Lit (Sym s'), BT.Integer))]) t in
+            let t = subst su t in
+            EachI ((i1, s', i2), t)
+          else
+            EachI ((i1, s, i2), subst su t)
      in
      IT (Bool_op bool_op, bt)
   | Tuple_op tuple_op -> 
@@ -698,11 +703,13 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Get (it, arg) -> 
           Get (subst su it, subst su arg)
        | Def ((s, abt), body) ->
-          let s' = Sym.fresh_same s in 
-          let su' = [(s, IT (Lit (Sym s'), abt))] in
-          let body = subst su' body in
-          let body = subst su body in
-          Def ((s', abt), body)
+          if SymSet.mem s su.relevant then
+            let s' = Sym.fresh_same s in 
+            let body = subst (make_subst [(s, IT (Lit (Sym s'), abt))]) body in
+            let body = subst su body in
+            Def ((s', abt), body)
+          else 
+            Def ((s, abt), subst su body)
      in
      IT (Array_op array_op, bt)
 

@@ -251,7 +251,7 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | EachI ((i1, s, i2), t) -> 
            let rec aux i = 
              if i <= i2 
-             then IT.subst [(s, int_ i)] t :: aux (i + 1)
+             then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
              else []
            in
            term (and_ (aux i1))
@@ -334,7 +334,7 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | Set (t1, t2, t3) -> 
           mk_store context (term t1) (term t2) (term t3)
        | Get (IT (Array_op (Def ((s, bt), body)), _), arg) -> 
-          term (IT.subst [(s, arg)] body)
+          term (IT.subst (make_subst [(s, arg)]) body)
        | Get (f, arg) -> 
           mk_select context (term f) (term arg)
        | Def ((q_s, q_bt), body) ->
@@ -434,7 +434,7 @@ let check struct_decls solver (lc : LC.t) =
             Z3.Solver.check solver [Z3.Boolean.mk_not context t]
          | Forall ((s, bt), t) -> 
             let s' = Sym.fresh () in
-            let t = IT.subst [(s, sym_ (s', bt))] t in
+            let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
             Z3.Solver.check solver [Z3.Boolean.mk_not context (term struct_decls t)]
        in
        match result with

@@ -44,13 +44,13 @@ let subst substitution c =
   | T it -> 
      T (IT.subst substitution it)
   | Forall ((s, bt), body) ->
-     let s' = Sym.fresh_same s in 
-     let substitution' = [(s, IT.sym_ (s', bt))] in
-     (* let trigger = Option.map (subst_trigger substitution') trigger in
-      * let trigger = Option.map (subst_trigger substitution) trigger in *)
-     let body = IT.subst substitution' body in
-     let body = IT.subst substitution body in
-     Forall ((s', bt), body)
+     if SymSet.mem s substitution.relevant then
+       let s' = Sym.fresh_same s in 
+       let body = IT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) body in
+       let body = IT.subst substitution body in
+       Forall ((s', bt), body)
+     else
+       Forall ((s, bt), IT.subst substitution body)
 
 
 

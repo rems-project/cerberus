@@ -258,7 +258,7 @@ let rec simp struct_decls (lcs : LC.t list) =
        end
     | EachI ((i1, s, i2), t) ->
        let s' = Sym.fresh_same s in 
-       let t = IndexTerms.subst [(s, sym_ (s', bt))] t in
+       let t = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) t in
        let t = aux t in
        IT (Bool_op (EachI ((i1, s', i2), t)), bt)
 
@@ -371,7 +371,7 @@ let rec simp struct_decls (lcs : LC.t list) =
        IT (Array_op (Get (it, arg)), bt)
     | Def ((s, abt), body) ->
        let s' = Sym.fresh_same s in 
-       let body = IndexTerms.subst [(s, sym_ (s', abt))] body in
+       let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
        let body = aux body in
        IT (Array_op (Def ((s', abt), body)), bt)
   in
@@ -404,7 +404,7 @@ let simp_lc struct_decls lcs lc =
      LC.T (simp struct_decls lcs it)
   | LC.Forall ((s, bt), it) -> 
      let s' = Sym.fresh_same s in 
-     let it = IndexTerms.subst [(s, sym_ (s', bt))] it in
+     let it = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) it in
      (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
      let it = simp struct_decls lcs it in
      LC.Forall ((s', bt), it)
@@ -416,7 +416,7 @@ let simp_lc_flatten struct_decls lcs c =
      List.map (fun c -> LC.T c) (simp_flatten struct_decls lcs it)
   | LC.Forall ((s, bt), it) -> 
      let s' = Sym.fresh_same s in 
-     let it = IndexTerms.subst [(s, sym_ (s', bt))] it in
+     let it = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) it in
      (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
      let it = simp struct_decls lcs it in
      [LC.Forall ((s', bt), it)]

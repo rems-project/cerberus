@@ -665,7 +665,7 @@ module WLRT = struct
       | Logical ((s,ls), info, lrt) -> 
          let s' = Sym.fresh_same s in
          let@ () = add_l s' ls in
-         let lrt = subst [(s, IT.sym_ (s', ls))] lrt in
+         let lrt = subst (IT.make_subst [(s, IT.sym_ (s', ls))]) lrt in
          aux lrt
       | Resource (re, info, lrt) -> 
          let@ () = WRE.welltyped (fst info) re in
@@ -685,7 +685,7 @@ module WLRT = struct
       match lrt with
       | Logical ((s, ls), info, lrt) ->
          let s' = Sym.fresh_same s in
-         let lrt = LRT.subst [(s, IT.sym_ (s', ls))] lrt in
+         let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) lrt in
          let undetermined = SymSet.add s' undetermined in
          let infos = SymMap.add s' info infos in
          aux ~infos ~undetermined ~bad_as_value constraints lrt
@@ -738,7 +738,7 @@ module WRT = struct
          let lname = Sym.fresh () in
          let@ () = add_l lname bt in
          let@ () = add_a name' (bt, lname) in
-         let lrt = LRT.subst [(name, IT.sym_ (lname, bt))] lrt in
+         let lrt = LRT.subst (IT.make_subst [(name, IT.sym_ (lname, bt))]) lrt in
          WLRT.welltyped loc lrt
       end
 
@@ -746,7 +746,7 @@ module WRT = struct
     match rt with
     | Computational ((s, bt), _info, lrt) ->
        let s' = Sym.fresh_same s in
-       let lrt = LRT.subst [(s, IT.sym_ (s', bt))] lrt in
+       let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) lrt in
        WLRT.mode_and_bad_value_check loc ~infos ~bad_as_value lrt
 
 
@@ -837,12 +837,12 @@ module WAT (WI: WI_Sig) = struct
          let lname = Sym.fresh () in
          let@ () = add_l lname bt in
          let@ () = add_a name' (bt, lname) in
-         let at = AT.subst WI.subst [(name, IT.sym_ (lname, bt))] at in
+         let at = AT.subst WI.subst (IT.make_subst [(name, IT.sym_ (lname, bt))]) at in
          aux at
       | AT.Logical ((s,ls), _info, at) -> 
          let lname = Sym.fresh_same s in
          let@ () = add_l lname ls in
-         let at = AT.subst WI.subst [(s, IT.sym_ (lname, ls))] at in
+         let at = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (lname, ls))]) at in
          aux at
       | AT.Resource (re, info, at) -> 
          let@ () = WRE.welltyped (fst info) re in
@@ -866,7 +866,7 @@ module WAT (WI: WI_Sig) = struct
       match ft with
       | AT.Computational ((s, bt), _info, ft) ->
          let s' = Sym.fresh_same s in
-         let ft = AT.subst WI.subst [(s, IT.sym_ (s', bt))] ft in
+         let ft = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) ft in
          aux ~infos ~undetermined ~bad_as_value constraints ft
       | AT.Logical ((s, _), info, ft) ->
          let infos = SymMap.add s info infos in

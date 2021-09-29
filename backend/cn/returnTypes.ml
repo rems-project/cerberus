@@ -28,10 +28,13 @@ let concat (t1: t) (t2: LRT.t) : t =
 let subst (substitution: IT.t Subst.t) rt = 
   match rt with
   | Computational ((name, bt), oinfo, t) -> 
-     let name' = Sym.fresh_same name in
-     let t' = LRT.subst [(name, IT.sym_ (name', bt))] t in
-     let t'' = LRT.subst substitution t' in
-     Computational ((name', bt), oinfo, t'')
+     if SymSet.mem name substitution.relevant then
+       let name' = Sym.fresh_same name in
+       let t' = LRT.subst (IT.make_subst [(name, IT.sym_ (name', bt))]) t in
+       let t'' = LRT.subst substitution t' in
+       Computational ((name', bt), oinfo, t'')
+     else
+       Computational ((name, bt), oinfo, LRT.subst substitution t)
 
 
 

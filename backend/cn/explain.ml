@@ -291,7 +291,9 @@ let explanation ctxt relevant =
       ) vclass_explanations []
   in
 
-  {substitution; vclasses = vclass_explanations; relevant}
+  { substitution = IT.make_subst substitution; 
+    vclasses = vclass_explanations; 
+    relevant = relevant }
 
 
 
@@ -322,7 +324,7 @@ let state ctxt {substitution; vclasses; relevant} model =
     let@ it_val = S.z3_expr struct_decls z3_val in
     match it_val with
     | IT (Array_op (Def ((s, _), body)), _) ->
-       return (IT.subst [(s, sym_ (q_s, q_bt))] body)
+       return (IT.subst (make_subst [(s, sym_ (q_s, q_bt))]) body)
     | _ ->
        return (get_ it_val (sym_ (q_s, q_bt)))
   in

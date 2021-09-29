@@ -34,29 +34,38 @@ let mResources t  = List.fold_right mResource t
 
 
 
-let rec subst i_subst (substitution: IT.t Subst.t) at =
-  match at with
-  | Computational ((name, bt), info, t) -> 
-     let name' = Sym.fresh_same name in
-     let t' = subst i_subst [(name, IT.sym_ (name', bt))] t in
-     let t'' = subst i_subst substitution t' in
-     Computational ((name', bt), info, t'')
-  | Logical ((name, ls), info, t) -> 
-     let name' = Sym.fresh_same name in
-     let t' = subst i_subst [(name, IT.sym_ (name', ls))] t in
-     let t'' = subst i_subst substitution t' in
-     Logical ((name', ls), info, t'')
-  | Resource (re, info, t) -> 
-     let re = RE.subst substitution re in
-     let t = subst i_subst substitution t in
-     Resource (re, info, t)
-  | Constraint (lc, info, t) -> 
-     let lc = LC.subst substitution lc in
-     let t = subst i_subst substitution t in
-     Constraint (lc, info, t)
-  | I i -> 
-     let i = i_subst substitution i in
-     I i
+let subst i_subst =
+  let rec aux (substitution: IT.t Subst.t) at =
+    match at with
+    | Computational ((name, bt), info, t) -> 
+       if SymSet.mem name substitution.relevant then
+         let name' = Sym.fresh_same name in
+         let t' = aux (IT.make_subst [(name, IT.sym_ (name', bt))]) t in
+         let t'' = aux substitution t' in
+         Computational ((name', bt), info, t'')
+       else
+         Computational ((name, bt), info, aux substitution t)
+    | Logical ((name, ls), info, t) -> 
+       if SymSet.mem name substitution.relevant then
+         let name' = Sym.fresh_same name in
+         let t' = aux (IT.make_subst [(name, IT.sym_ (name', ls))]) t in
+         let t'' = aux substitution t' in
+         Logical ((name', ls), info, t'')
+       else
+         Logical ((name, ls), info, aux substitution t)
+    | Resource (re, info, t) -> 
+       let re = RE.subst substitution re in
+       let t = aux substitution t in
+       Resource (re, info, t)
+    | Constraint (lc, info, t) -> 
+       let lc = LC.subst substitution lc in
+       let t = aux substitution t in
+       Constraint (lc, info, t)
+    | I i -> 
+       let i = i_subst substitution i in
+       I i
+  in
+  aux
 
 
 let pp i_pp ft = 

@@ -177,7 +177,7 @@ let rec bind_logical where (ctxt : t) (lrt : LRT.t) : t =
   match lrt with
   | Logical ((s, ls), _oinfo, rt) ->
      let s' = Sym.fresh () in
-     let rt' = LRT.subst [(s, IT.sym_ (s', ls))] rt in
+     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) rt in
      bind_logical where (add_l s' ls ctxt) rt'
   | Resource (re, _oinfo, rt) -> 
      bind_logical where (add_r where re ctxt) rt
@@ -188,7 +188,7 @@ let rec bind_logical where (ctxt : t) (lrt : LRT.t) : t =
 let bind_computational where (ctxt : t) (name : Sym.t) (rt : RT.t) : t =
   let Computational ((s, bt), _oinfo, rt) = rt in
   let s' = Sym.fresh () in
-  let rt' = LRT.subst [(s, IT.sym_ (s', bt))] rt in
+  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
   bind_logical where (add_a name (bt, s') (add_l s' bt ctxt)) rt'
 
 
@@ -198,7 +198,7 @@ let bind where (ctxt : t) (name : Sym.t) (rt : RT.t) : t =
 let bind_logically where (ctxt : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
   let Computational ((s, bt), _oinfo, rt) = rt in
   let s' = Sym.fresh () in
-  let rt' = LRT.subst [(s, IT.sym_ (s', bt))] rt in
+  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
   ((bt, s'), bind_logical where (add_l s' bt ctxt) rt')
 
 

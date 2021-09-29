@@ -1,4 +1,5 @@
 open Pp
+open Subst
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -139,7 +140,7 @@ module Make (O : Output) = struct
 
 
   let alpha_rename_qpoint qpointer' (qp : qpoint) = 
-    let subst = [(qp.qpointer, sym_ (qpointer', BT.Loc))] in
+    let subst = make_subst [(qp.qpointer, sym_ (qpointer', BT.Loc))] in
     { ct = qp.ct;
       qpointer = qpointer';
       permission = IT.subst subst qp.permission;
@@ -149,7 +150,7 @@ module Make (O : Output) = struct
 
 
   let alpha_rename_qpredicate qpointer' (qp : qpredicate) = 
-    let subst = [(qp.qpointer, sym_ (qpointer', BT.Loc))] in
+    let subst = make_subst [(qp.qpointer, sym_ (qpointer', BT.Loc))] in
     { name = qp.name;
       qpointer = qpointer';
       permission = IT.subst subst qp.permission;
@@ -168,8 +169,11 @@ module Make (O : Output) = struct
     }
 
   let subst_qpoint substitution (qp : qpoint) = 
-    let qp = alpha_rename_qpoint 
-               (Sym.fresh_same qp.qpointer) qp in
+    let qp = 
+      if SymSet.mem qp.qpointer substitution.relevant 
+      then alpha_rename_qpoint (Sym.fresh_same qp.qpointer) qp 
+      else qp
+    in
     {
       ct = qp.ct;
       qpointer = qp.qpointer;
@@ -189,8 +193,11 @@ module Make (O : Output) = struct
     }
 
   let subst_qpredicate substitution (qp : qpredicate) =
-    let qp = alpha_rename_qpredicate 
-               (Sym.fresh_same qp.qpointer) qp in
+    let qp = 
+      if SymSet.mem qp.qpointer substitution.relevant
+      then alpha_rename_qpredicate (Sym.fresh_same qp.qpointer) qp 
+      else qp
+    in
     {
       name = qp.name;
       qpointer = qp.qpointer;

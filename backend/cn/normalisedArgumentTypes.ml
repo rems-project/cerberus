@@ -1,3 +1,4 @@
+open Subst
 open Locations
 module BT = BaseTypes
 module IT = IndexTerms
@@ -34,35 +35,39 @@ let mresource (bound, oinfo) t =
 
 let rec subst_c i_subst substitution = function
   | Constraint (lc, oinfo, t) -> 
-     Constraint (LC.subst substitution lc, 
-                 oinfo, 
-                 subst_c i_subst substitution t)
+     let lc = LC.subst substitution lc in
+     Constraint (lc, oinfo, subst_c i_subst substitution t)
   | I rt -> 
      I (i_subst substitution rt)
 
 let rec subst_r i_subst substitution = function
   | Resource (re, oinfo, t) ->
-     Resource (RE.subst substitution re, 
-               oinfo, 
-               subst_r i_subst substitution t)
+     let re = RE.subst substitution re in
+     Resource (re, oinfo, subst_r i_subst substitution t)
   | C c -> 
      C (subst_c i_subst substitution c)
 
 let rec subst_l i_subst substitution = function
   | Logical ((name, ls), oinfo, t) -> 
-     let name' = Sym.fresh () in
-     let t' = subst_l i_subst [(name, IT.sym_ (name', ls))] t in
-     let t'' = subst_l i_subst substitution t' in
-     Logical ((name', ls), oinfo, t'')
+     if SymSet.mem name substitution.relevant then
+       let name' = Sym.fresh () in
+       let t' = subst_l i_subst (IT.make_subst [(name, IT.sym_ (name', ls))]) t in
+       let t'' = subst_l i_subst substitution t' in
+       Logical ((name', ls), oinfo, t'')
+     else
+       Logical ((name, ls), oinfo, subst_l i_subst substitution t)
   | R r -> 
      R (subst_r i_subst substitution r)
 
 let rec subst_a i_subst substitution = function
   | Computational ((name, bt), oinfo, t) -> 
-     let name' = Sym.fresh () in
-     let t' = subst_a i_subst [(name, IT.sym_ (name', bt))] t in
-     let t'' = subst_a i_subst substitution t' in
-     Computational ((name', bt), oinfo, t'')
+     if SymSet.mem name substitution.relevant then
+       let name' = Sym.fresh () in
+       let t' = subst_a i_subst (IT.make_subst [(name, IT.sym_ (name', bt))]) t in
+       let t'' = subst_a i_subst substitution t' in
+       Computational ((name', bt), oinfo, t'')
+     else
+       Computational ((name, bt), oinfo, subst_a i_subst substitution t)
   | L l -> 
      L (subst_l i_subst substitution l)
 

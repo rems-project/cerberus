@@ -219,7 +219,7 @@ module ResourceInference = struct
                else 
                  continue
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
-               let subst = [(p'.qpointer, requested.pointer)] in
+               let subst = make_subst [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                if provable (t_ took) then
@@ -273,7 +273,7 @@ module ResourceInference = struct
             let continue = (re, (needed, value, init)) in
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
-               let subst = [(requested.qpointer, p'.pointer)] in
+               let subst = make_subst [(requested.qpointer, p'.pointer)] in
                let can_take = min_ (p'.permission, IT.subst subst needed) in
                let took = gt_ (can_take, q_ (0, 1)) in
                if provable (t_ took) then
@@ -306,7 +306,7 @@ module ResourceInference = struct
         let@ global = get_global () in
         let@ all_lcs = all_constraints () in
         let qpointer_s, qpointer = IT.fresh Loc in
-        let subst = [(requested.qpointer, qpointer)] in
+        let subst = make_subst [(requested.qpointer, qpointer)] in
         let r = 
           { ct = requested.ct;
             qpointer = qpointer_s;
@@ -345,7 +345,7 @@ module ResourceInference = struct
                else
                  continue
             | QPredicate p' when String.equal requested.name p'.name ->
-               let subst = [(p'.qpointer, requested.pointer)] in
+               let subst = make_subst [(p'.qpointer, requested.pointer)] in
                let can_take = min_ (IT.subst subst p'.permission, needed) in
                let took = 
                  and_ ((List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs) @
@@ -392,7 +392,7 @@ module ResourceInference = struct
             let continue = (re, (needed, oargs)) in
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
-               let subst = [(requested.qpointer, p'.pointer)] in
+               let subst = make_subst [(requested.qpointer, p'.pointer)] in
                let could_take = min_ (p'.permission, IT.subst subst needed) in
                let took = 
                  and_ ((List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs) @
@@ -431,7 +431,7 @@ module ResourceInference = struct
         let@ global = get_global () in
         let@ all_lcs = all_constraints () in
         let qpointer_s, qpointer = IT.fresh Loc in
-        let subst = [(requested.qpointer, qpointer)] in
+        let subst = make_subst [(requested.qpointer, qpointer)] in
         let r = 
           { name = requested.name;
             qpointer = qpointer_s;
@@ -467,14 +467,17 @@ module ResourceInference = struct
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
       let folded_value = 
         let values = 
-          List.init length (fun i -> (int_ i, IT.subst [(qpoint.qpointer, pointer (int_ i))] qpoint.value))
+          List.init length (fun i -> 
+              let subst = make_subst [(qpoint.qpointer, pointer (int_ i))] in
+              (int_ i, IT.subst subst qpoint.value)
+            )
         in
         List.fold_left set_ (const_ Integer (default_ (BT.of_sct item_ct))) values
       in
       let folded_init = 
         let i_s, i = IT.fresh Integer  in
-        eachI_ (0, i_s, length - 1)
-          (IT.subst [(qpoint.qpointer, pointer i)] qpoint.init)
+        let subst = make_subst [(qpoint.qpointer, pointer i)] in
+        eachI_ (0, i_s, length - 1) (IT.subst subst qpoint.init)
       in
       let folded_resource = 
         Point {
@@ -736,7 +739,7 @@ end = struct
     in
 
     let unify_or_constrain (unis, subst, constrs) (output_spec, output_have) =
-      match IT.subst subst output_spec with
+      match IT.subst (make_subst subst) output_spec with
       | IT (Lit (Sym s), _) when SymMap.mem s unis ->
          let@ () = ls_matches_spec unis s output_have in
          return (SymMap.remove s unis, (s, output_have) :: subst, constrs)
@@ -747,7 +750,7 @@ end = struct
 
     (* ASSUMES unification variables and quantifier q_s are disjoint  *)
     let unify_or_constrain_q (q_s,q_bt) (unis, subst, constrs) (output_spec, output_have) = 
-      match IT.subst subst output_spec with
+      match IT.subst (make_subst subst) output_spec with
       | IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
            when Sym.equal q' q_s && SymMap.mem s unis ->
          let output_have_body = array_def_ (q_s, q_bt) output_have in
@@ -774,7 +777,7 @@ end = struct
          let result = 
            provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, subst) else fail failure
+         if result then return (unis, make_subst subst) else fail failure
        else fail failure
     | QPoint p_spec, QPoint p_have ->
        let p_spec, p_have = 
@@ -796,7 +799,7 @@ end = struct
              (forall_ (p_have.qpointer, BT.Loc)
                 (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, subst) else fail failure
+         if result then return (unis, make_subst subst) else fail failure
        else fail failure
     | Predicate p_spec, Predicate p_have ->
        if predicate_name_equal p_spec.name p_have.name
@@ -812,7 +815,7 @@ end = struct
          let result =
            provable (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, subst) else fail failure
+         if result then return (unis, make_subst subst) else fail failure
        else fail failure
     | QPredicate p_spec, QPredicate p_have ->
        let p_spec, p_have = 
@@ -835,7 +838,7 @@ end = struct
              (forall_ (p_have.qpointer, BT.Loc)
                 (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
          in
-         if result then return (unis, subst) else fail failure
+         if result then return (unis, make_subst subst) else fail failure
        else fail failure
     | _ -> 
        Debug_ocaml.error "resource inference has inferred mismatched resources"
@@ -881,7 +884,7 @@ end = struct
         | (arg :: args), (Computational ((s, bt), _info, ftyp))
              when BT.equal arg.bt bt ->
            check_computational args 
-             (subst rt_subst [(s, sym_ (arg.lname, bt))] ftyp)
+             (subst rt_subst (make_subst [(s, sym_ (arg.lname, bt))]) ftyp)
         | (arg :: _), (Computational ((_, bt), _info, _))  ->
            fail (fun _ -> {loc = arg.loc; msg = Mismatch {has = arg.bt; expect = bt}})
         | [], (L ftyp) -> 
@@ -905,7 +908,7 @@ end = struct
         | Logical ((s, ls), info, ftyp) ->
            let s' = Sym.fresh () in
            delay_logical (SymMap.add s' (ls, info) unis) 
-             (subst_l rt_subst [(s, sym_ (s', ls))] ftyp)
+             (subst_l rt_subst (make_subst [(s, sym_ (s', ls))]) ftyp)
         | R ftyp -> 
            return (unis, ftyp)
       in
@@ -1801,9 +1804,11 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        in
        let instantiated_clauses = 
          let subst = 
-           (def.pointer, it_of_arg pointer_arg) ::
-           (def.permission, permission ) ::
-           List.combine (List.map fst def.iargs) (List.map it_of_arg iargs)
+           make_subst (
+               (def.pointer, it_of_arg pointer_arg) ::
+               (def.permission, permission ) ::
+               List.combine (List.map fst def.iargs) (List.map it_of_arg iargs)
+             )
          in
          List.map (Predicates.subst_clause subst) def.clauses
        in
@@ -1864,7 +1869,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        let new_constraints = 
          List.filter_map (function
              | Forall ((s, bt), body) when BT.equal arg.bt bt ->
-                let inst = IT.subst [(s, it_of_arg arg)] body in
+                let inst = IT.subst (make_subst [(s, it_of_arg arg)]) body in
                 Some (LC.t_ inst, (loc, None))
              | (Forall _ | T _) -> 
                 None
@@ -1986,7 +1991,7 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
     | ((aname,abt) :: args), (AT.Computational ((lname, sbt), _info, ftyp))
          when BT.equal abt sbt ->
        let new_lname = Sym.fresh () in
-       let subst = [(lname, sym_ (new_lname, sbt))] in
+       let subst = make_subst [(lname, sym_ (new_lname, sbt))] in
        let ftyp' = AT.subst rt_subst subst ftyp in
        let@ () = add_l new_lname abt in
        let@ () = add_a aname (abt,new_lname) in

@@ -40,10 +40,13 @@ let rec subst (substitution: IT.t Subst.t) lrt =
   | I -> 
      I
   | Logical ((name, ls), info, t) -> 
-     let name' = Sym.fresh_same name in
-     let t' = subst [(name, IT.sym_ (name', ls))] t in
-     let t'' = subst substitution t' in
-     Logical ((name', ls), info, t'')
+     if SymSet.mem name substitution.relevant then
+       let name' = Sym.fresh_same name in
+       let t' = subst (IT.make_subst [(name, IT.sym_ (name', ls))]) t in
+       let t'' = subst substitution t' in
+       Logical ((name', ls), info, t'')
+     else
+       Logical ((name, ls), info, subst substitution t)
   | Resource (re, info, t) -> 
      let re = Resources.subst substitution re in
      let t = subst substitution t in
