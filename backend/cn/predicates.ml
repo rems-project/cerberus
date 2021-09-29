@@ -286,6 +286,7 @@ let page_alloc_predicates struct_decls =
   in
 
 
+
   let vmemmap_page =
 
     let id = "Vmemmap_page" in
@@ -395,6 +396,124 @@ let page_alloc_predicates struct_decls =
 
 
 
+
+  (* check: possibly inconsistent *)
+  let free_area_cell =
+
+    let id = "FreeArea_cell" in
+    let loc = Loc.other "internal (FreeArea_cell)" in
+
+    let cell_pointer_s, cell_pointer = IT.fresh_named Loc "cell_pointer" in
+    let permission_s, permission = IT.fresh_named BT.Real "permission" in
+    (* iargs *)
+    let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
+    let vmemmap_s, vmemmap = 
+      IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+    let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
+    let range_start_s, range_start = IT.fresh_named Integer "range_start" in
+    let range_end_s, range_end = IT.fresh_named Integer "range_end" in
+    (* oargs *)
+    let cell_s, cell = IT.fresh_named (BT.Struct list_head_tag) "cell" in
+
+    let free_area_base_pointer = 
+      addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "free_area")) in
+
+    let offset_within_free_area =
+      (pointerToIntegerCast_ cell_pointer) %-
+        (pointerToIntegerCast_ free_area_base_pointer)
+    in
+
+    let index_in_free_area = 
+      offset_within_free_area %/ (int_ (Memory.size_of_struct list_head_tag))
+    in
+
+    let order = index_in_free_area in
+
+
+    let ownership = 
+      let resource = 
+        Point {
+            ct = struct_ct list_head_tag;
+            pointer = cell_pointer;
+            permission = permission;
+            value = cell; 
+            init = bool_ true;
+          }
+      in
+      LRT.Logical ((cell_s, IT.bt cell), (loc, None),
+      LRT.Resource (resource, (loc, None), 
+      LRT.I))
+    in
+
+
+    let free_area_wellformedness = 
+      let val_constr = good_ (struct_ct list_head_tag, cell) in
+      let wf_constr = 
+        let prev = cell %. "prev" in
+        let next = cell %. "next" in
+        or_ [and_ [prev %== cell_pointer; next %== cell_pointer];
+             and_ begin
+                 let prev_vmemmap = container_of_ (prev, hyp_page_tag, Id.id "node") in
+                 let next_vmemmap = container_of_ (next, hyp_page_tag, Id.id "node") in
+                 [(*prev*)
+                   vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap range_start range_end;
+                   ((get_ vmemmap prev_vmemmap) %. "order") %== order;
+                   ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
+                   (*next*)
+                   vmemmap_good_pointer ~vmemmap_pointer next_vmemmap range_start range_end;
+                   ((get_ vmemmap next_vmemmap) %. "order") %== order;
+                   ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
+                 ]
+               end
+          ]
+      in
+      LRT.Constraint (t_ val_constr, (loc, None), 
+      LRT.Constraint (t_ wf_constr, (loc, None), 
+      LRT.I))
+    in
+
+    let lrt = 
+     let open LRT in
+     ownership @@
+     free_area_wellformedness
+    in
+
+    let assignment = OutputDef.[
+          {loc; name = "cell"; value = cell};
+      ]
+    in
+
+    let clause = {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = AT.of_lrt lrt (AT.I assignment)
+      }
+    in
+
+    let predicate = {
+        loc = loc;
+        pointer = cell_pointer_s;
+        permission = permission_s;
+        iargs = [
+            (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+            (vmemmap_s, IT.bt vmemmap);
+            (pool_pointer_s, IT.bt pool_pointer);
+            (range_start_s, IT.bt range_start);
+            (range_end_s, IT.bt range_end);
+          ];
+        oargs = [("cell", IT.bt cell)];
+        clauses = [clause]; 
+      } 
+    in
+    (id, predicate)
+  in
+
+
+
+
+
+
+
   (* let vmemmap_cell_address hyp_vmemmap_t i_t =
    *   arrayShift_ (hyp_vmemmap_t, 
    *                Sctype ([], Struct hyp_page_tag), 
@@ -422,73 +541,6 @@ let page_alloc_predicates struct_decls =
 
 
 
-  (* let free_area_cell = 
-   * 
-   *   let id = "Free_area_cell" in
-   *   let loc = Loc.other "internal (Free_area_cell)" in
-   *   
-   *   let vmemmap_pointer_s, vmemmap_pointer_t = IT.fresh_named Loc "vmemmap_pointer" in
-   *   let vmemmap_s, vmemmap_t = IT.fresh_named (BT.Array (Integer, Struct hyp_page_tag)) "vmemmap" in
-   *   let range_start_s, range_start_t = IT.fresh_named Integer "range_start" in
-   *   let range_end_s, range_end_t = IT.fresh_named Integer "range_end" in
-   *   let order_s, order_t = IT.fresh_named Integer "order" in
-   * 
-   *   let cell_pointer_s, cell_pointer_t = IT.fresh_named Loc "cell_pointer" in
-   *   let cell_s, cell_t = IT.fresh_named (BT.Struct list_head_tag) "cell" in
-   * 
-   *   let constr prev_next = 
-   *     let prev_next_t = cell_t %. prev_next in
-   *     or_ [
-   *         prev_next_t %== cell_pointer_t;
-   *         and_ (
-   *             vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t ::
-   *               (let i_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
-   *                [range_start_t %<= i_t; i_t %< range_end_t;
-   *                 ((vmemmap_t %@ i_t) %. "order") %== order_t;
-   *                 ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
-   *               )
-   *           )
-   *       ]
-   *   in
-   *   
-   *   let lrt = 
-   *     let points = 
-   *       point (cell_pointer_t, Memory.size_of_struct list_head_tag) 
-   *         (q_ (1, 1)) cell_t (bool_ true)
-   *     in
-   *     LRT.Logical ((cell_s, IT.bt cell_t),
-   *     LRT.Resource (points,
-   *     LRT.Constraint (t_ (constr "prev"),
-   *     LRT.Constraint (t_ (constr "next"),
-   *     LRT.I))))
-   *   in
-   * 
-   *   let predicate = 
-   *     {
-   *       loc = loc;
-   *       pointer = cell_pointer_s;
-   *       iargs = [
-   *           (vmemmap_pointer_s, IT.bt vmemmap_pointer_t);
-   *           (vmemmap_s, IT.bt vmemmap_t);
-   *           (range_start_s, IT.bt range_start_t);
-   *           (range_end_s, IT.bt range_end_t);
-   *           (order_s, IT.bt order_t);
-   *         ];
-   *       oargs = [("cell", IT.bt cell_t)];
-   *       clauses = 
-   *         [(loc, PackingFT.of_lrt lrt 
-   *                (PackingFT.I [("cell", cell_t)]));]; 
-   *     } 
-   *   in
-   *   (id, predicate)
-   * in *)
-
-
-
-
-
-
-
   let hyp_pool =
 
     let id = "Hyp_pool" in
@@ -497,49 +549,110 @@ let page_alloc_predicates struct_decls =
     let permission_s, permission = IT.fresh_named BT.Real "permission" in
     (* iargs *)
     let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
-    (* oargs *)
-    let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
-
-
     let vmemmap_s, vmemmap = 
       IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
-    let range_start = pool %. "range_start" in
-    let range_end = pool %. "range_end" in
-    let max_order_t = pool %. "max_order" in
-    let _free_area_t = pool %. "free_area" in
+    (* oargs *)
+    let range_start_s, range_start = IT.fresh_named Integer "range_start" in
+    let range_end_s, range_end = IT.fresh_named Integer "range_end" in
+    let max_order_s, max_order = IT.fresh_named Integer "max_order" in
+    let free_area_s, free_area = 
+      IT.fresh_named (Array (Loc, Struct list_head_tag)) "free_area" in
 
-    let metadata_ownership = 
-      let resource = 
+    let range_start_owned = 
+      let range_start_resource = 
         Point {
-            ct = struct_ct hyp_pool_tag;
-            pointer = pool_pointer;
+            ct = integer_ct (Unsigned LongLong);
+            pointer = addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "range_start"));
             permission = permission;
             init = bool_ true;
-            value = pool;
+            value = range_start;
           }
       in
-      LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
-      LRT.Resource (resource, (loc, None), 
-      LRT.Constraint (t_ (good_ (struct_ct hyp_pool_tag, pool)), (loc, None), 
+      LRT.Logical ((range_start_s, IT.bt range_start), (loc, None), 
+      LRT.Resource (range_start_resource, (loc, None), 
+      LRT.Constraint (t_ (good_ (integer_ct (Unsigned LongLong), range_start)), (loc, None), 
       LRT.I)))
+    in
+
+    let range_end_owned = 
+      let range_end_resource = 
+        Point {
+            ct = integer_ct (Unsigned LongLong);
+            pointer = addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "range_end"));
+            permission = permission;
+            init = bool_ true;
+            value = range_end;
+          }
+      in
+      LRT.Logical ((range_end_s, IT.bt range_end), (loc, None), 
+      LRT.Resource (range_end_resource, (loc, None), 
+      LRT.Constraint (t_ (good_ (integer_ct (Unsigned LongLong), range_end)), (loc, None), 
+      LRT.I)))
+    in
+
+    let max_order_owned = 
+      let max_order_resource = 
+        Point {
+            ct = integer_ct (Unsigned Int_);
+            pointer = addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "max_order"));
+            permission = permission;
+            init = bool_ true;
+            value = max_order;
+          }
+      in
+      LRT.Logical ((max_order_s, IT.bt max_order), (loc, None), 
+      LRT.Resource (max_order_resource, (loc, None), 
+      LRT.Constraint (t_ (good_ (integer_ct (Unsigned Int_), max_order)), (loc, None), 
+      LRT.I)))
+    in
+
+    let free_area_owned = 
+      let free_area_resource = 
+        let qpointer_s, qpointer = IT.fresh_named Loc "p" in
+        let base =
+          addPointer_ (pool_pointer, 
+                       memberOffset_ (hyp_pool_tag, Id.id "free_area"))
+        in
+        QPredicate {
+            name = "FreeArea_cell";
+            qpointer = qpointer_s;
+            iargs = [
+                vmemmap_pointer;
+                vmemmap;
+                pool_pointer;
+                range_start;
+                range_end
+              ];
+            oargs = [
+                get_ free_area qpointer;
+              ];
+            permission = 
+              array_permission ~base ~item_ct:(struct_ct list_head_tag)
+                ~length:mMAX_ORDER ~qpointer:qpointer ~permission
+          }
+      in
+      LRT.Logical ((free_area_s, IT.bt free_area), (loc, None), 
+      LRT.Resource (free_area_resource, (loc, None),
+      LRT.I))
     in
 
     let beyond_range_end_cell_pointer = 
       addPointer_ (vmemmap_pointer, (range_end %/ pPAGE_SIZE) %* hyp_page_size) in
     let metadata_well_formedness =
       let constrs = [
-          representable_ (pointer_ct void_ct, integerToPointerCast_ range_start);
-          representable_ (pointer_ct void_ct, integerToPointerCast_ range_end);
+          good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
+          good_ (pointer_ct void_ct, integerToPointerCast_ range_end);
           range_start %< range_end;
           rem_ (range_start, pPAGE_SIZE) %== int_ 0;
           rem_ (range_end, pPAGE_SIZE) %== int_ 0;
-          representable_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
-          max_order_t %> int_ 0;
-          max_order_t %<= mMAX_ORDER;
+          good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
+          max_order %> int_ 0;
+          max_order %<= mMAX_ORDER;
         ]
       in
       LRT.mConstraints (List.map (fun lc -> (t_ lc, (loc, None))) constrs) LRT.I
     in
+
 
     let vmemmap_metadata_owned =
       let p_s, p = IT.fresh_named Loc "p" in
@@ -568,82 +681,144 @@ let page_alloc_predicates struct_decls =
         aligned_ (vmemmap_pointer,
                   array_ct (struct_ct hyp_page_tag) None)
       in
-
       LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
       LRT.Resource (vmemmap_array, (loc, None), 
       LRT.Constraint (t_ aligned, (loc, None), 
       LRT.I)))
     in
 
-    let free_area_well_formedness = 
-      (* let constr prev_next = 
-       *   let o_s, o_t = IT.fresh_named Integer "o" in
-       *   let prev_next_t = (free_area_t %@ o_t) %. prev_next in
-       *   let cell_pointer_t = 
-       *     arrayShift_ (memberShift_ (pool_pointer_t, hyp_pool_tag, Id.id "free_area"),
-       *                  Sctype ([], Struct hyp_pool_tag),
-       *                  o_t) 
-       *   in
-       *   forall_ (o_s, IT.bt o_t) 
-       *     (\* (Some (T_Member (T_Get (T_Term free_area_t, T_Term o_t), Id.id prev_next))) *\)
-       *     begin
-       *       and_ []
-       *           good_pointer prev_next_t (Sctype ([], Struct list_head_tag));
-       *           or_ [
-       *               prev_next_t %== cell_pointer_t;
-       *               and_ (
-       *                   vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t :: []
-       * 
-       *                 (\* (let p_t = vmemmap_node_pointer_to_cell_pointer vmemmap_pointer_t prev_next_t in
-       *                  *  [range_start_t %<= p_t; p_t %< range_end_t;
-       *                  *   ((get_ vmemmap_t p_t) %. "order") %== o_t;
-       *                  *   ((get_ vmemmap_t p_t) %. "refcount") %== int_ 0] *\)
-       *                 )
-       *             ]
-       *         ]
-       *     end
-       * in
-       * LRT.Constraint (constr "prev", (loc, None), 
-       * LRT.Constraint (constr "next", (loc, None), 
-       * LRT.I)) *)
-      LRT.I
+    let lrt = 
+      let open LRT in
+      range_start_owned
+      @@ range_end_owned
+      @@ max_order_owned
+      @@ vmemmap_metadata_owned
+      @@ free_area_owned
+      @@ metadata_well_formedness
+      @@ vmemmap_metadata_owned
+      (* @@ free_area_well_formedness (\* possibly inconsistent *\)
+       * @@ vmemmap_well_formedness2 *)
+      (* @@ Tools.skip (LRT.I) page_group_ownership *)
     in
 
-    let vmemmap_well_formedness2 = 
-      let constr prev_next =
-        (* let i_s, i_t = IT.fresh_named Integer "i" in *)
-        (* let trigger = 
-         *   T_Member (T_Member (T_App (T_Term vmemmap_t, T_Term i_t), Id.id "node"), Id.id prev_next)
-         * in *)
-        T (bool_ true)
-        (* forall_trigger_ (i_s, IT.bt i_t) (Some trigger)
-         *   begin
-         *     let prev_next_t = ((vmemmap_t %@ i_t) %. "node") %.prev_next in
-         *     impl_ (
-         *         vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t
-         *       ,
-         *         let j_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
-         *         and_
-         *           [
-         *             (\* (((vmemmap_t %@ j_t) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== 
-         *              *   (vmemmap_cell_node_address vmemmap_pointer_t i_t); *\)
-         *             ((vmemmap_t %@ i_t) %. "order") %== ((vmemmap_t %@ j_t) %. "order");
-         *         (\* forall_sth_ (k_s, IT.bt k_t)
-         *          *   (and_ [(i_t %+ int_ 1) %<= k_t; 
-         *          *          k_t %< (i_t %+ (exp_ (int_ 2, (vmemmap_t %@ i_t) %. "order")))])
-         *          *   (and_ [
-         *          *       ((vmemmap_t %@ k_t) %. "order") %== hHYP_NO_ORDER_t;
-         *          *       ((vmemmap_t %@ k_t) %. "refcount") %== int_ 0;
-         *          *     ])
-         *          * ] *\)
-         *           ]
-         *       )
-         *   end *)
-      in
-      LRT.Constraint (constr "prev", (loc, None), 
-      LRT.Constraint (constr "next", (loc, None), 
-      LRT.I))
+    let assignment = OutputDef.[
+          {loc; name = "range_start"; value = range_start};
+          {loc; name = "range_end"; value = range_end};
+          {loc; name = "max_order"; value = max_order};
+          {loc; name = "free_area"; value = free_area};
+          {loc; name = "vmemmap"; value = vmemmap};
+      ]
     in
+    let clause = {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = AT.of_lrt lrt (AT.I assignment)
+      }
+    in
+
+    let predicate = {
+        loc = loc;
+        pointer = pool_pointer_s;
+        permission = permission_s;
+        iargs = [
+            (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+          ]
+        ;
+        oargs = [
+            ("range_start", IT.bt range_start); 
+            ("range_end", IT.bt range_end); 
+            ("max_order", IT.bt max_order); 
+            ("free_area", IT.bt free_area);
+            ("vmemmap", IT.bt vmemmap);
+          ];
+        clauses = [clause;]; 
+      } 
+    in
+    (id, predicate)
+
+
+  in
+  [vmemmap_page;
+   free_area_cell;
+   hyp_pool]
+
+
+
+
+
+
+
+
+    (* let vmemmap_metadata_owned =
+     *   let p_s, p = IT.fresh_named Loc "p" in
+     *   let point_permission = 
+     *     let condition = 
+     *       vmemmap_good_pointer ~vmemmap_pointer p
+     *         range_start range_end
+     *     in
+     *     ite_ (condition, permission, q_ (0, 1))
+     *   in
+     *   let vmemmap_array = 
+     *     QPredicate {
+     *         qpointer = p_s;
+     *         name = "Vmemmap_page";
+     *         iargs = [
+     *             vmemmap_pointer;
+     *             pool_pointer;
+     *             range_start;
+     *             range_end;
+     *           ];
+     *         oargs = [get_ vmemmap p];
+     *         permission = point_permission;
+     *       }
+     *   in
+     *   let aligned = 
+     *     aligned_ (vmemmap_pointer,
+     *               array_ct (struct_ct hyp_page_tag) None)
+     *   in
+     *   LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
+     *   LRT.Resource (vmemmap_array, (loc, None), 
+     *   LRT.Constraint (t_ aligned, (loc, None), 
+     *   LRT.I)))
+     * in *)
+
+
+
+    (* let vmemmap_well_formedness2 = 
+     *   let constr prev_next =
+     *     (\* let i_s, i_t = IT.fresh_named Integer "i" in *\)
+     *     (\* let trigger = 
+     *      *   T_Member (T_Member (T_App (T_Term vmemmap_t, T_Term i_t), Id.id "node"), Id.id prev_next)
+     *      * in *\)
+     *     T (bool_ true)
+     *     (\* forall_trigger_ (i_s, IT.bt i_t) (Some trigger)
+     *      *   begin
+     *      *     let prev_next_t = ((vmemmap_t %@ i_t) %. "node") %.prev_next in
+     *      *     impl_ (
+     *      *         vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t
+     *      *       ,
+     *      *         let j_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
+     *      *         and_
+     *      *           [
+     *      *             (\\* (((vmemmap_t %@ j_t) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== 
+     *      *              *   (vmemmap_cell_node_address vmemmap_pointer_t i_t); *\\)
+     *      *             ((vmemmap_t %@ i_t) %. "order") %== ((vmemmap_t %@ j_t) %. "order");
+     *      *         (\\* forall_sth_ (k_s, IT.bt k_t)
+     *      *          *   (and_ [(i_t %+ int_ 1) %<= k_t; 
+     *      *          *          k_t %< (i_t %+ (exp_ (int_ 2, (vmemmap_t %@ i_t) %. "order")))])
+     *      *          *   (and_ [
+     *      *          *       ((vmemmap_t %@ k_t) %. "order") %== hHYP_NO_ORDER_t;
+     *      *          *       ((vmemmap_t %@ k_t) %. "refcount") %== int_ 0;
+     *      *          *     ])
+     *      *          * ] *\\)
+     *      *           ]
+     *      *       )
+     *      *   end *\)
+     *   in
+     *   LRT.Constraint (constr "prev", (loc, None), 
+     *   LRT.Constraint (constr "next", (loc, None), 
+     *   LRT.I))
+     * in *)
 
     (* let page_group_ownership = 
      *   let qp_s, qp_t = IT.fresh_named Loc "qp" in
@@ -678,48 +853,7 @@ let page_alloc_predicates struct_decls =
      *   LRT.Resource (qpoint, LRT.I))
      * in *)
 
-    let lrt = 
-      let open LRT in
-      metadata_ownership
-      @@ metadata_well_formedness
-      @@ vmemmap_metadata_owned
-      @@ free_area_well_formedness (* possibly inconsistent *)
-      @@ vmemmap_well_formedness2
-      (* @@ Tools.skip (LRT.I) page_group_ownership *)
-    in
-    let assignment = OutputDef.[
-          {loc; name = "pool"; value = pool};
-          {loc; name = "vmemmap"; value = vmemmap};
-      ]
-    in
-    let clause = {
-        loc = loc;
-        guard = bool_ true;
-        packing_ft = AT.of_lrt lrt (AT.I assignment)
-      }
-    in
 
-    let predicate = {
-        loc = loc;
-        pointer = pool_pointer_s;
-        permission = permission_s;
-        iargs = [
-            (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          ]
-        ;
-        oargs = [
-            ("pool", IT.bt pool); 
-            ("vmemmap", IT.bt vmemmap)
-          ];
-        clauses = [clause;]; 
-      } 
-    in
-    (id, predicate)
-
-
-  in
-  [vmemmap_page;
-   hyp_pool]
 
 
 

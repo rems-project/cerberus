@@ -11,11 +11,12 @@ module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
+module Loc = Locations
+
 open Tools
 open Sctypes
 open Context
 open Global
-
 
 open IT
 open TypeErrors
@@ -716,7 +717,7 @@ module Spine : sig
     Loc.t -> arg -> RT.t -> (unit, type_error) m
 end = struct
 
-  let pp_unis (unis : (LS.t * Loc.info) SymMap.t) : Pp.document = 
+  let pp_unis (unis : (LS.t * Locations.info) SymMap.t) : Pp.document = 
    Pp.list (fun (sym, (ls, _)) ->
      Sym.pp sym ^^^ !^"unresolved" ^^^ parens (LS.pp ls)
      ) (SymMap.bindings unis)
@@ -757,7 +758,7 @@ end = struct
     in
     let unify_or_constrain_q_list q = ListM.fold_leftM (unify_or_constrain_q q) in
 
-    fun (unis : (LS.t * Loc.info) SymMap.t) r_spec r_have ->
+    fun (unis : (LS.t * Locations.info) SymMap.t) r_spec r_have ->
 
     match r_spec, r_have with
     | Point p_spec, Point p_have ->
