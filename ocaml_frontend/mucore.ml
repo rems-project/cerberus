@@ -35,7 +35,8 @@ module type TYPES = sig
   type lt
   type gt
 
-  type predicates
+  type resource_predicates
+  type logical_predicates
 
 end
 
@@ -338,7 +339,8 @@ module Make(T : TYPES) = struct
     mu_extern  : mu_extern_map;
     mu_funinfo :  mu_funinfos;
     mu_loop_attributes : Annot.loop_attributes;
-    mu_predicates : T.predicates
+    mu_resource_predicates : T.resource_predicates;
+    mu_logical_predicates : T.logical_predicates;
   }
 
 
@@ -360,7 +362,8 @@ module SimpleTypes : TYPES
        with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
        with type gt = Ctype.ctype
-       with type predicates = unit
+       with type resource_predicates = unit
+       with type logical_predicates = unit
   = 
 struct
 
@@ -374,6 +377,7 @@ struct
   type ft = ct * (Symbol.sym * ct) list * bool
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
   type gt = ct
-  type predicates = unit
+  type resource_predicates = unit
+  type logical_predicates = unit
 
 end

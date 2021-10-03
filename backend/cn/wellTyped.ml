@@ -390,133 +390,6 @@ module WIT = struct
 
 
 
-  let bad_value_check _ ~infos:_ ~bad_as_value:_ _ = 
-    return ()
-
-  (* let rec bad_value_check loc ~infos ~bad_as_value (IT (it, _)) =
-   *   let aux = bad_value_check loc ~infos ~bad_as_value in
-   *   match it with
-   *   | Lit lit ->
-   *      begin match lit with
-   *      | Sym s when SymSet.mem s bad_as_value -> 
-   *         let (_, odescr) = SymMap.find s infos in
-   *         fail (fun _ -> {loc; msg = Array_as_value (s, odescr)})
-   *      | _ ->
-   *         return ()
-   *      end
-   *   | Arith_op arith_op ->
-   *      begin match arith_op with
-   *      | Add (t,t')
-   *      | Sub (t,t')
-   *      | Mul (t,t')
-   *      | Div (t,t')
-   *      | Exp (t,t')
-   *      | Rem (t,t')
-   *      | Mod (t,t')
-   *      | LT (t,t') 
-   *      | LE (t,t') ->
-   *         ListM.iterM aux [t; t']
-   *      | IntToReal t
-   *      | RealToInt t ->
-   *         aux t
-   *      end
-   *   | Bool_op bool_op ->
-   *      begin match bool_op with
-   *      | And ts
-   *      | Or ts ->
-   *         ListM.iterM aux ts
-   *      | Impl (t,t') ->
-   *         ListM.iterM aux [t; t']
-   *      | Not t ->
-   *         aux t
-   *      | ITE (t,t',t'') ->
-   *         ListM.iterM aux [t; t'; t'']
-   *      | EQ (t,t') ->
-   *         ListM.iterM aux [t; t']
-   *      | EachI (_, t) ->
-   *         aux t
-   *      end
-   *   | Tuple_op tuple_op ->
-   *      begin match tuple_op with
-   *      | Tuple ts ->
-   *         ListM.iterM aux ts
-   *      | NthTuple (n, t') ->
-   *         aux t'
-   *      end
-   *   | Struct_op struct_op ->
-   *      begin match struct_op with
-   *      | Struct (tag, members) ->
-   *         ListM.iterM (fun (_,t) -> aux t) members
-   *      | StructMember (t, member) ->
-   *         aux t
-   *      end
-   *   | Pointer_op pointer_op ->
-   *      begin match pointer_op with 
-   *      | Null -> 
-   *         return ()
-   *      | AddPointer (t, t')
-   *      | SubPointer (t, t')
-   *      | MulPointer (t, t')
-   *      | LTPointer (t, t')
-   *      | LEPointer (t, t') ->
-   *         ListM.iterM aux [t; t']
-   *      | IntegerToPointerCast t
-   *      | PointerToIntegerCast t ->
-   *         aux t
-   *      | MemberOffset (tag, member) ->
-   *         return ()
-   *      | ArrayOffset (ct, t) ->
-   *         aux t
-   *      end
-   *   | CT_pred ct_pred ->
-   *      begin match ct_pred with
-   *      | AlignedI t ->
-   *         ListM.iterM aux [t.t; t.align]
-   *      | Aligned (t, ct) ->
-   *         aux t
-   *      | Representable (ct, t) ->
-   *         aux t
-   *      | Good (ct, t) ->
-   *         aux t
-   *      end
-   *   | List_op list_op ->
-   *      begin match list_op with
-   *      | Nil -> 
-   *         return ()
-   *      | Cons (t1,t2) ->
-   *         ListM.iterM aux [t1; t2]
-   *      | List ts ->
-   *         ListM.iterM aux ts
-   *      | Head t
-   *      | Tail t
-   *      | NthList (_, t) ->
-   *         aux t
-   *      end
-   *   | Set_op set_op ->
-   *      begin match set_op with
-   *      | SetMember (t,t') ->
-   *         ListM.iterM aux [t; t']
-   *      | SetUnion its
-   *      | SetIntersection its ->
-   *         ListM.iterM aux (List1.to_list its)
-   *      | SetDifference (t, t')
-   *      | Subset (t, t') ->
-   *         ListM.iterM aux [t; t']
-   *      end
-   *   | Array_op array_op -> 
-   *      begin match array_op with
-   *      | Const (_, t) ->
-   *         aux t
-   *      | Set (t1, t2, t3) ->
-   *         ListM.iterM aux [t1; t2; t3]
-   *      | Get (IT (Lit (Sym _), _), t2) -> 
-   *         aux t2
-   *      | Get (t1, t2) -> 
-   *         ListM.iterM aux [t1; t2]
-   *      | Def (_, body) -> 
-   *         aux body
-   *      end *)
-
 end
 
 
@@ -527,22 +400,23 @@ let unconstrained_lvar loc infos lvar =
   let (loc, odescr) = SymMap.find lvar infos in
   fail (fun _ -> {loc; msg = Unconstrained_logical_variable (lvar, odescr)})
 
+let ensure_same_argument_number loc input_output has ~expect =
+  if has = expect then return () else 
+    match input_output with
+    | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+    | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+    | `Output -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+
 
 module WRE = struct
 
   open Resources.RE
 
-  let get_predicate_def loc name = 
+  let get_resource_predicate_def loc name = 
     let@ global = get_global () in
-    match Global.get_predicate_def global name with
+    match Global.get_resource_predicate_def global name with
     | Some def -> return def
-    | None -> fail (fun _ -> {loc; msg = Unknown_predicate name})
-
-  let ensure_same_argument_number loc input_output has ~expect =
-    if has = expect then return () else 
-      match input_output with
-      | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
-      | `Output -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+    | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate name})
 
   let welltyped loc resource = 
     begin match resource with
@@ -561,7 +435,7 @@ module WRE = struct
            return ()
          end
     | Predicate p -> 
-       let@ def = get_predicate_def loc p.name in
+       let@ def = get_resource_predicate_def loc p.name in
        let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
        let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
        let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
@@ -577,7 +451,7 @@ module WRE = struct
        return ()
     | QPredicate p -> 
        pure begin 
-           let@ def = get_predicate_def loc p.name in
+           let@ def = get_resource_predicate_def loc p.name in
            let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
            let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
            let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
@@ -594,44 +468,61 @@ module WRE = struct
          end
     end
 
-  let mode_and_bad_value_check loc ~infos ~undetermined ~bad_as_value resource = 
+  let mode_check loc ~infos ~undetermined resource = 
     let undetermined = SymSet.diff undetermined (RE.bound resource) in
     let free_inputs = SymSet.diff (IT.free_vars_list (RE.inputs resource)) (RE.bound resource) in
     let@ () = match SymSet.choose_opt (SymSet.inter free_inputs undetermined) with
       | None -> return ()
       | Some lvar -> unconstrained_lvar loc infos lvar 
     in
-    let@ fixed, bad_as_value = 
-      ListM.fold_leftM (fun (fixed, bad_as_value) output ->
+    let@ fixed = 
+      ListM.fold_leftM (fun fixed output ->
           let undetermined_output = SymSet.inter undetermined (IT.free_vars output) in
           if SymSet.is_empty undetermined_output then 
             (* If the logical variables in the outputs are already
                determined, ok. *)
-            return (fixed, bad_as_value)
+            return fixed
           else
             (* otherwise, check that there is a single unification
                variable that can be resolved by unification *)
             match RE.quantifier resource, output with
             | None, 
               IT (Lit (Sym s), _) -> 
-               return (SymSet.add s fixed, bad_as_value)
+               return (SymSet.add s fixed)
             | Some (q, _), 
               IT (Array_op (Get (IT (Lit (Sym arr_s), _), IT (Lit (Sym arg_s), _))), _)
                  when Sym.equal arg_s q ->
-               return (SymSet.add arr_s fixed, SymSet.add arr_s bad_as_value)
+               return (SymSet.add arr_s fixed)
             (* otherwise, fail *)
             | _ ->
                let u = SymSet.choose undetermined_output in
                let (loc, odescr) = SymMap.find u infos in
                fail (fun _ -> {loc; msg = Logical_variable_not_good_for_unification (u, odescr)})
-        ) (SymSet.empty, bad_as_value) (RE.outputs resource)
+        ) (SymSet.empty) (RE.outputs resource)
     in
-    return (fixed, bad_as_value)
+    return fixed
 
 end
 
 module WLC = struct
   type t = LogicalConstraints.t
+
+  let get_logical_predicate_def loc name = 
+    let@ global = get_global () in
+    match Global.get_logical_predicate_def global name with
+    | Some def -> return def
+    | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate name})
+
+  let welltyped_pred loc (pred : LC.Pred.t) = 
+    let@ def = get_logical_predicate_def loc pred.name in
+    let has_args, expect_args = List.length pred.args, List.length def.args in
+    let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
+    let@ _ = 
+      ListM.mapM (fun (has_arg, (_, def_arg_bt)) ->
+          WIT.check loc def_arg_bt has_arg
+           ) (List.combine pred.args def.args)
+    in
+    return ()
 
   let welltyped loc lc =
     match lc with
@@ -644,13 +535,25 @@ module WLC = struct
            let@ _ = WIT.check loc BT.Bool it in
            return ()
        end
-
-  let bad_value_check loc ~bad_as_value ~infos lc =
-    match lc with
-    | LC.T it ->
-       WIT.bad_value_check loc ~infos ~bad_as_value it
-    | LC.Forall (_, it) ->
-       WIT.bad_value_check loc ~infos ~bad_as_value it
+    | LC.Pred pred ->
+       welltyped_pred loc pred
+    | LC.QPred {q = (s, bt); condition; pred} ->
+       pure begin
+           let@ () = add_l s bt in
+           let@ _ = WIT.check loc BT.Bool condition in
+           let@ () = welltyped_pred loc pred in
+           let@ def = get_logical_predicate_def loc pred.name in
+           begin match def.qarg with
+           | Some _ -> return ()
+           | None -> 
+              let err = 
+                "Cannot use predicate " ^ pred.name ^ 
+                  " inside a quantifier because it \
+                   has no index/quantifier argument."
+              in
+              fail (fun _ -> {loc; msg = Generic !^err})
+           end
+         end
 
 end
 
@@ -680,23 +583,21 @@ module WLRT = struct
     in
     pure (aux lrt)
 
-  let mode_and_bad_value_check loc ~infos ~bad_as_value lrt = 
-    let rec aux ~infos ~undetermined ~bad_as_value constraints lrt = 
+  let mode_check loc ~infos lrt = 
+    let rec aux ~infos ~undetermined constraints lrt = 
       match lrt with
       | Logical ((s, ls), info, lrt) ->
          let s' = Sym.fresh_same s in
          let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) lrt in
          let undetermined = SymSet.add s' undetermined in
          let infos = SymMap.add s' info infos in
-         aux ~infos ~undetermined ~bad_as_value constraints lrt
+         aux ~infos ~undetermined constraints lrt
       | Resource (re, info, lrt) ->
-         let@ (fixed, new_bad_as_value) = 
-           WRE.mode_and_bad_value_check (fst info) ~infos ~undetermined ~bad_as_value re in
+         let@ fixed = WRE.mode_check (fst info) ~infos ~undetermined re in
          let undetermined = SymSet.diff undetermined fixed in
-         let bad_as_value = SymSet.union new_bad_as_value bad_as_value in
-         aux ~infos ~undetermined ~bad_as_value constraints lrt
+         aux ~infos ~undetermined constraints lrt
       | Constraint (lc, info, lrt) ->
-         aux ~infos ~undetermined ~bad_as_value ((lc, info) :: constraints) lrt
+         aux ~infos ~undetermined ((lc, info) :: constraints) lrt
       | I ->
          let@ () = match SymSet.choose_opt undetermined with
            | Some s -> 
@@ -704,22 +605,15 @@ module WLRT = struct
               fail (fun _ -> {loc; msg = Unconstrained_logical_variable (s, odescr)})
            | None -> return ()
          in
-         let@ () = 
-           ListM.iterM (fun (lc, (loc, _odescr)) ->
-               (* todo: use odescr *)
-               WLC.bad_value_check loc ~bad_as_value ~infos lc
-             ) (List.rev constraints)
-         in
          return ()
     in
-    aux ~infos ~undetermined:SymSet.empty ~bad_as_value [] lrt
+    aux ~infos ~undetermined:SymSet.empty [] lrt
 
   let good loc lrt = 
     let@ () = welltyped loc lrt in
     let@ () = 
       let infos = SymMap.empty in
-      let bad_as_value = SymSet.empty in
-      mode_and_bad_value_check loc ~infos ~bad_as_value lrt
+      mode_check loc ~infos lrt
     in
     return ()
 
@@ -742,20 +636,19 @@ module WRT = struct
          WLRT.welltyped loc lrt
       end
 
-  let mode_and_bad_value_check loc ~infos ~bad_as_value rt = 
+  let mode_check loc ~infos rt = 
     match rt with
     | Computational ((s, bt), _info, lrt) ->
        let s' = Sym.fresh_same s in
        let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) lrt in
-       WLRT.mode_and_bad_value_check loc ~infos ~bad_as_value lrt
+       WLRT.mode_check loc ~infos lrt
 
 
   let good loc rt =
     let@ () = welltyped loc rt in
     let@ () = 
       let infos = SymMap.empty in
-      let bad_as_value = SymSet.empty in
-      mode_and_bad_value_check loc ~infos ~bad_as_value rt
+      mode_check loc ~infos rt
     in
     return ()
 
@@ -767,7 +660,7 @@ module WFalse = struct
   include False
   type t = False.t
   let welltyped _ _ = return ()
-  let mode_and_bad_value_check _ ~infos:_ ~bad_as_value:_ _ = return ()
+  let mode_check _ ~infos:_ _ = return ()
 end
 
 module type WOutputSpec = sig val name_bts : (string * LS.t) list end
@@ -790,10 +683,8 @@ module WOutputDef (Spec : WOutputSpec) = struct
     in
     aux Spec.name_bts assignment
 
-  let mode_and_bad_value_check loc ~infos ~bad_as_value assignment = 
-    ListM.iterM (fun {loc; name; value} ->
-        WIT.bad_value_check loc ~infos ~bad_as_value value
-      ) assignment
+  let mode_check loc ~infos assignment = 
+    return ()
 
   let welltyped loc assignment = 
     check loc assignment
@@ -809,10 +700,9 @@ module type WI_Sig = sig
 
   val pp : t -> Pp.document
 
-  val mode_and_bad_value_check : 
+  val mode_check : 
     Loc.t -> 
     infos:(Loc.info SymMap.t) -> 
-    bad_as_value:SymSet.t ->
     t -> 
     (unit, type_error) m
 
@@ -862,26 +752,24 @@ module WAT (WI: WI_Sig) = struct
     pure (aux at)
 
 
-  let mode_and_bad_value_check loc ~infos ~bad_as_value ft = 
-    let rec aux ~infos ~undetermined ~bad_as_value constraints ft = 
+  let mode_check loc ~infos ft = 
+    let rec aux ~infos ~undetermined constraints ft = 
       match ft with
       | AT.Computational ((s, bt), _info, ft) ->
          let s' = Sym.fresh_same s in
          let ft = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) ft in
-         aux ~infos ~undetermined ~bad_as_value constraints ft
+         aux ~infos ~undetermined constraints ft
       | AT.Logical ((s, _), info, ft) ->
          let infos = SymMap.add s info infos in
          let undetermined = SymSet.add s undetermined in
-         aux ~infos ~undetermined ~bad_as_value constraints ft
+         aux ~infos ~undetermined constraints ft
       | AT.Resource (re, info, ft) ->
-         let@ (fixed, new_bad_as_value) = 
-           WRE.mode_and_bad_value_check (fst info) ~infos ~undetermined ~bad_as_value re in
+         let@ fixed = WRE.mode_check (fst info) ~infos ~undetermined re in
          let undetermined = SymSet.diff undetermined fixed in
-         let bad_as_value = SymSet.union new_bad_as_value bad_as_value in
-         aux ~infos ~undetermined ~bad_as_value constraints ft
+         aux ~infos ~undetermined constraints ft
       | AT.Constraint (lc, info, ft) ->
          let constraints = (lc, info) :: constraints in
-         aux ~infos ~undetermined ~bad_as_value constraints ft
+         aux ~infos ~undetermined constraints ft
       | AT.I rt ->
          let@ () = match SymSet.choose_opt undetermined with
            | Some s -> 
@@ -889,15 +777,9 @@ module WAT (WI: WI_Sig) = struct
               fail (fun _ -> {loc; msg = Unconstrained_logical_variable (s, odescr)})
            | None -> return ()
          in 
-         let@ () = 
-           ListM.iterM (fun (lc, (loc, _odescr)) ->
-               (* todo: use odescr *)
-               WLC.bad_value_check loc ~bad_as_value ~infos lc
-             ) (List.rev constraints)
-         in
-         WI.mode_and_bad_value_check loc ~infos ~bad_as_value rt
+         WI.mode_check loc ~infos rt
     in
-    aux ~infos ~undetermined:SymSet.empty ~bad_as_value [] ft
+    aux ~infos ~undetermined:SymSet.empty [] ft
 
 
   let good kind loc ft = 
@@ -908,8 +790,7 @@ module WAT (WI: WI_Sig) = struct
     let () = Debug_ocaml.begin_csv_timing "WAT.mode_and_bad_value_check" in
     let@ () = 
       let infos = SymMap.empty in
-      let bad_as_value = SymSet.empty in
-      mode_and_bad_value_check loc ~infos ~bad_as_value ft 
+      mode_check loc ~infos ft 
     in
     let () = Debug_ocaml.end_csv_timing "WAT.mode_and_bad_value_check" in
     let () = Debug_ocaml.end_csv_timing "WAT.good" in
@@ -922,11 +803,11 @@ module WFT = WAT(WRT)
 module WLT = WAT(WFalse)
 module WPackingFT(Spec : WOutputSpec) = WAT(WOutputDef(Spec))
 
-module WPD = struct
+module WRPD = struct
 
   let welltyped pd = 
     pure begin
-        let open Predicates in
+        let open ResourcePredicates in
         let@ () = add_l pd.pointer BT.Loc in
         let@ () = add_l pd.permission BT.Real in
         let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
@@ -937,12 +818,11 @@ module WPD = struct
           ) pd.clauses
       end
 
-  let mode_and_bad_value_check loc ~infos ~bad_as_value pd = 
-    let open Predicates in
+  let mode_check loc ~infos pd = 
+    let open ResourcePredicates in
     let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
     ListM.iterM (fun {loc; guard; packing_ft} ->
-        let@ () = WIT.bad_value_check loc ~infos ~bad_as_value guard in
-        WPackingFT.mode_and_bad_value_check loc ~infos ~bad_as_value packing_ft
+        WPackingFT.mode_check loc ~infos packing_ft
       ) pd.clauses
 
   let good pd =
@@ -950,11 +830,27 @@ module WPD = struct
     let@ () = welltyped pd in
     let@ () = 
       let infos = SymMap.empty in
-      let bad_as_value = SymSet.empty in
-      mode_and_bad_value_check pd.loc ~infos ~bad_as_value pd 
+      mode_check pd.loc ~infos pd 
     in
     let () = Debug_ocaml.end_csv_timing "WPD.good" in
     return ()
+
+end
+
+
+
+module WLPD = struct
+
+  let welltyped (pd : LogicalPredicates.definition) = 
+    pure begin
+        let@ () = add_ls pd.args in
+        let@ _ = WIT.check pd.loc BT.Bool pd.body in
+        return ()
+      end
+
+
+  let good pd =
+    welltyped pd
 
 end
 

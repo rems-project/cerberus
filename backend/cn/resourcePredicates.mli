@@ -8,7 +8,7 @@ val pp_clause : clause -> Pp.document
 val subst_clause : IndexTerms.t Subst.t -> clause -> clause
 
 
-type predicate_definition = {
+type definition = {
     loc : Locations.t;
     pointer: Sym.t;
     iargs : (Sym.t * LogicalSorts.t) list;
@@ -17,7 +17,7 @@ type predicate_definition = {
     clauses : clause list;
   }
 
-val pp_predicate_definition : predicate_definition -> Pp.document
+val pp_definition : definition -> Pp.document
 
 
-val predicate_list : Memory.struct_decls -> (string * predicate_definition) list
+val predicate_list : Memory.struct_decls -> (string * definition) list

@@ -33,7 +33,7 @@ let subst_clause subst {loc; guard; packing_ft} =
 
 
 
-type predicate_definition = {
+type definition = {
     loc : Loc.t;
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
@@ -42,7 +42,7 @@ type predicate_definition = {
     clauses : clause list;
   }
   
-let pp_predicate_definition def = 
+let pp_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
   item "oargs" (Pp.list (fun (s,_) -> Pp.string s) def.oargs) ^/^

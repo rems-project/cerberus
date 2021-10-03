@@ -18,7 +18,8 @@ type t =
     fun_decls : (Locations.t * AT.ft) SymMap.t;
     impl_fun_decls : AT.ft ImplMap.t;
     impl_constants : RT.t ImplMap.t;
-    resource_predicates : Predicates.predicate_definition StringMap.t;
+    resource_predicates : ResourcePredicates.definition StringMap.t;
+    logical_predicates : LogicalPredicates.definition StringMap.t;
   } 
 
 let empty = 
@@ -27,10 +28,12 @@ let empty =
     impl_fun_decls = ImplMap.empty;
     impl_constants = ImplMap.empty;
     resource_predicates = StringMap.empty;
+    logical_predicates = StringMap.empty;
   }
 
 
-let get_predicate_def global id = StringMap.find_opt id global.resource_predicates
+let get_resource_predicate_def global id = StringMap.find_opt id global.resource_predicates
+let get_logical_predicate_def global id = StringMap.find_opt id global.logical_predicates
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_impl_fun_decl global i = ImplMap.find i global.impl_fun_decls
 let get_impl_constant global i = ImplMap.find i global.impl_constants
@@ -59,16 +62,15 @@ let pp_struct_decls decls =
 let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (AT.pp RT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
-let pp_predicate_definitions defs =
+let pp_resource_predicate_definitions defs =
   separate_map hardline (fun (name, def) ->
-      item name
-        (Predicates.pp_predicate_definition def))
+      item name (ResourcePredicates.pp_definition def))
     (StringMap.bindings defs)
 
 let pp global = 
   pp_struct_decls global.struct_decls ^^ hardline ^^
   pp_fun_decls global.fun_decls ^^ hardline ^^
-  pp_predicate_definitions global.resource_predicates
+  pp_resource_predicate_definitions global.resource_predicates
 
 
 

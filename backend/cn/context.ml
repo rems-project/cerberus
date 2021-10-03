@@ -88,7 +88,7 @@ let add_ls lvars ctxt =
 
 let add_c lc (ctxt : t) = 
   let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
-  let scs = List.concat_map (Solver.constr ctxt.global.struct_decls) lcs in
+  let scs = List.filter_map (Solver.constr ctxt.global) lcs in
   let () = 
     Z3.Solver.add ctxt.solver 
       [Z3.Boolean.mk_and Solver.context scs] 

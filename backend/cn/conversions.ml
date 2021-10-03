@@ -15,7 +15,7 @@ open Resources.RE
 open Sctypes
 open Mapping
 open Ast
-open Predicates
+open ResourcePredicates
 open Memory
 open Tools
 
@@ -213,7 +213,7 @@ let make_block loc (pointer : IT.t) path sct =
      in
      return (l, [r], [], mapping)
 
-let make_pred loc (predicates : (string * Predicates.predicate_definition) list) 
+let make_pred loc (predicates : (string * ResourcePredicates.definition) list) 
       (pred, def) ~oname pointer iargs = 
   let (mapping, l) = 
     List.fold_right (fun (oarg, bt) (mapping, l) ->
@@ -244,7 +244,7 @@ let make_pred loc (predicates : (string * Predicates.predicate_definition) list)
 
 
 
-let make_qpred loc (predicates : (string * Predicates.predicate_definition) list) 
+let make_qpred loc (predicates : (string * ResourcePredicates.definition) list) 
       (pred, def) ~oname ~qpointer:(qp,qbt) ~condition pointer iargs = 
   assert (BT.equal qbt BT.Loc);
   let@ () = match is_sym pointer with
@@ -520,7 +520,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
   | _ ->
      let@ def = match List.assoc_opt String.equal predicate predicates with
        | Some def -> return def
-       | None -> fail {loc; msg = Unknown_predicate predicate}
+       | None -> fail {loc; msg = Unknown_resource_predicate predicate}
      in
      let@ (pointer, arguments) = match arguments with
        | pointer :: arguments -> return (pointer, arguments)

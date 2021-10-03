@@ -82,7 +82,8 @@ type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
   | Unknown_struct of BT.tag
-  | Unknown_predicate of string
+  | Unknown_resource_predicate of string
+  | Unknown_logical_predicate of string
   | Unknown_member of BT.tag * BT.member
 
   | Missing_resource_request of {request : RER.t; situation : situation; oinfo : info option; ctxt : Context.t; model: Z3.Model.model }
@@ -139,8 +140,11 @@ let pp_message te =
   | Unknown_struct tag -> 
      let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
      { short; descr = None; state = None }
-  | Unknown_predicate id -> 
-     let short = !^"Unknown predicate" ^^^ squotes (!^id) in
+  | Unknown_resource_predicate id -> 
+     let short = !^"Unknown resource predicate" ^^^ squotes (!^id) in
+     { short; descr = None; state = None }
+  | Unknown_logical_predicate id -> 
+     let short = !^"Unknown logical predicate" ^^^ squotes (!^id) in
      { short; descr = None; state = None }
   | Unknown_member (tag, member) -> 
      let short = !^"Unknown member" ^^^ Id.pp member in

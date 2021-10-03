@@ -28,7 +28,7 @@ open Pp
 open BT
 open Resources
 open Resources.RE
-open Predicates
+open ResourcePredicates
 open LogicalConstraints
 
 
@@ -1836,9 +1836,9 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        Spine.calltype_ft loc args decl_typ
     | M_Epredicate (pack_unpack, pname, asyms) ->
        let@ global = get_global () in
-       let@ def = match Global.get_predicate_def global (Id.s pname) with
+       let@ def = match Global.get_resource_predicate_def global (Id.s pname) with
          | Some def -> return def
-         | None -> fail (fun _ -> {loc; msg = Unknown_predicate (Id.s pname)})
+         | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate (Id.s pname)})
        in
        let@ pointer_asym, iarg_asyms = match asyms with
          | pointer_asym :: iarg_asyms -> return (pointer_asym, iarg_asyms)
@@ -1869,7 +1869,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                List.combine (List.map fst def.iargs) (List.map it_of_arg iargs)
              )
          in
-         List.map (Predicates.subst_clause subst) def.clauses
+         List.map (ResourcePredicates.subst_clause subst) def.clauses
        in
        let@ provable = provable in
        let@ right_clause = 
@@ -1924,27 +1924,28 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           return rt
        end
     | M_Eqfacts asym ->
-       let@ arg = arg_of_asym asym in
-       let@ all_constraints = all_constraints () in
-       let new_constraints = 
-         List.filter_map (function
-             | Forall ((s, bt), body) when BT.equal arg.bt bt ->
-                let inst = IT.subst (make_subst [(s, it_of_arg arg)]) body in
-                Some (LC.t_ inst, (loc, None))
-             | (Forall _ | T _) -> 
-                None
-           ) all_constraints
-       in
-       let@ () = match new_constraints with
-         | [] -> fail (fun _ -> {loc; msg = Generic !^"no matching all-quantified constraints found"})
-         | _ -> return ()
-       in
-       let rt = 
-         RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
-         LRT.mConstraints new_constraints
-         LRT.I)
-       in
-       return rt
+       failwith "asd"
+       (* let@ arg = arg_of_asym asym in
+        * let@ all_constraints = all_constraints () in
+        * let new_constraints = 
+        *   List.filter_map (function
+        *       | Forall ((s, bt), body) when BT.equal arg.bt bt ->
+        *          let inst = IT.subst (make_subst [(s, it_of_arg arg)]) body in
+        *          Some (LC.t_ inst, (loc, None))
+        *       | (Forall _ | T _) -> 
+        *          None
+        *     ) all_constraints
+        * in
+        * let@ () = match new_constraints with
+        *   | [] -> fail (fun _ -> {loc; msg = Generic !^"no matching all-quantified constraints found"})
+        *   | _ -> return ()
+        * in
+        * let rt = 
+        *   RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
+        *   LRT.mConstraints new_constraints
+        *   LRT.I)
+        * in
+        * return rt *)
   in
   debug 3 (lazy (RT.pp result));
   return result
@@ -2248,21 +2249,37 @@ let check mu_file =
   let () = Debug_ocaml.end_csv_timing "impls" in
   
 
-  let () = Debug_ocaml.begin_csv_timing "predicate defs" in
+  let () = Debug_ocaml.begin_csv_timing "logical predicates" in
   let@ ctxt = 
-    (* check and record predicate defs *)
-    let number_entries = List.length (Pmap.bindings_list mu_file.mu_funinfo) in
-    let ping = Pp.progress "predicate welltypedness" number_entries in
+    (* check and record logical predicate defs *)
+    let number_entries = List.length (mu_file.mu_logical_predicates) in
+    let ping = Pp.progress "logical predicate welltypedness" number_entries in
+    ListM.fold_leftM (fun ctxt (name,(def : LogicalPredicates.definition)) -> 
+        let@ () = return (ping name) in
+        let@ () = Typing.run ctxt (WellTyped.WLPD.good def) in
+        let logical_predicates =
+          StringMap.add name def ctxt.global.logical_predicates in
+        let global = { ctxt.global with logical_predicates } in
+        return { ctxt with global }
+      ) ctxt mu_file.mu_logical_predicates
+  in
+  let () = Debug_ocaml.end_csv_timing "logical predicates" in
+
+  let () = Debug_ocaml.begin_csv_timing "resource predicates" in
+  let@ ctxt = 
+    (* check and record resource predicate defs *)
+    let number_entries = List.length (mu_file.mu_resource_predicates) in
+    let ping = Pp.progress "resource predicate welltypedness" number_entries in
     ListM.fold_leftM (fun ctxt (name,def) -> 
         let@ () = return (ping name) in
-        let@ () = Typing.run ctxt (WellTyped.WPD.good def) in
+        let@ () = Typing.run ctxt (WellTyped.WRPD.good def) in
         let resource_predicates =
           StringMap.add name def ctxt.global.resource_predicates in
         let global = { ctxt.global with resource_predicates } in
         return { ctxt with global }
-      ) ctxt mu_file.mu_predicates
+      ) ctxt mu_file.mu_resource_predicates
   in
-  let () = Debug_ocaml.end_csv_timing "predicate defs" in
+  let () = Debug_ocaml.end_csv_timing "resource predicates" in
 
 
   let () = Debug_ocaml.begin_csv_timing "globals" in

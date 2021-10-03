@@ -34,7 +34,8 @@ module SR_Types = struct
   type gt = ct
   type ut = unit
   type mapping = Mapping.t
-  type predicates = (string * Predicates.predicate_definition) list
+  type resource_predicates = (string * ResourcePredicates.definition) list
+  type logical_predicates = (string * LogicalPredicates.definition) list
 end
 
 module Old = CF.Mucore.Make(CF.Mucore.SimpleTypes)
@@ -455,7 +456,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   in
 
 
-  let predicates = Predicates.predicate_list struct_decls in
+  let resource_predicates = ResourcePredicates.predicate_list struct_decls in
+  let logical_predicates = LogicalPredicates.predicate_list struct_decls in
 
 
   let@ (globs, glob_typs) = 
@@ -535,7 +537,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
         in
         let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
         let@ (ftyp, mappings) = 
-          Conversions.make_fun_spec loc struct_decls predicates fsym fspec 
+          Conversions.make_fun_spec loc struct_decls resource_predicates fsym fspec 
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
@@ -584,7 +586,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           in
           let@ lspec = Parse.parse_label lname argtyps fspec this_attrs in
           let@ (lt,mapping) = 
-            Conversions.make_label_spec loc struct_decls predicates lname 
+            Conversions.make_label_spec loc struct_decls resource_predicates lname 
               start_mapping lspec
           in
           let@ e = retype_texpr e in
@@ -649,7 +651,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           mu_extern = file.mu_extern;
           mu_funinfo = funinfo; 
           mu_loop_attributes = file.mu_loop_attributes;
-          mu_predicates = predicates;
+          mu_resource_predicates = resource_predicates;
+          mu_logical_predicates = logical_predicates;
     }
   in
   return file

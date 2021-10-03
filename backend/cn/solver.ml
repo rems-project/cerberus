@@ -7,6 +7,7 @@ open LogicalConstraints
 open List1
 open List
 open Pp
+open Global
 
 
 
@@ -367,66 +368,37 @@ let lambda struct_decls (q_s, q_bt) body =
        (term struct_decls body))
 
 
+let open_pred global (pred : LogicalConstraints.Pred.t) =
+  let def = Option.get (get_logical_predicate_def global pred.name) in
+  let su = 
+    make_subst
+      (List.map2 (fun (s, _) arg -> (s, arg)) def.args pred.args) 
+  in
+  IT.subst su def.body
 
 
-(* let rec make_trigger = function
- *   | T_Term (IT (Lit (Sym s), bt)) -> 
- *      let t = Z3.Expr.mk_const context (sym_to_sym s) (sort bt) in
- *      (bt, t, [])
- *   | T_Term it -> 
- *      let _, t1 = IT.fresh (IT.bt it) in
- *      let t1 = term t1 in
- *      let t2 = term it in
- *      (IT.bt it, t1, [Z3.Boolean.mk_eq context t1 t2])
- *   | T_Get (t, t') ->
- *      let (bt, t, cs) = make_trigger t in
- *      let (_, t', cs') = make_trigger t' in
- *      let (_, rbt) = BT.array_bt bt in
- *      (rbt, Z3.Z3Array.mk_select context t t', cs @ cs')
- *   | T_Member (t, member) ->
- *      let (sbt, t, cs) = make_trigger t in
- *      let tag = match sbt with
- *        | Struct tag -> tag
- *        | _ -> Debug_ocaml.error "illtyped index term: not a struct"
- *      in
- *      let layout = SymMap.find tag SD.struct_decls in
- *      let members = List.map fst (Memory.member_types layout) in
- *      let bt = BT.of_sct (List.assoc Id.equal member (Memory.member_types layout)) in
- *      let destructors = Z3.Tuple.get_field_decls (sort (Struct tag)) in
- *      let member_destructors = List.combine members destructors in
- *      let destructor = List.assoc Id.equal member member_destructors in
- *      (bt, Z3.Expr.mk_app context destructor [t], cs) *)
 
 
-let constr struct_decls c = 
+let constr global c = 
+  let struct_decls = global.struct_decls in
   match c with
   | T it -> 
-     [term struct_decls it]
+     Some (term struct_decls it)
   | Forall ((s, bt), body) ->
-     let (triggers, cs) = 
-       (* match trigger with
-        * | Some trigger -> 
-        *    let (_, t, cs) = make_trigger trigger in
-        *    ([Z3.Quantifier.mk_pattern context [t]], cs)
-        * | None -> *)
-          ([], [])
-     in
      let q = 
        Z3.Quantifier.mk_forall_const context 
          [Z3.Expr.mk_const context (sym_to_sym s) (sort struct_decls bt)] 
          (term struct_decls body) 
-         None triggers [] None None 
+         None [] [] None None 
      in
-     Z3.Quantifier.expr_of_quantifier q :: cs
+     Some (Z3.Quantifier.expr_of_quantifier q)
+  | Pred pred ->
+     Some (term struct_decls (open_pred global pred))
+  | QPred _ ->
+     (* QPreds are not automatically expanded: to avoid
+        all-quantifiers *)
+     None
 
-
-(* type provable = 
- *   | True
- *   | False
- * 
- * type provable_or_model = 
- *   | True
- *   | FalseB of Z3.Model.model *)
 
 
 
@@ -435,48 +407,78 @@ let model solver =
   Option.value_err "Z3 did not produce a counter model"
     (Z3.Solver.get_model solver)
 
-let constraint_to_check solver struct_decls lc = 
+
+let z3_status = function
+  | Z3.Solver.UNSATISFIABLE -> `True
+  | Z3.Solver.SATISFIABLE -> `False
+  | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
+
+let check_t global solver t = 
+  let t = term global.struct_decls t in
+  z3_status (Z3.Solver.check solver [Z3.Boolean.mk_not context t])
+
+let check_forall global solver ((s, bt), t) = 
+  let s' = Sym.fresh () in
+  let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
+  z3_status (Z3.Solver.check solver 
+               [Z3.Boolean.mk_not context (term global.struct_decls t)])
+
+let check_pred global solver pred =
+  check_t global solver (open_pred global pred)
+
+let check_qpred global solver assumptions {q; condition; pred} =
+  let def = Option.get (get_logical_predicate_def global pred.name) in
+  let qarg_number = Option.get def.qarg in
+  let reduced_condition = 
+    let rec aux assumptions condition = 
+      match assumptions with
+      | [] -> condition
+      | a :: assumptions ->
+         let condition = match a with
+           | Pred pred' when String.equal pred.name pred'.name ->
+              let q_instance = List.nth pred'.args qarg_number in
+              let reduction = 
+                and_ (eq_ (sym_ q, q_instance) ::
+                      List.map2 eq__ pred.args pred'.args)
+              in
+              and_ [condition; not_ reduction]
+           | QPred qpred' when String.equal pred.name qpred'.pred.name ->
+              let qpred' = alpha_rename_qpred (fst q) qpred' in
+              let reduction = 
+                and_ (qpred'.condition ::
+                      List.map2 eq__ pred.args qpred'.pred.args)
+              in
+              and_ [condition; not_ reduction]
+           | _ -> 
+              condition
+         in
+         aux assumptions condition 
+    in
+    aux assumptions condition
+  in
+  check_forall global solver
+    (q, eq_ (reduced_condition, bool_ false))
+
+let check_constraint global solver (assumptions : LC.t list) lc = 
   match lc with
-  | T t ->
-     let t = term struct_decls t in
-     Z3.Solver.check solver [Z3.Boolean.mk_not context t]
-  | Forall ((s, bt), t) -> 
-     let s' = Sym.fresh () in
-     let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
-     Z3.Solver.check solver [Z3.Boolean.mk_not context (term struct_decls t)]
+  | T t -> check_t global solver t
+  | Forall ((s, bt), t) -> check_forall global solver ((s, bt), t)
+  | Pred pred -> check_pred global solver pred
+  | QPred qpred -> check_qpred global solver assumptions qpred
 
-let provable struct_decls solver (lc : LC.t) =  
-  let result = match lc with
-    (* (\* as similarly suggested by Robbert *\)
-     * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-     *    `True *)
-    | _ ->
-       let result = constraint_to_check solver struct_decls lc in
-       match result with
-       | Z3.Solver.UNSATISFIABLE -> `True
-       | Z3.Solver.SATISFIABLE -> `False
-       | Z3.Solver.UNKNOWN -> 
-          warn !^"solver returned unknown";
-          `False
-  in
-  result
+let provable global solver assumptions (lc : LC.t) =  
+  match lc with
+  (* (\* as similarly suggested by Robbert *\)
+   * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
+   *    `True *)
+  | _ ->
+     check_constraint global solver assumptions lc
 
 
-let provable_or_model struct_decls solver (lc : LC.t) =  
-  let result = match lc with
-    (* (\* as similarly suggested by Robbert *\)
-     * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-     *    `True *)
-    | _ ->
-       let result = constraint_to_check solver struct_decls lc in
-       match result with
-       | Z3.Solver.UNSATISFIABLE -> `True
-       | Z3.Solver.SATISFIABLE -> `False (model solver)
-       | Z3.Solver.UNKNOWN -> 
-          warn !^"solver returned unknown";
-          `False (model solver)
-  in
-  result
+let provable_or_model global solver assumptions (lc : LC.t) =  
+  match provable global solver assumptions lc with
+  | `True -> `True
+  | `False -> `False (model solver)
 
 
 

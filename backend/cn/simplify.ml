@@ -408,6 +408,10 @@ let simp_lc struct_decls lcs lc =
      (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
      let it = simp struct_decls lcs it in
      LC.Forall ((s', bt), it)
+  | LC.Pred pred ->
+     LC.Pred pred
+  | LC.QPred qpred ->
+     LC.QPred qpred
 
 
 let simp_lc_flatten struct_decls lcs c = 
@@ -420,3 +424,7 @@ let simp_lc_flatten struct_decls lcs c =
      (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
      let it = simp struct_decls lcs it in
      [LC.Forall ((s', bt), it)]
+  | LC.Pred pred ->
+     [LC.Pred pred]
+  | LC.QPred qpred ->
+     [LC.QPred qpred]

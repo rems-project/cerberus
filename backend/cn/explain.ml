@@ -440,7 +440,7 @@ let state ctxt {substitution; vclasses; relevant} model =
            } 
        in
        let oargs = 
-         let predicate_def = Option.get (Global.get_predicate_def ctxt.global p.name) in
+         let predicate_def = Option.get (Global.get_resource_predicate_def ctxt.global p.name) in
          List.map2 (fun oarg (name, _) ->
              let var = !^id ^^ dot ^^ dot ^^ !^name in
              let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
@@ -475,7 +475,7 @@ let state ctxt {substitution; vclasses; relevant} model =
            } 
        in
        let oargs = 
-         let predicate_def = Option.get (Global.get_predicate_def ctxt.global p.name) in
+         let predicate_def = Option.get (Global.get_resource_predicate_def ctxt.global p.name) in
          List.map2 (fun oarg (name, _) ->
              let var = !^id ^^ dot ^^ dot ^^ !^name in
              let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
