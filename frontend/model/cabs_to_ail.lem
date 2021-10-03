@@ -3728,10 +3728,11 @@ let desugar_declaration_base attrs specifs idecltors =
                                 E.return (ty', (sym, d_e) :: acc)
                           end
                       | Nothing ->
-                          if dur = Static || dur = Thread then
-                            (* TODO: not correct for thread? *)
-  (*                        E.get_tag_definitions >>= fun tagDefs ->
-                            E.register_global_object_definition sym (*mk_zeroInit tagDefs ty*) >> *)
+                          if dur = Static then
+                            E.get_tag_definitions >>= fun tagDefs ->
+                            E.register_global_object_definition sym (E.Definition (mk_zeroInit tagDefs cty)) >>= fun () ->
+                            E.return (cty, acc)
+                          else if dur = Thread then
                             E.return (cty, acc)
                           else
                             E.return (cty, acc)
