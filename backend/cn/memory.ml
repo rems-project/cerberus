@@ -92,3 +92,16 @@ let member_offset (layout : struct_layout) member : int option =
     ) layout
 
 
+
+
+
+
+
+let find_tag struct_decls tag = 
+  SymMap.choose
+    (SymMap.filter (fun s _ ->
+         match Sym.description s with
+         | Sym.SD_Id tag' when String.equal tag tag' -> true
+         | _ -> false
+       ) struct_decls
+    )
