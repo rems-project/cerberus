@@ -51,7 +51,40 @@ let pp_definition def =
   
 
 
-
+(* for testing *)
+let int_point = 
+    let id = "IntPoint" in
+    let loc = Loc.other "internal (IntPoint)" in
+    let pointer_s, pointer = IT.fresh_named Loc "pointer" in
+    let permission_s, permission = IT.fresh_named BT.Real "permission" in
+    let value_s, value = IT.fresh_named Integer "value" in
+    let resource = 
+      Point {
+          ct = integer_ct (Signed Int_);
+          pointer = pointer;
+          permission = permission;
+          value = value; 
+          init = bool_ true;
+        }
+    in
+    let lrt = 
+      AT.of_lrt (
+        LRT.Logical ((value_s, IT.bt value), (loc, None),
+        LRT.Resource (resource, (loc, None),
+        LRT.I)))
+        (AT.I OutputDef.[{loc; name = "value"; value= value}])
+    in
+    let clause = { loc; guard = bool_ true; packing_ft = lrt } in    
+    let predicate = {
+        loc = loc;
+        pointer = pointer_s;
+        iargs = [];
+        oargs = [("value", IT.bt value)];
+        permission = permission_s;
+        clauses = [clause]; 
+      } 
+    in
+    (id, predicate)
 
 
 
@@ -292,115 +325,167 @@ let page_alloc_predicates struct_decls =
 
 
 
-  (* let hyp_pool =
-   * 
-   *   let id = "Hyp_pool" in
-   *   let loc = Loc.other "internal (Hyp_pool)" in
-   *   let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-   *   let permission_s, permission = IT.fresh_named BT.Real "permission" in
-   *   (\* iargs *\)
-   *   let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
-   *   let vmemmap_s, vmemmap = 
-   *     IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
-   *   (\* oargs *\)
-   *   let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
-   * 
-   *   let metatdata_owned = 
-   *     let resource = 
-   *       Point {
-   *           ct = struct_ct hyp_pool_tag;
-   *           pointer = pool_pointer;
-   *           permission = permission;
-   *           init = bool_ true;
-   *           value = pool;
-   *         }
-   *     in
-   *     LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
-   *     LRT.Resource (resource, (loc, None), 
-   *     LRT.Constraint (t_ (good_ (struct_ct hyp_pool_tag, pool)), (loc, None), 
-   *     LRT.I)))
-   *   in
-   * 
-   *   let vmemmap_metadata_owned =
-   *     let p_s, p = IT.fresh_named Loc "p" in
-   *     let point_permission = 
-   *       let condition = 
-   *         vmemmap_good_pointer ~vmemmap_pointer p
-   *           range_start range_end
-   *       in
-   *       ite_ (condition, permission, q_ (0, 1))
-   *     in
-   *     let vmemmap_array = 
-   *       QPredicate {
-   *           qpointer = p_s;
-   *           name = "Vmemmap_page";
-   *           iargs = [];
-   *           oargs = [get_ vmemmap p];
-   *           permission = point_permission;
-   *         }
-   *     in
-   *     let aligned = 
-   *       aligned_ (vmemmap_pointer,
-   *                 array_ct (struct_ct hyp_page_tag) None)
-   *     in
-   *     LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
-   *     LRT.Resource (vmemmap_array, (loc, None), 
-   *     LRT.Constraint (t_ aligned, (loc, None), 
-   *     LRT.I)))
-   *   in
-   * 
-   *   let lrt = 
-   *     let open LRT in
-   *     range_start_owned
-   *     @@ range_end_owned
-   *     @@ max_order_owned
-   *     @@ vmemmap_metadata_owned
-   *     @@ free_area_owned
-   *     @@ metadata_well_formedness
-   *     (\* @@ free_area_well_formedness (\\* possibly inconsistent *\\)
-   *      * @@ vmemmap_well_formedness2 *\)
-   *     (\* @@ Tools.skip (LRT.I) page_group_ownership *\)
-   *   in
-   * 
-   *   let assignment = OutputDef.[
-   *         {loc; name = "range_start"; value = range_start};
-   *         {loc; name = "range_end"; value = range_end};
-   *         {loc; name = "max_order"; value = max_order};
-   *         {loc; name = "free_area"; value = free_area};
-   *         {loc; name = "vmemmap"; value = vmemmap};
-   *     ]
-   *   in
-   *   let clause = {
-   *       loc = loc;
-   *       guard = bool_ true;
-   *       packing_ft = AT.of_lrt lrt (AT.I assignment)
-   *     }
-   *   in
-   * 
-   *   let predicate = {
-   *       loc = loc;
-   *       pointer = pool_pointer_s;
-   *       permission = permission_s;
-   *       iargs = [
-   *           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-   *         ]
-   *       ;
-   *       oargs = [
-   *           ("range_start", IT.bt range_start); 
-   *           ("range_end", IT.bt range_end); 
-   *           ("max_order", IT.bt max_order); 
-   *           ("free_area", IT.bt free_area);
-   *           ("vmemmap", IT.bt vmemmap);
-   *         ];
-   *       clauses = [clause;]; 
-   *     } 
-   *   in
-   *   (id, predicate)
-   * in *)
+  let hyp_pool =  
+    let id = "Hyp_pool" in
+    let loc = Loc.other "internal (Hyp_pool)" in
+    let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
+    let permission_s, permission = IT.fresh_named BT.Real "permission" in
+    (* iargs *)
+    let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
+    (* oargs *)
+    let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
+    let vmemmap_s, vmemmap = 
+      IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+    let metadata_owned = 
+      let resource = 
+        Point {
+            ct = struct_ct hyp_pool_tag;
+            pointer = pool_pointer;
+            permission = permission;
+            init = bool_ true;
+            value = pool;
+          }
+      in
+      LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
+      LRT.Resource (resource, (loc, None), 
+      LRT.Constraint (t_ (good_ (struct_ct hyp_pool_tag, pool)), (loc, None), 
+      LRT.I)))
+    in
+  
+    let vmemmap_metadata_owned =
+      let p_s, p = IT.fresh_named Loc "p" in
+      let point_permission = 
+        let condition = 
+          vmemmap_good_pointer ~vmemmap_pointer p
+            (pool %. "range_start") (pool %. "range_end")
+        in
+        ite_ (condition, permission, q_ (0, 1))
+      in
+      let vmemmap_array = 
+        QPredicate {
+            qpointer = p_s;
+            name = "Vmemmap_page";
+            iargs = [];
+            oargs = [get_ vmemmap p];
+            permission = point_permission;
+          }
+      in
+      let aligned = 
+        aligned_ (vmemmap_pointer,
+                  array_ct (struct_ct hyp_page_tag) None)
+      in
+      LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
+      LRT.Resource (vmemmap_array, (loc, None), 
+      LRT.Constraint (t_ aligned, (loc, None), 
+      LRT.I)))
+    in
+  
+    let vmemmap_wf = 
+      let p_s, p = IT.fresh_named Loc "ptr" in
+
+      let condition =
+        vmemmap_good_pointer ~vmemmap_pointer p
+          (pool %. "range_start") (pool %. "range_end");
+      in
+      let args = [
+          p;
+          get_ vmemmap p;
+          vmemmap_pointer;
+          (* vmemmap; *)
+          pool_pointer;
+          pool %. "range_start";
+          pool %. "range_end"
+        ]
+      in
+      QPred {
+          q = (p_s, IT.bt p); 
+          condition = condition;
+          pred = { name = "Vmemmap_page_wf"; args };
+        }
+    in
+
+  let free_area_wf = 
+      let i_s, i = IT.fresh_named Integer "i" in
+      let condition = and_ [int_ 0 %<= i; i %< mMAX_ORDER] in
+      let args = [
+          i;
+          get_ (pool %. "free_area") i;
+          vmemmap_pointer;
+          (* vmemmap; *)
+          pool_pointer;
+          pool %. "range_start";
+          pool %. "range_end"
+        ]
+      in
+      QPred {
+          q = (i_s, IT.bt i); 
+          condition = condition;
+          pred = { name = "FreeArea_cell_wf"; args };
+        }
+    in
+
+    let hyp_pool_wf = 
+      let args = [
+          pool_pointer;
+          pool;
+          vmemmap_pointer;
+          vmemmap;
+        ]        
+      in
+      Pred { name = "Hyp_pool_wf"; args }
+    in
+
+    let wellformedness = 
+      LRT.Constraint (vmemmap_wf, (loc, Some "vmemmap_wf"),
+      LRT.Constraint (free_area_wf, (loc, Some "free_area_wf"),
+      LRT.Constraint (hyp_pool_wf, (loc, Some "hyp_pool_wf"),
+      LRT.I)))
+    in
+
+
+    let lrt = 
+      let open LRT in
+      metadata_owned
+      @@ vmemmap_metadata_owned
+      @@ wellformedness
+      (* @@ free_area_well_formedness (\* possibly inconsistent *\)
+       * @@ vmemmap_well_formedness2 *)
+      (* @@ Tools.skip (LRT.I) page_group_ownership *)
+    in
+  
+    let assignment = OutputDef.[
+          {loc; name = "pool"; value = pool};
+          {loc; name = "vmemmap"; value = vmemmap};
+      ]
+    in
+    let clause = {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = AT.of_lrt lrt (AT.I assignment)
+      }
+    in
+  
+    let predicate = {
+        loc = loc;
+        pointer = pool_pointer_s;
+        permission = permission_s;
+        iargs = [
+            (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+          ]
+        ;
+        oargs = [
+            ("pool", IT.bt pool); 
+            ("vmemmap", IT.bt vmemmap);
+          ];
+        clauses = [clause;]; 
+      } 
+    in
+    (id, predicate)
+  in
 
 
   [vmemmap_page;
-   (* hyp_pool *)]
+   hyp_pool]
 
 
 
@@ -518,6 +603,7 @@ let page_alloc_predicates struct_decls =
 
 
 let predicate_list struct_decls = 
+  int_point ::
   region () ::
   zero_region () ::
   part_zero_region () ::

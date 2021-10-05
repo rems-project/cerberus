@@ -444,8 +444,10 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
         Core.Expr annot (Core.Epack id pes)
     | Core.Eunpack id pes ->
         Core.Expr annot (Core.Eunpack id pes)
-    | Core.Eqfacts pe ->
-        Core.Expr annot (Core.Eqfacts pe)
+    | Core.Ehave id pes ->
+        Core.Expr annot (Core.Ehave id pes)
+    | Core.Eshow id pes ->
+        Core.Expr annot (Core.Eshow id pes)
 (*
     | Core.Eloc loc e ->
         Core.Expr annot (Core.Eloc loc (indet_hack e))

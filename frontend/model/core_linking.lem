@@ -205,8 +205,10 @@ let rec free_expr acc (Expr _ e) =
       List.foldl free_pexpr acc pes
   | Eunpack _ pes ->
       List.foldl free_pexpr acc pes
-  | Eqfacts pe ->
-      free_pexpr acc pe
+  | Ehave _ pes ->
+      List.foldl free_pexpr acc pes
+  | Eshow _ pes ->
+      List.foldl free_pexpr acc pes
 
   end
 

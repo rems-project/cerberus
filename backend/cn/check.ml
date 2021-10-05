@@ -368,7 +368,7 @@ module ResourceInference = struct
                in
                begin match provable (t_ took) with
                | `True ->
-                  let oargs = p'.oargs in
+                  let oargs = List.map (IT.subst subst) p'.oargs in
                   let needed = sub_ (needed, can_take) in
                   let permission' =
                     sub_ (p'.permission,
@@ -1834,7 +1834,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          | CF.Core.Sym sym -> get_fun_decl loc sym in
        let@ args = args_of_asyms asyms in
        Spine.calltype_ft loc args decl_typ
-    | M_Epredicate (pack_unpack, pname, asyms) ->
+    | M_Erpredicate (pack_unpack, pname, asyms) ->
        let@ global = get_global () in
        let@ def = match Global.get_resource_predicate_def global (Id.s pname) with
          | Some def -> return def
@@ -1923,29 +1923,62 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           in
           return rt
        end
-    | M_Eqfacts asym ->
-       failwith "asd"
-       (* let@ arg = arg_of_asym asym in
-        * let@ all_constraints = all_constraints () in
-        * let new_constraints = 
-        *   List.filter_map (function
-        *       | Forall ((s, bt), body) when BT.equal arg.bt bt ->
-        *          let inst = IT.subst (make_subst [(s, it_of_arg arg)]) body in
-        *          Some (LC.t_ inst, (loc, None))
-        *       | (Forall _ | T _) -> 
-        *          None
-        *     ) all_constraints
-        * in
-        * let@ () = match new_constraints with
-        *   | [] -> fail (fun _ -> {loc; msg = Generic !^"no matching all-quantified constraints found"})
-        *   | _ -> return ()
-        * in
-        * let rt = 
-        *   RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
-        *   LRT.mConstraints new_constraints
-        *   LRT.I)
-        * in
-        * return rt *)
+    | M_Elpredicate (have_show, pname, asyms) ->
+       let@ global = get_global () in
+       let@ def = match Global.get_logical_predicate_def global (Id.s pname) with
+         | Some def -> return def
+         | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate (Id.s pname)})
+       in
+       let@ args = args_of_asyms asyms in
+       let@ () = 
+         let has, expect = List.length args, List.length def.args in
+         if has = expect then return ()
+         else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+       in
+       let@ () = 
+         ListM.iterM (fun (arg, expected_sort) ->
+             ensure_base_type arg.loc ~expect:expected_sort arg.bt
+           ) (List.combine args (List.map snd def.args))
+       in
+       let rt = 
+         RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), 
+         LRT.Constraint (Pred {name = Id.s pname; args = List.map it_of_arg args}, (loc, None),
+         LRT.I))
+       in
+       begin match have_show with
+       | Have ->
+          let qarg = List.nth args (Option.get def.qarg) in
+          let@ provable = provable in
+          let@ constraints = all_constraints () in
+          let pred_args = List.map it_of_arg args in
+          let to_check = 
+            List.filter_map (function
+                | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
+                   let su = make_subst [(fst qpred'.q, it_of_arg qarg)] in
+                   let condition' = IT.subst su qpred'.condition in
+                   let pred_args' = List.map (IT.subst su) qpred'.pred.args in
+                   let args_equal = List.map2 eq__ pred_args pred_args' in
+                   Some (and_ (condition' :: args_equal))
+                | _ -> 
+                   None
+              ) constraints
+          in
+          let@ () = match provable (t_ (or_ to_check)) with
+            | `True -> return ()
+            | `False ->
+               let err = "no quantified constraints containing this fact" in
+               fail (fun _ -> {loc; msg = Generic !^err})
+          in
+          return rt
+       | Show ->
+          let@ provable_or_model = provable_or_model in
+          let lc = Pred {name = Id.s pname; args = List.map it_of_arg args} in
+          begin match provable_or_model lc with
+          | `True -> return rt
+          | `False model ->
+             fail (fun ctxt -> {loc; msg = Unsat_constraint {constr = lc; info = (loc, None); ctxt; model}})
+          end
+       end
   in
   debug 3 (lazy (RT.pp result));
   return result

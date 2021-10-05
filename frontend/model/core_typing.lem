@@ -1495,7 +1495,9 @@ let rec collect_labels env (Expr _ expr_) =
         E.return env
     | Eunpack _ _ ->
         E.return env
-    | Eqfacts _ ->
+    | Ehave _ _ ->
+        E.return env
+    | Eshow _ _ ->
         E.return env
   end
 
@@ -1691,10 +1693,14 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
        E.mapM export_pexpr pes' >>= fun pes' ->
        E.return (Eunpack id pes')
     (* just check that pure argument is fine *)
-    | Eqfacts pe ->
-       infer_pexpr tagDefs env pe >>= fun pe' ->
-       export_pexpr pe' >>= fun pe' ->
-       E.return (Eqfacts pe')
+    | Ehave id pes ->
+       E.mapM (infer_pexpr tagDefs env) pes >>= fun pes' ->
+       E.mapM export_pexpr pes' >>= fun pes' ->
+       E.return (Ehave id pes')
+    | Eshow id pes ->
+       E.mapM (infer_pexpr tagDefs env) pes >>= fun pes' ->
+       E.mapM export_pexpr pes' >>= fun pes' ->
+       E.return (Eshow id pes')
 
   end
 

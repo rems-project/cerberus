@@ -222,6 +222,10 @@ module Make(T : TYPES) = struct
     | Pack
     | Unpack
 
+type have_show =
+    | Have
+    | Show
+
   type 'TY mu_expr_ =  (* (effectful) expression *)
    | M_Epure of ('TY mu_pexpr)
    | M_Ememop of 'TY mu_memop
@@ -229,8 +233,8 @@ module Make(T : TYPES) = struct
    | M_Eskip
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
-   | M_Epredicate of pack_unpack * Symbol.identifier * ('TY asym) list
-   | M_Eqfacts of 'TY asym
+   | M_Erpredicate of pack_unpack * Symbol.identifier * ('TY asym) list
+   | M_Elpredicate of have_show * Symbol.identifier * ('TY asym) list
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)

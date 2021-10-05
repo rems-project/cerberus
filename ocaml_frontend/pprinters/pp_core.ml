@@ -128,7 +128,8 @@ let rec precedence_expr = function
   | Ewait _ 
   | Epack _
   | Eunpack _ 
-  | Eqfacts _ ->
+  | Ehave _ 
+  | Eshow _ ->
       None
 
   | Eif _ ->
@@ -672,8 +673,10 @@ let rec pp_expr expr =
             pp_keyword "pack" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
         | Eunpack (Symbol.Identifier (_, ident), pes) ->
             pp_keyword "unpack" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
-        | Eqfacts pe ->
-            pp_keyword "qfacts" ^^^ pp_pexpr pe
+        | Ehave (Symbol.Identifier (_, ident), pes) ->
+            pp_keyword "have" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
+        | Eshow (Symbol.Identifier (_, ident), pes) ->
+            pp_keyword "show" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
         | Ebound (i, e) ->

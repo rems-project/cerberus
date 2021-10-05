@@ -78,7 +78,8 @@ let keywords: (string * Tokens.token) list = [
     (* for CN *)
     "pack"    , PACK;
     "unpack"  , UNPACK;
-    "qfacts"  , QFACTS;
+    "have"  , HAVE;
+    "show"  , SHOW;
   ]
 
 let lexicon: (string, token) Hashtbl.t =

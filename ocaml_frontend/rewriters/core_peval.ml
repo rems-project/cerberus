@@ -378,8 +378,10 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Epack (id, List.map (subst_sym_pexpr2 sym z) pes)
             | Eunpack (id, pes) ->
                 Eunpack (id, List.map (subst_sym_pexpr2 sym z) pes)
-            | Eqfacts pe ->
-                Eqfacts (subst_sym_pexpr2 sym z pe)
+            | Ehave (id, pes) ->
+                Ehave (id, List.map (subst_sym_pexpr2 sym z) pes)
+            | Eshow (id, pes) ->
+                Eshow (id, List.map (subst_sym_pexpr2 sym z) pes)
     )
 
 and subst_sym_action_2 sym z = function

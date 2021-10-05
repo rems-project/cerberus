@@ -1640,18 +1640,33 @@ BEFORE EVAL_PEXPR2
           |>
         )
 
-    (* Eqfacts _ = Eskip *)
-    | (Eqfacts _, Stack_empty) ->
-        error "reached empty stack with an Eqfacts"
-    | (Eqfacts _, Stack_cons current_proc_opt cont sk') ->
+    (* Ehave _ _ = Eskip *)
+    | (Ehave _ _, Stack_empty) ->
+        error "reached empty stack with an Ehave"
+    | (Ehave _ _, Stack_cons current_proc_opt cont sk') ->
 (* -----------------------------------------
-   <qfacts, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
-        one $ Step_tau "Eqfacts" TSK_Misc (
+   <have, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
+        one $ Step_tau "Ehave" TSK_Misc (
           E.return <| th_st with
             arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
             stack= Stack_cons current_proc_opt [] sk'
           |>
         )
+
+    (* Eshow _ _ = Eskip *)
+    | (Eshow _ _, Stack_empty) ->
+        error "reached empty stack with an Eshow"
+    | (Eshow _ _, Stack_cons current_proc_opt cont sk') ->
+(* -----------------------------------------
+   <show, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
+        one $ Step_tau "Eshow" TSK_Misc (
+          E.return <| th_st with
+            arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
+            stack= Stack_cons current_proc_opt [] sk'
+          |>
+        )
+
+
 
 
   end

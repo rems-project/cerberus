@@ -453,12 +453,14 @@ let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
                (map (get_pexpr "Eccall" env1) pes)))
     | M_Eproc( name1, pes) ->
        wrap (Core.Eproc( (), name1, (map (get_pexpr "Eproc" env1) pes)))
-    | M_Epredicate (Pack, id, pes) ->
+    | M_Erpredicate (Pack, id, pes) ->
        wrap (Core.Epack (id, map (get_pexpr "Epack" env1) pes))
-    | M_Epredicate (Unpack, id, pes) ->
+    | M_Erpredicate (Unpack, id, pes) ->
        wrap (Core.Eunpack (id, map (get_pexpr "Eunpack" env1) pes))
-    | M_Eqfacts pe ->
-       wrap (Core.Eqfacts (get_pexpr "Eqfacts" env1 pe))
+    | M_Elpredicate (Have, id, pes) ->
+       wrap (Core.Ehave (id, map (get_pexpr "Ehave" env1) pes))
+    | M_Elpredicate (Show, id, pes) ->
+       wrap (Core.Eshow (id, map (get_pexpr "Eshow" env1) pes))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     (* | M_Easeq (s,bt) pa ->

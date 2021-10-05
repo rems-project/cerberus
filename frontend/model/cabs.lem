@@ -314,7 +314,9 @@ and cabs_statement_ =
   (* for CN *)
   | CabsSpack of Symbol.identifier * list cabs_expression
   | CabsSunpack of Symbol.identifier * list cabs_expression
-  | CabsSqfacts of cabs_expression
+  | CabsShave of Symbol.identifier * list cabs_expression
+  | CabsSshow of Symbol.identifier * list cabs_expression
+
 
 and cabs_statement =
   | CabsStatement of Loc.t * Annot.attributes * cabs_statement_

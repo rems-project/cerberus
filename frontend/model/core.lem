@@ -305,7 +305,8 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  (* for CN *)
  | Epack of Symbol.identifier * list (generic_pexpr 'bty 'sym)
  | Eunpack of Symbol.identifier * list (generic_pexpr 'bty 'sym)
- | Eqfacts of generic_pexpr 'bty 'sym
+ | Ehave of Symbol.identifier * list (generic_pexpr 'bty 'sym)
+ | Eshow of Symbol.identifier * list (generic_pexpr 'bty 'sym)
 
 and generic_expr 'a 'bty 'sym = 
  | Expr of list annot * (generic_expr_ 'a 'bty 'sym)

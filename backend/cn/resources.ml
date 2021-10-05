@@ -390,14 +390,15 @@ module RE = struct
           int_ (Memory.size_of_ctype item_ct))
   
   (* check this *)
-  let array_permission ~base ~item_ct ~length ~qpointer ~permission =
+  let array_condition ~base ~item_ct ~length ~qpointer =
     let offset = array_offset_of_pointer ~base ~pointer:qpointer in
     let index = array_pointer_to_index ~base ~item_ct ~pointer:qpointer in
-    let condition = 
-      and_ [lePointer_ (base, qpointer);
-            eq_ (rem_ (offset, int_ (Memory.size_of_ctype item_ct)), int_ 0);
-            le_ (int_ 0, index); lt_ (index, length)]
-    in
+    and_ [lePointer_ (base, qpointer);
+          eq_ (rem_ (offset, int_ (Memory.size_of_ctype item_ct)), int_ 0);
+          le_ (int_ 0, index); lt_ (index, length)]
+
+  let array_permission ~base ~item_ct ~length ~qpointer ~permission =
+    let condition = array_condition ~base ~item_ct ~length ~qpointer in
     ite_ (condition, permission, q_ (0,1))
 
 

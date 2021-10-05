@@ -1952,9 +1952,12 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSunpack id es ->
         E.mapM annotate_expression es >>= fun es' ->
         E.return (AilSunpack id es')
-    | AilSqfacts e ->
-        annotate_expression e >>= fun e' ->
-        E.return (AilSqfacts e')
+    | AilShave id es ->
+        E.mapM annotate_expression es >>= fun es' ->
+        E.return (AilShave id es')
+    | AilSshow id es ->
+        E.mapM annotate_expression es >>= fun es' ->
+        E.return (AilSshow id es')
   end
 
 and annotate_statement sigm gamm ty (AnnotatedStatement loc attrs stmt) =

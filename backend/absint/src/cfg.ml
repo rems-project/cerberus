@@ -920,7 +920,9 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
      return `OK
   | Eunpack _ ->
      return `OK
-  | Eqfacts _ ->
+  | Ehave _ ->
+     return `OK
+  | Eshow _ ->
      return `OK
 
 let rec collect_saves (Expr (_, e_)) =
@@ -962,7 +964,9 @@ let rec collect_saves (Expr (_, e_)) =
     return ()
   | Eunpack _ ->
     return ()
-  | Eqfacts _ ->
+  | Ehave _ ->
+    return ()
+  | Eshow _ ->
     return ()
 
 let mk_cfg_pe pe =

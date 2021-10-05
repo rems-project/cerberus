@@ -318,7 +318,8 @@ type expr_alg 'sym 'bty 'ov 'lv 'value 'pexpr 'a 'action_ 'action 'paction 'expr
    ; a_Ewait : Mem_common.thread_id -> exceptM 'expr_ msg
    ; a_Epack : Symbol.identifier -> list 'pexpr -> exceptM 'expr_ msg
    ; a_Eunpack : Symbol.identifier -> list 'pexpr -> exceptM 'expr_ msg
-   ; a_Eqfacts : 'pexpr -> exceptM 'expr_ msg
+   ; a_Ehave : Symbol.identifier -> list 'pexpr -> exceptM 'expr_ msg
+   ; a_Eshow : Symbol.identifier -> list 'pexpr -> exceptM 'expr_ msg
   |>
 
 let rec fold_expr alg e = 
@@ -403,9 +404,12 @@ let rec fold_expr alg e =
   | Eunpack id es ->
      (mapM (fold_pexpr alg) es) >>= fun es ->
      wrap (alg.a_Eunpack id es)
-  | Eqfacts e ->
-     (fold_pexpr e) >>= fun e ->
-     wrap (alg.a_Eqfacts e)
+  | Ehave id es ->
+     (mapM (fold_pexpr alg) es) >>= fun es ->
+     wrap (alg.a_Ehave id es)
+  | Eshow id es ->
+     (mapM (fold_pexpr alg) es) >>= fun es ->
+     wrap (alg.a_Eshow id es)
 end
 
 
@@ -510,7 +514,8 @@ let id_expr_alg action_alg pexpr_alg =
    ; a_Ewait = fun a -> return (Ewait a)
    ; a_Epack = fun id es -> return (Epack id es)
    ; a_Eunpack = fun id es -> return (Eunpack id es)
-   ; a_Eqfacts = fun e -> return (Eqfacts e)
+   ; a_Ehave = fun id es -> return (Ehave id es)
+   ; a_Eshow = fun id es -> return (Eshow id es)
   |>
 
 
@@ -685,7 +690,8 @@ let pfp_expr_alg action_alg pexpr_alg =
    ; a_Epar = fun a -> return (Epar a)
    ; a_Ewait = fun a -> return (Ewait a)
    ; a_Epack = fun id es -> return (Epack id es)
-   ; a_Eqfacts = fun e -> return (Eqfacts e)
+   ; a_Ehave = fun id es -> return (Ehave id es)
+   ; a_Eshow = fun id es -> return (Eshow id es)
   |>
 
 

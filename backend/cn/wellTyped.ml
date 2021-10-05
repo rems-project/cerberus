@@ -544,7 +544,13 @@ module WLC = struct
            let@ () = welltyped_pred loc pred in
            let@ def = get_logical_predicate_def loc pred.name in
            begin match def.qarg with
-           | Some _ -> return ()
+           | Some n -> 
+              begin match IT.is_sym (List.nth pred.args n) with
+              | Some (s', bt') when Sym.equal s s' && BT.equal bt bt' -> return ()
+              | _ ->
+                let err = "Index/quantifier argument does not match quantifier" in
+                fail (fun _ -> {loc; msg = Generic !^err})
+              end
            | None -> 
               let err = 
                 "Cannot use predicate " ^ pred.name ^ 

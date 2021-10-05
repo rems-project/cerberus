@@ -8,6 +8,7 @@ open List1
 open List
 open Pp
 open Global
+open LogicalPredicates
 
 
 
@@ -368,13 +369,7 @@ let lambda struct_decls (q_s, q_bt) body =
        (term struct_decls body))
 
 
-let open_pred global (pred : LogicalConstraints.Pred.t) =
-  let def = Option.get (get_logical_predicate_def global pred.name) in
-  let su = 
-    make_subst
-      (List.map2 (fun (s, _) arg -> (s, arg)) def.args pred.args) 
-  in
-  IT.subst su def.body
+
 
 
 
@@ -393,7 +388,8 @@ let constr global c =
      in
      Some (Z3.Quantifier.expr_of_quantifier q)
   | Pred pred ->
-     Some (term struct_decls (open_pred global pred))
+     let def = Option.get (get_logical_predicate_def global pred.name) in
+     Some (term struct_decls (LogicalPredicates.open_pred global def pred.args))
   | QPred _ ->
      (* QPreds are not automatically expanded: to avoid
         all-quantifiers *)
@@ -423,8 +419,9 @@ let check_forall global solver ((s, bt), t) =
   z3_status (Z3.Solver.check solver 
                [Z3.Boolean.mk_not context (term global.struct_decls t)])
 
-let check_pred global solver pred =
-  check_t global solver (open_pred global pred)
+let check_pred global solver (pred : LC.Pred.t) =
+  let def = Option.get (get_logical_predicate_def global pred.name) in
+  check_t global solver (open_pred global def pred.args)
 
 let check_qpred global solver assumptions {q; condition; pred} =
   let def = Option.get (get_logical_predicate_def global pred.name) in
@@ -681,11 +678,11 @@ let z3_expr struct_decls =
 
   in
 
-  fun expr -> Some (aux [] expr)
+  (* fun expr -> Some (aux [] expr) *)
 
-  (* fun expr -> 
-   * try Some (aux [] expr) with
-   * | Unsupported err -> None *)
+  fun expr -> 
+  try Some (aux [] expr) with
+  | Unsupported err -> None
 
 
 

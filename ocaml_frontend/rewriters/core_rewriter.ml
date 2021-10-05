@@ -334,7 +334,10 @@ module Rewriter = functor (Eff: Monad) -> struct
       | Eunpack (id, pes) ->
           mapM aux_pexpr pes >>= fun pes' ->
           return_wrap (Eunpack (id, pes'))
-      | Eqfacts pe ->
-          aux_pexpr pe >>= fun pe' ->
-          return_wrap (Eqfacts pe)
+      | Ehave (id, pes) ->
+          mapM aux_pexpr pes >>= fun pes' ->
+          return_wrap (Ehave (id, pes'))
+      | Eshow (id, pes) ->
+          mapM aux_pexpr pes >>= fun pes' ->
+          return_wrap (Eshow (id, pes'))
 end

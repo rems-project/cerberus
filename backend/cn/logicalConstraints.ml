@@ -45,7 +45,7 @@ let pp lc =
     | Pred pred -> 
        Pred.pp pred
     | QPred {q; condition; pred} ->
-       Pp.c_app !^"forall" [Sym.pp (fst q); BT.pp (snd q); IT.pp condition]
+       Pp.c_app !^"each" [Sym.pp (fst q); BT.pp (snd q); IT.pp condition]
        ^^ dot ^^^ (Pred.pp pred)
   in
   squotes (aux lc)

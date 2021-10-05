@@ -365,14 +365,18 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
        return (New.M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (New.M_Eproc (name,asyms))
-    | M_Epredicate (pack_unpack, name, asyms) ->
+    | M_Erpredicate (pack_unpack, name, asyms) ->
        let pack_unpack = match pack_unpack with
          | Pack -> New.Pack
          | Unpack -> New.Unpack
        in
-       return (New.M_Epredicate (pack_unpack, name, asyms))
-    | M_Eqfacts asym ->
-       return (New.M_Eqfacts asym)
+       return (New.M_Erpredicate (pack_unpack, name, asyms))
+    | M_Elpredicate (have_show, name, asyms) ->
+       let have_show = match have_show with
+         | Have -> New.Have
+         | Show -> New.Show
+       in
+       return (New.M_Elpredicate (have_show, name, asyms))
   in
 
   return (New.M_Expr (loc, annots,expr_))

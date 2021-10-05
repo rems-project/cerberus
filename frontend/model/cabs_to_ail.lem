@@ -4169,8 +4169,10 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           AilSpack id <$> E.mapM desugar_expression es
       | CabsSunpack id es ->
           AilSunpack id <$> E.mapM desugar_expression es
-      | CabsSqfacts e ->
-          AilSqfacts <$> desugar_expression e
+      | CabsShave id es ->
+          AilShave id <$> E.mapM desugar_expression es
+      | CabsSshow id es ->
+          AilSshow id <$> E.mapM desugar_expression es
     end
 
 val desugar_statement: cabs_statement -> E.desugM (statement unit)
@@ -4225,7 +4227,9 @@ let rec register_labels (CabsStatement _ _ stmt_) =
        E.return ()
     | CabsSunpack _ _ ->
        E.return ()
-    | CabsSqfacts _ ->
+    | CabsShave _ _ ->
+       E.return ()
+    | CabsSshow _ _ ->
        E.return ()
   end
 

@@ -53,7 +53,8 @@ type token =
   (* for CN *)
   | PACK
   | UNPACK
-  | QFACTS
+  | HAVE
+  | SHOW
 
   (* §6.4.2 Identifiers *)
   | NAME of string
@@ -248,4 +249,5 @@ let string_of_token = function
   | EOF -> "EOF"
   | PACK -> "PACK"
   | UNPACK -> "UNPACK"
-  | QFACTS -> "QFACTS"
+  | HAVE -> "HAVE"
+  | SHOW -> "SHOW"

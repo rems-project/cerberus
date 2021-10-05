@@ -18,6 +18,19 @@ type definition = {
   }
 
 
+
+let open_pred global def args =
+  let su = 
+    make_subst
+      (List.map2 (fun (s, _) arg -> (s, arg)) def.args args) 
+  in
+  IT.subst su def.body
+
+
+
+
+
+
 module PageAlloc = struct
 
   module Aux(SD : sig val struct_decls : Memory.struct_decls end) = struct
@@ -48,6 +61,7 @@ module PageAlloc = struct
              eq_ (rem_ (offset, hyp_page_size), int_ 0);
              range_start %<= phys; phys %< range_end; ]
 
+
   end
 
 
@@ -67,17 +81,20 @@ module PageAlloc = struct
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let range_start_s, range_start = IT.fresh_named BT.Integer "range_start" in
       let range_end_s, range_end = IT.fresh_named BT.Integer "range_end" in
-      let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
-      in
 
-      let page = get_ vmemmap page_pointer in
+      (* let vmemmap_s, vmemmap = 
+       *   IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
+       * in *)
+
+      let page_s, page = IT.fresh_named (Struct hyp_page_tag) "page" in
+      (* let page = get_ vmemmap page_pointer in *)
 
 
       let args = [
           (page_pointer_s, IT.bt page_pointer);
+          (page_s, IT.bt page);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (vmemmap_s, IT.bt vmemmap);
+          (* (vmemmap_s, IT.bt vmemmap); *)
           (pool_pointer_s, IT.bt pool_pointer);
           (range_start_s, IT.bt range_start);
           (range_end_s, IT.bt range_end);
@@ -145,23 +162,23 @@ module PageAlloc = struct
     (* check: possibly inconsistent *)
     let free_area_cell_wf =
 
-      let id = "FreeArea_cell_ef" in
+      let id = "FreeArea_cell_wf" in
       let loc = Loc.other "internal (FreeArea_cell_wf)" in
 
-      let cell_pointer_s, cell_pointer = IT.fresh_named Loc "cell_pointer" in
+      let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
       let cell_s, cell = IT.fresh_named (BT.Struct list_head_tag) "cell" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
-      let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+      (* let vmemmap_s, vmemmap = 
+       *   IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in *)
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let range_start_s, range_start = IT.fresh_named Integer "range_start" in
       let range_end_s, range_end = IT.fresh_named Integer "range_end" in
 
       let args = [
-          (cell_pointer_s, IT.bt cell_pointer);
+          (cell_index_s, IT.bt cell_index);
           (cell_s, IT.bt cell);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (vmemmap_s, IT.bt vmemmap);
+          (* (vmemmap_s, IT.bt vmemmap); *)
           (pool_pointer_s, IT.bt pool_pointer);
           (range_start_s, IT.bt range_start);
           (range_end_s, IT.bt range_end);
@@ -169,41 +186,42 @@ module PageAlloc = struct
       in
       let qarg = Some 0 in
 
+      (* let order = cell_index in *)
 
-      let free_area_base_pointer = 
+      let free_area_pointer = 
         addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "free_area")) in
 
-      let offset_within_free_area =
-        (pointerToIntegerCast_ cell_pointer) %-
-          (pointerToIntegerCast_ free_area_base_pointer)
-      in
 
-      let index_in_free_area = 
-        offset_within_free_area %/ (int_ (Memory.size_of_struct list_head_tag))
-      in
+      let cell_pointer = arrayShift_ (free_area_pointer, struct_ct list_head_tag, cell_index) in
 
-      let order = index_in_free_area in
+      
+      
+      (* let index_in_free_area = 
+       *   offset_within_free_area %/ (int_ (Memory.size_of_struct list_head_tag))
+       * in
+       * 
+       * let order = index_in_free_area in *)
 
 
       let body = 
         let prev = cell %. "prev" in
-        let prev_pointer = addPointer_ (cell_pointer, memberOffset_ (list_head_tag, Id.id "prev")) in
+        (* let prev_pointer = addPointer_ (cell_pointer, memberOffset_ (list_head_tag, Id.id "prev")) in *)
         let next = cell %. "next" in
-        let next_pointer = addPointer_ (cell_pointer, memberOffset_ (list_head_tag, Id.id "next")) in
+        (* let next_pointer = addPointer_ (cell_pointer, memberOffset_ (list_head_tag, Id.id "next")) in *)
         or_ [and_ [prev %== cell_pointer; next %== cell_pointer];
              and_ begin
                  let prev_vmemmap = container_of_ (prev, hyp_page_tag, Id.id "node") in
                  let next_vmemmap = container_of_ (next, hyp_page_tag, Id.id "node") in
                  [(*prev*)
                    vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap range_start range_end;
-                   ((get_ vmemmap prev_vmemmap) %. "order") %== order;
-                   ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
-                   (((get_ vmemmap prev_vmemmap) %. "node") %. "next") %== prev_pointer;
+                   (* ((get_ vmemmap prev_vmemmap) %. "order") %== order;
+                    * ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
+                    * (((get_ vmemmap prev_vmemmap) %. "node") %. "next") %== prev_pointer; *)
                    (*next*)
                    vmemmap_good_pointer ~vmemmap_pointer next_vmemmap range_start range_end;
-                   ((get_ vmemmap next_vmemmap) %. "order") %== order;
-                   ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
-                   (((get_ vmemmap next_vmemmap) %. "node") %. "prev") %== next_pointer;
+                   (* ((get_ vmemmap next_vmemmap) %. "order") %== order;
+                    * ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
+                    * (((get_ vmemmap next_vmemmap) %. "node") %. "prev") %== next_pointer; *)
                  ]
                end
           ]
