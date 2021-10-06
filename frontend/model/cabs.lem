@@ -312,10 +312,14 @@ and cabs_statement_ =
   | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
 
   (* for CN *)
-  | CabsSpack of Symbol.identifier * list cabs_expression
-  | CabsSunpack of Symbol.identifier * list cabs_expression
+  | CabsSpack of cabs_to_pack_unpack * list cabs_expression
+  | CabsSunpack of cabs_to_pack_unpack * list cabs_expression
   | CabsShave of Symbol.identifier * list cabs_expression
   | CabsSshow of Symbol.identifier * list cabs_expression
+
+and cabs_to_pack_unpack =
+  | CTPU_Struct of Symbol.identifier
+  | CTPU_Predicate of Symbol.identifier
 
 
 and cabs_statement =

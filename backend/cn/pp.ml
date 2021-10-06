@@ -17,7 +17,7 @@ type loc_pp =
   | Hex
   | Dec
 
-let loc_pp = ref Hex
+let loc_pp = ref Dec
 
 
 

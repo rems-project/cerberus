@@ -669,10 +669,18 @@ let rec pp_expr expr =
             pp_keyword "par" ^^ P.parens (comma_list pp es)
         | Ewait tid ->
             pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-        | Epack (Symbol.Identifier (_, ident), pes) ->
-            pp_keyword "pack" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
-        | Eunpack (Symbol.Identifier (_, ident), pes) ->
-            pp_keyword "unpack" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
+        | Epack (tpu, pes) ->
+            let tpu = match tpu with
+              | TPU_Predicate (Symbol.Identifier (_, ident)) -> !^ident
+              | TPU_Struct sym -> !^"struct" ^^^ pp_symbol sym
+            in
+            pp_keyword "pack" ^^^ tpu ^^ P.parens (comma_list pp_pexpr pes)
+        | Eunpack (tpu, pes) ->
+            let tpu = match tpu with
+              | TPU_Predicate (Symbol.Identifier (_, ident)) -> !^ident
+              | TPU_Struct sym -> !^"struct" ^^^ pp_symbol sym
+            in
+            pp_keyword "unpack" ^^^ tpu ^^ P.parens (comma_list pp_pexpr pes)
         | Ehave (Symbol.Identifier (_, ident), pes) ->
             pp_keyword "have" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
         | Eshow (Symbol.Identifier (_, ident), pes) ->

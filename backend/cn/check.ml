@@ -666,36 +666,47 @@ module ResourceInference = struct
 
   module Special = struct
 
-    let missing_resource_failure loc situation (request, oinfo) = 
+    let missing_resource_failure loc situation (orequest, oinfo) = 
       fun model ctxt ->
-      let msg = Missing_resource_request {request; situation; oinfo; model; ctxt} in
+      let msg = Missing_resource_request {orequest; situation; oinfo; model; ctxt} in
       {loc; msg}
 
     let point_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation (Point request, oinfo) in
+      let failure = missing_resource_failure loc situation 
+                      (Some (Point request), oinfo) in
       General.point_request loc failure request
 
     let qpoint_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation (QPoint request, oinfo) in
+      let failure = missing_resource_failure loc situation 
+                      (Some (QPoint request), oinfo) in
       General.qpoint_request loc failure request
 
     let predicate_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation (Predicate request, oinfo) in
+      let failure = missing_resource_failure loc situation 
+                      (Some (Predicate request), oinfo) in
       General.predicate_request loc failure request
 
     let qpredicate_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation (QPredicate request, oinfo) in
+      let failure = missing_resource_failure loc situation 
+                      (Some (QPredicate request), oinfo) in
       General.qpredicate_request loc failure request
 
     let unfold_array loc situation ct base_pointer_t length permission_t = 
       let request = General.unfold_array_request ct base_pointer_t length permission_t in
-      let failure = missing_resource_failure loc situation (RER.Point request, None) in
+      let failure = missing_resource_failure loc situation 
+                      (Some (RER.Point request), None) in
       General.unfold_array loc failure ct base_pointer_t length permission_t
 
     let unfold_struct loc situation tag pointer_t permission_t = 
       let request = General.unfold_struct_request tag pointer_t permission_t in
-      let failure = missing_resource_failure loc situation (RER.Point request, None) in
+      let failure = missing_resource_failure loc situation 
+                      (Some (RER.Point request), None) in
       General.unfold_struct loc failure tag pointer_t permission_t
+
+    let fold_struct loc situation tag pointer_t permission_t = 
+      let failure = missing_resource_failure loc situation (None, None) in
+      General.fold_struct loc failure tag pointer_t permission_t
+
   end
 
 
@@ -975,7 +986,7 @@ end = struct
            let@ resource' = 
              let failure model ctxt = 
                let ctxt = { ctxt with resources = original_resources } in
-               let msg = Missing_resource_request {request; situation; oinfo = Some info; model; ctxt} in
+               let msg = Missing_resource_request {orequest = Some request; situation; oinfo = Some info; model; ctxt} in
                {loc; msg}
              in
              RI.General.resource_request loc failure request 
@@ -1036,7 +1047,7 @@ end = struct
 
   let calltype_packing loc (name : Id.t) (ft : AT.packing_ft) : (OutputDef.t, type_error) m =
     spine OutputDef.subst OutputDef.pp 
-      loc (Pack name) [] ft
+      loc (Pack (TPU_Predicate name)) [] ft
 
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
@@ -1834,7 +1845,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          | CF.Core.Sym sym -> get_fun_decl loc sym in
        let@ args = args_of_asyms asyms in
        Spine.calltype_ft loc args decl_typ
-    | M_Erpredicate (pack_unpack, pname, asyms) ->
+    | M_Erpredicate (pack_unpack, TPU_Predicate pname, asyms) ->
        let@ global = get_global () in
        let@ def = match Global.get_resource_predicate_def global (Id.s pname) with
          | Some def -> return def
@@ -1893,7 +1904,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        begin match pack_unpack with
        | Unpack ->
           let@ pred =
-            RI.Special.predicate_request loc (Unpack pname) ({
+            RI.Special.predicate_request loc (Unpack (TPU_Predicate pname)) ({
                 name = Id.s pname;
                 pointer = it_of_arg pointer_arg;
                 permission = permission;
@@ -1922,6 +1933,37 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
              LRT.I)))
           in
           return rt
+       end
+    | M_Erpredicate (pack_unpack, TPU_Struct tag, asyms) ->
+       let@ args = args_of_asyms asyms in
+       let@ () = 
+         (* "+1" because of pointer argument *)
+         let has = List.length args in
+         if has = 1 then return ()
+         else fail (fun _ -> {loc; msg = Number_arguments {has; expect = 1}})
+       in
+       let pointer_arg = List.hd args in
+       let@ () = ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
+       begin match pack_unpack with
+       | Pack ->
+          let situation = TypeErrors.Pack (TPU_Struct tag) in
+          let@ resource = RI.Special.fold_struct loc situation tag 
+                            (it_of_arg pointer_arg) (q_ (1, 1)) in
+          let rt = 
+            RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
+            LRT.Resource (resource, (loc, None), 
+            LRT.I))
+          in
+          return rt
+       | Unpack ->
+          let situation = TypeErrors.Unpack (TPU_Struct tag) in
+          let@ lrt = 
+            RI.Special.unfold_struct loc situation tag 
+              (it_of_arg pointer_arg) (q_ (1, 1)) 
+          in
+          let rt = RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt) in
+          return rt
+
        end
     | M_Elpredicate (have_show, pname, asyms) ->
        let@ global = get_global () in
@@ -1958,7 +2000,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                    let condition' = IT.subst su qpred'.condition in
                    let pred_args' = List.map (IT.subst su) qpred'.pred.args in
                    let args_equal = List.map2 eq__ pred_args pred_args' in
-                   Some (and_ (condition' :: args_equal))
+                   let to_check = and_ (condition' :: args_equal) in
+                   Some to_check
                 | _ -> 
                    None
               ) constraints
@@ -1966,7 +2009,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ () = match provable (t_ (or_ to_check)) with
             | `True -> return ()
             | `False ->
-               let err = "no quantified constraints containing this fact" in
+               let err = "Found no quantified constraints containing this fact" in
                fail (fun _ -> {loc; msg = Generic !^err})
           in
           return rt

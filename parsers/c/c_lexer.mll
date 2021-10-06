@@ -78,6 +78,8 @@ let keywords: (string * Tokens.token) list = [
     (* for CN *)
     "pack"    , PACK;
     "unpack"  , UNPACK;
+    "pack_struct"    , PACKSTRUCT;
+    "unpack_struct"  , UNPACKSTRUCT;
     "have"  , HAVE;
     "show"  , SHOW;
   ]

@@ -30,8 +30,8 @@ type situation =
   | Subtyping
   | ArrayShift
   | MemberShift
-  | Pack of Id.t
-  | Unpack of Id.t
+  | Pack of CF.Annot.to_pack_unpack
+  | Unpack of CF.Annot.to_pack_unpack
 
 let checking_situation = function
   | Access access -> !^"checking access"
@@ -42,8 +42,10 @@ let checking_situation = function
   | Subtyping -> !^"checking subtyping"
   | ArrayShift -> !^"array shifting"
   | MemberShift -> !^"member shifting"
-  | Pack name -> !^"packing predicate" ^^^ Id.pp name
-  | Unpack name -> !^"unpacking predicate" ^^^ Id.pp name
+  | Pack (TPU_Predicate name) -> !^"packing predicate" ^^^ Id.pp name
+  | Pack (TPU_Struct tag) -> !^"packing struct" ^^^ Sym.pp tag
+  | Unpack (TPU_Predicate name) -> !^"unpacking predicate" ^^^ Id.pp name
+  | Unpack (TPU_Struct tag) -> !^"unpacking struct" ^^^ Sym.pp tag
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -63,8 +65,10 @@ let for_situation = function
   | Subtyping -> !^"for subtyping"
   | ArrayShift -> !^"for array shifting"
   | MemberShift -> !^"for member shifting"
-  | Pack name -> !^"for packing predicate" ^^^ Id.pp name
-  | Unpack name -> !^"for unpacking predicate" ^^^ Id.pp name
+  | Pack (TPU_Predicate name) -> !^"for packing predicate" ^^^ Id.pp name
+  | Pack (TPU_Struct tag) -> !^"for packing struct" ^^^ Sym.pp tag
+  | Unpack (TPU_Predicate name) -> !^"for unpacking predicate" ^^^ Id.pp name
+  | Unpack (TPU_Struct tag) -> !^"for unpacking struct" ^^^ Sym.pp tag
 
 
 
@@ -86,7 +90,7 @@ type message =
   | Unknown_logical_predicate of string
   | Unknown_member of BT.tag * BT.member
 
-  | Missing_resource_request of {request : RER.t; situation : situation; oinfo : info option; ctxt : Context.t; model: Z3.Model.model }
+  | Missing_resource_request of {orequest : RER.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Z3.Model.model }
   | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Z3.Model.model}
   | Uninitialised_read of {ctxt : Context.t; model : Z3.Model.model}
   | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Z3.Model.model}
@@ -154,22 +158,28 @@ let pp_message te =
            Id.pp member
      in
      { short; descr = Some descr; state = None }
-  | Missing_resource_request {request; situation; oinfo; ctxt; model} ->
+  | Missing_resource_request {orequest; situation; oinfo; ctxt; model} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
-     let explanation = Explain.explanation ctxt (RER.free_vars request) in
-     let re_pp = RER.pp (RER.subst explanation.substitution request) in
-     let descr = match oinfo with
-       | Some (spec_loc, Some descr) ->
+     let relevant = match orequest with
+       | None -> IT.SymSet.empty 
+       | Some request -> (RER.free_vars request)
+     in
+     let explanation = Explain.explanation ctxt relevant in
+     let descr = match oinfo, orequest with
+       | Some (spec_loc, Some descr), _ ->
           let (head, _) = Locations.head_pos_of_location spec_loc in
-          !^"Missing resource from" ^^^ !^head ^^^ parens !^descr
-       | Some (spec_loc, None) ->
+          Some (!^"Missing resource from" ^^^ !^head ^^^ parens !^descr)
+       | Some (spec_loc, None), _ ->
           let (head, _) = Locations.head_pos_of_location spec_loc in
-          !^"Missing resource from" ^^^ !^head
-       | None ->
-          !^"Missing resource" ^^^ squotes re_pp
+          Some (!^"Missing resource from" ^^^ !^head)
+       | None, Some request ->
+          let re_pp = RER.pp (RER.subst explanation.substitution request) in
+          Some (!^"Missing resource" ^^^ squotes re_pp)
+       | None, None ->
+          None
      in
      let state = Explain.state ctxt explanation model in
-     { short; descr = Some descr; state = Some state }
+     { short; descr; state = Some state }
   | Resource_mismatch {has; expect; situation; ctxt; model} ->
      let short = !^"Resource mismatch" ^^^ for_situation situation in
      let relevant = IT.SymSet.union (RE.free_vars has) (RE.free_vars expect) in

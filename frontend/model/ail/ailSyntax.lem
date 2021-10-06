@@ -182,6 +182,7 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
 type bindings =
   list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
 
+
 type statement_ 'a [name="s*"] =
   | AilSskip
   | AilSexpr of expression 'a
@@ -202,8 +203,8 @@ type statement_ 'a [name="s*"] =
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
 (* for CN *)
-  | AilSpack of Symbol.identifier * list (expression 'a)
-  | AilSunpack of Symbol.identifier * list (expression 'a)
+  | AilSpack of Annot.to_pack_unpack * list (expression 'a)
+  | AilSunpack of Annot.to_pack_unpack * list (expression 'a)
   | AilShave of Symbol.identifier * list (expression 'a)
   | AilSshow of Symbol.identifier * list (expression 'a)
 and statement 'a [name="s*"] =

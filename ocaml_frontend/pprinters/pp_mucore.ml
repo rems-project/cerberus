@@ -668,9 +668,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_Eccall (pe_ty, pe, pes) ->
               pp_keyword "ccall" ^^ P.parens (pp_ct pe_ty.ct) ^^
                 P.parens (comma_list pp_actype_or_asym ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
-          | M_Erpredicate (pack_unpack, id, pes) ->
+          | M_Erpredicate (pack_unpack, tpu, pes) ->
               pp_keyword (match pack_unpack with Pack -> "pack"  | Unpack -> "unpack") ^^^
-                P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_asym pes)
+                let tpu = match tpu with
+                  | TPU_Struct sym -> !^"struct" ^^^ pp_symbol sym
+                  | TPU_Predicate (Symbol.Identifier (_, ident)) -> !^ident
+                in
+                P.parens (tpu ^^ P.comma ^^^ comma_list pp_asym pes)
           | M_Elpredicate (have_show, id, pes) ->
               pp_keyword (match have_show with Have -> "have"  | Show -> "show") ^^^
                 P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_asym pes)

@@ -74,7 +74,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
   STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
-  THREAD_LOCAL (* FOR CN *) PACK UNPACK HAVE SHOW
+  THREAD_LOCAL (* FOR CN *) PACK UNPACK PACKSTRUCT UNPACKSTRUCT HAVE SHOW
 
 (* §6.4.2 Identifiers *)
 %token<string> NAME (* NAME is either an variable identifier or a type name *)
@@ -1456,11 +1456,15 @@ asm_statement:
 
 
 pack_statement:
+  | PACKSTRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSpack (CTPU_Struct name, args)) }
   | PACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSpack (name, args)) }
+    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSpack (CTPU_Predicate name, args)) }
 unpack_statement:
+  | UNPACKSTRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSunpack (CTPU_Struct name, args)) }
   | UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSunpack (name, args)) }
+    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSunpack (CTPU_Predicate name, args)) }
 have_statement:
   | HAVE name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsShave (name, args)) }

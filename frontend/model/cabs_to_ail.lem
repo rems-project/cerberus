@@ -4165,10 +4165,34 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
           (* TODO: erasing inline assembly for now *)
           E.return AilSskip
-      | CabsSpack id es ->
-          AilSpack id <$> E.mapM desugar_expression es
-      | CabsSunpack id es ->
-          AilSunpack id <$> E.mapM desugar_expression es
+      | CabsSpack (CTPU_Struct tag_ident) es ->
+         E.mapM desugar_expression es >>= fun es ->
+         (* copying and adapting code from the `TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)` case *)
+         E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+         | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
+             E.return tag_sym
+         | Just (_, (tag_sym, _)) ->
+             E.constraint_violation loc (TagRedeclaration tag_sym)
+         | Nothing ->
+             E.register_tag E.Kind_struct (Just tag_ident)
+         end >>= fun tag_sym ->
+         E.return (AilSpack (Annot.TPU_Struct tag_sym) es)
+      | CabsSpack (CTPU_Predicate id) es ->
+          AilSpack (Annot.TPU_Predicate id) <$> E.mapM desugar_expression es
+      | CabsSunpack (CTPU_Struct tag_ident) es ->
+         E.mapM desugar_expression es >>= fun es ->
+         (* copying and adapting code from the `TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)` case *)
+         E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+         | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
+             E.return tag_sym
+         | Just (_, (tag_sym, _)) ->
+             E.constraint_violation loc (TagRedeclaration tag_sym)
+         | Nothing ->
+             E.register_tag E.Kind_struct (Just tag_ident)
+         end >>= fun tag_sym ->
+         E.return (AilSunpack (Annot.TPU_Struct tag_sym) es)         
+      | CabsSunpack (CTPU_Predicate id) es ->
+          AilSunpack (Annot.TPU_Predicate id) <$> E.mapM desugar_expression es
       | CabsShave id es ->
           AilShave id <$> E.mapM desugar_expression es
       | CabsSshow id es ->

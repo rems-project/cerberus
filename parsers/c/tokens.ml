@@ -53,6 +53,8 @@ type token =
   (* for CN *)
   | PACK
   | UNPACK
+  | PACKSTRUCT
+  | UNPACKSTRUCT
   | HAVE
   | SHOW
 
@@ -249,5 +251,7 @@ let string_of_token = function
   | EOF -> "EOF"
   | PACK -> "PACK"
   | UNPACK -> "UNPACK"
+  | PACKSTRUCT -> "PACKSTRUCT"
+  | UNPACKSTRUCT -> "UNPACKSTRUCT"
   | HAVE -> "HAVE"
   | SHOW -> "SHOW"

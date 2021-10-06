@@ -233,7 +233,7 @@ type have_show =
    | M_Eskip
    | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
-   | M_Erpredicate of pack_unpack * Symbol.identifier * ('TY asym) list
+   | M_Erpredicate of pack_unpack * Annot.to_pack_unpack * ('TY asym) list
    | M_Elpredicate of have_show * Symbol.identifier * ('TY asym) list
 
   and 'TY mu_expr = 
