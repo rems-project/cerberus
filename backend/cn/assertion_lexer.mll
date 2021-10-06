@@ -29,7 +29,10 @@ rule main = parse
 
   | "(pointer)"   { T.POINTERCAST }
   | "(integer)"   { T.INTEGERCAST }
-  
+
+  | "pointer"     { T.POINTER }
+  | "integer"     { T.INTEGER }
+
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
   | '['   { T.LBRACKET }

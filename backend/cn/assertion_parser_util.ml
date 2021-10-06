@@ -41,6 +41,8 @@ type token =
 
   | POINTERCAST
   | INTEGERCAST
+  | POINTER
+  | INTEGER
 
   | AMPERSAND
   | AT

@@ -479,10 +479,10 @@ let resolve_constraint loc layouts default_mapping_name mappings lc =
 
 
 
-let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oqpointer; predicate; arguments; oname}) =
+let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; oname}) =
   match predicate with
   | "Owned" ->
-     if oqpointer <> None then
+     if oq <> None then
        fail {loc; msg = Generic !^"cannot use 'Owned' with quantifier"}
      else
        begin match arguments with
@@ -500,7 +500,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
           fail {loc; msg = Generic !^"Owned predicate takes 1 argument, which has to be a path"}
        end
   | "Block" ->
-     if oqpointer <> None then
+     if oq <> None then
        fail {loc; msg = Generic !^"cannot use 'Block' with quantifier"}
      else
        begin match arguments with
@@ -527,24 +527,24 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
        | _ ->
           fail {loc; msg = Generic !^("predicates take at least one (pointer) argument")}
      in
-     let oqpointer = 
-       Option.bind oqpointer 
-         (fun (name, condition) -> 
-           Some ((name, (Sym.fresh_pretty name, BT.Loc)), condition))
+     let oq = 
+       Option.bind oq
+         (fun (name, bt, condition) -> 
+           Some ((name, (Sym.fresh_pretty name, bt)), condition))
      in
      let@ (pointer_resolved, _) = 
        resolve_index_term loc layouts default_mapping_name mappings 
-         (Option.map fst oqpointer) pointer 
+         (Option.map fst oq) pointer 
      in
      let@ iargs_resolved = 
        ListM.mapM (fun arg ->
            let@ (t, _) = 
              resolve_index_term loc layouts default_mapping_name mappings 
-               (Option.map fst oqpointer) arg in
+               (Option.map fst oq) arg in
            return t
          ) arguments
      in
-     let@ result = match oqpointer with
+     let@ result = match oq with
        | None ->
           make_pred loc predicates (predicate, def) 
             ~oname pointer_resolved iargs_resolved 
@@ -559,7 +559,36 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
      return result
 
 
-
+let apply_logical_predicate layouts default_mapping_name mappings (loc, cond) =
+  let@ lc = match cond.oq with
+    | None ->
+       let@ args_resolved = 
+         ListM.mapM (fun arg ->
+             let@ (t, _) = 
+               resolve_index_term loc layouts default_mapping_name mappings 
+                 None arg in
+             return t
+           ) cond.arguments
+       in
+       return (LC.Pred { name = cond.predicate; args = args_resolved })
+    | Some (name, bt, condition) -> 
+       let q = Sym.fresh_named name in
+       let@ args_resolved = 
+         ListM.mapM (fun arg ->
+             let@ (t, _) = 
+               resolve_index_term loc layouts default_mapping_name mappings 
+                 (Some (name, (q, bt))) arg in
+             return t
+           ) cond.arguments
+       in
+       let@ (condition, _) = 
+         resolve_index_term loc layouts default_mapping_name mappings 
+           (Some (name, (q, bt))) condition
+       in
+       let pred = LC.Pred.{ name = cond.predicate; args = args_resolved } in
+       return (LC.QPred { q = (q, bt); condition; pred })
+  in
+  return (lc, (loc, None))
 
 
 
@@ -618,7 +647,7 @@ let mod_mapping
     mappings
 
 
-let make_fun_spec loc (layouts : Memory.struct_decls) predicates fsym (fspec : function_spec)
+let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fsym (fspec : function_spec)
     : (AT.ft * mapping, type_error) m = 
   let open AT in
   let open RT in
@@ -672,16 +701,22 @@ let make_fun_spec loc (layouts : Memory.struct_decls) predicates fsym (fspec : f
   let@ (iL, iR, iC, mappings) = 
     ListM.fold_leftM (fun (iL, iR, iC, mappings) (loc, spec) ->
         match spec with
-        | Ast.Resource cond ->
-           let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts predicates
-               "start" mappings (loc, cond) in
-           let mappings = 
-             mod_mapping "start" mappings
-               (fun mapping -> mapping' @ mapping)
-           in
-           return (iL @ l, iR @ r, iC @ c, mappings)
-        | Ast.Logical cond ->
+        | Ast.Predicate cond ->
+           begin match List.assoc_opt String.equal cond.predicate lpredicates with
+           | Some p ->
+              let@ c = apply_logical_predicate layouts "start" mappings (loc, cond) in
+              return (iL, iR, iC @ [c], mappings)
+           | None ->
+              let@ (l, r, c, mapping') = 
+                apply_ownership_spec layouts rpredicates
+                  "start" mappings (loc, cond) in
+              let mappings = 
+                mod_mapping "start" mappings
+                  (fun mapping -> mapping' @ mapping)
+              in
+              return (iL @ l, iR @ r, iC @ c, mappings)
+           end
+        | Ast.Term cond ->
            let@ c = resolve_constraint loc layouts 
                       "start" mappings cond in
            return (iL, iR, iC @ [(c, (loc, None))], mappings)
@@ -742,17 +777,23 @@ let make_fun_spec loc (layouts : Memory.struct_decls) predicates fsym (fspec : f
   let@ (oL, oR, oC, mappings) = 
     ListM.fold_leftM (fun (oL, oR, oC, mappings) (loc, spec) ->
         match spec with
-        | Ast.Resource cond ->
-           let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts predicates
-               "end" mappings (loc, cond) 
-           in
-           let mappings = 
-             mod_mapping "end" mappings 
-               (fun mapping -> mapping' @ mapping)
-           in
-           return (oL @ l, oR @ r, oC @ c, mappings)
-        | Ast.Logical cond ->
+        | Ast.Predicate cond ->
+           begin match List.assoc_opt String.equal cond.predicate lpredicates with
+           | Some p ->
+              let@ c = apply_logical_predicate layouts "end" mappings (loc, cond) in
+              return (oL, oR, oC @ [c], mappings)
+           | None ->
+              let@ (l, r, c, mapping') = 
+                apply_ownership_spec layouts rpredicates
+                  "end" mappings (loc, cond) 
+              in
+              let mappings = 
+                mod_mapping "end" mappings 
+                  (fun mapping -> mapping' @ mapping)
+              in
+              return (oL @ l, oR @ r, oC @ c, mappings)
+           end
+        | Ast.Term cond ->
            let@ c = resolve_constraint loc layouts "end" mappings cond in
            return (oL, oR, oC @ [(c, (loc, None))], mappings)
       )
@@ -771,7 +812,8 @@ let make_fun_spec loc (layouts : Memory.struct_decls) predicates fsym (fspec : f
 let make_label_spec
       (loc : Loc.t)
       layouts
-      predicates
+      rpredicates
+      lpredicates
       (lname : string)
       start_mapping
       (lspec: Ast.label_spec)
@@ -849,16 +891,22 @@ let make_label_spec
   let@ (iL, iR, iC, mappings) = 
     ListM.fold_leftM (fun (iL, iR, iC, mappings) (loc, spec) ->
         match spec with
-        | Ast.Resource cond ->
-           let@ (l, r, c, mapping') = 
-             apply_ownership_spec layouts predicates
-               lname mappings (loc, cond) in
-           let mappings = 
-             mod_mapping lname mappings 
-               (fun mapping -> mapping' @ mapping)
-           in
-           return (iL @ l, iR @ r, iC @ c, mappings)
-        | Ast.Logical cond ->
+        | Ast.Predicate cond ->
+           begin match List.assoc_opt String.equal cond.predicate lpredicates with
+           | Some p ->
+              let@ c = apply_logical_predicate layouts lname mappings (loc, cond) in
+              return (iL, iR, iC @ [c], mappings)
+           | None ->
+              let@ (l, r, c, mapping') = 
+                apply_ownership_spec layouts rpredicates
+                  lname mappings (loc, cond) in
+              let mappings = 
+                mod_mapping lname mappings 
+                  (fun mapping -> mapping' @ mapping)
+              in
+              return (iL @ l, iR @ r, iC @ c, mappings)
+           end
+        | Ast.Term cond ->
            let@ c = resolve_constraint loc layouts lname mappings cond in
            return (iL, iR, iC @ [(c, (loc, None))], mappings)
       )

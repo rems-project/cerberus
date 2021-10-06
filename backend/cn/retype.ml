@@ -541,7 +541,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
         in
         let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
         let@ (ftyp, mappings) = 
-          Conversions.make_fun_spec loc struct_decls resource_predicates fsym fspec 
+          Conversions.make_fun_spec loc struct_decls resource_predicates 
+            logical_predicates fsym fspec 
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
@@ -590,8 +591,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           in
           let@ lspec = Parse.parse_label lname argtyps fspec this_attrs in
           let@ (lt,mapping) = 
-            Conversions.make_label_spec loc struct_decls resource_predicates lname 
-              start_mapping lspec
+            Conversions.make_label_spec loc struct_decls resource_predicates 
+              logical_predicates lname start_mapping lspec
           in
           let@ e = retype_texpr e in
           return (New.M_Label (loc, lt,args,e,annots))

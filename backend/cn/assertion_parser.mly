@@ -42,6 +42,8 @@ open Assertion_parser_util
 %token OFFSETOF
 %token POINTERCAST
 %token INTEGERCAST
+%token POINTER
+%token INTEGER
 
 %token AMPERSAND
 %token AT
@@ -162,20 +164,27 @@ term:
 
 
 
-resource_condition:
+basetype:
+  | POINTER
+      { BaseTypes.Loc }
+  | INTEGER
+      { BaseTypes.Integer }
+  
+
+predicate:
   | id_args=pred_with_args name=NAME
-      { Ast.{oqpointer = None; predicate=fst id_args; arguments = snd id_args; oname = Some name} }
+      { Ast.{oq = None; predicate=fst id_args; arguments = snd id_args; oname = Some name} }
   | id_args=pred_with_args 
-      { Ast.{oqpointer = None; predicate=fst id_args; arguments = snd id_args; oname = None} }
-  | EACH LPAREN qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE name=NAME
-      { Ast.{oqpointer = Some (qname,t); predicate=fst id_args; arguments = snd id_args; oname = Some name} }
-  | EACH LPAREN qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE
-      { Ast.{oqpointer = Some (qname,t); predicate=fst id_args; arguments = snd id_args; oname = None} }
+      { Ast.{oq = None; predicate=fst id_args; arguments = snd id_args; oname = None} }
+  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE name=NAME
+      { Ast.{oq = Some (qname,bt,t); predicate=fst id_args; arguments = snd id_args; oname = Some name} }
+  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE
+      { Ast.{oq = Some (qname,bt,t); predicate=fst id_args; arguments = snd id_args; oname = None} }
 
 
 cond:
   | c=term
-      { Ast.Logical c } 
-  | c=resource_condition
-      { Ast.Resource c }
+      { Ast.Term c } 
+  | c=predicate
+      { Ast.Predicate c }
 

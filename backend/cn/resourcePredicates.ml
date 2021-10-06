@@ -370,14 +370,9 @@ let page_alloc_predicates struct_decls =
             permission = point_permission;
           }
       in
-      let aligned = 
-        aligned_ (vmemmap_pointer,
-                  array_ct (struct_ct hyp_page_tag) None)
-      in
       LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
       LRT.Resource (vmemmap_array, (loc, None), 
-      LRT.Constraint (t_ aligned, (loc, None), 
-      LRT.I)))
+      LRT.I))
     in
   
     let vmemmap_wf = 

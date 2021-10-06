@@ -295,26 +295,28 @@ include Terms
 
 
 
-type resource_condition = {
-    oqpointer : (string * Terms.term) option;
+type predicate = {
+    oq : (string * BT.t * term) option;
     predicate : string;
     arguments : term list;
     oname : string option;
   }
 
-type logical_condition = term
-
 type condition = 
-  | Logical of logical_condition
-  | Resource of resource_condition
+  | Term of term
+  | Predicate of predicate
 
 
 let remove_labels = function
-  | Logical cond -> 
-     Logical (remove_labels cond)
-  | Resource {oqpointer; predicate; arguments; oname} ->
+  | Term t -> 
+     Term (remove_labels t)
+  | Predicate {oq; predicate; arguments; oname} ->
+     let oq = match oq with
+       | None -> None
+       | Some (name, bt, condition) -> Some (name, bt, remove_labels condition)
+     in
      let arguments = List.map remove_labels arguments in
-     Resource { oqpointer; predicate; arguments; oname }
+     Predicate { oq; predicate; arguments; oname }
     
 
 type varg = { vsym : Sym.t; typ : Sctypes.t }
