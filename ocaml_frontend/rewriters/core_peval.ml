@@ -492,7 +492,7 @@ let core_peval file : 'bty RW.rewriter =
   
   let open RW in {
     rw_pexpr=
-      RW.RW begin fun (Pexpr (annots, bTy, pexpr_) as pexpr) ->
+      RW.RW begin fun _ (Pexpr (annots, bTy, pexpr_) as pexpr) ->
         match eval_pexpr pexpr with
           | Right (Defined cval) ->
               begin match pexpr_ with
@@ -613,12 +613,12 @@ let core_peval file : 'bty RW.rewriter =
       end;
     
     rw_action=
-      RW.RW begin fun act ->
+      RW.RW begin fun _ act ->
         Traverse
       end;
     
     rw_expr=
-      RW.RW begin fun (Expr (annots, expr_) (*as expr*)) ->
+      RW.RW begin fun _ (Expr (annots, expr_) (*as expr*)) ->
         match expr_ with
           | Ebound (_, e) ->
               ChangeDoChildrenPost

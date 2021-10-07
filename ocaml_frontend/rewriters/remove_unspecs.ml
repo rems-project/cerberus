@@ -57,7 +57,7 @@ let rec select_case = function
 let rewriter : 'bty RW.rewriter =
   let open RW in {
     rw_pexpr=
-      RW.RW begin fun _ ->
+      RW.RW begin fun _ _ ->
         DoChildrenPost begin fun (Pexpr (annots, bTy, pexpr_) as pexpr) ->
           match pexpr_ with
             | PEcase (pe, xs) ->
@@ -72,12 +72,12 @@ let rewriter : 'bty RW.rewriter =
         end
       end;
     rw_action=
-      RW.RW begin fun act ->
+      RW.RW begin fun _ act ->
         Traverse
       end;
     
     rw_expr=
-      RW.(RW begin fun _ ->
+      RW.(RW begin fun _ _ ->
         DoChildrenPost begin fun (Expr (annots, expr_) as expr) ->
           match expr_ with
             | Ecase (pe, xs) ->
