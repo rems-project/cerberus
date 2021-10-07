@@ -22,9 +22,6 @@ let terminate () =
 
 let cerbCmd =
   "./cerb_wrapper.sh"
-(*
-  "cerberus --cpp='cc -E -nostdinc -undef -D__cerb__ -I $CERB_PATH/include/c/libc -I $CERB_PATH/include/c/posix -DCSMITH_MINIMAL -I ../runtime' --sequentialise --exec"
-*)
 
 let ccCmd =
   "clang -DCSMITH_MINIMAL -I ../runtime -w"
@@ -81,6 +78,7 @@ let run_cerb filename =
       | _ ->
           Error ("(Cerberus) failed to execute the binary of '" ^ filename ^ "'")
 
+(*
 let should_rerun filename =
   if not (Sys.file_exists "LOG.old") then
     true
@@ -106,6 +104,30 @@ let should_rerun filename =
     close_in log_ic;
     ret
   end
+*)
+
+let should_rerun =
+  if not (Sys.file_exists "LOG.old") then
+    (fun _ -> true)
+  else begin
+    let log_ic = open_in "LOG.old" in
+    let rec loop acc =
+      try
+        let str = input_line log_ic in
+        begin match String.split_on_char ' ' str with
+          | "KO" :: filename :: _ ->
+              loop (filename :: acc)
+          | _ ->
+              output_string log_oc (str ^ "\n");
+              loop acc
+        end
+      with
+        | End_of_file ->
+            (List.rev acc) in
+    let ret = loop [] in
+    close_in log_ic;
+    (fun z -> List.mem z ret)
+  end
 
 let run_test filename =
   if !should_stop then
@@ -121,7 +143,7 @@ let run_test filename =
           print_endline "\x1b[33mXX\x1b[0m";
           output_string log_oc ("XX " ^ filename ^ "\n")
       | Error str ->
-          Pervasives.(output_string stderr (str ^ "\n"));
+          Stdlib.(output_string stderr (str ^ "\n"));
           exit 1
       | Done (n_cc, stdout_cc, _) ->
           begin match run_cerb filename with
@@ -129,7 +151,7 @@ let run_test filename =
                 print_endline "\x1b[33mTO\x1b[0m";
                 output_string log_oc ("TO " ^ filename ^ "\n")
             | Error str ->
-                Pervasives.(output_string stderr (str ^ "\n"));
+                Stdlib.(output_string stderr (str ^ "\n"));
                 exit 1
             | Done (n_cerb, stdout_cerb, stderr_cerb) ->
                 if n_cc = n_cerb && stdout_cc = stdout_cerb then (

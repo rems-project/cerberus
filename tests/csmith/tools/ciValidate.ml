@@ -3,7 +3,7 @@ open Unix
 let log_oc = open_out_gen [Open_append] 0 "LOG"
 
 let cerbCmd =
-  "cerberus --cpp='cc -E -nostdinc -undef -D__cerb__ -I $CERB_PATH/include/c/libc -I $CERB_PATH/include/c/posix -DCSMITH_MINIMAL -I ../runtime' --sequentialise --exec"
+  "cerberus -DCSMITH_MINIMAL -I ../runtime --sequentialise --rewrite --exec"
 
 let ccCmd =
   "clang -DCSMITH_MINIMAL -I ../runtime -w"
@@ -73,7 +73,7 @@ let rec generate_test filename =
     | Timeout ->
         generate_test filename
     | Error str ->
-        Pervasives.(output_string stderr (str ^ "\n"));
+        Stdlib.(output_string stderr (str ^ "\n"));
         exit 1
     | Done (n, stdout) ->
         (n, stdout)
@@ -88,7 +88,7 @@ let generate_and_run_test n =
         print_endline "\x1b[33mTO\x1b[0m";
         output_string log_oc ("TO " ^ filename ^ "\n")
     | Error str ->
-        Pervasives.(output_string stderr (str ^ "\n"));
+        Stdlib.(output_string stderr (str ^ "\n"));
         exit 1
     | Done (n_cerb, stdout_cerb) ->
         if n_cc = n_cerb && stdout_cc = stdout_cerb then (
