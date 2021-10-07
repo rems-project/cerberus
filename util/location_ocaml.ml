@@ -46,7 +46,8 @@ let with_cursor = function
     Loc_point z
 
 
-(* [with_cursor_from loc1 loc2] makes a new (region location) with the region from loc1 and the cursor (if any) from loc2 *)
+(* [with_cursor_from loc1 loc2] makes a new (region location) with the region from loc1
+   and the cursor from loc2 if there is one, otherwise uses the beginning of loc2 as the cursor (if possible) *)
 let with_cursor_from loc1 loc2 =
   let cursor_opt = match loc2 with
     | Loc_unknown
@@ -54,8 +55,12 @@ let with_cursor_from loc1 loc2 =
         None
     | Loc_point z ->
         Some z
-    | Loc_region (_, _, z)
+    | Loc_region (start_p, _, None) ->
+        Some start_p
+    | Loc_region (_, _, Some z) ->
+        Some z
     | Loc_regions (_, z) ->
+        (* not putting a cursor because it seems arbitrary to use the first region *)
         z in
   match loc1 with
     | Loc_unknown ->
