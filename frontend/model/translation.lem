@@ -3449,12 +3449,13 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
         let c_ty = Caux.mk_ail_ctype_pe ty in
         E.with_block_objects [(sym, (qs, ty))] $
           E.mapM self ss >>= fun core_ss ->
+        let new_loc = Loc.with_cursor_from loc ident_loc in
         E.return begin
           Caux.mk_sseq_e (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer))
-             (Caux.pcreate (Loc.with_cursor_from loc ident_loc) (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym])) (
+             (Caux.pcreate new_loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym])) (
             List.foldr (fun core_s acc ->
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
-            ) (Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe sym)) core_ss
+            ) (Caux.pkill new_loc (C.Static ty) (Caux.mk_sym_pe sym)) core_ss
           )
         end
     
@@ -3474,7 +3475,9 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
              For non-void function however we know (?) that their must be these returns ?? so we could drop the kills here *)
           (* the kill actions for the local variables *)
           let core_kills : list (C.expr unit) =
-            List.map (fun (sym,ty) -> Caux.pkill loc (C.Static (snd ty)) (Caux.mk_sym_pe sym)) decls in
+            List.map (fun (sym, ident_loc, ty) ->
+              Caux.pkill (Loc.with_cursor_from loc ident_loc) (C.Static (snd ty)) (Caux.mk_sym_pe sym)
+            ) decls_with_loc in
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
