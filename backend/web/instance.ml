@@ -296,7 +296,7 @@ let set_uid file =
       | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
       | Epar es -> Epar (List.map set_e es)
       | Ewait thid -> Ewait thid
-      | Epack _ | Eunpack _ | Eqfacts _ ->
+      | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
           (* these two are CN specific contructors *)
           assert false  
     in Expr (Annot.Auid (fresh ()) :: annots, e_')
