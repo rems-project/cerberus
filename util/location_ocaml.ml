@@ -1,12 +1,17 @@
 open Lexing
 
+type cursor =
+  | NoCursor
+  | PointCursor of Lexing.position
+  | RegionCursor of Lexing.position * Lexing.position
+
 type raw =
   | Loc_unknown
   | Loc_other of string
   | Loc_point of Lexing.position
     (* start, end, cursor *)
-  | Loc_region of Lexing.position * Lexing.position * Lexing.position option
-  | Loc_regions of (Lexing.position * Lexing.position) list * Lexing.position option
+  | Loc_region of Lexing.position * Lexing.position * cursor
+  | Loc_regions of (Lexing.position * Lexing.position) list * cursor
 
 type t = raw
 
@@ -22,57 +27,67 @@ let other str =
 let point pos =
   Loc_point pos
 
-let region (b, e) cursor_opt =
-  Loc_region (b, e, cursor_opt)
+let region (b, e) cur =
+  Loc_region (b, e, cur)
 
-let regions xs cursor_opt =
+let regions xs cur =
   match xs with
     | [] ->
         failwith "Location_ocaml.region, xs must not be []"
     | _ ->
         (* TODO: need to sort the regions *)
-        Loc_regions (xs, cursor_opt)
+        Loc_regions (xs, cur)
 
 let with_cursor = function
   | Loc_unknown
   | Loc_other _
-  | Loc_regions ([], None) ->
-    Loc_unknown
+  | Loc_regions ([], NoCursor) ->
+      Loc_unknown
   | Loc_point z
-  | Loc_region (_, _, Some z)
-  | Loc_region (z, _, None)
-  | Loc_regions (_, Some z)
-  | Loc_regions ((z,_)::_, None) ->
-    Loc_point z
+  | Loc_region (_, _, PointCursor z)
+  | Loc_region (z, _, NoCursor)
+  | Loc_regions (_, PointCursor z)
+  | Loc_regions ((z,_)::_, NoCursor) ->
+      Loc_point z
+  | Loc_region (_, _, RegionCursor (b, e)) 
+  | Loc_regions (_, RegionCursor (b, e)) ->
+      Loc_region (b, e, NoCursor)
 
 
 (* [with_cursor_from loc1 loc2] makes a new (region location) with the region from loc1
    and the cursor from loc2 if there is one, otherwise uses the beginning of loc2 as the cursor (if possible) *)
 let with_cursor_from loc1 loc2 =
-  let cursor_opt = match loc2 with
+  let cursor = match loc2 with
     | Loc_unknown
     | Loc_other _ ->
-        None
+        NoCursor
     | Loc_point z ->
-        Some z
-    | Loc_region (start_p, _, None) ->
-        Some start_p
-    | Loc_region (_, _, Some z) ->
-        Some z
+        PointCursor z
+    | Loc_region (start_p, end_p, NoCursor) ->
+        RegionCursor (start_p, end_p)
+    | Loc_region (_, _, cur) ->
+        cur
     | Loc_regions (_, z) ->
         (* not putting a cursor because it seems arbitrary to use the first region *)
         z in
   match loc1 with
     | Loc_unknown ->
-        (match cursor_opt with Some loc -> Loc_point loc | _ -> Loc_unknown)
+        begin match cursor with
+          | NoCursor ->
+              Loc_unknown
+          | PointCursor pos ->
+              Loc_point pos
+          | RegionCursor (b, e) ->
+            Loc_region (b, e, NoCursor)
+        end
     | Loc_other str ->
         Loc_other str
     | Loc_point z ->
-        Loc_region (z, z, cursor_opt)
+        Loc_region (z, z, cursor)
     | Loc_region (begin_loc, end_loc, _) ->
-        Loc_region (begin_loc, end_loc, cursor_opt)
+        Loc_region (begin_loc, end_loc, cursor)
     | Loc_regions (regions, _) ->
-        Loc_regions (regions, cursor_opt)
+        Loc_regions (regions, cursor)
 
 let from_main_file = function
   | Loc_unknown
@@ -119,15 +134,15 @@ let bbox_location xs =
             xs @ acc
     ) [] xs
   end in
-  Loc_region (b, e, None)
+  Loc_region (b, e, NoCursor)
 
 
 let with_regions_and_cursor locs loc_opt =
   let cursor_opt = match loc_opt with
-    | Some (Loc_point z) -> Some z
+    | Some (Loc_point z) -> PointCursor z
     | Some (Loc_region (_, _, z))
     | Some (Loc_regions (_, z)) -> z
-    | _ -> None
+    | _ -> NoCursor
   in
   let pos_of_region = function
     | Loc_point p -> Some (p, p)
@@ -169,7 +184,7 @@ let location_to_string ?(charon=false) loc =
         "other_location(" ^ str ^ ")"
     | Loc_point pos ->
         string_of_pos pos ^ ":"
-    | Loc_region (pos1, pos2, _) ->
+    | Loc_region (pos1, pos2, pos_opt) ->
         string_of_pos pos1 ^ "-" ^
         begin if pos1.pos_fname = pos2.pos_fname then
           ""
@@ -182,6 +197,11 @@ let location_to_string ?(charon=false) loc =
           string_of_int pos2.pos_lnum ^ ":"
         end ^
         string_of_int (1+pos2.pos_cnum-pos2.pos_bol)
+        ^ begin match pos_opt with
+          | NoCursor -> ""
+          | PointCursor pos -> " (cursor: " ^ string_of_pos pos ^ ")"
+          | RegionCursor (b, e) -> " (cursor: " ^ string_of_pos b ^ " -" ^ string_of_pos e ^ ")"
+        end
     | Loc_regions (xs, _) ->
         let (pos1, pos2) = outer_bbox xs in
         string_of_pos pos1 ^ "-" ^
@@ -209,9 +229,16 @@ let print_location loc =
     ^^^ !^(string_of_int pos.Lexing.pos_bol)
     ^^^ !^(string_of_int pos.Lexing.pos_cnum)
   in
-  let print_option pp = Util.Option.case
-      (fun e -> !^"Some" ^^^ P.parens (pp e))
-      (fun _ -> !^"None") in
+  let print_cursor = function
+    | NoCursor ->
+        !^ "Location_ocaml.NoCursor"
+    | PointCursor pos ->
+        !^ "Location_ocaml.PointCursor" ^^^ P.parens (print_lex pos)
+    | RegionCursor (b, e) ->
+        !^ "Location_ocaml.RegionCursor"
+        ^^^ P.parens (print_lex b)
+        ^^^ P.parens (print_lex e)
+  in
   match loc with
     | Loc_unknown ->
         !^"Location_ocaml.unknown"
@@ -219,17 +246,17 @@ let print_location loc =
         !^ "Location_ocaml.other" ^^ P.parens (P.dquotes !^ (String.escaped str))
     | Loc_point pos ->
         !^"Location_ocaml.point" ^^^ P.parens (print_lex pos)
-    | Loc_region (pos1, pos2, opos3) ->
+    | Loc_region (pos1, pos2, cur) ->
         !^"Location_ocaml.region"
         ^^^ P.parens (print_lex pos1)
         ^^^ P.parens (print_lex pos2)
-        ^^^ P.parens (print_option print_lex opos3)
-  | Loc_regions (xs, opos) ->
+        ^^^ P.parens (print_cursor cur)
+  | Loc_regions (xs, cur) ->
       let print_pair pp (x, y) = P.parens (pp x ^^ P.comma ^^^ pp y) in
       let print_list pp xs = P.brackets (P.separate_map (P.semi ^^ P.space) pp xs) in
       !^"Location_ocaml.regions"
       ^^^ P.parens (print_list (print_pair print_lex) xs)
-      ^^^ P.parens (print_option print_lex opos)
+      ^^^ P.parens (print_cursor cur)
 
 
 open Lexing
@@ -268,18 +295,20 @@ let pp_location ?(clever = true) =
         "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
     if clever then last_pos := p;
     ret in
-  let aux_region start_p end_p cursor_p_opt =
+  let aux_region start_p end_p cur =
     let start_p_str = string_of_pos start_p in
     let end_p_str   = string_of_pos end_p in
-    let cursor_p_str =
-      match cursor_p_opt with
-        | None -> ""
-        | Some cursor_p -> " " ^ string_of_pos cursor_p in
+    let cursor_str =
+      match cur with
+        | NoCursor -> ""
+        | PointCursor cursor_p -> " " ^ string_of_pos cursor_p
+        | RegionCursor (b, e) -> " " ^ string_of_pos b ^ " - " ^ string_of_pos e in
     P.angles (
       !^ (ansi_format [Yellow] start_p_str) ^^ P.comma ^^^
       !^ (ansi_format [Yellow] end_p_str)
     ) ^^
-    P.optional (fun _ -> !^ (ansi_format [Yellow] cursor_p_str)) cursor_p_opt in
+    !^ (ansi_format [Yellow] cursor_str) in
+    (* P.optional (fun _ -> !^ (ansi_format [Yellow] cursor_str)) cursor in *)
   match loc with
     | Loc_unknown ->
         P.angles !^ (ansi_format [Yellow] "unknown location")
@@ -288,11 +317,11 @@ let pp_location ?(clever = true) =
     | Loc_point pos ->
         let pos_str = string_of_pos pos in
         P.angles !^ (ansi_format [Yellow] pos_str)
-    | Loc_region (start_p, end_p, cursor_p_opt) ->
-        aux_region start_p end_p cursor_p_opt
-    | Loc_regions (xs, cursor_p_opt) ->
+    | Loc_region (start_p, end_p, cur) ->
+        aux_region start_p end_p cur
+    | Loc_regions (xs, cur) ->
         let (start_p, end_p) = outer_bbox xs in
-        aux_region start_p end_p cursor_p_opt
+        aux_region start_p end_p cur
 
 
 let string_of_pos pos =
@@ -371,7 +400,7 @@ let head_pos_of_location = function
               ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
           | None ->
               "" )
-  | Loc_region (start_p, end_p, cursor_p_opt) ->
+  | Loc_region (start_p, end_p, cursor) ->
       ( string_of_pos start_p
       , let cpos1 = start_p.pos_cnum - start_p.pos_bol in
         match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
@@ -381,22 +410,24 @@ let head_pos_of_location = function
                   end_p.pos_cnum - end_p.pos_bol
                 else
                   String.length l in
-              let cursor = match cursor_p_opt with
-                | Some cursor_p ->
+              let cursor_n = match cursor with
+                | PointCursor cursor_p
+                | RegionCursor (cursor_p, _) ->
                     cursor_p.pos_cnum - cursor_p.pos_bol 
-                | None ->
+                | NoCursor ->
                     cpos1 in
               l ^ "\n" ^
               ansi_format [Bold; Green] (
-                String.init ((max cursor cpos2) + 1)
-                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else if n < String.length l && l.[n] = '\t' then '\t' else ' ')
+                String.init ((max cursor_n cpos2) + 1)
+                  (fun n -> if n = cursor_n then '^' else if n >= cpos1 && n < cpos2 then '~' else if n < String.length l && l.[n] = '\t' then '\t' else ' ')
               )
           | None ->
               "" )
-  | Loc_regions (xs, cursor_p_opt) ->
-      let pos = match cursor_p_opt with
-        | None -> fst (List.hd xs)
-        | Some p -> p
+  | Loc_regions (xs, cursor) ->
+      let pos = match cursor with
+        | NoCursor -> fst (List.hd xs)
+        | PointCursor p
+        | RegionCursor (p, _) -> p
       in
       ( string_of_pos pos
       , let cursor_p = pos.pos_cnum - pos.pos_bol in

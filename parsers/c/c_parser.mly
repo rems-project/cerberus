@@ -365,14 +365,14 @@ var_name:
    resolved using it. *)
 typedef_name_spec:
 | i= typedef_name
-    { TSpec ((Location_ocaml.region ($startpos, $endpos) None),
+    { TSpec ((Location_ocaml.(region ($startpos, $endpos) NoCursor)),
              TSpec_name (Identifier (Location_ocaml.point $startpos, i))) }
 ;
 
 general_identifier:
 | i= typedef_name
 | i= var_name
-    { Symbol.Identifier (Location_ocaml.region ($startpos, $endpos) None, i) }
+    { Symbol.Identifier (Location_ocaml.(region ($startpos, $endpos) NoCursor), i) }
 ;
 
 save_context:
@@ -404,30 +404,29 @@ enumeration_constant:
 (* §6.5.1 Primary expressions *)
 primary_expression:
 | str= var_name
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         CabsEident (Symbol.Identifier (Location_ocaml.point $startpos(str), str))) }
 | cst= CONSTANT
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEconst cst) }
 | lit= string_literal
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
     { let CabsExpression (_, expr_) = expr in
-      CabsExpression (Location_ocaml.region ($startpos, $endpos) None, expr_ ) }
+      CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor), expr_ ) }
 | gs= generic_selection
     { gs }
 (* GCC extension: Statement Exprs *)
 | LPAREN stmt= scoped(compound_statement) RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos(stmt)),
-                      CabsEgcc_statement stmt) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(stmt)))
+                     , CabsEgcc_statement stmt ) }
 ;
 
 (* §6.5.1.1 Generic selection *)
 generic_selection:
 | GENERIC LPAREN expr= assignment_expression COMMA gas= generic_assoc_list RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         CabsEgeneric (expr, gas)) }
 ;
 
@@ -450,60 +449,52 @@ postfix_expression:
 | expr= primary_expression
     { expr }
 | expr1= postfix_expression LBRACK expr2= expression RBRACK
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
-                      CabsEsubscript (expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                     , CabsEsubscript (expr1, expr2) ) }
 | expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
-                      CabsEcall (expr, option [] List.rev exprs_opt)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                     , CabsEcall (expr, option [] List.rev exprs_opt) ) }
 | expr= postfix_expression DOT i= general_identifier 
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEmemberof (expr, i)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEmemberof (expr, i) ) }
 | expr= postfix_expression MINUS_GT i= general_identifier
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEmemberofptr (expr, i)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEmemberofptr (expr, i) ) }
 | expr= postfix_expression PLUS_PLUS
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEpostincr expr) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEpostincr expr ) }
 | expr= postfix_expression MINUS_MINUS
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEpostdecr expr) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEpostdecr expr ) }
 | LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA? RBRACE
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEassert expr) }
 | VA_START LPAREN expr= assignment_expression COMMA i= general_identifier RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEva_start(expr, i)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEva_start(expr, i) ) }
 | VA_COPY LPAREN e1= assignment_expression COMMA e2= assignment_expression RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEva_copy(e1, e2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEva_copy(e1, e2) ) }
 | VA_ARG LPAREN expr= assignment_expression COMMA ty= type_name RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEva_arg(expr, ty)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEva_arg(expr, ty) ) }
 | VA_END LPAREN expr= assignment_expression RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEva_end(expr)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEva_end(expr) ) }
 | OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         CabsEoffsetof (ty, i)) }
 (* NOTE: the following is a cerb extension allowing the user to the
    query the type of an expression  *)
 | PRINT_TYPE LPAREN expr= expression RPAREN
-   { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+   { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         CabsEprint_type expr) }
 | BMC_ASSUME LPAREN expr= assignment_expression RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEbmc_assume expr) }
 ;
 
@@ -519,29 +510,23 @@ unary_expression:
 | expr= postfix_expression
     { expr }
 | PLUS_PLUS expr= unary_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($1)),
-                      CabsEpreincr expr) }
+    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+                     , CabsEpreincr expr ) }
 | MINUS_MINUS expr= unary_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($1)),
-                      CabsEpredecr expr) }
+    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+                     , CabsEpredecr expr ) }
 | op= unary_operator expr= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos(op)),
-                      CabsEunary (op, expr)) }
+    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos(op))
+                     , CabsEunary (op, expr) ) }
 | SIZEOF expr= unary_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($1)),
-                      CabsEsizeof_expr expr) }
+    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+                     , CabsEsizeof_expr expr ) }
 | SIZEOF LPAREN ty= type_name RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($1)),
-                      CabsEsizeof_type ty) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                     , CabsEsizeof_type ty ) }
 | ALIGNOF LPAREN ty= type_name RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($1)),
-                      CabsEalignof ty) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                     , CabsEalignof ty ) }
 ;
 
 unary_operator:
@@ -564,9 +549,8 @@ cast_expression:
 | expr= unary_expression
     { expr }
 | LPAREN ty= type_name RPAREN expr= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($1)),
-                      CabsEcast (ty, expr)) }
+    { CabsExpression ( Location_ocaml.region ($startpos, $endpos) (PointCursor $startpos($1))
+                     , CabsEcast (ty, expr) ) }
 ;
 
 (* §6.5.5 Multiplicative operators *)
@@ -574,17 +558,14 @@ multiplicative_expression:
 | expr= cast_expression
     { expr }
 | expr1= multiplicative_expression STAR expr2= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsMul, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsMul, expr1, expr2) ) }
 | expr1= multiplicative_expression SLASH expr2= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsDiv, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsDiv, expr1, expr2) ) }
 | expr1= multiplicative_expression PERCENT expr2= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsMod, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsMod, expr1, expr2) ) }
 ;
 
 (* §6.5.6 Additive operators *)
@@ -592,13 +573,11 @@ additive_expression:
 | expr= multiplicative_expression
     { expr }
 | expr1= additive_expression PLUS expr2= multiplicative_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsAdd, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsAdd, expr1, expr2) ) }
 | expr1= additive_expression MINUS expr2= multiplicative_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsSub, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsSub, expr1, expr2) ) }
 ;
 
 (* §6.5.7 Bitwise shift operators *)
@@ -606,13 +585,11 @@ shift_expression:
 | expr= additive_expression
     { expr }
 | expr1= shift_expression LT_LT expr2= additive_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsShl, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsShl, expr1, expr2) ) }
 | expr1= shift_expression GT_GT expr2= additive_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsShr, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsShr, expr1, expr2) ) }
 ;
 
 (* §6.5.8 Relational operators *)
@@ -620,21 +597,17 @@ relational_expression:
 | expr= shift_expression
     { expr }
 | expr1= relational_expression LT expr2= shift_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsLt, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsLt, expr1, expr2) ) }
 | expr1= relational_expression GT expr2= shift_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsGt, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsGt, expr1, expr2) ) }
 | expr1= relational_expression LT_EQ expr2= shift_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsLe, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsLe, expr1, expr2) ) }
 | expr1= relational_expression GT_EQ expr2= shift_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsGe, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsGe, expr1, expr2) ) }
 ;
 
 (* §6.5.9 Equality operators *)
@@ -642,13 +615,11 @@ equality_expression:
 | expr= relational_expression
     { expr }
 | expr1= equality_expression EQ_EQ expr2= relational_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsEq, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsEq, expr1, expr2) ) }
 | expr1= equality_expression BANG_EQ expr2= relational_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsNe, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsNe, expr1, expr2) ) }
 ;
 
 (* §6.5.10 Bitwise AND operator *)
@@ -656,9 +627,8 @@ _AND_expression:
 | expr= equality_expression
     { expr }
 | expr1= _AND_expression AMPERSAND expr2= equality_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsBand, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsBand, expr1, expr2) ) }
 ;
 
 (* §6.5.11 Bitwise exclusive OR operator *)
@@ -666,9 +636,8 @@ exclusive_OR_expression:
 | expr= _AND_expression
     { expr }
 | expr1= exclusive_OR_expression CARET expr2= _AND_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsBxor, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsBxor, expr1, expr2) ) }
 ;
 
 (* §6.5.12 Bitwise inclusive OR operator *)
@@ -676,9 +645,8 @@ inclusive_OR_expression:
 | expr= exclusive_OR_expression
     { expr }
 | expr1= inclusive_OR_expression PIPE expr2= exclusive_OR_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsBor, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsBor, expr1, expr2) ) }
 ;
 
 (* §6.5.13 Logical AND operator *)
@@ -686,9 +654,8 @@ logical_AND_expression:
 | expr= inclusive_OR_expression
     { expr }
 | expr1=logical_AND_expression AMPERSAND_AMPERSAND expr2=inclusive_OR_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsAnd, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsAnd, expr1, expr2) ) }
 ;
 
 (* §6.5.14 Logical OR operator *)
@@ -696,9 +663,8 @@ logical_OR_expression:
 | expr= logical_AND_expression
     { expr }
 | expr1= logical_OR_expression PIPE_PIPE expr2= logical_AND_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEbinary (CabsOr, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEbinary (CabsOr, expr1, expr2) ) }
 ;
 
 (* §6.5.15 Conditional operator *)
@@ -707,9 +673,8 @@ conditional_expression:
     { expr }
 | expr1= logical_OR_expression QUESTION expr2= expression
                                COLON    expr3= conditional_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEcond (expr1, expr2, expr3)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEcond (expr1, expr2, expr3) ) }
 ;
 
 (* §6.5.16 Assignment operators *)
@@ -717,9 +682,8 @@ assignment_expression:
 | expr= conditional_expression
     { expr }
 | expr1= unary_expression op= assignment_operator expr2= assignment_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos(op)),
-                      CabsEassign (op, expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(op)))
+                     , CabsEassign (op, expr1, expr2) ) }
 ;
 
 assignment_operator:
@@ -752,9 +716,8 @@ expression:
 | expr= assignment_expression
     { expr }
 | expr1= expression COMMA expr2= assignment_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos)
-                        (Some $startpos($2)),
-                      CabsEcomma (expr1, expr2)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEcomma (expr1, expr2) ) }
 ;
 
 (* §6.6 Constant expressions *)
@@ -786,7 +749,7 @@ declaration:
     { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
-      let loc = Location_ocaml.region($startpos, $endpos) (Some $startpos) in
+      let loc = Location_ocaml.(region($startpos, $endpos) (PointCursor $startpos)) in
       Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
@@ -829,10 +792,10 @@ init_declarator_list(declarator): (* NOTE: the list is in reverse *)
 
 init_declarator(declarator):
 | decl= declarator ioption(asm_register) 
-    { InitDecl (Location_ocaml.region ($startpos, $endpos) None,
+    { InitDecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                 LF.cabs_of_declarator decl, None) }
 | decl= declarator ioption(asm_register) EQ init= initializer_
-    { InitDecl (Location_ocaml.region ($startpos, $endpos) None,
+    { InitDecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                 LF.cabs_of_declarator decl, Some init) }
 ;
 
@@ -854,23 +817,23 @@ storage_class_specifier:
 (* §6.7.2 Type specifiers *)
 type_specifier_nonunique:
 | CHAR
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_char) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_char) }
 | SHORT
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_short) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_short) }
 | INT
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_int) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_int) }
 | LONG
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_long) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_long) }
 | FLOAT
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_float) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_float) }
 | DOUBLE
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_double) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_double) }
 | SIGNED
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_signed) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_signed) }
 | UNSIGNED
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_unsigned) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_unsigned) }
 | COMPLEX
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_Complex) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_Complex) }
 ;
 
 attribute_type_specifier_nonunique:
@@ -880,9 +843,9 @@ attribute_type_specifier_nonunique:
 
 type_specifier_unique:
 | VOID
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_void) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_void) }
 | BOOL
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_Bool) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_Bool) }
 | spec= atomic_type_specifier
     { spec }
 | spec= struct_or_union_specifier
@@ -892,9 +855,9 @@ type_specifier_unique:
 | spec= typedef_name_spec
     { spec }
 | TYPEOF expr= unary_expression
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_typeof_expr expr) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_expr expr) }
 | TYPEOF LPAREN ty= type_name RPAREN
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_typeof_type ty) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_type ty) }
 ;
 
 attribute_type_specifier_unique:
@@ -919,10 +882,10 @@ struct_or_union_specifier:
 
 struct_or_union:
 | STRUCT
-    { fun attrs x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
+    { fun attrs x y -> TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                               TSpec_struct (attrs, x, y)) }
 | UNION
-    { fun attrs x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
+    { fun attrs x y -> TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                               TSpec_union (attrs, x, y)) }
 ;
 
@@ -971,10 +934,10 @@ struct_declarator:
 enum_specifier:
 | ENUM ioption(attribute_specifier_sequence) iopt= general_identifier?
   LBRACE enums= enumerator_list COMMA? RBRACE
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None,
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (iopt, Some (List.rev enums))) }
 | ENUM ioption(attribute_specifier_sequence) i= general_identifier
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None,
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (Some i, None)) }
 ;
 
@@ -996,7 +959,7 @@ enumerator:
 (* §6.7.2.4 Atomic type specifiers *)
 atomic_type_specifier:
 | ATOMIC LPAREN ty= type_name RPAREN
-    { TSpec (Location_ocaml.region ($startpos, $endpos) None, TSpec_Atomic ty) }
+    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_Atomic ty) }
 ;
 
 (* §6.7.3 Type qualifiers *)
@@ -1064,21 +1027,21 @@ direct_declarator:
 array_declarator:
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
   expr_opt= assignment_expression? RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.region ($startpos, $endpos) None,
+    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         option [] List.rev tquals_opt, false,
         map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
 | ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list?
   expr= assignment_expression RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.region ($startpos, $endpos) None,
+    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                             option [] List.rev tquals_opt,
                             true, Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.region ($startpos, $endpos) None,
+    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                             List.rev tquals, true,
                             Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
-    { LF.array_decl (ADecl (Location_ocaml.region ($startpos, $endpos) None,
+    { LF.array_decl (ADecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                             option [] List.rev tquals_opt, false,
                             Some ADeclSize_asterisk)) ddecltor }
 ;
@@ -1098,7 +1061,7 @@ identifier_list: (* NOTE: the list is in reverse *)
 pointer:
 | STAR ioption(attribute_specifier_sequence) tquals= type_qualifier_list?
   ptr_decltor= pointer?
-    { PDecl (Location_ocaml.region ($startpos, $endpos) None,
+    { PDecl (Location_ocaml.(region ($startpos, $endpos) NoCursor),
              option [] List.rev tquals, ptr_decltor) }
 ;
 
@@ -1256,16 +1219,16 @@ statement:
 labeled_statement:
 | attr_opt= ioption(attribute_specifier_sequence) i= general_identifier COLON
   stmt= statement
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
 | attr_opt= attribute_specifier_sequence? CASE expr= constant_expression COLON
   stmt= statement
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         to_attrs attr_opt,
         CabsScase (expr, stmt)) }
 | attr_opt= attribute_specifier_sequence? DEFAULT COLON stmt= statement
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      to_attrs attr_opt,
                      CabsSdefault stmt) }
 ;
@@ -1273,12 +1236,12 @@ labeled_statement:
 (* §6.8.2 Compound statement *)
 compound_statement:
 | LBRACE bis_opt= block_item_list? RBRACE
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSblock (option [] List.rev bis_opt)) }
 (* NON-STD cppmem syntax *)
 | LBRACES stmts= separated_nonempty_list(PIPES, statement) RBRACES
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSpar stmts) }
 ;
@@ -1292,7 +1255,7 @@ block_item_list: (* NOTE: the list is in reverse *)
 
 block_item:
 | decl= declaration
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSdecl decl) }
 | stmt= statement
@@ -1302,11 +1265,11 @@ block_item:
 (* §6.8.3 Expression and null statements *)
 expression_statement:
 | expr_opt= expression? SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      option CabsSnull (fun z -> CabsSexpr z) expr_opt) }
 | attr= attribute_specifier_sequence expr= expression SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      to_attrs (Some attr),
                      CabsSexpr expr) }
 ;
@@ -1314,16 +1277,16 @@ expression_statement:
 (* §6.8.4 Selection statements *)
 selection_statement:
 | IF LPAREN expr= expression RPAREN stmt= scoped(statement) %prec THEN
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSif (expr, stmt, None)) }
 | IF LPAREN expr= expression RPAREN stmt1= scoped(statement)
   ELSE stmt2= scoped(statement)
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSif (expr, stmt1, Some stmt2)) }
 | SWITCH LPAREN expr= expression RPAREN stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSswitch (expr, stmt)) }
 ;
@@ -1331,22 +1294,22 @@ selection_statement:
 (* §6.8.5 Iteration statements *)
 iteration_statement:
 | WHILE LPAREN expr= expression RPAREN stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSwhile (expr, stmt)) }
 | DO stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSdo (expr, stmt)) }
 | FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSfor (map_option (fun x -> FC_expr x) expr1_opt,
                                expr2_opt,expr3_opt, stmt)) }
 | FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt)) }
 ;
@@ -1354,19 +1317,19 @@ iteration_statement:
 (* §6.8.6 Jump statements *)
 jump_statement:
 | GOTO i= general_identifier SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSgoto i) }
 | CONTINUE SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsScontinue) }
 | BREAK SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSbreak) }
 | RETURN expr_opt= expression? SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSreturn expr_opt) }
 ;
@@ -1439,7 +1402,7 @@ asm_statement:
           (* TODO: better error *)
           failwith "encoding prefix found inside a __asm__ ()"
       in
-      CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes,
+      CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs)) }
 | ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN
     { let is_volatile = List.mem `VOLATILE qs in
@@ -1450,27 +1413,27 @@ asm_statement:
           failwith "encoding prefix found inside a __asm__ ()"
       in
 (*      let (outputs, inputs, clobbers, labels) = args in *)
-      CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes,
+      CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs(*, outputs, intputs, clobbers, labels*))) }
 ;
 
 
 pack_statement:
   | PACKSTRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSpack (CTPU_Struct name, args)) }
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSpack (CTPU_Struct name, args)) }
   | PACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSpack (CTPU_Predicate name, args)) }
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSpack (CTPU_Predicate name, args)) }
 unpack_statement:
   | UNPACKSTRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSunpack (CTPU_Struct name, args)) }
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSunpack (CTPU_Struct name, args)) }
   | UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSunpack (CTPU_Predicate name, args)) }
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSunpack (CTPU_Predicate name, args)) }
 have_statement:
   | HAVE name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsShave (name, args)) }
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsShave (name, args)) }
 show_statement:
   | SHOW name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.region ($startpos, $endpos) None, Annot.no_attributes, CabsSshow (name, args)) }
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSshow (name, args)) }
 
 (* §6.9 External definitions *)
 external_declaration_list: (* NOTE: the list is in reverse *)
@@ -1504,7 +1467,7 @@ function_definition:
                          (Location_ocaml.point $startpos(has_semi))
                          Errors.(CPARSER Cparser_extra_semi)
                          Warning);
-      let loc = Location_ocaml.region ($startpos, $endpos) None in
+      let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
       LF.restore_context ctxt;
       LF.create_function_definition loc attr_opt specifs decltor stmt rev_decl_opt }
@@ -1670,7 +1633,7 @@ balanced_token_sequence: (* NOTE: the list is in reverse *)
 
 string_literal_component:
 | STRING_LITERAL
-    { let loc = Location_ocaml.region ($startpos, $endpos) None in
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       (fst $1, (loc, snd $1)) }
 ;
 
@@ -1692,7 +1655,7 @@ string_literal:
 
 located_string_literal:
 | string_literal
-    { let loc = Location_ocaml.region ($startpos, $endpos) None in
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let strs = List.map (fun (loc, s) -> (loc, String.concat "" s)) (snd $1) in
       (loc, String.concat "" (List.map snd strs), strs) }
 ;
