@@ -477,47 +477,59 @@ let page_alloc_predicates struct_decls =
     (id, predicate)
   in
 
-  let page = 
-    let id = "Page" in
-    let loc = Loc.other "internal (Page)" in
-    let base_s, base = IT.fresh_named Loc "base" in
-    let length_s, length = IT.fresh_named Integer "length" in
+  let vpage = 
+    let id = "VPage" in
+    let loc = Loc.other "internal (VPage)" in
+    let vbase_s, vbase = IT.fresh_named Loc "vbase" in
+    let order_s, order = IT.fresh_named Integer "order" in
     let permission_s, permission = IT.fresh_named BT.Real "permission" in
-    let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
-    let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
-    let qpoint = 
-      let qpointer_s, qpointer = IT.fresh Loc in {
-        ct = char_ct; 
-        qpointer = qpointer_s;
-        permission = 
-          RE.array_permission ~base ~item_ct:char_ct
-            ~length ~qpointer ~permission;
-        value = get_ value qpointer;
-        init = get_ init qpointer;
+    let hyp_physvirt_offset_s, hyp_physvirt_offset = 
+      IT.fresh_named BT.Integer "hyp_physvirt_offset" in
+    let pbase = addPointer_ (vbase, hyp_physvirt_offset) in
+    let clause1 = 
+      let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
+      let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
+      let qpoint = 
+        let qpointer_s, qpointer = IT.fresh Loc in {
+          ct = char_ct; 
+          qpointer = qpointer_s;
+          permission = 
+            RE.array_permission ~base:pbase ~item_ct:char_ct
+              ~length:(mul_ (pPAGE_SIZE, exp_ (int_ 2, order))) ~qpointer ~permission;
+          value = get_ value qpointer;
+          init = get_ init qpointer;
+        }
+      in
+      let lrt =
+        LRT.Logical ((value_s, IT.bt value), (loc, None),
+        LRT.Logical ((init_s, IT.bt init), (loc, None),
+        LRT.Resource (QPoint qpoint, (loc, None),
+        LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
+        (* LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, length), int_ 1))), (loc, None), *)
+        (* LRT.Constraint (t_ (eq_ (rem_ (pointerToIntegerCast_ base, pPAGE_SIZE), int_ 0)), (loc, None), *)
+        LRT.I))))
+      in
+      {
+        loc = loc;
+        guard = ne_ (vbase, null_);
+        packing_ft = AT.of_lrt lrt (AT.I []) 
       }
     in
-    let lrt =
-      LRT.Logical ((value_s, IT.bt value), (loc, None),
-      LRT.Logical ((init_s, IT.bt init), (loc, None),
-      LRT.Resource (QPoint qpoint, (loc, None),
-      LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct base), (loc, None),
-      (* LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, length), int_ 1))), (loc, None), *)
-      (* LRT.Constraint (t_ (eq_ (rem_ (pointerToIntegerCast_ base, pPAGE_SIZE), int_ 0)), (loc, None), *)
-      LRT.I))))
-    in
-    let clause = {
+    let clause2 = 
+      {
         loc = loc;
-        guard = bool_ true;
-        packing_ft = AT.of_lrt lrt (AT.I []) 
+        guard = eq_ (vbase, null_);
+        packing_ft = AT.I []
       }
     in
     let predicate = {
         loc = loc;
-        pointer = base_s;
+        pointer = vbase_s;
         permission = permission_s;
-        iargs = [(length_s, IT.bt length)]; 
+        iargs = [(order_s, IT.bt order);
+                 (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset)]; 
         oargs = []; 
-        clauses = [clause]; 
+        clauses = [clause1; clause2]; 
       } 
     in
     (id, predicate)
@@ -528,7 +540,7 @@ let page_alloc_predicates struct_decls =
 
   [vmemmap_page;
    hyp_pool;
-   page]
+   vpage]
 
 
 
