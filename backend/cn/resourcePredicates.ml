@@ -323,6 +323,10 @@ let page_alloc_predicates struct_decls =
     (id, predicate)
   in
 
+  (* let o_vmemmap_page = 
+   *   let id = "Vmemmap_page" in *)
+
+
 
 
   let hyp_pool =  
@@ -353,25 +357,14 @@ let page_alloc_predicates struct_decls =
     in
   
     let vmemmap_metadata_owned =
-      let p_s, p = IT.fresh_named Loc "p" in
-      let point_permission = 
-        let condition = 
-          vmemmap_good_pointer ~vmemmap_pointer p
-            (pool %. "range_start") (pool %. "range_end")
-        in
-        ite_ (condition, permission, q_ (0, 1))
-      in
-      let vmemmap_array = 
-        QPredicate {
-            qpointer = p_s;
-            name = "Vmemmap_page";
-            iargs = [];
-            oargs = [get_ vmemmap p];
-            permission = point_permission;
-          }
+      let resource = 
+        Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap
+          ~range_start:(pool %. "range_start")
+          ~range_end:(pool %. "range_end")
+          permission
       in
       LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
-      LRT.Resource (vmemmap_array, (loc, None), 
+      LRT.Resource (resource, (loc, None), 
       LRT.I))
     in
   
@@ -384,9 +377,9 @@ let page_alloc_predicates struct_decls =
       in
       let args = [
           p;
-          get_ vmemmap p;
+          (* get_ vmemmap p; *)
           vmemmap_pointer;
-          (* vmemmap; *)
+          vmemmap;
           pool_pointer;
           pool %. "range_start";
           pool %. "range_end"
@@ -406,7 +399,7 @@ let page_alloc_predicates struct_decls =
           i;
           get_ (pool %. "free_area") i;
           vmemmap_pointer;
-          (* vmemmap; *)
+          vmemmap;
           pool_pointer;
           pool %. "range_start";
           pool %. "range_end"

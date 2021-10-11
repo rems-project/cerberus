@@ -435,16 +435,18 @@ let check_qpred global solver assumptions {q; condition; pred} =
            | Pred pred' when String.equal pred.name pred'.name ->
               let q_instance = List.nth pred'.args qarg_number in
               let reduction = 
-                and_ (eq_ (sym_ q, q_instance) ::
-                      List.map2 eq__ pred.args pred'.args)
+                and_ [eq_ (sym_ q, q_instance);
+                      eq_ (open_pred global def pred.args, 
+                           open_pred global def pred'.args)]
               in
               and_ [condition; not_ reduction]
            | QPred qpred' when String.equal pred.name qpred'.pred.name ->
               let qpred' = alpha_rename_qpred (fst q) qpred' in
               let reduction = 
-                and_ (qpred'.condition ::
-                      List.map2 eq__ pred.args qpred'.pred.args)
-              in
+                and_ [qpred'.condition;
+                      eq_ (open_pred global def pred.args,
+                           open_pred global def qpred'.pred.args)]
+                      in
               and_ [condition; not_ reduction]
            | _ -> 
               condition

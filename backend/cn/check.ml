@@ -12,6 +12,7 @@ module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
 module Loc = Locations
+module LP = LogicalPredicates
 
 open Tools
 open Sctypes
@@ -754,6 +755,8 @@ module Spine : sig
     Loc.t -> args -> AT.lt * label_kind -> (unit, type_error) m
   val calltype_packing : 
     Loc.t -> Id.t -> AT.packing_ft -> (OutputDef.t, type_error) m
+  val calltype_lpred_argument_inference : 
+    Loc.t -> Id.t -> args -> AT.packing_ft -> (IT.t list, type_error) m
   val subtype : 
     Loc.t -> arg -> RT.t -> (unit, type_error) m
 end = struct
@@ -1049,6 +1052,14 @@ end = struct
     spine OutputDef.subst OutputDef.pp 
       loc (Pack (TPU_Predicate name)) [] ft
 
+  let calltype_lpred_argument_inference loc (name : Id.t) 
+        supplied_args (ft : AT.packing_ft) : (IT.t list, type_error) m =
+    let@ output_assignment = 
+      spine OutputDef.subst OutputDef.pp 
+        loc (ArgumentInference name) supplied_args ft
+    in
+    return (List.map (fun o -> o.OutputDef.value) output_assignment)
+
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
      inference as the spine judgment. So implement the subtyping
@@ -1185,8 +1196,8 @@ let rec infer_object_value (loc : loc)
                        (ov : 'bty mu_object_value) : (vt, type_error) m =
   match ov with
   | M_OVinteger iv ->
-     let i = Memory.int_of_ival iv in
-     return (Integer, int_ i)
+     let i = Memory.z_of_ival iv in
+     return (Integer, z_ i)
   | M_OVpointer p -> 
      infer_ptrval loc p
   | M_OVarray items ->
@@ -1626,7 +1637,16 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        | M_PtrGe (asym1, asym2) -> 
           pointer_op gePointer_ asym1 asym2
        | M_Ptrdiff (act, asym1, asym2) -> 
-          Debug_ocaml.error "todo: M_Ptrdiff"
+          let@ arg1 = arg_of_asym asym1 in
+          let@ arg2 = arg_of_asym asym2 in
+          let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
+          let@ () = ensure_base_type arg2.loc ~expect:Loc arg2.bt in
+          let v =
+            sub_ (pointerToIntegerCast_ (it_of_arg arg1),
+                  pointerToIntegerCast_ (it_of_arg arg2))
+          in
+          let vt = (Integer, v) in
+          return (rt_of_vt loc vt)
        | M_IntFromPtr (act_from, act_to, asym) ->
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1971,37 +1991,53 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          | Some def -> return def
          | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate (Id.s pname)})
        in
-       let@ args = args_of_asyms asyms in
-       let@ () = 
-         let has, expect = List.length args, List.length def.args in
-         if has = expect then return ()
-         else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+       let@ args = 
+         pure begin 
+             let@ supplied_args = args_of_asyms asyms in
+             Spine.calltype_lpred_argument_inference loc pname 
+               supplied_args def.infer_arguments 
+           end
        in
-       let@ () = 
-         ListM.iterM (fun (arg, expected_sort) ->
-             ensure_base_type arg.loc ~expect:expected_sort arg.bt
-           ) (List.combine args (List.map snd def.args))
-       in
+       (* let@ () = 
+        *   let has, expect = List.length args, List.length def.args in
+        *   if has = expect then return ()
+        *   else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+        * in
+        * let@ () = 
+        *   ListM.iterM (fun (arg, expected_sort) ->
+        *       ensure_base_type arg.loc ~expect:expected_sort arg.bt
+        *     ) (List.combine args (List.map snd def.args))
+        * in *)
        let rt = 
          RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), 
-         LRT.Constraint (Pred {name = Id.s pname; args = List.map it_of_arg args}, (loc, None),
+         LRT.Constraint (Pred {name = Id.s pname; args}, (loc, None),
          LRT.I))
        in
        begin match have_show with
        | Have ->
-          let qarg = List.nth args (Option.get def.qarg) in
+          let@ qarg = match def.qarg with
+            | Some n -> return (List.nth args n)
+            | None ->
+               let err = 
+                 "Cannot use predicate " ^ Id.s pname ^ 
+                   " with 'Have' because it \
+                    has no index/quantifier argument."
+               in
+               fail (fun _ -> {loc; msg = Generic !^err})
+          in
           let@ provable = provable in
           let@ constraints = all_constraints () in
-          let pred_args = List.map it_of_arg args in
           let to_check = 
             List.filter_map (function
                 | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
-                   let su = make_subst [(fst qpred'.q, it_of_arg qarg)] in
+                   let su = make_subst [(fst qpred'.q, qarg)] in
                    let condition' = IT.subst su qpred'.condition in
                    let pred_args' = List.map (IT.subst su) qpred'.pred.args in
-                   let args_equal = List.map2 eq__ pred_args pred_args' in
-                   let to_check = and_ (condition' :: args_equal) in
-                   Some to_check
+                   let matching = 
+                     eq_ (LP.open_pred global def args, 
+                          LP.open_pred global def pred_args') 
+                   in
+                   Some (and_ [condition'; matching])
                 | _ -> 
                    None
               ) constraints
@@ -2015,7 +2051,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           return rt
        | Show ->
           let@ provable_or_model = provable_or_model in
-          let lc = Pred {name = Id.s pname; args = List.map it_of_arg args} in
+          let lc = Pred {name = Id.s pname; args} in
           begin match provable_or_model lc with
           | `True -> return rt
           | `False model ->
@@ -2330,7 +2366,7 @@ let check mu_file =
     (* check and record logical predicate defs *)
     let number_entries = List.length (mu_file.mu_logical_predicates) in
     let ping = Pp.progress "logical predicate welltypedness" number_entries in
-    ListM.fold_leftM (fun ctxt (name,(def : LogicalPredicates.definition)) -> 
+    ListM.fold_leftM (fun ctxt (name,(def : LP.definition)) -> 
         let@ () = return (ping name) in
         let@ () = Typing.run ctxt (WellTyped.WLPD.good def) in
         let logical_predicates =

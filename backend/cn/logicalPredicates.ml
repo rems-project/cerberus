@@ -1,6 +1,7 @@
 module Loc = Locations
 module IT = IndexTerms
 module BT = BaseTypes
+module AT = ArgumentTypes
 
 open IndexTerms
 open Sctypes
@@ -14,7 +15,8 @@ type definition = {
        one of the arguments has to be the index/quantified
        variable. For now at least. *)
     qarg : int option;
-    body : IndexTerms.t
+    body : IndexTerms.t;
+    infer_arguments : ArgumentTypes.packing_ft;
   }
 
 
@@ -61,6 +63,23 @@ module PageAlloc = struct
              eq_ (rem_ (offset, hyp_page_size), int_ 0);
              range_start %<= phys; phys %< range_end; ]
 
+    let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end permission =
+      let p_s, p = IT.fresh_named Loc "p" in
+      let point_permission = 
+        let condition = 
+          vmemmap_good_pointer ~vmemmap_pointer p
+            range_start range_end
+        in
+        ite_ (condition, permission, q_ (0, 1))
+      in
+      Resources.RE.QPredicate {
+          qpointer = p_s;
+          name = "Vmemmap_page";
+          iargs = [];
+          oargs = [get_ vmemmap p];
+          permission = point_permission;
+        }
+
 
   end
 
@@ -82,19 +101,19 @@ module PageAlloc = struct
       let range_start_s, range_start = IT.fresh_named BT.Integer "range_start" in
       let range_end_s, range_end = IT.fresh_named BT.Integer "range_end" in
 
-      (* let vmemmap_s, vmemmap = 
-       *   IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
-       * in *)
+      let vmemmap_s, vmemmap = 
+        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
+      in
 
-      let page_s, page = IT.fresh_named (Struct hyp_page_tag) "page" in
-      (* let page = get_ vmemmap page_pointer in *)
+      (* let page_s, page = IT.fresh_named (Struct hyp_page_tag) "page" in *)
+      let page = get_ vmemmap page_pointer in
 
 
       let args = [
           (page_pointer_s, IT.bt page_pointer);
-          (page_s, IT.bt page);
+          (* (page_s, IT.bt page); *)
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (* (vmemmap_s, IT.bt vmemmap); *)
+          (vmemmap_s, IT.bt vmemmap);
           (pool_pointer_s, IT.bt pool_pointer);
           (range_start_s, IT.bt range_start);
           (range_end_s, IT.bt range_end);
@@ -153,7 +172,25 @@ module PageAlloc = struct
 
       let body = and_ constrs in
 
-      (id, {loc; args; body; qarg} )
+      let infer_arguments = 
+        AT.Computational ((page_pointer_s, IT.bt page_pointer), (loc, None),
+        AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
+        AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
+        AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
+        AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
+        AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.I OutputDef.[
+            {loc; name = "page_pointer"; value = page_pointer};
+            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = "vmemmap"; value = vmemmap};
+            {loc; name = "pool_pointer"; value = pool_pointer};
+            {loc; name = "range_start"; value = range_start};
+            {loc; name = "range_end"; value = range_end};
+          ])))))))
+      in
+
+      (id, {loc; args; body; qarg; infer_arguments} )
     in
 
 
@@ -168,8 +205,8 @@ module PageAlloc = struct
       let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
       let cell_s, cell = IT.fresh_named (BT.Struct list_head_tag) "cell" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
-      (* let vmemmap_s, vmemmap = 
-       *   IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in *)
+      let vmemmap_s, vmemmap = 
+        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let range_start_s, range_start = IT.fresh_named Integer "range_start" in
       let range_end_s, range_end = IT.fresh_named Integer "range_end" in
@@ -178,7 +215,7 @@ module PageAlloc = struct
           (cell_index_s, IT.bt cell_index);
           (cell_s, IT.bt cell);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (* (vmemmap_s, IT.bt vmemmap); *)
+          (vmemmap_s, IT.bt vmemmap);
           (pool_pointer_s, IT.bt pool_pointer);
           (range_start_s, IT.bt range_start);
           (range_end_s, IT.bt range_end);
@@ -186,7 +223,7 @@ module PageAlloc = struct
       in
       let qarg = Some 0 in
 
-      (* let order = cell_index in *)
+      let order = cell_index in
 
       let free_area_pointer = 
         addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "free_area")) in
@@ -205,29 +242,52 @@ module PageAlloc = struct
 
       let body = 
         let prev = cell %. "prev" in
-        (* let prev_pointer = addPointer_ (cell_pointer, memberOffset_ (list_head_tag, Id.id "prev")) in *)
         let next = cell %. "next" in
-        (* let next_pointer = addPointer_ (cell_pointer, memberOffset_ (list_head_tag, Id.id "next")) in *)
-        or_ [and_ [prev %== cell_pointer; next %== cell_pointer];
-             and_ begin
-                 let prev_vmemmap = container_of_ (prev, hyp_page_tag, Id.id "node") in
-                 let next_vmemmap = container_of_ (next, hyp_page_tag, Id.id "node") in
-                 [(*prev*)
-                   vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap range_start range_end;
-                   (* ((get_ vmemmap prev_vmemmap) %. "order") %== order;
-                    * ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
-                    * (((get_ vmemmap prev_vmemmap) %. "node") %. "next") %== prev_pointer; *)
-                   (*next*)
-                   vmemmap_good_pointer ~vmemmap_pointer next_vmemmap range_start range_end;
-                   (* ((get_ vmemmap next_vmemmap) %. "order") %== order;
-                    * ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
-                    * (((get_ vmemmap next_vmemmap) %. "node") %. "prev") %== next_pointer; *)
-                 ]
-               end
+        and_ [
+            (prev %== cell_pointer) %== (next %== cell_pointer);
+            or_ [prev %== cell_pointer;
+                 and_ begin
+                     let prev_vmemmap = container_of_ (prev, hyp_page_tag, Id.id "node") in
+                     let next_vmemmap = container_of_ (next, hyp_page_tag, Id.id "node") in
+                     [(*prev*)
+                       vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap range_start range_end;
+                       ((get_ vmemmap prev_vmemmap) %. "order") %== order;
+                       ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
+                       (((get_ vmemmap prev_vmemmap) %. "node") %. "next") %== cell_pointer;
+                       (*next*)
+                       vmemmap_good_pointer ~vmemmap_pointer next_vmemmap range_start range_end;
+                       ((get_ vmemmap next_vmemmap) %. "order") %== order;
+                       ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
+                       (((get_ vmemmap next_vmemmap) %. "node") %. "prev") %== cell_pointer;
+                     ]
+                   end
+              ];
           ]
       in
 
-      (id, {loc; args; body; qarg} )
+      let infer_arguments =
+        AT.Computational ((cell_index_s, IT.bt cell_index), (loc, None),
+        AT.Computational ((cell_s, IT.bt cell), (loc, None), 
+        AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
+        AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
+        AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
+        AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
+        AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.I OutputDef.[
+            {loc; name = "cell_index"; value = cell_index};
+            {loc; name = "cell"; value = cell};
+            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = "vmemmap"; value = vmemmap};
+            {loc; name = "pool_pointer"; value = pool_pointer};
+            {loc; name = "range_start"; value = range_start};
+            {loc; name = "range_end"; value = range_end};
+          ]))))))))
+      in
+
+
+
+      (id, {loc; args; body; qarg; infer_arguments} )
     in
 
 
@@ -303,7 +363,21 @@ module PageAlloc = struct
 
       let body = and_ [metadata_well_formedness; vmemmap_pointer_aligned] in
 
-      (id, { loc; args; qarg; body; })
+      let infer_arguments = 
+        AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
+        AT.Computational ((pool_s, IT.bt pool), (loc, None),
+        AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
+        AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.I OutputDef.[
+            {loc; name = "pool_pointer"; value = pool_pointer};
+            {loc; name = "pool"; value = pool};
+            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = "vmemmap"; value = vmemmap};
+          ])))))
+      in
+
+      (id, { loc; args; qarg; body; infer_arguments})
       
     in
     [vmemmap_page_wf;

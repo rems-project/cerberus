@@ -32,6 +32,7 @@ type situation =
   | MemberShift
   | Pack of CF.Annot.to_pack_unpack
   | Unpack of CF.Annot.to_pack_unpack
+  | ArgumentInference of Id.t
 
 let checking_situation = function
   | Access access -> !^"checking access"
@@ -46,6 +47,7 @@ let checking_situation = function
   | Pack (TPU_Struct tag) -> !^"packing struct" ^^^ Sym.pp tag
   | Unpack (TPU_Predicate name) -> !^"unpacking predicate" ^^^ Id.pp name
   | Unpack (TPU_Struct tag) -> !^"unpacking struct" ^^^ Sym.pp tag
+  | ArgumentInference id -> !^"argument inference for" ^^^ Id.pp id
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -69,6 +71,7 @@ let for_situation = function
   | Pack (TPU_Struct tag) -> !^"for packing struct" ^^^ Sym.pp tag
   | Unpack (TPU_Predicate name) -> !^"for unpacking predicate" ^^^ Id.pp name
   | Unpack (TPU_Struct tag) -> !^"for unpacking struct" ^^^ Sym.pp tag
+  | ArgumentInference id -> !^"for argument inference for" ^^^ Id.pp id
 
 
 
