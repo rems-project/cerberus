@@ -98,7 +98,7 @@ atomic_term:
       { Ast.Integer z }
   | a1=atomic_term member=MEMBER
 /* taking the location-handling aspect from c_parser.mly */
-      { Ast.Member (a1, Id.parse (Location_ocaml.region ($startpos, $endpos) (Some $startpos(member))) member) }
+      { Ast.Member (a1, Id.parse (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(member)))) member) }
   | pred=NAME DOTDOT oarg=NAME
     { Ast. PredOutput (pred, oarg) }
   | AMPERSAND id=NAME

@@ -13,12 +13,61 @@ end
 
 
 module Rewriter = functor (Eff: Monad) -> struct
-  include Eff
+  type state = {
+    rw_loc: Location_ocaml.t;
+    rw_has_changed: bool;
+  }
+
+  type 'a t =
+    state -> (state * 'a Eff.t)
+  
+  let return (z: 'a) : 'a t =
+    fun st -> (st, Eff.return z)
+  
+  let bind (ma : 'a t) (f : 'a -> 'b t) : 'b t =
+    fun st ->
+      let (st', a) = ma st in
+      (st', Eff.bind a (fun z -> snd (f z st')))
+  
+  let (>>=) ma f = bind ma f
+
+  let sequence ms =
+    List.fold_right
+      (fun m m' ->
+        m  >>= fun x  ->
+        m' >>= fun xs ->
+        return (x::xs)
+      ) ms (return [])
+  
+  let listM t xs = sequence (t xs)
+  
+  let mapM f = listM (List.map f)
+
+  let rec foldlM f a = function
+    | [] ->
+        return a
+    | x::xs ->
+        bind (f a x) (fun z -> foldlM f z xs)
+  
+  let liftM (ma: 'a Eff.t) : 'a t =
+    fun st -> (st, ma)
+  
+  let runM (ma: 'a t) : 'a Eff.t =
+    snd (ma { rw_loc= Location_ocaml.unknown; rw_has_changed= false })
+  
+  let update_loc loc : unit t =
+    fun st ->
+      ({ st with rw_loc= loc }, Eff.return ())
+  
+  let get_loc : Location_ocaml.t t =
+    fun st ->
+      (st, Eff.return st.rw_loc)
   
   let has_changed =
     ref false
   
   let rec repeat n m z =
+    let open Eff in
     if n = 0 then
       return z
     else begin
@@ -39,7 +88,7 @@ module Rewriter = functor (Eff: Monad) -> struct
     | ChangeDoChildrenPost of ('a Eff.t) * ('a -> 'a Eff.t) (* NOTE: the name comes from CIL *)
   
   type 'a rw =
-    | RW of ('a -> 'a action)
+    | RW of (Location_ocaml.t -> 'a -> 'a action)
   
   type 'bty rewriter = {
       rw_pexpr : (('bty, Symbol.sym) C.generic_pexpr) rw;
@@ -52,41 +101,47 @@ module Rewriter = functor (Eff: Monad) -> struct
     | ACTION : ((unit, 'bty, Symbol.sym) C.generic_action, 'bty) selector
     | EXPR   : ((unit, 'bty, Symbol.sym) C.generic_expr, 'bty) selector
   
-  
-  let doRewrite (type a bty) (z: (a, bty) selector) (rw: bty rewriter) (children: bty rewriter -> a -> a Eff.t) (node: a) : a Eff.t =
+  let doRewrite (type a bty) (z: (a, bty) selector) (rw: bty rewriter) (children: bty rewriter -> a -> a t) (node: a) : a t =
     let _start : a rw = match z with
       | PEXPR  -> rw.rw_pexpr
       | ACTION -> rw.rw_action
       | EXPR   -> rw.rw_expr in
     let RW start = _start in (* TODO, not sure why I need this intermediate step to typecheck *)
-    match start node with
+    get_loc >>= fun loc ->
+    match start loc node with
       | Unchanged ->
           return node
       | Update node' ->
           has_changed := true;
-          node'
+          liftM node'
       | Traverse ->
           children rw node
       | PostTraverseAction a ->
           children rw node >>= fun ch ->
-          a () >>= fun () ->
+          liftM (a ()) >>= fun () ->
           return ch
       | DoChildrenPost post ->
           children rw node >>= fun ch ->
-          post ch
+          liftM (post ch)
       | ChangeDoChildrenPost (m_node', post) ->
           has_changed := true;
-          m_node' >>= fun node' ->
+          liftM m_node' >>= fun node' ->
           children rw node' >>= fun ch ->
-          post ch
+          liftM (post ch)
   
   
-  let rec rewritePexpr (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) Eff.t =
+  let rec rewritePexpr_ (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) t =
     doRewrite PEXPR rw childrenPexpr pe
   
   and childrenPexpr (rw: 'bty rewriter) (Pexpr (annots, bty, pexpr_) as pexpr) =
-    let aux = rewritePexpr rw in
+    let aux = rewritePexpr_ rw in
     let return_wrap z = return (Pexpr (annots, bty, z)) in
+    begin match Annot.get_loc annots with
+      | Some loc ->
+          update_loc loc
+      | None ->
+          return ()
+    end >>= fun () ->
     match pexpr_ with
       | PEsym _
       | PEimpl _
@@ -175,12 +230,13 @@ module Rewriter = functor (Eff: Monad) -> struct
           return_wrap (PEare_compatible (pe1', pe2'))
   
   
-  let rec rewriteAction (rw: 'bty rewriter) (act: (unit, 'bty, Symbol.sym) C.generic_action) : ((unit, 'bty, Symbol.sym) C.generic_action) Eff.t =
+  let rec rewriteAction_ (rw: 'bty rewriter) (act: (unit, 'bty, Symbol.sym) C.generic_action) : ((unit, 'bty, Symbol.sym) C.generic_action) t =
     doRewrite ACTION rw childrenAction act
   
   and childrenAction (rw: 'bty rewriter) (Action (loc, (), act_)) =
-    let aux_pexpr = rewritePexpr rw in
+    let aux_pexpr = rewritePexpr_ rw in
     let return_wrap z = return (Action (loc, (), z)) in
+    update_loc loc >>= fun () ->
     match act_ with
       | Create (pe1, pe2, pref) ->
           aux_pexpr pe1 >>= fun pe1' ->
@@ -245,14 +301,20 @@ module Rewriter = functor (Eff: Monad) -> struct
           return_wrap (LinuxRMW (pe1', pe2', pe3', mo))
   
   
-  let rec rewriteExpr (rw: 'bty rewriter) (expr: (unit, 'bty, Symbol.sym) C.generic_expr) : ((unit, 'bty, Symbol.sym) C.generic_expr) Eff.t =
+  let rec rewriteExpr_ (rw: 'bty rewriter) (expr: (unit, 'bty, Symbol.sym) C.generic_expr) : ((unit, 'bty, Symbol.sym) C.generic_expr) t =
     doRewrite EXPR rw childrenExpr expr
   
   and childrenExpr (rw: 'bty rewriter) (Expr (annots, expr_)) =
-    let aux = rewriteExpr rw in
-    let aux_pexpr = rewritePexpr rw in
-    let aux_action = rewriteAction rw in
+    let aux = rewriteExpr_ rw in
+    let aux_pexpr = rewritePexpr_ rw in
+    let aux_action = rewriteAction_ rw in
     let return_wrap z = return (Expr (annots, z)) in
+    begin match Annot.get_loc annots with
+      | Some loc ->
+          update_loc loc
+      | None ->
+          return ()
+    end >>= fun () ->
     match expr_ with
       | Epure pe ->
           aux_pexpr pe >>= fun pe' ->
@@ -340,4 +402,13 @@ module Rewriter = functor (Eff: Monad) -> struct
       | Eshow (id, pes) ->
           mapM aux_pexpr pes >>= fun pes' ->
           return_wrap (Eshow (id, pes'))
+
+  let rewritePexpr (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) Eff.t =
+    runM (rewritePexpr_ rw pe)
+  
+  let rewriteAction (rw: 'bty rewriter) (act: (unit, 'bty, Symbol.sym) C.generic_action) : ((unit, 'bty, Symbol.sym) C.generic_action) Eff.t =
+    runM (rewriteAction_ rw act)
+  
+  let rewriteExpr (rw: 'bty rewriter) (expr: (unit, 'bty, Symbol.sym) C.generic_expr) : ((unit, 'bty, Symbol.sym) C.generic_expr) Eff.t =
+    runM (rewriteExpr_ rw expr)
 end

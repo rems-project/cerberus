@@ -41,7 +41,7 @@ let parse_condition default_label (loc, string) =
        let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
        fail {loc; msg = Generic !^"invalid symbol"}
     | Assertion_parser.Error ->
-       let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
+       let loc = Location_ocaml.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
        fail {loc; msg = Generic !^ ("Unexpected token " ^ Lexing.lexeme lexbuf)}
   in
   return (loc, parsed_spec)

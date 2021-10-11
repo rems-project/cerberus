@@ -80,20 +80,25 @@ let json_raw_loc loc : Yojson.Safe.t =
     | Loc_point point -> 
        `Variant ("Point", Some (json_lexing_position point))
       (* start, end, cursor *)
-    | Loc_region (startp, endp, ocursorp) ->
+    | Loc_region (startp, endp, cursor) ->
        let startp' = json_lexing_position startp in
        let endp' = json_lexing_position endp in
-       let cursorp' = match ocursorp with
-         | Some cursorp -> json_lexing_position cursorp
-         | None -> `Null
-       in
+       let cursor' = match cursor with
+         | NoCursor ->
+            `Variant ("NoCursor", None)
+         | PointCursor p ->
+            `Variant ("PointCursor", Some (json_lexing_position p))
+         | RegionCursor (b ,e) ->
+            `Variant ("RegionCursor", Some (`Assoc [ ("cursor_start", json_lexing_position b)
+                                                   ; ("cursor_end", json_lexing_position e) ]))
+         in
        let args = 
          [("region_start", startp');
           ("region_end", endp');
-          ("region_cursor", cursorp')]
+          ("region_cursor", cursor')]
        in
        `Variant ("Region", Some (`Assoc args))
-    | Loc_regions (starts_ends,ocursorp) ->
+    | Loc_regions (starts_ends,cursor) ->
        let starts_ends' = 
          List.map (fun (startp, endp) ->
              let startp' = json_lexing_position startp in
@@ -101,13 +106,18 @@ let json_raw_loc loc : Yojson.Safe.t =
              `Assoc [("regions_start", startp'); ("regions_end", endp')]
            ) starts_ends
        in
-       let cursorp' = match ocursorp with
-         | Some cursorp -> json_lexing_position cursorp
-         | None -> `Null
+       let cursor' = match cursor with
+         | NoCursor ->
+            `Variant ("NoCursor", None)
+         | PointCursor p ->
+            `Variant ("PointCursor", Some (json_lexing_position p))
+         | RegionCursor (b ,e) ->
+            `Variant ("RegionCursor", Some (`Assoc [ ("cursor_start", json_lexing_position b)
+                                                   ; ("cursor_end", json_lexing_position e) ]))
        in
        let args = 
          [("regions", `List starts_ends');
-          ("cursor", cursorp')]
+          ("cursor", cursor')]
        in
        `Variant ("Region", Some (`Assoc args))
   in

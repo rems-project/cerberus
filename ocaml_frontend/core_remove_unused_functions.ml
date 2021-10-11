@@ -287,7 +287,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
   let collect_names_rw = 
     let open RW in {
       rw_pexpr =
-        RW.RW begin fun pexpr ->
+        RW.RW begin fun _ pexpr ->
           let (Pexpr (annots, bTy, pexpr_)) = pexpr in
           match pexpr_ with
           | PEsym sym -> 
@@ -326,12 +326,12 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
           end;
 
       rw_action =
-        RW.RW begin fun act ->
+        RW.RW begin fun _ act ->
           Traverse
           end;
 
       rw_expr=
-        RW.RW begin fun (Expr (annots, expr_) (*as expr*)) ->
+        RW.RW begin fun _ (Expr (annots, expr_) (*as expr*)) ->
           match expr_ with
           | Eproc (_,name,_) ->
              let a () = names_in_name name in
