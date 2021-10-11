@@ -351,8 +351,8 @@ module PageAlloc = struct
         and_ [
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
             good_ (pointer_ct void_ct, integerToPointerCast_ range_end);
-            good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %+ hyp_physvirt_offset));
-            good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %+ hyp_physvirt_offset));
+            good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %- hyp_physvirt_offset));
+            good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %- hyp_physvirt_offset));
             range_start %< range_end;
             rem_ (range_start, pPAGE_SIZE) %== int_ 0;
             rem_ (range_end, pPAGE_SIZE) %== int_ 0;

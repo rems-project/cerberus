@@ -238,6 +238,8 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
        | LT (t1, t2) -> mk_lt context (term t1) (term t2)
        | LE (t1, t2) -> mk_le context (term t1) (term t2)
+       | Min (t1, t2) -> term (ite_ (le_ (t1, t2), t1, t2))
+       | Max (t1, t2) -> term (ite_ (ge_ (t1, t2), t1, t2))
        | IntToReal t -> Integer.mk_int2real context (term t)
        | RealToInt t -> Real.mk_real2int context (term t)
        end

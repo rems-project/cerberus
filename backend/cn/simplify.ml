@@ -15,16 +15,17 @@ module SymPairMap = Map.Make(SymPair)
 
 let rec simp struct_decls (lcs : LC.t list) =
 
-  let values = SymMap.empty in
-  (*   List.fold_right (fun c values ->
-   *       match c with
-   *       | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), _), it')), bt)) ->
-   *          (\* when IT.size it' <= 10 -> *\)
-   *            SymMap.add sym it' values
-   *       | _ ->
-   *          values
-   *     ) lcs SymMap.empty
-   * in *)
+  let values = 
+    List.fold_right (fun c values ->
+        match c with
+        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
+                                 ((IT (Lit lit, _)) as it'))), bt)) ->
+           (* when IT.size it' <= 10 -> *)
+             SymMap.add sym it' values
+        | _ ->
+           values
+      ) lcs SymMap.empty
+  in
   
   let equalities =
     List.fold_right (fun c equalities ->
@@ -177,6 +178,16 @@ let rec simp struct_decls (lcs : LC.t list) =
       | _, _ ->
          IT (Arith_op (LE (a, b)), bt)
       end
+    | Min (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if IT.equal a b then a else
+       IT (Arith_op (Min (a, b)), bt)
+    | Max (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if IT.equal a b then a else
+       IT (Arith_op (Max (a, b)), bt)
     | IntToReal a ->
        let a = aux a in
        IT (Arith_op (IntToReal a), bt)

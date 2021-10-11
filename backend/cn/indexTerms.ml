@@ -31,6 +31,8 @@ type 'bt arith_op =
   | Mod of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
+  | Min of 'bt term * 'bt term
+  | Max of 'bt term * 'bt term
   | IntToReal of 'bt term
   | RealToInt of 'bt term
 
@@ -152,6 +154,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Mod (t1,t2), Mod (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Min (t1,t2), Min (t1',t2') -> equal t1 t1' && equal t2 t2' 
+     | Max (t1,t2), Max (t1',t2') -> equal t1 t1' && equal t2 t2' 
      | IntToReal t, IntToReal t' -> equal t t'
      | RealToInt t, RealToInt t' -> equal t t'
      | Add _, _ -> false
@@ -163,6 +167,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Mod _, _ -> false
      | LT _, _ -> false
      | LE _, _ -> false
+     | Min _, _ -> false
+     | Max _, _ -> false
      | IntToReal _, _ -> false
      | RealToInt _, _ -> false
      end
@@ -361,6 +367,10 @@ let pp =
           mparens (flow (break 1) [aux true o1; langle; aux true o2])
        | LE (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; (langle ^^ equals); aux true o2])
+       | Min (o1,o2) -> 
+          c_app !^"min" [aux false o1; aux false o2]
+       | Max (o1,o2) -> 
+          c_app !^"max" [aux false o1; aux false o2]
        | IntToReal t ->
           c_app !^"intToReal" [aux false t]
        | RealToInt t ->
@@ -500,6 +510,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Mod (it, it') -> free_vars_list [it; it']
      | LT (it, it') -> free_vars_list [it; it']
      | LE (it, it') -> free_vars_list [it; it']
+     | Min (it, it') -> free_vars_list [it; it']
+     | Max (it, it') -> free_vars_list [it; it']
      | IntToReal t -> free_vars t
      | RealToInt t -> free_vars t
      end
@@ -602,6 +614,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Mod (it, it') -> Mod (subst su it, subst su it')
        | LT (it, it') -> LT (subst su it, subst su it')
        | LE (it, it') -> LE (subst su it, subst su it')
+       | Min (it, it') -> Min (subst su it, subst su it')
+       | Max (it, it') -> Max (subst su it, subst su it')
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
      in
@@ -731,6 +745,8 @@ let rec size (IT (it_, bt)) =
      | Mod (it, it')
      | LT (it, it')
      | LE (it, it') 
+     | Min (it, it')
+     | Max (it, it')
        -> 1 + size it + size it'
      | IntToReal it
      | RealToInt it ->
@@ -890,8 +906,8 @@ let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let rem_t___ (it, it') = rem_ (it, it')
 let rem_f___ (it, it') = rem_ (it, it')
-let min_ (it, it') = ite_ (le_ (it, it'), it, it')
-let max_ (it, it') = ite_ (ge_ (it, it'), it, it')
+let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
+let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
 let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)
 let realToInt_ it = IT (Arith_op (RealToInt it), BT.Integer)
 

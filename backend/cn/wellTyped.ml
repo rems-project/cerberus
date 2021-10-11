@@ -136,6 +136,16 @@ module WIT = struct
               let@ () = ensure_integer_or_real_type loc context t in
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, LE (t, t'))
+           | Min (t,t') ->
+              let@ t = infer loc ~context t in
+              let@ () = ensure_integer_or_real_type loc context t in
+              let@ t' = check loc ~context (IT.bt t) t' in
+              return (IT.bt t, Min (t, t'))
+           | Max (t,t') ->
+              let@ t = infer loc ~context t in
+              let@ () = ensure_integer_or_real_type loc context t in
+              let@ t' = check loc ~context (IT.bt t) t' in
+              return (IT.bt t, Max (t, t'))
            | IntToReal t ->
               let@ t = check loc ~context Integer t in
               return (BT.Real, IntToReal t)
