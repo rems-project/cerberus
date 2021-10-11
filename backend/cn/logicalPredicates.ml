@@ -328,12 +328,15 @@ module PageAlloc = struct
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
       let vmemmap_s, vmemmap = 
         IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+      let hyp_physvirt_offset_s, hyp_physvirt_offset = 
+        IT.fresh_named BT.Integer "hyp_physvirt_offset" in
 
       let args = [
           (pool_pointer_s, IT.bt pool_pointer);
           (pool_s, IT.bt pool);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
           (vmemmap_s, IT.bt vmemmap);
+          (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset);
         ]
       in
       let qarg = None in
@@ -348,6 +351,8 @@ module PageAlloc = struct
         and_ [
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
             good_ (pointer_ct void_ct, integerToPointerCast_ range_end);
+            good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %+ hyp_physvirt_offset));
+            good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %+ hyp_physvirt_offset));
             range_start %< range_end;
             rem_ (range_start, pPAGE_SIZE) %== int_ 0;
             rem_ (range_end, pPAGE_SIZE) %== int_ 0;
@@ -369,12 +374,14 @@ module PageAlloc = struct
         AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
         AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
         AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.Computational ((hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset), (loc, None), 
         AT.I OutputDef.[
             {loc; name = "pool_pointer"; value = pool_pointer};
             {loc; name = "pool"; value = pool};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
             {loc; name = "vmemmap"; value = vmemmap};
-          ])))))
+            {loc; name = "hyp_physvirt_offset"; value = hyp_physvirt_offset};
+          ]))))))
       in
 
       (id, { loc; args; qarg; body; infer_arguments})

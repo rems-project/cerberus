@@ -259,15 +259,20 @@ module ResourceInference = struct
          in
          return r
       | `False model ->
-         let@ folded_resource = match requested.ct with
+         let@ lrt = match requested.ct with
            | Sctype (_, Array (act, Some length)) ->
               fold_array loc failure act requested.pointer length requested.permission
            | Sctype (_, Struct tag) ->
-              fold_struct loc failure tag requested.pointer requested.permission
+              let@ resource = 
+                fold_struct loc failure tag requested.pointer 
+                  requested.permission
+              in
+              let lrt = LRT.Resource (resource, (loc, None), LRT.I) in
+              return lrt
            | _ -> 
               fail (failure model)
          in
-         let@ () = add_r (Some (Loc loc)) folded_resource in
+         let@ () = bind_logical_return_type (Some (Loc loc)) lrt in
          point_request loc failure requested
       end
 
@@ -492,14 +497,14 @@ module ResourceInference = struct
         }
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
-      let folded_value = 
-        let values = 
-          List.init length (fun i -> 
-              let subst = make_subst [(qpoint.qpointer, pointer (int_ i))] in
-              (int_ i, IT.subst subst qpoint.value)
-            )
-        in
-        List.fold_left set_ (const_ Integer (default_ (BT.of_sct item_ct))) values
+      let folded_value_s, folded_value = 
+        IT.fresh (BT.Array (Integer, BT.of_sct item_ct))
+      in
+      let folded_value_constraint = 
+        let i_s, i = IT.fresh Integer in
+        let subst = make_subst [(qpoint.qpointer, pointer i)] in
+        eachI_ (0, i_s, length - 1) 
+          (eq_ (get_ folded_value i, IT.subst subst qpoint.value))
       in
       let folded_init = 
         let i_s, i = IT.fresh Integer  in
@@ -515,7 +520,13 @@ module ResourceInference = struct
              permission = permission;
            }
       in
-      return folded_resource
+      let rt = 
+        LRT.Logical ((folded_value_s, IT.bt folded_value), (loc, None),
+        LRT.Resource (folded_resource, (loc, None), 
+        LRT.Constraint (t_ folded_value_constraint, (loc, None),
+        LRT.I)))
+      in
+      return rt
 
     and unfold_array loc failure item_ct base length permission =   
       debug 7 (lazy (item "unfold array" Pp.empty));
