@@ -8,9 +8,9 @@ type 'e failure = s -> 'e
 
 
 let run s m = 
-  let () = Z3.Solver.push s.solver in
+  let () = Solver.push s.solver in
   let outcome = m s in
-  let () = Z3.Solver.pop s.solver 1 in
+  let () = Solver.pop s.solver in
   match outcome with
   | Ok (a, _) -> Ok a
   | Error e -> Error e
@@ -42,12 +42,12 @@ let fail (f : s -> 'e) : ('a, 'e) t =
 
 let pure (m : ('a, 'e) t) : ('a, 'e) t =
   fun s ->
-  Z3.Solver.push s.solver;
+  Solver.push s.solver;
   let outcome = match m s with
     | Ok (a, _) -> Ok (a, s)
     | Error e -> Error e
   in
-  Z3.Solver.pop s.solver 1;
+  Solver.pop s.solver;
   outcome
 
 

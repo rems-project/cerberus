@@ -306,7 +306,7 @@ let symbol_it = function
 
 
 
-let state ctxt {substitution; vclasses; relevant} model =
+let state ctxt {substitution; vclasses; relevant} (model : Solver.model)=
 
   let open Report in
 
@@ -314,13 +314,13 @@ let state ctxt {substitution; vclasses; relevant} model =
 
   let evaluate it = 
     Option.bind 
-      (Z3.Model.eval model (S.term struct_decls it) true) 
+      (Solver.eval model (S.term struct_decls it)) 
       (S.z3_expr struct_decls ) 
   in
 
   let evaluate_lambda (q_s, q_bt) it = 
     let open Option in
-    let@ z3_val = Z3.Model.eval model (S.lambda struct_decls (q_s, q_bt) it) true in
+    let@ z3_val = Solver.eval model (S.lambda struct_decls (q_s, q_bt) it) in
     let@ it_val = S.z3_expr struct_decls z3_val in
     match it_val with
     | IT (Array_op (Def ((s, _), body)), _) ->

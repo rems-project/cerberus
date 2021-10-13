@@ -11,6 +11,13 @@ open Global
 open LogicalPredicates
 
 
+type context = Z3.context
+type solver = Z3.Solver.solver
+type expr = Z3.Expr.expr
+type sort = Z3.Sort.sort
+type model = Z3.Model.model
+
+
 
 let context_params = [
     ("model", "true");
@@ -68,25 +75,25 @@ module IT_Table = Hashtbl.Make(IndexTerms)
 module Sort_Table = Hashtbl.Make(Sort_HashedType)
 module Z3Symbol_Table = Hashtbl.Make(Z3Symbol_HashedType)
 
-let sort_table = Sort_Table.create 1000
 
 type z3sym_table_entry = 
   | MemberFunc of { tag : Sym.t; member : Id.t }
   | StructFunc of { tag : Sym.t }
   | CompFunc of { bts : BT.t list; i : int }
   | TupleFunc of  { bts : BT.t list }
-  | ConstFunc of { sym : Sym.t }
   | DefaultFunc of { bt : BT.t }
+
+
+
+let bt_table = BT_Table.create 1000
+let sort_table = Sort_Table.create 1000
+
+let it_table = IT_Table.create 5000
+
 
 let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
   Z3Symbol_Table.create 10000
 
-(* let member_funcdecl_table = Z3Symbol_Table.create 100
- * let struct_funcdecl_table = Z3Symbol_Table.create 100
- * let comp_funcdecl_table = Z3Symbol_Table.create 100
- * let tuple_funcdecl_table = Z3Symbol_Table.create 100
- * let sym_table = Z3Symbol_Table.create 10000
- * let default_table = Z3Symbol_Table.create 20 *)
 
 
 
@@ -129,8 +136,6 @@ let integer_to_loc i = Z3.Expr.mk_app context integer_to_loc_fundecl [i]
 
 
 let sort =
-
-  let bt_table = BT_Table.create 1000 in
 
   fun struct_decls ->
 
@@ -204,7 +209,6 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        begin match lit with
        | Sym s -> 
           let z3_sym = sym_to_sym s in
-          let () = Z3Symbol_Table.add z3sym_table z3_sym (ConstFunc {sym=s}) in
           Z3.Expr.mk_const context z3_sym (sort bt)
        | Z z -> 
           Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
@@ -352,13 +356,12 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
     end
 
   and term : IT.t -> Z3.Expr.expr =
-    let tbl = IT_Table.create 5000 in
     fun it ->
-    match IT_Table.find_opt tbl it with
+    match IT_Table.find_opt it_table it with
     | Some sc -> sc
     | None ->
        let t = translate it in
-       let () = IT_Table.add tbl it t in
+       let () = IT_Table.add it_table it t in
        t
   in
 
@@ -661,9 +664,6 @@ let z3_expr struct_decls =
 
       | () when Z3Symbol_Table.mem z3sym_table func_name ->
          begin match Z3Symbol_Table.find z3sym_table func_name with
-         | ConstFunc {sym} ->
-            let bt = z3_sort (Z3.Expr.get_sort expr) in
-            sym_ (sym, bt)
          | DefaultFunc {bt} ->
             default_ bt
          | MemberFunc {tag; member} ->
@@ -704,9 +704,32 @@ let z3_expr struct_decls =
 
 
 
-let simp struct_decls it =
-  let t = term struct_decls it in
-  let t = Z3.Expr.simplify t None in
-  z3_expr struct_decls t
+
+
+
+
+let push solver =
+  Z3.Solver.push solver
+
+
+let pop solver =
+  (* IT_Table.clear it_table; *)
+  Z3.Solver.pop solver 1
+
+
+
+let new_solver () = 
+  Z3.Solver.mk_simple_solver context
+
+
+
+
+let add solver scs = 
+  Z3.Solver.add solver scs
+
+
+let eval model expr = 
+  Z3.Model.eval model expr true
+
 
 

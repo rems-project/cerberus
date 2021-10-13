@@ -199,7 +199,7 @@ module ResourceInference = struct
           permission = permission_t;
       }
 
-    let rec point_request loc (failure : Z3.Model.model -> 'e failure) (requested : Resources.Requests.point) = 
+    let rec point_request loc (failure : Solver.model -> 'e failure) (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let needed = requested.permission in 
       let@ provable = provable in

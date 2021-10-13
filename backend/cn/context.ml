@@ -30,7 +30,8 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
-    solver : Z3.Solver.solver;
+    solver_constraints : Solver.expr list;
+    solver : Solver.solver;
     global: Global.t;
   }
 
@@ -40,7 +41,8 @@ let empty global = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
-    solver = Z3.Solver.mk_simple_solver Solver.context;
+    solver_constraints = [];
+    solver = Solver.new_solver ();
     global = global
   }
 
@@ -89,9 +91,9 @@ let add_ls lvars ctxt =
 let add_c lc (ctxt : t) = 
   let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
   let scs = List.filter_map (Solver.constr ctxt.global) lcs in
-  let () = Z3.Solver.add ctxt.solver scs in
+  let () = Solver.add ctxt.solver scs in
   { ctxt with constraints = lcs @ ctxt.constraints;
-              solver = ctxt.solver }
+              solver_constraints = scs @ ctxt.solver_constraints }
 
 let add_cs lcs (ctxt : t) = 
   List.fold_left (fun ctxt lc -> add_c lc ctxt) ctxt lcs
