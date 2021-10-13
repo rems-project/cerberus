@@ -14,13 +14,13 @@ open LogicalPredicates
 
 let context_params = [
     ("model", "true");
-    ("well_sorted_check","true");
+    ("well_sorted_check","false");
     (* ("trace", "true");
      * ("trace_file_name", "trace.smt") *)
   ]
 
 let global_params = [
-    ("smt.auto-config", "false");
+    ("smt.auto-config", "true");
     ("smt.mbqi", "true");
     ("smt.arith.solver", "2");
     ("model.completion", "true");
@@ -30,8 +30,8 @@ let global_params = [
     ("model_evaluator.array_as_stores", "true");
     (* ("model_evaluator.array_equalities", "false"); *)
     (* ("smt.ematching", "true"); *)
-    (* ("smt.pull-nested-quantifiers", "true"); *)
-    (* ("smt.macro_finder", "true"); *)
+    ("smt.pull-nested-quantifiers", "true");
+    ("smt.macro_finder", "true");
   ]
 
 let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
