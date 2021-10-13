@@ -38,10 +38,10 @@ module PageAlloc = struct
   module Aux(SD : sig val struct_decls : Memory.struct_decls end) = struct
     open SD
 
-    let pPAGE_SHIFT = int_ 12
-    let pPAGE_SIZE = exp_ (int_ 2, pPAGE_SHIFT)
-    let mMAX_ORDER = int_ 11
-    let _hHYP_NO_ORDER = int_ (-1)
+    let pPAGE_SHIFT = 12
+    let pPAGE_SIZE = Z.pow (Z.of_int 2) pPAGE_SHIFT
+    let mMAX_ORDER = 11
+    let _hHYP_NO_ORDER = -1
 
     let list_head_tag, _ = Memory.find_tag struct_decls "list_head"
     let hyp_pool_tag, _ = Memory.find_tag struct_decls "hyp_pool"
@@ -58,7 +58,7 @@ module PageAlloc = struct
     let vmemmap_good_pointer ~vmemmap_pointer pointer range_start range_end = 
       let offset = vmemmap_offset_of_pointer ~vmemmap_pointer pointer in
       let index = offset %/ hyp_page_size in
-      let phys = index %* pPAGE_SIZE in
+      let phys = index %* (z_ pPAGE_SIZE) in
       and_ [ lePointer_ (vmemmap_pointer, pointer);
              eq_ (rem_ (offset, hyp_page_size), int_ 0);
              range_start %<= phys; phys %< range_end; ]
@@ -70,7 +70,7 @@ module PageAlloc = struct
           vmemmap_good_pointer ~vmemmap_pointer p
             range_start range_end
         in
-        ite_ (condition, permission, q_ (0, 1))
+        and_ [condition; permission]
       in
       Resources.RE.QPredicate {
           qpointer = p_s;
@@ -179,7 +179,7 @@ module PageAlloc = struct
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
         AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
         AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
-        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
         AT.I OutputDef.[
             {loc; name = "page_pointer"; value = page_pointer};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
@@ -273,7 +273,7 @@ module PageAlloc = struct
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
         AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
         AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
-        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
         AT.I OutputDef.[
             {loc; name = "cell_index"; value = cell_index};
             {loc; name = "cell"; value = cell};
@@ -346,7 +346,7 @@ module PageAlloc = struct
       let max_order = pool %. "max_order" in
 
       let beyond_range_end_cell_pointer = 
-        addPointer_ (vmemmap_pointer, (range_end %/ pPAGE_SIZE) %* hyp_page_size) in
+        addPointer_ (vmemmap_pointer, (range_end %/ (z_ pPAGE_SIZE)) %* hyp_page_size) in
       let metadata_well_formedness =
         and_ [
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
@@ -354,11 +354,11 @@ module PageAlloc = struct
             good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %- hyp_physvirt_offset));
             good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %- hyp_physvirt_offset));
             range_start %< range_end;
-            rem_ (range_start, pPAGE_SIZE) %== int_ 0;
-            rem_ (range_end, pPAGE_SIZE) %== int_ 0;
+            rem_ (range_start, (z_ pPAGE_SIZE)) %== int_ 0;
+            rem_ (range_end, (z_ pPAGE_SIZE)) %== int_ 0;
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
             max_order %> int_ 0;
-            max_order %<= mMAX_ORDER;
+            max_order %<= int_ mMAX_ORDER;
           ]
       in
       let vmemmap_pointer_aligned = 
@@ -373,7 +373,7 @@ module PageAlloc = struct
         AT.Computational ((pool_s, IT.bt pool), (loc, None),
         AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
         AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
-        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (q_ (1, 1))), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
         AT.Computational ((hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset), (loc, None), 
         AT.I OutputDef.[
             {loc; name = "pool_pointer"; value = pool_pointer};

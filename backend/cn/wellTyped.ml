@@ -178,6 +178,10 @@ module WIT = struct
               let@ t = infer loc ~context t in
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, EQ (t,t')) 
+           | NE (t,t') ->
+              let@ t = infer loc ~context t in
+              let@ t' = check loc ~context (IT.bt t) t' in
+              return (BT.Bool, NE (t,t')) 
            | EachI ((i1, s, i2), t) ->
               pure begin 
                   let@ () = add_l s Integer in
@@ -434,14 +438,14 @@ module WRE = struct
        let@ _ = WIT.check loc BT.Loc b.pointer in
        let@ _ = WIT.infer loc b.value in
        let@ _ = WIT.check loc BT.Bool b.init in
-       let@ _ = WIT.check loc BT.Real b.permission in
+       let@ _ = WIT.check loc BT.Bool b.permission in
        return ()
     | QPoint b -> 
        pure begin 
            let@ () = add_l b.qpointer Loc in
            let@ _ = WIT.infer loc b.value in
            let@ _ = WIT.check loc BT.Bool b.init in
-           let@ _ = WIT.check loc BT.Real b.permission in
+           let@ _ = WIT.check loc BT.Bool b.permission in
            return ()
          end
     | Predicate p -> 
@@ -457,7 +461,7 @@ module WRE = struct
            ) (List.combine (p.iargs @ p.oargs) 
              (List.map snd def.iargs @ List.map snd def.oargs))
        in
-       let@ _ = WIT.check loc BT.Real p.permission in
+       let@ _ = WIT.check loc BT.Bool p.permission in
        return ()
     | QPredicate p -> 
        pure begin 
@@ -473,7 +477,7 @@ module WRE = struct
                ) (List.combine (p.iargs @ p.oargs) 
                  (List.map snd def.iargs @ List.map snd def.oargs))
            in
-           let@ _ = WIT.check loc BT.Real p.permission in
+           let@ _ = WIT.check loc BT.Bool p.permission in
            return ()
          end
     end
@@ -825,7 +829,7 @@ module WRPD = struct
     pure begin
         let open ResourcePredicates in
         let@ () = add_l pd.pointer BT.Loc in
-        let@ () = add_l pd.permission BT.Real in
+        let@ () = add_l pd.permission BT.Bool in
         let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
         let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
         ListM.iterM (fun {loc; guard; packing_ft} ->

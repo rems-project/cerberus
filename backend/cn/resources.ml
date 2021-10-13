@@ -344,8 +344,9 @@ module RE = struct
     let open IT in
     let lc = match resource with
       | Point p -> 
-         impl_ (gt_ (p.permission, q_ (0, 1)), 
-                not_ (eq_ (null_, p.pointer)))
+         bool_ true
+         (* impl_ (p.permission, 
+          *        not_ (eq_ (null_, p.pointer))) *)
       | _ ->
          bool_ true
     in
@@ -358,8 +359,9 @@ module RE = struct
     (* let open IT in *)
     match resource, resource' with
     | Point p, Point p' -> 
+       (* LC.T (bool_ true) *)
        LC.T (impl_ (
-            gt_ (add_ (p.permission, p'.permission), q_ (1, 1)),
+            and_ [p.permission; p'.permission],
             ne_ (p.pointer, p'.pointer)
           )
          )
@@ -398,8 +400,7 @@ module RE = struct
           le_ (int_ 0, index); lt_ (index, length)]
 
   let array_permission ~base ~item_ct ~length ~qpointer ~permission =
-    let condition = array_condition ~base ~item_ct ~length ~qpointer in
-    ite_ (condition, permission, q_ (0,1))
+    and_ [array_condition ~base ~item_ct ~length ~qpointer; permission]
 
 
 
@@ -449,8 +450,8 @@ module RE = struct
 
   let simp_or_empty struct_decls lcs resource = 
     match simp struct_decls lcs resource with
-    | Point p when IT.zero_frac p.permission -> None
-    | QPoint p when IT.zero_frac p.permission -> None
+    | Point p when IT.is_false p.permission -> None
+    | QPoint p when IT.is_false p.permission -> None
     | Predicate p when IT.is_false p.permission -> None
     | QPredicate p when IT.is_false p.permission -> None
     | re -> Some re

@@ -43,6 +43,7 @@ and 'bt bool_op =
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EQ of 'bt term * 'bt term
+  | NE of 'bt term * 'bt term
   | EachI of (int * Sym.t * int) * 'bt term
   (* add Z3's Distinct for separation facts  *)
 
@@ -186,6 +187,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         equal t1 t1' && equal t2 t2' && equal t3 t3'
      | EQ (t1,t2), EQ (t1',t2') -> 
         equal t1 t1' && equal t2 t2' 
+     | NE (t1,t2), NE (t1',t2') -> 
+        equal t1 t1' && equal t2 t2' 
      | EachI ((i1, s, i2), t), EachI ((i1', s', i2'), t') ->
         i1 = i1' && Sym.equal s s' && i2 = i2' && equal t t'
      | And _, _ -> 
@@ -199,6 +202,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | ITE _, _ ->
         false
      | EQ _, _ -> 
+        false
+     | NE _, _ -> 
         false
      | EachI _, _ ->
         false
@@ -390,8 +395,10 @@ let pp =
           mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
        | EQ (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
+       | NE (o1,o2) -> 
+          mparens (flow (break 1) [aux true o1; !^"!" ^^ equals; aux true o2])
        | EachI ((i1, s, i2), t) ->
-          mparens (c_app ((c_app !^"foreach" [!^(string_of_int i1); Sym.pp s; !^(string_of_int i2)])) [aux false t])
+          mparens (c_app ((c_app !^"each" [!^(string_of_int i1); Sym.pp s; !^(string_of_int i2)])) [aux false t])
        end
     | Tuple_op tuple_op -> 
        begin match tuple_op with
@@ -523,6 +530,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Not it -> free_vars it
      | ITE (it,it',it'') -> free_vars_list [it;it';it'']
      | EQ (it, it') -> free_vars_list [it; it']
+     | NE (it, it') -> free_vars_list [it; it']
      | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
      end
   | Tuple_op tuple_op -> 
@@ -628,6 +636,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Not it -> Not (subst su it)
        | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
        | EQ (it, it') -> EQ (subst su it, subst su it')
+       | NE (it, it') -> NE (subst su it, subst su it')
        | EachI ((i1, s, i2), t) ->
           if SymSet.mem s su.relevant then
             let s' = Sym.fresh_same s in
@@ -760,6 +769,7 @@ let rec size (IT (it_, bt)) =
      | Not it -> 1 + size it
      | ITE (it, it', it'') -> 1 + size_list [it; it'; it'']
      | EQ (it, it') -> 1 + size it + size it'
+     | NE (it, it') -> 1 + size it + size it'
      | EachI (_, it) -> 1 + size it
      end
   | Tuple_op tuple_op ->
@@ -892,7 +902,7 @@ let not_ it = IT (Bool_op (Not it), BT.Bool)
 let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
-let ne_ (it, it') = not_ (eq_ (it, it'))
+let ne_ (it, it') = IT (Bool_op (NE (it, it')), BT.Bool)
 let ne__ it it' = ne_ (it, it')
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
 

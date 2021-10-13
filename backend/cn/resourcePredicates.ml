@@ -51,40 +51,7 @@ let pp_definition def =
   
 
 
-(* for testing *)
-let int_point = 
-    let id = "IntPoint" in
-    let loc = Loc.other "internal (IntPoint)" in
-    let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-    let permission_s, permission = IT.fresh_named BT.Real "permission" in
-    let value_s, value = IT.fresh_named Integer "value" in
-    let resource = 
-      Point {
-          ct = integer_ct (Signed Int_);
-          pointer = pointer;
-          permission = permission;
-          value = value; 
-          init = bool_ true;
-        }
-    in
-    let lrt = 
-      AT.of_lrt (
-        LRT.Logical ((value_s, IT.bt value), (loc, None),
-        LRT.Resource (resource, (loc, None),
-        LRT.I)))
-        (AT.I OutputDef.[{loc; name = "value"; value= value}])
-    in
-    let clause = { loc; guard = bool_ true; packing_ft = lrt } in    
-    let predicate = {
-        loc = loc;
-        pointer = pointer_s;
-        iargs = [];
-        oargs = [("value", IT.bt value)];
-        permission = permission_s;
-        clauses = [clause]; 
-      } 
-    in
-    (id, predicate)
+
 
 
 
@@ -93,7 +60,7 @@ let region () =
   let loc = Loc.other "internal (Region)" in
   let base_s, base = IT.fresh_named Loc "base" in
   let length_s, length = IT.fresh_named Integer "length" in
-  let permission_s, permission = IT.fresh_named BT.Real "permission" in
+  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
   let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
   let qpoint = 
@@ -138,7 +105,7 @@ let part_zero_region () =
   let id = "PartZeroRegion" in
   let loc = Loc.other "internal (PartZeroRegion)" in
   let base_s, base = IT.fresh_named Loc "base" in
-  let permission_s, permission = IT.fresh_named BT.Real "permission" in
+  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let length_s, length = IT.fresh_named Integer "length" in
   let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
   let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
@@ -195,7 +162,7 @@ let zero_region () =
   let loc = Loc.other "internal (ZeroRegion)" in
   let base_s, base = IT.fresh_named Loc "base" in
   let length_s, length = IT.fresh_named Integer "length" in
-  let permission_s, permission = IT.fresh_named BT.Real "permission" in
+  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let qp_s, qp = IT.fresh_named Loc "p" in
   let qpoint = {
       ct = char_ct; 
@@ -236,7 +203,7 @@ let early_alloc () =
   let id = "EarlyAlloc" in
   let loc = Loc.other "internal (EarlyAlloc)" in
   let start_s, start = IT.fresh_named Loc "start" in
-  let permission_s, permission = IT.fresh_named BT.Real "permission" in
+  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let end_s, end_t = IT.fresh_named Loc "end" in
   let length = 
     add_ (sub_ (pointerToIntegerCast_ end_t,
@@ -291,7 +258,7 @@ let page_alloc_predicates struct_decls =
     let id = "Vmemmap_page" in
     let loc = Loc.other "internal (Vmemmap_page)" in
     let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in
-    let permission_s, permission = IT.fresh_named BT.Real "permission" in
+    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     let page_s, page = IT.fresh_named (BT.Struct hyp_page_tag) "page" in
     let resource = 
       Point {
@@ -323,17 +290,13 @@ let page_alloc_predicates struct_decls =
     (id, predicate)
   in
 
-  (* let o_vmemmap_page = 
-   *   let id = "Vmemmap_page" in *)
-
-
 
 
   let hyp_pool =  
     let id = "Hyp_pool" in
     let loc = Loc.other "internal (Hyp_pool)" in
     let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-    let permission_s, permission = IT.fresh_named BT.Real "permission" in
+    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     (* iargs *)
     let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
     let hyp_physvirt_offset_s, hyp_physvirt_offset = 
@@ -398,7 +361,7 @@ let page_alloc_predicates struct_decls =
 
   let free_area_wf = 
       let i_s, i = IT.fresh_named Integer "i" in
-      let condition = and_ [int_ 0 %<= i; i %< mMAX_ORDER] in
+      let condition = and_ [int_ 0 %<= i; i %< int_ mMAX_ORDER] in
       let args = [
           i;
           get_ (pool %. "free_area") i;
@@ -482,7 +445,7 @@ let page_alloc_predicates struct_decls =
     let loc = Loc.other "internal (VPage)" in
     let vbase_s, vbase = IT.fresh_named Loc "vbase" in
     let order_s, order = IT.fresh_named Integer "order" in
-    let permission_s, permission = IT.fresh_named BT.Real "permission" in
+    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     let hyp_physvirt_offset_s, hyp_physvirt_offset = 
       IT.fresh_named BT.Integer "hyp_physvirt_offset" in
     let pbase = addPointer_ (vbase, hyp_physvirt_offset) in
@@ -495,7 +458,7 @@ let page_alloc_predicates struct_decls =
           qpointer = qpointer_s;
           permission = 
             RE.array_permission ~base:pbase ~item_ct:char_ct
-              ~length:(mul_ (pPAGE_SIZE, exp_ (int_ 2, order))) ~qpointer ~permission;
+              ~length:(mul_ (z_ pPAGE_SIZE, exp_ (int_ 2, order))) ~qpointer ~permission;
           value = get_ value qpointer;
           init = get_ init qpointer;
         }
@@ -549,41 +512,7 @@ let page_alloc_predicates struct_decls =
 
 
 
-    (* let vmemmap_metadata_owned =
-     *   let p_s, p = IT.fresh_named Loc "p" in
-     *   let point_permission = 
-     *     let condition = 
-     *       vmemmap_good_pointer ~vmemmap_pointer p
-     *         range_start range_end
-     *     in
-     *     ite_ (condition, permission, q_ (0, 1))
-     *   in
-     *   let vmemmap_array = 
-     *     QPredicate {
-     *         qpointer = p_s;
-     *         name = "Vmemmap_page";
-     *         iargs = [
-     *             vmemmap_pointer;
-     *             pool_pointer;
-     *             range_start;
-     *             range_end;
-     *           ];
-     *         oargs = [get_ vmemmap p];
-     *         permission = point_permission;
-     *       }
-     *   in
-     *   let aligned = 
-     *     aligned_ (vmemmap_pointer,
-     *               array_ct (struct_ct hyp_page_tag) None)
-     *   in
-     *   LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
-     *   LRT.Resource (vmemmap_array, (loc, None), 
-     *   LRT.Constraint (t_ aligned, (loc, None), 
-     *   LRT.I)))
-     * in *)
-
-
-
+    
     (* let vmemmap_well_formedness2 = 
      *   let constr prev_next =
      *     (\* let i_s, i_t = IT.fresh_named Integer "i" in *\)
@@ -662,7 +591,6 @@ let page_alloc_predicates struct_decls =
 
 
 let predicate_list struct_decls = 
-  int_point ::
   region () ::
   zero_region () ::
   part_zero_region () ::

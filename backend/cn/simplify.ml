@@ -38,6 +38,9 @@ let rec simp struct_decls (lcs : LC.t list) =
            | IT (Bool_op (Not (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
                                                 IT (Lit (Sym sym'), _))), _))), _) ->
               SymPairMap.add (sym, sym') false equalities
+           | IT (Bool_op (NE (IT (Lit (Sym sym), _), 
+                              IT (Lit (Sym sym'), _))), _) ->
+              SymPairMap.add (sym, sym') false equalities
            | _ -> equalities
            end
         | _ -> equalities
@@ -267,6 +270,10 @@ let rec simp struct_decls (lcs : LC.t list) =
        | _, _ ->
           eq_ (a, b)
        end
+    | NE (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       IT (Bool_op (NE (a, b)), BT.Bool)
     | EachI ((i1, s, i2), t) ->
        let s' = Sym.fresh_same s in 
        let t = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) t in

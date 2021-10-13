@@ -252,6 +252,7 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | Not t -> mk_not context (term t)
        | ITE (t1, t2, t3) -> mk_ite context (term t1) (term t2) (term t3)
        | EQ (t1, t2) -> mk_eq context (term t1) (term t2)
+       | NE (t1, t2) -> mk_distinct context [term t1; term t2]
        | EachI ((i1, s, i2), t) -> 
            let rec aux i = 
              if i <= i2 
@@ -377,6 +378,7 @@ let lambda struct_decls (q_s, q_bt) body =
 
 
 let constr global c = 
+  print stdout (item "Solver.constr" (LC.pp c));
   let struct_decls = global.struct_decls in
   match c with
   | T it -> 
@@ -412,18 +414,22 @@ let z3_status = function
   | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
 
 let check_t global solver t = 
-  let t = term global.struct_decls t in
-  z3_status (Z3.Solver.check solver [Z3.Boolean.mk_not context t])
+  let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
+  print stderr (item "check_t" !^(Z3.Expr.to_string t));
+  z3_status (Z3.Solver.check solver [t])
 
 let check_forall global solver ((s, bt), t) = 
   let s' = Sym.fresh () in
   let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
-  z3_status (Z3.Solver.check solver 
-               [Z3.Boolean.mk_not context (term global.struct_decls t)])
+  let t' = Z3.Boolean.mk_not context (term global.struct_decls t) in
+  print stderr (item "check_forall" !^(Z3.Expr.to_string t'));
+  z3_status (Z3.Solver.check solver [t'])
 
 let check_pred global solver (pred : LC.Pred.t) =
   let def = Option.get (get_logical_predicate_def global pred.name) in
-  check_t global solver (open_pred global def pred.args)
+  let t = open_pred global def pred.args in
+  print stderr (item "check_pred" (IT.pp t));
+  check_t global solver t
 
 let check_qpred global solver assumptions {q; condition; pred} =
   let def = Option.get (get_logical_predicate_def global pred.name) in
@@ -457,11 +463,19 @@ let check_qpred global solver assumptions {q; condition; pred} =
     in
     aux assumptions condition
   in
+  let all_proved = eq_ (reduced_condition, bool_ false) in
+  print stderr (item "check_qpred" (IT.pp all_proved));
   check_forall global solver
-    (q, eq_ (reduced_condition, bool_ false))
+    (q, all_proved)
 
 let check_constraint global solver (assumptions : LC.t list) lc = 
+  print stdout (item "check_constraint" (LC.pp lc));
   match lc with
+  | T (IT (Bool_op (EachI ((i1, i_s, i2), body)), _)) ->
+     let i = sym_ (i_s, Integer) in
+     let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
+     check_forall global solver 
+       ((i_s, Integer), (impl_ (condition, body)))
   | T t -> check_t global solver t
   | Forall ((s, bt), t) -> check_forall global solver ((s, bt), t)
   | Pred pred -> check_pred global solver pred

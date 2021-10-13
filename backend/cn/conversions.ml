@@ -141,7 +141,7 @@ let make_owned_funarg floc i (pointer : IT.t) path sct =
        (RE.Point {
            ct = sct; 
            pointer; 
-           permission = q_ (1, 1); 
+           permission = bool_ true; 
            value = pointee_t; 
            init = bool_ true
            },
@@ -172,7 +172,7 @@ let make_owned loc (pointer : IT.t) path sct =
        (RE.Point {
            ct = sct; 
            pointer; 
-           permission = q_ (1, 1); 
+           permission = bool_ true; 
            value = pointee_t; 
            init = bool_ true
            },
@@ -205,7 +205,7 @@ let make_block loc (pointer : IT.t) path sct =
        (RE.Point {
             ct = sct; 
             pointer;
-            permission = q_ (1, 1);
+            permission = bool_ true;
             value = pointee_t;
             init = init_t
           },
@@ -236,7 +236,7 @@ let make_pred loc (predicates : (string * ResourcePredicates.definition) list)
          pointer = pointer;
          iargs; 
          oargs;
-         permission = q_ (1, 1);
+         permission = bool_ true;
        },
      (loc, None))
   in
@@ -277,7 +277,7 @@ let make_qpred loc (predicates : (string * ResourcePredicates.definition) list)
          qpointer = qp;
          iargs; 
          oargs;
-         permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
+         permission = condition;
        },
      (loc, None))
   in

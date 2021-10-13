@@ -207,36 +207,34 @@ module ResourceInference = struct
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
+            if is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
-               let could_take = min_ (p'.permission, needed) in
+               let could_take = and_ [p'.permission; needed] in
                let took = and_ [eq_ (requested.pointer, p'.pointer); 
-                                gt_ (could_take, q_ (0, 1))] in
+                                could_take] in
                begin match provable (t_ took) with
                | `True ->
                   let value = p'.value in
                   let init = p'.init in
-                  let needed = sub_ (needed, could_take) in
-                  let permission' = sub_ (p'.permission, could_take) in
+                  let needed = bool_ false in
+                  let permission' = bool_ false in
                   Point {p' with permission = permission'}, (needed, value, init)
                | `False ->
                   continue
                end
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
-               let can_take = min_ (IT.subst subst p'.permission, needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
+               let can_take = and_ [IT.subst subst p'.permission; needed] in
+               let took = can_take in
                begin match provable (t_ took) with
                | `True ->
                   let value = IT.subst subst p'.value in
                   let init = IT.subst subst p'.init in
-                  let needed = sub_ (needed, can_take) in
+                  let needed = bool_ false in
                   let permission' =
-                    sub_ (p'.permission, 
-                          ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                                can_take,
-                                q_ (0, 1))
-                      )
+                    and_ [p'.permission; 
+                          ne_ (sym_ (p'.qpointer, BT.Loc), requested.pointer)]
                   in
                   QPoint {p' with permission = permission'}, (needed, value, init)
                | `False ->
@@ -246,7 +244,7 @@ module ResourceInference = struct
                continue
           ) (needed, default_ requested.value, default_ requested.init)
       in
-      begin match provable_or_model (t_ (eq_ (needed, q_ (0, 1)))) with
+      begin match provable_or_model (t_ (not_ needed)) with
       | `True ->
          let@ global = get_global () in
          let@ all_lcs = all_constraints () in
@@ -285,38 +283,38 @@ module ResourceInference = struct
       let@ (needed, value, init) =
         map_and_fold_resources (fun re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
+            if is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
                let subst = make_subst [(requested.qpointer, p'.pointer)] in
-               let can_take = min_ (p'.permission, IT.subst subst needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
+               let can_take = and_ [p'.permission; IT.subst subst needed] in
+               let took = can_take in
                begin match provable (t_ took) with
                | `True ->
                   let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-                  let needed = sub_ (needed, ite_ (pmatch, can_take, q_ (0, 1))) in
+                  let needed = and_ [needed; not_ pmatch] in
                   let value = ite_ (pmatch, p'.value, value) in
                   let init = ite_ (pmatch, p'.init, init) in
-                  let permission' = sub_ (p'.permission, can_take) in
+                  let permission' = bool_ false in
                   (Point {p' with permission = permission'}, (needed, value, init))
                | `False ->
                   continue
                end
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let p' = RE.alpha_rename_qpoint requested.qpointer p' in
-               let can_take = min_ (p'.permission, needed) in
-               let took = gt_ (can_take, q_ (0, 1)) in
-               let needed = sub_ (needed, can_take) in
+               let can_take = and_ [p'.permission; needed] in
+               let took = can_take in
+               let needed = and_ [needed; not_ can_take] in
                let value = ite_ (took, p'.value, value) in
                let init = ite_ (took, p'.init, init) in
-               let permission' = sub_ (p'.permission, can_take) in
+               let permission' = and_ [p'.permission; not_ can_take] in
                (QPoint {p' with permission = permission'}, (needed, value, init))
             | re ->
                continue
           ) (needed, default_ requested.value, default_ requested.init)
       in
       let holds =
-        provable_or_model (forall_ (requested.qpointer, BT.Loc)
-                             (eq_ (needed, q_ (0, 1))))
+        provable_or_model (forall_ (requested.qpointer, BT.Loc) (not_ needed))
       in
       begin match holds with
       | `True ->
@@ -348,39 +346,38 @@ module ResourceInference = struct
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
+            if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
-               let could_take = min_ (p'.permission, needed) in
+               let could_take = and_ [p'.permission; needed] in
                let took = 
                  and_ (eq_ (requested.pointer, p'.pointer) ::
                        List.map2 eq__ requested.iargs p'.iargs @
-                       [gt_ (could_take, q_ (0, 1))])
+                       [could_take])
                in
                begin match provable (t_ took) with
                | `True ->
                   let oargs = p'.oargs in
-                  let needed = sub_ (needed, could_take) in
-                  let permission' = sub_ (p'.permission, could_take) in
+                  let needed = bool_ false in
+                  let permission' = bool_ false in
                   Predicate {p' with permission = permission'}, (needed, oargs)
                | `False ->
                   continue
                end
             | QPredicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
-               let can_take = min_ (IT.subst subst p'.permission, needed) in
+               let can_take = and_ [IT.subst subst p'.permission; needed] in
                let took = 
                  and_ ((List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs) @
-                       [gt_ (can_take, q_ (0, 1))])
+                       [can_take])
                in
                begin match provable (t_ took) with
                | `True ->
                   let oargs = List.map (IT.subst subst) p'.oargs in
-                  let needed = sub_ (needed, can_take) in
+                  let needed = bool_ false in
                   let permission' =
-                    sub_ (p'.permission,
-                          ite_ (eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer),
-                                can_take, q_ (0, 1))
-                      )
+                    and_ [p'.permission;
+                          ne_ (sym_ (p'.qpointer, BT.Loc), requested.pointer)]
                   in
                   QPredicate {p' with permission = permission'}, (needed, oargs)
                | `False ->
@@ -390,7 +387,7 @@ module ResourceInference = struct
                continue
           ) (needed, List.map default_ requested.oargs)
       in
-      let holds = provable_or_model (t_ (eq_ (needed, q_ (0, 1)))) in
+      let holds = provable_or_model (t_ (not_ needed)) in
       begin match holds with
       | `True ->
          let@ global = get_global () in
@@ -416,35 +413,36 @@ module ResourceInference = struct
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
+            if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(requested.qpointer, p'.pointer)] in
-               let could_take = min_ (p'.permission, IT.subst subst needed) in
+               let could_take = and_ [p'.permission; IT.subst subst needed] in
                let took = 
                  and_ ((List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs) @
-                         [gt_ (could_take, q_ (0, 1))])
+                         [could_take])
                in
                begin match provable (t_ took) with
                | `True ->
                   let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-                  let needed = sub_ (needed, ite_ (pmatch, could_take, q_ (0, 1))) in
+                  let needed = and_ [needed; not_ pmatch] in
                   let oargs = List.map2 (fun oarg oarg' -> ite_ (pmatch, oarg', oarg)) oargs p'.oargs in
-                  let permission' = sub_ (p'.permission, could_take) in
+                  let permission' = bool_ false in
                   (Predicate {p' with permission = permission'}, (needed, oargs))
                | `False ->
                   continue
                end
             | QPredicate p' when String.equal requested.name p'.name ->
                let p' = RE.alpha_rename_qpredicate requested.qpointer p' in
-               let could_take = min_ (p'.permission, needed) in
-               let took = gt_ (could_take, q_ (0, 1)) in
+               let could_take = and_ [p'.permission; needed] in
+               let took = could_take in
                begin match provable (forall_ (requested.qpointer, Loc) 
                             (impl_ (took,
                                     and_ (List.map2 eq__ requested.iargs p'.iargs)))) with
                | `True ->
-                  let needed = sub_ (needed, could_take) in
+                  let needed = and_ [needed; not_ could_take] in
                   let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
-                  let permission' = sub_ (p'.permission, could_take) in
+                  let permission' = and_ [p'.permission; not_ could_take] in
                   (QPredicate {p' with permission = permission'}, (needed, oargs))
                | `False ->
                   continue
@@ -454,8 +452,7 @@ module ResourceInference = struct
           ) (needed, List.map default_ requested.oargs)
       in
       let holds =
-        provable_or_model (forall_ (requested.qpointer, BT.Loc)
-             (eq_ (needed, q_ (0, 1))))
+        provable_or_model (forall_ (requested.qpointer, BT.Loc) (not_ needed))
       in
       begin match holds with
       | `True ->
@@ -834,7 +831,7 @@ end = struct
          in
          let@ provable_or_model = provable_or_model in
          let result = 
-           provable_or_model (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+           provable_or_model (t_ (impl_ (p_have.permission, and_ constrs)))
          in
          begin match result with
          | `True -> return (unis, make_subst subst) 
@@ -859,7 +856,7 @@ end = struct
          let result = 
            provable_or_model
              (forall_ (p_have.qpointer, BT.Loc)
-                (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+                (impl_ (p_have.permission, and_ constrs)))
          in
          begin match result with
          | `True -> return (unis, make_subst subst) 
@@ -878,7 +875,7 @@ end = struct
          in
          let@ provable_or_model = provable_or_model in
          let result =
-           provable_or_model (t_ (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+           provable_or_model (t_ (impl_ (p_have.permission, and_ constrs)))
          in
          begin match result with
          | `True -> return (unis, make_subst subst) 
@@ -904,7 +901,7 @@ end = struct
          let result =
            provable_or_model
              (forall_ (p_have.qpointer, BT.Loc)
-                (impl_ (gt_ (p_have.permission, q_ (0, 1)), and_ constrs)))
+                (impl_ (p_have.permission, and_ constrs)))
          in
          begin match result with
          | `True -> return (unis, make_subst subst) 
@@ -1289,7 +1286,7 @@ let infer_array_shift loc asym1 ct asym2 =
   | Some length ->
      let@ unfolded_array = 
        RI.Special.unfold_array loc ArrayShift ct (it_of_arg arg1) 
-         length (q_ (1, 1)) 
+         length (bool_ true) 
      in
      return (
        RT.concat (rt_of_vt loc (BT.Loc, v)) 
@@ -1299,9 +1296,11 @@ let infer_array_shift loc asym1 ct asym2 =
 
 let wrapI ity arg =
   (* try to follow wrapI from runtime/libcore/std.core *)
-  let dlt = add_ (sub_ (maxInteger_ ity, minInteger_ ity), int_ 1) in
-  let r = rem_f___ (arg, dlt) in
-  ite_  (le_ (r, maxInteger_ ity), r,sub_ (r, dlt))
+  let maxInt = Memory.max_integer_type ity in
+  let minInt = Memory.min_integer_type ity in
+  let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
+  let r = rem_f___ (arg, z_ dlt) in
+  ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt))
 
 
 
@@ -1371,7 +1370,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        in
        let@ lrt = 
          if found then
-           RI.Special.unfold_struct loc MemberShift tag (it_of_arg arg) (q_ (1, 1)) 
+           RI.Special.unfold_struct loc MemberShift tag (it_of_arg arg) (bool_ true) 
          else 
            return LRT.I
        in
@@ -1575,7 +1574,7 @@ let all_empty loc =
     ListM.mapM (fun resource ->
         match resource with
         | Point p ->
-           let holds = provable_or_model (t_ (le_ (p.permission, q_ (0, 1)))) in
+           let holds = provable_or_model (t_ (not_ p.permission)) in
            begin match holds with
            | `True -> return () 
            | `False model -> failure resource model
@@ -1583,15 +1582,14 @@ let all_empty loc =
         | QPoint p ->
            let holds = 
              provable_or_model
-               (forall_ (p.qpointer, BT.Loc)
-                  (le_ (p.permission, q_ (0, 1))))
+               (forall_ (p.qpointer, BT.Loc) (not_ p.permission))
            in
            begin match holds with
            | `True -> return () 
            | `False model -> failure resource model
            end
         | Predicate p ->
-           let holds = provable_or_model (t_ (le_ (p.permission, q_ (0, 1)))) in
+           let holds = provable_or_model (t_ (not_ p.permission)) in
            begin match holds with
            | `True -> return () 
            | `False model -> failure resource model
@@ -1599,8 +1597,7 @@ let all_empty loc =
         | QPredicate p ->
            let holds = 
              provable_or_model
-               (forall_ (p.qpointer, BT.Loc)
-                  (le_ (p.permission, q_ (0, 1))))
+               (forall_ (p.qpointer, BT.Loc) (not_ p.permission))
            in
            begin match holds with
            | `True -> return () 
@@ -1691,7 +1688,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             pure (RI.Special.point_request loc (Access Deref) ({
               ct = act.ct; 
               pointer = it_of_arg arg;
-              permission = q_ (1, 1);
+              permission = bool_ true;
               value = BT.of_sct act.ct;
               init = BT.Bool;
             }, None))
@@ -1731,7 +1728,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             RE.Point {
                 ct = act.ct; 
                 pointer = sym_ (ret, Loc);
-                permission = q_ (1, 1);
+                permission = bool_ true;
                 value = value_t; 
                 init = bool_ false;
               }
@@ -1758,7 +1755,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             RI.Special.point_request loc (Access Kill) ({
               ct = ct;
               pointer = it_of_arg arg;
-              permission = q_ (1, 1);
+              permission = bool_ true;
               value = BT.of_sct ct; 
               init = BT.Bool;
             }, None)
@@ -1797,7 +1794,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             RI.Special.point_request loc (Access (Store None)) ({
                 ct = act.ct; 
                 pointer = it_of_arg parg;
-                permission = q_ (1, 1);
+                permission = bool_ true;
                 value = BT.of_sct act.ct; 
                 init = BT.Bool;
               }, None)
@@ -1806,7 +1803,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             RE.Point {
                 ct = act.ct;
                 pointer = it_of_arg parg;
-                permission = q_ (1, 1);
+                permission = bool_ true;
                 value = it_of_arg varg; 
                 init = bool_ true;
               }
@@ -1824,7 +1821,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             pure (RI.Special.point_request loc (Access (Load None)) ({ 
                     ct = act.ct;
                     pointer = it_of_arg parg;
-                    permission = q_ (1, 1); (* fix *)
+                    permission = bool_ true; (* fix *)
                     value = BT.of_sct act.ct; 
                     init = BT.Bool;
                   }, None))
@@ -1888,7 +1885,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        in
        let@ pointer_arg = arg_of_asym pointer_asym in
        (* todo: allow other permission amounts *)
-       let permission = q_ (1, 1) in
+       let permission = bool_ true in
        let@ iargs = args_of_asyms iarg_asyms in
        let@ () = 
          (* "+1" because of pointer argument *)
@@ -1897,7 +1894,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
        in
        let@ () = ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
-       let@ () = ensure_base_type loc ~expect:Real (IT.bt permission) in
+       let@ () = ensure_base_type loc ~expect:Bool (IT.bt permission) in
        let@ () = 
          ListM.iterM (fun (arg, expected_sort) ->
              ensure_base_type arg.loc ~expect:expected_sort arg.bt
@@ -1953,7 +1950,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             Predicate {
               name = Id.s pname;
               pointer = it_of_arg pointer_arg;
-              permission = q_ (1, 1);
+              permission = bool_ true;
               iargs = List.map it_of_arg iargs;
               oargs = List.map (fun (o : OutputDef.entry) -> o.value) output_assignment;
             }
@@ -1979,7 +1976,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        | Pack ->
           let situation = TypeErrors.Pack (TPU_Struct tag) in
           let@ resource = RI.Special.fold_struct loc situation tag 
-                            (it_of_arg pointer_arg) (q_ (1, 1)) in
+                            (it_of_arg pointer_arg) (bool_ true) in
           let rt = 
             RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
             LRT.Resource (resource, (loc, None), 
@@ -1990,7 +1987,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let situation = TypeErrors.Unpack (TPU_Struct tag) in
           let@ lrt = 
             RI.Special.unfold_struct loc situation tag 
-              (it_of_arg pointer_arg) (q_ (1, 1)) 
+              (it_of_arg pointer_arg) (bool_ true) 
           in
           let rt = RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt) in
           return rt
