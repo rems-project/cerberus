@@ -719,6 +719,7 @@ let pop solver =
 
 
 let new_solver () = 
+  IT_Table.clear it_table;
   Z3.Solver.mk_simple_solver context
 
 
