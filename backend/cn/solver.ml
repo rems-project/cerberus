@@ -378,7 +378,7 @@ let lambda struct_decls (q_s, q_bt) body =
 
 
 let constr global c = 
-  print stdout (item "Solver.constr" (LC.pp c));
+  (* print stdout (item "Solver.constr" (LC.pp c)); *)
   let struct_decls = global.struct_decls in
   match c with
   | T it -> 
@@ -415,20 +415,20 @@ let z3_status = function
 
 let check_t global solver t = 
   let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  print stderr (item "check_t" !^(Z3.Expr.to_string t));
+  (* print stdout (item "check_t" !^(Z3.Expr.to_string t)); *)
   z3_status (Z3.Solver.check solver [t])
 
 let check_forall global solver ((s, bt), t) = 
   let s' = Sym.fresh () in
   let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
   let t' = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  print stderr (item "check_forall" !^(Z3.Expr.to_string t'));
+  (* print stdout (item "check_forall" !^(Z3.Expr.to_string t')); *)
   z3_status (Z3.Solver.check solver [t'])
 
 let check_pred global solver (pred : LC.Pred.t) =
   let def = Option.get (get_logical_predicate_def global pred.name) in
   let t = open_pred global def pred.args in
-  print stderr (item "check_pred" (IT.pp t));
+  (* print stdout (item "check_pred" (IT.pp t)); *)
   check_t global solver t
 
 let check_qpred global solver assumptions {q; condition; pred} =
@@ -464,12 +464,12 @@ let check_qpred global solver assumptions {q; condition; pred} =
     aux assumptions condition
   in
   let all_proved = eq_ (reduced_condition, bool_ false) in
-  print stderr (item "check_qpred" (IT.pp all_proved));
+  (* print stdout (item "check_qpred" (IT.pp all_proved)); *)
   check_forall global solver
     (q, all_proved)
 
 let check_constraint global solver (assumptions : LC.t list) lc = 
-  print stdout (item "check_constraint" (LC.pp lc));
+  (* print stdout (item "check_constraint" (LC.pp lc)); *)
   match lc with
   | T (IT (Bool_op (EachI ((i1, i_s, i2), body)), _)) ->
      let i = sym_ (i_s, Integer) in
