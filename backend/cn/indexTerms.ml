@@ -1109,19 +1109,16 @@ let hash (IT (it, _bt)) =
 
 
 
-let in_pointer_range pointer =
-  let pointer_bits = Memory.size_of_pointer * Memory.bits_per_byte in
-  and_ [lePointer_ (pointer_ Z.zero, pointer); 
-        ltPointer_ (pointer, pointer_ (Z.pow (Z.of_int 2) pointer_bits))]
 
 let value_check_pointer alignment ~pointee_ct about = 
+  let about_int = pointerToIntegerCast_ about in
   let pointee_size = match pointee_ct with
     | Sctypes.Sctype (_, Void) -> 1
     | Sctypes.Sctype (_, Function _) -> 1
     | _ -> Memory.size_of_ctype pointee_ct 
   in
-  and_ [in_pointer_range about;
-        in_pointer_range (subPointer_ (addPointer_ (about, int_ pointee_size), int_ 1));
+  and_ [le_ (z_ Z.zero, about_int);
+        le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =

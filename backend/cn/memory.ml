@@ -23,6 +23,10 @@ let min_integer_type it = z_of_ival (CF.Impl_mem.min_ival it)
 let size_of_pointer = Option.get ((OI.get ()).sizeof_pointer)
 let align_of_pointer = Option.get ((OI.get ()).alignof_pointer)
 
+let max_pointer = 
+  let pointer_bits = size_of_pointer * bits_per_byte in
+  Z.sub (Z.pow (Z.of_int 2) pointer_bits) (Z.of_int 1)
+
 
 let size_of_ctype = function
   | Sctype (_, Void) -> Debug_ocaml.error "size_of_ctype applied to void"

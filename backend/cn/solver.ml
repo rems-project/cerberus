@@ -39,6 +39,7 @@ let global_params = [
     (* ("smt.ematching", "true"); *)
     ("smt.pull-nested-quantifiers", "true");
     ("smt.macro_finder", "true");
+    (* ("combined_solver.solver2_timeout", "1000"); *)
   ]
 
 let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
@@ -380,8 +381,8 @@ let lambda struct_decls (q_s, q_bt) body =
 
 
 
+
 let constr global c = 
-  (* print stdout (item "Solver.constr" (LC.pp c)); *)
   let struct_decls = global.struct_decls in
   match c with
   | T it -> 
@@ -405,6 +406,25 @@ let constr global c =
 
 
 
+let push solver =
+  Z3.Solver.push solver
+
+let pop solver =
+  IT_Table.clear it_table;
+  Z3.Solver.pop solver 1
+
+let new_solver () = 
+  IT_Table.clear it_table;
+  Z3.Solver.mk_solver context None
+
+
+let add solver scs = 
+  Z3.Solver.add solver scs
+
+let eval model expr = 
+  Z3.Model.eval model expr true
+
+
 
 let model solver = 
   Option.value_err "Z3 did not produce a counter model"
@@ -418,20 +438,16 @@ let z3_status = function
 
 let check_t global solver t = 
   let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  (* print stdout (item "check_t" !^(Z3.Expr.to_string t)); *)
   z3_status (Z3.Solver.check solver [t])
 
 let check_forall global solver ((s, bt), t) = 
   let s' = Sym.fresh () in
   let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
-  let t' = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  (* print stdout (item "check_forall" !^(Z3.Expr.to_string t')); *)
-  z3_status (Z3.Solver.check solver [t'])
+  check_t global solver t
 
 let check_pred global solver (pred : LC.Pred.t) =
   let def = Option.get (get_logical_predicate_def global pred.name) in
   let t = open_pred global def pred.args in
-  (* print stdout (item "check_pred" (IT.pp t)); *)
   check_t global solver t
 
 let check_qpred global solver assumptions {q; condition; pred} =
@@ -467,12 +483,10 @@ let check_qpred global solver assumptions {q; condition; pred} =
     aux assumptions condition
   in
   let all_proved = eq_ (reduced_condition, bool_ false) in
-  (* print stdout (item "check_qpred" (IT.pp all_proved)); *)
   check_forall global solver
     (q, all_proved)
 
 let check_constraint global solver (assumptions : LC.t list) lc = 
-  (* print stdout (item "check_constraint" (LC.pp lc)); *)
   match lc with
   | T (IT (Bool_op (EachI ((i1, i_s, i2), body)), _)) ->
      let i = sym_ (i_s, Integer) in
@@ -494,7 +508,7 @@ let provable global solver assumptions (lc : LC.t) =
 
 
 let provable_or_model global solver assumptions (lc : LC.t) =  
-  match provable global solver assumptions lc with
+  match check_constraint global solver assumptions lc with
   | `True -> `True
   | `False -> `False (model solver)
 
@@ -708,29 +722,7 @@ let z3_expr struct_decls =
 
 
 
-let push solver =
-  Z3.Solver.push solver
 
-
-let pop solver =
-  (* IT_Table.clear it_table; *)
-  Z3.Solver.pop solver 1
-
-
-
-let new_solver () = 
-  IT_Table.clear it_table;
-  Z3.Solver.mk_simple_solver context
-
-
-
-
-let add solver scs = 
-  Z3.Solver.add solver scs
-
-
-let eval model expr = 
-  Z3.Model.eval model expr true
 
 
 
