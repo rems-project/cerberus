@@ -31,19 +31,23 @@ let global_params = [
     ("sat.random_seed", "1");
     ("smt.random_seed", "1");
     ("fp.spacer.random_seed", "1");
-    ("smt.auto-config", "true");
-    (* ("smt.auto-config", "false"); *)
-    (* ("smt.mbqi", "true"); *)
+    ("smt.auto-config", "false");
     ("smt.arith.solver", "2");
     ("model.completion", "true");
     ("model_evaluator.completion", "true");
+    ("nlsat.randomize", "false");
+    ("fp.spacer.random_seed", "1");
+    ("sls.random_offset", "false");
+    ("sls.random_seed", "0");
+    ("smt.macro_finder", "true");
+    (* ("smt.auto-config", "false"); *)
+    (* ("smt.mbqi", "true"); *)
     (* ("model.compact", "true"); *)
     (* ("model.inline_def", "true");
      * ("model_evaluator.array_as_stores", "true"); *)
     (* ("model_evaluator.array_equalities", "false"); *)
     (* ("smt.ematching", "true"); *)
     (* ("smt.pull-nested-quantifiers", "true"); *)
-    ("smt.macro_finder", "true");
     (* ("combined_solver.solver2_timeout", "1000");
      * ("combined_solver.solver2_unknown", "2"); *)
   ]
@@ -443,10 +447,9 @@ let z3_status = function
   | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
 
 let check_t global solver t = 
-  print stdout (item "check_t" (IT.pp t));
   let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
   let outcome = z3_status (Z3.Solver.check solver [t]) in
-  print stdout !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
+  (* print stdout !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver)); *)
   outcome
 
 let check_forall global solver ((s, bt), t) = 
