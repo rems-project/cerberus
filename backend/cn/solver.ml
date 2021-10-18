@@ -22,24 +22,30 @@ type model = Z3.Model.model
 let context_params = [
     ("model", "true");
     ("well_sorted_check","false");
+    ("type_check", "false");
     (* ("trace", "true");
      * ("trace_file_name", "trace.smt") *)
   ]
 
 let global_params = [
+    ("sat.random_seed", "1");
+    ("smt.random_seed", "1");
+    ("fp.spacer.random_seed", "1");
     ("smt.auto-config", "true");
-    ("smt.mbqi", "true");
+    (* ("smt.auto-config", "false"); *)
+    (* ("smt.mbqi", "true"); *)
     ("smt.arith.solver", "2");
     ("model.completion", "true");
     ("model_evaluator.completion", "true");
     (* ("model.compact", "true"); *)
-    ("model.inline_def", "true");
-    ("model_evaluator.array_as_stores", "true");
+    (* ("model.inline_def", "true");
+     * ("model_evaluator.array_as_stores", "true"); *)
     (* ("model_evaluator.array_equalities", "false"); *)
     (* ("smt.ematching", "true"); *)
-    ("smt.pull-nested-quantifiers", "true");
+    (* ("smt.pull-nested-quantifiers", "true"); *)
     ("smt.macro_finder", "true");
-    (* ("combined_solver.solver2_timeout", "1000"); *)
+    (* ("combined_solver.solver2_timeout", "1000");
+     * ("combined_solver.solver2_unknown", "2"); *)
   ]
 
 let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
@@ -415,7 +421,7 @@ let pop solver =
 
 let new_solver () = 
   IT_Table.clear it_table;
-  Z3.Solver.mk_solver context None
+  Z3.Solver.mk_simple_solver context (* "ALL" *)
 
 
 let add solver scs = 
@@ -437,8 +443,11 @@ let z3_status = function
   | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
 
 let check_t global solver t = 
+  print stdout (item "check_t" (IT.pp t));
   let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  z3_status (Z3.Solver.check solver [t])
+  let outcome = z3_status (Z3.Solver.check solver [t]) in
+  print stdout !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
+  outcome
 
 let check_forall global solver ((s, bt), t) = 
   let s' = Sym.fresh () in

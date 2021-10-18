@@ -1649,9 +1649,17 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ arg2 = arg_of_asym asym2 in
           let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
           let@ () = ensure_base_type arg2.loc ~expect:Loc arg2.bt in
+          (* copying and adapting from memory/concrete/impl_mem.ml *)
+          print stderr (item "diff ctype" (Sctypes.pp act.ct));
+          let divisor = match act.ct with
+            | Sctype (_, Array (item_ty, _)) -> Memory.size_of_ctype item_ty
+            | ct -> Memory.size_of_ctype ct
+          in
           let v =
-            sub_ (pointerToIntegerCast_ (it_of_arg arg1),
-                  pointerToIntegerCast_ (it_of_arg arg2))
+            div_
+              (sub_ (pointerToIntegerCast_ (it_of_arg arg1),
+                     pointerToIntegerCast_ (it_of_arg arg2)),
+               int_ divisor)
           in
           let vt = (Integer, v) in
           return (rt_of_vt loc vt)

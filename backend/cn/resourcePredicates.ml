@@ -101,58 +101,58 @@ let region () =
 
 
 
-let part_zero_region () = 
-  let id = "PartZeroRegion" in
-  let loc = Loc.other "internal (PartZeroRegion)" in
-  let base_s, base = IT.fresh_named Loc "base" in
-  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
-  let length_s, length = IT.fresh_named Integer "length" in
-  let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
-  let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
-  let up_to_s, up_to = IT.fresh_named Integer "up_to" in
-  let qp_s, qp = IT.fresh Loc in 
-  let qpoint = {
-      ct = char_ct; 
-      qpointer = qp_s;
-      permission = array_permission ~item_ct:char_ct ~base
-                     ~length ~qpointer:qp ~permission;
-      value = get_ value qp;
-      init = get_ init qp;
-    }
-  in
-  let constr = 
-    forall_ (qp_s, IT.bt qp)
-      (impl_ (and_ [lePointer_ (base, qp); 
-                    ltPointer_ (qp, addPointer_ (base, up_to))],
-              and_ [eq_ (get_ value qp, int_ 0);
-                    get_ init qp]))
-  in
-  let lrt =
-    LRT.Logical ((value_s, IT.bt value), (loc, None), 
-    LRT.Logical ((init_s, IT.bt init), (loc, None), 
-    LRT.Resource (QPoint qpoint, (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct base), (loc, None),
-    LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, length), int_ 1))), (loc, None),
-    LRT.Constraint (constr, (loc, None),
-    LRT.I))))))
-  in
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I []) 
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = base_s;
-      permission = permission_s;
-      iargs = [(length_s, IT.bt length); 
-               (up_to_s, IT.bt up_to);]; 
-      oargs = []; 
-      clauses = [clause]; 
-    } 
-  in
-  (id, predicate)
+(* let part_zero_region () = 
+ *   let id = "PartZeroRegion" in
+ *   let loc = Loc.other "internal (PartZeroRegion)" in
+ *   let base_s, base = IT.fresh_named Loc "base" in
+ *   let permission_s, permission = IT.fresh_named BT.Bool "permission" in
+ *   let length_s, length = IT.fresh_named Integer "length" in
+ *   let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
+ *   let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
+ *   let up_to_s, up_to = IT.fresh_named Integer "up_to" in
+ *   let qp_s, qp = IT.fresh Loc in 
+ *   let qpoint = {
+ *       ct = char_ct; 
+ *       qpointer = qp_s;
+ *       permission = array_permission ~item_ct:char_ct ~base
+ *                      ~length ~qpointer:qp ~permission;
+ *       value = get_ value qp;
+ *       init = get_ init qp;
+ *     }
+ *   in
+ *   let constr = 
+ *     forall_ (qp_s, IT.bt qp)
+ *       (impl_ (and_ [lePointer_ (base, qp); 
+ *                     ltPointer_ (qp, addPointer_ (base, up_to))],
+ *               and_ [eq_ (get_ value qp, int_ 0);
+ *                     get_ init qp]))
+ *   in
+ *   let lrt =
+ *     LRT.Logical ((value_s, IT.bt value), (loc, None), 
+ *     LRT.Logical ((init_s, IT.bt init), (loc, None), 
+ *     LRT.Resource (QPoint qpoint, (loc, None),
+ *     LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct base), (loc, None),
+ *     LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct (subPointer_ (addPointer_ (base, length), int_ 1))), (loc, None),
+ *     LRT.Constraint (constr, (loc, None),
+ *     LRT.I))))))
+ *   in
+ *   let clause = {
+ *       loc = loc;
+ *       guard = bool_ true;
+ *       packing_ft = AT.of_lrt lrt (AT.I []) 
+ *     }
+ *   in
+ *   let predicate = {
+ *       loc = loc;
+ *       pointer = base_s;
+ *       permission = permission_s;
+ *       iargs = [(length_s, IT.bt length); 
+ *                (up_to_s, IT.bt up_to);]; 
+ *       oargs = []; 
+ *       clauses = [clause]; 
+ *     } 
+ *   in
+ *   (id, predicate) *)
 
 
 
@@ -593,7 +593,7 @@ let page_alloc_predicates struct_decls =
 let predicate_list struct_decls = 
   region () ::
   zero_region () ::
-  part_zero_region () ::
+  (* part_zero_region () :: *)
   early_alloc () ::
   (* for now: *)
   try page_alloc_predicates struct_decls with

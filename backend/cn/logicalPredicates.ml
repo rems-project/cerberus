@@ -226,7 +226,7 @@ module PageAlloc = struct
       let order = cell_index in
 
       let free_area_pointer = 
-        addPointer_ (pool_pointer, memberOffset_ (hyp_pool_tag, Id.id "free_area")) in
+        memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area") in
 
 
       let cell_pointer = arrayShift_ (free_area_pointer, struct_ct list_head_tag, cell_index) in
@@ -356,6 +356,7 @@ module PageAlloc = struct
             range_start %< range_end;
             rem_ (range_start, (z_ pPAGE_SIZE)) %== int_ 0;
             rem_ (range_end, (z_ pPAGE_SIZE)) %== int_ 0;
+            representable_ (integer_ct Ptrdiff_t, range_end);
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
             max_order %> int_ 0;
             max_order %<= int_ mMAX_ORDER;
