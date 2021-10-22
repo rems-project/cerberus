@@ -386,19 +386,35 @@ let resolve_index_term loc
     | LessThan (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Arith_op (LT (it, it')), Bool), None)
+       let t = match IT.bt it with
+         | Loc -> IT (Pointer_op (LTPointer (it, it')), Bool)
+         | _ -> IT (Arith_op (LT (it, it')), Bool)
+       in
+       return (t, None)
     | GreaterThan (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Arith_op (LT (it', it)), Bool), None)
+       let t = match IT.bt it with
+         | Loc -> IT (Pointer_op (LTPointer (it', it)), Bool)
+         | _ -> IT (Arith_op (LT (it', it)), Bool)
+       in
+       return (t, None)
     | LessOrEqual (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Arith_op (LE (it, it')), Bool), None)
+       let t = match IT.bt it with
+         | Loc -> IT (Pointer_op (LEPointer (it, it')), Bool)
+         | _ -> IT (Arith_op (LE (it, it')), Bool)
+       in
+       return (t, None)
     | GreaterOrEqual (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Arith_op (LE (it', it)), Bool), None)
+       let t = match IT.bt it with
+         | Loc -> IT (Pointer_op (LEPointer (it', it)), Bool)
+         | _ -> IT (Arith_op (LE (it', it)), Bool)
+       in
+       return (t, None)
     | Member (t, member) ->
        let@ (st, _) = resolve t mapping in
        let ppf () = Ast.Terms.pp false term in

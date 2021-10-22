@@ -23,6 +23,7 @@ let context_params = [
     ("model", "true");
     ("well_sorted_check","false");
     ("type_check", "false");
+    (* ("auto_config", "false"); *)
     (* ("trace", "true");
      * ("trace_file_name", "trace.smt") *)
   ]
@@ -40,7 +41,6 @@ let global_params = [
     ("sls.random_offset", "false");
     ("sls.random_seed", "0");
     ("smt.macro_finder", "true");
-    (* ("smt.auto-config", "false"); *)
     (* ("smt.mbqi", "true"); *)
     (* ("model.compact", "true"); *)
     (* ("model.inline_def", "true");
