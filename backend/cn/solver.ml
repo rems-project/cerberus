@@ -462,41 +462,29 @@ let check_pred global solver (pred : LC.Pred.t) =
   let t = open_pred global def pred.args in
   check_t global solver t
 
-let check_qpred global solver assumptions {q; condition; pred} =
-  let def = Option.get (get_logical_predicate_def global pred.name) in
-  let qarg_number = Option.get def.qarg in
-  let reduced_condition = 
-    let rec aux assumptions condition = 
-      match assumptions with
-      | [] -> condition
-      | a :: assumptions ->
-         let condition = match a with
-           | Pred pred' when String.equal pred.name pred'.name ->
-              let q_instance = List.nth pred'.args qarg_number in
-              let reduction = 
-                and_ [eq_ (sym_ q, q_instance);
-                      eq_ (open_pred global def pred.args, 
-                           open_pred global def pred'.args)]
-              in
-              and_ [condition; not_ reduction]
-           | QPred qpred' when String.equal pred.name qpred'.pred.name ->
-              let qpred' = alpha_rename_qpred (fst q) qpred' in
-              let reduction = 
-                and_ [qpred'.condition;
-                      eq_ (open_pred global def pred.args,
-                           open_pred global def qpred'.pred.args)]
-                      in
-              and_ [condition; not_ reduction]
-           | _ -> 
-              condition
-         in
-         aux assumptions condition 
-    in
-    aux assumptions condition
+let check_qpred global solver assumptions qpred =
+  (* fresh name to instantiate quantifiers with *)
+  let s_inst = Sym.fresh () in
+  let instantiate {q = (s, bt); condition; pred} = 
+    let def = Option.get (get_logical_predicate_def global pred.name) in
+    let subst = make_subst [(s, sym_ (s_inst, bt))] in
+    (IT.subst subst condition, IT.subst subst (open_pred global def pred.args))
   in
-  let all_proved = eq_ (reduced_condition, bool_ false) in
-  check_forall global solver
-    (q, all_proved)
+  (* Want to prove "body[s_inst/s]" assuming 'condition[s_inst/s]',
+     using the qpred assumptions from the context for the same
+     predicate, also instantiated with s_inst *)
+  let (condition, body) = instantiate qpred in
+  let assumptions =
+    condition ::
+    List.filter_map (function
+      | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
+         let (condition', body') = instantiate qpred' in
+         Some (impl_ (condition', body'))
+      | _ -> 
+         None
+      ) assumptions
+  in
+  check_t global solver (impl_ (and_ assumptions, body))
 
 let check_constraint global solver (assumptions : LC.t list) lc = 
   match lc with
