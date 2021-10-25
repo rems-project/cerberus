@@ -473,6 +473,36 @@ let page_alloc_predicates struct_decls =
       LRT.I)))
     in
 
+    let page_group_ownership = 
+      let qp_s, qp = IT.fresh_named Loc "qp" in
+      let qp_int = pointerToIntegerCast_ qp in
+      let i = 
+        arrayShift_ 
+          (vmemmap_pointer,
+           struct_ct hyp_page_tag,
+           (qp_int %/ (z_ pPAGE_SIZE)))
+      in
+      let condition = 
+        and_ [
+            (pool %. "range_start") %<= qp_int; 
+            qp_int %< (pool %. "range_end");
+            ((vmemmap %@ i) %. "refcount") %== int_ 0;
+          ]
+      in
+      let qpoint = 
+        QPredicate {
+            name = "Byte";
+            qpointer = qp_s;
+            permission = condition;
+            iargs = [];
+            oargs = [];
+          }
+      in
+      LRT.Resource (qpoint, (loc, None), 
+      LRT.I)
+    in
+
+
 
     let lrt = 
       let open LRT in
@@ -481,6 +511,7 @@ let page_alloc_predicates struct_decls =
       @@ wellformedness
       (* @@ free_area_well_formedness (\* possibly inconsistent *\)
        * @@ vmemmap_well_formedness2 *)
+      @@ page_group_ownership
       (* @@ Tools.skip (LRT.I) page_group_ownership *)
     in
   
@@ -624,38 +655,6 @@ let page_alloc_predicates struct_decls =
      *   LRT.I))
      * in *)
 
-    (* let page_group_ownership = 
-     *   let qp_s, qp_t = IT.fresh_named Loc "qp" in
-     *   let bytes_s, bytes_t = IT.fresh_named (BT.Array (Loc, Integer)) "bytes" in
-     *   let condition = 
-     *     let i_t = (pointerToIntegerCast_ qp_t) %/ pPAGE_SIZE_t in
-     *     and_ [
-     *         gtPointer_ (qp_t, pointer_ (Z.of_int 0));
-     *           (and_ (
-     *              [range_start_t %<= pointerToIntegerCast_ qp_t; 
-     *               pointerToIntegerCast_ qp_t %< range_end_t;
-     *               or_ [
-     *                   and_ [((vmemmap_t %@ i_t) %. "order") %!= int_ hHYP_NO_ORDER;
-     *                         ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0];
-     *                   and_ [((vmemmap_t %@ i_t) %. "order") %== int_ hHYP_NO_ORDER;
-     *                         ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
-     *                 ]
-     *              ]
-     *           ))
-     *       ]
-     *   in
-     *   let qpoint = 
-     *     QPoint {
-     *         qpointer = qp_s;
-     *         size = Z.of_int 1;
-     *         permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
-     *         value = get_ bytes_t qp_t;
-     *         init = bool_ false;
-     *       }
-     *   in
-     *   LRT.Logical ((bytes_s, IT.bt bytes_t),
-     *   LRT.Resource (qpoint, LRT.I))
-     * in *)
 
 
 

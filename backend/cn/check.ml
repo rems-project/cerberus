@@ -440,6 +440,7 @@ module ResourceInference = struct
                             (impl_ (took,
                                     and_ (List.map2 eq__ requested.iargs p'.iargs)))) with
                | `True ->
+                  print stderr !^"****************** HERE" ;
                   let needed = and_ [needed; not_ could_take] in
                   let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
                   let permission' = and_ [p'.permission; not_ could_take] in
@@ -456,6 +457,7 @@ module ResourceInference = struct
       in
       begin match holds with
       | `True ->
+         print stderr !^"****************** HERE1" ;
          let@ global = get_global () in
          let@ all_lcs = all_constraints () in
          let qpointer_s, qpointer = IT.fresh Loc in
@@ -470,6 +472,7 @@ module ResourceInference = struct
          in
          return r
       | `False model ->
+         print stderr !^"****************** HERE2" ;
          fail (failure model)
       end
 

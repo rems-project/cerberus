@@ -41,7 +41,7 @@ module PageAlloc = struct
     let pPAGE_SHIFT = 12
     let pPAGE_SIZE = Z.pow (Z.of_int 2) pPAGE_SHIFT
     let mMAX_ORDER = 11
-    let _hHYP_NO_ORDER = -1
+    let hHYP_NO_ORDER = -1
 
     let list_head_tag, _ = Memory.find_tag struct_decls "list_head"
     let hyp_pool_tag, _ = Memory.find_tag struct_decls "hyp_pool"

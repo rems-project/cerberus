@@ -122,7 +122,7 @@ module Make (O : Output) = struct
       List.map IT.pp (p.iargs) @ 
       List.map O.pp p.oargs 
     in
-    !^"for" ^^^ Sym.pp p.qpointer ^^ dot ^^^
+    !^"each" ^^^ Sym.pp p.qpointer ^^ dot ^^^
     c_app (pp_predicate_name p.name) args
 
 
