@@ -440,7 +440,6 @@ module ResourceInference = struct
                             (impl_ (took,
                                     and_ (List.map2 eq__ requested.iargs p'.iargs)))) with
                | `True ->
-                  print stderr !^"****************** HERE" ;
                   let needed = and_ [needed; not_ could_take] in
                   let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
                   let permission' = and_ [p'.permission; not_ could_take] in
@@ -457,7 +456,6 @@ module ResourceInference = struct
       in
       begin match holds with
       | `True ->
-         print stderr !^"****************** HERE1" ;
          let@ global = get_global () in
          let@ all_lcs = all_constraints () in
          let qpointer_s, qpointer = IT.fresh Loc in
@@ -472,7 +470,6 @@ module ResourceInference = struct
          in
          return r
       | `False model ->
-         print stderr !^"****************** HERE2" ;
          fail (failure model)
       end
 
@@ -1653,7 +1650,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
           let@ () = ensure_base_type arg2.loc ~expect:Loc arg2.bt in
           (* copying and adapting from memory/concrete/impl_mem.ml *)
-          print stderr (item "diff ctype" (Sctypes.pp act.ct));
           let divisor = match act.ct with
             | Sctype (_, Array (item_ty, _)) -> Memory.size_of_ctype item_ty
             | ct -> Memory.size_of_ctype ct
