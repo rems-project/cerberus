@@ -278,9 +278,8 @@ let early_alloc () =
   let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let end_s, end_t = IT.fresh_named Loc "end" in
   let length = 
-    add_ (sub_ (pointerToIntegerCast_ end_t,
-                pointerToIntegerCast_ start), 
-          int_ 1)
+    sub_ (pointerToIntegerCast_ end_t,
+          pointerToIntegerCast_ start)
   in
   let region = 
     let qpointer_s, qpointer = IT.fresh Loc in {
