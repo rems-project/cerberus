@@ -132,7 +132,7 @@ module PageAlloc = struct
       in
 
       (* wrong, have to fix *)
-      let _prev_next_well_formed prev_next = 
+      let prev_next_well_formed prev_next = 
         let prev_next = (page %. "node") %.prev_next in
         or_ [
             (* either empty list (pointer to itself) *)
@@ -150,22 +150,22 @@ module PageAlloc = struct
           (* refcount is also valid signed int: for hyp_page_count *)
           representable_ (integer_ct (Signed Int_), page %. "refcount");
           (* order is HYP_NO_ORDER or between 0 and MAX_ORDER *)
-          (* (or_ [(page_t %. "order") %== int_ hHYP_NO_ORDER; 
-           *       and_ [int_ 0 %<= (page_t %. "order"); (page_t %. "order") %<= int_ mMAX_ORDER]]);              
-           * (\* points back to the pool *\)
-           * ((page_t %. "pool") %== pool_pointer_t);              
-           * (\* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *\)
-           * eq_ (((page_t %. "node") %. "next") %== self_node_pointer_t,
-           *      ((page_t %. "node") %. "prev") %== self_node_pointer_t);
-           * (\* list non-empty in the above sense if and only if refcount 0 and order != NYP_NO_ORDER *\)
-           * (eq_ (
-           *      ((page_t %. "node") %. "next") %!= self_node_pointer_t,
-           *      and_ [(page_t %. "refcount") %== int_ 0;
-           *            (page_t %. "order") %!= int_ hHYP_NO_ORDER;
-           *        ]
-           * ));
-           * prev_next_well_formed "prev";
-           * prev_next_well_formed "next"; *)
+          (or_ [(page %. "order") %== int_ hHYP_NO_ORDER; 
+                and_ [int_ 0 %<= (page %. "order"); (page %. "order") %<= int_ mMAX_ORDER]]);              
+          (* points back to the pool *)
+          ((page %. "pool") %== pool_pointer);
+          (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
+          eq_ (((page %. "node") %. "next") %== self_node_pointer,
+               ((page %. "node") %. "prev") %== self_node_pointer);
+          (* list non-empty in the above sense if and only if refcount 0 and order != NYP_NO_ORDER *)
+          (eq_ (
+               ((page %. "node") %. "next") %!= self_node_pointer,
+               and_ [(page %. "refcount") %== int_ 0;
+                     (page %. "order") %!= int_ hHYP_NO_ORDER;
+                 ]
+          ));
+          prev_next_well_formed "prev";
+          prev_next_well_formed "next";
         ]
       in
 

@@ -32,7 +32,7 @@ let global_params = [
     ("sat.random_seed", "1");
     ("smt.random_seed", "1");
     ("fp.spacer.random_seed", "1");
-    ("smt.auto-config", "false");
+    (* ("smt.auto-config", "false"); *)
     ("smt.arith.solver", "2");
     ("model.completion", "true");
     ("model_evaluator.completion", "true");
@@ -425,7 +425,11 @@ let pop solver =
 
 let new_solver () = 
   IT_Table.clear it_table;
-  Z3.Solver.mk_simple_solver context (* "ALL" *)
+  let solver = Z3.Solver.mk_simple_solver context in
+  let params = Z3.Params.mk_params context in
+  let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 1000 in
+  let () = Z3.Solver.set_parameters solver params in
+  solver
 
 
 let add solver scs = 
@@ -446,23 +450,30 @@ let z3_status = function
   | Z3.Solver.SATISFIABLE -> `False
   | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
 
-let check_t global solver t = 
+let check_t global scs incremental_solver t = 
   let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  let outcome = z3_status (Z3.Solver.check solver [t]) in
-  (* print stdout !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver)); *)
-  outcome
+  let open Z3.Solver in
+  match check incremental_solver [t] with
+  | UNSATISFIABLE -> `True
+  | SATISFIABLE -> `False
+  | UNKNOWN -> 
+     let assertions = Z3.Solver.get_assertions incremental_solver in
+     let fresh_solver = mk_solver_s context "ALL" in
+     let () = add fresh_solver assertions in
+     z3_status (check fresh_solver [t])
+     
 
-let check_forall global solver ((s, bt), t) = 
+let check_forall global scs incremental_solver ((s, bt), t) = 
   let s' = Sym.fresh () in
   let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
-  check_t global solver t
+  check_t global scs incremental_solver t
 
-let check_pred global solver (pred : LC.Pred.t) =
+let check_pred global scs incremental_solver (pred : LC.Pred.t) =
   let def = Option.get (get_logical_predicate_def global pred.name) in
   let t = open_pred global def pred.args in
-  check_t global solver t
+  check_t global scs incremental_solver t
 
-let check_qpred global solver assumptions qpred =
+let check_qpred global scs incremental_solver assumptions qpred =
   (* fresh name to instantiate quantifiers with *)
   let s_inst = Sym.fresh () in
   let instantiate {q = (s, bt); condition; pred} = 
@@ -484,33 +495,37 @@ let check_qpred global solver assumptions qpred =
          None
       ) assumptions
   in
-  check_t global solver (impl_ (and_ assumptions, body))
+  check_t global scs incremental_solver (impl_ (and_ assumptions, body))
 
-let check_constraint global solver (assumptions : LC.t list) lc = 
+let check_constraint global scs incremental_solver (assumptions : LC.t list) lc = 
   match lc with
   | T (IT (Bool_op (EachI ((i1, i_s, i2), body)), _)) ->
      let i = sym_ (i_s, Integer) in
      let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
-     check_forall global solver 
+     check_forall global scs incremental_solver 
        ((i_s, Integer), (impl_ (condition, body)))
-  | T t -> check_t global solver t
-  | Forall ((s, bt), t) -> check_forall global solver ((s, bt), t)
-  | Pred pred -> check_pred global solver pred
-  | QPred qpred -> check_qpred global solver assumptions qpred
+  | T t -> 
+     check_t global scs incremental_solver t
+  | Forall ((s, bt), t) -> 
+     check_forall global scs incremental_solver  ((s, bt), t)
+  | Pred pred -> 
+     check_pred global scs incremental_solver pred
+  | QPred qpred -> 
+     check_qpred global scs incremental_solver assumptions qpred
 
-let provable global solver assumptions (lc : LC.t) =  
+let provable global scs incremental_solver assumptions (lc : LC.t) =  
   match lc with
   (* (\* as similarly suggested by Robbert *\)
    * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
    *    `True *)
   | _ ->
-     check_constraint global solver assumptions lc
+     check_constraint global scs incremental_solver assumptions lc
 
 
-let provable_or_model global solver assumptions (lc : LC.t) =  
-  match check_constraint global solver assumptions lc with
+let provable_or_model global scs incremental_solver assumptions (lc : LC.t) =  
+  match check_constraint global scs incremental_solver assumptions lc with
   | `True -> `True
-  | `False -> `False (model solver)
+  | `False -> `False (model incremental_solver)
 
 
 

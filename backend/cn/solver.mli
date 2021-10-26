@@ -17,8 +17,8 @@ val z3_sort : sort -> BaseTypes.t
 val z3_expr : Memory.struct_decls -> expr -> IndexTerms.t option
 
 
-val provable : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
-val provable_or_model : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False of model]
+val provable : Global.t -> expr list -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
+val provable_or_model : Global.t -> expr list -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False of model]
 
 
 val push : solver -> unit
