@@ -381,19 +381,22 @@ type t = type_error
 let state_error_file () =
    Filename.temp_file "" ".cn-state"
 
-let output_state state =
-   let state_error_file = state_error_file () in
+let output_state ?to_:file state =
+  let state_error_file =
+    match file with
+    | Some file -> file
+    | None -> state_error_file () in
    let channel = open_out state_error_file in
    let () = Printf.fprintf channel "%s" (Report.print_report state) in
    let () = close_out channel in
    state_error_file
 
 (* stealing some logic from pp_errors *)
-let report {loc; msg} =
+let report ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
   let consider = match report.state with
     | Some state ->
-      let state_error_file = output_state state in
+      let state_error_file = output_state ?to_ state in
        Some (!^"Consider state in" ^^^ !^state_error_file)
     | None ->
        None
@@ -404,10 +407,10 @@ let report {loc; msg} =
 
 
 (* stealing some logic from pp_errors *)
-let report_json {loc; msg} =
+let report_json ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
   let state_error_file = match report.state with
-    | Some state -> `String (output_state state)
+    | Some state -> `String (output_state ?to_ state)
     | None -> `Null in
   let descr = match report.descr with
     | None -> `Null
