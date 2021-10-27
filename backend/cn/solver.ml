@@ -13,34 +13,34 @@ open LogicalPredicates
 
 type context = Z3.context
 type solver = Z3.Solver.solver
+
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
 type model = Z3.Model.model
 
 
 
-let context_params = [
-    ("model", "true");
-    ("well_sorted_check","false");
-    ("type_check", "false");
-    (* ("auto_config", "false"); *)
-    (* ("trace", "true");
-     * ("trace_file_name", "trace.smt") *)
-  ]
 
-let global_params = [
+
+let () = 
+  List.iter (fun (c,v) -> Z3.set_global_param c v) [
+
+    ("smt.auto-config", "false");
+    ("smt.logic", "all");
+    ("smt.arith.solver", "2");
+
     ("sat.random_seed", "1");
     ("smt.random_seed", "1");
     ("fp.spacer.random_seed", "1");
-    (* ("smt.auto-config", "false"); *)
-    ("smt.arith.solver", "2");
-    ("model.completion", "true");
-    ("model_evaluator.completion", "true");
     ("nlsat.randomize", "false");
     ("fp.spacer.random_seed", "1");
     ("sls.random_offset", "false");
     ("sls.random_seed", "0");
+
+    ("model.completion", "true");
+    ("model_evaluator.completion", "true");
     ("smt.macro_finder", "true");
+    (* ("parallel.enable", "true"); *)
     (* ("smt.mbqi", "true"); *)
     (* ("model.compact", "true"); *)
     (* ("model.inline_def", "true");
@@ -48,14 +48,20 @@ let global_params = [
     (* ("model_evaluator.array_equalities", "false"); *)
     (* ("smt.ematching", "true"); *)
     (* ("smt.pull-nested-quantifiers", "true"); *)
-    (* ("combined_solver.solver2_timeout", "1000");
+    (* ("combined_solver.solver2_timeout", "500");
      * ("combined_solver.solver2_unknown", "2"); *)
   ]
 
-let () = List.iter (fun (c,v) -> Z3.set_global_param c v) global_params
 
-
-let context = Z3.mk_context context_params 
+let context = 
+  Z3.mk_context [
+    ("auto_config", "false");
+    ("model", "true");
+    ("well_sorted_check","false");
+    ("type_check", "false");
+    (* ("trace", "true");
+     * ("trace_file_name", "trace.smt") *)
+  ]
 
 
 
@@ -416,57 +422,59 @@ let constr global c =
 
 
 
-let push solver =
-  Z3.Solver.push solver
+let push solver = Z3.Solver.push solver
 
 let pop solver =
   IT_Table.clear it_table;
   Z3.Solver.pop solver 1
 
 let new_solver () = 
-  IT_Table.clear it_table;
-  let solver = Z3.Solver.mk_solver_s context "ALL" in
-  (* let params = Z3.Params.mk_params context in
-   * let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 1000 in
-   * let () = Z3.Solver.set_parameters solver params in *)
-  solver
+  (* https://stackoverflow.com/a/14305028 describes an example where
+     tactics are useful *)
+  (* also see: https://z3prover.github.io/api/html/group__capi.html
+     regarding "and-then" *)
+  let mk_tactic = Z3.Tactic.mk_tactic context in
+  let mk_then t1 t2 ts = Z3.Tactic.and_then context t1 t2 ts in
+  let tactic = 
+    mk_then 
+      (mk_tactic "simplify")
+      (mk_tactic "solve-eqs")
+      [(mk_tactic "smt")]
+  in
+  Z3.Solver.mk_solver_t context tactic
 
 
 let add solver scs = 
-  Z3.Solver.add solver scs
+  List.iter (fun sc -> Z3.Solver.add solver [sc]) scs
 
 let eval model expr = 
   Z3.Model.eval model expr true
 
 
 
-let model solver = 
-  Option.value_err "Z3 did not produce a counter model"
-    (Z3.Solver.get_model solver)
-
-
-let z3_status = function
+let check_t global solver to_check = 
+  let t = 
+    Z3.Expr.simplify
+      (Z3.Boolean.mk_not context (term global.struct_decls to_check))
+      None
+  in
+  match Z3.Solver.check solver [t] with
   | Z3.Solver.UNSATISFIABLE -> `True
   | Z3.Solver.SATISFIABLE -> `False
-  | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
-
-let check_t global incremental_solver t = 
-  let t = Z3.Boolean.mk_not context (term global.struct_decls t) in
-  let open Z3.Solver in
-  z3_status (check incremental_solver [t])
+  | Z3.Solver.UNKNOWN -> `False
      
 
-let check_forall global incremental_solver ((s, bt), t) = 
+let check_forall global solver ((s, bt), t) = 
   let s' = Sym.fresh () in
   let t = IT.subst (make_subst [(s, sym_ (s', bt))]) t in
-  check_t global incremental_solver t
+  check_t global solver t
 
-let check_pred global incremental_solver (pred : LC.Pred.t) =
+let check_pred global solver (pred : LC.Pred.t) =
   let def = Option.get (get_logical_predicate_def global pred.name) in
   let t = open_pred global def pred.args in
-  check_t global incremental_solver t
+  check_t global solver t
 
-let check_qpred global incremental_solver assumptions qpred =
+let check_qpred global solver assumptions qpred =
   (* fresh name to instantiate quantifiers with *)
   let s_inst = Sym.fresh () in
   let instantiate {q = (s, bt); condition; pred} = 
@@ -488,37 +496,42 @@ let check_qpred global incremental_solver assumptions qpred =
          None
       ) assumptions
   in
-  check_t global incremental_solver (impl_ (and_ assumptions, body))
+  check_t global solver (impl_ (and_ assumptions, body))
 
-let check_constraint global incremental_solver (assumptions : LC.t list) lc = 
+let check_constraint global solver (assumptions : LC.t list) lc = 
   match lc with
   | T (IT (Bool_op (EachI ((i1, i_s, i2), body)), _)) ->
      let i = sym_ (i_s, Integer) in
      let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
-     check_forall global incremental_solver 
+     check_forall global solver 
        ((i_s, Integer), (impl_ (condition, body)))
   | T t -> 
-     check_t global incremental_solver t
+     check_t global solver t
   | Forall ((s, bt), t) -> 
-     check_forall global incremental_solver  ((s, bt), t)
+     check_forall global solver  ((s, bt), t)
   | Pred pred -> 
-     check_pred global incremental_solver pred
+     check_pred global solver pred
   | QPred qpred -> 
-     check_qpred global incremental_solver assumptions qpred
+     check_qpred global solver assumptions qpred
 
-let provable global incremental_solver assumptions (lc : LC.t) =  
-  match lc with
-  (* (\* as similarly suggested by Robbert *\)
+let provable global solver assumptions (lc : LC.t) =  
+  (* match lc with
+   * (\* as similarly suggested by Robbert *\)
    * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-   *    `True *)
-  | _ ->
-     check_constraint global incremental_solver assumptions lc
+   *    `True
+   * | _ -> *)
+  check_constraint global solver assumptions lc
 
 
-let provable_or_model global incremental_solver assumptions (lc : LC.t) =  
-  match check_constraint global incremental_solver assumptions lc with
+
+let provable_or_model global solver assumptions (lc : LC.t) =  
+  let model z3_solver = 
+    Option.value_err "Z3 did not produce a counter model"
+      (Z3.Solver.get_model z3_solver)
+  in
+  match check_constraint global solver assumptions lc with
   | `True -> `True
-  | `False -> `False (model incremental_solver)
+  | `False -> `False (model solver)
 
 
 

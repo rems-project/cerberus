@@ -43,7 +43,7 @@ type element =
   | Table of table
 
 type body = {elements : element list}
-type head = {css_file : string}
+type head = {style : string}
 type html = {head : head; body : body}
 
 let classes = function
@@ -86,9 +86,11 @@ let body {elements} =
     String.concat "" (List.map element elements) ^
   "</body>"
 
-let head {css_file} = 
+let head {style} = 
   "<head>" ^
-    "<link href=\""^css_file^"\" rel=\"stylesheet\">" ^
+    "<style>" ^
+      style ^
+    "</style>" ^
   "</head>"
 
 
@@ -165,7 +167,7 @@ let to_html report =
     )}
   in
 
-  { head = {css_file = "style.css"};
+  { head = {style = Style.style};
     body = {elements = [Table table]} }
   
 

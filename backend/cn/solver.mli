@@ -24,5 +24,5 @@ val provable_or_model : Global.t -> solver -> LogicalConstraints.t list -> Logic
 val push : solver -> unit
 val pop : solver -> unit
 val new_solver : unit -> solver
-val add : solver ->  expr list -> unit
+val add : solver -> expr list -> unit
 val eval : model -> expr -> expr option

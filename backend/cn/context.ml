@@ -30,7 +30,6 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
-    solver_constraints : Solver.expr list;
     solver : Solver.solver;
     global: Global.t;
   }
@@ -41,7 +40,6 @@ let empty global = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
-    solver_constraints = [];
     solver = Solver.new_solver ();
     global = global
   }
@@ -89,11 +87,10 @@ let add_ls lvars ctxt =
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
 let add_c lc (ctxt : t) = 
-  let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
-  let scs = List.filter_map (Solver.constr ctxt.global) lcs in
+  let lc = Simplify.simp_lc ctxt.global.struct_decls ctxt.constraints lc in
+  let scs = List.filter_map (Solver.constr ctxt.global) [lc] in
   let () = Solver.add ctxt.solver scs in
-  { ctxt with constraints = lcs @ ctxt.constraints;
-              solver_constraints = scs @ ctxt.solver_constraints }
+  { ctxt with constraints = lc :: ctxt.constraints }
 
 let add_cs lcs (ctxt : t) = 
   List.fold_left (fun ctxt lc -> add_c lc ctxt) ctxt lcs
