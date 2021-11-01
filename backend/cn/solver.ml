@@ -4,7 +4,6 @@ module SymMap=Map.Make(Sym)
 module IT = IndexTerms
 module LC = LogicalConstraints
 open LogicalConstraints
-open List1
 open List
 open Pp
 open Global
@@ -21,14 +20,35 @@ type model = Z3.Model.model
 
 
 
+let general_params = [
+    ("auto_config", "false");
+    ("model", "true");
+    ("well_sorted_check","false");
+    ("type_check", "false");
+    (* ("trace", "true");
+     * ("trace_file_name", "trace.smt") *)
+    (* ("parallel.enable", "true"); *)
+  ]
 
-let () = 
-  List.iter (fun (c,v) -> Z3.set_global_param c v) [
-
+let solver_params = [
     ("smt.auto-config", "false");
     ("smt.logic", "all");
     ("smt.arith.solver", "2");
+    ("smt.macro_finder", "true");
+    (* ("smt.pull-nested-quantifiers", "true"); *)
+    (* ("combined_solver.solver2_timeout", "500");
+     * ("combined_solver.solver2_unknown", "2"); *)
+    (* ("smt.mbqi", "true"); *)
+    (* ("smt.ematching", "true"); *)
+  ]
 
+let model_params = [
+    ("model.completion", "true");
+    ("model_evaluator.completion", "true");
+  ]
+
+
+let randomness_params = [
     ("sat.random_seed", "1");
     ("smt.random_seed", "1");
     ("fp.spacer.random_seed", "1");
@@ -36,32 +56,18 @@ let () =
     ("fp.spacer.random_seed", "1");
     ("sls.random_offset", "false");
     ("sls.random_seed", "0");
-
-    ("model.completion", "true");
-    ("model_evaluator.completion", "true");
-    ("smt.macro_finder", "true");
-    (* ("parallel.enable", "true"); *)
-    (* ("smt.mbqi", "true"); *)
-    (* ("model.compact", "true"); *)
-    (* ("model.inline_def", "true");
-     * ("model_evaluator.array_as_stores", "true"); *)
-    (* ("model_evaluator.array_equalities", "false"); *)
-    (* ("smt.ematching", "true"); *)
-    (* ("smt.pull-nested-quantifiers", "true"); *)
-    (* ("combined_solver.solver2_timeout", "500");
-     * ("combined_solver.solver2_unknown", "2"); *)
   ]
 
+let params = 
+  general_params
+  @ solver_params
+  @ model_params
+  @ randomness_params
 
-let context = 
-  Z3.mk_context [
-    ("auto_config", "false");
-    ("model", "true");
-    ("well_sorted_check","false");
-    ("type_check", "false");
-    (* ("trace", "true");
-     * ("trace_file_name", "trace.smt") *)
-  ]
+
+let () = List.iter (fun (c,v) -> Z3.set_global_param c v) params
+
+let context = Z3.mk_context []
 
 
 
@@ -327,8 +333,8 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        let open Z3.Set in
        begin match set_op with
        | SetMember (t1, t2) -> mk_membership context (term t1) (term t2)
-       | SetUnion ts -> mk_union context (map term (to_list ts))
-       | SetIntersection ts -> mk_intersection context (map term (to_list ts))
+       | SetUnion ts -> mk_union context (map term (List1.to_list ts))
+       | SetIntersection ts -> mk_intersection context (map term (List1.to_list ts))
        | SetDifference (t1, t2) -> mk_difference context (term t1) (term t2)
        | Subset (t1, t2) -> mk_subset context (term t1) (term t2)
        end
