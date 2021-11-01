@@ -4,6 +4,9 @@ type token =
   | Z of Z.t
   | NAME of string
 
+  | VAR
+  | EQUAL
+
   | PLUS
   | MINUS
   | STAR

@@ -11,7 +11,11 @@ rule main = parse
   
   (* integer constants *)
   | ['0'-'9']+ as z  { T.Z (Z.of_string z) }
+
+  | "var" { T.VAR }
+  | "="   { T.EQUAL }
   
+
   (* binary operators *)
   | '+'   { T.PLUS }
   | '-'   { T.MINUS }

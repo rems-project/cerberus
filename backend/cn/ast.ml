@@ -305,6 +305,7 @@ type predicate = {
 type condition = 
   | Term of term
   | Predicate of predicate
+  | Define of string * term
 
 
 let remove_labels = function
@@ -317,6 +318,8 @@ let remove_labels = function
      in
      let arguments = List.map remove_labels arguments in
      Predicate { oq; predicate; arguments; oname }
+  | Define (name, it) ->
+     Define (name, remove_labels it)
     
 
 type varg = { vsym : Sym.t; typ : Sctypes.t }

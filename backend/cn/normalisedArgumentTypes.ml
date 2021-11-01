@@ -118,12 +118,14 @@ let rec count_computational = function
 
 
 
-let normalise ft : ('rt t) = 
+let normalise rt_subst ft : ('rt t) = 
   let rec aux l r c = function
     | AT.Computational ((name, bt), oinfo, ft) -> 
        Computational ((name,bt), oinfo, aux l r c ft)
     | AT.Logical ((name, ls), oinfo, ft) -> 
        aux (l@[(name, ls, oinfo)]) r c ft
+    | AT.Define ((name, it), oinfo, ft) ->
+       aux l r c (AT.subst rt_subst (IT.make_subst [(name, it)]) ft)
     | AT.Resource (re, oinfo, ft) -> 
        aux l (r@[(re, oinfo)]) c ft
     | AT.Constraint (lc, oinfo, ft) -> 

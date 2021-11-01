@@ -937,7 +937,7 @@ end = struct
 
     let open NormalisedArgumentTypes in
 
-    let ftyp = normalise ftyp in
+    let ftyp = normalise rt_subst ftyp in
 
     let@ () = print_with_ctxt (fun ctxt ->
         debug 6 (lazy (checking_situation situation));
@@ -2194,6 +2194,10 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
        fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
     | args, (AT.Logical ((sname, sls), _, ftyp)) ->
        let@ () = add_l sname sls in
+       check resources args ftyp
+    | args, (AT.Define ((sname, it), _, ftyp)) ->
+       let@ () = add_l sname (IT.bt it) in
+       let@ () = add_c (t_ (def_ sname it)) in
        check resources args ftyp
     | args, (AT.Resource (re, _, ftyp)) ->
        check (re :: resources) args ftyp

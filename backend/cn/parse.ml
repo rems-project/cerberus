@@ -113,6 +113,10 @@ let parse_function
            in
            return (globals, pre, post)
         | "requires" -> 
+           let@ () = match post with
+             | [] -> return ()
+             | _ -> fail {loc = fst attr.keyword; msg = Generic !^"please specify the pre-conditions before the post-conditions"}
+           in
            let@ new_pre = ListM.mapM (parse_condition "start") attr.arguments in
            return (globals, pre @ new_pre, post)
         | "ensures" -> 

@@ -175,6 +175,12 @@ let rec bind_logical where (ctxt : t) (lrt : LRT.t) : t =
      let s' = Sym.fresh () in
      let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) rt in
      bind_logical where (add_l s' ls ctxt) rt'
+  | Define ((s, it), oinfo, rt) ->
+     let s' = Sym.fresh () in
+     let bt = IT.bt it in
+     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+     let constr = LC.t_ (IT.def_ s' it) in
+     bind_logical where (add_c constr (add_l s' bt ctxt)) rt'
   | Resource (re, _oinfo, rt) -> 
      bind_logical where (add_r where re ctxt) rt
   | Constraint (lc, _oinfo, rt) -> 

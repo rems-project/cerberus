@@ -8,6 +8,9 @@ open Assertion_parser_util
 %token <string> NAME
 %token <string> MEMBER
 
+%token VAR
+%token EQUAL
+
 %token DOTDOT
 
 %token PLUS
@@ -187,4 +190,6 @@ cond:
       { Ast.Term c } 
   | c=predicate
       { Ast.Predicate c }
+  | VAR id=NAME EQUAL t=term
+      { Ast.Define (id, t) }
 
