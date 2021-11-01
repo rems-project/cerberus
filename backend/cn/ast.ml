@@ -283,6 +283,65 @@ module Terms = struct
          t
     in
     aux t
+
+  let contains_env_expression t = 
+    let rec aux = function
+      | Addr bn -> 
+         false
+      | Var bn -> 
+         false
+      | Pointee p -> 
+         false
+      | PredOutput (pr,a) -> 
+         false
+      | Member (p, m) -> 
+         aux p
+      | Integer i -> 
+         false
+      | Addition (t1, t2) -> 
+         aux t1 || aux t2
+      | Subtraction (t1, t2) -> 
+         aux t1 || aux t2
+      | Multiplication (t1, t2) -> 
+         aux t1 || aux t2
+      | Division (t1, t2) -> 
+         aux t1 || aux t2
+      | Exponentiation (t1, t2) -> 
+         aux t1 || aux t2
+      | Remainder (t1, t2) -> 
+         aux t1 || aux t2
+      | Equality (t1, t2) -> 
+         aux t1 || aux t2
+      | Inequality (t1, t2) -> 
+         aux t1 || aux t2
+      | ITE (t1, t2, t3) ->
+         aux t1 || aux t2 || aux t3
+      | Or (t1, t2) ->
+         aux t1 || aux t2
+      | And (t1, t2) ->
+         aux t1 || aux t2
+      | LessThan (t1, t2) -> 
+         aux t1 || aux t2
+      | LessOrEqual (t1, t2) -> 
+         aux t1 || aux t2
+      | GreaterThan (t1, t2) -> 
+         aux t1 || aux t2
+      | GreaterOrEqual (t1, t2) -> 
+         aux t1 || aux t2
+      | IntegerToPointerCast t ->
+         aux t
+      | PointerToIntegerCast t ->
+         aux t
+      | Null ->
+         false
+      | OffsetOf {tag; member} ->
+         false
+      | App (t1, t2) ->
+         aux t1 || aux t2
+      | Env (t, _) ->
+         true
+    in
+    aux t
   
 
 
@@ -306,6 +365,7 @@ type condition =
   | Term of term
   | Predicate of predicate
   | Define of string * term
+  | Unchanged of term
 
 
 let remove_labels = function
@@ -320,6 +380,8 @@ let remove_labels = function
      Predicate { oq; predicate; arguments; oname }
   | Define (name, it) ->
      Define (name, remove_labels it)
+  | Unchanged t ->
+     Unchanged (remove_labels t)
     
 
 type varg = { vsym : Sym.t; typ : Sctypes.t }

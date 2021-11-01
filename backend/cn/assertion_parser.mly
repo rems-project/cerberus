@@ -10,6 +10,7 @@ open Assertion_parser_util
 
 %token VAR
 %token EQUAL
+%token UNCHANGED
 
 %token DOTDOT
 
@@ -114,7 +115,7 @@ atomic_term:
       { Ast.Null }
   | OFFSETOF LPAREN tag = NAME COMMA member= NAME RPAREN
       { Ast.OffsetOf {tag; member} }
-  | LPAREN a=term RPAREN AT l=NAME
+  | LBRACE a=term RBRACE AT l=NAME
       { Ast.Env (a, l) }
 
 arith_term:
@@ -192,4 +193,6 @@ cond:
       { Ast.Predicate c }
   | VAR id=NAME EQUAL t=term
       { Ast.Define (id, t) }
+  | LBRACE t=term RBRACE UNCHANGED
+      { Ast.Unchanged t }
 

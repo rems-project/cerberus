@@ -14,6 +14,7 @@ rule main = parse
 
   | "var" { T.VAR }
   | "="   { T.EQUAL }
+  | "unchanged" { T.UNCHANGED }
   
 
   (* binary operators *)

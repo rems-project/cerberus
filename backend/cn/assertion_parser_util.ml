@@ -6,6 +6,7 @@ type token =
 
   | VAR
   | EQUAL
+  | UNCHANGED
 
   | PLUS
   | MINUS

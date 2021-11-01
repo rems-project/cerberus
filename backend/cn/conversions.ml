@@ -763,6 +763,8 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
                (fun mapping -> mapping' @ mapping)
            in
            return (i @ [(`Define (s, it), (loc, None))], mappings)
+        | Ast.Unchanged _ ->
+           fail {loc; msg = Generic !^"Cannot use 'unchanged' in function pre-condition."}
       )
       (i, mappings) fspec.pre_condition
   in
@@ -850,6 +852,16 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
                (fun mapping -> mapping' @ mapping)
            in
            return (o @ [(`Define (s, it), (loc, None))], mappings)
+        | Ast.Unchanged t ->
+           let@ () = 
+             if Ast.contains_env_expression t 
+             then fail {loc; msg = Generic !^"Cannot use 'unchanged' together with {_}@label expressions."}
+             else return ()
+           in
+           let@ (t_start, _) = resolve_index_term loc layouts "start" mappings None t in
+           let@ (t_end, _) = resolve_index_term loc layouts "end" mappings None t in
+           let c = LC.t_ (eq_ (t_end, t_start)) in
+           return (o @ [(`Constraint c, (loc, None))], mappings)
       )
       (o, mappings) fspec.post_condition
   in
@@ -987,6 +999,16 @@ let make_label_spec
                (fun mapping -> mapping' @ mapping)
            in
            return (i @ [(`Define (s, it), (loc, None))], mappings)
+        | Ast.Unchanged t ->
+           let@ () = 
+             if Ast.contains_env_expression t 
+             then fail {loc; msg = Generic !^"Cannot use 'unchanged' together with {_}@label expressions."}
+             else return ()
+           in
+           let@ (t_start, _) = resolve_index_term loc layouts "start" mappings None t in
+           let@ (t_label, _) = resolve_index_term loc layouts lname mappings None t in
+           let c = LC.t_ (eq_ (t_label, t_start)) in
+           return (i @ [(`Constraint c, (loc, None))], mappings)
       )
       (i, mappings) lspec.invariant
   in
