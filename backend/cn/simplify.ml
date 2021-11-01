@@ -260,10 +260,6 @@ let rec simp struct_decls (lcs : LC.t list) =
           end
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
           bool_ (Z.equal z1 z2)
-       | IT (Pointer_op (AddPointer (b1,o1)), _), 
-         IT (Pointer_op (AddPointer (b2,o2)), _) 
-            when equal b1 b2 ->
-          aux (eq_ (o1, o2))
        | IT (Tuple_op (Tuple items1), _), 
          IT (Tuple_op (Tuple items2), _)  ->
           and_ (List.map2 eq__ items1 items2)
@@ -311,44 +307,12 @@ let rec simp struct_decls (lcs : LC.t list) =
   (* revisit when memory model changes *)
   and pointer_op it bt = 
     match it with
-    | AddPointer (a, b) ->
-       let a = aux a in
-       let b = aux b in
-       begin match a, b with
-       | _, IT (Lit (Z offset), _) when Z.equal Z.zero offset ->
-          a
-       | IT (Pointer_op (AddPointer (aa, IT (Lit (Z i), _))), _), 
-         IT (Lit (Pointer j), _) ->
-          IT (Pointer_op (AddPointer (aa, IT (Lit (Pointer (Z.add i j)), Integer))), bt)
-       | _ ->
-          IT (Pointer_op (AddPointer (a, b)), bt)
-       end
-    | SubPointer (a, b) ->
-       IT (Pointer_op (SubPointer (aux a, aux b)), bt)
-    | MulPointer (a, b) ->
-       let a = aux a in
-       let b = aux b in
-       begin match a, b with
-       | _, IT (Lit (Z i2), _) when Z.equal i2 Z.zero ->
-          pointer_ (Z.of_int 0)
-       | _, IT (Lit (Z i2), _) when Z.equal i2 (Z.of_int 1) ->
-          a
-       | _ ->
-          IT (Pointer_op (MulPointer (a, b)), bt)
-       end
     | LTPointer (a, b) ->
        IT (Pointer_op (LTPointer (aux a, aux b)), bt)
     | LEPointer (a, b) ->
        let a = aux a in
        let b = aux b in
        begin match a, b with
-       | IT (Pointer_op (AddPointer (base1, IT (Lit (Z offset1), _))), _),  
-         IT (Pointer_op (AddPointer (base2, IT (Lit (Z offset2), _))), _) when
-              equal base1 base2 ->
-          if Z.leq offset1 offset2 then 
-            IT (Lit (Bool true), bt)
-          else
-            IT (Lit (Bool false), bt)
        | _ -> 
           IT (Pointer_op (LEPointer (a, b)), bt)
        end

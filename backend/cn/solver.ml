@@ -305,15 +305,6 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
     | Pointer_op pointer_op -> 
        let open Z3.Arithmetic in
        begin match pointer_op with
-       | AddPointer (t1, t2) -> 
-          integer_to_loc
-            (mk_add context [loc_to_integer (term t1); term t2])
-       | SubPointer (t1, t2) -> 
-          integer_to_loc
-            (mk_sub context [loc_to_integer (term t1); term t2])
-       | MulPointer (t1, t2) -> 
-          integer_to_loc
-            (mk_mul context [loc_to_integer (term t1); term t2])
        | LTPointer (t1, t2) -> 
           mk_lt context (loc_to_integer (term t1)) 
             (loc_to_integer (term t2))

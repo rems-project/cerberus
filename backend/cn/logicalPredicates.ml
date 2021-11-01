@@ -346,7 +346,10 @@ module PageAlloc = struct
       let max_order = pool %. "max_order" in
 
       let beyond_range_end_cell_pointer = 
-        addPointer_ (vmemmap_pointer, (range_end %/ (z_ pPAGE_SIZE)) %* hyp_page_size) in
+        integerToPointerCast_
+          (add_ (pointerToIntegerCast_ vmemmap_pointer, 
+                 (range_end %/ (z_ pPAGE_SIZE)) %* hyp_page_size))
+           in
       let metadata_well_formedness =
         and_ [
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);

@@ -253,18 +253,6 @@ module WIT = struct
          return (IT (Struct_op struct_op, bt))
       | Pointer_op pointer_op ->
          let@ (bt, pointer_op) = match pointer_op with 
-           | AddPointer (t, t') ->
-              let@ t = check loc ~context Loc t in
-              let@ t' = check loc ~context Integer t' in
-              return (Loc, AddPointer (t, t'))
-           | SubPointer (t, t') ->
-              let@ t = check loc ~context Loc t in
-              let@ t' = check loc ~context Integer t' in
-              return (Loc, SubPointer (t, t'))
-           | MulPointer (t, t') ->
-              let@ t = check loc ~context Loc t in
-              let@ t' = check loc ~context Integer t' in
-              return (Loc, MulPointer (t, t'))
            | LTPointer (t, t') ->
               let@ t = check loc ~context Loc t in
               let@ t' = check loc ~context Loc t' in

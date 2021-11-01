@@ -381,7 +381,8 @@ module RE = struct
     mul_ (index, int_ (Memory.size_of_ctype item_ct))
 
   let array_index_to_pointer ~base ~item_ct ~index =
-    addPointer_ (base, array_offset_of_index ~item_ct ~index)
+    integerToPointerCast_
+      (add_ (pointerToIntegerCast_ base, array_offset_of_index ~item_ct ~index))
   
   let array_offset_of_pointer ~base ~pointer = 
     sub_ (pointerToIntegerCast_ pointer, 

@@ -56,9 +56,6 @@ and 'bt struct_op =
   | StructMember of 'bt term * BT.member
 
 and 'bt pointer_op = 
-  | AddPointer of 'bt term * 'bt term
-  | SubPointer of 'bt term * 'bt term
-  | MulPointer of 'bt term * 'bt term
   | LTPointer of 'bt term * 'bt term
   | LEPointer of 'bt term * 'bt term
   | IntegerToPointerCast of 'bt term
@@ -228,12 +225,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      end
   | Pointer_op pointer_op, Pointer_op pointer_op' -> 
      begin match pointer_op, pointer_op' with
-     | AddPointer (t1, t2), AddPointer (t1', t2') -> 
-        equal t1 t1' && equal t2 t2'
-     | SubPointer (t1, t2), SubPointer (t1', t2') -> 
-        equal t1 t1' && equal t2 t2'
-     | MulPointer (t1, t2), MulPointer (t1', t2') -> 
-        equal t1 t1' && equal t2 t2'
      | LTPointer (t1, t2), LTPointer (t1', t2') -> 
         equal t1 t1' && equal t2 t2'
      | LEPointer (t1, t2), LEPointer (t1', t2') -> 
@@ -246,9 +237,6 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         Sym.equal s s' && Id.equal m m'
      | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
         Sctypes.equal ct ct' && equal t t'
-     | AddPointer _, _ -> false
-     | SubPointer _, _ -> false
-     | MulPointer _, _ -> false
      | LTPointer _, _ -> false
      | LEPointer _, _ -> false
      | IntegerToPointerCast _, _ -> false
@@ -418,12 +406,6 @@ let pp =
        end
     | Pointer_op pointer_op -> 
        begin match pointer_op with
-       | AddPointer (t1, t2) ->
-          mparens (flow (break 1) [aux true t1; plus; aux true t2])
-       | SubPointer (t1, t2) ->
-          mparens (flow (break 1) [aux true t1; minus; aux true t2])
-       | MulPointer (t1, t2) ->
-          mparens (flow (break 1) [aux true t1; star; aux true t2])
        | LTPointer (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; langle; aux true o2])
        | LEPointer (o1,o2) -> 
@@ -545,9 +527,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
-     | AddPointer (it, it') -> free_vars_list [it; it']
-     | SubPointer (it, it') -> free_vars_list [it; it']
-     | MulPointer (it, it') -> free_vars_list [it; it']
      | LTPointer (it, it')  -> free_vars_list [it; it']
      | LEPointer (it, it') -> free_vars_list [it; it']
      | IntegerToPointerCast t -> free_vars t
@@ -670,12 +649,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Struct_op struct_op, bt)
   | Pointer_op pointer_op -> 
      let pointer_op = match pointer_op with
-       | AddPointer (it, it') -> 
-          AddPointer (subst su it, subst su it')
-       | SubPointer (it, it') -> 
-          SubPointer (subst su it, subst su it')
-       | MulPointer (it, it') -> 
-          MulPointer (subst su it, subst su it')
        | LTPointer (it, it') -> 
           LTPointer (subst su it, subst su it')
        | LEPointer (it, it') -> 
@@ -784,9 +757,6 @@ let rec size (IT (it_, bt)) =
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
-     | AddPointer (it, it')
-     | SubPointer (it, it')
-     | MulPointer (it, it')
      | LTPointer (it, it')
      | LEPointer (it, it') ->
         1 + size it + size it'
@@ -965,16 +935,10 @@ let (%.) struct_decls t member =
 
 (* pointer_op *)
 let null_ = IT (Lit Null, BT.Loc)
-let addPointer_ (it, it') = IT (Pointer_op (AddPointer (it, it')), BT.Loc)
-let subPointer_ (it, it') = IT (Pointer_op (SubPointer (it, it')), BT.Loc)
-let mulPointer_ (it, it') = IT (Pointer_op (MulPointer (it, it')), BT.Loc)
 let ltPointer_ (it, it') = IT (Pointer_op (LTPointer (it, it')), BT.Bool)
 let lePointer_ (it, it') = IT (Pointer_op (LEPointer (it, it')), BT.Bool)
 let gtPointer_ (it, it') = ltPointer_ (it', it)
 let gePointer_ (it, it') = lePointer_ (it', it)
-let disjoint_ ((p1, s1), (p2, s2)) = 
-  or_ [lePointer_ (addPointer_ (p1, s1), p2); 
-       lePointer_ (addPointer_ (p2, s2), p1)] 
 let integerToPointerCast_ it = 
   IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
 let pointerToIntegerCast_ it = 
@@ -984,18 +948,20 @@ let memberOffset_ (tag, member) =
 let arrayOffset_ (ct, t) = 
   IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
 let memberShift_ (t, tag, member) = 
-  addPointer_ (t, memberOffset_ (tag, member))
+  integerToPointerCast_ 
+    (add_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
 let arrayShift_ (t1, ct, t2) = 
-  addPointer_ (t1, arrayOffset_ (ct, t2))
+  integerToPointerCast_
+    (add_ (pointerToIntegerCast_ t1, arrayOffset_ (ct, t2)))
 
-let (%+.) it it' = addPointer_ (it, it')
 
 
 
 
 
 let container_of_ (t, tag, member) =
-  subPointer_ (t, memberOffset_ (tag, member))
+  integerToPointerCast_
+    (sub_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
 
 (* list_op *)
 let nil_ ~item_bt = IT (List_op Nil, BT.List item_bt)
@@ -1068,14 +1034,14 @@ let def_ sym e = eq_ (sym_ (sym, bt e), e)
 let in_range within (min, max) = 
   and_ [le_ (min, within); le_ (within, max)]
 
-let in_footprint within (pointer, size) = 
-  and_ [lePointer_ (pointer, within); 
-        ltPointer_ (within, addPointer_ (pointer, size))]
+(* let in_footprint within (pointer, size) = 
+ *   and_ [lePointer_ (pointer, within); 
+ *         ltPointer_ (within, addPointer_ (pointer, size))] *)
 
 
 
-let disjoint_from fp fps =
-  List.map (fun fp' -> disjoint_ (fp, fp')) fps
+(* let disjoint_from fp fps =
+ *   List.map (fun fp' -> disjoint_ (fp, fp')) fps *)
 
 
 

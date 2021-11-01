@@ -553,7 +553,11 @@ let page_alloc_predicates struct_decls =
     let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     let hyp_physvirt_offset_s, hyp_physvirt_offset = 
       IT.fresh_named BT.Integer "hyp_physvirt_offset" in
-    let pbase = addPointer_ (vbase, hyp_physvirt_offset) in
+    let pbase = 
+      integerToPointerCast_ 
+        (add_ (pointerToIntegerCast_ vbase, 
+               hyp_physvirt_offset)) 
+    in
     let clause1 = 
       let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
       let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in

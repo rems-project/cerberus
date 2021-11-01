@@ -327,28 +327,33 @@ let resolve_index_term loc
     | Integer i -> 
        return (IT (Lit (IT.Z i), BT.Integer), None)
     | Addition (it, it') -> 
-       let@ (it, _) = resolve it mapping in
+       let@ (it, oct) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       let t = match IT.bt it with
-         | Loc -> IT (Pointer_op (AddPointer (it, it')), Loc)
-         | _ -> IT (Arith_op (Add (it, it')), IT.bt it)
+       let@ t = match IT.bt it with
+         | Loc -> 
+            let err = "pointer addition not allowed in specifications: "^
+                        "please instead use pointer/integer casts"
+            in
+            fail {loc; msg = Generic (!^err)}
+         | _ -> return (IT (Arith_op (Add (it, it')), IT.bt it))
        in
        return (t, None)
     | Subtraction (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       let t = match IT.bt it with
-         | Loc -> IT (Pointer_op (SubPointer (it, it')), Loc)
-         | _ -> IT (Arith_op (Sub (it, it')), IT.bt it)
+       let@ t = match IT.bt it with
+         | Loc -> 
+            let err = "pointer subtraction not allowed in specifications: "^
+                        "please instead use pointer/integer casts"
+            in
+            fail {loc; msg = Generic (!^err)}
+         | _ -> return (IT (Arith_op (Sub (it, it')), IT.bt it))
        in
        return (t, None)
     | Multiplication (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       let t = match IT.bt it with
-       | Loc -> IT (Pointer_op (MulPointer (it, it')), Loc)
-       | _ -> IT (Arith_op (Mul (it, it')), IT.bt it)
-       in
+       let t = IT (Arith_op (Mul (it, it')), IT.bt it) in
        return (t, None)
     | Division (it, it') -> 
        let@ (it, _) = resolve it mapping in

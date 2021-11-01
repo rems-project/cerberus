@@ -562,7 +562,7 @@ module ResourceInference = struct
       let layout = SymMap.find tag global.struct_decls in
       let@ (values, inits) = 
         ListM.fold_rightM (fun {offset; size; member_or_padding} (values, inits) ->
-            let member_p = addPointer_ (pointer_t, int_ offset) in
+            let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset)) in
             match member_or_padding with
             | Some (member, sct) ->
                let@ point = 
@@ -581,7 +581,7 @@ module ResourceInference = struct
                    let@ _ = 
                      point_request loc failure {
                          ct = integer_ct Char;
-                         pointer = addPointer_ (member_p, int_ i);
+                         pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ member_p, int_ i));
                          permission = permission_t;
                          value = BT.Integer;
                          init = BT.Bool;
@@ -618,7 +618,7 @@ module ResourceInference = struct
       let lrt = 
         let open Memory in
         List.fold_right (fun {offset; size; member_or_padding} lrt ->
-            let member_p = addPointer_ (pointer_t, int_ offset) in
+            let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset)) in
             match member_or_padding with
             | Some (member, sct) ->
                let resource = 
@@ -635,7 +635,7 @@ module ResourceInference = struct
             | None ->
                let rec bytes i =
                  if i = size then LRT.I else
-                   let member_p = addPointer_ (member_p, int_ i) in
+                   let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ member_p, int_ i)) in
                    let padding_s, padding_t = IT.fresh BT.Integer in
                    let resource = 
                      Point {
@@ -1263,8 +1263,9 @@ let infer_array_shift loc asym1 ct asym2 =
   let@ provable = provable in
   let element_size = Memory.size_of_ctype ct in
   let v = 
-    addPointer_ (it_of_arg arg1, 
-                 mul_ (int_ element_size, it_of_arg arg2))
+    integerToPointerCast_
+      (add_ (pointerToIntegerCast_ (it_of_arg arg1), 
+             mul_ (int_ element_size, it_of_arg arg2)))
   in
   let@ o_folded_length =
     map_and_fold_resources (fun re found ->
@@ -1380,7 +1381,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          | Some offset -> return offset
          | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
        in
-       let vt = (Loc, IT.addPointer_ (it_of_arg arg, int_ offset)) in
+       let vt = (Loc, integerToPointerCast_ (add_ (pointerToIntegerCast_ (it_of_arg arg), int_ offset))) in
        return (RT.concat (rt_of_vt loc vt) lrt)
     | M_PEnot asym ->
        let@ arg = arg_of_asym asym in
