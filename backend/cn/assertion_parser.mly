@@ -8,7 +8,7 @@ open Assertion_parser_util
 %token <string> NAME
 %token <string> MEMBER
 
-%token VAR
+%token LET
 %token EQUAL
 %token UNCHANGED
 
@@ -191,7 +191,7 @@ cond:
       { Ast.Term c } 
   | c=predicate
       { Ast.Predicate c }
-  | VAR id=NAME EQUAL t=term
+  | LET id=NAME EQUAL t=term
       { Ast.Define (id, t) }
   | LBRACE t=term RBRACE UNCHANGED
       { Ast.Unchanged t }

@@ -4,7 +4,7 @@ type token =
   | Z of Z.t
   | NAME of string
 
-  | VAR
+  | LET
   | EQUAL
   | UNCHANGED
 

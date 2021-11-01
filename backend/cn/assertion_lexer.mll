@@ -12,7 +12,7 @@ rule main = parse
   (* integer constants *)
   | ['0'-'9']+ as z  { T.Z (Z.of_string z) }
 
-  | "var" { T.VAR }
+  | "let" { T.LET }
   | "="   { T.EQUAL }
   | "unchanged" { T.UNCHANGED }
   
