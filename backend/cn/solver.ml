@@ -11,58 +11,49 @@ open LogicalPredicates
 
 
 type context = Z3.context
-type solver = Z3.Solver.solver
+type solver = {
+    incremental: Z3.Solver.solver;
+    fancy: Z3.Solver.solver;
+  }
 
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
 type model = Z3.Model.model
 
 
-
-
-let general_params = [
+let no_automation = [
     ("auto_config", "false");
-    ("model", "true");
-    ("well_sorted_check","false");
-    ("type_check", "false");
-    (* ("trace", "true");
-     * ("trace_file_name", "trace.smt") *)
-    (* ("parallel.enable", "true"); *)
+    ("smt.auto_config", "false");
   ]
 
-let solver_params = [
-    ("smt.auto-config", "false");
-    ("smt.logic", "all");
-    ("smt.arith.solver", "2");
-    ("smt.macro_finder", "true");
-    (* ("smt.pull-nested-quantifiers", "true"); *)
-    (* ("combined_solver.solver2_timeout", "500");
-     * ("combined_solver.solver2_unknown", "2"); *)
-    (* ("smt.mbqi", "true"); *)
-    (* ("smt.ematching", "true"); *)
-  ]
-
-let model_params = [
-    ("model.completion", "true");
-    ("model_evaluator.completion", "true");
-  ]
-
-
-let randomness_params = [
-    ("sat.random_seed", "1");
-    ("smt.random_seed", "1");
-    ("fp.spacer.random_seed", "1");
+let no_randomness = [
+    ("sat.random_seed", "0");
     ("nlsat.randomize", "false");
-    ("fp.spacer.random_seed", "1");
+    ("fp.spacer.random_seed", "0");
+    ("smt.arith.random_initial_value", "false");
+    ("smt.random_seed", "0");
     ("sls.random_offset", "false");
     ("sls.random_seed", "0");
   ]
 
+let solver_params = [
+    ("smt.logic", "all");
+    ("smt.arith.solver", "2");
+    ("smt.macro_finder", "true");
+    (* ("smt.pull-nested-quantifiers", "true"); *)
+  ]
+
+let model_params = [
+    ("model", "true");
+    ("model.completion", "true");
+    ("model_evaluator.completion", "true");
+  ]
+
 let params = 
-  general_params
+  no_automation
+  @ no_randomness
   @ solver_params
   @ model_params
-  @ randomness_params
 
 
 let () = List.iter (fun (c,v) -> Z3.set_global_param c v) params
@@ -419,46 +410,60 @@ let constr global c =
 
 
 
-let push solver = Z3.Solver.push solver
+let push solver = 
+  Z3.Solver.push solver.incremental;
+  Z3.Solver.push solver.fancy
 
 let pop solver =
   IT_Table.clear it_table;
-  Z3.Solver.pop solver 1
+  Z3.Solver.pop solver.incremental 1;
+  Z3.Solver.pop solver.fancy 1
 
-let new_solver () = 
+let new_solver () : solver = 
   (* https://stackoverflow.com/a/14305028 describes an example where
      tactics are useful *)
   (* also see: https://z3prover.github.io/api/html/group__capi.html
      regarding "and-then" *)
-  let mk_tactic = Z3.Tactic.mk_tactic context in
-  let mk_then t1 t2 ts = Z3.Tactic.and_then context t1 t2 ts in
-  let tactic = 
-    mk_then 
-      (mk_tactic "simplify")
-      (mk_tactic "solve-eqs")
-      [(mk_tactic "smt")]
+  let incremental = 
+    let solver = Z3.Solver.mk_simple_solver context in
+    let params = Z3.Params.mk_params context in
+    let () = Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 10 in
+    let () = Z3.Solver.set_parameters solver params in
+    solver
   in
-  Z3.Solver.mk_solver_t context tactic
+  let fancy = 
+    let mk_tactic = Z3.Tactic.mk_tactic context in
+    let mk_then t1 t2 ts = Z3.Tactic.and_then context t1 t2 ts in
+    let tactic = 
+      mk_then 
+        (mk_tactic "simplify")
+        (mk_tactic "solve-eqs")
+        [(mk_tactic "smt")]
+    in
+    Z3.Solver.mk_solver_t context tactic
+  in
+  { incremental; fancy }
 
 
 let add solver scs = 
-  List.iter (fun sc -> Z3.Solver.add solver [sc]) scs
+  List.iter (fun sc -> Z3.Solver.add solver.incremental [sc]) scs;
+  List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs
 
 let eval model expr = 
   Z3.Model.eval model expr true
 
 
 
-let check_t global solver to_check = 
-  let t = 
-    Z3.Expr.simplify
-      (Z3.Boolean.mk_not context (term global.struct_decls to_check))
-      None
-  in
-  match Z3.Solver.check solver [t] with
-  | Z3.Solver.UNSATISFIABLE -> `True
-  | Z3.Solver.SATISFIABLE -> `False
-  | Z3.Solver.UNKNOWN -> `False
+let check_t global (solver : solver) to_check = 
+  let t = Z3.Boolean.mk_not context (term global.struct_decls to_check) in
+  (* match Z3.Solver.check solver.incremental [t] with
+   * | Z3.Solver.UNSATISFIABLE -> `True
+   * | Z3.Solver.SATISFIABLE -> `False `Incremental
+   * | Z3.Solver.UNKNOWN -> `False `Incremental *)
+     match Z3.Solver.check solver.fancy [t] with
+     | Z3.Solver.UNSATISFIABLE -> `True
+     | Z3.Solver.SATISFIABLE -> `False `Fancy
+     | Z3.Solver.UNKNOWN -> `False `Fancy
      
 
 let check_forall global solver ((s, bt), t) = 
@@ -517,7 +522,9 @@ let provable global solver assumptions (lc : LC.t) =
    * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
    *    `True
    * | _ -> *)
-  check_constraint global solver assumptions lc
+  match check_constraint global solver assumptions lc with
+  | `True -> `True
+  | `False _ -> `False
 
 
 
@@ -528,7 +535,8 @@ let provable_or_model global solver assumptions (lc : LC.t) =
   in
   match check_constraint global solver assumptions lc with
   | `True -> `True
-  | `False -> `False (model solver)
+  | `False `Incremental -> `False (model solver.incremental)
+  | `False `Fancy -> `False (model solver.fancy)
 
 
 
