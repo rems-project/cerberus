@@ -312,16 +312,12 @@ let state ctxt {substitution; vclasses; relevant} (model : Solver.model)=
 
   let struct_decls = ctxt.global.struct_decls in
 
-  let evaluate it = 
-    Option.bind 
-      (Solver.eval model (S.term struct_decls it)) 
-      (S.z3_expr struct_decls ) 
-  in
+  let evaluate it = Solver.eval struct_decls model it in
 
   let evaluate_lambda (q_s, q_bt) it = 
     let open Option in
-    let@ z3_val = Solver.eval model (S.lambda struct_decls (q_s, q_bt) it) in
-    let@ it_val = S.z3_expr struct_decls z3_val in
+    let lambda = array_def_ (q_s, q_bt) it in
+    let@ it_val = evaluate lambda in
     match it_val with
     | IT (Array_op (Def ((s, _), body)), _) ->
        return (IT.subst (make_subst [(s, sym_ (q_s, q_bt))]) body)

@@ -10,7 +10,6 @@ open Global
 open LogicalPredicates
 
 
-type context = Z3.context
 type solver = {
     fancy: Z3.Solver.solver;
   }
@@ -37,13 +36,13 @@ let no_automation_params = [
   ]
 
 let no_randomness_params = [
-    ("sat.random_seed", "0");
+    ("sat.random_seed", "1");
     ("nlsat.randomize", "false");
-    ("fp.spacer.random_seed", "0");
+    ("fp.spacer.random_seed", "1");
     ("smt.arith.random_initial_value", "false");
-    ("smt.random_seed", "0");
+    ("smt.random_seed", "1");
     ("sls.random_offset", "false");
-    ("sls.random_seed", "0");
+    ("sls.random_seed", "1");
   ]
 
 let solver_params = [
@@ -160,7 +159,7 @@ let loc_to_integer l = Z3.Expr.mk_app context loc_to_integer_fundecl [l]
 let integer_to_loc i = Z3.Expr.mk_app context integer_to_loc_fundecl [i]
 
 
-let sort =
+let sort : Memory.struct_decls -> BT.t -> sort =
 
   fun struct_decls ->
 
@@ -218,7 +217,7 @@ let sym_to_sym s =
   Z3.Symbol.mk_string context (CF.Pp_symbol.to_string_pretty_cn s)
 
 
-let term struct_decls : IT.t -> Z3.Expr.expr =
+let term ?(warn_lambda=true) struct_decls : IT.t -> expr =
 
 
   let sort = sort struct_decls in
@@ -363,8 +362,8 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
        | Get (f, arg) -> 
           mk_select context (term f) (term arg)
        | Def ((q_s, q_bt), body) ->
-          warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt)));
-          (* warn (!^"generating lambda"); *)
+          if warn_lambda then
+            warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt)));
           Z3.Quantifier.expr_of_quantifier
             (Z3.Quantifier.mk_lambda_const context
                [term (sym_ (q_s, q_bt))] (term body))
@@ -382,16 +381,6 @@ let term struct_decls : IT.t -> Z3.Expr.expr =
   in
 
   term
-
-
-let lambda struct_decls (q_s, q_bt) body = 
-  Z3.Quantifier.expr_of_quantifier
-    (Z3.Quantifier.mk_lambda_const context
-       [term struct_decls (sym_ (q_s, q_bt))] 
-       (term struct_decls body))
-
-
-
 
 
 
@@ -428,7 +417,7 @@ let pop solver =
   IT_Table.clear it_table;
   Z3.Solver.pop solver.fancy 1
 
-let new_solver () : solver = 
+let make () : solver = 
   (* https://stackoverflow.com/a/14305028 describes an example where
      tactics are useful *)
   (* also see: https://z3prover.github.io/api/html/group__capi.html
@@ -447,12 +436,13 @@ let new_solver () : solver =
   { fancy }
 
 
-let add solver scs = 
-  (* List.iter (fun sc -> Z3.Solver.add solver.incremental [sc]) scs; *)
-  List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs
+let add global solver lc = 
+  match constr global lc with
+  | None -> ()
+  | Some sc -> Z3.Solver.add solver.fancy [sc]
 
-let eval model expr = 
-  Z3.Model.eval model expr true
+
+
 
 
 
@@ -754,7 +744,8 @@ let z3_expr struct_decls =
 
 
 
-
-
-
-
+let eval struct_decls model it = 
+  let expr = term ~warn_lambda:false struct_decls it in
+  match Z3.Model.eval model expr true with
+  | None -> None
+  | Some v -> z3_expr struct_decls v

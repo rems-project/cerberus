@@ -40,7 +40,7 @@ let empty global = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
-    solver = Solver.new_solver ();
+    solver = Solver.make ();
     global = global
   }
 
@@ -88,8 +88,7 @@ let add_ls lvars ctxt =
 
 let add_c lc (ctxt : t) = 
   let lc = Simplify.simp_lc ctxt.global.struct_decls ctxt.constraints lc in
-  let scs = List.filter_map (Solver.constr ctxt.global) [lc] in
-  let () = Solver.add ctxt.solver scs in
+  let () = Solver.add ctxt.global ctxt.solver lc in
   { ctxt with constraints = lc :: ctxt.constraints }
 
 let add_cs lcs (ctxt : t) = 
