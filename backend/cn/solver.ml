@@ -514,26 +514,35 @@ let check_constraint global solver (assumptions : LC.t list) lc =
   | QPred qpred -> 
      check_qpred global solver assumptions qpred
 
+
+(* as similarly suggested by Robbert *)
+let shortcut lc = 
+  match Simplify.simp_lc [] [] lc with
+  | T (IT (Lit (Bool true), _)) -> `True
+  | _ -> `No_shortcut
+  
+
+
+let get_model z3_solver = 
+  Option.value_err "Z3 did not produce a counter model"
+    (Z3.Solver.get_model z3_solver)
+
 let provable global solver assumptions (lc : LC.t) =  
-  (* match lc with
-   * (\* as similarly suggested by Robbert *\)
-   * | T (IT (Bool_op (EQ (it, it')), _)) when IT.equal it it' ->
-   *    `True
-   * | _ -> *)
-  match check_constraint global solver assumptions lc with
+  match shortcut lc with
   | `True -> `True
-  | `False _ -> `False
-
-
+  | `No_shortcut ->
+     match check_constraint global solver assumptions lc with
+     | `True -> `True
+     | `False _ -> `False
 
 let provable_or_model global solver assumptions (lc : LC.t) =  
-  let model z3_solver = 
-    Option.value_err "Z3 did not produce a counter model"
-      (Z3.Solver.get_model z3_solver)
-  in
-  match check_constraint global solver assumptions lc with
+  match shortcut lc with
   | `True -> `True
-  | `False `Fancy -> `False (model solver.fancy)
+  | `No_shortcut ->
+     match check_constraint global solver assumptions lc with
+     | `True -> `True
+     | `False `Fancy -> `False (get_model solver.fancy)
+
 
 
 
