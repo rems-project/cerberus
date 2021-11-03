@@ -197,6 +197,14 @@ let rec simp struct_decls (lcs : LC.t list) =
     | RealToInt a ->
        let a = aux a in
        IT (Arith_op (RealToInt a), bt)
+    | FlipBit {bit; t} ->
+       let bit = aux bit in
+       let t = aux t in
+       IT (Arith_op (FlipBit {bit; t}), bt)
+    | XOR (ity, a, b) -> 
+       let a = aux a in
+       let b = aux b in
+       IT (Arith_op (XOR (ity, a, b)), bt)
   
   and bool_op it bt = 
     match it with

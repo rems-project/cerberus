@@ -1,3 +1,4 @@
+module CF = Cerb_frontend
 open Pp
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -15,7 +16,7 @@ module ImplMap =
 
 type t = 
   { struct_decls : Memory.struct_decls; 
-    fun_decls : (Locations.t * AT.ft) SymMap.t;
+    fun_decls : (Locations.t * AT.ft * CF.Mucore.trusted) SymMap.t;
     impl_fun_decls : AT.ft ImplMap.t;
     impl_constants : RT.t ImplMap.t;
     resource_predicates : ResourcePredicates.definition StringMap.t;
@@ -59,7 +60,7 @@ let pp_struct_layout (tag,layout) =
 let pp_struct_decls decls = 
   Pp.list pp_struct_layout (SymMap.bindings decls) 
 
-let pp_fun_decl (sym, (_, t)) = item (plain (Sym.pp sym)) (AT.pp RT.pp t)
+let pp_fun_decl (sym, (_, t, _)) = item (plain (Sym.pp sym)) (AT.pp RT.pp t)
 let pp_fun_decls decls = flow_map hardline pp_fun_decl (SymMap.bindings decls)
 
 let pp_resource_predicate_definitions defs =

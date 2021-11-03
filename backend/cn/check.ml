@@ -1338,12 +1338,23 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ args = args_of_asyms asyms in
        let@ vt = infer_constructor loc ctor args in
        return (rt_of_vt loc vt)
-    | M_CivCOMPL _
-      | M_CivAND _
-      | M_CivOR _
-      | M_CivXOR _ 
-      -> 
-       Debug_ocaml.error "todo: Civ..."
+    | M_CivCOMPL _ ->
+       Debug_ocaml.error "todo: CivCOMPL"
+    | M_CivAND _ ->
+       Debug_ocaml.error "todo: CivAND"
+    | M_CivOR _ ->
+       Debug_ocaml.error "todo: CivOR"
+    | M_CivXOR (act, asym1, asym2) -> 
+       let ity = match act.ct with
+         | Sctype (_, Integer ity) -> ity
+         | _ -> Debug_ocaml.error "M_CivXOR with non-integer c-type"
+       in
+       let@ arg1 = arg_of_asym asym1 in
+       let@ arg2 = arg_of_asym asym2 in
+       let@ () = ensure_base_type arg1.loc ~expect:Integer arg1.bt in
+       let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
+       let vt = (Integer, xor_ ity (it_of_arg arg1, it_of_arg arg2)) in
+       return (rt_of_vt loc vt)
     | M_Cfvfromint _ -> 
        unsupported loc !^"floats"
     | M_Civfromfloat _ -> 
@@ -1425,7 +1436,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          | CF.Core.Impl impl -> 
             return (Global.get_impl_fun_decl global impl )
          | CF.Core.Sym sym -> 
-            let@ (_, t) = get_fun_decl loc sym in
+            let@ (_, t, _) = get_fun_decl loc sym in
             return t
        in
        let@ args = args_of_asyms asyms in
@@ -1871,14 +1882,17 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        return rt
     | M_Eccall (_ctype, afsym, asyms) ->
        let@ args = args_of_asyms asyms in
-       let@ (_loc, ft) = get_fun_decl loc afsym.sym in
+       let@ (_loc, ft, _) = get_fun_decl loc afsym.sym in
        Spine.calltype_ft loc args ft
     | M_Eproc (fname, asyms) ->
        let@ (_, decl_typ) = match fname with
          | CF.Core.Impl impl -> 
             let@ global = get_global () in
             return (loc, Global.get_impl_fun_decl global impl)
-         | CF.Core.Sym sym -> get_fun_decl loc sym in
+         | CF.Core.Sym sym -> 
+            let@ (loc, fun_decl, _) = get_fun_decl loc sym in
+            return (loc, fun_decl)
+       in
        let@ args = args_of_asyms asyms in
        Spine.calltype_ft loc args decl_typ
     | M_Erpredicate (pack_unpack, TPU_Predicate pname, asyms) ->
@@ -2433,13 +2447,13 @@ let check mu_file =
 
   let@ ctxt =
     PmapM.foldM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto)) ctxt ->
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ctxt ->
         let ctxt = 
           let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
           let lc2 = t_ (representable_ (pointer_ct void_ct, sym_ (fsym, Loc))) in
           Context.add_l fsym Loc (Context.add_cs [lc1; lc2] ctxt)
         in
-        let fun_decls = SymMap.add fsym (loc, ftyp) ctxt.global.fun_decls in
+        let fun_decls = SymMap.add fsym (loc, ftyp, trusted) ctxt.global.fun_decls in
         let global = { ctxt.global with fun_decls = fun_decls } in
         return {ctxt with global}
       ) mu_file.mu_funinfo ctxt
@@ -2450,7 +2464,7 @@ let check mu_file =
     let number_entries = List.length (Pmap.bindings_list mu_file.mu_funinfo) in
     let ping = Pp.progress "function welltypedness" number_entries in
     PmapM.iterM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, _has_proto)) ->
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
         let@ () = return (ping (Sym.pp_string fsym)) in
         let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
         let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
@@ -2464,12 +2478,20 @@ let check mu_file =
     fun fsym fn ->
     let decl = Global.get_fun_decl ctxt.global fsym in
     let@ () = match fn, decl with
-      | M_Fun (rbt, args, body), Some (loc, ftyp) ->
-         check_function loc (Sym.pp_string fsym) args rbt body ftyp ctxt
+      | M_Fun (rbt, args, body), Some (loc, ftyp, trusted) ->
+         begin match trusted with
+         | CF.Mucore.Trusted _ -> return ()
+         | CF.Mucore.Checked -> 
+            check_function loc (Sym.pp_string fsym) args rbt body ftyp ctxt
+         end
       | M_Fun (rbt, args, body), None ->
          fail {loc = Loc.unknown; msg = Unknown_function fsym}
-      | M_Proc (loc, rbt, args, body, labels), Some (loc', ftyp) ->
-         check_procedure loc' fsym args rbt body ftyp labels ctxt
+      | M_Proc (loc, rbt, args, body, labels), Some (loc', ftyp, trusted) ->
+         begin match trusted with
+         | CF.Mucore.Trusted _ -> return ()
+         | CF.Mucore.Checked -> 
+            check_procedure loc' fsym args rbt body ftyp labels ctxt
+         end
       | M_Proc (loc, rbt, args, body, labels), None ->
          fail {loc; msg = Unknown_function fsym}
       | M_ProcDecl _, _ -> 

@@ -1,3 +1,4 @@
+module CF = Cerb_frontend
 open IndexTerms
 open BaseTypes
 module SymMap=Map.Make(Sym)
@@ -18,14 +19,11 @@ type model = Z3.Model.model
 
 module Params = struct
 
-  let logging_params = 
-    if !Debug_ocaml.debug_level > 0 then [
-        ("trace", "true");
-        ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
-        ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log");
-      ]
-    else 
-      []
+  let logging_params = [
+      (* ("trace", "true");
+       * ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
+       * ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log"); *)
+    ]
 
   let no_automation_params = [
       ("auto_config", "false");
@@ -47,6 +45,7 @@ module Params = struct
       ("smt.arith.solver", "2");
       ("smt.macro_finder", "true");
       (* ("smt.pull-nested-quantifiers", "true"); *)
+      (* ("rewriter.elim_rem", "true"); *)
     ]
 
   let model_params = [
@@ -269,6 +268,39 @@ module Translate = struct
          | Max (t1, t2) -> term (ite_ (ge_ (t1, t2), t1, t2))
          | IntToReal t -> Integer.mk_int2real context (term t)
          | RealToInt t -> Real.mk_real2int context (term t)
+         | FlipBit fb ->
+            (* looking at https://en.wikipedia.org/wiki/Bitwise_operation#XOR *)
+            let bit = mod_ (div_ (fb.t, exp_ (int_ 2, fb.bit)), int_ 2) in
+            let to_add_or_sub = exp_ (int_ 2, fb.bit) in
+            let result = 
+              ite_ (eq_ (bit, int_ 1),
+                    sub_ (fb.t, to_add_or_sub),
+                    add_ (fb.t, to_add_or_sub))
+            in
+            term result
+         (* | XOR (ity, t1, t2) ->
+          *    let bit_width = Memory.bits_per_byte * Memory.size_of_integer_type ity in
+          *    let bt1 = Z3.Arithmetic.Integer.mk_int2bv context bit_width (term t1) in
+          *    let bt2 = Z3.Arithmetic.Integer.mk_int2bv context bit_width (term t2) in
+          *    let btv = Z3.BitVector.mk_xor context bt1 bt2 in
+          *    Z3.BitVector.mk_bv2int context btv (CF.AilTypesAux.is_signed_ity ity) *)
+         | XOR (ity, t1, t2) ->
+            (* looking at https://en.wikipedia.org/wiki/Bitwise_operation#XOR *)
+            assert (CF.AilTypesAux.is_unsigned_ity ity);
+            let bit_width = Memory.bits_per_byte * Memory.size_of_integer_type ity in
+            let shift_to_pos n pos = div_ (n, exp_ (int_ 2, int_ pos)) in
+            (* let zero_one_pos n pos = mod_ (shift_to_pos n pos, int_ 2) in *)
+            let zero_one_pos n pos = shift_to_pos n pos in
+            let xor_pos n1 n2 pos = 
+              mod_ (add_ (zero_one_pos n1 pos,
+                          zero_one_pos n2 pos),
+                    int_ 2)
+            in
+            let rec sum pos = 
+              if pos < 0 then int_ 0 
+              else add_ (sum (pos - 1), mul_ (xor_pos t1 t2 pos, exp_ (int_ 2, int_ pos)))
+            in
+            term (sum (bit_width - 1))
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in

@@ -100,6 +100,7 @@ module PageAlloc = struct
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let range_start_s, range_start = IT.fresh_named BT.Integer "range_start" in
       let range_end_s, range_end = IT.fresh_named BT.Integer "range_end" in
+      let max_order_s, max_order = IT.fresh_named BT.Integer "max_order" in
 
       let vmemmap_s, vmemmap = 
         IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
@@ -117,6 +118,7 @@ module PageAlloc = struct
           (pool_pointer_s, IT.bt pool_pointer);
           (range_start_s, IT.bt range_start);
           (range_end_s, IT.bt range_end);
+          (max_order_s, IT.bt max_order);
         ]
       in
       let qarg = Some 0 in
@@ -149,9 +151,9 @@ module PageAlloc = struct
       let constrs = [
           (* refcount is also valid signed int: for hyp_page_count *)
           representable_ (integer_ct (Signed Int_), page %. "refcount");
-          (* order is HYP_NO_ORDER or between 0 and MAX_ORDER *)
+          (* order is HYP_NO_ORDER or between 0 and max_order *)
           (or_ [(page %. "order") %== int_ hHYP_NO_ORDER; 
-                and_ [int_ 0 %<= (page %. "order"); (page %. "order") %<= int_ mMAX_ORDER]]);              
+                and_ [int_ 0 %<= (page %. "order"); (page %. "order") %< max_order]]);              
           (* points back to the pool *)
           ((page %. "pool") %== pool_pointer);
           (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
@@ -179,6 +181,7 @@ module PageAlloc = struct
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
         AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
         AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
+        AT.Computational ((max_order_s, IT.bt max_order), (loc, None), 
         AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
         AT.I OutputDef.[
             {loc; name = "page_pointer"; value = page_pointer};
@@ -187,7 +190,8 @@ module PageAlloc = struct
             {loc; name = "pool_pointer"; value = pool_pointer};
             {loc; name = "range_start"; value = range_start};
             {loc; name = "range_end"; value = range_end};
-          ])))))))
+            {loc; name = "max_order"; value = max_order};
+          ]))))))))
       in
 
       (id, {loc; args; body; qarg; infer_arguments} )
@@ -361,7 +365,7 @@ module PageAlloc = struct
             rem_ (range_end, (z_ pPAGE_SIZE)) %== int_ 0;
             representable_ (integer_ct Ptrdiff_t, range_end);
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
-            max_order %> int_ 0;
+            max_order %>= int_ 0;
             max_order %<= int_ mMAX_ORDER;
           ]
       in

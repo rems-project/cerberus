@@ -18,6 +18,8 @@ type token =
   | POWER
   | PERCENT
 
+  | FLIPBIT
+
   | EQ
   | NE
   | LT

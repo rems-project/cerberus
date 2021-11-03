@@ -379,6 +379,10 @@ let resolve_index_term loc
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
        return (IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), Bool))), Bool), None)
+    | FlipBit {bit; t} ->
+       let@ (bit, _) = resolve bit mapping in
+       let@ (t, _) = resolve t mapping in
+       return (IT (Arith_op (FlipBit {bit; t}), Integer), None)
     | ITE (it', it'', it''') ->
        let@ (it', _) = resolve it' mapping in
        let@ (it'', _) = resolve it'' mapping in
@@ -681,7 +685,7 @@ let mod_mappings mapping_names mappings f =
 
 
 let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fsym (fspec : function_spec)
-    : (AT.ft * mapping, type_error) m = 
+    : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
   let open AT in
   let open RT in
 
@@ -890,7 +894,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
       ) i (AT.I rt)
   in
 
-  return (ft, StringMap.find "start" mappings)
+  return (ft, fspec.trusted, StringMap.find "start" mappings)
 
 
   

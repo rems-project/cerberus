@@ -423,7 +423,8 @@ let page_alloc_predicates struct_decls =
           vmemmap;
           pool_pointer;
           pool %. "range_start";
-          pool %. "range_end"
+          pool %. "range_end";
+          pool %. "max_order";
         ]
       in
       QPred {

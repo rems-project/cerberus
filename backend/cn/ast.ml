@@ -1,3 +1,4 @@
+module CF = Cerb_frontend
 module Loc = Locations
 module BT = BaseTypes
 open Pp
@@ -21,6 +22,7 @@ module Terms = struct
     | Remainder of term * term
     | Equality of term * term
     | Inequality of term * term
+    | FlipBit of {bit : term; t : term}
     | ITE of term * term * term
     | Or of term * term
     | And of term * term
@@ -71,6 +73,8 @@ module Terms = struct
        term_equal a11 a21 && term_equal a12 a22
     | LessThan (a11,a12), LessThan (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
+    | FlipBit fb, FlipBit fb' ->
+       term_equal fb.bit fb'.bit && term_equal fb.t fb'.t
     | ITE (a11,a12,a13), ITE (a21,a22,a23) ->
        term_equal a11 a21 && term_equal a12 a22 && term_equal a13 a23
     | Or (a11,a12), Or (a21,a22) ->
@@ -124,6 +128,8 @@ module Terms = struct
     | Equality _, _ ->
        false
     | Inequality _, _ ->
+       false
+    | FlipBit _, _ -> 
        false
     | ITE _, _ ->
        false
@@ -188,6 +194,8 @@ module Terms = struct
        mparens atomic (pp true t1 ^^^ !^"==" ^^^ pp true t2)
     | Inequality (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"!=" ^^^ pp true t2)
+    | FlipBit {bit; t} ->
+       mparens atomic (c_app !^"flipBit" [pp false bit; pp false t])
     | ITE (t1, t2, t3) ->
        mparens atomic (pp true t1 ^^^ !^"?" ^^^ pp true t2
                        ^^^ !^":" ^^^ pp true t3)
@@ -265,6 +273,8 @@ module Terms = struct
          Equality (aux t1, aux t2)
       | Inequality (t1, t2) -> 
          Inequality (aux t1, aux t2) 
+      | FlipBit {bit; t} ->
+         FlipBit {bit = aux bit; t = aux t}
       | ITE (t1, t2, t3) ->
          ITE (aux t1, aux t2, aux t3)
       | Or (t1, t2) ->
@@ -326,6 +336,8 @@ module Terms = struct
          aux t1 || aux t2
       | Inequality (t1, t2) -> 
          aux t1 || aux t2
+      | FlipBit {bit; t} ->
+         aux bit || aux t
       | ITE (t1, t2, t3) ->
          aux t1 || aux t2 || aux t3
       | Or (t1, t2) ->
@@ -402,6 +414,7 @@ type garg = { asym : Sym.t; lsym : Sym.t; typ : Sctypes.t; accessed : Loc.t opti
 
 
 type function_spec = { 
+    trusted: CF.Mucore.trusted;
     global_arguments : garg list;
     function_arguments : aarg list;
     function_return : varg;

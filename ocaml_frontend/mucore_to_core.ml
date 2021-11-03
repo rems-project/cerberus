@@ -586,7 +586,7 @@ let mu_to_core__globs_list (gs : (symbol * 'bty mu_globs) list )
    (map (fun (sym1,g) -> (sym1, mu_to_core__globs g)) gs)
 
 
-let mu_to_core__funinfo (M_funinfo (loc,annots2,(ret,args,b1),b2)):Location_ocaml.t*attributes*'b*'a*bool*bool=
+let mu_to_core__funinfo (M_funinfo (loc, annots2, (ret,args,b1), _trusted, b2)):Location_ocaml.t*attributes*'b*'a*bool*bool=
   let args = List.map (fun (s,ct) -> (Some s, ct)) args in
    (loc,annots2,ret,args,b1,b2)
 

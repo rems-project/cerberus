@@ -4,12 +4,16 @@ open Cerb_frontend
 
 
 
+type integerType = Ctype.integerType
+let integerTypeEqual = Ctype.integerTypeEqual
+let pp_integerType = Pp_core_ctype.pp_integer_ctype
+
 type t = 
   Sctype of Annot.annot list * t_
 
 and t_ =
   | Void
-  | Integer of Ctype.integerType
+  | Integer of integerType
   | Array of t * int option
   | Pointer of t
   | Struct of Sym.t

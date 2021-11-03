@@ -53,6 +53,8 @@ open Assertion_parser_util
 %token POINTER
 %token INTEGER
 
+%token FLIPBIT
+
 %token AMPERSAND
 %token AT
 
@@ -139,6 +141,8 @@ arith_term:
       { Ast.Remainder (a1, a2) }
   | POWER LPAREN a1=term COMMA a2=term RPAREN
       { Ast.Exponentiation (a1, a2) }
+  | FLIPBIT LPAREN bit=term COMMA t=term RPAREN
+      { Ast.FlipBit {bit; t} }
 
 arith_or_atomic_term:
   | a=arith_term

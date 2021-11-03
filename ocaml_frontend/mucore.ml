@@ -21,6 +21,12 @@ type 'TY asym = {
   }
 
 
+
+type trusted = 
+  | Trusted of Location_ocaml.t
+  | Checked
+
+
 module type TYPES = sig
 
   type ct
@@ -325,7 +331,7 @@ type have_show =
     Pmap.map
 
   type mu_funinfo = 
-    M_funinfo of Location_ocaml.t * Annot.attributes * T.ft * bool
+    M_funinfo of Location_ocaml.t * Annot.attributes * T.ft * trusted * bool
 
   type mu_funinfos = 
     (symbol, mu_funinfo) Pmap.map

@@ -924,7 +924,7 @@ let normalise_funinfo (loc,annots2,ret,args,b1,b2) =
         | None -> (Symbol.fresh (), ct)
       ) args 
   in
-  M_funinfo (loc,annots2,(ret,args,b1),b2)
+  M_funinfo (loc, annots2, (ret,args,b1), Checked, b2)
 
 let normalise_funinfos funinfos =
    (Pmap.map normalise_funinfo funinfos)

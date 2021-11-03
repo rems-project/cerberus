@@ -35,6 +35,8 @@ rule main = parse
   | "<="  { T.LE }
   | ">="  { T.GE }
 
+  | "flipBit" { T.FLIPBIT }
+
   | "(pointer)"   { T.POINTERCAST }
   | "(integer)"   { T.INTEGERCAST }
 

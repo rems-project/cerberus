@@ -152,6 +152,14 @@ module WIT = struct
            | RealToInt t ->
               let@ t = check loc ~context Real t in
               return (BT.Integer, IntToReal t)
+           | FlipBit {bit; t} ->
+              let@ bit = check loc ~context Integer bit in
+              let@ t = check loc ~context Integer t in
+              return (BT.Integer, FlipBit {bit; t})
+           | XOR (ity, t, t') ->
+              let@ t = check loc ~context Integer t in
+              let@ t' = check loc ~context Integer t' in
+              return (BT.Integer, XOR (ity, t, t'))
          in
          return (IT (Arith_op arith_op, bt))
       | Bool_op bool_op ->
