@@ -515,8 +515,8 @@ let check global (solver : solver) assumptions lc =
   let t = Translate.term global.struct_decls (not_ it) in
   match Z3.Solver.check solver.fancy [t] with
   | Z3.Solver.UNSATISFIABLE -> `True
-  | Z3.Solver.SATISFIABLE -> `False `Fancy
-  | Z3.Solver.UNKNOWN -> `False `Fancy
+  | Z3.Solver.SATISFIABLE -> `False
+  | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
 
 
 
@@ -530,7 +530,7 @@ let provable global solver assumptions (lc : LC.t) =
   | `No_shortcut ->
      match check global solver assumptions lc with
      | `True -> `True
-     | `False _ -> `False
+     | `False -> `False
 
 let provable_or_model global solver assumptions (lc : LC.t) =  
   match shortcut lc with
@@ -538,7 +538,7 @@ let provable_or_model global solver assumptions (lc : LC.t) =
   | `No_shortcut ->
      match check global solver assumptions lc with
      | `True -> `True
-     | `False `Fancy -> `False (get_model solver.fancy)
+     | `False -> `False (get_model solver.fancy)
 
 
 

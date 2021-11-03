@@ -4,6 +4,9 @@ type token =
   | Z of Z.t
   | NAME of string
 
+  | TRUE
+  | FALSE
+
   | LET
   | EQUAL
   | UNCHANGED

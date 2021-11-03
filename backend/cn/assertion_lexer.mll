@@ -9,6 +9,9 @@ rule main = parse
   (* skip spaces *)
   | [' ' '\t']+ { main lexbuf }
   
+  | "true"   { T.TRUE }
+  | "false"  { T.FALSE }
+
   (* integer constants *)
   | ['0'-'9']+ as z  { T.Z (Z.of_string z) }
 

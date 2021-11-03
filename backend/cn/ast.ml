@@ -11,6 +11,7 @@ module Terms = struct
     | Pointee of term
     | PredOutput of string * string
     | Member of term * Id.t
+    | Bool of bool
     | Integer of Z.t
     | Addition of term * term
     | Subtraction of term * term
@@ -48,6 +49,8 @@ module Terms = struct
        String.equal p1 p2 && String.equal a1 a2
     | Member (t1, m1), Member (t2, m2) ->
        term_equal t1 t2 && Id.equal m1 m2
+    | Bool b1, Bool b2 ->
+       b1 = b2
     | Integer i1, Integer i2 -> 
        Z.equal i1 i2
     | Addition (a11,a12), Addition (a21,a22) ->
@@ -101,6 +104,8 @@ module Terms = struct
     | PredOutput _, _ ->
        false
     | Member _, _ ->
+       false
+    | Bool _, _ ->
        false
     | Integer _, _ -> 
        false
@@ -163,7 +168,10 @@ module Terms = struct
        !^p ^^ dot ^^ dot ^^ !^a
     | Member (p, m) -> 
        pp true p ^^ dot ^^ Id.pp m
-    | Integer z -> !^(Z.to_string z)
+    | Bool b -> 
+       !^(if b then "true" else "false")
+    | Integer z -> 
+       !^(Z.to_string z)
     | Addition (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ plus ^^^ pp true t2)
     | Subtraction (t1, t2) -> 
@@ -237,6 +245,8 @@ module Terms = struct
          PredOutput (pr, a)
       | Member (p, m) -> 
          Member (remove_labels p, m)
+      | Bool b -> 
+         Bool b
       | Integer i -> 
          Integer i
       | Addition (t1, t2) -> 
@@ -296,6 +306,8 @@ module Terms = struct
          false
       | Member (p, m) -> 
          aux p
+      | Bool b -> 
+         false
       | Integer i -> 
          false
       | Addition (t1, t2) -> 

@@ -326,6 +326,8 @@ let resolve_index_term loc
        lookup (Pointee it) mapping
     | PredOutput (name, oarg) ->
        lookup (PredOutput (name, oarg)) mapping
+    | Bool b -> 
+       return (IT (Lit (IT.Bool b), BT.Bool), None)
     | Integer i -> 
        return (IT (Lit (IT.Z i), BT.Integer), None)
     | Addition (it, it') -> 

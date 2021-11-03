@@ -8,6 +8,10 @@ open Assertion_parser_util
 %token <string> NAME
 %token <string> MEMBER
 
+
+%token TRUE
+%token FALSE
+
 %token LET
 %token EQUAL
 %token UNCHANGED
@@ -98,6 +102,10 @@ integer:
 atomic_term:
   | LPAREN t= term RPAREN
       { t }
+  | TRUE
+      { Ast.Bool true }
+  | FALSE
+      { Ast.Bool false }
   | z=Z
       { Ast.Integer z }
   | a1=atomic_term member=MEMBER

@@ -1571,8 +1571,8 @@ let all_empty loc =
   in
   let@ provable_or_model = provable_or_model in
   let@ all_resources = all_resources () in
-  let _ = 
-    ListM.mapM (fun resource ->
+  let@ () = 
+    ListM.iterM (fun resource ->
         match resource with
         | Point p ->
            let holds = provable_or_model (t_ (not_ p.permission)) in
