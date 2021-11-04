@@ -59,6 +59,7 @@ rule main = parse
 
   | "NULL" { T.NULL }
   | "offsetof" { T.OFFSETOF }
+  | "cellPointer" { T.CELLPOINTER }
 
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }

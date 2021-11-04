@@ -98,9 +98,7 @@ module PageAlloc = struct
       let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-      let range_start_s, range_start = IT.fresh_named BT.Integer "range_start" in
-      let range_end_s, range_end = IT.fresh_named BT.Integer "range_end" in
-      let max_order_s, max_order = IT.fresh_named BT.Integer "max_order" in
+      let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
 
       let vmemmap_s, vmemmap = 
         IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
@@ -116,9 +114,7 @@ module PageAlloc = struct
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
           (vmemmap_s, IT.bt vmemmap);
           (pool_pointer_s, IT.bt pool_pointer);
-          (range_start_s, IT.bt range_start);
-          (range_end_s, IT.bt range_end);
-          (max_order_s, IT.bt max_order);
+          (pool_s, IT.bt pool);
         ]
       in
       let qarg = Some 0 in
@@ -144,7 +140,7 @@ module PageAlloc = struct
             (* or pointer to other vmemmap cell, within the same range*)
             vmemmap_good_pointer ~vmemmap_pointer 
               (container_of_ (prev_next, hyp_page_tag, Id.id "node"))
-              range_start range_end
+              (pool %. "range_start") (pool %. "range_end")
           ]
       in
 
@@ -153,7 +149,7 @@ module PageAlloc = struct
           representable_ (integer_ct (Signed Int_), page %. "refcount");
           (* order is HYP_NO_ORDER or between 0 and max_order *)
           (or_ [(page %. "order") %== int_ hHYP_NO_ORDER; 
-                and_ [int_ 0 %<= (page %. "order"); (page %. "order") %< max_order]]);              
+                and_ [int_ 0 %<= (page %. "order"); (page %. "order") %< (pool %. "max_order")]]);              
           (* points back to the pool *)
           ((page %. "pool") %== pool_pointer);
           (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
@@ -179,19 +175,18 @@ module PageAlloc = struct
         AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
         AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
-        AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
-        AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
-        AT.Computational ((max_order_s, IT.bt max_order), (loc, None), 
-        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
+        AT.Computational ((pool_s, IT.bt pool), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap 
+                        ~range_start:(pool %. "range_start")
+                        ~range_end:(pool %. "range_end") 
+                        (bool_ true)), (loc, None),
         AT.I OutputDef.[
             {loc; name = "page_pointer"; value = page_pointer};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
             {loc; name = "vmemmap"; value = vmemmap};
             {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "range_start"; value = range_start};
-            {loc; name = "range_end"; value = range_end};
-            {loc; name = "max_order"; value = max_order};
-          ]))))))))
+            {loc; name = "pool"; value = pool};
+          ]))))))
       in
 
       (id, {loc; args; body; qarg; infer_arguments} )

@@ -489,7 +489,8 @@ module ResourceInference = struct
           value = BT.of_sct item_ct;
           init = BT.Bool;
           permission = 
-            array_permission ~item_ct ~base ~length:(int_ length) 
+            array_permission ~item_size:(int_ (Memory.size_of_ctype item_ct)) 
+              ~base ~length:(int_ length) 
               ~permission ~qpointer:qp_t;
         }
       in
@@ -535,6 +536,7 @@ module ResourceInference = struct
         point_request loc failure 
           (unfold_array_request item_ct base length permission) 
       in
+      let item_size = int_ (Memory.size_of_ctype item_ct) in
       let unfolded_resource = 
         let qp_s, qp_t = IT.fresh Loc in
         QPoint {
@@ -542,10 +544,10 @@ module ResourceInference = struct
             qpointer = qp_s;
             value = 
               get_ point.value 
-                (array_pointer_to_index ~base ~item_ct ~pointer:qp_t); 
+                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
             init = point.init;
             permission = 
-              array_permission ~base ~item_ct ~length:(int_ length) 
+              array_permission ~base ~item_size ~length:(int_ length) 
                 ~permission ~qpointer:qp_t;
           }
       in

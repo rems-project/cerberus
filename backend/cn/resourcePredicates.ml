@@ -282,11 +282,12 @@ let early_alloc () =
           pointerToIntegerCast_ start)
   in
   let region = 
+    let item_size = int_ (Memory.size_of_ctype char_ct) in
     let qpointer_s, qpointer = IT.fresh Loc in {
         name = "Byte";
         qpointer = qpointer_s;
         permission = 
-          RE.array_permission ~base:start ~item_ct:char_ct
+          RE.array_permission ~base:start ~item_size
             ~length ~qpointer ~permission;
         iargs = [];
         oargs = [];
@@ -422,9 +423,7 @@ let page_alloc_predicates struct_decls =
           vmemmap_pointer;
           vmemmap;
           pool_pointer;
-          pool %. "range_start";
-          pool %. "range_end";
-          pool %. "max_order";
+          pool
         ]
       in
       QPred {
@@ -563,11 +562,12 @@ let page_alloc_predicates struct_decls =
       let value_s, value = IT.fresh_named (BT.Array (Loc, Integer)) "value" in
       let init_s, init = IT.fresh_named (BT.Array (Loc, Bool)) "init" in
       let qpoint = 
+        let item_size = int_ (Memory.size_of_ctype char_ct) in
         let qpointer_s, qpointer = IT.fresh Loc in {
           ct = char_ct; 
           qpointer = qpointer_s;
           permission = 
-            RE.array_permission ~base:pbase ~item_ct:char_ct
+            RE.array_permission ~base:pbase ~item_size 
               ~length:(mul_ (z_ pPAGE_SIZE, exp_ (int_ 2, order))) ~qpointer ~permission;
           value = get_ value qpointer;
           init = get_ init qpointer;

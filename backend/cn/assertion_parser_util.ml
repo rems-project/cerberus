@@ -44,6 +44,7 @@ type token =
   | NULL
   | OFFSETOF
 
+  | CELLPOINTER
 
   | MEMBER of string
   | DOTDOT

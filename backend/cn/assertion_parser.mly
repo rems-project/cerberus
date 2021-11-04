@@ -53,6 +53,9 @@ open Assertion_parser_util
 %token POINTER
 %token INTEGER
 
+%token CELLPOINTER
+
+
 %token FLIPBIT
 
 %token AMPERSAND
@@ -125,6 +128,8 @@ atomic_term:
       { Ast.Null }
   | OFFSETOF LPAREN tag = NAME COMMA member= NAME RPAREN
       { Ast.OffsetOf {tag; member} }
+  | CELLPOINTER LPAREN t1=term COMMA t2=term COMMA t3=term COMMA t4=term COMMA t5=term RPAREN
+      { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
   | LBRACE a=term RBRACE AT l=NAME
       { Ast.Env (a, l) }
 

@@ -388,20 +388,24 @@ module RE = struct
     sub_ (pointerToIntegerCast_ pointer, 
           pointerToIntegerCast_ base)
 
-  let array_pointer_to_index ~base ~item_ct ~pointer =
+  let array_pointer_to_index ~base ~item_size ~pointer =
     div_ (array_offset_of_pointer ~base ~pointer, 
-          int_ (Memory.size_of_ctype item_ct))
+          item_size)
   
-  (* check this *)
-  let array_condition ~base ~item_ct ~length ~qpointer =
+  let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
     let offset = array_offset_of_pointer ~base ~pointer:qpointer in
-    let index = array_pointer_to_index ~base ~item_ct ~pointer:qpointer in
+    let index = array_pointer_to_index ~base ~item_size ~pointer:qpointer in
     and_ [lePointer_ (base, qpointer);
-          eq_ (rem_ (offset, int_ (Memory.size_of_ctype item_ct)), int_ 0);
-          le_ (int_ 0, index); lt_ (index, length)]
+          eq_ (rem_ (offset, item_size), int_ 0);
+          le_ (from_index, index); lt_ (index, to_index)]  
 
-  let array_permission ~base ~item_ct ~length ~qpointer ~permission =
-    and_ [array_condition ~base ~item_ct ~length ~qpointer; permission]
+  (* check this *)
+  let array_condition ~base ~item_size ~length ~qpointer =
+    subarray_condition  ~base ~item_size 
+      ~from_index:(int_ 0) ~to_index:length ~qpointer
+
+  let array_permission ~base ~item_size ~length ~qpointer ~permission =
+    and_ [array_condition ~base ~item_size ~length ~qpointer; permission]
 
 
 

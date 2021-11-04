@@ -479,6 +479,15 @@ let resolve_index_term loc
             fail {loc; msg = Generic err}
        in
        return (IT (Pointer_op (MemberOffset (tag, member)), BT.Integer), None)
+    | CellPointer ((base, step), (from_index, to_index), pointer) ->
+       let@ (base, _) = resolve base mapping in
+       let@ (step, _) = resolve step mapping in
+       let@ (from_index, _) = resolve from_index mapping in
+       let@ (to_index, _) = resolve to_index mapping in
+       let@ (pointer, _) = resolve pointer mapping in
+       let t = subarray_condition ~base ~item_size:step ~from_index ~to_index 
+                 ~qpointer:pointer in
+       return (t, None)
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping in
        let@ (it2, _) = resolve t2 mapping in
