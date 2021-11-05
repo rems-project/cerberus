@@ -325,8 +325,6 @@ module PageAlloc = struct
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let pool_s, pool = IT.fresh_named (Struct hyp_pool_tag) "pool" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
-      let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
       let hyp_physvirt_offset_s, hyp_physvirt_offset = 
         IT.fresh_named BT.Integer "hyp_physvirt_offset" in
 
@@ -334,7 +332,6 @@ module PageAlloc = struct
           (pool_pointer_s, IT.bt pool_pointer);
           (pool_s, IT.bt pool);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (vmemmap_s, IT.bt vmemmap);
           (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset);
         ]
       in
@@ -358,6 +355,7 @@ module PageAlloc = struct
             range_start %< range_end;
             rem_ (range_start, (z_ pPAGE_SIZE)) %== int_ 0;
             rem_ (range_end, (z_ pPAGE_SIZE)) %== int_ 0;
+            (* for hyp_page_to_phys conversion *)
             representable_ (integer_ct Ptrdiff_t, range_end);
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
             max_order %>= int_ 0;
@@ -375,16 +373,13 @@ module PageAlloc = struct
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
         AT.Computational ((pool_s, IT.bt pool), (loc, None),
         AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
-        AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
-        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
         AT.Computational ((hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset), (loc, None), 
         AT.I OutputDef.[
             {loc; name = "pool_pointer"; value = pool_pointer};
             {loc; name = "pool"; value = pool};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "vmemmap"; value = vmemmap};
             {loc; name = "hyp_physvirt_offset"; value = hyp_physvirt_offset};
-          ]))))))
+          ]))))
       in
 
       (id, { loc; args; qarg; body; infer_arguments})

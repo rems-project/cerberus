@@ -458,7 +458,6 @@ let page_alloc_predicates struct_decls =
           pool_pointer;
           pool;
           vmemmap_pointer;
-          vmemmap;
           hyp_physvirt_offset;
         ]        
       in
