@@ -210,12 +210,23 @@ let rec simp struct_decls (lcs : LC.t list) =
     match it with
     | And its ->
        let its = List.map aux its in
-       if List.exists is_false its then 
-         IT (Lit (Bool false), bt)
-       else if List.for_all is_true its then
-         IT (Lit (Bool true), bt)
-       else
-         IT (Bool_op (And its), bt)
+       begin match its with
+       | [a; b] when 
+              (* let open Pp in
+               * print stdout (item "a" (IT.pp a));
+               * print stdout (item "b" (IT.pp b)); *)
+              IT.equal (not_ a) b ->
+          bool_ false
+       | [a; b] when IT.equal a (not_ b) ->
+          bool_ false
+       | _ ->
+          if List.exists is_false its then 
+            IT (Lit (Bool false), bt)
+          else if List.for_all is_true its then
+            IT (Lit (Bool true), bt)
+          else
+            IT (Bool_op (And its), bt)
+       end
     | Or its ->
        let its = List.map aux its in
        if List.exists is_true its then
