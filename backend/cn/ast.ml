@@ -254,71 +254,6 @@ module Terms = struct
   let predarg pr a =
     PredOutput (pr,a)
 
-  let rec remove_labels t = 
-    let rec aux = function
-      | Addr bn -> 
-         Addr bn
-      | Var bn -> 
-         Var bn
-      | Pointee p -> 
-         Pointee (remove_labels p)
-      | PredOutput (pr,a) -> 
-         PredOutput (pr, a)
-      | Member (p, m) -> 
-         Member (remove_labels p, m)
-      | Bool b -> 
-         Bool b
-      | Integer i -> 
-         Integer i
-      | Addition (t1, t2) -> 
-         Addition (aux t1, aux t2)
-      | Subtraction (t1, t2) -> 
-         Subtraction (aux t1, aux t2)
-      | Multiplication (t1, t2) -> 
-         Multiplication (aux t1, aux t2)
-      | Division (t1, t2) -> 
-         Division (aux t1, aux t2)
-      | Exponentiation (t1, t2) -> 
-         Exponentiation (aux t1, aux t2)
-      | Remainder (t1, t2) -> 
-         Remainder (aux t1, aux t2)
-      | Equality (t1, t2) -> 
-         Equality (aux t1, aux t2)
-      | Inequality (t1, t2) -> 
-         Inequality (aux t1, aux t2) 
-      | FlipBit {bit; t} ->
-         FlipBit {bit = aux bit; t = aux t}
-      | ITE (t1, t2, t3) ->
-         ITE (aux t1, aux t2, aux t3)
-      | Or (t1, t2) ->
-         Or (aux t1, aux t2)
-      | And (t1, t2) ->
-         And (aux t1, aux t2)
-      | LessThan (t1, t2) -> 
-         LessThan (aux t1, aux t2)
-      | LessOrEqual (t1, t2) -> 
-         LessOrEqual (aux t1, aux t2)
-      | GreaterThan (t1, t2) -> 
-         GreaterThan (aux t1, aux t2)
-      | GreaterOrEqual (t1, t2) -> 
-         GreaterOrEqual (aux t1, aux t2)
-      | IntegerToPointerCast t ->
-         IntegerToPointerCast (aux t)
-      | PointerToIntegerCast t ->
-         PointerToIntegerCast (aux t)
-      | Null ->
-         Null
-      | OffsetOf {tag; member} ->
-         OffsetOf {tag; member}
-      | CellPointer ((t1, t2), (t3, t4), t5) ->
-         CellPointer ((aux t1, aux t2), (aux t3, aux t4), aux t5)
-      | App (t1, t2) ->
-         App (aux t1, aux t2)
-      | Env (t, _) ->
-         t
-    in
-    aux t
-
   let contains_env_expression t = 
     let rec aux = function
       | Addr bn -> 
@@ -409,21 +344,7 @@ type condition =
   | Unchanged of term
 
 
-let remove_labels = function
-  | Term t -> 
-     Term (remove_labels t)
-  | Predicate {oq; predicate; arguments; oname} ->
-     let oq = match oq with
-       | None -> None
-       | Some (name, bt, condition) -> Some (name, bt, remove_labels condition)
-     in
-     let arguments = List.map remove_labels arguments in
-     Predicate { oq; predicate; arguments; oname }
-  | Define (name, it) ->
-     Define (name, remove_labels it)
-  | Unchanged t ->
-     Unchanged (remove_labels t)
-    
+
 
 type varg = { vsym : Sym.t; typ : Sctypes.t }
 type aarg = { asym : Sym.t; typ : Sctypes.t }
