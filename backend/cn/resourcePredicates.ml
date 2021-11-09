@@ -339,18 +339,17 @@ let page_alloc_predicates struct_decls =
     let pointer_s, pointer = IT.fresh_named Loc "pointer" in
     let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     let value_s, value = IT.fresh_named (BT.Struct list_head_tag) "value" in
-    let init_s, init = IT.fresh_named BT.Bool "init" in
     let point = {
         ct = struct_ct list_head_tag; 
         pointer = pointer;
         permission = permission;
         value = value;
-        init = init;
+        init = bool_ true;
       }
     in
     let lrt =
       LRT.Logical ((value_s, IT.bt value), (loc, None),
-      LRT.Logical ((init_s, IT.bt init), (loc, None),
+      LRT.Constraint (t_ (good_ (struct_ct list_head_tag, value)), (loc, None),
       LRT.Resource (Point point, (loc, None),
       LRT.I)))
     in
