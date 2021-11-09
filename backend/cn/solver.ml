@@ -20,9 +20,9 @@ type model = Z3.Model.model
 module Params = struct
 
   let logging_params = [
-      (* ("trace", "true");
-       * ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
-       * ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log"); *)
+      (* ("trace", "true"); *)
+      (* ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log"); *)
+      ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log");
     ]
 
   let no_automation_params = [
@@ -510,10 +510,14 @@ let make () : solver =
     let mk_tactic = Z3.Tactic.mk_tactic context in
     let mk_then t1 t2 ts = Z3.Tactic.and_then context t1 t2 ts in
     let tactic = 
+      (* mk_then 
+       *   (mk_tactic "simplify")
+       *   (mk_tactic "solve-eqs")
+       *   [(mk_tactic "smt")] *)
       mk_then 
         (mk_tactic "simplify")
-        (mk_tactic "solve-eqs")
-        [(mk_tactic "smt")]
+        (mk_tactic "smt")
+        []
     in
     Z3.Solver.mk_solver_t context tactic
   in

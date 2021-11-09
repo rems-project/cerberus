@@ -349,40 +349,28 @@ module ResourceInference = struct
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
-               let could_take = and_ [p'.permission; needed] in
                let took = 
-                 and_ (eq_ (requested.pointer, p'.pointer) ::
-                       List.map2 eq__ requested.iargs p'.iargs @
-                       [could_take])
+                 and_ (needed
+                       :: p'.permission
+                       :: eq_ (requested.pointer, p'.pointer)
+                       :: List.map2 eq__ requested.iargs p'.iargs)
                in
-               begin match provable (t_ took) with
-               | `True ->
-                  let oargs = p'.oargs in
-                  let needed = bool_ false in
-                  let permission' = bool_ false in
-                  Predicate {p' with permission = permission'}, (needed, oargs)
-               | `False ->
-                  continue
-               end
+               let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
+               let needed = and_ [needed; not_ took] in
+               let permission' = and_ [p'.permission; not_ took] in
+               Predicate {p' with permission = permission'}, (needed, oargs)
             | QPredicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
-               let can_take = and_ [IT.subst subst p'.permission; needed] in
                let took = 
-                 and_ ((List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs) @
-                       [can_take])
+                 and_ (needed
+                       :: IT.subst subst p'.permission
+                       :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
                in
-               begin match provable (t_ took) with
-               | `True ->
-                  let oargs = List.map (IT.subst subst) p'.oargs in
-                  let needed = bool_ false in
-                  let permission' =
-                    and_ [p'.permission;
-                          ne_ (sym_ (p'.qpointer, BT.Loc), requested.pointer)]
-                  in
-                  QPredicate {p' with permission = permission'}, (needed, oargs)
-               | `False ->
-                  continue
-               end
+               let oargs = List.map2 (fun oa oa' -> ite_ (took, IT.subst subst oa', oa)) oargs p'.oargs in
+               let needed = and_ [needed; not_ took] in
+               let pmatch = eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer) in
+               let permission' = and_ [p'.permission; or_ [not_ pmatch; not_ took]] in
+               QPredicate {p' with permission = permission'}, (needed, oargs)
             | re ->
                continue
           ) (needed, List.map default_ requested.oargs)
@@ -417,36 +405,27 @@ module ResourceInference = struct
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(requested.qpointer, p'.pointer)] in
-               let could_take = and_ [p'.permission; IT.subst subst needed] in
                let took = 
-                 and_ ((List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs) @
-                         [could_take])
+                 and_ (IT.subst subst needed
+                       :: p'.permission 
+                       :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs)
                in
-               begin match provable (t_ took) with
-               | `True ->
-                  let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-                  let needed = and_ [needed; not_ pmatch] in
-                  let oargs = List.map2 (fun oarg oarg' -> ite_ (pmatch, oarg', oarg)) oargs p'.oargs in
-                  let permission' = bool_ false in
-                  (Predicate {p' with permission = permission'}, (needed, oargs))
-               | `False ->
-                  continue
-               end
+               let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
+               let needed = and_ [needed; or_ [not_ pmatch; not_ took]] in
+               let oargs = List.map2 (fun oa oa' -> ite_ (and_ [pmatch; took], oa', oa)) oargs p'.oargs in
+               let permission' = and_ [p'.permission; not_ took] in
+               (Predicate {p' with permission = permission'}, (needed, oargs))
             | QPredicate p' when String.equal requested.name p'.name ->
                let p' = RE.alpha_rename_qpredicate requested.qpointer p' in
-               let could_take = and_ [p'.permission; needed] in
-               let took = could_take in
-               begin match provable (forall_ (requested.qpointer, Loc) 
-                            (impl_ (took,
-                                    and_ (List.map2 eq__ requested.iargs p'.iargs)))) with
-               | `True ->
-                  let needed = and_ [needed; not_ could_take] in
-                  let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
-                  let permission' = and_ [p'.permission; not_ could_take] in
-                  (QPredicate {p' with permission = permission'}, (needed, oargs))
-               | `False ->
-                  continue
-               end
+               let took = 
+                 and_ (needed 
+                       :: p'.permission
+                       :: List.map2 eq__ requested.iargs p'.iargs)
+               in
+               let needed = and_ [needed; not_ took] in
+               let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
+               let permission' = and_ [p'.permission; not_ took] in
+               (QPredicate {p' with permission = permission'}, (needed, oargs))
             | re ->
                continue
           ) (needed, List.map default_ requested.oargs)

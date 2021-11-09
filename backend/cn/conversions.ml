@@ -150,7 +150,7 @@ let make_owned_funarg floc i (pointer : IT.t) path sct =
      ([l;r;c], mapping)
 
 
-let make_owned loc (pointer : IT.t) path sct =
+let make_owned loc ~oname (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
   | Sctype (_, Void) ->
@@ -160,11 +160,19 @@ let make_owned loc (pointer : IT.t) path sct =
      let pointee_bt = BT.of_sct sct in
      let pointee_t = sym_ (pointee, pointee_bt) in
      let l = (`Logical (pointee, pointee_bt), (loc, Some "pointee")) in
-     let mapping = {
+     let mapping = [{
          path = Ast.pointee path; 
          it = pointee_t;
          o_sct = Some sct;
-       } 
+       }] 
+     in
+     let mapping = match oname with
+       | Some name ->
+          {path = Ast.predarg name "value"; 
+           it = pointee_t; 
+           o_sct = Some sct } :: mapping
+       | None ->
+          mapping
      in
      let c = 
        (`Constraint (LC.t_ (good_ (sct, pointee_t))), 
@@ -180,7 +188,7 @@ let make_owned loc (pointer : IT.t) path sct =
            }),
         (loc, Some "ownership"))
      in
-     return ([l;r;c], [mapping])
+     return ([l;r;c], mapping)
 
 
 
@@ -559,7 +567,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
           | None -> 
              fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
           | Some Sctype (_, Pointer sct2) ->
-             make_owned loc it path sct2
+             make_owned loc ~oname it path sct2
           | Some _ ->
              fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
           end
@@ -752,7 +760,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         | None ->
            return (i, mappings)
         | Some loc -> 
-           let@ (i', mapping') = make_owned loc item.it item.path garg.typ in
+           let@ (i', mapping') = make_owned loc ~oname:None item.it item.path garg.typ in
            let mappings = 
              mod_mapping "start" mappings
                (fun mapping -> (item :: mapping') @ mapping)
@@ -844,7 +852,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         | None -> return (o, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
-           let@ (o', mapping') = make_owned loc item.it item.path garg.typ in
+           let@ (o', mapping') = make_owned loc ~oname:None item.it item.path garg.typ in
            let mappings =
              mod_mapping "end" mappings
                (fun mapping -> (item :: mapping') @ mapping)
@@ -971,7 +979,7 @@ let make_label_spec
         | None ->  return (i, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
-           let@ (i', mapping') = make_owned loc item.it item.path garg.typ in
+           let@ (i', mapping') = make_owned loc ~oname:None item.it item.path garg.typ in
            let mappings = 
              mod_mapping lname mappings
                (fun mapping -> mapping' @ mapping)
@@ -985,7 +993,7 @@ let make_label_spec
   let@ (i, mappings) = 
     ListM.fold_leftM (fun (i, mappings) aarg ->
         let item = aarg_item loc aarg in
-        let@ (i', mapping') = make_owned loc item.it item.path aarg.typ in
+        let@ (i', mapping') = make_owned loc ~oname:None item.it item.path aarg.typ in
         let mappings = 
           mod_mapping lname mappings
             (fun mapping -> mapping' @ mapping)
@@ -1004,7 +1012,7 @@ let make_label_spec
       ListM.fold_leftM (fun (i, mapping) (aarg : aarg) ->
           let a = (`Computational (aarg.asym, BT.Loc), (loc, None)) in
           let item = aarg_item loc aarg in
-          let@ (i', mapping') = make_owned loc item.it item.path aarg.typ in 
+          let@ (i', mapping') = make_owned loc ~oname:None item.it item.path aarg.typ in 
           let c = 
             (`Constraint (LC.t_ (good_value layouts (pointer_ct aarg.typ) item.it)),
              (loc, None))

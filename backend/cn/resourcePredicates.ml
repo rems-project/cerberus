@@ -89,6 +89,10 @@ let byte () =
   in
   (id, predicate)
 
+
+
+
+
 let zerobyte () = 
   let id = "ZeroByte" in
   let loc = Loc.other "internal (ZeroByte)" in
@@ -328,6 +332,46 @@ let page_alloc_predicates struct_decls =
 
   let module Aux = LogicalPredicates.PageAlloc.Aux(struct let struct_decls = struct_decls end) in
   let open Aux in
+
+  let list_node = 
+    let id = "ListNode" in
+    let loc = Loc.other "internal (ListNode)" in
+    let pointer_s, pointer = IT.fresh_named Loc "pointer" in
+    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
+    let value_s, value = IT.fresh_named (BT.Struct list_head_tag) "value" in
+    let init_s, init = IT.fresh_named BT.Bool "init" in
+    let point = {
+        ct = struct_ct list_head_tag; 
+        pointer = pointer;
+        permission = permission;
+        value = value;
+        init = init;
+      }
+    in
+    let lrt =
+      LRT.Logical ((value_s, IT.bt value), (loc, None),
+      LRT.Logical ((init_s, IT.bt init), (loc, None),
+      LRT.Resource (Point point, (loc, None),
+      LRT.I)))
+    in
+    let clause = {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = "value"; value}]) 
+      }
+    in
+    let predicate = {
+        loc = loc;
+        pointer = pointer_s;
+        permission = permission_s;
+        iargs = []; 
+        oargs = [("value", IT.bt value)]; 
+        clauses = [clause]; 
+      } 
+    in
+    (id, predicate)
+  in
+
 
   let vmemmap_page =
     let id = "Vmemmap_page" in
@@ -610,7 +654,8 @@ let page_alloc_predicates struct_decls =
 
 
 
-  [vmemmap_page;
+  [list_node;
+   vmemmap_page;
    hyp_pool;
    vpage]
 
