@@ -65,6 +65,8 @@ rule main = parse
   | '@'   { T.AT }
 
   | "each" {T.EACH }
+
+  | "where" {T.WHERE }
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 

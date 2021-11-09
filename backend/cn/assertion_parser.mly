@@ -63,6 +63,9 @@ open Assertion_parser_util
 
 %token EACH
 
+%token WHERE
+
+
 %token EOF
 
 /* %left EQ NE GT LT GE LE */
@@ -91,7 +94,7 @@ start:
 
 
 %inline pred_with_args:
-  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
+  | id=NAME LPAREN args=separated_list(COMMA, term) RPAREN
       { (id, args) }
 
 
@@ -181,7 +184,12 @@ term:
   | INTEGERCAST a1=atomic_term
       { Ast.PointerToIntegerCast a1 }
   | a1=atomic_term LBRACKET a2=term RBRACKET
-      { Ast.App (a1, a2) }
+      { Ast.App (a1, a2) } 
+
+
+term_with_name:
+  | name=NAME EQUAL t=term
+      { (name,t) }
 
 
 
@@ -192,15 +200,20 @@ basetype:
       { BaseTypes.Integer }
   
 
+where_clause:
+  | COMMA WHERE some_oargs=separated_list(COMMA, term_with_name)
+      { some_oargs }
+
 predicate:
-  | id_args=pred_with_args name=NAME
-      { Ast.{oq = None; predicate=fst id_args; arguments = snd id_args; oname = Some name} }
-  | id_args=pred_with_args 
-      { Ast.{oq = None; predicate=fst id_args; arguments = snd id_args; oname = None} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE name=NAME
-      { Ast.{oq = Some (qname,bt,t); predicate=fst id_args; arguments = snd id_args; oname = Some name} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE
-      { Ast.{oq = Some (qname,bt,t); predicate=fst id_args; arguments = snd id_args; oname = None} }
+  | predwithargs=pred_with_args oname=option(NAME) maybe_some_oargs=option(where_clause)
+      { let (predicate, arguments) = predwithargs in
+        let some_oargs = Option.value [] maybe_some_oargs in
+        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname} }
+  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
+      { let (predicate, arguments) = predwithargs in
+        let some_oargs = Option.value [] maybe_some_oargs in
+        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname} }
+
 
 
 cond:

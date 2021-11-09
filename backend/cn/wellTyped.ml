@@ -415,7 +415,7 @@ let ensure_same_argument_number loc input_output has ~expect =
     match input_output with
     | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
     | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
-    | `Output -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+    | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
 
 
 module WRE = struct

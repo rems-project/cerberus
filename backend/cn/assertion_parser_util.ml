@@ -59,4 +59,6 @@ type token =
 
   | EACH
 
+  | WHERE
+
   | EOF

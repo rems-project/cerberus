@@ -215,12 +215,32 @@ let make_block loc (pointer : IT.t) path sct =
      in
      return (l@[r], mapping)
 
+let some_oargs_map loc some_oargs = 
+  ListM.fold_leftM (fun acc (name, it) ->
+      if StringMap.mem name acc 
+      then fail {loc; msg = Generic !^("already defined '" ^ name ^ "'")}
+      else return (StringMap.add name it acc)
+    ) StringMap.empty some_oargs
+
+
+let ensure_some_oargs_empty loc pred some_oargs =
+  match StringMap.choose_opt some_oargs with
+  | None -> return ()
+  | Some (name, _) -> fail {loc; msg = Generic !^("predicate '"^pred^"' does not have output argument '" ^ name ^ "'")}
+
 let make_pred loc (predicates : (string * ResourcePredicates.definition) list) 
-      (pred, def) ~oname pointer iargs = 
-  let (mapping, l) = 
-    List.fold_right (fun (oarg, bt) (mapping, l) ->
-        let s, it = IT.fresh bt in
-        let l = (`Logical (s, bt), (loc, Some ("output argument '" ^ oarg ^"'"))) :: l in
+      (pred, def) ~oname pointer iargs some_oargs = 
+  let@ some_oargs = some_oargs_map loc some_oargs in
+  let (mapping, l, some_oargs, oargs) = 
+    List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
+        let it, l = match StringMap.find_opt oarg some_oargs with
+          | None ->
+             let s, it = IT.fresh bt in
+             let new_l = (`Logical (s, bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
+             (it, new_l :: l)
+          | Some it ->
+             (it, l)
+        in
         let mapping = match oname with
           | Some name ->
              let item = {path = Ast.predarg name oarg; it; o_sct = None } in
@@ -228,10 +248,12 @@ let make_pred loc (predicates : (string * ResourcePredicates.definition) list)
           | None ->
              mapping
         in
-        (mapping, l)
-      ) def.oargs ([], [])
+        let some_oargs = StringMap.remove oarg some_oargs in
+        let oargs = it :: oargs in
+        (mapping, l, some_oargs, oargs)
+      ) def.oargs ([], [], some_oargs, [])
   in
-  let oargs = List.map (fun (`Logical (s, ls), _) -> sym_ (s, ls)) l in
+  let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
     (`Resource (RE.Predicate {
          name = pred; 
@@ -247,17 +269,24 @@ let make_pred loc (predicates : (string * ResourcePredicates.definition) list)
 
 
 let make_qpred loc (predicates : (string * ResourcePredicates.definition) list) 
-      (pred, def) ~oname ~qpointer:(qp,qbt) ~condition pointer iargs = 
+      (pred, def) ~oname ~qpointer:(qp,qbt) ~condition pointer iargs some_oargs = 
   assert (BT.equal qbt BT.Loc);
   let@ () = match is_sym pointer with
     | Some (s, sbt) when Sym.equal s qp && BT.equal sbt qbt -> return ()
     | _ -> fail {loc; msg = Generic (!^"Predicate pointer argument must be the quantified variable")}
   in
-  let (mapping, l) = 
-    List.fold_right (fun (oarg, bt) (mapping, l) ->
-        let lifted_bt = BT.Array (qbt, bt) in
-        let s, it = IT.fresh lifted_bt in
-        let l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) :: l in
+  let@ some_oargs = some_oargs_map loc some_oargs in
+  let (mapping, l, some_oargs, oargs) = 
+    List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
+        let it, l = match StringMap.find_opt oarg some_oargs with
+          | None ->
+             let lifted_bt = BT.Array (qbt, bt) in
+             let s, it = IT.fresh lifted_bt in
+             let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
+             (it, new_l :: l)
+          | Some it ->
+             (it, l)
+        in
         let mapping = match oname with
           | Some name ->
              let item = {path = Ast.predarg name oarg; it; o_sct = None } in
@@ -265,14 +294,12 @@ let make_qpred loc (predicates : (string * ResourcePredicates.definition) list)
           | None ->
              mapping
         in
-        (mapping, l)
-      ) def.oargs ([], [])
+        let some_oargs = StringMap.remove oarg some_oargs in
+        let oargs = (get_ it (sym_ (qp, qbt))) :: oargs in
+        (mapping, l, some_oargs, oargs)
+      ) def.oargs ([], [], some_oargs, [])
   in
-  let oargs = 
-    List.map (fun (`Logical (s, ls), _) -> 
-        get_ (sym_ (s, ls)) (sym_ (qp, qbt))
-      ) l 
-  in
+  let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
     (`Resource (RE.QPredicate {
          name = pred; 
@@ -517,11 +544,13 @@ let resolve_constraint loc layouts default_mapping_name mappings lc =
 
 
 
-let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; oname}) =
+let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname}) =
   match predicate with
   | "Owned" ->
      if oq <> None then
        fail {loc; msg = Generic !^"cannot use 'Owned' with quantifier"}
+     else if some_oargs <> [] then
+       fail {loc; msg = Generic !^"cannot use 'Owned' with output argument syntax"}
      else
        begin match arguments with
        | [path] ->
@@ -540,6 +569,8 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
   | "Block" ->
      if oq <> None then
        fail {loc; msg = Generic !^"cannot use 'Block' with quantifier"}
+     else if some_oargs <> [] then
+       fail {loc; msg = Generic !^"cannot use 'Block' with output argument syntax"}
      else
        begin match arguments with
        | [path] ->
@@ -582,10 +613,18 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
            return t
          ) arguments
      in
+     let@ some_oargs_resolved = 
+       ListM.mapM (fun (name, arg) ->
+           let@ (t, _) = 
+             resolve_index_term loc layouts default_mapping_name mappings 
+               None arg in      (* quantifier not bound in some_oarg definition *)
+           return (name, t)
+         ) some_oargs
+     in
      let@ result = match oq with
        | None ->
           make_pred loc predicates (predicate, def) 
-            ~oname pointer_resolved iargs_resolved 
+            ~oname pointer_resolved iargs_resolved some_oargs_resolved
        | Some ((name, (s, bt)), condition) -> 
           let@ (condition, _) = 
              resolve_index_term loc layouts default_mapping_name mappings 
@@ -593,6 +632,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
           in
           make_qpred loc predicates (predicate, def) 
             ~oname ~qpointer:(s, bt) ~condition pointer_resolved iargs_resolved 
+            some_oargs_resolved
      in
      return result
 

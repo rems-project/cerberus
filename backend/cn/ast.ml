@@ -334,6 +334,7 @@ type predicate = {
     oq : (string * BT.t * term) option;
     predicate : string;
     arguments : term list;
+    some_oargs: (string * term) list;
     oname : string option;
   }
 
