@@ -44,7 +44,7 @@ module Params = struct
       ("smt.logic", "ALL");
       ("smt.arith.solver", "2");
       ("smt.macro_finder", "true");
-      (* ("smt.pull-nested-quantifiers", "true"); *)
+      ("smt.pull-nested-quantifiers", "true");
       (* ("rewriter.elim_rem", "true"); *)
     ]
 
@@ -394,7 +394,8 @@ module Translate = struct
             mk_select context (term f) (term arg)
          | Def ((q_s, q_bt), body) ->
             if warn_lambda then
-              warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt)));
+              warn (!^"generating lambda");
+              (* warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt))); *)
             Z3.Quantifier.expr_of_quantifier
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))

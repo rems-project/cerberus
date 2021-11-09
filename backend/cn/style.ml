@@ -1,11 +1,11 @@
-let style = "@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro&display=swap');
+let style = "@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
 
 * {
     font-size: 10.5pt
 }
 
 html {
-    font-family: 'Source Code Pro', monospace;;
+    font-family: 'Source Sans Pro', monospace;;
     padding: 0;
     margin: 0;
     /* font-size: 8pt; */
