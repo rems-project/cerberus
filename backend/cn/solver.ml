@@ -523,7 +523,7 @@ let make () : solver =
           mk_tactic "elim-term-ite";
           mk_tactic "normalize-bounds";
           mk_tactic "solve-eqs";
-          mk_tactic "aufnira";
+          mk_tactic "auflia";
           mk_tactic "smt"
         ]
     in
