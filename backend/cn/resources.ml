@@ -359,12 +359,12 @@ module RE = struct
     (* let open IT in *)
     match resource, resource' with
     | Point p, Point p' -> 
-       (* LC.T (bool_ true) *)
-       LC.T (impl_ (
-            and_ [p.permission; p'.permission],
-            ne_ (p.pointer, p'.pointer)
-          )
-         )
+       LC.T (bool_ true)
+       (* LC.T (impl_ (
+        *      and_ [p.permission; p'.permission],
+        *      ne_ (p.pointer, p'.pointer)
+        *    )
+        *   ) *)
     | Predicate _, _
     | _, Predicate _ -> 
        LC.T (bool_ true)
