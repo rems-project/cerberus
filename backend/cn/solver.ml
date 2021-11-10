@@ -555,7 +555,7 @@ let shortcut lc =
 
 
 let check global (solver : solver) assumptions lc = 
-  let () = Debug_ocaml.begin_csv_timing "solving" in
+  (* let () = Debug_ocaml.begin_csv_timing "solving" in *)
   let it = ReduceQuery.constr global assumptions lc in
   let t = Translate.term global.struct_decls (not_ it) in
   let result = match Z3.Solver.check solver.fancy [t] with
@@ -563,7 +563,7 @@ let check global (solver : solver) assumptions lc =
     | Z3.Solver.SATISFIABLE -> `False
     | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
   in
-  let () = Debug_ocaml.end_csv_timing "solving" in
+  (* let () = Debug_ocaml.end_csv_timing "solving" in *)
   result
 
 
