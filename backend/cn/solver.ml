@@ -508,6 +508,7 @@ end
 let make () : solver = 
   (* https://stackoverflow.com/a/14305028 describes an example where
      tactics are useful *)
+  (* http://www.cs.tau.ac.il/~msagiv/courses/asv/z3py/strategies-examples.htm *)
   (* also see: https://z3prover.github.io/api/html/group__capi.html
      regarding "and-then" *)
   let fancy = 
