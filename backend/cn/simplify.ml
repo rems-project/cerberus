@@ -20,7 +20,7 @@ let simp struct_decls (lcs : LC.t list) =
     List.fold_right (fun c values ->
         match c with
         | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                                 it')), _)) ->
+                                 it')), _)) (* when Option.is_some (is_lit it') *) ->
            (* when IT.size it' <= 10 -> *)
              SymMap.add sym it' values
         | _ ->
@@ -377,7 +377,6 @@ let simp struct_decls (lcs : LC.t list) =
        | IT (Bool_op (ITE (cond, array1, array2)), bt') ->
           (* (if cond then array1 else array2)[index] -->
            * if cond then array1[index] else array2[index] *)
-          assert (BT.equal bt bt');
           ite_ (cond, 
                 aux (get_ array1 index), 
                 aux (get_ array2 index))

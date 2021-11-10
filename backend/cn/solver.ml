@@ -520,8 +520,10 @@ let make () : solver =
     let tactic = 
       mk_then  [
           mk_tactic "simplify";
+          mk_tactic "elim-term-ite";
           mk_tactic "normalize-bounds";
           mk_tactic "solve-eqs";
+          mk_tactic "aufnira";
           mk_tactic "smt"
         ]
     in
