@@ -519,6 +519,8 @@ let make () : solver =
     in
     let tactic = 
       mk_then  [
+          mk_tactic "propagate-values";
+          mk_tactic "propagate-ineqs";
           mk_tactic "simplify";
           mk_tactic "elim-term-ite";
           mk_tactic "normalize-bounds";
