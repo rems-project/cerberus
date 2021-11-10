@@ -60,5 +60,8 @@ type token =
   | EACH
 
   | WHERE
+  | WITH
+  | TYP
+  | TYPEOF
 
   | EOF

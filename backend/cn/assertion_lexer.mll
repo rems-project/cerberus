@@ -67,6 +67,9 @@ rule main = parse
   | "each" {T.EACH }
 
   | "where" {T.WHERE }
+  | "with" {T.WHERE }
+  | "type" {T.TYP }
+  | "typeof" {T.TYPEOF }
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 

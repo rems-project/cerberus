@@ -330,12 +330,17 @@ include Terms
 
 
 
+type typ = 
+  | Typeof of term
+
+
 type predicate = {
     oq : (string * BT.t * term) option;
     predicate : string;
     arguments : term list;
     some_oargs: (string * term) list;
     oname : string option;
+    typ: typ option;
   }
 
 type condition = 

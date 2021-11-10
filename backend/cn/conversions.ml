@@ -192,8 +192,6 @@ let make_owned loc ~oname (pointer : IT.t) path sct =
 
 
 
-
-
 let make_block loc (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
@@ -542,7 +540,30 @@ let resolve_index_term loc
        end
   in
   resolve term (StringMap.find default_mapping_name mappings)
+
+
+
+let resolve_typ loc 
+      (layouts : Memory.struct_decls)
+      (default_mapping_name : string)
+      (mappings : mapping StringMap.t)
+      (oquantifier : (string * (Sym.t * BT.t)) option)
+      (typ: Ast.typ) =
+  match typ with
+  | Typeof term ->
+     let@ (_, osct) = 
+       resolve_index_term loc layouts default_mapping_name
+         mappings oquantifier term
+     in
+     match osct with
+     | Some sct -> return sct
+     | None ->
+        fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
+                                    Ast.pp false term)}
+
+
      
+
 
 
 let resolve_constraint loc layouts default_mapping_name mappings lc = 
@@ -552,66 +573,62 @@ let resolve_constraint loc layouts default_mapping_name mappings lc =
 
 
 
-let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname}) =
-  match predicate with
-  | "Owned" ->
-     if oq <> None then
-       fail {loc; msg = Generic !^"cannot use 'Owned' with quantifier"}
-     else if some_oargs <> [] then
-       fail {loc; msg = Generic !^"cannot use 'Owned' with output argument syntax"}
-     else
-       begin match arguments with
-       | [path] ->
-          let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings None path in
-          begin match sct with
-          | None -> 
-             fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
-          | Some Sctype (_, Pointer sct2) ->
-             make_owned loc ~oname it path sct2
-          | Some _ ->
-             fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
-          end
-       | _ ->
-          fail {loc; msg = Generic !^"Owned predicate takes 1 argument, which has to be a path"}
-       end
-  | "Block" ->
-     if oq <> None then
-       fail {loc; msg = Generic !^"cannot use 'Block' with quantifier"}
-     else if some_oargs <> [] then
-       fail {loc; msg = Generic !^"cannot use 'Block' with output argument syntax"}
-     else
-       begin match arguments with
-       | [path] ->
-          let@ (it, sct) = resolve_index_term loc layouts default_mapping_name mappings None path in
-          begin match sct with
-          | None -> 
-             fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false path))}
-          | Some (Sctype (_, Pointer sct2)) -> 
-             make_block loc it path sct2
-          | Some _ ->
-             fail {loc; msg = Generic (Ast.Terms.pp false path ^^^ !^"is not a pointer")}
-          end
-       | _ ->
-          fail {loc; msg = Generic !^"Block predicate takes 1 argument, which has to be a path"}
-       end
+
+
+let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname; typ}) =
+  let oq = match oq with
+    | None -> None
+    | Some (name, bt, condition) ->
+       let s = Sym.fresh_pretty name in
+       Some ((name, (s, bt)), condition)
+  in
+  let@ (pointer, arguments) = match arguments with
+    | pointer :: arguments -> return (pointer, arguments)
+    | _ -> fail {loc; msg = Generic !^("missing first (pointer) argument")}
+  in
+  let@ (pointer_resolved, pointer_sct) = 
+    resolve_index_term loc layouts default_mapping_name mappings 
+      (Option.map fst oq) pointer 
+  in
+  let ownership_kind = match predicate with
+    | "Owned" -> `Builtin `Owned
+    | "Block" -> `Builtin `Block
+    | str -> `Predicate str
+  in
+  match ownership_kind with
+  | `Builtin block_or_owned ->
+     let@ () = match oq with
+       | None -> return ()
+       | Some _ -> fail {loc; msg = Generic !^("cannot use '"^predicate^"' with quantifier")}
+     in
+     let@ () = match arguments, some_oargs with
+       | [], [] -> return ()
+       | _ :: _, _ -> fail {loc; msg = Generic !^("'"^predicate^"' takes 1 argument, which has to be a path")}
+       | _, _ :: _ -> fail {loc; msg = Generic !^("cannot use '"^predicate^"' with output argument syntax")}
+     in
+     let@ pointee_sct = match typ, pointer_sct with
+       | Some typ, _ ->
+          resolve_typ loc layouts default_mapping_name mappings 
+            (Option.map fst oq) typ
+       | _, Some (Sctype (_, Pointer pointee_sct)) -> 
+          return pointee_sct
+       | _, Some _ ->
+          fail {loc; msg = Generic (Ast.Terms.pp false pointer ^^^ !^"is not a pointer")}
+       | None, None ->
+          fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false pointer))}
+     in
+     begin match block_or_owned with
+     | `Owned -> make_owned loc ~oname pointer_resolved pointer pointee_sct
+     | `Block -> make_block loc pointer_resolved pointer pointee_sct
+     end
   | _ ->
+     let@ () = match typ with
+       | None -> return ()
+       | Some _ -> fail {loc; msg = Generic !^"cannot use 'type' syntax with predicates"}
+     in
      let@ def = match List.assoc_opt String.equal predicate predicates with
        | Some def -> return def
        | None -> fail {loc; msg = Unknown_resource_predicate predicate}
-     in
-     let@ (pointer, arguments) = match arguments with
-       | pointer :: arguments -> return (pointer, arguments)
-       | _ ->
-          fail {loc; msg = Generic !^("predicates take at least one (pointer) argument")}
-     in
-     let oq = 
-       Option.bind oq
-         (fun (name, bt, condition) -> 
-           Some ((name, (Sym.fresh_pretty name, bt)), condition))
-     in
-     let@ (pointer_resolved, _) = 
-       resolve_index_term loc layouts default_mapping_name mappings 
-         (Option.map fst oq) pointer 
      in
      let@ iargs_resolved = 
        ListM.mapM (fun arg ->

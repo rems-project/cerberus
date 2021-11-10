@@ -64,6 +64,9 @@ open Assertion_parser_util
 %token EACH
 
 %token WHERE
+%token WITH
+%token TYP
+%token TYPEOF
 
 
 %token EOF
@@ -200,19 +203,31 @@ basetype:
       { BaseTypes.Integer }
   
 
-where_clause:
+%inline ctype:
+  | TYPEOF LPAREN t=term RPAREN
+      { Ast.Typeof t }
+
+%inline with_clause:
+  | WITH TYP EQUAL typ=ctype
+      { typ }
+
+%inline where_clause:
   | COMMA WHERE some_oargs=separated_list(COMMA, term_with_name)
       { some_oargs }
 
+
+
+
+
 predicate:
-  | predwithargs=pred_with_args oname=option(NAME) maybe_some_oargs=option(where_clause)
+  | predwithargs=pred_with_args oname=option(NAME) maybe_typ=option(with_clause) maybe_some_oargs=option(where_clause)
       { let (predicate, arguments) = predwithargs in
         let some_oargs = Option.value [] maybe_some_oargs in
-        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
+        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; typ = maybe_typ} }
+  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args maybe_typ=option(with_clause) RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
       { let (predicate, arguments) = predwithargs in
         let some_oargs = Option.value [] maybe_some_oargs in
-        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname} }
+        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; typ = maybe_typ} }
 
 
 
