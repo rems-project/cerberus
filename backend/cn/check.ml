@@ -2454,10 +2454,10 @@ let check mu_file =
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in
 
-  let () = Debug_ocaml.begin_csv_timing "functions" in
   let check_function =
     fun fsym fn ->
     let decl = Global.get_fun_decl ctxt.global fsym in
+    let () = Debug_ocaml.begin_csv_timing "functions" in
     let@ () = match fn, decl with
       | M_Fun (rbt, args, body), Some (loc, ftyp, trusted) ->
          begin match trusted with
@@ -2480,9 +2480,9 @@ let check mu_file =
       | M_BuiltinDecl _, _ -> 
          return ()
     in
+    let () = Debug_ocaml.end_csv_timing "functions" in
     return ()
   in
-  let () = Debug_ocaml.end_csv_timing "functions" in
 
   let () = Debug_ocaml.begin_csv_timing "check stdlib" in
   let@ () = PmapM.iterM check_function mu_file.mu_stdlib in

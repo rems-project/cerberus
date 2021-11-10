@@ -13,14 +13,14 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let rec simp struct_decls (lcs : LC.t list) =
+let simp struct_decls (lcs : LC.t list) =
 
 
   let values = 
     List.fold_right (fun c values ->
         match c with
         | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                                 ((IT (Lit lit, _)) as it'))), bt)) ->
+                                 it')), _)) ->
            (* when IT.size it' <= 10 -> *)
              SymMap.add sym it' values
         | _ ->
@@ -259,8 +259,8 @@ let rec simp struct_decls (lcs : LC.t list) =
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = simp struct_decls (LC.T a :: lcs) b in
-       let c = simp struct_decls (LC.T (not_ a) :: lcs) c in
+       let b = aux b in
+       let c = aux c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -367,22 +367,24 @@ let rec simp struct_decls (lcs : LC.t list) =
        let t2 = aux t2 in
        let t3 = aux t3 in
        IT (Array_op (Set (t1, t2, t3)), bt)
-    | Get (it, arg) ->
-       let it = aux it in
-       let arg = aux arg in
-       begin match arg with
+    | Get (array, index) ->
+       let array = aux array in
+       let index = aux index in
+       begin match array with
        | IT (Array_op (Def ((s, abt), body)), _) ->
-          aux (IT.subst (IT.make_subst [(s, arg)]) body)
-       | IT (Bool_op (ITE (cond, a1, a2)), _) ->
-          let r = 
-            ite_ (cond, 
-                  aux (get_ a1 arg), 
-                  aux (get_ a2 arg))
-          in
-          aux r
+          assert (BT.equal abt (IT.bt index));
+          aux (IT.subst (IT.make_subst [(s, index)]) body)
+       | IT (Bool_op (ITE (cond, array1, array2)), bt') ->
+          (* (if cond then array1 else array2)[index] -->
+           * if cond then array1[index] else array2[index] *)
+          assert (BT.equal bt bt');
+          ite_ (cond, 
+                aux (get_ array1 index), 
+                aux (get_ array2 index))
        | _ ->
-          IT (Array_op (Get (it, arg)), bt)
+          IT (Array_op (Get (array, index)), bt)
        end
+
     | Def ((s, abt), body) ->
        let s' = Sym.fresh_same s in 
        let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
