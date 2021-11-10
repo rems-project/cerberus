@@ -15,6 +15,7 @@ module SymPairMap = Map.Make(SymPair)
 
 let rec simp struct_decls (lcs : LC.t list) =
 
+
   let values = 
     List.fold_right (fun c values ->
         match c with
@@ -369,7 +370,19 @@ let rec simp struct_decls (lcs : LC.t list) =
     | Get (it, arg) ->
        let it = aux it in
        let arg = aux arg in
-       IT (Array_op (Get (it, arg)), bt)
+       begin match arg with
+       | IT (Array_op (Def ((s, abt), body)), _) ->
+          aux (IT.subst (IT.make_subst [(s, arg)]) body)
+       | IT (Bool_op (ITE (cond, a1, a2)), _) ->
+          let r = 
+            ite_ (cond, 
+                  aux (get_ a1 arg), 
+                  aux (get_ a2 arg))
+          in
+          aux r
+       | _ ->
+          IT (Array_op (Get (it, arg)), bt)
+       end
     | Def ((s, abt), body) ->
        let s' = Sym.fresh_same s in 
        let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
@@ -379,7 +392,9 @@ let rec simp struct_decls (lcs : LC.t list) =
   
   (* fun term -> aux term *)
 
-  fun term -> aux term
+  fun term -> 
+  let result = aux term in
+  result
 
   (* let term = aux term in
    * if with_solver && IT.size term <= 50 then term else

@@ -412,7 +412,8 @@ module Translate = struct
          t
     in
 
-    term
+    fun it -> 
+    term it
 
 
 
@@ -511,14 +512,14 @@ let make () : solver =
     let mk_tactic = Z3.Tactic.mk_tactic context in
     let mk_then t1 t2 ts = Z3.Tactic.and_then context t1 t2 ts in
     let tactic = 
-      (* mk_then 
-       *   (mk_tactic "simplify")
-       *   (mk_tactic "solve-eqs")
-       *   [(mk_tactic "smt")] *)
       mk_then 
         (mk_tactic "simplify")
-        (mk_tactic "smt")
-        []
+        (mk_tactic "solve-eqs")
+        [(mk_tactic "smt")]
+      (* mk_then 
+       *   (mk_tactic "simplify")
+       *   (mk_tactic "smt")
+       *   [] *)
     in
     Z3.Solver.mk_solver_t context tactic
   in
