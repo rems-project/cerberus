@@ -367,10 +367,9 @@ let pp_message te =
      let short = !^"Found no quantified constraints containing this fact" in
      let explanation = Explain.explanation ctxt (IT.free_vars to_check) in
      let state = Explain.state ctxt explanation model in
-     let descr = 
-       parens (!^"to check:" ^^^ IT.pp (IT.subst explanation.substitution to_check))
-     in
-     { short; descr = Some descr; state = Some state }
+     let descr = None in
+       (* parens (!^"to check:" ^^^ IT.pp (IT.subst explanation.substitution to_check)) *)
+     { short; descr = descr; state = Some state }
   | Generic err ->
      let short = err in
      { short; descr = None; state = None }

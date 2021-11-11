@@ -257,20 +257,16 @@ module ResourceInference = struct
          in
          return r
       | `False model ->
-         let@ lrt = match requested.ct with
+         let@ resource = match requested.ct with
            | Sctype (_, Array (act, Some length)) ->
               fold_array loc failure act requested.pointer length requested.permission
            | Sctype (_, Struct tag) ->
-              let@ resource = 
-                fold_struct loc failure tag requested.pointer 
-                  requested.permission
-              in
-              let lrt = LRT.Resource (resource, (loc, None), LRT.I) in
-              return lrt
+              fold_struct loc failure tag requested.pointer 
+                requested.permission
            | _ -> 
               fail (failure model)
          in
-         let@ () = bind_logical_return_type (Some (Loc loc)) lrt in
+         let@ () = add_r (Some (Loc loc)) resource in
          point_request loc failure requested
       end
 
@@ -474,14 +470,13 @@ module ResourceInference = struct
         }
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
-      let folded_value_s, folded_value = 
-        IT.fresh (BT.Array (Integer, BT.of_sct item_ct))
-      in
-      let folded_value_constraint = 
-        let i_s, i = IT.fresh Integer in
-        let subst = make_subst [(qpoint.qpointer, pointer i)] in
-        eachI_ (0, i_s, length - 1) 
-          (eq_ (get_ folded_value i, IT.subst subst qpoint.value))
+      let folded_value = 
+        let rec aux value i = 
+          if i < 0 then value else 
+            let subst = make_subst [(qpoint.qpointer, pointer (int_ i))] in
+            aux (set_ value (int_ i, IT.subst subst qpoint.value)) (i - 1)
+        in
+        aux (default_ (BT.Array (Integer, BT.of_sct item_ct))) (length - 1)
       in
       let folded_init = 
         let i_s, i = IT.fresh Integer  in
@@ -490,47 +485,14 @@ module ResourceInference = struct
       in
       let folded_resource = 
         Point {
-             ct = array_ct item_ct (Some length);
-             pointer = base;
-             value = folded_value;
-             init = folded_init;
-             permission = permission;
-           }
-      in
-      let rt = 
-        LRT.Logical ((folded_value_s, IT.bt folded_value), (loc, None),
-        LRT.Resource (folded_resource, (loc, None), 
-        LRT.Constraint (t_ folded_value_constraint, (loc, None),
-        LRT.I)))
-      in
-      return rt
-
-    and unfold_array loc failure item_ct base length permission =   
-      debug 7 (lazy (item "unfold array" Pp.empty));
-      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
-      debug 7 (lazy (item "base" (IT.pp base)));
-      debug 7 (lazy (item "length" (IT.pp (int_ length))));
-      debug 7 (lazy (item "permission" (IT.pp permission)));
-      let@ point = 
-        point_request loc failure 
-          (unfold_array_request item_ct base length permission) 
-      in
-      let item_size = int_ (Memory.size_of_ctype item_ct) in
-      let unfolded_resource = 
-        let qp_s, qp_t = IT.fresh Loc in
-        QPoint {
-            ct = item_ct;
-            qpointer = qp_s;
-            value = 
-              get_ point.value 
-                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
-            init = point.init;
-            permission = 
-              array_permission ~base ~item_size ~length:(int_ length) 
-                ~permission ~qpointer:qp_t;
+            ct = array_ct item_ct (Some length);
+            pointer = base;
+            value = folded_value;
+            init = folded_init;
+            permission = permission;
           }
       in
-      return unfolded_resource
+      return folded_resource
 
 
     and fold_struct loc failure tag pointer_t permission_t =
@@ -585,7 +547,34 @@ module ResourceInference = struct
       in
       return folded_resource
 
-    and unfold_struct loc failure tag pointer_t permission_t = 
+    let unfold_array loc failure item_ct base length permission =   
+      debug 7 (lazy (item "unfold array" Pp.empty));
+      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
+      debug 7 (lazy (item "base" (IT.pp base)));
+      debug 7 (lazy (item "length" (IT.pp (int_ length))));
+      debug 7 (lazy (item "permission" (IT.pp permission)));
+      let@ point = 
+        point_request loc failure 
+          (unfold_array_request item_ct base length permission) 
+      in
+      let item_size = int_ (Memory.size_of_ctype item_ct) in
+      let unfolded_resource = 
+        let qp_s, qp_t = IT.fresh Loc in
+        QPoint {
+            ct = item_ct;
+            qpointer = qp_s;
+            value = 
+              get_ point.value 
+                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
+            init = point.init;
+            permission = 
+              array_permission ~base ~item_size ~length:(int_ length) 
+                ~permission ~qpointer:qp_t;
+          }
+      in
+      return unfolded_resource
+
+    let unfold_struct loc failure tag pointer_t permission_t = 
       debug 7 (lazy (item "unfold struct" Pp.empty));
       debug 7 (lazy (item "tag" (Sym.pp tag)));
       debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
@@ -2036,28 +2025,33 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                in
                fail (fun _ -> {loc; msg = Generic !^err})
           in
-          let@ provable = provable in
+          (* print stdout (item "qarg" (IT.pp qarg)); *)
           let@ provable_or_model = provable_or_model in
           let@ constraints = all_constraints () in
           let to_check = 
-            List.filter_map (function
-                | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
-                   let su = make_subst [(fst qpred'.q, qarg)] in
-                   let condition' = IT.subst su qpred'.condition in
-                   let pred_args' = List.map (IT.subst su) qpred'.pred.args in
-                   let matching = 
-                     eq_ (LP.open_pred global def args, 
-                          LP.open_pred global def pred_args') 
-                   in
-                   Some (and_ [condition'; matching])
-                | _ -> 
-                   None
-              ) constraints
+            let body = LP.open_pred global def args in
+            (* print stdout (item "body" (IT.pp body)); *)
+            let assumptions = 
+              List.filter_map (function
+                  | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
+                     let su = make_subst [(fst qpred'.q, qarg)] in
+                     let condition' = IT.subst su qpred'.condition in
+                     let pred_args' = List.map (IT.subst su) qpred'.pred.args in
+                     Some (impl_ (condition', LP.open_pred global def pred_args'))
+                  | _ -> 
+                     None
+                ) constraints
+            in
+            (* List.iter (fun it ->
+             *     print stdout (item "assumption" (IT.pp it));
+             *     ) assumptions; *)
+            print_endline "";
+            impl_ (and_ assumptions, body)
           in
-          let@ () = match provable_or_model (t_ (or_ to_check)) with
+          let@ () = match provable_or_model (t_ to_check) with
             | `True -> return ()
             | `False model ->
-               fail (fun ctxt -> {loc; msg = No_quantified_constraints {to_check = or_ to_check; ctxt; model}})
+               fail (fun ctxt -> {loc; msg = No_quantified_constraints {to_check; ctxt; model}})
           in
           return rt
        | Show ->

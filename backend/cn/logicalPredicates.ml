@@ -164,7 +164,10 @@ module PageAlloc = struct
           representable_ (integer_ct (Signed Int_), page %. "refcount");
           (* order is HYP_NO_ORDER or between 0 and max_order *)
           (or_ [(page %. "order") %== int_ hHYP_NO_ORDER; 
-                and_ [int_ 0 %<= (page %. "order"); (page %. "order") %< (pool %. "max_order")]]);              
+                and_ [int_ 0 %<= (page %. "order"); 
+                      (page %. "order") %< (pool %. "max_order");
+                      (page %. "order") %< int_ mMAX_ORDER;
+          ]]);              
           (* points back to the pool *)
           ((page %. "pool") %== pool_pointer);
           (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
@@ -430,7 +433,111 @@ module PageAlloc = struct
       (id, { loc; args; qarg; body; infer_arguments})
       
     in
-    [vmemmap_page_wf;
+
+
+
+
+
+
+
+    let bogus_vmemmap_page_wf =
+
+      let id = "BOGUS_Vmemmap_page_wf" in
+      let loc = Loc.other "internal (Vmemmap_page_wf)" in
+
+      let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in
+      let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
+      let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
+      let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
+
+      let page_s, page = 
+        IT.fresh_named (BT.Struct hyp_page_tag) "page" 
+      in
+
+      let args = [
+          (page_pointer_s, IT.bt page_pointer);
+          (* (page_s, IT.bt page); *)
+          (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+          (page_s, IT.bt page);
+          (pool_pointer_s, IT.bt pool_pointer);
+          (pool_s, IT.bt pool);
+        ]
+      in
+      let qarg = Some 0 in
+
+      let self_node_pointer = 
+        memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
+
+      let pool_free_area_pointer = 
+        arrayShift_
+          (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
+           struct_ct list_head_tag,
+           page %. "order");
+      in
+
+      (* wrong, have to fix *)
+      let prev_next_well_formed prev_next_s = 
+        let inv_prev_next_s = 
+          if prev_next_s = "prev" then "next" else "prev"
+        in
+        let prev_next = (page %. "node") %. prev_next_s in
+        or_ [
+            (* either empty list (pointer to itself) *)
+            prev_next %== self_node_pointer;
+            (* or pointer to free_area cell *)
+            impl_ (
+                bool_ true
+                (* and_ [
+                 *     (int_ 0) %<= (page %. "order");
+                 *     (page %. "order") %< (int_ 11)
+                 *   ], *)
+              ,
+                and_ (
+                    let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
+                    [prev_next %== pool_free_area_pointer;
+                     (free_area_entry %. inv_prev_next_s) %== self_node_pointer]
+                  )
+              );
+            (* or pointer to other vmemmap cell, within the same range*)
+          ]
+      in
+
+      let constrs = [
+          prev_next_well_formed "prev";
+        ]
+      in
+
+
+      let body = and_ constrs in
+
+      let infer_arguments = 
+        AT.Computational ((page_pointer_s, IT.bt page_pointer), (loc, None),
+        AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
+        AT.Computational ((page_s, IT.bt page), (loc, None), 
+        AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
+        AT.Computational ((pool_s, IT.bt pool), (loc, None),
+        AT.I OutputDef.[
+            {loc; name = "page_pointer"; value = page_pointer};
+            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = "page"; value = page};
+            {loc; name = "pool_pointer"; value = pool_pointer};
+            {loc; name = "pool"; value = pool};
+          ])))))
+      in
+
+      (id, {loc; args; body; qarg; infer_arguments} )
+    in
+
+
+
+
+
+
+
+
+
+    [bogus_vmemmap_page_wf;
+     vmemmap_page_wf;
      free_area_cell_wf;
      hyp_pool_wf]
 
