@@ -2037,6 +2037,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                fail (fun _ -> {loc; msg = Generic !^err})
           in
           let@ provable = provable in
+          let@ provable_or_model = provable_or_model in
           let@ constraints = all_constraints () in
           let to_check = 
             List.filter_map (function
@@ -2053,11 +2054,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                    None
               ) constraints
           in
-          let@ () = match provable (t_ (or_ to_check)) with
+          let@ () = match provable_or_model (t_ (or_ to_check)) with
             | `True -> return ()
-            | `False ->
-               let err = "Found no quantified constraints containing this fact" in
-               fail (fun _ -> {loc; msg = Generic !^err})
+            | `False model ->
+               fail (fun ctxt -> {loc; msg = No_quantified_constraints {to_check = or_ to_check; ctxt; model}})
           in
           return rt
        | Show ->

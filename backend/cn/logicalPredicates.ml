@@ -136,7 +136,11 @@ module PageAlloc = struct
             (* either empty list (pointer to itself) *)
             prev_next %== self_node_pointer;
             (* or pointer to free_area cell *)
-            prev_next %== pool_free_area_pointer;
+            and_ (
+                let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
+                [prev_next %== pool_free_area_pointer;
+                 (free_area_entry %. inv_prev_next_s) %== self_node_pointer]
+              );
             (* or pointer to other vmemmap cell, within the same range*)
             and_ (
                 let prev_next_page_pointer = 
@@ -146,10 +150,10 @@ module PageAlloc = struct
                 [vmemmap_good_pointer ~vmemmap_pointer prev_next_page_pointer
                    (pool %. "range_start") (pool %. "range_end")
                 ;
-                  (container_of_ 
-                    (((prev_next_page %. "node") %. inv_prev_next_s),
-                     hyp_page_tag,
-                     Id.id "node")) %== page_pointer
+                  (((prev_next_page %. "node") %. inv_prev_next_s) 
+                   %== self_node_pointer)
+                ;
+                  ((prev_next_page %. "order") %== (page %. "order"))
                 ]
               )
           ]

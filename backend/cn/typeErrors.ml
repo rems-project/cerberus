@@ -117,7 +117,7 @@ type message =
   | Implementation_defined_behaviour of document * state_report
   | Unspecified of CF.Ctype.ctype
   | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
-
+  | No_quantified_constraints of {to_check: IT.t; ctxt: Context.t; model : Solver.model_with_q}
   | Generic of Pp.document
 
 
@@ -362,6 +362,14 @@ let pp_message te =
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model in
      let descr = !^err in
+     { short; descr = Some descr; state = Some state }
+  | No_quantified_constraints {to_check; ctxt; model} ->
+     let short = !^"Found no quantified constraints containing this fact" in
+     let explanation = Explain.explanation ctxt (IT.free_vars to_check) in
+     let state = Explain.state ctxt explanation model in
+     let descr = 
+       parens (!^"to check:" ^^^ IT.pp (IT.subst explanation.substitution to_check))
+     in
      { short; descr = Some descr; state = Some state }
   | Generic err ->
      let short = err in
