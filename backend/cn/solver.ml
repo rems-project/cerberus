@@ -262,7 +262,7 @@ module Translate = struct
          | Sub (t1, t2) -> mk_sub context [term t1; term t2]
          | Mul (t1, t2) -> mk_mul context [term t1; term t2]
          | Div (t1, t2) -> mk_div context (term t1) (term t2)
-         | Exp (t1, t2) -> mk_power context (term t1) (term t2)
+         | Exp (t1, t2) -> Real.mk_real2int context (mk_power context (term t1) (term t2))
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
          | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
          | LT (t1, t2) -> mk_lt context (term t1) (term t2)

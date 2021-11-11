@@ -399,7 +399,7 @@ let resolve_index_term loc
     | Exponentiation (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
-       return (IT (Arith_op (Exp (it, it')), IT.bt it), None)
+       return (exp_ (it, it'), None)
     | Remainder (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in
