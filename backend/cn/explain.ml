@@ -306,7 +306,9 @@ let symbol_it = function
 
 
 
-let state ctxt {substitution; vclasses; relevant} (model : Solver.model)=
+let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)=
+
+  let model, quantifier_counter_model = model_with_q in
 
   let open Report in
 
@@ -510,7 +512,25 @@ let state ctxt {substitution; vclasses; relevant} (model : Solver.model)=
         else None
       ) vclasses
   in
+
+
   let logical_var_lines = 
+    
+    let qvars = match quantifier_counter_model with
+      | None -> []
+      | Some (qs, bt) ->
+         let expr = match List.assoc_opt Sym.equal qs substitution.replace with
+           | None -> !^"?QVAR"
+           | Some it -> !^"?QVAR" ^^^ equals ^^^ IT.pp it
+         in
+         let value = evaluate (IT.sym_ (qs, bt)) in
+         let entry = {var = expr; value = maybe_evaluated value} in
+         [entry]
+    in
+
+
+    qvars 
+    @ 
     List.filter_map (fun (vclass,c) ->
         if report vclass && not (BT.equal vclass.sort Loc) then
           let expr = Ast.Terms.pp false c.path in

@@ -524,6 +524,12 @@ let resolve_index_term loc
        let t = subarray_condition ~base ~item_size:step ~from_index ~to_index 
                  ~qpointer:pointer in
        return (t, None)
+    | Disjoint ((p1, sz1), (p2, sz2)) ->
+       let@ (p1, _) = resolve p1 mapping in
+       let@ (sz1, _) = resolve sz1 mapping in
+       let@ (p2, _) = resolve p2 mapping in
+       let@ (sz2, _) = resolve sz2 mapping in
+       return (disjoint_ (p1, sz1) (p2, sz2), None)
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping in
        let@ (it2, _) = resolve t2 mapping in

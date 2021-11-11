@@ -378,7 +378,37 @@ module PageAlloc = struct
                   array_ct (struct_ct hyp_page_tag) None)
       in
 
-      let body = and_ [metadata_well_formedness; vmemmap_pointer_aligned] in
+
+  
+
+    let hyp_pool_vmemmap_disjoint =
+      (* the vmemamp can be bigger than just the part managed by this
+         allocator *)
+      let end_i = (pool %. "range_end") %/ (z_ pPAGE_SIZE) in
+      let start_i = (pool %. "range_start") %/ (z_ pPAGE_SIZE) in
+      let start_offset = start_i %* (int_ (Memory.size_of_struct hyp_page_tag)) in
+      let vmemmap_start_pointer = 
+        integerToPointerCast_
+          (add_ (pointerToIntegerCast_ vmemmap_pointer,
+                 start_offset))
+      in
+      (* end_i is the first index outside the vmemmap *)
+      let vmemmap_index_length = end_i %- start_i in
+      let vmemmap_length = 
+        vmemmap_index_length %* 
+          (int_ (Memory.size_of_struct hyp_page_tag))
+      in
+      IT.disjoint_ 
+        (pool_pointer, int_ (Memory.size_of_struct hyp_pool_tag))
+        (vmemmap_start_pointer, vmemmap_length)
+    in
+
+
+      let body = 
+        and_ [metadata_well_formedness; 
+              vmemmap_pointer_aligned;
+              hyp_pool_vmemmap_disjoint;] 
+      in
 
       let infer_arguments = 
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),

@@ -1058,6 +1058,15 @@ let def_ sym e = eq_ (sym_ (sym, bt e), e)
 let in_range within (min, max) = 
   and_ [le_ (min, within); le_ (within, max)]
 
+let disjoint_ (p1, sz1) (p2, sz2) = 
+  let p1i = pointerToIntegerCast_ p1 in
+  let p2i = pointerToIntegerCast_ p2 in
+  or_ [le_ (add_ (p1i, sz1), p2i);
+       le_ (add_ (p2i, sz2), p1i)]
+  
+
+
+
 (* let in_footprint within (pointer, size) = 
  *   and_ [lePointer_ (pointer, within); 
  *         ltPointer_ (within, addPointer_ (pointer, size))] *)

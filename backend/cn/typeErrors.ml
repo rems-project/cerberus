@@ -93,10 +93,10 @@ type message =
   | Unknown_logical_predicate of string
   | Unknown_member of BT.tag * BT.member
 
-  | Missing_resource_request of {orequest : RER.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model }
-  | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model}
-  | Uninitialised_read of {ctxt : Context.t; model : Solver.model}
-  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model}
+  | Missing_resource_request of {orequest : RER.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
+  | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model_with_q }
+  | Uninitialised_read of {ctxt : Context.t; model : Solver.model_with_q}
+  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q}
 
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
@@ -106,17 +106,17 @@ type message =
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> message
-  | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model }
-  | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model}
-  | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model}
+  | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
+  | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
+  | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q}
   | Unconstrained_logical_variable of Sym.t * string option
   | Array_as_value of Sym.t * string option
   | Logical_variable_not_good_for_unification of Sym.t * string option
 
-  | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model}
+  | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model_with_q}
   | Implementation_defined_behaviour of document * state_report
   | Unspecified of CF.Ctype.ctype
-  | StaticError of {err : string; ctxt : Context.t; model : Solver.model}
+  | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
 
   | Generic of Pp.document
 

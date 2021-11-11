@@ -486,7 +486,8 @@ let page_alloc_predicates struct_decls =
       LRT.Constraint (t_ (good_ (struct_ct hyp_pool_tag, pool)), (loc, None), 
       LRT.I)))
     in
-  
+
+
     let vmemmap_metadata_owned =
       let resource = 
         Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap

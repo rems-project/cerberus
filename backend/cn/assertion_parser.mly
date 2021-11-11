@@ -53,6 +53,7 @@ open Assertion_parser_util
 %token INTEGERCAST
 %token POINTER
 %token INTEGER
+%token DISJOINT
 
 %token CELLPOINTER
 
@@ -139,6 +140,8 @@ atomic_term:
       { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
   | LBRACE a=term RBRACE AT l=NAME
       { Ast.Env (a, l) }
+  | DISJOINT LPAREN p1=term COMMA sz1=term COMMA p2=term COMMA sz2=term RPAREN
+      { Ast.Disjoint ((p1, sz1), (p2, sz2)) }
 
 arith_term:
   | a1=arith_or_atomic_term PLUS a2=arith_or_atomic_term

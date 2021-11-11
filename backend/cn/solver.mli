@@ -1,5 +1,6 @@
 type solver
 type model
+type model_with_q = model * (Sym.t * LogicalSorts.t) option
 
 
 val make : unit -> solver
@@ -10,7 +11,7 @@ val add : Global.t -> solver -> LogicalConstraints.t -> unit
 
 
 val provable : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
-val provable_or_model : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False of model]
+val provable_or_model : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False of model_with_q]
 
 
 

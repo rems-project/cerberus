@@ -15,6 +15,7 @@ type solver = { fancy: Z3.Solver.solver }
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
 type model = Z3.Model.model
+type model_with_q = model * (Sym.t * BT.t) option
 
 
 
@@ -452,11 +453,11 @@ module ReduceQuery = struct
 
   let forall ((s, bt), t) =
     let s' = Sym.fresh () in
-    IT.subst (make_subst [(s, sym_ (s', bt))]) t
+    (IT.subst (make_subst [(s, sym_ (s', bt))]) t, Some (s', bt))
 
   let pred global (pred : LC.Pred.t) = 
     let def = Option.get (get_logical_predicate_def global pred.name) in
-    open_pred global def pred.args
+    (open_pred global def pred.args, None)
 
   let qpred global assumptions qpred = 
     (* fresh name to instantiate quantifiers with *)
@@ -480,7 +481,7 @@ module ReduceQuery = struct
            None
         ) assumptions
     in
-    impl_ (and_ assumptions, body)
+    (impl_ (and_ assumptions, body), Some (s_inst, snd qpred.q))
 
   let plain it = 
     match it with
@@ -489,9 +490,9 @@ module ReduceQuery = struct
        let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
        forall ((i_s, Integer), (impl_ (condition, body)))
     | _ -> 
-       it
+       (it, None)
 
-  let constr global assumptions (lc : LC.t) : IT.t =
+  let constr global assumptions (lc : LC.t) =
     match lc with
     | T t -> plain t
     | Forall ((s, bt), t) -> forall ((s, bt), t)
@@ -558,12 +559,12 @@ let shortcut lc =
 
 let check global (solver : solver) assumptions lc = 
   (* let () = Debug_ocaml.begin_csv_timing "solving" in *)
-  let it = ReduceQuery.constr global assumptions lc in
+  let it, oq = ReduceQuery.constr global assumptions lc in
   let t = Translate.term global.struct_decls (not_ it) in
   let result = match Z3.Solver.check solver.fancy [t] with
     | Z3.Solver.UNSATISFIABLE -> `True
-    | Z3.Solver.SATISFIABLE -> `False
-    | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
+    | Z3.Solver.SATISFIABLE -> `False oq
+    | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False oq
   in
   (* let () = Debug_ocaml.end_csv_timing "solving" in *)
   result
@@ -580,7 +581,7 @@ let provable global solver assumptions (lc : LC.t) =
   | `No_shortcut ->
      match check global solver assumptions lc with
      | `True -> `True
-     | `False -> `False
+     | `False _ -> `False
 
 let provable_or_model global solver assumptions (lc : LC.t) =  
   match shortcut lc with
@@ -588,7 +589,7 @@ let provable_or_model global solver assumptions (lc : LC.t) =
   | `No_shortcut ->
      match check global solver assumptions lc with
      | `True -> `True
-     | `False -> `False (get_model solver.fancy)
+     | `False oq -> `False (get_model solver.fancy, oq)
 
 
 

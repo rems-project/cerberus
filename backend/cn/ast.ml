@@ -36,6 +36,7 @@ module Terms = struct
     | Null
     | OffsetOf of {tag:string; member:string}
     | CellPointer of (term * term) * (term * term) * term
+    | Disjoint of (term * term) * (term * term)
     | App of term * term
     | Env of term * string
 
@@ -103,6 +104,10 @@ module Terms = struct
        List.equal term_equal 
          [t1; t2; t3; t4; t5]
          [t1'; t2'; t3'; t4'; t5']
+    | Disjoint ((t1, t2), (t3, t4)), Disjoint ((t1', t2'), (t3', t4')) ->
+       List.equal term_equal 
+         [t1; t2; t3; t4]
+         [t1'; t2'; t3'; t4']
     | App (t11, t12), App (t21, t22) ->
        term_equal t11 t21 && term_equal t12 t22
     | Env (t1, e1), Env (t2, e2) ->
@@ -164,6 +169,8 @@ module Terms = struct
     | OffsetOf _, _ ->
        false
     | CellPointer _, _ ->
+       false
+    | Disjoint _, _ ->
        false
     | App _, _ ->
        false
@@ -239,6 +246,11 @@ module Terms = struct
             [pp false base; pp false step; 
              pp false from_index; pp false to_index; 
              pp false pointer])
+    | Disjoint ((p1, sz1), (p2, sz2)) ->
+       mparens atomic 
+         (c_app !^"cellPointer" 
+            [pp false p1; pp false sz1; 
+             pp false p2; pp false sz2])
     | App (t1, t2) ->
        mparens atomic (pp true t1 ^^ brackets (pp false t2))
     | Env (t, e) ->
@@ -321,6 +333,8 @@ module Terms = struct
          false
       | CellPointer ((t1, t2), (t3, t4), t5) ->
          aux t1 || aux t2 || aux t3 || aux t4 || aux t5
+      | Disjoint ((t1, t2), (t3, t4)) ->
+         aux t1 || aux t2 || aux t3 || aux t4
       | App (t1, t2) ->
          aux t1 || aux t2
       | Env (t, _) ->
