@@ -390,9 +390,9 @@ let pp =
        | Impl (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
        | Not (o1) -> 
-          mparens (!^"not" ^^^ aux true o1)
+          mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) -> 
-          mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
+          parens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
        | EQ (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
        | NE (o1,o2) -> 
@@ -899,7 +899,12 @@ let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
 let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
 let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
-let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
+let exp_ (it, it') = 
+  match is_z it, is_z it' with
+  | Some z, Some z' when Z.fits_int z' ->
+     z_ (Z.pow z (Z.to_int z'))
+  | _ ->
+     IT (Arith_op (Exp (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let rem_t___ (it, it') = rem_ (it, it')

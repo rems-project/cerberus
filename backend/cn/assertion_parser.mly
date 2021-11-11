@@ -45,6 +45,7 @@ open Assertion_parser_util
 %token COLON
 %token OR
 %token AND
+%token NOT
 
 %token NULL
 %token OFFSETOF
@@ -182,6 +183,8 @@ term:
       { Ast.Or (a1, a2) }
   | a1=term AND a2=term
       { Ast.And (a1, a2) }
+  | NOT LPAREN t=term RPAREN
+      { Ast.Not t }
   | POINTERCAST a1=atomic_term
       { Ast.IntegerToPointerCast a1 }
   | INTEGERCAST a1=atomic_term

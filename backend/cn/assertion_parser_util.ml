@@ -40,6 +40,7 @@ type token =
   | COLON
   | OR
   | AND
+  | NOT
 
   | NULL
   | OFFSETOF

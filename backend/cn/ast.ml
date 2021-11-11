@@ -26,6 +26,7 @@ module Terms = struct
     | ITE of term * term * term
     | Or of term * term
     | And of term * term
+    | Not of term
     | LessThan of term * term
     | LessOrEqual of term * term
     | GreaterThan of term * term
@@ -82,6 +83,8 @@ module Terms = struct
        term_equal a11 a21 && term_equal a12 a22
     | And (a11,a12), And (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
+    | Not a, Not a' ->
+       term_equal a a'
     | LessOrEqual (a11,a12), LessOrEqual (a21,a22) ->
        term_equal a11 a21 && term_equal a12 a22
     | GreaterThan (a11,a12), GreaterThan (a21,a22) ->
@@ -141,6 +144,8 @@ module Terms = struct
     | Or _, _ ->
        false
     | And _, _ ->
+       false
+    | Not _, _ ->
        false
     | LessThan _, _ ->
        false
@@ -210,6 +215,8 @@ module Terms = struct
        mparens atomic (pp true t1 ^^^ !^"||" ^^^ pp true t2)
     | And (t1, t2) ->
        mparens atomic (pp true t1 ^^^ !^"&&" ^^^ pp true t2)
+    | Not t ->
+       mparens atomic (!^"!" ^^ parens (pp false t))
     | LessThan (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"<" ^^^ pp true t2)
     | LessOrEqual (t1, t2) -> 
@@ -294,6 +301,8 @@ module Terms = struct
          aux t1 || aux t2
       | And (t1, t2) ->
          aux t1 || aux t2
+      | Not t ->
+         aux t
       | LessThan (t1, t2) -> 
          aux t1 || aux t2
       | LessOrEqual (t1, t2) -> 

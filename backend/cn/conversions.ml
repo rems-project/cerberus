@@ -429,6 +429,9 @@ let resolve_index_term loc
        let@ (it', _) = resolve it' mapping in
        let@ (it'', _) = resolve it'' mapping in
        return (IT (Bool_op (And [it'; it'']), Bool), None)
+    | Not it' ->
+       let@ (it', _) = resolve it' mapping in
+       return (IT (Bool_op (Not it'), Bool), None)
     | LessThan (it, it') -> 
        let@ (it, _) = resolve it mapping in
        let@ (it', _) = resolve it' mapping in

@@ -56,6 +56,7 @@ rule main = parse
   | ':'   { T.COLON }
   | "||"  { T.OR }
   | "&&"  { T.AND }
+  | '!'   { T.NOT }
 
   | "NULL" { T.NULL }
   | "offsetof" { T.OFFSETOF }

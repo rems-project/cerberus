@@ -525,7 +525,7 @@ let make () : solver =
           mk_tactic "elim-term-ite";
           mk_tactic "add-bounds";
           mk_tactic "solve-eqs";
-          mk_tactic "auflia";
+          mk_tactic "auflira";
           mk_tactic "smt"
         ]
     in

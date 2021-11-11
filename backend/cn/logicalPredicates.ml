@@ -38,7 +38,7 @@ module PageAlloc = struct
     let pPAGE_SHIFT = 12
     let pPAGE_SIZE = Z.pow (Z.of_int 2) pPAGE_SHIFT
     let mMAX_ORDER = 11
-    let hHYP_NO_ORDER = -1
+    let hHYP_NO_ORDER = 4294967295
 
     let list_head_tag, _ = Memory.find_tag struct_decls "list_head"
     let hyp_pool_tag, _ = Memory.find_tag struct_decls "hyp_pool"
@@ -127,17 +127,31 @@ module PageAlloc = struct
       in
 
       (* wrong, have to fix *)
-      let prev_next_well_formed prev_next = 
-        let prev_next = (page %. "node") %.prev_next in
+      let prev_next_well_formed prev_next_s = 
+        let inv_prev_next_s = 
+          if prev_next_s = "prev" then "next" else "prev"
+        in
+        let prev_next = (page %. "node") %. prev_next_s in
         or_ [
             (* either empty list (pointer to itself) *)
             prev_next %== self_node_pointer;
             (* or pointer to free_area cell *)
             prev_next %== pool_free_area_pointer;
             (* or pointer to other vmemmap cell, within the same range*)
-            vmemmap_good_pointer ~vmemmap_pointer 
-              (container_of_ (prev_next, hyp_page_tag, Id.id "node"))
-              (pool %. "range_start") (pool %. "range_end")
+            and_ (
+                let prev_next_page_pointer = 
+                  container_of_ (prev_next, hyp_page_tag, Id.id "node") in
+                let prev_next_page = 
+                  get_ vmemmap prev_next_page_pointer in
+                [vmemmap_good_pointer ~vmemmap_pointer prev_next_page_pointer
+                   (pool %. "range_start") (pool %. "range_end")
+                ;
+                  (container_of_ 
+                    (((prev_next_page %. "node") %. inv_prev_next_s),
+                     hyp_page_tag,
+                     Id.id "node")) %== page_pointer
+                ]
+              )
           ]
       in
 
