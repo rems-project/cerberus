@@ -401,55 +401,25 @@ let simp struct_decls (lcs : LC.t list) =
   
   (* fun term -> aux term *)
 
-  fun term -> 
-  let result = aux term in
-  result
+  fun term ->  aux term
 
-  (* let term = aux term in
-   * if with_solver && IT.size term <= 50 then term else
-   *   match Solver.simp struct_decls term with
-   *   | Some term -> term
-   *   | None -> 
-   *      let open Pp in
-   *      Pp.warn !^"failed to simplify with SMT solver";
-   *      term *)
 
 
 let simp_flatten struct_decls lcs term =
   match simp struct_decls lcs term with
+  | IT (Lit (Bool true), _) -> []
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
 
 
 
-
 let simp_lc struct_decls lcs lc = 
   match lc with
-  | LC.T it -> 
-     LC.T (simp struct_decls lcs it)
-  | LC.Forall ((s, bt), it) -> 
-     let s' = Sym.fresh_same s in 
-     let it = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) it in
-     (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
-     let it = simp struct_decls lcs it in
-     LC.Forall ((s', bt), it)
-  | LC.Pred pred ->
-     LC.Pred pred
-  | LC.QPred qpred ->
-     LC.QPred qpred
+  | LC.T it -> LC.T (simp struct_decls lcs it)
+  | _ -> lc
 
 
-let simp_lc_flatten struct_decls lcs c = 
-  match c with
-  | LC.T it ->
-     List.map (fun c -> LC.T c) (simp_flatten struct_decls lcs it)
-  | LC.Forall ((s, bt), it) -> 
-     let s' = Sym.fresh_same s in 
-     let it = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) it in
-     (* let trigger = Option.map (LC.subst_trigger [(s, sym_ (s', bt))]) trigger in *)
-     let it = simp struct_decls lcs it in
-     [LC.Forall ((s', bt), it)]
-  | LC.Pred pred ->
-     [LC.Pred pred]
-  | LC.QPred qpred ->
-     [LC.QPred qpred]
+let simp_lc_flatten struct_decls lcs lc = 
+  match lc with
+  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls lcs it)
+  | _ -> [lc]
