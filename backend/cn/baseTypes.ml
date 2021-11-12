@@ -72,6 +72,10 @@ let struct_bt = function
   | Struct tag -> tag 
   | _ -> Debug_ocaml.error "illtyped index term: not an array"
 
+let is_array_bt = function
+  | Array (abt, rbt) -> Some (abt, rbt)
+  | _ -> None
+
 let array_bt = function
   | Array (abt, rbt) -> (abt, rbt) 
   | _ -> Debug_ocaml.error "illtyped index term: not an array"

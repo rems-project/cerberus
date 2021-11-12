@@ -20,6 +20,25 @@ type definition = {
   }
 
 
+let make_guarded_definition (id,def) = 
+  let id = "Guarded" ^ id in
+  let guard_s, guard = IT.fresh Bool in
+  let loc = Loc.other ("internal ("^id^")") in
+  (id, {
+    loc = loc;
+    args = (guard_s, BT.Bool) :: def.args;
+    qarg = Option.map ((+) 1) def.qarg;
+    body = impl_ (guard, def.body);
+    infer_arguments = 
+      AT.Computational ((guard_s, IT.bt guard), (loc, None),
+        AT.map (fun output_def ->
+            let guard_entry = OutputDef.{loc; name = "guard"; value = guard} in
+            guard_entry :: output_def
+          ) def.infer_arguments
+      )
+  })
+
+
 
 let open_pred global def args =
   let su = 
@@ -543,7 +562,10 @@ module PageAlloc = struct
     [bogus_vmemmap_page_wf;
      vmemmap_page_wf;
      free_area_cell_wf;
-     hyp_pool_wf]
+     hyp_pool_wf;
+     make_guarded_definition vmemmap_page_wf;
+     make_guarded_definition free_area_cell_wf;
+    ]
 
 
 
