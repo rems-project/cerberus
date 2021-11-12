@@ -348,16 +348,15 @@ module ResourceInference = struct
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
-               let took = 
-                 and_ (needed
-                       :: p'.permission
-                       :: eq_ (requested.pointer, p'.pointer)
-                       :: List.map2 eq__ requested.iargs p'.iargs)
+               let pmatch = 
+                 eq_ (requested.pointer, p'.pointer)
+                 :: List.map2 eq__ requested.iargs p'.iargs
                in
+               let took = and_ (needed :: p'.permission :: pmatch) in
                let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
-               let needed = and_ [needed; not_ took] in
-               let permission' = and_ [p'.permission; not_ took] in
-               Predicate {p' with permission = permission'}, (needed, oargs)
+               let needed' = and_ [needed; not_ (and_ (p'.permission :: pmatch))] in
+               let permission' = and_ [p'.permission; not_ (and_ (needed :: pmatch))] in
+               Predicate {p' with permission = permission'}, (needed', oargs)
             | QPredicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
                let took = 
