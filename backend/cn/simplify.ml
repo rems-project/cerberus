@@ -93,6 +93,10 @@ let simp struct_decls (lcs : LC.t list) =
           IT (Lit (Z (Z.add i1 i2)), bt)
        | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
           IT (Lit (Q (Q.add q1 q2)), bt) 
+       | a, IT (Lit (Z z), _) when Z.equal z Z.zero ->
+          a
+       | IT (Lit (Z z), _), a when Z.equal z Z.zero ->
+          a
        | _, _ ->
           IT (Arith_op (Add (a, b)), bt)
        end
@@ -211,31 +215,44 @@ let simp struct_decls (lcs : LC.t list) =
     match it with
     | And its ->
        let its = List.map aux its in
-       begin match its with
-       | [a; b] when 
-              (* let open Pp in
-               * print stdout (item "a" (IT.pp a));
-               * print stdout (item "b" (IT.pp b)); *)
-              IT.equal (not_ a) b ->
-          bool_ false
-       | [a; b] when IT.equal a (not_ b) ->
-          bool_ false
-       | _ ->
-          if List.exists is_false its then 
-            IT (Lit (Bool false), bt)
-          else if List.for_all is_true its then
-            IT (Lit (Bool true), bt)
-          else
-            IT (Bool_op (And its), bt)
-       end
+       let rec make acc = function
+         | [] -> 
+            begin match acc with
+            | [] -> bool_ true
+            | [r] -> r
+            | _ -> and_ acc
+            end
+         | it :: its ->
+            begin match it with
+            | IT (Lit (Bool true), _) -> make acc its
+            | IT (Lit (Bool false), _) -> bool_ false
+            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ false
+            | _ when List.mem IT.equal it acc -> make acc its
+            | IT (Bool_op (And ys), _) -> make acc (ys @ its)
+            | _ -> make (it :: acc) its
+            end
+       in
+       make [] its
     | Or its ->
        let its = List.map aux its in
-       if List.exists is_true its then
-         IT (Lit (Bool true), bt)
-       else if List.for_all is_false its then
-         IT (Lit (Bool false), bt)
-       else
-         IT (Bool_op (Or its), bt)
+       let rec make acc = function
+         | [] ->
+            begin match acc with
+            | [] -> bool_ false
+            | [r] -> r
+            | _ -> or_ acc
+            end
+         | it :: its ->
+            begin match it with
+            | IT (Lit (Bool true), _) -> bool_ true
+            | IT (Lit (Bool false), _) -> make acc its
+            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ true 
+            | _ when List.mem IT.equal it acc -> make acc its
+            | IT (Bool_op (Or ys), _) -> make acc (ys @ its)
+            | _ -> make (it :: acc) its
+            end
+       in
+       make [] its
     | Impl (a, b) ->
        let a = aux a in
        let b = aux b in
