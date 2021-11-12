@@ -362,8 +362,15 @@ let simp struct_decls (lcs : LC.t list) =
   
   and ct_pred it bt = 
     match it with
-    | _ ->
-       IT (CT_pred it, bt)
+    | Representable (ct, t) ->
+       IT (CT_pred (Representable (ct, aux t)), bt)
+    | Good (ct, t) ->
+       IT (CT_pred (Good (ct, aux t)), bt)
+    | AlignedI a -> 
+       IT (CT_pred (AlignedI {t = aux a.t; align = aux a.align}), bt)
+    | Aligned (t, ct) ->
+       IT (CT_pred (Aligned (aux t, ct)), bt)
+
 
   and array_op it bt = 
     match it with
