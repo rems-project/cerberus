@@ -760,7 +760,7 @@ let mod_mapping
 
 let mod_mappings mapping_names mappings f = 
   StringMap.mapi (fun name mapping ->
-      if List.mem name mapping_names then 
+      if List.mem String.equal name mapping_names then 
         f mapping
       else 
         mapping
