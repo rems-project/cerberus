@@ -20,55 +20,70 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 
-module Params = struct
+let logging_params = [
+    ("trace", "true");
+    ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
+    ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log");
+  ]
 
-  let logging_params = [
-      (* ("trace", "true");
-       * ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
-       * ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log"); *)
-    ]
+let no_automation_params = [
+    ("auto_config", "false");
+    ("smt.auto_config", "false");
+  ]
 
-  let no_automation_params = [
-      ("auto_config", "false");
-      ("smt.auto_config", "false");
-    ]
+let no_randomness_params = [
+    ("sat.random_seed", "1");
+    ("nlsat.randomize", "false");
+    ("fp.spacer.random_seed", "1");
+    ("smt.arith.random_initial_value", "false");
+    ("smt.random_seed", "1");
+    ("sls.random_offset", "false");
+    ("sls.random_seed", "1");
+  ]
 
-  let no_randomness_params = [
-      ("sat.random_seed", "1");
-      ("nlsat.randomize", "false");
-      ("fp.spacer.random_seed", "1");
-      ("smt.arith.random_initial_value", "false");
-      ("smt.random_seed", "1");
-      ("sls.random_offset", "false");
-      ("sls.random_seed", "1");
-    ]
+let solver_params = [
+    ("smt.logic", "ALL");
+    ("smt.arith.solver", "2");
+    ("smt.macro_finder", "true");
+    ("smt.pull-nested-quantifiers", "true");
+  ]
 
-  let solver_params = [
-      ("smt.logic", "ALL");
-      ("smt.arith.solver", "2");
-      ("smt.macro_finder", "true");
-      ("smt.pull-nested-quantifiers", "true");
-      (* ("rewriter.elim_rem", "true"); *)
-    ]
+let rewriter_params = [
+    ("rewriter.expand_nested_stores", "true");
+    ("rewriter.elim_rem", "true");
+  ]
 
-  let model_params = [
-      ("model", "true");
-      ("model.completion", "true");
-      ("model_evaluator.completion", "true");
-    ]
+let model_params = [
+    ("model", "true");
+    ("model.completion", "true");
+    ("model_evaluator.completion", "true");
+  ]
 
-  let params = 
-    logging_params
-    @ no_automation_params
-    @ no_randomness_params
-    @ solver_params
-    @ model_params
+let params = 
+  logging_params
+  @ no_automation_params
+  @ no_randomness_params
+  @ solver_params
+  @ rewriter_params
+  @ model_params
 
-end
+
+
+let tactics = [
+    "propagate-values";
+    "propagate-ineqs";
+    "purify-arith";
+    "simplify";
+    "elim-term-ite";
+    "add-bounds";
+    "solve-eqs";
+    "aufnira";
+    "smt";
+  ]
 
 
 let context = 
-  List.iter (fun (c,v) -> Z3.set_global_param c v) Params.params;
+  List.iter (fun (c,v) -> Z3.set_global_param c v) params;
   Z3.mk_context []
 
 
@@ -361,6 +376,10 @@ module Translate = struct
             term (int_ (Option.get (Memory.member_offset decl member)))
          | ArrayOffset (ct, t) -> 
             term (mul_ (int_ (Memory.size_of_ctype ct), t))
+         | CellPointer {base;step;starti;endi;p} ->
+            term 
+              (Resources.RE.subarray_condition ~base ~item_size:step 
+                 ~from_index:starti ~to_index:endi ~qpointer:p)
          end
       | List_op t -> 
          Debug_ocaml.error "todo: SMT mapping for list operations"
@@ -518,18 +537,7 @@ let make () : solver =
       | t1 :: t2 :: ts -> Z3.Tactic.and_then context t1 t2 ts 
       | _ -> assert false;
     in
-    let tactic = 
-      mk_then  [
-          mk_tactic "propagate-values";
-          mk_tactic "propagate-ineqs";
-          mk_tactic "simplify";
-          mk_tactic "elim-term-ite";
-          mk_tactic "add-bounds";
-          mk_tactic "solve-eqs";
-          mk_tactic "auflira";
-          mk_tactic "smt"
-        ]
-    in
+    let tactic = mk_then (List.map mk_tactic tactics) in
     Z3.Solver.mk_solver_t context tactic
   in
   { fancy }

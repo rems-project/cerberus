@@ -64,6 +64,7 @@ and 'bt pointer_op =
   | PointerToIntegerCast of 'bt term
   | MemberOffset of BT.tag * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
+  | CellPointer of {base : 'bt term; step: 'bt term; starti: 'bt term; endi: 'bt term; p: 'bt term}
 
 and 'bt list_op = 
   | Nil
@@ -245,12 +246,17 @@ let rec equal (IT (it, _)) (IT (it', _)) =
         Sym.equal s s' && Id.equal m m'
      | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
         Sctypes.equal ct ct' && equal t t'
+     | CellPointer c, CellPointer c' ->
+        List.equal equal 
+          [c.base; c.step; c.starti; c.endi; c.p]
+          [c'.base; c'.step; c'.starti; c'.endi; c'.p]
      | LTPointer _, _ -> false
      | LEPointer _, _ -> false
      | IntegerToPointerCast _, _ -> false
      | PointerToIntegerCast _, _ -> false
      | MemberOffset _, _ -> false
      | ArrayOffset _, _ -> false
+     | CellPointer _, _ -> false
      end
   | List_op list_op, List_op list_op' -> 
      begin match list_op, list_op' with
@@ -430,6 +436,8 @@ let pp =
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
           mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+       | CellPointer c ->
+          mparens (c_app !^"cellPointer" [aux false c.base; aux false c.step; aux false c.starti; aux false c.endi; aux false c.p])
        end
     | CT_pred ct_pred -> 
        begin match ct_pred with
@@ -547,6 +555,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | PointerToIntegerCast t -> free_vars t
      | MemberOffset (_, _) -> SymSet.empty
      | ArrayOffset (_, t) -> free_vars t
+     | CellPointer c -> free_vars_list [c.base; c.step; c.starti; c.endi; c.p]
      end
   | CT_pred ct_pred ->
      begin match ct_pred with
@@ -677,6 +686,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           MemberOffset (tag, member)
        | ArrayOffset (tag, t) ->
           ArrayOffset (tag, subst su t)
+       | CellPointer c ->
+          CellPointer {
+              base = subst su c.base;
+              step = subst su c.step;
+              starti = subst su c.starti;
+              endi = subst su c.endi;
+              p = subst su c.p;
+            }
      in
      IT (Pointer_op pointer_op, bt)
   | CT_pred ct_pred -> 
@@ -727,96 +744,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
 
 
 
-
-
-let rec size (IT (it_, bt)) =
-  match it_ with
-  | Lit _ -> 1
-  | Arith_op arith_op ->
-     begin match arith_op with
-     | Add (it, it')
-     | Sub (it, it')
-     | Mul (it, it')
-     | Div (it, it')
-     | Exp (it, it')
-     | Rem (it, it')
-     | Mod (it, it')
-     | LT (it, it')
-     | LE (it, it') 
-     | Min (it, it')
-     | Max (it, it')
-       -> 1 + size it + size it'
-     | IntToReal it
-     | RealToInt it ->
-        1 + size it
-     | FlipBit fb -> 1 + size fb.bit + size fb.t
-     | XOR (_, it, it') -> 1 + size it + size it'
-     end
-  | Bool_op bool_op ->
-     begin match bool_op with
-     | And its -> 1 + size_list its
-     | Or its -> 1 + size_list its
-     | Impl (it, it') -> 1 + size it + size it'
-     | Not it -> 1 + size it
-     | ITE (it, it', it'') -> 1 + size_list [it; it'; it'']
-     | EQ (it, it') -> 1 + size it + size it'
-     | NE (it, it') -> 1 + size it + size it'
-     | EachI (_, it) -> 1 + size it
-     end
-  | Tuple_op tuple_op ->
-     begin match tuple_op with
-     | Tuple its -> 1 + size_list its
-     | NthTuple (_, it) -> 1 + size it
-     end
-  | Struct_op struct_op ->
-     begin match struct_op with
-     | Struct (_, members) -> 1 + size_list (List.map snd members)
-     | StructMember (it, _) -> 1 + size it
-     end
-  | Pointer_op pointer_op ->
-     begin match pointer_op with
-     | LTPointer (it, it')
-     | LEPointer (it, it') ->
-        1 + size it + size it'
-     | IntegerToPointerCast it -> 1 + size it
-     | PointerToIntegerCast it -> 1 + size it
-     | MemberOffset _ -> 1
-     | ArrayOffset (_, it) -> 1 + size it
-     end
-  | List_op list_op ->
-     begin match list_op with
-     | Nil -> 1
-     | Cons (it, it') -> 1 + size it + size it'
-     | List its -> 1 + size_list its
-     | Head it -> 1 + size it
-     | Tail it -> 1 + size it
-     | NthList (_, it) -> 1 + size it
-     end
-  | Set_op set_op ->
-     begin match set_op with
-     | SetMember (it, it') -> 1 + size it + size it'
-     | SetUnion its -> 1 + size_list (List1.to_list its)
-     | SetIntersection its -> 1 + size_list (List1.to_list its)
-     | SetDifference (it, it') -> 1 + size it + size it'
-     | Subset (it, it') -> 1 + size it + size it'
-     end
-  | CT_pred ct_pred ->
-     begin match ct_pred with
-     | Representable (_, it) -> 1 + size it
-     | Good (_, it) -> 1 + size it
-     | AlignedI a -> 1 + size a.t + size a.align
-     | Aligned (it, _) -> 1 + size it
-     end
-  | Array_op array_op ->
-     begin match array_op with
-     | Const (_, it) -> 1 + size it
-     | Set (it, it', it'') -> 1 + size_list [it;it';it'']
-     | Get (it, it') -> 1 + size it + size it'
-     | Def (_, it) -> 1 + size it
-     end
-
-and size_list its = 
-  List.fold_right (fun it acc -> acc + size it) its 0
 
 
 
@@ -971,6 +898,9 @@ let memberOffset_ (tag, member) =
   IT (Pointer_op (MemberOffset (tag, member)), BT.Integer)
 let arrayOffset_ (ct, t) = 
   IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
+let cellPointer_ ~base ~step ~starti ~endi ~p =
+  IT (Pointer_op (CellPointer {base;step;starti;endi;p}), BT.Bool)
+
 let memberShift_ (t, tag, member) = 
   integerToPointerCast_ 
     (add_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))

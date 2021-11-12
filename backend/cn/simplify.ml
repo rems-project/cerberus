@@ -351,6 +351,14 @@ let simp struct_decls (lcs : LC.t list) =
        IT (Pointer_op (MemberOffset (tag, member)), bt)
     | ArrayOffset (ct, t) ->
        aux (mul_ (int_ (Memory.size_of_ctype ct), t))
+    | CellPointer c ->
+       IT (Pointer_op (CellPointer {
+                           base = aux c.base;
+                           step = aux c.step;
+                           starti = aux c.starti;
+                           endi = aux c.endi;
+                           p = aux c.p;
+             }), bt)
   
   and ct_pred it bt = 
     match it with

@@ -458,15 +458,15 @@ module ResourceInference = struct
       if length > 20 then warn !^"generating point-wise constraints for big array";
       let@ qpoint = 
         let qp_s, qp_t = IT.fresh Loc in
+        let step = int_ (Memory.size_of_ctype item_ct) in
         qpoint_request loc failure {
           ct = item_ct;
           qpointer = qp_s;
           value = BT.of_sct item_ct;
           init = BT.Bool;
           permission = 
-            array_permission ~item_size:(int_ (Memory.size_of_ctype item_ct)) 
-              ~base ~length:(int_ length) 
-              ~permission ~qpointer:qp_t;
+            and_ [cellPointer_ ~base ~step ~starti:(int_ 0) ~endi:(int_ length)
+                    ~p:qp_t; permission]
         }
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
@@ -568,8 +568,8 @@ module ResourceInference = struct
                 (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
             init = point.init;
             permission = 
-              array_permission ~base ~item_size ~length:(int_ length) 
-                ~permission ~qpointer:qp_t;
+              and_ [cellPointer_ ~base ~step:item_size ~starti:(int_ 0)
+                      ~endi:(int_ length) ~p:qp_t; permission]
           }
       in
       return unfolded_resource

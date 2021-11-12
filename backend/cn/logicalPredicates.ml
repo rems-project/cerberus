@@ -53,12 +53,16 @@ module PageAlloc = struct
         pointerToIntegerCast_ vmemmap_pointer
 
     let vmemmap_good_pointer ~vmemmap_pointer pointer range_start range_end = 
-      let offset = vmemmap_offset_of_pointer ~vmemmap_pointer pointer in
-      let index = offset %/ hyp_page_size in
-      let phys = index %* (z_ pPAGE_SIZE) in
-      and_ [ lePointer_ (vmemmap_pointer, pointer);
-             eq_ (rem_ (offset, hyp_page_size), int_ 0);
-             range_start %<= phys; phys %< range_end; ]
+      cellPointer_ ~base:vmemmap_pointer ~step:hyp_page_size
+        ~starti:(range_start %/ z_ pPAGE_SIZE)
+        ~endi:(range_end %/ z_ pPAGE_SIZE)
+        ~p:pointer
+      (* let offset = vmemmap_offset_of_pointer ~vmemmap_pointer pointer in
+       * let index = offset %/ hyp_page_size in
+       * let phys = index %* (z_ pPAGE_SIZE) in
+       * and_ [ lePointer_ (vmemmap_pointer, pointer);
+       *        eq_ (rem_ (offset, hyp_page_size), int_ 0);
+       *        range_start %<= phys; phys %< range_end; ] *)
 
     let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end permission =
       let p_s, p = IT.fresh_named Loc "p" in
