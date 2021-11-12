@@ -521,8 +521,8 @@ let resolve_index_term loc
        let@ (from_index, _) = resolve from_index mapping in
        let@ (to_index, _) = resolve to_index mapping in
        let@ (pointer, _) = resolve pointer mapping in
-       let t = subarray_condition ~base ~item_size:step ~from_index ~to_index 
-                 ~qpointer:pointer in
+       let t = cellPointer_ ~base ~step ~starti:from_index ~endi:to_index 
+                 ~p:pointer in
        return (t, None)
     | Disjoint ((p1, sz1), (p2, sz2)) ->
        let@ (p1, _) = resolve p1 mapping in
