@@ -559,23 +559,25 @@ let add global solver lc =
 
 
 (* as similarly suggested by Robbert *)
-let shortcut lc = 
-  match Simplify.simp_lc [] [] lc with
-  | T (IT (Lit (Bool true), _)) -> `True
-  | _ -> `No_shortcut
+let shortcut it = 
+  match Simplify.simp [] [] it with
+  | IT (Lit (Bool true), _) -> `True
+  | it -> `No_shortcut it
 
 
 let check global (solver : solver) assumptions lc = 
-  (* let () = Debug_ocaml.begin_csv_timing "solving" in *)
   let it, oq = ReduceQuery.constr global assumptions lc in
-  let t = Translate.term global.struct_decls (not_ it) in
-  let result = match Z3.Solver.check solver.fancy [t] with
-    | Z3.Solver.UNSATISFIABLE -> `True
-    | Z3.Solver.SATISFIABLE -> `False oq
-    | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False oq
-  in
-  (* let () = Debug_ocaml.end_csv_timing "solving" in *)
-  result
+  match shortcut it with
+  | `True -> `True
+  | `No_shortcut it ->
+     print stdout (item "checking (after simplification)" (IT.pp it));
+     let t = Translate.term global.struct_decls (not_ it) in
+     let result = match Z3.Solver.check solver.fancy [t] with
+       | Z3.Solver.UNSATISFIABLE -> `True
+       | Z3.Solver.SATISFIABLE -> `False oq
+       | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False oq
+     in
+     result
 
 
 
@@ -584,20 +586,14 @@ let get_model z3_solver =
     (Z3.Solver.get_model z3_solver)
 
 let provable global solver assumptions (lc : LC.t) =  
-  match shortcut lc with
+  match check global solver assumptions lc with
   | `True -> `True
-  | `No_shortcut ->
-     match check global solver assumptions lc with
-     | `True -> `True
-     | `False _ -> `False
+  | `False _ -> `False
 
 let provable_or_model global solver assumptions (lc : LC.t) =  
-  match shortcut lc with
+  match check global solver assumptions lc with
   | `True -> `True
-  | `No_shortcut ->
-     match check global solver assumptions lc with
-     | `True -> `True
-     | `False oq -> `False (get_model solver.fancy, oq)
+  | `False oq -> `False (get_model solver.fancy, oq)
 
 
 
