@@ -337,11 +337,14 @@ module ResourceInference = struct
     and predicate_request loc failure (requested : Resources.Requests.predicate) = 
       debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
       let needed = requested.permission in 
-      let@ provable = provable in
       let@ provable_or_model = provable_or_model in
+      let@ global = get_global () in
+      let@ all_lcs = all_constraints () in
+      let simp = Simplify.simp global.struct_decls all_lcs in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
+            let needed = simp needed in
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
@@ -374,14 +377,12 @@ module ResourceInference = struct
       let holds = provable_or_model (t_ (not_ needed)) in
       begin match holds with
       | `True ->
-         let@ global = get_global () in
-         let@ all_lcs = all_constraints () in
          let r = 
            { name = requested.name;
              pointer = requested.pointer;
              permission = requested.permission;
              iargs = requested.iargs; 
-             oargs = List.map (Simplify.simp global.struct_decls all_lcs) oargs
+             oargs = List.map simp oargs
            }
          in
          return r
@@ -392,8 +393,10 @@ module ResourceInference = struct
     and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let needed = requested.permission in
-      let@ provable = provable in
       let@ provable_or_model = provable_or_model in
+      let@ global = get_global () in
+      let@ all_lcs = all_constraints () in
+      let simp = Simplify.simp global.struct_decls all_lcs in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
@@ -431,8 +434,6 @@ module ResourceInference = struct
       in
       begin match holds with
       | `True ->
-         let@ global = get_global () in
-         let@ all_lcs = all_constraints () in
          let qpointer_s, qpointer = IT.fresh Loc in
          let subst = make_subst [(requested.qpointer, qpointer)] in
          let r = 
@@ -440,7 +441,7 @@ module ResourceInference = struct
              qpointer = qpointer_s;
              permission = IT.subst subst requested.permission;
              iargs = List.map (IT.subst subst) requested.iargs; 
-             oargs = List.map (fun oa -> Simplify.simp global.struct_decls all_lcs (IT.subst subst oa)) oargs;
+             oargs = List.map (fun oa -> simp (IT.subst subst oa)) oargs;
            } 
          in
          return r
