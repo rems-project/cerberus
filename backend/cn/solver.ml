@@ -21,9 +21,9 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 let logging_params = [
-    ("trace", "true");
-    ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
-    ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log");
+    (* ("trace", "true");
+     * ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
+     * ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log"); *)
   ]
 
 let no_automation_params = [

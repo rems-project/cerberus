@@ -343,6 +343,12 @@ let simp struct_decls (lcs : LC.t list) =
        match it with
        | IT (Struct_op (Struct (_, members)), _) ->
           List.assoc Id.equal member members
+       | IT (Bool_op (ITE (cond, it1, it2)), _) ->
+          (* (if cond then it1 else it2) . member -->
+             (if cond then it1.member else it2.member) *)
+          ite_ (cond,
+                aux (IT (Struct_op (StructMember (it1, member)), bt)),
+                aux (IT (Struct_op (StructMember (it2, member)), bt)))
        | _ ->
           IT (Struct_op (IT.StructMember (it, member)), bt)
   
