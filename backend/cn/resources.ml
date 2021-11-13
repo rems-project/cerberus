@@ -341,12 +341,11 @@ module RE = struct
 
   (* assumption: resource is owned *)
   let derived_constraint resource = 
-    let open IT in
     let lc = match resource with
       | Point p -> 
-         bool_ true
-         (* impl_ (p.permission, 
-          *        not_ (eq_ (null_, p.pointer))) *)
+         (* bool_ true *)
+         impl_ (p.permission, 
+                ne_ (p.pointer, null_))
       | _ ->
          bool_ true
     in
