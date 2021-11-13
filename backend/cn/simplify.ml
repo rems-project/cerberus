@@ -13,58 +13,11 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let simp struct_decls (lcs : LC.t list) =
+let rec simp struct_decls values equalities =
 
-
-  let values = 
-    List.fold_right (fun c values ->
-        match c with
-        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
-                                 it')), _)) 
-             when Option.is_some (is_lit it') ->
-             SymMap.add sym it' values
-        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
-                                 (IT (Array_op (Def _),_) as it'))), _)) ->
-             SymMap.add sym it' values
-        | _ ->
-           values
-      ) lcs SymMap.empty
-  in
+  let aux it = simp struct_decls values equalities it in
   
-  let equalities =
-    List.fold_right (fun c equalities ->
-        match c with
-        | LC.T it ->
-           begin match it with
-           | IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                              IT (Lit (Sym sym'), _))), _) ->
-              SymPairMap.add (sym, sym') true equalities
-           | IT (Bool_op (Not (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                                                IT (Lit (Sym sym'), _))), _))), _) ->
-              SymPairMap.add (sym, sym') false equalities
-           | IT (Bool_op (NE (IT (Lit (Sym sym), _), 
-                              IT (Lit (Sym sym'), _))), _) ->
-              SymPairMap.add (sym, sym') false equalities
-           | _ -> equalities
-           end
-        | _ -> equalities
-      ) lcs SymPairMap.empty
-  in
-  
-  let rec aux (IT (it, bt)) =
-    match it with
-    | Lit it -> lit it bt
-    | Arith_op it -> arith_op it bt
-    | Bool_op it -> bool_op it bt
-    | Tuple_op it -> tuple_op it bt
-    | Struct_op it -> struct_op it bt
-    | Pointer_op it -> pointer_op it bt
-    | List_op it -> IT (List_op it, bt)
-    | Set_op it -> IT (Set_op it, bt)
-    | CT_pred it -> ct_pred it bt
-    | Array_op it -> array_op it bt
-  
-  and lit it bt = 
+  let lit it bt = 
     match it with
     | Sym sym ->
        begin match SymMap.find_opt sym values with
@@ -85,8 +38,9 @@ let simp struct_decls (lcs : LC.t list) =
        IT (Lit (Default bt'), bt)
     | Null -> 
        IT (Lit Null, bt)
+  in
   
-  and arith_op it bt = 
+  let arith_op it bt = 
     match it with
     | Add (a, b) ->
        let a = aux a in
@@ -213,8 +167,9 @@ let simp struct_decls (lcs : LC.t list) =
        let a = aux a in
        let b = aux b in
        IT (Arith_op (XOR (ity, a, b)), bt)
+  in
   
-  and bool_op it bt = 
+  let bool_op it bt = 
     match it with
     | And its ->
        let its = List.map aux its in
@@ -317,9 +272,10 @@ let simp struct_decls (lcs : LC.t list) =
        let t = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) t in
        let t = aux t in
        IT (Bool_op (EachI ((i1, s', i2), t)), bt)
+  in
 
 
-  and tuple_op it bt = 
+  let tuple_op it bt = 
     match it with
     | Tuple its ->
        let its = List.map aux its in
@@ -327,9 +283,10 @@ let simp struct_decls (lcs : LC.t list) =
     | NthTuple (n, it) ->
        let it = aux it in
        IT (Tuple_op (NthTuple (n, it)), bt)
+  in
   
   
-  and struct_op it bt = 
+  let struct_op it bt = 
     match it with
     | IT.Struct (tag, members) ->
        let members = 
@@ -351,9 +308,10 @@ let simp struct_decls (lcs : LC.t list) =
                 aux (IT (Struct_op (StructMember (it2, member)), bt)))
        | _ ->
           IT (Struct_op (IT.StructMember (it, member)), bt)
+  in
   
   (* revisit when memory model changes *)
-  and pointer_op it bt = 
+  let pointer_op it bt = 
     match it with
     | LTPointer (a, b) ->
        IT (Pointer_op (LTPointer (aux a, aux b)), bt)
@@ -392,8 +350,9 @@ let simp struct_decls (lcs : LC.t list) =
                            endi = aux c.endi;
                            p = aux c.p;
              }), bt)
+  in
   
-  and ct_pred it bt = 
+  let ct_pred it bt = 
     match it with
     | Representable (ct, t) ->
        IT (CT_pred (Representable (ct, aux t)), bt)
@@ -403,9 +362,10 @@ let simp struct_decls (lcs : LC.t list) =
        IT (CT_pred (AlignedI {t = aux a.t; align = aux a.align}), bt)
     | Aligned (t, ct) ->
        IT (CT_pred (Aligned (aux t, ct)), bt)
+  in
 
 
-  and array_op it bt = 
+  let array_op it bt = 
     match it with
     | Const (index_bt, t) ->
        let t = aux t in
@@ -450,9 +410,58 @@ let simp struct_decls (lcs : LC.t list) =
        IT (Array_op (Def ((s', abt), body)), bt)
   in
   
-  (* fun term -> aux term *)
+  fun (IT (it, bt)) ->
+    match it with
+    | Lit it -> lit it bt
+    | Arith_op it -> arith_op it bt
+    | Bool_op it -> bool_op it bt
+    | Tuple_op it -> tuple_op it bt
+    | Struct_op it -> struct_op it bt
+    | Pointer_op it -> pointer_op it bt
+    | List_op it -> IT (List_op it, bt)
+    | Set_op it -> IT (Set_op it, bt)
+    | CT_pred it -> ct_pred it bt
+    | Array_op it -> array_op it bt
 
-  fun term ->  aux term
+
+let simp struct_decls lcs it = 
+  
+  let values = 
+    List.fold_right (fun c values ->
+        match c with
+        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
+                                 it')), _)) 
+             when Option.is_some (is_lit it') ->
+             SymMap.add sym it' values
+        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
+                                 (IT (Array_op (Def _),_) as it'))), _)) ->
+             SymMap.add sym it' values
+        | _ ->
+           values
+      ) lcs SymMap.empty
+  in
+  
+  let equalities =
+    List.fold_right (fun c equalities ->
+        match c with
+        | LC.T it ->
+           begin match it with
+           | IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
+                              IT (Lit (Sym sym'), _))), _) ->
+              SymPairMap.add (sym, sym') true equalities
+           | IT (Bool_op (Not (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
+                                                IT (Lit (Sym sym'), _))), _))), _) ->
+              SymPairMap.add (sym, sym') false equalities
+           | IT (Bool_op (NE (IT (Lit (Sym sym), _), 
+                              IT (Lit (Sym sym'), _))), _) ->
+              SymPairMap.add (sym, sym') false equalities
+           | _ -> equalities
+           end
+        | _ -> equalities
+      ) lcs SymPairMap.empty
+  in
+
+  simp struct_decls values equalities it
 
 
 
