@@ -13,9 +13,12 @@ end
 module SymPairMap = Map.Make(SymPair)
 
 
-let rec simp struct_decls values equalities =
+let rec simp struct_decls values equalities some_known_facts =
 
-  let aux it = simp struct_decls values equalities it in
+  let aux it = 
+    simp struct_decls values equalities some_known_facts it in
+  let aux2 some_known_facts it = 
+    simp struct_decls values equalities some_known_facts it in
   
   let lit it bt = 
     match it with
@@ -172,7 +175,6 @@ let rec simp struct_decls values equalities =
   let bool_op it bt = 
     match it with
     | And its ->
-       let its = List.map aux its in
        let rec make acc = function
          | [] -> 
             begin match acc with
@@ -181,6 +183,7 @@ let rec simp struct_decls values equalities =
             | _ -> and_ acc
             end
          | it :: its ->
+            let it = aux2 (acc @ some_known_facts) it in
             begin match it with
             | IT (Lit (Bool true), _) -> make acc its
             | IT (Lit (Bool false), _) -> bool_ false
@@ -236,8 +239,8 @@ let rec simp struct_decls values equalities =
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = aux b in
-       let c = aux c in
+       let b = aux2 (a :: some_known_facts) b in
+       let c = aux2 ((not_ a) :: some_known_facts) c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -410,18 +413,21 @@ let rec simp struct_decls values equalities =
        IT (Array_op (Def ((s', abt), body)), bt)
   in
   
-  fun (IT (it, bt)) ->
-    match it with
-    | Lit it -> lit it bt
-    | Arith_op it -> arith_op it bt
-    | Bool_op it -> bool_op it bt
-    | Tuple_op it -> tuple_op it bt
-    | Struct_op it -> struct_op it bt
-    | Pointer_op it -> pointer_op it bt
-    | List_op it -> IT (List_op it, bt)
-    | Set_op it -> IT (Set_op it, bt)
-    | CT_pred it -> ct_pred it bt
-    | Array_op it -> array_op it bt
+  fun it ->
+  if List.mem IT.equal it some_known_facts then bool_ true 
+  else
+    let (IT (it_, bt)) = it in
+    match it_ with
+    | Lit l -> lit l bt
+    | Arith_op a -> arith_op a bt
+    | Bool_op b -> bool_op b bt
+    | Tuple_op t -> tuple_op t bt
+    | Struct_op s -> struct_op s bt
+    | Pointer_op p -> pointer_op p bt
+    | List_op l -> IT (List_op l, bt)
+    | Set_op s -> IT (Set_op s, bt)
+    | CT_pred c -> ct_pred c bt
+    | Array_op a -> array_op a bt
 
 
 let simp struct_decls lcs it = 
@@ -461,7 +467,7 @@ let simp struct_decls lcs it =
       ) lcs SymPairMap.empty
   in
 
-  simp struct_decls values equalities it
+  simp struct_decls values equalities [] it
 
 
 
