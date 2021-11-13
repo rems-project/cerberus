@@ -813,7 +813,11 @@ let ge_ (it, it') = le_ (it', it)
 let and_ its = IT (Bool_op (And its), BT.Bool)
 let or_ its = IT (Bool_op (Or its), BT.Bool)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
-let not_ it = IT (Bool_op (Not it), BT.Bool)
+let not_ it = 
+  match it with
+  | IT (Bool_op (Not a), _) -> a
+  | _ -> IT (Bool_op (Not it), BT.Bool)
+
 let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')

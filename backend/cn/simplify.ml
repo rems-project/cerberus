@@ -19,9 +19,12 @@ let simp struct_decls (lcs : LC.t list) =
   let values = 
     List.fold_right (fun c values ->
         match c with
-        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                                 it')), _)) (* when Option.is_some (is_lit it') *) ->
-           (* when IT.size it' <= 10 -> *)
+        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
+                                 it')), _)) 
+             when Option.is_some (is_lit it') ->
+             SymMap.add sym it' values
+        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
+                                 (IT (Array_op (Def _),_) as it'))), _)) ->
              SymMap.add sym it' values
         | _ ->
            values
@@ -228,6 +231,7 @@ let simp struct_decls (lcs : LC.t list) =
             | IT (Lit (Bool false), _) -> bool_ false
             | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ false
             | _ when List.mem IT.equal it acc -> make acc its
+            | IT (Bool_op (Not (IT (Bool_op (Or ys), _))), _) -> make acc ((List.map not_ ys) @ its)
             | IT (Bool_op (And ys), _) -> make acc (ys @ its)
             | _ -> make (it :: acc) its
             end
@@ -248,6 +252,7 @@ let simp struct_decls (lcs : LC.t list) =
             | IT (Lit (Bool false), _) -> make acc its
             | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ true 
             | _ when List.mem IT.equal it acc -> make acc its
+            | IT (Bool_op (Not (IT (Bool_op (And ys), _))), _) -> make acc ((List.map not_ ys) @ its)
             | IT (Bool_op (Or ys), _) -> make acc (ys @ its)
             | _ -> make (it :: acc) its
             end
@@ -402,20 +407,31 @@ let simp struct_decls (lcs : LC.t list) =
     | Get (array, index) ->
        let array = aux array in
        let index = aux index in
-       begin match array with
-       | IT (Array_op (Def ((s, abt), body)), _) ->
-          assert (BT.equal abt (IT.bt index));
-          aux (IT.subst (IT.make_subst [(s, index)]) body)
-       | IT (Bool_op (ITE (cond, array1, array2)), bt') ->
-          (* (if cond then array1 else array2)[index] -->
-           * if cond then array1[index] else array2[index] *)
-          ite_ (cond, 
-                aux (get_ array1 index), 
-                aux (get_ array2 index))
-       | _ ->
-          IT (Array_op (Get (array, index)), bt)
-       end
-
+       let rec make array index = 
+         begin match array with
+         | IT (Array_op (Def ((s, abt), body)), _) ->
+            assert (BT.equal abt (IT.bt index));
+            aux (IT.subst (IT.make_subst [(s, index)]) body)
+         | IT (Array_op (Set (array', index', value')), _) ->
+            begin match index, index' with
+            | _, _ when IT.equal index index' ->
+               value'
+            | IT (Lit (Z z), _), IT (Lit (Z z'), _) when not (Z.equal z z') ->
+               make array' index
+            | _ ->
+               IT (Array_op (Get (array, index)), bt)
+            end
+         | IT (Bool_op (ITE (cond, array1, array2)), bt') ->
+            (* (if cond then array1 else array2)[index] -->
+             * if cond then array1[index] else array2[index] *)
+            ite_ (cond, 
+                  aux (get_ array1 index), 
+                  aux (get_ array2 index))
+         | _ ->
+            IT (Array_op (Get (array, index)), bt)
+         end
+       in
+       make array index
     | Def ((s, abt), body) ->
        let s' = Sym.fresh_same s in 
        let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
