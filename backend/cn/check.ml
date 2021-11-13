@@ -359,16 +359,15 @@ module ResourceInference = struct
                Predicate {p' with permission = permission'}, (needed', oargs)
             | QPredicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
-               let took = 
-                 and_ (needed
-                       :: IT.subst subst p'.permission
-                       :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
+               let iarg_match = 
+                 List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs
                in
+               let took = and_ (needed :: IT.subst subst p'.permission :: iarg_match) in
                let oargs = List.map2 (fun oa oa' -> ite_ (took, IT.subst subst oa', oa)) oargs p'.oargs in
-               let needed = and_ [needed; not_ took] in
+               let needed' = and_ [needed; not_ (and_ (IT.subst subst p'.permission :: iarg_match))] in
                let pmatch = eq_ (sym_ (p'.qpointer, BT.Loc), requested.pointer) in
                let permission' = and_ [p'.permission; or_ [not_ pmatch; not_ took]] in
-               QPredicate {p' with permission = permission'}, (needed, oargs)
+               QPredicate {p' with permission = permission'}, (needed', oargs)
             | re ->
                continue
           ) (needed, List.map default_ requested.oargs)
@@ -403,16 +402,15 @@ module ResourceInference = struct
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
                let subst = make_subst [(requested.qpointer, p'.pointer)] in
-               let took = 
-                 and_ (IT.subst subst needed
-                       :: p'.permission 
-                       :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs)
+               let iarg_match = 
+                 List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs
                in
+               let took = and_ (IT.subst subst needed :: p'.permission :: iarg_match) in
                let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
-               let needed = and_ [needed; or_ [not_ pmatch; not_ took]] in
+               let needed' = and_ [needed; or_ [not_ pmatch; not_ took]] in
                let oargs = List.map2 (fun oa oa' -> ite_ (and_ [pmatch; took], oa', oa)) oargs p'.oargs in
-               let permission' = and_ [p'.permission; not_ took] in
-               (Predicate {p' with permission = permission'}, (needed, oargs))
+               let permission' = and_ [p'.permission; not_ (and_ (IT.subst subst needed :: iarg_match))] in
+               (Predicate {p' with permission = permission'}, (needed', oargs))
             | QPredicate p' when String.equal requested.name p'.name ->
                let p' = RE.alpha_rename_qpredicate requested.qpointer p' in
                let took = 
