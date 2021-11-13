@@ -413,15 +413,12 @@ module ResourceInference = struct
                (Predicate {p' with permission = permission'}, (needed', oargs))
             | QPredicate p' when String.equal requested.name p'.name ->
                let p' = RE.alpha_rename_qpredicate requested.qpointer p' in
-               let took = 
-                 and_ (needed 
-                       :: p'.permission
-                       :: List.map2 eq__ requested.iargs p'.iargs)
-               in
-               let needed = and_ [needed; not_ took] in
+               let iarg_match = List.map2 eq__ requested.iargs p'.iargs in
+               let took = and_ (needed :: p'.permission :: iarg_match) in
+               let needed' = and_ [needed; not_ (and_ (p'.permission :: iarg_match))] in
                let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
-               let permission' = and_ [p'.permission; not_ took] in
-               (QPredicate {p' with permission = permission'}, (needed, oargs))
+               let permission' = and_ [p'.permission; not_ (and_ (needed :: iarg_match))] in
+               (QPredicate {p' with permission = permission'}, (needed', oargs))
             | re ->
                continue
           ) (needed, List.map default_ requested.oargs)
