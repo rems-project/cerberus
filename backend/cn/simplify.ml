@@ -366,7 +366,12 @@ let simp struct_decls (lcs : LC.t list) =
        end
     | IntegerToPointerCast a ->
        let a = aux a in
-       IT (Pointer_op (IntegerToPointerCast a), bt)
+       begin match a with
+       | IT (Pointer_op (PointerToIntegerCast b), _) ->
+          b
+       | _ ->
+          IT (Pointer_op (IntegerToPointerCast a), bt)
+       end
     | PointerToIntegerCast a ->
        let a = aux a in
        begin match a with
