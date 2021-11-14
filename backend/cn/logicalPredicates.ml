@@ -196,8 +196,8 @@ module PageAlloc = struct
           (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
           eq_ (((page %. "node") %. "next") %== self_node_pointer,
                ((page %. "node") %. "prev") %== self_node_pointer);
-          (* list non-empty in the above sense if and only if refcount 0 and order != NYP_NO_ORDER *)
-          (eq_ (
+          (* list non-empty in the above sense implies refcount 0 and order != NYP_NO_ORDER *)
+          (impl_ (
                ((page %. "node") %. "next") %!= self_node_pointer,
                and_ [(page %. "refcount") %== int_ 0;
                      (page %. "order") %!= int_ hHYP_NO_ORDER;

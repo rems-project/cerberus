@@ -570,7 +570,7 @@ let check global (solver : solver) assumptions lc =
   match shortcut it with
   | `True -> `True
   | `No_shortcut it ->
-     print stdout (item "checking (after simplification)" (IT.pp it));
+     (* print stdout (item "checking (after simplification)" (IT.pp it)); *)
      let t = Translate.term global.struct_decls (not_ it) in
      let result = match Z3.Solver.check solver.fancy [t] with
        | Z3.Solver.UNSATISFIABLE -> `True
