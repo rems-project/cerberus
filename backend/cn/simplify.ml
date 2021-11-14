@@ -15,6 +15,7 @@ module SymPairMap = Map.Make(SymPair)
 
 let rec simp struct_decls values equalities some_known_facts =
 
+
   let aux it = 
     simp struct_decls values equalities some_known_facts it in
   let aux2 some_known_facts it = 
@@ -300,17 +301,18 @@ let rec simp struct_decls values equalities some_known_facts =
        IT (Struct_op (IT.Struct (tag, members)), bt)
     | IT.StructMember (it, member) ->
        let it = aux it in
-       match it with
-       | IT (Struct_op (Struct (_, members)), _) ->
-          List.assoc Id.equal member members
-       | IT (Bool_op (ITE (cond, it1, it2)), _) ->
-          (* (if cond then it1 else it2) . member -->
+       let rec make it = 
+         match it with
+         | IT (Struct_op (Struct (_, members)), _) ->
+            List.assoc Id.equal member members
+         | IT (Bool_op (ITE (cond, it1, it2)), _) ->
+            (* (if cond then it1 else it2) . member -->
              (if cond then it1.member else it2.member) *)
-          ite_ (cond,
-                aux (IT (Struct_op (StructMember (it1, member)), bt)),
-                aux (IT (Struct_op (StructMember (it2, member)), bt)))
-       | _ ->
-          IT (Struct_op (IT.StructMember (it, member)), bt)
+            ite_ (cond, make it1, make it2)
+         | _ ->
+            IT (Struct_op (IT.StructMember (it, member)), bt)
+       in
+       make it
   in
   
   (* revisit when memory model changes *)
@@ -399,8 +401,8 @@ let rec simp struct_decls values equalities some_known_facts =
             (* (if cond then array1 else array2)[index] -->
              * if cond then array1[index] else array2[index] *)
             ite_ (cond, 
-                  aux (get_ array1 index), 
-                  aux (get_ array2 index))
+                  make array1 index, 
+                  make array2 index)
          | _ ->
             IT (Array_op (Get (array, index)), bt)
          end
@@ -430,7 +432,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | Array_op a -> array_op a bt
 
 
-let simp struct_decls lcs it = 
+let simp ?(some_known_facts = []) struct_decls lcs it = 
   
   let values = 
     List.fold_right (fun c values ->
@@ -467,7 +469,7 @@ let simp struct_decls lcs it =
       ) lcs SymPairMap.empty
   in
 
-  simp struct_decls values equalities [] it
+  simp struct_decls values equalities some_known_facts it
 
 
 
