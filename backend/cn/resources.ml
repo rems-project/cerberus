@@ -343,9 +343,9 @@ module RE = struct
   let derived_constraint resource = 
     let lc = match resource with
       | Point p -> 
-         (* bool_ true *)
-         impl_ (p.permission, 
-                ne_ (p.pointer, null_))
+         bool_ true
+         (* impl_ (p.permission, 
+          *        ne_ (p.pointer, null_)) *)
       | _ ->
          bool_ true
     in
@@ -410,43 +410,48 @@ module RE = struct
 
 
   let simp struct_decls lcs resource =
-    let simp_it = Simplify.simp struct_decls lcs in
+    let simp_it extra_facts it = 
+      Simplify.simp struct_decls lcs 
+        ~some_known_facts:extra_facts it 
+    in
     match resource with
     | Point p ->
        Point {
            ct = p.ct;
-           pointer = simp_it p.pointer; 
-           permission = simp_it p.permission;
-           value = simp_it p.value;
-           init = simp_it p.init; 
+           pointer = simp_it [] p.pointer; 
+           permission = simp_it [] p.permission;
+           value = simp_it [] p.value;
+           init = simp_it [] p.init; 
          }
     | QPoint qp ->
        let qp = alpha_rename_qpoint 
                   (Sym.fresh_same qp.qpointer) qp in
+       let permission = simp_it [] qp.permission in
        QPoint 
          { ct = qp.ct;
            qpointer = qp.qpointer;
-           permission = simp_it qp.permission;
-           value = simp_it qp.value;
-           init = simp_it qp.init;
+           permission = permission;
+           value = simp_it [permission] qp.value;
+           init = simp_it [permission] qp.init;
          }
     | Predicate p -> 
        Predicate {
            name = p.name; 
-           pointer = simp_it p.pointer; 
-           permission = simp_it p.permission;
-           iargs = List.map simp_it p.iargs; 
-           oargs = List.map simp_it p.oargs; 
+           pointer = simp_it [] p.pointer; 
+           permission = simp_it [] p.permission;
+           iargs = List.map (simp_it []) p.iargs; 
+           oargs = List.map (simp_it []) p.oargs; 
          }
     | QPredicate qp -> 
        let qp = alpha_rename_qpredicate 
                   (Sym.fresh_same qp.qpointer) qp in
+       let permission = simp_it [] qp.permission in
        QPredicate {
            name = qp.name;
            qpointer = qp.qpointer;
-           permission = simp_it qp.permission;
-           iargs = List.map simp_it qp.iargs;
-           oargs = List.map simp_it qp.oargs;
+           permission = permission;
+           iargs = List.map (simp_it [permission]) qp.iargs;
+           oargs = List.map (simp_it [permission]) qp.oargs;
          }
 
 
