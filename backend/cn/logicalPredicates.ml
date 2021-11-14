@@ -22,17 +22,18 @@ type definition = {
 
 let make_guarded_definition (id,def) = 
   let id = "Guarded" ^ id in
-  let guard_s, guard = IT.fresh Bool in
+  let guard_i_s, guard_i = IT.fresh Integer in
+  let guard_b_s, guard_b = IT.fresh Bool in
   let loc = Loc.other ("internal ("^id^")") in
   (id, {
     loc = loc;
-    args = (guard_s, BT.Bool) :: def.args;
+    args = (guard_b_s, IT.bt guard_b) :: def.args;
     qarg = Option.map ((+) 1) def.qarg;
-    body = impl_ (guard, def.body);
+    body = impl_ (guard_b, def.body);
     infer_arguments = 
-      AT.Computational ((guard_s, IT.bt guard), (loc, None),
+      AT.Computational ((guard_i_s, IT.bt guard_i), (loc, None),
         AT.map (fun output_def ->
-            let guard_entry = OutputDef.{loc; name = "guard"; value = guard} in
+            let guard_entry = OutputDef.{loc; name = "guard"; value = eq_ (guard_i, int_ 1)} in
             guard_entry :: output_def
           ) def.infer_arguments
       )
@@ -243,22 +244,23 @@ module PageAlloc = struct
       let loc = Loc.other "internal (FreeArea_cell_wf)" in
 
       let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
-      let cell_s, cell = IT.fresh_named (BT.Struct list_head_tag) "cell" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
       let vmemmap_s, vmemmap = 
         IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-      let range_start_s, range_start = IT.fresh_named Integer "range_start" in
-      let range_end_s, range_end = IT.fresh_named Integer "range_end" in
+
+      let pool_s, pool = IT.fresh_named (Struct hyp_pool_tag) "pool" in
+      let free_area = pool %. "free_area" in
+      let cell = get_ free_area cell_index in
+      let range_start = pool %. "range_start" in
+      let range_end = pool %. "range_end" in
 
       let args = [
           (cell_index_s, IT.bt cell_index);
-          (cell_s, IT.bt cell);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
           (vmemmap_s, IT.bt vmemmap);
           (pool_pointer_s, IT.bt pool_pointer);
-          (range_start_s, IT.bt range_start);
-          (range_end_s, IT.bt range_end);
+          (pool_s, IT.bt pool);
         ]
       in
       let qarg = Some 0 in
@@ -307,22 +309,18 @@ module PageAlloc = struct
 
       let infer_arguments =
         AT.Computational ((cell_index_s, IT.bt cell_index), (loc, None),
-        AT.Computational ((cell_s, IT.bt cell), (loc, None), 
         AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
         AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
-        AT.Computational ((range_start_s, IT.bt range_start), (loc, None),
-        AT.Computational ((range_end_s, IT.bt range_end), (loc, None), 
+        AT.Computational ((pool_s, IT.bt pool), (loc, None),
         AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
         AT.I OutputDef.[
             {loc; name = "cell_index"; value = cell_index};
-            {loc; name = "cell"; value = cell};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
             {loc; name = "vmemmap"; value = vmemmap};
             {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "range_start"; value = range_start};
-            {loc; name = "range_end"; value = range_end};
-          ]))))))))
+            {loc; name = "pool"; value = pool};
+          ]))))))
       in
 
 

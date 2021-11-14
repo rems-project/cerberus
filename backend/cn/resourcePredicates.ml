@@ -388,12 +388,10 @@ let page_alloc_predicates struct_decls =
       let condition = and_ [int_ 0 %<= i; i %< int_ mMAX_ORDER] in
       let args = [
           i;
-          get_ (pool %. "free_area") i;
           vmemmap_pointer;
           vmemmap;
           pool_pointer;
-          pool %. "range_start";
-          pool %. "range_end"
+          pool;
         ]
       in
       QPred {
