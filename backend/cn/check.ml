@@ -2040,7 +2040,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             (* List.iter (fun it ->
              *     print stdout (item "assumption" (IT.pp it));
              *     ) assumptions; *)
-            print_endline "";
             impl_ (and_ assumptions, body)
           in
           let@ () = match provable_or_model (t_ to_check) with
