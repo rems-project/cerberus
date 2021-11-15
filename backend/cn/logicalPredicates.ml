@@ -255,12 +255,7 @@ module PageAlloc = struct
       let vmemmap_s, vmemmap = 
         IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-
       let pool_s, pool = IT.fresh_named (Struct hyp_pool_tag) "pool" in
-      let free_area = pool %. "free_area" in
-      let cell = get_ free_area cell_index in
-      let range_start = pool %. "range_start" in
-      let range_end = pool %. "range_end" in
 
       let args = [
           (cell_index_s, IT.bt cell_index);
@@ -272,24 +267,16 @@ module PageAlloc = struct
       in
       let qarg = Some 0 in
 
-      let order = cell_index in
-
-      let free_area_pointer = 
-        memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area") in
-
-
-      let cell_pointer = arrayShift_ (free_area_pointer, struct_ct list_head_tag, cell_index) in
-
-      
-      
-      (* let index_in_free_area = 
-       *   offset_within_free_area %/ (int_ (Memory.size_of_struct list_head_tag))
-       * in
-       * 
-       * let order = index_in_free_area in *)
-
 
       let body = 
+        let__ ("pool", pool) (fun pool ->
+        let__ ("vmemmap", vmemmap) (fun vmemmap ->
+        let__ ("cell_index", cell_index) (fun cell_index ->
+        let__ ("cell", get_ (pool %. "free_area") cell_index) (fun cell ->
+        let order = cell_index in
+        let free_area_pointer = memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area") in
+        let cell_pointer = arrayShift_ (free_area_pointer, struct_ct list_head_tag, cell_index) in
+
         let prev = cell %. "prev" in
         let next = cell %. "next" in
         and_ [
@@ -299,12 +286,12 @@ module PageAlloc = struct
                      let prev_vmemmap = container_of_ (prev, hyp_page_tag, Id.id "node") in
                      let next_vmemmap = container_of_ (next, hyp_page_tag, Id.id "node") in
                      [(*prev*)
-                       vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap range_start range_end;
+                       vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap (pool %. "range_start") (pool %. "range_end");
                        ((get_ vmemmap prev_vmemmap) %. "order") %== order;
                        ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
                        (((get_ vmemmap prev_vmemmap) %. "node") %. "next") %== cell_pointer;
                        (*next*)
-                       vmemmap_good_pointer ~vmemmap_pointer next_vmemmap range_start range_end;
+                       vmemmap_good_pointer ~vmemmap_pointer next_vmemmap (pool %. "range_start") (pool %. "range_end");
                        ((get_ vmemmap next_vmemmap) %. "order") %== order;
                        ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
                        (((get_ vmemmap next_vmemmap) %. "node") %. "prev") %== cell_pointer;
@@ -312,6 +299,7 @@ module PageAlloc = struct
                    end
               ];
           ]
+          ))))
       in
 
       let infer_arguments =
@@ -320,7 +308,10 @@ module PageAlloc = struct
         AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
         AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
         AT.Computational ((pool_s, IT.bt pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end (bool_ true)), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap 
+                        ~range_start:(pool %. "range_start") 
+                        ~range_end:(pool %. "range_end")
+                        (bool_ true)), (loc, None),
         AT.I OutputDef.[
             {loc; name = "cell_index"; value = cell_index};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
@@ -336,31 +327,6 @@ module PageAlloc = struct
     in
 
 
-
-
-    (* let vmemmap_cell_address hyp_vmemmap_t i_t =
-     *   arrayShift_ (hyp_vmemmap_t, 
-     *                Sctype ([], Struct hyp_page_tag), 
-     *                i_t)
-     * in *)
-
-    (* let _vmemmap_cell_node_address hyp_vmemmap_t i_t =
-     *   memberShift_ (vmemmap_cell_address hyp_vmemmap_t i_t,
-     *                 hyp_page_tag,
-     *                 Id.id "node")
-     * in *)
-
-
-
-
-    (* let _vmemmap_node_pointer_to_index hyp_vmemmap_t pointer = 
-     *   vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer %/
-     *     int_ (Memory.size_of_struct hyp_page_tag)
-     * in *)
-
-    (* let _vmemmap_node_pointer_to_cell_pointer hyp_vmemmap_t pointer = 
-     *   vmemmap_offset_of_node_pointer hyp_vmemmap_t pointer
-     * in *)
 
 
 
@@ -468,104 +434,13 @@ module PageAlloc = struct
 
 
 
-    let bogus_vmemmap_page_wf =
-
-      let id = "BOGUS_Vmemmap_page_wf" in
-      let loc = Loc.other "internal (Vmemmap_page_wf)" in
-
-      let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in
-      let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
-      let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-      let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
-
-      let page_s, page = 
-        IT.fresh_named (BT.Struct hyp_page_tag) "page" 
-      in
-
-      let args = [
-          (page_pointer_s, IT.bt page_pointer);
-          (* (page_s, IT.bt page); *)
-          (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (page_s, IT.bt page);
-          (pool_pointer_s, IT.bt pool_pointer);
-          (pool_s, IT.bt pool);
-        ]
-      in
-      let qarg = Some 0 in
-
-      let self_node_pointer = 
-        memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
-
-      let pool_free_area_pointer = 
-        arrayShift_
-          (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
-           struct_ct list_head_tag,
-           page %. "order");
-      in
-
-      (* wrong, have to fix *)
-      let prev_next_well_formed prev_next_s = 
-        let inv_prev_next_s = 
-          if prev_next_s = "prev" then "next" else "prev"
-        in
-        let prev_next = (page %. "node") %. prev_next_s in
-        or_ [
-            (* either empty list (pointer to itself) *)
-            prev_next %== self_node_pointer;
-            (* or pointer to free_area cell *)
-            impl_ (
-                bool_ true
-                (* and_ [
-                 *     (int_ 0) %<= (page %. "order");
-                 *     (page %. "order") %< (int_ 11)
-                 *   ], *)
-              ,
-                and_ (
-                    let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
-                    [prev_next %== pool_free_area_pointer;
-                     (free_area_entry %. inv_prev_next_s) %== self_node_pointer]
-                  )
-              );
-            (* or pointer to other vmemmap cell, within the same range*)
-          ]
-      in
-
-      let constrs = [
-          prev_next_well_formed "prev";
-        ]
-      in
-
-
-      let body = and_ constrs in
-
-      let infer_arguments = 
-        AT.Computational ((page_pointer_s, IT.bt page_pointer), (loc, None),
-        AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
-        AT.Computational ((page_s, IT.bt page), (loc, None), 
-        AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
-        AT.Computational ((pool_s, IT.bt pool), (loc, None),
-        AT.I OutputDef.[
-            {loc; name = "page_pointer"; value = page_pointer};
-            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "page"; value = page};
-            {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "pool"; value = pool};
-          ])))))
-      in
-
-      (id, {loc; args; body; qarg; infer_arguments} )
-    in
 
 
 
 
 
 
-
-
-
-    [bogus_vmemmap_page_wf;
-     vmemmap_page_wf;
+    [vmemmap_page_wf;
      free_area_cell_wf;
      hyp_pool_wf;
      make_guarded_definition vmemmap_page_wf;
@@ -577,111 +452,6 @@ module PageAlloc = struct
 
 
 
-
-
-      (* let vmemmap_metadata_owned =
-       *   let p_s, p = IT.fresh_named Loc "p" in
-       *   let point_permission = 
-       *     let condition = 
-       *       vmemmap_good_pointer ~vmemmap_pointer p
-       *         range_start range_end
-       *     in
-       *     ite_ (condition, permission, q_ (0, 1))
-       *   in
-       *   let vmemmap_array = 
-       *     QPredicate {
-       *         qpointer = p_s;
-       *         name = "Vmemmap_page";
-       *         iargs = [
-       *             vmemmap_pointer;
-       *             pool_pointer;
-       *             range_start;
-       *             range_end;
-       *           ];
-       *         oargs = [get_ vmemmap p];
-       *         permission = point_permission;
-       *       }
-       *   in
-       *   let aligned = 
-       *     aligned_ (vmemmap_pointer,
-       *               array_ct (struct_ct hyp_page_tag) None)
-       *   in
-       *   LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
-       *   LRT.Resource (vmemmap_array, (loc, None), 
-       *   LRT.Constraint (t_ aligned, (loc, None), 
-       *   LRT.I)))
-       * in *)
-
-
-
-      (* let vmemmap_well_formedness2 = 
-       *   let constr prev_next =
-       *     (\* let i_s, i_t = IT.fresh_named Integer "i" in *\)
-       *     (\* let trigger = 
-       *      *   T_Member (T_Member (T_App (T_Term vmemmap_t, T_Term i_t), Id.id "node"), Id.id prev_next)
-       *      * in *\)
-       *     T (bool_ true)
-       *     (\* forall_trigger_ (i_s, IT.bt i_t) (Some trigger)
-       *      *   begin
-       *      *     let prev_next_t = ((vmemmap_t %@ i_t) %. "node") %.prev_next in
-       *      *     impl_ (
-       *      *         vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t
-       *      *       ,
-       *      *         let j_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
-       *      *         and_
-       *      *           [
-       *      *             (\\* (((vmemmap_t %@ j_t) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== 
-       *      *              *   (vmemmap_cell_node_address vmemmap_pointer_t i_t); *\\)
-       *      *             ((vmemmap_t %@ i_t) %. "order") %== ((vmemmap_t %@ j_t) %. "order");
-       *      *         (\\* forall_sth_ (k_s, IT.bt k_t)
-       *      *          *   (and_ [(i_t %+ int_ 1) %<= k_t; 
-       *      *          *          k_t %< (i_t %+ (exp_ (int_ 2, (vmemmap_t %@ i_t) %. "order")))])
-       *      *          *   (and_ [
-       *      *          *       ((vmemmap_t %@ k_t) %. "order") %== hHYP_NO_ORDER_t;
-       *      *          *       ((vmemmap_t %@ k_t) %. "refcount") %== int_ 0;
-       *      *          *     ])
-       *      *          * ] *\\)
-       *      *           ]
-       *      *       )
-       *      *   end *\)
-       *   in
-       *   LRT.Constraint (constr "prev", (loc, None), 
-       *   LRT.Constraint (constr "next", (loc, None), 
-       *   LRT.I))
-       * in *)
-
-      (* let page_group_ownership = 
-       *   let qp_s, qp_t = IT.fresh_named Loc "qp" in
-       *   let bytes_s, bytes_t = IT.fresh_named (BT.Array (Loc, Integer)) "bytes" in
-       *   let condition = 
-       *     let i_t = (pointerToIntegerCast_ qp_t) %/ pPAGE_SIZE_t in
-       *     and_ [
-       *         gtPointer_ (qp_t, pointer_ (Z.of_int 0));
-       *           (and_ (
-       *              [range_start_t %<= pointerToIntegerCast_ qp_t; 
-       *               pointerToIntegerCast_ qp_t %< range_end_t;
-       *               or_ [
-       *                   and_ [((vmemmap_t %@ i_t) %. "order") %!= int_ hHYP_NO_ORDER;
-       *                         ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0];
-       *                   and_ [((vmemmap_t %@ i_t) %. "order") %== int_ hHYP_NO_ORDER;
-       *                         ((vmemmap_t %@ i_t) %. "refcount") %== int_ 0]
-       *                 ]
-       *              ]
-       *           ))
-       *       ]
-       *   in
-       *   let qpoint = 
-       *     QPoint {
-       *         qpointer = qp_s;
-       *         size = Z.of_int 1;
-       *         permission = ite_ (condition, q_ (1, 1), q_ (0, 1));
-       *         value = get_ bytes_t qp_t;
-       *         init = bool_ false;
-       *       }
-       *   in
-       *   LRT.Logical ((bytes_s, IT.bt bytes_t),
-       *   LRT.Resource (qpoint, LRT.I))
-       * in *)
 
 
 end
