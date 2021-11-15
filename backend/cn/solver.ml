@@ -129,7 +129,7 @@ module Translate = struct
   let bt_table = BT_Table.create 1000
   let sort_table = Sort_Table.create 1000
 
-  let it_table = IT_Table.create 5000
+  let it_table = IT_Table.create 50000
 
 
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 

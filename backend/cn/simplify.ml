@@ -15,6 +15,19 @@ module SymPairMap = Map.Make(SymPair)
 
 let rec simp struct_decls values equalities some_known_facts =
 
+  let flatten_and = function
+    | IT (Bool_op (And fs), _) -> fs
+    | f -> [f]
+  in
+
+  let add_known_fact f some_known_facts = 
+    flatten_and f @ some_known_facts
+  in
+
+  let add_known_facts fs some_known_facts =
+    List.concat_map flatten_and fs @ some_known_facts
+  in
+
 
   let aux it = 
     simp struct_decls values equalities some_known_facts it in
@@ -73,6 +86,9 @@ let rec simp struct_decls values equalities some_known_facts =
           IT (Lit (Z (Z.sub i1 i2)), bt)
        | IT (Lit (Q q1), _), IT (Lit (Q q2), _), _ ->
           IT (Lit (Q (Q.sub q1 q2)), bt)
+       | IT (Arith_op (Add (c, d)), _), _, _ when IT.equal c b ->
+          (* (c + d) - b  when  c = b *)
+          d
        | _, _, _ ->
           IT (Arith_op (Sub (a, b)), bt) 
        end
@@ -93,6 +109,8 @@ let rec simp struct_decls values equalities some_known_facts =
        let a = aux a in
        let b = aux b in 
        begin match a, b with
+       | IT (Lit (Z a), _), IT (Lit (Z b), _) ->
+          z_ (Z.div a b)
        | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
        | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
@@ -184,7 +202,7 @@ let rec simp struct_decls values equalities some_known_facts =
             | _ -> and_ acc
             end
          | it :: its ->
-            let it = aux2 (acc @ some_known_facts) it in
+            let it = aux2 (add_known_facts acc some_known_facts) it in
             begin match it with
             | IT (Lit (Bool true), _) -> make acc its
             | IT (Lit (Bool false), _) -> bool_ false
@@ -240,8 +258,8 @@ let rec simp struct_decls values equalities some_known_facts =
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = aux2 (a :: some_known_facts) b in
-       let c = aux2 ((not_ a) :: some_known_facts) c in
+       let b = aux2 (add_known_fact a some_known_facts) b in
+       let c = aux2 (add_known_fact (not_ a) some_known_facts) c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -293,12 +311,24 @@ let rec simp struct_decls values equalities some_known_facts =
   let struct_op it bt = 
     match it with
     | IT.Struct (tag, members) ->
-       let members = 
-         List.map (fun (member, it) ->
-             (member, aux it)
-           ) members
-       in
-       IT (Struct_op (IT.Struct (tag, members)), bt)
+       begin match members with
+       | (_, IT (Struct_op (StructMember (str, _)), _)) :: _ when 
+              BT.equal (Struct tag) (IT.bt str) &&
+              List.for_all (function 
+                  | (mem, IT (Struct_op (StructMember (str', mem')), _)) ->
+                    Id.equal mem mem' && IT.equal str str'
+                  | _ -> false
+                ) members
+          ->
+           str
+       | _ ->
+          let members = 
+            List.map (fun (member, it) ->
+                (member, aux it)
+              ) members
+          in
+          IT (Struct_op (IT.Struct (tag, members)), bt)
+       end
     | IT.StructMember (it, member) ->
        let it = aux it in
        let rec make it = 
