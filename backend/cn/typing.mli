@@ -5,6 +5,7 @@ type 'e failure = Context.t -> 'e
 val return : 'a -> ('a, 'e) m
 val bind : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 val pure : ('a, 'e) m -> ('a, 'e) m
+val restore_resources : ('a, 'e) m -> ('a, 'e) m
 val (let@) : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 val fail : 'e failure -> ('a, 'e) m
 val run : Context.t -> ('a, 'e) m -> ('a, 'e) Result.t

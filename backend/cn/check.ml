@@ -466,9 +466,6 @@ module ResourceInference = struct
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
       let folded_value = 
-        (* let i_s, i = IT.fresh Integer  in
-         * let subst = make_subst [(qpoint.qpointer, pointer i)] in
-         * array_def_ (i_s, IT.bt i) (IT.subst subst qpoint.value) *)
         let rec aux value i = 
           if i < 0 then value else 
             let subst = make_subst [(qpoint.qpointer, pointer (int_ i))] in
@@ -770,8 +767,15 @@ end = struct
       match IT.subst (make_subst subst) output_spec with
       | IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
            when Sym.equal q' q_s && SymMap.mem s unis ->
-         let output_have_body = array_def_ (q_s, q_bt) output_have in
+         let output_have_body_s, output_have_body = IT.fresh (Array (q_bt, IT.bt output_have)) in
          let@ () = ls_matches_spec unis s output_have_body in
+         let@ () = add_l output_have_body_s (IT.bt output_have_body) in
+         let def_lc = 
+           let s' = Sym.fresh () in
+           ArrayEquality (output_have_body, (s', q_bt),
+                          IT.subst (IT.make_subst [(q_s, sym_ (s', q_bt))]) output_have)
+         in
+         let@ () = add_c def_lc in
          return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
       | _ ->
          return (unis, subst, eq_ (output_spec, output_have) :: constrs)
@@ -1997,10 +2001,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate (Id.s pname)})
        in
        let@ args = 
-         pure begin 
-             let@ supplied_args = args_of_asyms asyms in
-             Spine.calltype_lpred_argument_inference loc pname 
-               supplied_args def.infer_arguments 
+         restore_resources begin 
+           let@ supplied_args = args_of_asyms asyms in
+           Spine.calltype_lpred_argument_inference loc pname 
+             supplied_args def.infer_arguments 
            end
        in
        (* let@ () = 
@@ -2047,10 +2051,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                      None
                 ) constraints
             in
-            List.iter (fun it ->
-                print stdout (item "assumption" (IT.pp it));
-                ) assumptions;
-            print stdout (item "goal" (IT.pp body));
+            (* List.iter (fun it ->
+             *     print stdout (item "assumption" (IT.pp it));
+             *     ) assumptions;
+             * print stdout (item "goal" (IT.pp body)); *)
             impl_ (and_ assumptions, body)
           in
           let@ () = match provable_or_model (t_ to_check) with

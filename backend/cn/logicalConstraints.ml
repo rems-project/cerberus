@@ -35,6 +35,7 @@ type t =
   | Forall of (Sym.t * BT.t) * IT.t
   | Pred of pred
   | QPred of qpred
+  | ArrayEquality of IT.t * (Sym.t * BT.t) * IT.t
 
 let pp lc = 
   let aux = function
@@ -47,6 +48,9 @@ let pp lc =
     | QPred {q; condition; pred} ->
        Pp.c_app !^"each" [Sym.pp (fst q); BT.pp (snd q); IT.pp condition]
        ^^ dot ^^^ (Pred.pp pred)
+    | ArrayEquality (array, (q_s, q_bt), value) ->
+       parens (Sym.pp q_s ^^ dot ^^^ IT.pp array ^^ parens (Sym.pp q_s) ^^^ equals ^^^ 
+                 IT.pp value)
   in
   squotes (aux lc)
 
@@ -91,6 +95,16 @@ let subst su c =
      let condition = IT.subst su condition in
      let pred = Pred.subst su pred in
      QPred { q; condition; pred }
+  | ArrayEquality (array, (q_s, q_bt), value) ->
+     let array = IT.subst su array in
+     let (q_s, value) = 
+       if SymSet.mem q_s su.relevant then 
+         let q_s' = Sym.fresh_same q_s in
+         (q_s', IT.subst (IT.make_subst [(q_s, IT.sym_ (q_s', q_bt))]) value)
+       else (q_s, value)
+     in
+     let value = IT.subst su value in
+     ArrayEquality (array, (q_s, q_bt), value)
 
 
 
@@ -107,6 +121,9 @@ let free_vars = function
      SymSet.remove (fst qpred.q)
        (SymSet.union (IT.free_vars qpred.condition)
           (Pred.free_vars qpred.pred))
+  | ArrayEquality (array, (q_s, _), value) ->
+     SymSet.union (IT.free_vars array)
+       (SymSet.remove q_s (IT.free_vars value))
 
 
 
@@ -127,6 +144,10 @@ let equal c c' =
   | QPred {q = (s, bt); condition = c; pred = p}, 
     QPred {q = (s', bt'); condition = c'; pred = p'} ->
      Sym.equal s s' && BT.equal bt bt' && IT.equal c c' && Pred.equal p p'
+  | ArrayEquality (array, (q_s, q_bt), value), 
+    ArrayEquality (array', (q_s', q_bt'), value') ->
+     IT.equal array array' && Sym.equal q_s q_s' && 
+       BT.equal q_bt q_bt' && IT.equal value value'
   | T _, _ -> 
      false
   | Forall _, _ ->
@@ -134,6 +155,8 @@ let equal c c' =
   | Pred _, _ -> 
      false
   | QPred _, _ ->
+     false
+  | ArrayEquality _, _ ->
      false
 
 

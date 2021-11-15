@@ -46,6 +46,7 @@ let solver_params = [
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
+    (* ("smt.mbqi", "false"); *)
   ]
 
 let rewriter_params = [
@@ -59,7 +60,7 @@ let model_params = [
     ("model_evaluator.completion", "true");
   ]
 
-let params = 
+let params =
   logging_params
   @ no_automation_params
   @ no_randomness_params
@@ -70,14 +71,15 @@ let params =
 
 
 let tactics = [
-    "propagate-values";
-    "propagate-ineqs";
-    "purify-arith";
     "simplify";
+    (* "propagate-values"; *)
+    (* "propagate-ineqs"; *)
+    "purify-arith";
     "elim-term-ite";
     "add-bounds";
     "solve-eqs";
     "aufnira";
+    (* "qe2"; *)
     "smt";
   ]
 
@@ -460,30 +462,59 @@ end
 
 let constr global c = 
   let open Translate in
-  let struct_decls = global.struct_decls in
+  let term it = term global.struct_decls it in
+  let sort bt = sort global.struct_decls bt in
   match c with
   | T it -> 
-     Some (term struct_decls it)
+     Some (term it)
   | Forall ((s, bt), body) ->
      let q = 
        Z3.Quantifier.mk_forall_const context 
-         [Z3.Expr.mk_const context (sym_to_sym s) (sort struct_decls bt)] 
-         (term struct_decls body) 
+         [Z3.Expr.mk_const context (sym_to_sym s) (sort bt)] 
+         (term body) 
          None [] [] None None 
      in
      Some (Z3.Quantifier.expr_of_quantifier q)
   | Pred pred ->
      let def = Option.get (get_logical_predicate_def global pred.name) in
-     Some (term struct_decls (LogicalPredicates.open_pred global def pred.args))
+     Some (term (LogicalPredicates.open_pred global def pred.args))
   | QPred _ ->
      (* QPreds are not automatically expanded: to avoid
         all-quantifiers *)
      None
+  | ArrayEquality (array, (q_s, q_bt), value) ->
+     warn (!^"generating forall");
+     let (abt,rbt) = BT.array_bt (IT.bt array) in
+     let array_func_decl = 
+       Z3.FuncDecl.mk_func_decl context (sym_to_sym (Sym.fresh ()))
+         [sort abt] (sort rbt)
+     in
+     let array_fun_def = 
+       Z3.Quantifier.expr_of_quantifier
+         (Z3.Quantifier.mk_forall_const context
+            [term (sym_ (q_s, q_bt))] 
+            (Z3.Boolean.mk_eq context
+               (Z3.Expr.mk_app context array_func_decl [term (sym_ (q_s, q_bt))])
+               (term value)
+            )
+            None [] [] None None
+         )
+     in
+     let array_body_lambda = 
+       Z3.Quantifier.expr_of_quantifier
+         (Z3.Quantifier.mk_lambda_const context
+            [term (sym_ (q_s, q_bt))] 
+            (Z3.Expr.mk_app context array_func_decl [term (sym_ (q_s, q_bt))]))
+     in
+     let array_def = 
+       Z3.Boolean.mk_eq context (term array) array_body_lambda in
+     Some (Z3.Boolean.mk_and context [array_fun_def; array_def])
+     
 
 
 module ReduceQuery = struct
 
-  let forall ((s, bt), t) =
+  let forall (s, bt) t =
     let s' = Sym.fresh () in
     (IT.subst (make_subst [(s, sym_ (s', bt))]) t, Some (s', bt))
 
@@ -520,16 +551,23 @@ module ReduceQuery = struct
     | IT (Bool_op (EachI ((i1, i_s, i2), body)), _) ->
        let i = sym_ (i_s, Integer) in
        let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
-       forall ((i_s, Integer), (impl_ (condition, body)))
+       forall (i_s, Integer) (impl_ (condition, body))
     | _ -> 
        (it, None)
+
+  let array_equality global array (q_s, q_bt) value = 
+    forall (q_s, q_bt)
+      (eq_ (get_ array (sym_ (q_s, q_bt)), value))
+
 
   let constr global assumptions (lc : LC.t) =
     match lc with
     | T t -> plain t
-    | Forall ((s, bt), t) -> forall ((s, bt), t)
+    | Forall ((s, bt), t) -> forall (s, bt) t
     | Pred predicate -> pred global predicate
     | QPred qpredicate -> qpred global assumptions qpredicate
+    | ArrayEquality (array, (q_s, q_bt), value) -> 
+       array_equality global array (q_s, q_bt) value
        
 
 

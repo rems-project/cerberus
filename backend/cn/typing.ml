@@ -51,6 +51,16 @@ let pure (m : ('a, 'e) t) : ('a, 'e) t =
   outcome
 
 
+let restore_resources (m : ('a, 'e) t) : ('a, 'e) t =
+  fun old_state ->
+  match m old_state with
+  | Ok (a, new_state) -> 
+     Ok (a, { new_state with resources = old_state.resources })
+  | Error e -> Error e
+  
+
+
+
 
 
 let print_with_ctxt printer = 
