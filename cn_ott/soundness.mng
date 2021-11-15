@@ -1286,50 +1286,6 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
 
 \end{proof}
 
-\section{Framing}
-
-If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_1', h_2.\
-\mathrm{disjoint}(h_1, h_2) \wedge h = h_1 + h_2 \wedge \hconf{h_1}{e} \stepsto
-\hconf{h_1'}{e'}$ then $h' = h_1' + h_2$.
-
-\begin{proof}
-
-    \assume{%
-        \begin{pfenum}
-            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$,
-            \item $h = h_1 + h_2$ where $h_1, h_2$ disjoint,
-            \item and $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$.
-        \end{pfenum}
-    }
-
-    \prove{%
-        $h' = h_1' + h_2$.\\
-    }
-
-    \pfsketch{%
-        Induction over the operational rules. Only covering ones
-        which modify the heap; rest are trivially true.\\
-    }
-
-    \step{<1>1}{%
-        \case{%
-            \textsc{Op\_Action\_TVal\_Create}
-        }{%
-            \pf\ Because  $[[ty_mem_ptr]]$ is fresh.
-        }
-    }
-
-    \step{<1>2}{%
-        \case{%
-            \textsc{Op\_Action\_TVal\_\{Store,Kill\}}.
-        }{%
-            \pf\ By assumption of disjointness, $[[ty_mem_ptr]] \in [[h1]]$
-            implies $[[ty_mem_ptr]] \notin [[h2]]$.
-        }
-    }
-
-\end{proof}
-
 \section{Type Preservation}
 
 \subsection{Pointed-to values have type $[[to_base ( ct )
@@ -1607,23 +1563,25 @@ substitution).
 
 \subsection{Type Preservation Statement and Proof}
 
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
-$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
-\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+If $\cdot ; \cdot ; \cdot ; \ctxR_1 \vdash e \sych t$ then
+$\forall h {:} \ctxR, f, e' , h'.\ \hconf{h + f}{e} \stepsto \hconf{h'}{e'}
+\implies \\ \exists h'' {:} \ctxR'.\ h' = h'' + f \wedge \cdot ; \cdot ; \cdot ;
+\ctxR' \vdash e' \sych t$.
 
 \begin{proof}
     \pfsketch{ Induction over the typing rules.\\}
 
     \assume{%
         \begin{pfenum}
-            \item $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$
-            \item arbitrary $h : \ctxR, e' , h' : \ctxR'$
-            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$.\\
+            \item $\cdot ; \cdot ; \cdot ; \ctxR_1 \vdash e \sych t$
+            \item arbitrary $h {:} \ctxR_1, f, e' , h'$
+            \item $\hconf{h + f}{e} \stepsto \hconf{h'}{e'}$.\\
         \end{pfenum}
     }
 
     \prove{%
-        $\cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.\\
+        $\exists h' {:} \ctxR_1'.\ h' = h' + f \wedge \cdot ; \cdot ; \cdot
+        ; \ctxR_1' \vdash e' \sych t$.\\
     }
 
     \step{<1>1}{%
@@ -1642,7 +1600,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                         )> --> <( ty_mem_ptr' )> ]]$.\label{array-shift-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot |- ty_mem_ptr' => y : loc . y = term ]]$.
+                $[[ cdot ; cdot ; cdot |- ty_mem_ptr' => y : loc . y = term ]]$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
                 \textsc{Ty\_PE\_Val} and construction of $[[ty_mem_ptr']]$
@@ -1671,8 +1630,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                         or $[[ <( not ( False ) )> --> <( True )> ]]$.\label{not-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot |- mu_bool_value' => y : bool . y = neg
-                    inj mu_bool_value ]]$.
+                $[[ cdot ; cdot ; cdot |- mu_bool_value' => y : bool . y = neg inj mu_bool_value ]]$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_\{True,False\}}, \textsc{Ty\_PE\_Val} and
                 \ref{not-assm2}.
@@ -1695,7 +1654,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                         ty_mem_int )> ]]$.\label{arith-binop-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot |- ty_mem_int => y : integer . y = term ]]$.
+                $[[ cdot ; cdot ; cdot |- ty_mem_int => y : integer . y = term ]]$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
                 \textsc{Ty\_PE\_Val} and construction of $[[ty_mem_int]]$
@@ -1731,7 +1691,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $[[ <( assert_undef ( True , ty_loc UB_name ) )> --> <( Unit )> ]]$.
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot |- Unit => y : unit . y = unit ]]$.
+                $[[ cdot ; cdot ; cdot |- Unit => y : unit . y = unit ]]$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_Unit} and \textsc{Ty\_PE\_Val}.
         }
@@ -1754,7 +1715,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                         mem_zero )> ]]$.
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot |- ty_mem_int => y : integer . y = term ]]$
+                $[[ cdot ; cdot ; cdot |- ty_mem_int => y : integer . y = term ]]$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By cases on $[[mu_bool_value]]$, then applying
                 \textsc{Ty\_PVal\_\{True,False\}} and \textsc{Ty\_PE\_Val}.
@@ -1812,14 +1774,15 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 $pt = [[ inj ty_mem_ptr ( q_one )|- * - ct -> inj mu_pval_aux ]]$.\\
                 $ term = [[ representable ( ct *s , yp ) /\ alignedI ( inj ty_mem_int , yp ) ]]$.\\
                 $ret = [[ sigma yp : loc . term /\ exists y : to_base ( ct ) . (
-                yp ( q_one )|- * - ct -> y ) *o I ]]$.
+                yp ( q_one )|- * - ct -> y ) *o I ]]$.\\
+                $h = \cdot$ so $h' = [[ cdot + { pt } ]]$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; cdot |- create ( ty_mem_int
                         , ct ) Symbol_prefix => ret ]]$.
-                    \item $[[ <( cdot ; create ( ty_mem_int , ct ) Symbol_prefix
-                        )> --> <( cdot + { pt } ; done ty_mem_ptr , mu_pval_aux ,
+                    \item $[[ <( f ; create ( ty_mem_int , ct ) Symbol_prefix
+                        )> --> <( f + { pt } ; done ty_mem_ptr , mu_pval_aux ,
                         pt )> ]]$.
                 \end{pfenum}}
             \prove{%
@@ -1851,15 +1814,16 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }{%
             \pflet{%
                 $pt  = [[ inj ty_mem_ptr ( q_one )|- tick - ct -> inj mu_pval_aux   ]]$.\\
-                $ret = [[ sigma y : to_base ( ct ) . y = inj mu_pval_aux /\ pt *o I ]]$.
+                $ret = [[ sigma y : to_base ( ct ) . y = inj mu_pval_aux /\ pt *o I ]]$.\\
+                $h = h' = [[ cdot + { pt } ]]$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; R |- load ( ct , ty_mem_ptr
                         , _mem_order , pt ) => ret]]$.\label{load-assm1}
 
-                    \item $[[ <( cdot + { pt } ; load ( ct , ty_mem_ptr , _mem_order , pt ) )>
-                        --> <( cdot + { pt } ; done mu_pval_aux , pt )> ]]$.\label{load-assm2}
+                    \item $[[ <( f + { pt } ; load ( ct , ty_mem_ptr , _mem_order , pt ) )>
+                        --> <( f + { pt } ; done mu_pval_aux , pt )> ]]$.\label{load-assm2}
                 \end{pfenum}}
             \prove{%
                 $[[ cdot ; cdot ; cdot ; R |- done mu_pval_aux , pt <= ret ]]$
@@ -1888,15 +1852,16 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pflet{%
                 $pt  = [[ inj ty_mem_ptr ( _q )|- tick - ct -> _t ]]$.\\
                 $pt' = [[ inj ty_mem_ptr ( _q )|- tick - ct -> inj mu_pval_aux ]]$.\\
-                $ret = [[ sigma _ : unit . pt' *o I ]]$.
+                $ret = [[ sigma _ : unit . pt' *o I ]]$.\\
+                $h = h' = [[ cdot + { pt } ]]$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; R |- store ( _b , ct ,
                         mu_pval_aux0 , mu_pval_aux1 , _mem_order , pt ) => ret ]]$.
 
-                    \item $[[ <( cdot + { pt } ; store ( _b , ct , ty_mem_ptr , mu_pval_aux ,
-                        _mem_order , pt )  )> --> <( cdot + { pt' } ; done Unit , pt' )> ]]$.
+                    \item $[[ <( f + { pt } ; store ( _b , ct , ty_mem_ptr , mu_pval_aux ,
+                        _mem_order , pt )  )> --> <( f + { pt' } ; done Unit , pt' )> ]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ cdot ; cdot ; cdot ; cdot , _ : pt' |- done Unit , pt' <= ret ]]$.
@@ -1905,7 +1870,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ R ]] = [[ cdot , _ : pt2 ]]$ where $[[ cdot |- pt'' eq pt ]]$,
+        \step{<2>1}{$[[ R ]] = [[ cdot , _ : pt'' ]]$ where $[[ cdot |- pt'' eq pt ]]$,
             by inversion on the typing assumption.}
 
         \step{<2>2}{$[[ cdot ; cdot ; cdot |- Unit => unit ]]$ by \textsc{Ty\_PVal\_Unit}.}
@@ -1922,21 +1887,22 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \textsc{Ty\_Action\_Kill\_Static}.
         }{%
             \pflet{%
-                $pt = [[ inj ty_mem_ptr ( _q )|- _i - ct -> _t ]]$.
+                $pt = [[ inj ty_mem_ptr ( _q )|- _i - ct -> _t ]]$. \\
+                $[[R]] = [[ cdot , _ : pt' ]]$ where $[[ cdot |- pt' eq pt ]]$.\\
+                $h = [[ cdot + { pt }]]$ so $h' = \cdot$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; R |-  kill ( static ct ,
                         mu_pval_aux0 , pt ) => sigma _ : unit . I ]]$.
 
-                    \item $[[ <( cdot + { pt } ; kill ( static ct , ty_mem_ptr , pt ) )>
-                        --> <( h ; done Unit )> ]]$.
+                    \item $[[ <( f + { pt } ; kill ( static ct , ty_mem_ptr , pt ) )>
+                        --> <( f ; done Unit )> ]]$.
                 \end{pfenum}}
             \prove{%
                 $[[ cdot ; cdot ; cdot ; cdot |- done Unit <= sigma _ : unit . I ]]$
             }
             \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
-            Note: $[[R]] = [[ cdot , _ : pt' ]]$ where $[[ cdot |- pt' eq pt ]]$.
         }
     }
 
@@ -1954,15 +1920,16 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \textsc{Ty\_Memop\_IntFromPtr}.
         }{%
             \pflet{%
-                $ret = [[sigma y : integer . y = cast_ptr_to_int inj ty_mem_ptr /\ I]]$.
+                $ret = [[sigma y : integer . y = cast_ptr_to_int inj ty_mem_ptr /\ I]]$.\\
+                $h = \cdot$ so $h' = \cdot$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; cdot |- intFromPtr ( ct1 , ct2 , ty_mem_ptr )
                         => ret ]]$.
 
-                    \item $[[ <( cdot ; intFromPtr ( ct1 , ct2 , ty_mem_ptr ) )>
-                        --> <( cdot ; done ty_mem_int )> ]]$.\label{intfromptr-assm2}
+                    \item $[[ <( f ; intFromPtr ( ct1 , ct2 , ty_mem_ptr ) )>
+                        --> <( f ; done ty_mem_int )> ]]$.\label{intfromptr-assm2}
                 \end{pfenum}}
             \prove{%
                 $[[ cdot ; cdot ; cdot ; cdot |- done ty_mem_int <= ret ]]$
@@ -1996,15 +1963,16 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }{%
             \pflet{%
                 $pt = [[ inj ty_mem_ptr ( _q )|- tick - ct -> _t ]]$.\\
-                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ pt *o I]]$.
+                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ pt *o I]]$.\\
+                $h = [[cdot + { pt }]]$ so $h' = h$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; R |- ptrValidForDeref ( ct ,
                         ty_mem_ptr , pt ) => ret ]]$.\label{ptrValid-assm1}
 
-                    \item $[[ <( cdot + { pt } ; ptrValidForDeref ( ct ,
-                        ty_mem_ptr , pt ) )> --> <( cdot + { pt } ; done
+                    \item $[[ <( f + { pt } ; ptrValidForDeref ( ct ,
+                        ty_mem_ptr , pt ) )> --> <( f + { pt } ; done
                         mu_bool_value , pt )> ]]$.\label{ptrValid-assm2}
                 \end{pfenum}}
             \prove{%
@@ -2014,8 +1982,9 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$[[ cdot ; cdot ; cdot ; cdot , _ : pt |- pt <= pt]]$, by inversion on
-            \ref{ptrValid-assm1}.}
+        \step{<2>1}{$[[ cdot ; cdot ; cdot ; cdot , _ : pt' |- pt <= pt]]$, by inversion on
+            \ref{ptrValid-assm1}. \\
+            Note: $[[R]] = [[ cdot , _ : pt' ]]$ where $[[ cdot |- pt' eq pt ]]$.}
 
         \step{<2>2}{$[[mu_bool_value]] = [[aligned ( ct, inj ty_mem_ptr )]]$ by
             construction of $[[mu_bool_value]]$ (inversion on \ref{ptrValid-assm2}).}
@@ -2034,15 +2003,16 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \textsc{Ty\_Memop\_PtrWellAligned}.
         }{%
             \pflet{%
-                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ I]]$.
+                $ret = [[sigma y : bool . y = aligned ( ct , inj ty_mem_ptr ) /\ I]]$.\\
+                $h = \cdot$ so $h' = \cdot$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $[[ cdot ; cdot ; cdot ; cdot |- ptrWellAligned ( ct , ty_mem_ptr )
                         => ret]]$.
 
-                    \item $[[ <( cdot ; ptrWellAligned ( ct , ty_mem_ptr ) )>
-                        --> <( cdot ; done mu_bool_value )> ]]$.\label{wellaligned-assm2}
+                    \item $[[ <( f ; ptrWellAligned ( ct , ty_mem_ptr ) )>
+                        --> <( f ; done mu_bool_value )> ]]$.\label{wellaligned-assm2}
                 \end{pfenum}}
             \prove{%
                 $[[ cdot ; cdot ; cdot ; cdot |- done mu_bool_value => ret ]]$.
@@ -2079,11 +2049,12 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $[[ cdot ; cdot ; cdot ; R |- ccall ( ty_act , Symbol_sym ,
                         </ spine_elemi // i /> ) => [ subs ] ret ]]$.\label{ccall-assm1}
 
-                    \item $[[ <( h ; ccall ( ty_act , Symbol_sym , </ spine_elemi // i /> ) )>
-                        --> <( h ; [ subs' ] mu_texpr : [ subs' ] ret )> ]]$.
+                    \item $[[ <( h + f  ; ccall ( ty_act , Symbol_sym , </ spine_elemi // i /> ) )>
+                        --> <( h + f ; [ subs' ] mu_texpr : [ subs' ] ret )> ]]$.
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R |- [ subs ] mu_texpr <= [ subs ] ret ]]$
+                $[[ cdot ; cdot ; cdot ; R |- [ subs ] mu_texpr <= [ subs ] ret ]]$ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2172,7 +2143,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             }
             \prove{%
                 $[[ cdot ; cdot ; cdot |- let mu_sym_or_pattern = mu_pexpr_aux'
-                    in mu_tpexpr <= y2 : base_type2 . term2 ]]$.
+                    in mu_tpexpr <= y2 : base_type2 . term2 ]]$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
         }
     }
@@ -2214,13 +2186,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $[[ cdot ; cdot ; cdot ; R' , R |- let </ ret_patterni // i /> =
                         mu_seq_expr in mu_texpr2 <= ret2 ]]$.\label{let_letT-assm1}
 
-                    \item $[[ <( h ; let </ ret_patterni // i /> = mu_seq_expr_aux
-                        in mu_texpr2 )> --> <( h ; let </ ret_patterni // i /> : ret1' =
+                    \item $[[ <( h + f ; let </ ret_patterni // i /> = mu_seq_expr_aux
+                        in mu_texpr2 )> --> <( h + f ; let </ ret_patterni // i /> : ret1' =
                         mu_texpr1 in mu_texpr2 )> ]]$.\label{let_letT-assm2}
                 \end{pfenum}}
 
             \prove{$[[ cdot ; cdot ; cdot ; R' , R |- let </ ret_patterni // i /> : ret1
-                = mu_texpr1 in mu_texpr2 <= ret2 ]]$.
+                = mu_texpr1 in mu_texpr2 <= ret2 ]]$ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2250,19 +2223,19 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \case{%
             \textsc{Ty\_Seq\_TE\_LetT}.
         }{%
-            \textsc{Note:} $h : \ctxR' , \ctxR$ and $h : \ctxR_1 , \ctxR$.\\
             \assume{%
                 \begin{pfenum}
                     \item $[[cdot ; cdot ; cdot ; R' , R |- let </ ret_patterni // i />
                         : ret1 = done </ spine_elemi // i /> in mu_texpr2 <=
                         ret2]]$.\label{letT_sub-assm1}
 
-                    \item $[[ <( h ; let </ ret_patterni // i /> : ret1 = done
-                        </ spine_elemi // i /> in mu_texpr )> --> <( h ; [ subs
+                    \item $[[ <( h + f ; let </ ret_patterni // i /> : ret1 = done
+                        </ spine_elemi // i /> in mu_texpr )> --> <( h + f ; [ subs
                         ] mu_texpr2 )> ]]$.\label{letT_sub-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R' , R |- [ subs ] mu_texpr2 <= [ subs ] ret2 ]]$.
+                $[[ cdot ; cdot ; cdot ; R' , R |- [ subs ] mu_texpr2 <= [ subs ] ret2 ]]$ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2296,13 +2269,13 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $[[ cdot ; cdot ; cdot ; R' , R |- let </ ret_patterni // i /> : ret1
                         = mu_texpr1 in mu_texpr2 <= ret2 ]]$.\label{letT_letT-assm1}
 
-                    \item $[[ <( h ; let </ ret_patterni // i /> : ret = mu_texpr1 in mu_texpr2 )>
+                    \item $[[ <( h + f ; let </ ret_patterni // i /> : ret = mu_texpr1 in mu_texpr2 )>
                         --> <( h' ; let </ ret_patterni // i /> : ret = mu_texpr1' in mu_texpr2 )>
                         ]]$.\label{letT_letT-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R'' , R |- let </ ret_patterni // i /> : ret1
-                    = mu_texpr1' in mu_texpr2 <= ret2 ]]$.
+                $\exists [[ h'' : R'' , R]].\ h' = h'' + f \\ \wedge [[ cdot ; cdot ; cdot ; R''
+                , R |- let </ ret_patterni // i /> : ret1 = mu_texpr1' in mu_texpr2 <= ret2 ]]$.
             }
         }
     }
@@ -2315,14 +2288,21 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \end{pfenum}
             \pf\ By inversion on \ref{letT_letT-assm1}.}
 
-        \step{<2>2}{$[[ <( h ; mu_texpr1 )> --> <( h' ; mu_texpr1' )> ]]$.\\
+        \step{<2>2}{$[[ <( h + f ; mu_texpr1 )> --> <( h' ; mu_texpr1' )> ]]$.\\
             \pf\ By inversion on \ref{letT_letT-assm2}.}
 
-        \step{<2>3}{$[[ cdot ; cdot ; cdot ; R'' |- mu_texpr1' <= ret1 ]]$.\\
-            \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
+        \step{<2>3}{$h = h_1 + h_2$ where $[[ h1 : R']]$ and $[[h2 : R]]$.\\
+            \pf\ By induction on $[[R]]$.}
+
+        \step{<2>3}{$\exists h_1' {:} R''.\ h' = h_1' + h_2 + f \wedge [[ cdot ;
+            cdot ; cdot ; R'' |- mu_texpr1' <= ret1 ]]$.\\
+            \pf\ By induction with $[[h1 : R']]$ and $h2 + f$ as the frame,
+            using \stepref{<2>1}.1 and \stepref{<2>2}.}
 
         \step{<2>4}{By \stepref{<2>3}, \stepref{<2>2}.2,3 using
-            \textsc{Ty\_Seq\_TE\_LetT}, we are done.}
+            \textsc{Ty\_Seq\_TE\_LetT}, and $h'' = h_1' + h_2$ (so $[[
+            h'' : R'', R]]$) we are done.}
+
     \end{proof}
 
     \step{<1>33}{%
@@ -2334,11 +2314,12 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $[[ cdot ; cdot ; cdot ; R |- case mu_pval_aux of </ | mu_patterni
                         => mu_texpri // i /> end <= ret ]]$.\label{case-assm1}
 
-                    \item $[[ <( h ; case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri
-                        // i /> end )> --> <( h ; [ subsj ] mu_texprj )> ]]$.\label{case-assm2}
+                    \item $[[ <( h + f ; case mu_pval_aux of </ | mu_pattern_auxi => mu_texpri
+                        // i /> end )> --> <( h + f ; [ subsj ] mu_texprj )> ]]$.\label{case-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R |- [ subsj ] mu_texprj  <= ret ]]$.
+                $[[ cdot ; cdot ; cdot ; R |- [ subsj ] mu_texprj  <= ret ]]$ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2382,11 +2363,12 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $[[ cdot ; cdot ; cdot ; R |- if True then mu_texpr1
                         else mu_texpr2 <= ret ]]$.\label{if-assm1}
 
-                    \item $[[ <( h ; if True then mu_texpr1 else mu_texpr2 )>
-                        --> <( h ; mu_texpr1 )> ]]$.\label{if-assm2}
+                    \item $[[ <( h + f ; if True then mu_texpr1 else mu_texpr2 )>
+                        --> <( h + f ; mu_texpr1 )> ]]$.\label{if-assm2}
                 \end{pfenum}}
             \prove{%
-                $[[ cdot ; cdot ; cdot ; R |- mu_texpr1 <= ret ]]$.
+                $[[ cdot ; cdot ; cdot ; R |- mu_texpr1 <= ret ]]$ \\
+                (because the heap does not change).
             }
             \pf\ Invert \ref{if-assm1}, note $[[ cdot ; cdot ; cdot ; R |- (
             id ) : ( cdot ; cdot ; cdot , true = true ; R ) ]]$ and then

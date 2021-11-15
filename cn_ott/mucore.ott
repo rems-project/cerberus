@@ -1064,9 +1064,10 @@ defns
 
 grammar
 
-  heap , h :: 'Heap_' ::= {{ phantom }} {{ com heaps }}
+  heap , h , f :: 'Heap_' ::= {{ phantom }} {{ com heaps }}
     | cdot              :: :: empty
     | h + { points_to } :: :: points_to
+    | h + f             :: O :: concat
 
 
 defns

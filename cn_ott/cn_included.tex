@@ -734,9 +734,10 @@
 \cnprodline{|}{name  {:}  \cnnt{arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  texpr \, \in \, \cnkw{Globals}}{}{}{}{}}
 
 \newcommand{\cnheap}{
-\cnrulehead{\cnnt{heap}  ,\ \cnnt{h}}{::=}{\cncom{heaps}}\cnprodnewline
+\cnrulehead{\cnnt{heap}  ,\ \cnnt{h}  ,\ \cnnt{f}}{::=}{\cncom{heaps}}\cnprodnewline
 \cnfirstprodline{|}{\cdot}{}{}{}{}\cnprodnewline
-\cnprodline{|}{\cnnt{h}  \cnsym{+}  \cnsym{\{}  \cnnt{points\_to}  \cnsym{\}}}{}{}{}{}}
+\cnprodline{|}{\cnnt{h}  \cnsym{+}  \cnsym{\{}  \cnnt{points\_to}  \cnsym{\}}}{}{}{}{}\cnprodnewline
+\cnprodline{|}{\cnnt{h}  \cnsym{+}  \cnnt{f}}{}{}{}{}}
 
 \newcommand{\cnlemmaXXjtype}{
 \cnrulehead{\cnnt{lemma\_jtype}}{::=}{}\cnprodnewline

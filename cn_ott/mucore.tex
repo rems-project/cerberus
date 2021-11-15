@@ -590,9 +590,10 @@
 \ottprodline{|}{name  {:}  \ottnt{arg} \, \equiv \, \ottcomp{\ottmv{x_{\ottmv{i}}}}{\ottmv{i}} \, \mapsto  texpr \, \in \, \ottkw{Globals}}{}{}{}{}}
 
 \newcommand{\ottheap}{
-\ottrulehead{\ottnt{heap}  ,\ \ottnt{h}}{::=}{\ottcom{heaps}}\ottprodnewline
+\ottrulehead{\ottnt{heap}  ,\ \ottnt{h}  ,\ \ottnt{f}}{::=}{\ottcom{heaps}}\ottprodnewline
 \ottfirstprodline{|}{\cdot}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\ottnt{h}  \ottsym{+}  \ottsym{\{}  \ottnt{points\_to}  \ottsym{\}}}{}{}{}{}}
+\ottprodline{|}{\ottnt{h}  \ottsym{+}  \ottsym{\{}  \ottnt{points\_to}  \ottsym{\}}}{}{}{}{}\ottprodnewline
+\ottprodline{|}{\ottnt{h}  \ottsym{+}  \ottnt{f}}{}{}{\textsf{[O]}}{}}
 
 \newcommand{\ottlemmaXXjtype}{
 \ottrulehead{\ottnt{lemma\_jtype}}{::=}{}\ottprodnewline

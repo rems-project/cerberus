@@ -1239,50 +1239,6 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
 
 \end{proof}
 
-\section{Framing}
-
-If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_1', h_2.\
-\mathrm{disjoint}(h_1, h_2) \wedge h = h_1 + h_2 \wedge \hconf{h_1}{e} \stepsto
-\hconf{h_1'}{e'}$ then $h' = h_1' + h_2$.
-
-\begin{proof}
-
-    \assume{%
-        \begin{pfenum}
-            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$,
-            \item $h = h_1 + h_2$ where $h_1, h_2$ disjoint,
-            \item and $\hconf{h_1}{e} \stepsto \hconf{h_1'}{e'}$.
-        \end{pfenum}
-    }
-
-    \prove{%
-        $h' = h_1' + h_2$.\\
-    }
-
-    \pfsketch{%
-        Induction over the operational rules. Only covering ones
-        which modify the heap; rest are trivially true.\\
-    }
-
-    \step{<1>1}{%
-        \case{%
-            \textsc{Op\_Action\_TVal\_Create}
-        }{%
-            \pf\ Because  $mem\_ptr$ is fresh.
-        }
-    }
-
-    \step{<1>2}{%
-        \case{%
-            \textsc{Op\_Action\_TVal\_\{Store,Kill\}}.
-        }{%
-            \pf\ By assumption of disjointness, $mem\_ptr \in \cnnt{h_{{\mathrm{1}}}}$
-            implies $mem\_ptr \notin \cnnt{h_{{\mathrm{2}}}}$.
-        }
-    }
-
-\end{proof}
-
 \section{Type Preservation}
 
 \subsection{Pointed-to values have type $ \beta_{  \tau  } $}\label{subsec:pt_val_type}
@@ -1330,7 +1286,7 @@ environment}\label{stripped_same_env}
 
     \step{<1>1}{\suffices{ $\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res'}  \cnsym{)}$.}
         \pf\ By \texttt{strip\_ifs} idempotent and assumption~\ref{stripped_same_env-assm2}.}
-    
+
     \step{<1>2}{$\Phi  \vdash  \cnnt{res'} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$ by inversion
         on~\ref{stripped_same_env-assm1}.}
 
@@ -1481,7 +1437,7 @@ substitution).
             \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term'}  \Leftarrow  \cnnt{res''}$.
             \end{pfenum}
         \pf\ Inversion on~\ref{wt_sub_res-assm1}.}
-    
+
         \step{<2>2}{$\Phi  \vdash  \cnnt{res\_pattern'}  {:}   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res'}  )   \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\\
         \pf\ Inversion on~\ref{wt_sub_res-assm2}.}
 
@@ -1558,23 +1514,25 @@ substitution).
 
 \subsection{Type Preservation Statement and Proof}
 
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
-$\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
-\implies \cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.
+If $\cdot ; \cdot ; \cdot ; \ctxR_1 \vdash e \sych t$ then
+$\forall h {:} \ctxR, f, e' , h'.\ \hconf{h + f}{e} \stepsto \hconf{h'}{e'}
+\implies \\ \exists h'' {:} \ctxR'.\ h' = h'' + f \wedge \cdot ; \cdot ; \cdot ;
+\ctxR' \vdash e' \sych t$.
 
 \begin{proof}
     \pfsketch{ Induction over the typing rules.\\}
 
     \assume{%
         \begin{pfenum}
-            \item $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$
-            \item arbitrary $h : \ctxR, e' , h' : \ctxR'$
-            \item $\hconf{h}{e} \stepsto \hconf{h'}{e'}$.\\
+            \item $\cdot ; \cdot ; \cdot ; \ctxR_1 \vdash e \sych t$
+            \item arbitrary $h {:} \ctxR_1, f, e' , h'$
+            \item $\hconf{h + f}{e} \stepsto \hconf{h'}{e'}$.\\
         \end{pfenum}
     }
 
     \prove{%
-        $\cdot ; \cdot ; \cdot ; \ctxR' \vdash e' \sych t$.\\
+        $\exists h' {:} \ctxR_1'.\ h' = h' + f \wedge \cdot ; \cdot ; \cdot
+        ; \ctxR_1' \vdash e' \sych t$.\\
     }
 
     \step{<1>1}{%
@@ -1591,7 +1549,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cnkw{array\_shift} \, \cnsym{(}  mem\_ptr  \cnsym{,}  \tau  \cnsym{,}  mem\_int  \cnsym{)}  \rangle  \longrightarrow  \langle  mem\_ptr'  \rangle$.\label{array-shift-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr'  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_ptr'  \Rightarrow  \cnmv{y}  {:}  \cnkw{loc}  . \:  \cnmv{y}  =  \cnnt{term}$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
                 \textsc{Ty\_PE\_Val} and construction of $mem\_ptr'$
@@ -1619,7 +1578,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                         or $\langle  \cnkw{not} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{True}  \rangle$.\label{not-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value'  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  bool\_value'  \Rightarrow  \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \neg \,  bool\_value $ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_\{True,False\}}, \textsc{Ty\_PE\_Val} and
                 \ref{not-assm2}.
@@ -1640,7 +1600,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  mem\_int_{{\mathrm{1}}} \, \mathbin{ binop_{arith} } \, mem\_int_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  mem\_int  \rangle$.\label{arith-binop-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_Obj\_Int}, \textsc{Ty\_PVal\_Obj},
                 \textsc{Ty\_PE\_Val} and construction of $mem\_int$
@@ -1675,7 +1636,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cnkw{assert\_undef} \, \cnsym{(}  \cnkw{True}  \cnsym{,}   \, \cnmv{UB\_name}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnkw{Unit}  \rangle$.
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnmv{y}  {:}  \cnkw{unit}  . \:  \cnmv{y}  =  \cnkw{unit}$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By \textsc{Ty\_PVal\_Unit} and \textsc{Ty\_PE\_Val}.
         }
@@ -1695,7 +1657,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                     \item $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{True}  \cnsym{)}  \rangle  \longrightarrow  \langle   1   \rangle$ or $\langle  \cnkw{bool\_to\_integer} \, \cnsym{(}  \cnkw{False}  \cnsym{)}  \rangle  \longrightarrow  \langle   0   \rangle$.
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  mem\_int  \Rightarrow  \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnnt{term}$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
             \pf\ By cases on $bool\_value$, then applying
                 \textsc{Ty\_PVal\_\{True,False\}} and \textsc{Ty\_PE\_Val}.
@@ -1752,12 +1715,13 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pflet{%
                 $pt =   mem\_ptr   \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }   pval  $.\\
                 $ term = \cnkw{representable} \, \cnsym{(}  \tau  *  \cnsym{,}  { y_p }  \cnsym{)}  \wedge  \cnkw{alignedI} \, \cnsym{(}   mem\_int   \cnsym{,}  { y_p }  \cnsym{)}$.\\
-                $ret = \Sigma \, { y_p }  {:}  \cnkw{loc}  . \:  \cnnt{term}  \wedge  \exists \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:    { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \cnmv{y}    \otimes  \cnkw{I}$.
+                $ret = \Sigma \, { y_p }  {:}  \cnkw{loc}  . \:  \cnnt{term}  \wedge  \exists \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:    { y_p }  \mathbin{ { \overset{   {  \times  }   }{ \mapsto } }_{  \tau  } }  \cnmv{y}    \otimes  \cnkw{I}$.\\
+                $h = \cdot$ so $h' = \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \Rightarrow  \cnnt{ret}$.
-                    \item $\langle  \cdot  \cnsym{;}  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \rangle$.
+                    \item $\langle  \cnnt{f}  \cnsym{;}  \cnkw{create} \, \cnsym{(}  mem\_int  \cnsym{,}  \tau  \cnsym{)}    \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \rangle$.
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
@@ -1787,13 +1751,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }{%
             \pflet{%
                 $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
-                $ret = \Sigma \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:  \cnmv{y}  =   pval   \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.
+                $ret = \Sigma \, \cnmv{y}  {:}   \beta_{  \tau  }   . \:  \cnmv{y}  =   pval   \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.\\
+                $h = h' = \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{load-assm1}
 
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \rangle$.\label{load-assm2}
+                    \item $\langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{load} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \rangle$.\label{load-assm2}
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, pval  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$
@@ -1822,13 +1787,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pflet{%
                 $pt  =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ $.\\
                 $pt' =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }   pval  $.\\
-                $ret = \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnnt{pt'}  \otimes  \cnkw{I}$.
+                $ret = \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnnt{pt'}  \otimes  \cnkw{I}$.\\
+                $h = h' = \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  pval_{{\mathrm{1}}}  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
 
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
+                    \item $\langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{store} \, \cnsym{(}  \_  \cnsym{,}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  pval  \cnsym{,}  \_  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt'}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \rangle$.
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnkw{done} \, \cnkw{Unit}  \cnsym{,}  \cnnt{pt'}  \Leftarrow  \cnnt{ret}$.
@@ -1837,7 +1803,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt_{{\mathrm{2}}}}$ where $\cdot  \vdash  \cnnt{pt''} \, \equiv \, \cnnt{pt}$,
+        \step{<2>1}{$\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt''}$ where $\cdot  \vdash  \cnnt{pt''} \, \equiv \, \cnnt{pt}$,
             by inversion on the typing assumption.}
 
         \step{<2>2}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{Unit}  \Rightarrow  \cnkw{unit}$ by \textsc{Ty\_PVal\_Unit}.}
@@ -1854,19 +1820,20 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \textsc{Ty\_Action\_Kill\_Static}.
         }{%
             \pflet{%
-                $pt =   mem\_ptr   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_ $.
+                $pt =   mem\_ptr   \mathbin{ { \overset{    }{ \mapsto } }_{  \tau  } }  \_ $. \\
+                $\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$.\\
+                $h = \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}$ so $h' = \cdot$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  pval_{{\mathrm{0}}}  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$.
 
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \rangle$.
+                    \item $\langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{kill} \, \cnsym{(}  \cnkw{static} \, \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{;}  \cnkw{done} \, \cnkw{Unit}  \rangle$.
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, \cnkw{Unit}  \Leftarrow  \Sigma \, \cnmv{\_}  {:}  \cnkw{unit}  . \:  \cnkw{I}$
             }
             \pf\ By \textsc{Ty\_TVal\_I}, \textsc{Ty\_PVal\_Unit} and then \textsc{Ty\_TVal\_Comp}.
-            Note: $\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$.
         }
     }
 
@@ -1884,13 +1851,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \textsc{Ty\_Memop\_IntFromPtr}.
         }{%
             \pflet{%
-                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnkw{cast\_ptr\_to\_int} \,  mem\_ptr   \wedge  \cnkw{I}$.
+                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{integer}  . \:  \cnmv{y}  =  \cnkw{cast\_ptr\_to\_int} \,  mem\_ptr   \wedge  \cnkw{I}$.\\
+                $h = \cdot$ so $h' = \cdot$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{intFromPtr} \, \cnsym{(}  \tau_{{\mathrm{1}}}  \cnsym{,}  \tau_{{\mathrm{2}}}  \cnsym{,}  mem\_ptr  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
 
-                    \item $\langle  \cdot  \cnsym{;}  \cnkw{intFromPtr} \, \cnsym{(}  \tau_{{\mathrm{1}}}  \cnsym{,}  \tau_{{\mathrm{2}}}  \cnsym{,}  mem\_ptr  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{;}  \cnkw{done} \, mem\_int  \rangle$.\label{intfromptr-assm2}
+                    \item $\langle  \cnnt{f}  \cnsym{;}  \cnkw{intFromPtr} \, \cnsym{(}  \tau_{{\mathrm{1}}}  \cnsym{,}  \tau_{{\mathrm{2}}}  \cnsym{,}  mem\_ptr  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{;}  \cnkw{done} \, mem\_int  \rangle$.\label{intfromptr-assm2}
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, mem\_int  \Leftarrow  \cnnt{ret}$
@@ -1924,13 +1892,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         }{%
             \pflet{%
                 $pt =   mem\_ptr   \mathbin{ { \overset{  \checkmark  }{ \mapsto } }_{  \tau  } }  \_ $.\\
-                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.
+                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \wedge  \cnnt{pt}  \otimes  \cnkw{I}$.\\
+                $h = \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}$ so $h' = h$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \Rightarrow  \cnnt{ret}$.\label{ptrValid-assm1}
 
-                    \item $\langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \rangle$.\label{ptrValid-assm2}
+                    \item $\langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{ptrValidForDeref} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{,}  \cnnt{pt}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{+}  \cnsym{\{}  \cnnt{pt}  \cnsym{\}}  \cnsym{;}  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \rangle$.\label{ptrValid-assm2}
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnkw{done} \, bool\_value  \cnsym{,}  \cnnt{pt}  \Leftarrow  \cnnt{ret}$.
@@ -1939,8 +1908,9 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     }
 
     \begin{proof}
-        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
-            \ref{ptrValid-assm1}.}
+        \step{<2>1}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}  \vdash  \cnnt{pt}  \Leftarrow  \cnnt{pt}$, by inversion on
+            \ref{ptrValid-assm1}. \\
+            Note: $\mathcal{R} = \cdot  \cnsym{,}  \cnmv{\_}  {:}  \cnnt{pt'}$ where $\cdot  \vdash  \cnnt{pt'} \, \equiv \, \cnnt{pt}$.}
 
         \step{<2>2}{$bool\_value = \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}$ by
             construction of $bool\_value$ (inversion on \ref{ptrValid-assm2}).}
@@ -1959,13 +1929,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \textsc{Ty\_Memop\_PtrWellAligned}.
         }{%
             \pflet{%
-                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \wedge  \cnkw{I}$.
+                $ret = \Sigma \, \cnmv{y}  {:}  \cnkw{bool}  . \:  \cnmv{y}  =  \cnkw{aligned} \, \cnsym{(}  \tau  \cnsym{,}   mem\_ptr   \cnsym{)}  \wedge  \cnkw{I}$.\\
+                $h = \cdot$ so $h' = \cdot$.
             }
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{ptrWellAligned} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{)}  \Rightarrow  \cnnt{ret}$.
 
-                    \item $\langle  \cdot  \cnsym{;}  \cnkw{ptrWellAligned} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{)}  \rangle  \longrightarrow  \langle  \cdot  \cnsym{;}  \cnkw{done} \, bool\_value  \rangle$.\label{wellaligned-assm2}
+                    \item $\langle  \cnnt{f}  \cnsym{;}  \cnkw{ptrWellAligned} \, \cnsym{(}  \tau  \cnsym{,}  mem\_ptr  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{f}  \cnsym{;}  \cnkw{done} \, bool\_value  \rangle$.\label{wellaligned-assm2}
                 \end{pfenum}}
             \prove{%
                 $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{done} \, bool\_value  \Rightarrow  \cnnt{ret}$.
@@ -2001,10 +1972,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  ident  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \Rightarrow   \sigma  (  \cnnt{ret}  ) $.\label{ccall-assm1}
 
-                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  ident  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma'  (  texpr  )   {:}   \sigma'  (  \cnnt{ret}  )   \rangle$.
+                    \item $\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{ccall} \, \cnsym{(}  \tau  \cnsym{,}  ident  \cnsym{,}  \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \cnsym{)}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}   \sigma'  (  texpr  )   {:}   \sigma'  (  \cnnt{ret}  )   \rangle$.
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  texpr  )   \Leftarrow   \sigma  (  \cnnt{ret}  ) $
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  texpr  )   \Leftarrow   \sigma  (  \cnnt{ret}  ) $ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2085,7 +2057,8 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 \end{pfenum}
             }
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{let} \, ident\_or\_pattern  =  pexpr' \, \cnkw{in} \, tpexpr  \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:  \cnnt{term_{{\mathrm{2}}}}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnkw{let} \, ident\_or\_pattern  =  pexpr' \, \cnkw{in} \, tpexpr  \Leftarrow  \cnmv{y_{{\mathrm{2}}}}  {:}  \beta_{{\mathrm{2}}}  . \:  \cnnt{term_{{\mathrm{2}}}}$ \\
+                (because this is a pure expression, heaps are irrelevant).
             }
         }
     }
@@ -2124,10 +2097,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.\label{let_letT-assm1}
 
-                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret'_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle$.\label{let_letT-assm2}
+                    \item $\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret'_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle$.\label{let_letT-assm2}
                 \end{pfenum}}
 
-            \prove{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
+            \prove{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2157,15 +2131,15 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
         \case{%
             \textsc{Ty\_Seq\_TE\_LetT}.
         }{%
-            \textsc{Note:} $h : \ctxR' , \ctxR$ and $h : \ctxR_1 , \ctxR$.\\
             \assume{%
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.\label{letT_sub-assm1}
 
-                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma  (  texpr_{{\mathrm{2}}}  )   \rangle$.\label{letT_sub-assm2}
+                    \item $\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \cnkw{in} \, texpr  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}   \sigma  (  texpr_{{\mathrm{2}}}  )   \rangle$.\label{letT_sub-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash   \sigma  (  texpr_{{\mathrm{2}}}  )   \Leftarrow   \sigma  (  \cnnt{ret_{{\mathrm{2}}}}  ) $.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash   \sigma  (  texpr_{{\mathrm{2}}}  )   \Leftarrow   \sigma  (  \cnnt{ret_{{\mathrm{2}}}}  ) $ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2198,10 +2172,10 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.\label{letT_letT-assm1}
 
-                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  texpr'_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle$.\label{letT_letT-assm2}
+                    \item $\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  =  texpr'_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \rangle$.\label{letT_letT-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}''  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr'_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
+                $\exists \cnnt{h''}  {:}  \mathcal{R}''  \cnsym{,}  \mathcal{R}.\ h' = h'' + f \\ \wedge \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}''  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr'_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             }
         }
     }
@@ -2214,14 +2188,19 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \end{pfenum}
             \pf\ By inversion on \ref{letT_letT-assm1}.}
 
-        \step{<2>2}{$\langle  \cnnt{h}  \cnsym{;}  texpr_{{\mathrm{1}}}  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  texpr'_{{\mathrm{1}}}  \rangle$.\\
+        \step{<2>2}{$\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  texpr_{{\mathrm{1}}}  \rangle  \longrightarrow  \langle  \cnnt{h'}  \cnsym{;}  texpr'_{{\mathrm{1}}}  \rangle$.\\
             \pf\ By inversion on \ref{letT_letT-assm2}.}
 
-        \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}''  \vdash  texpr'_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.\\
-            \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
+        \step{<2>3}{$h = h_1 + h_2$ where $\cnnt{h_{{\mathrm{1}}}}  {:}  \mathcal{R}'$ and $\cnnt{h_{{\mathrm{2}}}}  {:}  \mathcal{R}$.\\
+            \pf\ By induction on $\mathcal{R}$.}
+
+        \step{<2>3}{$\exists h_1' {:} R''.\ h' = h_1' + h_2 + f \wedge \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}''  \vdash  texpr'_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.\\
+            \pf\ By induction with $\cnnt{h_{{\mathrm{1}}}}  {:}  \mathcal{R}'$ and $h2 + f$ as the frame,
+            using \stepref{<2>1}.1 and \stepref{<2>2}.}
 
         \step{<2>4}{By \stepref{<2>3}, \stepref{<2>2}.2,3 using
-            \textsc{Ty\_Seq\_TE\_LetT}, we are done.}
+            \textsc{Ty\_Seq\_TE\_LetT}, and $h'' = h_1' + h_2$ (so $\cnnt{h''}  {:}  \mathcal{R}''  \cnsym{,}  \mathcal{R}$) we are done.}
+
     \end{proof}
 
     \step{<1>33}{%
@@ -2232,10 +2211,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{case} \, pval \, \cnkw{of} \, \cncomp{\mid  pattern_{\cnmv{i}}  \Rightarrow  texpr_{\cnmv{i}}}{\cnmv{i}} \, \cnkw{end}  \Leftarrow  \cnnt{ret}$.\label{case-assm1}
 
-                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{case} \, pval \, \cnkw{of} \, \cncomp{\mid  pattern_{\cnmv{i}}  \Rightarrow  texpr_{\cnmv{i}}}{\cnmv{i}} \, \cnkw{end}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}   \sigma_{\cnmv{j}}  (  texpr_{\cnmv{j}}  )   \rangle$.\label{case-assm2}
+                    \item $\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{case} \, pval \, \cnkw{of} \, \cncomp{\mid  pattern_{\cnmv{i}}  \Rightarrow  texpr_{\cnmv{i}}}{\cnmv{i}} \, \cnkw{end}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}   \sigma_{\cnmv{j}}  (  texpr_{\cnmv{j}}  )   \rangle$.\label{case-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash   \sigma_{\cnmv{j}}  (  texpr_{\cnmv{j}}  )   \Leftarrow  \cnnt{ret}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash   \sigma_{\cnmv{j}}  (  texpr_{\cnmv{j}}  )   \Leftarrow  \cnnt{ret}$ \\
+                (because the heap does not change).
             }
         }
     }
@@ -2276,10 +2256,11 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
                 \begin{pfenum}
                     \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{if} \, \cnkw{True} \, \cnkw{then} \, texpr_{{\mathrm{1}}} \, \cnkw{else} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret}$.\label{if-assm1}
 
-                    \item $\langle  \cnnt{h}  \cnsym{;}  \cnkw{if} \, \cnkw{True} \, \cnkw{then} \, texpr_{{\mathrm{1}}} \, \cnkw{else} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{;}  texpr_{{\mathrm{1}}}  \rangle$.\label{if-assm2}
+                    \item $\langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  \cnkw{if} \, \cnkw{True} \, \cnkw{then} \, texpr_{{\mathrm{1}}} \, \cnkw{else} \, texpr_{{\mathrm{2}}}  \rangle  \longrightarrow  \langle  \cnnt{h}  \cnsym{+}  \cnnt{f}  \cnsym{;}  texpr_{{\mathrm{1}}}  \rangle$.\label{if-assm2}
                 \end{pfenum}}
             \prove{%
-                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret}$.
+                $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret}$ \\
+                (because the heap does not change).
             }
             \pf\ Invert \ref{if-assm1}, note $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}   \mathrm{id}   \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnkw{true}  =  \cnkw{true}  \cnsym{;}  \mathcal{R}  \cnsym{)}$ and then
             apply substitution lemma (\ref{subsec:sub_lemma}).
