@@ -23,7 +23,6 @@
 \interStepSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
 \pflongindent%
 
-
 \newcommand{\ctxC}{\mathcal{C}}%
 \newcommand{\ctxL}{\mathcal{L}}%
 \newcommand{\ctxN}{\Phi}%
@@ -906,7 +905,7 @@ $\cncomp{\cnmv{x_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \ma
 
 \subsection{Progress Statement and Proof}\label{subsec:progress}
 
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ and all pattern in $e$ are
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ and all patterns in $e$ are
 exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
 : R.\ \exists e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
 
@@ -987,7 +986,7 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
             \textsc{Ty\_PE\_Call}.
         }{%
             \pf\ By inversion we have $name  {:}  \cnnt{pure\_arg} \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}}{\cnmv{i}} \, \mapsto  tpexpr \, \in \, \cnkw{Globals}$ and $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash \, \cncomp{\cnmv{x_{\cnmv{i}}}  =  pval_{\cnmv{i}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \gg  \sigma  \cnsym{;}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{term}  \wedge  \cnkw{I}$, with the latter implying $\cncomp{\cnmv{x_{\cnmv{i}}}  =  pval_{\cnmv{i}}}{\cnmv{i}} \, \mathbin{ {:} {:} }  \cnnt{pure\_arg}  \gg  \sigma  \cnsym{;}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{term}  \wedge  \cnkw{I}$ (lemma
-           \ref{subsec:spine_decons_same}. Thus it can step with
+            \ref{subsec:spine_decons_same}). Thus it can step with
            \textsc{Op\_PE\_TPE\_Call}.
         }
     }
@@ -1242,7 +1241,7 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
 
 \section{Framing}
 
-If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_2.\
+If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_1', h_2.\
 \mathrm{disjoint}(h_1, h_2) \wedge h = h_1 + h_2 \wedge \hconf{h_1}{e} \stepsto
 \hconf{h_1'}{e'}$ then $h' = h_1' + h_2$.
 
@@ -1306,9 +1305,37 @@ values}\label{subsec:pattern_term}
         \item $pattern  =  pval  \leadsto  \sigma$.\\
     \end{pfenum}}
 
-    \prove{ The constraint $term_{\cnmv{j}}  =   pval $ holds.\\}
+    \prove{ The constraint $term  =   pval $ holds.\\}
 
     \pfsketch{ Induction over $pattern$.}
+
+\end{proof}
+
+\subsection{\texttt{strip\_ifs} is idempotent}\label{strip_ifs_idemp}
+\pfsketch{ Induction over the definition.}
+
+\subsection{Deconstructing a stripped resource produces the same
+environment}\label{stripped_same_env}
+
+\begin{proof}
+    \assume{%
+        \begin{pfenum}
+        \item $\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$.\label{stripped_same_env-assm1}
+        \item $\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}$.\label{stripped_same_env-assm2}
+        \end{pfenum}}
+
+    \prove{%
+        $\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res'}  \leadsto  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$.\\
+    }
+
+    \step{<1>1}{\suffices{ $\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res'}  \cnsym{)}$.}
+        \pf\ By \texttt{strip\_ifs} idempotent and assumption~\ref{stripped_same_env-assm2}.}
+    
+    \step{<1>2}{$\Phi  \vdash  \cnnt{res'} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$ by inversion
+        on~\ref{stripped_same_env-assm1}.}
+
+    \step{<1>3}{By definiton of $\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}$ and
+        \stepref{<1>1} and \stepref{<1>2} we are done.}
 
 \end{proof}
 
@@ -1359,26 +1386,26 @@ First, computational part.
 
 \end{proof}
 
-Now, resource part.
+Now, resource part (of deconstructing a pattern leads to a well-typed
+substitution).
 
 \begin{proof}
     \assume{%
         \begin{pfenum}
         \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res}$.\label{wt_sub_res-assm1}
-        % FIXME update proof for predicates
-        \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\label{wt_sub_res-assm2}
-        \item $\cnnt{res\_pattern}  =  \cnnt{res\_term}  \leadsto  \sigma$.\label{wt_sub_sub-assm3}
+        \item $\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\label{wt_sub_res-assm2}
+        \item $\cnnt{res\_pattern}  =  \cnnt{res\_term}  \leadsto  \sigma$.\label{wt_sub_res-assm3}
         \end{pfenum}}
 
     \prove{%
         $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
     }
 
-    \pfsketch{ By induction over \ref{wt_sub_res-assm2}.}
+    \pfsketch{ By induction over \ref{wt_sub_res-assm1}.}
 
     \step{<1>1}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Empty}.
+            \textsc{Ty\_Res\_Empty}.
         }{%
             $\cnnt{res\_pattern} = \cnnt{res\_term} = \cnnt{res} = \cnkw{emp}$.
             $\sigma, \mathcal{L}, \Phi, \mathcal{R}, \mathcal{R}'$ are all empty.\\
@@ -1386,19 +1413,29 @@ Now, resource part.
         }
     }
 
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_Res\_PointsTo}.
+        }{%
+            $\cnnt{res\_pattern} = \cnmv{r}$, $\cnnt{res\_term} = \cnnt{pt}$, $\sigma = \cnnt{pt}  \cnsym{/}  \cnmv{r}  \cnsym{,}  \cdot$,
+            $\mathcal{L} = \cdot$, $\Phi = \cdot$, $\mathcal{R} = \mathcal{R}' = \cdot  \cnsym{,}  \cnmv{r}  {:}  \cnnt{pt}$.\\
+            \pf\ By \textsc{Ty\_Subs\_Cons\_Res}.
+        }
+    }
+
     \step{<1>3}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Var}.
+            \textsc{Ty\_Res\_Var}.
         }{%
-            $\cnnt{res\_pattern} = \cnmv{r}$, $\sigma = \cnnt{res\_term}  \cnsym{/}  \cnmv{x}  \cnsym{,}  \cdot$,
-            $\mathcal{L} = \cdot$, $\Phi = \cdot$, $\mathcal{R}' = \cdot  \cnsym{,}  \cnmv{x}  {:}  \cnnt{res}$.\\
+            $\cnnt{res\_pattern} = \cnmv{r}$, $\sigma = \cnnt{res\_term}  \cnsym{/}  \cnmv{r}  \cnsym{,}  \cdot$,
+            $\mathcal{L} = \cdot$, $\Phi = \cdot$, $\mathcal{R} = \mathcal{R}' = \cdot  \cnsym{,}  \cnmv{r}  {:}  \cnnt{res}$.\\
             \pf\ By \textsc{Ty\_Subs\_Cons\_Res}.
         }
     }
 
     \step{<1>4}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_SepConj}.
+            \textsc{Ty\_Res\_SepConj}.
         }{%
             \pf\ By induction (and concatenating well-typed substitutions).
         }
@@ -1406,7 +1443,7 @@ Now, resource part.
 
     \step{<1>5}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Conj}.
+            \textsc{Ty\_Res\_Conj}.
         }{%
             \pf\ By $\cnkw{smt} \, \cnsym{(}  \cdot  \Rightarrow  term  \cnsym{)}$ (from \ref{wt_sub_res-assm1})
             and induction with \textsc{Ty\_Sub\_Cons\_Phi}.
@@ -1415,7 +1452,7 @@ Now, resource part.
 
     \step{<1>6}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Pack}.
+            \textsc{Ty\_Res\_Pack}.
         }{%
             $\cnnt{res\_pattern} = \cnkw{pack} \, \cnsym{(}  \cnmv{x}  \cnsym{,}  \cnnt{res\_pattern'}  \cnsym{)}$,
             $\cnnt{res\_term} = \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term'}  \cnsym{)}$,
@@ -1426,9 +1463,44 @@ Now, resource part.
         }
     }
 
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_Res\_Fold}.
+        }{%
+            $\cnnt{res\_pattern} = \cnkw{fold} \, \cnsym{(}  \cnnt{res\_pattern'}  \cnsym{)}$,
+            $\cnnt{res\_term} = \cnkw{fold} \, \cnsym{(}  \cnnt{res\_term'}  \cnsym{)}$,
+            $\cnnt{res} = { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}$.
+        }
+    }
+
+    \begin{proof}
+
+        \step{<2>1}{\begin{pfenum}
+            \item ${ \alpha } \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}}}{\cnmv{i}} \, \mapsto  \cnnt{res'} \, \in \, \cnkw{Globals}$.
+            \item $\Phi  \vdash  \cnnt{res''}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res'}  \cnsym{)}$.
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term'}  \Leftarrow  \cnnt{res''}$.
+            \end{pfenum}
+        \pf\ Inversion on~\ref{wt_sub_res-assm1}.}
+    
+        \step{<2>2}{$\Phi  \vdash  \cnnt{res\_pattern'}  {:}   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res'}  )   \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\\
+        \pf\ Inversion on~\ref{wt_sub_res-assm2}.}
+
+        \step{<2>3}{$\Phi  \vdash  \cnnt{res\_pattern'}  {:}  \cnnt{res''}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\\
+        \pf\ By \stepref{<2>1}.2, \stepref{<2>2} and deconstructing a stripped
+        resource produces the same environment (lemma~\ref{stripped_same_env}).}
+
+        \step{<2>4}{$\cnnt{res\_pattern'}  =  \cnnt{res\_term'}  \leadsto  \sigma$.\\
+        \pf\ By inversion on \ref{wt_sub_res-assm3}.}
+
+        \step{<2>5}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \cdot  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{)}$.\\
+        \pf\ By induction on~\stepref{<2>1}.3,~\stepref{<2>3} and~\stepref{<2>4}.}
+
+    \end{proof}
+
 \end{proof}
 
-Now, full proof.
+Now, full proof (of deconstructing a pattern leads to a well-typed
+substitution).
 
 \begin{proof}
 
@@ -1436,8 +1508,7 @@ Now, full proof.
         \begin{pfenum}
             \item $\cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}  =  \cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}} \, \leadsto  \sigma$.\label{wt_sub-assm1}
             \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \cnnt{ret}$.\label{wt_sub-assm2}
-            % FIXME update proof for predicates
-            \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\label{wt_sub-assm3}
+            \item $\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$.\label{wt_sub-assm3}
         \end{pfenum}
     }
 
@@ -2064,8 +2135,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  seq\_expr  \Rightarrow  \cnnt{ret_{{\mathrm{1}}}}$.
-                % FIXME update proof for predicates
-                \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
+                \item $\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
                 \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             \end{pfenum}
             \pf\ By inversion on \ref{let_letT-assm1}.}
@@ -2103,8 +2173,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  \cnkw{done} \, \cncomp{\cnnt{spine\_elem_{\cnmv{i}}}}{\cnmv{i}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.
-                % FIXME update proof for predicates
-                \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
+                \item $\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
                 \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             \end{pfenum}
             \pf\ By inversion on \ref{letT_sub-assm1}.}
@@ -2113,7 +2182,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{letT_sub-assm2}.}
 
         \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  \cnsym{(}  \sigma  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{)}$.\\
-            \pf\ By \stepref{<2>1}.1,2 and \stepref{<2>3}, \stepref{<2>2} using
+            \pf\ By \stepref{<2>1}.1,2 and \stepref{<2>2} using
             lemma \ref{subsec:wt_sub} (deconstructing a pattern produces a
             well-typed substitution).}
 
@@ -2140,8 +2209,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}'  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.
-                % FIXME update proof for predicates
-                \item $\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
+                \item $\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}$.
                 \item $\mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}  \vdash  texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}$.
             \end{pfenum}
             \pf\ By inversion on \ref{letT_letT-assm1}.}
@@ -2150,9 +2218,9 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{letT_letT-assm2}.}
 
         \step{<2>3}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \mathcal{R}''  \vdash  texpr'_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}$.\\
-            \pf\ By induction on \stepref{<1>32}.1 and \stepref{<2>2}.}
+            \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
 
-        \step{<2>4}{By \stepref{<2>3}, \stepref{<1>32}.2,3 using
+        \step{<2>4}{By \stepref{<2>3}, \stepref{<2>2}.2,3 using
             \textsc{Ty\_Seq\_TE\_LetT}, we are done.}
     \end{proof}
 
@@ -2187,14 +2255,14 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{case-assm2}.}
 
         \step{<2>3}{$term_{\cnmv{j}}  =   pval $.\\
-            \pf\ By \stepref{<1>32}.2 and terms derived from patterns are
+            \pf\ By \stepref{<2>1}.2 and terms derived from patterns are
             ``equal to'' matching values (lemma \ref{subsec:pattern_term}).}
 
         \step{<2>4}{$\cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \vdash  \cnsym{(}  \sigma_{\cnmv{j}}  \cnsym{)}  {:}  \cnsym{(}  \mathcal{C}_{\cnmv{j}}  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  term_{\cnmv{j}}  =   pval   \cnsym{;}  \cdot  \cnsym{)}$.\\
             \pf\ By \stepref{<2>3} and lemma \ref{subsec:wt_sub}
             (deconstructing a pattern produces a well-typed substitution).}
 
-        \step{<2>5}{By \stepref{<2>4}, \stepref{<1>32}.3 and substitution lemma
+        \step{<2>5}{By \stepref{<2>4}, \stepref{<2>1}.3 and substitution lemma
             \ref{subsec:sub_lemma}, we are done.}
 
     \end{proof}

@@ -23,7 +23,6 @@
 \interStepSpace{15pt, 10pt, 10pt, 10pt, 5pt, 2pt}
 \pflongindent%
 
-
 \newcommand{\ctxC}{\mathcal{C}}%
 \newcommand{\ctxL}{\mathcal{L}}%
 \newcommand{\ctxN}{\Phi}%
@@ -946,7 +945,7 @@ $[[</ xi = spine_elemi // i /> :; arg >> subs' ; ret' ]]$ then $[[ subs ]] =
 
 \subsection{Progress Statement and Proof}\label{subsec:progress}
 
-If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ and all pattern in $e$ are
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ and all patterns in $e$ are
 exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
 : R.\ \exists e' , h' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}$.
 
@@ -1031,7 +1030,7 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
             xi = mu_pval_auxi // i /> :; pure_arg >> subs ; sigma y : base_type
             . term /\ I]]$, with the latter implying $[[</ xi = mu_pval_auxi //
             i /> :; pure_arg >> subs ; sigma y : base_type . term /\ I]]$ (lemma
-           \ref{subsec:spine_decons_same}. Thus it can step with
+            \ref{subsec:spine_decons_same}). Thus it can step with
            \textsc{Op\_PE\_TPE\_Call}.
         }
     }
@@ -1289,7 +1288,7 @@ exhaustive then either $e$ is a value, or it is unreachable, or $\forall h
 
 \section{Framing}
 
-If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_2.\
+If $\hconf{h}{e} \stepsto \hconf{h'}{e'}$ and $\exists h_1 , h_1', h_2.\
 \mathrm{disjoint}(h_1, h_2) \wedge h = h_1 + h_2 \wedge \hconf{h_1}{e} \stepsto
 \hconf{h_1'}{e'}$ then $h' = h_1' + h_2$.
 
@@ -1355,9 +1354,37 @@ values}\label{subsec:pattern_term}
         \item $[[ mu_pattern_aux = mu_pval_aux ~> subs ]]$.\\
     \end{pfenum}}
 
-    \prove{ The constraint $[[ term_auxj = inj mu_pval_aux ]]$ holds.\\}
+    \prove{ The constraint $[[ term_aux = inj mu_pval_aux ]]$ holds.\\}
 
     \pfsketch{ Induction over $[[ mu_pattern ]]$.}
+
+\end{proof}
+
+\subsection{\texttt{strip\_ifs} is idempotent}\label{strip_ifs_idemp}
+\pfsketch{ Induction over the definition.}
+
+\subsection{Deconstructing a stripped resource produces the same
+environment}\label{stripped_same_env}
+
+\begin{proof}
+    \assume{%
+        \begin{pfenum}
+        \item $[[ N |- res_pattern : res ~> L ; N ; R ]]$.\label{stripped_same_env-assm1}
+        \item $[[ N |- res' = strip_ifs ( res ) ]]$.\label{stripped_same_env-assm2}
+        \end{pfenum}}
+
+    \prove{%
+        $[[ N |- res_pattern : res' ~> L ; N ; R ]]$.\\
+    }
+
+    \step{<1>1}{\suffices{ $[[ N |- res' = strip_ifs ( res' ) ]]$.}
+        \pf\ By \texttt{strip\_ifs} idempotent and assumption~\ref{stripped_same_env-assm2}.}
+
+    \step{<1>2}{$[[ N |- res' as res_pattern ~> L ; N ; R ]]$ by inversion
+        on~\ref{stripped_same_env-assm1}.}
+
+    \step{<1>3}{By definiton of $[[ N |- res_pattern : res ~> L ; N ; R ]]$ and
+        \stepref{<1>1} and \stepref{<1>2} we are done.}
 
 \end{proof}
 
@@ -1408,26 +1435,26 @@ First, computational part.
 
 \end{proof}
 
-Now, resource part.
+Now, resource part (of deconstructing a pattern leads to a well-typed
+substitution).
 
 \begin{proof}
     \assume{%
         \begin{pfenum}
         \item $[[ cdot ; cdot ; cdot ; R |- res_term <= res ]]$.\label{wt_sub_res-assm1}
-        % FIXME update proof for predicates
-        \item $[[ L ; N |- res_pattern : res ~> L' ; N' ; R'  ]]$.\label{wt_sub_res-assm2}
-        \item $[[ res_pattern = res_term ~> subs ]]$.\label{wt_sub_sub-assm3}
+        \item $[[ N |- res_pattern : res ~> L' ; N' ; R'  ]]$.\label{wt_sub_res-assm2}
+        \item $[[ res_pattern = res_term ~> subs ]]$.\label{wt_sub_res-assm3}
         \end{pfenum}}
 
     \prove{%
         $[[ cdot ; cdot ; cdot ; R |- ( subs ) : ( cdot ; L ; N ; R' ) ]]$.\\
     }
 
-    \pfsketch{ By induction over \ref{wt_sub_res-assm2}.}
+    \pfsketch{ By induction over \ref{wt_sub_res-assm1}.}
 
     \step{<1>1}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Empty}.
+            \textsc{Ty\_Res\_Empty}.
         }{%
             $[[res_pattern]] = [[res_term]] = [[res]] = [[emp]]$.
             $[[subs]], [[L]], [[N]], [[R]], [[R']]$ are all empty.\\
@@ -1435,19 +1462,29 @@ Now, resource part.
         }
     }
 
+    \step{<1>2}{%
+        \case{%
+            \textsc{Ty\_Res\_PointsTo}.
+        }{%
+            $[[res_pattern]] = [[r]]$, $[[ res_term ]] = [[ pt ]]$, $[[subs]] = [[ pt / r , cdot ]]$,
+            $[[L]] = \cdot$, $[[N]] = \cdot$, $[[R]] = [[R']] = [[ cdot , r : pt ]]$.\\
+            \pf\ By \textsc{Ty\_Subs\_Cons\_Res}.
+        }
+    }
+
     \step{<1>3}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Var}.
+            \textsc{Ty\_Res\_Var}.
         }{%
-            $[[res_pattern]] = [[r]]$, $[[subs]] = [[ res_term / x , cdot ]]$,
-            $[[L]] = \cdot$, $[[N]] = \cdot$, $[[R']] = [[ cdot , x : res ]]$.\\
+            $[[res_pattern]] = [[r]]$, $[[subs]] = [[ res_term / r , cdot ]]$,
+            $[[L]] = \cdot$, $[[N]] = \cdot$, $[[R]] = [[R']] = [[ cdot , r : res ]]$.\\
             \pf\ By \textsc{Ty\_Subs\_Cons\_Res}.
         }
     }
 
     \step{<1>4}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_SepConj}.
+            \textsc{Ty\_Res\_SepConj}.
         }{%
             \pf\ By induction (and concatenating well-typed substitutions).
         }
@@ -1455,7 +1492,7 @@ Now, resource part.
 
     \step{<1>5}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Conj}.
+            \textsc{Ty\_Res\_Conj}.
         }{%
             \pf\ By $[[ smt ( cdot => term_aux ) ]]$ (from \ref{wt_sub_res-assm1})
             and induction with \textsc{Ty\_Sub\_Cons\_Phi}.
@@ -1464,7 +1501,7 @@ Now, resource part.
 
     \step{<1>6}{%
         \case{%
-            \textsc{Ty\_Pat\_Res\_Pack}.
+            \textsc{Ty\_Res\_Pack}.
         }{%
             $[[res_pattern]] = [[pack ( x , res_pattern' ) ]]$,
             $[[ res_term ]] = [[pack (mu_pval_aux, res_term') ]]$,
@@ -1475,9 +1512,44 @@ Now, resource part.
         }
     }
 
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_Res\_Fold}.
+        }{%
+            $[[ res_pattern ]] = [[ fold ( res_pattern' ) ]]$,
+            $[[ res_term ]] = [[ fold ( res_term' ) ]]$,
+            $[[ res ]] = [[ a ( </ mu_pval_auxi // i /> ) ]]$.
+        }
+    }
+
+    \begin{proof}
+
+        \step{<2>1}{\begin{pfenum}
+            \item $[[ a eq </ xi : base_typei // i /> |-> res' inEnv Globals ]]$.
+            \item $[[ N |- res'' = strip_ifs ( res' ) ]]$.
+            \item $[[ C ; L ; N ; R |- res_term' <= res'' ]]$.
+            \end{pfenum}
+        \pf\ Inversion on~\ref{wt_sub_res-assm1}.}
+
+        \step{<2>2}{$[[ N |- res_pattern' : [ </ mu_pval_auxi / xi , cdot // i /> ] res' ~> L' ; N' ; R' ]]$.\\
+        \pf\ Inversion on~\ref{wt_sub_res-assm2}.}
+
+        \step{<2>3}{$[[ N |- res_pattern' : res'' ~> L' ; N' ; R' ]]$.\\
+        \pf\ By \stepref{<2>1}.2, \stepref{<2>2} and deconstructing a stripped
+        resource produces the same environment (lemma~\ref{stripped_same_env}).}
+
+        \step{<2>4}{$[[ res_pattern' = res_term' ~> subs ]]$.\\
+        \pf\ By inversion on \ref{wt_sub_res-assm3}.}
+
+        \step{<2>5}{$[[ cdot ; cdot ; cdot ; R |- ( subs ) : ( cdot ; L ; N ; R' ) ]]$.\\
+        \pf\ By induction on~\stepref{<2>1}.3,~\stepref{<2>3} and~\stepref{<2>4}.}
+
+    \end{proof}
+
 \end{proof}
 
-Now, full proof.
+Now, full proof (of deconstructing a pattern leads to a well-typed
+substitution).
 
 \begin{proof}
 
@@ -1485,8 +1557,7 @@ Now, full proof.
         \begin{pfenum}
             \item $[[ </ ret_patterni = spine_elemi // i /> ~> subs ]]$.\label{wt_sub-assm1}
             \item $[[ cdot ; cdot ; cdot ; R |- done </ spine_elemi // i /> <= ret ]]$.\label{wt_sub-assm2}
-            % FIXME update proof for predicates
-            \item $[[ L ; N |- </ ret_patterni // i /> : ret ~> C ; L' ; N' ; R' ]]$.\label{wt_sub-assm3}
+            \item $[[ N |- </ ret_patterni // i /> : ret ~> C ; L' ; N' ; R' ]]$.\label{wt_sub-assm3}
         \end{pfenum}
     }
 
@@ -2157,8 +2228,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $[[ cdot ; cdot ; cdot ; R' |- mu_seq_expr => ret1 ]]$.
-                % FIXME update proof for predicates
-                \item $[[ L ; N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1 ]]$.
+                \item $[[ N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1 ]]$.
                 \item $[[  C1 ; L1 ; N1 ; R , R1 |- mu_texpr <= ret2 ]]$.
             \end{pfenum}
             \pf\ By inversion on \ref{let_letT-assm1}.}
@@ -2200,8 +2270,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $[[ cdot ; cdot ; cdot ; R' |- done </ spine_elemi // i /> <= ret1 ]]$.
-                % FIXME update proof for predicates
-                \item $[[ L ; N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1 ]]$.
+                \item $[[ N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1 ]]$.
                 \item $[[ C1 ; L1 ; N1 ; R1 , R |- mu_texpr2 <= ret2 ]]$.
             \end{pfenum}
             \pf\ By inversion on \ref{letT_sub-assm1}.}
@@ -2210,7 +2279,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{letT_sub-assm2}.}
 
         \step{<2>3}{$[[ cdot ; cdot ; cdot ; R' |- ( subs ) : ( C1 ; L1 ; N1 ; R1 ) ]]$.\\
-            \pf\ By \stepref{<2>1}.1,2 and \stepref{<2>3}, \stepref{<2>2} using
+            \pf\ By \stepref{<2>1}.1,2 and \stepref{<2>2} using
             lemma \ref{subsec:wt_sub} (deconstructing a pattern produces a
             well-typed substitution).}
 
@@ -2241,8 +2310,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
     \begin{proof}
         \step{<2>1}{\begin{pfenum}
                 \item $[[ cdot ; cdot ; cdot ; R' |- mu_texpr1 <= ret1 ]]$.
-                % FIXME update proof for predicates
-                \item $[[ L ; N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1 ]]$.
+                \item $[[ N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1 ]]$.
                 \item $[[ C1 ; L1 ; N1 ; R1 , R |- mu_texpr2 <= ret2 ]]$.
             \end{pfenum}
             \pf\ By inversion on \ref{letT_letT-assm1}.}
@@ -2251,9 +2319,9 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{letT_letT-assm2}.}
 
         \step{<2>3}{$[[ cdot ; cdot ; cdot ; R'' |- mu_texpr1' <= ret1 ]]$.\\
-            \pf\ By induction on \stepref{<1>32}.1 and \stepref{<2>2}.}
+            \pf\ By induction on \stepref{<2>1}.1 and \stepref{<2>2}.}
 
-        \step{<2>4}{By \stepref{<2>3}, \stepref{<1>32}.2,3 using
+        \step{<2>4}{By \stepref{<2>3}, \stepref{<2>2}.2,3 using
             \textsc{Ty\_Seq\_TE\_LetT}, we are done.}
     \end{proof}
 
@@ -2291,7 +2359,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By inversion on \ref{case-assm2}.}
 
         \step{<2>3}{$[[ term_auxj = inj mu_pval_aux ]]$.\\
-            \pf\ By \stepref{<1>32}.2 and terms derived from patterns are
+            \pf\ By \stepref{<2>1}.2 and terms derived from patterns are
             ``equal to'' matching values (lemma \ref{subsec:pattern_term}).}
 
         \step{<2>4}{$[[ cdot ; cdot ; cdot ; cdot |- ( subsj ) : ( Cj ; cdot ;
@@ -2299,7 +2367,7 @@ $\forall h : \ctxR, e' , h' : \ctxR' .\ \hconf{h}{e} \stepsto \hconf{h'}{e'}
             \pf\ By \stepref{<2>3} and lemma \ref{subsec:wt_sub}
             (deconstructing a pattern produces a well-typed substitution).}
 
-        \step{<2>5}{By \stepref{<2>4}, \stepref{<1>32}.3 and substitution lemma
+        \step{<2>5}{By \stepref{<2>4}, \stepref{<2>1}.3 and substitution lemma
             \ref{subsec:sub_lemma}, we are done.}
 
     \end{proof}

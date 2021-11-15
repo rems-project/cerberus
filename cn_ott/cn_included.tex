@@ -275,7 +275,7 @@
 \cnprodline{|}{\bigwedge  \cnsym{(} \, \cncomp{term_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{\bigvee  \cnsym{(} \, \cncomp{term_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}}{}{}{}{}\cnprodnewline
 \cnprodline{|}{term_{{\mathrm{1}}}  \wedge  term_{{\mathrm{2}}}} {\textsf{M}}{}{}{}\cnprodnewline
-\cnprodline{|}{term_{{\mathrm{1}}}  \cnsym{\mbox{$\backslash{}$}/}  term_{{\mathrm{2}}}} {\textsf{M}}{}{}{}\cnprodnewline
+\cnprodline{|}{term_{{\mathrm{1}}}  \vee  term_{{\mathrm{2}}}} {\textsf{M}}{}{}{}\cnprodnewline
 \cnprodline{|}{ term_{{\mathrm{1}}}   \mathbin{ binop_{bool} }   term_{{\mathrm{2}}} } {\textsf{M}}{}{}{}\cnprodnewline
 \cnprodline{|}{\cnkw{if} \, term_{{\mathrm{1}}} \, \cnkw{then} \, term_{{\mathrm{2}}} \, \cnkw{else} \, term_{{\mathrm{3}}}}{}{}{}{}}
 
@@ -639,6 +639,7 @@
 \cnprodline{|}{ \gg }{}{}{}{}\cnprodnewline
 \cnprodline{|}{ \mathbin{ {:} {:} } }{}{}{}{}\cnprodnewline
 \cnprodline{|}{ \mathbin { \texttt{\char`\^} } }{}{}{}{}\cnprodnewline
+\cnprodline{|}{ \vee }{}{}{}{}\cnprodnewline
 \cnprodline{|}{ \bigvee }{}{}{}{}\cnprodnewline
 \cnprodline{|}{ \equiv }{}{}{}{}\cnprodnewline
 \cnprodline{|}{ \langle }{}{}{}{}\cnprodnewline
@@ -772,13 +773,13 @@
 
 \newcommand{\cnresXXpatternXXjtype}{
 \cnrulehead{\cnnt{res\_pattern\_jtype}}{::=}{}\cnprodnewline
-\cnfirstprodline{|}{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}}{}{}{}{}\cnprodnewline
-\cnprodline{|}{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{}{}{}{}\cnprodnewline
-\cnprodline{|}{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{}{}{}{}}
+\cnfirstprodline{|}{\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}}{}{}{}{}\cnprodnewline
+\cnprodline{|}{\Phi  \vdash  \cnnt{res} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{}{}{}{}\cnprodnewline
+\cnprodline{|}{\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{}{}{}{}}
 
 \newcommand{\cnretXXpatternXXjtype}{
 \cnrulehead{\cnnt{ret\_pattern\_jtype}}{::=}{}\cnprodnewline
-\cnfirstprodline{|}{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{}{}{}{}}
+\cnfirstprodline{|}{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{}{}{}{}}
 
 \newcommand{\cntpvalXXjtype}{
 \cnrulehead{\cnnt{tpval\_jtype}}{::=}{}\cnprodnewline
@@ -1353,8 +1354,8 @@
 
 
 \newcommand{\cndruleTyXXResXXVar}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{1}}}}  \cnsym{)}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}%
+\cnpremise{\Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{1}}}}  \cnsym{)}}%
+\cnpremise{\Phi  \vdash  \cnnt{res'_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}%
 \cnpremise{\Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}} \, \equiv \, \cnnt{res'_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{r}  {:}  \cnnt{res_{{\mathrm{1}}}}  \vdash  \cnmv{r}  \Leftarrow  \cnnt{res_{{\mathrm{2}}}}}{%
@@ -1392,7 +1393,7 @@
 \newcommand{\cndruleTyXXResXXFold}[1]{\cndrule[#1]{%
 \cnpremise{{ \alpha } \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}}}{\cnmv{i}} \, \mapsto  \cnnt{res} \, \in \, \cnkw{Globals}}%
 \cnpremise{\cncomp{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash  pval_{\cnmv{i}}  \Rightarrow  \beta_{\cnmv{i}}}{\cnmv{i}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res}  )   \cnsym{)}}%
+\cnpremise{\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res}  )   \cnsym{)}}%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnnt{res\_term}  \Leftarrow  \cnnt{res'}}%
 }{
 \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{fold} \, \cnsym{(}  \cnnt{res\_term}  \cnsym{)}  \Leftarrow  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}}{%
@@ -1892,71 +1893,71 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 %% defn Res_StripIfs_
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXEmpty}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnkw{emp}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{emp}  \cnsym{)}}{%
+\Phi  \vdash  \cnkw{emp}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{emp}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_Empty}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXPointsTo}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{pt}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{pt}  \cnsym{)}}{%
+\Phi  \vdash  \cnnt{pt}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{pt}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_PointsTo}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXSepConj}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res_{{\mathrm{1}}}}  *  \cnnt{res_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{1}}}}  *  \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
+\Phi  \vdash  \cnnt{res_{{\mathrm{1}}}}  *  \cnnt{res_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{1}}}}  *  \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_SepConj}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXExists}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \exists \, \cnmv{x}  {:}  \beta  . \:  \cnnt{res}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \exists \, \cnmv{x}  {:}  \beta  . \:  \cnnt{res}  \cnsym{)}}{%
+\Phi  \vdash  \exists \, \cnmv{x}  {:}  \beta  . \:  \cnnt{res}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \exists \, \cnmv{x}  {:}  \beta  . \:  \cnnt{res}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_Exists}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXTermConj}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  term  \wedge  \cnnt{res}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  term  \wedge  \cnnt{res}  \cnsym{)}}{%
+\Phi  \vdash  term  \wedge  \cnnt{res}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  term  \wedge  \cnnt{res}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_TermConj}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXTrue}[1]{\cndrule[#1]{%
 \cnpremise{\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  term  \cnsym{)}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res'_{{\mathrm{1}}}}  \cnsym{)}}%
+\cnpremise{\Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res'_{{\mathrm{1}}}}  \cnsym{)}}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
+\Phi  \vdash  \cnnt{res'_{{\mathrm{1}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_True}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXFalse}[1]{\cndrule[#1]{%
 \cnpremise{\cnkw{smt} \, \cnsym{(}  \Phi  \Rightarrow  \neg \, term  \cnsym{)}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}%
+\cnpremise{\Phi  \vdash  \cnnt{res'_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
+\Phi  \vdash  \cnnt{res'_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_False}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXUnderDet}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
+\Phi  \vdash  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnkw{if} \, term \, \cnkw{then} \, \cnnt{res_{{\mathrm{1}}}} \, \cnkw{else} \, \cnnt{res_{{\mathrm{2}}}}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_UnderDet}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXStripIfsXXPred}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  \cnsym{)}}{%
+\Phi  \vdash  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  \cnsym{)}}{%
 {\cndrulename{Ty\_Pat\_Res\_StripIfs\_Pred}}{}%
 }}
 
-\newcommand{\cndefnTyXXPatXXResXXStripIfsXX}[1]{\begin{cndefnblock}[#1]{$\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}$}{}
+\newcommand{\cndefnTyXXPatXXResXXStripIfsXX}[1]{\begin{cndefnblock}[#1]{$\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}$}{}
 \cnusedrule{\cndruleTyXXPatXXResXXStripIfsXXEmpty{}}
 \cnusedrule{\cndruleTyXXPatXXResXXStripIfsXXPointsTo{}}
 \cnusedrule{\cndruleTyXXPatXXResXXStripIfsXXSepConj{}}
@@ -1971,52 +1972,52 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 %% defn Res_Match_
 \newcommand{\cndruleTyXXPatXXResXXMatchXXEmpty}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnkw{emp} \, \cnkw{as} \, \cnkw{emp}  \leadsto  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot}{%
+\Phi  \vdash  \cnkw{emp} \, \cnkw{as} \, \cnkw{emp}  \leadsto  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot}{%
 {\cndrulename{Ty\_Pat\_Res\_Match\_Empty}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXMatchXXVar}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res} \, \cnkw{as} \, \cnmv{r}  \leadsto  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{r}  {:}  \cnnt{res}}{%
+\Phi  \vdash  \cnnt{res} \, \cnkw{as} \, \cnmv{r}  \leadsto  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{,}  \cnmv{r}  {:}  \cnnt{res}}{%
 {\cndrulename{Ty\_Pat\_Res\_Match\_Var}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXMatchXXSepConj}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern_{{\mathrm{1}}}}  {:}  \cnnt{res_{{\mathrm{1}}}}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern_{{\mathrm{2}}}}  {:}  \cnnt{res_{{\mathrm{2}}}}  \leadsto  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
+\cnpremise{\Phi  \vdash  \cnnt{res\_pattern_{{\mathrm{1}}}}  {:}  \cnnt{res_{{\mathrm{1}}}}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\cnpremise{\Phi  \vdash  \cnnt{res\_pattern_{{\mathrm{2}}}}  {:}  \cnnt{res_{{\mathrm{2}}}}  \leadsto  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res_{{\mathrm{1}}}}  *  \cnnt{res_{{\mathrm{2}}}} \, \cnkw{as} \, \langle  \cnnt{res\_pattern_{{\mathrm{1}}}}  \cnsym{,}  \cnnt{res\_pattern_{{\mathrm{2}}}}  \rangle  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{,}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
+\Phi  \vdash  \cnnt{res_{{\mathrm{1}}}}  *  \cnnt{res_{{\mathrm{2}}}} \, \cnkw{as} \, \langle  \cnnt{res\_pattern_{{\mathrm{1}}}}  \cnsym{,}  \cnnt{res\_pattern_{{\mathrm{2}}}}  \rangle  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{,}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
 {\cndrulename{Ty\_Pat\_Res\_Match\_SepConj}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXMatchXXConj}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
+\cnpremise{\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  term  \wedge  \cnnt{res} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{,}  term  \cnsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  term  \wedge  \cnnt{res} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{,}  term  \cnsym{;}  \mathcal{R}'}{%
 {\cndrulename{Ty\_Pat\_Res\_Match\_Conj}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXMatchXXPack}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}   \cnmv{x}  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res}  )   \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
+\cnpremise{\Phi  \vdash  \cnnt{res\_pattern}  {:}   \cnmv{x}  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{res}  )   \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res} \, \cnkw{as} \, \cnkw{pack} \, \cnsym{(}  \cnmv{x}  \cnsym{,}  \cnnt{res\_pattern}  \cnsym{)}  \leadsto  \mathcal{L}'  \cnsym{,}  \cnmv{x}  {:}  \beta  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res} \, \cnkw{as} \, \cnkw{pack} \, \cnsym{(}  \cnmv{x}  \cnsym{,}  \cnnt{res\_pattern}  \cnsym{)}  \leadsto  \mathcal{L}'  \cnsym{,}  \cnmv{x}  {:}  \beta  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
 {\cndrulename{Ty\_Pat\_Res\_Match\_Pack}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXResXXMatchXXFold}[1]{\cndrule[#1]{%
 \cnpremise{{ \alpha } \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}}}{\cnmv{i}} \, \mapsto  \cnnt{res} \, \in \, \cnkw{Globals}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res}  )   \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
+\cnpremise{\Phi  \vdash  \cnnt{res\_pattern}  {:}   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res}  )   \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)} \, \cnkw{as} \, \cnkw{fold} \, \cnsym{(}  \cnnt{res\_pattern}  \cnsym{)}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)} \, \cnkw{as} \, \cnkw{fold} \, \cnsym{(}  \cnnt{res\_pattern}  \cnsym{)}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
 {\cndrulename{Ty\_Pat\_Res\_Match\_Fold}}{}%
 }}
 
-\newcommand{\cndefnTyXXPatXXResXXMatchXX}[1]{\begin{cndefnblock}[#1]{$\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$}{}
+\newcommand{\cndefnTyXXPatXXResXXMatchXX}[1]{\begin{cndefnblock}[#1]{$\Phi  \vdash  \cnnt{res} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$}{}
 \cnusedrule{\cndruleTyXXPatXXResXXMatchXXEmpty{}}
 \cnusedrule{\cndruleTyXXPatXXResXXMatchXXVar{}}
 \cnusedrule{\cndruleTyXXPatXXResXXMatchXXSepConj{}}
@@ -2027,14 +2028,14 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 
 %% defn Res_
 \newcommand{\cndruleTyXXPatXXResXXStripXXIfs}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res'} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
+\cnpremise{\Phi  \vdash  \cnnt{res'}  = \, \cnkw{strip\_ifs} \, \cnsym{(}  \cnnt{res}  \cnsym{)}}%
+\cnpremise{\Phi  \vdash  \cnnt{res'} \, \cnkw{as} \, \cnnt{res\_pattern}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
 {\cndrulename{Ty\_Pat\_Res\_Strip\_Ifs}}{}%
 }}
 
-\newcommand{\cndefnTyXXPatXXResXX}[1]{\begin{cndefnblock}[#1]{$\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$}{}
+\newcommand{\cndefnTyXXPatXXResXX}[1]{\begin{cndefnblock}[#1]{$\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$}{}
 \cnusedrule{\cndruleTyXXPatXXResXXStripXXIfs{}}
 \end{cndefnblock}}
 
@@ -2046,45 +2047,45 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 %% defn Ret_
 \newcommand{\cndruleTyXXPatXXRetXXEmpty}[1]{\cndrule[#1]{%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \,  {:}  \cnkw{I}  \leadsto  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot}{%
+\Phi  \vdash  \,  {:}  \cnkw{I}  \leadsto  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot  \cnsym{;}  \cdot}{%
 {\cndrulename{Ty\_Pat\_Ret\_Empty}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXRetXXComp}[1]{\cndrule[#1]{%
 \cnpremise{ident\_or\_pattern  {:}  \beta  \leadsto  \mathcal{C}_{{\mathrm{1}}} \, \cnkw{with} \, term_{{\mathrm{1}}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}   term_{{\mathrm{1}}}  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{ret}  )   \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}   term_{{\mathrm{1}}}  \cnsym{/}  \cnmv{y}  \cnsym{,}  \cdot  (  \cnnt{ret}  )   \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnkw{comp} \, ident\_or\_pattern  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}{%
+\Phi  \vdash  \cnkw{comp} \, ident\_or\_pattern  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \Sigma \, \cnmv{y}  {:}  \beta  . \:  \cnnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}{%
 {\cndrulename{Ty\_Pat\_Ret\_Comp}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXRetXXLog}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnkw{log} \, \cnmv{y}  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{,}  \cnmv{y}  {:}  \beta  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  \cnkw{log} \, \cnmv{y}  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{,}  \cnmv{y}  {:}  \beta  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}{%
 {\cndrulename{Ty\_Pat\_Ret\_Log}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXRetXXRes}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
+\cnpremise{\Phi  \vdash  \cnnt{res\_pattern}  {:}  \cnnt{res}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash  \texttt{res} \, \cnnt{res\_pattern}  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{res}  \otimes  \cnnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{,}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
+\Phi  \vdash  \texttt{res} \, \cnnt{res\_pattern}  \cnsym{,} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{res}  \otimes  \cnnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{L}_{{\mathrm{2}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{,}  \Phi_{{\mathrm{2}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}  \cnsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
 {\cndrulename{Ty\_Pat\_Ret\_Res}}{}%
 }}
 
 
 \newcommand{\cndruleTyXXPatXXRetXXPhi}[1]{\cndrule[#1]{%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  term  \wedge  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{,}  term  \cnsym{;}  \mathcal{R}'}{%
+\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  term  \wedge  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{,}  term  \cnsym{;}  \mathcal{R}'}{%
 {\cndrulename{Ty\_Pat\_Ret\_Phi}}{}%
 }}
 
-\newcommand{\cndefnTyXXPatXXRetXX}[1]{\begin{cndefnblock}[#1]{$\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$}{}
+\newcommand{\cndefnTyXXPatXXRetXX}[1]{\begin{cndefnblock}[#1]{$\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret}  \leadsto  \mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'$}{}
 \cnusedrule{\cndruleTyXXPatXXRetXXEmpty{}}
 \cnusedrule{\cndruleTyXXPatXXRetXXComp{}}
 \cnusedrule{\cndruleTyXXPatXXRetXXLog{}}
@@ -2453,7 +2454,7 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 
 \newcommand{\cndruleTyXXSeqXXTEXXLet}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \vdash  seq\_expr  \Rightarrow  \cnnt{ret_{{\mathrm{1}}}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \cnpremise{\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi  \cnsym{,}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  seq\_expr \, \cnkw{in} \, texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}{%
@@ -2463,7 +2464,7 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 
 \newcommand{\cndruleTyXXSeqXXTEXXLetT}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \cnnt{ret_{{\mathrm{1}}}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \cnpremise{\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi  \cnsym{,}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \cnkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}{%
@@ -2522,7 +2523,7 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \cnkw{with} \, term}{%
 %% defn Is_TE
 \newcommand{\cndruleTyXXIsXXTEXXLetS}[1]{\cndrule[#1]{%
 \cnpremise{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \vdash  is\_expr  \Rightarrow  \cnnt{ret_{{\mathrm{1}}}}}%
-\cnpremise{\mathcal{L}  \cnsym{;}  \Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\cnpremise{\Phi  \vdash \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, {:}  \cnnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \cnpremise{\mathcal{C}  \cnsym{,}  \mathcal{C}_{{\mathrm{1}}}  \cnsym{;}  \mathcal{L}  \cnsym{,}  \mathcal{L}_{{\mathrm{1}}}  \cnsym{;}  \Phi  \cnsym{,}  \Phi_{{\mathrm{1}}}  \cnsym{;}  \mathcal{R}  \cnsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}'  \cnsym{,}  \mathcal{R}  \vdash  \cnkw{let} \, \cnkw{strong} \, \cncomp{\cnnt{ret\_pattern_{\cnmv{i}}}}{\cnmv{i}} \, =  is\_expr \, \cnkw{in} \, texpr  \Leftarrow  \cnnt{ret_{{\mathrm{2}}}}}{%

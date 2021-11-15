@@ -629,13 +629,13 @@
 
 \newcommand{\ottresXXpatternXXjtype}{
 \ottrulehead{\ottnt{res\_pattern\_jtype}}{::=}{}\ottprodnewline
-\ottfirstprodline{|}{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{}{}{}{}\ottprodnewline
-\ottprodline{|}{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{}{}{}{}}
+\ottfirstprodline{|}{\Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}}{}{}{}{}\ottprodnewline
+\ottprodline{|}{\Phi  \vdash  \ottnt{res} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{}{}{}{}\ottprodnewline
+\ottprodline{|}{\Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{}{}{}{}}
 
 \newcommand{\ottretXXpatternXXjtype}{
 \ottrulehead{\ottnt{ret\_pattern\_jtype}}{::=}{}\ottprodnewline
-\ottfirstprodline{|}{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{}{}{}{}}
+\ottfirstprodline{|}{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{}{}{}{}}
 
 \newcommand{\otttpvalXXjtype}{
 \ottrulehead{\ottnt{tpval\_jtype}}{::=}{}\ottprodnewline
@@ -1055,8 +1055,8 @@
 
 
 \newcommand{\ottdruleTyXXResXXVar}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{1}}}}  \ottsym{)}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{1}}}}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}%
 \ottpremise{\Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}} \, \equiv \, \ottnt{res'_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{r}  {:}  \ottnt{res_{{\mathrm{1}}}}  \vdash  \ottmv{r}  \Leftarrow  \ottnt{res_{{\mathrm{2}}}}}{%
@@ -1094,7 +1094,7 @@
 \newcommand{\ottdruleTyXXResXXFold}[1]{\ottdrule[#1]{%
 \ottpremise{{ \alpha } \, \equiv \, \ottcomp{\ottmv{x_{\ottmv{i}}}  {:}  \beta_{\ottmv{i}}}{\ottmv{i}} \, \mapsto  \ottnt{res} \, \in \, \ottkw{Globals}}%
 \ottpremise{\ottcomp{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \vdash  pval_{\ottmv{i}}  \Rightarrow  \beta_{\ottmv{i}}}{\ottmv{i}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}   \ottcomp{pval_{\ottmv{i}}  \ottsym{/}  \ottmv{x_{\ottmv{i}}}  \ottsym{,}  \cdot}{\ottmv{i}}  (  \ottnt{res}  )   \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}   \ottcomp{pval_{\ottmv{i}}  \ottsym{/}  \ottmv{x_{\ottmv{i}}}  \ottsym{,}  \cdot}{\ottmv{i}}  (  \ottnt{res}  )   \ottsym{)}}%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottnt{res\_term}  \Leftarrow  \ottnt{res'}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}  \vdash  \ottkw{fold} \, \ottsym{(}  \ottnt{res\_term}  \ottsym{)}  \Leftarrow  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}}{%
@@ -1594,71 +1594,71 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 %% defn Res_StripIfs_
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXEmpty}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottkw{emp}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{emp}  \ottsym{)}}{%
+\Phi  \vdash  \ottkw{emp}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{emp}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_Empty}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXPointsTo}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{pt}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{pt}  \ottsym{)}}{%
+\Phi  \vdash  \ottnt{pt}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{pt}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_PointsTo}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXSepConj}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
+\Phi  \vdash  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_SepConj}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXExists}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \exists \, \ottmv{x}  {:}  \beta  . \:  \ottnt{res}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \exists \, \ottmv{x}  {:}  \beta  . \:  \ottnt{res}  \ottsym{)}}{%
+\Phi  \vdash  \exists \, \ottmv{x}  {:}  \beta  . \:  \ottnt{res}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \exists \, \ottmv{x}  {:}  \beta  . \:  \ottnt{res}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_Exists}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXTermConj}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  term  \wedge  \ottnt{res}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  term  \wedge  \ottnt{res}  \ottsym{)}}{%
+\Phi  \vdash  term  \wedge  \ottnt{res}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  term  \wedge  \ottnt{res}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_TermConj}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXTrue}[1]{\ottdrule[#1]{%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  term  \ottsym{)}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res'_{{\mathrm{1}}}}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res'_{{\mathrm{1}}}}  \ottsym{)}}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
+\Phi  \vdash  \ottnt{res'_{{\mathrm{1}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_True}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXFalse}[1]{\ottdrule[#1]{%
 \ottpremise{\ottkw{smt} \, \ottsym{(}  \Phi  \Rightarrow  \neg \, term  \ottsym{)}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
+\Phi  \vdash  \ottnt{res'_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_False}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXUnderDet}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
+\Phi  \vdash  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottkw{if} \, term \, \ottkw{then} \, \ottnt{res_{{\mathrm{1}}}} \, \ottkw{else} \, \ottnt{res_{{\mathrm{2}}}}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_UnderDet}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXStripIfsXXPred}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}  \ottsym{)}}{%
+\Phi  \vdash  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)}  \ottsym{)}}{%
 {\ottdrulename{Ty\_Pat\_Res\_StripIfs\_Pred}}{}%
 }}
 
-\newcommand{\ottdefnTyXXPatXXResXXStripIfsXX}[1]{\begin{ottdefnblock}[#1]{$\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}$}{}
+\newcommand{\ottdefnTyXXPatXXResXXStripIfsXX}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}$}{}
 \ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXEmpty{}}
 \ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXPointsTo{}}
 \ottusedrule{\ottdruleTyXXPatXXResXXStripIfsXXSepConj{}}
@@ -1673,52 +1673,52 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 %% defn Res_Match_
 \newcommand{\ottdruleTyXXPatXXResXXMatchXXEmpty}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottkw{emp} \, \ottkw{as} \, \ottkw{emp}  \leadsto  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot}{%
+\Phi  \vdash  \ottkw{emp} \, \ottkw{as} \, \ottkw{emp}  \leadsto  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot}{%
 {\ottdrulename{Ty\_Pat\_Res\_Match\_Empty}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXMatchXXVar}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res} \, \ottkw{as} \, \ottmv{r}  \leadsto  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{r}  {:}  \ottnt{res}}{%
+\Phi  \vdash  \ottnt{res} \, \ottkw{as} \, \ottmv{r}  \leadsto  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{,}  \ottmv{r}  {:}  \ottnt{res}}{%
 {\ottdrulename{Ty\_Pat\_Res\_Match\_Var}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXMatchXXSepConj}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern_{{\mathrm{1}}}}  {:}  \ottnt{res_{{\mathrm{1}}}}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern_{{\mathrm{2}}}}  {:}  \ottnt{res_{{\mathrm{2}}}}  \leadsto  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
+\ottpremise{\Phi  \vdash  \ottnt{res\_pattern_{{\mathrm{1}}}}  {:}  \ottnt{res_{{\mathrm{1}}}}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\ottpremise{\Phi  \vdash  \ottnt{res\_pattern_{{\mathrm{2}}}}  {:}  \ottnt{res_{{\mathrm{2}}}}  \leadsto  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}} \, \ottkw{as} \, \langle  \ottnt{res\_pattern_{{\mathrm{1}}}}  \ottsym{,}  \ottnt{res\_pattern_{{\mathrm{2}}}}  \rangle  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{,}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
+\Phi  \vdash  \ottnt{res_{{\mathrm{1}}}}  *  \ottnt{res_{{\mathrm{2}}}} \, \ottkw{as} \, \langle  \ottnt{res\_pattern_{{\mathrm{1}}}}  \ottsym{,}  \ottnt{res\_pattern_{{\mathrm{2}}}}  \rangle  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{,}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
 {\ottdrulename{Ty\_Pat\_Res\_Match\_SepConj}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXMatchXXConj}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
+\ottpremise{\Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  term  \wedge  \ottnt{res} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{,}  term  \ottsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  term  \wedge  \ottnt{res} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{,}  term  \ottsym{;}  \mathcal{R}'}{%
 {\ottdrulename{Ty\_Pat\_Res\_Match\_Conj}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXMatchXXPack}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}   \ottmv{x}  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{res}  )   \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
+\ottpremise{\Phi  \vdash  \ottnt{res\_pattern}  {:}   \ottmv{x}  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{res}  )   \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{res} \, \ottkw{as} \, \ottkw{pack} \, \ottsym{(}  \ottmv{x}  \ottsym{,}  \ottnt{res\_pattern}  \ottsym{)}  \leadsto  \mathcal{L}'  \ottsym{,}  \ottmv{x}  {:}  \beta  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{res} \, \ottkw{as} \, \ottkw{pack} \, \ottsym{(}  \ottmv{x}  \ottsym{,}  \ottnt{res\_pattern}  \ottsym{)}  \leadsto  \mathcal{L}'  \ottsym{,}  \ottmv{x}  {:}  \beta  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
 {\ottdrulename{Ty\_Pat\_Res\_Match\_Pack}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXResXXMatchXXFold}[1]{\ottdrule[#1]{%
 \ottpremise{{ \alpha } \, \equiv \, \ottcomp{\ottmv{x_{\ottmv{i}}}  {:}  \beta_{\ottmv{i}}}{\ottmv{i}} \, \mapsto  \ottnt{res} \, \in \, \ottkw{Globals}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}   \ottcomp{pval_{\ottmv{i}}  \ottsym{/}  \ottmv{x_{\ottmv{i}}}  \ottsym{,}  \cdot}{\ottmv{i}}  (  \ottnt{res}  )   \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
+\ottpremise{\Phi  \vdash  \ottnt{res\_pattern}  {:}   \ottcomp{pval_{\ottmv{i}}  \ottsym{/}  \ottmv{x_{\ottmv{i}}}  \ottsym{,}  \cdot}{\ottmv{i}}  (  \ottnt{res}  )   \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)} \, \ottkw{as} \, \ottkw{fold} \, \ottsym{(}  \ottnt{res\_pattern}  \ottsym{)}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  { \alpha }  \ottsym{(} \, \ottcomp{pval_{\ottmv{i}}}{\ottmv{i}} \, \ottsym{)} \, \ottkw{as} \, \ottkw{fold} \, \ottsym{(}  \ottnt{res\_pattern}  \ottsym{)}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
 {\ottdrulename{Ty\_Pat\_Res\_Match\_Fold}}{}%
 }}
 
-\newcommand{\ottdefnTyXXPatXXResXXMatchXX}[1]{\begin{ottdefnblock}[#1]{$\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'$}{}
+\newcommand{\ottdefnTyXXPatXXResXXMatchXX}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash  \ottnt{res} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'$}{}
 \ottusedrule{\ottdruleTyXXPatXXResXXMatchXXEmpty{}}
 \ottusedrule{\ottdruleTyXXPatXXResXXMatchXXVar{}}
 \ottusedrule{\ottdruleTyXXPatXXResXXMatchXXSepConj{}}
@@ -1729,14 +1729,14 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 
 %% defn Res_
 \newcommand{\ottdruleTyXXPatXXResXXStripXXIfs}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res'} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
+\ottpremise{\Phi  \vdash  \ottnt{res'}  = \, \ottkw{strip\_ifs} \, \ottsym{(}  \ottnt{res}  \ottsym{)}}%
+\ottpremise{\Phi  \vdash  \ottnt{res'} \, \ottkw{as} \, \ottnt{res\_pattern}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
 {\ottdrulename{Ty\_Pat\_Res\_Strip\_Ifs}}{}%
 }}
 
-\newcommand{\ottdefnTyXXPatXXResXX}[1]{\begin{ottdefnblock}[#1]{$\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'$}{}
+\newcommand{\ottdefnTyXXPatXXResXX}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'$}{}
 \ottusedrule{\ottdruleTyXXPatXXResXXStripXXIfs{}}
 \end{ottdefnblock}}
 
@@ -1748,45 +1748,45 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 %% defn Ret_
 \newcommand{\ottdruleTyXXPatXXRetXXEmpty}[1]{\ottdrule[#1]{%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \,  {:}  \ottkw{I}  \leadsto  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot}{%
+\Phi  \vdash  \,  {:}  \ottkw{I}  \leadsto  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot  \ottsym{;}  \cdot}{%
 {\ottdrulename{Ty\_Pat\_Ret\_Empty}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXRetXXComp}[1]{\ottdrule[#1]{%
 \ottpremise{ident\_or\_pattern  {:}  \beta  \leadsto  \mathcal{C}_{{\mathrm{1}}} \, \ottkw{with} \, term_{{\mathrm{1}}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}   term_{{\mathrm{1}}}  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{ret}  )   \leadsto  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}   term_{{\mathrm{1}}}  \ottsym{/}  \ottmv{y}  \ottsym{,}  \cdot  (  \ottnt{ret}  )   \leadsto  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottkw{comp} \, ident\_or\_pattern  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \Sigma \, \ottmv{y}  {:}  \beta  . \:  \ottnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}{%
+\Phi  \vdash  \ottkw{comp} \, ident\_or\_pattern  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \Sigma \, \ottmv{y}  {:}  \beta  . \:  \ottnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}{%
 {\ottdrulename{Ty\_Pat\_Ret\_Comp}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXRetXXLog}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottkw{log} \, \ottmv{y}  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{,}  \ottmv{y}  {:}  \beta  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
+\Phi  \vdash  \ottkw{log} \, \ottmv{y}  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \exists \, \ottmv{y}  {:}  \beta  . \:  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{,}  \ottmv{y}  {:}  \beta  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}{%
 {\ottdrulename{Ty\_Pat\_Ret\_Log}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXRetXXRes}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
+\ottpremise{\Phi  \vdash  \ottnt{res\_pattern}  {:}  \ottnt{res}  \leadsto  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{2}}}}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash  \texttt{res} \, \ottnt{res\_pattern}  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{res}  \otimes  \ottnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{,}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
+\Phi  \vdash  \texttt{res} \, \ottnt{res\_pattern}  \ottsym{,} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{res}  \otimes  \ottnt{ret}  \leadsto  \mathcal{C}_{{\mathrm{2}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{L}_{{\mathrm{2}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{,}  \Phi_{{\mathrm{2}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}  \ottsym{,}  \mathcal{R}_{{\mathrm{2}}}}{%
 {\ottdrulename{Ty\_Pat\_Ret\_Res}}{}%
 }}
 
 
 \newcommand{\ottdruleTyXXPatXXRetXXPhi}[1]{\ottdrule[#1]{%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'}%
 }{
-\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  term  \wedge  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{,}  term  \ottsym{;}  \mathcal{R}'}{%
+\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  term  \wedge  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{,}  term  \ottsym{;}  \mathcal{R}'}{%
 {\ottdrulename{Ty\_Pat\_Ret\_Phi}}{}%
 }}
 
-\newcommand{\ottdefnTyXXPatXXRetXX}[1]{\begin{ottdefnblock}[#1]{$\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'$}{}
+\newcommand{\ottdefnTyXXPatXXRetXX}[1]{\begin{ottdefnblock}[#1]{$\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret}  \leadsto  \mathcal{C}'  \ottsym{;}  \mathcal{L}'  \ottsym{;}  \Phi'  \ottsym{;}  \mathcal{R}'$}{}
 \ottusedrule{\ottdruleTyXXPatXXRetXXEmpty{}}
 \ottusedrule{\ottdruleTyXXPatXXRetXXComp{}}
 \ottusedrule{\ottdruleTyXXPatXXRetXXLog{}}
@@ -2155,7 +2155,7 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 
 \newcommand{\ottdruleTyXXSeqXXTEXXLet}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \vdash  seq\_expr  \Rightarrow  \ottnt{ret_{{\mathrm{1}}}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \ottpremise{\mathcal{C}  \ottsym{,}  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}  \ottsym{,}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi  \ottsym{,}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \mathcal{R}  \vdash  \ottkw{let} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  seq\_expr \, \ottkw{in} \, texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}{%
@@ -2165,7 +2165,7 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 
 \newcommand{\ottdruleTyXXSeqXXTEXXLetT}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \vdash  texpr_{{\mathrm{1}}}  \Leftarrow  \ottnt{ret_{{\mathrm{1}}}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \ottpremise{\mathcal{C}  \ottsym{,}  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}  \ottsym{,}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi  \ottsym{,}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr_{{\mathrm{2}}}  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \mathcal{R}  \vdash  \ottkw{let} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  =  texpr_{{\mathrm{1}}} \, \ottkw{in} \, texpr_{{\mathrm{2}}}  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}{%
@@ -2224,7 +2224,7 @@ pattern  {:}  \beta  \leadsto  \mathcal{C} \, \ottkw{with} \, term}{%
 %% defn Is_TE
 \newcommand{\ottdruleTyXXIsXXTEXXLetS}[1]{\ottdrule[#1]{%
 \ottpremise{\mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \vdash  is\_expr  \Rightarrow  \ottnt{ret_{{\mathrm{1}}}}}%
-\ottpremise{\mathcal{L}  \ottsym{;}  \Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
+\ottpremise{\Phi  \vdash \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, {:}  \ottnt{ret_{{\mathrm{1}}}}  \leadsto  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}_{{\mathrm{1}}}}%
 \ottpremise{\mathcal{C}  \ottsym{,}  \mathcal{C}_{{\mathrm{1}}}  \ottsym{;}  \mathcal{L}  \ottsym{,}  \mathcal{L}_{{\mathrm{1}}}  \ottsym{;}  \Phi  \ottsym{,}  \Phi_{{\mathrm{1}}}  \ottsym{;}  \mathcal{R}  \ottsym{,}  \mathcal{R}_{{\mathrm{1}}}  \vdash  texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}%
 }{
 \mathcal{C}  \ottsym{;}  \mathcal{L}  \ottsym{;}  \Phi  \ottsym{;}  \mathcal{R}'  \ottsym{,}  \mathcal{R}  \vdash  \ottkw{let} \, \ottkw{strong} \, \ottcomp{\ottnt{ret\_pattern_{\ottmv{i}}}}{\ottmv{i}} \, =  is\_expr \, \ottkw{in} \, texpr  \Leftarrow  \ottnt{ret_{{\mathrm{2}}}}}{%

@@ -291,8 +291,8 @@ grammar
 grammar
 
   ty_sym_opt_T_bt {{ tex ident\_opt\_\beta }} :: '' ::= {{ ocaml ( Symbol.sym option * T.bt ) }} {{ com type annotated optional identifier }}
-    | _ : T_bt          :: :: No_sym (+ binders = {}         +) {{ ocaml ( None , [[T_bt]] ) }}
-    | Symbol_sym : T_bt :: :: Just   (+ binders = Symbol_sym +) {{ ocaml ( Some [[Symbol_sym]] , [[T_bt]] ) }}
+    | _ : T_bt          ::   :: No_sym (+ binders = {}         +) {{ ocaml ( None , [[T_bt]] ) }}
+    | Symbol_sym : T_bt ::   :: Just   (+ binders = Symbol_sym +) {{ ocaml ( Some [[Symbol_sym]] , [[T_bt]] ) }}
 
 
 grammar
@@ -831,6 +831,7 @@ grammar
     | >>     :: :: chevron   {{ tex \gg                              }}
     | :;     :: :: doublecol {{ tex \mathbin{ {:} {:} }              }}
     | ^      :: :: caret     {{ tex \mathbin { \texttt{\char`\^} }   }}
+    | \/     :: :: or        {{ tex \vee                             }}
     | \//    :: :: big_or    {{ tex \bigvee                          }}
     | eq     :: :: equiv     {{ tex \equiv                           }}
     | <(     :: :: langle    {{ tex \langle                          }}
@@ -1125,8 +1126,8 @@ defns
     C ; L ; N ; cdot , _ : points_to |- points_to' <= points_to''
 
 
-    L ; N |- res1' = strip_ifs ( res1 )
-    L ; N |- res2' = strip_ifs ( res2 )
+    N |- res1' = strip_ifs ( res1 )
+    N |- res2' = strip_ifs ( res2 )
     N |- res1' eq res2'
     ---------------------------------------- :: Var
     C ; L ; N ; cdot , r : res1 |- r <= res2
@@ -1154,7 +1155,7 @@ defns
 
     a eq </ xi : base_typei // i /> |-> res inEnv Globals
     </ C ; L ; N |- mu_pval_auxi => base_typei // i />
-    L ; N |- res' = strip_ifs ( [ </ mu_pval_auxi / xi , cdot // i /> ] res )
+    N |- res' = strip_ifs ( [ </ mu_pval_auxi / xi , cdot // i /> ] res )
     C ; L ; N ; R |- res_term <= res'
     ------------------------------------------------------------------- :: Fold
     C ; L ; N ; R |- fold ( res_term ) <= a ( </ mu_pval_auxi // i /> )
@@ -1482,124 +1483,124 @@ defns
   res_pattern_jtype :: 'Ty_Pat_' ::=
 
   defn
-    L ; N |- res' = strip_ifs ( res ) :: :: Res_StripIfs_ :: Res_StripIfs_ by
+    N |- res' = strip_ifs ( res ) :: :: Res_StripIfs_ :: Res_StripIfs_ by
 
 
     --------------------------------- :: Empty
-    L ; N |- emp = strip_ifs ( emp )
+    N |- emp = strip_ifs ( emp )
 
 
     ------------------------------ :: PointsTo
-    L ; N |- pt = strip_ifs ( pt )
+    N |- pt = strip_ifs ( pt )
 
 
     -------------------------------------------------- :: SepConj
-    L ; N |- res1 *s res2 = strip_ifs ( res1 *s res2 )
+    N |- res1 *s res2 = strip_ifs ( res1 *s res2 )
 
 
     ------------------------------------------------------------------------------ :: Exists
-    L ; N |- exists x : base_type . res = strip_ifs ( exists x : base_type . res )
+    N |- exists x : base_type . res = strip_ifs ( exists x : base_type . res )
 
 
     --------------------------------------------------------- :: TermConj
-    L ; N |- term_aux /\ res = strip_ifs ( term_aux /\ res )
+    N |- term_aux /\ res = strip_ifs ( term_aux /\ res )
 
 
     smt ( N => term_aux )
-    L ; N |- res1' = strip_ifs ( res1' )
+    N |- res1' = strip_ifs ( res1' )
     -------------------------------------------------------------- :: True
-    L ; N |- res1' = strip_ifs ( if term_aux then res1 else res2 )
+    N |- res1' = strip_ifs ( if term_aux then res1 else res2 )
 
 
     smt ( N => neg term_aux )
-    L ; N |- res2' = strip_ifs ( res2 )
+    N |- res2' = strip_ifs ( res2 )
     -------------------------------------------------------------- :: False
-    L ; N |- res2' = strip_ifs ( if term_aux then res1 else res2 )
+    N |- res2' = strip_ifs ( if term_aux then res1 else res2 )
 
 
     ------------------------------------------------------------------------------------------- :: UnderDet
-    L ; N |- if term_aux then res1 else res2 = strip_ifs ( if term_aux then res1 else res2 )
+    N |- if term_aux then res1 else res2 = strip_ifs ( if term_aux then res1 else res2 )
 
 
     ------------------------------------------------------------------------------------ :: Pred
-    L ; N |- a ( </ mu_pval_auxi // i /> ) = strip_ifs ( a ( </ mu_pval_auxi // i /> ) )
+    N |- a ( </ mu_pval_auxi // i /> ) = strip_ifs ( a ( </ mu_pval_auxi // i /> ) )
 
 
   defn
-    L ; N |- res as res_pattern ~> L' ; N' ; R' :: :: Res_Match_ :: Res_Match_ by
+    N |- res as res_pattern ~> L' ; N' ; R' :: :: Res_Match_ :: Res_Match_ by
 
 
     ----------------------------------------- :: Empty
-    L ; N |- emp as emp ~> cdot ; cdot ; cdot
+    N |- emp as emp ~> cdot ; cdot ; cdot
 
 
     ------------------------------------------------- :: Var
-    L ; N |- res as r ~> cdot ; cdot ; cdot , r : res
+    N |- res as r ~> cdot ; cdot ; cdot , r : res
 
 
-    L ; N |- res_pattern1 : res1 ~> L1 ; N1 ; R1
-    L ; N |- res_pattern2 : res2 ~> L2 ; N2 ; R2
+    N |- res_pattern1 : res1 ~> L1 ; N1 ; R1
+    N |- res_pattern2 : res2 ~> L2 ; N2 ; R2
     ----------------------------------------------------------------------------------------- :: SepConj
-    L ; N |- res1 *s res2 as <( res_pattern1 , res_pattern2 )> ~> L1 , L2 ; N1 , N2 ; R1 , R2
+    N |- res1 *s res2 as <( res_pattern1 , res_pattern2 )> ~> L1 , L2 ; N1 , N2 ; R1 , R2
 
 
-    L ; N |- res_pattern : res ~> L' ; N' ; R'
+    N |- res_pattern : res ~> L' ; N' ; R'
     ------------------------------------------------------------------ :: Conj
-    L ; N |- term_aux /\ res as res_pattern ~> L' ; N' , term_aux ; R'
+    N |- term_aux /\ res as res_pattern ~> L' ; N' , term_aux ; R'
 
 
-    L ; N |- res_pattern : [ x / y , cdot ] res ~> L' ; N' ; R'
+    N |- res_pattern : [ x / y , cdot ] res ~> L' ; N' ; R'
     ----------------------------------------------------------------------------------------------- :: Pack
-    L ; N |- exists y : base_type . res as pack ( x , res_pattern ) ~> L' , x : base_type ; N' ; R'
+    N |- exists y : base_type . res as pack ( x , res_pattern ) ~> L' , x : base_type ; N' ; R'
 
 
     a eq </ xi : base_typei // i /> |-> res inEnv Globals
-    L ; N |- res_pattern : [ </ mu_pval_auxi / xi , cdot // i /> ] res ~> L' ; N' ; R'
+    N |- res_pattern : [ </ mu_pval_auxi / xi , cdot // i /> ] res ~> L' ; N' ; R'
     ---------------------------------------------------------------------------------- :: Fold
-    L ; N |- a ( </ mu_pval_auxi // i /> ) as fold ( res_pattern ) ~> L' ; N' ; R'
+    N |- a ( </ mu_pval_auxi // i /> ) as fold ( res_pattern ) ~> L' ; N' ; R'
 
 
   defn
-    L ; N |- res_pattern : res ~> L' ; N' ; R' :: :: Res_ :: Res_ by
+    N |- res_pattern : res ~> L' ; N' ; R' :: :: Res_ :: Res_ by
 
 
-    L ; N |- res' = strip_ifs ( res )
-    L ; N |- res' as res_pattern ~> L' ; N' ; R'
+    N |- res' = strip_ifs ( res )
+    N |- res' as res_pattern ~> L' ; N' ; R'
     -------------------------------------------- :: Strip_Ifs
-    L ; N |- res_pattern : res ~> L' ; N' ; R'
+    N |- res_pattern : res ~> L' ; N' ; R'
 
 
 defns
   ret_pattern_jtype :: 'Ty_Pat_' ::=
 
   defn
-    L ; N |- </ ret_patterni // , // i /> : ret ~> C' ; L' ; N' ; R' :: :: Ret_ :: Ret_ by
+    N |- </ ret_patterni // , // i /> : ret ~> C' ; L' ; N' ; R' :: :: Ret_ :: Ret_ by
 
 
     ------------------------------------------------- :: Empty
-    L ; N |-  : I ~> cdot ; cdot ; cdot ; cdot
+    N |-  : I ~> cdot ; cdot ; cdot ; cdot
 
 
     mu_sym_or_pattern : base_type ~> C1 with term_aux1
-    L ; N |- </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L2 ; N2 ; R2
+    N |- </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L2 ; N2 ; R2
     --------------------------------------------------------------------------- :: Comp
-    L ; N |- comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
+    N |- comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
 
 
-    L ; N |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
+    N |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
     ---------------------------------------------------------------------------------------------------------- :: Log
-    L ; N |- log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C' ; L' , y : base_type ; N' ; R'
+    N |- log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C' ; L' , y : base_type ; N' ; R'
 
 
-    L ; N |- res_pattern : res ~> L1 ; N1 ; R1
-    L ; N |- </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
+    N |- res_pattern : res ~> L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
     -------------------------------------------------------------------------------------------------- :: Res
-    L ; N |- reso res_pattern , </ ret_patterni // i /> : res *o ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
+    N |- reso res_pattern , </ ret_patterni // i /> : res *o ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
 
 
-    L ; N |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
+    N |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
     ---------------------------------------------------------------------------------- :: Phi
-    L ; N |- </ ret_patterni // i /> : term_aux /\ ret ~> C' ; L' ; N' , term_aux ; R'
+    N |- </ ret_patterni // i /> : term_aux /\ ret ~> C' ; L' ; N' , term_aux ; R'
 
 
 defns
@@ -1880,14 +1881,14 @@ defns
 
 
     C ; L ; N ; R' |- mu_seq_expr => ret1
-    L ; N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret2
     ----------------------------------------------------------------------------------- :: Let
     C ; L ; N ; R' , R |- let </ ret_patterni // i /> = mu_seq_expr in mu_texpr <= ret2
 
 
     C ; L ; N ; R' |- mu_texpr1 <= ret1
-    L ; N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr2 <= ret2
     ----------------------------------------------------------------------------------------- :: LetT
     C ; L ; N ; R' , R |- let </ ret_patterni // i /> : ret1 = mu_texpr1 in mu_texpr2 <= ret2
@@ -1932,7 +1933,7 @@ defns
 
     % NOT IMPLEMENTED - memory events
     C ; L ; N ; R' |- mu_is_expr_aux => ret1
-    L ; N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret2
     --------------------------------------------------------------------------------------------- :: LetS
     C ; L ; N ; R' , R |- let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr <= ret2
