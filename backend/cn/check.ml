@@ -466,6 +466,9 @@ module ResourceInference = struct
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
       let folded_value = 
+        (* let i_s, i = IT.fresh Integer  in
+         * let subst = make_subst [(qpoint.qpointer, pointer i)] in
+         * array_def_ (i_s, IT.bt i) (IT.subst subst qpoint.value) *)
         let rec aux value i = 
           if i < 0 then value else 
             let subst = make_subst [(qpoint.qpointer, pointer (int_ i))] in
@@ -784,6 +787,8 @@ end = struct
 
     fun (unis : (LS.t * Locations.info) SymMap.t) r_spec r_have ->
 
+    debug 9 (lazy (item "matching resource" (RE.pp r_have ^^^ !^"against" ^^^ (RE.pp r_spec))));
+
     match r_spec, r_have with
     | Point p_spec, Point p_have ->
        if Sctypes.equal p_spec.ct p_have.ct
@@ -974,13 +979,15 @@ end = struct
                let has = resource' in
                {loc = loc; msg = Resource_mismatch {expect; has; situation; ctxt; model}}
              in
-             match_resources loc failure unis resource resource' in
+             match_resources loc failure unis resource resource' 
+           in
            infer_resources unis (subst_r rt_subst new_subst ftyp)
         | C ftyp ->
            return (unis, ftyp)
       in
       infer_resources unis ftyp_r
     in
+    debug 9 (lazy (!^"finished inferring resource"));
 
     let () = match SymMap.min_binding_opt unis with
       | Some (s, _) ->
@@ -991,8 +998,10 @@ end = struct
 
     let@ rt = 
       let@ provable_or_model = provable_or_model in
+      let@ () = return (debug 9 (lazy !^"checking constraints")) in
       let rec check_logical_constraints = function
         | Constraint (c, info, ftyp) -> 
+           let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
            begin match provable_or_model c with
            | `True -> check_logical_constraints ftyp 
            | `False model ->
@@ -1006,6 +1015,7 @@ end = struct
       in
       check_logical_constraints ftyp_c
     in
+    let@ () = return (debug 9 (lazy !^"done")) in
     return rt
 
   let calltype_ft loc args (ftyp : AT.ft) : (RT.t, type_error) m =
@@ -2037,9 +2047,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                      None
                 ) constraints
             in
-            (* List.iter (fun it ->
-             *     print stdout (item "assumption" (IT.pp it));
-             *     ) assumptions; *)
+            List.iter (fun it ->
+                print stdout (item "assumption" (IT.pp it));
+                ) assumptions;
+            print stdout (item "goal" (IT.pp body));
             impl_ (and_ assumptions, body)
           in
           let@ () = match provable_or_model (t_ to_check) with

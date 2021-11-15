@@ -445,6 +445,14 @@ let rec simp struct_decls values equalities some_known_facts =
        IT (Array_op (Def ((s', abt), body)), bt)
   in
   
+  let letb (s, bound) body bt =
+    let bound = aux bound in
+    let s' = Sym.fresh_same s in
+    let body = IndexTerms.subst (make_subst [(s, sym_ (s', IT.bt bound))]) body in
+    let body = aux body in
+    IT (Let ((s', bound), body), bt)
+  in
+
   fun it ->
   if List.mem IT.equal it some_known_facts then bool_ true 
   else
@@ -460,6 +468,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | Set_op s -> IT (Set_op s, bt)
     | CT_pred c -> ct_pred c bt
     | Array_op a -> array_op a bt
+    | Let ((s, bound), body) -> letb (s, bound) body bt
 
 
 let simp ?(some_known_facts = []) struct_decls lcs it = 

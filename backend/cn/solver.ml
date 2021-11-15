@@ -129,7 +129,7 @@ module Translate = struct
   let bt_table = BT_Table.create 1000
   let sort_table = Sort_Table.create 1000
 
-  let it_table = IT_Table.create 50000
+  let it_table = IT_Table.create 500000
 
 
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
@@ -422,6 +422,19 @@ module Translate = struct
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))
          end
+      | Let ((s, bound), body) ->
+         (* let body = IT.subst (IT.make_subst [(s, bound)]) body in
+          * term body *)
+         (* reading
+            https://stackoverflow.com/questions/24188626/performance-issues-about-z3-for-java
+            and
+            https://stackoverflow.com/questions/14392957/encoding-let-expressions-in-z3
+            and
+            https://gitter.im/chc-comp/Lobby?at=5b1ae86e106f3c24bde6fea4
+            *)
+         let sym_s, sym = IT.fresh (IT.bt bound) in
+         let body = IT.subst (IT.make_subst [(s, sym)]) body in
+         Z3.Expr.substitute_one (term body) (term sym) (term bound)
       end
 
     and term : IT.t -> Z3.Expr.expr =
@@ -566,17 +579,25 @@ let shortcut it =
 
 
 let check global (solver : solver) assumptions lc = 
+  print stdout (item "checking" (LC.pp lc));
+  print stdout !^"reducing";
   let it, oq = ReduceQuery.constr global assumptions lc in
+  print stdout !^"shortcut";
   match shortcut it with
-  | `True -> `True
+  | `True -> 
+     print stdout !^"done";
+     `True
   | `No_shortcut it ->
-     (* print stdout (item "checking (after simplification)" (IT.pp it)); *)
+     print stdout (item "checking (after simplification)" (IT.pp it));
+     print stdout !^"translating";
      let t = Translate.term global.struct_decls (not_ it) in
+     print stdout !^"solving";
      let result = match Z3.Solver.check solver.fancy [t] with
        | Z3.Solver.UNSATISFIABLE -> `True
        | Z3.Solver.SATISFIABLE -> `False oq
        | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False oq
      in
+     print stdout !^"done";
      result
 
 

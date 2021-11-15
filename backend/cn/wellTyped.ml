@@ -388,6 +388,15 @@ module WIT = struct
                 end
          in
          return (IT (Array_op array_op, bt))
+      | Let ((s, bound), body) ->
+         pure begin
+             let@ t = infer loc ~context bound in
+             let@ () = add_l s (IT.bt t) in
+             infer loc ~context body
+           end
+         
+         
+
 
     and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context ls it ->

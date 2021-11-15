@@ -104,6 +104,7 @@ and 'bt term_ =
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
   | Array_op of 'bt array_op
+  | Let of (Sym.t * 'bt term) * 'bt term
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -120,7 +121,8 @@ type t = typed
 
 
 
-let bt (IT (_, bt)) : BT.t = bt
+let basetype (IT (_, bt)) : BT.t = bt
+let bt = basetype
 
 
 let rec equal (IT (it, _)) (IT (it', _)) = 
@@ -321,6 +323,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Get _, _ -> false
      | Def _, _ -> false
      end
+  | Let ((s, bound), body), Let ((s', bound'), body') ->
+     Sym.equal s s' && equal bound bound' && equal body body'
   | Lit _, _ -> false
   | Arith_op _, _ -> false
   | Bool_op _, _ -> false
@@ -331,6 +335,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Set_op _, _ -> false
   | CT_pred _, _ -> false
   | Array_op _, _ -> false
+  | Let _, _ -> false
 
 
 
@@ -489,6 +494,8 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
+    | Let ((s, bound), body) ->
+       !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body)
   in
   fun (it : 'bt term) -> aux false it
 
@@ -588,6 +595,9 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Get (t, arg) -> free_vars_list ([t; arg])
      | Def ((s, _), body) -> SymSet.remove s (free_vars body)
      end
+  | Let ((s, bound), body) ->
+     SymSet.union (free_vars bound)
+       (SymSet.remove s (free_vars body))
 
 and free_vars_list l = 
   List.fold_left (fun acc sym -> 
@@ -741,6 +751,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
             Def ((s, abt), subst su body)
      in
      IT (Array_op array_op, bt)
+  | Let ((s, bound), body) ->
+     let bound = subst su bound in
+     if SymSet.mem s su.relevant then
+       let s' = Sym.fresh_same s in
+       let body = subst (make_subst [(s, IT (Lit (Sym s'), basetype bound))]) body in
+       let body = subst su body in
+       IT (Let ((s', bound), body), bt)
+     else
+       IT (Let ((s, bound), subst su body), bt)
 
 
 
@@ -965,6 +984,12 @@ let array_def_ (s, abt) body =
   IT (Array_op (Def ((s, abt), body)), BT.Array (abt, bt body))
 
 
+let let_ (s, bound) body = 
+  IT (Let ((s, bound), body), basetype body)
+let let__ (name, bound) body =
+  let s = Sym.fresh_named name in
+  let_ (s, bound) (body (sym_ (s, basetype bound)))
+
 
 let (%@) it it' = get_ it it'
 
@@ -979,6 +1004,10 @@ let fresh bt =
 
 let fresh_named bt name = 
   let symbol = Sym.fresh_named name in
+  (symbol, sym_ (symbol, bt))
+
+let fresh_same bt symbol' = 
+  let symbol = Sym.fresh_same symbol' in
   (symbol, sym_ (symbol, bt))
 
 
@@ -1027,6 +1056,7 @@ let hash (IT (it, _bt)) =
   | List_op _ -> 7
   | Set_op _ -> 8
   | Array_op _ -> 9
+  | Let _ -> 10
   | Lit lit ->
      begin match lit with
      | Z z -> 20

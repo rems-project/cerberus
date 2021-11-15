@@ -125,10 +125,6 @@ module PageAlloc = struct
         IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
       in
 
-      (* let page_s, page = IT.fresh_named (Struct hyp_page_tag) "page" in *)
-      let page = get_ vmemmap page_pointer in
-
-
       let args = [
           (page_pointer_s, IT.bt page_pointer);
           (* (page_s, IT.bt page); *)
@@ -140,77 +136,88 @@ module PageAlloc = struct
       in
       let qarg = Some 0 in
 
-      let self_node_pointer = 
-        memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
-
-      let pool_free_area_pointer = 
-        arrayShift_
-          (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
-           struct_ct list_head_tag,
-           page %. "order");
-      in
-
-      (* wrong, have to fix *)
-      let prev_next_well_formed prev_next_s = 
-        let inv_prev_next_s = 
-          if prev_next_s = "prev" then "next" else "prev"
-        in
-        let prev_next = (page %. "node") %. prev_next_s in
-        or_ [
-            (* either empty list (pointer to itself) *)
-            prev_next %== self_node_pointer;
-            (* or pointer to free_area cell *)
-            and_ (
-                let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
-                [prev_next %== pool_free_area_pointer;
-                 (free_area_entry %. inv_prev_next_s) %== self_node_pointer]
-              );
-            (* or pointer to other vmemmap cell, within the same range*)
-            and_ (
-                let prev_next_page_pointer = 
-                  container_of_ (prev_next, hyp_page_tag, Id.id "node") in
-                let prev_next_page = 
-                  get_ vmemmap prev_next_page_pointer in
-                [vmemmap_good_pointer ~vmemmap_pointer prev_next_page_pointer
-                   (pool %. "range_start") (pool %. "range_end")
-                ;
-                  (((prev_next_page %. "node") %. inv_prev_next_s) 
-                   %== self_node_pointer)
-                ;
-                  ((prev_next_page %. "order") %== (page %. "order"))
-                ]
-              )
+      let body = 
+        let__ ("pool", pool) (fun pool ->
+        let__ ("page", get_ vmemmap page_pointer) (fun page ->
+        let__ ("self_node_pointer",
+               memberShift_ (page_pointer, hyp_page_tag, Id.id "node")) (fun self_node_pointer ->
+        let__ ("pool_free_area_pointer",
+               arrayShift_
+                 (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
+                  struct_ct list_head_tag,
+                  page %. "order")) (fun pool_free_area_pointer ->
+        let__ ("prev", (page %. "node") %. "prev") (fun prev ->
+        let__ ("next", (page %. "node") %. "next") (fun next ->
+        and_ [
+            (* refcount is also valid signed int: for hyp_page_count *)
+            representable_ (integer_ct (Signed Int_), page %. "refcount");
+            (* order is HYP_NO_ORDER or between 0 and max_order *)
+            (or_ [(page %. "order") %== int_ hHYP_NO_ORDER; 
+                  and_ [int_ 0 %<= (page %. "order"); 
+                        (page %. "order") %< (pool %. "max_order");
+                        (page %. "order") %< int_ mMAX_ORDER;
+            ]]);              
+            (* points back to the pool *)
+            ((page %. "pool") %== pool_pointer);
+            (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
+            eq_ (next %== self_node_pointer, prev %== self_node_pointer);
+            (* list non-empty in the above sense implies refcount 0 and order != NYP_NO_ORDER *)
+            (impl_ (
+                 next %!= self_node_pointer,
+                 and_ [(page %. "refcount") %== int_ 0;
+                       (page %. "order") %!= int_ hHYP_NO_ORDER;
+                   ]
+            ));
+            or_ [
+                (* either empty list (pointer to itself) *)
+                prev %== self_node_pointer;
+                (* or pointer to free_area cell *)
+                and_ (
+                    let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
+                    [prev %== pool_free_area_pointer;
+                     (free_area_entry %. "next") %== self_node_pointer]
+                  );
+                (* or pointer to other vmemmap cell, within the same range*)
+                and_ (
+                    let prev_page_pointer = 
+                      container_of_ (prev, hyp_page_tag, Id.id "node") in
+                    let prev_page = 
+                      get_ vmemmap prev_page_pointer in
+                    [vmemmap_good_pointer ~vmemmap_pointer prev_page_pointer
+                       (pool %. "range_start") (pool %. "range_end");
+                      (((prev_page %. "node") %. "next") 
+                       %== self_node_pointer);
+                      ((prev_page %. "order") %== (page %. "order"))
+                    ]
+                  )
+              ];
+            or_ [
+                (* either empty list (pointer to itself) *)
+                next %== self_node_pointer;
+                (* or pointer to free_area cell *)
+                and_ (
+                    let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
+                    [next %== pool_free_area_pointer;
+                     (free_area_entry %. "prev") %== self_node_pointer]
+                  );
+                (* or pointer to other vmemmap cell, within the same range*)
+                and_ (
+                    let next_page_pointer = 
+                      container_of_ (next, hyp_page_tag, Id.id "node") in
+                    let next_page = 
+                      get_ vmemmap next_page_pointer in
+                    [vmemmap_good_pointer ~vmemmap_pointer next_page_pointer
+                       (pool %. "range_start") (pool %. "range_end");
+                      (((next_page %. "node") %. "prev") 
+                       %== self_node_pointer);
+                      ((next_page %. "order") %== (page %. "order"))
+                    ]
+                  )
+              ]
           ]
+          ))))))
       in
 
-      let constrs = [
-          (* refcount is also valid signed int: for hyp_page_count *)
-          representable_ (integer_ct (Signed Int_), page %. "refcount");
-          (* order is HYP_NO_ORDER or between 0 and max_order *)
-          (or_ [(page %. "order") %== int_ hHYP_NO_ORDER; 
-                and_ [int_ 0 %<= (page %. "order"); 
-                      (page %. "order") %< (pool %. "max_order");
-                      (page %. "order") %< int_ mMAX_ORDER;
-          ]]);              
-          (* points back to the pool *)
-          ((page %. "pool") %== pool_pointer);
-          (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
-          eq_ (((page %. "node") %. "next") %== self_node_pointer,
-               ((page %. "node") %. "prev") %== self_node_pointer);
-          (* list non-empty in the above sense implies refcount 0 and order != NYP_NO_ORDER *)
-          (impl_ (
-               ((page %. "node") %. "next") %!= self_node_pointer,
-               and_ [(page %. "refcount") %== int_ 0;
-                     (page %. "order") %!= int_ hHYP_NO_ORDER;
-                 ]
-          ));
-          prev_next_well_formed "prev";
-          prev_next_well_formed "next";
-        ]
-      in
-
-
-      let body = and_ constrs in
 
       let infer_arguments = 
         AT.Computational ((page_pointer_s, IT.bt page_pointer), (loc, None),
