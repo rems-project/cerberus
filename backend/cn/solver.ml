@@ -71,12 +71,12 @@ let params =
 
 
 let tactics = [
-    "simplify";
-    (* "propagate-values"; *)
-    (* "propagate-ineqs"; *)
+    "propagate-values";
+    "propagate-ineqs";
     "purify-arith";
     "elim-term-ite";
     "add-bounds";
+    "simplify";
     "solve-eqs";
     "aufnira";
     (* "qe2"; *)
@@ -425,6 +425,10 @@ module Translate = struct
                  [term (sym_ (q_s, q_bt))] (term body))
          end
       | Let ((s, bound), body) ->
+         term 
+           (Simplify.simp struct_decls [] 
+              (IT.subst (IT.make_subst [(s, bound)]) body))
+
          (* let body = IT.subst (IT.make_subst [(s, bound)]) body in
           * term body *)
          (* reading
@@ -434,9 +438,9 @@ module Translate = struct
             and
             https://gitter.im/chc-comp/Lobby?at=5b1ae86e106f3c24bde6fea4
             *)
-         let sym_s, sym = IT.fresh (IT.bt bound) in
-         let body = IT.subst (IT.make_subst [(s, sym)]) body in
-         Z3.Expr.substitute_one (term body) (term sym) (term bound)
+         (* let sym_s, sym = IT.fresh (IT.bt bound) in
+          * let body = IT.subst (IT.make_subst [(s, sym)]) body in
+          * Z3.Expr.substitute_one (term body) (term sym) (term bound) *)
       end
 
     and term : IT.t -> Z3.Expr.expr =
@@ -542,9 +546,7 @@ module ReduceQuery = struct
 end
 
 
-
-
-let make () : solver = 
+let solver : solver = 
   (* https://stackoverflow.com/a/14305028 describes an example where
      tactics are useful *)
   (* http://www.cs.tau.ac.il/~msagiv/courses/asv/z3py/strategies-examples.htm *)
@@ -560,6 +562,12 @@ let make () : solver =
     Z3.Solver.mk_solver_t context tactic
   in
   { fancy }
+
+
+
+let make () : solver = 
+  let () = Z3.Solver.reset solver.fancy in
+  solver
 
 
 let push solver = 
