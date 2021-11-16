@@ -213,7 +213,7 @@ module ResourceInference = struct
                let could_take = and_ [p'.permission; needed] in
                let took = and_ [eq_ (requested.pointer, p'.pointer); 
                                 could_take] in
-               begin match provable (t_ took) with
+               begin match provable ~shortcut_false:true (t_ took) with
                | `True ->
                   let value = p'.value in
                   let init = p'.init in
@@ -227,7 +227,7 @@ module ResourceInference = struct
                let subst = make_subst [(p'.qpointer, requested.pointer)] in
                let can_take = and_ [IT.subst subst p'.permission; needed] in
                let took = can_take in
-               begin match provable (t_ took) with
+               begin match provable ~shortcut_false:true (t_ took) with
                | `True ->
                   let value = IT.subst subst p'.value in
                   let init = IT.subst subst p'.init in
@@ -288,7 +288,7 @@ module ResourceInference = struct
                let subst = make_subst [(requested.qpointer, p'.pointer)] in
                let can_take = and_ [p'.permission; IT.subst subst needed] in
                let took = can_take in
-               begin match provable (t_ took) with
+               begin match provable ~shortcut_false:true (t_ took) with
                | `True ->
                   let pmatch = eq_ (sym_ (requested.qpointer, BT.Loc), p'.pointer) in
                   let needed = and_ [needed; not_ pmatch] in

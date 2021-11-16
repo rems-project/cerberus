@@ -138,6 +138,7 @@ module PageAlloc = struct
 
       let body = 
         let__ ("pool", pool) (fun pool ->
+        let__ ("vmemmap", vmemmap) (fun vmemmap ->
         let__ ("page", get_ vmemmap page_pointer) (fun page ->
         let__ ("self_node_pointer",
                memberShift_ (page_pointer, hyp_page_tag, Id.id "node")) (fun self_node_pointer ->
@@ -215,7 +216,7 @@ module PageAlloc = struct
                   )
               ]
           ]
-          ))))))
+          )))))))
       in
 
 
@@ -349,17 +350,33 @@ module PageAlloc = struct
       in
       let qarg = None in
 
-      let range_start = pool %. "range_start" in
-      let range_end = pool %. "range_end" in
-      let max_order = pool %. "max_order" in
 
-      let beyond_range_end_cell_pointer = 
-        integerToPointerCast_
-          (add_ (pointerToIntegerCast_ vmemmap_pointer, 
-                 (range_end %/ (z_ pPAGE_SIZE)) %* hyp_page_size))
-           in
-      let metadata_well_formedness =
+
+      let body = 
+        let__ ("pool", pool) (fun pool ->
+        let__ ("range_start", pool %. "range_start") (fun range_start ->
+        let__ ("range_end", pool %. "range_end") (fun range_end ->
+        let__ ("max_order", pool %. "max_order") (fun max_order ->
+        let__ ("beyond_range_end_cell_pointer",
+               integerToPointerCast_
+                 (add_ (pointerToIntegerCast_ vmemmap_pointer, 
+                        (range_end %/ (z_ pPAGE_SIZE)) %* hyp_page_size))) (fun beyond_range_end_cell_pointer ->
+        (* (for the final disjointness condition) the vmemamp can be
+           bigger than just the part managed by this allocator *)
+        let__ ("start_i", (pool %. "range_start") %/ (z_ pPAGE_SIZE)) (fun start_i ->
+        let__ ("end_i", (pool %. "range_end") %/ (z_ pPAGE_SIZE)) (fun end_i ->
+        let__ ("start_offset", start_i %* (int_ (Memory.size_of_struct hyp_page_tag))) (fun start_offset ->
+        let__ ("vmemmap_start_pointer",
+               integerToPointerCast_
+                 (add_ (pointerToIntegerCast_ vmemmap_pointer,
+                        start_offset))) (fun vmemmap_start_pointer ->
+        (* end_i is the first index outside the vmemmap *)
+        let vmemmap_index_length = end_i %- start_i in
+        let__ ("vmemmap_length",
+               vmemmap_index_length %* 
+                 (int_ (Memory.size_of_struct hyp_page_tag))) (fun vmemmap_length ->
         and_ [
+            (* metadata well formedness *)
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
             good_ (pointer_ct void_ct, integerToPointerCast_ range_end);
             good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %- hyp_physvirt_offset));
@@ -372,43 +389,15 @@ module PageAlloc = struct
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
             max_order %>= int_ 0;
             max_order %<= int_ mMAX_ORDER;
-          ]
-      in
-      let vmemmap_pointer_aligned = 
-        aligned_ (vmemmap_pointer,
-                  array_ct (struct_ct hyp_page_tag) None)
-      in
-
-
-  
-
-    let hyp_pool_vmemmap_disjoint =
-      (* the vmemamp can be bigger than just the part managed by this
-         allocator *)
-      let end_i = (pool %. "range_end") %/ (z_ pPAGE_SIZE) in
-      let start_i = (pool %. "range_start") %/ (z_ pPAGE_SIZE) in
-      let start_offset = start_i %* (int_ (Memory.size_of_struct hyp_page_tag)) in
-      let vmemmap_start_pointer = 
-        integerToPointerCast_
-          (add_ (pointerToIntegerCast_ vmemmap_pointer,
-                 start_offset))
-      in
-      (* end_i is the first index outside the vmemmap *)
-      let vmemmap_index_length = end_i %- start_i in
-      let vmemmap_length = 
-        vmemmap_index_length %* 
-          (int_ (Memory.size_of_struct hyp_page_tag))
-      in
-      IT.disjoint_ 
-        (pool_pointer, int_ (Memory.size_of_struct hyp_pool_tag))
-        (vmemmap_start_pointer, vmemmap_length)
-    in
-
-
-      let body = 
-        and_ [metadata_well_formedness; 
-              vmemmap_pointer_aligned;
-              hyp_pool_vmemmap_disjoint;] 
+            (* vmemmap pointer aligned *)
+            aligned_ (vmemmap_pointer,
+                      array_ct (struct_ct hyp_page_tag) None);
+            (* hyp pool vmemmap disjoint *)
+            IT.disjoint_ 
+              (pool_pointer, int_ (Memory.size_of_struct hyp_pool_tag))
+              (vmemmap_start_pointer, vmemmap_length)
+          ] 
+          ))))))))))
       in
 
       let infer_arguments = 

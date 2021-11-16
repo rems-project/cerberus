@@ -611,32 +611,27 @@ let add global solver lc =
 
 (* as similarly suggested by Robbert *)
 let shortcut it = 
-  match Simplify.simp [] [] it with
+  let it = Simplify.simp [] [] it in
+  match it with
   | IT (Lit (Bool true), _) -> `True
-  | it -> `No_shortcut it
+  | IT (Lit (Bool false), _) -> `False it
+  | _ -> `No_shortcut it
 
 
-let check global (solver : solver) assumptions lc = 
-  print stdout (item "checking" (LC.pp lc));
-  print stdout !^"reducing";
-  let it, oq = ReduceQuery.constr global assumptions lc in
-  print stdout !^"shortcut";
+let z3_outcome_to_outcome = function
+  | Z3.Solver.UNSATISFIABLE -> `True
+  | Z3.Solver.SATISFIABLE -> `False
+  | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
+
+let check ~shortcut_false global (solver : solver) it = 
   match shortcut it with
   | `True -> 
-     print stdout !^"done";
      `True
-  | `No_shortcut it ->
-     print stdout (item "checking (after simplification)" (IT.pp it));
-     print stdout !^"translating";
+  | `False _ when shortcut_false ->
+     `False
+  | (`False it | `No_shortcut it) ->
      let t = Translate.term global.struct_decls (not_ it) in
-     print stdout !^"solving";
-     let result = match Z3.Solver.check solver.fancy [t] with
-       | Z3.Solver.UNSATISFIABLE -> `True
-       | Z3.Solver.SATISFIABLE -> `False oq
-       | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False oq
-     in
-     print stdout !^"done";
-     result
+     z3_outcome_to_outcome (Z3.Solver.check solver.fancy [t])
 
 
 
@@ -644,15 +639,17 @@ let get_model z3_solver =
   Option.value_err "Z3 did not produce a counter model"
     (Z3.Solver.get_model z3_solver)
 
-let provable global solver assumptions (lc : LC.t) =  
-  match check global solver assumptions lc with
+let provable ~shortcut_false global solver assumptions (lc : LC.t) =  
+  let it, oq = ReduceQuery.constr global assumptions lc in
+  match check ~shortcut_false global solver it with
   | `True -> `True
-  | `False _ -> `False
+  | `False -> `False
 
 let provable_or_model global solver assumptions (lc : LC.t) =  
-  match check global solver assumptions lc with
+  let it, oq = ReduceQuery.constr global assumptions lc in
+  match check ~shortcut_false:false global solver it with
   | `True -> `True
-  | `False oq -> `False (get_model solver.fancy, oq)
+  | `False -> `False (get_model solver.fancy, oq)
 
 
 

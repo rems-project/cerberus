@@ -82,7 +82,9 @@ let all_resources () =
 
 let provable =
   let@ s = get () in
-  let f lc = Solver.provable s.global s.solver s.constraints lc in
+  let f ?(shortcut_false=false) lc = 
+    Solver.provable ~shortcut_false s.global s.solver s.constraints lc 
+  in
   return f
 
 let provable_or_model =

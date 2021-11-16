@@ -10,7 +10,7 @@ val pop : solver -> unit
 val add : Global.t -> solver -> LogicalConstraints.t -> unit
 
 
-val provable : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
+val provable : shortcut_false:bool -> Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
 val provable_or_model : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False of model_with_q]
 
 

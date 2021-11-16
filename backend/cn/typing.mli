@@ -15,7 +15,7 @@ val print_with_ctxt : (Context.t -> unit) -> (unit, 'e) m
 val get_global : unit -> (Global.t, 'e) m
 val all_constraints : unit -> (LogicalConstraints.t list, 'e) m
 val all_resources : unit -> (Resources.RE.t list, 'e) m
-val provable : (LogicalConstraints.t -> [> `True | `False], 'e) m
+val provable : (?shortcut_false:bool -> LogicalConstraints.t -> [> `True | `False], 'e) m
 val provable_or_model : (LogicalConstraints.t -> [> `True | `False of Solver.model_with_q], 'e) m
 val bound_a : Sym.t -> (bool, 'e) m
 val bound_l : Sym.t -> (bool, 'e) m

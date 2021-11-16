@@ -834,6 +834,7 @@ let or_ its = IT (Bool_op (Or its), BT.Bool)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
 let not_ it = 
   match it with
+  | IT (Lit (Bool b), _) -> bool_ (not b)
   | IT (Bool_op (Not a), _) -> a
   | _ -> IT (Bool_op (Not it), BT.Bool)
 
