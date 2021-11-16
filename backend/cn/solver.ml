@@ -594,39 +594,50 @@ let shortcut it =
   | _ -> `No_shortcut it
 
 
-let z3_outcome_to_outcome = function
-  | Z3.Solver.UNSATISFIABLE -> `True
-  | Z3.Solver.SATISFIABLE -> `False
-  | Z3.Solver.UNKNOWN -> warn !^"solver returned unknown"; `False
 
-let check ~shortcut_false global (solver : solver) it = 
+
+
+type model_state =
+  | Model_fancy_solver of (Sym.t * LogicalSorts.t) option
+  | No_model
+
+let model_state = 
+  ref No_model
+
+
+
+let model () = 
+  match !model_state with
+  | Model_fancy_solver oq ->
+     let omodel = Z3.Solver.get_model solver.fancy in
+     let model = Option.value_err "Z3 did not produce a counter model" omodel in
+     (model, oq)
+  | No_model ->
+     assert false
+
+
+let provable ~shortcut_false global (solver : solver) assumptions lc = 
+  let it, oq = ReduceQuery.constr global assumptions lc in
   match shortcut it with
   | `True -> 
+     model_state := No_model; 
      `True
   | `False _ when shortcut_false ->
+     model_state := No_model; 
      `False
   | (`False it | `No_shortcut it) ->
      let t = Translate.term global.struct_decls (not_ it) in
-     z3_outcome_to_outcome (Z3.Solver.check solver.fancy [t])
-
-
-
-let get_model z3_solver = 
-  Option.value_err "Z3 did not produce a counter model"
-    (Z3.Solver.get_model z3_solver)
-
-let provable ~shortcut_false global solver assumptions (lc : LC.t) =  
-  let it, oq = ReduceQuery.constr global assumptions lc in
-  match check ~shortcut_false global solver it with
-  | `True -> `True
-  | `False -> `False
-
-let provable_or_model global solver assumptions (lc : LC.t) =  
-  let it, oq = ReduceQuery.constr global assumptions lc in
-  match check ~shortcut_false:false global solver it with
-  | `True -> `True
-  | `False -> `False (get_model solver.fancy, oq)
-
+     match Z3.Solver.check solver.fancy [t] with
+     | Z3.Solver.UNSATISFIABLE -> 
+        model_state := No_model; 
+        `True
+     | Z3.Solver.SATISFIABLE -> 
+        model_state := Model_fancy_solver oq; 
+        `False
+     | Z3.Solver.UNKNOWN -> 
+        model_state := No_model; 
+        warn !^"solver returned unknown"; 
+        `False
 
 
 

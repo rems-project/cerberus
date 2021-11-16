@@ -87,10 +87,10 @@ let provable =
   in
   return f
 
-let provable_or_model =
-  let@ s = get () in
-  let f lc = Solver.provable_or_model s.global s.solver s.constraints lc in
-  return f
+let model () =
+  return (Solver.model ())
+  
+
 
 let bound_a sym = 
   let@ s = get () in
