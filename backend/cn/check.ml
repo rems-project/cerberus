@@ -257,19 +257,16 @@ module ResourceInference = struct
          in
          return r
       | `False model ->
-         let@ lrt = match requested.ct with
+         let@ resource = match requested.ct with
            | Sctype (_, Array (act, Some length)) ->
               fold_array loc failure act requested.pointer length requested.permission
            | Sctype (_, Struct tag) ->
-              let@ resource = 
-                fold_struct loc failure tag requested.pointer 
-                  requested.permission
-              in
-              return (LRT.Resource (resource, (loc, None), LRT.I))
+              fold_struct loc failure tag requested.pointer 
+                requested.permission
            | _ -> 
               fail (failure model)
          in
-         let@ () = bind_logical_return_type (Some (Loc loc)) lrt in
+         let@ () = add_r (Some (Loc loc)) resource in
          point_request loc failure requested
       end
 
@@ -474,7 +471,9 @@ module ResourceInference = struct
       let folded_value_lc = 
         let i_s, i = IT.fresh Integer  in
         let subst = make_subst [(qpoint.qpointer, pointer i)] in
-        ArrayEquality (folded_value, (i_s, IT.bt i), IT.subst subst qpoint.value)
+        eachI_ (0, i_s, length - 1) 
+          (eq_ (get_ folded_value i, 
+                IT.subst subst qpoint.value))
       in
       let folded_init = 
         let i_s, i = IT.fresh Integer  in
@@ -490,13 +489,10 @@ module ResourceInference = struct
             permission = permission;
           }
       in
-      let lrt = 
-        LRT.Logical ((folded_value_s, IT.bt folded_value), (loc, None),
-        LRT.Resource (folded_resource, (loc, None),
-        LRT.Constraint (folded_value_lc, (loc, None),
-        LRT.I)))
-      in
-      return lrt
+      let@ () = add_l folded_value_s (IT.bt folded_value) in
+      let@ () = add_c (t_ folded_value_lc) in
+      return folded_resource
+
 
 
     and fold_struct loc failure tag pointer_t permission_t =
@@ -776,15 +772,12 @@ end = struct
       match IT.subst (make_subst subst) output_spec with
       | IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
            when Sym.equal q' q_s && SymMap.mem s unis ->
-         let output_have_body_s, output_have_body = IT.fresh (Array (q_bt, IT.bt output_have)) in
-         let@ () = ls_matches_spec unis s output_have_body in
-         let@ () = add_l output_have_body_s (IT.bt output_have_body) in
-         let def_lc = 
+         let output_have_body = 
            let s' = Sym.fresh () in
-           ArrayEquality (output_have_body, (s', q_bt),
-                          IT.subst (IT.make_subst [(q_s, sym_ (s', q_bt))]) output_have)
+           array_def_ (s', q_bt)
+             (IT.subst (IT.make_subst [(q_s, sym_ (s', q_bt))]) output_have)
          in
-         let@ () = add_c def_lc in
+         let@ () = ls_matches_spec unis s output_have_body in
          return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
       | _ ->
          return (unis, subst, eq_ (output_spec, output_have) :: constrs)

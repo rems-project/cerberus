@@ -482,33 +482,6 @@ let constr global c =
      (* QPreds are not automatically expanded: to avoid
         all-quantifiers *)
      None
-  | ArrayEquality (array, (q_s, q_bt), value) ->
-     warn (!^"generating forall");
-     let (abt,rbt) = BT.array_bt (IT.bt array) in
-     let array_func_decl = 
-       Z3.FuncDecl.mk_func_decl context (sym_to_sym (Sym.fresh ()))
-         [sort abt] (sort rbt)
-     in
-     let array_fun_def = 
-       Z3.Quantifier.expr_of_quantifier
-         (Z3.Quantifier.mk_forall_const context
-            [term (sym_ (q_s, q_bt))] 
-            (Z3.Boolean.mk_eq context
-               (Z3.Expr.mk_app context array_func_decl [term (sym_ (q_s, q_bt))])
-               (term value)
-            )
-            None [] [] None None
-         )
-     in
-     let array_body_lambda = 
-       Z3.Quantifier.expr_of_quantifier
-         (Z3.Quantifier.mk_lambda_const context
-            [term (sym_ (q_s, q_bt))] 
-            (Z3.Expr.mk_app context array_func_decl [term (sym_ (q_s, q_bt))]))
-     in
-     let array_def = 
-       Z3.Boolean.mk_eq context (term array) array_body_lambda in
-     Some (Z3.Boolean.mk_and context [array_fun_def; array_def])
      
 
 
@@ -555,9 +528,6 @@ module ReduceQuery = struct
     | _ -> 
        (it, None)
 
-  let array_equality global array (q_s, q_bt) value = 
-    forall (q_s, q_bt)
-      (eq_ (get_ array (sym_ (q_s, q_bt)), value))
 
 
   let constr global assumptions (lc : LC.t) =
@@ -566,8 +536,6 @@ module ReduceQuery = struct
     | Forall ((s, bt), t) -> forall (s, bt) t
     | Pred predicate -> pred global predicate
     | QPred qpredicate -> qpred global assumptions qpredicate
-    | ArrayEquality (array, (q_s, q_bt), value) -> 
-       array_equality global array (q_s, q_bt) value
        
 
 

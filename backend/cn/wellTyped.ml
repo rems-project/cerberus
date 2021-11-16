@@ -586,15 +586,6 @@ module WLC = struct
               fail (fun _ -> {loc; msg = Generic !^err})
            end
          end
-    | LC.ArrayEquality (array, (q_s, q_bt), value) ->
-       pure begin 
-           let@ array = WIT.infer loc array in
-           let@ (abt, rbt) = WIT.ensure_array_type loc array array in
-           let@ _ = WIT.check loc abt (IT.sym_ (q_s, q_bt)) in
-           let@ () = add_l q_s q_bt in
-           let@ value = WIT.check loc rbt value in
-           return ()
-         end
 
 end
 
