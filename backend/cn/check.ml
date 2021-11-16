@@ -257,16 +257,19 @@ module ResourceInference = struct
          in
          return r
       | `False model ->
-         let@ resource = match requested.ct with
+         let@ lrt = match requested.ct with
            | Sctype (_, Array (act, Some length)) ->
               fold_array loc failure act requested.pointer length requested.permission
            | Sctype (_, Struct tag) ->
-              fold_struct loc failure tag requested.pointer 
-                requested.permission
+              let@ resource = 
+                fold_struct loc failure tag requested.pointer 
+                  requested.permission
+              in
+              return (LRT.Resource (resource, (loc, None), LRT.I))
            | _ -> 
               fail (failure model)
          in
-         let@ () = add_r (Some (Loc loc)) resource in
+         let@ () = bind_logical_return_type (Some (Loc loc)) lrt in
          point_request loc failure requested
       end
 
@@ -465,13 +468,13 @@ module ResourceInference = struct
         }
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
-      let folded_value = 
-        let rec aux value i = 
-          if i < 0 then value else 
-            let subst = make_subst [(qpoint.qpointer, pointer (int_ i))] in
-            aux (set_ value (int_ i, IT.subst subst qpoint.value)) (i - 1)
-        in
-        aux (default_ (BT.Array (Integer, BT.of_sct item_ct))) (length - 1)
+      let folded_value_s, folded_value = 
+        IT.fresh (BT.Array (Integer, BT.of_sct item_ct))
+      in
+      let folded_value_lc = 
+        let i_s, i = IT.fresh Integer  in
+        let subst = make_subst [(qpoint.qpointer, pointer i)] in
+        ArrayEquality (folded_value, (i_s, IT.bt i), IT.subst subst qpoint.value)
       in
       let folded_init = 
         let i_s, i = IT.fresh Integer  in
@@ -487,7 +490,13 @@ module ResourceInference = struct
             permission = permission;
           }
       in
-      return folded_resource
+      let lrt = 
+        LRT.Logical ((folded_value_s, IT.bt folded_value), (loc, None),
+        LRT.Resource (folded_resource, (loc, None),
+        LRT.Constraint (folded_value_lc, (loc, None),
+        LRT.I)))
+      in
+      return lrt
 
 
     and fold_struct loc failure tag pointer_t permission_t =
@@ -1683,13 +1692,14 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let@ _ = 
-            pure (RI.Special.point_request loc (Access Deref) ({
-              ct = act.ct; 
-              pointer = it_of_arg arg;
-              permission = bool_ true;
-              value = BT.of_sct act.ct;
-              init = BT.Bool;
-            }, None))
+            restore_resources
+              (RI.Special.point_request loc (Access Deref) ({
+                     ct = act.ct; 
+                     pointer = it_of_arg arg;
+                     permission = bool_ true;
+                     value = BT.of_sct act.ct;
+                     init = BT.Bool;
+                   }, None))
           in
           let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
           return (rt_of_vt loc vt)
@@ -1816,13 +1826,14 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ parg = arg_of_asym pasym in
           let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
           let@ point = 
-            pure (RI.Special.point_request loc (Access (Load None)) ({ 
-                    ct = act.ct;
-                    pointer = it_of_arg parg;
-                    permission = bool_ true; (* fix *)
-                    value = BT.of_sct act.ct; 
-                    init = BT.Bool;
-                  }, None))
+            restore_resources 
+              (RI.Special.point_request loc (Access (Load None)) ({ 
+                     ct = act.ct;
+                     pointer = it_of_arg parg;
+                     permission = bool_ true; (* fix *)
+                     value = BT.of_sct act.ct; 
+                     init = BT.Bool;
+                   }, None))
           in
           let@ () = 
             let@ provable_or_model = provable_or_model in

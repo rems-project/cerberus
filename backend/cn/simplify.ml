@@ -238,11 +238,13 @@ let rec simp struct_decls values equalities some_known_facts =
     | Impl (a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match a with
-       | IT (Lit (Bool true), _) ->
-          b
-       | IT (Lit (Bool false), _) ->
+       begin match a, b with
+       | IT (Lit (Bool false), _), _ ->
           IT (Lit (Bool true), bt) 
+       | _, IT (Lit (Bool true), _) ->
+          IT (Lit (Bool true), bt)
+       | IT (Lit (Bool true), _), _ ->
+          b
        | _ ->
           IT (Bool_op (Impl (a, b)), bt)
        end
