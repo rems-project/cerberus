@@ -1,16 +1,20 @@
 open Context
 
-type s = Context.t
+type s = {
+    typing_context: Context.t;
+    solver : Solver.solver;
+  }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
 type ('a, 'e) m = ('a, 'e) t
-type 'e failure = s -> 'e
+type 'e failure = Context.t -> 'e
 
 
-let run s m = 
-  let () = Solver.push s.solver in
+let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
+  let solver = Solver.make () in
+  List.iter (Solver.add solver c.global) c.constraints;
+  let s = { typing_context = c; solver } in
   let outcome = m s in
-  let () = Solver.pop s.solver in
   match outcome with
   | Ok (a, _) -> Ok a
   | Error e -> Error e
@@ -29,15 +33,18 @@ let bind (m : ('a, 'e) t) (f : 'a -> ('b, 'e) t) : ('b, 'e) t =
 
 let (let@) = bind
 
-let get () : ('a, 'e) t = 
-  fun s -> Ok (s, s)
+let get () : (Context.t, 'e) t = 
+  fun s -> Ok (s.typing_context, s)
 
-let set (s : 's) : (unit, 'e) t = 
-  fun _ -> Ok ((), s)
+let set (c : Context.t) : (unit, 'e) t = 
+  fun s -> Ok ((), {s with typing_context = c})
+
+let solver () : (Solver.solver, 'e) t = 
+  fun s -> Ok (s.solver, s)
 
 
-let fail (f : s -> 'e) : ('a, 'e) t = 
-  fun s -> Error (f s)
+let fail (f : 'e failure) : ('a, 'e) t = 
+  fun s -> Error (f s.typing_context)
 
 
 let pure (m : ('a, 'e) t) : ('a, 'e) t =
@@ -55,7 +62,11 @@ let restore_resources (m : ('a, 'e) t) : ('a, 'e) t =
   fun old_state ->
   match m old_state with
   | Ok (a, new_state) -> 
-     Ok (a, { new_state with resources = old_state.resources })
+     let typing_context = 
+       {new_state.typing_context with 
+         resources = old_state.typing_context.resources} 
+     in
+     Ok (a, { new_state with typing_context })
   | Error e -> Error e
   
 
@@ -82,8 +93,9 @@ let all_resources () =
 
 let provable =
   let@ s = get () in
+  let@ solver = solver () in
   let f ?(shortcut_false=false) lc = 
-    Solver.provable ~shortcut_false s.solver s.global s.constraints lc 
+    Solver.provable ~shortcut_false solver s.global s.constraints lc 
   in
   return f
 
@@ -122,9 +134,10 @@ let add_ls lvars =
 
 let add_c lc = 
   let@ s = get () in
+  let@ solver = solver () in
   let lcs = Simplify.simp_lc_flatten s.global.struct_decls s.constraints lc in
   let s = List.fold_right Context.add_c lcs s in
-  let () = List.iter (Solver.add s.solver s.global) lcs in
+  let () = List.iter (Solver.add solver s.global) lcs in
   set s
 
 let rec add_cs = function

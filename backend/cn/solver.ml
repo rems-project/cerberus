@@ -559,6 +559,11 @@ end
 let make () : solver = 
 
   Z3.Memory.reset ();
+
+  Translate.BT_Table.clear Translate.bt_table;
+  Translate.IT_Table.clear Translate.it_table;
+
+
   List.iter (fun (c,v) -> Z3.set_global_param c v) params;
 
   let context = Z3.mk_context [] in

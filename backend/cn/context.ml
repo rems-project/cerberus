@@ -31,7 +31,6 @@ type t = {
     resources : RE.t list;
     constraints : LC.t list;
     global : Global.t;
-    solver : Solver.solver;
   }
 
 
@@ -41,7 +40,6 @@ let empty global = {
     resources = [];
     constraints = [];
     global = global;
-    solver = Solver.make ();
   }
 
 
