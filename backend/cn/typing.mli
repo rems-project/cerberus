@@ -30,4 +30,3 @@ val add_r : Context.where option -> Resources.RE.t -> (unit, 'e) m
 val map_and_fold_resources : 
   (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
   'acc -> ('acc, 'e) m
-val all_vars : unit -> (Sym.t list, 'e) m

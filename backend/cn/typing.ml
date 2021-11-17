@@ -139,7 +139,3 @@ let map_and_fold_resources f acc =
   return acc
 
 
-let all_vars () = 
-  let@ s = get () in
-  return (Context.all_vars s)
-

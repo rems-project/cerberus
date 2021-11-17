@@ -129,11 +129,6 @@ let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc)
 
 
 
-let all_vars (ctxt : t) = 
-  List.map fst (SymMap.bindings ctxt.computational) @
-  List.map fst (SymMap.bindings ctxt.logical)
-
-
 let json (ctxt : t) : Yojson.Safe.t = 
 
   let computational  = 
