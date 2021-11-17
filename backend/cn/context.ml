@@ -86,18 +86,11 @@ let add_l lname ls (ctxt : t) =
 let add_ls lvars ctxt = 
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
-let add_c lc (ctxt : t) = 
-  let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
-
-  (* BEGIN SOLVER *)
-  let () = List.iter (Solver.add ctxt.solver ctxt.global) lcs in
-  (* END SOLVER *)
-
-  { ctxt with constraints = lcs @ ctxt.constraints }
+let add_c c (ctxt : t) = 
+  { ctxt with constraints = c :: ctxt.constraints }
 
 
 let add_r owhere r (ctxt : t) = 
-  let r = RE.simp ctxt.global.struct_decls ctxt.constraints r in
   let lcs = 
     RE.derived_constraint r ::
       List.map (fun r' -> RE.derived_constraints r r') 

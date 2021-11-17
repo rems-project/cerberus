@@ -122,7 +122,10 @@ let add_ls lvars =
 
 let add_c lc = 
   let@ s = get () in
-  set (Context.add_c lc s)
+  let lcs = Simplify.simp_lc_flatten s.global.struct_decls s.constraints lc in
+  let s = List.fold_right Context.add_c lcs s in
+  let () = List.iter (Solver.add s.solver s.global) lcs in
+  set s
 
 let rec add_cs = function
   | [] -> return ()
@@ -133,6 +136,7 @@ let rec add_cs = function
 
 let add_r oloc r = 
   let@ s = get () in
+  let r = RE.simp s.global.struct_decls s.constraints r in
   let (s, lcs) = Context.add_r oloc r s in
   let@ () = set s in
   return lcs
