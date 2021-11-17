@@ -8,9 +8,9 @@ type 'e failure = s -> 'e
 
 
 let run s m = 
-  let () = Solver.push () in
+  let () = Solver.push s.solver in
   let outcome = m s in
-  let () = Solver.pop () in
+  let () = Solver.pop s.solver in
   match outcome with
   | Ok (a, _) -> Ok a
   | Error e -> Error e
@@ -42,12 +42,12 @@ let fail (f : s -> 'e) : ('a, 'e) t =
 
 let pure (m : ('a, 'e) t) : ('a, 'e) t =
   fun s ->
-  Solver.push ();
+  Solver.push s.solver;
   let outcome = match m s with
     | Ok (a, _) -> Ok (a, s)
     | Error e -> Error e
   in
-  Solver.pop ();
+  Solver.pop s.solver;
   outcome
 
 
@@ -83,7 +83,7 @@ let all_resources () =
 let provable =
   let@ s = get () in
   let f ?(shortcut_false=false) lc = 
-    Solver.provable ~shortcut_false s.global s.constraints lc 
+    Solver.provable ~shortcut_false s.solver s.global s.constraints lc 
   in
   return f
 

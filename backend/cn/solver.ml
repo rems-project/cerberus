@@ -11,10 +11,13 @@ open Global
 open LogicalPredicates
 
 
-type solver = { fancy: Z3.Solver.solver }
+type solver = { 
+    context : Z3.context;
+    fancy : Z3.Solver.solver;
+  }
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
-type model = Z3.Model.model
+type model = Z3.context * Z3.Model.model
 type model_with_q = model * (Sym.t * BT.t) option
 
 
@@ -84,9 +87,9 @@ let tactics = [
   ]
 
 
-let context = 
-  List.iter (fun (c,v) -> Z3.set_global_param c v) params;
-  Z3.mk_context []
+
+
+
 
 
 
@@ -141,62 +144,53 @@ module Translate = struct
 
 
 
-
-
+  let symbol context str = 
+    Z3.Symbol.mk_string context str
+  
 
   let bt_name bt = 
     Pp.plain (BT.pp bt)
-  let bt_symbol bt = 
-    Z3.Symbol.mk_string context (bt_name bt)
+  (* let bt_symbol bt = 
+   *   Z3.Symbol.mk_string context (bt_name bt) *)
 
   let tuple_field_name i = 
     "comp" ^ string_of_int i
-  let tuple_field_symbol i = 
-    Z3.Symbol.mk_string context (tuple_field_name i)
+  (* let tuple_field_symbol i = 
+   *   Z3.Symbol.mk_string context (tuple_field_name i) *)
 
   let member_name tag id = 
     bt_name (BT.Struct tag) ^ "_" ^ Id.s id
-  let member_symbol tag id = 
-    Z3.Symbol.mk_string context (member_name tag id)
+  (* let member_symbol tag id = 
+   *   Z3.Symbol.mk_string context (member_name tag id) *)
 
 
 
-  let unit_sort = Z3.Sort.mk_uninterpreted_s context "unit"
-  let bool_sort = Z3.Boolean.mk_sort context
-  let integer_sort = Z3.Arithmetic.Integer.mk_sort context
-  let real_sort = Z3.Arithmetic.Real.mk_sort context
 
-  let loc_to_integer_symbol = Z3.Symbol.mk_string context "loc_to_integer"
-  let loc_sort_symbol = bt_symbol Loc
-  let loc_sort = Z3.Tuple.mk_sort context loc_sort_symbol [loc_to_integer_symbol] [integer_sort]
+  let sort : Z3.context -> Memory.struct_decls -> BT.t -> sort =
 
-  let loc_to_integer_fundecl = nth (Z3.Tuple.get_field_decls loc_sort) 0
-  let integer_to_loc_fundecl = Z3.Tuple.get_mk_decl loc_sort
-  let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl
+    fun context struct_decls ->
 
-  let loc_to_integer l = Z3.Expr.mk_app context loc_to_integer_fundecl [l]
-  let integer_to_loc i = Z3.Expr.mk_app context integer_to_loc_fundecl [i]
-
-
-  let sort : Memory.struct_decls -> BT.t -> sort =
-
-    fun struct_decls ->
+    let symbol str = symbol context str in
 
     let rec translate = function
-      | Unit -> unit_sort
-      | Bool -> bool_sort
-      | Integer -> integer_sort
-      | Real -> real_sort
-      | Loc -> loc_sort
-      | List bt -> Z3.Z3List.mk_sort context (bt_symbol bt) (translate bt) 
+      | Unit -> Z3.Sort.mk_uninterpreted_s context "unit"
+      | Bool -> Z3.Boolean.mk_sort context
+      | Integer -> Z3.Arithmetic.Integer.mk_sort context
+      | Real -> Z3.Arithmetic.Real.mk_sort context
+      | Loc -> 
+         Z3.Tuple.mk_sort context 
+           (symbol (bt_name Loc))
+           [symbol "loc_to_integer"] 
+           [translate BT.Integer]
+      | List bt -> Z3.Z3List.mk_sort context (symbol (bt_name bt)) (translate bt) 
       | Set bt -> Z3.Set.mk_sort context (translate bt)
       | Array (abt, rbt) -> Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
       | Tuple bts ->
-         let bt_symbol = bt_symbol (Tuple bts) in
+         let bt_symbol = symbol (bt_name (Tuple bts)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
          let field_symbols = 
            mapi (fun i _ -> 
-               let sym = tuple_field_symbol i in
+               let sym = symbol (tuple_field_name i) in
                Z3Symbol_Table.add z3sym_table sym (CompFunc {bts; i});
                sym
              ) bts 
@@ -204,12 +198,12 @@ module Translate = struct
          let sorts = map translate bts in
          Z3.Tuple.mk_sort context bt_symbol field_symbols sorts
       | Struct tag ->
-         let struct_symbol = bt_symbol (Struct tag) in
+         let struct_symbol = symbol (bt_name (Struct tag)) in
          Z3Symbol_Table.add z3sym_table struct_symbol (StructFunc {tag});
          let layout = SymMap.find tag struct_decls in
          let member_symbols, member_sorts = 
            map_split (fun (id,sct) -> 
-               let s = member_symbol tag id in
+               let s = symbol (member_name tag id) in
                Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
                (s, translate (BT.of_sct sct))
              ) (Memory.member_types layout)
@@ -231,27 +225,38 @@ module Translate = struct
     sort
 
 
+  let loc_to_integer_fundecl context struct_decls = 
+    nth (Z3.Tuple.get_field_decls (sort context struct_decls Loc)) 0
 
-  let sym_to_sym s = 
-    Z3.Symbol.mk_string context (CF.Pp_symbol.to_string_pretty_cn s)
+  let integer_to_loc_fundecl context struct_decls = 
+    Z3.Tuple.get_mk_decl (sort context struct_decls Loc)
 
 
-  let term ?(warn_lambda=true) struct_decls : IT.t -> expr =
+  let term ?(warn_lambda=true) context struct_decls : IT.t -> expr =
 
-    let sort = sort struct_decls in
+    let sort bt = sort context struct_decls bt in
+    let symbol str = symbol context str in
 
-    let unit_symbol = Z3.Symbol.mk_string context "unit" in
-    let unit_term = Z3.Expr.mk_const context unit_symbol unit_sort in
-    let true_term = Z3.Boolean.mk_true context in
-    let false_term = Z3.Boolean.mk_false context in
+    (* let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl in *)
+  
+    let loc_to_integer l = 
+      Z3.Expr.mk_app context 
+        (loc_to_integer_fundecl context struct_decls) [l] 
+    in
+    let integer_to_loc i = 
+      Z3.Expr.mk_app context 
+        (integer_to_loc_fundecl context struct_decls) [i] 
+    in
+
+
 
     let rec translate (IT (it_, bt)) =
       begin match it_ with
       | Lit lit -> 
          begin match lit with
          | Sym s -> 
-            let z3_sym = sym_to_sym s in
-            Z3.Expr.mk_const context z3_sym (sort bt)
+            let str = CF.Pp_symbol.to_string_pretty_cn s in
+            Z3.Expr.mk_const context (symbol str) (sort bt)
          | Z z -> 
             Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
          | Q q -> 
@@ -260,11 +265,11 @@ module Translate = struct
             integer_to_loc
               (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
          | Bool true -> 
-            true_term
+            Z3.Boolean.mk_true context
          | Bool false -> 
-            false_term
+            Z3.Boolean.mk_false context
          | Unit -> 
-            unit_term
+            Z3.Expr.mk_const context (symbol "unit") (sort Unit)
          | Default bt -> 
             let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
             let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
@@ -464,18 +469,16 @@ end
 
 
 
-let constr global c = 
+let constr context global c = 
   let open Translate in
-  let term it = term global.struct_decls it in
-  let sort bt = sort global.struct_decls bt in
+  let term it = term context global.struct_decls it in
   match c with
   | T it -> 
      Some (term it)
   | Forall ((s, bt), body) ->
      let q = 
        Z3.Quantifier.mk_forall_const context 
-         [Z3.Expr.mk_const context (sym_to_sym s) (sort bt)] 
-         (term body) 
+         [term (sym_ (s, bt))] (term body) 
          None [] [] None None 
      in
      Some (Z3.Quantifier.expr_of_quantifier q)
@@ -546,13 +549,26 @@ module ReduceQuery = struct
 end
 
 
-let solver : solver = 
-  (* https://stackoverflow.com/a/14305028 describes an example where
-     tactics are useful *)
-  (* http://www.cs.tau.ac.il/~msagiv/courses/asv/z3py/strategies-examples.htm *)
-  (* also see: https://z3prover.github.io/api/html/group__capi.html
-     regarding "and-then" *)
+
+
+
+
+
+
+
+let make () : solver = 
+
+  Z3.Memory.reset ();
+  List.iter (fun (c,v) -> Z3.set_global_param c v) params;
+
+  let context = Z3.mk_context [] in
+
   let fancy = 
+    (* https://stackoverflow.com/a/14305028 describes an example where
+       tactics are useful *)
+    (* http://www.cs.tau.ac.il/~msagiv/courses/asv/z3py/strategies-examples.htm *)
+    (* also see: https://z3prover.github.io/api/html/group__capi.html
+       regarding "and-then" *)
     let mk_tactic = Z3.Tactic.mk_tactic context in
     let mk_then = function
       | t1 :: t2 :: ts -> Z3.Tactic.and_then context t1 t2 ts 
@@ -561,24 +577,24 @@ let solver : solver =
     let tactic = mk_then (List.map mk_tactic tactics) in
     Z3.Solver.mk_solver_t context tactic
   in
-  { fancy }
+
+  { context; fancy }
 
 
 
-let init () = Z3.Solver.reset solver.fancy
 
 
-let push () = 
+
+let push solver = 
   Z3.Solver.push solver.fancy
 
-
-let pop () =
+let pop solver =
   Translate.IT_Table.clear Translate.it_table;
   Z3.Solver.pop solver.fancy 1
 
 
-let add global lc = 
-  match constr global lc with
+let add solver global lc = 
+  match constr solver.context global lc with
   | None -> ()
   | Some sc -> Z3.Solver.add solver.fancy [sc]
 
@@ -596,7 +612,7 @@ let shortcut it =
 
 
 type model_state =
-  | Model_fancy_solver of (Sym.t * LogicalSorts.t) option
+  | Model of Z3.context * Z3.Solver.solver * (Sym.t * LogicalSorts.t) option
   | No_model
 
 let model_state = 
@@ -606,15 +622,15 @@ let model_state =
 
 let model () = 
   match !model_state with
-  | Model_fancy_solver oq ->
-     let omodel = Z3.Solver.get_model solver.fancy in
-     let model = Option.value_err "Z3 did not produce a counter model" omodel in
-     (model, oq)
   | No_model ->
      assert false
+  | Model (context, z3_solver, oq) ->
+     let omodel = Z3.Solver.get_model z3_solver in
+     let model = Option.value_err "SMT solver did not produce a counter model" omodel in
+     ((context, model), oq)
 
 
-let provable ~shortcut_false global assumptions lc = 
+let provable ~shortcut_false solver global assumptions lc = 
   let it, oq = ReduceQuery.constr global assumptions lc in
   match shortcut it with
   | `True -> 
@@ -624,13 +640,13 @@ let provable ~shortcut_false global assumptions lc =
      model_state := No_model; 
      `False
   | (`False it | `No_shortcut it) ->
-     let t = Translate.term global.struct_decls (not_ it) in
+     let t = Translate.term solver.context global.struct_decls (not_ it) in
      match Z3.Solver.check solver.fancy [t] with
      | Z3.Solver.UNSATISFIABLE -> 
         model_state := No_model; 
         `True
      | Z3.Solver.SATISFIABLE -> 
-        model_state := Model_fancy_solver oq; 
+        model_state := Model (solver.context, solver.fancy, oq); 
         `False
      | Z3.Solver.UNKNOWN -> 
         model_state := No_model; 
@@ -641,7 +657,7 @@ let provable ~shortcut_false global assumptions lc =
 
 exception Unsupported of string
 
-let eval struct_decls model to_be_evaluated = 
+let eval struct_decls (context, model) to_be_evaluated = 
 
   let open Translate in
 
@@ -808,14 +824,18 @@ let eval struct_decls model to_be_evaluated =
         let func_name = Z3.FuncDecl.get_name func_decl in
         match () with
 
-        | () when z3_symbol_equal func_name loc_to_integer_symbol ->
+        | () when 
+               Z3.FuncDecl.equal func_decl
+                 (loc_to_integer_fundecl context struct_decls) ->
            let p = nth args 0 in
            begin match IT.is_pointer p with
            | Some z -> z_ z
-           | _ -> pointerToIntegerCast_ (nth args 0)
+           | _ -> pointerToIntegerCast_ p
            end
 
-        | () when z3_symbol_equal func_name integer_to_loc_symbol ->
+        | () when 
+               Z3.FuncDecl.equal func_decl 
+                 (integer_to_loc_fundecl context struct_decls) ->
            let i = nth args 0 in
            begin match IT.is_z i with
            | Some z -> pointer_ z
@@ -860,7 +880,10 @@ let eval struct_decls model to_be_evaluated =
     aux [] expr
   in
 
-  let expr = Translate.term ~warn_lambda:false struct_decls to_be_evaluated in
+  let expr = 
+    Translate.term ~warn_lambda:false context 
+      struct_decls to_be_evaluated 
+  in
   match Z3.Model.eval model expr true with
   | None -> None
   | Some v -> Some (z3_expr v)
