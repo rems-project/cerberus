@@ -2504,7 +2504,10 @@ let check mu_file =
         let ctxt = 
           let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
           let lc2 = t_ (representable_ (pointer_ct void_ct, sym_ (fsym, Loc))) in
-          Context.add_l fsym Loc (Context.add_cs [lc1; lc2] ctxt)
+          let ctxt = Context.add_l fsym Loc ctxt in
+          let ctxt = Context.add_c lc1 ctxt in
+          let ctxt = Context.add_c lc2 ctxt in
+          ctxt
         in
         let fun_decls = SymMap.add fsym (loc, ftyp, trusted) ctxt.global.fun_decls in
         let global = { ctxt.global with fun_decls = fun_decls } in

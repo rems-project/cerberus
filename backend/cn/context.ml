@@ -88,11 +88,12 @@ let add_ls lvars ctxt =
 
 let add_c lc (ctxt : t) = 
   let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
-  let () = List.iter (Solver.add ctxt.solver ctxt.global) lcs in
-  { ctxt with constraints = lcs @ ctxt.constraints }
 
-let add_cs lcs (ctxt : t) = 
-  List.fold_left (fun ctxt lc -> add_c lc ctxt) ctxt lcs
+  (* BEGIN SOLVER *)
+  let () = List.iter (Solver.add ctxt.solver ctxt.global) lcs in
+  (* END SOLVER *)
+
+  { ctxt with constraints = lcs @ ctxt.constraints }
 
 
 let add_r owhere r (ctxt : t) = 

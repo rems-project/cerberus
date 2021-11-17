@@ -124,9 +124,12 @@ let add_c lc =
   let@ s = get () in
   set (Context.add_c lc s)
 
-let add_cs lcs = 
-  let@ s = get () in
-  set (Context.add_cs lcs s)
+let rec add_cs = function
+  | [] -> return ()
+  | lc :: lcs -> 
+     let@ () = add_c lc in 
+     add_cs lcs
+
 
 let add_r oloc r = 
   let@ s = get () in
