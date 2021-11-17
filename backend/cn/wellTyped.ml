@@ -612,7 +612,8 @@ module WLRT = struct
          aux lrt
       | Resource (re, info, lrt) -> 
          let@ () = WRE.welltyped (fst info) re in
-         let@ () = add_r None re in
+         let@ lcs = add_r None re in
+         let@ () = add_cs lcs in
          aux lrt
       | Constraint (lc, info, lrt) ->
          let@ () = WLC.welltyped (fst info) lc in
@@ -794,7 +795,8 @@ module WAT (WI: WI_Sig) = struct
          aux at
       | AT.Resource (re, info, at) -> 
          let@ () = WRE.welltyped (fst info) re in
-         let@ () = add_r None re in
+         let@ lcs = add_r None re in
+         let@ () = add_cs lcs in
          aux at
       | AT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in

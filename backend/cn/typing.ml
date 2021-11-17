@@ -130,7 +130,9 @@ let add_cs lcs =
 
 let add_r oloc r = 
   let@ s = get () in
-  set (Context.add_r oloc r s)
+  let (s, lcs) = Context.add_r oloc r s in
+  let@ () = set s in
+  return lcs
 
 let map_and_fold_resources f acc =
   let@ s = get () in

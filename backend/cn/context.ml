@@ -96,18 +96,14 @@ let add_cs lcs (ctxt : t) =
 
 
 let add_r owhere r (ctxt : t) = 
-  match RE.simp_or_empty ctxt.global.struct_decls ctxt.constraints r with
-  | Some r -> 
-     let lcs = 
-       RE.derived_constraint r ::
-         List.map (fun r' -> RE.derived_constraints r r') 
-           ctxt.resources
-     in
-     let ctxt = {ctxt with resources = r :: ctxt.resources} in
-     let ctxt = add_cs lcs ctxt in
-     ctxt
-  | None ->
-     ctxt
+  let r = RE.simp ctxt.global.struct_decls ctxt.constraints r in
+  let lcs = 
+    RE.derived_constraint r ::
+      List.map (fun r' -> RE.derived_constraints r r') 
+        ctxt.resources
+  in
+  let ctxt = {ctxt with resources = r :: ctxt.resources} in
+  (ctxt, lcs)
 
 
 let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 

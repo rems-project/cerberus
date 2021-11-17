@@ -178,7 +178,8 @@ let rec bind_logical where (lrt : LRT.t) =
      let@ () = add_c constr in
      bind_logical where rt'
   | Resource (re, _oinfo, rt) -> 
-     let@ () = add_r where re in
+     let@ lcs = add_r where re in
+     let@ () = add_cs lcs in
      bind_logical where rt
   | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
@@ -317,7 +318,8 @@ module ResourceInference = struct
               let@ model = model () in
               fail (failure model)
          in
-         let@ () = add_r (Some (Loc loc)) resource in
+         let@ lcs = add_r (Some (Loc loc)) resource in
+         let@ () = add_cs lcs in
          point_request loc failure requested
       end
 
@@ -2277,7 +2279,11 @@ let check_function
       let@ (rt, resources) = 
         check_and_bind_arguments RT.subst loc arguments function_typ 
       in
-      let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
+      let@ () = 
+        ListM.iterM (fun r -> 
+            let@ lcs = add_r (Some (Label "start")) r in
+            add_cs lcs
+          ) resources in
       (* rbt consistency *)
       let@ () = 
         let Computational ((sname, sbt), _info, t) = rt in
@@ -2352,7 +2358,11 @@ let check_procedure
              let@ (rt, resources) = 
                check_and_bind_arguments False.subst loc args lt 
              in
-             let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
+             let@ () = 
+               ListM.iterM (fun r ->
+                   let@ lcs = add_r (Some (Label label_name)) r in
+                   add_cs lcs
+                 ) resources in
              let@ () = check_texpr labels body False in
              return ()
           end
@@ -2360,7 +2370,12 @@ let check_procedure
       let@ () = PmapM.foldM check_label label_defs () in
       (* check the function body *)
       debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
-      let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
+      let@ () = 
+        ListM.iterM (fun r -> 
+            let@ lcs = add_r (Some (Label "start")) r in
+            add_cs lcs
+          ) resources 
+      in
       check_texpr labels body (Normal rt)
     end
 
