@@ -160,12 +160,63 @@ let pattern_match =
 
 
 
+
+
+let rec bind_logical where (lrt : LRT.t) = 
+  match lrt with
+  | Logical ((s, ls), _oinfo, rt) ->
+     let s' = Sym.fresh () in
+     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) rt in
+     let@ () = add_l s' ls in
+     bind_logical where rt'
+  | Define ((s, it), oinfo, rt) ->
+     let s' = Sym.fresh () in
+     let bt = IT.bt it in
+     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+     let constr = LC.t_ (IT.def_ s' it) in
+     let@ () = add_l s' bt in
+     let@ () = add_c constr in
+     bind_logical where rt'
+  | Resource (re, _oinfo, rt) -> 
+     let@ () = add_r where re in
+     bind_logical where rt
+  | Constraint (lc, _oinfo, rt) -> 
+     let@ () = add_c lc in
+     bind_logical where rt
+  | I -> 
+     return ()
+
+let bind_computational where (name : Sym.t) (rt : RT.t) =
+  let Computational ((s, bt), _oinfo, rt) = rt in
+  let s' = Sym.fresh () in
+  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+  let@ () = add_l s' bt in
+  let@ () = add_a name (bt, s') in
+  bind_logical where rt'
+
+
+let bind where (name : Sym.t) (rt : RT.t) =
+  bind_computational where name rt
+
+let bind_logically where (rt : RT.t) : ((BT.t * Sym.t), type_error) m =
+  let Computational ((s, bt), _oinfo, rt) = rt in
+  let s' = Sym.fresh () in
+  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+  let@ () = add_l s' bt in
+  let@ () = bind_logical where rt' in
+  return (bt, s')
+
+
+
+
+
+
 (* The pattern-matching might de-struct 'bt'. For easily making
    constraints carry over to those values, record (lname,bound) as a
    logical variable and record constraints about how the variables
    introduced in the pattern-matching relate to (lname,bound). *)
 let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m =
-  let@ (bt, s') = logically_bind_return_type (Some loc) rt in
+  let@ (bt, s') = bind_logically (Some loc) rt in
   pattern_match (sym_ (s', bt)) pat
 
 
@@ -1518,7 +1569,7 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
   | M_PElet (p, e1, e2) ->
      let@ rt = infer_pexpr e1 in
      let@ () = match p with
-       | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
+       | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
        | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
      in
      check_tpexpr e2 typ
@@ -2123,7 +2174,7 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Elet (p, e1, e2) ->
        let@ rt = infer_pexpr e1 in
        let@ () = match p with 
-         | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_pexpr e1))) sym rt
+         | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
          | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
        in
        check_texpr labels e2 typ
@@ -2134,7 +2185,7 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Esseq (pat, e1, e2) ->
        let@ rt = infer_expr labels e1 in
        let@ () = match pat with
-         | M_Symbol sym -> bind_return_type (Some (Loc (loc_of_expr e1))) sym rt
+         | M_Symbol sym -> bind (Some (Loc (loc_of_expr e1))) sym rt
          | M_Pat pat -> pattern_match_rt (Loc (loc_of_expr e1)) pat rt
        in
        check_texpr labels e2 typ

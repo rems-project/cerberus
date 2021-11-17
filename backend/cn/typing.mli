@@ -31,6 +31,3 @@ val map_and_fold_resources :
   (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
   'acc -> ('acc, 'e) m
 val all_vars : unit -> (Sym.t list, 'e) m
-val bind_return_type : Context.where option -> Sym.t -> ReturnTypes.t -> (unit, 'e) m
-val bind_logical_return_type : Context.where option -> LogicalReturnTypes.t -> (unit, 'e) m
-val logically_bind_return_type : Context.where option -> ReturnTypes.t -> (BaseTypes.t * Sym.t, 'e) m

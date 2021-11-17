@@ -143,16 +143,3 @@ let all_vars () =
   let@ s = get () in
   return (Context.all_vars s)
 
-let bind_return_type oloc sym rt = 
-  let@ s = get () in
-  set (Context.bind oloc s sym rt)
-
-let bind_logical_return_type oloc lrt = 
-  let@ s = get () in
-  set (Context.bind_logical oloc s lrt)
-
-let logically_bind_return_type oloc rt = 
-  let@ s = get () in
-  let ((bt, sym), s) = Context.bind_logically oloc s rt in
-  let@ () = set s in
-  return (bt, sym)
