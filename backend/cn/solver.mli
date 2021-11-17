@@ -3,14 +3,14 @@ type model
 type model_with_q = model * (Sym.t * LogicalSorts.t) option
 
 
-val make : unit -> solver
+val init : unit -> unit
 
-val push : solver -> unit
-val pop : solver -> unit
-val add : Global.t -> solver -> LogicalConstraints.t -> unit
+val push : unit -> unit
+val pop : unit -> unit
+val add : Global.t -> LogicalConstraints.t -> unit
 
 
-val provable : shortcut_false:bool -> Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
+val provable : shortcut_false:bool -> Global.t -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
 
 
 val model : unit -> model_with_q

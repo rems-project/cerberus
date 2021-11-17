@@ -30,17 +30,17 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
-    solver : Solver.solver;
     global: Global.t;
   }
 
 
-let empty global = {
+let empty global = 
+  Solver.init ();
+  {
     computational = SymMap.empty;
     logical = SymMap.empty;
     resources = [];
     constraints = [];
-    solver = Solver.make ();
     global = global
   }
 
@@ -88,7 +88,7 @@ let add_ls lvars ctxt =
 
 let add_c lc (ctxt : t) = 
   let lcs = Simplify.simp_lc_flatten ctxt.global.struct_decls ctxt.constraints lc in
-  let () = List.iter (Solver.add ctxt.global ctxt.solver) lcs in
+  let () = List.iter (Solver.add ctxt.global) lcs in
   { ctxt with constraints = lcs @ ctxt.constraints }
 
 let add_cs lcs (ctxt : t) = 

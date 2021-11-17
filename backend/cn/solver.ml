@@ -565,21 +565,19 @@ let solver : solver =
 
 
 
-let make () : solver = 
-  let () = Z3.Solver.reset solver.fancy in
-  solver
+let init () = Z3.Solver.reset solver.fancy
 
 
-let push solver = 
+let push () = 
   Z3.Solver.push solver.fancy
 
 
-let pop solver =
+let pop () =
   Translate.IT_Table.clear Translate.it_table;
   Z3.Solver.pop solver.fancy 1
 
 
-let add global solver lc = 
+let add global lc = 
   match constr global lc with
   | None -> ()
   | Some sc -> Z3.Solver.add solver.fancy [sc]
@@ -616,7 +614,7 @@ let model () =
      assert false
 
 
-let provable ~shortcut_false global (solver : solver) assumptions lc = 
+let provable ~shortcut_false global assumptions lc = 
   let it, oq = ReduceQuery.constr global assumptions lc in
   match shortcut it with
   | `True -> 
