@@ -142,7 +142,7 @@ let frontend filename =
 
 
 
-let main filename loc_pp debug_level print_level json =
+let main filename loc_pp debug_level print_level json state_file =
   if json then begin
       if debug_level > 0 then
         CF.Pp_errors.fatal ("debug level must be 0 for json output");
@@ -174,10 +174,10 @@ let main filename loc_pp debug_level print_level json =
          | Ok () -> 
             exit 0
          | Error e when json ->
-            TypeErrors.report_json e;
+            TypeErrors.report_json ?state_file e;
             exit 1
          | Error e ->
-            TypeErrors.report e;
+            TypeErrors.report ?state_file e;
             exit 1
        with
        | exc -> 
@@ -214,6 +214,11 @@ let json =
   Arg.(value & flag & info["json"] ~doc)
 
 
+let state_file =
+  let doc = "file in which to output the state" in
+  Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
+
+
 let () =
   let open Term in
   let check_t = 
@@ -222,6 +227,7 @@ let () =
       loc_pp $ 
       debug_level $ 
       print_level $
-      json
+      json $
+      state_file
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")
