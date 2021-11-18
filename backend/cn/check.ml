@@ -835,13 +835,6 @@ end = struct
     in
     let unify_or_constrain_q_list q = ListM.fold_leftM (unify_or_constrain_q q) in
 
-    (* let non_model_fail () = 
-     *   let@ provable = provable in
-     *   match provable (t_ (bool_ false)) with
-     *   | `True -> assert false
-     *   | `False -> let@ model = model () in fail (failure model)
-     * in *)
-
     fun (unis : (LS.t * Locations.info) SymMap.t) r_spec r_have ->
 
     debug 9 (lazy (item "matching resource" (RE.pp r_have ^^^ !^"against" ^^^ (RE.pp r_spec))));
