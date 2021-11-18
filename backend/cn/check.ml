@@ -224,7 +224,26 @@ let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m =
 
 
 
-(* resource inference *)
+(* resource logic *)
+
+
+let unfolded_array item_ct base length permission value init =
+  let item_size = int_ (Memory.size_of_ctype item_ct) in
+  let unfolded_resource = 
+    let qp_s, qp_t = IT.fresh Loc in
+    QPoint {
+        ct = item_ct;
+        qpointer = qp_s;
+        value = 
+          get_ value 
+            (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
+        init = init;
+        permission = 
+          and_ [cellPointer_ ~base ~step:item_size ~starti:(int_ 0)
+                  ~endi:(int_ length) ~p:qp_t; permission]
+      }
+  in
+  unfolded_resource
 
 
 
@@ -598,24 +617,6 @@ module ResourceInference = struct
       in
       return folded_resource
 
-    let unfolded_array item_ct base length permission value init =
-      let item_size = int_ (Memory.size_of_ctype item_ct) in
-      let unfolded_resource = 
-        let qp_s, qp_t = IT.fresh Loc in
-        QPoint {
-            ct = item_ct;
-            qpointer = qp_s;
-            value = 
-              get_ value 
-                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
-            init = init;
-            permission = 
-              and_ [cellPointer_ ~base ~step:item_size ~starti:(int_ 0)
-                      ~endi:(int_ length) ~p:qp_t; permission]
-          }
-      in
-      unfolded_resource
-
     let unfold_array loc failure item_ct base length permission =   
       debug 7 (lazy (item "unfold array" Pp.empty));
       debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
@@ -751,6 +752,23 @@ end
 
 
 module RI = ResourceInference
+
+
+
+
+let auto_unpack_resources () =
+  map_and_fold_resources (fun re () ->
+      match re with
+      | Point ({ct = Sctype (_, Array (item_ct, Some length)); _} as point) ->
+         let re = 
+           unfolded_array 
+             item_ct point.pointer length point.permission
+             point.value point.init
+         in
+         (re, ())
+      | _ ->
+         (re, ())
+    ) ()
 
 
 
@@ -1290,38 +1308,8 @@ let infer_array_shift loc asym1 ct asym2 =
   let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
   let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
   let@ provable = provable in
-  let element_size = Memory.size_of_ctype ct in
-  let v = 
-    integerToPointerCast_
-      (add_ (pointerToIntegerCast_ (it_of_arg arg1), 
-             mul_ (int_ element_size, it_of_arg arg2)))
-  in
-  let@ o_folded_length =
-    map_and_fold_resources (fun re found ->
-        match found, re with
-        | Some _, _ -> 
-           (re, found)
-        | None, Point {ct = Sctype (_, Array (_, Some length)); pointer; _} ->
-           begin match provable (t_ (eq__ pointer (it_of_arg arg1))) with
-           | `True -> (re, Some length)
-           | `False -> (re, found)
-           end
-        | _ -> 
-           (re, found)
-      ) None
-  in
-  match o_folded_length with
-  | None -> 
-     return (rt_of_vt loc (BT.Loc, v))
-  | Some length ->
-     let@ unfolded_array = 
-       RI.Special.unfold_array loc ArrayShift ct (it_of_arg arg1) 
-         length (bool_ true) 
-     in
-     return (
-       RT.concat (rt_of_vt loc (BT.Loc, v)) 
-       (LRT.Resource (unfolded_array, (loc, None), LRT.I))
-     )
+  let v = arrayShift_ (it_of_arg arg1, ct, it_of_arg arg2) in
+  return (rt_of_vt loc (BT.Loc, v))
 
 
 let wrapI ity arg =
@@ -1651,6 +1639,9 @@ type labels = (AT.lt * label_kind) SymMap.t
 
 
 let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m = 
+
+  let@ () = auto_unpack_resources () in
+
   let (M_Expr (loc, _annots, e_)) = e in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
