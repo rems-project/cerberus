@@ -378,25 +378,21 @@ let pp_message te =
 type t = type_error
 
 
-let state_error_file () =
-   Filename.temp_file "" ".cn-state"
-
-let output_state ?to_:file state =
-  let state_error_file =
-    match file with
-    | Some file -> file
-    | None -> state_error_file () in
-   let channel = open_out state_error_file in
-   let () = Printf.fprintf channel "%s" (Report.print_report state) in
-   let () = close_out channel in
-   state_error_file
+let output_state state_error_file state =
+  let channel = open_out state_error_file in
+  let () = Printf.fprintf channel "%s" (Report.print_report state) in
+  close_out channel
 
 (* stealing some logic from pp_errors *)
 let report ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
   let consider = match report.state with
     | Some state ->
-      let state_error_file = output_state ?to_ state in
+       let state_error_file = match to_ with
+         | Some file -> file
+         | None -> Filename.temp_file "" ".html"
+       in
+       output_state state_error_file state;
        Some (!^"Consider state in" ^^^ !^state_error_file)
     | None ->
        None
@@ -410,7 +406,13 @@ let report ?state_file:to_ {loc; msg} =
 let report_json ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
   let state_error_file = match report.state with
-    | Some state -> `String (output_state ?to_ state)
+    | Some state -> 
+       let file = match to_ with
+         | Some file -> file
+         | None -> Filename.temp_file "" ".cn-state"
+       in
+       output_state file state;
+       `String file
     | None -> `Null in
   let descr = match report.descr with
     | None -> `Null
