@@ -75,11 +75,12 @@ $\CLNRp \vdash J$.
     \step{<1>2}{%
         \case{%
             \textsc{Ty\_PVal\_Error}, \textsc{Ty\_Res\_Eq\_\{PointsTo,Term\}},
-            \textsc{Ty\_Res\_Conj},\\
-            \textsc{Ty\_Spine\_Res\_Phi}, \textsc{Ty\_PE\_AssertUndef},
-            \textsc{Ty\_TPVal\_\{Undef,Done\}},\\
-            \textsc{Ty\_Action\_\{Load,Store,Kill\}},
-            \textsc{Ty\_Memop\_PtrValidForDeref},\\
+            \textsc{Ty\_Res\_\{PointsTo,\\
+            Var,Conj,Fold\}}, \textsc{Ty\_Spine\_Res\_Phi},
+            \textsc{Ty\_PE\_AssertUndef},\\
+            \textsc{Ty\_TPVal\_\{Undef,Done\}},
+            \textsc{Ty\_Action\_\{Load,Store,Kill\}},\\
+            \textsc{Ty\_Memop\_PtrValidForDeref},
             \textsc{Ty\_TVal\_\{Phi,Undef\}}.
         }{%
         }
@@ -100,17 +101,18 @@ $\CLNRp \vdash J$.
         \step{<2>3}{In all cases, $\cnkw{smt} \, \cnsym{(}  \Phi'  \Rightarrow  \cnnt{term'}  \cnsym{)}$ as required.}
 
     \end{proof}
-
-    % TODO Resource cases
+    %   
 
     \step{<1>3}{%
         \case{%
-            \textsc{Ty\_Res\_\{Emp,PointsTo,Var,SepConj\}},
+            \textsc{Ty\_Res\_\{Emp,SepConj,Pack\}},
             \textsc{Ty\_Spine\_\{Empty,Res\}},\\
-            \textsc{Ty\_Action\_Create}, \textsc{Ty\_TVal\_Res},
-            \textsc{Ty\_Memop\_\{Rel\_Binop, \\
-            IntFromPtr, PtrFromInt, WellAligned, PtrArrayShift\}},\\
-            \textsc{Ty\_TVal\_\{I,Undef\}}, \textsc{Ty\_Seq\_TE\_\{Let,LetT,Run\}},
+            \textsc{Ty\_Action\_Create},
+            \textsc{Ty\_TVal\_Res}, \textsc{Ty\_Memop\_\{Rel\_Binop,\\
+            IntFromPtr, PtrFromInt,
+            WellAligned, PtrArrayShift\}},\\
+            \textsc{Ty\_TVal\_\{I,Undef\}},
+            \textsc{Ty\_Seq\_TE\_\{Let,LetT,Run\}},
             \textsc{Ty\_IS\_TE\_LetS}.
         }{
         }
@@ -258,6 +260,15 @@ Weakening for substitution: as above, but with $J= ( \sigma ) : ( \ctxC'' ;
         \step{<2>2}{$\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term'}  \cnsym{)}  \Leftarrow  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res'_{{\mathrm{1}}}}$ as required.}
 
     \end{proof}
+
+    \step{<1>7}{%
+        \case{%
+            \textsc{Ty\_Res\_Fold}
+        }{%
+            \pf\ $\cnnt{res} = \cnnt{res'} = { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}$.
+        }
+    }
+
 
 \end{proof}
 
@@ -495,6 +506,26 @@ J$ then $\ctxC ; \ctxL ; \ctxN ; \ctxR \vdash \sigma ( J )$.
         \end{pfenum}}
 
         \step{<2>2}{So $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnkw{pack} \, \cnsym{(}  pval  \cnsym{,}  \cnnt{res\_term}  \cnsym{)}  )   \Leftarrow   \sigma  (  \exists \, \cnmv{y}  {:}  \beta  . \:  \cnnt{res}  ) $.}
+    \end{proof}
+    
+    \step{<1>16a}{%
+        \case{%
+            \textsc{Ty\_Res\_Fold}
+        }{%
+            $\mathcal{C}'  \cnsym{;}  \mathcal{L}'  \cnsym{;}  \Phi'  \cnsym{;}  \mathcal{R}'  \vdash  \cnkw{fold} \, \cnsym{(}  \cnnt{res\_term}  \cnsym{)}  \Leftarrow  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}$
+        }
+    }
+
+    \begin{proof}
+        \step{<2>1}{By induction,\begin{pfenum}
+            \item ${ \alpha } \, \equiv \, \cncomp{\cnmv{x_{\cnmv{i}}}  {:}  \beta_{\cnmv{i}}}{\cnmv{i}} \, \mapsto  \cnnt{res} \, \in \, \cnkw{Globals}$
+            \item $\cncomp{\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \vdash   \sigma  (  pval_{\cnmv{i}}  )   \Rightarrow  \beta_{\cnmv{i}}}{\cnmv{i}}$
+            \item $\Phi  \vdash   \sigma  (  \cnnt{res'}  )   = \, \cnkw{strip\_ifs} \, \cnsym{(}   \sigma  (   \cncomp{pval_{\cnmv{i}}  \cnsym{/}  \cnmv{x_{\cnmv{i}}}  \cnsym{,}  \cdot}{\cnmv{i}}  (  \cnnt{res}  )   )   \cnsym{)}$
+            \item $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnnt{res\_term}  )   \Leftarrow   \sigma  (  \cnnt{res'}  ) $
+        \end{pfenum}}
+
+        \step{<2>2}{So $\mathcal{C}  \cnsym{;}  \mathcal{L}  \cnsym{;}  \Phi  \cnsym{;}  \mathcal{R}  \vdash   \sigma  (  \cnkw{fold} \, \cnsym{(}  \cnnt{res\_term}  \cnsym{)}  )   \Leftarrow   \sigma  (  { \alpha }  \cnsym{(} \, \cncomp{pval_{\cnmv{i}}}{\cnmv{i}} \, \cnsym{)}  ) $.}
+
     \end{proof}
 
     \step{<1>17}{%
@@ -1514,7 +1545,7 @@ substitution).
 
 \subsection{Type Preservation Statement and Proof}
 
-If $\cdot ; \cdot ; \cdot ; \ctxR_1 \vdash e \sych t$ then
+If $\cdot ; \cdot ; \cdot ; \ctxR \vdash e \sych t$ then
 $\forall h {:} \ctxR, f, e' , h'.\ \hconf{h + f}{e} \stepsto \hconf{h'}{e'}
 \implies \\ \exists h'' {:} \ctxR'.\ h' = h'' + f \wedge \cdot ; \cdot ; \cdot ;
 \ctxR' \vdash e' \sych t$.
