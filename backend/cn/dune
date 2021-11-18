@@ -6,7 +6,7 @@
   (public_name cn)
   (package cn)
   (flags (:standard -w -27))
-  (libraries cmdliner str unix
+  (libraries cmdliner str unix z3
    cerb_frontend cerb_backend mem_concrete util))
 
 ;; from parsers/core/dune

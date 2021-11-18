@@ -1,9 +1,7 @@
 ; Add project-wide flags here.
 (env
- (dev     (flags :standard -bin-annot (-cclib -lstdc++)))
- (release (flags :standard -bin-annot (-cclib -lstdc++))))
+ (dev     (flags :standard -bin-annot))
+ (release (flags :standard -bin-annot)))
 
 (dirs util sibylfs ocaml_frontend memory parsers backend tools runtime)
 
-;; (-cclib -lstdc++) for the z3 package, as recommended here:
-;; https://stackoverflow.com/questions/56839246/installing-ocaml-api-for-z3-using-opam/58398704
