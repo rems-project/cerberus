@@ -9,7 +9,7 @@ embed {{ tex-preamble
 }}
 
 
-metavar ident , x , y , yp {{ tex { y_p } }} , yf {{ tex { y_f } }} , _ , abbrev , r ::= {{ phantom }}
+metavar ident , x , y , yp {{ tex { y_p } }} , yf {{ tex { y_f } }} , _ , abbrev , r , a {{ tex { \alpha } }} ::= {{ phantom }}
   {{ com subscripts: p for pointers, f for functions }}
 
 
@@ -291,8 +291,8 @@ grammar
 grammar
 
   ty_sym_opt_T_bt {{ tex ident\_opt\_\beta }} :: '' ::= {{ ocaml ( Symbol.sym option * T.bt ) }} {{ com type annotated optional identifier }}
-    | _ : T_bt          :: :: No_sym (+ binders = {}         +) {{ ocaml ( None , [[T_bt]] ) }}
-    | Symbol_sym : T_bt :: :: Just   (+ binders = Symbol_sym +) {{ ocaml ( Some [[Symbol_sym]] , [[T_bt]] ) }}
+    | _ : T_bt          ::   :: No_sym (+ binders = {}         +) {{ ocaml ( None , [[T_bt]] ) }}
+    | Symbol_sym : T_bt ::   :: Just   (+ binders = Symbol_sym +) {{ ocaml ( Some [[Symbol_sym]] , [[T_bt]] ) }}
 
 
 grammar
@@ -495,7 +495,7 @@ grammar
     | let mu_sym_or_pattern : ( y1 : base_type1 . term1 ) = mu_tpexpr_aux1 in mu_tpexpr_aux2
                                                                   ::   :: letT   (+ bind binders( mu_sym_or_pattern ) in mu_tpexpr_aux2 +)
                                                                                  (+ bind y1 in term1 +)
-                                                                                 {{ com pure let              }}
+                                                                                 {{ com annoted pure let      }}
     | if mu_pval_aux then mu_tpexpr_aux1 else mu_tpexpr_aux2      ::   :: if     {{ com pure if               }}
     | [ subs ] mu_tpexpr                                          :: M :: subs   {{ ocaml MU_TPEXPR_SUBS [[subs]] [[mu_tpexpr]] }} {{ tex [[subs]] ( [[mu_tpexpr]] ) }}
                                                                                  {{ com simul-sub $[[subs]]$ in $[[mu_tpexpr]]$ }}
@@ -545,13 +545,14 @@ metavar Linux_linux_memory_order {{ tex linux\_mem\_order }} ::= {{ ocaml Linux.
 grammar
 
   res_term :: 'ResT_' ::= {{ com resource terms }}
-    | emp                             ::   :: Empty    {{ com empty heap }}
-    | points_to                       ::   :: PointsTo {{ com single-cell heap }}
-    | Symbol_sym                      ::   :: Var      {{ com variable }}
-    | <( res_term1 , res_term2 )>     ::   :: SepPair  {{ com seperating-conjunction pair }}
-    | pack ( mu_pval_aux , res_term ) ::   :: Pack     {{ com packing for existentials }}
-    |               [ subs ] res_term :: M :: Subs     {{ com substitution for resource terms }}
-                                                       {{ tex [[subs]] ( [[res_term]] ) }}
+    | emp                             ::   :: Empty    {{ com empty heap                            }}
+    | points_to                       ::   :: PointsTo {{ com single-cell heap                      }}
+    | Symbol_sym                      ::   :: Var      {{ com variable                              }}
+    | <( res_term1 , res_term2 )>     ::   :: SepPair  {{ com seperating-conjunction pair           }}
+    | pack ( mu_pval_aux , res_term ) ::   :: Pack     {{ com packing for existentials              }}
+    | fold ( res_term )               ::   :: Fold     {{ com fold into recursive res. pred.        }}
+    |               [ subs ] res_term :: M :: Subs     {{ com substitution for resource terms       }}
+                                                       {{ tex [[subs]] ( [[res_term]] )             }}
                                                        {{ ocaml RES_TERM_SUBS [[subs]] [[res_term]] }}
 
 
@@ -619,7 +620,7 @@ grammar
     | [ subs ] spine_elem :: M :: subs    {{ com substitution for spine elements / return values }}
                                           {{ ocaml SPINE_ELEM_SUBS [[subs]] [[spine_elem]] }}
                                           {{ tex [[subs]] ( [[spine_elem]] ) }}
-  
+
 
   spine :: Spine_ ::= {{ ocaml 'TY spine_elem list }} {{ phantom }} {{ com spine }}
     | </ spine_elemi // , // i /> ::   :: elems
@@ -644,8 +645,8 @@ grammar
 
   res_pattern :: 'ResP_' ::= {{ com resource terms }}
     | emp                               :: :: Empty    (+ binders = {}         +) {{ com empty heap }}
-    | pt                                :: :: PointsTo (+ binders = {}         +) {{ com single-cell heap }}
     | Symbol_sym                        :: :: Var      (+ binders = Symbol_sym +) {{ com variable }}
+    | fold ( res_pattern )              :: :: Fold     (+ binders = {}         +) {{ com unfold (recursive) predicate }}
     | <( res_pattern1 , res_pattern2 )> :: :: SepPair  (+ binders = binders( res_pattern1 ) union binders( res_pattern2 ) +)
                                                        {{ com seperating-conjunction pair }}
     | pack ( Symbol_sym , res_pattern ) :: :: Pack     (+ binders = Symbol_sym union binders( res_pattern ) +)
@@ -684,7 +685,9 @@ grammar
     | points_to                           ::   :: Points_to {{ com points-top heap pred.  }}
     | res1 *s res2                        ::   :: SepConj   {{ com seperating conjunction }}
     | exists Symbol_sym : base_type . res ::   :: Exists    {{ com existential            }}
-    | term_aux /\ res                     ::   :: Term      {{ com logical conjuction     }}
+    | term_aux /\ res                     ::   :: TermConj  {{ com logical conjuction     }}
+    | if term_aux then res1 else res2     ::   :: OrdDisj   {{ com ordered disjuction     }}
+    | a ( </ mu_pval_auxi // , // i /> )  ::   :: Pred      {{ com predicate              }}
     | ( res )                             :: X S :: Paren   {{ com parentheses            }} {{ ocaml [[res]] }} {{ tex [[res]] }}
     | [ subs ] res                        :: M :: Subs      {{ ocaml RES_SUBS [[subs]] [[res]]         }}
                                                             {{ com simul-sub $[[subs]]$ in $[[res]]$   }}
@@ -733,7 +736,7 @@ grammar
     | let mu_sym_or_pattern : ( y1 : base_type1 . term1 ) = mu_tpexpr_aux in mu_texpr
                                                                         :: :: letTP (+ bind binders( mu_sym_or_pattern ) in mu_texpr +)
                                                                                     (+ bind y1 in term1 +)
-                                                                                    {{ com pure let              }}
+                                                                                    {{ com annotated pure let    }}
     | let </ ret_patterni // , // i /> = mu_seq_expr_aux in mu_texpr    :: :: let   (+ bind binders( </ ret_patterni // i /> ) in mu_texpr  +)
                                                                                     {{ com bind return patterns           }}
     | let </ ret_patterni // , // i /> : ret = mu_texpr1 in mu_texpr2   :: :: letT  (+ bind binders( </ ret_patterni // i /> ) in mu_texpr2 +)
@@ -828,6 +831,7 @@ grammar
     | >>     :: :: chevron   {{ tex \gg                              }}
     | :;     :: :: doublecol {{ tex \mathbin{ {:} {:} }              }}
     | ^      :: :: caret     {{ tex \mathbin { \texttt{\char`\^} }   }}
+    | \/     :: :: or        {{ tex \vee                             }}
     | \//    :: :: big_or    {{ tex \bigvee                          }}
     | eq     :: :: equiv     {{ tex \equiv                           }}
     | <(     :: :: langle    {{ tex \langle                          }}
@@ -898,8 +902,7 @@ grammar
 
   R {{ tex \mathcal{R} }} :: Res_ ::= {{ phantom }} {{ com resources env }}
     | cdot                 ::   :: empty
-    | R , res              ::   :: anon_cons
-    | R , Symbol_sym : res ::   :: bound_cons
+    | R , Symbol_sym : res ::   :: cons
     | </ Ri // , // i />   ::   :: concat
 
 grammar
@@ -922,6 +925,7 @@ grammar
     | Symbol_sym : base_type inEnv C                                      ::   :: x_in_C
     | Symbol_sym : base_type inEnv L                                      ::   :: x_in_L
     | struct ty_tag & </ Symbol_identifieri : T_cti // i /> inEnv Globals ::   :: struct_in_globals
+    | a eq </ xi : base_typei // , // i /> |-> res inEnv Globals          ::   :: rec_res_pred_in_globals       {{ com recursive resource predicate }}
     | </ Ci ; Li ; Ni |- ty_mem_valuei => mem base_typei // i />          ::   :: indexed_infer_mem_value       {{ com dependent on memory object model }}
     | </ Ci ; Li ; Ni |- mu_pval_auxi => base_typei // i />               :: X :: index_infer_mu_pval
     | </ mu_pattern_auxi : base_typei ~> Ci with term_auxi // i />        :: X :: indexed_pattern
@@ -1004,12 +1008,7 @@ defns
 
 
     C ; L ; N ; R [= C' ; L' ; N' ; R'
-    ---------------------------------------------- :: Cons_Res_Anon
-    C ; L ; N ; R , res [= C' ; L' ; N' ; R' , res
-
-
-    C ; L ; N ; R [= C' ; L' ; N' ; R'
-    ------------------------------------------------------- :: Cons_Res_Named
+    ------------------------------------------------------- :: Cons_Res
     C ; L ; N ; R , x : res [= C' ; L' ; N' ; R' , x : res
 
 
@@ -1059,22 +1058,16 @@ defns
 
     C ; L ; N ; R  |- ( subs ) : ( C' ; L' ; N' ; R' )
     C ; L ; N ; R1 |- res_term <= [ subs ] res
-    -------------------------------------------------------------------------------- :: Cons_Res_Named
+    -------------------------------------------------------------------------------- :: Cons_Res
     C ; L ; N ; R , R1 |- ( res_term / x , subs ) :  ( C' ; L' ; N' ; R' , x : res )
-
-
-    % ASK: not so sure about this rule - it is necessary but how?
-    C ; L ; N ; R  |- ( subs ) : ( C' ; L' ; N' ; R' )
-    C ; L ; N ; R1 |- res_term <= [ subs ] res
-    ------------------------------------------------------------- :: Cons_Res_Anon
-    C ; L ; N ; R , R1 |- ( subs ) :  ( C' ; L' ; N' ; R' , res )
 
 
 grammar
 
-  heap , h :: 'Heap_' ::= {{ phantom }} {{ com heaps }}
-    | cdot              :: :: empty
-    | h + { points_to } :: :: points_to
+  heap , h , f :: 'Heap_' ::= {{ phantom }} {{ com heaps }}
+    | cdot              ::   :: empty
+    | h + { points_to } ::   :: points_to
+    | h + f             :: O :: concat    {{ com convenient for the soundness proof }}
 
 
 defns
@@ -1109,6 +1102,17 @@ defns
     N |- term_aux /\ res eq term_aux' /\ res'
 
 
+    smt ( N => ( term_aux1 -> term_aux2 ) /\ ( term_aux2 -> term_aux1 ) )
+    N |- res11 eq res21
+    N |- res21 eq res22
+    ----------------------------------------------------------------------------- :: OrdDisj
+    N |- if term_aux1 then res11 else res12 eq if term_aux2 then res21 else res22
+
+
+    ------------------------------------------------------------------- :: Pred
+    N |- a ( </ mu_pval_auxi // i /> ) eq a ( </ mu_pval_auxi // i /> )
+
+
   defn
     C ; L ; N ; R |- res_term <= res :: :: Res :: Res_ by
 
@@ -1119,13 +1123,15 @@ defns
 
     N |- points_to  eq points_to'
     N |- points_to' eq points_to''
-    --------------------------------------------------------- :: PointsTo
-    C ; L ; N ; cdot , points_to |- points_to' <= points_to''
+    ------------------------------------------------------------- :: PointsTo
+    C ; L ; N ; cdot , _ : points_to |- points_to' <= points_to''
 
 
-    N |- res eq res'
-    --------------------------------------- :: Var
-    C ; L ; N ; cdot , r : res |- r <= res'
+    N |- res1' = strip_ifs ( res1 )
+    N |- res2' = strip_ifs ( res2 )
+    N |- res1' eq res2'
+    ---------------------------------------- :: Var
+    C ; L ; N ; cdot , r : res1 |- r <= res2
 
 
     C ; L ; N ; R1 |- res_term1 <= res1
@@ -1146,6 +1152,15 @@ defns
     C ; L ; N ; R |- res_term <= [ mu_pval_aux / y , cdot ] res
     ------------------------------------------------------------------------------- :: Pack
     C ; L ; N ; R |- pack ( mu_pval_aux , res_term ) <= exists y : base_type . res
+
+
+    a eq </ xi : base_typei // i /> |-> res inEnv Globals
+    </ C ; L ; N |- mu_pval_auxi => base_typei // i />
+    N |- res' = strip_ifs ( [ </ mu_pval_auxi / xi , cdot // i /> ] res )
+    C ; L ; N ; R |- res_term <= res'
+    ------------------------------------------------------------------- :: Fold
+    C ; L ; N ; R |- fold ( res_term ) <= a ( </ mu_pval_auxi // i /> )
+
 
   defn
     h : R :: :: Heap :: Heap_ by
@@ -1469,68 +1484,124 @@ defns
   res_pattern_jtype :: 'Ty_Pat_' ::=
 
   defn
-    res_pattern : res ~> L ; N ;  R :: :: Res_ :: Res_ by
+    N |- res' = strip_ifs ( res ) :: :: Res_StripIfs_ :: Res_StripIfs_ by
 
 
-    -------------------------------- :: Empty
-    emp : emp ~> cdot ; cdot ; cdot
+    --------------------------------- :: Empty
+    N |- emp = strip_ifs ( emp )
 
 
-    ----------------------------------------------------------- :: PointsTo
-    points_to : points_to ~> cdot ; cdot ; cdot , points_to
+    ------------------------------ :: PointsTo
+    N |- pt = strip_ifs ( pt )
+
+
+    -------------------------------------------------- :: SepConj
+    N |- res1 *s res2 = strip_ifs ( res1 *s res2 )
+
+
+    ------------------------------------------------------------------------------ :: Exists
+    N |- exists x : base_type . res = strip_ifs ( exists x : base_type . res )
+
+
+    --------------------------------------------------------- :: TermConj
+    N |- term_aux /\ res = strip_ifs ( term_aux /\ res )
+
+
+    smt ( N => term_aux )
+    N |- res1' = strip_ifs ( res1' )
+    -------------------------------------------------------------- :: True
+    N |- res1' = strip_ifs ( if term_aux then res1 else res2 )
+
+
+    smt ( N => neg term_aux )
+    N |- res2' = strip_ifs ( res2 )
+    -------------------------------------------------------------- :: False
+    N |- res2' = strip_ifs ( if term_aux then res1 else res2 )
+
+
+    ------------------------------------------------------------------------------------------- :: UnderDet
+    N |- if term_aux then res1 else res2 = strip_ifs ( if term_aux then res1 else res2 )
+
+
+    ------------------------------------------------------------------------------------ :: Pred
+    N |- a ( </ mu_pval_auxi // i /> ) = strip_ifs ( a ( </ mu_pval_auxi // i /> ) )
+
+
+  defn
+    N |- res as res_pattern ~> L' ; N' ; R' :: :: Res_Match_ :: Res_Match_ by
+
+
+    ----------------------------------------- :: Empty
+    N |- emp as emp ~> cdot ; cdot ; cdot
 
 
     ------------------------------------------------- :: Var
-    r : res ~> cdot ; cdot ; cdot , r : res
+    N |- res as r ~> cdot ; cdot ; cdot , r : res
 
 
-    res_pattern1 : res1 ~> L1 ; N1 ; R1
-    res_pattern2 : res2 ~> L2 ; N2 ; R2
-    ------------------------------------------------------------------------------- :: SepConj
-    <( res_pattern1 , res_pattern2 )> : res1 *s res2 ~> L1 , L2 ; N1 , N2 ; R1 , R2
+    N |- res_pattern1 : res1 ~> L1 ; N1 ; R1
+    N |- res_pattern2 : res2 ~> L2 ; N2 ; R2
+    ----------------------------------------------------------------------------------------- :: SepConj
+    N |- res1 *s res2 as <( res_pattern1 , res_pattern2 )> ~> L1 , L2 ; N1 , N2 ; R1 , R2
 
 
-    res_pattern : res ~> L ; N ; R
-    ------------------------------------------------------ :: Conj
-    res_pattern : term_aux /\ res ~> L ; N , term_aux ; R
+    N |- res_pattern : res ~> L' ; N' ; R'
+    ------------------------------------------------------------------ :: Conj
+    N |- term_aux /\ res as res_pattern ~> L' ; N' , term_aux ; R'
 
 
-    res_pattern : [ x / y , cdot ] res ~> L ; N ; R
-    ---------------------------------------------------------------------------------- :: Pack
-    pack ( x , res_pattern ) : exists y : base_type . res ~> L , x : base_type ; N ; R
+    N |- res_pattern : [ x / y , cdot ] res ~> L' ; N' ; R'
+    ----------------------------------------------------------------------------------------------- :: Pack
+    N |- exists y : base_type . res as pack ( x , res_pattern ) ~> L' , x : base_type ; N' ; R'
+
+
+    a eq </ xi : base_typei // i /> |-> res inEnv Globals
+    N |- res_pattern : [ </ mu_pval_auxi / xi , cdot // i /> ] res ~> L' ; N' ; R'
+    ---------------------------------------------------------------------------------- :: Fold
+    N |- a ( </ mu_pval_auxi // i /> ) as fold ( res_pattern ) ~> L' ; N' ; R'
+
+
+  defn
+    N |- res_pattern : res ~> L' ; N' ; R' :: :: Res_ :: Res_ by
+
+
+    N |- res' = strip_ifs ( res )
+    N |- res' as res_pattern ~> L' ; N' ; R'
+    -------------------------------------------- :: Strip_Ifs
+    N |- res_pattern : res ~> L' ; N' ; R'
 
 
 defns
   ret_pattern_jtype :: 'Ty_Pat_' ::=
 
   defn
-    </ ret_patterni // , // i /> : ret ~> C ; L ; N ; R :: :: Ret_ :: Ret_ by
+    N |- </ ret_patterni // , // i /> : ret ~> C' ; L' ; N' ; R' :: :: Ret_ :: Ret_ by
 
 
     ------------------------------------------------- :: Empty
-     : I ~> cdot ; cdot ; cdot ; cdot
+    N |-  : I ~> cdot ; cdot ; cdot ; cdot
 
 
     mu_sym_or_pattern : base_type ~> C1 with term_aux1
-    </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L2 ; N2 ; R2
+    N |- </ ret_patterni // i /> : [ term_aux1 / y , cdot ] ret ~> C2 ; L2 ; N2 ; R2
     --------------------------------------------------------------------------- :: Comp
-    comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
+    N |- comp mu_sym_or_pattern , </ ret_patterni // i /> : sigma y : base_type . ret ~> C1, C2 ; L2 ; N2 ; R2
 
 
-    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
-    ---------------------------------------------------------------------------------------------- :: Log
-    log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C ; L , y : base_type ; N ; R
+    N |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
+    ---------------------------------------------------------------------------------------------------------- :: Log
+    N |- log y , </ ret_patterni // i /> : exists y : base_type . ret ~> C' ; L' , y : base_type ; N' ; R'
 
 
-    res_pattern : res ~> L1 ; N1 ; R1
-    </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
-    ---------------------------------------------------------------------------------------- :: Res
-    reso res_pattern , </ ret_patterni // i /> : res *o ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
+    N |- res_pattern : res ~> L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret ~> C2 ; L2 ; N2 ; R2
+    -------------------------------------------------------------------------------------------------- :: Res
+    N |- reso res_pattern , </ ret_patterni // i /> : res *o ret ~> C2 ; L1, L2 ; N1, N2 ; R1, R2
 
 
-    </ ret_patterni // i /> : ret ~> C ; L ; N ; R
-    --------------------------------------------------------------------- :: Phi
-    </ ret_patterni // i /> : term_aux /\ ret ~> C ; L ; N , term_aux ; R
+    N |- </ ret_patterni // i /> : ret ~> C' ; L' ; N' ; R'
+    ---------------------------------------------------------------------------------- :: Phi
+    N |- </ ret_patterni // i /> : term_aux /\ ret ~> C' ; L' ; N' , term_aux ; R'
 
 
 defns
@@ -1811,14 +1882,14 @@ defns
 
 
     C ; L ; N ; R' |- mu_seq_expr => ret1
-    </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret2
     ----------------------------------------------------------------------------------- :: Let
     C ; L ; N ; R' , R |- let </ ret_patterni // i /> = mu_seq_expr in mu_texpr <= ret2
 
 
     C ; L ; N ; R' |- mu_texpr1 <= ret1
-    </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr2 <= ret2
     ----------------------------------------------------------------------------------------- :: LetT
     C ; L ; N ; R' , R |- let </ ret_patterni // i /> : ret1 = mu_texpr1 in mu_texpr2 <= ret2
@@ -1863,7 +1934,7 @@ defns
 
     % NOT IMPLEMENTED - memory events
     C ; L ; N ; R' |- mu_is_expr_aux => ret1
-    </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
+    N |- </ ret_patterni // i /> : ret1 ~> C1 ; L1 ; N1 ; R1
     C , C1 ; L , L1 ; N , N1 ; R , R1 |- mu_texpr <= ret2
     --------------------------------------------------------------------------------------------- :: LetS
     C ; L ; N ; R' , R |- let strong </ ret_patterni // i /> = mu_is_expr_aux in mu_texpr <= ret2
@@ -1941,10 +2012,6 @@ defns
     emp = emp ~> cdot
 
 
-    --------------- :: Points_to
-    pt = pt ~> cdot
-
-
     --------------------------------------------------------- :: Var
     Symbol_sym = res_term ~> res_term / Symbol_sym , cdot
 
@@ -1958,6 +2025,11 @@ defns
     res_pattern = res_term ~> subs
     ------------------------------------------------------------------------------------------------------ :: Pack
     pack ( Symbol_sym , res_pattern ) = pack ( mu_pval_aux , res_term ) ~> mu_pval_aux / Symbol_sym , subs
+
+
+    res_pattern = res_term ~> subs
+    --------------------------------------- :: Fold
+    fold ( res_pattern ) = res_term ~> subs
 
 
   defn
