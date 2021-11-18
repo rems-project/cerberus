@@ -598,6 +598,24 @@ module ResourceInference = struct
       in
       return folded_resource
 
+    let unfolded_array item_ct base length permission value init =
+      let item_size = int_ (Memory.size_of_ctype item_ct) in
+      let unfolded_resource = 
+        let qp_s, qp_t = IT.fresh Loc in
+        QPoint {
+            ct = item_ct;
+            qpointer = qp_s;
+            value = 
+              get_ value 
+                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
+            init = init;
+            permission = 
+              and_ [cellPointer_ ~base ~step:item_size ~starti:(int_ 0)
+                      ~endi:(int_ length) ~p:qp_t; permission]
+          }
+      in
+      unfolded_resource
+
     let unfold_array loc failure item_ct base length permission =   
       debug 7 (lazy (item "unfold array" Pp.empty));
       debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
@@ -608,22 +626,11 @@ module ResourceInference = struct
         point_request loc failure 
           (unfold_array_request item_ct base length permission) 
       in
-      let item_size = int_ (Memory.size_of_ctype item_ct) in
-      let unfolded_resource = 
-        let qp_s, qp_t = IT.fresh Loc in
-        QPoint {
-            ct = item_ct;
-            qpointer = qp_s;
-            value = 
-              get_ point.value 
-                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
-            init = point.init;
-            permission = 
-              and_ [cellPointer_ ~base ~step:item_size ~starti:(int_ 0)
-                      ~endi:(int_ length) ~p:qp_t; permission]
-          }
+      let qpoint =
+        unfolded_array item_ct base length permission 
+          point.value point.init
       in
-      return unfolded_resource
+      return qpoint
 
     let unfold_struct loc failure tag pointer_t permission_t = 
       debug 7 (lazy (item "unfold struct" Pp.empty));
