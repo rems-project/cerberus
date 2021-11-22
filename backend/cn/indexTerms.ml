@@ -93,6 +93,13 @@ and 'bt array_op =
   | Get of 'bt term * 'bt term
   | Def of (Sym.t * BT.t) * 'bt term
 
+and 'bt option_op =
+  | Nothing of BT.t
+  | Something of 'bt term
+  | Is_nothing of 'bt term
+  | Is_something of 'bt term
+  | Get_some_value of 'bt term
+
 and 'bt term_ =
   | Lit of lit
   | Arith_op of 'bt arith_op
@@ -104,6 +111,7 @@ and 'bt term_ =
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
   | Array_op of 'bt array_op
+  | Option_op of 'bt option_op
   | Let of (Sym.t * 'bt term) * 'bt term
 
 and 'bt term =
@@ -323,6 +331,19 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Get _, _ -> false
      | Def _, _ -> false
      end
+  | Option_op option_op, Option_op option_op' ->
+     begin match option_op, option_op' with
+     | Nothing bt, Nothing bt' -> BT.equal bt bt'
+     | Something t, Something t' -> equal t t'
+     | Is_nothing t, Is_nothing t' -> equal t t'
+     | Is_something t, Is_something t' -> equal t t'
+     | Get_some_value t, Get_some_value t' -> equal t t'
+     | Nothing _, _ -> false
+     | Something _, _ -> false
+     | Is_nothing _, _ -> false
+     | Is_something _, _ -> false
+     | Get_some_value _, _ -> false
+     end
   | Let ((s, bound), body), Let ((s', bound'), body') ->
      Sym.equal s s' && equal bound bound' && equal body body'
   | Lit _, _ -> false
@@ -335,6 +356,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | Set_op _, _ -> false
   | CT_pred _, _ -> false
   | Array_op _, _ -> false
+  | Option_op _, _ -> false
   | Let _, _ -> false
 
 
@@ -494,6 +516,14 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
+    | Option_op option_op ->
+       begin match option_op with
+       | Nothing bt -> !^"nothing"
+       | Something t -> c_app !^"some" [aux false t]
+       | Is_nothing t -> c_app !^"is_nothing" [aux false t]
+       | Is_something t -> c_app !^"is_something" [aux false t]
+       | Get_some_value t -> c_app !^"value" [aux false t]
+       end
     | Let ((s, bound), body) ->
        !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body)
   in
@@ -594,6 +624,14 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
      | Get (t, arg) -> free_vars_list ([t; arg])
      | Def ((s, _), body) -> SymSet.remove s (free_vars body)
+     end
+  | Option_op option_op ->
+     begin match option_op with
+     | Nothing _bt -> SymSet.empty
+     | Something t -> free_vars t
+     | Is_nothing t -> free_vars t
+     | Is_something t -> free_vars t
+     | Get_some_value t -> free_vars t
      end
   | Let ((s, bound), body) ->
      SymSet.union (free_vars bound)
@@ -751,6 +789,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
             Def ((s, abt), subst su body)
      in
      IT (Array_op array_op, bt)
+  | Option_op option_op -> 
+     let option_op = match option_op with
+       | Nothing bt -> Nothing bt
+       | Something t -> Something (subst su t)
+       | Is_nothing t -> Is_nothing (subst su t)
+       | Is_something t -> Is_something (subst su t)
+       | Get_some_value t -> Get_some_value (subst su t)
+     in
+     IT (Option_op option_op, bt)
   | Let ((s, bound), body) ->
      let bound = subst su bound in
      if SymSet.mem s su.relevant then
@@ -985,6 +1032,19 @@ let array_def_ (s, abt) body =
   IT (Array_op (Def ((s, abt), body)), BT.Array (abt, bt body))
 
 
+let nothing_ bt = 
+  IT (Option_op (Nothing bt), BT.Option bt)
+let something_ t =
+  IT (Option_op (Something t), BT.Option (basetype t))
+let is_nothing t =
+  IT (Option_op (Is_nothing t), BT.Bool)
+let is_something_ t =
+  IT (Option_op (Is_something t), BT.Bool)
+let get_some_value_ t =
+  let vbt = BT.option_bt (basetype t) in
+  IT (Option_op (Get_some_value t), vbt)
+
+
 let let_ (s, bound) body = 
   IT (Let ((s, bound), body), basetype body)
 let let__ (name, bound) body =
@@ -1057,7 +1117,8 @@ let hash (IT (it, _bt)) =
   | List_op _ -> 7
   | Set_op _ -> 8
   | Array_op _ -> 9
-  | Let _ -> 10
+  | Option_op _ -> 10
+  | Let _ -> 11
   | Lit lit ->
      begin match lit with
      | Z z -> 20

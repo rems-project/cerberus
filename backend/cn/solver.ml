@@ -442,6 +442,24 @@ module Translate = struct
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))
          end
+      | Option_op option_op ->
+         begin match option_op with
+         | Nothing vbt ->
+            let nothing_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 0 in
+            Z3.Expr.mk_app context nothing_constructor []
+         | Something t ->
+            let something_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 1 in
+            Z3.Expr.mk_app context something_constructor [term t]
+         | Is_nothing t ->
+            let nothing_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 0 in
+            Z3.Expr.mk_app context nothing_recogniser [term t]
+         | Is_something t ->
+            let something_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 1 in
+            Z3.Expr.mk_app context something_recogniser [term t]
+         | Get_some_value t ->
+            let something_value_accessor = hd (List.nth (Z3.Datatype.get_accessors (sort (IT.bt t))) 1) in
+            Z3.Expr.mk_app context something_value_accessor [term t]
+         end
       | Let ((s, bound), body) ->
          term 
            (Simplify.simp struct_decls [] 

@@ -75,7 +75,7 @@ let json bt : Yojson.Safe.t =
 let struct_bt = function
   | Struct tag -> tag 
   | bt -> Debug_ocaml.error 
-           ("illtyped index term: not a struct: " ^ Pp.plain (pp bt))
+           ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
 
 let is_array_bt = function
   | Array (abt, rbt) -> Some (abt, rbt)
@@ -84,7 +84,12 @@ let is_array_bt = function
 let array_bt = function
   | Array (abt, rbt) -> (abt, rbt) 
   | bt -> Debug_ocaml.error 
-           ("illtyped index term: not an array: " ^ Pp.plain (pp bt))
+           ("illtyped index term: not an array type: " ^ Pp.plain (pp bt))
+
+let option_bt = function
+  | Option bt -> bt 
+  | bt -> Debug_ocaml.error 
+           ("illtyped index term: not an option type: " ^ Pp.plain (pp bt))
 
 
 
