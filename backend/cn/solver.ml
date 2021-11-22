@@ -210,6 +210,19 @@ module Translate = struct
          in
          Z3.Tuple.mk_sort context struct_symbol
            member_symbols member_sorts
+      | Option bt -> 
+         let none_constructor =
+           Z3.Datatype.mk_constructor context (symbol ("none__" ^ bt_name bt))
+             (symbol ("is_none__" ^ bt_name bt)) [] [] []
+         in
+         let some_constructor = 
+           Z3.Datatype.mk_constructor context (symbol ("some__" ^ bt_name bt))
+             (symbol("is_some__" ^ bt_name bt)) 
+             [symbol ("some_value__" ^ bt_name bt)]
+             [Some (translate bt)] [0]
+         in
+         Z3.Datatype.mk_sort context (symbol (bt_name (Option bt))) 
+           [none_constructor; some_constructor]
     in
 
     let sort bt = 

@@ -15,6 +15,7 @@ type t =
   | List of t
   | Tuple of t list
   | Set of t
+  | Option of t
 
 
 let is_struct = function
@@ -33,6 +34,7 @@ let rec equal t t' =
   | List t, List t' -> equal t t'
   | Tuple ts, Tuple ts' -> List.equal equal ts ts'
   | Set t, Set t' -> equal t t'
+  | Option t, Option t' -> equal t t'
   | Unit, _
   | Bool, _
   | Integer, _
@@ -43,6 +45,7 @@ let rec equal t t' =
   | List _, _
   | Tuple _, _
   | Set _, _
+  | Option _, _ 
     ->
      false
 
@@ -59,6 +62,7 @@ let rec pp = function
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
   | Set t -> !^"set" ^^ angles (pp t)
+  | Option t -> !^"option" ^^ angles (pp t)
 
 
 
@@ -104,5 +108,6 @@ let rec hash = function
   | List _ -> 5
   | Tuple _ -> 6
   | Set _ -> 7
+  | Option _ -> 8
   | Struct tag -> 1000 + Sym.num tag
   | Array (abt,rbt) -> 2000 + hash abt + hash rbt
