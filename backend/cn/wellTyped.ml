@@ -53,11 +53,11 @@ module WIT = struct
     | List bt -> return bt
     | _ -> fail (illtyped_index_term loc context it (IT.bt it) "list type")
 
-  let ensure_array_type loc context it = 
+  let ensure_map_type loc context it = 
     let open BT in
     match IT.bt it with
-    | Array (abt, rbt) -> return (abt, rbt)
-    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "array type")
+    | Map (abt, rbt) -> return (abt, rbt)
+    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "map/array type")
 
   let get_struct_decl loc tag = 
     let@ global = get_global () in
@@ -370,30 +370,30 @@ module WIT = struct
               return (BT.Bool, Subset (t,t'))
          in
          return (IT (Set_op set_op, bt))
-      | Array_op array_op -> 
-         let@ (bt, array_op) = match array_op with
+      | Map_op map_op -> 
+         let@ (bt, map_op) = match map_op with
            | Const (index_bt, t) ->
               let@ t = infer loc ~context t in
-              return (BT.Array (index_bt, IT.bt t), Const (index_bt, t))
+              return (BT.Map (index_bt, IT.bt t), Const (index_bt, t))
            | Set (t1, t2, t3) ->
               let@ t1 = infer loc ~context t1 in
-              let@ (abt, rbt) = ensure_array_type loc context t1 in
+              let@ (abt, rbt) = ensure_map_type loc context t1 in
               let@ t2 = check loc ~context abt t2 in
               let@ t3 = check loc ~context rbt t3 in
               return (IT.bt t1, Set (t1, t2, t3))
            | Get (t, arg) -> 
               let@ t = infer loc ~context t in
-              let@ (abt, bt) = ensure_array_type loc context t in
+              let@ (abt, bt) = ensure_map_type loc context t in
               let@ arg = check loc ~context abt arg in
               return (bt, Get (t, arg))
            | Def ((s, abt), body) ->
               pure begin
                   let@ () = add_l s abt in
                   let@ body = infer loc ~context body in
-                  return (Array (abt, IT.bt body), Def ((s, abt), body))
+                  return (Map (abt, IT.bt body), Def ((s, abt), body))
                 end
          in
-         return (IT (Array_op array_op, bt))
+         return (IT (Map_op map_op, bt))
       | Option_op option_op ->
          let@ (bt, option_op) = match option_op with
            | Nothing vbt -> return (Option vbt, Nothing vbt)
@@ -542,7 +542,7 @@ module WRE = struct
               IT (Lit (Sym s), _) -> 
                return (SymSet.add s fixed)
             | Some (q, _), 
-              IT (Array_op (Get (IT (Lit (Sym arr_s), _), IT (Lit (Sym arg_s), _))), _)
+              IT (Map_op (Get (IT (Lit (Sym arr_s), _), IT (Lit (Sym arg_s), _))), _)
                  when Sym.equal arg_s q ->
                return (SymSet.add arr_s fixed)
             (* otherwise, fail *)

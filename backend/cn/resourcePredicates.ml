@@ -328,7 +328,7 @@ let page_alloc_predicates struct_decls =
     (* oargs *)
     let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
     let vmemmap_s, vmemmap = 
-      IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+      IT.fresh_named (BT.Map (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
 
 
     let metadata_owned = 

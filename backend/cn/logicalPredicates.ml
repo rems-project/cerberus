@@ -122,7 +122,7 @@ module PageAlloc = struct
       let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
 
       let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
+        IT.fresh_named (BT.Map (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
       in
 
       let args = [
@@ -254,7 +254,7 @@ module PageAlloc = struct
       let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
       let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Array (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+        IT.fresh_named (BT.Map (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let pool_s, pool = IT.fresh_named (Struct hyp_pool_tag) "pool" in
 

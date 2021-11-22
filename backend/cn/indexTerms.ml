@@ -87,7 +87,7 @@ and 'bt ct_pred =
   | AlignedI of {t : 'bt term; align : 'bt term}
   | Aligned of 'bt term * CT.t
 
-and 'bt array_op = 
+and 'bt map_op = 
   | Const of BT.t * 'bt term
   | Set of 'bt term * 'bt term * 'bt term
   | Get of 'bt term * 'bt term
@@ -110,7 +110,7 @@ and 'bt term_ =
   | List_op of 'bt list_op
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
-  | Array_op of 'bt array_op
+  | Map_op of 'bt map_op
   | Option_op of 'bt option_op
   | Let of (Sym.t * 'bt term) * 'bt term
 
@@ -316,8 +316,8 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | Representable _, _ -> false
      | Good _, _ -> false
      end
-  | Array_op array_op, Array_op array_op' -> 
-     begin match array_op, array_op' with
+  | Map_op map_op, Map_op map_op' -> 
+     begin match map_op, map_op' with
      | Const (bt, t), Const (bt', t') ->
         BT.equal bt bt' && equal t t'
      | Set (t1,t2,t3), Set (t1',t2',t3') ->
@@ -355,7 +355,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
   | List_op _, _ -> false
   | Set_op _, _ -> false
   | CT_pred _, _ -> false
-  | Array_op _, _ -> false
+  | Map_op _, _ -> false
   | Option_op _, _ -> false
   | Let _, _ -> false
 
@@ -505,8 +505,8 @@ let pp =
        | Subset (t1, t2) ->
           c_app !^"subset" [aux false t1; aux false t2]
        end
-    | Array_op array_op -> 
-       begin match array_op with
+    | Map_op map_op -> 
+       begin match map_op with
        | Const (_, t) ->
           braces (aux false t)
        | Set (t1,t2,t3) ->
@@ -618,8 +618,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | SetDifference (t1, t2) -> free_vars_list [t1;t2]
      | Subset (t1, t2) -> free_vars_list [t1;t2]
      end
-  | Array_op array_op -> 
-     begin match array_op with
+  | Map_op map_op -> 
+     begin match map_op with
      | Const (_, t) -> free_vars t
      | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
      | Get (t, arg) -> free_vars_list ([t; arg])
@@ -771,8 +771,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
      in
      IT (Set_op set_op, bt)
-  | Array_op array_op -> 
-     let array_op = match array_op with
+  | Map_op map_op -> 
+     let map_op = match map_op with
        | Const (bt, t) -> 
           Const (bt, subst su t)
        | Set (t1, t2, t3) -> 
@@ -788,7 +788,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           else 
             Def ((s, abt), subst su body)
      in
-     IT (Array_op array_op, bt)
+     IT (Map_op map_op, bt)
   | Option_op option_op -> 
      let option_op = match option_op with
        | Nothing bt -> Nothing bt
@@ -839,7 +839,7 @@ let is_q = function
   | _ -> None
 
 let is_app = function
-  | IT (Array_op (Get (f,arg)), _) -> Some (f, arg)
+  | IT (Map_op (Get (f,arg)), _) -> Some (f, arg)
   | _ -> None
 
 let zero_frac = function
@@ -1020,16 +1020,16 @@ let alignedI_ ~t ~align =
   IT (CT_pred (AlignedI {t; align}), BT.Bool)
 
 let const_ index_bt t = 
-  IT (Array_op (Const (index_bt, t)), BT.Array (index_bt, bt t))
+  IT (Map_op (Const (index_bt, t)), BT.Map (index_bt, bt t))
 let set_ t1 (t2, t3) = 
-  IT (Array_op (Set (t1, t2, t3)), bt t1)
+  IT (Map_op (Set (t1, t2, t3)), bt t1)
 let get_ v arg = 
   match bt v with
-  | BT.Array (_, rbt) ->
-     IT (Array_op (Get (v, arg)), rbt)
+  | BT.Map (_, rbt) ->
+     IT (Map_op (Get (v, arg)), rbt)
   | _ -> Debug_ocaml.error "illtyped index term"
-let array_def_ (s, abt) body = 
-  IT (Array_op (Def ((s, abt), body)), BT.Array (abt, bt body))
+let map_def_ (s, abt) body = 
+  IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
 
 
 let nothing_ bt = 
@@ -1116,7 +1116,7 @@ let hash (IT (it, _bt)) =
   | CT_pred _ -> 6
   | List_op _ -> 7
   | Set_op _ -> 8
-  | Array_op _ -> 9
+  | Map_op _ -> 9
   | Option_op _ -> 10
   | Let _ -> 11
   | Lit lit ->

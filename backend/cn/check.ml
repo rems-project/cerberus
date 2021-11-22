@@ -237,7 +237,7 @@ module ResourceInference = struct
       Resources.Requests.{
           ct = array_ct ct (Some length);
           pointer = base_pointer_t;
-          value = BT.Array (Integer, of_sct ct);
+          value = BT.Map (Integer, of_sct ct);
           init = BT.Bool;
           permission = permission_t;
       }
@@ -517,7 +517,7 @@ module ResourceInference = struct
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
       let folded_value_s, folded_value = 
-        IT.fresh (BT.Array (Integer, BT.of_sct item_ct))
+        IT.fresh (BT.Map (Integer, BT.of_sct item_ct))
       in
       let folded_value_lc = 
         let i_s, i = IT.fresh Integer  in
@@ -828,11 +828,11 @@ end = struct
     (* ASSUMES unification variables and quantifier q_s are disjoint  *)
     let unify_or_constrain_q (q_s,q_bt) (unis, subst, constrs) (output_spec, output_have) = 
       match IT.subst (make_subst subst) output_spec with
-      | IT (Array_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
+      | IT (Map_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
            when Sym.equal q' q_s && SymMap.mem s unis ->
          let output_have_body = 
            let s' = Sym.fresh () in
-           array_def_ (s', q_bt)
+           map_def_ (s', q_bt)
              (IT.subst (IT.make_subst [(q_s, sym_ (s', q_bt))]) output_have)
          in
          let@ () = ls_matches_spec unis s output_have_body in
@@ -1138,7 +1138,7 @@ let infer_array (loc : loc) (vts : vt list) =
         return (index + 1, set_ it (int_ index, arg_it))
          ) (0, const_ Integer (default_ item_bt)) vts
   in
-  return (BT.Array (Integer, item_bt), it)
+  return (BT.Map (Integer, item_bt), it)
 
 
 let infer_constructor (loc : loc) (constructor : mu_ctor) 

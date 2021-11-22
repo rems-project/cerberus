@@ -184,7 +184,7 @@ module Translate = struct
            [translate BT.Integer]
       | List bt -> Z3.Z3List.mk_sort context (symbol (bt_name bt)) (translate bt) 
       | Set bt -> Z3.Set.mk_sort context (translate bt)
-      | Array (abt, rbt) -> Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
+      | Map (abt, rbt) -> Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
       | Tuple bts ->
          let bt_symbol = symbol (bt_name (Tuple bts)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
@@ -423,14 +423,14 @@ module Translate = struct
          | Good (ct, t) ->
             term (good_value struct_decls ct t)
          end
-      | Array_op array_op -> 
+      | Map_op map_op -> 
          let open Z3.Z3Array in
-         begin match array_op with
+         begin match map_op with
          | Const (abt, t) -> 
             mk_const_array context (sort abt) (term t)
          | Set (t1, t2, t3) -> 
             mk_store context (term t1) (term t2) (term t3)
-         | Get (IT (Array_op (Def ((s, bt), body)), _), arg) -> 
+         | Get (IT (Map_op (Def ((s, bt), body)), _), arg) -> 
             term (IT.subst (make_subst [(s, arg)]) body)
          | Get (f, arg) -> 
             mk_select context (term f) (term arg)
@@ -728,7 +728,7 @@ let eval struct_decls (context, model) to_be_evaluated =
            | _ -> unsupported "z3 quantifier list"
          in
          let q_s = new_q () in
-         array_def_ (q_s, q_bt) (aux ((q_s, q_bt) :: binders) body)
+         map_def_ (q_s, q_bt) (aux ((q_s, q_bt) :: binders) body)
 
       | () when Z3.Arithmetic.is_add expr ->
          List.fold_left (Tools.curry add_) (hd args) (tl args)
@@ -750,16 +750,16 @@ let eval struct_decls (context, model) to_be_evaluated =
          in
          let base_value = aux binders (Z3.Model.FuncInterp.get_else array_func_interp) in
          let entries = Z3.Model.FuncInterp.get_entries array_func_interp in
-         List.fold_right (fun entry array_value ->
+         List.fold_right (fun entry map_value ->
              match Z3.Model.FuncInterp.FuncEntry.get_args entry with
              | [index] ->
                 let index = aux binders index in
                 let value = aux binders (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
-                set_ array_value (index, value)
+                set_ map_value (index, value)
              | [] ->
-                Debug_ocaml.error "unexpected zero-dimenstional array"
+                Debug_ocaml.error "unexpected zero-dimenstional map/array"
              | _ ->
-                raise (Unsupported "multi-dimensional arrays (from as-value)")
+                raise (Unsupported "multi-dimensional maps/arrays (from as-value)")
            ) entries (const_ abt base_value)
 
       | () when Z3.Z3Array.is_constant_array expr ->

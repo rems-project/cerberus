@@ -38,12 +38,14 @@ let sct_of_ct loc ct =
 
 (* base types *)
 
-let bt_of_core_object_type loc ot =
+let rec bt_of_core_object_type loc ot =
   let open CF.Core in
   match ot with
   | OTy_integer -> return BT.Integer
   | OTy_pointer -> return BT.Loc
-  | OTy_array cbt -> Debug_ocaml.error "arrays"
+  | OTy_array t -> 
+     let@ t = bt_of_core_object_type loc t in
+     return (BT.Map (Integer, t))
   | OTy_struct tag -> return (BT.Struct tag)
   | OTy_union _tag -> Debug_ocaml.error "union types"
   | OTy_floating -> unsupported loc !^"floats"
@@ -61,7 +63,7 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_tuple bts -> 
      let@ bts = ListM.mapM (bt_of_core_base_type loc) bts in
      return (BT.Tuple bts)
-  | BTy_storable -> Debug_ocaml.error "BTy_storageble"
+  | BTy_storable -> Debug_ocaml.error "BTy_storable"
   | BTy_ctype -> Debug_ocaml.error "BTy_ctype"
 
 
@@ -286,7 +288,7 @@ let make_qpred loc (predicates : (string * ResourcePredicates.definition) list)
     List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
         let it, l = match StringMap.find_opt oarg some_oargs with
           | None ->
-             let lifted_bt = BT.Array (qbt, bt) in
+             let lifted_bt = BT.Map (qbt, bt) in
              let s, it = IT.fresh lifted_bt in
              let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
              (it, new_l :: l)
@@ -535,10 +537,10 @@ let resolve_index_term loc
        let@ (it2, _) = resolve t2 mapping in
        let ppf () = Ast.Terms.pp false t1 in
        begin match IT.bt it1 with
-       | BT.Array (_, bt) -> 
-          return (IT (Array_op (Get (it1, it2)), bt), None)
+       | BT.Map (_, bt) -> 
+          return (IT (Map_op (Get (it1, it2)), bt), None)
        | _ -> 
-          fail {loc; msg = Generic (ppf () ^^^ !^"is not an array")}
+          fail {loc; msg = Generic (ppf () ^^^ !^"is not an array/not a map")}
        end
     | Env (t, mapping_name) ->
        begin match StringMap.find_opt mapping_name mappings with

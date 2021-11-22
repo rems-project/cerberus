@@ -111,7 +111,7 @@ let make_name =
   let struct_c = ref 0 in
   let set_c = ref 0 in
   let option_c = ref 0 in
-  let array_c = ref 0 in
+  let map_c = ref 0 in
   
   let bt_prefix (bt : BT.t) = 
     match bt with
@@ -125,7 +125,7 @@ let make_name =
     | Struct _ -> "s"
     | Set _ -> "set"
     | Option _ -> "o"
-    | Array _ -> "a"
+    | Map _ -> "m"
   in
   
   let bt_counter (bt : BT.t) = 
@@ -140,7 +140,7 @@ let make_name =
     | Struct _ -> struct_c
     | Set _ -> set_c
     | Option _ -> option_c
-    | Array _ -> array_c
+    | Map _ -> map_c
   in
   fun sort ->
   "?" ^ bt_prefix sort ^ 
@@ -321,10 +321,10 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
 
   let evaluate_lambda (q_s, q_bt) it = 
     let open Option in
-    let lambda = array_def_ (q_s, q_bt) it in
+    let lambda = map_def_ (q_s, q_bt) it in
     let@ it_val = evaluate lambda in
     match it_val with
-    | IT (Array_op (Def ((s, _), body)), _) ->
+    | IT (Map_op (Def ((s, _), body)), _) ->
        return (IT.subst (make_subst [(s, sym_ (q_s, q_bt))]) body)
     | _ ->
        return (get_ it_val (sym_ (q_s, q_bt)))

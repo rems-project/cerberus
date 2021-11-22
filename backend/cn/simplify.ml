@@ -402,49 +402,49 @@ let rec simp struct_decls values equalities some_known_facts =
   in
 
 
-  let array_op it bt = 
+  let map_op it bt = 
     match it with
     | Const (index_bt, t) ->
        let t = aux t in
-       IT (Array_op (Const (index_bt, t)), bt)
+       IT (Map_op (Const (index_bt, t)), bt)
     | Set (t1, t2, t3) ->
        let t1 = aux t1 in
        let t2 = aux t2 in
        let t3 = aux t3 in
-       IT (Array_op (Set (t1, t2, t3)), bt)
-    | Get (array, index) ->
-       let array = aux array in
+       IT (Map_op (Set (t1, t2, t3)), bt)
+    | Get (map, index) ->
+       let map = aux map in
        let index = aux index in
-       let rec make array index = 
-         begin match array with
-         | IT (Array_op (Def ((s, abt), body)), _) ->
+       let rec make map index = 
+         begin match map with
+         | IT (Map_op (Def ((s, abt), body)), _) ->
             assert (BT.equal abt (IT.bt index));
             aux (IT.subst (IT.make_subst [(s, index)]) body)
-         | IT (Array_op (Set (array', index', value')), _) ->
+         | IT (Map_op (Set (map', index', value')), _) ->
             begin match index, index' with
             | _, _ when IT.equal index index' ->
                value'
             | IT (Lit (Z z), _), IT (Lit (Z z'), _) when not (Z.equal z z') ->
-               make array' index
+               make map' index
             | _ ->
-               IT (Array_op (Get (array, index)), bt)
+               IT (Map_op (Get (map, index)), bt)
             end
-         | IT (Bool_op (ITE (cond, array1, array2)), bt') ->
-            (* (if cond then array1 else array2)[index] -->
-             * if cond then array1[index] else array2[index] *)
+         | IT (Bool_op (ITE (cond, map1, map2)), bt') ->
+            (* (if cond then map1 else map2)[index] -->
+             * if cond then map1[index] else map2[index] *)
             ite_ (cond, 
-                  make array1 index, 
-                  make array2 index)
+                  make map1 index, 
+                  make map2 index)
          | _ ->
-            IT (Array_op (Get (array, index)), bt)
+            IT (Map_op (Get (map, index)), bt)
          end
        in
-       make array index
+       make map index
     | Def ((s, abt), body) ->
        let s' = Sym.fresh_same s in 
        let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
        let body = aux body in
-       IT (Array_op (Def ((s', abt), body)), bt)
+       IT (Map_op (Def ((s', abt), body)), bt)
   in
   
   let option_op o bt = 
@@ -487,7 +487,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | List_op l -> IT (List_op l, bt)
     | Set_op s -> IT (Set_op s, bt)
     | CT_pred c -> ct_pred c bt
-    | Array_op a -> array_op a bt
+    | Map_op a -> map_op a bt
     | Option_op o -> option_op o bt
     | Let ((s, bound), body) -> letb (s, bound) body bt
 
@@ -502,7 +502,7 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
              when Option.is_some (is_lit it') ->
              SymMap.add sym it' values
         | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
-                                 (IT (Array_op (Def _),_) as it'))), _)) ->
+                                 (IT (Map_op (Def _),_) as it'))), _)) ->
              SymMap.add sym it' values
         | _ ->
            values
