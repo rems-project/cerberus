@@ -49,12 +49,13 @@ let solver_params = [
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
-    (* ("smt.mbqi", "false"); *)
+    ("smt.mbqi", "true");
+    ("smt.ematching", "false");
   ]
 
 let rewriter_params = [
     ("rewriter.expand_nested_stores", "true");
-    ("rewriter.elim_rem", "true");
+    (* ("rewriter.elim_rem", "true"); *)
   ]
 
 let model_params = [
@@ -81,8 +82,7 @@ let tactics = [
     "add-bounds";
     "simplify";
     "solve-eqs";
-    "aufnira";
-    (* "qe2"; *)
+    "auflia";
     "smt";
   ]
 
@@ -668,6 +668,7 @@ let model () =
 
 let provable ~shortcut_false solver global assumptions lc = 
   let it, oq = ReduceQuery.constr global assumptions lc in
+  (* print stdout (item "assumptions" (Pp.list LC.pp assumptions)); *)
   match shortcut it with
   | `True -> 
      model_state := No_model; 
@@ -755,16 +756,16 @@ let eval struct_decls (context, model) to_be_evaluated =
              | [index] ->
                 let index = aux binders index in
                 let value = aux binders (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
-                set_ map_value (index, value)
+                map_set_ map_value (index, value)
              | [] ->
                 Debug_ocaml.error "unexpected zero-dimenstional map/array"
              | _ ->
                 raise (Unsupported "multi-dimensional maps/arrays (from as-value)")
-           ) entries (const_ abt base_value)
+           ) entries (const_map_ abt base_value)
 
       | () when Z3.Z3Array.is_constant_array expr ->
          let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
-         const_ abt (hd args)
+         const_map_ abt (hd args)
 
       | () when Z3.Z3Array.is_default_array expr ->
          unsupported "z3 array default"
@@ -827,10 +828,10 @@ let eval struct_decls (context, model) to_be_evaluated =
          rem_ (nth args 0, nth args 1)
 
       | () when Z3.Z3Array.is_select expr ->
-         get_ (nth args 0) (nth args 1)
+         map_get_ (nth args 0) (nth args 1)
 
       | () when Z3.Z3Array.is_store expr ->
-         set_ (nth args 0) (nth args 1, nth args 2)
+         map_set_ (nth args 0) (nth args 1, nth args 2)
 
       | () when Z3.Arithmetic.is_sub expr ->
          sub_ (nth args 0, nth args 1)

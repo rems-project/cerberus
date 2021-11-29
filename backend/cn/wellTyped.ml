@@ -542,9 +542,10 @@ module WRE = struct
               IT (Lit (Sym s), _) -> 
                return (SymSet.add s fixed)
             | Some (q, _), 
-              IT (Map_op (Get (IT (Lit (Sym arr_s), _), IT (Lit (Sym arg_s), _))), _)
+              IT (Option_op (Get_some_value (IT (Map_op (Get (IT (Lit (Sym map_s), _), 
+                                                              IT (Lit (Sym arg_s), _))), _))), _)
                  when Sym.equal arg_s q ->
-               return (SymSet.add arr_s fixed)
+               return (SymSet.add map_s fixed)
             (* otherwise, fail *)
             | _ ->
                let u = SymSet.choose undetermined_output in

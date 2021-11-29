@@ -1019,11 +1019,11 @@ let aligned_ (t, it) =
 let alignedI_ ~t ~align = 
   IT (CT_pred (AlignedI {t; align}), BT.Bool)
 
-let const_ index_bt t = 
+let const_map_ index_bt t = 
   IT (Map_op (Const (index_bt, t)), BT.Map (index_bt, bt t))
-let set_ t1 (t2, t3) = 
+let map_set_ t1 (t2, t3) = 
   IT (Map_op (Set (t1, t2, t3)), bt t1)
-let get_ v arg = 
+let map_get_ v arg = 
   match bt v with
   | BT.Map (_, rbt) ->
      IT (Map_op (Get (v, arg)), rbt)
@@ -1036,7 +1036,7 @@ let nothing_ bt =
   IT (Option_op (Nothing bt), BT.Option bt)
 let something_ t =
   IT (Option_op (Something t), BT.Option (basetype t))
-let is_nothing t =
+let is_nothing_ t =
   IT (Option_op (Is_nothing t), BT.Bool)
 let is_something_ t =
   IT (Option_op (Is_something t), BT.Bool)
@@ -1050,11 +1050,6 @@ let let_ (s, bound) body =
 let let__ (name, bound) body =
   let s = Sym.fresh_named name in
   let_ (s, bound) (body (sym_ (s, basetype bound)))
-
-
-let (%@) it it' = get_ it it'
-
-
 
 
 
@@ -1134,6 +1129,18 @@ let hash (IT (it, _bt)) =
 
 
 
+let partiality_check_array length item_ct value = 
+  let unmapped = 
+    let rec aux i acc = 
+      if i > (length - 1) then acc else 
+        aux (i + 1) (map_set_ acc (int_ i, nothing_ (BT.of_sct item_ct)))
+    in
+    aux 0 value
+  in
+  let empty = const_map_ Integer (nothing_ (BT.of_sct item_ct)) in
+  eq_ (unmapped, empty)
+
+
 
 let value_check_pointer alignment ~pointee_ct about = 
   let about_int = pointerToIntegerCast_ about in
@@ -1158,8 +1165,14 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Array (it, None) -> 
        Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
     | Array (ict, Some n) -> 
+       let partiality = 
+         partiality_check_array n ict about
+       in
        let i_s, i = fresh BT.Integer in
-       eachI_ (0, i_s, n - 1) (aux ict (get_ about i))
+       and_ 
+         [eachI_ (0, i_s, n - 1) (is_something_ (map_get_ about i));
+          eachI_ (0, i_s, n - 1) (aux ict (get_some_value_ (map_get_ about i)));
+          partiality]
     | Pointer pointee_ct -> 
        value_check_pointer alignment ~pointee_ct about
     | Struct tag -> 

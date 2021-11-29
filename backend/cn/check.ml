@@ -237,7 +237,7 @@ module ResourceInference = struct
       Resources.Requests.{
           ct = array_ct ct (Some length);
           pointer = base_pointer_t;
-          value = BT.Map (Integer, of_sct ct);
+          value = of_sct (array_ct ct (Some length));
           init = BT.Bool;
           permission = permission_t;
       }
@@ -246,7 +246,7 @@ module ResourceInference = struct
       Resources.Requests.{
           ct = struct_ct tag;
           pointer = pointer_t;
-          value = Struct tag;
+          value = BT.of_sct (struct_ct tag);
           init = BT.Bool;
           permission = permission_t;
       }
@@ -517,17 +517,19 @@ module ResourceInference = struct
       in
       let pointer index = array_index_to_pointer ~base ~item_ct ~index in
       let folded_value_s, folded_value = 
-        IT.fresh (BT.Map (Integer, BT.of_sct item_ct))
+        IT.fresh (BT.Map (Integer, Option (BT.of_sct item_ct)))
       in
       let folded_value_lc = 
-        let i_s, i = IT.fresh Integer  in
+        let i_s, i = IT.fresh Integer in
         let subst = make_subst [(qpoint.qpointer, pointer i)] in
         eachI_ (0, i_s, length - 1) 
-          (eq_ (get_ folded_value i, 
-                IT.subst subst qpoint.value))
+          (eq_ (map_get_ folded_value i, 
+                something_ (IT.subst subst qpoint.value)))
+      in
+      let partiality_lc = IT.partiality_check_array length item_ct folded_value
       in
       let folded_init = 
-        let i_s, i = IT.fresh Integer  in
+        let i_s, i = IT.fresh Integer in
         let subst = make_subst [(qpoint.qpointer, pointer i)] in
         eachI_ (0, i_s, length - 1) (IT.subst subst qpoint.init)
       in
@@ -542,6 +544,7 @@ module ResourceInference = struct
       in
       let@ () = add_l folded_value_s (IT.bt folded_value) in
       let@ () = add_c (t_ folded_value_lc) in
+      let@ () = add_c (t_ partiality_lc) in
       return folded_resource
 
 
@@ -606,8 +609,9 @@ module ResourceInference = struct
             ct = item_ct;
             qpointer = qp_s;
             value = 
-              get_ value 
-                (array_pointer_to_index ~base ~item_size ~pointer:qp_t); 
+              get_some_value_
+                (map_get_ value 
+                   (array_pointer_to_index ~base ~item_size ~pointer:qp_t)); 
             init = init;
             permission = 
               and_ [cellPointer_ ~base ~step:item_size ~starti:(int_ 0)
@@ -825,22 +829,28 @@ end = struct
     in
     let unify_or_constrain_list = ListM.fold_leftM unify_or_constrain in
 
-    (* ASSUMES unification variables and quantifier q_s are disjoint  *)
-    let unify_or_constrain_q (q_s,q_bt) (unis, subst, constrs) (output_spec, output_have) = 
+    (* ASSUMES unification variables and quantifier q_s are disjoint *)
+    let unify_or_constrain_q (q_s,q_bt) condition (unis, subst, constrs) (output_spec, output_have) = 
       match IT.subst (make_subst subst) output_spec with
-      | IT (Map_op (Get (IT (Lit (Sym s), _), IT (Lit (Sym q'), _))), _) 
+      | IT (Option_op (Get_some_value (IT (Map_op (Get (IT (Lit (Sym s), _), 
+                                                        IT (Lit (Sym q'), _))), _) )), _)
            when Sym.equal q' q_s && SymMap.mem s unis ->
          let output_have_body = 
            let s' = Sym.fresh () in
+           let su = IT.make_subst [(q_s, sym_ (s', q_bt))] in
            map_def_ (s', q_bt)
-             (IT.subst (IT.make_subst [(q_s, sym_ (s', q_bt))]) output_have)
+             (ite_ (IT.subst su condition,
+                    IT.subst su (something_ (output_have)),
+                    nothing_ (IT.bt output_have))
+             )
          in
          let@ () = ls_matches_spec unis s output_have_body in
          return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
       | _ ->
          return (unis, subst, eq_ (output_spec, output_have) :: constrs)
     in
-    let unify_or_constrain_q_list q = ListM.fold_leftM (unify_or_constrain_q q) in
+    let unify_or_constrain_q_list q condition = 
+      ListM.fold_leftM (unify_or_constrain_q q condition) in
 
     fun (unis : (LS.t * Locations.info) SymMap.t) r_spec r_have ->
 
@@ -874,7 +884,10 @@ end = struct
                && IT.equal p_spec.permission p_have.permission);
        (* then          *)
          let@ (unis, subst, constrs) = 
-           unify_or_constrain_q_list (p_have.qpointer, Loc) (unis, [], []) 
+           unify_or_constrain_q_list 
+             (p_have.qpointer, Loc) 
+             p_have.permission
+             (unis, [], []) 
              [(p_spec.value, p_have.value); (p_spec.init, p_have.init)] 
          in         
          let@ provable = provable in
@@ -917,8 +930,11 @@ end = struct
                && List.equal IT.equal p_spec.iargs p_have.iargs);
        (* then *)
          let@ (unis, subst, constrs) = 
-           unify_or_constrain_q_list (p_have.qpointer, Loc)
-             (unis, [], []) (List.combine p_spec.oargs p_have.oargs) 
+           unify_or_constrain_q_list 
+             (p_have.qpointer, Loc)
+             p_have.permission
+             (unis, [], []) 
+             (List.combine p_spec.oargs p_have.oargs) 
          in
          let@ provable = provable in
          let result =
@@ -1135,10 +1151,10 @@ let infer_array (loc : loc) (vts : vt list) =
   let@ (_, it) = 
     ListM.fold_leftM (fun (index,it) (arg_bt, arg_it) -> 
         let@ () = ensure_base_type loc ~expect:item_bt arg_bt in
-        return (index + 1, set_ it (int_ index, arg_it))
-         ) (0, const_ Integer (default_ item_bt)) vts
+        return (index + 1, map_set_ it (int_ index, something_ arg_it))
+         ) (0, const_map_ Integer (nothing_ item_bt)) vts
   in
-  return (BT.Map (Integer, item_bt), it)
+  return (BT.Map (Integer, Option item_bt), it)
 
 
 let infer_constructor (loc : loc) (constructor : mu_ctor) 
@@ -1958,7 +1974,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          let subst = 
            make_subst (
                (def.pointer, it_of_arg pointer_arg) ::
-               (def.permission, permission ) ::
+               (def.permission, permission) ::
                List.combine (List.map fst def.iargs) (List.map it_of_arg iargs)
              )
          in

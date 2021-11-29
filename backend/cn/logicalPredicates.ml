@@ -97,7 +97,7 @@ module PageAlloc = struct
           qpointer = p_s;
           name = "Vmemmap_page";
           iargs = [];
-          oargs = [get_ vmemmap p];
+          oargs = [get_some_value_ (map_get_ vmemmap p)];
           permission = point_permission;
         }
 
@@ -122,7 +122,7 @@ module PageAlloc = struct
       let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
 
       let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Map (Loc, BT.Struct hyp_page_tag)) "vmemmap" 
+        IT.fresh_named (BT.Map (Loc, Option (BT.Struct hyp_page_tag))) "vmemmap" 
       in
 
       let args = [
@@ -139,7 +139,7 @@ module PageAlloc = struct
       let body = 
         let__ ("pool", pool) (fun pool ->
         let__ ("vmemmap", vmemmap) (fun vmemmap ->
-        let__ ("page", get_ vmemmap page_pointer) (fun page ->
+        let__ ("page", get_some_value_ (map_get_ vmemmap page_pointer)) (fun page ->
         let__ ("self_node_pointer",
                memberShift_ (page_pointer, hyp_page_tag, Id.id "node")) (fun self_node_pointer ->
         let__ ("pool_free_area_pointer",
@@ -174,7 +174,7 @@ module PageAlloc = struct
                 prev %== self_node_pointer;
                 (* or pointer to free_area cell *)
                 and_ (
-                    let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
+                    let free_area_entry = get_some_value_ (map_get_ (pool %. "free_area") (page %. "order")) in
                     [prev %== pool_free_area_pointer;
                      (free_area_entry %. "next") %== self_node_pointer]
                   );
@@ -183,7 +183,7 @@ module PageAlloc = struct
                     let prev_page_pointer = 
                       container_of_ (prev, hyp_page_tag, Id.id "node") in
                     let prev_page = 
-                      get_ vmemmap prev_page_pointer in
+                      get_some_value_ (map_get_ vmemmap prev_page_pointer) in
                     [vmemmap_good_pointer ~vmemmap_pointer prev_page_pointer
                        (pool %. "range_start") (pool %. "range_end");
                       (((prev_page %. "node") %. "next") 
@@ -197,7 +197,7 @@ module PageAlloc = struct
                 next %== self_node_pointer;
                 (* or pointer to free_area cell *)
                 and_ (
-                    let free_area_entry = get_ (pool %. "free_area") (page %. "order") in
+                    let free_area_entry = get_some_value_ (map_get_ (pool %. "free_area") (page %. "order")) in
                     [next %== pool_free_area_pointer;
                      (free_area_entry %. "prev") %== self_node_pointer]
                   );
@@ -206,7 +206,7 @@ module PageAlloc = struct
                     let next_page_pointer = 
                       container_of_ (next, hyp_page_tag, Id.id "node") in
                     let next_page = 
-                      get_ vmemmap next_page_pointer in
+                      get_some_value_ (map_get_ vmemmap next_page_pointer) in
                     [vmemmap_good_pointer ~vmemmap_pointer next_page_pointer
                        (pool %. "range_start") (pool %. "range_end");
                       (((next_page %. "node") %. "prev") 
@@ -254,7 +254,7 @@ module PageAlloc = struct
       let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
       let vmemmap_s, vmemmap = 
-        IT.fresh_named (BT.Map (Loc, BT.Struct hyp_page_tag)) "vmemmap" in
+        IT.fresh_named (BT.Map (Loc, Option (BT.Struct hyp_page_tag))) "vmemmap" in
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let pool_s, pool = IT.fresh_named (Struct hyp_pool_tag) "pool" in
 
@@ -273,7 +273,7 @@ module PageAlloc = struct
         let__ ("pool", pool) (fun pool ->
         let__ ("vmemmap", vmemmap) (fun vmemmap ->
         let__ ("cell_index", cell_index) (fun cell_index ->
-        let__ ("cell", get_ (pool %. "free_area") cell_index) (fun cell ->
+        let__ ("cell", get_some_value_ (map_get_ (pool %. "free_area") cell_index)) (fun cell ->
         let order = cell_index in
         let free_area_pointer = memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area") in
         let cell_pointer = arrayShift_ (free_area_pointer, struct_ct list_head_tag, cell_index) in
@@ -288,14 +288,14 @@ module PageAlloc = struct
                      let next_vmemmap = container_of_ (next, hyp_page_tag, Id.id "node") in
                      [(*prev*)
                        vmemmap_good_pointer ~vmemmap_pointer prev_vmemmap (pool %. "range_start") (pool %. "range_end");
-                       ((get_ vmemmap prev_vmemmap) %. "order") %== order;
-                       ((get_ vmemmap prev_vmemmap) %. "refcount") %== (int_ 0);
-                       (((get_ vmemmap prev_vmemmap) %. "node") %. "next") %== cell_pointer;
+                       ((get_some_value_ (map_get_ vmemmap prev_vmemmap)) %. "order") %== order;
+                       ((get_some_value_ (map_get_ vmemmap prev_vmemmap)) %. "refcount") %== (int_ 0);
+                       (((get_some_value_ (map_get_ vmemmap prev_vmemmap)) %. "node") %. "next") %== cell_pointer;
                        (*next*)
                        vmemmap_good_pointer ~vmemmap_pointer next_vmemmap (pool %. "range_start") (pool %. "range_end");
-                       ((get_ vmemmap next_vmemmap) %. "order") %== order;
-                       ((get_ vmemmap next_vmemmap) %. "refcount") %== (int_ 0);
-                       (((get_ vmemmap next_vmemmap) %. "node") %. "prev") %== cell_pointer;
+                       ((get_some_value_ (map_get_ vmemmap next_vmemmap)) %. "order") %== order;
+                       ((get_some_value_ (map_get_ vmemmap next_vmemmap)) %. "refcount") %== (int_ 0);
+                       (((get_some_value_ (map_get_ vmemmap next_vmemmap)) %. "node") %. "prev") %== cell_pointer;
                      ]
                    end
               ];

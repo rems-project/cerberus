@@ -97,7 +97,7 @@ let rec of_sct (Sctypes.Sctype (_, sct_)) =
   match sct_ with
   | Void -> Unit
   | Integer _ -> Integer
-  | Array (sct, _) -> Map (Integer, of_sct sct)
+  | Array (sct, _) -> Map (Integer, Option (of_sct sct))
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"

@@ -327,7 +327,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
     | IT (Map_op (Def ((s, _), body)), _) ->
        return (IT.subst (make_subst [(s, sym_ (q_s, q_bt))]) body)
     | _ ->
-       return (get_ it_val (sym_ (q_s, q_bt)))
+       return (map_get_ it_val (sym_ (q_s, q_bt)))
   in
 
 

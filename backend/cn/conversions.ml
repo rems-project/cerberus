@@ -45,7 +45,7 @@ let rec bt_of_core_object_type loc ot =
   | OTy_pointer -> return BT.Loc
   | OTy_array t -> 
      let@ t = bt_of_core_object_type loc t in
-     return (BT.Map (Integer, t))
+     return (BT.Map (Integer, Option t))
   | OTy_struct tag -> return (BT.Struct tag)
   | OTy_union _tag -> Debug_ocaml.error "union types"
   | OTy_floating -> unsupported loc !^"floats"
@@ -284,16 +284,23 @@ let make_qpred loc (predicates : (string * ResourcePredicates.definition) list)
     | _ -> fail {loc; msg = Generic (!^"Predicate pointer argument must be the quantified variable")}
   in
   let@ some_oargs = some_oargs_map loc some_oargs in
-  let (mapping, l, some_oargs, oargs) = 
-    List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
-        let it, l = match StringMap.find_opt oarg some_oargs with
+  let (mapping, l, c, some_oargs, oargs) = 
+    List.fold_right (fun (oarg, bt) (mapping, l, c, some_oargs, oargs) ->
+        let it, l, c = match StringMap.find_opt oarg some_oargs with
           | None ->
-             let lifted_bt = BT.Map (qbt, bt) in
+             let lifted_bt = BT.Map (qbt, Option bt) in
              let s, it = IT.fresh lifted_bt in
              let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
-             (it, new_l :: l)
+             let _new_c1 = 
+               (`Constraint
+                  (LC.forall_ (qp, qbt)
+                     (impl_ (not_ condition, is_nothing_ (map_get_ it (sym_ (qp, qbt)))))),
+                     (* (impl_ (not_ condition, not_ (is_something_ (map_get_ it (sym_ (qp, qbt))))))), *)
+                (loc, Some ("output argument '" ^ oarg ^"' map/array partiality constraint")))
+             in
+             (it, new_l :: l, (* new_c1 :: *) c)
           | Some it ->
-             (it, l)
+             (it, l, c)
         in
         let mapping = match oname with
           | Some name ->
@@ -303,9 +310,9 @@ let make_qpred loc (predicates : (string * ResourcePredicates.definition) list)
              mapping
         in
         let some_oargs = StringMap.remove oarg some_oargs in
-        let oargs = (get_ it (sym_ (qp, qbt))) :: oargs in
-        (mapping, l, some_oargs, oargs)
-      ) def.oargs ([], [], some_oargs, [])
+        let oargs = (get_some_value_ (map_get_ it (sym_ (qp, qbt)))) :: oargs in
+        (mapping, l, c, some_oargs, oargs)
+      ) def.oargs ([], [], [], some_oargs, [])
   in
   let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
@@ -318,7 +325,7 @@ let make_qpred loc (predicates : (string * ResourcePredicates.definition) list)
        }),
      (loc, None))
   in
-  return (l @ [r], mapping)
+  return (l @ [r] @ c, mapping)
 
 
 
@@ -537,8 +544,10 @@ let resolve_index_term loc
        let@ (it2, _) = resolve t2 mapping in
        let ppf () = Ast.Terms.pp false t1 in
        begin match IT.bt it1 with
+       | BT.Map (_, Option bt) -> 
+          return (get_some_value_ (map_get_ it1 it2), None)
        | BT.Map (_, bt) -> 
-          return (IT (Map_op (Get (it1, it2)), bt), None)
+          assert false
        | _ -> 
           fail {loc; msg = Generic (ppf () ^^^ !^"is not an array/not a map")}
        end
