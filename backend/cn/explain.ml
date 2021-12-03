@@ -307,6 +307,12 @@ let symbol_it = function
   | IT.IT (Lit (Sym s), _) -> SymSet.singleton s
   | _ -> SymSet.empty
 
+let app_symbol_it q = function
+  | IT.IT (Map_op (Get (IT (Lit (Sym v_s), _), IT (Lit (Sym i_s), _))), _)
+       when Sym.equal i_s q ->
+     SymSet.singleton v_s
+  | _ -> SymSet.empty
+
 
 
 let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)=
@@ -352,8 +358,8 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
          evaluate p.init,
          evaluate p.value
        in
-       let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
-         | Some q, Some true when Q.equal q Q.one ->
+       let state = match Option.bind permission_v is_bool, Option.bind init_v is_bool with
+         | Some true, Some true ->
             Sctypes.pp p.ct ^^ colon ^^^
             value_e ^^^ equals ^^^ maybe_evaluated value_v
          | _ -> 
@@ -369,49 +375,47 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
          } 
        in
        let reported = 
-         List.fold_left SymSet.union SymSet.empty
-           [symbol_it p.pointer; 
-            symbol_it p.value;
+         List.fold_left SymSet.union SymSet.empty [
+             symbol_it p.pointer; 
+             symbol_it p.value;
            ]
        in
        (entry, [], reported)
     | QPoint p ->
-       let p = alpha_rename_qpoint (Sym.fresh_pretty "ptr") p in
-       let q = (p.qpointer, BT.Loc) in
+       let p = alpha_rename_qpoint (Sym.fresh_pretty "i") p in
+       let q = (p.q, BT.Integer) in
        let loc_e, permission_e, init_e, value_e = 
-         Sym.pp p.qpointer,
+         IT.pp (name_subst p.pointer),
          IT.pp (name_subst p.permission),
          IT.pp (name_subst p.init), 
          IT.pp (name_subst p.value)
        in
-       let permission_v, init_v, value_v = 
+       let loc_v, permission_v, init_v, value_v = 
+         evaluate p.pointer,
          evaluate_lambda q p.permission,
          evaluate_lambda q p.init,
          evaluate_lambda q p.value
        in
-       let state = match Option.bind permission_v is_q, Option.bind init_v is_bool with
-         | Some q, Some true when Q.equal q Q.one ->
-            Sctypes.pp p.ct ^^ colon ^^^
-            value_e ^^^ equals ^^^ maybe_evaluated value_v
-         | _ ->
-            let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
-            let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
-            Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
-            value_e ^^^ equals ^^^ maybe_evaluated value_v
+       let state = 
+         let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
+         let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
+         !^"each" ^^^ Sym.pp (fst q) ^^ colon ^^^
+         Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
+           value_e ^^^ equals ^^^ maybe_evaluated value_v
        in
        let entry = {
-           loc_e = Some (!^"each" ^^^ loc_e);
-           loc_v = None;
+           loc_e = Some loc_e;
+           loc_v = Some (maybe_evaluated loc_v);
            state = Some state;
          } 
        in
        let reported = 
-         SymSet.remove p.qpointer
-           (List.fold_left SymSet.union SymSet.empty
-              [IT.free_vars p.value;
-               IT.free_vars p.init;
-               IT.free_vars p.permission;
-              ])
+         (List.fold_left SymSet.union SymSet.empty [
+              symbol_it p.pointer;
+              app_symbol_it p.q p.value;
+              app_symbol_it p.q p.init;
+              app_symbol_it p.q p.permission;
+         ])
        in
        (entry, [], reported)
     | Predicate p ->
@@ -425,8 +429,8 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
          evaluate p.pointer,
          evaluate p.permission
        in
-       let state = match Option.bind permission_v is_q with
-         | Some q when Q.equal q Q.one ->
+       let state = match Option.bind permission_v is_bool with
+         | Some true ->
             !^id ^^^ equals ^^^
             Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
          | _ ->
@@ -448,32 +452,36 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
              {var; value}
            ) p.oargs predicate_def.oargs
        in
-       let reported = symbol_it p.pointer in
+       let reported = 
+         (List.fold_left SymSet.union SymSet.empty (
+              symbol_it p.pointer ::
+              symbol_it p.permission ::
+              List.map symbol_it p.iargs
+         ))
+       in
        (entry, oargs, reported)
     | QPredicate p ->
-       let p = alpha_rename_qpredicate (Sym.fresh_pretty "ptr") p in
-       let q = (p.qpointer, BT.Loc) in
+       let p = alpha_rename_qpredicate (Sym.fresh_pretty "i") p in
+       let q = (p.q, BT.Integer) in
        let id = make_predicate_name () in
        let loc_e, permission_e, iargs_e = 
-         Sym.pp p.qpointer,
+         IT.pp (name_subst p.pointer),
          IT.pp (name_subst p.permission), 
-         (List.map (fun i -> IT.pp (name_subst i)) p.iargs)
+         (List.map (fun ia -> IT.pp (name_subst ia)) p.iargs)
        in
+       let loc_v = evaluate p.pointer in
        let permission_v = evaluate_lambda q p.permission in
-       let state = match Option.bind permission_v is_q with
-         | Some q when Q.equal q Q.one ->
-            !^id ^^^ equals ^^^
-            Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e))
-         | _ ->
-            !^id ^^^ equals ^^^
-            Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
-            parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
+       let state = 
+         !^id ^^^ equals ^^^
+         !^"each" ^^^ Sym.pp (fst q) ^^ colon ^^^
+         Pp.string p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
+         parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
        in
        let entry = {
-           loc_e = Some (!^"each" ^^^ loc_e);
-           loc_v = None;
+           loc_e = Some loc_e;
+           loc_v = Some (maybe_evaluated loc_v);
            state = Some state
-           } 
+         } 
        in
        let oargs = 
          let predicate_def = Option.get (Global.get_resource_predicate_def ctxt.global p.name) in
@@ -483,7 +491,14 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
              {var; value}
            ) p.oargs predicate_def.oargs
        in
-       (entry, oargs, SymSet.empty)
+       let reported = 
+         (List.fold_left SymSet.union SymSet.empty (
+              symbol_it p.pointer ::
+              app_symbol_it p.q p.permission ::
+              List.map (app_symbol_it p.q) p.iargs
+         ))
+       in
+       (entry, oargs, reported)
   in
 
   let (memory, predicate_oargs, reported) = 

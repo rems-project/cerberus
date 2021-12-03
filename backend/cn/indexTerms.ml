@@ -1129,7 +1129,7 @@ let hash (IT (it, _bt)) =
 
 
 
-let partiality_check_array length item_ct value = 
+let partiality_check_array ~length ~item_ct value = 
   let unmapped = 
     let rec aux i acc = 
       if i > (length - 1) then acc else 
@@ -1164,14 +1164,12 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
        in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
     | Array (it, None) -> 
        Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
-    | Array (ict, Some n) -> 
-       let partiality = 
-         partiality_check_array n ict about
-       in
+    | Array (item_ct, Some n) -> 
+       let partiality = partiality_check_array ~length:n ~item_ct about in
        let i_s, i = fresh BT.Integer in
        and_ 
          [eachI_ (0, i_s, n - 1) (is_something_ (map_get_ about i));
-          eachI_ (0, i_s, n - 1) (aux ict (get_some_value_ (map_get_ about i)));
+          eachI_ (0, i_s, n - 1) (aux item_ct (get_some_value_ (map_get_ about i)));
           partiality]
     | Pointer pointee_ct -> 
        value_check_pointer alignment ~pointee_ct about

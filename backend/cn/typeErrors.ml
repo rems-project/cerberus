@@ -209,28 +209,28 @@ let pp_message te =
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
      let descr =
-       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+       !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
      { short; descr = Some descr; state = None}
   | Number_arguments {has;expect} ->
      let short = !^"Wrong number of arguments" in
      let descr =
-       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+       !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
      { short; descr = Some descr; state = None }
   | Number_input_arguments {has;expect} ->
      let short = !^"Wrong number of input arguments" in
      let descr =
-       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+       !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
      { short; descr = Some descr; state = None }
   | Number_output_arguments {has;expect} ->
      let short = !^"Wrong number of output arguments" in
      let descr =
-       !^"Expected" ^^^ !^(string_of_int expect) ^^^ comma ^^^
+       !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
      { short; descr = Some descr; state = None }
