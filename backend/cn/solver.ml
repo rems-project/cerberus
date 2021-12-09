@@ -82,7 +82,7 @@ let tactics = [
     "add-bounds";
     "simplify";
     "solve-eqs";
-    (* "auflia"; *)
+    (* "aufnira"; *)
     "smt";
   ]
 

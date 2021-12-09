@@ -471,7 +471,10 @@ let resolve_index_term loc
          | Struct tag -> return tag
          | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
        in
-       let layout = SymMap.find tag layouts in
+       let@ layout = match SymMap.find_opt tag layouts with
+         | Some layout -> return layout
+         | None -> fail {loc; msg = Unknown_struct tag}
+       in
        let decl_members = Memory.member_types layout in
        let@ sct = match List.assoc_opt Id.equal member decl_members with
          | Some sct -> 
