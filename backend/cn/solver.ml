@@ -77,12 +77,12 @@ let params =
 let tactics = [
     "propagate-values";
     "propagate-ineqs";
-    "purify-arith";
-    "elim-term-ite";
+    (* "purify-arith"; *)
+    (* "elim-term-ite"; *)
     "add-bounds";
     "simplify";
     "solve-eqs";
-    "auflia";
+    (* "auflia"; *)
     "smt";
   ]
 
