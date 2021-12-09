@@ -2,15 +2,19 @@ module LC = LogicalConstraints
 module IT = IndexTerms
 open IndexTerms
 
-module SymPair = struct
-  type t = Sym.t * Sym.t
-  let compare (s1,s2) (s1',s2') =
-    let c1 = Sym.compare s1 s1' in
-    if c1 <> 0 then c1 else Sym.compare s2 s2'
+
+module ITPair = struct 
+  type t = IT.t * IT.t
+  let equal (a1, a2) (b1, b2) = 
+    IT.equal a1 b1 && IT.equal a2 b2
+
+  let hash (a1, a2) = 
+    IT.hash a1 + IT.hash a2
 end
 
 
-module SymPairMap = Map.Make(SymPair)
+module ITPairTable = Hashtbl.Make(ITPair)
+
 
 
 let rec simp struct_decls values equalities some_known_facts =
@@ -274,15 +278,18 @@ let rec simp struct_decls values equalities some_known_facts =
        begin match a, b with
        | _ when equal a b ->
          IT (Lit (Bool true), bt) 
-       | IT (Lit (Sym s), _), IT (Lit (Sym s'), _) ->
-          begin match SymPairMap.find_opt (s,s') equalities, 
-                      SymPairMap.find_opt (s',s) equalities with
+       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
+          bool_ (Z.equal z1 z2)
+       | a, b
+          when ITPairTable.mem equalities (a,b) ||
+                 ITPairTable.mem equalities (b,a) 
+         ->
+          begin match ITPairTable.find_opt equalities (a,b), 
+                      ITPairTable.find_opt equalities (b,a) with
           | Some bool, _ -> bool_ bool
           | _, Some bool -> bool_ bool
           | _ -> eq_ (a, b)
           end
-       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-          bool_ (Z.equal z1 z2)
        | IT (Tuple_op (Tuple items1), _), 
          IT (Tuple_op (Tuple items2), _)  ->
           and_ (List.map2 eq__ items1 items2)
@@ -495,7 +502,7 @@ let rec simp struct_decls values equalities some_known_facts =
 
 
 let simp ?(some_known_facts = []) struct_decls lcs it = 
-  
+
   let values = 
     List.fold_right (fun c values ->
         match c with
@@ -511,27 +518,31 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
       ) lcs SymMap.empty
   in
   
-  let equalities =
-    List.fold_right (fun c equalities ->
+  let equalities = ITPairTable.create 100 in
+  let () = 
+    List.iter (fun c ->
         match c with
         | LC.T it ->
            begin match it with
-           | IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                              IT (Lit (Sym sym'), _))), _) ->
-              SymPairMap.add (sym, sym') true equalities
-           | IT (Bool_op (Not (IT (Bool_op (EQ (IT (Lit (Sym sym), _), 
-                                                IT (Lit (Sym sym'), _))), _))), _) ->
-              SymPairMap.add (sym, sym') false equalities
-           | IT (Bool_op (NE (IT (Lit (Sym sym), _), 
-                              IT (Lit (Sym sym'), _))), _) ->
-              SymPairMap.add (sym, sym') false equalities
-           | _ -> equalities
+           | IT (Bool_op (EQ (a, b)), _) ->
+              ITPairTable.add equalities (a, b) true 
+           | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) ->
+              ITPairTable.add equalities (a, b) false
+           | IT (Bool_op (NE (a, b)), _) ->
+              ITPairTable.add equalities (a, b) false
+           | _ -> 
+              ()
            end
-        | _ -> equalities
-      ) lcs SymPairMap.empty
+        | _ -> 
+           ()
+      ) lcs
   in
 
-  simp struct_decls values equalities some_known_facts it
+  let result = simp struct_decls values equalities some_known_facts it in
+
+  result
+  
+  
 
 
 

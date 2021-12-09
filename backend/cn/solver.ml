@@ -128,6 +128,8 @@ module Translate = struct
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
     | DefaultFunc of { bt : BT.t }
+    | SomeFunc of { bt : BT.t }
+    | NoneFunc of { bt : BT.t }
 
 
 
@@ -212,11 +214,15 @@ module Translate = struct
            member_symbols member_sorts
       | Option bt -> 
          let none_constructor =
-           Z3.Datatype.mk_constructor context (symbol ("none__" ^ bt_name bt))
+           let fsym = symbol ("none__" ^ bt_name bt) in
+           Z3Symbol_Table.add z3sym_table fsym (NoneFunc {bt});
+           Z3.Datatype.mk_constructor context fsym
              (symbol ("is_none__" ^ bt_name bt)) [] [] []
          in
          let some_constructor = 
-           Z3.Datatype.mk_constructor context (symbol ("some__" ^ bt_name bt))
+           let fsym = symbol ("some__" ^ bt_name bt) in
+           Z3Symbol_Table.add z3sym_table fsym (SomeFunc {bt});
+           Z3.Datatype.mk_constructor context fsym
              (symbol("is_some__" ^ bt_name bt)) 
              [symbol ("some_value__" ^ bt_name bt)]
              [Some (translate bt)] [0]
@@ -895,6 +901,10 @@ let eval struct_decls (context, model) to_be_evaluated =
               nthTuple_ ~item_bt:comp_bt (i, nth args 0)
            | TupleFunc {bts} ->
               tuple_ args
+           | SomeFunc { bt } ->
+              something_ (List.hd args)
+           | NoneFunc { bt }->
+              nothing_ bt
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->

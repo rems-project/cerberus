@@ -413,50 +413,63 @@ module RE = struct
 
 
   let simp struct_decls lcs resource =
+
+    (* print stdout !^"simplifying resource";
+     * print stdout (item "lcs" (list LC.pp lcs));
+     * print stdout (item "resource" (pp resource)); *)
+
     let simp_it extra_facts it = 
       Simplify.simp struct_decls lcs 
         ~some_known_facts:extra_facts it 
     in
-    match resource with
-    | Point p ->
-       Point {
-           ct = p.ct;
-           pointer = simp_it [] p.pointer; 
-           permission = simp_it [] p.permission;
-           value = simp_it [] p.value;
-           init = simp_it [] p.init; 
-         }
-    | QPoint qp ->
-       let qp = alpha_rename_qpoint (Sym.fresh_same qp.q) qp in
-       let permission = simp_it [] qp.permission in
-       QPoint { 
-           ct = qp.ct;
-           pointer = simp_it [] qp.pointer;
-           q = qp.q;
-           permission = permission;
-           value = simp_it [permission] qp.value;
-           init = simp_it [permission] qp.init;
-         }
-    | Predicate p -> 
-       Predicate {
-           name = p.name; 
-           pointer = simp_it [] p.pointer; 
-           permission = simp_it [] p.permission;
-           iargs = List.map (simp_it []) p.iargs; 
-           oargs = List.map (simp_it []) p.oargs; 
-         }
-    | QPredicate qp -> 
-       let qp = alpha_rename_qpredicate (Sym.fresh_same qp.q) qp in
-       let permission = simp_it [] qp.permission in
-       QPredicate {
-           name = qp.name;
-           pointer = simp_it [] qp.pointer;
-           q = qp.q;
-           step = qp.step;
-           permission = permission;
-           iargs = List.map (simp_it [permission]) qp.iargs;
-           oargs = List.map (simp_it [permission]) qp.oargs;
-         }
+
+    let result = match resource with
+      | Point p ->
+         Point {
+             ct = p.ct;
+             pointer = simp_it [] p.pointer; 
+             permission = simp_it [] p.permission;
+             value = simp_it [] p.value;
+             init = simp_it [] p.init; 
+           }
+      | QPoint qp ->
+         let qp = alpha_rename_qpoint (Sym.fresh_same qp.q) qp in
+         let permission = simp_it [] qp.permission in
+         QPoint { 
+             ct = qp.ct;
+             pointer = simp_it [] qp.pointer;
+             q = qp.q;
+             permission = permission;
+             value = simp_it [permission] qp.value;
+             init = simp_it [permission] qp.init;
+           }
+      | Predicate p -> 
+         Predicate {
+             name = p.name; 
+             pointer = simp_it [] p.pointer; 
+             permission = simp_it [] p.permission;
+             iargs = List.map (simp_it []) p.iargs; 
+             oargs = List.map (simp_it []) p.oargs; 
+           }
+      | QPredicate qp -> 
+         let qp = alpha_rename_qpredicate (Sym.fresh_same qp.q) qp in
+         let permission = simp_it [] qp.permission in
+         QPredicate {
+             name = qp.name;
+             pointer = simp_it [] qp.pointer;
+             q = qp.q;
+             step = qp.step;
+             permission = permission;
+             iargs = List.map (simp_it [permission]) qp.iargs;
+             oargs = List.map (simp_it [permission]) qp.oargs;
+           }
+    in
+
+    (* print stdout (item "result" (pp result)); *)
+
+    result
+
+    
 
 
 
