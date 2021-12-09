@@ -128,8 +128,12 @@ module Translate = struct
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
     | DefaultFunc of { bt : BT.t }
-    | SomeFunc of { bt : BT.t }
-    | NoneFunc of { bt : BT.t }
+    | SomethingFunc of { bt : BT.t }
+    | NothingFunc of { bt : BT.t }
+    | IsSomethingFunc of { bt : BT.t }
+    | ValueOfSomethingFunc of { bt : BT.t }
+
+
 
 
 
@@ -214,17 +218,21 @@ module Translate = struct
            member_symbols member_sorts
       | Option bt -> 
          let none_constructor =
-           let fsym = symbol ("none__" ^ bt_name bt) in
-           Z3Symbol_Table.add z3sym_table fsym (NoneFunc {bt});
-           Z3.Datatype.mk_constructor context fsym
+           let nothing_sym = symbol ("none__" ^ bt_name bt) in
+           Z3Symbol_Table.add z3sym_table nothing_sym (NothingFunc {bt});
+           Z3.Datatype.mk_constructor context nothing_sym
              (symbol ("is_none__" ^ bt_name bt)) [] [] []
          in
          let some_constructor = 
-           let fsym = symbol ("some__" ^ bt_name bt) in
-           Z3Symbol_Table.add z3sym_table fsym (SomeFunc {bt});
-           Z3.Datatype.mk_constructor context fsym
-             (symbol("is_some__" ^ bt_name bt)) 
-             [symbol ("some_value__" ^ bt_name bt)]
+           let something_sym = symbol ("some__" ^ bt_name bt) in
+           let value_of_something_sym = symbol ("value_of_something__" ^ bt_name bt) in
+           let is_something_sym = symbol("is_something__" ^ bt_name bt) in
+           Z3Symbol_Table.add z3sym_table something_sym (SomethingFunc {bt});
+           Z3Symbol_Table.add z3sym_table value_of_something_sym (ValueOfSomethingFunc {bt});
+           Z3Symbol_Table.add z3sym_table is_something_sym (IsSomethingFunc {bt});
+           Z3.Datatype.mk_constructor context something_sym
+             is_something_sym 
+             [value_of_something_sym]
              [Some (translate bt)] [0]
          in
          Z3.Datatype.mk_sort context (symbol (bt_name (Option bt))) 
@@ -901,10 +909,14 @@ let eval struct_decls (context, model) to_be_evaluated =
               nthTuple_ ~item_bt:comp_bt (i, nth args 0)
            | TupleFunc {bts} ->
               tuple_ args
-           | SomeFunc { bt } ->
+           | SomethingFunc { bt } ->
               something_ (List.hd args)
-           | NoneFunc { bt }->
+           | NothingFunc { bt }->
               nothing_ bt
+           | IsSomethingFunc { bt } ->
+              is_something_ (List.hd args)
+           | ValueOfSomethingFunc { bt } ->
+              get_some_value_ (List.hd args)
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
