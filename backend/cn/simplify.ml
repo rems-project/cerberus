@@ -275,8 +275,10 @@ let rec simp struct_decls values equalities some_known_facts =
        | _ when equal a b ->
          IT (Lit (Bool true), bt) 
        | IT (Lit (Sym s), _), IT (Lit (Sym s'), _) ->
-          begin match SymPairMap.find_opt (s,s') equalities with
-          | Some bool -> bool_ bool
+          begin match SymPairMap.find_opt (s,s') equalities, 
+                      SymPairMap.find_opt (s',s) equalities with
+          | Some bool, _ -> bool_ bool
+          | _, Some bool -> bool_ bool
           | _ -> eq_ (a, b)
           end
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
