@@ -192,10 +192,6 @@ module WIT = struct
               let@ t = infer loc ~context t in
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, EQ (t,t')) 
-           | NE (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (BT.Bool, NE (t,t')) 
            | EachI ((i1, s, i2), t) ->
               pure begin 
                   let@ () = add_l s Integer in

@@ -363,7 +363,6 @@ module Translate = struct
          | Not t -> mk_not context (term t)
          | ITE (t1, t2, t3) -> mk_ite context (term t1) (term t2) (term t3)
          | EQ (t1, t2) -> mk_eq context (term t1) (term t2)
-         | NE (t1, t2) -> mk_distinct context [term t1; term t2]
          | EachI ((i1, s, i2), t) -> 
              let rec aux i = 
                if i <= i2 

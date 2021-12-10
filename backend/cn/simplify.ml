@@ -296,10 +296,6 @@ let rec simp struct_decls values equalities some_known_facts =
        | _, _ ->
           eq_ (a, b)
        end
-    | NE (a, b) ->
-       let a = aux a in
-       let b = aux b in
-       IT (Bool_op (NE (a, b)), BT.Bool)
     | EachI ((i1, s, i2), t) ->
        let s' = Sym.fresh_same s in 
        let t = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) t in
@@ -527,8 +523,6 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
            | IT (Bool_op (EQ (a, b)), _) ->
               ITPairTable.add equalities (a, b) true 
            | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) ->
-              ITPairTable.add equalities (a, b) false
-           | IT (Bool_op (NE (a, b)), _) ->
               ITPairTable.add equalities (a, b) false
            | _ -> 
               ()
