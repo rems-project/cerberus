@@ -349,37 +349,7 @@ module RE = struct
   include Make(IT)
 
 
-  (* assumption: resource is owned *)
-  let derived_constraint resource = 
-    let lc = match resource with
-      | Point p -> 
-         (* bool_ true *)
-         impl_ (p.permission, 
-                ne_ (p.pointer, null_))
-      | _ ->
-         bool_ true
-    in
-    LC.t_ lc
-  
-  
-  (* assumption: resource owned at the same time as resources' *)
-  (* todo, depending on how much we need *)
-  let derived_constraints resource resource' =
-    (* let open IT in *)
-    match resource, resource' with
-    | Point p, Point p' -> 
-       (* LC.T (bool_ true) *)
-       LC.T (impl_ (
-            and_ [p.permission; p'.permission],
-            ne_ (p.pointer, p'.pointer)
-          )
-         )
-    | Predicate _, _
-    | _, Predicate _ -> 
-       LC.T (bool_ true)
-    | _ ->
-       (* todo *)
-       LC.T (bool_ true)
+
 
 
 
@@ -408,6 +378,60 @@ module RE = struct
    * 
    * let array_permission ~base ~item_size ~length ~qpointer ~permission =
    *   and_ [array_condition ~base ~item_size ~length ~qpointer; permission] *)
+
+
+
+
+
+
+  (* assumption: resource is owned *)
+  let derived_constraint resource = 
+    let lc = match resource with
+      | Point p -> 
+         (* bool_ true *)
+         impl_ (p.permission, 
+                ne_ (p.pointer, null_))
+      | _ ->
+         bool_ true
+    in
+    LC.t_ lc
+  
+  
+  (* assumption: resource owned at the same time as resources' *)
+  (* todo, depending on how much we need *)
+  let derived_constraints resource resource' =
+    (* let open IT in *)
+    match resource, resource' with
+    | Point p, Point p' -> 
+       LC.T (impl_ (
+            and_ [p.permission; p'.permission],
+            ne_ (p.pointer, p'.pointer)
+          )
+         )
+    | Point p, QPoint qp
+    | QPoint qp, Point p ->
+       (* copying and adapting code from point_request logic *)
+       let base = qp.pointer in
+       let item_size = int_ (Memory.size_of_ctype qp.ct) in
+       let offset = array_offset_of_pointer ~base ~pointer:p.pointer in
+       let index = array_pointer_to_index ~base ~item_size ~pointer:p.pointer in
+       let impossible_match = 
+         and_ [lePointer_ (base, p.pointer);
+               eq_ (rem_ (offset, item_size), int_ 0);
+               IT.subst (IT.make_subst [(qp.q, index)]) qp.permission; 
+               p.permission] 
+       in
+       LC.T (not_ impossible_match)
+    | QPoint qp, QPoint qp' ->
+       (* todo: this requires all-quantified constraints *)
+       LC.T (bool_ true)
+    | (Predicate _ | QPredicate _), _
+    | _, (Predicate _ | QPredicate _) ->
+       (* we don't know anything until we unpack: the resource could
+          be "ownership-empty" *)
+       LC.T (bool_ true)
+
+
 
 
 

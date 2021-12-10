@@ -539,7 +539,7 @@ module ResourceInference = struct
         let rec update value i = 
           if i >= length then value else
             let subst = IT.make_subst [(qpoint.q, int_ i)] in
-            let cell_value = IT.subst subst qpoint.value in
+            let cell_value = something_ (IT.subst subst qpoint.value) in
             let value' = map_set_ value (int_ i, cell_value) in
             update value' (i + 1)
         in
