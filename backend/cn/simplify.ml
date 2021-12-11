@@ -5,16 +5,14 @@ open Terms
 
 
 module ITPair = struct 
-  type t = IT.t * IT.t
-  let equal (a1, a2) (b1, b2) = 
-    IT.equal a1 b1 && IT.equal a2 b2
-
-  let hash (a1, a2) = 
-    IT.hash a1 + IT.hash a2
+  type it_pair = IT.t * IT.t
+  [@@deriving eq, ord]
+  type t = it_pair
+  let equal = equal_it_pair
+  let compare = compare_it_pair
 end
 
-
-module ITPairTable = Hashtbl.Make(ITPair)
+module ITPairMap = Map.Make(ITPair)
 
 
 
@@ -282,11 +280,11 @@ let rec simp struct_decls values equalities some_known_facts =
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
           bool_ (Z.equal z1 z2)
        | a, b
-          when ITPairTable.mem equalities (a,b) ||
-                 ITPairTable.mem equalities (b,a) 
+          when ITPairMap.mem (a,b) equalities ||
+                 ITPairMap.mem (b,a) equalities 
          ->
-          begin match ITPairTable.find_opt equalities (a,b), 
-                      ITPairTable.find_opt equalities (b,a) with
+          begin match ITPairMap.find_opt (a,b) equalities, 
+                      ITPairMap.find_opt (b,a) equalities with
           | Some bool, _ -> bool_ bool
           | _, Some bool -> bool_ bool
           | _ -> eq_ (a, b)
@@ -515,22 +513,21 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
       ) lcs SymMap.empty
   in
   
-  let equalities = ITPairTable.create 100 in
-  let () = 
-    List.iter (fun c ->
+  let equalities = 
+    List.fold_left (fun equalities c ->
         match c with
         | LC.T it ->
            begin match it with
            | IT (Bool_op (EQ (a, b)), _) ->
-              ITPairTable.add equalities (a, b) true 
+              ITPairMap.add (a, b) true equalities
            | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) ->
-              ITPairTable.add equalities (a, b) false
+              ITPairMap.add (a, b) false equalities
            | _ -> 
-              ()
+              equalities
            end
         | _ -> 
-           ()
-      ) lcs
+           equalities
+      ) ITPairMap.empty lcs
   in
 
   let result = simp struct_decls values equalities some_known_facts it in
