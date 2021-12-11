@@ -36,7 +36,7 @@ type 'bt arith_op =
   | IntToReal of 'bt term
   | RealToInt of 'bt term
   | FlipBit of {bit: 'bt term; t : 'bt term}
-  | XOR of Sctypes.integerType * 'bt term * 'bt term
+  | XOR of Sctypes.IntegerTypes.t * 'bt term * 'bt term
 
 and 'bt bool_op = 
   | And of 'bt term list
@@ -171,7 +171,7 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | FlipBit fb, FlipBit fb' ->
         equal fb.bit fb'.bit && equal fb.t fb'.t
      | XOR (ity, t1, t2), XOR (ity', t1', t2') -> 
-        Sctypes.integerTypeEqual ity ity' && equal t1 t1' && equal t2 t2'
+        Sctypes.IntegerTypes.equal ity ity' && equal t1 t1' && equal t2 t2'
      | Add _, _ -> false
      | Sub _, _ -> false
      | Mul _, _ -> false 
@@ -407,7 +407,7 @@ let pp =
        | FlipBit fb ->
           c_app !^"flipBit" [aux false fb.bit; aux false fb.t]
        | XOR (ity, t1, t2) -> 
-          c_app !^"xor" [Sctypes.pp_integerType ity ; aux false t1; aux false t2]
+          c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
        end
     | Bool_op bool_op -> 
        begin match bool_op with

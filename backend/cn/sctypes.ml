@@ -1,12 +1,57 @@
 open Cerb_frontend
 
+(* copying some things over from frontend/model/ctype.lem *)
 (* copying subset of Ctype.ctype *)
 
+module IntegerBaseTypes = struct
+  type integerBaseType = Ctype.integerBaseType =
+    | Ichar
+    | Short
+    | Int_
+    | Long
+    | LongLong
+    (* Things defined in the standard libraries *)
+    | IntN_t of int
+    | Int_leastN_t of int
+    | Int_fastN_t of int
+    | Intmax_t
+    | Intptr_t
+  [@@deriving eq,ord]
+  type t = integerBaseType
+  let equal = equal_integerBaseType
+  let compare = compare_integerBaseType
+end
+open IntegerBaseTypes
 
+module IntegerTypes = struct
+  type integerType = Ctype.integerType =
+    | Char
+    | Bool
+    | Signed of integerBaseType
+    | Unsigned of integerBaseType
+    | Enum of Symbol.sym
+    (* Things defined in the standard libraries *)
+    | Wchar_t
+    | Wint_t
+    | Size_t
+    | Ptrdiff_t
+  [@@deriving eq, ord]
+  type t = integerType
+  let equal = equal_integerType
+  let compare = compare_integerType
+  let pp = Pp_core_ctype.pp_integer_ctype
+end
+open IntegerTypes
 
-type integerType = Ctype.integerType
-let integerTypeEqual = Ctype.integerTypeEqual
-let pp_integerType = Pp_core_ctype.pp_integer_ctype
+module Qualifiers = struct
+  type qualifiers = Ctype.qualifiers =
+    { const : bool; restrict : bool; volatile : bool; }
+      [@@deriving eq, ord]
+  type t = qualifiers
+  let equal = equal_qualifiers
+  let compare = compare_qualifiers
+end
+open Qualifiers
 
 type t =
   | Void
@@ -14,43 +59,31 @@ type t =
   | Array of t * int option
   | Pointer of t
   | Struct of Sym.t
-  | Function of (* has_proto *)bool * (Ctype.qualifiers * t)
+  | Function of (* has_proto *)bool * (qualifiers * t)
                 * (t * (* is_register *)bool) list
                 * (* is_variadic *)bool
+[@@deriving eq, ord]
 
 
 let is_unsigned_integer_type ty =
   AilTypesAux.is_unsigned_integer_type 
-    (Ctype ([], Ctype.Basic (Ctype.Integer ty)))
+    Ctype.(Ctype ([], Basic (Integer ty)))
 
 
 let is_unsigned_integer_ctype = function
   | Integer ty ->
      AilTypesAux.is_unsigned_integer_type 
-       (Ctype ([], Ctype.Basic (Ctype.Integer ty)))
+       Ctype.(Ctype ([], Basic (Integer ty)))
   | _ -> false
      
 
 
-let void_ct = 
-  Void
-
-let integer_ct it = 
-  Integer it
-
-let array_ct ct olength = 
-  Array (ct, olength)
-
-let pointer_ct ct = 
-  Pointer ct
-
-let struct_ct tag = 
-  Struct tag
-
-let char_ct = 
-  Integer Char
-
-
+let void_ct = Void
+let integer_ct it = Integer it
+let array_ct ct olength = Array (ct, olength)
+let pointer_ct ct = Pointer ct
+let struct_ct tag = Struct tag
+let char_ct = Integer Char
 
 
 let rec to_ctype ct_ =
@@ -111,46 +144,6 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
      fail
 
 
-
-let equal =
-  let rec aux ct1_ ct2_ =
-    match ct1_, ct2_ with
-    | Void, Void -> 
-       true
-    | Integer it1, Integer it2 -> 
-       Ctype.integerTypeEqual it1 it2
-    | Array (t1, oi1), Array (t2, oi2) ->
-       aux t1 t2 && Option.equal (=) oi1 oi2
-    | Pointer ct1, Pointer ct2 ->
-       aux ct1 ct2
-       (* && (ignore_qualifiers || Ctype.qualifiersEqual qs1 qs2) *)
-    | Struct s1, Struct s2 ->
-       Sym.equal s1 s2
-    | Function (has_proto1, (qs1, ret1), args1, is_variadic1),
-      Function (has_proto2, (qs2, ret2), args2, is_variadic2) ->
-       has_proto1 = has_proto2
-       (* && (ignore_qualifiers || Ctype.qualifiersEqual qs1 qs2) *)
-       && aux ret1 ret2
-       && List.equal (fun (act1,areg1) (act2,areg2) ->
-              (* (ignore_qualifiers || Ctype.qualifiersEqual aqs1 aqs2) *)
-              aux act1 act2 &&
-                areg1 = areg2
-            ) args1 args2 &&
-         is_variadic1 = is_variadic2
-    | Void, _
-    | Integer _, _
-    | Array _, _
-    | Pointer _, _
-    | Struct _, _
-    | Function _, _ 
-      -> 
-       false
-  in
-  aux
-
-
-
-let pp t = 
-  Pp_core_ctype.pp_ctype (to_ctype t)
+let pp t = Pp_core_ctype.pp_ctype (to_ctype t)
 
 
