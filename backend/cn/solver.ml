@@ -420,8 +420,8 @@ module Translate = struct
          let open Z3.Set in
          begin match set_op with
          | SetMember (t1, t2) -> mk_membership context (term t1) (term t2)
-         | SetUnion ts -> mk_union context (map term (List1.to_list ts))
-         | SetIntersection ts -> mk_intersection context (map term (List1.to_list ts))
+         | SetUnion ts -> mk_union context (map term ts)
+         | SetIntersection ts -> mk_intersection context (map term ts)
          | SetDifference (t1, t2) -> mk_difference context (term t1) (term t2)
          | Subset (t1, t2) -> mk_subset context (term t1) (term t2)
          end
@@ -810,8 +810,8 @@ let eval struct_decls (context, model) to_be_evaluated =
       | () when Z3.Arithmetic.is_int_numeral expr ->
          z_ (Z3.Arithmetic.Integer.get_big_int expr)
 
-      | () when  Z3.Set.is_intersect expr ->
-         setIntersection_ (List1.make (hd args, tl args))
+      (* | () when  Z3.Set.is_intersect expr ->
+       *    setIntersection_ args *)
 
       | () when Z3.Boolean.is_ite expr ->
          ite_ (nth args 0, nth args 1, nth args 2)
@@ -863,8 +863,8 @@ let eval struct_decls (context, model) to_be_evaluated =
          | _ -> Debug_ocaml.error "illtyped index term"
          end
 
-      | () when Z3.Set.is_union expr ->
-         setUnion_ (List1.make (hd args, tl args))
+      (* | () when Z3.Set.is_union expr ->
+       *    setUnion_ (List1.make (hd args, tl args)) *)
 
       | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
          sym_ (nth binders (Z3.Quantifier.get_index expr))

@@ -343,17 +343,23 @@ module WIT = struct
               let@ t' = check loc ~context (Set (IT.bt t)) t' in
               return (BT.Bool, SetMember (t, t'))
            | SetUnion its ->
-              let (t, ts) = List1.dest its in
+              let@ (t, ts) = match its with
+                | t :: ts -> return (t, ts)
+                | _ -> fail (fun _ -> {loc; msg = Polymorphic_it context})
+              in
               let@ t = infer loc ~context t in
               let@ itembt = ensure_set_type loc context t in
               let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
-              return (BT.Set itembt, SetUnion (List1.make (t, ts)))
+              return (BT.Set itembt, SetUnion (t :: ts))
            | SetIntersection its ->
-              let (t, ts) = List1.dest its in
+              let@ (t, ts) = match its with
+                | t :: ts -> return (t, ts)
+                | _ -> fail (fun _ -> {loc; msg = Polymorphic_it context})
+              in
               let@ t = infer loc ~context t in
               let@ itembt = ensure_set_type loc context t in
               let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
-              return (BT.Set itembt, SetIntersection (List1.make (t, ts)))
+              return (BT.Set itembt, SetIntersection (t :: ts))
            | SetDifference (t, t') ->
               let@ t  = infer loc ~context t in
               let@ itembt = ensure_set_type loc context t in

@@ -75,8 +75,8 @@ and 'bt list_op =
 
 and 'bt set_op = 
   | SetMember of 'bt term * 'bt term
-  | SetUnion of ('bt term) List1.t
-  | SetIntersection of ('bt term) List1.t
+  | SetUnion of ('bt term) list
+  | SetIntersection of ('bt term) list
   | SetDifference of 'bt term * 'bt term
   | Subset of 'bt term * 'bt term
 
@@ -283,9 +283,9 @@ let rec equal (IT (it, _)) (IT (it', _)) =
      | SetMember (t1,t2), SetMember (t1',t2') ->
         equal t1 t1' && equal t1' t2'
      | SetUnion ts, SetUnion ts' ->
-        List1.equal equal ts ts'
+        List.equal equal ts ts'
      | SetIntersection ts, SetIntersection ts' ->
-        List1.equal equal ts ts'
+        List.equal equal ts ts'
      | SetDifference (t1, t2), SetDifference (t1', t2') ->
         equal t1 t1' && equal t1' t2'
      | Subset (t1, t2), Subset (t1', t2') ->
@@ -490,9 +490,9 @@ let pp =
        | SetMember (t1,t2) ->
           c_app !^"member" [aux false t1; aux false t2]
        | SetUnion ts ->
-          c_app !^"union" (List.map (aux false) (List1.to_list ts))
+          c_app !^"union" (List.map (aux false) ts)
        | SetIntersection ts ->
-          c_app !^"intersection" (List.map (aux false) (List1.to_list ts))
+          c_app !^"intersection" (List.map (aux false) ts)
        | SetDifference (t1, t2) ->
           c_app !^"difference" [aux false t1; aux false t2]
        | Subset (t1, t2) ->
@@ -605,8 +605,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | Set_op set_op ->
      begin match set_op with
      | SetMember (t1,t2) -> free_vars_list [t1;t2]
-     | SetUnion ts -> free_vars_list (List1.to_list ts)
-     | SetIntersection ts -> free_vars_list (List1.to_list ts)
+     | SetUnion ts -> free_vars_list ts
+     | SetIntersection ts -> free_vars_list ts
      | SetDifference (t1, t2) -> free_vars_list [t1;t2]
      | Subset (t1, t2) -> free_vars_list [t1;t2]
      end
@@ -756,8 +756,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | Set_op set_op -> 
      let set_op = match set_op with
        | SetMember (t1,t2) -> SetMember (subst su t1, subst su t2)
-       | SetUnion ts -> SetUnion (List1.map (subst su) ts)
-       | SetIntersection ts -> SetIntersection (List1.map (subst su) ts)
+       | SetUnion ts -> SetUnion (List.map (subst su) ts)
+       | SetIntersection ts -> SetIntersection (List.map (subst su) ts)
        | SetDifference (t1, t2) -> SetDifference (subst su t1, subst su t2)
        | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
      in
@@ -989,8 +989,8 @@ let nthList_ ~item_bt (n, it) = IT (List_op (NthList (n, it)), item_bt)
 
 (* set_op *)
 let setMember_ bt (it, it') = IT (Set_op (SetMember (it, it')), BT.Bool)
-let setUnion_ its = IT (Set_op (SetUnion its), bt (List1.head its))
-let setIntersection_ its = IT (Set_op (SetIntersection its), bt (List1.head its))
+(* let setUnion_ its = IT (Set_op (SetUnion its), bt (hd its))
+ * let setIntersection_ its = IT (Set_op (SetIntersection its), bt (hd its)) *)
 let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
 let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
