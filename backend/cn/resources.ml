@@ -11,14 +11,13 @@ module LC = LogicalConstraints
 
 
 module type Output = sig
-
   type t
   val pp : t -> document
   val subst : IT.t Subst.t -> t -> t
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val free_vars : t -> SymSet.t
   val free_vars_list : t list -> SymSet.t
-
 end
 
 
@@ -34,6 +33,7 @@ module Make (O : Output) = struct
       value: O.t;               (* O *)
       init: O.t;                (* O *)
     }
+  [@@deriving eq, ord]
 
   type qpoint = {
       ct: Sctypes.t; 
@@ -43,6 +43,7 @@ module Make (O : Output) = struct
       value: O.t;               (* O, function of q *)
       init: O.t;                (* O, function of q *)
     }
+  [@@deriving eq, ord]
 
 
   type predicate = {
@@ -52,6 +53,7 @@ module Make (O : Output) = struct
       iargs: IT.t list;         (* I *)
       oargs: O.t list;          (* O *)
     }
+  [@@deriving eq, ord]
 
   type qpredicate = {
       name : string; 
@@ -62,15 +64,16 @@ module Make (O : Output) = struct
       iargs: IT.t list;         (* I, function of q *)
       oargs: O.t list;          (* O, function of q *)
     }
+  [@@deriving eq, ord]
 
-
-  type t = 
+  type resource = 
     | Point of point
     | QPoint of qpoint
     | Predicate of predicate
     | QPredicate of qpredicate
+  [@@deriving eq, ord]
 
-  type resource = t
+  type t = resource
 
 
   let pp_point (p : point) =
@@ -213,42 +216,8 @@ let subst (substitution : IT.t Subst.t) resource =
 
 
 
-  (* literal equality, no alpha renaming of quantifiers *)
-  let equal t1 t2 = 
-    match t1, t2 with
-    | Point b1, Point b2 ->
-       Sctypes.equal b1.ct b2.ct
-       && IT.equal b1.pointer b2.pointer
-       && IT.equal b1.permission b2.permission
-       && O.equal b1.value b2.value
-       && O.equal b1.init b2.init
-    | QPoint b1, QPoint b2 ->
-       Sctypes.equal b1.ct b2.ct
-       && IT.equal b1.pointer b2.pointer
-       && Sym.equal b1.q b2.q
-       && IT.equal b1.permission b2.permission
-       && O.equal b1.value b2.value
-       && O.equal b1.init b2.init
-    | Predicate p1, Predicate p2 ->
-       String.equal p1.name p2.name
-       && IT.equal p1.pointer p2.pointer
-       && IT.equal p1.permission p2.permission
-       && List.equal IT.equal p1.iargs p2.iargs
-       && List.equal O.equal p1.oargs p2.oargs
-    | QPredicate p1, QPredicate p2 ->
-       String.equal p1.name p2.name
-       && IT.equal p1.pointer p2.pointer
-       && Sym.equal p1.q p2.q
-       && p1.step = p2.step
-       && IT.equal p1.permission p2.permission
-       && List.equal IT.equal p1.iargs p2.iargs
-       && List.equal O.equal p1.oargs p2.oargs
-    | Point _, _ -> false
-    | QPoint _, _ -> false
-    | Predicate _, _ -> false
-    | QPredicate _, _ -> false
-
-
+  let equal = equal_resource
+  let compare = compare_resource
 
 
   let free_vars = function
@@ -336,6 +305,7 @@ module Requests =
       let pp _ = underscore
       let subst _ o = o
       let equal = BT.equal
+      let compare = BT.compare
       let free_vars _ = SymSet.empty
       let free_vars_list _ = SymSet.empty
     end)

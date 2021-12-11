@@ -30,7 +30,7 @@ module VClass = struct
       logical_vars : SymSet.t;
     }
 
-  let compare vc1 vc2 = compare vc1.id vc2.id
+  let compare vc1 vc2 = Stdlib.compare vc1.id vc2.id
   let equal vc1 vc2 = vc1.id = vc2.id
 
   type vclass = t

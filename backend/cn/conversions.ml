@@ -341,7 +341,7 @@ let resolve_index_term loc
     | Var name, Some (name', (s, bt)) when String.equal name name' -> 
        return (sym_ (s, bt), None)
     | _ ->
-       let found = List.find_opt (fun {path;_} -> Ast.term_equal path term) mapping in
+       let found = List.find_opt (fun {path;_} -> Ast.equal path term) mapping in
        match found with
        | Some {it; o_sct; _} -> 
           return (it, o_sct)

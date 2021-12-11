@@ -53,16 +53,21 @@ module Qualifiers = struct
 end
 open Qualifiers
 
-type t =
+type ctype =
   | Void
   | Integer of integerType
-  | Array of t * int option
-  | Pointer of t
+  | Array of ctype * int option
+  | Pointer of ctype
   | Struct of Sym.t
-  | Function of (* has_proto *)bool * (qualifiers * t)
-                * (t * (* is_register *)bool) list
+  | Function of (* has_proto *)bool * (qualifiers * ctype)
+                * (ctype * (* is_register *)bool) list
                 * (* is_variadic *)bool
 [@@deriving eq, ord]
+type t = ctype
+
+let equal = equal_ctype
+let compare = compare_ctype
+
 
 
 let is_unsigned_integer_type ty =
@@ -86,7 +91,7 @@ let struct_ct tag = Struct tag
 let char_ct = Integer Char
 
 
-let rec to_ctype ct_ =
+let rec to_ctype (ct_ : ctype) =
   let ct_ = match ct_ with
     | Void -> 
        Ctype.Void

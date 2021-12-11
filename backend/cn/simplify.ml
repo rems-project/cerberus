@@ -1,6 +1,7 @@
 module LC = LogicalConstraints
 module IT = IndexTerms
 open IndexTerms
+open Terms
 
 
 module ITPair = struct 
@@ -158,7 +159,7 @@ let rec simp struct_decls values equalities some_known_facts =
          IT (Lit (Bool (Z.leq z1 z2)), bt)
       | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
          IT (Lit (Bool (Q.leq q1 q2)), bt)
-      | _, _ when equal a b ->
+      | _, _ when IT.equal a b ->
          bool_ true
       | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
         IT (Lit (Z z2), _) when
@@ -269,14 +270,14 @@ let rec simp struct_decls values equalities some_known_facts =
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
-       | _ when equal b c -> b
+       | _ when IT.equal b c -> b
        | _ -> IT (Bool_op (ITE (a, b, c)), bt)
        end
     | EQ (a, b) ->
        let a = aux a in
        let b = aux b in
        begin match a, b with
-       | _ when equal a b ->
+       | _ when IT.equal a b ->
          IT (Lit (Bool true), bt) 
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
           bool_ (Z.equal z1 z2)

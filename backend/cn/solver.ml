@@ -538,6 +538,9 @@ let constr context global c =
 
 module ReduceQuery = struct
 
+  open Pred
+  open QPred
+
   let forall (s, bt) t =
     let s' = Sym.fresh () in
     (IT.subst (make_subst [(s, sym_ (s', bt))]) t, Some (s', bt))

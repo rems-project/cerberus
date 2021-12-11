@@ -1,54 +1,34 @@
 open Pp
 
+
 type tag = Sym.t
+let equal_tag = Sym.equal
+let compare_tag = Sym.compare
+
 type member = Id.t
+let equal_member = Id.equal
+let compare_member = Id.compare
 
 
-type t =
+type basetype =
   | Unit 
   | Bool
   | Integer
   | Real
   | Loc
   | Struct of tag
-  | Map of t * t
-  | List of t
-  | Tuple of t list
-  | Set of t
-  | Option of t
+  | Map of basetype * basetype
+  | List of basetype
+  | Tuple of basetype list
+  | Set of basetype
+  | Option of basetype
+[@@deriving eq, ord]
+
+type t = basetype
 
 
-let is_struct = function
-  | Struct tag -> Some tag
-  | _ -> None
-
-let rec equal t t' = 
-  match t, t' with
-  | Unit, Unit -> true
-  | Bool, Bool -> true
-  | Integer, Integer -> true
-  | Real, Real -> true
-  | Loc, Loc -> true
-  | Struct t, Struct t' -> Sym.equal t t'
-  | Map (t1,t2), Map (t1',t2') -> equal t1 t1' && equal t2 t2'
-  | List t, List t' -> equal t t'
-  | Tuple ts, Tuple ts' -> List.equal equal ts ts'
-  | Set t, Set t' -> equal t t'
-  | Option t, Option t' -> equal t t'
-  | Unit, _
-  | Bool, _
-  | Integer, _
-  | Real, _
-  | Loc, _
-  | Struct _, _
-  | Map _, _
-  | List _, _
-  | Tuple _, _
-  | Set _, _
-  | Option _, _ 
-    ->
-     false
-
+let equal = equal_basetype
+let compare = compare_basetype
 
 
 let rec pp = function
