@@ -45,7 +45,7 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    ("smt.logic", "ALL");
+    ("smt.logic", "AUFNIRA");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
@@ -77,12 +77,12 @@ let params =
 let tactics = [
     "propagate-values";
     "propagate-ineqs";
-    (* "purify-arith"; *)
-    (* "elim-term-ite"; *)
+    "purify-arith";
+    "elim-term-ite";
     "add-bounds";
     "simplify";
     "solve-eqs";
-    (* "aufnira"; *)
+    "aufnira";
     "smt";
   ]
 

@@ -142,7 +142,15 @@ let frontend filename =
 
 
 
-let main filename loc_pp debug_level print_level json state_file =
+let main 
+      filename 
+      loc_pp 
+      debug_level 
+      print_level 
+      json 
+      state_file 
+      skip_consistency
+  =
   if json then begin
       if debug_level > 0 then
         CF.Pp_errors.fatal ("debug level must be 0 for json output");
@@ -150,6 +158,7 @@ let main filename loc_pp debug_level print_level json state_file =
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
   Debug_ocaml.debug_level := debug_level;
+  WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   if not (Sys.file_exists filename) then
@@ -218,6 +227,10 @@ let state_file =
   let doc = "file in which to output the state" in
   Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
 
+let skip_consistency = 
+  let doc = "Skip check for logical consistency of function specifications." in
+  Arg.(value & flag & info["skip_consistency"] ~doc)
+
 
 let () =
   let open Term in
@@ -228,6 +241,7 @@ let () =
       debug_level $ 
       print_level $
       json $
-      state_file
+      state_file $
+      skip_consistency
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

@@ -14,6 +14,9 @@ open Locations
 open Typing
 open Effectful.Make(Typing)
 
+
+let check_consistency = ref true
+
 module WIT = struct
 
 
@@ -842,10 +845,14 @@ module WAT (WI: WI_Sig) = struct
          aux at
       | AT.I i -> 
          let@ provable = provable in
-         begin match provable (LC.t_ (IT.bool_ false)) with
-         | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
-         | `False -> WI.welltyped loc i
-         end
+         let@ () = 
+           if !check_consistency then
+             match provable (LC.t_ (IT.bool_ false)) with
+             | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
+             | `False -> return ()
+           else return ()
+         in
+         WI.welltyped loc i
     in
     pure (aux at)
 
