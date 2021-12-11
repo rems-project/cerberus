@@ -864,7 +864,7 @@ let eval struct_decls (context, model) to_be_evaluated =
          end
 
       (* | () when Z3.Set.is_union expr ->
-       *    setUnion_ (List1.make (hd args, tl args)) *)
+       *    setUnion_ args *)
 
       | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
          sym_ (nth binders (Z3.Quantifier.get_index expr))

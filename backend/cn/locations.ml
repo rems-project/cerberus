@@ -8,7 +8,7 @@ type loc = t
 
 type info = loc * string option
 
-type path = t List1.t
+type path = t list
 
 let unknown = Location_ocaml.unknown
 
@@ -46,7 +46,7 @@ let update (loc : t) (loc2 : Location_ocaml.t) =
 
 
 let log (locs : path) (loc' : Location_ocaml.t) : path =
-  if good_location loc' then List1.cons loc' locs else locs
+  if good_location loc' then loc' :: locs else locs
 
 
 let head_pos_of_location = 
@@ -128,7 +128,7 @@ let json_loc loc : Yojson.Safe.t =
 
 
 let json_path locs : Yojson.Safe.t = 
-  let locs_json = List.map json_loc (List.rev (List1.to_list locs)) in
+  let locs_json = List.map json_loc (List.rev locs) in
   `Variant ("path", Some (`List locs_json))
 
 
