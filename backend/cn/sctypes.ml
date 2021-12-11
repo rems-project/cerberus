@@ -8,10 +8,7 @@ type integerType = Ctype.integerType
 let integerTypeEqual = Ctype.integerTypeEqual
 let pp_integerType = Pp_core_ctype.pp_integer_ctype
 
-type t = 
-  Sctype of Annot.annot list * t_
-
-and t_ =
+type t =
   | Void
   | Integer of integerType
   | Array of t * int option
@@ -28,7 +25,7 @@ let is_unsigned_integer_type ty =
 
 
 let is_unsigned_integer_ctype = function
-  | Sctype (_, Integer ty) ->
+  | Integer ty ->
      AilTypesAux.is_unsigned_integer_type 
        (Ctype ([], Ctype.Basic (Ctype.Integer ty)))
   | _ -> false
@@ -36,27 +33,27 @@ let is_unsigned_integer_ctype = function
 
 
 let void_ct = 
-  Sctype ([], Void)
+  Void
 
 let integer_ct it = 
-  Sctype ([], Integer it)
+  Integer it
 
 let array_ct ct olength = 
-  Sctype ([], Array (ct, olength))
+  Array (ct, olength)
 
 let pointer_ct ct = 
-  Sctype ([], Pointer ct)
+  Pointer ct
 
 let struct_ct tag = 
-  Sctype ([], Struct tag)
+  Struct tag
 
 let char_ct = 
-  Sctype ([], Integer Char)
+  Integer Char
 
 
 
 
-let rec to_ctype (Sctype (annots, ct_)) =
+let rec to_ctype ct_ =
   let ct_ = match ct_ with
     | Void -> 
        Ctype.Void
@@ -77,12 +74,12 @@ let rec to_ctype (Sctype (annots, ct_)) =
        let ret_ct = to_ctype ret_ct in
        Function (has_proto, (ret_q, ret_ct), args, variadic)
   in
-  Ctype (annots, ct_)
+  Ctype ([], ct_)
 
 
-let rec of_ctype (Ctype.Ctype (annots,ct_)) =
+let rec of_ctype (Ctype.Ctype (_,ct_)) =
   let open Option in
-  let@ ct_ = match ct_ with
+  match ct_ with
   | Ctype.Void -> 
      return Void
   | Ctype.Basic (Integer it) -> 
@@ -112,13 +109,11 @@ let rec of_ctype (Ctype.Ctype (annots,ct_)) =
      return (Struct s)
   | Union _ ->
      fail
-  in
-  return (Sctype (annots, ct_))
 
 
 
 let equal =
-  let rec aux (Sctype (_, ct1_)) (Sctype (_, ct2_)) =
+  let rec aux ct1_ ct2_ =
     match ct1_, ct2_ with
     | Void, Void -> 
        true
@@ -143,11 +138,11 @@ let equal =
             ) args1 args2 &&
          is_variadic1 = is_variadic2
     | Void, _
-      | Integer _, _
-      | Array _, _
-      | Pointer _, _
-      | Struct _, _
-      | Function _, _ 
+    | Integer _, _
+    | Array _, _
+    | Pointer _, _
+    | Struct _, _
+    | Function _, _ 
       -> 
        false
   in

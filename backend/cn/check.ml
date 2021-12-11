@@ -306,10 +306,10 @@ module ResourceInference = struct
          return r
       | `False ->
          let@ resource = match requested.ct with
-           | Sctype (_, Array (act, Some length)) ->
+           | Array (act, Some length) ->
               fold_array loc failure act requested.pointer length 
                 requested.permission
-           | Sctype (_, Struct tag) ->
+           | Struct tag ->
               fold_struct loc failure tag requested.pointer 
                 requested.permission
            | _ -> 
@@ -1314,7 +1314,7 @@ let infer_array_shift loc asym1 ct asym2 =
         match found, re with
         | Some _, _ -> 
            (re, found)
-        | None, Point {ct = Sctype (_, Array (_, Some length)); pointer; _} ->
+        | None, Point {ct = Array (_, Some length); pointer; _} ->
            begin match provable (t_ (eq__ pointer (it_of_arg arg1))) with
            | `True -> (re, Some length)
            | `False -> (re, found)
@@ -1391,7 +1391,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        Debug_ocaml.error "todo: CivOR"
     | M_CivXOR (act, asym1, asym2) -> 
        let ity = match act.ct with
-         | Sctype (_, Integer ity) -> ity
+         | Integer ity -> ity
          | _ -> Debug_ocaml.error "M_CivXOR with non-integer c-type"
        in
        let@ arg1 = arg_of_asym asym1 in
@@ -1415,7 +1415,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
              match found, re with
              | true, _ -> 
                 (re, found)
-             | false, Point {ct = Sctype (_, Struct tag'); pointer; _} 
+             | false, Point {ct = Struct tag'; pointer; _} 
                   when Sym.equal tag tag' ->
                 begin match provable (t_ (eq__ pointer (it_of_arg arg))) with
                 | `True -> (re, true)
@@ -1509,7 +1509,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        (* try to follow conv_int from runtime/libcore/std.core *)
        let arg_it = it_of_arg arg in
        let ity = match act.ct with
-         | Sctype (_, Integer ity) -> ity
+         | Integer ity -> ity
          | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
        in
        begin match ity with
@@ -1542,7 +1542,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
        let ity = match act.ct with
-         | Sctype (_, Integer ity) -> ity
+         | Integer ity -> ity
          | _ -> Debug_ocaml.error "wrapI applied to non-integer type"
        in
        let result = wrapI ity (it_of_arg arg) in
@@ -1685,7 +1685,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ () = ensure_base_type arg2.loc ~expect:Loc arg2.bt in
           (* copying and adapting from memory/concrete/impl_mem.ml *)
           let divisor = match act.ct with
-            | Sctype (_, Array (item_ty, _)) -> Memory.size_of_ctype item_ty
+            | Array (item_ty, _) -> Memory.size_of_ctype item_ty
             | ct -> Memory.size_of_ctype ct
           in
           let v =
@@ -2399,7 +2399,7 @@ let check mu_file =
            let@ () =
              ListM.iterM (fun piece ->
                  match piece.member_or_padding with
-                 | Some (_, Sctypes.Sctype (_, Sctypes.Struct sym2)) ->
+                 | Some (_, Sctypes.Struct sym2) ->
                     if SymMap.mem sym2 ctxt.global.struct_decls then return ()
                     else fail {loc = Loc.unknown; msg = Unknown_struct sym2}
                  | _ -> return ()

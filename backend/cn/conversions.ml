@@ -120,7 +120,7 @@ let struct_decl loc fields (tag : BT.tag) =
 let make_owned_funarg floc i (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
-  | Sctype (_, Void) ->
+  | Void ->
      Debug_ocaml.error "void argument"
   | _ ->
      let descr = "ARG" ^ string_of_int i in
@@ -153,7 +153,7 @@ let make_owned_funarg floc i (pointer : IT.t) path sct =
 let make_owned loc ~oname (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
-  | Sctype (_, Void) ->
+  | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
      let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
@@ -193,7 +193,7 @@ let make_owned loc ~oname (pointer : IT.t) path sct =
 let make_block loc (pointer : IT.t) path sct =
   let open Sctypes in
   match sct with
-  | Sctype (_, Void) ->
+  | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
      let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
@@ -624,7 +624,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
        | Some typ, _ ->
           resolve_typ loc layouts default_mapping_name mappings 
             (Option.map fst oq) typ
-       | _, Some (Sctype (_, Pointer pointee_sct)) -> 
+       | _, Some (Pointer pointee_sct) -> 
           return pointee_sct
        | _, Some _ ->
           fail {loc; msg = Generic (Ast.Terms.pp false pointer ^^^ !^"is not a pointer")}

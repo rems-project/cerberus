@@ -1136,8 +1136,8 @@ let partiality_check_array ~length ~item_ct value =
 let value_check_pointer alignment ~pointee_ct about = 
   let about_int = pointerToIntegerCast_ about in
   let pointee_size = match pointee_ct with
-    | Sctypes.Sctype (_, Void) -> 1
-    | Sctypes.Sctype (_, Function _) -> 1
+    | Sctypes.Void -> 1
+    | Function _ -> 1
     | _ -> Memory.size_of_ctype pointee_ct 
   in
   and_ [le_ (z_ Z.zero, about_int);
@@ -1147,7 +1147,7 @@ let value_check_pointer alignment ~pointee_ct about =
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
   let open Sctypes in
   let open Memory in
-  let rec aux (Sctype (_, ct_) : Sctypes.t) about = 
+  let rec aux (ct_ : Sctypes.t) about = 
     match ct_ with
     | Void -> 
        bool_ true

@@ -93,9 +93,8 @@ let option_bt = function
 
 
 
-let rec of_sct (Sctypes.Sctype (_, sct_)) = 
-  match sct_ with
-  | Void -> Unit
+let rec of_sct = function
+  | Sctypes.Void -> Unit
   | Integer _ -> Integer
   | Array (sct, _) -> Map (Integer, Option (of_sct sct))
   | Pointer _ -> Loc
