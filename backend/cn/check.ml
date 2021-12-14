@@ -614,6 +614,19 @@ module ResourceInference = struct
       in
       return folded_resource
 
+    let exact_match () =
+      let@ global = get_global () in
+      let@ all_lcs = all_constraints () in
+      return begin fun (request, resource) -> match (request, resource) with
+      | (RER.Point req_p, RE.Point res_p) ->
+        let simp t = Simplify.simp global.struct_decls all_lcs t in
+        let pmatch = eq_ (req_p.pointer, res_p.pointer) in
+        let more_perm = impl_ (req_p.permission, res_p.permission) in
+        (* FIXME: simp of Impl isn't all that clever *)
+        (is_true (simp pmatch) && is_true (simp more_perm))
+      | _ -> false
+      end
+
     let unfolded_array item_ct base length permission value init =
       let q_s, q = IT.fresh Integer in
       QPoint {
@@ -789,6 +802,21 @@ let arg_of_asym (asym : 'bty asym) : (arg, type_error) m =
 let args_of_asyms (asyms : 'bty asyms) : (args, type_error) m = 
   ListM.mapM arg_of_asym asyms
 
+(* FIXME: are these just reimplementations of standard ops? *)
+let rec monadic_map f xs = match xs with
+  | [] -> return []
+  | (x :: xs) ->
+  let@ y = f x in
+  let@ ys = monadic_map f xs in
+  return (y :: ys)
+
+let rec monadic_filter f xs = match xs with
+  | [] -> return []
+  | (x :: xs) ->
+  let@ ok = f x in
+  let@ xs = monadic_filter f xs in
+  return (if ok then x :: xs else xs)
+
 
 
 
@@ -947,11 +975,48 @@ end = struct
     | _ -> 
        Debug_ocaml.error "resource inference has inferred mismatched resources"
 
+  let rec resource_requests i ftyp =
+    let open NormalisedArgumentTypes in
+    match ftyp with
+    | Resource (resource, info, ftyp) -> (i, resource) :: resource_requests (i + 1) ftyp
+    | _ -> []
 
+  let prefer_req i ftyp =
+    let open NormalisedArgumentTypes in
+    let rec grab i ftyp = match ftyp with
+      | Resource (resource, info, ftyp) -> if i = 0
+          then (resource, info)
+          else grab (i - 1) ftyp
+      | _ -> assert false
+    in
+    let rec del i ftyp = match ftyp with
+      | Resource (resource, info, ftyp) -> if i = 0
+          then ftyp
+          else Resource (resource, info, del (i - 1) ftyp)
+      | _ -> assert false
+    in
+    let (resource, info) = grab i ftyp in
+    let ftyp = del i ftyp in
+    Resource (resource, info, ftyp)
 
+  let has_exact r =
+    let@ is_ex = RI.General.exact_match () in
+    map_and_fold_resources (fun re found -> (re, found || is_ex (RE.request re, r))) false
 
-
-
+  let prefer_exact unis ftyp =
+    let reqs = resource_requests 0 ftyp in
+    let res_free_vars r = match r with
+      | Point p -> IT.free_vars p.pointer
+      | QPoint p -> IT.free_vars p.pointer
+      | _ -> SymSet.empty
+    in
+    let no_unis r = SymSet.for_all (fun x -> not (SymMap.mem x unis)) (res_free_vars r) in
+    let reqs = List.filter (fun (_, r) -> no_unis r) reqs in
+    let@ reqs = monadic_filter (fun (_, r) -> has_exact r) reqs in
+    (* just need an actual preference function *)
+    match List.rev reqs with
+      | ((i, _) :: _) -> return (prefer_req i ftyp)
+      | [] -> return ftyp
 
 
   let spine :
@@ -1027,6 +1092,7 @@ end = struct
             debug 6 (lazy (item "unis" (pp_unis unis)))
           )
         in
+        let@ ftyp = prefer_exact unis ftyp in
         match ftyp with
         | Resource (resource, info, ftyp) -> 
            let request = RE.request resource in
