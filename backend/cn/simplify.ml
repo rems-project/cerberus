@@ -241,6 +241,8 @@ let rec simp struct_decls values equalities some_known_facts =
     | Impl (a, b) ->
        let a = aux a in
        let b = aux b in
+       if IT.equal a b then IT (Lit (Bool true), bt)
+       else
        begin match a, b with
        | IT (Lit (Bool false), _), _ ->
           IT (Lit (Bool true), bt) 
