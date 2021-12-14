@@ -229,6 +229,7 @@ let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m =
 
 module ResourceInference = struct 
 
+  let reorder_points = ref true
 
   module General = struct
 
@@ -250,16 +251,30 @@ module ResourceInference = struct
           permission = permission_t;
       }
 
+    let exact_match () =
+      let@ global = get_global () in
+      let@ all_lcs = all_constraints () in
+      return begin fun (request, resource) -> match (request, resource) with
+      | (RER.Point req_p, RE.Point res_p) ->
+        let simp t = Simplify.simp global.struct_decls all_lcs t in
+        let pmatch = eq_ (req_p.pointer, res_p.pointer) in
+        let more_perm = impl_ (req_p.permission, res_p.permission) in
+        (* FIXME: simp of Impl isn't all that clever *)
+        (is_true (simp pmatch) && is_true (simp more_perm))
+      | _ -> false
+      end
+
     let rec point_request loc failure (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
+      let@ is_ex = exact_match () in
+      let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
       let@ global = get_global () in
       let@ all_lcs = all_constraints () in
       let simp t = Simplify.simp global.struct_decls all_lcs t in
       let needed = requested.permission in 
-      let@ (needed, value, init) =
-        map_and_fold_resources (fun re (needed, value, init) ->
+      let sub_resource_if = fun cond re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
-            if is_false needed then continue else
+            if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
                let pmatch = eq_ (requested.pointer, p'.pointer) in
@@ -291,8 +306,14 @@ module ResourceInference = struct
                QPoint {p' with permission = permission'}, (simp needed', value, init)
             | _ ->
                continue
-          ) (needed, default_ requested.value, default_ requested.init)
       in
+      let@ (needed, value, init) =
+        map_and_fold_resources (sub_resource_if is_exact_re)
+          (needed, default_ requested.value, default_ requested.init)
+      in
+      let@ (needed, value, init) =
+        map_and_fold_resources (sub_resource_if (fun re -> not (is_exact_re re)))
+          (needed, value, init) in
       let@ provable = provable in
       begin match provable (t_ (not_ needed)) with
       | `True ->
@@ -613,19 +634,6 @@ module ResourceInference = struct
           }
       in
       return folded_resource
-
-    let exact_match () =
-      let@ global = get_global () in
-      let@ all_lcs = all_constraints () in
-      return begin fun (request, resource) -> match (request, resource) with
-      | (RER.Point req_p, RE.Point res_p) ->
-        let simp t = Simplify.simp global.struct_decls all_lcs t in
-        let pmatch = eq_ (req_p.pointer, res_p.pointer) in
-        let more_perm = impl_ (req_p.permission, res_p.permission) in
-        (* FIXME: simp of Impl isn't all that clever *)
-        (is_true (simp pmatch) && is_true (simp more_perm))
-      | _ -> false
-      end
 
     let unfolded_array item_ct base length permission value init =
       let q_s, q = IT.fresh Integer in
@@ -1004,6 +1012,8 @@ end = struct
     map_and_fold_resources (fun re found -> (re, found || is_ex (RE.request re, r))) false
 
   let prefer_exact unis ftyp =
+    if ! RI.reorder_points then return ftyp
+    else
     let reqs = resource_requests 0 ftyp in
     let res_free_vars r = match r with
       | Point p -> IT.free_vars p.pointer
