@@ -810,23 +810,6 @@ let arg_of_asym (asym : 'bty asym) : (arg, type_error) m =
 let args_of_asyms (asyms : 'bty asyms) : (args, type_error) m = 
   ListM.mapM arg_of_asym asyms
 
-(* FIXME: are these just reimplementations of standard ops? *)
-let rec monadic_map f xs = match xs with
-  | [] -> return []
-  | (x :: xs) ->
-  let@ y = f x in
-  let@ ys = monadic_map f xs in
-  return (y :: ys)
-
-let rec monadic_filter f xs = match xs with
-  | [] -> return []
-  | (x :: xs) ->
-  let@ ok = f x in
-  let@ xs = monadic_filter f xs in
-  return (if ok then x :: xs else xs)
-
-
-
 
 module Spine : sig
   val calltype_ft : 
@@ -1022,7 +1005,7 @@ end = struct
     in
     let no_unis r = SymSet.for_all (fun x -> not (SymMap.mem x unis)) (res_free_vars r) in
     let reqs = List.filter (fun (_, r) -> no_unis r) reqs in
-    let@ reqs = monadic_filter (fun (_, r) -> has_exact r) reqs in
+    let@ reqs = ListM.filterM (fun (_, r) -> has_exact r) reqs in
     (* just need an actual preference function *)
     match List.rev reqs with
       | ((i, _) :: _) -> return (prefer_req i ftyp)

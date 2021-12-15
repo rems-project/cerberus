@@ -50,6 +50,9 @@ module Make(T : S) = struct
       let@ xs = mapM f l in
       return (filter_map (fun x -> x) xs)
 
+    let filterM f xs =
+      let@ ys = mapM (fun x -> let@ b = f x in return (b, x)) xs in
+      return (List.map snd (List.filter fst ys))
 
 
     let fold_leftM (f : 'a -> 'b -> ('c, 'e) m) (a : 'a) (bs : 'b list) =
