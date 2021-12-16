@@ -162,4 +162,13 @@ let rec unnormalise_a = function
      AT.Computational ((name, bt), oinfo, unnormalise_a t)
   | L t -> unnormalise_l t
 
+
+let rec r_resource_requests r =
+  match r with
+  | Resource (resource, info, r) -> resource :: r_resource_requests r
+  | _ -> []
+
+
+
+
 let unnormalise = unnormalise_a
