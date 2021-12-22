@@ -90,6 +90,7 @@ let make_accessed globals (loc, name) =
 
 let parse_function 
       (globals : (Sym.t * Sym.t * Sctypes.t) list)
+      trusted
       (arguments : (Sym.t * Sctypes.t) list)
       (return_type : Sctypes.t)
       (Attrs attributes)
@@ -102,31 +103,33 @@ let parse_function
         {asym; lsym; typ; accessed = None}
       ) globals 
   in
-  let@ (globals, pre, post) = 
-    ListM.fold_leftM (fun (globals,pre,post) attr ->
+  let@ (trusted, globals, pre, post) = 
+    ListM.fold_leftM (fun (trusted, globals, pre, post) attr ->
         match snd attr.keyword with
-        | "accesses" -> 
-           let@ globals = 
-             ListM.fold_leftM (fun globals arg ->
-                 make_accessed globals arg
-               ) globals attr.arguments
+        | "trusted" ->
+           let@ () = match attr.arguments with
+             | [] -> return ()
+             | _ -> fail {loc = fst attr.keyword; msg = Generic !^"'trusted' takes no arguments"}
            in
-           return (globals, pre, post)
+           return (CF.Mucore.Trusted (fst attr.keyword), globals, pre, post)
+        | "accesses" -> 
+           let@ globals = ListM.fold_leftM make_accessed globals attr.arguments in
+           return (trusted, globals, pre, post)
         | "requires" -> 
            let@ () = match post with
              | [] -> return ()
              | _ -> fail {loc = fst attr.keyword; msg = Generic !^"please specify the pre-conditions before the post-conditions"}
            in
            let@ new_pre = ListM.mapM (parse_condition "start") attr.arguments in
-           return (globals, pre @ new_pre, post)
+           return (trusted, globals, pre @ new_pre, post)
         | "ensures" -> 
            let@ new_post = ListM.mapM (parse_condition "end") attr.arguments in
-           return (globals, pre, post @ new_post)
+           return (trusted, globals, pre, post @ new_post)
         | "inv" ->
            fail {loc = fst attr.keyword; msg = Generic !^"'inv' is for loop specifications"}
         | other ->
            fail {loc = fst attr.keyword; msg = Generic !^("unknown keyword '"^other^"'")}
-      ) (globals, [], []) cn_attributes
+      ) (trusted, globals, [], []) cn_attributes
   in
   let global_arguments = globals in
   let function_arguments = 
@@ -135,6 +138,7 @@ let parse_function
   let pre_condition = pre in
   let post_condition = post in
   return { 
+      trusted;
       global_arguments; 
       function_arguments; 
       function_return; 
@@ -158,6 +162,8 @@ let parse_label
   let@ inv = 
     ListM.fold_leftM (fun inv attr ->
         match snd attr.keyword with
+        | "trusted" ->
+           fail {loc = fst attr.keyword; msg = Generic !^("currently 'trusted' only works for functions, not labels")}
         | "accesses" -> 
            fail {loc = fst attr.keyword; msg = Generic !^"'accesses' is for function specifications"}
         | "requires" -> 

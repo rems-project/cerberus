@@ -14,6 +14,9 @@ open Locations
 open Typing
 open Effectful.Make(Typing)
 
+
+let check_consistency = ref true
+
 module WIT = struct
 
 
@@ -41,17 +44,23 @@ module WIT = struct
     | Set bt -> return bt
     | _ -> fail (illtyped_index_term loc context it (IT.bt it) "set type")
 
+  let ensure_option_type loc context it = 
+    let open BT in
+    match IT.bt it with
+    | Option bt -> return bt
+    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "option type")
+
   let ensure_list_type loc context it = 
     let open BT in
     match IT.bt it with
     | List bt -> return bt
     | _ -> fail (illtyped_index_term loc context it (IT.bt it) "list type")
 
-  let ensure_array_type loc context it = 
+  let ensure_map_type loc context it = 
     let open BT in
     match IT.bt it with
-    | Array (abt, rbt) -> return (abt, rbt)
-    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "array type")
+    | Map (abt, rbt) -> return (abt, rbt)
+    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "map/array type")
 
   let get_struct_decl loc tag = 
     let@ global = get_global () in
@@ -152,6 +161,14 @@ module WIT = struct
            | RealToInt t ->
               let@ t = check loc ~context Real t in
               return (BT.Integer, IntToReal t)
+           | FlipBit {bit; t} ->
+              let@ bit = check loc ~context Integer bit in
+              let@ t = check loc ~context Integer t in
+              return (BT.Integer, FlipBit {bit; t})
+           | XOR (ity, t, t') ->
+              let@ t = check loc ~context Integer t in
+              let@ t' = check loc ~context Integer t' in
+              return (BT.Integer, XOR (ity, t, t'))
          in
          return (IT (Arith_op arith_op, bt))
       | Bool_op bool_op ->
@@ -178,10 +195,6 @@ module WIT = struct
               let@ t = infer loc ~context t in
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, EQ (t,t')) 
-           | NE (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (BT.Bool, NE (t,t')) 
            | EachI ((i1, s, i2), t) ->
               pure begin 
                   let@ () = add_l s Integer in
@@ -272,6 +285,13 @@ module WIT = struct
            | ArrayOffset (ct, t) ->
               let@ t = check loc ~context Integer t in
               return (Integer, ArrayOffset (ct, t))
+           | CellPointer c ->
+              let@ base = check loc ~context Loc c.base in
+              let@ step = check loc ~context Integer c.step in
+              let@ starti = check loc ~context Integer c.starti in
+              let@ endi = check loc ~context Integer c.endi in
+              let@ p = check loc ~context Loc c.p in
+              return (BT.Bool, CellPointer {base;step;starti;endi;p})
          in
          return (IT (Pointer_op pointer_op, bt))
       | CT_pred ct_pred ->
@@ -326,17 +346,23 @@ module WIT = struct
               let@ t' = check loc ~context (Set (IT.bt t)) t' in
               return (BT.Bool, SetMember (t, t'))
            | SetUnion its ->
-              let (t, ts) = List1.dest its in
+              let@ (t, ts) = match its with
+                | t :: ts -> return (t, ts)
+                | _ -> fail (fun _ -> {loc; msg = Polymorphic_it context})
+              in
               let@ t = infer loc ~context t in
               let@ itembt = ensure_set_type loc context t in
               let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
-              return (BT.Set itembt, SetUnion (List1.make (t, ts)))
+              return (BT.Set itembt, SetUnion (t :: ts))
            | SetIntersection its ->
-              let (t, ts) = List1.dest its in
+              let@ (t, ts) = match its with
+                | t :: ts -> return (t, ts)
+                | _ -> fail (fun _ -> {loc; msg = Polymorphic_it context})
+              in
               let@ t = infer loc ~context t in
               let@ itembt = ensure_set_type loc context t in
               let@ ts = ListM.mapM (check loc ~context (Set itembt)) ts in
-              return (BT.Set itembt, SetIntersection (List1.make (t, ts)))
+              return (BT.Set itembt, SetIntersection (t :: ts))
            | SetDifference (t, t') ->
               let@ t  = infer loc ~context t in
               let@ itembt = ensure_set_type loc context t in
@@ -349,30 +375,59 @@ module WIT = struct
               return (BT.Bool, Subset (t,t'))
          in
          return (IT (Set_op set_op, bt))
-      | Array_op array_op -> 
-         let@ (bt, array_op) = match array_op with
+      | Map_op map_op -> 
+         let@ (bt, map_op) = match map_op with
            | Const (index_bt, t) ->
               let@ t = infer loc ~context t in
-              return (BT.Array (index_bt, IT.bt t), Const (index_bt, t))
+              return (BT.Map (index_bt, IT.bt t), Const (index_bt, t))
            | Set (t1, t2, t3) ->
               let@ t1 = infer loc ~context t1 in
-              let@ (abt, rbt) = ensure_array_type loc context t1 in
+              let@ (abt, rbt) = ensure_map_type loc context t1 in
               let@ t2 = check loc ~context abt t2 in
               let@ t3 = check loc ~context rbt t3 in
               return (IT.bt t1, Set (t1, t2, t3))
            | Get (t, arg) -> 
               let@ t = infer loc ~context t in
-              let@ (abt, bt) = ensure_array_type loc context t in
+              let@ (abt, bt) = ensure_map_type loc context t in
               let@ arg = check loc ~context abt arg in
               return (bt, Get (t, arg))
            | Def ((s, abt), body) ->
               pure begin
                   let@ () = add_l s abt in
                   let@ body = infer loc ~context body in
-                  return (Array (abt, IT.bt body), Def ((s, abt), body))
+                  return (Map (abt, IT.bt body), Def ((s, abt), body))
                 end
          in
-         return (IT (Array_op array_op, bt))
+         return (IT (Map_op map_op, bt))
+      | Option_op option_op ->
+         let@ (bt, option_op) = match option_op with
+           | Nothing vbt -> return (Option vbt, Nothing vbt)
+           | Something t -> 
+              let@ t = infer loc ~context t in
+              return (Option (IT.bt t), Something t)
+           | Is_something t ->
+              let@ t = infer loc ~context t in
+              let@ _vbt = ensure_option_type loc context t in
+              return (BT.Bool, Is_something t)
+           | Is_nothing t ->
+              let@ t = infer loc ~context t in
+              let@ _vbt = ensure_option_type loc context t in
+              return (BT.Bool, Is_nothing t)
+           | Get_some_value t ->
+              let@ t = infer loc ~context t in
+              let@ vbt = ensure_option_type  loc context t in
+              return (vbt, Get_some_value t)
+         in
+         return (IT (Option_op option_op, bt))
+      | Let ((s, bound), body) ->
+         pure begin
+             let@ t = infer loc ~context bound in
+             let@ () = add_l s (IT.bt t) in
+             infer loc ~context body
+           end
+         
+         
+
 
     and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context ls it ->
@@ -407,7 +462,7 @@ let ensure_same_argument_number loc input_output has ~expect =
     match input_output with
     | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
     | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
-    | `Output -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+    | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
 
 
 module WRE = struct
@@ -424,85 +479,95 @@ module WRE = struct
     begin match resource with
     | Point b -> 
        let@ _ = WIT.check loc BT.Loc b.pointer in
-       let@ _ = WIT.infer loc b.value in
-       let@ _ = WIT.check loc BT.Bool b.init in
        let@ _ = WIT.check loc BT.Bool b.permission in
+       let@ _ = WIT.check loc (BT.of_sct b.ct) b.value in
+       let@ _ = WIT.check loc BT.Bool b.init in
        return ()
     | QPoint b -> 
+       let@ _ = WIT.check loc BT.Loc b.pointer in
        pure begin 
-           let@ () = add_l b.qpointer Loc in
-           let@ _ = WIT.infer loc b.value in
-           let@ _ = WIT.check loc BT.Bool b.init in
+           let@ () = add_l b.q Integer in
            let@ _ = WIT.check loc BT.Bool b.permission in
+           let@ _ = WIT.check loc (BT.of_sct b.ct) b.value in
+           let@ _ = WIT.check loc BT.Bool b.init in
            return ()
          end
     | Predicate p -> 
        let@ def = get_resource_predicate_def loc p.name in
+       let@ _ = WIT.check loc BT.Loc p.pointer in
+       let@ _ = WIT.check loc BT.Bool p.permission in
        let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
        let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
-       let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
+       (* +1 because of pointer argument *)
+       let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
        let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
-       let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = 
          ListM.mapM (fun (arg, expected_sort) ->
              WIT.check loc expected_sort arg
            ) (List.combine (p.iargs @ p.oargs) 
              (List.map snd def.iargs @ List.map snd def.oargs))
        in
-       let@ _ = WIT.check loc BT.Bool p.permission in
        return ()
     | QPredicate p -> 
+       let@ def = get_resource_predicate_def loc p.name in
+       let@ _ = WIT.check loc BT.Loc p.pointer in
        pure begin 
-           let@ def = get_resource_predicate_def loc p.name in
+           let@ () = add_l p.q Integer in
+           let@ _ = WIT.check loc BT.Bool p.permission in
            let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
            let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
-           let@ () = ensure_same_argument_number loc `Input has_iargs ~expect:expect_iargs in
+           (* +1 because of pointer argument *)
+           let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
            let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
-           let@ () = add_l p.qpointer Loc in
            let@ _ = 
              ListM.mapM (fun (arg, expected_sort) ->
                  WIT.check loc expected_sort arg
                ) (List.combine (p.iargs @ p.oargs) 
                  (List.map snd def.iargs @ List.map snd def.oargs))
            in
-           let@ _ = WIT.check loc BT.Bool p.permission in
            return ()
          end
     end
 
   let mode_check loc ~infos ~undetermined resource = 
-    let undetermined = SymSet.diff undetermined (RE.bound resource) in
-    let free_inputs = SymSet.diff (IT.free_vars_list (RE.inputs resource)) (RE.bound resource) in
-    let@ () = match SymSet.choose_opt (SymSet.inter free_inputs undetermined) with
+    (* check inputs *)
+    let undetermined_input_vars = SymSet.inter (RE.free_input_vars resource) undetermined in
+    let@ () = match SymSet.choose_opt undetermined_input_vars with
       | None -> return ()
       | Some lvar -> unconstrained_lvar loc infos lvar 
     in
+    (* check outputs *)
+    (* NOTE: The following line is ok because the quantifier is bound
+       in all the outputs. In principle, this is not necessary,
+       however. *)
+    let undetermined = SymSet.diff undetermined (RE.bound resource) in
     let@ fixed = 
-      ListM.fold_leftM (fun fixed output ->
+      ListM.mapM (fun output ->
           let undetermined_output = SymSet.inter undetermined (IT.free_vars output) in
           if SymSet.is_empty undetermined_output then 
-            (* If the logical variables in the outputs are already
+            (* If the logical variables in the output term are already
                determined, ok. *)
-            return fixed
+            return SymSet.empty
           else
             (* otherwise, check that there is a single unification
                variable that can be resolved by unification *)
             match RE.quantifier resource, output with
             | None, 
               IT (Lit (Sym s), _) -> 
-               return (SymSet.add s fixed)
+               return (SymSet.singleton s)
             | Some (q, _), 
-              IT (Array_op (Get (IT (Lit (Sym arr_s), _), IT (Lit (Sym arg_s), _))), _)
+              IT (Option_op (Get_some_value (IT (Map_op (Get (IT (Lit (Sym map_s), _), 
+                                                              IT (Lit (Sym arg_s), _))), _))), _)
                  when Sym.equal arg_s q ->
-               return (SymSet.add arr_s fixed)
+               return (SymSet.singleton map_s)
             (* otherwise, fail *)
             | _ ->
                let u = SymSet.choose undetermined_output in
                let (loc, odescr) = SymMap.find u infos in
                fail (fun _ -> {loc; msg = Logical_variable_not_good_for_unification (u, odescr)})
-        ) (SymSet.empty) (RE.outputs resource)
+        ) (RE.outputs resource)
     in
-    return fixed
+    return (List.fold_left SymSet.union SymSet.empty fixed)
 
 end
 
@@ -588,7 +653,8 @@ module WLRT = struct
          aux lrt
       | Resource (re, info, lrt) -> 
          let@ () = WRE.welltyped (fst info) re in
-         let@ () = add_r None re in
+         let@ lcs = add_r None re in
+         let@ () = add_cs lcs in
          aux lrt
       | Constraint (lc, info, lrt) ->
          let@ () = WLC.welltyped (fst info) lc in
@@ -770,7 +836,8 @@ module WAT (WI: WI_Sig) = struct
          aux at
       | AT.Resource (re, info, at) -> 
          let@ () = WRE.welltyped (fst info) re in
-         let@ () = add_r None re in
+         let@ lcs = add_r None re in
+         let@ () = add_cs lcs in
          aux at
       | AT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in
@@ -778,10 +845,14 @@ module WAT (WI: WI_Sig) = struct
          aux at
       | AT.I i -> 
          let@ provable = provable in
-         begin match provable (LC.t_ (IT.bool_ false)) with
-         | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
-         | `False -> WI.welltyped loc i
-         end
+         let@ () = 
+           if !check_consistency then
+             match provable (LC.t_ (IT.bool_ false)) with
+             | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
+             | `False -> return ()
+           else return ()
+         in
+         WI.welltyped loc i
     in
     pure (aux at)
 

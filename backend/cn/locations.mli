@@ -7,7 +7,7 @@ type loc = t
 
 type info = loc * string option
 
-type path = t List1.t
+type path = t list
 
 val unknown : t
 

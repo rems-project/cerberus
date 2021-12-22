@@ -4,6 +4,7 @@ module SymSet = Set.Make(Sym)
 
 
 type t = False
+[@@deriving eq, ord]
 
 
 let subst substitution = function

@@ -1,16 +1,20 @@
 open Context
 
-type s = Context.t
+type s = {
+    typing_context: Context.t;
+    solver : Solver.solver;
+  }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
 type ('a, 'e) m = ('a, 'e) t
-type 'e failure = s -> 'e
+type 'e failure = Context.t -> 'e
 
 
-let run s m = 
-  let () = Solver.push s.solver in
+let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
+  let solver = Solver.make () in
+  List.iter (Solver.add solver c.global) c.constraints;
+  let s = { typing_context = c; solver } in
   let outcome = m s in
-  let () = Solver.pop s.solver in
   match outcome with
   | Ok (a, _) -> Ok a
   | Error e -> Error e
@@ -29,15 +33,18 @@ let bind (m : ('a, 'e) t) (f : 'a -> ('b, 'e) t) : ('b, 'e) t =
 
 let (let@) = bind
 
-let get () : ('a, 'e) t = 
-  fun s -> Ok (s, s)
+let get () : (Context.t, 'e) t = 
+  fun s -> Ok (s.typing_context, s)
 
-let set (s : 's) : (unit, 'e) t = 
-  fun _ -> Ok ((), s)
+let set (c : Context.t) : (unit, 'e) t = 
+  fun s -> Ok ((), {s with typing_context = c})
+
+let solver () : (Solver.solver, 'e) t = 
+  fun s -> Ok (s.solver, s)
 
 
-let fail (f : s -> 'e) : ('a, 'e) t = 
-  fun s -> Error (f s)
+let fail (f : 'e failure) : ('a, 'e) t = 
+  fun s -> Error (f s.typing_context)
 
 
 let pure (m : ('a, 'e) t) : ('a, 'e) t =
@@ -49,6 +56,20 @@ let pure (m : ('a, 'e) t) : ('a, 'e) t =
   in
   Solver.pop s.solver;
   outcome
+
+
+let restore_resources (m : ('a, 'e) t) : ('a, 'e) t =
+  fun old_state ->
+  match m old_state with
+  | Ok (a, new_state) -> 
+     let typing_context = 
+       {new_state.typing_context with 
+         resources = old_state.typing_context.resources} 
+     in
+     Ok (a, { new_state with typing_context })
+  | Error e -> Error e
+  
+
 
 
 
@@ -72,13 +93,16 @@ let all_resources () =
 
 let provable =
   let@ s = get () in
-  let f lc = Solver.provable s.global s.solver s.constraints lc in
+  let@ solver = solver () in
+  let f ?(shortcut_false=false) lc = 
+    Solver.provable ~shortcut_false solver s.global s.constraints lc 
+  in
   return f
 
-let provable_or_model =
-  let@ s = get () in
-  let f lc = Solver.provable_or_model s.global s.solver s.constraints lc in
-  return f
+let model () =
+  return (Solver.model ())
+  
+
 
 let bound_a sym = 
   let@ s = get () in
@@ -110,15 +134,25 @@ let add_ls lvars =
 
 let add_c lc = 
   let@ s = get () in
-  set (Context.add_c lc s)
+  let@ solver = solver () in
+  let lcs = Simplify.simp_lc_flatten s.global.struct_decls s.constraints lc in
+  let s = List.fold_right Context.add_c lcs s in
+  let () = List.iter (Solver.add solver s.global) lcs in
+  set s
 
-let add_cs lcs = 
-  let@ s = get () in
-  set (Context.add_cs lcs s)
+let rec add_cs = function
+  | [] -> return ()
+  | lc :: lcs -> 
+     let@ () = add_c lc in 
+     add_cs lcs
+
 
 let add_r oloc r = 
   let@ s = get () in
-  set (Context.add_r oloc r s)
+  let r = RE.simp s.global.struct_decls s.constraints r in
+  let (s, lcs) = Context.add_r oloc r s in
+  let@ () = set s in
+  return lcs
 
 let map_and_fold_resources f acc =
   let@ s = get () in
@@ -127,20 +161,3 @@ let map_and_fold_resources f acc =
   return acc
 
 
-let all_vars () = 
-  let@ s = get () in
-  return (Context.all_vars s)
-
-let bind_return_type oloc sym rt = 
-  let@ s = get () in
-  set (Context.bind oloc s sym rt)
-
-let bind_logical_return_type oloc lrt = 
-  let@ s = get () in
-  set (Context.bind_logical oloc s lrt)
-
-let logically_bind_return_type oloc rt = 
-  let@ s = get () in
-  let ((bt, sym), s) = Context.bind_logically oloc s rt in
-  let@ () = set s in
-  return (bt, sym)

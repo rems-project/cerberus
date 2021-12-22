@@ -29,6 +29,15 @@ let rec compare (comparison : 'a -> 'a -> int) (xs : 'a list) (xs' : 'a list) =
   | [], _ -> -1
   | _, [] -> 1
 
+
+let mem equality y xs = 
+  let rec aux = function
+    | [] -> false
+    | x :: xs -> equality y x || aux xs
+  in
+  aux xs
+
+
 let assoc_opt (equality : 'k -> 'k -> bool) (k : 'k) (l : ('k * 'v) list) : 'v option = 
   match find_opt (fun (k',_) -> equality k k') l with
   | Some (_, v) -> Some v

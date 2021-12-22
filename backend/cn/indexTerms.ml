@@ -8,316 +8,20 @@ module SymMap = Map.Make(Sym)
 open Subst
 
 
-type lit = 
-  | Sym of Sym.t
-  | Z of Z.t
-  | Q of Q.t
-  | Pointer of Z.t
-  | Bool of bool
-  | Unit
-  | Default of BT.t
-  | Null
-(* Default bt: equivalent to a unique variable of base type bt, that
-   we know nothing about other than Default bt = Default bt *)
+include Terms
 
-(* over integers and reals *)
-type 'bt arith_op =
-  | Add of 'bt term * 'bt term
-  | Sub of 'bt term * 'bt term
-  | Mul of 'bt term * 'bt term
-  | Div of 'bt term * 'bt term
-  | Exp of 'bt term * 'bt term
-  | Rem of 'bt term * 'bt term
-  | Mod of 'bt term * 'bt term
-  | LT of 'bt term * 'bt term
-  | LE of 'bt term * 'bt term
-  | Min of 'bt term * 'bt term
-  | Max of 'bt term * 'bt term
-  | IntToReal of 'bt term
-  | RealToInt of 'bt term
-
-and 'bt bool_op = 
-  | And of 'bt term list
-  | Or of 'bt term list
-  | Impl of 'bt term * 'bt term
-  | Not of 'bt term
-  | ITE of 'bt term * 'bt term * 'bt term
-  | EQ of 'bt term * 'bt term
-  | NE of 'bt term * 'bt term
-  | EachI of (int * Sym.t * int) * 'bt term
-  (* add Z3's Distinct for separation facts  *)
-
-and 'bt tuple_op = 
-  | Tuple of 'bt term list
-  | NthTuple of int * 'bt term
-
-and 'bt struct_op =
-  | Struct of BT.tag * (BT.member * 'bt term) list
-  | StructMember of 'bt term * BT.member
-
-and 'bt pointer_op = 
-  | LTPointer of 'bt term * 'bt term
-  | LEPointer of 'bt term * 'bt term
-  | IntegerToPointerCast of 'bt term
-  | PointerToIntegerCast of 'bt term
-  | MemberOffset of BT.tag * Id.t
-  | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
-
-and 'bt list_op = 
-  | Nil
-  | Cons of 'bt term * 'bt term
-  | List of 'bt term list
-  | Head of 'bt term
-  | Tail of 'bt term
-  | NthList of int * 'bt term
-
-and 'bt set_op = 
-  | SetMember of 'bt term * 'bt term
-  | SetUnion of ('bt term) List1.t
-  | SetIntersection of ('bt term) List1.t
-  | SetDifference of 'bt term * 'bt term
-  | Subset of 'bt term * 'bt term
-
-and 'bt ct_pred = 
-  | Representable of CT.t * 'bt term
-  | Good of CT.t * 'bt term
-  | AlignedI of {t : 'bt term; align : 'bt term}
-  | Aligned of 'bt term * CT.t
-
-and 'bt array_op = 
-  | Const of BT.t * 'bt term
-  | Set of 'bt term * 'bt term * 'bt term
-  | Get of 'bt term * 'bt term
-  | Def of (Sym.t * BT.t) * 'bt term
-
-and 'bt term_ =
-  | Lit of lit
-  | Arith_op of 'bt arith_op
-  | Bool_op of 'bt bool_op
-  | Tuple_op of 'bt tuple_op
-  | Struct_op of 'bt struct_op
-  | Pointer_op of 'bt pointer_op
-  | List_op of 'bt list_op
-  | Set_op of 'bt set_op
-  | CT_pred of 'bt ct_pred
-  | Array_op of 'bt array_op
-
-and 'bt term =
-  | IT of 'bt term_ * 'bt
-
-
+let equal = equal_term BT.equal
+let compare = compare_term BT.compare
 
 
 
 type typed = BT.t term
-type untyped = unit term
-
-type it = typed
-type t = typed
+type t = BT.t term
 
 
 
-let bt (IT (_, bt)) : BT.t = bt
-
-
-let rec equal (IT (it, _)) (IT (it', _)) = 
-  match it, it' with
-  | Lit lit, Lit lit' -> 
-     begin match lit, lit' with
-     | Sym sym, Sym sym' -> Sym.equal sym sym'
-     | Z n, Z n' -> Z.equal n n'
-     | Q q, Q q' -> Q.equal q q'
-     | Pointer p, Pointer p' -> Z.equal p p'
-     | Bool b, Bool b' -> b = b'
-     | Unit, Unit -> true
-     | Default bt, Default bt' -> BT.equal bt bt'
-     | Null, Null -> true
-     | Sym _, _ -> false
-     | Z _, _ -> false
-     | Q _, _ -> false
-     | Pointer _, _ -> false
-     | Bool _, _ -> false
-     | Unit, _ -> false
-     | Default _, _ -> false
-     | Null, _ -> false
-     end
-  | Arith_op arith_op, Arith_op arith_op' -> 
-     begin match arith_op, arith_op' with
-     | Add (t1,t2), Add (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Sub (t1,t2), Sub (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Mul (t1,t2), Mul (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Div (t1,t2), Div (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Exp (t1,t2), Exp (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Rem (t1,t2), Rem (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Mod (t1,t2), Mod (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | LT (t1,t2), LT (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | LE (t1,t2), LE (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Min (t1,t2), Min (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | Max (t1,t2), Max (t1',t2') -> equal t1 t1' && equal t2 t2' 
-     | IntToReal t, IntToReal t' -> equal t t'
-     | RealToInt t, RealToInt t' -> equal t t'
-     | Add _, _ -> false
-     | Sub _, _ -> false
-     | Mul _, _ -> false 
-     | Div _, _ -> false
-     | Exp _, _ -> false
-     | Rem _, _ -> false
-     | Mod _, _ -> false
-     | LT _, _ -> false
-     | LE _, _ -> false
-     | Min _, _ -> false
-     | Max _, _ -> false
-     | IntToReal _, _ -> false
-     | RealToInt _, _ -> false
-     end
-  | Bool_op bool_op, Bool_op bool_op' -> 
-     begin match bool_op, bool_op' with
-     | And ts, And ts' -> 
-        List.equal equal ts ts'
-     | Or ts, Or ts' -> 
-        List.equal equal ts ts'
-     | Impl (t1,t2), Impl (t1',t2') -> 
-        equal t1 t1' && equal t2 t2' 
-     | Not t, Not t' -> 
-        equal t t' 
-     | ITE (t1,t2,t3), ITE (t1',t2',t3') -> 
-        equal t1 t1' && equal t2 t2' && equal t3 t3'
-     | EQ (t1,t2), EQ (t1',t2') -> 
-        equal t1 t1' && equal t2 t2' 
-     | NE (t1,t2), NE (t1',t2') -> 
-        equal t1 t1' && equal t2 t2' 
-     | EachI ((i1, s, i2), t), EachI ((i1', s', i2'), t') ->
-        i1 = i1' && Sym.equal s s' && i2 = i2' && equal t t'
-     | And _, _ -> 
-        false
-     | Or _, _ -> 
-        false
-     | Impl _, _ -> 
-        false
-     | Not _, _ ->
-        false
-     | ITE _, _ ->
-        false
-     | EQ _, _ -> 
-        false
-     | NE _, _ -> 
-        false
-     | EachI _, _ ->
-        false
-     end
-  | Tuple_op tuple_op, Tuple_op tuple_op' -> 
-     begin match tuple_op, tuple_op' with
-     | Tuple ts, Tuple ts' -> List.equal equal ts ts'
-     | NthTuple (n,t), NthTuple (n',t') -> n = n' && equal t t' 
-     | Tuple _, _ -> false
-     | NthTuple _, _ -> false
-     end
-  | Struct_op struct_op, Struct_op struct_op' -> 
-     begin match struct_op, struct_op' with
-     | Struct (tag, members), Struct (tag2, members2) ->
-        Sym.equal tag tag2 && 
-          List.equal (fun (m,t) (m',t') -> Id.equal m m' && equal t t') 
-            members members2
-     | StructMember (t,member), StructMember (t',member') ->
-        equal t t' && Id.equal member member'
-     | Struct _, _ -> false
-     | StructMember _, _ -> false
-     end
-  | Pointer_op pointer_op, Pointer_op pointer_op' -> 
-     begin match pointer_op, pointer_op' with
-     | LTPointer (t1, t2), LTPointer (t1', t2') -> 
-        equal t1 t1' && equal t2 t2'
-     | LEPointer (t1, t2), LEPointer (t1', t2') -> 
-        equal t1 t1' && equal t2 t2'
-     | IntegerToPointerCast t1, IntegerToPointerCast t2 -> 
-        equal t1 t2
-     | PointerToIntegerCast t1, PointerToIntegerCast t2 -> 
-        equal t1 t2
-     | MemberOffset (s, m), MemberOffset (s', m') ->
-        Sym.equal s s' && Id.equal m m'
-     | ArrayOffset (ct, t), ArrayOffset (ct', t') ->
-        Sctypes.equal ct ct' && equal t t'
-     | LTPointer _, _ -> false
-     | LEPointer _, _ -> false
-     | IntegerToPointerCast _, _ -> false
-     | PointerToIntegerCast _, _ -> false
-     | MemberOffset _, _ -> false
-     | ArrayOffset _, _ -> false
-     end
-  | List_op list_op, List_op list_op' -> 
-     begin match list_op, list_op' with
-     | Nil, Nil -> true
-     | Cons (t1,t2), Cons (t1',t2') -> equal t1 t1' && equal t2 t2'
-     | List its, List its' -> List.equal equal its its'
-     | Head t, Head t' -> equal t t'
-     | Tail t, Tail t' -> equal t t'
-     | NthList (n,t), NthList (n',t') -> n = n' && equal t t'
-     | Nil, _ -> false
-     | Cons _, _ -> false
-     | List _, _ -> false
-     | Head _, _ -> false
-     | Tail _, _ -> false
-     | NthList _, _ -> false
-     end
-  | Set_op set_op, Set_op set_op' -> 
-     begin match set_op, set_op' with
-     | SetMember (t1,t2), SetMember (t1',t2') ->
-        equal t1 t1' && equal t1' t2'
-     | SetUnion ts, SetUnion ts' ->
-        List1.equal equal ts ts'
-     | SetIntersection ts, SetIntersection ts' ->
-        List1.equal equal ts ts'
-     | SetDifference (t1, t2), SetDifference (t1', t2') ->
-        equal t1 t1' && equal t1' t2'
-     | Subset (t1, t2), Subset (t1', t2') ->
-        equal t1 t1' && equal t1' t2'
-     | SetMember _, _ -> false
-     | SetUnion _, _ -> false
-     | SetIntersection _, _ -> false
-     | SetDifference _, _ -> false
-     | Subset _, _ -> false
-     end
-  | CT_pred ct_pred, CT_pred ct_pred' -> 
-     begin match ct_pred, ct_pred' with
-     | Aligned (t, ct), Aligned (t', ct') ->
-        equal t t' && CT.equal ct ct'
-     | AlignedI t1, AlignedI t2 ->
-        equal t1.t t2.t && equal t1.align t2.align
-     | Representable (rt, t), Representable (rt', t') ->
-        CT.equal rt rt' && equal t t'
-     | Good (rt, t), Good (rt', t') ->
-        CT.equal rt rt' && equal t t'
-     | Aligned _, _ -> false
-     | AlignedI _, _ -> false
-     | Representable _, _ -> false
-     | Good _, _ -> false
-     end
-  | Array_op array_op, Array_op array_op' -> 
-     begin match array_op, array_op' with
-     | Const (bt, t), Const (bt', t') ->
-        BT.equal bt bt' && equal t t'
-     | Set (t1,t2,t3), Set (t1',t2',t3') ->
-        equal t1 t1' && equal t2 t2' && equal t3 t3'
-     | Get (t, args), Get (t', args') ->
-        equal t t' && equal args args'
-     | Def ((s, abt), body), Def ((s', abt'), body') ->
-        Sym.equal s s' && BT.equal abt abt' && equal body body'
-     | Const _, _ -> false
-     | Set _, _ -> false
-     | Get _, _ -> false
-     | Def _, _ -> false
-     end
-  | Lit _, _ -> false
-  | Arith_op _, _ -> false
-  | Bool_op _, _ -> false
-  | Tuple_op _, _ -> false
-  | Struct_op _, _ -> false
-  | Pointer_op _, _ -> false
-  | List_op _, _ -> false
-  | Set_op _, _ -> false
-  | CT_pred _, _ -> false
-  | Array_op _, _ -> false
-
+let basetype (IT (_, bt)) : BT.t = bt
+let bt = basetype
 
 
 
@@ -368,6 +72,10 @@ let pp =
           c_app !^"intToReal" [aux false t]
        | RealToInt t ->
           c_app !^"realToInt" [aux false t]
+       | FlipBit fb ->
+          c_app !^"flipBit" [aux false fb.bit; aux false fb.t]
+       | XOR (ity, t1, t2) -> 
+          c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
        end
     | Bool_op bool_op -> 
        begin match bool_op with
@@ -378,13 +86,11 @@ let pp =
        | Impl (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
        | Not (o1) -> 
-          mparens (!^"not" ^^^ aux true o1)
+          mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) -> 
-          mparens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
+          parens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
        | EQ (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
-       | NE (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; !^"!" ^^ equals; aux true o2])
        | EachI ((i1, s, i2), t) ->
           mparens (c_app ((c_app !^"each" [!^(string_of_int i1); Sym.pp s; !^(string_of_int i2)])) [aux false t])
        end
@@ -418,6 +124,8 @@ let pp =
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
           mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+       | CellPointer c ->
+          mparens (c_app !^"cellPointer" [aux false c.base; aux false c.step; aux false c.starti; aux false c.endi; aux false c.p])
        end
     | CT_pred ct_pred -> 
        begin match ct_pred with
@@ -450,16 +158,16 @@ let pp =
        | SetMember (t1,t2) ->
           c_app !^"member" [aux false t1; aux false t2]
        | SetUnion ts ->
-          c_app !^"union" (List.map (aux false) (List1.to_list ts))
+          c_app !^"union" (List.map (aux false) ts)
        | SetIntersection ts ->
-          c_app !^"intersection" (List.map (aux false) (List1.to_list ts))
+          c_app !^"intersection" (List.map (aux false) ts)
        | SetDifference (t1, t2) ->
           c_app !^"difference" [aux false t1; aux false t2]
        | Subset (t1, t2) ->
           c_app !^"subset" [aux false t1; aux false t2]
        end
-    | Array_op array_op -> 
-       begin match array_op with
+    | Map_op map_op -> 
+       begin match map_op with
        | Const (_, t) ->
           braces (aux false t)
        | Set (t1,t2,t3) ->
@@ -469,6 +177,16 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
+    | Option_op option_op ->
+       begin match option_op with
+       | Nothing bt -> !^"nothing"
+       | Something t -> c_app !^"some" [aux false t]
+       | Is_nothing t -> c_app !^"is_nothing" [aux false t]
+       | Is_something t -> c_app !^"is_something" [aux false t]
+       | Get_some_value t -> c_app !^"value" [aux false t]
+       end
+    | Let ((s, bound), body) ->
+       !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body)
   in
   fun (it : 'bt term) -> aux false it
 
@@ -503,6 +221,8 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Max (it, it') -> free_vars_list [it; it']
      | IntToReal t -> free_vars t
      | RealToInt t -> free_vars t
+     | FlipBit fb -> free_vars_list [fb.bit; fb.t]
+     | XOR (_, it, it') -> free_vars_list [it; it']
      end
   | Bool_op bool_op ->
      begin match bool_op with
@@ -512,7 +232,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Not it -> free_vars it
      | ITE (it,it',it'') -> free_vars_list [it;it';it'']
      | EQ (it, it') -> free_vars_list [it; it']
-     | NE (it, it') -> free_vars_list [it; it']
      | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
      end
   | Tuple_op tuple_op -> 
@@ -533,6 +252,7 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | PointerToIntegerCast t -> free_vars t
      | MemberOffset (_, _) -> SymSet.empty
      | ArrayOffset (_, t) -> free_vars t
+     | CellPointer c -> free_vars_list [c.base; c.step; c.starti; c.endi; c.p]
      end
   | CT_pred ct_pred ->
      begin match ct_pred with
@@ -553,18 +273,29 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
   | Set_op set_op ->
      begin match set_op with
      | SetMember (t1,t2) -> free_vars_list [t1;t2]
-     | SetUnion ts -> free_vars_list (List1.to_list ts)
-     | SetIntersection ts -> free_vars_list (List1.to_list ts)
+     | SetUnion ts -> free_vars_list ts
+     | SetIntersection ts -> free_vars_list ts
      | SetDifference (t1, t2) -> free_vars_list [t1;t2]
      | Subset (t1, t2) -> free_vars_list [t1;t2]
      end
-  | Array_op array_op -> 
-     begin match array_op with
+  | Map_op map_op -> 
+     begin match map_op with
      | Const (_, t) -> free_vars t
      | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
      | Get (t, arg) -> free_vars_list ([t; arg])
      | Def ((s, _), body) -> SymSet.remove s (free_vars body)
      end
+  | Option_op option_op ->
+     begin match option_op with
+     | Nothing _bt -> SymSet.empty
+     | Something t -> free_vars t
+     | Is_nothing t -> free_vars t
+     | Is_something t -> free_vars t
+     | Get_some_value t -> free_vars t
+     end
+  | Let ((s, bound), body) ->
+     SymSet.union (free_vars bound)
+       (SymSet.remove s (free_vars body))
 
 and free_vars_list l = 
   List.fold_left (fun acc sym -> 
@@ -605,6 +336,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Max (it, it') -> Max (subst su it, subst su it')
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
+       | FlipBit {bit; t} -> FlipBit {bit = subst su bit; t = subst su t}
+       | XOR (ity, it, it') -> XOR (ity, subst su it, subst su it')
      in
      IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
@@ -615,7 +348,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Not it -> Not (subst su it)
        | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
        | EQ (it, it') -> EQ (subst su it, subst su it')
-       | NE (it, it') -> NE (subst su it, subst su it')
        | EachI ((i1, s, i2), t) ->
           if SymSet.mem s su.relevant then
             let s' = Sym.fresh_same s in
@@ -661,6 +393,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           MemberOffset (tag, member)
        | ArrayOffset (tag, t) ->
           ArrayOffset (tag, subst su t)
+       | CellPointer c ->
+          CellPointer {
+              base = subst su c.base;
+              step = subst su c.step;
+              starti = subst su c.starti;
+              endi = subst su c.endi;
+              p = subst su c.p;
+            }
      in
      IT (Pointer_op pointer_op, bt)
   | CT_pred ct_pred -> 
@@ -684,14 +424,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | Set_op set_op -> 
      let set_op = match set_op with
        | SetMember (t1,t2) -> SetMember (subst su t1, subst su t2)
-       | SetUnion ts -> SetUnion (List1.map (subst su) ts)
-       | SetIntersection ts -> SetIntersection (List1.map (subst su) ts)
+       | SetUnion ts -> SetUnion (List.map (subst su) ts)
+       | SetIntersection ts -> SetIntersection (List.map (subst su) ts)
        | SetDifference (t1, t2) -> SetDifference (subst su t1, subst su t2)
        | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
      in
      IT (Set_op set_op, bt)
-  | Array_op array_op -> 
-     let array_op = match array_op with
+  | Map_op map_op -> 
+     let map_op = match map_op with
        | Const (bt, t) -> 
           Const (bt, subst su t)
        | Set (t1, t2, t3) -> 
@@ -707,98 +447,28 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           else 
             Def ((s, abt), subst su body)
      in
-     IT (Array_op array_op, bt)
+     IT (Map_op map_op, bt)
+  | Option_op option_op -> 
+     let option_op = match option_op with
+       | Nothing bt -> Nothing bt
+       | Something t -> Something (subst su t)
+       | Is_nothing t -> Is_nothing (subst su t)
+       | Is_something t -> Is_something (subst su t)
+       | Get_some_value t -> Get_some_value (subst su t)
+     in
+     IT (Option_op option_op, bt)
+  | Let ((s, bound), body) ->
+     let bound = subst su bound in
+     if SymSet.mem s su.relevant then
+       let s' = Sym.fresh_same s in
+       let body = subst (make_subst [(s, IT (Lit (Sym s'), basetype bound))]) body in
+       let body = subst su body in
+       IT (Let ((s', bound), body), bt)
+     else
+       IT (Let ((s, bound), subst su body), bt)
 
 
 
-
-
-let rec size (IT (it_, bt)) =
-  match it_ with
-  | Lit _ -> 1
-  | Arith_op arith_op ->
-     begin match arith_op with
-     | Add (it, it')
-     | Sub (it, it')
-     | Mul (it, it')
-     | Div (it, it')
-     | Exp (it, it')
-     | Rem (it, it')
-     | Mod (it, it')
-     | LT (it, it')
-     | LE (it, it') 
-     | Min (it, it')
-     | Max (it, it')
-       -> 1 + size it + size it'
-     | IntToReal it
-     | RealToInt it ->
-        1 + size it
-     end
-  | Bool_op bool_op ->
-     begin match bool_op with
-     | And its -> 1 + size_list its
-     | Or its -> 1 + size_list its
-     | Impl (it, it') -> 1 + size it + size it'
-     | Not it -> 1 + size it
-     | ITE (it, it', it'') -> 1 + size_list [it; it'; it'']
-     | EQ (it, it') -> 1 + size it + size it'
-     | NE (it, it') -> 1 + size it + size it'
-     | EachI (_, it) -> 1 + size it
-     end
-  | Tuple_op tuple_op ->
-     begin match tuple_op with
-     | Tuple its -> 1 + size_list its
-     | NthTuple (_, it) -> 1 + size it
-     end
-  | Struct_op struct_op ->
-     begin match struct_op with
-     | Struct (_, members) -> 1 + size_list (List.map snd members)
-     | StructMember (it, _) -> 1 + size it
-     end
-  | Pointer_op pointer_op ->
-     begin match pointer_op with
-     | LTPointer (it, it')
-     | LEPointer (it, it') ->
-        1 + size it + size it'
-     | IntegerToPointerCast it -> 1 + size it
-     | PointerToIntegerCast it -> 1 + size it
-     | MemberOffset _ -> 1
-     | ArrayOffset (_, it) -> 1 + size it
-     end
-  | List_op list_op ->
-     begin match list_op with
-     | Nil -> 1
-     | Cons (it, it') -> 1 + size it + size it'
-     | List its -> 1 + size_list its
-     | Head it -> 1 + size it
-     | Tail it -> 1 + size it
-     | NthList (_, it) -> 1 + size it
-     end
-  | Set_op set_op ->
-     begin match set_op with
-     | SetMember (it, it') -> 1 + size it + size it'
-     | SetUnion its -> 1 + size_list (List1.to_list its)
-     | SetIntersection its -> 1 + size_list (List1.to_list its)
-     | SetDifference (it, it') -> 1 + size it + size it'
-     | Subset (it, it') -> 1 + size it + size it'
-     end
-  | CT_pred ct_pred ->
-     begin match ct_pred with
-     | Representable (_, it) -> 1 + size it
-     | Good (_, it) -> 1 + size it
-     | AlignedI a -> 1 + size a.t + size a.align
-     | Aligned (it, _) -> 1 + size it
-     end
-  | Array_op array_op ->
-     begin match array_op with
-     | Const (_, it) -> 1 + size it
-     | Set (it, it', it'') -> 1 + size_list [it;it';it'']
-     | Get (it, it') -> 1 + size it + size it'
-     | Def (_, it) -> 1 + size it
-     end
-
-and size_list its = 
-  List.fold_right (fun it acc -> acc + size it) its 0
 
 
 
@@ -828,7 +498,7 @@ let is_q = function
   | _ -> None
 
 let is_app = function
-  | IT (Array_op (Get (f,arg)), _) -> Some (f, arg)
+  | IT (Map_op (Get (f,arg)), _) -> Some (f, arg)
   | _ -> None
 
 let zero_frac = function
@@ -868,11 +538,16 @@ let ge_ (it, it') = le_ (it', it)
 let and_ its = IT (Bool_op (And its), BT.Bool)
 let or_ its = IT (Bool_op (Or its), BT.Bool)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
-let not_ it = IT (Bool_op (Not it), BT.Bool)
+let not_ it = 
+  match it with
+  | IT (Lit (Bool b), _) -> bool_ (not b)
+  | IT (Bool_op (Not a), _) -> a
+  | _ -> IT (Bool_op (Not it), BT.Bool)
+
 let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
 let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
-let ne_ (it, it') = IT (Bool_op (NE (it, it')), BT.Bool)
+let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
 
@@ -881,7 +556,12 @@ let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
 let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
 let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
-let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
+let exp_ (it, it') = 
+  match is_z it, is_z it' with
+  | Some z, Some z' when Z.fits_int z' ->
+     z_ (Z.pow z (Z.to_int z'))
+  | _ ->
+     IT (Arith_op (Exp (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let rem_t___ (it, it') = rem_ (it, it')
@@ -890,6 +570,7 @@ let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
 let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
 let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)
 let realToInt_ it = IT (Arith_op (RealToInt it), BT.Integer)
+let xor_ ity (it, it') = IT (Arith_op (XOR (ity, it, it')), BT.Integer)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
@@ -947,6 +628,9 @@ let memberOffset_ (tag, member) =
   IT (Pointer_op (MemberOffset (tag, member)), BT.Integer)
 let arrayOffset_ (ct, t) = 
   IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
+let cellPointer_ ~base ~step ~starti ~endi ~p =
+  IT (Pointer_op (CellPointer {base;step;starti;endi;p}), BT.Bool)
+
 let memberShift_ (t, tag, member) = 
   integerToPointerCast_ 
     (add_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
@@ -973,8 +657,8 @@ let nthList_ ~item_bt (n, it) = IT (List_op (NthList (n, it)), item_bt)
 
 (* set_op *)
 let setMember_ bt (it, it') = IT (Set_op (SetMember (it, it')), BT.Bool)
-let setUnion_ its = IT (Set_op (SetUnion its), bt (List1.head its))
-let setIntersection_ its = IT (Set_op (SetIntersection its), bt (List1.head its))
+(* let setUnion_ its = IT (Set_op (SetUnion its), bt (hd its))
+ * let setIntersection_ its = IT (Set_op (SetIntersection its), bt (hd its)) *)
 let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
 let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
@@ -994,23 +678,37 @@ let aligned_ (t, it) =
 let alignedI_ ~t ~align = 
   IT (CT_pred (AlignedI {t; align}), BT.Bool)
 
-let const_ index_bt t = 
-  IT (Array_op (Const (index_bt, t)), BT.Array (index_bt, bt t))
-let set_ t1 (t2, t3) = 
-  IT (Array_op (Set (t1, t2, t3)), bt t1)
-let get_ v arg = 
+let const_map_ index_bt t = 
+  IT (Map_op (Const (index_bt, t)), BT.Map (index_bt, bt t))
+let map_set_ t1 (t2, t3) = 
+  IT (Map_op (Set (t1, t2, t3)), bt t1)
+let map_get_ v arg = 
   match bt v with
-  | BT.Array (_, rbt) ->
-     IT (Array_op (Get (v, arg)), rbt)
+  | BT.Map (_, rbt) ->
+     IT (Map_op (Get (v, arg)), rbt)
   | _ -> Debug_ocaml.error "illtyped index term"
-let array_def_ (s, abt) body = 
-  IT (Array_op (Def ((s, abt), body)), BT.Array (abt, bt body))
+let map_def_ (s, abt) body = 
+  IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
 
 
+let nothing_ bt = 
+  IT (Option_op (Nothing bt), BT.Option bt)
+let something_ t =
+  IT (Option_op (Something t), BT.Option (basetype t))
+let is_nothing_ t =
+  IT (Option_op (Is_nothing t), BT.Bool)
+let is_something_ t =
+  IT (Option_op (Is_something t), BT.Bool)
+let get_some_value_ t =
+  let vbt = BT.option_bt (basetype t) in
+  IT (Option_op (Get_some_value t), vbt)
 
-let (%@) it it' = get_ it it'
 
-
+let let_ (s, bound) body = 
+  IT (Let ((s, bound), body), basetype body)
+let let__ (name, bound) body =
+  let s = Sym.fresh_named name in
+  let_ (s, bound) (body (sym_ (s, basetype bound)))
 
 
 
@@ -1023,6 +721,10 @@ let fresh_named bt name =
   let symbol = Sym.fresh_named name in
   (symbol, sym_ (symbol, bt))
 
+let fresh_same bt symbol' = 
+  let symbol = Sym.fresh_same symbol' in
+  (symbol, sym_ (symbol, bt))
+
 
 
 
@@ -1033,6 +735,15 @@ let def_ sym e = eq_ (sym_ (sym, bt e), e)
 
 let in_range within (min, max) = 
   and_ [le_ (min, within); le_ (within, max)]
+
+let disjoint_ (p1, sz1) (p2, sz2) = 
+  let p1i = pointerToIntegerCast_ p1 in
+  let p2i = pointerToIntegerCast_ p2 in
+  or_ [le_ (add_ (p1i, sz1), p2i);
+       le_ (add_ (p2i, sz2), p1i)]
+  
+
+
 
 (* let in_footprint within (pointer, size) = 
  *   and_ [lePointer_ (pointer, within); 
@@ -1059,7 +770,9 @@ let hash (IT (it, _bt)) =
   | CT_pred _ -> 6
   | List_op _ -> 7
   | Set_op _ -> 8
-  | Array_op _ -> 9
+  | Map_op _ -> 9
+  | Option_op _ -> 10
+  | Let _ -> 11
   | Lit lit ->
      begin match lit with
      | Z z -> 20
@@ -1075,12 +788,24 @@ let hash (IT (it, _bt)) =
 
 
 
+let partiality_check_array ~length ~item_ct value = 
+  let unmapped = 
+    let rec aux i acc = 
+      if i > (length - 1) then acc else 
+        aux (i + 1) (map_set_ acc (int_ i, nothing_ (BT.of_sct item_ct)))
+    in
+    aux 0 value
+  in
+  let empty = const_map_ Integer (nothing_ (BT.of_sct item_ct)) in
+  eq_ (unmapped, empty)
+
+
 
 let value_check_pointer alignment ~pointee_ct about = 
   let about_int = pointerToIntegerCast_ about in
   let pointee_size = match pointee_ct with
-    | Sctypes.Sctype (_, Void) -> 1
-    | Sctypes.Sctype (_, Function _) -> 1
+    | Sctypes.Void -> 1
+    | Function _ -> 1
     | _ -> Memory.size_of_ctype pointee_ct 
   in
   and_ [le_ (z_ Z.zero, about_int);
@@ -1090,7 +815,7 @@ let value_check_pointer alignment ~pointee_ct about =
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
   let open Sctypes in
   let open Memory in
-  let rec aux (Sctype (_, ct_) : Sctypes.t) about = 
+  let rec aux (ct_ : Sctypes.t) about = 
     match ct_ with
     | Void -> 
        bool_ true
@@ -1098,9 +823,13 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
        in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
     | Array (it, None) -> 
        Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
-    | Array (ict, Some n) -> 
+    | Array (item_ct, Some n) -> 
+       let partiality = partiality_check_array ~length:n ~item_ct about in
        let i_s, i = fresh BT.Integer in
-       eachI_ (0, i_s, n - 1) (aux ict (get_ about i))
+       and_ 
+         [eachI_ (0, i_s, n - 1) (is_something_ (map_get_ about i));
+          eachI_ (0, i_s, n - 1) (aux item_ct (get_some_value_ (map_get_ about i)));
+          partiality]
     | Pointer pointee_ct -> 
        value_check_pointer alignment ~pointee_ct about
     | Struct tag -> 

@@ -142,15 +142,15 @@ let frontend filename =
 
 
 
-let z3_log_file_path = 
-  Filename.get_temp_dir_name () ^
-    Filename.dir_sep ^
-      "z3.log"
-
-
-
-
-let main filename loc_pp debug_level print_level json =
+let main 
+      filename 
+      loc_pp 
+      debug_level 
+      print_level 
+      json 
+      state_file 
+      skip_consistency
+  =
   if json then begin
       if debug_level > 0 then
         CF.Pp_errors.fatal ("debug level must be 0 for json output");
@@ -158,9 +158,9 @@ let main filename loc_pp debug_level print_level json =
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
   Debug_ocaml.debug_level := debug_level;
+  WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
-  if debug_level > 0 then Printexc.record_backtrace true else ();
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
   else if not (String.equal (Filename.extension filename) ".c") then
@@ -173,26 +173,23 @@ let main filename loc_pp debug_level print_level json =
     | CF.Exception.Result file ->
        try
          let open Resultat in
-         assert (Z3.Log.open_ z3_log_file_path);
          Debug_ocaml.maybe_open_csv_timing_file ();
          let result = 
            let@ file = Retype.retype_file file in
            Check.check file 
          in
-         Z3.Log.close ();
          Debug_ocaml.maybe_close_csv_timing_file ();
          match result with
          | Ok () -> 
             exit 0
          | Error e when json ->
-            TypeErrors.report_json e;
+            TypeErrors.report_json ?state_file e;
             exit 1
          | Error e ->
-            TypeErrors.report e;
+            TypeErrors.report ?state_file e;
             exit 1
        with
        | exc -> 
-          Z3.Log.close ();
           Debug_ocaml.maybe_close_csv_timing_file ();
           Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
     end
@@ -226,6 +223,15 @@ let json =
   Arg.(value & flag & info["json"] ~doc)
 
 
+let state_file =
+  let doc = "file in which to output the state" in
+  Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
+
+let skip_consistency = 
+  let doc = "Skip check for logical consistency of function specifications." in
+  Arg.(value & flag & info["skip_consistency"] ~doc)
+
+
 let () =
   let open Term in
   let check_t = 
@@ -234,6 +240,8 @@ let () =
       loc_pp $ 
       debug_level $ 
       print_level $
-      json
+      json $
+      state_file $
+      skip_consistency
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

@@ -45,6 +45,7 @@ open Assertion_parser_util
 %token COLON
 %token OR
 %token AND
+%token NOT
 
 %token NULL
 %token OFFSETOF
@@ -52,11 +53,23 @@ open Assertion_parser_util
 %token INTEGERCAST
 %token POINTER
 %token INTEGER
+%token DISJOINT
+
+%token CELLPOINTER
+
+
+%token FLIPBIT
 
 %token AMPERSAND
 %token AT
 
 %token EACH
+
+%token WHERE
+%token WITH
+%token TYP
+%token TYPEOF
+
 
 %token EOF
 
@@ -86,7 +99,7 @@ start:
 
 
 %inline pred_with_args:
-  | id=NAME args=delimited(LPAREN, separated_list(COMMA, term), RPAREN)
+  | id=NAME LPAREN args=separated_list(COMMA, term) RPAREN
       { (id, args) }
 
 
@@ -123,8 +136,12 @@ atomic_term:
       { Ast.Null }
   | OFFSETOF LPAREN tag = NAME COMMA member= NAME RPAREN
       { Ast.OffsetOf {tag; member} }
+  | CELLPOINTER LPAREN t1=term COMMA t2=term COMMA t3=term COMMA t4=term COMMA t5=term RPAREN
+      { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
   | LBRACE a=term RBRACE AT l=NAME
       { Ast.Env (a, l) }
+  | DISJOINT LPAREN p1=term COMMA sz1=term COMMA p2=term COMMA sz2=term RPAREN
+      { Ast.Disjoint ((p1, sz1), (p2, sz2)) }
 
 arith_term:
   | a1=arith_or_atomic_term PLUS a2=arith_or_atomic_term
@@ -139,6 +156,8 @@ arith_term:
       { Ast.Remainder (a1, a2) }
   | POWER LPAREN a1=term COMMA a2=term RPAREN
       { Ast.Exponentiation (a1, a2) }
+  | FLIPBIT LPAREN bit=term COMMA t=term RPAREN
+      { Ast.FlipBit {bit; t} }
 
 arith_or_atomic_term:
   | a=arith_term
@@ -167,12 +186,19 @@ term:
       { Ast.Or (a1, a2) }
   | a1=term AND a2=term
       { Ast.And (a1, a2) }
+  | NOT LPAREN t=term RPAREN
+      { Ast.Not t }
   | POINTERCAST a1=atomic_term
       { Ast.IntegerToPointerCast a1 }
   | INTEGERCAST a1=atomic_term
       { Ast.PointerToIntegerCast a1 }
   | a1=atomic_term LBRACKET a2=term RBRACKET
-      { Ast.App (a1, a2) }
+      { Ast.App (a1, a2) } 
+
+
+term_with_name:
+  | name=NAME EQUAL t=term
+      { (name,t) }
 
 
 
@@ -183,15 +209,32 @@ basetype:
       { BaseTypes.Integer }
   
 
+%inline ctype:
+  | TYPEOF LPAREN t=term RPAREN
+      { Ast.Typeof t }
+
+%inline with_clause:
+  | WITH TYP EQUAL typ=ctype
+      { typ }
+
+%inline where_clause:
+  | COMMA WHERE some_oargs=separated_list(COMMA, term_with_name)
+      { some_oargs }
+
+
+
+
+
 predicate:
-  | id_args=pred_with_args name=NAME
-      { Ast.{oq = None; predicate=fst id_args; arguments = snd id_args; oname = Some name} }
-  | id_args=pred_with_args 
-      { Ast.{oq = None; predicate=fst id_args; arguments = snd id_args; oname = None} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE name=NAME
-      { Ast.{oq = Some (qname,bt,t); predicate=fst id_args; arguments = snd id_args; oname = Some name} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE id_args=pred_with_args RBRACE
-      { Ast.{oq = Some (qname,bt,t); predicate=fst id_args; arguments = snd id_args; oname = None} }
+  | predwithargs=pred_with_args oname=option(NAME) maybe_typ=option(with_clause) maybe_some_oargs=option(where_clause)
+      { let (predicate, arguments) = predwithargs in
+        let some_oargs = Option.value [] maybe_some_oargs in
+        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; typ = maybe_typ} }
+  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args maybe_typ=option(with_clause) RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
+      { let (predicate, arguments) = predwithargs in
+        let some_oargs = Option.value [] maybe_some_oargs in
+        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; typ = maybe_typ} }
+
 
 
 cond:

@@ -61,23 +61,6 @@ module Make(T : S) = struct
 
   end
 
-  module List1M = struct
-
-    open List1
-
-    let mapM (f : 'a -> ('b, 'e) m) (l : 'a list1) : ('b list1, 'e) m = 
-      let (hd, tl) = dest l in
-      let@ hd = f hd in
-      let@ tl = ListM.mapM f tl in
-      return (List1.make (hd, tl))
-
-    let iterM (f : ('a -> (unit, 'e) m)) (l : 'a list1) : (unit, 'e) m = 
-      let@ _ = mapM f l in 
-      return ()  
-
-  end
-
-
   module PmapM = struct
 
     let foldM 

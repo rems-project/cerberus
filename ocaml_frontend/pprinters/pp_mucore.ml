@@ -942,13 +942,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           acc) P.empty globs
 
   let pp_funinfo finfos =
-      Pmap.fold (fun sym (M_funinfo (_, _, ft, has_proto)) acc ->
+      Pmap.fold (fun sym (M_funinfo (_, _, ft, _trusted, has_proto)) acc ->
           acc ^^ pp_symbol sym ^^ P.colon
           ^^^ pp_ft ft
           ^^ P.hardline) finfos P.empty
 
     let pp_funinfo_with_attributes finfos =
-      Pmap.fold (fun sym (M_funinfo (loc, attrs, ft, has_proto)) acc ->
+      Pmap.fold (fun sym (M_funinfo (loc, attrs, ft, _trusted, has_proto)) acc ->
           acc ^^ pp_symbol sym ^^ P.colon
           ^^^ pp_ft ft
           ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
@@ -1121,7 +1121,7 @@ module Basic = (struct
   (* let ansi_format = Colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = false
-  let show_include = false
+  let show_include = true
   let show_locations = false
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
@@ -1141,7 +1141,7 @@ module WithLocations = (struct
   let ansi_format _ s = s
   (* let ansi_format = Colour.ansi_format *)
   let show_std = false
-  let show_include = false
+  let show_include = true
   let show_locations = true
   let handle_location _ _ = ()
   let handle_uid _ _ = ()

@@ -35,6 +35,8 @@ rule main = parse
   | "<="  { T.LE }
   | ">="  { T.GE }
 
+  | "flipBit" { T.FLIPBIT }
+
   | "(pointer)"   { T.POINTERCAST }
   | "(integer)"   { T.INTEGERCAST }
 
@@ -54,14 +56,22 @@ rule main = parse
   | ':'   { T.COLON }
   | "||"  { T.OR }
   | "&&"  { T.AND }
+  | '!'   { T.NOT }
 
   | "NULL" { T.NULL }
   | "offsetof" { T.OFFSETOF }
+  | "cellPointer" { T.CELLPOINTER }
+  | "disjoint"    { T.DISJOINT }
 
   | '&'   { T.AMPERSAND }
   | '@'   { T.AT }
 
   | "each" {T.EACH }
+
+  | "where" {T.WHERE }
+  | "with" {T.WHERE }
+  | "type" {T.TYP }
+  | "typeof" {T.TYPEOF }
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 

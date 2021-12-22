@@ -1,17 +1,32 @@
 type solver
 type model
+type model_with_q = model * (Sym.t * LogicalSorts.t) option
 
 
 val make : unit -> solver
 
 val push : solver -> unit
 val pop : solver -> unit
-val add : Global.t -> solver -> LogicalConstraints.t -> unit
+val add : solver -> Global.t -> LogicalConstraints.t -> unit
 
 
-val provable : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False ]
-val provable_or_model : Global.t -> solver -> LogicalConstraints.t list -> LogicalConstraints.t -> [> `True | `False of model]
+val provable : 
+  shortcut_false:bool -> 
+  solver -> 
+  Global.t -> 
+  LogicalConstraints.t list -> 
+  LogicalConstraints.t -> 
+  [> `True | `False ]
+
+
+val model : 
+  unit -> 
+  model_with_q
 
 
 
-val eval : Memory.struct_decls -> model -> IndexTerms.t -> IndexTerms.t option
+val eval : 
+  Memory.struct_decls -> 
+  model -> 
+  IndexTerms.t -> 
+  IndexTerms.t option

@@ -18,6 +18,8 @@ type token =
   | POWER
   | PERCENT
 
+  | FLIPBIT
+
   | EQ
   | NE
   | LT
@@ -38,10 +40,13 @@ type token =
   | COLON
   | OR
   | AND
+  | NOT
 
   | NULL
   | OFFSETOF
 
+  | CELLPOINTER
+  | DISJOINT
 
   | MEMBER of string
   | DOTDOT
@@ -55,5 +60,10 @@ type token =
   | AT
 
   | EACH
+
+  | WHERE
+  | WITH
+  | TYP
+  | TYPEOF
 
   | EOF

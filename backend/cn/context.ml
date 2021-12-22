@@ -30,8 +30,7 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
-    solver : Solver.solver;
-    global: Global.t;
+    global : Global.t;
   }
 
 
@@ -40,8 +39,7 @@ let empty global = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
-    solver = Solver.make ();
-    global = global
+    global = global;
   }
 
 
@@ -86,28 +84,18 @@ let add_l lname ls (ctxt : t) =
 let add_ls lvars ctxt = 
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
-let add_c lc (ctxt : t) = 
-  let lc = Simplify.simp_lc ctxt.global.struct_decls ctxt.constraints lc in
-  let () = Solver.add ctxt.global ctxt.solver lc in
-  { ctxt with constraints = lc :: ctxt.constraints }
-
-let add_cs lcs (ctxt : t) = 
-  List.fold_left (fun ctxt lc -> add_c lc ctxt) ctxt lcs
+let add_c c (ctxt : t) = 
+  { ctxt with constraints = c :: ctxt.constraints }
 
 
 let add_r owhere r (ctxt : t) = 
-  match RE.simp_or_empty ctxt.global.struct_decls ctxt.constraints r with
-  | Some r -> 
-     let lcs = 
-       RE.derived_constraint r ::
-         List.map (fun r' -> RE.derived_constraints r r') 
-           ctxt.resources
-     in
-     let ctxt = {ctxt with resources = r :: ctxt.resources} in
-     let ctxt = add_cs lcs ctxt in
-     ctxt
-  | None ->
-     ctxt
+  let lcs = 
+    RE.derived_constraint r ::
+      List.map (fun r' -> RE.derived_constraints r r') 
+        ctxt.resources
+  in
+  let ctxt = {ctxt with resources = r :: ctxt.resources} in
+  (ctxt, lcs)
 
 
 let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) 
@@ -127,11 +115,6 @@ let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc)
 
 
 
-
-
-let all_vars (ctxt : t) = 
-  List.map fst (SymMap.bindings ctxt.computational) @
-  List.map fst (SymMap.bindings ctxt.logical)
 
 
 let json (ctxt : t) : Yojson.Safe.t = 
@@ -159,48 +142,6 @@ let json (ctxt : t) : Yojson.Safe.t =
       ]
   in
   `Variant ("Context", Some json_record)
-
-
-
-
-module LRT = LogicalReturnTypes
-module RT = ReturnTypes
-
-
-
-let rec bind_logical where (ctxt : t) (lrt : LRT.t) : t = 
-  match lrt with
-  | Logical ((s, ls), _oinfo, rt) ->
-     let s' = Sym.fresh () in
-     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) rt in
-     bind_logical where (add_l s' ls ctxt) rt'
-  | Define ((s, it), oinfo, rt) ->
-     let s' = Sym.fresh () in
-     let bt = IT.bt it in
-     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
-     let constr = LC.t_ (IT.def_ s' it) in
-     bind_logical where (add_c constr (add_l s' bt ctxt)) rt'
-  | Resource (re, _oinfo, rt) -> 
-     bind_logical where (add_r where re ctxt) rt
-  | Constraint (lc, _oinfo, rt) -> 
-     bind_logical where (add_c lc ctxt) rt
-  | I -> ctxt
-
-let bind_computational where (ctxt : t) (name : Sym.t) (rt : RT.t) : t =
-  let Computational ((s, bt), _oinfo, rt) = rt in
-  let s' = Sym.fresh () in
-  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
-  bind_logical where (add_a name (bt, s') (add_l s' bt ctxt)) rt'
-
-
-let bind where (ctxt : t) (name : Sym.t) (rt : RT.t) : t =
-  bind_computational where ctxt name rt
-
-let bind_logically where (ctxt : t) (rt : RT.t) : ((BT.t * Sym.t) * t) =
-  let Computational ((s, bt), _oinfo, rt) = rt in
-  let s' = Sym.fresh () in
-  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
-  ((bt, s'), bind_logical where (add_l s' bt ctxt) rt')
 
 
 

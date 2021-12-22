@@ -1,51 +1,34 @@
 open Pp
 
+
 type tag = Sym.t
+let equal_tag = Sym.equal
+let compare_tag = Sym.compare
+
 type member = Id.t
+let equal_member = Id.equal
+let compare_member = Id.compare
 
 
-type t =
+type basetype =
   | Unit 
   | Bool
   | Integer
   | Real
   | Loc
   | Struct of tag
-  | Array of t * t
-  | List of t
-  | Tuple of t list
-  | Set of t
+  | Map of basetype * basetype
+  | List of basetype
+  | Tuple of basetype list
+  | Set of basetype
+  | Option of basetype
+[@@deriving eq, ord]
+
+type t = basetype
 
 
-let is_struct = function
-  | Struct tag -> Some tag
-  | _ -> None
-
-let rec equal t t' = 
-  match t, t' with
-  | Unit, Unit -> true
-  | Bool, Bool -> true
-  | Integer, Integer -> true
-  | Real, Real -> true
-  | Loc, Loc -> true
-  | Struct t, Struct t' -> Sym.equal t t'
-  | Array (t1,t2), Array (t1',t2') -> equal t1 t1' && equal t2 t2'
-  | List t, List t' -> equal t t'
-  | Tuple ts, Tuple ts' -> List.equal equal ts ts'
-  | Set t, Set t' -> equal t t'
-  | Unit, _
-  | Bool, _
-  | Integer, _
-  | Real, _
-  | Loc, _
-  | Struct _, _
-  | Array _, _
-  | List _, _
-  | Tuple _, _
-  | Set _, _
-    ->
-     false
-
+let equal = equal_basetype
+let compare = compare_basetype
 
 
 let rec pp = function
@@ -55,10 +38,11 @@ let rec pp = function
   | Real -> !^"real"
   | Loc -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
-  | Array (abt, rbt) -> !^"array" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
+  | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
   | Set t -> !^"set" ^^ angles (pp t)
+  | Option t -> !^"option" ^^ angles (pp t)
 
 
 
@@ -70,19 +54,29 @@ let json bt : Yojson.Safe.t =
 
 let struct_bt = function
   | Struct tag -> tag 
-  | _ -> Debug_ocaml.error "illtyped index term: not an array"
+  | bt -> Debug_ocaml.error 
+           ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
 
-let array_bt = function
-  | Array (abt, rbt) -> (abt, rbt) 
-  | _ -> Debug_ocaml.error "illtyped index term: not an array"
+let is_map_bt = function
+  | Map (abt, rbt) -> Some (abt, rbt)
+  | _ -> None
+
+let map_bt = function
+  | Map (abt, rbt) -> (abt, rbt) 
+  | bt -> Debug_ocaml.error 
+           ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
+
+let option_bt = function
+  | Option bt -> bt 
+  | bt -> Debug_ocaml.error 
+           ("illtyped index term: not an option type: " ^ Pp.plain (pp bt))
 
 
 
-let rec of_sct (Sctypes.Sctype (_, sct_)) = 
-  match sct_ with
-  | Void -> Unit
+let rec of_sct = function
+  | Sctypes.Void -> Unit
   | Integer _ -> Integer
-  | Array (sct, _) -> Array (Integer, of_sct sct)
+  | Array (sct, _) -> Map (Integer, Option (of_sct sct))
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"
@@ -98,5 +92,6 @@ let rec hash = function
   | List _ -> 5
   | Tuple _ -> 6
   | Set _ -> 7
+  | Option _ -> 8
   | Struct tag -> 1000 + Sym.num tag
-  | Array (abt,rbt) -> 2000 + hash abt + hash rbt
+  | Map (abt,rbt) -> 2000 + hash abt + hash rbt

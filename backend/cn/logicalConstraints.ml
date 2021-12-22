@@ -6,16 +6,18 @@ open Pp
 
 module Pred = struct
 
-  type t = { name : string; args : IT.t list }
-  type pred = t
+  type pred = { 
+      name : string; 
+      args : IT.t list;
+    } [@@deriving eq, ord]
 
+  type t = pred
+
+  let equal = equal_pred
+  let compare = compare_pred
 
   let pp {name; args} = 
     Pp.c_app !^name (List.map IT.pp args)
-
-  let equal pred pred' =
-    String.equal pred.name pred'.name &&
-      List.equal IT.equal pred.args pred'.args
 
   let subst su pred = 
     {pred with args = List.map (IT.subst su) pred.args }
@@ -24,17 +26,31 @@ module Pred = struct
     IT.free_vars_list pred.args
 
 end
-
 open Pred
 
+module QPred = struct 
+  type qpred = { q : Sym.t * BT.t; condition: IT.t; pred : pred }
+  [@@deriving eq, ord]
+  type t = qpred
+  let equal = equal_qpred
+  let compare = compare_qpred
+end
+open QPred
 
-type qpred = { q : Sym.t * BT.t; condition: IT.t; pred : pred }
 
-type t = 
+type logical_constraint = 
   | T of IT.t
   | Forall of (Sym.t * BT.t) * IT.t
   | Pred of pred
   | QPred of qpred
+[@@deriving eq, ord]
+
+type t = logical_constraint
+
+let equal = equal_logical_constraint
+let compare = compare_logical_constraint
+
+
 
 let pp lc = 
   let aux = function
@@ -112,42 +128,9 @@ let free_vars = function
 
 
 
-let equal c c' = 
-  match c, c' with
-  | T it, 
-    T it' -> 
-     IT.equal it it'
-  | Forall ((s,bt), body), 
-    Forall ((s',bt'), body') ->
-     Sym.equal s s' && 
-       BT.equal bt bt' && IT.equal body body'
-  | Pred pred, 
-    Pred pred' ->
-     Pred.equal pred pred'
-  | QPred {q = (s, bt); condition = c; pred = p}, 
-    QPred {q = (s', bt'); condition = c'; pred = p'} ->
-     Sym.equal s s' && BT.equal bt bt' && IT.equal c c' && Pred.equal p p'
-  | T _, _ -> 
-     false
-  | Forall _, _ ->
-     false
-  | Pred _, _ -> 
-     false
-  | QPred _, _ ->
-     false
-
 
 let t_ it = T it
-
-let forall_ (s,bt) it = 
-  Forall ((s, bt), it)
-
-
-
-
-
-
-
+let forall_ (s,bt) it = Forall ((s, bt), it)
 
 
 

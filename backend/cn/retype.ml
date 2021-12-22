@@ -526,7 +526,8 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   let@ ((funinfo : funinfos), 
         (funinfo_extra : funinfo_extras)) =
     let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
-      let (Old.M_funinfo (floc,attrs,(ret_ctype,args,is_variadic),has_proto)) = funinfo_entry in
+      let (Old.M_funinfo (floc,attrs,(ret_ctype,args,is_variadic), trusted, has_proto)) = 
+        funinfo_entry in
       let loc = Loc.update Loc.unknown floc in
       if is_variadic then 
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
@@ -539,12 +540,12 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
               return (msym, ct)
             ) args
         in
-        let@ fspec = Parse.parse_function glob_typs args ret_ctype attrs in
-        let@ (ftyp, mappings) = 
+        let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
+        let@ (ftyp, trusted, mappings) = 
           Conversions.make_fun_spec loc struct_decls resource_predicates 
             logical_predicates fsym fspec 
         in
-        let funinfo_entry = New.M_funinfo (floc,attrs,ftyp,has_proto) in
+        let funinfo_entry = New.M_funinfo (floc,attrs,ftyp, trusted, has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
         let funinfo_extra = Pmap.add fsym (fspec, mappings) funinfo_extra in
         return (funinfo, funinfo_extra)
@@ -556,7 +557,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
 
   let retype_label ~fsym (lsym : Sym.t) def = 
     let ftyp = match Pmap.lookup fsym funinfo with
-      | Some (New.M_funinfo (_,_,ftyp,_)) -> ftyp 
+      | Some (New.M_funinfo (_,_,ftyp, _trusted, _)) -> ftyp 
       | None -> error (Sym.pp_string fsym^" not found in funinfo")
     in
     let (fspec, start_mapping) = match Pmap.lookup fsym funinfo_extra with

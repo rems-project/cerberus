@@ -138,11 +138,15 @@ let inline symbolEqual sym1 sym2 =
 
 (* to have a non-inlined version to refer to *)
 let symbolEquality = symbolEqual
+(* for [@@deriving eq] *)
+let equal_sym = symbolEquality
 
 val symbol_compare: sym -> sym -> ordering
 let symbol_compare (Symbol d1 n1 _) (Symbol d2 n2 _) =
   if d1 = d2 then compare n1 n2
   else compare d1 d2
+(* for [@@ deriving ord] *)
+let compare_sym = symbol_compare
 
 instance (Eq sym)
   let (=)            = symbolEqual

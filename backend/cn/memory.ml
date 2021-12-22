@@ -29,17 +29,17 @@ let max_pointer =
 
 
 let size_of_ctype = function
-  | Sctype (_, Void) -> Debug_ocaml.error "size_of_ctype applied to void"
+  | Void -> Debug_ocaml.error "size_of_ctype applied to void"
   | ct -> int_of_ival (IM.sizeof_ival (to_ctype ct))
 
 let align_of_ctype = function
-  | Sctype (_, Void) -> 1
-  | Sctype (_, Function _) -> 1
+  | Void -> 1
+  | Function _ -> 1
   | ct -> int_of_ival (IM.alignof_ival (Sctypes.to_ctype ct))
 
 
-let size_of_struct tag = size_of_ctype (Sctype ([], Struct tag))
-let align_of_struct tag = align_of_ctype (Sctype ([], Struct tag))
+let size_of_struct tag = size_of_ctype (Struct tag)
+let align_of_struct tag = align_of_ctype (Struct tag)
 
 
 type struct_piece = { 
