@@ -22,6 +22,22 @@ type webconf =
 let webconf =
   ref (fun () -> failwith "webconf undefined")
 
+
+(* Preventing filesystem disclosure *)
+let check_docroot str =
+  let path = Fpath.v str in
+  if Fpath.(normalize path = path && is_abs path) then
+    str
+  else begin
+    Debug.error "the DOCROOT must be set to an absolute and normalised path.";
+    Stdlib.exit 1
+  end
+
+let check_filepath str =
+  let open Fpath in
+  let root = v (!webconf()).docroot in
+  is_rooted ~root (v str)
+
 let print_webconf () =
   let w = !webconf() in
   Printf.printf "[1]: Web server configuration:
@@ -66,7 +82,7 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
   in
   let default =
     { tcp_port= tcp_port;
-      docroot= docroot;
+      docroot= check_docroot docroot;
       timeout= timeout;
       cerb_path= cerb_path;
       core_impl= core_impl;
@@ -87,7 +103,7 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
           cfg
       in
       List.fold_left parse_tcp cfg tcp
-    | ("docroot", `String docroot) -> { cfg with docroot = docroot }
+    | ("docroot", `String docroot) -> { cfg with docroot = check_docroot docroot }
     | ("timeout", `Int max) -> { cfg with timeout = max }
     | ("log", `Assoc log) ->
       let parse_log cfg = function
@@ -418,13 +434,12 @@ type rheader =
 (* Server default responses *)
 
 let forbidden path =
-  let body = Printf.sprintf
+  let body =
       "<html><body>\
        <h2>Forbidden</h2>\
-       <p><b>%s</b> is forbidden</p>\
+       <p>the requested path is forbidden</p>\
        <hr/>\
-       </body></html>"
-      path in
+       </body></html>" in
   Debug.warn ("Trying to access path: " ^ path);
   Server.respond_string ~status:`Forbidden ~body ()
 
@@ -481,53 +496,59 @@ let date () =
     (tm.tm_hour+1) tm.tm_min tm.tm_sec
 
 let respond_file ~rheader fname =
-  let gzipped = rheader.accept_gzip && Sys.file_exists (fname ^ ".gz") in
-  let mime  = resolve_mime fname in
-  let fname = fname ^ (if gzipped then ".gz" else "") in
-  let hash = Digest.to_hex @@ Digest.file fname in
-  Debug.print 7 @@ "File: " ^ fname;
-  Debug.print 7 @@ "Hash: " ^ hash;
-  let try_with () =
-    let count = 16384 (* 16 KB *) in
-    Lwt_io.open_file
-      ~buffer:(Lwt_bytes.create count)
-      ~mode:Lwt_io.input fname
-    >>= fun ic ->
-    Lwt_io.length ic >>= fun len ->
-    let encoding = Cohttp.Transfer.Fixed len in
-    let stream = Lwt_stream.from @@ fun () ->
-      Lwt.catch (fun () ->
-          Lwt_io.read ~count ic >|= function
-          | "" -> None
-          | buf -> Some buf)
-        (fun e ->
-           Debug.error_exception ("Error resolving file " ^ fname) e;
-           return_none)
+  (* I know this is already done before calls to this function.
+     Tryin to prevent future misuses. *)
+  if not (check_filepath fname) then begin
+    forbidden fname
+  end else begin
+    let gzipped = rheader.accept_gzip && Sys.file_exists (fname ^ ".gz") in
+    let mime  = resolve_mime fname in
+    let fname = fname ^ (if gzipped then ".gz" else "") in
+    let hash = Digest.to_hex @@ Digest.file fname in
+    Debug.print 7 @@ "File: " ^ fname;
+    Debug.print 7 @@ "Hash: " ^ hash;
+    let try_with () =
+      let count = 16384 (* 16 KB *) in
+      Lwt_io.open_file
+        ~buffer:(Lwt_bytes.create count)
+        ~mode:Lwt_io.input fname
+      >>= fun ic ->
+      Lwt_io.length ic >>= fun len ->
+      let encoding = Cohttp.Transfer.Fixed len in
+      let stream = Lwt_stream.from @@ fun () ->
+        Lwt.catch (fun () ->
+            Lwt_io.read ~count ic >|= function
+            | "" -> None
+            | buf -> Some buf)
+          (fun e ->
+            Debug.error_exception ("Error resolving file " ^ fname) e;
+            return_none)
+      in
+      Lwt.on_success (Lwt_stream.closed stream)
+        (fun () -> ignore_result @@ Lwt_io.close ic);
+      let body = Cohttp_lwt.Body.of_stream stream in
+      let headers = Cohttp.Header.of_list
+        [("Content-Type", mime);
+        ("Content-Encoding", if gzipped then "gzip" else "identity");
+        ("Cache-Control", "max-age=900");
+        ("ETag", hash);
+        ("Date", date ());
+        ("Server", "Cerberus/1.0")]
+      in
+      let res = Cohttp.Response.make ~status:`OK ~encoding ~headers () in
+      return (res, body)
     in
-    Lwt.on_success (Lwt_stream.closed stream)
-      (fun () -> ignore_result @@ Lwt_io.close ic);
-    let body = Cohttp_lwt.Body.of_stream stream in
-    let headers = Cohttp.Header.of_list
-      [("Content-Type", mime);
-       ("Content-Encoding", if gzipped then "gzip" else "identity");
-       ("Cache-Control", "max-age=900");
-       ("ETag", hash);
-       ("Date", date ());
-       ("Server", "Cerberus/1.0")]
-    in
-    let res = Cohttp.Response.make ~status:`OK ~encoding ~headers () in
-    return (res, body)
-  in
-  if rheader.if_none_match = hash then begin
-    Debug.warn "not-modified";
-    Server.respond ~status:`Not_modified ~body:`Empty ()
+    if rheader.if_none_match = hash then begin
+      Debug.warn "not-modified";
+      Server.respond ~status:`Not_modified ~body:`Empty ()
+    end
+    else Lwt.catch try_with @@ function
+      | Unix.Unix_error (Unix.ENOENT, _, _) ->
+        Server.respond_not_found ()
+      | e ->
+        Debug.error_exception ("responding file : " ^ fname) e;
+        forbidden fname
   end
-  else Lwt.catch try_with @@ function
-    | Unix.Unix_error (Unix.ENOENT, _, _) ->
-      Server.respond_not_found ()
-    | e ->
-      Debug.error_exception ("responding file : " ^ fname) e;
-      forbidden fname
 
 (* Cerberus actions *)
 
@@ -656,7 +677,7 @@ let head uri path =
   let check_local_file () =
     let docroot = (!webconf()).docroot in
     let filename = Cohttp.Path.resolve_local_file ~docroot ~uri in
-    if is_regular filename && Sys.file_exists filename then
+    if check_filepath filename && is_regular filename && Sys.file_exists filename then
         Server.respond ~status:`OK ~body:`Empty ()
     else forbidden path
   in
@@ -683,7 +704,7 @@ let get ~rheader ~flow uri path =
   let docroot = (!webconf()).docroot in
   let get_local_file () =
     let filename = Cohttp.Path.resolve_local_file ~docroot ~uri in
-    if is_regular filename then
+    if check_filepath filename && is_regular filename then
       respond_file ~rheader filename
     else forbidden path
   in
@@ -827,7 +848,7 @@ let timeout =
 
 let docroot =
   let doc = "Set public (document root) files locations." in
-  Arg.(value & pos 0 string "./public/dist/" & info [] ~docv:"PUBLIC" ~doc)
+  Arg.(value & pos 0 string (Sys.getenv "PWD") & info [] ~docv:"PUBLIC" ~doc)
 
 let config =
   let doc = "Configuration file in JSON. \
