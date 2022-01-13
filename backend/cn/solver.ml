@@ -24,9 +24,9 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 let logging_params = [
-    (* ("trace", "true");
-     * ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
-     * ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log"); *)
+    (* ("trace", "true"); *)
+    (* ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log"); *)
+    ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt");
   ]
 
 let no_automation_params = [
@@ -45,7 +45,7 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    ("smt.logic", "AUFNIRA");
+    ("smt.logic", "AUFLIA");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
@@ -54,7 +54,7 @@ let solver_params = [
   ]
 
 let rewriter_params = [
-    ("rewriter.expand_nested_stores", "true");
+    (* ("rewriter.expand_nested_stores", "true"); *)
     (* ("rewriter.elim_rem", "true"); *)
   ]
 
@@ -626,8 +626,9 @@ let make () : solver =
       | t1 :: t2 :: ts -> Z3.Tactic.and_then context t1 t2 ts 
       | _ -> assert false;
     in
-    let tactic = mk_then (List.map mk_tactic tactics) in
-    Z3.Solver.mk_solver_t context tactic
+    let _tactic = mk_then (List.map mk_tactic tactics) in
+    (* Z3.Solver.mk_solver_t context tactic *)
+    Z3.Solver.mk_solver_s context "AUFLIA"
   in
 
   { context; fancy }
@@ -702,9 +703,7 @@ let provable ~shortcut_false solver global assumptions lc =
         model_state := Model (solver.context, solver.fancy, oq); 
         `False
      | Z3.Solver.UNKNOWN -> 
-        model_state := No_model; 
-        warn !^"solver returned unknown"; 
-        `False
+        assert false
 
 
 
