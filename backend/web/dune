@@ -11,7 +11,7 @@
  (package cerberus-web)
  (flags (:standard -w -27))
  (modules instance)
- (libraries str lwt cohttp-lwt-unix ezgzip
+ (libraries str lwt cohttp-lwt-unix ezgzip fpath
   cerb_frontend cerb_backend mem_concrete util instance_api))
 
 (executable
@@ -20,7 +20,7 @@
  (package cerberus-web)
  (flags (:standard -w -27))
  (modules instance_symbolic)
- (libraries str lwt cohttp-lwt-unix ezgzip
+ (libraries str lwt cohttp-lwt-unix ezgzip fpath
   cerb_frontend cerb_backend mem_symbolic util instance_api))
 
 (executable
@@ -29,7 +29,7 @@
  (package cerberus-web)
  (flags (:standard -w -27))
  (modules web)
- (libraries lwt cohttp-lwt-unix ezgzip
+ (libraries lwt cohttp-lwt-unix ezgzip fpath
   cerb_frontend cerb_backend mem_concrete util instance_api))
 
 (rule
