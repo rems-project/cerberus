@@ -270,7 +270,7 @@ module ResourceInference = struct
       let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
       let@ global = get_global () in
       let@ all_lcs = all_constraints () in
-      let simp t = Simplify.simp global.struct_decls all_lcs t in
+      let simp t = time_f "point_request: simp" (Simplify.simp global.struct_decls all_lcs) t in
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
@@ -807,7 +807,7 @@ let group_eq simp ptr_gp = List.find_map (fun (p, req) -> if not req then None
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
 let add_eqs_to_infer ftyp =
-  debug 5 (lazy (headline "doing add_eqs for infer"));
+  debug 5 (lazy (format [] "doing add_eqs for infer"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in
   let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer r) in
@@ -816,12 +816,12 @@ let add_eqs_to_infer ftyp =
   let ptr_gps = div_groups_discard CT.compare ptrs in
   let@ provable = provable in
   let rec loop ptr_gps =
-    debug 7 (lazy (headline "loop iteration"));
+    debug 7 (lazy (format [] "loop iteration"));
     let@ global = get_global () in
     let@ all_lcs = all_constraints () in
     let simp t = Simplify.simp global.struct_decls all_lcs t in
     let poss_eqs = List.filter_map (group_eq simp) ptr_gps in
-    debug 7 (lazy (headline ("loop iteration with " ^ Int.to_string (List.length poss_eqs))));
+    debug 7 (lazy (format [] ("loop iteration with " ^ Int.to_string (List.length poss_eqs))));
     if List.length poss_eqs == 0
     then return ()
     else match provable (t_ (and_ poss_eqs)) with

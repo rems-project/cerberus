@@ -122,10 +122,21 @@ let action a = format [Cyan] ("## " ^ a ^ " ")
 
 let debug l pp = 
   if !print_level >= l 
-  then print stderr (Lazy.force pp) 
+  then
+    let time = Sys.time () in
+    let dpp = format [Green] ("[" ^ Float.to_string time ^ "] ") in
+    print stderr (dpp ^^ Lazy.force pp)
 
 let warn pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
+
+let time_f msg f x =
+  let start = Sys.time () in
+  let y = f x in
+  let fin = Sys.time () in
+  let d = fin -. start in
+  debug 5 (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
+  y
 
 
 

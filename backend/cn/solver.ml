@@ -683,6 +683,7 @@ let model () =
 
 
 let provable ~shortcut_false solver global assumptions lc = 
+  debug 5 (lazy (format [] "provable check"));
   let it, oq = ReduceQuery.constr global assumptions lc in
   (* print stdout (item "assumptions" (Pp.list LC.pp assumptions)); *)
   match shortcut it with
@@ -694,7 +695,8 @@ let provable ~shortcut_false solver global assumptions lc =
      `False
   | (`False it | `No_shortcut it) ->
      let t = Translate.term solver.context global.struct_decls (not_ it) in
-     match Z3.Solver.check solver.fancy [t] with
+     let res = time_f "Z3" (Z3.Solver.check solver.fancy) [t] in
+     match res with
      | Z3.Solver.UNSATISFIABLE -> 
         model_state := No_model; 
         `True
