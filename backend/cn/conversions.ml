@@ -45,7 +45,7 @@ let rec bt_of_core_object_type loc ot =
   | OTy_pointer -> return BT.Loc
   | OTy_array t -> 
      let@ t = bt_of_core_object_type loc t in
-     return (BT.Map (Integer, Option t))
+     return (BT.Map (Integer, t))
   | OTy_struct tag -> return (BT.Struct tag)
   | OTy_union _tag -> Debug_ocaml.error "union types"
   | OTy_floating -> unsupported loc !^"floats"
@@ -279,14 +279,13 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
           | Some it ->
              (it, l, c)
           | None ->
-             let lifted_bt = BT.Map (qbt, Option bt) in
+             let lifted_bt = BT.Map (qbt, bt) in
              let s, it = IT.fresh lifted_bt in
              let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
              let new_c1 = 
                (`Constraint
                   (LC.forall_ (qs, qbt)
-                     (impl_ (not_ condition, is_nothing_ (map_get_ it (sym_ (qs, qbt)))))),
-                     (* (impl_ (not_ condition, not_ (is_something_ (map_get_ it (sym_ (qp, qbt))))))), *)
+                     (impl_ (not_ condition, eq_ (map_get_ it (sym_ (qs, qbt)), default_ bt)))),
                 (loc, Some ("output argument '" ^ oarg ^"' map/array partiality constraint")))
              in
              (it, new_l :: l, new_c1 :: c)
@@ -299,7 +298,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
              mapping
         in
         let some_oargs = StringMap.remove oarg some_oargs in
-        let oargs = (get_some_value_ (map_get_ it (sym_ (qs, qbt)))) :: oargs in
+        let oargs = ((map_get_ it (sym_ (qs, qbt)))) :: oargs in
         ((mapping, l, c, oargs), some_oargs)
       ) def.oargs (([], [], [], []), some_oargs)
   in
@@ -537,10 +536,8 @@ let resolve_index_term loc
        let@ (it1, _) = resolve t1 mapping in
        let@ (it2, _) = resolve t2 mapping in
        begin match IT.bt it1 with
-       | BT.Map (_, Option bt) -> 
-          return (get_some_value_ (map_get_ it1 it2), None)
        | BT.Map (_, bt) -> 
-          assert false
+          return ((map_get_ it1 it2), None)
        | _ -> 
           let ppf () = Ast.Terms.pp false t1 in
           fail {loc; msg = Generic (ppf () ^^^ !^"is not an array/not a map")}

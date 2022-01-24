@@ -410,7 +410,7 @@ let page_alloc_predicates struct_decls =
     (* oargs *)
     let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
     let vmemmap_s, vmemmap = 
-      IT.fresh_named (BT.Map (Integer, Option (BT.Struct hyp_page_tag))) "vmemmap" in
+      IT.fresh_named (BT.Map (Integer, (BT.Struct hyp_page_tag))) "vmemmap" in
 
 
     let metadata_owned = 
@@ -506,7 +506,7 @@ let page_alloc_predicates struct_decls =
         and_ [permission;
               (pool %. "range_start") %<= q;
               q %< (pool %. "range_end");
-              ((get_some_value_ (map_get_ vmemmap i)) %. "refcount") %== int_ 0;
+              (((map_get_ vmemmap i)) %. "refcount") %== int_ 0;
           ]
       in
       let qp = 

@@ -110,7 +110,7 @@ let make_name =
   let tuple_c = ref 0 in
   let struct_c = ref 0 in
   let set_c = ref 0 in
-  let option_c = ref 0 in
+  (* let option_c = ref 0 in *)
   let map_c = ref 0 in
   
   let bt_prefix (bt : BT.t) = 
@@ -124,7 +124,7 @@ let make_name =
     | Tuple _ -> "tuple"
     | Struct _ -> "s"
     | Set _ -> "set"
-    | Option _ -> "o"
+    (* | Option _ -> "o" *)
     | Map _ -> "m"
   in
   
@@ -139,7 +139,7 @@ let make_name =
     | Tuple _ -> tuple_c
     | Struct _ -> struct_c
     | Set _ -> set_c
-    | Option _ -> option_c
+    (* | Option _ -> option_c *)
     | Map _ -> map_c
   in
   fun sort ->
