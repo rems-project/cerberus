@@ -24,8 +24,6 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 let logging_params = [
-    (* ("trace", "true"); *)
-    (* ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log"); *)
     ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt");
   ]
 
@@ -55,8 +53,6 @@ let solver_params = [
 
 let rewriter_params = [
     ("rewriter.expand_nested_stores", "true");
-    (* ("rewriter.elim_rem", "true"); *)
-    (* ("rewriter.flat", "false"); *)
   ]
 
 let model_params = [
@@ -75,17 +71,7 @@ let params =
 
 
 
-let tactics = [
-    (* "propagate-values"; *)
-    (* "propagate-ineqs"; *)
-    (* "purify-arith"; *)
-    (* "elim-term-ite"; *)
-    (* "add-bounds"; *)
-    "simplify";
-    (* "solve-eqs"; *)
-    (* "auflia"; *)
-    "smt";
-  ]
+
 
 
 
@@ -617,18 +603,6 @@ let make () : solver =
   let context = Z3.mk_context [] in
 
   let fancy = 
-    (* https://stackoverflow.com/a/14305028 describes an example where
-       tactics are useful *)
-    (* http://www.cs.tau.ac.il/~msagiv/courses/asv/z3py/strategies-examples.htm *)
-    (* also see: https://z3prover.github.io/api/html/group__capi.html
-       regarding "and-then" *)
-    let mk_tactic = Z3.Tactic.mk_tactic context in
-    let mk_then = function
-      | t1 :: t2 :: ts -> Z3.Tactic.and_then context t1 t2 ts 
-      | _ -> assert false;
-    in
-    let _tactic = mk_then (List.map mk_tactic tactics) in
-    (* Z3.Solver.mk_solver_t context tactic *)
     Z3.Solver.mk_solver_s context "AUFLIA"
     (* Z3.Solver.mk_solver context  *)
     (*   (Some (Translate.symbol context "AUFLIA")) *)
