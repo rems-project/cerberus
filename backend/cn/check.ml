@@ -957,17 +957,17 @@ end = struct
                            output_have))
              )
          in
-         let constr2 = 
-           forall_ (q_s, q_bt) (
-               impl_ (not_ condition,
-                     eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)),
-                          default_ (IT.bt output_have)))
-             )
-         in
+         (* let constr2 =  *)
+         (*   forall_ (q_s, q_bt) ( *)
+         (*       impl_ (not_ condition, *)
+         (*             eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)), *)
+         (*                  default_ (IT.bt output_have))) *)
+         (*     ) *)
+         (* in *)
          let@ () = ls_matches_spec unis s output_have_body in
          let@ () = add_l output_have_body_s (IT.bt output_have_body) in
          let@ () = add_c constr1 in
-         let@ () = add_c constr2 in
+         (* let@ () = add_c constr2 in *)
          return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
       | _ ->
          return (unis, subst, eq_ (output_spec, output_have) :: constrs)

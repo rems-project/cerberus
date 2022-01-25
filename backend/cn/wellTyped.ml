@@ -852,7 +852,8 @@ module WAT (WI: WI_Sig) = struct
              | `False -> return ()
            else return ()
          in
-         WI.welltyped loc i
+         let@ () = WI.welltyped loc i in
+         return ()
     in
     pure (aux at)
 

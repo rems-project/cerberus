@@ -45,16 +45,16 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    ("smt.logic", "AUFNIRA");
+    (* ("smt.logic", "AUFLIA"); *)
     ("smt.arith.solver", "2");
-    ("smt.macro_finder", "true");
-    ("smt.pull-nested-quantifiers", "true");
+    (* ("smt.macro_finder", "true"); *)
+    (* ("smt.pull-nested-quantifiers", "true"); *)
     ("smt.mbqi", "true");
     ("smt.ematching", "false");
   ]
 
 let rewriter_params = [
-    ("rewriter.expand_nested_stores", "true");
+    (* ("rewriter.expand_nested_stores", "true"); *)
     (* ("rewriter.elim_rem", "true"); *)
   ]
 
@@ -75,14 +75,14 @@ let params =
 
 
 let tactics = [
-    "propagate-values";
-    "propagate-ineqs";
-    "purify-arith";
-    "elim-term-ite";
-    "add-bounds";
+    (* "propagate-values"; *)
+    (* "propagate-ineqs"; *)
+    (* "purify-arith"; *)
+    (* "elim-term-ite"; *)
+    (* "add-bounds"; *)
     "simplify";
     "solve-eqs";
-    "aufnira";
+    "auflia";
     "smt";
   ]
 
@@ -626,9 +626,9 @@ let make () : solver =
       | t1 :: t2 :: ts -> Z3.Tactic.and_then context t1 t2 ts 
       | _ -> assert false;
     in
-    let _tactic = mk_then (List.map mk_tactic tactics) in
-    (* Z3.Solver.mk_solver_t context tactic *)
-    Z3.Solver.mk_solver_s context "AUFNIRA"
+    let tactic = mk_then (List.map mk_tactic tactics) in
+    Z3.Solver.mk_solver_t context tactic
+    (* Z3.Solver.mk_solver_s context "AUFLIA" *)
   in
 
   { context; fancy }
@@ -705,7 +705,7 @@ let provable ~shortcut_false solver global assumptions lc =
         model_state := Model (solver.context, solver.fancy, oq); 
         `False
      | Z3.Solver.UNKNOWN -> 
-        assert false
+        failwith "SMT solver returned 'unknown'"
 
 
 
