@@ -784,6 +784,8 @@ end
 
 module InferenceEqs = struct
 
+let use_model_eqs = ref true
+
 let res_pointer res = match res with
   | (RE.Point res_pt) -> Some (res_pt.ct, res_pt.pointer)
   | _ -> None
@@ -807,6 +809,8 @@ let group_eq simp ptr_gp = List.find_map (fun (p, req) -> if not req then None
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
 let add_eqs_to_infer ftyp =
+  if not (! use_model_eqs) then ()
+  else
   debug 5 (lazy (format [] "doing add_eqs for infer"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in

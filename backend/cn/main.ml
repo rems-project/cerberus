@@ -149,6 +149,8 @@ let main
       print_level 
       json 
       state_file 
+      no_reorder_points
+      no_model_eqs
       skip_consistency
   =
   if json then begin
@@ -161,6 +163,8 @@ let main
   WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
+  Check.ResourceInference.reorder_points := not no_reorder_points;
+  Check.InferenceEqs.use_model_eqs := not no_model_eqs;
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
   else if not (String.equal (Filename.extension filename) ".c") then
@@ -231,6 +235,15 @@ let skip_consistency =
   let doc = "Skip check for logical consistency of function specifications." in
   Arg.(value & flag & info["skip_consistency"] ~doc)
 
+let no_reorder_points =
+  let doc = "Deactivate 'reorder points' optimisation in resource inference." in
+  Arg.(value & flag & info["no_reorder_points"] ~doc)
+
+let no_model_eqs =
+  let doc = "Deactivate 'model based eqs' optimisation in resource inference spine judgement." in
+  Arg.(value & flag & info["no_model_eqs"] ~doc)
+
+
 
 let () =
   let open Term in
@@ -242,6 +255,8 @@ let () =
       print_level $
       json $
       state_file $
+      no_reorder_points $
+      no_model_eqs $
       skip_consistency
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")
