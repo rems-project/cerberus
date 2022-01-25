@@ -501,12 +501,11 @@ let page_alloc_predicates struct_decls =
 
     let page_group_ownership = 
       let q_s, q = IT.fresh_named Integer "q" in
-      let i = q %/ (z_ pPAGE_SIZE) in
       let condition = 
         and_ [permission;
               (pool %. "range_start") %<= q;
               q %< (pool %. "range_end");
-              (((map_get_ vmemmap i)) %. "refcount") %== int_ 0;
+              (((map_get_ vmemmap (q %/ (z_ pPAGE_SIZE)))) %. "refcount") %== int_ 0;
           ]
       in
       let qp = 

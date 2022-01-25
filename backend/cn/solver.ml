@@ -56,7 +56,7 @@ let solver_params = [
 let rewriter_params = [
     ("rewriter.expand_nested_stores", "true");
     (* ("rewriter.elim_rem", "true"); *)
-    ("rewriter.flat", "false");
+    (* ("rewriter.flat", "false"); *)
   ]
 
 let model_params = [
@@ -630,6 +630,8 @@ let make () : solver =
     let _tactic = mk_then (List.map mk_tactic tactics) in
     (* Z3.Solver.mk_solver_t context tactic *)
     Z3.Solver.mk_solver_s context "AUFLIA"
+    (* Z3.Solver.mk_solver context  *)
+    (*   (Some (Translate.symbol context "AUFLIA")) *)
   in
 
   { context; fancy }
