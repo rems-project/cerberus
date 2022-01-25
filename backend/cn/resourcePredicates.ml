@@ -90,6 +90,43 @@ let byte () =
   (id, predicate)
 
 
+let char () = 
+  let id = "Char" in
+  let loc = Loc.other "internal (Char)" in
+  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
+  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
+  let value_s, value = IT.fresh_named BT.Integer "value" in
+  let point = {
+      ct = char_ct; 
+      pointer = pointer;
+      permission = permission;
+      value = value;
+      init = bool_ true;
+    }
+  in
+  let lrt =
+    LRT.Logical ((value_s, IT.bt value), (loc, None),
+    LRT.Resource (Point point, (loc, None),
+    LRT.I))
+  in
+  let clause = {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = "value"; value}]) 
+    }
+  in
+  let predicate = {
+      loc = loc;
+      pointer = pointer_s;
+      permission = permission_s;
+      iargs = []; 
+      oargs = [("value", IT.bt value)]; 
+      clauses = [clause]; 
+    } 
+  in
+  (id, predicate)
+
+
 
 
 
@@ -373,7 +410,7 @@ let page_alloc_predicates struct_decls =
     (* oargs *)
     let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
     let vmemmap_s, vmemmap = 
-      IT.fresh_named (BT.Map (Integer, Option (BT.Struct hyp_page_tag))) "vmemmap" in
+      IT.fresh_named (BT.Map (Integer, (BT.Struct hyp_page_tag))) "vmemmap" in
 
 
     let metadata_owned = 
@@ -469,7 +506,7 @@ let page_alloc_predicates struct_decls =
         and_ [permission;
               (pool %. "range_start") %<= q;
               q %< (pool %. "range_end");
-              ((get_some_value_ (map_get_ vmemmap i)) %. "refcount") %== int_ 0;
+              (((map_get_ vmemmap i)) %. "refcount") %== int_ 0;
           ]
       in
       let qp = 
@@ -668,6 +705,7 @@ let page_alloc_predicates struct_decls =
 
 
 let predicate_list struct_decls = 
+  char () ::
   byte () ::
   zerobyte () ::
   (* region () ::

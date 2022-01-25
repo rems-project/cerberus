@@ -24,9 +24,9 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 let logging_params = [
-    (* ("trace", "true");
-     * ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log");
-     * ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_smtlib2.log"); *)
+    (* ("trace", "true"); *)
+    (* ("trace_file_name", Filename.get_temp_dir_name () ^ "/z3.log"); *)
+    ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt");
   ]
 
 let no_automation_params = [
@@ -128,10 +128,10 @@ module Translate = struct
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
     | DefaultFunc of { bt : BT.t }
-    | SomethingFunc of { bt : BT.t }
-    | NothingFunc of { bt : BT.t }
-    | IsSomethingFunc of { bt : BT.t }
-    | ValueOfSomethingFunc of { bt : BT.t }
+    (* | SomethingFunc of { bt : BT.t } *)
+    (* | NothingFunc of { bt : BT.t } *)
+    (* | IsSomethingFunc of { bt : BT.t } *)
+    (* | ValueOfSomethingFunc of { bt : BT.t } *)
 
 
 
@@ -216,27 +216,27 @@ module Translate = struct
          in
          Z3.Tuple.mk_sort context struct_symbol
            member_symbols member_sorts
-      | Option bt -> 
-         let none_constructor =
-           let nothing_sym = symbol ("none__" ^ bt_name bt) in
-           Z3Symbol_Table.add z3sym_table nothing_sym (NothingFunc {bt});
-           Z3.Datatype.mk_constructor context nothing_sym
-             (symbol ("is_none__" ^ bt_name bt)) [] [] []
-         in
-         let some_constructor = 
-           let something_sym = symbol ("some__" ^ bt_name bt) in
-           let value_of_something_sym = symbol ("value_of_something__" ^ bt_name bt) in
-           let is_something_sym = symbol("is_something__" ^ bt_name bt) in
-           Z3Symbol_Table.add z3sym_table something_sym (SomethingFunc {bt});
-           Z3Symbol_Table.add z3sym_table value_of_something_sym (ValueOfSomethingFunc {bt});
-           Z3Symbol_Table.add z3sym_table is_something_sym (IsSomethingFunc {bt});
-           Z3.Datatype.mk_constructor context something_sym
-             is_something_sym 
-             [value_of_something_sym]
-             [Some (translate bt)] [0]
-         in
-         Z3.Datatype.mk_sort context (symbol (bt_name (Option bt))) 
-           [none_constructor; some_constructor]
+      (* | Option bt ->  *)
+      (*    let none_constructor = *)
+      (*      let nothing_sym = symbol ("none__" ^ bt_name bt) in *)
+      (*      Z3Symbol_Table.add z3sym_table nothing_sym (NothingFunc {bt}); *)
+      (*      Z3.Datatype.mk_constructor context nothing_sym *)
+      (*        (symbol ("is_none__" ^ bt_name bt)) [] [] [] *)
+      (*    in *)
+      (*    let some_constructor =  *)
+      (*      let something_sym = symbol ("some__" ^ bt_name bt) in *)
+      (*      let value_of_something_sym = symbol ("value_of_something__" ^ bt_name bt) in *)
+      (*      let is_something_sym = symbol("is_something__" ^ bt_name bt) in *)
+      (*      Z3Symbol_Table.add z3sym_table something_sym (SomethingFunc {bt}); *)
+      (*      Z3Symbol_Table.add z3sym_table value_of_something_sym (ValueOfSomethingFunc {bt}); *)
+      (*      Z3Symbol_Table.add z3sym_table is_something_sym (IsSomethingFunc {bt}); *)
+      (*      Z3.Datatype.mk_constructor context something_sym *)
+      (*        is_something_sym  *)
+      (*        [value_of_something_sym] *)
+      (*        [Some (translate bt)] [0] *)
+      (*    in *)
+      (*    Z3.Datatype.mk_sort context (symbol (bt_name (Option bt)))  *)
+      (*      [none_constructor; some_constructor] *)
     in
 
     let sort bt = 
@@ -455,24 +455,24 @@ module Translate = struct
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))
          end
-      | Option_op option_op ->
-         begin match option_op with
-         | Nothing vbt ->
-            let nothing_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 0 in
-            Z3.Expr.mk_app context nothing_constructor []
-         | Something t ->
-            let something_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 1 in
-            Z3.Expr.mk_app context something_constructor [term t]
-         | Is_nothing t ->
-            let nothing_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 0 in
-            Z3.Expr.mk_app context nothing_recogniser [term t]
-         | Is_something t ->
-            let something_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 1 in
-            Z3.Expr.mk_app context something_recogniser [term t]
-         | Get_some_value t ->
-            let something_value_accessor = hd (List.nth (Z3.Datatype.get_accessors (sort (IT.bt t))) 1) in
-            Z3.Expr.mk_app context something_value_accessor [term t]
-         end
+      (* | Option_op option_op -> *)
+      (*    begin match option_op with *)
+      (*    | Nothing vbt -> *)
+      (*       let nothing_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 0 in *)
+      (*       Z3.Expr.mk_app context nothing_constructor [] *)
+      (*    | Something t -> *)
+      (*       let something_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 1 in *)
+      (*       Z3.Expr.mk_app context something_constructor [term t] *)
+      (*    | Is_nothing t -> *)
+      (*       let nothing_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 0 in *)
+      (*       Z3.Expr.mk_app context nothing_recogniser [term t] *)
+      (*    | Is_something t -> *)
+      (*       let something_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 1 in *)
+      (*       Z3.Expr.mk_app context something_recogniser [term t] *)
+      (*    | Get_some_value t -> *)
+      (*       let something_value_accessor = hd (List.nth (Z3.Datatype.get_accessors (sort (IT.bt t))) 1) in *)
+      (*       Z3.Expr.mk_app context something_value_accessor [term t] *)
+      (*    end *)
       | Let ((s, bound), body) ->
          term 
            (Simplify.simp struct_decls [] 
@@ -626,8 +626,9 @@ let make () : solver =
       | t1 :: t2 :: ts -> Z3.Tactic.and_then context t1 t2 ts 
       | _ -> assert false;
     in
-    let tactic = mk_then (List.map mk_tactic tactics) in
-    Z3.Solver.mk_solver_t context tactic
+    let _tactic = mk_then (List.map mk_tactic tactics) in
+    (* Z3.Solver.mk_solver_t context tactic *)
+    Z3.Solver.mk_solver_s context "AUFNIRA"
   in
 
   { context; fancy }
@@ -704,9 +705,7 @@ let provable ~shortcut_false solver global assumptions lc =
         model_state := Model (solver.context, solver.fancy, oq); 
         `False
      | Z3.Solver.UNKNOWN -> 
-        model_state := No_model; 
-        warn !^"solver returned unknown"; 
-        `False
+        assert false
 
 
 
@@ -913,14 +912,14 @@ let eval struct_decls (context, model) to_be_evaluated =
               nthTuple_ ~item_bt:comp_bt (i, nth args 0)
            | TupleFunc {bts} ->
               tuple_ args
-           | SomethingFunc { bt } ->
-              something_ (List.hd args)
-           | NothingFunc { bt }->
-              nothing_ bt
-           | IsSomethingFunc { bt } ->
-              is_something_ (List.hd args)
-           | ValueOfSomethingFunc { bt } ->
-              get_some_value_ (List.hd args)
+           (* | SomethingFunc { bt } -> *)
+           (*    something_ (List.hd args) *)
+           (* | NothingFunc { bt }-> *)
+           (*    nothing_ bt *)
+           (* | IsSomethingFunc { bt } -> *)
+           (*    is_something_ (List.hd args) *)
+           (* | ValueOfSomethingFunc { bt } -> *)
+           (*    get_some_value_ (List.hd args) *)
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->

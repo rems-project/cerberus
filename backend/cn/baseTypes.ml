@@ -21,7 +21,7 @@ type basetype =
   | List of basetype
   | Tuple of basetype list
   | Set of basetype
-  | Option of basetype
+  (* | Option of basetype *)
 [@@deriving eq, ord]
 
 type t = basetype
@@ -42,7 +42,7 @@ let rec pp = function
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
   | Set t -> !^"set" ^^ angles (pp t)
-  | Option t -> !^"option" ^^ angles (pp t)
+  (* | Option t -> !^"option" ^^ angles (pp t) *)
 
 
 
@@ -66,17 +66,17 @@ let map_bt = function
   | bt -> Debug_ocaml.error 
            ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
 
-let option_bt = function
-  | Option bt -> bt 
-  | bt -> Debug_ocaml.error 
-           ("illtyped index term: not an option type: " ^ Pp.plain (pp bt))
+(* let option_bt = function *)
+(*   | Option bt -> bt  *)
+(*   | bt -> Debug_ocaml.error  *)
+(*            ("illtyped index term: not an option type: " ^ Pp.plain (pp bt)) *)
 
 
 
 let rec of_sct = function
   | Sctypes.Void -> Unit
   | Integer _ -> Integer
-  | Array (sct, _) -> Map (Integer, Option (of_sct sct))
+  | Array (sct, _) -> Map (Integer, of_sct sct)
   | Pointer _ -> Loc
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"
@@ -92,6 +92,6 @@ let rec hash = function
   | List _ -> 5
   | Tuple _ -> 6
   | Set _ -> 7
-  | Option _ -> 8
+  (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
   | Map (abt,rbt) -> 2000 + hash abt + hash rbt

@@ -556,11 +556,11 @@ module ResourceInference = struct
         }
       in
       let folded_value = 
-        let empty = const_map_ Integer (nothing_ (BT.of_sct item_ct)) in
+        let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in
         let rec update value i = 
           if i >= length then value else
             let subst = IT.make_subst [(qpoint.q, int_ i)] in
-            let cell_value = something_ (IT.subst subst qpoint.value) in
+            let cell_value = IT.subst subst qpoint.value in
             let value' = map_set_ value (int_ i, cell_value) in
             update value' (i + 1)
         in
@@ -641,7 +641,7 @@ module ResourceInference = struct
           ct = item_ct;
           pointer = base;
           q = q_s;
-          value = get_some_value_ (map_get_ value q); 
+          value = (map_get_ value q); 
           init = init;
           permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)]
         }
@@ -940,17 +940,30 @@ end = struct
     (* ASSUMES unification variables and quantifier q_s are disjoint *)
     let unify_or_constrain_q (q_s,q_bt) condition (unis, subst, constrs) (output_spec, output_have) = 
       match IT.subst (make_subst subst) output_spec with
-      | IT (Option_op (Get_some_value (IT (Map_op (Get (IT (Lit (Sym s), _), 
-                                                        IT (Lit (Sym q'), _))), _) )), _)
+      | IT (Map_op (Get (IT (Lit (Sym s), _), 
+                         IT (Lit (Sym q'), _))), _)
            when Sym.equal q' q_s && SymMap.mem s unis ->
-         let output_have_body = 
-           map_def_ (q_s, q_bt) (
-               ite_ (condition,
-                     something_ output_have,
-                     nothing_ (IT.bt output_have))
+
+         let output_have_body_s, output_have_body = 
+           IT.fresh (Map (q_bt, IT.bt output_have)) in
+         let constr1 = 
+           forall_ (q_s, q_bt) (
+               impl_ (condition, 
+                      eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)),
+                           output_have))
+             )
+         in
+         let constr2 = 
+           forall_ (q_s, q_bt) (
+               impl_ (not_ condition,
+                     eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)),
+                          default_ (IT.bt output_have)))
              )
          in
          let@ () = ls_matches_spec unis s output_have_body in
+         let@ () = add_l output_have_body_s (IT.bt output_have_body) in
+         let@ () = add_c constr1 in
+         let@ () = add_c constr2 in
          return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
       | _ ->
          return (unis, subst, eq_ (output_spec, output_have) :: constrs)
@@ -1287,10 +1300,10 @@ let infer_array (loc : loc) (vts : vt list) =
   let@ (_, it) = 
     ListM.fold_leftM (fun (index,it) (arg_bt, arg_it) -> 
         let@ () = ensure_base_type loc ~expect:item_bt arg_bt in
-        return (index + 1, map_set_ it (int_ index, something_ arg_it))
-         ) (0, const_map_ Integer (nothing_ item_bt)) vts
+        return (index + 1, map_set_ it (int_ index, arg_it))
+         ) (0, const_map_ Integer (default_ item_bt)) vts
   in
-  return (BT.Map (Integer, Option item_bt), it)
+  return (BT.Map (Integer, item_bt), it)
 
 
 let infer_constructor (loc : loc) (constructor : mu_ctor) 

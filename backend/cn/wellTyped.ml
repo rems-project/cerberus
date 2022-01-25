@@ -44,11 +44,11 @@ module WIT = struct
     | Set bt -> return bt
     | _ -> fail (illtyped_index_term loc context it (IT.bt it) "set type")
 
-  let ensure_option_type loc context it = 
-    let open BT in
-    match IT.bt it with
-    | Option bt -> return bt
-    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "option type")
+  (* let ensure_option_type loc context it =  *)
+  (*   let open BT in *)
+  (*   match IT.bt it with *)
+  (*   | Option bt -> return bt *)
+  (*   | _ -> fail (illtyped_index_term loc context it (IT.bt it) "option type") *)
 
   let ensure_list_type loc context it = 
     let open BT in
@@ -399,26 +399,26 @@ module WIT = struct
                 end
          in
          return (IT (Map_op map_op, bt))
-      | Option_op option_op ->
-         let@ (bt, option_op) = match option_op with
-           | Nothing vbt -> return (Option vbt, Nothing vbt)
-           | Something t -> 
-              let@ t = infer loc ~context t in
-              return (Option (IT.bt t), Something t)
-           | Is_something t ->
-              let@ t = infer loc ~context t in
-              let@ _vbt = ensure_option_type loc context t in
-              return (BT.Bool, Is_something t)
-           | Is_nothing t ->
-              let@ t = infer loc ~context t in
-              let@ _vbt = ensure_option_type loc context t in
-              return (BT.Bool, Is_nothing t)
-           | Get_some_value t ->
-              let@ t = infer loc ~context t in
-              let@ vbt = ensure_option_type  loc context t in
-              return (vbt, Get_some_value t)
-         in
-         return (IT (Option_op option_op, bt))
+      (* | Option_op option_op -> *)
+      (*    let@ (bt, option_op) = match option_op with *)
+      (*      | Nothing vbt -> return (Option vbt, Nothing vbt) *)
+      (*      | Something t ->  *)
+      (*         let@ t = infer loc ~context t in *)
+      (*         return (Option (IT.bt t), Something t) *)
+      (*      | Is_something t -> *)
+      (*         let@ t = infer loc ~context t in *)
+      (*         let@ _vbt = ensure_option_type loc context t in *)
+      (*         return (BT.Bool, Is_something t) *)
+      (*      | Is_nothing t -> *)
+      (*         let@ t = infer loc ~context t in *)
+      (*         let@ _vbt = ensure_option_type loc context t in *)
+      (*         return (BT.Bool, Is_nothing t) *)
+      (*      | Get_some_value t -> *)
+      (*         let@ t = infer loc ~context t in *)
+      (*         let@ vbt = ensure_option_type  loc context t in *)
+      (*         return (vbt, Get_some_value t) *)
+      (*    in *)
+      (*    return (IT (Option_op option_op, bt)) *)
       | Let ((s, bound), body) ->
          pure begin
              let@ t = infer loc ~context bound in
@@ -556,8 +556,8 @@ module WRE = struct
               IT (Lit (Sym s), _) -> 
                return (SymSet.singleton s)
             | Some (q, _), 
-              IT (Option_op (Get_some_value (IT (Map_op (Get (IT (Lit (Sym map_s), _), 
-                                                              IT (Lit (Sym arg_s), _))), _))), _)
+              IT (Map_op (Get (IT (Lit (Sym map_s), _), 
+                               IT (Lit (Sym arg_s), _))), _)
                  when Sym.equal arg_s q ->
                return (SymSet.singleton map_s)
             (* otherwise, fail *)

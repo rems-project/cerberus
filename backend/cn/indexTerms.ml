@@ -177,14 +177,14 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
-    | Option_op option_op ->
-       begin match option_op with
-       | Nothing bt -> !^"nothing"
-       | Something t -> c_app !^"some" [aux false t]
-       | Is_nothing t -> c_app !^"is_nothing" [aux false t]
-       | Is_something t -> c_app !^"is_something" [aux false t]
-       | Get_some_value t -> c_app !^"value" [aux false t]
-       end
+    (* | Option_op option_op -> *)
+    (*    begin match option_op with *)
+    (*    | Nothing bt -> !^"nothing" *)
+    (*    | Something t -> c_app !^"some" [aux false t] *)
+    (*    | Is_nothing t -> c_app !^"is_nothing" [aux false t] *)
+    (*    | Is_something t -> c_app !^"is_something" [aux false t] *)
+    (*    | Get_some_value t -> c_app !^"value" [aux false t] *)
+    (*    end *)
     | Let ((s, bound), body) ->
        !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body)
   in
@@ -285,14 +285,14 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | Get (t, arg) -> free_vars_list ([t; arg])
      | Def ((s, _), body) -> SymSet.remove s (free_vars body)
      end
-  | Option_op option_op ->
-     begin match option_op with
-     | Nothing _bt -> SymSet.empty
-     | Something t -> free_vars t
-     | Is_nothing t -> free_vars t
-     | Is_something t -> free_vars t
-     | Get_some_value t -> free_vars t
-     end
+  (* | Option_op option_op -> *)
+  (*    begin match option_op with *)
+  (*    | Nothing _bt -> SymSet.empty *)
+  (*    | Something t -> free_vars t *)
+  (*    | Is_nothing t -> free_vars t *)
+  (*    | Is_something t -> free_vars t *)
+  (*    | Get_some_value t -> free_vars t *)
+  (*    end *)
   | Let ((s, bound), body) ->
      SymSet.union (free_vars bound)
        (SymSet.remove s (free_vars body))
@@ -448,15 +448,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
             Def ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
-  | Option_op option_op -> 
-     let option_op = match option_op with
-       | Nothing bt -> Nothing bt
-       | Something t -> Something (subst su t)
-       | Is_nothing t -> Is_nothing (subst su t)
-       | Is_something t -> Is_something (subst su t)
-       | Get_some_value t -> Get_some_value (subst su t)
-     in
-     IT (Option_op option_op, bt)
+  (* | Option_op option_op ->  *)
+  (*    let option_op = match option_op with *)
+  (*      | Nothing bt -> Nothing bt *)
+  (*      | Something t -> Something (subst su t) *)
+  (*      | Is_nothing t -> Is_nothing (subst su t) *)
+  (*      | Is_something t -> Is_something (subst su t) *)
+  (*      | Get_some_value t -> Get_some_value (subst su t) *)
+  (*    in *)
+  (*    IT (Option_op option_op, bt) *)
   | Let ((s, bound), body) ->
      let bound = subst su bound in
      if SymSet.mem s su.relevant then
@@ -691,17 +691,17 @@ let map_def_ (s, abt) body =
   IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
 
 
-let nothing_ bt = 
-  IT (Option_op (Nothing bt), BT.Option bt)
-let something_ t =
-  IT (Option_op (Something t), BT.Option (basetype t))
-let is_nothing_ t =
-  IT (Option_op (Is_nothing t), BT.Bool)
-let is_something_ t =
-  IT (Option_op (Is_something t), BT.Bool)
-let get_some_value_ t =
-  let vbt = BT.option_bt (basetype t) in
-  IT (Option_op (Get_some_value t), vbt)
+(* let nothing_ bt =  *)
+(*   IT (Option_op (Nothing bt), BT.Option bt) *)
+(* let something_ t = *)
+(*   IT (Option_op (Something t), BT.Option (basetype t)) *)
+(* let is_nothing_ t = *)
+(*   IT (Option_op (Is_nothing t), BT.Bool) *)
+(* let is_something_ t = *)
+(*   IT (Option_op (Is_something t), BT.Bool) *)
+(* let get_some_value_ t = *)
+(*   let vbt = BT.option_bt (basetype t) in *)
+(*   IT (Option_op (Get_some_value t), vbt) *)
 
 
 let let_ (s, bound) body = 
@@ -771,7 +771,7 @@ let hash (IT (it, _bt)) =
   | List_op _ -> 7
   | Set_op _ -> 8
   | Map_op _ -> 9
-  | Option_op _ -> 10
+  (* | Option_op _ -> 10 *)
   | Let _ -> 11
   | Lit lit ->
      begin match lit with
@@ -792,11 +792,11 @@ let partiality_check_array ~length ~item_ct value =
   let unmapped = 
     let rec aux i acc = 
       if i > (length - 1) then acc else 
-        aux (i + 1) (map_set_ acc (int_ i, nothing_ (BT.of_sct item_ct)))
+        aux (i + 1) (map_set_ acc (int_ i, default_ (BT.of_sct item_ct)))
     in
     aux 0 value
   in
-  let empty = const_map_ Integer (nothing_ (BT.of_sct item_ct)) in
+  let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in
   eq_ (unmapped, empty)
 
 
@@ -827,8 +827,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
        let partiality = partiality_check_array ~length:n ~item_ct about in
        let i_s, i = fresh BT.Integer in
        and_ 
-         [eachI_ (0, i_s, n - 1) (is_something_ (map_get_ about i));
-          eachI_ (0, i_s, n - 1) (aux item_ct (get_some_value_ (map_get_ about i)));
+         [eachI_ (0, i_s, n - 1) (aux item_ct (map_get_ about i));
           partiality]
     | Pointer pointee_ct -> 
        value_check_pointer alignment ~pointee_ct about

@@ -453,23 +453,23 @@ let rec simp struct_decls values equalities some_known_facts =
        IT (Map_op (Def ((s', abt), body)), bt)
   in
   
-  let option_op o bt = 
-    match o with
-    | Nothing vbt -> 
-       IT (Option_op (Nothing vbt), bt)
-    | Something t -> 
-       let t = aux t in
-       IT (Option_op (Something t), bt)
-    | Is_nothing t ->
-       let t = aux t in
-       IT (Option_op (Is_nothing t), bt)
-    | Is_something t ->
-       let t = aux t in
-       IT (Option_op (Is_something t), bt)
-    | Get_some_value t ->
-       let t = aux t in
-       IT (Option_op (Get_some_value t), bt)
-  in
+  (* let option_op o bt =  *)
+  (*   match o with *)
+  (*   | Nothing vbt ->  *)
+  (*      IT (Option_op (Nothing vbt), bt) *)
+  (*   | Something t ->  *)
+  (*      let t = aux t in *)
+  (*      IT (Option_op (Something t), bt) *)
+  (*   | Is_nothing t -> *)
+  (*      let t = aux t in *)
+  (*      IT (Option_op (Is_nothing t), bt) *)
+  (*   | Is_something t -> *)
+  (*      let t = aux t in *)
+  (*      IT (Option_op (Is_something t), bt) *)
+  (*   | Get_some_value t -> *)
+  (*      let t = aux t in *)
+  (*      IT (Option_op (Get_some_value t), bt) *)
+  (* in *)
 
   let letb (s, bound) body bt =
     let bound = aux bound in
@@ -494,7 +494,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | Set_op s -> IT (Set_op s, bt)
     | CT_pred c -> ct_pred c bt
     | Map_op a -> map_op a bt
-    | Option_op o -> option_op o bt
+    (* | Option_op o -> option_op o bt *)
     | Let ((s, bound), body) -> letb (s, bound) body bt
 
 
