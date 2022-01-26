@@ -48,7 +48,7 @@ let solver_params = [
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
-    ("smt.ematching", "false");
+    ("smt.ematching", "true");
   ]
 
 let rewriter_params = [

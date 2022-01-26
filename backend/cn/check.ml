@@ -1884,16 +1884,16 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           (* TODO: maybe we don't need to do the resource request
              below *)
-          let@ _ = 
-            restore_resources
-              (RI.Special.point_request loc (Access Deref) ({
-                     ct = act.ct; 
-                     pointer = it_of_arg arg;
-                     permission = bool_ true;
-                     value = BT.of_sct act.ct;
-                     init = BT.Bool;
-                   }, None))
-          in
+          (* let@ _ =  *)
+          (*   restore_resources *)
+          (*     (RI.Special.point_request loc (Access Deref) ({ *)
+          (*            ct = act.ct;  *)
+          (*            pointer = it_of_arg arg; *)
+          (*            permission = bool_ true; *)
+          (*            value = BT.of_sct act.ct; *)
+          (*            init = BT.Bool; *)
+          (*          }, None)) *)
+          (* in *)
           let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
           return (rt_of_vt loc vt)
        | M_PtrWellAligned (act, asym) ->
