@@ -565,10 +565,17 @@ let simp_flatten struct_decls lcs term =
 let simp_lc struct_decls lcs lc = 
   match lc with
   | LC.T it -> LC.T (simp struct_decls lcs it)
+  | LC.Forall ((q, qbt), body) ->
+     let ((q_new, qbt), body) = 
+       LC.alpha_rename_forall (Sym.fresh ()) ((q, qbt), body)
+     in
+     let body = simp struct_decls lcs body in
+     let ((q, qbt), body) = LC.alpha_rename_forall q ((q_new, qbt), body) in
+     LC.Forall ((q, qbt), body)
   | _ -> lc
 
 
 let simp_lc_flatten struct_decls lcs lc = 
   match lc with
   | LC.T it -> List.map LC.t_ (simp_flatten struct_decls lcs it)
-  | _ -> [lc]
+  | _ -> [simp_lc struct_decls lcs lc]

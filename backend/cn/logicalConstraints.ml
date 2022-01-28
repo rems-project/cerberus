@@ -74,7 +74,7 @@ let json c : Yojson.Safe.t =
 
 let alpha_rename_forall s' ((s, bt), body) = 
   let body = IT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) body in
-  ((s, bt), body)
+  ((s', bt), body)
 
 let alpha_rename_qpred s' { q = (s, bt); condition; pred } = 
   let su = IT.make_subst [(s, IT.sym_ (s', bt))] in
