@@ -555,17 +555,28 @@ module ResourceInference = struct
           permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)];
         }
       in
-      let folded_value = 
-        let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in
-        let rec update value i = 
-          if i >= length then value else
-            let subst = IT.make_subst [(qpoint.q, int_ i)] in
-            let cell_value = IT.subst subst qpoint.value in
-            let value' = map_set_ value (int_ i, cell_value) in
-            update value' (i + 1)
-        in
-        update empty 0
+      let folded_value_s, folded_value = 
+        IT.fresh (Map (Integer, BT.of_sct item_ct)) in
+      let folded_value_constr = 
+        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
+        forall_ (q_s, IT.bt q) (
+            eq_ (map_get_ folded_value q,
+                 qpoint.value)
+          )
       in
+      let@ () = add_l folded_value_s (IT.bt folded_value) in
+      let@ () = add_c folded_value_constr in
+      (* let folded_value =  *)
+      (*   let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in *)
+      (*   let rec update value i =  *)
+      (*     if i >= length then value else *)
+      (*       let subst = IT.make_subst [(qpoint.q, int_ i)] in *)
+      (*       let cell_value = IT.subst subst qpoint.value in *)
+      (*       let value' = map_set_ value (int_ i, cell_value) in *)
+      (*       update value' (i + 1) *)
+      (*   in *)
+      (*   update empty 0 *)
+      (* in *)
       let folded_init = 
         let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
         eachI_ (0, q_s, length - 1) qpoint.init
@@ -592,7 +603,7 @@ module ResourceInference = struct
       let@ global = get_global () in
       let layout = SymMap.find tag global.struct_decls in
       let@ (values, inits) = 
-        ListM.fold_rightM (fun {offset; size; member_or_padding} (values, inits) ->
+        ListM.fold_leftM (fun (values, inits) {offset; size; member_or_padding} ->
             let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset)) in
             match member_or_padding with
             | Some (member, sct) ->
@@ -605,7 +616,7 @@ module ResourceInference = struct
                    permission = permission_t;
                  }
                in
-               return ((member, point.value) :: values, point.init :: inits)
+               return (values @ [(member, point.value)], inits @ [point.init])
             | None ->
                let rec bytes i =
                  if i = size then return () else
@@ -622,7 +633,7 @@ module ResourceInference = struct
                in
                let@ () = bytes 0 in
                return (values, inits)
-       ) layout ([], [])
+       ) ([], []) layout
       in
       let folded_resource = 
         Point {
@@ -1571,9 +1582,10 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
              match found, re with
              | true, _ -> 
                 (re, found)
-             | false, Point {ct = Struct tag'; pointer; _} 
+             | false, Point {ct = Struct tag'; pointer; permission; _} 
                   when Sym.equal tag tag' ->
-                begin match provable (t_ (eq__ pointer (it_of_arg arg))) with
+                begin match provable (t_ (and_ [eq__ pointer (it_of_arg arg);
+                                                permission])) with
                 | `True -> (re, true)
                 | `False -> (re, found)
                 end
@@ -1882,18 +1894,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           (* check *)
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
-          (* TODO: maybe we don't need to do the resource request
-             below *)
-          (* let@ _ =  *)
-          (*   restore_resources *)
-          (*     (RI.Special.point_request loc (Access Deref) ({ *)
-          (*            ct = act.ct;  *)
-          (*            pointer = it_of_arg arg; *)
-          (*            permission = bool_ true; *)
-          (*            value = BT.of_sct act.ct; *)
-          (*            init = BT.Bool; *)
-          (*          }, None)) *)
-          (* in *)
           let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
           return (rt_of_vt loc vt)
        | M_PtrWellAligned (act, asym) ->
