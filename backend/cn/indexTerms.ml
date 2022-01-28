@@ -564,8 +564,8 @@ let exp_ (it, it') =
      IT (Arith_op (Exp (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
-let rem_t___ (it, it') = rem_ (it, it')
-let rem_f___ (it, it') = rem_ (it, it')
+let rem_t___ (it, it') = failwith "rem_t"
+let rem_f___ (it, it') = mod_ (it, it')
 let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
 let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
 let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)

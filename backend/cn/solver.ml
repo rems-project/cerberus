@@ -44,7 +44,7 @@ let no_randomness_params = [
 
 let solver_params = [
     ("smt.logic", "AUFLIA");
-    ("smt.arith.solver", "6");
+    ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");

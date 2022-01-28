@@ -129,7 +129,8 @@ let rec simp struct_decls values equalities some_known_facts =
        begin match a, b with
        | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
-       | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
+       | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
+         IT (Lit (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
           int_ 0
        | _ ->
           IT (Arith_op (Rem (a, b)), bt) 
@@ -137,7 +138,15 @@ let rec simp struct_decls values equalities some_known_facts =
     | Mod (a, b) ->
        let a = aux a in
        let b = aux b in
-       IT (Arith_op (Mod (a, b)), bt) 
+       begin match a, b with
+       | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) ->
+          int_ 0
+       | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
+         IT (Lit (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
+          int_ 0
+       | _ ->
+          IT (Arith_op (Mod (a, b)), bt) 
+       end
     | LT (a, b) -> 
       let a = aux a in
       let b = aux b in
@@ -160,10 +169,13 @@ let rec simp struct_decls values equalities some_known_facts =
       | _, _ when IT.equal a b ->
          bool_ true
       | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
-        IT (Lit (Z z2), _) when
+        IT (Lit (Z z2), _) 
+      | IT (Arith_op (Mod (_, IT (Lit (Z z1), _))), _), 
+        IT (Lit (Z z2), _) 
+           when
              Z.gt z1 Z.zero &&
                Z.gt z2 Z.zero &&
-                 Z.leq z1 (Z.add z2 (Z.of_int 1)) ->
+                 Z.equal z1 (Z.add z2 (Z.of_int 1)) ->
          bool_ true
       | _, _ ->
          IT (Arith_op (LE (a, b)), bt)
