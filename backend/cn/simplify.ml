@@ -504,12 +504,12 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
     List.fold_right (fun c values ->
         match c with
         | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
-                                 it')), _)) 
-             when Option.is_some (is_lit it') ->
+                                 it')), _)) ->
+             (* when Option.is_some (is_lit it') -> *)
              SymMap.add sym it' values
-        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
-                                 (IT (Map_op (Def _),_) as it'))), _)) ->
-             SymMap.add sym it' values
+        (* | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt),  *)
+        (*                          (IT (Map_op (Def _),_) as it'))), _)) -> *)
+        (*      SymMap.add sym it' values *)
         | _ ->
            values
       ) lcs SymMap.empty
