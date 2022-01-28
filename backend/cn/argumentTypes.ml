@@ -91,7 +91,7 @@ let pp i_pp ft =
        let op = if !unicode then utf8string "\u{2200}" else !^"AL" in
        group (op ^^^ typ (Sym.pp name) (LS.pp ls) ^^ dot) :: aux t
     | Define ((name, it), _info, t) ->
-       group (!^"var" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ dot) :: aux t       
+       group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ dot) :: aux t       
     | Resource (re, _info, t) ->
        let op = minus ^^ star in
        group (RE.pp re ^^^ op) :: aux t

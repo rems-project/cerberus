@@ -661,8 +661,9 @@ let model () =
 
 
 let provable ~shortcut_false solver global assumptions lc = 
-  debug 5 (lazy (format [] "provable check"));
+  debug 5 (lazy (item "provable check" (LC.pp lc)));
   let it, oq = ReduceQuery.constr global assumptions lc in
+  debug 6 (lazy (item "reduced" (IT.pp it)));
   (* print stdout (item "assumptions" (Pp.list LC.pp assumptions)); *)
   match shortcut it with
   | `True -> 
