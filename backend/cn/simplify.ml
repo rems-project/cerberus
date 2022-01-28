@@ -118,6 +118,8 @@ let rec simp struct_decls values equalities some_known_facts =
           int_ 0
        | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
           a
+       | IT (Arith_op (Mul (b', c)), _), _ when IT.equal b' b ->
+          c
        | _ ->
           IT (Arith_op (Div (a, b)), bt) 
        end
