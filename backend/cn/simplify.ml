@@ -89,6 +89,8 @@ let rec simp struct_decls values equalities some_known_facts =
           IT (Lit (Z (Z.sub i1 i2)), bt)
        | IT (Lit (Q q1), _), IT (Lit (Q q2), _), _ ->
           IT (Lit (Q (Q.sub q1 q2)), bt)
+       | _, IT (Lit (Z i2), _), _ when Z.equal i2 Z.zero ->
+          a
        | IT (Arith_op (Add (c, d)), _), _, _ when IT.equal c b ->
           (* (c + d) - b  when  c = b *)
           d
@@ -134,6 +136,8 @@ let rec simp struct_decls values equalities some_known_facts =
        | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
          IT (Lit (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
           int_ 0
+       | _, IT (Lit (Z b), _) when Z.equal b Z.one ->
+          int_ 0
        | _ ->
           IT (Arith_op (Rem (a, b)), bt) 
        end
@@ -145,6 +149,8 @@ let rec simp struct_decls values equalities some_known_facts =
           int_ 0
        | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
          IT (Lit (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
+          int_ 0
+       | _, IT (Lit (Z b), _) when Z.equal b Z.one ->
           int_ 0
        | _ ->
           IT (Arith_op (Mod (a, b)), bt) 
@@ -216,7 +222,7 @@ let rec simp struct_decls values equalities some_known_facts =
             begin match acc with
             | [] -> bool_ true
             | [r] -> r
-            | _ -> and_ acc
+            | _ -> and_ (List.rev acc)
             end
          | it :: its ->
             let it = aux2 (add_known_facts acc some_known_facts) it in
@@ -238,7 +244,7 @@ let rec simp struct_decls values equalities some_known_facts =
             begin match acc with
             | [] -> bool_ false
             | [r] -> r
-            | _ -> or_ acc
+            | _ -> or_ (List.rev acc)
             end
          | it :: its ->
             begin match it with
@@ -308,6 +314,12 @@ let rec simp struct_decls values equalities some_known_facts =
        | IT (Tuple_op (Tuple items1), _), 
          IT (Tuple_op (Tuple items2), _)  ->
           and_ (List.map2 eq__ items1 items2)
+       | IT (Pointer_op (IntegerToPointerCast a), _), 
+         IT (Pointer_op (IntegerToPointerCast b), _) ->
+          eq_ (a, b)
+       | IT (Pointer_op (PointerToIntegerCast a), _), 
+         IT (Pointer_op (PointerToIntegerCast b), _) ->
+          eq_ (a, b)
        | _, _ ->
           eq_ (a, b)
        end
@@ -494,8 +506,8 @@ let rec simp struct_decls values equalities some_known_facts =
   in
 
   fun it ->
-  if List.mem IT.equal it some_known_facts then bool_ true 
-  else
+  if List.mem IT.equal it some_known_facts then bool_ true else
+  if List.mem IT.equal (not_ it) some_known_facts then bool_ false else
     let (IT (it_, bt)) = it in
     match it_ with
     | Lit l -> lit l bt
@@ -554,8 +566,8 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
 
 
 
-let simp_flatten struct_decls lcs term =
-  match simp struct_decls lcs term with
+let simp_flatten ?(some_known_facts = []) struct_decls lcs term =
+  match simp ~some_known_facts struct_decls lcs term with
   | IT (Lit (Bool true), _) -> []
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
@@ -571,7 +583,15 @@ let simp_lc struct_decls lcs lc =
      in
      let body = simp struct_decls lcs body in
      let ((q, qbt), body) = LC.alpha_rename_forall q ((q_new, qbt), body) in
-     LC.Forall ((q, qbt), body)
+     begin match body with
+     | IT (Bool_op (EQ (  IT (Map_op (Get (a, i)), _)  ,  
+                          IT (Map_op (Get (b, i')), _)  
+             )), _) 
+           when IT.equal i i' && IT.equal i' (sym_ (q, qbt))
+       ->
+        LC.T (eq_ (a, b))
+     | _ -> LC.Forall ((q, qbt), body)
+     end
   | _ -> lc
 
 
