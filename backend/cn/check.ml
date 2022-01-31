@@ -822,8 +822,9 @@ let unknown_eq_in_group simp ptr_gp = List.find_map (fun (p, req) -> if not req 
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
 let add_eqs_for_infer ftyp =
-  if not (! use_model_eqs) then ()
+  if not (! use_model_eqs) then return ()
   else
+  begin
   debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in
@@ -860,6 +861,7 @@ let add_eqs_for_infer ftyp =
   let@ () = loop ptr_gps in
   debug 5 (lazy (format [] "finished equality discovery"));
   return ()
+  end
 
 (*
     let exact_match () =
