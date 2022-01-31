@@ -299,7 +299,7 @@ let subst (substitution : IT.t Subst.t) resource =
     | None -> SymSet.empty
 
 
-
+  
 
 
   let simp_it struct_decls lcs extra_facts it = 
@@ -310,59 +310,59 @@ let subst (substitution : IT.t Subst.t) resource =
     O.simp ~some_known_facts:extra_facts
       struct_decls lcs
   
-  let simp_point struct_decls lcs (p : point) =
+  let simp_point ?(only_outputs=false) struct_decls lcs (p : point) =
     let simp_it = simp_it struct_decls lcs in
     let simp_o = simp_o struct_decls lcs in
     {
       ct = p.ct;
-      pointer = simp_it [] p.pointer; 
-      permission = simp_it [] p.permission;
+      pointer = if only_outputs then p.pointer else simp_it [] p.pointer; 
+      permission = if only_outputs then p.permission else simp_it [] p.permission;
       value = simp_o [] p.value;
       init = simp_o [] p.init; 
     }
 
-  let simp_qpoint struct_decls lcs (qp : qpoint) = 
+  let simp_qpoint ?(only_outputs=false) struct_decls lcs (qp : qpoint) = 
     let simp_it = simp_it struct_decls lcs in
     let simp_o = simp_o struct_decls lcs in
     let old_q = qp.q in
     let qp = alpha_rename_qpoint (Sym.fresh_same old_q) qp in
-    let permission = simp_it [] qp.permission in
+    let permission = Simplify.simp_flatten struct_decls lcs qp.permission in
     let qp = { 
         ct = qp.ct;
-        pointer = simp_it [] qp.pointer;
+        pointer = if only_outputs then qp.pointer else simp_it [] qp.pointer;
         q = qp.q;
-        permission = permission;
-        value = simp_o [permission] qp.value;
-        init = simp_o [permission] qp.init;
+        permission = if only_outputs then qp.permission else and_ permission;
+        value = simp_o permission qp.value;
+        init = simp_o permission qp.init;
       }
     in
     alpha_rename_qpoint old_q qp
 
-  let simp_predicate struct_decls lcs (p : predicate) = 
+  let simp_predicate ?(only_outputs=false) struct_decls lcs (p : predicate) = 
     let simp_it = simp_it struct_decls lcs in
     let simp_o = simp_o struct_decls lcs in
     {
       name = p.name; 
-      pointer = simp_it [] p.pointer; 
-      permission = simp_it [] p.permission;
-      iargs = List.map (simp_it []) p.iargs; 
+      pointer = if only_outputs then p.pointer else simp_it [] p.pointer; 
+      permission = if only_outputs then p.permission else simp_it [] p.permission;
+      iargs = if only_outputs then p.iargs else List.map (simp_it []) p.iargs; 
       oargs = List.map (simp_o []) p.oargs; 
     }
 
-  let simp_qpredicate struct_decls lcs (qp : qpredicate) = 
+  let simp_qpredicate ?(only_outputs=false) struct_decls lcs (qp : qpredicate) = 
     let simp_it = simp_it struct_decls lcs in
     let simp_o = simp_o struct_decls lcs in
     let old_q = qp.q in
     let qp = alpha_rename_qpredicate (Sym.fresh_same old_q) qp in
-    let permission = simp_it [] qp.permission in
+    let permission = Simplify.simp_flatten struct_decls lcs qp.permission in
     let qp = {
         name = qp.name;
-        pointer = simp_it [] qp.pointer;
+        pointer = if only_outputs then qp.pointer else simp_it [] qp.pointer;
         q = qp.q;
         step = qp.step;
-        permission = permission;
-        iargs = List.map (simp_it [permission]) qp.iargs;
-        oargs = List.map (simp_o [permission]) qp.oargs;
+        permission = if only_outputs then qp.permission else and_ permission;
+        iargs = if only_outputs then qp.iargs else List.map (simp_it permission) qp.iargs;
+        oargs = List.map (simp_o permission) qp.oargs;
       }
     in 
     alpha_rename_qpredicate old_q qp

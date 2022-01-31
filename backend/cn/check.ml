@@ -319,13 +319,15 @@ module ResourceInference = struct
       let@ provable = provable in
       begin match provable (t_ (not_ needed)) with
       | `True ->
-         let r = 
-           { ct = requested.ct;
+         let r = { 
+             ct = requested.ct;
              pointer = requested.pointer;
-             value = simp value;
-             init = simp init;
-             permission = requested.permission }
+             value = value;
+             init = init;
+             permission = requested.permission 
+           }
          in
+         let r = RE.simp_point ~only_outputs:true global.struct_decls all_lcs r in
          return r
       | `False ->
          let@ resource = match requested.ct with
@@ -390,17 +392,16 @@ module ResourceInference = struct
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
       | `True ->
-         let q_s, q = IT.fresh Integer in
-         let subst = make_subst [(requested.q, q)] in
-         let r = 
-           { ct = requested.ct;
+         let r = { 
+             ct = requested.ct;
              pointer = requested.pointer;
-             q = q_s;
-             value = simp (IT.subst subst value); 
-             init = simp (IT.subst subst init);
-             permission = IT.subst subst requested.permission;
+             q = requested.q;
+             value = value; 
+             init = init;
+             permission = requested.permission;
            } 
          in
+         let r = RE.simp_qpoint ~only_outputs:true global.struct_decls all_lcs r in
          return r
       | `False ->
          let@ model = model () in
@@ -456,14 +457,15 @@ module ResourceInference = struct
       let@ provable = provable in
       begin match provable (t_ (not_ needed)) with
       | `True ->
-         let r = 
-           { name = requested.name;
+         let r = { 
+             name = requested.name;
              pointer = requested.pointer;
              permission = requested.permission;
              iargs = requested.iargs; 
-             oargs = List.map simp oargs
+             oargs = oargs
            }
          in
+         let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in
          return r
       | `False ->
          let@ model = model () in
@@ -520,18 +522,17 @@ module ResourceInference = struct
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
       | `True ->
-         let q_s, q = IT.fresh Integer in
-         let subst = make_subst [(requested.q, q)] in
-         let r = 
-           { name = requested.name;
+         let r = { 
+             name = requested.name;
              pointer = requested.pointer;
-             q = q_s;
+             q = requested.q;
              step = requested.step;
-             permission = IT.subst subst requested.permission;
-             iargs = List.map (IT.subst subst) requested.iargs; 
-             oargs = List.map (fun oa -> simp (IT.subst subst oa)) oargs;
+             permission = requested.permission;
+             iargs = requested.iargs; 
+             oargs = oargs;
            } 
          in
+         let r = RE.simp_qpredicate ~only_outputs:true global.struct_decls all_lcs r in
          return r
       | `False ->
          let@ model = model () in
@@ -965,15 +966,20 @@ end = struct
                          IT (Lit (Sym q'), _))), _)
            when Sym.equal q' q_s && SymMap.mem s unis ->
 
-         let output_have_body_s, output_have_body = 
+         let output_have_body_s, output_have_body =
            IT.fresh (Map (q_bt, IT.bt output_have)) in
-         let constr1 = 
+         (* let output_have_body =  *)
+         (*   map_def_ (q_s, q_bt) output_have *)
+         (* in *)
+         let constr1 =
            forall_ (q_s, q_bt) (
-               impl_ (condition, 
+               impl_ (condition,
                       eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)),
-                           output_have))
+                           output_have)
+                 )
              )
          in
+
          (* let constr2 =  *)
          (*   forall_ (q_s, q_bt) ( *)
          (*       impl_ (not_ condition, *)
@@ -2246,12 +2252,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                in
                fail (fun _ -> {loc; msg = Generic !^err})
           in
-          (* print stdout (item "qarg" (IT.pp qarg)); *)
           let@ provable = provable in
           let@ constraints = all_constraints () in
           let to_check = 
             let body = LP.open_pred global def args in
-            (* print stdout (item "body" (IT.pp body)); *)
             let assumptions = 
               List.filter_map (function
                   | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
@@ -2263,10 +2267,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                      None
                 ) constraints
             in
-            (* List.iter (fun it ->
-             *     print stdout (item "assumption" (IT.pp it));
-             *     ) assumptions;
-             * print stdout (item "goal" (IT.pp body)); *)
             impl_ (and_ assumptions, body)
           in
           let@ () = match provable (t_ to_check) with
