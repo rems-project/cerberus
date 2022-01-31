@@ -270,13 +270,14 @@ module ResourceInference = struct
       let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
       let@ global = get_global () in
       let@ all_lcs = all_constraints () in
-      let simp t = time_f "point_request: simp" (Simplify.simp global.struct_decls all_lcs) t in
+      let simp t = Simplify.simp global.struct_decls all_lcs t in
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
             if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
+               debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
                let pmatch = eq_ (requested.pointer, p'.pointer) in
                let took = and_ [pmatch; p'.permission; needed] in
                let value = ite_ (took, p'.value, value) in
@@ -286,6 +287,7 @@ module ResourceInference = struct
                Point {p' with permission = permission'}, (simp needed', value, init)
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let base = p'.pointer in
+               debug 15 (lazy (item "point/qpoint sub at base ptr" (IT.pp base)));
                let item_size = int_ (Memory.size_of_ctype p'.ct) in
                let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
                let index = array_pointer_to_index ~base ~item_size ~pointer:requested.pointer in
@@ -814,15 +816,16 @@ let div_groups cmp xs =
 let div_groups_discard cmp xs =
   List.map (List.map snd) (div_groups (fun (k, _) (k2, _) -> cmp k k2) xs)
 
-let group_eq simp ptr_gp = List.find_map (fun (p, req) -> if not req then None
+let unknown_eq_in_group simp ptr_gp = List.find_map (fun (p, req) -> if not req then None
   else List.find_map (fun (p2, req) -> if req then None
     else if is_true (simp (eq_ (p, p2))) then None
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
-let add_eqs_to_infer ftyp =
-  if not (! use_model_eqs) then ()
+let add_eqs_for_infer ftyp =
+  if not (! use_model_eqs) then return ()
   else
-  debug 5 (lazy (format [] "doing add_eqs for infer"));
+  begin
+  debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in
   let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer r) in
@@ -831,12 +834,12 @@ let add_eqs_to_infer ftyp =
   let ptr_gps = div_groups_discard CT.compare ptrs in
   let@ provable = provable in
   let rec loop ptr_gps =
-    debug 7 (lazy (format [] "loop iteration"));
     let@ global = get_global () in
     let@ all_lcs = all_constraints () in
     let simp t = Simplify.simp global.struct_decls all_lcs t in
-    let poss_eqs = List.filter_map (group_eq simp) ptr_gps in
-    debug 7 (lazy (format [] ("loop iteration with " ^ Int.to_string (List.length poss_eqs))));
+    let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
+    debug 7 (lazy (format [] ("investigating " ^
+        Int.to_string (List.length poss_eqs) ^ " possible eqs")));
     if List.length poss_eqs == 0
     then return ()
     else match provable (t_ (and_ poss_eqs)) with
@@ -846,6 +849,7 @@ let add_eqs_to_infer ftyp =
         loop ptr_gps
       | `False ->
         let (m, _) = Solver.model () in
+        debug 7 (lazy (format [] ("eqs refuted, processing model")));
         let eval_f p = match Solver.eval global.struct_decls m p with
           | Some (IT (Lit (Pointer i), _)) -> i
           | _ -> (print stderr (IT.pp p); assert false)
@@ -855,7 +859,9 @@ let add_eqs_to_infer ftyp =
         loop ptr_gps
   in
   let@ () = loop ptr_gps in
+  debug 5 (lazy (format [] "finished equality discovery"));
   return ()
+  end
 
 (*
     let exact_match () =
@@ -1183,7 +1189,7 @@ end = struct
       delay_logical SymMap.empty ftyp_l
     in
 
-    let@ () = InferenceEqs.add_eqs_to_infer ftyp_r in
+    let@ () = InferenceEqs.add_eqs_for_infer ftyp_r in
 
     let@ (unis, ftyp_c) = 
       let rec infer_resources unis ftyp = 
