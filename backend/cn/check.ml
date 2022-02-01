@@ -1714,20 +1714,22 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          | Integer ity -> ity
          | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
        in
+       let@ provable = provable in
        begin match ity with
        | Bool ->
           let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
           return (rt_of_vt loc vt)
        | _
             when Sctypes.is_unsigned_integer_type ity ->
-          let result = 
-            ite_ (representable_ (act.ct, arg_it),
-                  arg_it,
-                  wrapI ity arg_it)
+          let result = match provable (t_ (representable_ (act.ct, arg_it))) with
+            | `True -> arg_it
+            | `False ->
+               ite_ (representable_ (act.ct, arg_it),
+                     arg_it,
+                     wrapI ity arg_it)
           in
           return (rt_of_vt loc (Integer, result))
        | _ ->
-          let@ provable = provable in
           begin match provable (t_ (representable_ (act.ct, arg_it))) with
           | `True -> return (rt_of_vt loc (Integer, arg_it))
           | `False ->
