@@ -38,6 +38,13 @@ module Make(T : S) = struct
       in
       aux 0 l
 
+    let map2M (f : 'a -> 'b -> ('c, 'e) m)
+              (l1 : 'a list)
+              (l2 : 'b list)
+            : ('c list, 'e) m =
+      let l12 = List.combine l1 l2 in
+      mapM (Tools.uncurry f) l12
+
     let iterM (f : ('a -> (unit, 'e) m)) (l : 'a list) : (unit, 'e) m = 
       let@ _ = mapM f l in 
       return ()

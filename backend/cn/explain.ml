@@ -398,10 +398,10 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
        in
        let state = 
          let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in
-         let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in
+         let init = !^"init" ^^ colon ^^^ init_e (* maybe_evaluated init_v *) in
          !^"each" ^^^ Sym.pp (fst q) ^^ colon ^^^
          Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^
-           value_e ^^^ equals ^^^ maybe_evaluated value_v
+           value_e (* ^^^ equals ^^^ maybe_evaluated value_v *)
        in
        let entry = {
            loc_e = Some loc_e;
@@ -412,8 +412,8 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
        let reported = 
          (List.fold_left SymSet.union SymSet.empty [
               symbol_it p.pointer;
-              app_symbol_it p.q p.value;
-              app_symbol_it p.q p.init;
+              (* app_symbol_it p.q p.value; *)
+              (* app_symbol_it p.q p.init; *)
               app_symbol_it p.q p.permission;
          ])
        in

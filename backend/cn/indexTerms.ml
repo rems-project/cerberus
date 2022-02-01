@@ -497,7 +497,7 @@ let is_q = function
   | IT (Lit (Q q), _) -> Some q
   | _ -> None
 
-let is_app = function
+let is_map_get = function
   | IT (Map_op (Get (f,arg)), _) -> Some (f, arg)
   | _ -> None
 
@@ -788,16 +788,16 @@ let hash (IT (it, _bt)) =
 
 
 
-let partiality_check_array ~length ~item_ct value = 
-  let unmapped = 
-    let rec aux i acc = 
-      if i > (length - 1) then acc else 
-        aux (i + 1) (map_set_ acc (int_ i, default_ (BT.of_sct item_ct)))
-    in
-    aux 0 value
-  in
-  let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in
-  eq_ (unmapped, empty)
+(* let partiality_check_array ~length ~item_ct value =  *)
+(*   let unmapped =  *)
+(*     let rec aux i acc =  *)
+(*       if i > (length - 1) then acc else  *)
+(*         aux (i + 1) (map_set_ acc (int_ i, default_ (BT.of_sct item_ct))) *)
+(*     in *)
+(*     aux 0 value *)
+(*   in *)
+(*   let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in *)
+(*   eq_ (unmapped, empty) *)
 
 
 
@@ -824,11 +824,10 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Array (it, None) -> 
        Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) -> 
-       let partiality = partiality_check_array ~length:n ~item_ct about in
+       (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
        let i_s, i = fresh BT.Integer in
        and_ 
-         [eachI_ (0, i_s, n - 1) (aux item_ct (map_get_ about i));
-          partiality]
+         [eachI_ (0, i_s, n - 1) (aux item_ct (map_get_ about i))]
     | Pointer pointee_ct -> 
        value_check_pointer alignment ~pointee_ct about
     | Struct tag -> 

@@ -584,6 +584,8 @@ let simp_lc struct_decls lcs lc =
      let body = simp struct_decls lcs body in
      let ((q, qbt), body) = LC.alpha_rename_forall q ((q_new, qbt), body) in
      begin match body with
+     | IT (Lit (Bool true), _) -> 
+        LC.T (bool_ true)
      | IT (Bool_op (EQ (  IT (Map_op (Get (a, i)), _)  ,  
                           IT (Map_op (Get (b, i')), _)  
              )), _) 

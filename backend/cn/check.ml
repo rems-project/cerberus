@@ -32,7 +32,7 @@ open Resources.RE
 open ResourcePredicates
 open LogicalConstraints
 
-
+open List
 
 
 
@@ -233,6 +233,9 @@ module ResourceInference = struct
 
   module General = struct
 
+    type 'a cases = C of 'a list
+
+
     let unfold_array_request item_ct base_pointer_t length permission_t = 
       Resources.Requests.{
           ct = array_ct item_ct (Some length);
@@ -272,19 +275,19 @@ module ResourceInference = struct
       let@ all_lcs = all_constraints () in
       let simp t = Simplify.simp global.struct_decls all_lcs t in
       let needed = requested.permission in 
-      let sub_resource_if = fun cond re (needed, value, init) ->
-            let continue = (re, (needed, value, init)) in
+      let sub_resource_if = fun cond re (needed, C value, C init) ->
+            let continue = (re, (needed, C value, C init)) in
             if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
                debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
                let pmatch = eq_ (requested.pointer, p'.pointer) in
                let took = and_ [pmatch; p'.permission; needed] in
-               let value = ite_ (took, p'.value, value) in
-               let init = ite_ (took, p'.init, init) in
+               let value = value @ [(took, p'.value)] in
+               let init = init @ [(took, p'.init)] in
                let needed' = and_ [needed; not_ (and_ [pmatch; p'.permission])] in
                let permission' = and_ [p'.permission; not_ (and_ [pmatch; needed])] in
-               Point {p' with permission = permission'}, (simp needed', value, init)
+               Point {p' with permission = permission'}, (simp needed', C value, C init)
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let base = p'.pointer in
                debug 15 (lazy (item "point/qpoint sub at base ptr" (IT.pp base)));
@@ -298,36 +301,41 @@ module ResourceInference = struct
                in
                let subst = IT.make_subst [(p'.q, index)] in
                let took = and_ [pre_match; IT.subst subst p'.permission; needed] in
-               let value = ite_ (took, IT.subst subst p'.value, value) in
-               let init = ite_ (took, IT.subst subst p'.init, init) in
+               let value = value @ [(took, IT.subst subst p'.value)] in
+               let init = init @ [(took, IT.subst subst p'.init)] in
                let needed' = and_ [needed; not_ (and_ [pre_match; IT.subst subst p'.permission])] in
                let permission' = 
                  and_ [p'.permission; 
                        not_ (and_ [eq_ (sym_ (p'.q, Integer), index); pre_match; needed])] 
                in
-               QPoint {p' with permission = permission'}, (simp needed', value, init)
+               QPoint {p' with permission = permission'}, (simp needed', C value, C init)
             | _ ->
                continue
       in
-      let@ (needed, value, init) =
+      let@ (needed, C value, C init) =
         map_and_fold_resources (sub_resource_if is_exact_re)
-          (needed, default_ requested.value, default_ requested.init)
+          (needed, C [], C [])
       in
-      let@ (needed, value, init) =
+      let@ (needed, C value, C init) =
         map_and_fold_resources (sub_resource_if (fun re -> not (is_exact_re re)))
-          (needed, value, init) in
+          (needed, C value, C init) in
       let@ provable = provable in
       begin match provable (t_ (not_ needed)) with
       | `True ->
+         let v_s, v = IT.fresh requested.value in
+         let i_s, i = IT.fresh requested.init in
+         let@ () = add_ls [(v_s, IT.bt v); (i_s, IT.bt i)] in
+         let constr x (guard, x_v) = t_ (impl_ (guard, eq_ (x, x_v))) in
+         let@ () = add_cs (map (constr v) value @ map (constr i) init) in
          let r = { 
              ct = requested.ct;
              pointer = requested.pointer;
-             value = value;
-             init = init;
+             value = v;
+             init = i;
              permission = requested.permission 
            }
          in
-         let r = RE.simp_point ~only_outputs:true global.struct_decls all_lcs r in
+         (* let r = RE.simp_point ~only_outputs:true global.struct_decls all_lcs r in *)
          return r
       | `False ->
          let@ resource = match requested.ct with
@@ -353,9 +361,9 @@ module ResourceInference = struct
       let@ all_lcs = all_constraints () in
       let simp t = Simplify.simp global.struct_decls all_lcs t in
       let needed = requested.permission in
-      let@ (needed, value, init) =
-        map_and_fold_resources (fun re (needed, value, init) ->
-            let continue = (re, (needed, value, init)) in
+      let@ (needed, C value, C init) =
+        map_and_fold_resources (fun re (needed, C value, C init) ->
+            let continue = (re, (needed, C value, C init)) in
             if is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
@@ -370,38 +378,47 @@ module ResourceInference = struct
                let subst = IT.make_subst [(requested.q, index)] in
                let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
                let i_match = eq_ (sym_ (requested.q, Integer), index) in
-               let value = ite_ (and_ [took; i_match], p'.value, value) in
-               let init = ite_ (and_ [took; i_match], p'.init, init) in
+               let value = value @ [(and_ [took; i_match], p'.value)] in
+               let init = init @ [(and_ [took; i_match], p'.init)] in
                let needed' = and_ [needed; not_ (and_ [pre_match; p'.permission; i_match])] in
                let permission' = and_ [p'.permission; not_ (and_ [pre_match; IT.subst subst needed])] in
-               Point {p' with permission = permission'}, (simp needed', value, init)
+               Point {p' with permission = permission'}, (simp needed', C value, C init)
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let p' = alpha_rename_qpoint requested.q p' in
                let pmatch = eq_ (requested.pointer, p'.pointer) in
                let took = and_ [pmatch; needed; p'.permission] in
-               let value = ite_ (took, p'.value, value) in
-               let init = ite_ (took, p'.init, init) in
+               let value = value @ [(took, p'.value)] in
+               let init = init @ [(took, p'.init)] in
                let needed' = and_ [needed; not_ (and_ [pmatch; p'.permission])] in
                let permission' = and_ [p'.permission; not_ (and_ [pmatch; needed])] in
-               QPoint {p' with permission = permission'}, (simp needed', value, init)
+               QPoint {p' with permission = permission'}, (simp needed', C value, C init)
             | re ->
                continue
-          ) (needed, default_ requested.value, default_ requested.init)
+          ) (needed, C [], C [])
       in
       let@ provable = provable in
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
       | `True ->
+         let q_s, q = requested.q, sym_ (requested.q, BT.Integer) in
+         let v_s, v = IT.fresh (Map (IT.bt q, requested.value)) in
+         let i_s, i = IT.fresh (Map (IT.bt q, requested.init)) in
+         let@ () = add_ls [(v_s, IT.bt v); (i_s, IT.bt i)] in
+         let constr a (guard, a_v) =
+           forall_ (q_s, IT.bt q)
+             (impl_ (guard, eq_ (map_get_ a q, a_v)))
+         in
+         let@ () = add_cs (map (constr v) value @ (map (constr i) init)) in
          let r = { 
              ct = requested.ct;
              pointer = requested.pointer;
              q = requested.q;
-             value = value; 
-             init = init;
+             value = map_get_ v q;
+             init = map_get_ i q;
              permission = requested.permission;
            } 
          in
-         let r = RE.simp_qpoint ~only_outputs:true global.struct_decls all_lcs r in
+         (* let r = RE.simp_qpoint ~only_outputs:true global.struct_decls all_lcs r in *)
          return r
       | `False ->
          let@ model = model () in
@@ -428,7 +445,7 @@ module ResourceInference = struct
                  :: List.map2 eq__ requested.iargs p'.iargs
                in
                let took = and_ (needed :: p'.permission :: pmatch) in
-               let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
+               let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(took, oa')])) oargs p'.oargs in
                let needed' = and_ [needed; not_ (and_ (p'.permission :: pmatch))] in
                let permission' = and_ [p'.permission; not_ (and_ (needed :: pmatch))] in
                Predicate {p' with permission = permission'}, (simp needed', oargs)
@@ -445,27 +462,36 @@ module ResourceInference = struct
                        :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
                in
                let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
-               let oargs = List.map2 (fun oa oa' -> ite_ (took, IT.subst subst oa', oa)) oargs p'.oargs in
+               let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(took, IT.subst subst oa')])) oargs p'.oargs in
                let needed' = and_ [needed; not_ (and_ [pre_match; IT.subst subst p'.permission])] in
                let i_match = eq_ (sym_ (p'.q, Integer), index) in
                let permission' = and_ [p'.permission; not_ (and_ [pre_match; needed; i_match])] in
                QPredicate {p' with permission = permission'}, (simp needed', oargs)
             | re ->
                continue
-          ) (needed, List.map default_ requested.oargs)
+          ) (needed, List.map (fun _ -> C []) requested.oargs)
       in
       let@ provable = provable in
       begin match provable (t_ (not_ needed)) with
       | `True ->
+         let constr x (guard, v_x) = t_ (impl_ (guard, eq_ (x, v_x))) in
+         let@ oas = 
+           ListM.map2M (fun (C oa) oa_bt ->
+               let o_s, o = IT.fresh oa_bt in
+               let@ () = add_l o_s (IT.bt o) in
+               let@ () = add_cs (List.map (constr o) oa) in
+               return o
+             ) oargs requested.oargs
+         in
          let r = { 
              name = requested.name;
              pointer = requested.pointer;
              permission = requested.permission;
              iargs = requested.iargs; 
-             oargs = oargs
+             oargs = oas
            }
          in
-         let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in
+         (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
          return r
       | `False ->
          let@ model = model () in
@@ -498,7 +524,7 @@ module ResourceInference = struct
                in
                let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
                let i_match = eq_ (sym_ (requested.q, Integer), index) in
-               let oargs = List.map2 (fun oa oa' -> ite_ (and_ [took; i_match], oa', oa)) oargs p'.oargs in
+               let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(and_ [took; i_match], oa')])) oargs p'.oargs in
                let needed' = and_ [needed; not_ (and_ [pre_match; p'.permission; i_match])] in
                let permission' = and_ [p'.permission; not_ (and_ [pre_match; IT.subst subst needed; p'.permission])] in
                Predicate {p' with permission = permission'}, (simp needed', oargs)
@@ -512,16 +538,33 @@ module ResourceInference = struct
                let took = and_ [pmatch; needed; p'.permission] in
                let needed' = and_ [needed; not_ (and_ [pmatch; p'.permission])] in
                let permission' = and_ [p'.permission; not_ (and_ [pmatch; needed])] in
-               let oargs = List.map2 (fun oa oa' -> ite_ (took, oa', oa)) oargs p'.oargs in
+               let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(took, oa')])) oargs p'.oargs in
                QPredicate {p' with permission = permission'}, (simp needed', oargs)
             | re ->
                continue
-          ) (needed, List.map default_ requested.oargs)
+          ) (needed, List.map (fun _ -> C []) requested.oargs)
       in
       let@ provable = provable in
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
       | `True ->
+         let q_s, q = requested.q, sym_ (requested.q, Integer) in
+         (* let constr a (guard, a_v) =  *)
+         (*   forall_ (q_s, IT.bt q) *)
+         (*     (impl_ (guard , _)) *)
+         (* in *)
+         let constr a (guard, a_v) = 
+           forall_ (q_s, IT.bt q)
+             (impl_ (guard, eq_ (map_get_ a q, a_v)))
+         in
+         let@ oas = 
+           ListM.map2M (fun (C oa) (oa_bt) ->
+               let o_s, o = IT.fresh (Map (IT.bt q, oa_bt)) in
+               let@ () = add_l o_s (IT.bt o) in
+               let@ () = add_cs (List.map (constr o) oa) in
+               return (map_get_ o q)
+             ) oargs requested.oargs
+         in
          let r = { 
              name = requested.name;
              pointer = requested.pointer;
@@ -529,10 +572,10 @@ module ResourceInference = struct
              step = requested.step;
              permission = requested.permission;
              iargs = requested.iargs; 
-             oargs = oargs;
+             oargs = oas;
            } 
          in
-         let r = RE.simp_qpredicate ~only_outputs:true global.struct_decls all_lcs r in
+         (* let r = RE.simp_qpredicate ~only_outputs:true global.struct_decls all_lcs r in *)
          return r
       | `False ->
          let@ model = model () in
@@ -650,7 +693,7 @@ module ResourceInference = struct
       return folded_resource
 
     let unfolded_array item_ct base length permission value init =
-      let q_s, q = IT.fresh Integer in
+      let q_s, q = IT.fresh_named Integer "i" in
       QPoint {
           ct = item_ct;
           pointer = base;
@@ -959,38 +1002,17 @@ end = struct
     in
     let unify_or_constrain_list = ListM.fold_leftM unify_or_constrain in
 
-    (* ASSUMES unification variables and quantifier q_s are disjoint *)
+    (* ASSUMES unification variables and quantifier q_s are disjoint,
+       and that resource inference has produced a resource with value/oargs v[q] *)
     let unify_or_constrain_q (q_s,q_bt) condition (unis, subst, constrs) (output_spec, output_have) = 
-      match IT.subst (make_subst subst) output_spec with
-      | IT (Map_op (Get (IT (Lit (Sym s), _), 
-                         IT (Lit (Sym q'), _))), _)
-           when Sym.equal q' q_s && SymMap.mem s unis ->
-
-         let output_have_body_s, output_have_body =
-           IT.fresh (Map (q_bt, IT.bt output_have)) in
-         (* let output_have_body =  *)
-         (*   map_def_ (q_s, q_bt) output_have *)
-         (* in *)
-         let constr1 =
-           forall_ (q_s, q_bt) (
-               impl_ (condition,
-                      eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)),
-                           output_have)
-                 )
-             )
-         in
-
-         (* let constr2 =  *)
-         (*   forall_ (q_s, q_bt) ( *)
-         (*       impl_ (not_ condition, *)
-         (*             eq_ (map_get_ output_have_body (sym_ (q_s, q_bt)), *)
-         (*                  default_ (IT.bt output_have))) *)
-         (*     ) *)
-         (* in *)
+      let q = sym_ (q_s, q_bt) in
+      match is_map_get (IT.subst (make_subst subst) output_spec) with
+      | Some (IT (Lit (Sym s), _), IT (Lit (Sym q'_s), q'_bt)) 
+           when Sym.equal q'_s q_s && SymMap.mem s unis ->
+         let@ () = ensure_logical_sort loc ~expect:q_bt q'_bt in
+         let (output_have_body, q') = Option.get (is_map_get output_have) in
+         assert (IT.equal q' q);
          let@ () = ls_matches_spec unis s output_have_body in
-         let@ () = add_l output_have_body_s (IT.bt output_have_body) in
-         let@ () = add_c constr1 in
-         (* let@ () = add_c constr2 in *)
          return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
       | _ ->
          return (unis, subst, eq_ (output_spec, output_have) :: constrs)
