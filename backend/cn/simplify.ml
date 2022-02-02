@@ -131,6 +131,8 @@ let rec simp struct_decls values equalities some_known_facts =
        let a = aux a in
        let b = aux b in 
        begin match a, b with
+       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) when Z.geq z1 Z.zero && Z.gt z2 Z.zero ->
+         IT (Lit (Z (Z.rem z1 z2)), bt)
        | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
        | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
