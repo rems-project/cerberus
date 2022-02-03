@@ -23,6 +23,8 @@ type t = BT.t term
 let basetype (IT (_, bt)) : BT.t = bt
 let bt = basetype
 
+let term (IT (t, _)) = t
+
 
 
 
@@ -630,6 +632,10 @@ let arrayOffset_ (ct, t) =
   IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
 let cellPointer_ ~base ~step ~starti ~endi ~p =
   IT (Pointer_op (CellPointer {base;step;starti;endi;p}), BT.Bool)
+
+let isIntegerToPointerCast = function
+  | IT (Pointer_op (IntegerToPointerCast _), _) -> true
+  | _ -> false
 
 let memberShift_ (t, tag, member) = 
   integerToPointerCast_ 
