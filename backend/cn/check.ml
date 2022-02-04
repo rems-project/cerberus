@@ -254,18 +254,45 @@ module ResourceInference = struct
           permission = permission_t;
       }
 
-    let exact_match () =
+    let exact_ptr_match () =
       let@ global = get_global () in
       let@ all_lcs = all_constraints () in
+      let simp t = Simplify.simp global.struct_decls all_lcs t in
+      return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
+
+    let exact_match () =
+      let@ pmatch = exact_ptr_match () in
       return begin fun (request, resource) -> match (request, resource) with
       | (RER.Point req_p, RE.Point res_p) ->
-        let simp t = Simplify.simp global.struct_decls all_lcs t in
-        let pmatch = eq_ (req_p.pointer, res_p.pointer) in
-        let more_perm = impl_ (req_p.permission, res_p.permission) in
-        (* FIXME: simp of Impl isn't all that clever *)
-        (is_true (simp pmatch) && is_true (simp more_perm))
+        pmatch (req_p.pointer, res_p.pointer)
+      | (RER.QPoint req_qp, RE.QPoint res_qp) ->
+        pmatch (req_qp.pointer, res_qp.pointer)
       | _ -> false
       end
+
+    let exact_match_point_ptrs ptrs =
+      let@ pmatch = exact_ptr_match () in
+      return begin function
+        | RE.Point res_p -> List.exists (fun p -> pmatch (p, res_p.pointer)) ptrs
+        | _ -> false
+      end
+
+    let scan_key_indices v_nm t =
+      let is_i t = match t with
+        | IT (Lit (Sym nm2), _) -> nm2 = v_nm
+        | _ -> false
+      in
+      let rec f pol t = match t with
+        | IT (Bool_op (And xs), _) -> List.concat (List.map (f pol) xs)
+        | IT (Bool_op (Or xs), _) -> List.concat (List.map (f pol) xs)
+        | IT (Bool_op (Impl (x, y)), _) -> f (not pol) x @ f pol y
+        | IT (Bool_op (EQ (x, y)), _) ->
+          if pol && is_i x then [y] else if pol && is_i y then [x] else []
+        | IT (Bool_op (Not x), _) -> f (not pol) x
+        | _ -> []
+      in
+      let xs = f true t in
+      List.sort_uniq IT.compare xs
 
     let rec point_request loc failure (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
@@ -357,14 +384,15 @@ module ResourceInference = struct
 
     and qpoint_request loc failure (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
+      let@ is_ex = exact_match () in
+      let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
       let@ global = get_global () in
       let@ all_lcs = all_constraints () in
       let simp t = Simplify.simp global.struct_decls all_lcs t in
       let needed = requested.permission in
-      let@ (needed, C value, C init) =
-        map_and_fold_resources (fun re (needed, C value, C init) ->
+      let sub_resource_if = fun cond re (needed, C value, C init) ->
             let continue = (re, (needed, C value, C init)) in
-            if is_false needed then continue else
+            if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
                let base = requested.pointer in
@@ -394,8 +422,33 @@ module ResourceInference = struct
                QPoint {p' with permission = permission'}, (simp needed', C value, C init)
             | re ->
                continue
-          ) (needed, C [], C [])
       in
+      let@ (needed, C value, C init) =
+        map_and_fold_resources (sub_resource_if is_exact_re)
+          (needed, C [], C [])
+      in
+
+      debug 10 (lazy (item "needed after exact matches:" (IT.pp needed)));
+      let k_is = scan_key_indices requested.q needed in
+      let k_ptrs = List.map (fun i -> arrayShift_ (requested.pointer, requested.ct, i)) k_is in
+      let k_ptrs = List.map simp k_ptrs in
+      if List.length k_ptrs == 0 then ()
+      else debug 10 (lazy (item "key ptrs for additional matches:" (Pp.list IT.pp k_ptrs)));
+      let@ k_ptr_match = exact_match_point_ptrs k_ptrs in
+      let is_exact_k re = !reorder_points && k_ptr_match re in
+
+      let@ (needed, C value, C init) =
+        map_and_fold_resources (sub_resource_if is_exact_k)
+          (needed, C value, C init) in
+
+      if List.length k_ptrs == 0 then ()
+      else debug 10 (lazy (item "needed after additional matches:" (IT.pp needed)));
+
+      let@ (needed, C value, C init) =
+        map_and_fold_resources (sub_resource_if
+          (fun re -> not (is_exact_k re) && not (is_exact_k re)))
+          (needed, C value, C init) in
+
       let@ provable = provable in
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
@@ -843,8 +896,9 @@ module InferenceEqs = struct
 
 let use_model_eqs = ref true
 
-let res_pointer res = match res with
-  | (RE.Point res_pt) -> Some (res_pt.ct, res_pt.pointer)
+let res_pointer_kind res = match res with
+  | (RE.Point res_pt) -> Some ((true, res_pt.ct), res_pt.pointer)
+  | (RE.QPoint res_qpt) -> Some ((false, res_qpt.ct), res_qpt.pointer)
   | _ -> None
 
 let div_groups cmp xs =
@@ -872,10 +926,11 @@ let add_eqs_for_infer ftyp =
   debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in
-  let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer r) in
+  let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
   let ptrs = List.filter_map (res_ptr_k true) reqs @
     (List.filter_map (res_ptr_k false) ress) in
-  let ptr_gps = div_groups_discard CT.compare ptrs in
+  let cmp2 = Lem_basic_classes.pairCompare Bool.compare CT.compare in
+  let ptr_gps = div_groups_discard cmp2 ptrs in
   let@ provable = provable in
   let rec loop ptr_gps =
     let@ global = get_global () in

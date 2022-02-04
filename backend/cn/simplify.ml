@@ -1,5 +1,6 @@
 module LC = LogicalConstraints
 module IT = IndexTerms
+module ITSet = Set.Make(IT)
 open IndexTerms
 open Terms
 
@@ -15,6 +16,68 @@ end
 module ITPairMap = Map.Make(ITPair)
 
 
+let z1 = z_ (Z.of_int 1)
+let z0 = z_ Z.zero
+
+let rec dest_int_addition ts it = match IT.term it with
+    | Lit (Z i1) -> if fst ts || ITSet.mem z1 (snd ts) then ([(z1, i1)], z0) else ([], it)
+    | Arith_op (Add (a, b)) ->
+        let (a_xs, a_r) = dest_int_addition ts a in
+        let (b_xs, b_r) = dest_int_addition ts b in
+        (a_xs @ b_xs, if IT.equal a_r z0 then b_r else if IT.equal b_r z0 then a_r
+            else add_ (a_r, b_r))
+    | Arith_op (Sub (a, b)) ->
+        let (a_xs, a_r) = dest_int_addition ts a in
+        let (b_xs, b_r) = dest_int_addition ts b in
+        let b_xs_neg = List.map (fun (it, i) -> (it, Z.sub Z.zero i)) b_xs in
+        (a_xs @ b_xs_neg, if IT.equal b_r z0 then a_r else sub_ (a_r, b_r))
+    | Arith_op (Mul (a, IT (Lit (Z b_i), _))) ->
+        let (a_xs, a_r) = dest_int_addition ts a in
+        let a_xs_mul = List.map (fun (it, i) -> (it, Z.mul i b_i)) a_xs in
+        (a_xs_mul, if IT.equal a_r z0 then z0 else mul_ (a_r, z_ b_i))
+    | Arith_op (Mul (IT (Lit (Z a_i), _), b)) ->
+        let (b_xs, b_r) = dest_int_addition ts b in
+        let b_xs_mul = List.map (fun (it, i) -> (it, Z.mul i a_i)) b_xs in
+        (b_xs_mul, if IT.equal b_r z0 then z0 else mul_ (z_ a_i, b_r))
+    | _ -> if fst ts || ITSet.mem it (snd ts) then ([(it, Z.of_int 1)], z0) else ([], it)
+
+(* group a list into adjacent equal sublists *)
+let group eq xs =
+    let rec f y ys gps zs = match zs with
+      | [] -> ((y :: ys) :: gps)
+      | (z :: tl_zs) when eq z y -> f y (z :: ys) gps tl_zs
+      | (z :: tl_zs) -> f z [] ((y :: ys) :: gps) tl_zs
+    in
+    match xs with
+      | [] -> []
+      | (x :: xs) -> f x [] [] xs
+
+let simp_int_comp a b =
+    let a_elems = dest_int_addition (true, ITSet.empty) a |> fst |> List.map fst in
+    let b_elems = dest_int_addition (true, ITSet.empty) b |> fst |> List.map fst in
+    let repeated = List.sort IT.compare (a_elems @ b_elems)
+        |> group IT.equal
+        |> List.filter (fun xs -> List.length xs >= 2)
+        |> List.map List.hd |> ITSet.of_list in
+    let (a_xs, a_r) = dest_int_addition (false, repeated) a in
+    let (b_xs, b_r) = dest_int_addition (false, repeated) b in
+    let a_xs_neg = List.map (fun (it, i) -> (it, Z.sub Z.zero i)) a_xs in
+    let xs = List.sort (fun a b -> IT.compare (fst a) (fst b)) (a_xs_neg @ b_xs)
+        |> group (fun a b -> IT.equal (fst a) (fst b))
+        |> List.map (fun xs -> (fst (List.hd xs), List.fold_left Z.add Z.zero (List.map snd xs)))
+        |> List.filter (fun t -> not (Z.equal (snd t) Z.zero))
+    in
+    let mul_z t i = if Z.equal i (Z.of_int 1) then t
+        else if IT.equal z1 t then z_ i else mul_ (t, z_ i) in
+    let add_x t (x, i) = if Z.equal i Z.zero then t
+      else if Z.gt i (Z.of_int 0) then
+        (if IT.equal t z0 then mul_z x i else add_ (t, mul_z x i))
+      else sub_ (t, mul_z x (Z.sub Z.zero i))
+    in
+    (a_r, List.fold_left add_x b_r xs)
+
+let simp_comp_if_int a b = if BaseTypes.equal (IT.basetype a) BaseTypes.Integer
+    then simp_int_comp a b else (a, b)
 
 let rec simp struct_decls values equalities some_known_facts =
 
@@ -131,6 +194,8 @@ let rec simp struct_decls values equalities some_known_facts =
        let a = aux a in
        let b = aux b in 
        begin match a, b with
+       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) when Z.geq z1 Z.zero && Z.gt z2 Z.zero ->
+         IT (Lit (Z (Z.rem z1 z2)), bt)
        | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
        | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
@@ -158,6 +223,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | LT (a, b) -> 
       let a = aux a in
       let b = aux b in
+      let (a, b) = simp_comp_if_int a b in
       begin match a, b with
       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
          IT (Lit (Bool (Z.lt z1 z2)), bt)
@@ -169,6 +235,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | LE (a, b) -> 
       let a = aux a in
       let b = aux b in
+      let (a, b) = simp_comp_if_int a b in
       begin match a, b with
       | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
          IT (Lit (Bool (Z.leq z1 z2)), bt)
@@ -298,6 +365,10 @@ let rec simp struct_decls values equalities some_known_facts =
     | EQ (a, b) ->
        let a = aux a in
        let b = aux b in
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (eq_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else
        begin match a, b with
        | _ when IT.equal a b ->
          IT (Lit (Bool true), bt) 
@@ -337,6 +408,8 @@ let rec simp struct_decls values equalities some_known_facts =
        | IT (Pointer_op (PointerToIntegerCast a), _), 
          IT (Pointer_op (PointerToIntegerCast b), _) ->
           eq_ (a, b)
+       | IT (Pointer_op (PointerToIntegerCast a), _), b ->
+          eq_ (a, integerToPointerCast_ b)
        | _, _ ->
           eq_ (a, b)
        end
@@ -400,14 +473,23 @@ let rec simp struct_decls values equalities some_known_facts =
   let pointer_op it bt = 
     match it with
     | LTPointer (a, b) ->
-       IT (Pointer_op (LTPointer (aux a, aux b)), bt)
+       let a = aux a in
+       let b = aux b in
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (lt_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else if IT.equal a b
+       then bool_ false
+       else IT (Pointer_op (LTPointer (a, b)), bt)
     | LEPointer (a, b) ->
        let a = aux a in
        let b = aux b in
-       begin match a, b with
-       | _ -> 
-          IT (Pointer_op (LEPointer (a, b)), bt)
-       end
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (le_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else if IT.equal a b
+       then bool_ true
+       else IT (Pointer_op (LEPointer (a, b)), bt)
     | IntegerToPointerCast a ->
        let a = aux a in
        begin match a with
