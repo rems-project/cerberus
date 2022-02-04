@@ -376,7 +376,7 @@ module ResourceInference = struct
                        eq_ (rem_ (offset, item_size), int_ 0)]
                in
                let subst = IT.make_subst [(requested.q, index)] in
-               let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
+               let took = and_ [pre_match; IT.subst subst requested.permission; p'.permission] in
                let i_match = eq_ (sym_ (requested.q, Integer), index) in
                let value = value @ [(and_ [took; i_match], p'.value)] in
                let init = init @ [(and_ [took; i_match], p'.init)] in
@@ -386,7 +386,7 @@ module ResourceInference = struct
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let p' = alpha_rename_qpoint requested.q p' in
                let pmatch = eq_ (requested.pointer, p'.pointer) in
-               let took = and_ [pmatch; needed; p'.permission] in
+               let took = and_ [pmatch; requested.permission; p'.permission] in
                let value = value @ [(took, p'.value)] in
                let init = init @ [(took, p'.init)] in
                let needed' = and_ [needed; not_ (and_ [pmatch; p'.permission])] in
@@ -522,7 +522,7 @@ module ResourceInference = struct
                        :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs
                    )
                in
-               let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
+               let took = and_ [pre_match; IT.subst subst requested.permission; p'.permission] in
                let i_match = eq_ (sym_ (requested.q, Integer), index) in
                let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(and_ [took; i_match], oa')])) oargs p'.oargs in
                let needed' = and_ [needed; not_ (and_ [pre_match; p'.permission; i_match])] in
@@ -535,7 +535,7 @@ module ResourceInference = struct
                  and_ (eq_ (requested.pointer, p'.pointer)
                        :: List.map2 eq__ requested.iargs p'.iargs)
                in
-               let took = and_ [pmatch; needed; p'.permission] in
+               let took = and_ [pmatch; requested.permission; p'.permission] in
                let needed' = and_ [needed; not_ (and_ [pmatch; p'.permission])] in
                let permission' = and_ [p'.permission; not_ (and_ [pmatch; needed])] in
                let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(took, oa')])) oargs p'.oargs in
@@ -1715,6 +1715,14 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
        in
        let@ provable = provable in
+       let fail_unrepresentable () = 
+         let@ model = model () in
+         fail (fun ctxt ->
+             let msg = Int_unrepresentable 
+                         {value = arg_it; ict = act.ct; ctxt; model} in
+             {loc; msg}
+           )
+       in
        begin match ity with
        | Bool ->
           let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
@@ -1732,14 +1740,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        | _ ->
           begin match provable (t_ (representable_ (act.ct, arg_it))) with
           | `True -> return (rt_of_vt loc (Integer, arg_it))
-          | `False ->
-             let value = arg_it in
-             let ict = act.ct in
-             let@ model = model () in
-             fail (fun ctxt ->
-                 let msg = Int_unrepresentable {value; ict; ctxt; model} in
-                 {loc; msg}
-               )
+          | `False -> fail_unrepresentable ()
           end
        end
     | M_PEwrapI (act, asym) ->

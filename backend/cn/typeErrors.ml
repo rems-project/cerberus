@@ -119,6 +119,7 @@ type message =
   | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
   | No_quantified_constraints of {to_check: IT.t; ctxt: Context.t; model : Solver.model_with_q}
   | Generic of Pp.document
+  | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
 
 
 type type_error = {
@@ -373,6 +374,11 @@ let pp_message te =
   | Generic err ->
      let short = err in
      { short; descr = None; state = None }
+  | Generic_with_model {err; model; ctxt} ->
+     let short = err in
+     let explanation = Explain.explanation ctxt IT.SymSet.empty in
+     let state = Explain.state ctxt explanation model in
+     { short; descr = None; state = Some state }
 
 
 type t = type_error

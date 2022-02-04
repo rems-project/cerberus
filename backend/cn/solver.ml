@@ -48,7 +48,7 @@ let solver_params = [
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
-    ("smt.ematching", "true");
+    ("smt.ematching", "false");
   ]
 
 let rewriter_params = [
@@ -604,8 +604,8 @@ let make () : solver =
 
   let fancy = 
     Z3.Solver.mk_solver_s context "AUFLIA"
-    (* Z3.Solver.mk_solver context  *)
-    (*   (Some (Translate.symbol context "AUFLIA")) *)
+    (* Z3.Solver.mk_solver context None *)
+      (* (Some (Translate.symbol context "AUFLIA")) *)
   in
 
   { context; fancy }

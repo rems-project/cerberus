@@ -270,6 +270,8 @@ let rec simp struct_decls values equalities some_known_facts =
           IT (Lit (Bool true), bt)
        | IT (Lit (Bool true), _), _ ->
           b
+       | _, IT (Lit (Bool false), _) ->
+          not_ a
        | _ ->
           IT (Bool_op (Impl (a, b)), bt)
        end
@@ -301,6 +303,21 @@ let rec simp struct_decls values equalities some_known_facts =
          IT (Lit (Bool true), bt) 
        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
           bool_ (Z.equal z1 z2)
+       (* (cond ? z1 : z2) == z3 *)
+       | IT (Bool_op (ITE (cond, 
+                           IT (Lit (Z z1), _), 
+                           IT (Lit (Z z2), _))), _),
+         IT (Lit (Z z3), _)
+
+       | IT (Lit (Z z3), _),
+         IT (Bool_op (ITE (cond, 
+                           IT (Lit (Z z1), _), 
+                           IT (Lit (Z z2), _))), _) ->
+
+          aux (
+            and_ [impl_ (cond, bool_ (Z.equal z1 z3));
+                  impl_ (not_ cond, bool_ (Z.equal z2 z3))]
+            )
        | a, b
           when ITPairMap.mem (a,b) equalities ||
                  ITPairMap.mem (b,a) equalities 
