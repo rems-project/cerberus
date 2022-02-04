@@ -261,9 +261,11 @@ module ResourceInference = struct
       | (RER.Point req_p, RE.Point res_p) ->
         let simp t = Simplify.simp global.struct_decls all_lcs t in
         let pmatch = eq_ (req_p.pointer, res_p.pointer) in
-        let more_perm = impl_ (req_p.permission, res_p.permission) in
-        (* FIXME: simp of Impl isn't all that clever *)
-        (is_true (simp pmatch) && is_true (simp more_perm))
+        (is_true (simp pmatch))
+      | (RER.QPoint req_qp, RE.QPoint res_qp) ->
+        let simp t = Simplify.simp global.struct_decls all_lcs t in
+        let pmatch = eq_ (req_qp.pointer, res_qp.pointer) in
+        (is_true (simp pmatch))
       | _ -> false
       end
 
@@ -357,16 +359,20 @@ module ResourceInference = struct
 
     and qpoint_request loc failure (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
+      let@ is_ex = exact_match () in
+      let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
       let@ global = get_global () in
       let@ all_lcs = all_constraints () in
       let simp t = Simplify.simp global.struct_decls all_lcs t in
       let needed = requested.permission in
-      let@ (needed, C value, C init) =
-        map_and_fold_resources (fun re (needed, C value, C init) ->
+      debug 10 (lazy (item "base qpoint pointer" (IT.pp requested.pointer)));
+      let sub_resource_if = fun cond re (needed, C value, C init) ->
             let continue = (re, (needed, C value, C init)) in
-            if is_false needed then continue else
+            if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
+               debug 10 (lazy (item "current needed" (IT.pp needed)));
+               debug 10 (lazy (item "sub of Point:" (IT.pp p'.pointer)));
                let base = requested.pointer in
                let item_size = int_ (Memory.size_of_ctype requested.ct) in
                let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
@@ -384,6 +390,8 @@ module ResourceInference = struct
                let permission' = and_ [p'.permission; not_ (and_ [pre_match; IT.subst subst needed])] in
                Point {p' with permission = permission'}, (simp needed', C value, C init)
             | QPoint p' when Sctypes.equal requested.ct p'.ct ->
+               debug 10 (lazy (item "current needed" (IT.pp needed)));
+               debug 10 (lazy (item "sub of QPoint:" (IT.pp p'.pointer)));
                let p' = alpha_rename_qpoint requested.q p' in
                let pmatch = eq_ (requested.pointer, p'.pointer) in
                let took = and_ [pmatch; needed; p'.permission] in
@@ -394,8 +402,14 @@ module ResourceInference = struct
                QPoint {p' with permission = permission'}, (simp needed', C value, C init)
             | re ->
                continue
-          ) (needed, C [], C [])
       in
+      let@ (needed, C value, C init) =
+        map_and_fold_resources (sub_resource_if is_exact_re)
+          (needed, C [], C [])
+      in
+      let@ (needed, C value, C init) =
+        map_and_fold_resources (sub_resource_if (fun re -> not (is_exact_re re)))
+          (needed, C value, C init) in
       let@ provable = provable in
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with

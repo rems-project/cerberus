@@ -363,6 +363,10 @@ let rec simp struct_decls values equalities some_known_facts =
     | EQ (a, b) ->
        let a = aux a in
        let b = aux b in
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (eq_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else
        begin match a, b with
        | _ when IT.equal a b ->
          IT (Lit (Bool true), bt) 
@@ -387,6 +391,8 @@ let rec simp struct_decls values equalities some_known_facts =
        | IT (Pointer_op (PointerToIntegerCast a), _), 
          IT (Pointer_op (PointerToIntegerCast b), _) ->
           eq_ (a, b)
+       | IT (Pointer_op (PointerToIntegerCast a), _), b ->
+          eq_ (a, integerToPointerCast_ b)
        | _, _ ->
           eq_ (a, b)
        end
