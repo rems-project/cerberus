@@ -843,8 +843,9 @@ module InferenceEqs = struct
 
 let use_model_eqs = ref true
 
-let res_pointer res = match res with
-  | (RE.Point res_pt) -> Some (res_pt.ct, res_pt.pointer)
+let res_pointer_kind res = match res with
+  | (RE.Point res_pt) -> Some ((true, res_pt.ct), res_pt.pointer)
+  | (RE.QPoint res_qpt) -> Some ((false, res_qpt.ct), res_qpt.pointer)
   | _ -> None
 
 let div_groups cmp xs =
@@ -872,10 +873,11 @@ let add_eqs_for_infer ftyp =
   debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in
-  let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer r) in
+  let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
   let ptrs = List.filter_map (res_ptr_k true) reqs @
     (List.filter_map (res_ptr_k false) ress) in
-  let ptr_gps = div_groups_discard CT.compare ptrs in
+  let cmp2 = Lem_basic_classes.pairCompare Bool.compare CT.compare in
+  let ptr_gps = div_groups_discard cmp2 ptrs in
   let@ provable = provable in
   let rec loop ptr_gps =
     let@ global = get_global () in
