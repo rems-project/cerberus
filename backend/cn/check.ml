@@ -282,15 +282,16 @@ module ResourceInference = struct
         | IT (Lit (Sym nm2), _) -> nm2 = v_nm
         | _ -> false
       in
-      let rec f t = match t with
-        | IT (Bool_op (And xs), _) -> List.concat (List.map f xs)
-        | IT (Bool_op (Or xs), _) -> List.concat (List.map f xs)
-        | IT (Bool_op (Impl (x, y)), _) -> f y
+      let rec f pol t = match t with
+        | IT (Bool_op (And xs), _) -> List.concat (List.map (f pol) xs)
+        | IT (Bool_op (Or xs), _) -> List.concat (List.map (f pol) xs)
+        | IT (Bool_op (Impl (x, y)), _) -> f (not pol) x @ f pol y
         | IT (Bool_op (EQ (x, y)), _) ->
-          if is_i x then [y] else if is_i y then [x] else []
+          if pol && is_i x then [y] else if pol && is_i y then [x] else []
+        | IT (Bool_op (Not x), _) -> f (not pol) x
         | _ -> []
       in
-      let xs = f t in
+      let xs = f true t in
       List.sort_uniq IT.compare xs
 
     let rec point_request loc failure (requested : Resources.Requests.point) = 
