@@ -920,6 +920,9 @@ let unknown_eq_in_group simp ptr_gp = List.find_map (fun (p, req) -> if not req 
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
 let add_eqs_for_infer ftyp =
+
+  (* TODO: fix any 'fuel'-related things *)
+
   if not (! use_model_eqs) then return ()
   else
   begin
@@ -932,7 +935,9 @@ let add_eqs_for_infer ftyp =
   let cmp2 = Lem_basic_classes.pairCompare Bool.compare CT.compare in
   let ptr_gps = div_groups_discard cmp2 ptrs in
   let@ provable = provable in
-  let rec loop ptr_gps =
+  let rec loop fuel ptr_gps =
+    if fuel <= 10 then return () 
+    else
     let@ global = get_global () in
     let@ all_lcs = all_constraints () in
     let simp t = Simplify.simp global.struct_decls all_lcs t in
@@ -945,7 +950,7 @@ let add_eqs_for_infer ftyp =
       | `True ->
         debug 5 (lazy (item "adding equalities" (IT.pp (and_ poss_eqs))));
         let@ () = add_cs (List.map t_ poss_eqs) in
-        loop ptr_gps
+        loop (fuel - 1) ptr_gps
       | `False ->
         let (m, _) = Solver.model () in
         debug 7 (lazy (format [] ("eqs refuted, processing model")));
@@ -955,9 +960,9 @@ let add_eqs_for_infer ftyp =
         in
         let eval_eqs = List.map (List.map (fun (p, req) -> (eval_f p, (p, req)))) ptr_gps in
         let ptr_gps = List.concat (List.map (div_groups_discard Z.compare) eval_eqs) in
-        loop ptr_gps
+        loop (fuel - 1) ptr_gps
   in
-  let@ () = loop ptr_gps in
+  let@ () = loop 10 ptr_gps in
   debug 5 (lazy (format [] "finished equality discovery"));
   return ()
   end

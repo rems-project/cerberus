@@ -13,6 +13,7 @@ open LogicalPredicates
 
 type solver = { 
     context : Z3.context;
+    incremental : Z3.Solver.solver;
     fancy : Z3.Solver.solver;
   }
 type expr = Z3.Expr.expr
@@ -43,12 +44,12 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    ("smt.logic", "AUFLIA");
+    (* ("smt.logic", "AUFLIA"); *)
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
-    ("smt.ematching", "false");
+    ("smt.ematching", "true");
   ]
 
 let rewriter_params = [
@@ -57,6 +58,7 @@ let rewriter_params = [
 
 let model_params = [
     ("model", "true");
+    ("model.compact", "true");
     ("model.completion", "true");
     ("model_evaluator.completion", "true");
   ]
@@ -590,25 +592,36 @@ end
 
 
 
-let make () : solver = 
+let tactics context ts = 
+  match List.map (Z3.Tactic.mk_tactic context) ts with
+  | [] -> Z3.Tactic.skip context
+  | [t] -> t
+  | t1::t2::ts -> Z3.Tactic.and_then context t1 t2 ts
 
+let tactic context = 
+  tactics context [
+      "smt";
+    ]
+
+let make () : solver = 
   Z3.Memory.reset ();
 
   Translate.BT_Table.clear Translate.bt_table;
   Translate.IT_Table.clear Translate.it_table;
 
-
   List.iter (fun (c,v) -> Z3.set_global_param c v) params;
 
   let context = Z3.mk_context [] in
 
-  let fancy = 
-    Z3.Solver.mk_solver_s context "AUFLIA"
-    (* Z3.Solver.mk_solver context None *)
-      (* (Some (Translate.symbol context "AUFLIA")) *)
-  in
+  let params = Z3.Params.mk_params context in
+  Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 500;
 
-  { context; fancy }
+  let incremental = Z3.Solver.mk_simple_solver context in
+  Z3.Solver.set_parameters incremental params;
+
+  let fancy = Z3.Solver.mk_solver_t context (tactic context) in
+
+  { context; incremental; fancy }
 
 
 
@@ -616,17 +629,20 @@ let make () : solver =
 
 
 let push solver = 
-  Z3.Solver.push solver.fancy
+  (* do nothing to fancy solver, because that is reset for every query *)
+  Z3.Solver.push solver.incremental
 
 let pop solver =
+  (* do nothing to fancy solver, because that is reset for every query *)
   Translate.IT_Table.clear Translate.it_table;
-  Z3.Solver.pop solver.fancy 1
+  Z3.Solver.pop solver.incremental 1
 
 
 let add solver global lc = 
+  (* do nothing to fancy solver, because that is reset for every query *)
   match constr solver.context global lc with
   | None -> ()
-  | Some sc -> Z3.Solver.add solver.fancy [sc]
+  | Some sc -> Z3.Solver.add solver.incremental [sc]
 
 
 (* as similarly suggested by Robbert *)
@@ -661,29 +677,32 @@ let model () =
 
 
 let provable ~shortcut_false solver global assumptions lc = 
-  debug 5 (lazy (item "provable check" (LC.pp lc)));
+  let context = solver.context in
+  (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
   let it, oq = ReduceQuery.constr global assumptions lc in
-  debug 6 (lazy (item "reduced" (IT.pp it)));
-  (* print stdout (item "assumptions" (Pp.list LC.pp assumptions)); *)
+  (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
+  let rtrue () = model_state := No_model; `True in
+  let rfalse = function
+    | Some solver -> model_state := Model (context, solver, oq); `False
+    | None -> model_state := No_model; `False
+  in
   match shortcut it with
-  | `True -> 
-     model_state := No_model; 
-     `True
-  | `False _ when shortcut_false ->
-     model_state := No_model; 
-     `False
+  | `True -> rtrue ()
+  | `False _ when shortcut_false -> rfalse None
   | (`False it | `No_shortcut it) ->
-     let t = Translate.term solver.context global.struct_decls (not_ it) in
-     let res = time_f "Z3" (Z3.Solver.check solver.fancy) [t] in
-     match res with
-     | Z3.Solver.UNSATISFIABLE -> 
-        model_state := No_model; 
-        `True
-     | Z3.Solver.SATISFIABLE -> 
-        model_state := Model (solver.context, solver.fancy, oq); 
-        `False
-     | Z3.Solver.UNKNOWN -> 
-        failwith "SMT solver returned 'unknown'"
+     let t = Translate.term context global.struct_decls (not_ it) in
+     match Z3.Solver.check solver.incremental [t] with
+     | Z3.Solver.UNSATISFIABLE -> rtrue ()
+     | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
+     | Z3.Solver.UNKNOWN ->
+        Z3.Solver.reset solver.fancy;
+        let scs = t :: Z3.Solver.get_assertions solver.incremental in
+        let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
+        let res = time_f "Z3" (Z3.Solver.check solver.fancy) [] in
+        match res with
+        | Z3.Solver.UNSATISFIABLE -> rtrue ()
+        | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)
+        | Z3.Solver.UNKNOWN -> failwith "SMT solver returned 'unknown'"
 
 
 
