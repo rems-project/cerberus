@@ -231,6 +231,7 @@ let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m =
 module ResourceInference = struct 
 
   let reorder_points = ref true
+  let additional_sat_check = ref true
 
   module General = struct
 
@@ -446,6 +447,14 @@ module ResourceInference = struct
 
       if List.length k_ptrs == 0 then ()
       else debug 10 (lazy (item "needed after additional matches:" (IT.pp needed)));
+
+      let needed = if !additional_sat_check
+        then begin
+        match provable (forall_ (requested.q, BT.Integer) (not_ needed)) with
+          | `True -> (debug 10 (lazy (format [] "proved needed == false.")); bool_ false)
+          | _ -> (debug 10 (lazy (format [] "checked, needed is satisfiable.")); needed)
+        end
+        else needed in
 
       let@ (needed, C value, C init) =
         map_and_fold_resources (sub_resource_if

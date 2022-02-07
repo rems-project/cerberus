@@ -150,6 +150,7 @@ let main
       json 
       state_file 
       no_reorder_points
+      no_additional_sat_check
       no_model_eqs
       skip_consistency
   =
@@ -164,6 +165,7 @@ let main
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Check.ResourceInference.reorder_points := not no_reorder_points;
+  Check.ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
@@ -239,6 +241,10 @@ let no_reorder_points =
   let doc = "Deactivate 'reorder points' optimisation in resource inference." in
   Arg.(value & flag & info["no_reorder_points"] ~doc)
 
+let no_additional_sat_check =
+  let doc = "Deactivate 'additional sat check' in inference of q-points." in
+  Arg.(value & flag & info["no_additional_sat_check"] ~doc)
+
 let no_model_eqs =
   let doc = "Deactivate 'model based eqs' optimisation in resource inference spine judgement." in
   Arg.(value & flag & info["no_model_eqs"] ~doc)
@@ -256,6 +262,7 @@ let () =
       json $
       state_file $
       no_reorder_points $
+      no_additional_sat_check $
       no_model_eqs $
       skip_consistency
   in
