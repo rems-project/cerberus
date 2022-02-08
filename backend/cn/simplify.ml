@@ -102,6 +102,8 @@ let rec simp struct_decls values equalities some_known_facts =
   
   let lit it bt = 
     match it with
+    | Sym _ when BT.equal bt BT.Unit ->
+       unit_ 
     | Sym sym ->
        begin match SymMap.find_opt sym values with
        | Some it -> it
