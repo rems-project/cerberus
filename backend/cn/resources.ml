@@ -461,9 +461,9 @@ module RE = struct
   let derived_constraint resource = 
     let lc = match resource with
       | Point p -> 
-         (* bool_ true *)
-         impl_ (p.permission, 
-                ne_ (p.pointer, null_))
+         bool_ true
+         (* impl_ (p.permission,  *)
+         (*        ne_ (p.pointer, null_)) *)
       | _ ->
          bool_ true
     in

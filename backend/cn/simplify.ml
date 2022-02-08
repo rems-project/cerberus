@@ -511,7 +511,7 @@ let rec simp struct_decls values equalities some_known_facts =
     | MemberOffset (tag, member) ->
        IT (Pointer_op (MemberOffset (tag, member)), bt)
     | ArrayOffset (ct, t) ->
-       aux (mul_ (int_ (Memory.size_of_ctype ct), t))
+       IT (Pointer_op (ArrayOffset (ct, aux t)), bt)
     | CellPointer c ->
        IT (Pointer_op (CellPointer {
                            base = aux c.base;
