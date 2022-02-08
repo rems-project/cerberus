@@ -148,8 +148,8 @@ module Translate = struct
   (* let bt_symbol bt = 
    *   Z3.Symbol.mk_string context (bt_name bt) *)
 
-  let tuple_field_name i = 
-    "comp" ^ string_of_int i
+  let tuple_field_name bts i = 
+    bt_name (Tuple bts) ^ string_of_int i
   (* let tuple_field_symbol i = 
    *   Z3.Symbol.mk_string context (tuple_field_name i) *)
 
@@ -185,7 +185,7 @@ module Translate = struct
          Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
          let field_symbols = 
            mapi (fun i _ -> 
-               let sym = symbol (tuple_field_name i) in
+               let sym = symbol (tuple_field_name bts i) in
                Z3Symbol_Table.add z3sym_table sym (CompFunc {bts; i});
                sym
              ) bts 
