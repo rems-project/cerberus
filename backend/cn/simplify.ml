@@ -16,7 +16,7 @@ end
 module ITPairMap = Map.Make(ITPair)
 
 
-let z1 = z_ (Z.of_int 1)
+let z1 = z_ Z.one
 let z0 = z_ Z.zero
 
 let rec dest_int_addition ts it = match IT.term it with
@@ -67,7 +67,7 @@ let simp_int_comp a b =
         |> List.map (fun xs -> (fst (List.hd xs), List.fold_left Z.add Z.zero (List.map snd xs)))
         |> List.filter (fun t -> not (Z.equal (snd t) Z.zero))
     in
-    let mul_z t i = if Z.equal i (Z.of_int 1) then t
+    let mul_z t i = if Z.equal i Z.one then t
         else if IT.equal z1 t then z_ i else mul_ (t, z_ i) in
     let add_x t (x, i) = if Z.equal i Z.zero then t
       else if Z.gt i (Z.of_int 0) then
@@ -168,8 +168,12 @@ let rec simp struct_decls values equalities some_known_facts =
        begin match a, b with
        | _, IT (Lit (Z i2), _) when Z.equal i2 Z.zero ->
           int_ 0
-       | _, IT (Lit (Z i2), _) when Z.equal i2 (Z.of_int 1) ->
+       | IT (Lit (Z i1), _), _ when Z.equal i1 Z.zero ->
+          int_ 0
+       | _, IT (Lit (Z i2), _) when Z.equal i2 Z.one ->
           a
+       | IT (Lit (Z i1), _), _ when Z.equal i1 Z.one ->
+          b
        | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
           IT (Lit (Z (Z.mul i1 i2)), bt)
        | _ ->
@@ -183,7 +187,7 @@ let rec simp struct_decls values equalities some_known_facts =
           z_ (Z.div a b)
        | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
-       | _, IT (Lit (Z b), _) when Z.equal b (Z.of_int 1) -> 
+       | _, IT (Lit (Z b), _) when Z.equal b Z.one -> 
           a
        | IT (Arith_op (Mul (b', c)), _), _ when IT.equal b' b ->
           c
@@ -252,7 +256,7 @@ let rec simp struct_decls values equalities some_known_facts =
            when
              Z.gt z1 Z.zero &&
                Z.gt z2 Z.zero &&
-                 Z.equal z1 (Z.add z2 (Z.of_int 1)) ->
+                 Z.equal z1 (Z.add z2 Z.one) ->
          bool_ true
       | _, _ ->
          IT (Arith_op (LE (a, b)), bt)
