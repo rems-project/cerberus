@@ -424,35 +424,7 @@ module RE = struct
 
 
 
-
-
-  let array_index_to_pointer ~base ~item_ct ~index =
-    arrayShift_ (base, item_ct, index)
   
-  let array_offset_of_pointer ~base ~pointer = 
-    sub_ (pointerToIntegerCast_ pointer, 
-          pointerToIntegerCast_ base)
-  
-  let array_pointer_to_index ~base ~item_size ~pointer =
-    div_ (array_offset_of_pointer ~base ~pointer, 
-          item_size)
-
-  let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
-    let offset = array_offset_of_pointer ~base ~pointer:qpointer in
-    let index = array_pointer_to_index ~base ~item_size ~pointer:qpointer in
-    and_ [lePointer_ (base, qpointer);
-          eq_ (rem_ (offset, item_size), int_ 0);
-          le_ (from_index, index); lt_ (index, to_index)]  
-  
-   (* (\* check this *\)
-   * let array_condition ~base ~item_size ~length ~qpointer =
-   *   subarray_condition  ~base ~item_size 
-   *     ~from_index:(int_ 0) ~to_index:length ~qpointer
-   * 
-   * let array_permission ~base ~item_size ~length ~qpointer ~permission =
-   *   and_ [array_condition ~base ~item_size ~length ~qpointer; permission] *)
-
-
 
 
 

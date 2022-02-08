@@ -285,13 +285,6 @@ module WIT = struct
            | ArrayOffset (ct, t) ->
               let@ t = check loc ~context Integer t in
               return (Integer, ArrayOffset (ct, t))
-           | CellPointer c ->
-              let@ base = check loc ~context Loc c.base in
-              let@ step = check loc ~context Integer c.step in
-              let@ starti = check loc ~context Integer c.starti in
-              let@ endi = check loc ~context Integer c.endi in
-              let@ p = check loc ~context Loc c.p in
-              return (BT.Bool, CellPointer {base;step;starti;endi;p})
          in
          return (IT (Pointer_op pointer_op, bt))
       | CT_pred ct_pred ->

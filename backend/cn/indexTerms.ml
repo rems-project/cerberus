@@ -126,8 +126,6 @@ let pp =
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
           mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
-       | CellPointer c ->
-          mparens (c_app !^"cellPointer" [aux false c.base; aux false c.step; aux false c.starti; aux false c.endi; aux false c.p])
        end
     | CT_pred ct_pred -> 
        begin match ct_pred with
@@ -254,7 +252,6 @@ let rec free_vars : 'bt. 'bt term -> SymSet.t =
      | PointerToIntegerCast t -> free_vars t
      | MemberOffset (_, _) -> SymSet.empty
      | ArrayOffset (_, t) -> free_vars t
-     | CellPointer c -> free_vars_list [c.base; c.step; c.starti; c.endi; c.p]
      end
   | CT_pred ct_pred ->
      begin match ct_pred with
@@ -395,14 +392,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           MemberOffset (tag, member)
        | ArrayOffset (tag, t) ->
           ArrayOffset (tag, subst su t)
-       | CellPointer c ->
-          CellPointer {
-              base = subst su c.base;
-              step = subst su c.step;
-              starti = subst su c.starti;
-              endi = subst su c.endi;
-              p = subst su c.p;
-            }
      in
      IT (Pointer_op pointer_op, bt)
   | CT_pred ct_pred -> 
@@ -630,8 +619,6 @@ let memberOffset_ (tag, member) =
   IT (Pointer_op (MemberOffset (tag, member)), BT.Integer)
 let arrayOffset_ (ct, t) = 
   IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
-let cellPointer_ ~base ~step ~starti ~endi ~p =
-  IT (Pointer_op (CellPointer {base;step;starti;endi;p}), BT.Bool)
 
 let isIntegerToPointerCast = function
   | IT (Pointer_op (IntegerToPointerCast _), _) -> true
@@ -645,6 +632,32 @@ let arrayShift_ (t1, ct, t2) =
     (add_ (pointerToIntegerCast_ t1, arrayOffset_ (ct, t2)))
 
 
+
+
+
+
+let array_index_to_pointer ~base ~item_ct ~index =
+  arrayShift_ (base, item_ct, index)
+
+let array_offset_of_pointer ~base ~pointer = 
+  sub_ (pointerToIntegerCast_ pointer, 
+        pointerToIntegerCast_ base)
+
+let array_pointer_to_index ~base ~item_size ~pointer =
+  div_ (array_offset_of_pointer ~base ~pointer, 
+        item_size)
+
+let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
+  let offset = array_offset_of_pointer ~base ~pointer:qpointer in
+  let index = array_pointer_to_index ~base ~item_size ~pointer:qpointer in
+  and_ [lePointer_ (base, qpointer);
+        eq_ (rem_ (offset, item_size), int_ 0);
+        le_ (from_index, index); lt_ (index, to_index)]  
+
+
+let cellPointer_ ~base ~step ~starti ~endi ~p =
+  subarray_condition ~base ~item_size:step 
+    ~from_index:starti ~to_index:endi ~qpointer:p
 
 
 

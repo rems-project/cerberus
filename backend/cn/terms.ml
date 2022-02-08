@@ -54,7 +54,7 @@ and 'bt pointer_op =
   | PointerToIntegerCast of 'bt term
   | MemberOffset of BaseTypes.tag * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
-  | CellPointer of {base : 'bt term; step: 'bt term; starti: 'bt term; endi: 'bt term; p: 'bt term}
+
 
 and 'bt list_op = 
   | Nil

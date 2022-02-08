@@ -398,10 +398,6 @@ module Translate = struct
             term (int_ (Option.get (Memory.member_offset decl member)))
          | ArrayOffset (ct, t) -> 
             term (mul_ (int_ (Memory.size_of_ctype ct), t))
-         | CellPointer {base;step;starti;endi;p} ->
-            term 
-              (Resources.RE.subarray_condition ~base ~item_size:step 
-                 ~from_index:starti ~to_index:endi ~qpointer:p)
          end
       | List_op t -> 
          Debug_ocaml.error "todo: SMT mapping for list operations"

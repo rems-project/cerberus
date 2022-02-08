@@ -511,15 +511,11 @@ let rec simp struct_decls values equalities some_known_facts =
     | MemberOffset (tag, member) ->
        IT (Pointer_op (MemberOffset (tag, member)), bt)
     | ArrayOffset (ct, t) ->
-       IT (Pointer_op (ArrayOffset (ct, aux t)), bt)
-    | CellPointer c ->
-       IT (Pointer_op (CellPointer {
-                           base = aux c.base;
-                           step = aux c.step;
-                           starti = aux c.starti;
-                           endi = aux c.endi;
-                           p = aux c.p;
-             }), bt)
+       let t = aux t in
+       begin match is_z t with
+       | Some z when Z.equal Z.zero z -> int_ 0
+       | _ -> IT (Pointer_op (ArrayOffset (ct, t)), bt)
+       end
   in
   
   let ct_pred it bt = 
