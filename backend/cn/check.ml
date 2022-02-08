@@ -703,13 +703,12 @@ module ResourceInference = struct
       let layout = SymMap.find tag global.struct_decls in
       let@ (values, inits) = 
         ListM.fold_leftM (fun (values, inits) {offset; size; member_or_padding} ->
-            let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset)) in
             match member_or_padding with
             | Some (member, sct) ->
                let@ point = 
                  point_request loc failure {
                    ct = sct;
-                   pointer = member_p;
+                   pointer = memberShift_ (pointer_t, tag, member);
                    value = BT.of_sct sct;
                    init = BT.Bool;
                    permission = permission_t;
@@ -722,7 +721,7 @@ module ResourceInference = struct
                    let@ _ = 
                      point_request loc failure {
                          ct = integer_ct Char;
-                         pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ member_p, int_ i));
+                         pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
                          permission = permission_t;
                          value = BT.Integer;
                          init = BT.Bool;
@@ -787,13 +786,12 @@ module ResourceInference = struct
       let lrt = 
         let open Memory in
         List.fold_right (fun {offset; size; member_or_padding} lrt ->
-            let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset)) in
             match member_or_padding with
             | Some (member, sct) ->
                let resource = 
                  Point {
                      ct = sct;
-                     pointer = member_p;
+                     pointer = memberShift_ (pointer_t, tag, member);
                      permission = permission_t;
                      value = member_ ~member_bt:(BT.of_sct sct) (tag, point.value, member);
                      init = point.init
@@ -804,12 +802,11 @@ module ResourceInference = struct
             | None ->
                let rec bytes i =
                  if i = size then LRT.I else
-                   let member_p = integerToPointerCast_ (add_ (pointerToIntegerCast_ member_p, int_ i)) in
                    let padding_s, padding_t = IT.fresh BT.Integer in
                    let resource = 
                      Point {
                          ct = integer_ct Char;
-                         pointer = member_p;
+                         pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
                          permission = permission_t;
                          value = padding_t;
                          init = bool_ false
@@ -1670,6 +1667,9 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
     | M_PEmember_shift (asym, tag, member) ->
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
+       let@ layout = get_struct_decl loc tag in
+       let@ _member_bt = get_member_type loc tag member layout in
+       let it = it_of_arg arg in
        let@ provable = provable in
        let@ found =
          map_and_fold_resources (fun re found ->
@@ -1678,7 +1678,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
                 (re, found)
              | false, Point {ct = Struct tag'; pointer; permission; _} 
                   when Sym.equal tag tag' ->
-                begin match provable (t_ (and_ [eq__ pointer (it_of_arg arg);
+                begin match provable (t_ (and_ [eq__ pointer it;
                                                 permission])) with
                 | `True -> (re, true)
                 | `False -> (re, found)
@@ -1691,17 +1691,11 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          if found then
            (* TODO: this is unecessary: we could have unfolded the
               struct in the loop above *)
-           RI.Special.unfold_struct loc MemberShift tag (it_of_arg arg) (bool_ true) 
+           RI.Special.unfold_struct loc MemberShift tag it (bool_ true) 
          else 
            return LRT.I
        in
-       let@ layout = get_struct_decl loc tag in
-       let@ _member_bt = get_member_type loc tag member layout in
-       let@ offset = match Memory.member_offset layout member with
-         | Some offset -> return offset
-         | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
-       in
-       let vt = (Loc, integerToPointerCast_ (add_ (pointerToIntegerCast_ (it_of_arg arg), int_ offset))) in
+       let vt = (Loc, memberShift_ (it, tag, member)) in
        return (RT.concat (rt_of_vt loc vt) lrt)
     | M_PEnot asym ->
        let@ arg = arg_of_asym asym in
