@@ -27,6 +27,7 @@ val add_ls : (Sym.t * LogicalSorts.t) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
 val add_r : Context.where option -> Resources.RE.t -> (LogicalConstraints.t list, 'e) m
+val add_rs : Context.where option -> Resources.RE.t list -> (LogicalConstraints.t list, 'e) m
 val map_and_fold_resources : 
   (Resources.RE.t -> 'acc -> Resources.RE.t * 'acc) -> 
   'acc -> ('acc, 'e) m

@@ -79,7 +79,7 @@ let simp_int_comp a b =
 let simp_comp_if_int a b = if BaseTypes.equal (IT.basetype a) BaseTypes.Integer
     then simp_int_comp a b else (a, b)
 
-let rec simp struct_decls values equalities some_known_facts =
+let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_facts =
 
   let flatten_and = function
     | IT (Bool_op (And fs), _) -> fs
@@ -513,12 +513,14 @@ let rec simp struct_decls values equalities some_known_facts =
           IT (Pointer_op (PointerToIntegerCast a), bt)
        end
     | MemberOffset (tag, member) ->
-       IT (Pointer_op (MemberOffset (tag, member)), bt)
+       let layout = SymMap.find tag struct_decls in
+       int_ (Option.get (Memory.member_offset layout member))
     | ArrayOffset (ct, t) ->
        let t = aux t in
        begin match is_z t with
        | Some z when Z.equal Z.zero z -> int_ 0
-       | _ -> IT (Pointer_op (ArrayOffset (ct, t)), bt)
+       | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
+          (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
        end
   in
   

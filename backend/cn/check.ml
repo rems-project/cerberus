@@ -113,6 +113,7 @@ let get_fun_decl loc fsym =
 (*** pattern matching *********************************************************)
 
 
+(* pattern-matches and binds *)
 let pattern_match = 
 
   let rec aux pat : (IT.t, type_error) m = 
@@ -376,8 +377,7 @@ module ResourceInference = struct
               let@ model = model () in
               fail (failure model)
          in
-         let@ lcs = add_r (Some (Loc loc)) resource in
-         let@ () = add_cs lcs in
+         let@ _lcs = add_r (Some (Loc loc)) resource in
          point_request loc failure requested
       end
 
@@ -783,9 +783,9 @@ module ResourceInference = struct
           (unfold_struct_request tag pointer_t permission_t)
       in
       let layout = SymMap.find tag global.struct_decls in
-      let lrt = 
+      let@ resources = 
         let open Memory in
-        List.fold_right (fun {offset; size; member_or_padding} lrt ->
+        ListM.concat_mapM (fun {offset; size; member_or_padding} ->
             match member_or_padding with
             | Some (member, sct) ->
                let resource = 
@@ -797,13 +797,13 @@ module ResourceInference = struct
                      init = point.init
                    } 
                in
-               let lrt = LRT.Resource (resource, (loc, None), lrt) in
-               lrt
+               return [resource]
             | None ->
                let rec bytes i =
-                 if i = size then LRT.I else
+                 if i = size then return [] else
                    let padding_s, padding_t = IT.fresh BT.Integer in
-                   let resource = 
+                   let@ () = add_l padding_s (IT.bt padding_t) in
+                   let byte_resource = 
                      Point {
                          ct = integer_ct Char;
                          pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
@@ -812,15 +812,13 @@ module ResourceInference = struct
                          init = bool_ false
                        } 
                    in
-                   LRT.Logical ((padding_s, IT.bt padding_t), (loc, None),
-                   LRT.Resource (resource, (loc, None),
-                   bytes (i + 1)))
+                   let@ byte_resources = bytes (i + 1) in
+                   return (byte_resource :: byte_resources)
                in
-               let lrt = LRT.concat (bytes 0) lrt in
-               lrt
-          ) layout LRT.I
+               bytes 0
+          ) layout
       in
-      return lrt
+      return resources
 
     let resource_request loc failure (request : RER.t) : (RE.t, type_error) m = 
       match request with
@@ -1591,10 +1589,8 @@ let infer_array_shift loc asym1 ct asym2 =
        RI.Special.unfold_array loc ArrayShift ct (it_of_arg arg1) 
          length (bool_ true) 
      in
-     return (
-       RT.concat (rt_of_vt loc (BT.Loc, v)) 
-       (LRT.Resource (unfolded_array, (loc, None), LRT.I))
-     )
+     let@ _cs = add_r (Some (Loc loc)) unfolded_array in
+     return (rt_of_vt loc (BT.Loc, v))
 
 
 let wrapI ity arg =
@@ -1607,6 +1603,7 @@ let wrapI ity arg =
 
 
 
+(* could potentially return a vt instead of an RT.t *)
 let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m = 
   let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
@@ -1687,16 +1684,15 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
                 (re, found)
            ) false
        in
-       let@ lrt = 
-         if found then
-           (* TODO: this is unecessary: we could have unfolded the
-              struct in the loop above *)
-           RI.Special.unfold_struct loc MemberShift tag it (bool_ true) 
-         else 
-           return LRT.I
+       (* TODO: this is unecessary: we could have unfolded the struct
+          in the loop above *)
+       let@ resources = 
+         if found then RI.Special.unfold_struct loc MemberShift tag it (bool_ true) 
+         else return []
        in
+       let@ _cs = add_rs (Some (Loc loc)) resources in
        let vt = (Loc, memberShift_ (it, tag, member)) in
-       return (RT.concat (rt_of_vt loc vt) lrt)
+       return (rt_of_vt loc vt)
     | M_PEnot asym ->
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Bool arg.bt in
@@ -2283,10 +2279,12 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           return rt
        | Unpack ->
           let situation = TypeErrors.Unpack (TPU_Struct tag) in
-          let@ lrt = 
+          let@ resources = 
             RI.Special.unfold_struct loc situation tag 
               (it_of_arg pointer_arg) (bool_ true) 
           in
+          let resources_infos = List.map (fun r -> (r, (loc, None))) resources in
+          let lrt = LRT.mResources resources_infos LRT.I in
           let rt = RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt) in
           return rt
 

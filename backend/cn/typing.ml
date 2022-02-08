@@ -154,6 +154,14 @@ let add_r oloc r =
   let@ () = set s in
   return lcs
 
+let rec add_rs oloc = function
+  | [] -> return []
+  | r :: rs -> 
+     let@ cs = add_r oloc r in
+     let@ cs' = add_rs oloc rs in
+     return (cs @ cs')
+
+
 let map_and_fold_resources f acc =
   let@ s = get () in
   let (s, acc) = Context.map_and_fold_resources f s acc in

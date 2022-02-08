@@ -643,8 +643,8 @@ let add solver global lc =
 
 
 (* as similarly suggested by Robbert *)
-let shortcut it = 
-  let it = Simplify.simp [] [] it in
+let shortcut struct_decls it = 
+  let it = Simplify.simp struct_decls [] it in
   match it with
   | IT (Lit (Bool true), _) -> `True
   | IT (Lit (Bool false), _) -> `False it
@@ -683,7 +683,7 @@ let provable ~shortcut_false solver global assumptions lc =
     | Some solver -> model_state := Model (context, solver, oq); `False
     | None -> model_state := No_model; `False
   in
-  match shortcut it with
+  match shortcut global.struct_decls it with
   | `True -> rtrue ()
   | `False _ when shortcut_false -> rfalse None
   | (`False it | `No_shortcut it) ->
