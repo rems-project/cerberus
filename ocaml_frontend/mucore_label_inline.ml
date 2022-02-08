@@ -55,8 +55,11 @@ let rec ib_texpr label e =
        let arguments = (Lem_list.list_combine label_arg_syms args) in
        let (M_TExpr(_, annots2, e_)) = 
          (List.fold_right (fun (spec_arg, (asym : 'TY asym)) body ->
-              let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
-              M_TExpr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
+              if Symbol.symbolEquality asym.sym spec_arg then
+                body
+              else
+                let pe = M_Pexpr (asym.loc, asym.annot, asym.type_annot, M_PEsym asym.sym) in
+                M_TExpr(loc, [], (M_Elet (M_Symbol spec_arg, pe, body)))
             ) arguments label_body)
        in
        (* this combines annotations *)
