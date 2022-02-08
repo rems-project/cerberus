@@ -69,24 +69,18 @@ module PageAlloc = struct
     let hyp_page_size = int_ (Memory.size_of_struct hyp_page_tag)
 
     let vmemmap_offset_of_pointer ~vmemmap_pointer pointer = 
-      pointerToIntegerCast_ pointer %-
-        pointerToIntegerCast_ vmemmap_pointer
+      IT.array_offset_of_pointer ~base:vmemmap_pointer ~pointer
 
     let vmemmap_index_of_pointer ~vmemmap_pointer pointer = 
-      let offset = vmemmap_offset_of_pointer ~vmemmap_pointer pointer in
-      offset %/ hyp_page_size
+      array_pointer_to_index ~base:vmemmap_pointer ~item_size:hyp_page_size
+        ~pointer
 
     let vmemmap_good_pointer ~vmemmap_pointer pointer range_start range_end = 
       cellPointer_ ~base:vmemmap_pointer ~step:hyp_page_size
         ~starti:(range_start %/ z_ pPAGE_SIZE)
         ~endi:(range_end %/ z_ pPAGE_SIZE)
         ~p:pointer
-      (* let offset = vmemmap_offset_of_pointer ~vmemmap_pointer pointer in
-       * let index = offset %/ hyp_page_size in
-       * let phys = index %* (z_ pPAGE_SIZE) in
-       * and_ [ lePointer_ (vmemmap_pointer, pointer);
-       *        eq_ (rem_ (offset, hyp_page_size), int_ 0);
-       *        range_start %<= phys; phys %< range_end; ] *)
+
 
     let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end permission =
       let range_start_i = range_start %/ (z_ pPAGE_SIZE) in
