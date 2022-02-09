@@ -12,9 +12,10 @@ val add : solver -> Global.t -> LogicalConstraints.t -> unit
 
 val provable : 
   shortcut_false:bool -> 
-  solver -> 
-  Global.t -> 
-  LogicalConstraints.t list -> 
+  solver:solver -> 
+  global:Global.t -> 
+  assumptions:LogicalConstraints.t list -> 
+  pointer_facts:IndexTerms.t list ->
   LogicalConstraints.t -> 
   [> `True | `False ]
 

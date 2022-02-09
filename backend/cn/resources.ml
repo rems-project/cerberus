@@ -429,33 +429,28 @@ module RE = struct
 
 
 
-  (* assumption: resource is owned *)
-  let derived_constraint resource = 
-    let lc = match resource with
-      | Point p -> 
-         bool_ true
-         (* impl_ (p.permission,  *)
-         (*        ne_ (p.pointer, null_)) *)
-      | _ ->
-         bool_ true
-    in
-    LC.t_ lc
+  (* assumption: the resource is owned *)
+  let derived_lc1 = function
+    | Point p -> 
+       []
+    (* impl_ (p.permission,  *)
+    (*        ne_ (p.pointer, null_)) *)
+    | _ -> []
   
   
-  (* assumption: resource owned at the same time as resources' *)
+  (* assumption: both resources are owned at the same *)
   (* todo, depending on how much we need *)
-  let derived_constraints resource resource' =
-    (* let open IT in *)
+  let derived_lc2 resource resource' =
     match resource, resource' with
     | Point p, Point p' -> 
-       LC.T (impl_ (
+       [impl_ (
             and_ [p.permission; p'.permission],
             ne_ (p.pointer, p'.pointer)
           )
-         )
+       ]
     | Point p, QPoint qp
     | QPoint qp, Point p ->
-       LC.T (bool_ true)
+       []
        (* (\* copying and adapting code from point_request logic *\) *)
        (* let base = qp.pointer in *)
        (* let item_size = int_ (Memory.size_of_ctype qp.ct) in *)
@@ -470,15 +465,22 @@ module RE = struct
        (* LC.T (not_ impossible_match) *)
     | QPoint qp, QPoint qp' ->
        (* todo: this requires all-quantified constraints *)
-       LC.T (bool_ true)
+       []
     | (Predicate _ | QPredicate _), _
     | _, (Predicate _ | QPredicate _) ->
        (* we don't know anything until we unpack: the resource could
           be "ownership-empty" *)
-       LC.T (bool_ true)
+       []
 
 
-
+  let pointer_facts =
+    let rec aux acc = function
+      | [] -> acc
+      | r :: rs ->
+         let acc = derived_lc1 r @ (List.concat_map (derived_lc2 r) rs) in 
+         aux acc rs
+    in
+    fun resources -> aux [] resources
 
 
 

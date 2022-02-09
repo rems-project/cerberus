@@ -94,8 +94,10 @@ let all_resources () =
 let provable =
   let@ s = get () in
   let@ solver = solver () in
+  let pointer_facts = Resources.RE.pointer_facts s.resources in
   let f ?(shortcut_false=false) lc = 
-    Solver.provable ~shortcut_false solver s.global s.constraints lc 
+    Solver.provable ~shortcut_false ~solver ~global:s.global 
+      ~assumptions:s.constraints ~pointer_facts lc 
   in
   return f
 
@@ -150,9 +152,9 @@ let rec add_cs = function
 let add_r oloc r = 
   let@ s = get () in
   let r = RE.simp s.global.struct_decls s.constraints r in
-  let (s, lcs) = Context.add_r oloc r s in
+  let s = Context.add_r oloc r s in
   let@ () = set s in
-  return lcs
+  return []
 
 let rec add_rs oloc = function
   | [] -> return []

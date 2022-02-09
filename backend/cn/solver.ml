@@ -673,8 +673,9 @@ let model () =
      ((context, model), oq)
 
 
-let provable ~shortcut_false solver global assumptions lc = 
+let provable ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc = 
   let context = solver.context in
+  let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
   let it, oq = ReduceQuery.constr global assumptions lc in
   (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
@@ -683,17 +684,18 @@ let provable ~shortcut_false solver global assumptions lc =
     | Some solver -> model_state := Model (context, solver, oq); `False
     | None -> model_state := No_model; `False
   in
-  match shortcut global.struct_decls it with
+  match shortcut structs it with
   | `True -> rtrue ()
   | `False _ when shortcut_false -> rfalse None
   | (`False it | `No_shortcut it) ->
-     let t = Translate.term context global.struct_decls (not_ it) in
-     match Z3.Solver.check solver.incremental [t] with
+     let t = Translate.term context structs (not_ it) in
+     let pointer_facts = List.map (Translate.term context structs) pointer_facts in
+     match Z3.Solver.check solver.incremental (t :: pointer_facts) with
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
      | Z3.Solver.UNKNOWN ->
         Z3.Solver.reset solver.fancy;
-        let scs = t :: Z3.Solver.get_assertions solver.incremental in
+        let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
         let res = time_f "Z3" (Z3.Solver.check solver.fancy) [] in
         match res with

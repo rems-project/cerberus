@@ -139,6 +139,9 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
           a
        | IT (Lit (Z z), _), a when Z.equal z Z.zero ->
           a
+       | IT (Arith_op (Add (c, IT (Lit (Z i1), _))), _), 
+         IT (Lit (Z i2), _) ->
+          add_ (c, z_ (Z.add i1 i2))
        | _, _ ->
           IT (Arith_op (Add (a, b)), bt)
        end
