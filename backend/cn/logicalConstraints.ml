@@ -134,7 +134,7 @@ let forall_ (s,bt) it = Forall ((s, bt), it)
 
 
 
-let is_sym_lhs_equality = function 
+let is_sym_lhs_equality = function
   | T t ->
       begin match IT.is_eq t with
       | Some (lhs, rhs) ->
