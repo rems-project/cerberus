@@ -14,6 +14,8 @@ val run : Context.t -> ('a, 'e) m -> ('a, 'e) Result.t
 val print_with_ctxt : (Context.t -> unit) -> (unit, 'e) m
 val get_global : unit -> (Global.t, 'e) m
 val all_constraints : unit -> (LogicalConstraints.t list, 'e) m
+val simp_constraints : unit ->
+    ((IndexTerms.t IndexTerms.SymMap.t * LogicalConstraints.t list), 'e) m
 val all_resources : unit -> (Resources.RE.t list, 'e) m
 val provable : (?shortcut_false:bool -> LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m

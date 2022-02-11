@@ -258,8 +258,8 @@ module ResourceInference = struct
 
     let exact_ptr_match () =
       let@ global = get_global () in
-      let@ all_lcs = all_constraints () in
-      let simp t = Simplify.simp global.struct_decls all_lcs t in
+      let@ simp_lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls simp_lcs t in
       return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
 
     let exact_match () =
@@ -302,6 +302,8 @@ module ResourceInference = struct
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
       let@ global = get_global () in
+      let@ simp_lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init) ->
             let continue = (re, (needed, value, init)) in
@@ -310,7 +312,7 @@ module ResourceInference = struct
             | Point p' when Sctypes.equal requested.ct p'.ct ->
                debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
                let pmatch = eq_ (requested.pointer, p'.pointer) in
-               let took = and_ [pmatch; p'.permission; needed] in
+               let took = simp (and_ [pmatch; p'.permission; needed]) in
                begin match provable (LC.T took) with
                | `True ->
                   Point {p' with permission = bool_ false}, 
@@ -382,8 +384,8 @@ module ResourceInference = struct
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
       let@ global = get_global () in
-      let@ all_lcs = all_constraints () in
-      let simp t = Simplify.simp global.struct_decls all_lcs t in
+      let@ simp_lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in
       let sub_resource_if = fun cond re (needed, C value, C init) ->
             let continue = (re, (needed, C value, C init)) in
@@ -496,7 +498,7 @@ module ResourceInference = struct
       debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
       let@ provable = provable in
       let@ global = get_global () in
-      let@ all_lcs = all_constraints () in
+      let@ simp_lcs = simp_constraints () in
       let needed = requested.permission in 
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
@@ -562,8 +564,8 @@ module ResourceInference = struct
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let@ provable = provable in
       let@ global = get_global () in
-      let@ all_lcs = all_constraints () in
-      let simp it = Simplify.simp global.struct_decls all_lcs it in
+      let@ simp_lcs = simp_constraints () in
+      let simp it = Simplify.simp global.struct_decls simp_lcs it in
       let needed = requested.permission in
       let@ (needed, oargs) =
         map_and_fold_resources (fun re (needed, oargs) ->
@@ -946,8 +948,8 @@ let add_eqs_for_infer ftyp =
     if fuel <= 10 then return () 
     else
     let@ global = get_global () in
-    let@ all_lcs = all_constraints () in
-    let simp t = Simplify.simp global.struct_decls all_lcs t in
+    let@ simp_lcs = simp_constraints () in
+    let simp t = Simplify.simp global.struct_decls simp_lcs t in
     let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
     debug 7 (lazy (format [] ("investigating " ^
         Int.to_string (List.length poss_eqs) ^ " possible eqs")));

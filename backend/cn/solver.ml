@@ -460,7 +460,7 @@ module Translate = struct
       (*    end *)
       | Let ((s, bound), body) ->
          term 
-           (Simplify.simp struct_decls [] 
+           (Simplify.simp struct_decls (SymMap.empty, [])
               (IT.subst (IT.make_subst [(s, bound)]) body))
 
          (* let body = IT.subst (IT.make_subst [(s, bound)]) body in
@@ -644,7 +644,7 @@ let add solver global lc =
 
 (* as similarly suggested by Robbert *)
 let shortcut struct_decls it = 
-  let it = Simplify.simp struct_decls [] it in
+  let it = Simplify.simp struct_decls (SymMap.empty, []) it in
   match it with
   | IT (Lit (Bool true), _) -> `True
   | IT (Lit (Bool false), _) -> `False it
@@ -676,9 +676,9 @@ let model () =
 let provable ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc = 
   let context = solver.context in
   let structs = global.struct_decls in
-  (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
+  debug 5 (lazy (item "provable check" (LC.pp lc)));
   let it, oq = ReduceQuery.constr global assumptions lc in
-  (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
+  debug 6 (lazy (item "reduced" (IT.pp it)));
   let rtrue () = model_state := No_model; `True in
   let rfalse = function
     | Some solver -> model_state := Model (context, solver, oq); `False

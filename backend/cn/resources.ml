@@ -20,7 +20,7 @@ module type Output = sig
   val free_vars_list : t list -> SymSet.t
   val simp : ?some_known_facts:IT.t list ->
              Memory.struct_decls ->
-             LC.t list ->
+             (IT.t SymMap.t * LC.t list) ->
              t ->
              t
 end

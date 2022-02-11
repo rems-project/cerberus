@@ -504,6 +504,10 @@ let is_false = function
   | IT (Lit (Bool false), _) -> true
   | _ -> false
 
+let is_eq = function
+  | (IT (Bool_op (EQ (lhs, rhs)), _)) -> Some (lhs, rhs)
+  | _ -> None
+
 
 (* shorthands *)
 

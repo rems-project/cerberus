@@ -87,6 +87,10 @@ let all_constraints () =
   let@ s = get () in
   return s.constraints
 
+let simp_constraints () =
+  let@ s = get () in
+  return (s.sym_eqs, s.constraints)
+
 let all_resources () = 
   let@ s = get () in
   return s.resources
@@ -137,7 +141,8 @@ let add_ls lvars =
 let add_c lc = 
   let@ s = get () in
   let@ solver = solver () in
-  let lcs = Simplify.simp_lc_flatten s.global.struct_decls s.constraints lc in
+  let@ scs = simp_constraints () in
+  let lcs = Simplify.simp_lc_flatten s.global.struct_decls scs lc in
   let s = List.fold_right Context.add_c lcs s in
   let () = List.iter (Solver.add solver s.global) lcs in
   set s
@@ -151,7 +156,8 @@ let rec add_cs = function
 
 let add_r oloc r = 
   let@ s = get () in
-  let r = RE.simp s.global.struct_decls s.constraints r in
+  let@ scs = simp_constraints () in
+  let r = RE.simp s.global.struct_decls scs r in
   let s = Context.add_r oloc r s in
   let@ () = set s in
   return []

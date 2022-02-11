@@ -30,6 +30,7 @@ type t = {
     logical : LS.t SymMap.t;
     resources : RE.t list;
     constraints : LC.t list;
+    sym_eqs : IT.t SymMap.t;
     global : Global.t;
   }
 
@@ -39,6 +40,7 @@ let empty global = {
     logical = SymMap.empty;
     resources = [];
     constraints = [];
+    sym_eqs = SymMap.empty;
     global = global;
   }
 
@@ -59,8 +61,10 @@ let pp (ctxt : t) =
   item "resources" 
     (Pp.list RE.pp ctxt.resources) ^/^
   item "constraints" 
-    (Pp.list LC.pp ctxt.constraints)
-
+    (Pp.list LC.pp ctxt.constraints) ^/^
+  item "sym_eq constraints"
+    (Pp.list (fun (sym, rhs) -> IT.pp (IT.eq_ (IT.sym_ (sym, IT.basetype rhs), rhs)))
+        (SymMap.bindings ctxt.sym_eqs))
 
 let bound_a sym ctxt = 
   SymMap.mem sym ctxt.computational
@@ -84,12 +88,15 @@ let add_l lname ls (ctxt : t) =
 let add_ls lvars ctxt = 
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
-let add_c c (ctxt : t) = 
-  { ctxt with constraints = c :: ctxt.constraints }
-
+let rec add_c c (ctxt : t) = match LC.is_sym_lhs_equality c with
+  | None -> { ctxt with constraints = c :: ctxt.constraints }
+  | Some (sym, rhs) -> begin match SymMap.find_opt sym ctxt.sym_eqs with
+      | None -> { ctxt with sym_eqs = SymMap.add sym rhs ctxt.sym_eqs }
+      | Some rhs' -> add_c (LC.t_ (IT.eq_ (rhs', rhs))) ctxt
+      end
 
 let add_r owhere r (ctxt : t) = 
-  match RE.simp_or_empty ctxt.global.struct_decls ctxt.constraints r with
+  match RE.simp_or_empty ctxt.global.struct_decls (ctxt.sym_eqs, ctxt.constraints) r with
   | None -> ctxt
   | Some re -> {ctxt with resources = r :: ctxt.resources}
 
@@ -99,7 +106,7 @@ let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc)
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
         let (re, acc) = f re acc in
-        match RE.simp_or_empty ctxt.global.struct_decls ctxt.constraints re with
+        match RE.simp_or_empty ctxt.global.struct_decls (ctxt.sym_eqs, ctxt.constraints) re with
         | Some re -> 
            (re :: resources, acc)
         | None -> 

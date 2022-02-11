@@ -95,7 +95,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
   in
 
 
-  let aux it = 
+  let aux it =
     simp struct_decls values equalities some_known_facts it in
   let aux2 some_known_facts it = 
     simp struct_decls values equalities some_known_facts it in
@@ -632,21 +632,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
 
 let simp ?(some_known_facts = []) struct_decls lcs it = 
 
-  let values = 
-    List.fold_right (fun c values ->
-        match c with
-        | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt), 
-                                 it')), _)) ->
-             (* when Option.is_some (is_lit it') -> *)
-             SymMap.add sym it' values
-        (* | LC.T (IT (Bool_op (EQ (IT (Lit (Sym sym), bt),  *)
-        (*                          (IT (Map_op (Def _),_) as it'))), _)) -> *)
-        (*      SymMap.add sym it' values *)
-        | _ ->
-           values
-      ) lcs SymMap.empty
-  in
-  
+  let (values, gen_lcs) = lcs in
+
   let equalities = 
     List.fold_left (fun equalities c ->
         match c with
@@ -661,7 +648,7 @@ let simp ?(some_known_facts = []) struct_decls lcs it =
            end
         | _ -> 
            equalities
-      ) ITPairMap.empty lcs
+      ) ITPairMap.empty gen_lcs
   in
 
   let result = simp struct_decls values equalities some_known_facts it in

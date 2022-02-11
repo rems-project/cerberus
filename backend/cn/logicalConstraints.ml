@@ -134,13 +134,22 @@ let forall_ (s,bt) it = Forall ((s, bt), it)
 
 
 
-let is_sym_equality = function
-  | T (IT (Bool_op (EQ (a, b)), _)) ->
-     begin match IT.is_sym a, IT.is_sym b with
-     | Some (s, bt), Some (s', bt') ->
-        Some (s, s')
-     | _ -> None
-     end
+let is_sym_lhs_equality = function 
+  | T t ->
+      begin match IT.is_eq t with
+      | Some (lhs, rhs) ->
+          begin match IT.is_sym lhs with
+          | Some (s, _) -> Some (s, rhs)
+          | _ -> None
+          end
+      | _ -> None
+      end
   | _ -> None
- 
- 
+
+let is_sym_equality t = match is_sym_lhs_equality t with
+  | Some (s, rhs) -> begin match IT.is_sym rhs with
+      | Some (s', _) -> Some (s, s')
+      | _ -> None
+      end
+  | _ -> None
+
