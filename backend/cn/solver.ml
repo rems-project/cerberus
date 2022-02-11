@@ -690,7 +690,8 @@ let provable ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc =
   | (`False it | `No_shortcut it) ->
      let t = Translate.term context structs (not_ it) in
      let pointer_facts = List.map (Translate.term context structs) pointer_facts in
-     match Z3.Solver.check solver.incremental (t :: pointer_facts) with
+     let res = time_f "Z3(inc)" (Z3.Solver.check solver.incremental) (t :: pointer_facts) in
+     match res with
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
      | Z3.Solver.UNKNOWN ->
