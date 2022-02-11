@@ -178,8 +178,7 @@ let rec bind_logical where (lrt : LRT.t) =
      let@ () = add_c constr in
      bind_logical where rt'
   | Resource (re, _oinfo, rt) -> 
-     let@ lcs = add_r where re in
-     let@ () = add_cs lcs in
+     let@ () = add_r where re in
      bind_logical where rt
   | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
@@ -1717,22 +1716,34 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ arg2 = arg_of_asym asym2 in
        let v1 = it_of_arg arg1 in
        let v2 = it_of_arg arg2 in
-       let (((ebt1, ebt2), rbt), result_it) =
-         match op with
-         | OpAdd ->   (((Integer, Integer), Integer), IT.add_ (v1, v2))
-         | OpSub ->   (((Integer, Integer), Integer), IT.sub_ (v1, v2))
-         | OpMul ->   (((Integer, Integer), Integer), IT.mul_ (v1, v2))
-         | OpDiv ->   (((Integer, Integer), Integer), IT.div_ (v1, v2))
-         | OpRem_t -> (((Integer, Integer), Integer), IT.rem_t___ (v1, v2))
-         | OpRem_f -> (((Integer, Integer), Integer), IT.rem_f___ (v1, v2))
-         | OpExp ->   (((Integer, Integer), Integer), IT.exp_ (v1, v2))
-         | OpEq ->    (((Integer, Integer), Bool), IT.eq_ (v1, v2))
-         | OpGt ->    (((Integer, Integer), Bool), IT.gt_ (v1, v2))
-         | OpLt ->    (((Integer, Integer), Bool), IT.lt_ (v1, v2))
-         | OpGe ->    (((Integer, Integer), Bool), IT.ge_ (v1, v2))
-         | OpLe ->    (((Integer, Integer), Bool), IT.le_ (v1, v2))
-         | OpAnd ->   (((Bool, Bool), Bool), IT.and_ [v1; v2])
-         | OpOr ->    (((Bool, Bool), Bool), IT.or_ [v1; v2])
+       let@ (((ebt1, ebt2), rbt), result_it) = match op with
+         | OpAdd ->   return (((Integer, Integer), Integer), IT.add_ (v1, v2))
+         | OpSub ->   return (((Integer, Integer), Integer), IT.sub_ (v1, v2))
+         | OpMul ->   return (((Integer, Integer), Integer), IT.mul_ (v1, v2))
+         | OpDiv ->   return (((Integer, Integer), Integer), IT.div_ (v1, v2))
+         | OpRem_f -> return (((Integer, Integer), Integer), IT.rem_f___ (v1, v2))
+         | OpExp ->   return (((Integer, Integer), Integer), IT.exp_ (v1, v2))
+         | OpEq ->    return (((Integer, Integer), Bool), IT.eq_ (v1, v2))
+         | OpGt ->    return (((Integer, Integer), Bool), IT.gt_ (v1, v2))
+         | OpLt ->    return (((Integer, Integer), Bool), IT.lt_ (v1, v2))
+         | OpGe ->    return (((Integer, Integer), Bool), IT.ge_ (v1, v2))
+         | OpLe ->    return (((Integer, Integer), Bool), IT.le_ (v1, v2))
+         | OpAnd ->   return (((Bool, Bool), Bool), IT.and_ [v1; v2])
+         | OpOr ->    return (((Bool, Bool), Bool), IT.or_ [v1; v2])
+         | OpRem_t -> 
+            let@ provable = provable in
+            begin match provable (LC.T (and_ [le_ (int_ 0, v1); le_ (int_ 0, v2)])) with
+            | `True ->
+               (* if the arguments are non-negative, then rem should be sound to use for rem_t *)
+               return (((Integer, Integer), Integer), IT.rem_ (v1, v2))
+            | `False ->
+               let@ model = model () in
+               let err = !^"Unsupported: rem_t applied to negative arguments" in
+               fail (fun ctxt ->
+                   let msg = Generic_with_model {err; model; ctxt} in
+                   {loc; msg}
+                 )
+            end
        in
        let@ () = ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
        let@ () = ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
@@ -2529,11 +2540,7 @@ let check_function
       let@ (rt, resources) = 
         check_and_bind_arguments RT.subst loc arguments function_typ 
       in
-      let@ () = 
-        ListM.iterM (fun r -> 
-            let@ lcs = add_r (Some (Label "start")) r in
-            add_cs lcs
-          ) resources in
+      let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
       (* rbt consistency *)
       let@ () = 
         let Computational ((sname, sbt), _info, t) = rt in
@@ -2608,25 +2615,21 @@ let check_procedure
              let@ (rt, resources) = 
                check_and_bind_arguments False.subst loc args lt 
              in
-             let@ () = 
-               ListM.iterM (fun r ->
-                   let@ lcs = add_r (Some (Label label_name)) r in
-                   add_cs lcs
-                 ) resources in
+             let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
              let@ () = check_texpr labels body False in
              return ()
           end
       in
-      let@ () = PmapM.foldM check_label label_defs () in
-      (* check the function body *)
-      debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
-      let@ () = 
-        ListM.iterM (fun r -> 
-            let@ lcs = add_r (Some (Label "start")) r in
-            add_cs lcs
-          ) resources 
+      let check_body () = 
+        pure begin 
+            debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
+            let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
+            check_texpr labels body (Normal rt)
+          end
       in
-      check_texpr labels body (Normal rt)
+      let@ () = check_body () in
+      let@ () = PmapM.foldM check_label label_defs () in
+      return ()
     end
 
  

@@ -159,15 +159,13 @@ let add_r oloc r =
   let@ scs = simp_constraints () in
   let r = RE.simp s.global.struct_decls scs r in
   let s = Context.add_r oloc r s in
-  let@ () = set s in
-  return []
+  set s
 
 let rec add_rs oloc = function
-  | [] -> return []
+  | [] -> return ()
   | r :: rs -> 
-     let@ cs = add_r oloc r in
-     let@ cs' = add_rs oloc rs in
-     return (cs @ cs')
+     let@ () = add_r oloc r in
+     add_rs oloc rs
 
 
 let map_and_fold_resources f acc =

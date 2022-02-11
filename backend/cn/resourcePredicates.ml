@@ -572,19 +572,13 @@ let page_alloc_predicates struct_decls =
 
 
 
-  let vpage = 
-    let id = "VPage" in
-    let loc = Loc.other "internal (VPage)" in
-    let vbase_s, vbase = IT.fresh_named Loc "vbase" in
+  let page = 
+    let id = "Page" in
+    let loc = Loc.other "internal (Page)" in
+    let guardv_s, guardv = IT.fresh_named BT.Integer "guardv" in
+    let pbase_s, pbase = IT.fresh_named Loc "pbase" in
     let order_s, order = IT.fresh_named Integer "order" in
     let permission_s, permission = IT.fresh_named BT.Bool "permission" in
-    let hyp_physvirt_offset_s, hyp_physvirt_offset = 
-      IT.fresh_named BT.Integer "hyp_physvirt_offset" in
-    let pbase = 
-      integerToPointerCast_ 
-        (add_ (pointerToIntegerCast_ vbase, 
-               hyp_physvirt_offset)) 
-    in
     let clause1 = 
       let qp = 
         let length = 
@@ -615,25 +609,26 @@ let page_alloc_predicates struct_decls =
       in
       {
         loc = loc;
-        guard = 
-          and_ [ne_ (vbase, null_);
-                int_ 0 %<= order; order %< int_ mMAX_ORDER];
+        guard = ne_ (guardv, int_ 0);
+          (* and_ [ne_ (vbase, null_); *)
+          (*       int_ 0 %<= order; order %< int_ mMAX_ORDER]; *)
         packing_ft = AT.of_lrt lrt (AT.I []) 
       }
     in
     let clause2 = 
       {
         loc = loc;
-        guard = eq_ (vbase, null_);
+        guard = bool_ true;
         packing_ft = AT.I []
       }
     in
     let predicate = {
         loc = loc;
-        pointer = vbase_s;
+        pointer = pbase_s;
         permission = permission_s;
-        iargs = [(order_s, IT.bt order);
-                 (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset)]; 
+        iargs = [(guardv_s, IT.bt guardv);
+                 (order_s, IT.bt order);
+                ]; 
         oargs = []; 
         clauses = [clause1; clause2]; 
       } 
@@ -648,7 +643,7 @@ let page_alloc_predicates struct_decls =
    (* o_list_node; *)
    vmemmap_page;
    hyp_pool;
-   vpage]
+   page]
 
 
 
