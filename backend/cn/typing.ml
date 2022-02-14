@@ -100,9 +100,8 @@ let provable =
   let@ solver = solver () in
   let pointer_facts = Resources.RE.pointer_facts s.resources in
   let f ?(shortcut_false=false) lc = 
-    let sym_lc = Context.relevant_sym_eqs s (lc :: s.constraints) pointer_facts in
     Solver.provable ~shortcut_false ~solver ~global:s.global 
-      ~assumptions:(sym_lc @ s.constraints) ~pointer_facts lc
+      ~assumptions:s.constraints ~pointer_facts lc 
   in
   return f
 
