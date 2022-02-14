@@ -95,6 +95,24 @@ let rec add_c c (ctxt : t) = match LC.is_sym_lhs_equality c with
       | Some rhs' -> add_c (LC.t_ (IT.eq_ (rhs', rhs))) ctxt
       end
 
+let sym_eq_to_c sym rhs = LC.t_ (IT.eq_ (IT.sym_ (sym, IT.basetype rhs), rhs))
+
+let relevant_sym_eqs (ctxt : t) lcs tms =
+    let rec find known = function
+      | [] -> known
+      | sym :: syms -> begin match (SymSet.mem sym known, SymMap.find_opt sym ctxt.sym_eqs) with
+          | (true, _) -> find known syms
+          | (_, None) -> find known syms
+          | (_, Some rhs) -> find (SymSet.add sym known)
+                (SymSet.elements (IT.free_vars rhs) @ syms)
+        end
+    in
+    let syms = find SymSet.empty (List.concat (List.map SymSet.elements
+        (List.map IT.free_vars tms @ List.map LC.free_vars lcs))) in
+    List.map (fun sym -> sym_eq_to_c sym (SymMap.find sym ctxt.sym_eqs))
+        (SymSet.elements syms)
+
+
 let add_r owhere r (ctxt : t) = 
   match RE.simp_or_empty ctxt.global.struct_decls (ctxt.sym_eqs, ctxt.constraints) r with
   | None -> ctxt
