@@ -62,7 +62,7 @@ let model_params = [
     ("model.completion", "true");
     ("model.inline_def", "true");
     ("model_evaluator.completion", "true");
-    (* ("model_evaluator.array_as_stores", "false"); *)
+    ("model_evaluator.array_as_stores", "false");
   ]
 
 let params =
@@ -704,7 +704,9 @@ let provable ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc =
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)
-        | Z3.Solver.UNKNOWN -> failwith "SMT solver returned 'unknown'"
+        | Z3.Solver.UNKNOWN -> 
+           let reason = Z3.Solver.get_reason_unknown solver.fancy in
+           failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
 
 
