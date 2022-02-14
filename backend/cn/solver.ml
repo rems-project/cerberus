@@ -60,7 +60,9 @@ let model_params = [
     ("model", "true");
     ("model.compact", "true");
     ("model.completion", "true");
+    ("model.inline_def", "true");
     ("model_evaluator.completion", "true");
+    (* ("model_evaluator.array_as_stores", "false"); *)
   ]
 
 let params =
@@ -722,7 +724,33 @@ let eval struct_decls (context, model) to_be_evaluated =
       let () = counter := c+1 in
       Sym.fresh_pretty ("p" ^ string_of_int c)
     in
-    let rec aux (binders : (Sym.t * BT.t) list) (expr : Z3.Expr.expr) : IT.t = 
+    (* TODO: check about binders, shouldn't those be empty here? *)
+    let rec func_interp binders func_decl = 
+      let domain = match Z3.FuncDecl.get_domain func_decl with
+        | [domain] -> domain
+        | [] -> Debug_ocaml.error "unexpected constant function"
+        | _ -> raise (Unsupported "multi-argument functions")
+      in      
+      let func_interp = match Z3.Model.get_func_interp model func_decl with
+        | None -> Debug_ocaml.error "func_decl without interpretation"
+        | Some interp -> interp
+      in
+      let base_value = aux binders (Z3.Model.FuncInterp.get_else func_interp) in
+      let entries = Z3.Model.FuncInterp.get_entries func_interp in
+      List.fold_right (fun entry map_value ->
+          match Z3.Model.FuncInterp.FuncEntry.get_args entry with
+          | [index] ->
+             let index = aux binders index in
+             let value = aux binders (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
+             map_set_ map_value (index, value)
+          | [] ->
+             Debug_ocaml.error "unexpected constant function"
+          | _ ->
+             raise (Unsupported "multi-argument functions")
+        ) entries (const_map_ (z3_sort domain) base_value)
+
+
+    and aux (binders : (Sym.t * BT.t) list) (expr : Z3.Expr.expr) : IT.t = 
       let unsupported what = 
         let err = 
           Printf.sprintf "unsupported %s. expr: %s"
@@ -930,8 +958,19 @@ let eval struct_decls (context, model) to_be_evaluated =
 
         | () when String.equal (Z3.Symbol.get_string func_name) "unit" ->
            unit_
-        | () ->
-           unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
+        | () -> 
+           let func_decl = 
+             try Z3.Expr.get_func_decl expr with
+             | _ ->
+                print_endline (Z3.Model.to_string model);
+                unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
+           in
+           let arg = match args with
+             | [arg] -> arg
+             | [] -> Debug_ocaml.error "unexpected constant function"
+             | _ -> raise (Unsupported "multi-argument functions")
+           in      
+           map_get_ (func_interp binders func_decl) arg
 
     in
 

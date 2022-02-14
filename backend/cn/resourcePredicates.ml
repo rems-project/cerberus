@@ -442,8 +442,8 @@ let page_alloc_predicates struct_decls =
       LRT.I))
     in
 
-    let start_i = (pool %. "range_start") %/ (z_ pPAGE_SIZE) in
-    let end_i = (pool %. "range_end") %/ (z_ pPAGE_SIZE) in
+    let start_i = (pool %. "range_start") %/ (int_ pPAGE_SIZE) in
+    let end_i = (pool %. "range_end") %/ (int_ pPAGE_SIZE) in
   
     let vmemmap_wf = 
       let i_s, i = IT.fresh_named Integer "i" in
@@ -499,23 +499,46 @@ let page_alloc_predicates struct_decls =
       LRT.I)))
     in
 
+    (* let page_group_ownership =  *)
+    (*   let q_s, q = IT.fresh_named Integer "q" in *)
+    (*   let condition =  *)
+    (*     and_ [permission; *)
+    (*           (pool %. "range_start") %<= q; *)
+    (*           q %< (pool %. "range_end"); *)
+    (*           (((map_get_ vmemmap (q %/ (int_ pPAGE_SIZE)))) %. "refcount") %== int_ 0; *)
+    (*       ] *)
+    (*   in *)
+    (*   let qp =  *)
+    (*     QPredicate { *)
+    (*         name = "Byte"; *)
+    (*         pointer = pointer_ Z.zero; *)
+    (*         q = q_s; *)
+    (*         step = Memory.size_of_ctype char_ct; *)
+    (*         permission = condition; *)
+    (*         iargs = []; *)
+    (*         oargs = []; *)
+    (*       } *)
+    (*   in *)
+    (*   LRT.Resource (qp, (loc, None),  *)
+    (*   LRT.I) *)
+    (* in *)
+
     let page_group_ownership = 
       let q_s, q = IT.fresh_named Integer "q" in
       let condition = 
-        and_ [permission;
-              (pool %. "range_start") %<= q;
-              q %< (pool %. "range_end");
-              (((map_get_ vmemmap (q %/ (z_ pPAGE_SIZE)))) %. "refcount") %== int_ 0;
+        and_ [permission; start_i %<= q; q %< end_i;
+              (((map_get_ vmemmap q)) %. "refcount") %== int_ 0;
+              (((map_get_ vmemmap q)) %. "order") %!= int_ hHYP_NO_ORDER;
           ]
       in
       let qp = 
         QPredicate {
-            name = "Byte";
+            name = "Page";
             pointer = pointer_ Z.zero;
             q = q_s;
-            step = Memory.size_of_ctype char_ct;
+            step = pPAGE_SIZE;
             permission = condition;
-            iargs = [];
+            iargs = [int_ 1; (((map_get_ vmemmap q)) %. "order")];
             oargs = [];
           }
       in
@@ -577,6 +600,7 @@ let page_alloc_predicates struct_decls =
     let loc = Loc.other "internal (Page)" in
     let guardv_s, guardv = IT.fresh_named BT.Integer "guardv" in
     let pbase_s, pbase = IT.fresh_named Loc "pbase" in
+    let pbaseI = pointerToIntegerCast_ pbase in
     let order_s, order = IT.fresh_named Integer "order" in
     let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     let clause1 = 
@@ -593,11 +617,11 @@ let page_alloc_predicates struct_decls =
         in
         let q_s, q = IT.fresh Integer in {
           name = "Byte"; 
-          pointer = pbase;
+          pointer = pointer_ Z.zero;
           q = q_s;
           step = Memory.size_of_ctype char_ct;
           permission = 
-            and_ [permission; int_ 0 %<= q; q %< length];
+            and_ [permission; pbaseI %<= q; q %< (pbaseI %+ length)];
           iargs = [];
           oargs = [];
         }
@@ -639,11 +663,11 @@ let page_alloc_predicates struct_decls =
 
 
 
-  [list_node;
+  [page;
+   list_node;
    (* o_list_node; *)
    vmemmap_page;
-   hyp_pool;
-   page]
+   hyp_pool;]
 
 
 

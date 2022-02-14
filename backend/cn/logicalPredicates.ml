@@ -56,7 +56,7 @@ module PageAlloc = struct
     open SD
 
     let pPAGE_SHIFT = 12
-    let pPAGE_SIZE = Z.pow (Z.of_int 2) pPAGE_SHIFT
+    let pPAGE_SIZE = 4096
     let mMAX_ORDER = 11
     let hHYP_NO_ORDER = 4294967295
 
@@ -77,14 +77,14 @@ module PageAlloc = struct
 
     let vmemmap_good_pointer ~vmemmap_pointer pointer range_start range_end = 
       cellPointer_ ~base:vmemmap_pointer ~step:hyp_page_size
-        ~starti:(range_start %/ z_ pPAGE_SIZE)
-        ~endi:(range_end %/ z_ pPAGE_SIZE)
+        ~starti:(range_start %/ int_ pPAGE_SIZE)
+        ~endi:(range_end %/ int_ pPAGE_SIZE)
         ~p:pointer
 
 
     let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end permission =
-      let range_start_i = range_start %/ (z_ pPAGE_SIZE) in
-      let range_end_i = range_end %/ (z_ pPAGE_SIZE) in
+      let range_start_i = range_start %/ (int_ pPAGE_SIZE) in
+      let range_end_i = range_end %/ (int_ pPAGE_SIZE) in
       let q_s, q = IT.fresh_named Integer "q" in
       Resources.RE.QPredicate {
           pointer = vmemmap_pointer;
@@ -364,11 +364,11 @@ module PageAlloc = struct
         let__ ("beyond_range_end_cell_pointer",
                (arrayShift_ 
                   (vmemmap_pointer, struct_ct hyp_page_tag,
-                   range_end %/ (z_ pPAGE_SIZE)))) (fun beyond_range_end_cell_pointer ->
+                   range_end %/ (int_ pPAGE_SIZE)))) (fun beyond_range_end_cell_pointer ->
         (* (for the final disjointness condition) the vmemamp can be
            bigger than just the part managed by this allocator *)
-        let__ ("start_i", (pool %. "range_start") %/ (z_ pPAGE_SIZE)) (fun start_i ->
-        let__ ("end_i", (pool %. "range_end") %/ (z_ pPAGE_SIZE)) (fun end_i ->
+        let__ ("start_i", (pool %. "range_start") %/ (int_ pPAGE_SIZE)) (fun start_i ->
+        let__ ("end_i", (pool %. "range_end") %/ (int_ pPAGE_SIZE)) (fun end_i ->
         let__ ("vmemmap_start_pointer",
                arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, start_i)) (fun vmemmap_start_pointer ->
         (* end_i is the first index outside the vmemmap *)
@@ -379,11 +379,13 @@ module PageAlloc = struct
             (* metadata well formedness *)
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
             good_ (pointer_ct void_ct, integerToPointerCast_ range_end);
+            (* TODO: the following three have to go *)
             good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %- hyp_physvirt_offset));
             good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %- hyp_physvirt_offset));
+            good_ (pointer_ct void_ct, integerToPointerCast_ (pointerToIntegerCast_ (null_) %+ hyp_physvirt_offset));
             range_start %< range_end;
-            rem_ (range_start, z_ pPAGE_SIZE) %== int_ 0;
-            rem_ (range_end, z_ pPAGE_SIZE) %== int_ 0;
+            rem_ (range_start, int_ pPAGE_SIZE) %== int_ 0;
+            rem_ (range_end, int_ pPAGE_SIZE) %== int_ 0;
             (* for hyp_page_to_phys conversion *)
             representable_ (integer_ct Ptrdiff_t, range_end);
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
@@ -395,7 +397,13 @@ module PageAlloc = struct
             (* hyp pool vmemmap disjoint *)
             IT.disjoint_ 
               (pool_pointer, int_ (Memory.size_of_struct hyp_pool_tag))
-              (vmemmap_start_pointer, vmemmap_length)
+              (vmemmap_start_pointer, vmemmap_length);
+            IT.disjoint_int_ 
+              (hyp_physvirt_offset, int_ 1)
+              (range_start, range_end);
+            IT.disjoint_int_ 
+              (hyp_physvirt_offset %+ z_ (Z.of_string "18446744073709551616"), int_ 1)
+              (range_start, range_end);
           ] 
           )))))))))
       in
