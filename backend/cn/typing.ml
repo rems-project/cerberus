@@ -11,7 +11,7 @@ type 'e failure = Context.t -> 'e
 
 
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
-  let solver = Solver.make () in
+  let solver = Solver.make c.global.struct_decls in
   List.iter (Solver.add solver c.global) c.constraints;
   let s = { typing_context = c; solver } in
   let outcome = m s in

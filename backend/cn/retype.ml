@@ -580,7 +580,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
        in
        begin match CF.Annot.get_label_annot annots with
        | Some (LAloop_body loop_id)
-       | Some (LAloop_continue loop_id)
+       (* | Some (LAloop_continue loop_id) *)
          ->
           let this_attrs = match Pmap.lookup loop_id file.mu_loop_attributes with
             | Some attrs -> attrs 
@@ -597,6 +597,10 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
           in
           let@ e = retype_texpr e in
           return (New.M_Label (loc, lt,args,e,annots))
+       | Some (LAloop_prebody loop_id) ->
+          error "pre-body label has not been inlined"
+       | Some (LAloop_continue loop_id) ->
+          error "continue label has not been inlined"
        | Some (LAloop_break loop_id) ->
           error "break label has not been inlined"
        | Some LAreturn -> 

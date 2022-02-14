@@ -104,6 +104,7 @@ let ib_fun_map_decl
                match get_label_annot annot2 with
                | Some (LAloop_break _)
                | Some (LAloop_continue _) 
+               | Some (LAloop_prebody _) 
                  -> 
                   (to_keep, ((label, map fst args, lbody) :: to_inline))
                | _ -> 

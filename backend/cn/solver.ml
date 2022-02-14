@@ -130,8 +130,8 @@ module Translate = struct
 
   let bt_table = BT_Table.create 1000
   let sort_table = Sort_Table.create 1000
-
   let it_table = IT_Table.create 500000
+
 
 
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
@@ -241,6 +241,16 @@ module Translate = struct
     in
 
     sort
+
+
+
+  let init structs context = 
+    BT_Table.clear bt_table;
+    Sort_Table.clear sort_table;
+    IT_Table.clear it_table;
+    let _ = sort context structs BT.Integer in
+    let _ = sort context structs BT.Bool in
+    ()
 
 
   let loc_to_integer_fundecl context struct_decls = 
@@ -601,15 +611,14 @@ let _tactic context =
       "smt";
     ]
 
-let make () : solver = 
+let make struct_decls : solver = 
   Z3.Memory.reset ();
-
-  Translate.BT_Table.clear Translate.bt_table;
-  Translate.IT_Table.clear Translate.it_table;
 
   List.iter (fun (c,v) -> Z3.set_global_param c v) params;
 
   let context = Z3.mk_context [] in
+
+  Translate.init struct_decls context;
 
   let params = Z3.Params.mk_params context in
   Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 500;
@@ -717,7 +726,10 @@ let eval struct_decls (context, model) to_be_evaluated =
   let open Translate in
 
   let z3_sort (sort : Z3.Sort.sort) = 
-    Sort_Table.find sort_table sort in
+    try Sort_Table.find sort_table sort with
+    | Not_found -> 
+       failwith ("could not find sort '"^Z3.Sort.to_string sort^"' in Sort_Table")
+  in
 
   let z3_expr = 
     let counter = ref 0 in
