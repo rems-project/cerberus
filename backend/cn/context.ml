@@ -62,9 +62,8 @@ let pp (ctxt : t) =
     (Pp.list RE.pp ctxt.resources) ^/^
   item "constraints" 
     (Pp.list LC.pp ctxt.constraints) ^/^
-  item "sym_eq constraints"
-    (Pp.list (fun (sym, rhs) -> IT.pp (IT.eq_ (IT.sym_ (sym, IT.basetype rhs), rhs)))
-        (SymMap.bindings ctxt.sym_eqs))
+  item "sym_eq constraints" (format []
+        (Int.to_string (SymMap.cardinal ctxt.sym_eqs) ^ " more eqs"))
 
 let bound_a sym ctxt = 
   SymMap.mem sym ctxt.computational
