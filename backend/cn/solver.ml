@@ -950,6 +950,8 @@ let eval struct_decls (context, model) to_be_evaluated =
 
         | () when String.equal (Z3.Symbol.get_string func_name) "unit" ->
            unit_
+        | () when BT.equal Unit (z3_sort (Z3.Expr.get_sort expr)) ->
+           unit_
         | () -> 
            let func_decl = 
              try Z3.Expr.get_func_decl expr with
@@ -959,7 +961,8 @@ let eval struct_decls (context, model) to_be_evaluated =
            in
            let arg = match args with
              | [arg] -> arg
-             | [] -> Debug_ocaml.error "unexpected constant function"
+             | [] -> Debug_ocaml.error ("unexpected constant function: "  
+                                        ^ Z3.Symbol.to_string func_name)
              | _ -> raise (Unsupported "multi-argument functions")
            in      
            map_get_ (func_interp binders func_decl) arg

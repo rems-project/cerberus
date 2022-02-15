@@ -166,6 +166,10 @@ module PageAlloc = struct
                        (page %. "order") %!= int_ hHYP_NO_ORDER;
                    ]
             ));
+            (impl_ (
+                 (page %. "order") %== int_ hHYP_NO_ORDER,
+                 (page %. "refcount") %== (int_ 0))
+            );
             or_ [
                 (* either empty list (pointer to itself) *)
                 prev %== self_node_pointer;
