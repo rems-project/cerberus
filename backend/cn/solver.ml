@@ -178,10 +178,10 @@ module Translate = struct
          Z3.Tuple.mk_sort context 
            (symbol (bt_name Loc))
            [symbol "loc_to_integer"] 
-           [translate BT.Integer]
-      | List bt -> Z3.Z3List.mk_sort context (symbol (bt_name bt)) (translate bt) 
-      | Set bt -> Z3.Set.mk_sort context (translate bt)
-      | Map (abt, rbt) -> Z3.Z3Array.mk_sort context (translate abt) (translate rbt)
+           [sort BT.Integer]
+      | List bt -> Z3.Z3List.mk_sort context (symbol (bt_name bt)) (sort bt) 
+      | Set bt -> Z3.Set.mk_sort context (sort bt)
+      | Map (abt, rbt) -> Z3.Z3Array.mk_sort context (sort abt) (sort rbt)
       | Tuple bts ->
          let bt_symbol = symbol (bt_name (Tuple bts)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
@@ -192,7 +192,7 @@ module Translate = struct
                sym
              ) bts 
          in
-         let sorts = map translate bts in
+         let sorts = map sort bts in
          Z3.Tuple.mk_sort context bt_symbol field_symbols sorts
       | Struct tag ->
          let struct_symbol = symbol (bt_name (Struct tag)) in
@@ -202,35 +202,13 @@ module Translate = struct
            map_split (fun (id,sct) -> 
                let s = symbol (member_name tag id) in
                Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
-               (s, translate (BT.of_sct sct))
+               (s, sort (BT.of_sct sct))
              ) (Memory.member_types layout)
          in
          Z3.Tuple.mk_sort context struct_symbol
            member_symbols member_sorts
-      (* | Option bt ->  *)
-      (*    let none_constructor = *)
-      (*      let nothing_sym = symbol ("none__" ^ bt_name bt) in *)
-      (*      Z3Symbol_Table.add z3sym_table nothing_sym (NothingFunc {bt}); *)
-      (*      Z3.Datatype.mk_constructor context nothing_sym *)
-      (*        (symbol ("is_none__" ^ bt_name bt)) [] [] [] *)
-      (*    in *)
-      (*    let some_constructor =  *)
-      (*      let something_sym = symbol ("some__" ^ bt_name bt) in *)
-      (*      let value_of_something_sym = symbol ("value_of_something__" ^ bt_name bt) in *)
-      (*      let is_something_sym = symbol("is_something__" ^ bt_name bt) in *)
-      (*      Z3Symbol_Table.add z3sym_table something_sym (SomethingFunc {bt}); *)
-      (*      Z3Symbol_Table.add z3sym_table value_of_something_sym (ValueOfSomethingFunc {bt}); *)
-      (*      Z3Symbol_Table.add z3sym_table is_something_sym (IsSomethingFunc {bt}); *)
-      (*      Z3.Datatype.mk_constructor context something_sym *)
-      (*        is_something_sym  *)
-      (*        [value_of_something_sym] *)
-      (*        [Some (translate bt)] [0] *)
-      (*    in *)
-      (*    Z3.Datatype.mk_sort context (symbol (bt_name (Option bt)))  *)
-      (*      [none_constructor; some_constructor] *)
-    in
 
-    let sort bt = 
+    and sort bt = 
       match BT_Table.find_opt bt_table bt with
       | Some sort -> sort
       | None ->
