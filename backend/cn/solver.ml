@@ -662,7 +662,7 @@ let model () =
      ((context, model), oq)
 
 
-let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc = 
+let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~pointer_facts lc = 
   let context = solver.context in
   let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
@@ -679,7 +679,9 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc
   | (`False it | `No_shortcut it) ->
      let t = Translate.term context structs (not_ it) in
      let pointer_facts = List.map (Translate.term context structs) pointer_facts in
-     let res = time_f loc 5 "Z3(inc)" (Z3.Solver.check solver.incremental) (t :: pointer_facts) in
+     let res = time_f loc nassumptions 5 "Z3(inc)" 
+                 (Z3.Solver.check solver.incremental) (t :: pointer_facts) 
+     in
      match res with
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
@@ -687,7 +689,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~pointer_facts lc
         Z3.Solver.reset solver.fancy;
         let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
-        let res = time_f loc 5 "Z3" (Z3.Solver.check solver.fancy) [] in
+        let res = time_f loc 5 nassumptions "Z3" (Z3.Solver.check solver.fancy) [] in
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)

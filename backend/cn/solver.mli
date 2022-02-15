@@ -16,6 +16,7 @@ val provable :
   solver:solver -> 
   global:Global.t -> 
   assumptions:LogicalConstraints.t list -> 
+  nassumptions:int -> 
   pointer_facts:IndexTerms.t list ->
   LogicalConstraints.t -> 
   [> `True | `False ]

@@ -33,7 +33,12 @@ let times = ref (None : out_channel option)
 
 let maybe_open_times_channel = function
   | None -> ()
-  | Some filename -> times := Some (open_out filename)
+  | Some filename -> 
+     let channel = open_out filename in
+     times := Some channel;
+     Printf.fprintf channel "lineF, lineT, assumptions, time\n"
+
+
 
 let maybe_close_times_channel () =
   match !times with
@@ -145,7 +150,7 @@ let debug l pp =
 let warn pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
-let time_f (loc : Locations.t) level msg f x =
+let time_f (loc : Locations.t) number_constraints level msg f x =
   match !times with
   | Some channel ->
      let start = Unix.gettimeofday () in
@@ -153,7 +158,8 @@ let time_f (loc : Locations.t) level msg f x =
      let fin = Unix.gettimeofday () in
      let d = fin -. start in
      begin match Locations.line_numbers loc with
-     | Some (l1, l2) -> Printf.fprintf channel "%d, %d, %f\n" l1 l2 d;
+     | Some (l1, l2) -> 
+        Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 number_constraints d;
      | _ -> Printf.fprintf channel "None, None, %f\n" d;
      end;
      y

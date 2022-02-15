@@ -101,7 +101,8 @@ let provable loc =
   let pointer_facts = Resources.RE.pointer_facts s.resources in
   let f ?(shortcut_false=false) lc = 
     Solver.provable ~loc ~shortcut_false ~solver ~global:s.global 
-      ~assumptions:s.constraints ~pointer_facts lc 
+      ~assumptions:s.constraints ~nassumptions:s.number_constraints
+      ~pointer_facts lc 
   in
   return f
 

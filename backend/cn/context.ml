@@ -32,6 +32,7 @@ type t = {
     constraints : LC.t list;
     sym_eqs : IT.t SymMap.t;
     global : Global.t;
+    number_constraints : int;   (* constraints + sym_eqs *)
   }
 
 
@@ -42,6 +43,7 @@ let empty global = {
     constraints = [];
     sym_eqs = SymMap.empty;
     global = global;
+    number_constraints = 0;
   }
 
 
@@ -88,11 +90,14 @@ let add_ls lvars ctxt =
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
 let rec add_c c (ctxt : t) = match LC.is_sym_lhs_equality c with
-  | None -> { ctxt with constraints = c :: ctxt.constraints }
-  | Some (sym, rhs) -> begin match SymMap.find_opt sym ctxt.sym_eqs with
-      | None -> { ctxt with sym_eqs = SymMap.add sym rhs ctxt.sym_eqs }
-      | Some rhs' -> add_c (LC.t_ (IT.eq_ (rhs', rhs))) ctxt
-      end
+  | None -> { ctxt with constraints = c :: ctxt.constraints;
+                        number_constraints = ctxt.number_constraints + 1}
+  | Some (sym, rhs) -> 
+     begin match SymMap.find_opt sym ctxt.sym_eqs with
+     | None -> { ctxt with sym_eqs = SymMap.add sym rhs ctxt.sym_eqs; 
+                           number_constraints = ctxt.number_constraints  + 1}
+     | Some rhs' -> add_c (LC.t_ (IT.eq_ (rhs', rhs))) ctxt
+     end
 
 let add_r owhere r (ctxt : t) = 
   match RE.simp_or_empty ctxt.global.struct_decls (ctxt.sym_eqs, ctxt.constraints) r with
