@@ -835,7 +835,7 @@ module WAT (WI: WI_Sig) = struct
          let@ () = add_c lc in
          aux at
       | AT.I i -> 
-         let@ provable = provable in
+         let@ provable = provable loc in
          let@ () = 
            if !check_consistency then
              match provable (LC.t_ (IT.bool_ false)) with

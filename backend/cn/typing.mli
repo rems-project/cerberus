@@ -17,7 +17,9 @@ val all_constraints : unit -> (LogicalConstraints.t list, 'e) m
 val simp_constraints : unit ->
     ((IndexTerms.t IndexTerms.SymMap.t * LogicalConstraints.t list), 'e) m
 val all_resources : unit -> (Resources.RE.t list, 'e) m
-val provable : (?shortcut_false:bool -> LogicalConstraints.t -> [> `True | `False], 'e) m
+val provable : 
+  Locations.t ->
+  (?shortcut_false:bool -> LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m
 val bound_a : Sym.t -> (bool, 'e) m
 val bound_l : Sym.t -> (bool, 'e) m

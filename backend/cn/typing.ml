@@ -95,12 +95,12 @@ let all_resources () =
   let@ s = get () in
   return s.resources
 
-let provable =
+let provable loc =
   let@ s = get () in
   let@ solver = solver () in
   let pointer_facts = Resources.RE.pointer_facts s.resources in
   let f ?(shortcut_false=false) lc = 
-    Solver.provable ~shortcut_false ~solver ~global:s.global 
+    Solver.provable ~loc ~shortcut_false ~solver ~global:s.global 
       ~assumptions:s.constraints ~pointer_facts lc 
   in
   return f

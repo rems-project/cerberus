@@ -41,3 +41,5 @@ val regions: (Lexing.position * Lexing.position) list -> Location_ocaml.cursor -
 
 
 val simple_location : t -> string
+
+val line_numbers : t -> (int * int) option

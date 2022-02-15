@@ -144,8 +144,4 @@ let regions = Location_ocaml.regions
 
 let simple_location = Location_ocaml.simple_location
 
-
-
-
-
-
+let line_numbers = Location_ocaml.line_numbers

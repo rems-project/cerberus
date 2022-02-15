@@ -492,3 +492,14 @@ let is_library_location loc =
         Hashtbl.mem excluded (Filename.dirname path)
     | None ->
         false
+
+
+
+(* following simple_location *)
+let line_numbers = function
+  | Loc_unknown -> None
+  | Loc_other _ -> None
+  | Loc_point p -> Some (p.pos_lnum, p.pos_lnum)
+  | Loc_region (p1, p2, _) -> Some (p1.pos_lnum, p2.pos_lnum)
+  | Loc_regions ((p1,p2) :: _, _) -> Some (p1.pos_lnum, p2.pos_lnum)
+  | Loc_regions ([], _) -> None

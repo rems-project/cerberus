@@ -142,6 +142,14 @@ let frontend filename =
 
 
 
+let check_input_file filename = 
+  if not (Sys.file_exists filename) then
+    CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
+  else if not (String.equal (Filename.extension filename) ".c") then
+    CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
+
+
+
 let main 
       filename 
       loc_pp 
@@ -154,6 +162,7 @@ let main
       no_model_eqs
       skip_consistency
       only
+      times
   =
   if json then begin
       if debug_level > 0 then
@@ -169,38 +178,30 @@ let main
   Check.ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
   Check.only := only;
-  if not (Sys.file_exists filename) then
-    CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
-  else if not (String.equal (Filename.extension filename) ".c") then
-    CF.Pp_errors.fatal ("file \""^filename^"\" has wrong file extension")
-  else
-    begin match frontend filename with
-    | CF.Exception.Exception err ->
-       prerr_endline (CF.Pp_errors.to_string err);
-       exit 2
-    | CF.Exception.Result file ->
-       try
-         let open Resultat in
-         Debug_ocaml.maybe_open_csv_timing_file ();
-         let result = 
-           let@ file = Retype.retype_file file in
-           Check.check file 
-         in
-         Debug_ocaml.maybe_close_csv_timing_file ();
-         match result with
-         | Ok () -> 
-            exit 0
-         | Error e when json ->
-            TypeErrors.report_json ?state_file e;
-            exit 1
-         | Error e ->
-            TypeErrors.report ?state_file e;
-            exit 1
-       with
-       | exc -> 
-          Debug_ocaml.maybe_close_csv_timing_file ();
-          Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
-    end
+  check_input_file filename;
+  begin match frontend filename with
+  | CF.Exception.Exception err ->
+     prerr_endline (CF.Pp_errors.to_string err); exit 2
+  | CF.Exception.Result file ->
+     try
+       let open Resultat in
+       Debug_ocaml.maybe_open_csv_timing_file ();
+       Pp.maybe_open_times_channel times;
+       let result = 
+         let@ file = Retype.retype_file file in
+         Check.check file 
+       in
+       Pp.maybe_close_times_channel ();
+       match result with
+       | Ok () -> exit 0
+       | Error e when json -> TypeErrors.report_json ?state_file e; exit 1
+       | Error e -> TypeErrors.report ?state_file e; exit 1
+     with
+     | exc -> 
+        Debug_ocaml.maybe_close_csv_timing_file ();
+        Pp.maybe_close_times_channel ();
+        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
+  end
 
 
 open Cmdliner
@@ -251,11 +252,13 @@ let no_model_eqs =
   let doc = "Deactivate 'model based eqs' optimisation in resource inference spine judgement." in
   Arg.(value & flag & info["no_model_eqs"] ~doc)
 
-
+let times =
+  let doc = "file in which to output timing information" in
+  Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
 
 let only =
   let doc = "only type-check this function" in
-  Arg.(value & opt (some string) None & info ["only"] ~docv:"FUNCTION" ~doc)
+  Arg.(value & opt (some string) None & info ["only"] ~doc)
 
 
 let () =
@@ -272,6 +275,7 @@ let () =
       no_additional_sat_check $
       no_model_eqs $
       skip_consistency $
-      only
+      only $
+      times 
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

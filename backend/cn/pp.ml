@@ -27,6 +27,21 @@ let int i = string (string_of_int i)
 let unicode = ref true
 let print_level = ref 0
 
+
+let times = ref (None : out_channel option)
+
+
+let maybe_open_times_channel = function
+  | None -> ()
+  | Some filename -> times := Some (open_out filename)
+
+let maybe_close_times_channel () =
+  match !times with
+  | None -> ()
+  | Some channel -> flush channel; close_out channel
+
+
+
 (* from run_pp *)
 let print channel doc = 
   PPrint.ToChannel.pretty 1.0 term_col channel (doc ^^ hardline);
@@ -123,24 +138,34 @@ let action a = format [Cyan] ("## " ^ a ^ " ")
 let debug l pp = 
   if !print_level >= l 
   then
-    let time = Sys.time () in
+    let time = Unix.gettimeofday () in
     let dpp = format [Green] ("[" ^ Float.to_string time ^ "] ") in
     print stderr (dpp ^^ Lazy.force pp)
 
 let warn pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
-let time_f level msg f x =
-  if !print_level >= level 
-  then
-    let start = Sys.time () in
-    let y = f x in
-    let fin = Sys.time () in
-    let d = fin -. start in
-    debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
-    y
-  else
-    f x
+let time_f (loc : Locations.t) level msg f x =
+  match !times with
+  | Some channel ->
+     let start = Unix.gettimeofday () in
+     let y = f x in
+     let fin = Unix.gettimeofday () in
+     let d = fin -. start in
+     begin match Locations.line_numbers loc with
+     | Some (l1, l2) -> Printf.fprintf channel "%d, %d, %f\n" l1 l2 d;
+     | _ -> Printf.fprintf channel "None, None, %f\n" d;
+     end;
+     y
+  | None when !print_level >= level ->
+       let start = Unix.gettimeofday () in
+       let y = f x in
+       let fin = Unix.gettimeofday () in
+       let d = fin -. start in
+       debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
+       y
+  | _ ->
+     f x
 
 
 
