@@ -268,6 +268,8 @@ module ResourceInference = struct
         pmatch (req_p.pointer, res_p.pointer)
       | (RER.QPoint req_qp, RE.QPoint res_qp) ->
         pmatch (req_qp.pointer, res_qp.pointer)
+      | (RER.Predicate req_pd, RE.Predicate res_pd) ->
+        pmatch (req_pd.pointer, res_pd.pointer)
       | _ -> false
       end
 
@@ -499,8 +501,7 @@ module ResourceInference = struct
       let@ global = get_global () in
       let@ simp_lcs = simp_constraints () in
       let needed = requested.permission in 
-      let@ (needed, oargs) =
-        map_and_fold_resources (fun re (needed, oargs) ->
+      let sub_predicate_if = fun cond re (needed, oargs) ->
             let continue = (re, (needed, oargs)) in
             if is_false needed then continue else
             match re with
@@ -539,7 +540,16 @@ module ResourceInference = struct
                end
             | re ->
                continue
-          ) (needed, List.map default_ requested.oargs)
+      in
+      let@ is_ex = exact_match () in
+      let is_exact_re re = !reorder_points && (is_ex (RER.Predicate requested, re)) in
+      let@ (needed, oargs) =
+        map_and_fold_resources (sub_predicate_if is_exact_re)
+            (needed, List.map default_ requested.oargs)
+      in
+      let@ (needed, oargs) =
+        map_and_fold_resources (sub_predicate_if (fun re -> not (is_exact_re re)))
+            (needed, List.map default_ requested.oargs)
       in
       begin match provable (t_ (not_ needed)) with
       | `True ->
