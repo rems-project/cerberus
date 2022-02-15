@@ -549,7 +549,7 @@ module ResourceInference = struct
       in
       let@ (needed, oargs) =
         map_and_fold_resources (sub_predicate_if (fun re -> not (is_exact_re re)))
-            (needed, List.map default_ requested.oargs)
+            (needed, oargs)
       in
       begin match provable (t_ (not_ needed)) with
       | `True ->
