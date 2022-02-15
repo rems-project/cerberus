@@ -153,6 +153,7 @@ let main
       no_additional_sat_check
       no_model_eqs
       skip_consistency
+      only
   =
   if json then begin
       if debug_level > 0 then
@@ -161,12 +162,13 @@ let main
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
   Debug_ocaml.debug_level := debug_level;
-  WellTyped.check_consistency := not skip_consistency;
+  WellTyped.check_consistency := not skip_consistency || Option.is_some only;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Check.ResourceInference.reorder_points := not no_reorder_points;
   Check.ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
+  Check.only := only;
   if not (Sys.file_exists filename) then
     CF.Pp_errors.fatal ("file \""^filename^"\" does not exist")
   else if not (String.equal (Filename.extension filename) ".c") then
@@ -251,6 +253,11 @@ let no_model_eqs =
 
 
 
+let only =
+  let doc = "only type-check this function" in
+  Arg.(value & opt (some string) None & info ["only"] ~docv:"FUNCTION" ~doc)
+
+
 let () =
   let open Term in
   let check_t = 
@@ -264,6 +271,7 @@ let () =
       no_reorder_points $
       no_additional_sat_check $
       no_model_eqs $
-      skip_consistency
+      skip_consistency $
+      only
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

@@ -2646,6 +2646,8 @@ let check_procedure
 
  
 
+let only = ref None
+
 
 let check mu_file = 
   let open Resultat in
@@ -2832,6 +2834,10 @@ let check mu_file =
     let number_entries = List.length (Pmap.bindings_list mu_file.mu_funs) in
     let ping = Pp.progress "checking function" number_entries in
     PmapM.iterM (fun fsym fn ->
+        match !only with
+        | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
+           return ()
+        | _ ->
         let@ () = return (ping (Sym.pp_string fsym)) in
         let@ () = check_function fsym fn in
         return ()
