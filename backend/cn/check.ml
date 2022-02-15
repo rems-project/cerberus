@@ -905,8 +905,9 @@ module InferenceEqs = struct
 let use_model_eqs = ref true
 
 let res_pointer_kind res = match res with
-  | (RE.Point res_pt) -> Some ((true, res_pt.ct), res_pt.pointer)
-  | (RE.QPoint res_qpt) -> Some ((false, res_qpt.ct), res_qpt.pointer)
+  | (RE.Point res_pt) -> Some ((("", "Pt"), res_pt.ct), res_pt.pointer)
+  | (RE.QPoint res_qpt) -> Some ((("", "QPt"), res_qpt.ct), res_qpt.pointer)
+  | (RE.Predicate res_pd) -> Some (((res_pd.name, "Pd"), Sctypes.Void), res_pd.pointer)
   | _ -> None
 
 let div_groups cmp xs =
@@ -940,7 +941,8 @@ let add_eqs_for_infer ftyp =
   let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
   let ptrs = List.filter_map (res_ptr_k true) reqs @
     (List.filter_map (res_ptr_k false) ress) in
-  let cmp2 = Lem_basic_classes.pairCompare Bool.compare CT.compare in
+  let cmp2 = Lem_basic_classes.pairCompare
+        (Lem_basic_classes.pairCompare String.compare String.compare) CT.compare in
   let ptr_gps = div_groups_discard cmp2 ptrs in
   let@ provable = provable in
   let rec loop fuel ptr_gps =
