@@ -546,7 +546,11 @@ module ReduceQuery = struct
            None
         ) assumptions
     in
-    (impl_ (and_ assumptions, body), Some (s_inst, snd qpred.q))
+    let reduced = impl_ (and_ assumptions, body) in
+    (* print stdout !^"************************************************************************** "; *)
+    (* print stdout (IT.pp reduced); *)
+    (* print stdout !^"************************************************************************** "; *)
+    (reduced, Some (s_inst, snd qpred.q))
 
   let plain it = 
     match it with

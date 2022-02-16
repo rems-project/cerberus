@@ -64,8 +64,12 @@ let pp (ctxt : t) =
     (Pp.list RE.pp ctxt.resources) ^/^
   item "constraints" 
     (Pp.list LC.pp ctxt.constraints) ^/^
-  item "sym_eq constraints" (format []
-        (Int.to_string (SymMap.cardinal ctxt.sym_eqs) ^ " more eqs"))
+  item "sym_eq constraints" 
+    begin 
+      if !print_level >= 11 
+      then Pp.list (fun (s,it) -> Sym.pp s ^^^ !^":=" ^^^ IT.pp it) (SymMap.bindings ctxt.sym_eqs)
+      else !^(Int.to_string (SymMap.cardinal ctxt.sym_eqs) ^ " more eqs")
+    end
 
 let bound_a sym ctxt = 
   SymMap.mem sym ctxt.computational
