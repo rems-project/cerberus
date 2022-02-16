@@ -162,16 +162,16 @@ let time_f (loc : Locations.t) number_constraints level msg f x =
         Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 number_constraints d;
      | _ -> Printf.fprintf channel "None, None, %f\n" d;
      end;
-     y
+     (d, y)
   | None when !print_level >= level ->
        let start = Unix.gettimeofday () in
        let y = f x in
        let fin = Unix.gettimeofday () in
        let d = fin -. start in
        debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
-       y
+       (d, y)
   | _ ->
-     f x
+     (0.0, f x)
 
 
 
