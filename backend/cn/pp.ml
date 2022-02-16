@@ -150,7 +150,7 @@ let debug l pp =
 let warn pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
-let time_f (loc : Locations.t) number_constraints level msg f x =
+let time_f_elapsed (loc : Locations.t) number_constraints level msg f x =
   match !times with
   | Some channel ->
      let start = Unix.gettimeofday () in
@@ -162,17 +162,18 @@ let time_f (loc : Locations.t) number_constraints level msg f x =
         Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 number_constraints d;
      | _ -> Printf.fprintf channel "None, None, %f\n" d;
      end;
-     y
+     (d, y)
   | None when !print_level >= level ->
        let start = Unix.gettimeofday () in
        let y = f x in
        let fin = Unix.gettimeofday () in
        let d = fin -. start in
        debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
-       y
+       (d, y)
   | _ ->
-     f x
+     (0.0, f x)
 
+let time_f loc n_cons level msg f x = snd (time_f_elapsed loc n_cons level msg f x)
 
 
 

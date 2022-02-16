@@ -11,6 +11,8 @@ open Global
 open LogicalPredicates
 
 
+let save_slow_problems = ref (5.0, (None : string option))
+
 type solver = { 
     context : Z3.context;
     incremental : Z3.Solver.solver;
@@ -665,6 +667,18 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), oq)
 
+let maybe_save_slow_problem solv_inst time = match ! save_slow_problems with
+  | (_, None) -> ()
+  | (cutoff, _) when time < cutoff -> ()
+  | (_, Some fname) ->
+    let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
+    output_string channel "\n\nSlow problem, time taken: ";
+    output_string channel (Float.to_string time);
+    output_string channel "\n\nAssertions:\n";
+    List.iter (fun e -> output_string channel (Z3.Expr.to_string e ^ "\n"))
+        (Z3.Solver.get_assertions solv_inst);
+    output_string channel "\n";
+    close_out channel
 
 let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~pointer_facts lc = 
   let context = solver.context in
@@ -683,7 +697,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
   | (`False it | `No_shortcut it) ->
      let t = Translate.term context structs (not_ it) in
      let pointer_facts = List.map (Translate.term context structs) pointer_facts in
-     let res = time_f loc nassumptions 5 "Z3(inc)" 
+     let (_, res) = time_f_elapsed loc nassumptions 5 "Z3(inc)"
                  (Z3.Solver.check solver.incremental) (t :: pointer_facts) 
      in
      match res with
@@ -691,9 +705,12 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
      | Z3.Solver.UNKNOWN ->
         Z3.Solver.reset solver.fancy;
+        debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
         let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
-        let res = time_f loc 5 nassumptions "Z3" (Z3.Solver.check solver.fancy) [] in
+        let (elapsed, res) = time_f_elapsed loc nassumptions 5 "Z3"
+                (Z3.Solver.check solver.fancy) [] in
+        maybe_save_slow_problem solver.fancy elapsed;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)
