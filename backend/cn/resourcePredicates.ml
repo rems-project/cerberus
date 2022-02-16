@@ -165,6 +165,69 @@ let zerobyte () =
   (id, predicate)
 
 
+let page () = 
+  let id = "Page" in
+  let loc = Loc.other "internal (Page)" in
+  let guardv_s, guardv = IT.fresh_named BT.Integer "guardv" in
+  let pbase_s, pbase = IT.fresh_named Loc "pbase" in
+  let pbaseI = pointerToIntegerCast_ pbase in
+  let order_s, order = IT.fresh_named Integer "order" in
+  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
+  let clause1 = 
+    let qp = 
+      let length = 
+        let rec aux i = 
+          if i >= 11 then default_ BT.Integer else 
+            ite_ (eq_ (order, int_ i), 
+                  z_ (Z.pow (Z.of_int 2) (12 + i)), 
+                  aux (i + 1))
+
+        in
+        aux 0
+      in
+      let q_s, q = IT.fresh Integer in {
+        name = "Byte"; 
+        pointer = pointer_ Z.zero;
+        q = q_s;
+        step = Memory.size_of_ctype char_ct;
+        permission = 
+          and_ [permission; pbaseI %<= q; q %< (pbaseI %+ length)];
+        iargs = [];
+        oargs = [];
+      }
+    in
+    let lrt =
+      LRT.Resource (QPredicate qp, (loc, None),
+      LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
+      LRT.I))
+    in
+    {
+      loc = loc;
+      guard = ne_ (guardv, int_ 0);
+        (* and_ [ne_ (vbase, null_); *)
+        (*       int_ 0 %<= order; order %< int_ mMAX_ORDER]; *)
+      packing_ft = AT.of_lrt lrt (AT.I []) 
+    }
+  in
+  let clause2 = 
+    {
+      loc = loc;
+      guard = bool_ true;
+      packing_ft = AT.I []
+    }
+  in
+  let predicate = {
+      loc = loc;
+      pointer = pbase_s;
+      permission = permission_s;
+      iargs = [(guardv_s, IT.bt guardv);
+               (order_s, IT.bt order);
+              ]; 
+      oargs = []; 
+      clauses = [clause1; clause2]; 
+    } 
+  in
+  (id, predicate)
 
 
 
@@ -595,76 +658,12 @@ let page_alloc_predicates struct_decls =
 
 
 
-  let page = 
-    let id = "Page" in
-    let loc = Loc.other "internal (Page)" in
-    let guardv_s, guardv = IT.fresh_named BT.Integer "guardv" in
-    let pbase_s, pbase = IT.fresh_named Loc "pbase" in
-    let pbaseI = pointerToIntegerCast_ pbase in
-    let order_s, order = IT.fresh_named Integer "order" in
-    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
-    let clause1 = 
-      let qp = 
-        let length = 
-          let rec aux i = 
-            if i >= 11 then default_ BT.Integer else 
-              ite_ (eq_ (order, int_ i), 
-                    z_ (Z.pow (Z.of_int 2) (12 + i)), 
-                    aux (i + 1))
-
-          in
-          aux 0
-        in
-        let q_s, q = IT.fresh Integer in {
-          name = "Byte"; 
-          pointer = pointer_ Z.zero;
-          q = q_s;
-          step = Memory.size_of_ctype char_ct;
-          permission = 
-            and_ [permission; pbaseI %<= q; q %< (pbaseI %+ length)];
-          iargs = [];
-          oargs = [];
-        }
-      in
-      let lrt =
-        LRT.Resource (QPredicate qp, (loc, None),
-        LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
-        LRT.I))
-      in
-      {
-        loc = loc;
-        guard = ne_ (guardv, int_ 0);
-          (* and_ [ne_ (vbase, null_); *)
-          (*       int_ 0 %<= order; order %< int_ mMAX_ORDER]; *)
-        packing_ft = AT.of_lrt lrt (AT.I []) 
-      }
-    in
-    let clause2 = 
-      {
-        loc = loc;
-        guard = bool_ true;
-        packing_ft = AT.I []
-      }
-    in
-    let predicate = {
-        loc = loc;
-        pointer = pbase_s;
-        permission = permission_s;
-        iargs = [(guardv_s, IT.bt guardv);
-                 (order_s, IT.bt order);
-                ]; 
-        oargs = []; 
-        clauses = [clause1; clause2]; 
-      } 
-    in
-    (id, predicate)
-  in
 
 
 
 
-  [page;
-   list_node;
+
+  [list_node;
    (* o_list_node; *)
    vmemmap_page;
    hyp_pool;]
@@ -730,6 +729,7 @@ let predicate_list struct_decls =
    * zero_region () :: *)
   (* part_zero_region () :: *)
   early_alloc () ::
+  page () ::
   (* for now: *)
   try page_alloc_predicates struct_decls with
   | Not_found -> []
