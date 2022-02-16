@@ -668,11 +668,12 @@ let maybe_save_slow_problem solv_inst time = match ! save_slow_problems with
   | (cutoff, _) when time < cutoff -> ()
   | (_, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
-    print_string channel "\n\nSlow problem, time taken: ";
-    print_float channel time;
-    print_string channel "\n\nAssertions:\n";
-    List.iter (fun e -> print_string channel (Z3.Expr.to_string e ^ "\n"));
-    print_string channel "\n";
+    output_string channel "\n\nSlow problem, time taken: ";
+    output_string channel (Float.to_string time);
+    output_string channel "\n\nAssertions:\n";
+    List.iter (fun e -> output_string channel (Z3.Expr.to_string e ^ "\n"))
+        (Z3.Solver.get_assertions solv_inst);
+    output_string channel "\n";
     close_out channel
 
 let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~pointer_facts lc = 
@@ -692,7 +693,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
   | (`False it | `No_shortcut it) ->
      let t = Translate.term context structs (not_ it) in
      let pointer_facts = List.map (Translate.term context structs) pointer_facts in
-     let (_, res) = time_f loc nassumptions 5 "Z3(inc)"
+     let (_, res) = time_f_elapsed loc nassumptions 5 "Z3(inc)"
                  (Z3.Solver.check solver.incremental) (t :: pointer_facts) 
      in
      match res with
@@ -703,7 +704,8 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
         let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
-        let (elapsed, res) = time_f loc nassumptions 5 "Z3" (Z3.Solver.check solver.fancy) [] in
+        let (elapsed, res) = time_f_elapsed loc nassumptions 5 "Z3"
+                (Z3.Solver.check solver.fancy) [] in
         maybe_save_slow_problem solver.fancy elapsed;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()

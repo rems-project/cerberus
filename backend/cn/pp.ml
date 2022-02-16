@@ -150,7 +150,7 @@ let debug l pp =
 let warn pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
-let time_f (loc : Locations.t) number_constraints level msg f x =
+let time_f_elapsed (loc : Locations.t) number_constraints level msg f x =
   match !times with
   | Some channel ->
      let start = Unix.gettimeofday () in
@@ -173,6 +173,7 @@ let time_f (loc : Locations.t) number_constraints level msg f x =
   | _ ->
      (0.0, f x)
 
+let time_f loc n_cons level msg f x = snd (time_f_elapsed loc n_cons level msg f x)
 
 
 
