@@ -687,9 +687,10 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
      | Z3.Solver.UNKNOWN ->
         Z3.Solver.reset solver.fancy;
+        debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
         let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
-        let res = time_f loc 5 nassumptions "Z3" (Z3.Solver.check solver.fancy) [] in
+        let res = time_f loc nassumptions 5 "Z3" (Z3.Solver.check solver.fancy) [] in
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)
