@@ -1332,7 +1332,8 @@ end = struct
         | C ftyp ->
            return (unis, ftyp)
       in
-      infer_resources unis ftyp_r
+      time_f loc 0 9 "inferences"
+        (infer_resources unis) ftyp_r
     in
     debug 9 (lazy (!^"finished inferring resource"));
 
@@ -1361,7 +1362,8 @@ end = struct
         | I rt ->
            return rt
       in
-      check_logical_constraints ftyp_c
+      time_f loc 0 9 "constraint checks"
+        check_logical_constraints ftyp_c
     in
     let@ () = return (debug 9 (lazy !^"done")) in
     return rt
