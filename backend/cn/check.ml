@@ -2790,10 +2790,14 @@ let check mu_file =
     let ping = Pp.progress "function welltypedness" number_entries in
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
-        let@ () = return (ping (Sym.pp_string fsym)) in
-        let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
-        let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-        Typing.run ctxt (WellTyped.WFT.good "global" loc ftyp)
+        match !only with
+        | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
+           return ()
+        | _ ->
+           let@ () = return (ping (Sym.pp_string fsym)) in
+           let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
+           let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
+           Typing.run ctxt (WellTyped.WFT.good "global" loc ftyp)
       ) mu_file.mu_funinfo
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in
