@@ -3,6 +3,7 @@ open Context
 type s = {
     typing_context: Context.t;
     solver : Solver.solver;
+    sym_eqs : IT.t SymMap.t;
   }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
@@ -12,8 +13,9 @@ type 'e failure = Context.t -> 'e
 
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global.struct_decls in
+  let sym_eqs = SymMap.empty in
   List.iter (Solver.add solver c.global) c.constraints;
-  let s = { typing_context = c; solver } in
+  let s = { typing_context = c; solver; sym_eqs } in
   let outcome = m s in
   match outcome with
   | Ok (a, _) -> Ok a
@@ -88,8 +90,8 @@ let all_constraints () =
   return s.constraints
 
 let simp_constraints () =
-  let@ s = get () in
-  return (s.sym_eqs, s.constraints)
+  fun s ->
+  Ok ((s.sym_eqs, s.typing_context.constraints), s)
 
 let all_resources () = 
   let@ s = get () in
@@ -139,6 +141,16 @@ let add_ls lvars =
   let@ s = get () in
   set (Context.add_ls lvars s)
 
+let add_sym_eqs sym_eqs = 
+  fun s -> 
+  let sym_eqs = 
+    List.fold_left (fun acc (s, v) -> 
+        SymMap.add s v acc
+      ) s.sym_eqs sym_eqs 
+  in
+  Ok ((), { s with sym_eqs })
+  
+
 let add_c lc = 
   let@ s = get () in
   let@ solver = solver () in
@@ -146,6 +158,8 @@ let add_c lc =
   let lcs = Simplify.simp_lc_flatten s.global.struct_decls scs lc in
   let s = List.fold_right Context.add_c lcs s in
   let () = List.iter (Solver.add solver s.global) lcs in
+  let sym_eqs = List.filter_map (LC.is_sym_lhs_equality) lcs in
+  let@ _ = add_sym_eqs sym_eqs in
   set s
 
 let rec add_cs = function
@@ -158,9 +172,10 @@ let rec add_cs = function
 let add_r oloc r = 
   let@ s = get () in
   let@ scs = simp_constraints () in
-  let r = RE.simp s.global.struct_decls scs r in
-  let s = Context.add_r oloc r s in
-  set s
+  match RE.simp_or_empty s.global.struct_decls scs r with
+  | None -> return ()
+  | Some r -> set (Context.add_r oloc r s)
+
 
 let rec add_rs oloc = function
   | [] -> return ()
@@ -169,10 +184,18 @@ let rec add_rs oloc = function
      add_rs oloc rs
 
 
-let map_and_fold_resources f acc =
-  let@ s = get () in
-  let (s, acc) = Context.map_and_fold_resources f s acc in
-  let@ () = set s in
-  return acc
 
-
+let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) (acc : 'acc) = 
+  fun s ->
+  let structs = s.typing_context.global.struct_decls in
+  let sym_eqs = s.sym_eqs in
+  let constraints = s.typing_context.constraints in
+  let resources, acc =
+    List.fold_right (fun re (resources, acc) ->
+        let (re, acc) = f re acc in
+        match RE.simp_or_empty structs (sym_eqs, constraints) re with
+        | Some re -> (re :: resources, acc)
+        | None -> (resources, acc)
+      ) s.typing_context.resources ([], acc)
+  in
+  Ok (acc, {s with typing_context = {s.typing_context with resources}})
