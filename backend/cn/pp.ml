@@ -162,6 +162,7 @@ let time_f_elapsed (loc : Locations.t) number_constraints level msg f x =
         Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 number_constraints d;
      | _ -> Printf.fprintf channel "None, None, %f\n" d;
      end;
+     flush channel;
      (d, y)
   | None when !print_level >= level ->
        let start = Unix.gettimeofday () in

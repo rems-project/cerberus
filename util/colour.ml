@@ -39,6 +39,13 @@ let int_fg = function
 let do_colour =
   ref (Unix.isatty Unix.stdout)
 
+let without_colour f x =
+  let col = ! do_colour in
+  do_colour := false;
+  let r = f x in
+  do_colour := col;
+  r
+
 let ansi_format f str =
   if !do_colour then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in

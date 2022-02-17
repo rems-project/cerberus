@@ -11,7 +11,7 @@ open Global
 open LogicalPredicates
 
 
-let save_slow_problems = ref (5.0, (None : string option))
+let save_slow_problems = ref (5.0, (Some "slow_smt.txt" : string option))
 
 type solver = { 
     context : Z3.context;
@@ -667,16 +667,20 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), oq)
 
-let maybe_save_slow_problem solv_inst time = match ! save_slow_problems with
+let maybe_save_slow_problem solv_inst lc lc_t time = match ! save_slow_problems with
   | (_, None) -> ()
   | (cutoff, _) when time < cutoff -> ()
   | (_, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
-    output_string channel "\n\nSlow problem, time taken: ";
-    output_string channel (Float.to_string time);
-    output_string channel "\n\nAssertions:\n";
-    List.iter (fun e -> output_string channel (Z3.Expr.to_string e ^ "\n"))
-        (Z3.Solver.get_assertions solv_inst);
+    output_string channel "\n\n";
+    Colour.without_colour (fun () -> print channel (item "Slow problem"
+      (Pp.list (fun pp -> pp) [
+          item "time taken" (format [] (Float.to_string time));
+          item "constraint" (LC.pp lc);
+          item "reduced constraint" (IT.pp lc_t);
+          item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e))
+              (Z3.Solver.get_assertions solv_inst))
+    ]))) ();
     output_string channel "\n";
     close_out channel
 
@@ -710,7 +714,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
         let (elapsed, res) = time_f_elapsed loc nassumptions 5 "Z3"
                 (Z3.Solver.check solver.fancy) [] in
-        maybe_save_slow_problem solver.fancy elapsed;
+        maybe_save_slow_problem solver.fancy lc it elapsed;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)
