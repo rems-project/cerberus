@@ -49,6 +49,7 @@ let open_pred global def args =
   IT.subst su def.body
 
 
+exception Struct_not_found
 
 module PageAlloc = struct
 
@@ -60,9 +61,15 @@ module PageAlloc = struct
     let mMAX_ORDER = 11
     let hHYP_NO_ORDER = 4294967295
 
-    let list_head_tag, _ = Memory.find_tag struct_decls "list_head"
-    let hyp_pool_tag, _ = Memory.find_tag struct_decls "hyp_pool"
-    let hyp_page_tag, _ = Memory.find_tag struct_decls "hyp_page"
+    let list_head_tag, _ = 
+      try Memory.find_tag struct_decls "list_head" with
+      | Not_found -> raise Struct_not_found
+    let hyp_pool_tag, _ = 
+      try Memory.find_tag struct_decls "hyp_pool" with
+      | Not_found -> raise Struct_not_found
+    let hyp_page_tag, _ = 
+      try Memory.find_tag struct_decls "hyp_page" with
+      | Not_found -> raise Struct_not_found
 
     let (%.) t member = IT.(%.) struct_decls t (Id.id member)
 
@@ -460,7 +467,7 @@ end
 
 let predicate_list struct_decls = 
   try PageAlloc.predicates struct_decls with
-  | Not_found -> []
+  | Struct_not_found -> []
 
 
     

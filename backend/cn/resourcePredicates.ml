@@ -732,7 +732,7 @@ let predicate_list struct_decls =
   page () ::
   (* for now: *)
   try page_alloc_predicates struct_decls with
-  | Not_found -> []
+  | LogicalPredicates.Struct_not_found -> []
 
 
     
