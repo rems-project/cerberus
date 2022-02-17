@@ -234,7 +234,10 @@ module ResourceInference = struct
 
   module General = struct
 
-    type 'a cases = C of 'a list
+    type case =
+      | One of {index : IT.t; value : IT.t}
+      | Many of {guard: IT.t; value : IT.t}
+    type cases = C of case list
 
 
     let unfold_array_request item_ct base_pointer_t length permission_t = 
@@ -406,8 +409,8 @@ module ResourceInference = struct
                begin match provable (LC.T took) with
                | `True -> 
                   let i_match = eq_ (sym_ (requested.q, Integer), index) in
-                  let value = value @ [(i_match, p'.value)] in
-                  let init = init @ [(i_match, p'.init)] in
+                  let value = value @ [One {index; value = p'.value}] in
+                  let init = init @ [One {index; value = p'.init}] in
                   let needed' = and_ [needed; not_ (i_match)] in
                   Point {p' with permission = bool_ false}, 
                   (simp needed', C value, C init)
@@ -419,8 +422,8 @@ module ResourceInference = struct
                begin match provable (LC.T pmatch) with
                | `True ->
                   let took = and_ [requested.permission; p'.permission] in
-                  let value = value @ [(took, p'.value)] in
-                  let init = init @ [(took, p'.init)] in
+                  let value = value @ [Many {guard = took; value = p'.value}] in
+                  let init = init @ [Many {guard = took; value = p'.init}] in
                   let needed' = and_ [needed; not_ p'.permission] in
                   let permission' = and_ [p'.permission; not_ needed] in
                   QPoint {p' with permission = permission'}, 
@@ -471,9 +474,12 @@ module ResourceInference = struct
          let v_s, v = IT.fresh (Map (IT.bt q, requested.value)) in
          let i_s, i = IT.fresh (Map (IT.bt q, requested.init)) in
          let@ () = add_ls [(v_s, IT.bt v); (i_s, IT.bt i)] in
-         let constr a (guard, a_v) =
-           forall_ (q_s, IT.bt q)
-             (impl_ (guard, eq_ (map_get_ a q, a_v)))
+         let constr a = function
+           | One {index; value = a_v} ->
+              t_ (eq_ (map_get_ a index, a_v))
+           | Many {guard; value = a_v} ->
+              forall_ (q_s, IT.bt q)
+                (impl_ (guard, eq_ (map_get_ a q, a_v)))
          in
          let@ () = add_cs (map (constr v) value @ (map (constr i) init)) in
          let r = { 
@@ -597,7 +603,7 @@ module ResourceInference = struct
                begin match provable (LC.T took) with
                | `True ->
                   let i_match = eq_ (sym_ (requested.q, Integer), index) in
-                  let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(i_match, oa')])) oargs p'.oargs in
+                  let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [One {index; value = oa'}])) oargs p'.oargs in
                   let needed' = and_ [needed; not_ i_match] in
                   Predicate {p' with permission = bool_ false}, 
                   (simp needed', oargs)
@@ -613,7 +619,7 @@ module ResourceInference = struct
                   let took = and_ [iarg_match; requested.permission; p'.permission] in
                   let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
                   let permission' = and_ [p'.permission; not_ (and_ [iarg_match; needed])] in
-                  let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [(took, oa')])) oargs p'.oargs in
+                  let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [Many {guard = took; value = oa'}])) oargs p'.oargs in
                   QPredicate {p' with permission = permission'}, (simp needed', oargs)
                | `False -> continue
                end
@@ -625,13 +631,12 @@ module ResourceInference = struct
       begin match holds with
       | `True ->
          let q_s, q = requested.q, sym_ (requested.q, Integer) in
-         (* let constr a (guard, a_v) =  *)
-         (*   forall_ (q_s, IT.bt q) *)
-         (*     (impl_ (guard , _)) *)
-         (* in *)
-         let constr a (guard, a_v) = 
-           forall_ (q_s, IT.bt q)
-             (impl_ (guard, eq_ (map_get_ a q, a_v)))
+         let constr a = function
+           | One {index; value = a_v} ->
+              t_ (eq_ (map_get_ a index, a_v))
+           | Many {guard; value = a_v} ->
+              forall_ (q_s, IT.bt q)
+                (impl_ (guard, eq_ (map_get_ a q, a_v)))
          in
          let@ oas = 
            ListM.map2M (fun (C oa) (oa_bt) ->
