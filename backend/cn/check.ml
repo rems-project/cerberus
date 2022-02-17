@@ -366,19 +366,18 @@ module ResourceInference = struct
          in
          return r
       | `False ->
-         let@ resource = match requested.ct with
-           | Array (act, Some length) ->
-              fold_array loc failure act requested.pointer length 
-                requested.permission
-           | Struct tag ->
-              fold_struct loc failure tag requested.pointer 
-                requested.permission
-           | _ -> 
-              let@ model = model () in
-              fail (failure model)
-         in
-         let@ _lcs = add_r (Some (Loc loc)) resource in
-         point_request loc failure requested
+         match requested.ct with
+         | Array (act, Some length) ->
+            (* print stdout !^"*************** fold array"; *)
+            fold_array loc failure act requested.pointer length 
+              requested.permission
+         | Struct tag ->
+            (* print stdout !^"*************** fold struct"; *)
+            fold_struct loc failure tag requested.pointer 
+              requested.permission
+         | _ -> 
+            let@ model = model () in
+            fail (failure model)
       end
 
 
@@ -709,13 +708,13 @@ module ResourceInference = struct
         eachI_ (0, q_s, length - 1) qpoint.init
       in
       let folded_resource = 
-        Point {
-            ct = array_ct item_ct (Some length);
-            pointer = base;
-            value = folded_value;
-            init = folded_init;
-            permission = permission;
-          }
+        {
+          ct = array_ct item_ct (Some length);
+          pointer = base;
+          value = folded_value;
+          init = folded_init;
+          permission = permission;
+        }
       in
       return folded_resource
 
@@ -762,13 +761,13 @@ module ResourceInference = struct
        ) ([], []) layout
       in
       let folded_resource = 
-        Point {
-            ct = struct_ct tag;
-            pointer = pointer_t;
-            value = IT.struct_ (tag, values); 
-            init = and_ inits;
-            permission = permission_t;
-          }
+        {
+          ct = struct_ct tag;
+          pointer = pointer_t;
+          value = IT.struct_ (tag, values); 
+          init = and_ inits;
+          permission = permission_t;
+        }
       in
       return folded_resource
 
@@ -2322,7 +2321,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                             (it_of_arg pointer_arg) (bool_ true) in
           let rt = 
             RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
-            LRT.Resource (resource, (loc, None), 
+            LRT.Resource (Point resource, (loc, None), 
             LRT.I))
           in
           return rt
