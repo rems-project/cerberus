@@ -183,15 +183,15 @@ let time_log_end prev_time =
     Printf.fprintf channel "end (%f)}\n" d
   | _ -> ()
 
-let time_f_logs ((loc : Locations.t), number_constraints) level msg f x =
+let time_f_logs (loc : Locations.t) level msg f x =
   match !times with
   | Some (channel, style) ->
      let _ = time_log_start msg in
      let (d, y) = time_f_elapsed f x in
      begin match (Locations.line_numbers loc, style) with
      | (Some (l1, l2), "csv") ->
-        Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 number_constraints d;
-     | (_, "csv") -> Printf.fprintf channel "None, None, %d, %f\n" number_constraints d;
+        Printf.fprintf channel "%d, %d, %f\n" l1 l2 d;
+     | (_, "csv") -> Printf.fprintf channel "None, None, %f\n" d;
      | (_, "log") -> Printf.fprintf channel "} end (%f)\n" d;
      | _ -> ()
      end;

@@ -12,7 +12,6 @@ module IT = IndexTerms
 module SymMap = Map.Make(Sym)
 
 
-open Global
 
 
 
@@ -26,22 +25,20 @@ let pp_where = function
 
 
 type t = {
-    computational : (BT.t * Sym.t) SymMap.t;
-    logical : LS.t SymMap.t;
+    computational : (Sym.t * (BT.t * Sym.t)) list;
+    logical : (Sym.t * LS.t) list;
     resources : RE.t list;
     constraints : LC.t list;
     global : Global.t;
-    number_constraints : int;   (* constraints + sym_eqs *)
   }
 
 
 let empty global = {
-    computational = SymMap.empty;
-    logical = SymMap.empty;
+    computational = [];
+    logical = [];
     resources = [];
     constraints = [];
     global = global;
-    number_constraints = 0;
   }
 
 
@@ -53,11 +50,11 @@ let pp (ctxt : t) =
   item "computational" 
     (Pp.list (fun (sym, (bt,lsym)) -> 
          typ (Sym.pp sym) (BT.pp bt ^^ tilde ^^ Sym.pp lsym)
-       ) (SymMap.bindings ctxt.computational)) ^/^
+       ) ctxt.computational) ^/^
   item "logical" 
     (Pp.list (fun (sym, ls) -> 
          typ (Sym.pp sym) (LS.pp ls)
-       ) (SymMap.bindings ctxt.logical)) ^/^
+       ) ctxt.logical) ^/^
   item "resources" 
     (Pp.list RE.pp ctxt.resources) ^/^
   item "constraints" 
@@ -69,23 +66,23 @@ let pp (ctxt : t) =
 
 
 let bound_a sym ctxt = 
-  SymMap.mem sym ctxt.computational
+  Option.is_some (List.assoc_opt Sym.equal sym ctxt.computational)
 let bound_l sym ctxt = 
-  SymMap.mem sym ctxt.logical
+  Option.is_some (List.assoc_opt Sym.equal sym ctxt.logical)
 
 
 
 let get_a (name: Sym.t) (ctxt: t)  = 
-  SymMap.find name ctxt.computational
+  List.assoc Sym.equal name ctxt.computational
 
 let get_l (name: Sym.t) (ctxt:t) = 
-  SymMap.find name ctxt.logical
+  List.assoc Sym.equal name ctxt.logical
 
 let add_a aname (bt, lname) ctxt = 
-  {ctxt with computational = SymMap.add aname (bt, lname) ctxt.computational}
+  {ctxt with computational = (aname, (bt, lname)) :: ctxt.computational}
 
 let add_l lname ls (ctxt : t) = 
-  {ctxt with logical = SymMap.add lname ls ctxt.logical}
+  {ctxt with logical = (lname, ls) :: ctxt.logical}
 
 let add_ls lvars ctxt = 
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
@@ -105,13 +102,13 @@ let json (ctxt : t) : Yojson.Safe.t =
         `Assoc [("name", Sym.json sym);
                 ("basetype", BT.json bt); 
                 ("logical", Sym.json lname)]        
-      ) (SymMap.bindings ctxt.computational)
+      ) ctxt.computational
   in
   let logical = 
     List.map (fun (sym, ls) ->
         `Assoc [("name", Sym.json sym);
                 ("sort", LS.json ls)]
-      ) (SymMap.bindings ctxt.logical)
+      ) ctxt.logical
   in
   let resources = List.map RE.json ctxt.resources in
   let constraints = List.map LC.json ctxt.constraints in

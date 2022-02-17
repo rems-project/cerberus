@@ -1303,7 +1303,7 @@ end = struct
       delay_logical SymMap.empty ftyp_l
     in
 
-    let@ () = time_f_logs (loc, 0) 9 "pre_inf_eqs"
+    let@ () = time_f_logs loc 9 "pre_inf_eqs"
         (InferenceEqs.add_eqs_for_infer loc) ftyp_r in
 
     let start = time_log_start "inference" in
@@ -1359,7 +1359,7 @@ end = struct
       let rec check_logical_constraints = function
         | Constraint (c, info, ftyp) -> 
            let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-           let res = time_f_logs (fst info, 0) 9 ("constraint, " ^ Locations.to_string (fst info))
+           let res = time_f_logs loc 9 ("constraint, " ^ Locations.to_string (fst info))
                provable c in
            begin match res with
            | `True -> check_logical_constraints ftyp 

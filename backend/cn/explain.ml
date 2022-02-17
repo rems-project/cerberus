@@ -175,13 +175,13 @@ module VClassGraph = Graph.Make(VClass)
 
 let veclasses ctxt = 
   let with_logical = 
-    SymMap.fold (fun l sort g ->
+    List.fold_right (fun (l, sort) g ->
         VClassSet.add (make (l, sort)) g
       ) ctxt.logical VClassSet.empty
   in
   (* add computational variables into the classes *)
   let with_all = 
-    SymMap.fold (fun s (bt, l) g ->
+    List.fold_right (fun (s, (bt, l)) g ->
         let c = find_class (in_class l) g in
         let c' = { c with computational_vars = SymSet.add s c.computational_vars } in
         VClassSet.add c' (VClassSet.remove c g)
@@ -208,12 +208,12 @@ let explanation ctxt relevant =
 
   (* only report the state of the relevant variables *)
   let relevant = 
-    SymMap.fold (fun s _ acc -> 
+    List.fold_right (fun (s, _) acc -> 
         if has_good_description s then SymSet.add s acc else acc
       ) ctxt.computational relevant
   in
   let relevant = 
-    SymMap.fold (fun s _ acc -> 
+    List.fold_right (fun (s, _) acc -> 
         if has_good_description s then SymSet.add s acc else acc
       ) ctxt.logical relevant
   in
