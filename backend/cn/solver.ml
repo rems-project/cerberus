@@ -712,7 +712,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
   let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
   let it, oq = ReduceQuery.constr global assumptions lc in
-  debug 6 (lazy (item "reduced" (IT.pp it)));
+  (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
   let rtrue () = model_state := No_model; `True in
   let rfalse = function
     | Some solver -> model_state := Model (context, solver, oq); `False
