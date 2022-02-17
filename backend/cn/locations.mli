@@ -17,6 +17,8 @@ val is_unknown : t -> bool
 
 val pp : t -> PPrint.document
 
+val to_string : t -> string
+
 val good_location : Location_ocaml.t -> bool
 
 val update : t -> Location_ocaml.t -> t

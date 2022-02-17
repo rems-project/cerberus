@@ -17,6 +17,8 @@ let is_unknown loc = loc = unknown
 
 let pp loc = Location_ocaml.pp_location ~clever:false loc
 
+let to_string loc = Location_ocaml.location_to_string loc
+
 let other str = Location_ocaml.other str
 
 

@@ -28,22 +28,24 @@ let unicode = ref true
 let print_level = ref 0
 
 
-let times = ref (None : out_channel option)
+let times = ref (None : (out_channel * string) option)
 
 
 let maybe_open_times_channel = function
   | None -> ()
-  | Some filename -> 
+  | Some (filename, style) ->
      let channel = open_out filename in
-     times := Some channel;
-     Printf.fprintf channel "lineF, lineT, assumptions, time\n"
+     times := Some (channel, style);
+     if style == "csv"
+     then Printf.fprintf channel "lineF, lineT, assumptions, time\n"
+     else ()
 
 
 
 let maybe_close_times_channel () =
   match !times with
   | None -> ()
-  | Some channel -> flush channel; close_out channel
+  | Some (channel, _) -> flush channel; close_out channel
 
 
 
@@ -150,33 +152,53 @@ let debug l pp =
 let warn pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
-let time_f_elapsed (loc : Locations.t) number_constraints level msg f x =
+let time_f_elapsed f x =
+  let start = Unix.gettimeofday () in
+  let y = f x in
+  let fin = Unix.gettimeofday () in
+  let d = fin -. start in
+  (d, y)
+
+let time_f_debug level msg f x =
+  if !print_level >= level
+  then
+    let (d, y) = time_f_elapsed f x in
+    debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
+    y
+  else f x
+
+let time_log_start msg =
   match !times with
-  | Some channel ->
-     let start = Unix.gettimeofday () in
-     let y = f x in
-     let fin = Unix.gettimeofday () in
-     let d = fin -. start in
-     begin match Locations.line_numbers loc with
-     | Some (l1, l2) -> 
+  | Some (channel, "log") ->
+    let start = Unix.gettimeofday () in
+    Printf.fprintf channel "begin (%s) {\n" msg;
+    start
+  | _ -> 0.0
+
+let time_log_end prev_time =
+  match !times with
+  | Some (channel, "log") ->
+    let fin_time = Unix.gettimeofday () in
+    let d = fin_time -. prev_time in
+    Printf.fprintf channel "end (%f)}\n" d
+  | _ -> ()
+
+let time_f_logs ((loc : Locations.t), number_constraints) level msg f x =
+  match !times with
+  | Some (channel, style) ->
+     let _ = time_log_start msg in
+     let (d, y) = time_f_elapsed f x in
+     begin match (Locations.line_numbers loc, style) with
+     | (Some (l1, l2), "csv") ->
         Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 number_constraints d;
-     | _ -> Printf.fprintf channel "None, None, %f\n" d;
+     | (_, "csv") -> Printf.fprintf channel "None, None, %d, %f\n" number_constraints d;
+     | (_, "log") -> Printf.fprintf channel "} end (%f)\n" d;
+     | _ -> ()
      end;
      flush channel;
-     (d, y)
-  | None when !print_level >= level ->
-       let start = Unix.gettimeofday () in
-       let y = f x in
-       let fin = Unix.gettimeofday () in
-       let d = fin -. start in
-       debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
-       (d, y)
-  | _ ->
-     (0.0, f x)
-
-let time_f loc n_cons level msg f x = snd (time_f_elapsed loc n_cons level msg f x)
-
-
+     debug level (lazy (format [] (msg ^ ": elapsed: " ^ Float.to_string d)));
+     y
+  | _ -> time_f_debug level msg f x
 
 
 (* stealing some logic from pp_errors *)

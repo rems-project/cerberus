@@ -162,7 +162,8 @@ let main
       no_model_eqs
       skip_consistency
       only
-      times
+      csv_times
+      log_times
   =
   if json then begin
       if debug_level > 0 then
@@ -186,7 +187,10 @@ let main
      try
        let open Resultat in
        Debug_ocaml.maybe_open_csv_timing_file ();
-       Pp.maybe_open_times_channel times;
+       Pp.maybe_open_times_channel (match (csv_times, log_times) with
+         | (Some times, _) -> Some (times, "csv")
+         | (_, Some times) -> Some (times, "log")
+         | _ -> None);
        let result = 
          let@ file = Retype.retype_file file in
          Check.check file 
@@ -252,9 +256,13 @@ let no_model_eqs =
   let doc = "Deactivate 'model based eqs' optimisation in resource inference spine judgement." in
   Arg.(value & flag & info["no_model_eqs"] ~doc)
 
-let times =
-  let doc = "file in which to output timing information" in
+let csv_times =
+  let doc = "file in which to output csv timing information" in
   Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
+
+let log_times =
+  let doc = "file in which to output hierarchical timing information" in
+  Arg.(value & opt (some string) None & info ["log_times"] ~docv:"FILE" ~doc)
 
 let only =
   let doc = "only type-check this function" in
@@ -276,6 +284,7 @@ let () =
       no_model_eqs $
       skip_consistency $
       only $
-      times 
+      csv_times $
+      log_times
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

@@ -1297,8 +1297,10 @@ end = struct
       delay_logical SymMap.empty ftyp_l
     in
 
-    let@ () = InferenceEqs.add_eqs_for_infer loc ftyp_r in
+    let@ () = time_f_logs (loc, 0) 9 "pre_inf_eqs"
+        (InferenceEqs.add_eqs_for_infer loc) ftyp_r in
 
+    let start = time_log_start "inference" in
     let@ (unis, ftyp_c) = 
       let rec infer_resources unis ftyp = 
         let@ () = print_with_ctxt (fun ctxt ->
@@ -1332,10 +1334,10 @@ end = struct
         | C ftyp ->
            return (unis, ftyp)
       in
-      time_f loc 0 9 "inferences"
-        (infer_resources unis) ftyp_r
+      infer_resources unis ftyp_r
     in
     debug 9 (lazy (!^"finished inferring resource"));
+    time_log_end start;
 
     let () = match SymMap.min_binding_opt unis with
       | Some (s, _) ->
@@ -1344,13 +1346,16 @@ end = struct
          ()
     in
 
+    let start = time_log_start "spine constraints" in
     let@ rt = 
       let@ provable = provable loc in
       let@ () = return (debug 9 (lazy !^"checking constraints")) in
       let rec check_logical_constraints = function
         | Constraint (c, info, ftyp) -> 
            let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-           begin match provable c with
+           let res = time_f_logs (fst info, 0) 9 ("constraint, " ^ Locations.to_string (fst info))
+               provable c in
+           begin match res with
            | `True -> check_logical_constraints ftyp 
            | `False ->
               let@ model = model () in
@@ -1362,9 +1367,9 @@ end = struct
         | I rt ->
            return rt
       in
-      time_f loc 0 9 "constraint checks"
-        check_logical_constraints ftyp_c
+      check_logical_constraints ftyp_c
     in
+    time_log_end start;
     let@ () = return (debug 9 (lazy !^"done")) in
     return rt
 

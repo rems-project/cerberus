@@ -526,7 +526,7 @@ module ReduceQuery = struct
     let def = Option.get (get_logical_predicate_def global pred.name) in
     (open_pred global def pred.args, None)
 
-  let qpred global assumptions qpred = 
+  let qpred global assumptions qpred =
     (* fresh name to instantiate quantifiers with *)
     let s_inst = Sym.fresh () in
     let instantiate {q = (s, bt); condition; pred} = 
@@ -553,6 +553,29 @@ module ReduceQuery = struct
     (* print stdout (IT.pp reduced); *)
     (* print stdout !^"************************************************************************** "; *)
     (reduced, Some (s_inst, snd qpred.q))
+
+  let qpred_eq global assumptions qpred =
+    (* fresh name to instantiate quantifiers with *)
+    let s_inst = Sym.fresh () in
+    let instantiate {q = (s, bt); condition; pred} =
+      let subst = make_subst [(s, sym_ (s_inst, bt))] in
+      (IT.subst subst condition, List.map (IT.subst subst) pred.args)
+    in
+    (* constraint true if one of the premise predicates has its
+       conditions true and equal arguments *)
+    let (condition, args) = instantiate qpred in
+    let poss =
+      List.filter_map (function
+        | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
+           let (condition', args') = instantiate qpred' in
+           let eq_args = List.map2 eq__ args args' in
+           Some (impl_ (condition', and_ eq_args))
+        | _ ->
+           None
+        ) assumptions
+    in
+    (impl_ (condition, (or_ poss)), Some (s_inst, snd qpred.q))
+
 
   let plain it = 
     match it with
@@ -689,7 +712,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
   let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
   let it, oq = ReduceQuery.constr global assumptions lc in
-  (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
+  debug 6 (lazy (item "reduced" (IT.pp it)));
   let rtrue () = model_state := No_model; `True in
   let rfalse = function
     | Some solver -> model_state := Model (context, solver, oq); `False
@@ -701,7 +724,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
   | (`False it | `No_shortcut it) ->
      let t = Translate.term context structs (not_ it) in
      let pointer_facts = List.map (Translate.term context structs) pointer_facts in
-     let (_, res) = time_f_elapsed loc nassumptions 5 "Z3(inc)"
+     let res = time_f_logs (loc, nassumptions) 5 "Z3(inc)"
                  (Z3.Solver.check solver.incremental) (t :: pointer_facts) 
      in
      match res with
@@ -712,8 +735,8 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
         let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
-        let (elapsed, res) = time_f_elapsed loc nassumptions 5 "Z3"
-                (Z3.Solver.check solver.fancy) [] in
+        let (elapsed, res) = time_f_elapsed (time_f_logs (loc, nassumptions) 5 "Z3"
+                (Z3.Solver.check solver.fancy)) [] in
         maybe_save_slow_problem solver.fancy lc it elapsed;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
