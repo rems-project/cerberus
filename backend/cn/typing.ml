@@ -209,8 +209,7 @@ let map_and_fold_resources loc (f : RE.t -> 'acc -> (RE.t changed) * 'acc) (acc 
            | None -> (resources, acc)
            | Some (QPoint {q; permission; _} | QPredicate {q; permission; _})
                 when (`True = provable (LC.forall_ (q, Integer) (IT.not_ permission))) ->
-              let open Pp in print stdout !^"*************************************** deleted";
-                             (resources, acc)
+              (resources, acc)
            | Some re -> 
               (re :: resources, acc)
       ) s.typing_context.resources ([], acc)
