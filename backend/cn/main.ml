@@ -171,7 +171,7 @@ let main
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
   Debug_ocaml.debug_level := debug_level;
-  WellTyped.check_consistency := not skip_consistency || Option.is_some only;
+  WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Check.ResourceInference.reorder_points := not no_reorder_points;
