@@ -310,7 +310,7 @@ module ResourceInference = struct
       let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init) ->
-            let continue = (re, (needed, value, init)) in
+            let continue = (Unchanged re, (needed, value, init)) in
             if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
@@ -319,7 +319,7 @@ module ResourceInference = struct
                let took = simp (and_ [pmatch; p'.permission; needed]) in
                begin match provable (LC.T took) with
                | `True ->
-                  Point {p' with permission = bool_ false}, 
+                  Changed (Point {p' with permission = bool_ false}), 
                   (bool_ false, p'.value, p'.init)
                | `False -> 
                   continue
@@ -340,7 +340,7 @@ module ResourceInference = struct
                begin match provable (LC.T took) with
                | `True ->
                   let permission' = and_ [p'.permission; ne_ (sym_ (p'.q, Integer), index)] in
-                  QPoint {p' with permission = permission'}, 
+                  Changed (QPoint {p' with permission = permission'}), 
                   (bool_ false, IT.subst subst p'.value, IT.subst subst p'.init)
                | `False -> continue
                end
@@ -348,11 +348,11 @@ module ResourceInference = struct
                continue
       in
       let@ (needed, value, init) =
-        map_and_fold_resources (sub_resource_if is_exact_re)
+        map_and_fold_resources loc (sub_resource_if is_exact_re)
           (needed, default_ requested.value, default_ requested.init)
       in
       let@ (needed, value, init) =
-        map_and_fold_resources (sub_resource_if (fun re -> not (is_exact_re re)))
+        map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
           (needed, value, init) in
       begin match provable (t_ (not_ needed)) with
       | `True ->
@@ -391,7 +391,7 @@ module ResourceInference = struct
       let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in
       let sub_resource_if = fun cond re (needed, C value, C init) ->
-            let continue = (re, (needed, C value, C init)) in
+            let continue = (Unchanged re, (needed, C value, C init)) in
             if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
@@ -411,7 +411,7 @@ module ResourceInference = struct
                   let value = value @ [One {index; value = p'.value}] in
                   let init = init @ [One {index; value = p'.init}] in
                   let needed' = and_ [needed; not_ (i_match)] in
-                  Point {p' with permission = bool_ false}, 
+                  Changed (Point {p' with permission = bool_ false}), 
                   (simp needed', C value, C init)
                | `False -> continue
                end
@@ -425,7 +425,7 @@ module ResourceInference = struct
                   let init = init @ [Many {guard = took; value = p'.init}] in
                   let needed' = and_ [needed; not_ p'.permission] in
                   let permission' = and_ [p'.permission; not_ needed] in
-                  QPoint {p' with permission = permission'}, 
+                  Changed (QPoint {p' with permission = permission'}), 
                   (simp needed', C value, C init)
                | `False -> continue
                end
@@ -433,7 +433,7 @@ module ResourceInference = struct
                continue
       in
       let@ (needed, C value, C init) =
-        map_and_fold_resources (sub_resource_if is_exact_re)
+        map_and_fold_resources loc (sub_resource_if is_exact_re)
           (needed, C [], C [])
       in
 
@@ -447,7 +447,7 @@ module ResourceInference = struct
       let is_exact_k re = !reorder_points && k_ptr_match re in
 
       let@ (needed, C value, C init) =
-        map_and_fold_resources (sub_resource_if is_exact_k)
+        map_and_fold_resources loc (sub_resource_if is_exact_k)
           (needed, C value, C init) in
 
       if List.length k_ptrs == 0 then ()
@@ -462,7 +462,7 @@ module ResourceInference = struct
         else needed in
 
       let@ (needed, C value, C init) =
-        map_and_fold_resources (sub_resource_if
+        map_and_fold_resources loc (sub_resource_if
           (fun re -> not (is_exact_k re) && not (is_exact_k re)))
           (needed, C value, C init) in
 
@@ -507,7 +507,7 @@ module ResourceInference = struct
       let@ simp_lcs = simp_constraints () in
       let needed = requested.permission in 
       let sub_predicate_if = fun cond re (needed, oargs) ->
-            let continue = (re, (needed, oargs)) in
+            let continue = (Unchanged re, (needed, oargs)) in
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
@@ -518,7 +518,7 @@ module ResourceInference = struct
                let took = and_ (needed :: p'.permission :: pmatch) in
                begin match provable (LC.T took) with
                | `True ->
-                  Predicate {p' with permission = bool_ false}, 
+                  Changed (Predicate {p' with permission = bool_ false}), 
                   (bool_ false, p'.oargs)
                | `False -> continue
                end
@@ -540,7 +540,8 @@ module ResourceInference = struct
                   let oargs = List.map (IT.subst subst) p'.oargs in
                   let i_match = eq_ (sym_ (p'.q, Integer), index) in
                   let permission' = and_ [p'.permission; not_ i_match] in
-                  QPredicate {p' with permission = permission'}, (bool_ false, oargs)
+                  Changed (QPredicate {p' with permission = permission'}), 
+                  (bool_ false, oargs)
                | `False -> continue
                end
             | re ->
@@ -549,11 +550,11 @@ module ResourceInference = struct
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.Predicate requested, re)) in
       let@ (needed, oargs) =
-        map_and_fold_resources (sub_predicate_if is_exact_re)
+        map_and_fold_resources loc (sub_predicate_if is_exact_re)
             (needed, List.map default_ requested.oargs)
       in
       let@ (needed, oargs) =
-        map_and_fold_resources (sub_predicate_if (fun re -> not (is_exact_re re)))
+        map_and_fold_resources loc (sub_predicate_if (fun re -> not (is_exact_re re)))
             (needed, oargs)
       in
       begin match provable (t_ (not_ needed)) with
@@ -582,8 +583,8 @@ module ResourceInference = struct
       let simp it = Simplify.simp global.struct_decls simp_lcs it in
       let needed = requested.permission in
       let@ (needed, oargs) =
-        map_and_fold_resources (fun re (needed, oargs) ->
-            let continue = (re, (needed, oargs)) in
+        map_and_fold_resources loc (fun re (needed, oargs) ->
+            let continue = (Unchanged re, (needed, oargs)) in
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
@@ -604,7 +605,7 @@ module ResourceInference = struct
                   let i_match = eq_ (sym_ (requested.q, Integer), index) in
                   let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [One {index; value = oa'}])) oargs p'.oargs in
                   let needed' = and_ [needed; not_ i_match] in
-                  Predicate {p' with permission = bool_ false}, 
+                  Changed (Predicate {p' with permission = bool_ false}), 
                   (simp needed', oargs)
                | `False -> continue
                end
@@ -619,7 +620,8 @@ module ResourceInference = struct
                   let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
                   let permission' = and_ [p'.permission; not_ (and_ [iarg_match; needed])] in
                   let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [Many {guard = took; value = oa'}])) oargs p'.oargs in
-                  QPredicate {p' with permission = permission'}, (simp needed', oargs)
+                  Changed (QPredicate {p' with permission = permission'}), 
+                  (simp needed', oargs)
                | `False -> continue
                end
             | re ->
@@ -951,7 +953,7 @@ let add_eqs_for_infer loc ftyp =
   begin
   debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
-  let@ ress = map_and_fold_resources (fun re xs -> (re, re :: xs)) [] in
+  let@ ress = map_and_fold_resources loc (fun re xs -> (Unchanged re, re :: xs)) [] in
   let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
   let ptrs = List.filter_map (res_ptr_k true) reqs @
     (List.filter_map (res_ptr_k false) ress) in
@@ -1213,11 +1215,11 @@ end = struct
     let ftyp = del i ftyp in
     Resource (resource, info, ftyp)
 
-  let has_exact r =
+  let has_exact loc r =
     let@ is_ex = RI.General.exact_match () in
-    map_and_fold_resources (fun re found -> (re, found || is_ex (RE.request re, r))) false
+    map_and_fold_resources loc (fun re found -> (Unchanged re, found || is_ex (RE.request re, r))) false
 
-  let prefer_exact unis ftyp =
+  let prefer_exact loc unis ftyp =
     if ! RI.reorder_points then return ftyp
     else
     let reqs1 = NormalisedArgumentTypes.r_resource_requests ftyp in
@@ -1229,7 +1231,7 @@ end = struct
     in
     let no_unis r = SymSet.for_all (fun x -> not (SymMap.mem x unis)) (res_free_vars r) in
     let reqs = List.filter (fun (_, r) -> no_unis r) reqs in
-    let@ reqs = ListM.filterM (fun (_, r) -> has_exact r) reqs in
+    let@ reqs = ListM.filterM (fun (_, r) -> has_exact loc r) reqs in
     (* just need an actual preference function *)
     match List.rev reqs with
       | ((i, _) :: _) -> return (prefer_req i ftyp)
@@ -1313,7 +1315,7 @@ end = struct
             debug 6 (lazy (item "unis" (pp_unis unis)))
           )
         in
-        let@ ftyp = prefer_exact unis ftyp in
+        let@ ftyp = prefer_exact loc unis ftyp in
         match ftyp with
         | Resource (resource, info, ftyp) -> 
            let request = RE.request resource in
@@ -1602,17 +1604,17 @@ let infer_array_shift loc asym1 ct asym2 =
    *            mul_ (int_ element_size, it_of_arg arg2)))
    * in *)
   let@ o_folded_length =
-    map_and_fold_resources (fun re found ->
+    map_and_fold_resources loc (fun re found ->
         match found, re with
         | Some _, _ -> 
-           (re, found)
+           (Unchanged re, found)
         | None, Point {ct = Array (_, Some length); pointer; _} ->
            begin match provable (t_ (eq__ pointer (it_of_arg arg1))) with
-           | `True -> (re, Some length)
-           | `False -> (re, found)
+           | `True -> (Unchanged re, Some length)
+           | `False -> (Unchanged re, found)
            end
         | _ -> 
-           (re, found)
+           (Unchanged re, found)
       ) None
   in
   match o_folded_length with
@@ -1705,19 +1707,19 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let it = it_of_arg arg in
        let@ provable = provable loc in
        let@ found =
-         map_and_fold_resources (fun re found ->
+         map_and_fold_resources loc (fun re found ->
              match found, re with
              | true, _ -> 
-                (re, found)
+                (Unchanged re, found)
              | false, Point {ct = Struct tag'; pointer; permission; _} 
                   when Sym.equal tag tag' ->
                 begin match provable (t_ (and_ [eq__ pointer it;
                                                 permission])) with
-                | `True -> (re, true)
-                | `False -> (re, found)
+                | `True -> (Unchanged re, true)
+                | `False -> (Unchanged re, found)
                 end
              | _ -> 
-                (re, found)
+                (Unchanged re, found)
            ) false
        in
        (* TODO: this is unecessary: we could have unfolded the struct

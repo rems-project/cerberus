@@ -690,7 +690,7 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), oq)
 
-let maybe_save_slow_problem solv_inst lc lc_t time = match ! save_slow_problems with
+let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_problems with
   | (_, None) -> ()
   | (cutoff, _) when time < cutoff -> ()
   | (_, Some fname) ->
@@ -701,9 +701,9 @@ let maybe_save_slow_problem solv_inst lc lc_t time = match ! save_slow_problems 
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "reduced constraint" (IT.pp lc_t);
-          item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e))
-              (Z3.Solver.get_assertions solv_inst))
-    ]))) ();
+          if !Pp.print_level >= 10 then item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver)) else Pp.empty;
+          if !Pp.print_level >= 11 then item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solv_inst)) else Pp.empty;
+      ]))) ();
     output_string channel "\n";
     close_out channel
 
@@ -737,7 +737,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~assumptions ~nassumptions ~po
         let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
         let (elapsed, res) = time_f_elapsed (time_f_logs (loc, nassumptions) 5 "Z3"
                 (Z3.Solver.check solver.fancy)) [] in
-        maybe_save_slow_problem solver.fancy lc it elapsed;
+        maybe_save_slow_problem solver.fancy lc it elapsed solver.fancy;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)

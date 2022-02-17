@@ -97,16 +97,20 @@ let all_resources () =
   let@ s = get () in
   return s.resources
 
-let provable loc =
-  let@ s = get () in
-  let@ solver = solver () in
+let make_provable loc =
+  fun {typing_context = s; solver; sym_eqs} -> 
   let pointer_facts = Resources.RE.pointer_facts s.resources in
   let f ?(shortcut_false=false) lc = 
     Solver.provable ~loc ~shortcut_false ~solver ~global:s.global 
       ~assumptions:s.constraints ~nassumptions:s.number_constraints
       ~pointer_facts lc 
   in
-  return f
+  f
+
+let provable loc = 
+  fun s -> 
+  Ok (make_provable loc s, s)
+  
 
 let model () =
   return (Solver.model ())
@@ -184,18 +188,31 @@ let rec add_rs oloc = function
      add_rs oloc rs
 
 
+type 'a changed = 
+  | Unchanged of 'a
+  | Changed of 'a
 
-let map_and_fold_resources (f : RE.t -> 'acc -> RE.t * 'acc) (acc : 'acc) = 
+let map_and_fold_resources loc (f : RE.t -> 'acc -> (RE.t changed) * 'acc) (acc : 'acc) = 
   fun s ->
+  let provable = make_provable loc s in
   let structs = s.typing_context.global.struct_decls in
   let sym_eqs = s.sym_eqs in
   let constraints = s.typing_context.constraints in
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
         let (re, acc) = f re acc in
-        match RE.simp_or_empty structs (sym_eqs, constraints) re with
-        | Some re -> (re :: resources, acc)
-        | None -> (resources, acc)
+        match re with
+        | Unchanged re -> 
+           (re :: resources, acc)
+        | Changed re ->
+           match RE.simp_or_empty structs (sym_eqs, constraints) re with
+           | None -> (resources, acc)
+           | Some (QPoint {q; permission; _} | QPredicate {q; permission; _})
+                when (`True = provable (LC.forall_ (q, Integer) (IT.not_ permission))) ->
+              let open Pp in print stdout !^"*************************************** deleted";
+                             (resources, acc)
+           | Some re -> 
+              (re :: resources, acc)
       ) s.typing_context.resources ([], acc)
   in
   Ok (acc, {s with typing_context = {s.typing_context with resources}})
