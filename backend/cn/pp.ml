@@ -145,7 +145,7 @@ let action a = format [Cyan] ("## " ^ a ^ " ")
 let debug l pp = 
   if !print_level >= l 
   then
-    let time = Unix.gettimeofday () in
+    let time = Sys.time () in
     let dpp = format [Green] ("[" ^ Float.to_string time ^ "] ") in
     print stderr (dpp ^^ Lazy.force pp)
 
