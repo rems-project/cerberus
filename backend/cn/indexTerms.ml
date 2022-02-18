@@ -191,89 +191,89 @@ let pp =
   fun (it : 'bt term) -> aux false it
 
 
-let subterms : 'bt. 'bt term -> ('bt term) list =
-  fun (IT (it, _)) ->
+let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
+  fun ts (IT (it, _)) ->
   match it with
-  | Arith_op arith_op -> 
+  | Arith_op arith_op ->
      begin match arith_op with
-     | Add (it, it') -> [it; it'] 
-     | Sub (it, it') -> [it; it']
-     | Mul (it, it') -> [it; it']
-     | Div (it, it') -> [it; it']
-     | Exp (it, it') -> [it; it']
-     | Rem (it, it') -> [it; it']
-     | Mod (it, it') -> [it; it']
-     | LT (it, it') -> [it; it']
-     | LE (it, it') -> [it; it']
-     | Min (it, it') -> [it; it']
-     | Max (it, it') -> [it; it']
-     | IntToReal t -> [t]
-     | RealToInt t -> [t]
-     | FlipBit fb -> [fb.bit; fb.t]
-     | XOR (_, it, it') -> [it; it']
+     | Add (it, it') -> [it; it'] @ ts
+     | Sub (it, it') -> [it; it'] @ ts
+     | Mul (it, it') -> [it; it'] @ ts
+     | Div (it, it') -> [it; it'] @ ts
+     | Exp (it, it') -> [it; it'] @ ts
+     | Rem (it, it') -> [it; it'] @ ts
+     | Mod (it, it') -> [it; it'] @ ts
+     | LT (it, it') -> [it; it'] @ ts
+     | LE (it, it') -> [it; it'] @ ts
+     | Min (it, it') -> [it; it'] @ ts
+     | Max (it, it') -> [it; it'] @ ts
+     | IntToReal t -> [t] @ ts
+     | RealToInt t -> [t] @ ts
+     | FlipBit fb -> [fb.bit; fb.t] @ ts
+     | XOR (_, it, it') -> [it; it'] @ ts
      end
   | Bool_op bool_op ->
      begin match bool_op with
-     | And its -> its
-     | Or its -> its
-     | Impl (it, it') -> [it; it']
-     | Not it -> [it]
-     | ITE (it,it',it'') -> [it;it';it'']
-     | EQ (it, it') -> [it; it']
-     | EachI _ -> (* in binders set below *) []
+     | And its -> its @ ts
+     | Or its -> its @ ts
+     | Impl (it, it') -> [it; it'] @ ts
+     | Not it -> [it] @ ts
+     | ITE (it,it',it'') -> [it;it';it''] @ ts
+     | EQ (it, it') -> [it; it'] @ ts
+     | EachI _ -> (* in binders set below *) [] @ ts
      end
-  | Tuple_op tuple_op -> 
+  | Tuple_op tuple_op ->
      begin match tuple_op with
-     | Tuple its -> its
-     | NthTuple ( _, it) -> [it]
+     | Tuple its -> its @ ts
+     | NthTuple ( _, it) -> [it] @ ts
      end
-  | Struct_op struct_op -> 
+  | Struct_op struct_op ->
      begin match struct_op with
      | Struct (_tag, members) -> map snd members
-     | StructMember (it, s) -> [it;it]
+     | StructMember (it, s) -> [it;it] @ ts
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
-     | LTPointer (it, it')  -> [it; it']
-     | LEPointer (it, it') -> [it; it']
-     | IntegerToPointerCast t -> [t]
-     | PointerToIntegerCast t -> [t]
-     | MemberOffset (_, _) -> []
-     | ArrayOffset (_, t) -> [t]
+     | LTPointer (it, it')  -> [it; it'] @ ts
+     | LEPointer (it, it') -> [it; it'] @ ts
+     | IntegerToPointerCast t -> [t] @ ts
+     | PointerToIntegerCast t -> [t] @ ts
+     | MemberOffset (_, _) -> ts
+     | ArrayOffset (_, t) -> [t] @ ts
      end
   | CT_pred ct_pred ->
      begin match ct_pred with
-     | Aligned (t, _rt) -> [t]
-     | AlignedI t -> [t.t; t.align]
-     | Representable (_rt,t) -> [t]
-     | Good (_rt,t) -> [t]
+     | Aligned (t, _rt) -> [t] @ ts
+     | AlignedI t -> [t.t; t.align] @ ts
+     | Representable (_rt,t) -> [t] @ ts
+     | Good (_rt,t) -> [t] @ ts
      end
   | List_op list_op ->
      begin match list_op with
-     | Nil  -> []
-     | Cons (it, it') -> [it; it']
-     | List its -> its
-     | Head it -> [it]
-     | Tail it -> [it]
-     | NthList (_,it) -> [it]
+     | Nil  -> [] @ ts
+     | Cons (it, it') -> [it; it'] @ ts
+     | List its -> its @ ts
+     | Head it -> [it] @ ts
+     | Tail it -> [it] @ ts
+     | NthList (_,it) -> [it] @ ts
      end
   | Set_op set_op ->
      begin match set_op with
-     | SetMember (t1,t2) -> [t1;t2]
-     | SetUnion ts -> ts
-     | SetIntersection ts -> ts
-     | SetDifference (t1, t2) -> [t1;t2]
-     | Subset (t1, t2) -> [t1;t2]
+     | SetMember (t1,t2) -> [t1;t2] @ ts
+     | SetUnion ts2 -> ts2 @ ts
+     | SetIntersection ts2 -> ts2 @ ts
+     | SetDifference (t1, t2) -> [t1;t2] @ ts
+     | Subset (t1, t2) -> [t1;t2] @ ts
      end
-  | Map_op map_op -> 
+  | Map_op map_op ->
      begin match map_op with
-     | Const (_, t) -> [t]
-     | Set (t1,t2,t3) -> [t1;t2;t3]
-     | Get (t, arg) -> [t; arg]
-     | Def ((s, _), body) -> (* in binders *) []
+     | Const (_, t) -> [t] @ ts
+     | Set (t1,t2,t3) -> [t1;t2;t3] @ ts
+     | Get (t, arg) -> [t; arg] @ ts
+     | Def ((s, _), body) -> (* in binders *) [] @ ts
      end
-  | Let ((s, bound), body) -> [bound] (* s/body in binders *)
-  | _ -> []
+  | Let ((s, bound), body) -> [bound] @ ts (* s/body in binders *)
+  | _ -> [] @ ts
 
 let subterm_binder : 'bt. 'bt term -> (Sym.t * 'bt term) option =
   fun (IT (it, _)) ->
@@ -287,16 +287,15 @@ let fold_subterms : 'a 'bt. (Sym.t list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt te
   fun f acc t ->
   let rec g xs acc = function
     | [] -> acc
-    | [] :: tss -> g xs acc tss
-    | (t :: ts) :: tss ->
+    | t :: ts ->
     let acc = f xs acc t in
     let acc = match subterm_binder t with
       | None -> acc
-      | Some (sym, t) -> g (sym :: xs) acc [[t]]
+      | Some (sym, t) -> g (sym :: xs) acc [t]
     in
-    g xs acc (subterms t :: ts :: tss)
+    g xs acc (add_subterms ts t)
   in
-  g [] acc [[t]]
+  g [] acc [t]
 
 
 let free_vars : 'bt. 'bt term -> SymSet.t =
@@ -308,16 +307,15 @@ let free_vars : 'bt. 'bt term -> SymSet.t =
   in
   let rec f ss = function
     | [] -> ss
-    | [] :: tss -> f ss tss
-    | (t :: ts) :: tss ->
+    | t :: ts ->
     let ss = add_sym ss t in
     let ss = match subterm_binder t with
       | None -> ss
-      | Some (sym, t) -> SymSet.union ss (SymSet.remove sym (f SymSet.empty [[t]]))
+      | Some (sym, t) -> SymSet.union ss (SymSet.remove sym (f SymSet.empty [t]))
     in
-    f ss (subterms t :: ts :: tss)
+    f ss (add_subterms ts t)
   in
-  f SymSet.empty [[t]]
+  f SymSet.empty [t]
 
 let free_vars_list xs = List.fold_left
     (fun ss t -> SymSet.union ss (free_vars t)) SymSet.empty xs
