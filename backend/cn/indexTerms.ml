@@ -191,116 +191,136 @@ let pp =
   fun (it : 'bt term) -> aux false it
 
 
-
-let rec free_vars : 'bt. 'bt term -> SymSet.t =
+let subterms : 'bt. 'bt term -> ('bt term) list =
   fun (IT (it, _)) ->
   match it with
-  | Lit lit -> 
-     begin match lit with
-     | Sym symbol -> SymSet.singleton symbol
-     | Z _ -> SymSet.empty
-     | Q _ -> SymSet.empty
-     | Pointer _ -> SymSet.empty
-     | Bool _ -> SymSet.empty
-     | Unit -> SymSet.empty
-     | Default _ -> SymSet.empty
-     | Null -> SymSet.empty
-     end
   | Arith_op arith_op -> 
      begin match arith_op with
-     | Add (it, it') -> free_vars_list [it; it']
-     | Sub (it, it') -> free_vars_list [it; it']
-     | Mul (it, it') -> free_vars_list [it; it']
-     | Div (it, it') -> free_vars_list [it; it']
-     | Exp (it, it') -> free_vars_list [it; it']
-     | Rem (it, it') -> free_vars_list [it; it']
-     | Mod (it, it') -> free_vars_list [it; it']
-     | LT (it, it') -> free_vars_list [it; it']
-     | LE (it, it') -> free_vars_list [it; it']
-     | Min (it, it') -> free_vars_list [it; it']
-     | Max (it, it') -> free_vars_list [it; it']
-     | IntToReal t -> free_vars t
-     | RealToInt t -> free_vars t
-     | FlipBit fb -> free_vars_list [fb.bit; fb.t]
-     | XOR (_, it, it') -> free_vars_list [it; it']
+     | Add (it, it') -> [it; it'] 
+     | Sub (it, it') -> [it; it']
+     | Mul (it, it') -> [it; it']
+     | Div (it, it') -> [it; it']
+     | Exp (it, it') -> [it; it']
+     | Rem (it, it') -> [it; it']
+     | Mod (it, it') -> [it; it']
+     | LT (it, it') -> [it; it']
+     | LE (it, it') -> [it; it']
+     | Min (it, it') -> [it; it']
+     | Max (it, it') -> [it; it']
+     | IntToReal t -> [t]
+     | RealToInt t -> [t]
+     | FlipBit fb -> [fb.bit; fb.t]
+     | XOR (_, it, it') -> [it; it']
      end
   | Bool_op bool_op ->
      begin match bool_op with
-     | And its -> free_vars_list its
-     | Or its -> free_vars_list its
-     | Impl (it, it') -> free_vars_list [it; it']
-     | Not it -> free_vars it
-     | ITE (it,it',it'') -> free_vars_list [it;it';it'']
-     | EQ (it, it') -> free_vars_list [it; it']
-     | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
+     | And its -> its
+     | Or its -> its
+     | Impl (it, it') -> [it; it']
+     | Not it -> [it]
+     | ITE (it,it',it'') -> [it;it';it'']
+     | EQ (it, it') -> [it; it']
+     | EachI _ -> (* in binders set below *) []
      end
   | Tuple_op tuple_op -> 
      begin match tuple_op with
-     | Tuple its -> free_vars_list its
-     | NthTuple ( _, it) -> free_vars it
+     | Tuple its -> its
+     | NthTuple ( _, it) -> [it]
      end
   | Struct_op struct_op -> 
      begin match struct_op with
-     | Struct (_tag, members) -> free_vars_list (map snd members)
-     | StructMember (it, s) -> free_vars_list [it;it]
+     | Struct (_tag, members) -> map snd members
+     | StructMember (it, s) -> [it;it]
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
-     | LTPointer (it, it')  -> free_vars_list [it; it']
-     | LEPointer (it, it') -> free_vars_list [it; it']
-     | IntegerToPointerCast t -> free_vars t
-     | PointerToIntegerCast t -> free_vars t
-     | MemberOffset (_, _) -> SymSet.empty
-     | ArrayOffset (_, t) -> free_vars t
+     | LTPointer (it, it')  -> [it; it']
+     | LEPointer (it, it') -> [it; it']
+     | IntegerToPointerCast t -> [t]
+     | PointerToIntegerCast t -> [t]
+     | MemberOffset (_, _) -> []
+     | ArrayOffset (_, t) -> [t]
      end
   | CT_pred ct_pred ->
      begin match ct_pred with
-     | Aligned (t, _rt) -> free_vars t
-     | AlignedI t -> free_vars_list [t.t; t.align]
-     | Representable (_rt,t) -> free_vars t
-     | Good (_rt,t) -> free_vars t
+     | Aligned (t, _rt) -> [t]
+     | AlignedI t -> [t.t; t.align]
+     | Representable (_rt,t) -> [t]
+     | Good (_rt,t) -> [t]
      end
   | List_op list_op ->
      begin match list_op with
-     | Nil  -> SymSet.empty
-     | Cons (it, it') -> free_vars_list [it; it']
-     | List its -> free_vars_list its
-     | Head it -> free_vars it
-     | Tail it -> free_vars it
-     | NthList (_,it) -> free_vars it
+     | Nil  -> []
+     | Cons (it, it') -> [it; it']
+     | List its -> its
+     | Head it -> [it]
+     | Tail it -> [it]
+     | NthList (_,it) -> [it]
      end
   | Set_op set_op ->
      begin match set_op with
-     | SetMember (t1,t2) -> free_vars_list [t1;t2]
-     | SetUnion ts -> free_vars_list ts
-     | SetIntersection ts -> free_vars_list ts
-     | SetDifference (t1, t2) -> free_vars_list [t1;t2]
-     | Subset (t1, t2) -> free_vars_list [t1;t2]
+     | SetMember (t1,t2) -> [t1;t2]
+     | SetUnion ts -> ts
+     | SetIntersection ts -> ts
+     | SetDifference (t1, t2) -> [t1;t2]
+     | Subset (t1, t2) -> [t1;t2]
      end
   | Map_op map_op -> 
      begin match map_op with
-     | Const (_, t) -> free_vars t
-     | Set (t1,t2,t3) -> free_vars_list [t1;t2;t3]
-     | Get (t, arg) -> free_vars_list ([t; arg])
-     | Def ((s, _), body) -> SymSet.remove s (free_vars body)
+     | Const (_, t) -> [t]
+     | Set (t1,t2,t3) -> [t1;t2;t3]
+     | Get (t, arg) -> [t; arg]
+     | Def ((s, _), body) -> (* in binders *) []
      end
-  (* | Option_op option_op -> *)
-  (*    begin match option_op with *)
-  (*    | Nothing _bt -> SymSet.empty *)
-  (*    | Something t -> free_vars t *)
-  (*    | Is_nothing t -> free_vars t *)
-  (*    | Is_something t -> free_vars t *)
-  (*    | Get_some_value t -> free_vars t *)
-  (*    end *)
-  | Let ((s, bound), body) ->
-     SymSet.union (free_vars bound)
-       (SymSet.remove s (free_vars body))
+  | Let ((s, bound), body) -> [bound] (* s/body in binders *)
+  | _ -> []
 
-and free_vars_list l = 
-  List.fold_left (fun acc sym -> 
-      SymSet.union acc (free_vars sym)
-    ) SymSet.empty l
+let subterm_binder : 'bt. 'bt term -> (Sym.t * 'bt term) option =
+  fun (IT (it, _)) ->
+  match it with
+  | Bool_op (EachI ((_, s, _), t)) -> Some (s, t)
+  | Map_op (Def ((s, _), body)) -> Some (s, body)
+  | Let ((s, bound), body) -> Some (s, body)
+  | _ -> None
 
+let fold_subterms : 'a 'bt. (Sym.t list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
+  fun f acc t ->
+  let rec g xs acc = function
+    | [] -> acc
+    | [] :: tss -> g xs acc tss
+    | (t :: ts) :: tss ->
+    let acc = f xs acc t in
+    let acc = match subterm_binder t with
+      | None -> acc
+      | Some (sym, t) -> g (sym :: xs) acc [[t]]
+    in
+    g xs acc (subterms t :: ts :: tss)
+  in
+  g [] acc [[t]]
+
+
+let free_vars : 'bt. 'bt term -> SymSet.t =
+  fun t ->
+  let add_sym ss = fun (IT (it, _)) ->
+    match it with
+    | Lit (Sym symbol) -> SymSet.add symbol ss
+    | _ -> ss
+  in
+  let rec f ss = function
+    | [] -> ss
+    | [] :: tss -> f ss tss
+    | (t :: ts) :: tss ->
+    let ss = add_sym ss t in
+    let ss = match subterm_binder t with
+      | None -> ss
+      | Some (sym, t) -> SymSet.union ss (SymSet.remove sym (f SymSet.empty [[t]]))
+    in
+    f ss (subterms t :: ts :: tss)
+  in
+  f SymSet.empty [[t]]
+
+let free_vars_list xs = List.fold_left
+    (fun ss t -> SymSet.union ss (free_vars t)) SymSet.empty xs
 
 
 let json it : Yojson.Safe.t = 
