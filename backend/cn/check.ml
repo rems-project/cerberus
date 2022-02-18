@@ -729,7 +729,7 @@ module ResourceInference = struct
       debug 7 (lazy (item "permission" (IT.pp permission_t)));
       let open Memory in
       let@ global = get_global () in
-      let layout = SymMap.find tag global.struct_decls in
+      let@ layout = get_struct_decl loc tag in
       let@ (values, inits) = 
         ListM.fold_leftM (fun (values, inits) {offset; size; member_or_padding} ->
             match member_or_padding with
