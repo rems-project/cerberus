@@ -167,32 +167,44 @@ let time_f_debug level msg f x =
     y
   else f x
 
-let time_log_start msg =
+let wrap s = "\"" ^ String.escaped s ^ "\""
+
+let time_log_start kind detail =
   match !times with
   | Some (channel, "log") ->
     let start = Unix.gettimeofday () in
-    Printf.fprintf channel "begin (%s) {\n" msg;
+    Printf.fprintf channel "{\n  %s: %s,\n" (wrap "name") (wrap kind);
+    if String.length detail > 0
+    then Printf.fprintf channel "  %s: %s,\n" (wrap "details") (wrap detail)
+    else ();
+    Printf.fprintf channel "  %s: [\n" (wrap "contents");
     start
   | _ -> 0.0
+
+let write_time_log_end d =
+  match !times with
+  | Some (channel, "log") ->
+    Printf.fprintf channel "  {}\n],\n  %s: %f\n},\n" (wrap "time") d
+  | _ -> ()
 
 let time_log_end prev_time =
   match !times with
   | Some (channel, "log") ->
     let fin_time = Unix.gettimeofday () in
     let d = fin_time -. prev_time in
-    Printf.fprintf channel "end (%f)}\n" d
+    write_time_log_end d
   | _ -> ()
 
 let time_f_logs (loc : Locations.t) level msg f x =
   match !times with
   | Some (channel, style) ->
-     let _ = time_log_start msg in
+     let _ = time_log_start msg "" in
      let (d, y) = time_f_elapsed f x in
      begin match (Locations.line_numbers loc, style) with
      | (Some (l1, l2), "csv") ->
         Printf.fprintf channel "%d, %d, %f\n" l1 l2 d;
      | (_, "csv") -> Printf.fprintf channel "None, None, %f\n" d;
-     | (_, "log") -> Printf.fprintf channel "} end (%f)\n" d;
+     | (_, "log") -> write_time_log_end d
      | _ -> ()
      end;
      flush channel;
