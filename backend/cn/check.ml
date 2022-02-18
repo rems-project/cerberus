@@ -1251,6 +1251,8 @@ end = struct
     fun rt_subst rt_pp
         loc situation arguments ftyp ->
 
+    let start_spine = time_log_start "spine" "" in
+
     (* record the resources now, so we can later re-construct the
        memory state "before" running spine *)
     let@ original_resources = all_resources () in
@@ -1306,7 +1308,7 @@ end = struct
     let@ () = time_f_logs loc 9 "pre_inf_eqs"
         (InferenceEqs.add_eqs_for_infer loc) ftyp_r in
 
-    let start = time_log_start "inference" in
+    let start = time_log_start "inference" "" in
     let@ (unis, ftyp_c) = 
       let rec infer_resources unis ftyp = 
         let@ () = print_with_ctxt (fun ctxt ->
@@ -1352,15 +1354,16 @@ end = struct
          ()
     in
 
-    let start = time_log_start "spine constraints" in
+    let start = time_log_start "constraints" "" in
     let@ rt = 
       let@ provable = provable loc in
       let@ () = return (debug 9 (lazy !^"checking constraints")) in
       let rec check_logical_constraints = function
         | Constraint (c, info, ftyp) -> 
            let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-           let res = time_f_logs loc 9 ("constraint, " ^ Locations.to_string (fst info))
-               provable c in
+           let start = time_log_start "constraint" (Locations.to_string (fst info)) in
+           let res = provable c in
+           time_log_end start;
            begin match res with
            | `True -> check_logical_constraints ftyp 
            | `False ->
@@ -1376,7 +1379,9 @@ end = struct
       check_logical_constraints ftyp_c
     in
     time_log_end start;
+
     let@ () = return (debug 9 (lazy !^"done")) in
+    time_log_end start_spine;
     return rt
 
   let calltype_ft loc args (ftyp : AT.ft) : (RT.t, type_error) m =
@@ -2817,6 +2822,7 @@ let check mu_file =
     fun fsym fn ->
     let decl = Global.get_fun_decl ctxt.global fsym in
     let () = Debug_ocaml.begin_csv_timing "functions" in
+    let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
     let@ () = match fn, decl with
       | M_Fun (rbt, args, body), Some (loc, ftyp, trusted) ->
          begin match trusted with
@@ -2839,7 +2845,8 @@ let check mu_file =
       | M_BuiltinDecl _, _ -> 
          return ()
     in
-    let () = Debug_ocaml.end_csv_timing "functions" in
+    Debug_ocaml.end_csv_timing "functions";
+    time_log_end start;
     return ()
   in
 
