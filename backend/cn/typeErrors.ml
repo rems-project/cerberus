@@ -28,8 +28,6 @@ type situation =
   | FunctionCall
   | LabelCall of label_kind
   | Subtyping
-  | ArrayShift
-  | MemberShift
   | Pack of CF.Annot.to_pack_unpack
   | Unpack of CF.Annot.to_pack_unpack
   | ArgumentInference of Id.t
@@ -41,8 +39,6 @@ let checking_situation = function
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
   | Subtyping -> !^"checking subtyping"
-  | ArrayShift -> !^"array shifting"
-  | MemberShift -> !^"member shifting"
   | Pack (TPU_Predicate name) -> !^"packing predicate" ^^^ Id.pp name
   | Pack (TPU_Struct tag) -> !^"packing struct" ^^^ Sym.pp tag
   | Unpack (TPU_Predicate name) -> !^"unpacking predicate" ^^^ Id.pp name
@@ -65,8 +61,6 @@ let for_situation = function
   | LabelCall Loop -> !^"for loop"
   | LabelCall Other -> !^"for calling label"
   | Subtyping -> !^"for subtyping"
-  | ArrayShift -> !^"for array shifting"
-  | MemberShift -> !^"for member shifting"
   | Pack (TPU_Predicate name) -> !^"for packing predicate" ^^^ Id.pp name
   | Pack (TPU_Struct tag) -> !^"for packing struct" ^^^ Sym.pp tag
   | Unpack (TPU_Predicate name) -> !^"for unpacking predicate" ^^^ Id.pp name
