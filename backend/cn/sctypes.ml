@@ -69,6 +69,26 @@ let equal = equal_ctype
 let compare = compare_ctype
 
 
+let rec subtype ct ct' = 
+  match ct, ct' with
+  | Void, Void -> 
+     true
+  | Integer it, Integer it' -> 
+     IntegerTypes.equal it it'
+  | Array (ct, olength), Array (ct', None) -> 
+     subtype ct ct'
+  | Array (ct, olength), Array (ct', olength') -> 
+     subtype ct ct' && Option.equal Int.equal olength olength'
+  | Pointer ct, Pointer ct' -> 
+     subtype ct ct'
+  | Struct tag, Struct tag' ->
+     Sym.equal tag tag'
+  | Function _, Function _ ->
+     equal_ctype ct ct'
+  | _, _ ->
+     false
+
+
 
 let is_unsigned_integer_type ty =
   AilTypesAux.is_unsigned_integer_type 

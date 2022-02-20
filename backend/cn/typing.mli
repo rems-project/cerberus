@@ -33,11 +33,12 @@ val add_cs : LogicalConstraints.t list -> (unit, 'e) m
 val add_r : Context.where option -> Resources.RE.t -> (unit, 'e) m
 val add_rs : Context.where option -> Resources.RE.t list -> (unit, 'e) m
 
-type 'a changed = 
-  | Unchanged of 'a
-  | Changed of 'a
+type changed = 
+  | Unchanged
+  | Unfolded of Resources.RE.t list
+  | Changed of Resources.RE.t
 
 val map_and_fold_resources : 
   Locations.t ->
-  (Resources.RE.t -> 'acc -> Resources.RE.t changed * 'acc) -> 
+  (Resources.RE.t -> 'acc -> changed * 'acc) -> 
   'acc -> ('acc, 'e) m

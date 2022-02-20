@@ -188,11 +188,12 @@ let rec add_rs oloc = function
      add_rs oloc rs
 
 
-type 'a changed = 
-  | Unchanged of 'a
-  | Changed of 'a
+type changed = 
+  | Unchanged
+  | Unfolded of RE.t list
+  | Changed of RE.t
 
-let map_and_fold_resources loc (f : RE.t -> 'acc -> (RE.t changed) * 'acc) (acc : 'acc) = 
+let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) = 
   fun s ->
   let provable = make_provable loc s in
   let structs = s.typing_context.global.struct_decls in
@@ -200,10 +201,12 @@ let map_and_fold_resources loc (f : RE.t -> 'acc -> (RE.t changed) * 'acc) (acc 
   let constraints = s.typing_context.constraints in
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
-        let (re, acc) = f re acc in
-        match re with
-        | Unchanged re -> 
+        let (changed, acc) = f re acc in
+        match changed with
+        | Unchanged -> 
            (re :: resources, acc)
+        | Unfolded res ->
+           (res @ resources, acc)
         | Changed re ->
            match RE.simp_or_empty structs (sym_eqs, constraints) re with
            | None -> (resources, acc)

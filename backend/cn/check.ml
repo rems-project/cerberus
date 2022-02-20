@@ -240,15 +240,6 @@ module ResourceInference = struct
     type cases = C of case list
 
 
-    let unfold_array_request item_ct base_pointer_t length permission_t = 
-      Resources.Requests.{
-          ct = array_ct item_ct (Some length);
-          pointer = base_pointer_t;
-          value = of_sct (array_ct item_ct (Some length));
-          init = BT.Bool;
-          permission = permission_t;
-      }
-
     let unfold_struct_request tag pointer_t permission_t = 
       Resources.Requests.{
           ct = struct_ct tag;
@@ -300,7 +291,7 @@ module ResourceInference = struct
       let xs = f true t in
       List.sort_uniq IT.compare xs
 
-    let rec point_request loc failure (requested : Resources.Requests.point) = 
+    let rec point_request ~recursive loc (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
@@ -310,7 +301,7 @@ module ResourceInference = struct
       let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init) ->
-            let continue = (Unchanged re, (needed, value, init)) in
+            let continue = (Unchanged, (needed, value, init)) in
             if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
@@ -364,24 +355,21 @@ module ResourceInference = struct
              permission = requested.permission 
            }
          in
-         return r
+         return (Some r)
       | `False ->
          match requested.ct with
-         | Array (act, Some length) ->
-            (* print stdout !^"*************** fold array"; *)
-            fold_array loc failure act requested.pointer length 
+         | Array (act, Some length) when recursive ->
+            fold_array loc act requested.pointer length 
               requested.permission
-         | Struct tag ->
-            (* print stdout !^"*************** fold struct"; *)
-            fold_struct loc failure tag requested.pointer 
-              requested.permission
-         | _ -> 
-            let@ model = model () in
-            fail (failure model)
+         | Struct tag when recursive ->
+           fold_struct ~recursive loc tag requested.pointer 
+             requested.permission
+         | _ ->
+            return None
       end
 
 
-    and qpoint_request loc failure (requested : Resources.Requests.qpoint) = 
+    and qpoint_request loc (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
@@ -391,7 +379,7 @@ module ResourceInference = struct
       let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in
       let sub_resource_if = fun cond re (needed, C value, C init) ->
-            let continue = (Unchanged re, (needed, C value, C init)) in
+            let continue = (Unchanged, (needed, C value, C init)) in
             if not (cond re) || is_false needed then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
@@ -491,23 +479,226 @@ module ResourceInference = struct
            } 
          in
          (* let r = RE.simp_qpoint ~only_outputs:true global.struct_decls all_lcs r in *)
-         return r
+         return (Some r)
       | `False ->
-         let@ model = model () in
-         fail (failure model)
+         return None
       end
 
+    and fold_array loc item_ct base length permission =
+      debug 7 (lazy (item "fold array" Pp.empty));
+      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
+      debug 7 (lazy (item "base" (IT.pp base)));
+      debug 7 (lazy (item "length" (IT.pp (int_ length))));
+      debug 7 (lazy (item "permission" (IT.pp permission)));
+      if length > 20 then warn !^"generating point-wise constraints for big array";
+      let@ qpoint = 
+        let q_s, q = IT.fresh Integer in
+        qpoint_request loc {
+          ct = item_ct;
+          pointer = base;
+          q = q_s;
+          value = BT.of_sct item_ct;
+          init = BT.Bool;
+          permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)];
+        }
+      in
+      match qpoint with 
+      | None -> return None
+      | Some qpoint ->
+      let folded_value_s, folded_value = 
+        IT.fresh (Map (Integer, BT.of_sct item_ct)) in
+      let folded_value_constr = 
+        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
+        forall_ (q_s, IT.bt q) (
+            eq_ (map_get_ folded_value q,
+                 qpoint.value)
+          )
+      in
+      let@ () = add_l folded_value_s (IT.bt folded_value) in
+      let@ () = add_c folded_value_constr in
+      (* let folded_value =  *)
+      (*   let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in *)
+      (*   let rec update value i =  *)
+      (*     if i >= length then value else *)
+      (*       let subst = IT.make_subst [(qpoint.q, int_ i)] in *)
+      (*       let cell_value = IT.subst subst qpoint.value in *)
+      (*       let value' = map_set_ value (int_ i, cell_value) in *)
+      (*       update value' (i + 1) *)
+      (*   in *)
+      (*   update empty 0 *)
+      (* in *)
+      let folded_init = 
+        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
+        eachI_ (0, q_s, length - 1) qpoint.init
+      in
+      let folded_resource = 
+        {
+          ct = array_ct item_ct (Some length);
+          pointer = base;
+          value = folded_value;
+          init = folded_init;
+          permission = permission;
+        }
+      in
+      return (Some folded_resource)
+
+    and fold_struct ~recursive loc tag pointer_t permission_t =
+      debug 7 (lazy (item "fold struct" Pp.empty));
+      debug 7 (lazy (item "tag" (Sym.pp tag)));
+      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
+      debug 7 (lazy (item "permission" (IT.pp permission_t)));
+      let open Memory in
+      let@ global = get_global () in
+      let@ layout = get_struct_decl loc tag in
+      let@ o_values_inits = 
+        ListM.fold_leftM (fun o_values_inits {offset; size; member_or_padding} ->
+            match o_values_inits with
+            | None -> return None
+            | Some (values, inits) ->
+               match member_or_padding with
+               | Some (member, sct) ->
+                  let@ point = 
+                    point_request ~recursive loc {
+                      ct = sct;
+                      pointer = memberShift_ (pointer_t, tag, member);
+                      value = BT.of_sct sct;
+                      init = BT.Bool;
+                      permission = permission_t;
+                    }
+                  in
+                  begin match point with
+                  | None -> return None
+                  | Some point -> 
+                     return (Some (values @ [(member, point.value)], inits @ [point.init]))
+                  end
+               | None ->
+                  let rec bytes i =
+                    if i = size then return true else
+                      let@ result = 
+                        point_request ~recursive loc {
+                            ct = integer_ct Char;
+                            pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
+                            permission = permission_t;
+                            value = BT.Integer;
+                            init = BT.Bool;
+                          } 
+                      in
+                      begin match result with
+                      | None -> return false
+                      | Some _ -> bytes (i + 1)
+                      end
+                  in
+                  let@ success = bytes 0 in
+                  return (if success then Some (values, inits) else None)
+       ) (Some ([], [])) layout
+      in
+      match o_values_inits with
+      | None -> return None
+      | Some (values, inits) ->
+         let folded_resource = 
+           {
+             ct = struct_ct tag;
+             pointer = pointer_t;
+             value = IT.struct_ (tag, values); 
+             init = and_ inits;
+             permission = permission_t;
+           }
+         in
+         return (Some folded_resource)
+
+    let unfolded_array item_ct base length permission value init =
+      let q_s, q = IT.fresh_named Integer "i" in
+      QPoint {
+          ct = item_ct;
+          pointer = base;
+          q = q_s;
+          value = (map_get_ value q); 
+          init = init;
+          permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)]
+        }
+
+    let unfold_array ~recursive loc item_ct length base permission =   
+      debug 7 (lazy (item "unfold array" Pp.empty));
+      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
+      debug 7 (lazy (item "base" (IT.pp base)));
+      debug 7 (lazy (item "permission" (IT.pp permission)));
+      let@ result = 
+        point_request ~recursive loc (Resources.Requests.{
+              ct = array_ct item_ct (Some length);
+              pointer = base;
+              value = of_sct (array_ct item_ct None);
+              init = BT.Bool;
+              permission = permission;
+          }
+        ) 
+      in
+      match result with
+      | None -> return None
+      | Some point ->
+         let qpoint =
+           unfolded_array item_ct base length permission 
+             point.value point.init
+         in
+         return (Some qpoint)
 
 
+    let unfolded_struct layout tag pointer_t permission_t value init = 
+      let open Memory in
+      List.concat_map (fun {offset; size; member_or_padding} ->
+          match member_or_padding with
+          | Some (member, sct) ->
+             let resource = 
+               Point {
+                   ct = sct;
+                   pointer = memberShift_ (pointer_t, tag, member);
+                   permission = permission_t;
+                   value = member_ ~member_bt:(BT.of_sct sct) (tag, value, member);
+                   init = init
+                 } 
+             in
+             [resource]
+          | None ->
+             List.init size (fun i ->
+                 Point {
+                     ct = integer_ct Char;
+                     pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
+                     permission = permission_t;
+                     value = default_ Integer;
+                     init = bool_ false
+                   } 
+               )
+        ) layout
 
-    and predicate_request loc failure (requested : Resources.Requests.predicate) = 
+
+    let unfold_struct ~recursive loc tag pointer_t permission_t = 
+      debug 7 (lazy (item "unfold struct" Pp.empty));
+      debug 7 (lazy (item "tag" (Sym.pp tag)));
+      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
+      debug 7 (lazy (item "permission" (IT.pp permission_t)));
+      let@ global = get_global () in
+      let@ result = 
+        point_request ~recursive loc
+          (unfold_struct_request tag pointer_t permission_t)
+      in
+      match result with
+      | None -> return None
+      | Some point -> 
+        let layout = SymMap.find tag global.struct_decls in
+        let resources = 
+          unfolded_struct layout tag pointer_t permission_t
+            point.value point.init
+        in
+        return (Some resources)
+
+
+    let predicate_request loc (requested : Resources.Requests.predicate) = 
       debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
       let@ provable = provable loc in
       let@ global = get_global () in
       let@ simp_lcs = simp_constraints () in
       let needed = requested.permission in 
       let sub_predicate_if = fun cond re (needed, oargs) ->
-            let continue = (Unchanged re, (needed, oargs)) in
+            let continue = (Unchanged, (needed, oargs)) in
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
@@ -568,14 +759,13 @@ module ResourceInference = struct
            }
          in
          (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
-         return r
+         return (Some r)
       | `False ->
-         let@ model = model () in
-         fail (failure model)
+         return None
       end
 
 
-    and qpredicate_request loc failure (requested : Resources.Requests.qpredicate) = 
+    let qpredicate_request loc (requested : Resources.Requests.qpredicate) = 
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let@ provable = provable loc in
       let@ global = get_global () in
@@ -584,7 +774,7 @@ module ResourceInference = struct
       let needed = requested.permission in
       let@ (needed, oargs) =
         map_and_fold_resources loc (fun re (needed, oargs) ->
-            let continue = (Unchanged re, (needed, oargs)) in
+            let continue = (Unchanged, (needed, oargs)) in
             if is_false needed then continue else
             match re with
             | Predicate p' when String.equal requested.name p'.name ->
@@ -658,256 +848,87 @@ module ResourceInference = struct
            } 
          in
          (* let r = RE.simp_qpredicate ~only_outputs:true global.struct_decls all_lcs r in *)
-         return r
+         return (Some r)
       | `False ->
-         let@ model = model () in
-         fail (failure model)
+         return None
       end
 
 
-    and fold_array loc failure item_ct base length permission =
-      debug 7 (lazy (item "fold array" Pp.empty));
-      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
-      debug 7 (lazy (item "base" (IT.pp base)));
-      debug 7 (lazy (item "length" (IT.pp (int_ length))));
-      debug 7 (lazy (item "permission" (IT.pp permission)));
-      if length > 20 then warn !^"generating point-wise constraints for big array";
-      let@ qpoint = 
-        let q_s, q = IT.fresh Integer in
-        qpoint_request loc failure {
-          ct = item_ct;
-          pointer = base;
-          q = q_s;
-          value = BT.of_sct item_ct;
-          init = BT.Bool;
-          permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)];
-        }
-      in
-      let folded_value_s, folded_value = 
-        IT.fresh (Map (Integer, BT.of_sct item_ct)) in
-      let folded_value_constr = 
-        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
-        forall_ (q_s, IT.bt q) (
-            eq_ (map_get_ folded_value q,
-                 qpoint.value)
-          )
-      in
-      let@ () = add_l folded_value_s (IT.bt folded_value) in
-      let@ () = add_c folded_value_constr in
-      (* let folded_value =  *)
-      (*   let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in *)
-      (*   let rec update value i =  *)
-      (*     if i >= length then value else *)
-      (*       let subst = IT.make_subst [(qpoint.q, int_ i)] in *)
-      (*       let cell_value = IT.subst subst qpoint.value in *)
-      (*       let value' = map_set_ value (int_ i, cell_value) in *)
-      (*       update value' (i + 1) *)
-      (*   in *)
-      (*   update empty 0 *)
-      (* in *)
-      let folded_init = 
-        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
-        eachI_ (0, q_s, length - 1) qpoint.init
-      in
-      let folded_resource = 
-        {
-          ct = array_ct item_ct (Some length);
-          pointer = base;
-          value = folded_value;
-          init = folded_init;
-          permission = permission;
-        }
-      in
-      return folded_resource
 
 
-
-    and fold_struct loc failure tag pointer_t permission_t =
-      debug 7 (lazy (item "fold struct" Pp.empty));
-      debug 7 (lazy (item "tag" (Sym.pp tag)));
-      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
-      debug 7 (lazy (item "permission" (IT.pp permission_t)));
-      let open Memory in
-      let@ global = get_global () in
-      let@ layout = get_struct_decl loc tag in
-      let@ (values, inits) = 
-        ListM.fold_leftM (fun (values, inits) {offset; size; member_or_padding} ->
-            match member_or_padding with
-            | Some (member, sct) ->
-               let@ point = 
-                 point_request loc failure {
-                   ct = sct;
-                   pointer = memberShift_ (pointer_t, tag, member);
-                   value = BT.of_sct sct;
-                   init = BT.Bool;
-                   permission = permission_t;
-                 }
-               in
-               return (values @ [(member, point.value)], inits @ [point.init])
-            | None ->
-               let rec bytes i =
-                 if i = size then return () else
-                   let@ _ = 
-                     point_request loc failure {
-                         ct = integer_ct Char;
-                         pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
-                         permission = permission_t;
-                         value = BT.Integer;
-                         init = BT.Bool;
-                       } 
-                   in
-                   bytes (i + 1)
-               in
-               let@ () = bytes 0 in
-               return (values, inits)
-       ) ([], []) layout
-      in
-      let folded_resource = 
-        {
-          ct = struct_ct tag;
-          pointer = pointer_t;
-          value = IT.struct_ (tag, values); 
-          init = and_ inits;
-          permission = permission_t;
-        }
-      in
-      return folded_resource
-
-    let unfolded_array item_ct base length permission value init =
-      let q_s, q = IT.fresh_named Integer "i" in
-      QPoint {
-          ct = item_ct;
-          pointer = base;
-          q = q_s;
-          value = (map_get_ value q); 
-          init = init;
-          permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)]
-        }
-
-    (* actually actually here *)
-    let unfold_array loc failure item_ct base length permission =   
-      debug 7 (lazy (item "unfold array" Pp.empty));
-      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
-      debug 7 (lazy (item "base" (IT.pp base)));
-      debug 7 (lazy (item "length" (IT.pp (int_ length))));
-      debug 7 (lazy (item "permission" (IT.pp permission)));
-      let@ point = 
-        point_request loc failure 
-          (unfold_array_request item_ct base length permission) 
-      in
-      let qpoint =
-        unfolded_array item_ct base length permission 
-          point.value point.init
-      in
-      return qpoint
-
-    let unfold_struct loc failure tag pointer_t permission_t = 
-      debug 7 (lazy (item "unfold struct" Pp.empty));
-      debug 7 (lazy (item "tag" (Sym.pp tag)));
-      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
-      debug 7 (lazy (item "permission" (IT.pp permission_t)));
-      let@ global = get_global () in
-      let@ point = 
-        point_request loc failure 
-          (unfold_struct_request tag pointer_t permission_t)
-      in
-      let layout = SymMap.find tag global.struct_decls in
-      let@ resources = 
-        let open Memory in
-        ListM.concat_mapM (fun {offset; size; member_or_padding} ->
-            match member_or_padding with
-            | Some (member, sct) ->
-               let resource = 
-                 Point {
-                     ct = sct;
-                     pointer = memberShift_ (pointer_t, tag, member);
-                     permission = permission_t;
-                     value = member_ ~member_bt:(BT.of_sct sct) (tag, point.value, member);
-                     init = point.init
-                   } 
-               in
-               return [resource]
-            | None ->
-               let rec bytes i =
-                 if i = size then return [] else
-                   let padding_s, padding_t = IT.fresh BT.Integer in
-                   let@ () = add_l padding_s (IT.bt padding_t) in
-                   let byte_resource = 
-                     Point {
-                         ct = integer_ct Char;
-                         pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
-                         permission = permission_t;
-                         value = padding_t;
-                         init = bool_ false
-                       } 
-                   in
-                   let@ byte_resources = bytes (i + 1) in
-                   return (byte_resource :: byte_resources)
-               in
-               bytes 0
-          ) layout
-      in
-      return resources
-
-    let resource_request loc failure (request : RER.t) : (RE.t, type_error) m = 
+    let resource_request ~recursive loc (request : RER.t) : (RE.t option, type_error) m = 
       match request with
       | Point request ->
-         let@ point = point_request loc failure request in
-         return (Point point)
+         let@ result = point_request ~recursive loc request in
+         return (Option.map (fun point -> Point point) result)
       | QPoint request ->
-         let@ qpoint = qpoint_request loc failure request in
-         return (QPoint qpoint)
+         let@ result = qpoint_request loc request in
+         return (Option.map (fun qpoint -> QPoint qpoint) result)
       | Predicate request ->
-         let@ predicate = predicate_request loc failure request in
-         return (Predicate predicate)
+         let@ result = predicate_request loc request in
+         return (Option.map (fun predicate -> Predicate predicate) result)
       | QPredicate request ->
-         let@ qpredicate = qpredicate_request loc failure request in
-         return (QPredicate qpredicate)
+         let@ result = qpredicate_request loc request in
+         return (Option.map (fun qpredicate -> QPredicate qpredicate) result)
 
   end
 
   module Special = struct
 
-    let missing_resource_failure loc situation (orequest, oinfo) = 
-      fun model ctxt ->
-      let msg = Missing_resource_request {orequest; situation; oinfo; model; ctxt} in
-      {loc; msg}
+    let fail_missing_resource loc situation (orequest, oinfo) = 
+      let@ model = model () in
+      fail (fun ctxt ->
+          let msg = Missing_resource_request {orequest; situation; oinfo; model; ctxt} in
+          {loc; msg})
 
-    let point_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation 
-                      (Some (Point request), oinfo) in
-      General.point_request loc failure request
+    let point_request ~recursive loc situation (request, oinfo) = 
+      let@ result = General.point_request ~recursive loc request in
+      match result with
+      | Some p -> return p
+      | None ->
+         fail_missing_resource loc situation 
+           (Some (Point request), oinfo)
 
     let qpoint_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation 
-                      (Some (QPoint request), oinfo) in
-      General.qpoint_request loc failure request
+      let@ result = General.qpoint_request loc request in
+      match result with
+      | Some r -> return r
+      | None -> 
+         let@ model = model () in
+         fail_missing_resource loc situation 
+           (Some (QPoint request), oinfo)
 
     let predicate_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation 
-                      (Some (Predicate request), oinfo) in
-      General.predicate_request loc failure request
+      let@ result = General.predicate_request loc request in
+      match result with
+      | Some r -> return r
+      | None -> 
+         let@ model = model () in
+         fail_missing_resource loc situation 
+           (Some (Predicate request), oinfo)
 
     let qpredicate_request loc situation (request, oinfo) = 
-      let failure = missing_resource_failure loc situation 
-                      (Some (QPredicate request), oinfo) in
-      General.qpredicate_request loc failure request
+      let@ result = General.qpredicate_request loc request in
+      match result with
+      | Some r -> return r
+      | None ->
+         fail_missing_resource loc situation 
+           (Some (QPredicate request), oinfo)
 
-    let unfold_array loc situation ct base_pointer_t length permission_t = 
-      let request = General.unfold_array_request ct base_pointer_t length permission_t in
-      let failure = missing_resource_failure loc situation 
-                      (Some (RER.Point request), None) in
-      General.unfold_array loc failure ct base_pointer_t length permission_t
+    let unfold_struct ~recursive loc situation tag pointer_t permission_t = 
+      let@ result = General.unfold_struct ~recursive loc tag pointer_t permission_t in
+      match result with
+      | Some resources -> return resources
+      | None -> 
+         let request = General.unfold_struct_request tag pointer_t permission_t in
+         fail_missing_resource loc situation (Some (Point request), None)
+      
 
-    let unfold_struct loc situation tag pointer_t permission_t = 
-      let request = General.unfold_struct_request tag pointer_t permission_t in
-      let failure = missing_resource_failure loc situation 
-                      (Some (RER.Point request), None) in
-      General.unfold_struct loc failure tag pointer_t permission_t
-
-    let fold_struct loc situation tag pointer_t permission_t = 
-      let failure = missing_resource_failure loc situation (None, None) in
-      General.fold_struct loc failure tag pointer_t permission_t
+    let fold_struct ~recursive loc situation tag pointer_t permission_t = 
+      let@ result = General.fold_struct ~recursive loc tag pointer_t permission_t in
+      match result with
+      | Some r -> return r
+      | None -> fail_missing_resource loc situation (None, None)
 
   end
 
@@ -953,7 +974,7 @@ let add_eqs_for_infer loc ftyp =
   begin
   debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
-  let@ ress = map_and_fold_resources loc (fun re xs -> (Unchanged re, re :: xs)) [] in
+  let@ ress = map_and_fold_resources loc (fun re xs -> (Unchanged, re :: xs)) [] in
   let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
   let ptrs = List.filter_map (res_ptr_k true) reqs @
     (List.filter_map (res_ptr_k false) ress) in
@@ -1217,7 +1238,7 @@ end = struct
 
   let has_exact loc r =
     let@ is_ex = RI.General.exact_match () in
-    map_and_fold_resources loc (fun re found -> (Unchanged re, found || is_ex (RE.request re, r))) false
+    map_and_fold_resources loc (fun re found -> (Unchanged, found || is_ex (RE.request re, r))) false
 
   let prefer_exact loc unis ftyp =
     if ! RI.reorder_points then return ftyp
@@ -1322,12 +1343,17 @@ end = struct
         | Resource (resource, info, ftyp) -> 
            let request = RE.request resource in
            let@ resource' = 
-             let failure model ctxt = 
-               let ctxt = { ctxt with resources = original_resources } in
-               let msg = Missing_resource_request {orequest = Some request; situation; oinfo = Some info; model; ctxt} in
-               {loc; msg}
-             in
-             RI.General.resource_request loc failure request 
+             let@ result = RI.General.resource_request ~recursive:true loc request in
+             begin match result with
+             | Some r -> return r
+             | None ->
+                let@ model = model () in
+                fail (fun ctxt ->
+                    let ctxt = { ctxt with resources = original_resources } in
+                    let msg = Missing_resource_request {orequest = Some request; situation; oinfo = Some info; model; ctxt} in
+                    {loc; msg}
+                  )
+             end
            in
            let@ (unis, new_subst) = 
              let failure model ctxt = 
@@ -1602,38 +1628,26 @@ let infer_array_shift loc asym1 ct asym2 =
   let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
   let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
   let@ provable = provable loc in
-  (* let element_size = Memory.size_of_ctype ct in *)
   let v = arrayShift_ (it_of_arg arg1, ct, it_of_arg arg2) in
-  (*   integerToPointerCast_
-   *     (add_ (pointerToIntegerCast_ (it_of_arg arg1), 
-   *            mul_ (int_ element_size, it_of_arg arg2)))
-   * in *)
-  let@ o_folded_length =
-    map_and_fold_resources loc (fun re found ->
-        match found, re with
-        | Some _, _ -> 
-           (Unchanged re, found)
-        | None, Point {ct = Array (_, Some length); pointer; _} ->
-           begin match provable (t_ (eq__ pointer (it_of_arg arg1))) with
-           | `True -> (Unchanged re, Some length)
-           | `False -> (Unchanged re, found)
-           end
-        | _ -> 
-           (Unchanged re, found)
-      ) None
+  let@ global = get_global () in
+  let@ scs = simp_constraints () in
+  let simp lc = Simplify.simp global.struct_decls scs lc in
+  let@ () = 
+    map_and_fold_resources loc (fun re () ->
+        match re with
+        | Point ({ct = Array (item_ct, Some length); _} as point) 
+             when Sctypes.equal item_ct ct 
+                  && is_true (simp (eq_ (it_of_arg arg1, point.pointer))) ->
+           let unfolded = 
+             RI.General.unfolded_array item_ct point.pointer 
+               length point.permission point.value point.init
+           in
+           (Unfolded [unfolded], ())
+        | _ ->
+           (Unchanged, ())
+      ) ()
   in
-  match o_folded_length with
-  | None -> 
-     return (rt_of_vt loc (BT.Loc, v))
-  | Some length ->
-     (* TODO: this is unnecessary: we could have just unfolded the
-        array in the loop above *)
-     let@ unfolded_array = 
-       RI.Special.unfold_array loc ArrayShift ct (it_of_arg arg1) 
-         length (bool_ true) 
-     in
-     let@ _cs = add_r (Some (Loc loc)) unfolded_array in
-     return (rt_of_vt loc (BT.Loc, v))
+  return (rt_of_vt loc (BT.Loc, v))
 
 
 let wrapI ity arg =
@@ -1710,30 +1724,24 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ layout = get_struct_decl loc tag in
        let@ _member_bt = get_member_type loc tag member layout in
        let it = it_of_arg arg in
-       let@ provable = provable loc in
-       let@ found =
-         map_and_fold_resources loc (fun re found ->
-             match found, re with
-             | true, _ -> 
-                (Unchanged re, found)
-             | false, Point {ct = Struct tag'; pointer; permission; _} 
-                  when Sym.equal tag tag' ->
-                begin match provable (t_ (and_ [eq__ pointer it;
-                                                permission])) with
-                | `True -> (Unchanged re, true)
-                | `False -> (Unchanged re, found)
-                end
-             | _ -> 
-                (Unchanged re, found)
-           ) false
+       let@ global = get_global () in
+       let@ scs = simp_constraints () in
+       let simp lc = Simplify.simp global.struct_decls scs lc in
+       let@ () = 
+         map_and_fold_resources loc (fun re () ->
+             match re with
+             | Point ({ct = Struct tag'; _} as point)
+                    when Sym.equal tag tag'
+                         && is_true (simp (eq_ (it, point.pointer))) ->
+                let unfolded = 
+                  RI.General.unfolded_struct layout tag point.pointer point.permission
+                    point.value point.init
+                in
+                (Unfolded unfolded, ())
+             | _ ->
+                (Unchanged, ())
+           ) ()
        in
-       (* TODO: this is unecessary: we could have unfolded the struct
-          in the loop above *)
-       let@ resources = 
-         if found then RI.Special.unfold_struct loc MemberShift tag it (bool_ true) 
-         else return []
-       in
-       let@ _cs = add_rs (Some (Loc loc)) resources in
        let vt = (Loc, memberShift_ (it, tag, member)) in
        return (rt_of_vt loc vt)
     | M_PEnot asym ->
@@ -2095,7 +2103,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let@ _ = 
-            RI.Special.point_request loc (Access Kill) ({
+            RI.Special.point_request ~recursive:true loc (Access Kill) ({
               ct = ct;
               pointer = it_of_arg arg;
               permission = bool_ true;
@@ -2135,7 +2143,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                  )
           in
           let@ _ = 
-            RI.Special.point_request loc (Access (Store None)) ({
+            RI.Special.point_request ~recursive:true loc (Access (Store None)) ({
                 ct = act.ct; 
                 pointer = it_of_arg parg;
                 permission = bool_ true;
@@ -2163,7 +2171,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
           let@ point = 
             restore_resources 
-              (RI.Special.point_request loc (Access (Load None)) ({ 
+              (RI.Special.point_request ~recursive:true loc (Access (Load None)) ({ 
                      ct = act.ct;
                      pointer = it_of_arg parg;
                      permission = bool_ true; (* fix *)
@@ -2324,7 +2332,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        begin match pack_unpack with
        | Pack ->
           let situation = TypeErrors.Pack (TPU_Struct tag) in
-          let@ resource = RI.Special.fold_struct loc situation tag 
+          let@ resource = RI.Special.fold_struct ~recursive:true loc situation tag 
                             (it_of_arg pointer_arg) (bool_ true) in
           let rt = 
             RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
@@ -2335,7 +2343,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        | Unpack ->
           let situation = TypeErrors.Unpack (TPU_Struct tag) in
           let@ resources = 
-            RI.Special.unfold_struct loc situation tag 
+            RI.Special.unfold_struct ~recursive:true loc situation tag 
               (it_of_arg pointer_arg) (bool_ true) 
           in
           let resources_infos = List.map (fun r -> (r, (loc, None))) resources in
