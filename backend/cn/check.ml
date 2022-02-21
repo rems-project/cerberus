@@ -1657,6 +1657,8 @@ let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m =
 
 (*** pure expression inference ************************************************)
 
+
+(* includes Thomas S's optimisation *)
 let infer_array_shift loc asym1 ct asym2 =
   let@ arg1 = arg_of_asym asym1 in
   let@ arg2 = arg_of_asym asym2 in
@@ -1667,20 +1669,29 @@ let infer_array_shift loc asym1 ct asym2 =
   let@ global = get_global () in
   let@ scs = simp_constraints () in
   let simp lc = Simplify.simp global.struct_decls scs lc in
-  let@ () = 
-    map_and_fold_resources loc (fun re () ->
+  let loop p_match = 
+    map_and_fold_resources loc (fun re found ->
         match re with
         | Point ({ct = Array (item_ct, Some length); _} as point) 
-             when Sctypes.equal item_ct ct 
-                  && is_true (simp (eq_ (it_of_arg arg1, point.pointer))) ->
+             when Sctypes.equal item_ct ct && p_match point.pointer ->
            let unfolded = 
              RI.General.unfolded_array item_ct point.pointer 
                length point.permission point.value point.init
            in
-           (Unfolded [unfolded], ())
+           (Unfolded [unfolded], true)
         | _ ->
-           (Unchanged, ())
-      ) ()
+           (Unchanged, found)
+      ) false
+  in
+  let@ found = loop (fun p -> is_true (simp (eq_ (it_of_arg arg1, p)))) in
+  let@ _ = 
+    if found 
+    then return found
+    else loop (fun p -> 
+             match provable (t_ (eq_ (it_of_arg arg1, p))) with
+             | `True -> true
+             | `False -> false
+           )
   in
   return (rt_of_vt loc (BT.Loc, v))
 
@@ -1761,21 +1772,28 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let it = it_of_arg arg in
        let@ global = get_global () in
        let@ scs = simp_constraints () in
+       let@ provable = provable loc in
        let simp lc = Simplify.simp global.struct_decls scs lc in
-       let@ () = 
-         map_and_fold_resources loc (fun re () ->
+       (* includes Thomas S's optimisation *)
+       let loop p_match =
+         map_and_fold_resources loc (fun re found ->
              match re with
              | Point ({ct = Struct tag'; _} as point)
-                    when Sym.equal tag tag'
-                         && is_true (simp (eq_ (it, point.pointer))) ->
+                    when Sym.equal tag tag' && p_match point.pointer ->
                 let unfolded = 
                   RI.General.unfolded_struct layout tag point.pointer point.permission
                     point.value point.init
                 in
-                (Unfolded unfolded, ())
+                (Unfolded unfolded, true)
              | _ ->
-                (Unchanged, ())
-           ) ()
+                (Unchanged, found)
+           ) false
+       in
+       let@ found = loop (fun p -> is_true (simp (eq_ (it, p)))) in
+       let@ _ = 
+         if found 
+         then return found 
+         else loop (fun p -> match provable (t_ (eq_ (it, p))) with `True -> true | `False -> false)
        in
        let vt = (Loc, memberShift_ (it, tag, member)) in
        return (rt_of_vt loc vt)
