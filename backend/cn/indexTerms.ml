@@ -544,6 +544,9 @@ let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
+
+
+
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
 
 (* arith_op *)
@@ -578,6 +581,14 @@ let (%<) t t' = lt_ (t, t')
 let (%<=) t t' = le_ (t, t')
 let (%>) t t' = gt_ (t, t')
 let (%>=) t t' = ge_ (t, t')
+
+
+let ne_array_prop_ (q : Sym.t) it = 
+  let q = sym_ (q, BT.Integer) in
+  or_ [q %<= (it %- (int_ 1));
+       (it %+ (int_ 1)) %<= q]
+
+
 
 
 (* tuple_op *)

@@ -369,7 +369,7 @@ module ResourceInference = struct
       end
 
 
-    and qpoint_request loc (requested : Resources.Requests.qpoint) = 
+    and qpoint_request_aux loc (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
@@ -456,7 +456,15 @@ module ResourceInference = struct
 
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
-      | `True ->
+      | `True -> return (Some (C value, C init))
+      | `False -> return None
+      end
+
+    and qpoint_request loc requested = 
+      let@ o_values_inits = qpoint_request_aux loc requested in
+      match o_values_inits with
+      | None -> return None
+      | Some (C value, C init) ->
          let q_s, q = requested.q, sym_ (requested.q, BT.Integer) in
          let v_s, v = IT.fresh (Map (IT.bt q, requested.value)) in
          let i_s, i = IT.fresh (Map (IT.bt q, requested.init)) in
@@ -480,9 +488,6 @@ module ResourceInference = struct
          in
          (* let r = RE.simp_qpoint ~only_outputs:true global.struct_decls all_lcs r in *)
          return (Some r)
-      | `False ->
-         return None
-      end
 
     and fold_array loc item_ct base length permission =
       debug 7 (lazy (item "fold array" Pp.empty));
@@ -491,56 +496,52 @@ module ResourceInference = struct
       debug 7 (lazy (item "length" (IT.pp (int_ length))));
       debug 7 (lazy (item "permission" (IT.pp permission)));
       if length > 20 then warn !^"generating point-wise constraints for big array";
-      let@ qpoint = 
-        let q_s, q = IT.fresh Integer in
-        qpoint_request loc {
+      let q_s, q = IT.fresh Integer in
+      let request : RER.qpoint = {
           ct = item_ct;
           pointer = base;
           q = q_s;
           value = BT.of_sct item_ct;
           init = BT.Bool;
-          permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)];
+          permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
         }
       in
-      match qpoint with 
+      let@ o_values_inits = qpoint_request_aux loc request in
+      match o_values_inits with 
       | None -> return None
-      | Some qpoint ->
-      let folded_value_s, folded_value = 
-        IT.fresh (Map (Integer, BT.of_sct item_ct)) in
-      let folded_value_constr = 
-        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
-        forall_ (q_s, IT.bt q) (
-            eq_ (map_get_ folded_value q,
-                 qpoint.value)
-          )
-      in
-      let@ () = add_l folded_value_s (IT.bt folded_value) in
-      let@ () = add_c folded_value_constr in
-      (* let folded_value =  *)
-      (*   let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in *)
-      (*   let rec update value i =  *)
-      (*     if i >= length then value else *)
-      (*       let subst = IT.make_subst [(qpoint.q, int_ i)] in *)
-      (*       let cell_value = IT.subst subst qpoint.value in *)
-      (*       let value' = map_set_ value (int_ i, cell_value) in *)
-      (*       update value' (i + 1) *)
-      (*   in *)
-      (*   update empty 0 *)
-      (* in *)
-      let folded_init = 
-        let q_s, q = qpoint.q, sym_ (qpoint.q, Integer) in
-        eachI_ (0, q_s, length - 1) qpoint.init
-      in
-      let folded_resource = 
-        {
-          ct = array_ct item_ct (Some length);
-          pointer = base;
-          value = folded_value;
-          init = folded_init;
-          permission = permission;
-        }
-      in
-      return (Some folded_resource)
+      | Some (C value, C init) ->
+         let folded_value_s, folded_value = 
+           IT.fresh (Map (Integer, BT.of_sct item_ct)) in
+         let inits_s, inits = 
+           IT.fresh (Map (Integer, BT.Bool)) in
+         let@ () = add_l folded_value_s (IT.bt folded_value) in
+         let@ () = add_l inits_s (IT.bt inits) in
+         let constrain cases map = 
+           List.concat_map (function
+               | One {index; value} -> 
+                  [t_ (eq_ (map_get_ map index, value))]
+               | Many {guard; value} ->
+                  List.init length (fun i ->
+                      let iv = map_get_ map (int_ i) in
+                      let su = IT.make_subst [(request.q, int_ i)] in
+                      t_ (impl_ (IT.subst su guard, 
+                                 eq_ (iv, IT.subst su value)))
+                    )
+             ) cases
+         in
+         let@ () = add_cs (constrain value folded_value) in
+         let@ () = add_cs (constrain init inits) in
+         let folded_init = and_ (List.init length (fun i -> map_get_ inits (int_ i))) in
+         let folded_resource = 
+           {
+             ct = array_ct item_ct (Some length);
+             pointer = base;
+             value = folded_value;
+             init = folded_init;
+             permission = permission;
+           }
+         in
+         return (Some folded_resource)
 
     and fold_struct ~recursive loc tag pointer_t permission_t =
       debug 7 (lazy (item "fold struct" Pp.empty));
@@ -614,7 +615,7 @@ module ResourceInference = struct
           q = q_s;
           value = (map_get_ value q); 
           init = init;
-          permission = and_ [permission; (int_ 0) %<= q; q %< (int_ length)]
+          permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
         }
 
     let unfold_array ~recursive loc item_ct length base permission =   

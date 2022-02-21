@@ -191,7 +191,7 @@ let page () =
         q = q_s;
         step = Memory.size_of_ctype char_ct;
         permission = 
-          and_ [permission; pbaseI %<= q; q %< (pbaseI %+ length)];
+          and_ [permission; pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
         iargs = [];
         oargs = [];
       }
@@ -205,7 +205,7 @@ let page () =
       loc = loc;
       guard = ne_ (guardv, int_ 0);
         (* and_ [ne_ (vbase, null_); *)
-        (*       int_ 0 %<= order; order %< int_ mMAX_ORDER]; *)
+        (*       int_ 0 %<= order; order %<= int_ (mMAX_ORDER - 1)]; *)
       packing_ft = AT.of_lrt lrt (AT.I []) 
     }
   in
@@ -235,56 +235,6 @@ let page () =
 
 
 
-(* let early_alloc () = 
- *   let id = "EarlyAlloc" in
- *   let loc = Loc.other "internal (EarlyAlloc)" in
- *   let base_s, base = IT.fresh_named Loc "base" in
- *   let cur_s, cur = IT.fresh_named Integer "cur" in
- *   let end_s, end_t = IT.fresh_named Integer "end" in
- *   let permission_s, permission = IT.fresh_named BT.Bool "permission" in
- *   let region = 
- *     let q_s, q = IT.fresh Integer in 
- *     QPredicate {
- *         name = "Byte";
- *         pointer = base;
- *         q = q_s;
- *         step = Memory.size_of_ctype char_ct;
- *         permission = and_ [permission; cur %<= q; q %< end_t];
- *         iargs = [];
- *         oargs = [];
- *       }
- *   in
- *   let lrt =
- *     LRT.Resource (region, (loc, None),
- *     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, base)), (loc, None),
- *     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, integerToPointerCast_ cur)), (loc, None),
- *     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, integerToPointerCast_ end_t)), (loc, None),
- *     LRT.Constraint (t_ (and_ [pointerToIntegerCast_ base %<= cur; cur %<= end_t]), (loc, None),
- *     LRT.I)))))
- *   in
- *   let clause = {
- *       loc = loc;
- *       guard = bool_ true;
- *       packing_ft = AT.of_lrt lrt (AT.I [])
- *     }
- *   in
- *   let predicate = {
- *       loc = loc;
- *       pointer = base_s;
- *       permission = permission_s;
- *       iargs = [
- *           (cur_s, IT.bt cur);
- *           (end_s, IT.bt end_t);
- *         ]; 
- *       oargs = []; 
- *       clauses = [clause]; 
- *     } 
- *   in
- *   (id, predicate) *)
-
-
-
-
 
 let early_alloc () = 
   let id = "EarlyAlloc" in
@@ -299,7 +249,7 @@ let early_alloc () =
         pointer = pointer_ Z.zero;
         q = q_s;
         step = Memory.size_of_ctype char_ct;
-        permission = and_ [permission; pointerToIntegerCast_ cur %<= q; q %< end_t];
+        permission = and_ [permission; pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
         iargs = [];
         oargs = [];
       }
@@ -510,7 +460,7 @@ let page_alloc_predicates struct_decls =
   
     let vmemmap_wf = 
       let i_s, i = IT.fresh_named Integer "i" in
-      let condition = and_ [start_i %<= i; i %< end_i] in
+      let condition = and_ [start_i %<= i; i %<= (sub_ (end_i, int_ 1))] in
       let args = [
           i;
           vmemmap_pointer;
@@ -528,7 +478,7 @@ let page_alloc_predicates struct_decls =
 
   let free_area_wf = 
       let i_s, i = IT.fresh_named Integer "i" in
-      let condition = and_ [int_ 0 %<= i; i %< int_ mMAX_ORDER] in
+      let condition = and_ [int_ 0 %<= i; i %<= int_ (mMAX_ORDER - 1)] in
       let args = [
           i;
           vmemmap_pointer;
@@ -562,34 +512,10 @@ let page_alloc_predicates struct_decls =
       LRT.I)))
     in
 
-    (* let page_group_ownership =  *)
-    (*   let q_s, q = IT.fresh_named Integer "q" in *)
-    (*   let condition =  *)
-    (*     and_ [permission; *)
-    (*           (pool %. "range_start") %<= q; *)
-    (*           q %< (pool %. "range_end"); *)
-    (*           (((map_get_ vmemmap (q %/ (int_ pPAGE_SIZE)))) %. "refcount") %== int_ 0; *)
-    (*       ] *)
-    (*   in *)
-    (*   let qp =  *)
-    (*     QPredicate { *)
-    (*         name = "Byte"; *)
-    (*         pointer = pointer_ Z.zero; *)
-    (*         q = q_s; *)
-    (*         step = Memory.size_of_ctype char_ct; *)
-    (*         permission = condition; *)
-    (*         iargs = []; *)
-    (*         oargs = []; *)
-    (*       } *)
-    (*   in *)
-    (*   LRT.Resource (qp, (loc, None),  *)
-    (*   LRT.I) *)
-    (* in *)
-
     let page_group_ownership = 
       let q_s, q = IT.fresh_named Integer "q" in
       let condition = 
-        and_ [permission; start_i %<= q; q %< end_i;
+        and_ [permission; start_i %<= q; q %<= (sub_ (end_i, int_ 1));
               (((map_get_ vmemmap q)) %. "refcount") %== int_ 0;
               (((map_get_ vmemmap q)) %. "order") %!= int_ hHYP_NO_ORDER;
           ]
@@ -676,49 +602,6 @@ let page_alloc_predicates struct_decls =
 
 
     
-    (* let vmemmap_well_formedness2 = 
-     *   let constr prev_next =
-     *     (\* let i_s, i_t = IT.fresh_named Integer "i" in *\)
-     *     (\* let trigger = 
-     *      *   T_Member (T_Member (T_App (T_Term vmemmap_t, T_Term i_t), Id.id "node"), Id.id prev_next)
-     *      * in *\)
-     *     T (bool_ true)
-     *     (\* forall_trigger_ (i_s, IT.bt i_t) (Some trigger)
-     *      *   begin
-     *      *     let prev_next_t = ((vmemmap_t %@ i_t) %. "node") %.prev_next in
-     *      *     impl_ (
-     *      *         vmemmap_good_node_pointer vmemmap_pointer_t prev_next_t
-     *      *       ,
-     *      *         let j_t = vmemmap_node_pointer_to_index vmemmap_pointer_t prev_next_t in
-     *      *         and_
-     *      *           [
-     *      *             (\\* (((vmemmap_t %@ j_t) %. "node") %.(if prev_next = "next" then "prev" else "next")) %== 
-     *      *              *   (vmemmap_cell_node_address vmemmap_pointer_t i_t); *\\)
-     *      *             ((vmemmap_t %@ i_t) %. "order") %== ((vmemmap_t %@ j_t) %. "order");
-     *      *         (\\* forall_sth_ (k_s, IT.bt k_t)
-     *      *          *   (and_ [(i_t %+ int_ 1) %<= k_t; 
-     *      *          *          k_t %< (i_t %+ (exp_ (int_ 2, (vmemmap_t %@ i_t) %. "order")))])
-     *      *          *   (and_ [
-     *      *          *       ((vmemmap_t %@ k_t) %. "order") %== hHYP_NO_ORDER_t;
-     *      *          *       ((vmemmap_t %@ k_t) %. "refcount") %== int_ 0;
-     *      *          *     ])
-     *      *          * ] *\\)
-     *      *           ]
-     *      *       )
-     *      *   end *\)
-     *   in
-     *   LRT.Constraint (constr "prev", (loc, None), 
-     *   LRT.Constraint (constr "next", (loc, None), 
-     *   LRT.I))
-     * in *)
-
-
-
-
-
-
-
-
 
 
 let predicate_list struct_decls = 

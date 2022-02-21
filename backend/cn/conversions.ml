@@ -282,13 +282,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
              let lifted_bt = BT.Map (qbt, bt) in
              let s, it = IT.fresh lifted_bt in
              let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
-             (* let new_c1 =  *)
-             (*   (`Constraint *)
-             (*      (LC.forall_ (qs, qbt) *)
-             (*         (impl_ (not_ condition, eq_ (map_get_ it (sym_ (qs, qbt)), default_ bt)))), *)
-             (*    (loc, Some ("output argument '" ^ oarg ^"' map/array partiality constraint"))) *)
-             (* in *)
-             (it, new_l :: l, (* new_c1 ::  *)c)
+             (it, new_l :: l, c)
         in
         let mapping = match oname with
           | Some name ->

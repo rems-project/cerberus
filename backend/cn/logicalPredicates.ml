@@ -100,7 +100,7 @@ module PageAlloc = struct
           name = "Vmemmap_page";
           iargs = [];
           oargs = [map_get_ vmemmap q];
-          permission = and_ [permission; range_start_i %<= q; q %< range_end_i];
+          permission = and_ [permission; range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
         }
 
 
