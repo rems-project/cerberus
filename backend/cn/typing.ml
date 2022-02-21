@@ -4,6 +4,7 @@ type s = {
     typing_context: Context.t;
     solver : Solver.solver;
     sym_eqs : IT.t SymMap.t;
+    trace_length : int;         (* for performance debugging *)
   }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
@@ -14,8 +15,9 @@ type 'e failure = Context.t -> 'e
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
+  let trace_length = 0 in
   List.iter (Solver.add solver c.global) c.constraints;
-  let s = { typing_context = c; solver; sym_eqs } in
+  let s = { typing_context = c; solver; sym_eqs; trace_length } in
   let outcome = m s in
   match outcome with
   | Ok (a, _) -> Ok a
@@ -43,7 +45,6 @@ let set (c : Context.t) : (unit, 'e) t =
 
 let solver () : (Solver.solver, 'e) t = 
   fun s -> Ok (s.solver, s)
-
 
 let fail (f : 'e failure) : ('a, 'e) t = 
   fun s -> Error (f s.typing_context)
@@ -76,6 +77,13 @@ let restore_resources (m : ('a, 'e) t) : ('a, 'e) t =
 
 
 
+
+let get_trace_length () = 
+  fun s -> Ok (s.trace_length, s)
+
+let increase_trace_length () = 
+  fun s -> Ok ((), {s with trace_length = s.trace_length + 1})
+
 let print_with_ctxt printer = 
   let@ s = get () in
   let () = printer s in
@@ -98,10 +106,11 @@ let all_resources () =
   return s.resources
 
 let make_provable loc =
-  fun {typing_context = s; solver; sym_eqs} -> 
+  fun {typing_context = s; solver; sym_eqs; trace_length} -> 
   let pointer_facts = Resources.RE.pointer_facts s.resources in
   let f ?(shortcut_false=false) lc = 
     Solver.provable ~loc ~shortcut_false ~solver ~global:s.global 
+      ~trace_length
       ~assumptions:s.constraints
       ~pointer_facts lc 
   in

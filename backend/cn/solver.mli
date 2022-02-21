@@ -15,6 +15,7 @@ val provable :
   shortcut_false:bool -> 
   solver:solver -> 
   global:Global.t -> 
+  trace_length:int ->
   assumptions:LogicalConstraints.t list -> 
   pointer_facts:IndexTerms.t list ->
   LogicalConstraints.t -> 

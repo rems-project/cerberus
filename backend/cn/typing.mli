@@ -12,6 +12,8 @@ val run : Context.t -> ('a, 'e) m -> ('a, 'e) Result.t
 
 (* val get: unit -> Context.t m *)
 val print_with_ctxt : (Context.t -> unit) -> (unit, 'e) m
+val get_trace_length : unit -> (int, 'e) m
+val increase_trace_length : unit -> (unit, 'e) m
 val get_global : unit -> (Global.t, 'e) m
 val all_constraints : unit -> (LogicalConstraints.t list, 'e) m
 val simp_constraints : unit ->

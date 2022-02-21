@@ -1326,8 +1326,11 @@ end = struct
       delay_logical SymMap.empty ftyp_l
     in
 
-    let@ () = time_f_logs loc 9 "pre_inf_eqs"
-        (InferenceEqs.add_eqs_for_infer loc) ftyp_r in
+    let@ () = 
+      let@ trace_length = get_trace_length () in
+      time_f_logs loc 9 "pre_inf_eqs" trace_length
+        (InferenceEqs.add_eqs_for_infer loc) ftyp_r 
+    in
 
     let start = time_log_start "inference" "" in
     let@ (unis, ftyp_c) = 
@@ -2436,6 +2439,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
 let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse) 
         : (unit, type_error) m = 
 
+  let@ () = increase_trace_length () in
   let (M_TExpr (loc, _annots, e_)) = e in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "checking expression"));
