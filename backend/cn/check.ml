@@ -234,9 +234,11 @@ module ResourceInference = struct
 
   module General = struct
 
+    type one = {index : IT.t; value : IT.t}
+    type many = {guard: IT.t; value : IT.t}
     type case =
-      | One of {index : IT.t; value : IT.t}
-      | Many of {guard: IT.t; value : IT.t}
+      | One of one
+      | Many of many
     type cases = C of case list
 
 
@@ -290,6 +292,60 @@ module ResourceInference = struct
       in
       let xs = f true t in
       List.sort_uniq IT.compare xs
+
+    
+    let cases_to_qf_map (q_s, q_bt) item_bt cases = 
+      let q = sym_ (q_s, q_bt) in
+      let ones, manys = 
+        List.partition_map (function
+            | One c -> Left c
+            | Many c -> Right c
+          ) cases 
+      in
+      match manys with
+      | [{guard; value = IT (Map_op (Get (base_array,i)),_)}] 
+           when not (SymSet.mem q_s (IT.free_vars base_array))
+                && IT.equal i q
+        ->
+         let m = 
+           List.fold_left (fun m {index; value} ->
+               map_set_ m (index, value)
+             ) base_array ones
+         in
+         return (Some m)
+      | _ ->
+         return None
+
+    let cases_to_map (q_s, q_bt) o_fixed_length item_bt cases = 
+      let@ o_qf_map = cases_to_qf_map (q_s, q_bt) item_bt cases in
+      match o_qf_map with
+      | Some m -> 
+         return m
+      | _ ->
+         let q = sym_ (q_s, q_bt) in
+         let m_s, m = IT.fresh (Map (q_bt, item_bt)) in
+         let@ () = add_l m_s (IT.bt m) in
+         let@ () = 
+           ListM.iterM (function
+               | One {index; value} -> 
+                  add_c (t_ (eq__ (map_get_ m index) value))
+               | Many {guard; value} -> 
+                  let cs = match o_fixed_length with
+                    | None ->
+                       [forall_ (q_s, q_bt)
+                          (impl_ (guard, eq__ (map_get_ m q) value))]
+                    | Some length ->
+                       [t_ (eachI_ (0, q_s, length - 1)
+                              (impl_ (guard, eq__ (map_get_ m q) value)))] 
+                  in
+                  add_cs cs
+             ) cases
+         in
+         return m
+      
+      
+
+
 
     let rec point_request ~recursive loc (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
@@ -465,24 +521,15 @@ module ResourceInference = struct
       match o_values_inits with
       | None -> return None
       | Some (C value, C init) ->
-         let q_s, q = requested.q, sym_ (requested.q, BT.Integer) in
-         let v_s, v = IT.fresh (Map (IT.bt q, requested.value)) in
-         let i_s, i = IT.fresh (Map (IT.bt q, requested.init)) in
-         let@ () = add_ls [(v_s, IT.bt v); (i_s, IT.bt i)] in
-         let constr a = function
-           | One {index; value = a_v} ->
-              t_ (eq_ (map_get_ a index, a_v))
-           | Many {guard; value = a_v} ->
-              forall_ (q_s, IT.bt q)
-                (impl_ (guard, eq_ (map_get_ a q, a_v)))
-         in
-         let@ () = add_cs (map (constr v) value @ (map (constr i) init)) in
+         let q = sym_ (requested.q, Integer) in
+         let@ value = cases_to_map (requested.q, Integer) None requested.value value in
+         let@ init = cases_to_map (requested.q, Integer) None requested.init init in
          let r = { 
              ct = requested.ct;
              pointer = requested.pointer;
              q = requested.q;
-             value = map_get_ v q;
-             init = map_get_ i q;
+             value = map_get_ value q;
+             init = map_get_ init q;
              permission = requested.permission;
            } 
          in
@@ -510,27 +557,14 @@ module ResourceInference = struct
       match o_values_inits with 
       | None -> return None
       | Some (C value, C init) ->
-         let folded_value_s, folded_value = 
-           IT.fresh (Map (Integer, BT.of_sct item_ct)) in
-         let inits_s, inits = 
-           IT.fresh (Map (Integer, BT.Bool)) in
-         let@ () = add_l folded_value_s (IT.bt folded_value) in
-         let@ () = add_l inits_s (IT.bt inits) in
-         let constrain cases map = 
-           List.concat_map (function
-               | One {index; value} -> 
-                  [t_ (eq_ (map_get_ map index, value))]
-               | Many {guard; value} ->
-                  List.init length (fun i ->
-                      let iv = map_get_ map (int_ i) in
-                      let su = IT.make_subst [(request.q, int_ i)] in
-                      t_ (impl_ (IT.subst su guard, 
-                                 eq_ (iv, IT.subst su value)))
-                    )
-             ) cases
+         let@ folded_value = 
+           cases_to_map (request.q, Integer) (Some length)
+             (BT.of_sct item_ct) value
          in
-         let@ () = add_cs (constrain value folded_value) in
-         let@ () = add_cs (constrain init inits) in
+         let@ inits = 
+           cases_to_map (request.q, Integer) (Some length)
+             BT.Bool init
+         in
          let folded_init = and_ (List.init length (fun i -> map_get_ inits (int_ i))) in
          let folded_resource = 
            {
@@ -822,20 +856,11 @@ module ResourceInference = struct
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
       begin match holds with
       | `True ->
-         let q_s, q = requested.q, sym_ (requested.q, Integer) in
-         let constr a = function
-           | One {index; value = a_v} ->
-              t_ (eq_ (map_get_ a index, a_v))
-           | Many {guard; value = a_v} ->
-              forall_ (q_s, IT.bt q)
-                (impl_ (guard, eq_ (map_get_ a q, a_v)))
-         in
+         let q = sym_ (requested.q, Integer) in
          let@ oas = 
-           ListM.map2M (fun (C oa) (oa_bt) ->
-               let o_s, o = IT.fresh (Map (IT.bt q, oa_bt)) in
-               let@ () = add_l o_s (IT.bt o) in
-               let@ () = add_cs (List.map (constr o) oa) in
-               return (map_get_ o q)
+           ListM.map2M (fun (C oa) oa_bt ->
+               let@ map = cases_to_map (requested.q, Integer) None oa_bt oa in
+               return (map_get_ map q)
              ) oargs requested.oargs
          in
          let r = { 
