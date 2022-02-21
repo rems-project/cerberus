@@ -309,7 +309,9 @@ module ResourceInference = struct
         ->
          let m = 
            List.fold_left (fun m {index; value} ->
-               map_set_ m (index, value)
+               if IT.equal value (map_get_ base_array index)
+               then m
+               else map_set_ m (index, value)
              ) base_array ones
          in
          return (Some m)
