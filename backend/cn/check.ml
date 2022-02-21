@@ -322,6 +322,11 @@ module ResourceInference = struct
       | Some m -> 
          return m
       | _ ->
+         begin match o_fixed_length with
+         | Some length when length > 20 -> warn !^"generating point-wise constraints for large fixed-size array"
+         | None -> warn !^"generating quantified facts for non-fixed-size array"
+         | _ -> ()
+         end;
          let q = sym_ (q_s, q_bt) in
          let m_s, m = IT.fresh (Map (q_bt, item_bt)) in
          let@ () = add_l m_s (IT.bt m) in
@@ -542,7 +547,6 @@ module ResourceInference = struct
       debug 7 (lazy (item "base" (IT.pp base)));
       debug 7 (lazy (item "length" (IT.pp (int_ length))));
       debug 7 (lazy (item "permission" (IT.pp permission)));
-      if length > 20 then warn !^"generating point-wise constraints for big array";
       let q_s, q = IT.fresh Integer in
       let request : RER.qpoint = {
           ct = item_ct;
