@@ -518,63 +518,42 @@ module ReduceQuery = struct
   open Pred
   open QPred
 
+  type reduction = {
+      lc : IT.t;
+      oq : (Sym.t * BT.t) option; (* for UI only *)
+    }
+
   let forall (s, bt) t =
     let s' = Sym.fresh () in
-    (IT.subst (make_subst [(s, sym_ (s', bt))]) t, Some (s', bt))
+    { lc = IT.subst (make_subst [(s, sym_ (s', bt))]) t; 
+      oq = Some (s', bt) }
 
   let pred global (pred : LC.Pred.t) = 
     let def = Option.get (get_logical_predicate_def global pred.name) in
-    (open_pred global def pred.args, None)
+    { lc = open_pred global def pred.args; 
+      oq = None }
 
   let qpred global assumptions qpred =
+    let def = Option.get (get_logical_predicate_def global qpred.pred.name) in
     (* fresh name to instantiate quantifiers with *)
     let s_inst = Sym.fresh () in
     let instantiate {q = (s, bt); condition; pred} = 
-      let def = Option.get (get_logical_predicate_def global pred.name) in
       let subst = make_subst [(s, sym_ (s_inst, bt))] in
-      (IT.subst subst condition, IT.subst subst (open_pred global def pred.args))
+      IT.subst subst (impl_ (condition, open_pred global def pred.args))
     in
     (* Want to prove "body[s_inst/s]" assuming 'condition[s_inst/s]',
        using the qpred assumptions from the context for the same
        predicate, also instantiated with s_inst *)
-    let (condition, body) = instantiate qpred in
-    let assumptions =
-      condition ::
+    let extra_assumptions =
       List.filter_map (function
         | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
-           let (condition', body') = instantiate qpred' in
-           Some (impl_ (condition', body'))
+           Some (instantiate qpred')
         | _ -> 
            None
         ) assumptions
     in
-    let reduced = impl_ (and_ assumptions, body) in
-    (* print stdout !^"************************************************************************** "; *)
-    (* print stdout (IT.pp reduced); *)
-    (* print stdout !^"************************************************************************** "; *)
-    (reduced, Some (s_inst, snd qpred.q))
-
-  let qpred_eq global assumptions qpred =
-    (* fresh name to instantiate quantifiers with *)
-    let s_inst = Sym.fresh () in
-    let instantiate {q = (s, bt); condition; pred} =
-      let subst = make_subst [(s, sym_ (s_inst, bt))] in
-      (IT.subst subst condition, List.map (IT.subst subst) pred.args)
-    in
-    (* constraint true if one of the premise predicates has its
-       conditions true and equal arguments *)
-    let (condition, args) = instantiate qpred in
-    let poss =
-      List.filter_map (function
-        | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
-           let (condition', args') = instantiate qpred' in
-           let eq_args = List.map2 eq__ args args' in
-           Some (impl_ (condition', and_ eq_args))
-        | _ ->
-           None
-        ) assumptions
-    in
-    (impl_ (condition, (or_ poss)), Some (s_inst, snd qpred.q))
+    { lc = impl_ (and_ extra_assumptions, instantiate qpred);
+      oq = Some (s_inst, snd qpred.q); }
 
 
   let plain it = 
@@ -584,7 +563,8 @@ module ReduceQuery = struct
        let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
        forall (i_s, Integer) (impl_ (condition, body))
     | _ -> 
-       (it, None)
+       { lc = it;
+         oq = None }
 
 
 
@@ -711,7 +691,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~trace_length ~assumptions ~po
   let context = solver.context in
   let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
-  let it, oq = ReduceQuery.constr global assumptions lc in
+  let ReduceQuery.{lc = it; oq} = ReduceQuery.constr global assumptions lc in
   (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
   let rtrue () = model_state := No_model; `True in
   let rfalse = function
@@ -722,19 +702,23 @@ let provable ~loc ~shortcut_false ~solver ~global ~trace_length ~assumptions ~po
   | `True -> rtrue ()
   | `False _ when shortcut_false -> rfalse None
   | (`False it | `No_shortcut it) ->
-     let t = Translate.term context structs (not_ it) in
-     let pointer_facts = List.map (Translate.term context structs) pointer_facts in
+     let translate it = Translate.term context structs it in
+     let t = translate (not_ it) in
+     let assumptions = List.map translate pointer_facts in
      let res = time_f_logs loc 5 "Z3(inc)" trace_length
-                 (Z3.Solver.check solver.incremental) (t :: pointer_facts) 
+                 (Z3.Solver.check solver.incremental) 
+                 (t :: assumptions) 
      in
      match res with
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
      | Z3.Solver.UNKNOWN ->
+        let add sc = Z3.Solver.add solver.fancy [sc] in
         Z3.Solver.reset solver.fancy;
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
-        let scs = t :: pointer_facts @ Z3.Solver.get_assertions solver.incremental in
-        let () = List.iter (fun sc -> Z3.Solver.add solver.fancy [sc]) scs in
+        add t;
+        List.iter add assumptions;
+        List.iter add (Z3.Solver.get_assertions solver.incremental);
         let (elapsed, res) = time_f_elapsed (time_f_logs loc 5 "Z3" trace_length
                 (Z3.Solver.check solver.fancy)) [] in
         maybe_save_slow_problem solver.fancy lc it elapsed solver.fancy;
