@@ -236,9 +236,17 @@ module ResourceInference = struct
 
     type one = {index : IT.t; value : IT.t}
     type many = {guard: IT.t; value : IT.t}
+
     type case =
       | One of one
       | Many of many
+
+    let pp_case = function
+      | One {index;value} -> 
+         !^"one" ^^ parens (IT.pp index ^^ comma ^^^ IT.pp value)
+      | Many {guard;value} -> 
+         !^"one" ^^ parens (IT.pp guard ^^ comma ^^^ IT.pp value)
+
     type cases = C of case list
 
 
@@ -295,6 +303,13 @@ module ResourceInference = struct
 
     
     let cases_to_qf_map (q_s, q_bt) item_bt cases = 
+      let update_with_ones base_array ones =
+        List.fold_left (fun m {index; value} ->
+            if IT.equal value (map_get_ base_array index)
+            then m
+            else map_set_ m (index, value)
+          ) base_array ones
+      in
       let q = sym_ (q_s, q_bt) in
       let ones, manys = 
         List.partition_map (function
@@ -303,30 +318,25 @@ module ResourceInference = struct
           ) cases 
       in
       match manys with
+      | [] ->
+         Some (update_with_ones (default_ (BT.Map (q_bt, item_bt))) ones)
       | [{guard; value = IT (Map_op (Get (base_array,i)),_)}] 
            when not (SymSet.mem q_s (IT.free_vars base_array))
-                && IT.equal i q
-        ->
-         let m = 
-           List.fold_left (fun m {index; value} ->
-               if IT.equal value (map_get_ base_array index)
-               then m
-               else map_set_ m (index, value)
-             ) base_array ones
-         in
-         return (Some m)
+                && IT.equal i q ->
+         Some (update_with_ones base_array ones)
       | _ ->
-         return None
+         None
 
     let cases_to_map (q_s, q_bt) o_fixed_length item_bt cases = 
-      let@ o_qf_map = cases_to_qf_map (q_s, q_bt) item_bt cases in
-      match o_qf_map with
+      match cases_to_qf_map (q_s, q_bt) item_bt cases with
       | Some m -> 
          return m
       | _ ->
          begin match o_fixed_length with
          | Some length when length > 20 -> warn !^"generating point-wise constraints for large fixed-size array"
-         | None -> warn !^"generating quantified facts for non-fixed-size array"
+         | None -> 
+            print stdout (item "cases" (list pp_case cases));
+            warn !^"generating quantified facts for non-fixed-size array"
          | _ -> ()
          end;
          let q = sym_ (q_s, q_bt) in
