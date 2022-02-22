@@ -105,10 +105,10 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
     | Sym _ when BT.equal bt BT.Unit ->
        unit_ 
     | Sym sym ->
-       begin match SymMap.find_opt sym values with
-       | Some it -> it
-       | None -> IT (Lit (Sym sym), bt)
-       end
+       (* begin match SymMap.find_opt sym values with *)
+       (* | Some it -> it *)
+       (* | None -> *) IT (Lit (Sym sym), bt)
+       (* end *)
     | Z z ->
        IT (Lit (Z z), bt)
     | Q q ->

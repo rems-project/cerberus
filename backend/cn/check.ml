@@ -329,8 +329,11 @@ module ResourceInference = struct
 
     let cases_to_map (q_s, q_bt) o_fixed_length item_bt cases = 
       match cases_to_qf_map (q_s, q_bt) item_bt cases with
-      | Some m -> 
-         return m
+      | Some m ->
+         let v_s, v = IT.fresh (Map (q_bt, item_bt)) in
+         let@ () = add_l v_s (IT.bt v)  in
+         let@ () = add_c (t_ (def_ v_s m)) in
+         return v
       | _ ->
          begin match o_fixed_length with
          | Some length when length > 20 -> warn !^"generating point-wise constraints for large fixed-size array"
@@ -646,12 +649,18 @@ module ResourceInference = struct
       match o_values_inits with
       | None -> return None
       | Some (values, inits) ->
+         let folded_value_s, folded_value = IT.fresh (Struct tag) in
+         let folded_init_s, folded_init = IT.fresh Bool in
+         let@ () = add_l folded_value_s (IT.bt folded_value) in
+         let@ () = add_l folded_init_s (IT.bt folded_init) in
+         let@ () = add_c (t_ (def_ folded_value_s (IT.struct_ (tag, values)))) in
+         let@ () = add_c (t_ (def_ folded_init_s (and_ inits))) in
          let folded_resource = 
            {
              ct = struct_ct tag;
              pointer = pointer_t;
-             value = IT.struct_ (tag, values); 
-             init = and_ inits;
+             value = folded_value; 
+             init = folded_init;
              permission = permission_t;
            }
          in
