@@ -1,0 +1,5 @@
+(library
+ (name mem_cheri)
+ (public_name cerberus.mem.cheri)
+ (flags (:standard -w -27-32))
+ (implements cerb_frontend))
