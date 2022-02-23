@@ -199,6 +199,34 @@ end
 module DefactoImpl = struct
   include DefaultImpl
 
+  (* TODO:
+    The observable, integer range of a uintptr_t is the same as that
+    of a vaddr_t (or ptrdiff_t for intptr_t ), despite the increased
+    alignment and storage requirements.
+   *)
+
+  let sizeof_ity = function
+    | Signed Intptr_t  | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
+
+  let alignof_ity = function
+    | Signed Intptr_t  | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.alignof_ity ity
+
+end
+
+module MorelloImpl = struct
+  include DefaultImpl
+
+  let name = "clang11_aarch64-unknown-freebsd13"
+  let details = "clang version 11.0.0\nTarget: Morello"
+
+  let sizeof_pointer =
+    Some 16
+
+  let alignof_pointer =
+    Some 16
+
   let sizeof_ity = function
     | Signed Intptr_t
     | Unsigned Intptr_t ->
