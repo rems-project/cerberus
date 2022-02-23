@@ -60,9 +60,6 @@ let frontend cpp_str filename =
 let cpp_str =
     "cc -E -C -Werror -nostdinc -undef -D__cerb__"
   ^ " -I/Users/catzilla/rems-project/cerberus-private/runtime/libc/include"
-  ^ " -I/Users/catzilla/github/hafnium/inc"
-  ^ " -I/Users/catzilla/github/hafnium/inc/vmapi"
-  ^ " -I/Users/catzilla/github/hafnium/src/arch/aarch64/inc"
   ^ " -DDEBUG"
   ^ " -DMAX_CPUS=4"
   ^ " -DMAX_VMS=2"
