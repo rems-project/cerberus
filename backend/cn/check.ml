@@ -2512,15 +2512,19 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Eif (casym, e1, e2) ->
        let@ carg = arg_of_asym casym in
        let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-       ListM.iterM (fun (lc, e) ->
+       ListM.iterM (fun (lc, nm, e) ->
            pure begin 
                let@ () = add_c (t_ lc) in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
                | `True -> return ()
-               | `False -> check_texpr labels e typ 
+               | `False ->
+                 let start = time_log_start (nm ^ " branch") (Locations.to_string loc) in
+                 let@ r = check_texpr labels e typ in
+                 time_log_end start;
+                 return r
              end
-         ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
+         ) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)]
     | M_Ebound (_, e) ->
        check_texpr labels e typ 
     | M_End _ ->

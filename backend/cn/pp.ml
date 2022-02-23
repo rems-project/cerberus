@@ -31,6 +31,33 @@ let print_level = ref 0
 let times = ref (None : (out_channel * string) option)
 
 
+let wrap s = "\"" ^ String.escaped s ^ "\""
+
+let write_time_log_start kind detail =
+  match !times with
+  | Some (channel, "log") ->
+    Printf.fprintf channel "{\n  %s: %s,\n" (wrap "name") (wrap kind);
+    if String.length detail > 0
+    then Printf.fprintf channel "  %s: %s,\n" (wrap "details") (wrap detail)
+    else ();
+    Printf.fprintf channel "  %s: [\n" (wrap "contents");
+    flush channel
+  | _ -> ()
+
+let write_time_log_end d =
+  match !times with
+  | Some (channel, "log") ->
+    Printf.fprintf channel "  {}\n],\n  %s: %f\n},\n" (wrap "time") d;
+    flush channel
+  | _ -> ()
+
+let write_time_log_final () =
+  match !times with
+  | Some (channel, "log") ->
+    Printf.fprintf channel "  {}\n]}\n"
+  | _ -> ()
+
+
 let maybe_open_times_channel = function
   | None -> ()
   | Some (filename, style) ->
@@ -38,14 +65,13 @@ let maybe_open_times_channel = function
      times := Some (channel, style);
      if style == "csv"
      then Printf.fprintf channel "lineF, lineT, trace length, time\n"
-     else ()
-
+     else write_time_log_start "timing" ""
 
 
 let maybe_close_times_channel () =
   match !times with
   | None -> ()
-  | Some (channel, _) -> flush channel; close_out channel
+  | Some (channel, _) -> write_time_log_final (); flush channel; close_out channel
 
 
 
@@ -167,25 +193,12 @@ let time_f_debug level msg f x =
     y
   else f x
 
-let wrap s = "\"" ^ String.escaped s ^ "\""
-
 let time_log_start kind detail =
   match !times with
   | Some (channel, "log") ->
-    let start = Unix.gettimeofday () in
-    Printf.fprintf channel "{\n  %s: %s,\n" (wrap "name") (wrap kind);
-    if String.length detail > 0
-    then Printf.fprintf channel "  %s: %s,\n" (wrap "details") (wrap detail)
-    else ();
-    Printf.fprintf channel "  %s: [\n" (wrap "contents");
-    start
+    write_time_log_start kind detail;
+    Unix.gettimeofday ()
   | _ -> 0.0
-
-let write_time_log_end d =
-  match !times with
-  | Some (channel, "log") ->
-    Printf.fprintf channel "  {}\n],\n  %s: %f\n},\n" (wrap "time") d
-  | _ -> ()
 
 let time_log_end prev_time =
   match !times with
