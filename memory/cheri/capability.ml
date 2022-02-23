@@ -1,10 +1,16 @@
 
-type addr = Nat_big_num.num
+(* vaddr_t: This is a new integer type introduced by CHERI C and
+   should be used to hold virtual addresses. vaddr_t should not be
+   directly cast to a pointer type for dereference; instead, it must
+   be combined with an existing valid capability to the address space
+   to generate a dereferenceable pointer. *)
+type vaddr = Nat_big_num.num
+
 type obj_type = Nat_big_num.num
-type addr_interval = addr * addr
+type vaddr_interval = vaddr * vaddr
 
 type cap_value =
-  | CapAddress of addr
+  | CapVaddress of vaddr
   | CapToken of obj_type
 
 type cap_seal =
@@ -54,7 +60,7 @@ module type capability_func =
     val cap_get_value : t -> cap_value
 
     (* Returns either inclusive bounds for covered  memory region *)
-    val cap_get_bounds: t -> addr_interval
+    val cap_get_bounds: t -> vaddr_interval
 
     (* Get informaiton about "seal" on this capability *)
     val cap_get_seal: t -> cap_seal
@@ -68,7 +74,7 @@ module type capability_func =
     val cap_c0: t
 
     (* Boldly assuming this one never fails *)
-    val cap_addr_of_obj_type: obj_type -> addr
+    val cap_vaddr_of_obj_type: obj_type -> vaddr
 
     (* Due to encoding, not all capabilities with large bounds have a
        contiguous representable region. This representability check is
@@ -79,14 +85,14 @@ module type capability_func =
        versions of the check may fail in additional cases.
 
        See: `CapIsRepresentable` in Morello *)
-    val cap_addr_representable: t -> addr -> bool
+    val cap_vaddr_representable: t -> vaddr -> bool
 
     (* Whenever given bounds could be encoded exactly. Due to
        encoding issues not all bounds could be reprsented exactly
        (e.g. due to alignment).
 
        See: `CapIsRepresentable` in Morello *)
-    val cap_bounds_representable_exactly: t -> addr_interval -> bool
+    val cap_bounds_representable_exactly: t -> vaddr_interval -> bool
 
     (* Operations on capabilities.
 
@@ -99,11 +105,11 @@ module type capability_func =
 
     (* --- Monotonic manipulation -- *)
 
-    (* Modifying the Capability Value (address of object type)
+    (* Modifying the Capability Value (vaddress of object type)
 
        Related instructions:
        - CFromPtr in RISC V
-       - CSetAddr in RISC V
+       - CSetVaddr in RISC V
        - SCVALUE in Morello
        - CCopyType in RISC V
        - CPYTYPE in Morello
@@ -116,7 +122,7 @@ module type capability_func =
        - CSetBounds in RISCV
        - SCBNDS (immediate) in Morello?
      *)
-    val cap_narrow_bounds: t -> addr_interval -> t
+    val cap_narrow_bounds: t -> vaddr_interval -> t
 
     (* Reducing the Capability Bounds (exact)
 
@@ -124,7 +130,7 @@ module type capability_func =
        - CSetBoundsExact in RISCV
        - SCBNDSE (immediate) in Morello?
      *)
-    val cap_narrow_bounds_exact: t -> addr_interval -> t
+    val cap_narrow_bounds_exact: t -> vaddr_interval -> t
 
     (* Reducing the Capability Permissions
 
