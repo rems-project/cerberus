@@ -28,33 +28,49 @@ let unicode = ref true
 let print_level = ref 0
 
 
-let times = ref (None : (out_channel * string) option)
+let times = ref (None : (out_channel * string * int) option)
 
 
 let wrap s = "\"" ^ String.escaped s ^ "\""
 
 let write_time_log_start kind detail =
   match !times with
-  | Some (channel, "log") ->
-    Printf.fprintf channel "{\n  %s: %s,\n" (wrap "name") (wrap kind);
+  | Some (channel, "log", i) ->
+    if i == 0 (* parent object opened, no contents yet *)
+    then Printf.fprintf channel ",\n  %s: [\n" (wrap "contents")
+    else Printf.fprintf channel ",\n";
+    Printf.fprintf channel "{\n  %s: %s" (wrap "name") (wrap kind);
     if String.length detail > 0
-    then Printf.fprintf channel "  %s: %s,\n" (wrap "details") (wrap detail)
+    then Printf.fprintf channel ",\n  %s: %s" (wrap "details") (wrap detail)
     else ();
-    Printf.fprintf channel "  %s: [\n" (wrap "contents");
+    (* this object is opened with no contents yet *)
+    times := Some (channel, "log", 0);
     flush channel
   | _ -> ()
 
 let write_time_log_end d =
   match !times with
-  | Some (channel, "log") ->
-    Printf.fprintf channel "  {}\n],\n  %s: %f\n},\n" (wrap "time") d;
+  | Some (channel, "log", i) ->
+    if i != 0 (* open contents to be closed *)
+    then Printf.fprintf channel "\n  ]"
+    else ();
+    begin match d with
+    | None -> ()
+    | Some elapsed -> Printf.fprintf channel ",\n  %s: %f" (wrap "time") elapsed;
+    end;
+    Printf.fprintf channel "\n}";
+    (* now returned to parent object which must have contents *)
+    times := Some (channel, "log", 1);
     flush channel
   | _ -> ()
 
 let write_time_log_final () =
   match !times with
-  | Some (channel, "log") ->
-    Printf.fprintf channel "  {}\n]}\n"
+  | Some (channel, "log", i) ->
+    if i != 0 (* open contents to be closed *)
+    then Printf.fprintf channel "\n  ]"
+    else ();
+    Printf.fprintf channel "\n}\n"
   | _ -> ()
 
 
@@ -62,16 +78,15 @@ let maybe_open_times_channel = function
   | None -> ()
   | Some (filename, style) ->
      let channel = open_out filename in
-     times := Some (channel, style);
+     times := Some (channel, style, 0);
      if style == "csv"
      then Printf.fprintf channel "lineF, lineT, trace length, time\n"
-     else write_time_log_start "timing" ""
-
+     else Printf.fprintf channel "{\n  %s: %s" (wrap "name") (wrap "timing")
 
 let maybe_close_times_channel () =
   match !times with
   | None -> ()
-  | Some (channel, _) -> write_time_log_final (); flush channel; close_out channel
+  | Some (channel, _, _) -> write_time_log_final (); flush channel; close_out channel
 
 
 
@@ -195,29 +210,29 @@ let time_f_debug level msg f x =
 
 let time_log_start kind detail =
   match !times with
-  | Some (channel, "log") ->
+  | Some (channel, "log", _) ->
     write_time_log_start kind detail;
     Unix.gettimeofday ()
   | _ -> 0.0
 
 let time_log_end prev_time =
   match !times with
-  | Some (channel, "log") ->
+  | Some (channel, "log", _) ->
     let fin_time = Unix.gettimeofday () in
     let d = fin_time -. prev_time in
-    write_time_log_end d
+    write_time_log_end (Some d)
   | _ -> ()
 
 let time_f_logs (loc : Locations.t) level msg trace_length f x =
   match !times with
-  | Some (channel, style) ->
+  | Some (channel, style, _) ->
      let _ = time_log_start msg "" in
      let (d, y) = time_f_elapsed f x in
      begin match (Locations.line_numbers loc, style) with
      | (Some (l1, l2), "csv") ->
         Printf.fprintf channel "%d, %d, %d, %f\n" l1 l2 trace_length d;
      | (_, "csv") -> Printf.fprintf channel "None, None, %d, %f\n" trace_length d;
-     | (_, "log") -> write_time_log_end d
+     | (_, "log") -> write_time_log_end (Some d)
      | _ -> ()
      end;
      flush channel;
