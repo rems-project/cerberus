@@ -29,22 +29,36 @@ module type cap_permission = sig
      encoded and treated as one, it is sigled out as separate
      field of logical Capability structure (see R_HRVBQ paragraph
      in Morello spec. *)
-  val permits_global: t -> bool
-  val permits_execute: t -> bool
-  val permits_ccall: t -> bool
-  val permits_load: t -> bool
-  val permits_load_cap: t -> bool
-  val permits_seal: t -> bool
-  val permits_store: t -> bool
-  val permits_store_cap: t -> bool
-  val permits_store_local_cap: t -> bool
-  val permits_system_access: t -> bool
-  val permits_unseal: t -> bool
+  val perm_is_global: t -> bool
+  val perm_is_execute: t -> bool
+  val perm_is_ccall: t -> bool
+  val perm_is_load: t -> bool
+  val perm_is_load_cap: t -> bool
+  val perm_is_seal: t -> bool
+  val perm_is_store: t -> bool
+  val perm_is_store_cap: t -> bool
+  val perm_is_store_local_cap: t -> bool
+  val perm_is_system_access: t -> bool
+  val perm_is_unseal: t -> bool
 
   (* User-defined permissions *)
   val get_user_perms: t -> bool list (* TODO: enforce user_perms_len? *)
 
-  (* TODO: how to change/clear permissions? *)
+  (* Clearing permissions *)
+  val perm_clear_global: t -> t
+  val perm_clear_execute: t -> t
+  val perm_clear_ccall: t -> t
+  val perm_clear_load: t -> t
+  val perm_clear_load_cap: t -> t
+  val perm_clear_seal: t -> t
+  val perm_clear_store: t -> t
+  val perm_clear_store_cap: t -> t
+  val perm_clear_store_local_cap: t -> t
+  val perm_clear_system_access: t -> t
+  val perm_clear_unseal: t -> t
+
+  (* perform bitwise AND of user permissions *)
+  val perm_and_user_perms: t -> bool list -> t
 end
 
 module type capability_func =
