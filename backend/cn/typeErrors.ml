@@ -101,6 +101,7 @@ type message =
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
   | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
+  | Write_value_bad of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
   | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q}
   | Unconstrained_logical_variable of Sym.t * string option
@@ -269,6 +270,23 @@ let pp_message te =
   | Write_value_unrepresentable {ct; location; value; ctxt; model} ->
      let short =
        !^"Write value not representable at type" ^^^
+         Sctypes.pp ct
+     in
+     let explanation =
+       Explain.explanation ctxt
+         (IT.free_vars_list [value; location])
+     in
+     let location = IT.pp (IT.subst explanation.substitution location) in
+     let value = IT.pp (IT.subst explanation.substitution value) in
+     let state = Explain.state ctxt explanation model in
+     let descr =
+       !^"Location" ^^ colon ^^^ location ^^ comma ^^^
+       !^"value" ^^ colon ^^^ value ^^ dot
+     in
+     { short; descr = Some descr; state = Some state }
+  | Write_value_bad {ct; location; value; ctxt; model} ->
+     let short =
+       !^"Bad write value: not representable at type or misaligned pointer value" ^^^
          Sctypes.pp ct
      in
      let explanation =

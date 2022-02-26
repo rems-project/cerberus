@@ -304,9 +304,8 @@ let page_alloc_predicates struct_decls =
     in
     let lrt =
       LRT.Logical ((value_s, IT.bt value), (loc, None),
-      LRT.Constraint (t_ (good_ (struct_ct list_head_tag, value)), (loc, None),
       LRT.Resource (Point point, (loc, None),
-      LRT.I)))
+      LRT.I))
     in
     let clause = {
         loc = loc;
@@ -392,8 +391,7 @@ let page_alloc_predicates struct_decls =
       AT.of_lrt (
         LRT.Logical ((page_s, IT.bt page), (loc, None),
         LRT.Resource (resource, (loc, None),
-        LRT.Constraint (t_ (good_ (struct_ct hyp_page_tag, page)), (loc, None), 
-        LRT.I))))
+        LRT.I)))
         (AT.I OutputDef.[{loc; name = "page"; value= page}])
     in
     let clause = { loc; guard = bool_ true; packing_ft = lrt } in    
@@ -438,8 +436,7 @@ let page_alloc_predicates struct_decls =
       in
       LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
       LRT.Resource (resource, (loc, None), 
-      LRT.Constraint (t_ (good_ (struct_ct hyp_pool_tag, pool)), (loc, None), 
-      LRT.I)))
+      LRT.I))
     in
 
 

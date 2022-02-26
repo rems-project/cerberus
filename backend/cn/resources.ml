@@ -30,7 +30,7 @@ end
 
 module Make (O : Output) = struct
 
-
+  (* ownership + "init --> good(value)" *)
   type point = {
       ct: Sctypes.t; 
       pointer: IT.t;            (* I *)
@@ -40,6 +40,7 @@ module Make (O : Output) = struct
     }
   [@@deriving eq, ord]
 
+  (* ownership + "init --> good(value)" *)
   type qpoint = {
       ct: Sctypes.t; 
       pointer: IT.t;            (* I *)
@@ -432,7 +433,7 @@ module RE = struct
   (* assumption: the resource is owned *)
   let derived_lc1 = function
     | Point p -> 
-       []
+       [impl_ (p.init, good_ (p.ct, p.value))]
     (* impl_ (p.permission,  *)
     (*        ne_ (p.pointer, null_)) *)
     | _ -> []

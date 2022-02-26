@@ -2186,7 +2186,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
              representable and done the right thing. Pointers, as I
              understand, are an exception. *)
           let@ () = 
-            let in_range_lc = representable_ (act.ct, it_of_arg varg) in
+            let in_range_lc = good_ (act.ct, it_of_arg varg) in
             let@ provable = provable loc in
             let holds = provable (t_ in_range_lc) in
             match holds with
@@ -2195,7 +2195,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                let@ model = model () in
                fail (fun ctxt ->
                    let msg = 
-                     Write_value_unrepresentable {
+                     Write_value_bad {
                          ct = act.ct; 
                          location = it_of_arg parg; 
                          value = it_of_arg varg; 
@@ -2251,11 +2251,11 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
                fail (fun ctxt -> {loc; msg = Uninitialised_read {ctxt; model}})
           in
           let ret = Sym.fresh () in
-          let constr = def_ ret point.value in
           let rt = 
             RT.Computational ((ret, IT.bt point.value), (loc, None),
-            Constraint (t_ constr, (loc, None),
-            LRT.I)) 
+            Constraint (t_ (def_ ret point.value), (loc, None),
+            Constraint (t_ (good_ (point.ct, point.value)), (loc, None),
+            LRT.I)))
           in
           return rt
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 

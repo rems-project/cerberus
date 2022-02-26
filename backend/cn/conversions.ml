@@ -143,11 +143,7 @@ let make_owned_funarg floc i (pointer : IT.t) path sct =
             }),
         (floc, Some "ownership of function argument location"))
      in
-     let c = 
-       (`Constraint (LC.t_ (good_ (sct, pointee_t))), 
-        (floc, Some (descr ^ "value constraint")))
-     in
-     ([l;r;c], mapping)
+     ([l;r], mapping)
 
 
 let make_owned loc ~oname (pointer : IT.t) path sct =
@@ -172,10 +168,6 @@ let make_owned loc ~oname (pointer : IT.t) path sct =
        | None ->
           mapping
      in
-     let c = 
-       (`Constraint (LC.t_ (good_ (sct, pointee_t))), 
-        (loc, Some "value constraint"))
-     in
      let r = 
        (`Resource (RE.Point {
            ct = sct; 
@@ -186,7 +178,7 @@ let make_owned loc ~oname (pointer : IT.t) path sct =
           }),
         (loc, Some "ownership"))
      in
-     return ([l;r;c], mapping)
+     return ([l;r], mapping)
 
 
 
@@ -918,7 +910,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         let (o', mapping') = 
           make_owned_funarg loc counter item.it item.path aarg.typ in
         let c = 
-          (`Constraint (LC.t_ (good_value layouts (pointer_ct aarg.typ) item.it)), 
+          (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))), 
            (loc, Some ("&ARG" ^ string_of_int counter ^ " constraint")))
         in
         let mappings = 
@@ -1063,7 +1055,7 @@ let make_label_spec
           let item = aarg_item loc aarg in
           let@ (i', mapping') = make_owned loc ~oname:None item.it item.path aarg.typ in 
           let c = 
-            (`Constraint (LC.t_ (good_value layouts (pointer_ct aarg.typ) item.it)),
+            (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
              (loc, None))
           in
           return (i @ a :: c :: i', (item :: mapping') @ mapping)
