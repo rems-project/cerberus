@@ -20,7 +20,7 @@ type cap_seal =
   | Cap_Indirect_SEntry_Pair (* "LBP" in Morello *)
   | Cap_Sealed of obj_type
 
-module type cap_permission = sig
+module type Cap_permission = sig
   type t
   (* Number of user-defined flags *)
   val user_perms_len: int
@@ -61,8 +61,8 @@ module type cap_permission = sig
   val perm_and_user_perms: t -> bool list -> t
 end
 
-module type capability_func =
-  functor (P: cap_permission) ->
+module type Capability_func =
+  functor (P: Cap_permission) ->
   sig
     type t
 
