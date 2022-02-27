@@ -73,7 +73,7 @@ end = struct
   let get = Nondeterminism.nd_get
   let put = Nondeterminism.nd_put
 (*  let fail err = Nondeterminism.kill (Other err) *)
-  let mapM _ _ = failwith "TODO: Concrete.Eff.mapM"
+  let mapM _ _ = failwith "TODO: CHERI.Eff.mapM"
   
   let msum str xs =
     Nondeterminism.(
@@ -123,14 +123,14 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | Some n ->
               n
           | None ->
-              failwith ("the concrete memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
+              failwith ("the concrete CHERI memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
         end
     | Basic (Floating fty) ->
         begin match (Ocaml_implementation.get ()).sizeof_fty fty with
           | Some n ->
               n
           | None ->
-              failwith "the concrete memory model requires a complete implementation sizeof FLOAT"
+              failwith "the concrete CHERI memory model requires a complete implementation sizeof FLOAT"
         end
     | Array (elem_ty, Some n) ->
         (* TODO: what if too big? *)
@@ -140,13 +140,13 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | Some n ->
               n
           | None ->
-              failwith "the concrete memory model requires a complete implementation sizeof POINTER"
+              failwith "the concrete CHERI memory model requires a complete implementation sizeof POINTER"
         end
     | Atomic atom_ty ->
         sizeof ~tagDefs atom_ty
     | Struct tag_sym ->
         (* TODO: need to add trailing padding for structs with a flexible array member *)
-        Debug_ocaml.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
+        Debug_ocaml.warn [] (fun () -> "TODO: CHERI.sizeof doesn't add trailing padding for structs with a flexible array member");
         let (_, max_offset) = offsetsof tagDefs tag_sym in
         let align = alignof ~tagDefs cty in
         let x = max_offset mod align in
@@ -174,14 +174,14 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | Some n ->
               n
           | None ->
-              failwith ("the concrete memory model requires a complete implementation alignof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
+              failwith ("the concrete CHERI memory model requires a complete implementation alignof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
         end
     | Basic (Floating fty) ->
         begin match (Ocaml_implementation.get ()).alignof_fty fty with
           | Some n ->
               n
           | None ->
-              failwith "the concrete memory model requires a complete implementation alignof FLOATING"
+              failwith "the concrete CHERI memory model requires a complete implementation alignof FLOATING"
         end
     | Array (elem_ty, _) ->
         alignof ~tagDefs elem_ty
@@ -193,7 +193,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | Some n ->
               n
           | None ->
-              failwith "the concrete memory model requires a complete implementation alignof POINTER"
+              failwith "the concrete CHERI memory model requires a complete implementation alignof POINTER"
         end
     | Atomic atom_ty ->
         alignof ~tagDefs atom_ty
@@ -228,7 +228,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
 
 
-module Concrete : Memory = struct
+module CHERI : Memory = struct
   let name = "CHERI memory model"
   
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
@@ -293,7 +293,7 @@ module Concrete : Memory = struct
       Eff (fun b -> ((if b then `SAT else `UNSAT), b))
     
     let with_constraints _ cs (Eff ma) =
-      Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
+      Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: CHERI.with_constraints");
       let rec eval_cs = function
         | MC_empty ->
             true
@@ -351,7 +351,7 @@ module Concrete : Memory = struct
        compatible. Returns the empty provenance otherwise *)
     let split_bytes = function
       | [] ->
-          failwith "Concrete.AbsByte.split_bytes: called on an empty list"
+          failwith "CHERI.AbsByte.split_bytes: called on an empty list"
       | bs ->
           let (_prov, rev_values, offset_status) =
             List.fold_left (fun (prov_acc, val_acc, offset_acc) b ->
@@ -596,7 +596,7 @@ module Concrete : Memory = struct
       | Some ret ->
           return ret
       | None ->
-          fail (MerrOutsideLifetime ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
+          fail (MerrOutsideLifetime ("CHERI.get_allocation, alloc_id=" ^ N.to_string alloc_id))
   
   let is_within_bound alloc_id lvalue_ty addr =
     get_allocation alloc_id >>= fun alloc ->
@@ -1107,7 +1107,7 @@ module Concrete : Memory = struct
             let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
             mval
         | None ->
-            failwith "Concrete.dot_of_mem_state: alloc.ty = None"
+            failwith "CHERI.dot_of_mem_state: alloc.ty = None"
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
       Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
@@ -1132,7 +1132,7 @@ module Concrete : Memory = struct
       let (q,m) = quomod z align in
       let z' = sub z (if less q zero then negate m else m) in
       if less_equal z' zero then
-        fail (MerrOther "Concrete.allocator: failed (out of memory)")
+        fail (MerrOther "CHERI.allocator: failed (out of memory)")
       else
         return z'
     end >>= fun addr ->
@@ -1162,7 +1162,7 @@ module Concrete : Memory = struct
           )
       | Some mval ->
           let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
-          (* TODO: factorise this with do_store inside Concrete.store *)
+          (* TODO: factorise this with do_store inside CHERI.store *)
           update (fun st ->
             let (funptrmap, pre_bs) = repr st.funptrmap mval in
             let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
@@ -1966,14 +1966,14 @@ module Concrete : Memory = struct
       | Some (_, _, offset) ->
           IV (Prov_none, N.of_int offset)
       | None ->
-          failwith "Concrete.offsetof_ival: invalid memb_ident"
+          failwith "CHERI.offsetof_ival: invalid memb_ident"
   
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     match prov with
       (* PNVI-ae-udi *)
       | Prov_symbolic iota ->
-          failwith "Concrete.array_shift_ptrval found a Prov_symbolic"
+          failwith "CHERI.array_shift_ptrval found a Prov_symbolic"
       | _ ->
           PV (prov, match ptrval_ with
           | PVnull _ ->
@@ -1981,7 +1981,7 @@ module Concrete : Memory = struct
               (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
               failwith "TODO(shift a null pointer should be undefined behaviour)"
           | PVfunction _ ->
-              failwith "Concrete.array_shift_ptrval, PVfunction"
+              failwith "CHERI.array_shift_ptrval, PVfunction"
           | PVconcrete addr ->
               PVconcrete (N.add addr offset))
   
@@ -1996,7 +1996,7 @@ module Concrete : Memory = struct
           else
             PVconcrete offset
       | PVfunction _ ->
-          failwith "Concrete.member_shift_ptrval, PVfunction"
+          failwith "CHERI.member_shift_ptrval, PVfunction"
       | PVconcrete addr ->
           PVconcrete (N.add addr offset))
   
@@ -2009,7 +2009,7 @@ module Concrete : Memory = struct
           (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
           failwith "TODO(shift a null pointer should be undefined behaviour)"
       | PV (_, PVfunction _) ->
-          failwith "Concrete.eff_array_shift_ptrval, PVfunction"
+          failwith "CHERI.eff_array_shift_ptrval, PVfunction"
       
       (* PNVI-ae-udi *)
       | PV (Prov_symbolic iota as prov, PVconcrete addr) ->
@@ -2234,7 +2234,7 @@ let combine_prov prov1 prov2 =
     (* TODO: this is improvised, need to check with P *)
     | (Prov_symbolic _, _)
     | (_, Prov_symbolic _) ->
-        failwith "Concrete.combine_prov: found a Prov_symbolic"
+        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
 
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
@@ -2273,7 +2273,7 @@ let combine_prov prov1 prov2 =
   let bitwise_complement_ival _ (IV (prov, n)) =
     (* NOTE: for PNVI we assume that prov = Prov_none *)
     (* TODO *)
-    (* prerr_endline "Concrete.bitwise_complement ==> HACK"; *)
+    (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
     IV (prov, Nat_big_num.(sub (negate n) (of_int 1)))
 
   let bitwise_and_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
@@ -2753,7 +2753,7 @@ let combine_prov prov1 prov2 =
 
 end
 
-include Concrete
+include CHERI
 
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)
