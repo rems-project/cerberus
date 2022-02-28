@@ -572,7 +572,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
        let@ args = mapM (retype_arg loc) args in
        let@ argtyps = 
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
-             let sym = Option.value (Sym.fresh ()) msym in
+             let sym = Option.value ~default:(Sym.fresh ()) msym in
              let () = if not by_pointer then error "label argument passed as value" in
              let@ ct = ct_of_ct loc ct in
              return (sym,ct) 

@@ -1,3 +1,6 @@
+include Stdlib.Option
+
+
 type 'a m = 'a option
 
 let map f = function
@@ -32,10 +35,10 @@ let equal equality oa oa' =
   | _, _ -> false
 
 
-let value (default : 'a) (oa : 'a option) =
-  match oa with
-  | Some a -> a
-  | None -> default
+(* let value (default : 'a) (oa : 'a option) = *)
+(*   match oa with *)
+(*   | Some a -> a *)
+(*   | None -> default *)
 
 let value_err (err : string) (oa : 'a option) =
   match oa with

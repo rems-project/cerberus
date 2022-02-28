@@ -65,5 +65,7 @@ type token =
   | WITH
   | TYP
   | TYPEOF
+  | IF
+  | STRUCT
 
   | EOF

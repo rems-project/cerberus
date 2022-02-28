@@ -39,6 +39,7 @@ module Terms = struct
     | Disjoint of (term * term) * (term * term)
     | App of term * term
     | Env of term * string
+    | Unchanged of term
   [@@deriving eq, ord]
 
 
@@ -124,6 +125,8 @@ module Terms = struct
        mparens atomic (pp true t1 ^^ brackets (pp false t2))
     | Env (t, e) ->
        parens (pp false t) ^^ at ^^ !^e
+    | Unchanged t ->
+       parens (pp false t) ^^^ !^"unchanged"
        
 
 
@@ -142,7 +145,7 @@ module Terms = struct
   let predarg pr a =
     PredOutput (pr,a)
 
-  let contains_env_expression t = 
+  let contains_env_or_unchanged_expression t = 
     let rec aux = function
       | Addr bn -> 
          false
@@ -208,6 +211,79 @@ module Terms = struct
          aux t1 || aux t2
       | Env (t, _) ->
          true
+      | Unchanged _ ->
+         true
+    in
+    aux t
+
+  let contains_env_or_unchanged_expression t = 
+    let rec aux = function
+      | Addr bn -> 
+         false
+      | Var bn -> 
+         false
+      | Pointee p -> 
+         false
+      | PredOutput (pr,a) -> 
+         false
+      | Member (p, m) -> 
+         aux p
+      | Bool b -> 
+         false
+      | Integer i -> 
+         false
+      | Addition (t1, t2) -> 
+         aux t1 || aux t2
+      | Subtraction (t1, t2) -> 
+         aux t1 || aux t2
+      | Multiplication (t1, t2) -> 
+         aux t1 || aux t2
+      | Division (t1, t2) -> 
+         aux t1 || aux t2
+      | Exponentiation (t1, t2) -> 
+         aux t1 || aux t2
+      | Remainder (t1, t2) -> 
+         aux t1 || aux t2
+      | Equality (t1, t2) -> 
+         aux t1 || aux t2
+      | Inequality (t1, t2) -> 
+         aux t1 || aux t2
+      | FlipBit {bit; t} ->
+         aux bit || aux t
+      | ITE (t1, t2, t3) ->
+         aux t1 || aux t2 || aux t3
+      | Or (t1, t2) ->
+         aux t1 || aux t2
+      | And (t1, t2) ->
+         aux t1 || aux t2
+      | Not t ->
+         aux t
+      | LessThan (t1, t2) -> 
+         aux t1 || aux t2
+      | LessOrEqual (t1, t2) -> 
+         aux t1 || aux t2
+      | GreaterThan (t1, t2) -> 
+         aux t1 || aux t2
+      | GreaterOrEqual (t1, t2) -> 
+         aux t1 || aux t2
+      | IntegerToPointerCast t ->
+         aux t
+      | PointerToIntegerCast t ->
+         aux t
+      | Null ->
+         false
+      | OffsetOf {tag; member} ->
+         false
+      | CellPointer ((t1, t2), (t3, t4), t5) ->
+         aux t1 || aux t2 || aux t3 || aux t4 || aux t5
+      | Disjoint ((t1, t2), (t3, t4)) ->
+         aux t1 || aux t2 || aux t3 || aux t4
+      | App (t1, t2) ->
+         aux t1 || aux t2
+      | Env (t, _) ->
+         true
+      | Unchanged _ ->
+         true
     in
     aux t
   
@@ -224,12 +300,15 @@ include Terms
 
 type typ = 
   | Typeof of term
+  | Struct of string
+  | Pointer of typ
 
 
 type predicate = {
     oq : (string * BT.t * term) option;
     predicate : string;
     arguments : term list;
+    o_permission: term option;
     some_oargs: (string * term) list;
     oname : string option;
     typ: typ option;
@@ -239,7 +318,6 @@ type condition =
   | Term of term
   | Predicate of predicate
   | Define of string * term
-  | Unchanged of term
 
 
 

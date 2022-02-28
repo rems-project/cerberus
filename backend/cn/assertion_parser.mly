@@ -69,6 +69,8 @@ open Assertion_parser_util
 %token WITH
 %token TYP
 %token TYPEOF
+%token IF
+%token STRUCT
 
 
 %token EOF
@@ -140,6 +142,8 @@ atomic_term:
       { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
   | LBRACE a=term RBRACE AT l=NAME
       { Ast.Env (a, l) }
+  | LBRACE t=term RBRACE UNCHANGED
+      { Ast.Unchanged t }
   | DISJOINT LPAREN p1=term COMMA sz1=term COMMA p2=term COMMA sz2=term RPAREN
       { Ast.Disjoint ((p1, sz1), (p2, sz2)) }
 
@@ -209,13 +213,21 @@ basetype:
       { BaseTypes.Integer }
   
 
-%inline ctype:
+ctype:
   | TYPEOF LPAREN t=term RPAREN
       { Ast.Typeof t }
+  | STRUCT name=NAME
+      { Ast.Struct name }
+  | ct=ctype STAR
+      { Ast.Pointer ct }
 
-%inline with_clause:
+%inline with_type_clause:
   | WITH TYP EQUAL typ=ctype
       { typ }
+
+%inline if_permission_clause:
+  | IF t=term
+      { t }
 
 %inline where_clause:
   | COMMA WHERE some_oargs=separated_list(COMMA, term_with_name)
@@ -226,14 +238,14 @@ basetype:
 
 
 predicate:
-  | predwithargs=pred_with_args oname=option(NAME) maybe_typ=option(with_clause) maybe_some_oargs=option(where_clause)
+  | predwithargs=pred_with_args oname=option(NAME) maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) maybe_some_oargs=option(where_clause)
       { let (predicate, arguments) = predwithargs in
-        let some_oargs = Option.value [] maybe_some_oargs in
-        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; typ = maybe_typ} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args maybe_typ=option(with_clause) RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
+        let some_oargs = Option.value ~default:[] maybe_some_oargs in
+        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ} }
+  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
       { let (predicate, arguments) = predwithargs in
-        let some_oargs = Option.value [] maybe_some_oargs in
-        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; typ = maybe_typ} }
+        let some_oargs = Option.value ~default:[] maybe_some_oargs in
+        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ} }
 
 
 
@@ -244,6 +256,4 @@ cond:
       { Ast.Predicate c }
   | LET id=NAME EQUAL t=term
       { Ast.Define (id, t) }
-  | LBRACE t=term RBRACE UNCHANGED
-      { Ast.Unchanged t }
 

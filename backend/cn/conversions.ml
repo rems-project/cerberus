@@ -20,6 +20,7 @@ open Memory
 open Tools
 
 
+
 module StringMap = Map.Make(String)
 module SymSet = Set.Make(Sym)
 
@@ -117,7 +118,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
 
 
-let make_owned_funarg floc i (pointer : IT.t) path sct =
+let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
   let open Sctypes in
   match sct with
   | Void ->
@@ -146,7 +147,7 @@ let make_owned_funarg floc i (pointer : IT.t) path sct =
      ([l;r], mapping)
 
 
-let make_owned loc ~oname (pointer : IT.t) path sct =
+let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
   let open Sctypes in
   match sct with
   | Void ->
@@ -172,7 +173,7 @@ let make_owned loc ~oname (pointer : IT.t) path sct =
        (`Resource (RE.Point {
            ct = sct; 
            pointer; 
-           permission = bool_ true; 
+           permission = Option.value o_permission ~default:(bool_ true); 
            value = pointee_t; 
            init = bool_ true
           }),
@@ -182,7 +183,50 @@ let make_owned loc ~oname (pointer : IT.t) path sct =
 
 
 
-let make_block loc (pointer : IT.t) path sct =
+
+
+let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
+  let open Sctypes in
+  let@ () = match qbt with
+    | BT.Integer -> return ()
+    | _ -> fail {loc; msg = Generic (!^"Quantifier for iterated resource must be of type 'integer'")}
+  in
+  let@ () = 
+    if Memory.size_of_ctype sct = step then return ()
+    else fail {loc; msg = Generic !^"pointer increment must match size of array-cell type"}
+  in
+  match sct with
+  | Void ->
+     fail {loc; msg = Generic !^"cannot make owned void* pointer"}
+  | _ ->
+     let pointee, pointee_t = IT.fresh (BT.Map (qbt, BT.of_sct sct)) in
+     let l = (`Logical (pointee, IT.bt pointee_t), (loc, Some "pointees")) in
+     let mapping = [] 
+     in
+     let mapping = match oname with
+       | Some name ->
+          {path = Ast.predarg name "value"; 
+           it = pointee_t; 
+           o_sct = Some sct } :: mapping
+       | None ->
+          mapping
+     in
+     let r = 
+       (`Resource (RE.QPoint {
+           ct = sct; 
+           pointer; 
+           q = qs;
+           permission = condition; 
+           value = map_get_ pointee_t (sym_ (qs, qbt)); 
+           init = bool_ true
+          }),
+        (loc, Some "ownership"))
+     in
+     return ([l;r], mapping)
+
+
+
+let make_block ~loc ~pointer ~path ~sct ~o_permission =
   let open Sctypes in
   match sct with
   | Void ->
@@ -199,7 +243,7 @@ let make_block loc (pointer : IT.t) path sct =
        (`Resource (RE.Point {
             ct = sct; 
             pointer;
-            permission = bool_ true;
+            permission = Option.value ~default:(bool_ true) o_permission;
             value = pointee_t;
             init = init_t
           }),
@@ -220,7 +264,7 @@ let ensure_some_oargs_empty loc pred some_oargs =
   | None -> return ()
   | Some (name, _) -> fail {loc; msg = Generic !^("predicate '"^pred^"' does not have output argument '" ^ name ^ "'")}
 
-let make_pred loc (pred, def) ~oname pointer iargs some_oargs = 
+let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission = 
   let@ some_oargs = some_oargs_map loc some_oargs in
   let (mapping, l, some_oargs, oargs) = 
     List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
@@ -251,7 +295,7 @@ let make_pred loc (pred, def) ~oname pointer iargs some_oargs =
          pointer = pointer;
          iargs; 
          oargs;
-         permission = bool_ true;
+         permission = Option.value ~default:(bool_ true) o_permission;
        }),
      (loc, None))
   in
@@ -529,18 +573,32 @@ let resolve_index_term loc
           fail {loc; msg = Generic (ppf () ^^^ !^"is not an array/not a map")}
        end
     | Env (t, mapping_name) ->
+       let@ () = 
+         if Ast.contains_env_or_unchanged_expression t 
+         then fail {loc; msg = Generic !^"Cannot use '{_}@label' together with other '{_}@label' or 'unchanged' expressions."}
+         else return ()
+       in
        begin match StringMap.find_opt mapping_name mappings with
        | Some mapping -> 
           resolve t mapping
        | None ->
           fail {loc; msg = Generic (!^"label" ^^^ !^mapping_name ^^^ !^"does not apply")}
        end
+    | Unchanged t ->
+       let@ () = 
+         if Ast.contains_env_or_unchanged_expression t 
+         then fail {loc; msg = Generic !^"Cannot use 'unchanged' together with '{_}@label' or other 'unchanged' expressions."}
+         else return ()
+       in
+       let@ (t_original, _) = resolve t (StringMap.find "start" mappings) in
+       let@ (t_new, _) = resolve t mapping in
+       return (eq_ (t_new, t_original), None)
   in
   resolve term (StringMap.find default_mapping_name mappings)
 
 
 
-let resolve_typ loc 
+let rec resolve_typ loc 
       (layouts : Memory.struct_decls)
       (default_mapping_name : string)
       (mappings : mapping StringMap.t)
@@ -552,11 +610,29 @@ let resolve_typ loc
        resolve_index_term loc layouts default_mapping_name
          mappings oquantifier term
      in
-     match osct with
+     begin match osct with
      | Some sct -> return sct
      | None ->
         fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
                                     Ast.pp false term)}
+     end
+  | Struct str ->
+     let ofound = 
+       SymMap.find_first_opt (fun s -> 
+           match Sym.description s with
+           | SD_Id str' ->
+              String.equal str str'
+           | _ -> false
+         ) layouts
+     in
+     begin match ofound with
+     | Some (tag, _) -> return (Sctypes.Struct tag)
+     | None -> 
+        fail {loc; msg = Unknown_struct (Sym.fresh_pretty str)}
+     end
+  | Pointer ct ->
+     let@ typ = resolve_typ loc layouts default_mapping_name mappings oquantifier ct in
+     return (Sctypes.Pointer typ)
 
 
      
@@ -572,7 +648,7 @@ let resolve_constraint loc layouts default_mapping_name mappings lc =
 
 
 
-let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname; typ}) =
+let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname; o_permission; typ}) =
   let ownership_kind = match predicate with
     | "Owned" -> `Builtin `Owned
     | "Block" -> `Builtin `Block
@@ -588,35 +664,85 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
     | pointer :: arguments -> return (pointer, arguments)
     | _ -> fail {loc; msg = Generic !^("missing first (pointer) argument")}
   in
+  let@ o_permission = match o_permission with
+    | None -> return None
+    | Some permission ->
+       let@ (t, _) = 
+         resolve_index_term loc layouts default_mapping_name mappings 
+           (Option.map fst oq) permission
+       in
+       return (Some t)
+  in
   match ownership_kind with
   | `Builtin block_or_owned ->
-     let@ (pointer_resolved, pointer_sct) = 
-       resolve_index_term loc layouts default_mapping_name mappings 
-         (Option.map fst oq) pointer 
-     in
-     let@ () = match oq with
-       | None -> return ()
-       | Some _ -> fail {loc; msg = Generic !^("cannot use '"^predicate^"' with quantifier")}
-     in
      let@ () = match arguments, some_oargs with
        | [], [] -> return ()
        | _ :: _, _ -> fail {loc; msg = Generic !^("'"^predicate^"' takes 1 argument, which has to be a path")}
        | _, _ :: _ -> fail {loc; msg = Generic !^("cannot use '"^predicate^"' with output argument syntax")}
      in
-     let@ pointee_sct = match typ, pointer_sct with
-       | Some typ, _ ->
-          resolve_typ loc layouts default_mapping_name mappings 
-            (Option.map fst oq) typ
-       | _, Some (Pointer pointee_sct) -> 
-          return pointee_sct
-       | _, Some _ ->
-          fail {loc; msg = Generic (Ast.Terms.pp false pointer ^^^ !^"is not a pointer")}
-       | None, None ->
-          fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false pointer))}
-     in
-     begin match block_or_owned with
-     | `Owned -> make_owned loc ~oname pointer_resolved pointer pointee_sct
-     | `Block -> make_block loc pointer_resolved pointer pointee_sct
+     begin match oq with
+     | None ->
+        let@ (pointer_resolved, pointer_sct) = 
+          resolve_index_term loc layouts default_mapping_name mappings 
+            (Option.map fst oq) pointer 
+        in
+        let@ pointee_sct = match typ, pointer_sct with
+          | Some typ, _ ->
+             resolve_typ loc layouts default_mapping_name mappings 
+               (Option.map fst oq) typ
+          | _, Some (Pointer pointee_sct) -> 
+             return pointee_sct
+          | _, Some _ ->
+             fail {loc; msg = Generic (Ast.Terms.pp false pointer ^^^ !^"is not a pointer")}
+          | None, None ->
+             fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false pointer))}
+        in
+        begin match block_or_owned with
+        | `Owned -> 
+           make_owned ~loc ~oname ~pointer:pointer_resolved ~path:pointer ~sct:pointee_sct ~o_permission
+        | `Block -> 
+           make_block ~loc ~pointer:pointer_resolved ~path:pointer ~sct:pointee_sct ~o_permission
+        end
+     | Some ((name, (qs,qbt)), condition) ->
+        let@ () = match o_permission with
+          | None -> return () 
+          | Some _ -> 
+             fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
+        in
+        let@ (pointer_resolved, step) = 
+          match pointer with
+          | Addition (pointer, Multiplication (Var name', Integer step)) 
+                 when String.equal name name' ->
+             let@ (pointer,_) = 
+               resolve_index_term loc layouts default_mapping_name mappings 
+                 None pointer 
+             in
+             return (pointer, Z.to_int step)
+          | _ -> 
+             let msg = 
+               "Iterated predicate pointer argument must be of the shape "^
+                 "(pointer expression + (quantifier variable * integer constant))"
+             in
+             fail {loc; msg = Generic (!^msg)}
+        in
+        let@ (condition, _) = 
+          resolve_index_term loc layouts default_mapping_name mappings 
+            (Some (name, (qs, qbt))) condition 
+        in
+        let@ pointee_sct = match typ with
+          | Some typ ->
+             resolve_typ loc layouts default_mapping_name mappings 
+               (Option.map fst oq) typ
+          | None ->
+             fail {loc; msg = Generic (!^"need 'with type' annotation" ^^^ (Ast.Terms.pp false pointer))}
+        in
+        begin match block_or_owned with
+        | `Owned -> 
+           make_qowned ~loc ~oname ~pointer:pointer_resolved ~q:(qs,qbt) 
+             ~step ~condition ~path:pointer ~sct:pointee_sct
+        | `Block -> 
+           fail {loc; msg = Generic !^("cannot use '"^predicate^"' with quantifier")}
+        end
      end
   | _ ->
      let@ () = match typ with
@@ -650,8 +776,13 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
               (Option.map fst oq) pointer 
           in
           make_pred loc (predicate, def) 
-            ~oname pointer_resolved iargs_resolved some_oargs_resolved
+            ~oname pointer_resolved iargs_resolved some_oargs_resolved ~o_permission
        | Some ((name, (s, bt)), condition) -> 
+          let@ () = match o_permission with
+            | None -> return () 
+            | Some _ -> 
+               fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
+          in
           let@ (pointer_resolved, step) = 
             match pointer with
             | Addition (pointer, Multiplication (Var name', Integer step)) 
@@ -801,7 +932,8 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         | None ->
            return (i, mappings)
         | Some loc -> 
-           let@ (i', mapping') = make_owned loc ~oname:None item.it item.path garg.typ in
+           let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
+                                   ~path:item.path ~sct:garg.typ ~o_permission:None in
            let mappings = 
              mod_mapping "start" mappings
                (fun mapping -> (item :: mapping') @ mapping)
@@ -867,8 +999,6 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
                (fun mapping -> mapping' @ mapping)
            in
            return (i @ [(`Define (s, it), (loc, None))], mappings)
-        | Ast.Unchanged _ ->
-           fail {loc; msg = Generic !^"Cannot use 'unchanged' in function pre-condition."}
       )
       (i, mappings) fspec.pre_condition
   in
@@ -893,7 +1023,8 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         | None -> return (o, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
-           let@ (o', mapping') = make_owned loc ~oname:None item.it item.path garg.typ in
+           let@ (o', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
+                                   ~path:item.path ~sct:garg.typ ~o_permission:None in
            let mappings =
              mod_mapping "end" mappings
                (fun mapping -> (item :: mapping') @ mapping)
@@ -956,16 +1087,6 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
                (fun mapping -> mapping' @ mapping)
            in
            return (o @ [(`Define (s, it), (loc, None))], mappings)
-        | Ast.Unchanged t ->
-           let@ () = 
-             if Ast.contains_env_expression t 
-             then fail {loc; msg = Generic !^"Cannot use 'unchanged' together with {_}@label expressions."}
-             else return ()
-           in
-           let@ (t_start, _) = resolve_index_term loc layouts "start" mappings None t in
-           let@ (t_end, _) = resolve_index_term loc layouts "end" mappings None t in
-           let c = LC.t_ (eq_ (t_end, t_start)) in
-           return (o @ [(`Constraint c, (loc, None))], mappings)
       )
       (o, mappings) fspec.post_condition
   in
@@ -1020,7 +1141,8 @@ let make_label_spec
         | None ->  return (i, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
-           let@ (i', mapping') = make_owned loc ~oname:None item.it item.path garg.typ in
+           let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
+                                   ~path:item.path ~sct:garg.typ ~o_permission:None in
            let mappings = 
              mod_mapping lname mappings
                (fun mapping -> mapping' @ mapping)
@@ -1034,7 +1156,8 @@ let make_label_spec
   let@ (i, mappings) = 
     ListM.fold_leftM (fun (i, mappings) aarg ->
         let item = aarg_item loc aarg in
-        let@ (i', mapping') = make_owned loc ~oname:None item.it item.path aarg.typ in
+        let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
+                                ~path:item.path ~sct:aarg.typ ~o_permission:None in
         let mappings = 
           mod_mapping lname mappings
             (fun mapping -> mapping' @ mapping)
@@ -1053,7 +1176,8 @@ let make_label_spec
       ListM.fold_leftM (fun (i, mapping) (aarg : aarg) ->
           let a = (`Computational (aarg.asym, BT.Loc), (loc, None)) in
           let item = aarg_item loc aarg in
-          let@ (i', mapping') = make_owned loc ~oname:None item.it item.path aarg.typ in 
+          let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
+                                  ~path:item.path ~sct:aarg.typ ~o_permission:None in 
           let c = 
             (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
              (loc, None))
@@ -1103,16 +1227,6 @@ let make_label_spec
                (fun mapping -> mapping' @ mapping)
            in
            return (i @ [(`Define (s, it), (loc, None))], mappings)
-        | Ast.Unchanged t ->
-           let@ () = 
-             if Ast.contains_env_expression t 
-             then fail {loc; msg = Generic !^"Cannot use 'unchanged' together with {_}@label expressions."}
-             else return ()
-           in
-           let@ (t_start, _) = resolve_index_term loc layouts "start" mappings None t in
-           let@ (t_label, _) = resolve_index_term loc layouts lname mappings None t in
-           let c = LC.t_ (eq_ (t_label, t_start)) in
-           return (i @ [(`Constraint c, (loc, None))], mappings)
       )
       (i, mappings) lspec.invariant
   in
