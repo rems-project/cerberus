@@ -1686,10 +1686,7 @@ let infer_array_shift loc asym1 ct asym2 =
   let@ arg2 = arg_of_asym asym2 in
   let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
   let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
-  let@ provable = provable loc in
   let v = arrayShift_ (it_of_arg arg1, ct, it_of_arg arg2) in
-  let@ global = get_global () in
-  let@ scs = simp_constraints () in
   let@ oqpoint = RI.General.unfold_array ~recursive:false loc ct None 
                   (it_of_arg arg1) (bool_ true) in
   let@ () = match oqpoint with
@@ -1773,30 +1770,10 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ layout = get_struct_decl loc tag in
        let@ _member_bt = get_member_type loc tag member layout in
        let it = it_of_arg arg in
-       let@ global = get_global () in
-       let@ scs = simp_constraints () in
-       let@ provable = provable loc in
-       let simp lc = Simplify.simp global.struct_decls scs lc in
-       (* includes Thomas S's optimisation *)
-       let loop p_match =
-         map_and_fold_resources loc (fun re found ->
-             match re with
-             | Point ({ct = Struct tag'; _} as point)
-                    when Sym.equal tag tag' && p_match point.pointer ->
-                let unfolded = 
-                  RI.General.unfolded_struct layout tag point.pointer point.permission
-                    point.value point.init
-                in
-                (Unfolded unfolded, true)
-             | _ ->
-                (Unchanged, found)
-           ) false
-       in
-       let@ found = loop (fun p -> is_true (simp (eq_ (it, p)))) in
-       let@ _ = 
-         if found 
-         then return found 
-         else loop (fun p -> match provable (t_ (eq_ (it, p))) with `True -> true | `False -> false)
+       let@ opoints = RI.General.unfold_struct ~recursive:false loc tag it (bool_ true) in
+       let@ () = match opoints with
+         | Some points -> add_rs None points
+         | None -> return () 
        in
        let vt = (Loc, memberShift_ (it, tag, member)) in
        return (rt_of_vt loc vt)
