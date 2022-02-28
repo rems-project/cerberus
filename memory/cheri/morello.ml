@@ -54,7 +54,8 @@ module Morello_permission : Cap_permission = struct
   let perm_clear_store_local_cap p = {p with permits_store_local_cap = false}
   let perm_clear_system_access   p = {p with permits_system_access   = false}
   let perm_clear_unseal          p = {p with permits_unseal          = false}
-  let perm_and_user_perms p np = p (* TODO *)
+  let perm_and_user_perms p up =
+    {p with user_perms = List.map2 (&&) p.user_perms up}
 
 end
 
