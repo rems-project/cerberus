@@ -376,7 +376,6 @@ module ResourceInference = struct
       let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
       let@ global = get_global () in
       let@ simp_lcs = simp_constraints () in
-      let simp t = Simplify.simp global.struct_decls simp_lcs t in
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init, ct) ->
             let continue = (Unchanged, (needed, value, init, ct)) in
@@ -386,7 +385,7 @@ module ResourceInference = struct
                             || (ct_subtype && Sctypes.subtype p'.ct requested.ct) ->
                debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
                let pmatch = eq_ (requested.pointer, p'.pointer) in
-               let took = simp (and_ [pmatch; p'.permission; needed]) in
+               let took = and_ [pmatch; p'.permission; needed] in
                begin match provable (LC.T took) with
                | `True ->
                   Changed (Point {p' with permission = bool_ false}), 
