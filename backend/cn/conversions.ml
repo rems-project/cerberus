@@ -147,14 +147,19 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      ([l;r], mapping)
 
 
-let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
+let make_owned ~loc ~oname ~pointer ~path ~sct ~o_value ~o_permission =
   let open Sctypes in
   match sct with
   | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
-     let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
-     let l = (`Logical (pointee, IT.bt pointee_t), (loc, Some "pointee")) in
+     let l, pointee_t = match o_value with
+       | None -> 
+          let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
+          ([`Logical (pointee, IT.bt pointee_t), (loc, Some "value")], pointee_t)
+       | Some pointee ->
+          ([], pointee)
+     in
      let mapping = [{
          path = Ast.pointee path; 
          it = pointee_t;
@@ -179,13 +184,13 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
           }),
         (loc, Some "ownership"))
      in
-     return ([l;r], mapping)
+     return (l@[r], mapping)
 
 
 
 
 
-let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
+let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_value =
   let open Sctypes in
   let@ () = match qbt with
     | BT.Integer -> return ()
@@ -199,8 +204,13 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
   | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
-     let pointee, pointee_t = IT.fresh (BT.Map (qbt, BT.of_sct sct)) in
-     let l = (`Logical (pointee, IT.bt pointee_t), (loc, Some "pointees")) in
+     let l, pointee_t = match o_value with
+       | None ->
+          let pointee, pointee_t = IT.fresh (BT.Map (qbt, BT.of_sct sct)) in
+          ([`Logical (pointee, IT.bt pointee_t), (loc, Some "value")], pointee_t)
+       | Some pointee ->
+          ([], pointee)
+     in
      let mapping = [] 
      in
      let mapping = match oname with
@@ -222,7 +232,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
           }),
         (loc, Some "ownership"))
      in
-     return ([l;r], mapping)
+     return (l@[r], mapping)
 
 
 
@@ -675,10 +685,20 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
   in
   match ownership_kind with
   | `Builtin block_or_owned ->
-     let@ () = match arguments, some_oargs with
-       | [], [] -> return ()
-       | _ :: _, _ -> fail {loc; msg = Generic !^("'"^predicate^"' takes 1 argument, which has to be a path")}
-       | _, _ :: _ -> fail {loc; msg = Generic !^("cannot use '"^predicate^"' with output argument syntax")}
+     let@ () = match arguments with
+       | [] -> return ()
+       | _ :: _ -> fail {loc; msg = Generic !^("'"^predicate^"' takes 1 argument, which has to be a path")}
+     in
+     let@ o_value = match block_or_owned, some_oargs with
+       | _, [] -> return None
+       | `Owned, [("value", value)] -> 
+          let@ (value, _) = 
+            resolve_index_term loc layouts default_mapping_name mappings 
+              (Option.map fst oq) value
+          in
+          return (Some value)
+       | `Block, _ -> fail {loc; msg = Generic !^(""^predicate^"' has no output arguments")}
+       | `Owned, _ -> fail {loc; msg = Generic !^("'"^predicate^"' has a single output argument, named 'value'")}
      in
      begin match oq with
      | None ->
@@ -699,7 +719,8 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
         in
         begin match block_or_owned with
         | `Owned -> 
-           make_owned ~loc ~oname ~pointer:pointer_resolved ~path:pointer ~sct:pointee_sct ~o_permission
+           make_owned ~loc ~oname ~pointer:pointer_resolved ~path:pointer 
+             ~sct:pointee_sct ~o_permission ~o_value
         | `Block -> 
            make_block ~loc ~pointer:pointer_resolved ~path:pointer ~sct:pointee_sct ~o_permission
         end
@@ -739,7 +760,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
         begin match block_or_owned with
         | `Owned -> 
            make_qowned ~loc ~oname ~pointer:pointer_resolved ~q:(qs,qbt) 
-             ~step ~condition ~path:pointer ~sct:pointee_sct
+             ~step ~condition ~path:pointer ~sct:pointee_sct ~o_value
         | `Block -> 
            fail {loc; msg = Generic !^("cannot use '"^predicate^"' with quantifier")}
         end
@@ -932,8 +953,10 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         | None ->
            return (i, mappings)
         | Some loc -> 
-           let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
-                                   ~path:item.path ~sct:garg.typ ~o_permission:None in
+           let@ (i', mapping') = 
+             make_owned ~loc ~oname:None ~pointer:item.it 
+               ~path:item.path ~sct:garg.typ ~o_permission:None ~o_value:None 
+           in
            let mappings = 
              mod_mapping "start" mappings
                (fun mapping -> (item :: mapping') @ mapping)
@@ -1023,8 +1046,10 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
         | None -> return (o, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
-           let@ (o', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
-                                   ~path:item.path ~sct:garg.typ ~o_permission:None in
+           let@ (o', mapping') = 
+             make_owned ~loc ~oname:None ~pointer:item.it 
+               ~path:item.path ~sct:garg.typ ~o_permission:None ~o_value:None
+           in
            let mappings =
              mod_mapping "end" mappings
                (fun mapping -> (item :: mapping') @ mapping)
@@ -1141,8 +1166,10 @@ let make_label_spec
         | None ->  return (i, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
-           let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
-                                   ~path:item.path ~sct:garg.typ ~o_permission:None in
+           let@ (i', mapping') = 
+             make_owned ~loc ~oname:None ~pointer:item.it 
+               ~path:item.path ~sct:garg.typ ~o_permission:None ~o_value:None
+           in
            let mappings = 
              mod_mapping lname mappings
                (fun mapping -> mapping' @ mapping)
@@ -1156,8 +1183,10 @@ let make_label_spec
   let@ (i, mappings) = 
     ListM.fold_leftM (fun (i, mappings) aarg ->
         let item = aarg_item loc aarg in
-        let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
-                                ~path:item.path ~sct:aarg.typ ~o_permission:None in
+        let@ (i', mapping') = 
+          make_owned ~loc ~oname:None ~pointer:item.it 
+            ~path:item.path ~sct:aarg.typ ~o_permission:None ~o_value:None
+        in
         let mappings = 
           mod_mapping lname mappings
             (fun mapping -> mapping' @ mapping)
@@ -1176,8 +1205,10 @@ let make_label_spec
       ListM.fold_leftM (fun (i, mapping) (aarg : aarg) ->
           let a = (`Computational (aarg.asym, BT.Loc), (loc, None)) in
           let item = aarg_item loc aarg in
-          let@ (i', mapping') = make_owned ~loc ~oname:None ~pointer:item.it 
-                                  ~path:item.path ~sct:aarg.typ ~o_permission:None in 
+          let@ (i', mapping') = 
+            make_owned ~loc ~oname:None ~pointer:item.it 
+              ~path:item.path ~sct:aarg.typ ~o_permission:None ~o_value:None
+          in 
           let c = 
             (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
              (loc, None))

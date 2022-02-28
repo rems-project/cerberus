@@ -243,9 +243,9 @@ module ResourceInference = struct
 
     let pp_case = function
       | One {index;value} -> 
-         !^"one" ^^ parens (IT.pp index ^^ comma ^^^ IT.pp value)
+         !^"one" ^^ parens (IT.pp index ^^^ !^"-----" ^^^ IT.pp value)
       | Many {guard;value} -> 
-         !^"one" ^^ parens (IT.pp guard ^^ comma ^^^ IT.pp value)
+         !^"many" ^^ parens (IT.pp guard ^^^ !^"-----" ^^^ IT.pp value)
 
     type cases = C of case list
 
@@ -324,6 +324,9 @@ module ResourceInference = struct
            when not (SymSet.mem q_s (IT.free_vars base_array))
                 && IT.equal i q ->
          Some (update_with_ones base_array ones)
+      | [{guard; value}] 
+           when not (SymSet.mem q_s (IT.free_vars value)) ->
+         Some (update_with_ones (const_map_ q_bt value) ones)
       | _ ->
          None
 

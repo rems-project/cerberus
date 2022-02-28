@@ -93,13 +93,12 @@ module PageAlloc = struct
       let range_start_i = range_start %/ (int_ pPAGE_SIZE) in
       let range_end_i = range_end %/ (int_ pPAGE_SIZE) in
       let q_s, q = IT.fresh_named Integer "q" in
-      Resources.RE.QPredicate {
+      Resources.RE.QPoint {
           pointer = vmemmap_pointer;
-          step = Memory.size_of_ctype (struct_ct hyp_page_tag);
           q = q_s;
-          name = "Vmemmap_page";
-          iargs = [];
-          oargs = [map_get_ vmemmap q];
+          ct = Struct hyp_page_tag;
+          value = map_get_ vmemmap q;
+          init = bool_ true;
           permission = and_ [permission; range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
         }
 

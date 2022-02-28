@@ -288,126 +288,6 @@ let page_alloc_predicates struct_decls =
   let module Aux = LogicalPredicates.PageAlloc.Aux(struct let struct_decls = struct_decls end) in
   let open Aux in
 
-  let list_node = 
-    let id = "ListNode" in
-    let loc = Loc.other "internal (ListNode)" in
-    let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
-    let value_s, value = IT.fresh_named (BT.Struct list_head_tag) "value" in
-    let point = {
-        ct = struct_ct list_head_tag; 
-        pointer = pointer;
-        permission = permission;
-        value = value;
-        init = bool_ true;
-      }
-    in
-    let lrt =
-      LRT.Logical ((value_s, IT.bt value), (loc, None),
-      LRT.Resource (Point point, (loc, None),
-      LRT.I))
-    in
-    let clause = {
-        loc = loc;
-        guard = bool_ true;
-        packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = "value"; value}]) 
-      }
-    in
-    let predicate = {
-        loc = loc;
-        pointer = pointer_s;
-        permission = permission_s;
-        iargs = []; 
-        oargs = [("value", IT.bt value)]; 
-        clauses = [clause]; 
-      } 
-    in
-    (id, predicate)
-  in
-
-  (* let o_list_node = 
-   *   let id = "OListNode" in
-   *   let loc = Loc.other "internal (OListNode)" in
-   *   let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-   *   let permission_s, permission = IT.fresh_named BT.Bool "permission" in
-   *   let oalias_s, oalias = IT.fresh_named BT.Loc "oalias" in
-   *   let value_s, value = IT.fresh_named (BT.Struct list_head_tag) "value" in
-   *   let clause1 = 
-   *     let point = {
-   *         ct = struct_ct list_head_tag; 
-   *         pointer = pointer;
-   *         permission = permission;
-   *         value = value;
-   *         init = bool_ true;
-   *       }
-   *     in
-   *     let lrt =
-   *       LRT.Logical ((value_s, IT.bt value), (loc, None),
-   *       LRT.Constraint (t_ (good_ (struct_ct list_head_tag, value)), (loc, None),
-   *       LRT.Resource (Point point, (loc, None),
-   *       LRT.I)))
-   *     in
-   *     {
-   *       loc = loc;
-   *       guard = ne_ (pointer, oalias);
-   *       packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = "value"; value}]) 
-   *     }
-   *   in
-   *   let clause2 = {
-   *       loc = loc;
-   *       guard = bool_ true;
-   *       packing_ft = AT.I [OutputDef.{loc; name = "value"; value = IT.default_ (IT.bt value)}]
-   *     }
-   *   in
-   *   let predicate = {
-   *       loc = loc;
-   *       pointer = pointer_s;
-   *       permission = permission_s;
-   *       iargs = [(oalias_s, IT.bt oalias)]; 
-   *       oargs = [("value", IT.bt value)]; 
-   *       clauses = [clause1; clause2]; 
-   *     } 
-   *   in
-   *   (id, predicate)
-   * in *)
-
-
-  let vmemmap_page =
-    let id = "Vmemmap_page" in
-    let loc = Loc.other "internal (Vmemmap_page)" in
-    let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in
-    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
-    let page_s, page = IT.fresh_named (BT.Struct hyp_page_tag) "page" in
-    let resource = 
-      Point {
-          ct = struct_ct hyp_page_tag;
-          pointer = page_pointer;
-          permission = permission;
-          value = page; 
-          init = bool_ true;
-        }
-    in
-    let lrt = 
-      AT.of_lrt (
-        LRT.Logical ((page_s, IT.bt page), (loc, None),
-        LRT.Resource (resource, (loc, None),
-        LRT.I)))
-        (AT.I OutputDef.[{loc; name = "page"; value= page}])
-    in
-    let clause = { loc; guard = bool_ true; packing_ft = lrt } in    
-    let predicate = {
-        loc = loc;
-        pointer = page_pointer_s;
-        iargs = [];
-        oargs = [("page", IT.bt page)];
-        permission = permission_s;
-        clauses = [clause]; 
-      } 
-    in
-    (id, predicate)
-  in
-
-
 
   let hyp_pool =  
     let id = "Hyp_pool" in
@@ -586,10 +466,7 @@ let page_alloc_predicates struct_decls =
 
 
 
-  [list_node;
-   (* o_list_node; *)
-   vmemmap_page;
-   hyp_pool;]
+  [hyp_pool;]
 
 
 
