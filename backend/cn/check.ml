@@ -286,7 +286,7 @@ module ResourceInference = struct
 
     let scan_key_indices v_nm t =
       let is_i t = match t with
-        | IT (Lit (Sym nm2), _) -> nm2 = v_nm
+        | IT (Lit (Sym nm2), _) -> Sym.equal nm2 v_nm
         | _ -> false
       in
       let rec f pol t = match t with
