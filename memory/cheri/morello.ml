@@ -90,7 +90,7 @@ module Morello_capability: Capability =
       | Cap_Unsealed
       | Cap_SEntry (* "RB" in Morello *)
       | Cap_Indirect_SEntry (* "LB" in Morello *)
-      | Cap_Indirect_SEntry_Pair (* "LBP" in Morello *)
+      (* | Cap_Indirect_SEntry_Pair *) (* "LBP" in Morello. TODO see why unused *)
       | Cap_Sealed of otype
 
     type t =
