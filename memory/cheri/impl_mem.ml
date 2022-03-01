@@ -227,8 +227,9 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
               ) 0 membrs
         end
 
+open Capability
 
-module CHERI : Memory = struct
+module CHERI (C:Capability) : Memory = struct
   let name = "CHERI memory model"
   
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
@@ -2753,7 +2754,10 @@ let combine_prov prov1 prov2 =
 
 end
 
-include CHERI
+open Morello
+
+module CHERIMorello = CHERI(Morello_capability)
+include CHERIMorello
 
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)
