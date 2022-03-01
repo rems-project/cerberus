@@ -108,7 +108,6 @@ module Translate = struct
 
   (* for caching the translation *)
   module BT_Table = Hashtbl.Make(BT)
-  module IT_Table = Hashtbl.Make(IndexTerms)
 
   (* for translating back *)
   module Sort_Table = Hashtbl.Make(Sort_HashedType)
@@ -132,7 +131,6 @@ module Translate = struct
 
   let bt_table = BT_Table.create 1000
   let sort_table = Sort_Table.create 1000
-  let it_table = IT_Table.create 500000
 
 
 
@@ -227,7 +225,6 @@ module Translate = struct
   let init structs context = 
     BT_Table.clear bt_table;
     Sort_Table.clear sort_table;
-    IT_Table.clear it_table;
     let _ = sort context structs BT.Integer in
     let _ = sort context structs BT.Bool in
     ()
@@ -258,7 +255,7 @@ module Translate = struct
 
 
 
-    let rec translate (IT (it_, bt)) =
+    let rec term (IT (it_, bt)) =
       begin match it_ with
       | Lit lit -> 
          begin match lit with
@@ -469,14 +466,6 @@ module Translate = struct
           * Z3.Expr.substitute_one (term body) (term sym) (term bound) *)
       end
 
-    and term : IT.t -> Z3.Expr.expr =
-      fun it ->
-      match IT_Table.find_opt it_table it with
-      | Some sc -> sc
-      | None ->
-         let t = translate it in
-         let () = IT_Table.add it_table it t in
-         t
     in
 
     fun it -> 
@@ -629,7 +618,6 @@ let push solver =
 
 let pop solver =
   (* do nothing to fancy solver, because that is reset for every query *)
-  Translate.IT_Table.clear Translate.it_table;
   Z3.Solver.pop solver.incremental 1
 
 
