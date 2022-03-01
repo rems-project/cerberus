@@ -78,7 +78,7 @@ module Morello_capability: Capability =
   struct
     module P = Morello_permission
     type vaddr = N.num
-    type otype = N.num (*  15 bits actually *)
+    type otype = N.num (*  15 bits actually. Maybe int? *)
 
     type vaddr_interval = vaddr * vaddr
 
@@ -133,7 +133,6 @@ module Morello_capability: Capability =
                   else (if N.equal x cap_SEAL_TYPE_LB then Cap_Indirect_SEntry
                         else Cap_Sealed x)))
 
-
     let get_flags c = c.flags
 
     let get_perms c = c.perms
@@ -157,24 +156,73 @@ module Morello_capability: Capability =
 
     let cap_invalidate c = {c with valid = false }
 
+    (* Modifying the Capability Value (vaddress of object type)
+
+       Related instructions:
+       - SCVALUE in Morello
+       - CPYTYPE in Morello
+     *)
     let cap_set_value c cv = c (* TODO *)
 
+    (* Reducing the Capability Bounds (with rounding)
+
+       Related instructions:
+       - SCBNDS (immediate) in Morello?
+     *)
     let cap_narrow_bounds c (a0,c1) = c
 
+    (* Reducing the Capability Bounds (exact)
+
+       Related instructions:
+       - SCBNDSE (immediate) in Morello?
+     *)
     let cap_narrow_bounds_exact c (a0,c1) = c
 
+    (* Reducing the Capability Permissions
+
+       Related instructions:
+       - CLRPERM in Morello
+     *)
     let cap_narrow_perms c p = c (* TODO *)
 
+    (* Sealing operations *)
+
+    (* Regular sealing (with object type)
+
+       Related instructions:
+       - SEAL (capabilitiy) in Morello
+     *)
     let cap_seal c k =
       cap_set_value c (cap_get_value k)
 
+    (* Seal Entry
+       - SEAL (immediatete) in Morello
+     *)
     let cap_seal_entry c = c (* TODO *)
 
+    (* Seal Indirect Entry
+       - SEAL (immediatete) in Morello
+     *)
     let cap_seal_indirect_entry c = c (* TODO *)
+
+    (* Seal Entry Pair
+       - SEAL (immediatete) in Morello
+     *)
     let cap_seal_indirect_entry_pair c = c (* TODO *)
 
-    let cap_set_flags c f = {c with flags=f }
+    (* Modifying the Capability Flags
+       - BICFLGS in Morello
+       - EORFLGS in Morello
+       - ORRFLGS in Morello
+       - SCFLGS in Morello
+     *)
+    let cap_set_flags c f = {c with flags = f }
 
+    (* --- Controlled non-monotonic manipulation --  *)
+
+    (* Unsealing a capability using an unsealing operation.
+       - UNSEAL in Morello
+     *)
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
   end
