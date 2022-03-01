@@ -12,8 +12,9 @@ open LogicalPredicates
 
 
 let save_slow_problems = 
-  ref (if !print_level > 10 then (99999999999.0, None)
-       else (5.0, (Some "slow_smt.txt" : string option)))
+  ref (if !Debug_ocaml.debug_level > 0
+       then (5.0, (Some "slow_smt.txt" : string option))
+       else (99999999999.0, None))
 
 type solver = { 
     context : Z3.context;
@@ -29,7 +30,7 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 let logging_params = 
-  if !print_level > 10 then [
+  if !Debug_ocaml.debug_level > 0 then [
       ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt");
     ]
   else

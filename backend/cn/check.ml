@@ -332,7 +332,10 @@ module ResourceInference = struct
 
     let cases_to_map (q_s, q_bt) o_fixed_length item_bt cases = 
       match cases_to_qf_map (q_s, q_bt) item_bt cases with
-      | Some m -> 
+      | Some m_value -> 
+         let m_s, m = IT.fresh (Map (q_bt, item_bt)) in
+         let@ () = add_l m_s (IT.bt m) in
+         let@ () = add_c (t_ (def_ m_s m_value)) in
          return m
       | _ ->
          begin match o_fixed_length with
@@ -583,17 +586,21 @@ module ResourceInference = struct
            cases_to_map (request.q, Integer) (Some length)
              (BT.of_sct item_ct) value
          in
-         let@ inits = 
+         let@ folded_inits = 
            cases_to_map (request.q, Integer) (Some length)
              BT.Bool init
          in
-         let folded_init = and_ (List.init length (fun i -> map_get_ inits (int_ i))) in
+         let value_s, value = IT.fresh (IT.bt folded_value) in
+         let init_s, init = IT.fresh BT.Bool in
+         let@ () = add_ls [(value_s, IT.bt value); (init_s, IT.bt init)] in
+         let@ () = add_c (t_ (def_ value_s folded_value)) in
+         let@ () = add_c (t_ (def_ init_s (and_ (List.init length (fun i -> map_get_ folded_inits (int_ i)))))) in
          let folded_resource = 
            {
              ct = array_ct item_ct (Some length);
              pointer = base;
-             value = folded_value;
-             init = folded_init;
+             value = value;
+             init = init;
              permission = permission;
            }
          in
@@ -652,12 +659,17 @@ module ResourceInference = struct
       match o_values_inits with
       | None -> return None
       | Some (values, inits) ->
+         let value_s, value = IT.fresh (Struct tag) in
+         let init_s, init = IT.fresh Bool in
+         let@ () = add_ls [(value_s, IT.bt value); (init_s, IT.bt init)] in
+         let@ () = add_c (t_ (def_ value_s (IT.struct_ (tag, values)))) in
+         let@ () = add_c (t_ (def_ init_s (and_ inits))) in
          let folded_resource = 
            {
              ct = struct_ct tag;
              pointer = pointer_t;
-             value = IT.struct_ (tag, values); 
-             init = and_ inits;
+             value = value; 
+             init = init;
              permission = permission_t;
            }
          in
