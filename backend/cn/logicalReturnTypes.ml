@@ -83,7 +83,7 @@ let rec pp_aux lrt =
      let op = if !unicode then utf8string "\u{2203}" else !^"E" in
      group (op ^^^ typ (Sym.pp name) (LogicalSorts.pp ls) ^^ dot) :: pp_aux t
   | Define ((name, it), _info, t) ->
-     group (!^"var" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ dot) :: pp_aux t
+     group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ dot) :: pp_aux t
   | Resource (re, _info, t) ->
      let op = star in
      group (Resources.pp re ^^^ op) :: pp_aux t

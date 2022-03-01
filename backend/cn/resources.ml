@@ -490,43 +490,46 @@ module RE = struct
 
 
 
-  let request = function
-    | Point p -> 
-       Requests.Point { 
-           ct = p.ct;
-           pointer = p.pointer;
-           permission = p.permission;
-           value = IT.bt p.value;
-           init = IT.bt p.init;
-         }
-    | QPoint p -> 
-       Requests.QPoint { 
-           ct = p.ct;
-           pointer = p.pointer;
-           q = p.q;
-           permission = p.permission;
-           value = IT.bt p.value;
-           init = IT.bt p.init;
-         }
-    | Predicate p -> 
-       Requests.Predicate {
-           name = p.name;
-           pointer = p.pointer;
-           permission = p.permission;
-           iargs = p.iargs;
-           oargs = List.map IT.bt p.oargs;
-         }
-    | QPredicate p ->
-       Requests.QPredicate {
-           name = p.name;
-           pointer = p.pointer;
-           q = p.q;
-           step = p.step;
-           permission = p.permission;
-           iargs = p.iargs;
-           oargs = List.map IT.bt p.oargs;
-         }
+  let request_point (p : point) : Requests.point = { 
+      ct = p.ct;
+      pointer = p.pointer;
+      permission = p.permission;
+      value = IT.bt p.value;
+      init = IT.bt p.init;
+    }
+  
+  let request_qpoint (p : qpoint) : Requests.qpoint = { 
+      ct = p.ct;
+      pointer = p.pointer;
+      q = p.q;
+      permission = p.permission;
+      value = IT.bt p.value;
+      init = IT.bt p.init;
+    }
 
+  let request_predicate (p : predicate) : Requests.predicate = {
+      name = p.name;
+      pointer = p.pointer;
+      permission = p.permission;
+      iargs = p.iargs;
+      oargs = List.map IT.bt p.oargs;
+    }
+
+  let request_qpredicate (p : qpredicate) : Requests.qpredicate = {
+      name = p.name;
+      pointer = p.pointer;
+      q = p.q;
+      step = p.step;
+      permission = p.permission;
+      iargs = p.iargs;
+      oargs = List.map IT.bt p.oargs;
+    }
+
+  let request = function
+    | Point p -> Requests.Point (request_point p)
+    | QPoint p -> Requests.QPoint (request_qpoint p)
+    | Predicate p -> Requests.Predicate (request_predicate p)
+    | QPredicate p -> Requests.QPredicate (request_qpredicate p)
 
 end
 

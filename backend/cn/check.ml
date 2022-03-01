@@ -1141,135 +1141,183 @@ end = struct
 
 
 
-  (* requires equality on inputs *)
+  let ls_matches_spec loc unis uni_var instantiation = 
+    let (expect, info) = SymMap.find uni_var unis in
+    if LS.equal (IT.bt instantiation) expect 
+    then return ()
+    else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
+
+  let unify_or_constrain loc (unis, subst, constrs) (output_spec, output_have) =
+    match IT.subst (make_subst subst) output_spec with
+    | IT (Lit (Sym s), _) when SymMap.mem s unis ->
+       let@ () = ls_matches_spec loc unis s output_have in
+       return (SymMap.remove s unis, (s, output_have) :: subst, constrs)
+    | _ ->
+       return (unis, subst, eq_ (output_spec, output_have) :: constrs)
+
+  let unify_or_constrain_list loc = ListM.fold_leftM (unify_or_constrain loc)
+
+  (* ASSUMES unification variables and quantifier q_s are disjoint,
+     and that resource inference has produced a resource with value/oargs v[q] *)
+  let unify_or_constrain_q loc (q_s,q_bt) condition (unis, subst, constrs) (output_spec, output_have) = 
+    let q = sym_ (q_s, q_bt) in
+    match is_map_get (IT.subst (make_subst subst) output_spec) with
+    | Some (IT (Lit (Sym s), _), IT (Lit (Sym q'_s), q'_bt)) 
+         when Sym.equal q'_s q_s && SymMap.mem s unis ->
+       let@ () = ensure_logical_sort loc ~expect:q_bt q'_bt in
+       let (output_have_body, q') = Option.get (is_map_get output_have) in
+       assert (IT.equal q' q);
+       let@ () = ls_matches_spec loc unis s output_have_body in
+       return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
+    | _ ->
+       return (unis, subst, eq_ (output_spec, output_have) :: constrs)
+
+  let unify_or_constrain_q_list loc q condition = 
+    ListM.fold_leftM (unify_or_constrain_q loc q condition)
+
+  (* the following functions for matching resources require equality
+     on inputs *)
   (* could optimise to delay checking the constraints until later *)
-  let match_resources loc failure =
 
-    let ls_matches_spec unis uni_var instantiation = 
-      let (expect, info) = SymMap.find uni_var unis in
-      if LS.equal (IT.bt instantiation) expect 
-      then return ()
-      else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
+
+
+  
+  let match_failure loc original_resources situation expect has = 
+    let@ model = model () in
+    fail (fun ctxt ->
+        let ctxt = { ctxt with resources = original_resources } in
+        {loc = loc; msg = Resource_mismatch {expect; has; situation; ctxt; model}}
+      )
+  
+
+  let match_points loc original_resources situation 
+        unis (p_spec : RE.point) (p_have : RE.point) = 
+    assert (Sctypes.equal p_spec.ct p_have.ct
+            && IT.equal p_spec.pointer p_have.pointer
+            && IT.equal p_spec.permission p_have.permission);
+    let@ (unis, subst, constrs) = 
+      unify_or_constrain_list loc (unis, [], []) 
+        [(p_spec.value, p_have.value); 
+         (p_spec.init, p_have.init)] 
     in
+    let@ provable = provable loc in
+    let result = provable (t_ (impl_ (p_have.permission, and_ constrs))) in
+    match result with
+    | `True -> return (unis, make_subst subst) 
+    | `False -> match_failure loc original_resources situation
+                  (Point p_spec) (Point p_have)
 
-    let unify_or_constrain (unis, subst, constrs) (output_spec, output_have) =
-      match IT.subst (make_subst subst) output_spec with
-      | IT (Lit (Sym s), _) when SymMap.mem s unis ->
-         let@ () = ls_matches_spec unis s output_have in
-         return (SymMap.remove s unis, (s, output_have) :: subst, constrs)
-      | _ ->
-         return (unis, subst, eq_ (output_spec, output_have) :: constrs)
+
+  let match_qpoints loc original_resources situation 
+        unis (p_spec : RE.qpoint) (p_have : RE.qpoint) = 
+    let p_spec, p_have = 
+      let q = Sym.fresh_same p_spec.q in
+      RE.alpha_rename_qpoint q p_spec,
+      RE.alpha_rename_qpoint q p_have
     in
-    let unify_or_constrain_list = ListM.fold_leftM unify_or_constrain in
-
-    (* ASSUMES unification variables and quantifier q_s are disjoint,
-       and that resource inference has produced a resource with value/oargs v[q] *)
-    let unify_or_constrain_q (q_s,q_bt) condition (unis, subst, constrs) (output_spec, output_have) = 
-      let q = sym_ (q_s, q_bt) in
-      match is_map_get (IT.subst (make_subst subst) output_spec) with
-      | Some (IT (Lit (Sym s), _), IT (Lit (Sym q'_s), q'_bt)) 
-           when Sym.equal q'_s q_s && SymMap.mem s unis ->
-         let@ () = ensure_logical_sort loc ~expect:q_bt q'_bt in
-         let (output_have_body, q') = Option.get (is_map_get output_have) in
-         assert (IT.equal q' q);
-         let@ () = ls_matches_spec unis s output_have_body in
-         return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
-      | _ ->
-         return (unis, subst, eq_ (output_spec, output_have) :: constrs)
+    assert (Sctypes.equal p_spec.ct p_have.ct
+            && IT.equal p_spec.pointer p_have.pointer
+            && Sym.equal p_spec.q p_have.q
+            && IT.equal p_spec.permission p_have.permission);
+    let@ (unis, subst, constrs) = 
+      unify_or_constrain_q_list loc (p_have.q, Integer) p_have.permission
+        (unis, [], []) 
+        [(p_spec.value, p_have.value); 
+         (p_spec.init, p_have.init)] 
+    in         
+    let@ provable = provable loc in
+    let result = 
+      provable
+        (forall_ (p_have.q, BT.Integer)
+           (impl_ (p_have.permission, and_ constrs)))
     in
-    let unify_or_constrain_q_list q condition = 
-      ListM.fold_leftM (unify_or_constrain_q q condition) in
+    match result with
+    | `True -> return (unis, make_subst subst) 
+    | `False -> match_failure loc original_resources situation
+                  (QPoint p_spec) (QPoint p_have)
 
-    fun (unis : (LS.t * Locations.info) SymMap.t) r_spec r_have ->
 
-    debug 9 (lazy (item "matching resource" (RE.pp r_have ^^^ !^"against" ^^^ (RE.pp r_spec))));
+  let match_predicates loc original_resources situation
+        unis (p_spec : RE.predicate) (p_have : RE.predicate) =
+    assert (String.equal p_spec.name p_have.name
+            && IT.equal p_spec.pointer p_have.pointer
+            && IT.equal p_spec.permission p_have.permission
+            && List.equal IT.equal p_spec.iargs p_have.iargs);
+    let@ (unis, subst, constrs) = 
+      unify_or_constrain_list loc (unis, [], [])
+        (List.combine p_spec.oargs p_have.oargs) 
+    in
+    let@ provable = provable loc in
+    let result = provable (t_ (impl_ (p_have.permission, and_ constrs))) in
+    match result with
+    | `True -> return (unis, make_subst subst) 
+    | `False -> match_failure loc original_resources situation
+                  (Predicate p_spec) (Predicate p_have)
 
-    match r_spec, r_have with
-    | Point p_spec, Point p_have ->
-       assert (Sctypes.equal p_spec.ct p_have.ct
-               && IT.equal p_spec.pointer p_have.pointer
-               && IT.equal p_spec.permission p_have.permission);
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_list (unis, [], []) 
-           [(p_spec.value, p_have.value); 
-            (p_spec.init, p_have.init)] 
-       in
-       let@ provable = provable loc in
-       let result = provable (t_ (impl_ (p_have.permission, and_ constrs))) in
-       begin match result with
-       | `True -> return (unis, make_subst subst) 
-       | `False -> let@ model = model () in fail (failure model)
-       end
-    | QPoint p_spec, QPoint p_have ->
-       let p_spec, p_have = 
-         let q = Sym.fresh_same p_spec.q in
-         RE.alpha_rename_qpoint q p_spec,
-         RE.alpha_rename_qpoint q p_have
-       in
-       assert (Sctypes.equal p_spec.ct p_have.ct
-               && IT.equal p_spec.pointer p_have.pointer
-               && Sym.equal p_spec.q p_have.q
-               && IT.equal p_spec.permission p_have.permission);
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_q_list (p_have.q, Integer) p_have.permission
-           (unis, [], []) 
-           [(p_spec.value, p_have.value); 
-            (p_spec.init, p_have.init)] 
-       in         
-       let@ provable = provable loc in
-       let result = 
-         provable
-           (forall_ (p_have.q, BT.Integer)
-              (impl_ (p_have.permission, and_ constrs)))
-       in
-       begin match result with
-       | `True -> return (unis, make_subst subst) 
-       | `False -> let@ model = model () in fail (failure model)
-       end
-    | Predicate p_spec, Predicate p_have ->
-       assert (String.equal p_spec.name p_have.name
-               && IT.equal p_spec.pointer p_have.pointer
-               && IT.equal p_spec.permission p_have.permission
-               && List.equal IT.equal p_spec.iargs p_have.iargs);
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_list (unis, [], [])
-           (List.combine p_spec.oargs p_have.oargs) 
-       in
-       let@ provable = provable loc in
-       let result = provable (t_ (impl_ (p_have.permission, and_ constrs))) in
-       begin match result with
-       | `True -> return (unis, make_subst subst) 
-       | `False -> let@ model = model () in fail (failure model)
-       end
-    | QPredicate p_spec, QPredicate p_have ->
-       let p_spec, p_have = 
-         let q = Sym.fresh_same p_spec.q in
-         RE.alpha_rename_qpredicate q p_spec,
-         RE.alpha_rename_qpredicate q p_have 
-       in
-       assert (String.equal p_spec.name p_have.name
-               && IT.equal p_spec.pointer p_have.pointer
-               && Sym.equal p_spec.q p_have.q
-               && p_spec.step = p_have.step
-               && IT.equal p_spec.permission p_have.permission
-               && List.equal IT.equal p_spec.iargs p_have.iargs);
-       let@ (unis, subst, constrs) = 
-         unify_or_constrain_q_list (p_have.q, Integer) p_have.permission
-           (unis, [], []) 
-           (List.combine p_spec.oargs p_have.oargs) 
-       in
-       let@ provable = provable loc in
-       let result =
-         provable
-           (forall_ (p_have.q, BT.Integer)
-              (impl_ (p_have.permission, and_ constrs)))
-       in
-       begin match result with
-       | `True -> return (unis, make_subst subst) 
-       | `False -> let@ model = model () in fail (failure model)
-       end
-    | _ -> 
-       Debug_ocaml.error "resource inference has inferred mismatched resources"
+  let match_qpredicates loc original_resources situation
+        unis (p_spec : RE.qpredicate) (p_have : RE.qpredicate) =
+    let p_spec, p_have = 
+      let q = Sym.fresh_same p_spec.q in
+      RE.alpha_rename_qpredicate q p_spec,
+      RE.alpha_rename_qpredicate q p_have 
+    in
+    assert (String.equal p_spec.name p_have.name
+            && IT.equal p_spec.pointer p_have.pointer
+            && Sym.equal p_spec.q p_have.q
+            && p_spec.step = p_have.step
+            && IT.equal p_spec.permission p_have.permission
+            && List.equal IT.equal p_spec.iargs p_have.iargs);
+    let@ (unis, subst, constrs) = 
+      unify_or_constrain_q_list loc (p_have.q, Integer) p_have.permission
+        (unis, [], []) 
+        (List.combine p_spec.oargs p_have.oargs) 
+    in
+    let@ provable = provable loc in
+    let result =
+      provable
+        (forall_ (p_have.q, BT.Integer)
+           (impl_ (p_have.permission, and_ constrs)))
+    in
+    match result with
+    | `True -> return (unis, make_subst subst) 
+    | `False -> match_failure loc original_resources situation
+                  (QPredicate p_spec) (QPredicate p_have)
+    
+
+  let request_and_match_resources loc original_resources situation
+        (unis : (LS.t * Locations.info) SymMap.t) info r_spec =
+    let request_failure request = 
+      let@ model = model () in
+      fail (fun ctxt ->
+          let ctxt = { ctxt with resources = original_resources } in
+          let msg = Missing_resource_request {orequest = Some request; situation; oinfo = Some info; model; ctxt} in
+          {loc; msg}
+        )
+    in
+    let request_and_match make_request_f request_f match_f inject_f resource = 
+      let request = make_request_f resource in
+      let@ result = request_f loc request in
+      let@ resource' = match result with
+        | Some resource' -> return resource'
+        | None -> request_failure (inject_f request)
+      in
+      match_f loc original_resources situation unis resource resource'
+    in
+    match r_spec with
+    | Point resource -> 
+       request_and_match RE.request_point (RI.General.point_request ~recursive:true) 
+         match_points (fun p -> Point p) resource
+    | QPoint resource ->
+       request_and_match RE.request_qpoint RI.General.qpoint_request 
+         match_qpoints (fun p -> QPoint p) resource
+    | Predicate resource ->
+       request_and_match RE.request_predicate RI.General.predicate_request 
+         match_predicates (fun p -> Predicate p) resource
+    | QPredicate resource ->
+       request_and_match RE.request_qpredicate RI.General.qpredicate_request 
+         match_qpredicates (fun p -> QPredicate p) resource
+
+
 
   let prefer_req i ftyp =
     let open NormalisedArgumentTypes in
@@ -1310,6 +1358,9 @@ end = struct
     match List.rev reqs with
       | ((i, _) :: _) -> return (prefer_req i ftyp)
       | [] -> return ftyp
+
+
+
 
 
   let spine :
@@ -1397,28 +1448,9 @@ end = struct
         let@ ftyp = prefer_exact loc unis ftyp in
         match ftyp with
         | Resource (resource, info, ftyp) -> 
-           let request = RE.request resource in
-           let@ resource' = 
-             let@ result = RI.General.resource_request ~recursive:true loc request in
-             begin match result with
-             | Some r -> return r
-             | None ->
-                let@ model = model () in
-                fail (fun ctxt ->
-                    let ctxt = { ctxt with resources = original_resources } in
-                    let msg = Missing_resource_request {orequest = Some request; situation; oinfo = Some info; model; ctxt} in
-                    {loc; msg}
-                  )
-             end
-           in
            let@ (unis, new_subst) = 
-             let failure model ctxt = 
-               let ctxt = { ctxt with resources = original_resources } in
-               let expect = resource in
-               let has = resource' in
-               {loc = loc; msg = Resource_mismatch {expect; has; situation; ctxt; model}}
-             in
-             match_resources loc failure unis resource resource' 
+             request_and_match_resources loc original_resources 
+               situation unis info resource
            in
            infer_resources unis (subst_r rt_subst new_subst ftyp)
         | C ftyp ->
