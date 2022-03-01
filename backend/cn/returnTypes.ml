@@ -9,10 +9,6 @@ type t = Computational of (Sym.t * BaseTypes.t) * info * LRT.t
 let lrt (Computational (_, _, lrt)) = lrt
 
 
-let to_logical = function
-  | Computational ((name, bt), info, lrt) ->
-     LRT.Logical ((name, bt), info, lrt)
-
 
 let mComputational (name, bound, oinfo) t = 
   Computational ((name, bound), oinfo, t)
