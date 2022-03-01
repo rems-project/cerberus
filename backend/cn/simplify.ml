@@ -106,8 +106,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
        unit_ 
     | Sym sym ->
        begin match SymMap.find_opt sym values with
-       | Some it -> it
-       | None -> IT (Lit (Sym sym), bt)
+       | Some it when Option.is_some (is_lit it) -> it
+       | _ -> IT (Lit (Sym sym), bt)
        end
     | Z z ->
        IT (Lit (Z z), bt)
