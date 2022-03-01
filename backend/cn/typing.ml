@@ -218,9 +218,12 @@ let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc)
            (res @ resources, acc)
         | Changed re ->
            match re with
-           | (QPoint {q; permission; _} | QPredicate {q; permission; _})
-                when (`True = provable (LC.forall_ (q, Integer) (IT.not_ permission))) ->
-              (resources, acc)
+           | QPoint {q; permission; _}
+           | QPredicate {q; permission; _} ->
+              begin match provable (LC.forall_ (q, Integer) (IT.not_ permission)) with
+              | `True -> (resources, acc)
+              | `False -> (re :: resources, acc)
+              end
            | _ -> 
               (re :: resources, acc)
       ) s.typing_context.resources ([], acc)

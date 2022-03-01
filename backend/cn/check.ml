@@ -1646,7 +1646,7 @@ and infer_struct (loc : loc) (tag : tag)
   let rec check fields spec =
     match fields, spec with
     | ((member, mv) :: fields), ((smember, sct) :: spec) 
-         when member = smember ->
+         when Id.equal member smember ->
        let@ (member_bt, member_it) = infer_mem_value loc mv in
        let@ () = ensure_base_type loc ~expect:(BT.of_sct sct) member_bt in
        let@ member_its = check fields spec in

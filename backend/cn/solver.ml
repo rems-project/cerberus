@@ -666,7 +666,7 @@ let model () =
 
 let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_problems with
   | (_, None) -> ()
-  | (cutoff, _) when time < cutoff -> ()
+  | (cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
   | (_, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";

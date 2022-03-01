@@ -12,7 +12,7 @@ type path = t list
 
 let unknown = Location_ocaml.unknown
 
-let is_unknown loc = loc = unknown
+let is_unknown_location = Location_ocaml.is_unknown_location
 
 
 let pp loc = Location_ocaml.pp_location ~clever:false loc

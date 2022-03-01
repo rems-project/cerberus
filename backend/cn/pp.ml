@@ -246,7 +246,7 @@ let error (loc : Locations.t) msg extras =
   let (head, pos) = Locations.head_pos_of_location loc in
   print stderr (format [Bold; Red] "error:" ^^^ 
                 format [Bold] head ^^^ msg);
-  if Locations.is_unknown loc then () else print stderr !^pos;
+  if Locations.is_unknown_location loc then () else print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
 
 

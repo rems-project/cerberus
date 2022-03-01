@@ -38,8 +38,11 @@ let pp =
        | Sym sym -> Sym.pp sym
        | Z i -> !^(Z.to_string i)
        | Q q -> !^(Q.to_string q)
-       | Pointer i when !Pp.loc_pp = Dec -> !^(Z.to_string i)
-       | Pointer i -> !^("0X" ^ (Z.format "016X" i))
+       | Pointer i ->
+          begin match !Pp.loc_pp with
+          |  Dec -> !^(Z.to_string i)
+          | _ -> !^("0X" ^ (Z.format "016X" i))
+          end
        | Bool true -> !^"true"
        | Bool false -> !^"false"
        | Unit -> !^"void"

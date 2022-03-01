@@ -18,6 +18,7 @@ type t
 val to_raw : t -> raw
 
 val unknown: t
+val is_unknown_location: t -> bool
 val other: string -> t
 val point: Lexing.position -> t
 val region: Lexing.position * Lexing.position -> cursor -> t

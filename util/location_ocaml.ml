@@ -21,6 +21,10 @@ let to_raw t = t
 let unknown =
   Loc_unknown
 
+let is_unknown_location = function
+  | Loc_unknown -> true
+  | _ -> false
+
 let other str =
   Loc_other str
 

@@ -13,7 +13,7 @@ val unknown : t
 
 val other : string -> t
 
-val is_unknown : t -> bool
+val is_unknown_location : t -> bool
 
 val pp : t -> PPrint.document
 
