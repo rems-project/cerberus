@@ -1,25 +1,4 @@
 
-(* vaddr_t: This is a new integer type introduced by CHERI C and
-   should be used to hold virtual addresses. vaddr_t should not be
-   directly cast to a pointer type for dereference; instead, it must
-   be combined with an existing valid capability to the address space
-   to generate a dereferenceable pointer. *)
-type vaddr = Nat_big_num.num
-
-type obj_type = Nat_big_num.num
-type vaddr_interval = vaddr * vaddr
-
-type cap_value =
-  | CapVaddress of vaddr
-  | CapToken of obj_type
-
-type cap_seal =
-  | Cap_Unsealed
-  | Cap_SEntry (* "RB" in Morello *)
-  | Cap_Indirect_SEntry (* "LB" in Morello *)
-  | Cap_Indirect_SEntry_Pair (* "LBP" in Morello *)
-  | Cap_Sealed of obj_type
-
 module type Cap_permission = sig
   type t
   (* Number of user-defined flags *)
@@ -59,17 +38,32 @@ module type Cap_permission = sig
 
   (* perform bitwise AND of user permissions *)
   val perm_and_user_perms: t -> bool list -> t
+
+  (* null permission *)
+  val perm_p0: t
 end
 
-module type Capability_func =
-  functor (P: Cap_permission) ->
+module type Capability =
   sig
+    module P: Cap_permission
+
     type t
+    (* vaddr_t: This is a new integer type introduced by CHERI C and
+       should be used to hold virtual addresses. vaddr_t should not be
+       directly cast to a pointer type for dereference; instead, it must
+       be combined with an existing valid capability to the address space
+       to generate a dereferenceable pointer. *)
+    type vaddr
+    type otype
+
+    type vaddr_interval
+    type cap_value
+    type cap_seal_t
 
     (* Number of user-defined flags *)
     val cap_flags_len: int
 
-    val cap_is_valid : bool
+    val cap_is_valid : t -> bool
 
     val cap_get_value : t -> cap_value
 
@@ -77,7 +71,7 @@ module type Capability_func =
     val cap_get_bounds: t -> vaddr_interval
 
     (* Get informaiton about "seal" on this capability *)
-    val cap_get_seal: t -> cap_seal
+    val cap_get_seal: t -> cap_seal_t
 
     (* user-defined flags *)
     val get_flags: t -> bool list (* TODO: enforce cap_flags_len? *)
@@ -88,7 +82,7 @@ module type Capability_func =
     val cap_c0: t
 
     (* Boldly assuming this one never fails *)
-    val cap_vaddr_of_obj_type: obj_type -> vaddr
+    val cap_vaddr_of_obj_type: otype -> vaddr
 
     (* Due to encoding, not all capabilities with large bounds have a
        contiguous representable region. This representability check is
