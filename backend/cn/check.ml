@@ -391,7 +391,7 @@ module ResourceInference = struct
                let took = and_ [pmatch; p'.permission; needed] in
                begin match provable (LC.T took) with
                | `True ->
-                  Changed (Point {p' with permission = bool_ false}), 
+                  Deleted, 
                   (bool_ false, p'.value, p'.init, p'.ct)
                | `False -> 
                   continue
@@ -481,7 +481,7 @@ module ResourceInference = struct
                   let value = value @ [One {index; value = p'.value}] in
                   let init = init @ [One {index; value = p'.init}] in
                   let needed' = and_ [needed; not_ (i_match)] in
-                  Changed (Point {p' with permission = bool_ false}), 
+                  Deleted, 
                   (simp needed', C value, C init)
                | `False -> continue
                end
@@ -783,7 +783,7 @@ module ResourceInference = struct
                let took = and_ (needed :: p'.permission :: pmatch) in
                begin match provable (LC.T took) with
                | `True ->
-                  Changed (Predicate {p' with permission = bool_ false}), 
+                  Deleted, 
                   (bool_ false, p'.oargs)
                | `False -> continue
                end
@@ -869,7 +869,7 @@ module ResourceInference = struct
                   let i_match = eq_ (sym_ (requested.q, Integer), index) in
                   let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [One {index; value = oa'}])) oargs p'.oargs in
                   let needed' = and_ [needed; not_ i_match] in
-                  Changed (Predicate {p' with permission = bool_ false}), 
+                  Deleted, 
                   (simp needed', oargs)
                | `False -> continue
                end

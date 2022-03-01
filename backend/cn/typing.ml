@@ -198,6 +198,7 @@ let rec add_rs oloc = function
 
 
 type changed = 
+  | Deleted
   | Unchanged
   | Unfolded of RE.t list
   | Changed of RE.t
@@ -205,24 +206,22 @@ type changed =
 let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) = 
   fun s ->
   let provable = make_provable loc s in
-  let structs = s.typing_context.global.struct_decls in
-  let sym_eqs = s.sym_eqs in
-  let constraints = s.typing_context.constraints in
   let resources, acc =
     List.fold_right (fun re (resources, acc) ->
         let (changed, acc) = f re acc in
         match changed with
+        | Deleted ->
+           (resources, acc)
         | Unchanged -> 
            (re :: resources, acc)
         | Unfolded res ->
            (res @ resources, acc)
         | Changed re ->
-           match RE.simp_or_empty structs (sym_eqs, constraints) re with
-           | None -> (resources, acc)
-           | Some (QPoint {q; permission; _} | QPredicate {q; permission; _})
+           match re with
+           | (QPoint {q; permission; _} | QPredicate {q; permission; _})
                 when (`True = provable (LC.forall_ (q, Integer) (IT.not_ permission))) ->
               (resources, acc)
-           | Some re -> 
+           | _ -> 
               (re :: resources, acc)
       ) s.typing_context.resources ([], acc)
   in

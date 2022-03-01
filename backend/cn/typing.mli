@@ -36,6 +36,7 @@ val add_r : Context.where option -> Resources.RE.t -> (unit, 'e) m
 val add_rs : Context.where option -> Resources.RE.t list -> (unit, 'e) m
 
 type changed = 
+  | Deleted
   | Unchanged
   | Unfolded of Resources.RE.t list
   | Changed of Resources.RE.t
