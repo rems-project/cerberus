@@ -382,7 +382,7 @@ module ResourceInference = struct
       let needed = requested.permission in 
       let sub_resource_if = fun cond re (needed, value, init, ct) ->
             let continue = (Unchanged, (needed, value, init, ct)) in
-            if not (cond re) || is_false needed then continue else
+            if is_false needed || not (cond re) then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct 
                             || (ct_subtype && Sctypes.subtype p'.ct requested.ct) ->
@@ -462,7 +462,7 @@ module ResourceInference = struct
       let needed = requested.permission in
       let sub_resource_if = fun cond re (needed, C value, C init) ->
             let continue = (Unchanged, (needed, C value, C init)) in
-            if not (cond re) || is_false needed then continue else
+            if is_false needed || not (cond re) then continue else
             match re with
             | Point p' when Sctypes.equal requested.ct p'.ct ->
                let base = requested.pointer in
