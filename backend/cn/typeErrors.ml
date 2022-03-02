@@ -177,15 +177,15 @@ let pp_message te =
        | None, None ->
           None
      in
-     let state = Explain.state ctxt explanation model in
-     { short; descr; state = Some state }
+     let state = Explain.state ctxt explanation model orequest in
+     { short; descr = descr; state = Some state }
   | Resource_mismatch {has; expect; situation; ctxt; model} ->
      let short = !^"Resource mismatch" ^^^ for_situation situation in
      let relevant = IT.SymSet.union (RE.free_vars has) (RE.free_vars expect) in
      let explanation = Explain.explanation ctxt relevant in
      let has = RE.pp (RE.subst explanation.substitution has) in
      let expect = RE.pp (RE.subst explanation.substitution expect) in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr =
        !^"Need a resource" ^^^ squotes expect ^^^
          !^"but have resource" ^^^ squotes has
@@ -194,13 +194,13 @@ let pp_message te =
   | Uninitialised_read {ctxt; model} ->
      let short = !^"Trying to read uninitialised data" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      { short; descr = None; state = Some state }
   | Unused_resource {resource; ctxt; model} ->
      let explanation = Explain.explanation ctxt (RE.free_vars resource) in
      let resource = RE.pp (RE.subst explanation.substitution resource) in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      { short; descr = None; state = Some state}
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
@@ -278,7 +278,7 @@ let pp_message te =
      in
      let location = IT.pp (IT.subst explanation.substitution location) in
      let value = IT.pp (IT.subst explanation.substitution value) in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
@@ -295,7 +295,7 @@ let pp_message te =
      in
      let location = IT.pp (IT.subst explanation.substitution location) in
      let value = IT.pp (IT.subst explanation.substitution value) in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
@@ -309,13 +309,13 @@ let pp_message te =
      let explanation = Explain.explanation ctxt (IT.free_vars value) in
      let value = IT.pp (IT.subst explanation.substitution value) in
      let descr = !^"Value" ^^ colon ^^^ value in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      { short; descr = Some descr; state = Some state }
   | Unsat_constraint {constr; info; ctxt; model} ->
      let short = !^"Unsatisfied constraint" in
      let explanation = Explain.explanation ctxt (LC.free_vars constr) in
      let _constr = LC.pp (LC.subst explanation.substitution constr) in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr =
        let (spec_loc, odescr) = info in
        let (head, _) = Locations.head_pos_of_location spec_loc in
@@ -360,7 +360,7 @@ let pp_message te =
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr = !^(CF.Undefined.pretty_string_of_undefined_behaviour ub) in
      { short; descr = Some descr; state = Some state }
   | Implementation_defined_behaviour (impl, state) ->
@@ -373,13 +373,13 @@ let pp_message te =
   | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr = !^err in
      { short; descr = Some descr; state = Some state }
   | No_quantified_constraints {to_check; ctxt; model} ->
      let short = !^"Found no quantified constraints containing this fact" in
      let explanation = Explain.explanation ctxt (IT.free_vars to_check) in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      let descr = None in
        (* parens (!^"to check:" ^^^ IT.pp (IT.subst explanation.substitution to_check)) *)
      { short; descr = descr; state = Some state }
@@ -389,7 +389,7 @@ let pp_message te =
   | Generic_with_model {err; model; ctxt} ->
      let short = err in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model in
+     let state = Explain.state ctxt explanation model None in
      { short; descr = None; state = Some state }
 
 
