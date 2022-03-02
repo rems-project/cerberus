@@ -78,13 +78,9 @@ module Morello_capability: Capability =
   struct
     module P = Morello_permission
     type vaddr = N.num
-    type otype = N.num (*  15 bits actually. Maybe int? *)
+    type otype = N.num (*  15 bits actually. *)
 
     type vaddr_interval = vaddr * vaddr
-
-    type cap_value =
-      | CapVaddress of vaddr
-      | CapToken of otype
 
     type cap_seal_t =
       | Cap_Unsealed
@@ -98,15 +94,13 @@ module Morello_capability: Capability =
         valid: bool;
 
         (* "Union" type of two values *)
-        value_addr: N.num ;
-        value_otype: N.num ;
+        value: vaddr;
+        obj_type: otype;
 
         bounds: vaddr_interval;
         flags: bool list;
         perms: P.t;
         is_execuvite : bool; (* Morello-spefic? *)
-
-        obj_type : otype;
       }
 
     let cap_SEAL_TYPE_UNSEALED:otype = N.of_int 0
@@ -118,10 +112,9 @@ module Morello_capability: Capability =
 
     let cap_is_valid c = c.valid (* TODO: maybe more checks *)
 
-    let cap_get_value (c:t) : cap_value =
-      if P.perm_is_seal c.perms || P.perm_is_unseal c.perms
-      then CapToken c.value_otype
-      else CapVaddress c.value_addr
+    let cap_get_obj_type c = c.obj_type
+
+    let cap_get_value c = c.value
 
     let cap_get_bounds c = c.bounds
 
@@ -139,16 +132,13 @@ module Morello_capability: Capability =
 
     let cap_c0 =  {
         valid = false;
-        value_addr = N.of_int 0;
-        value_otype = N.of_int 0;
+        value = N.of_int 0;
+        obj_type = cap_SEAL_TYPE_UNSEALED;
         bounds = (N.of_int 0, N.of_int 0);
         flags = List.init cap_flags_len (fun _ -> false) ;
         perms = P.perm_p0 ;
         is_execuvite = false ;
-        obj_type = N.of_int 0
       }
-
-    let cap_vaddr_of_obj_type o = o
 
     let cap_vaddr_representable c a = true (* TODO *)
 
@@ -225,4 +215,9 @@ module Morello_capability: Capability =
      *)
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
+
+    let to_string (c:t) =
+      ("0x" ^ Z.format "%x" (Z.of_string (N.to_string c.value)))
+        (* TODO: print more fields, including permissions *)
+
   end
