@@ -57,7 +57,6 @@ module type Capability =
     type otype
 
     type vaddr_interval
-    type cap_value
     type cap_seal_t
 
     (* Number of user-defined flags *)
@@ -65,7 +64,9 @@ module type Capability =
 
     val cap_is_valid : t -> bool
 
-    val cap_get_value : t -> cap_value
+    val cap_get_value : t -> vaddr
+
+    val cap_get_obj_type : t -> otype
 
     (* Returns either inclusive bounds for covered  memory region *)
     val cap_get_bounds: t -> vaddr_interval
@@ -80,9 +81,6 @@ module type Capability =
 
     (* Null capability *)
     val cap_c0: t
-
-    (* Boldly assuming this one never fails *)
-    val cap_vaddr_of_obj_type: otype -> vaddr
 
     (* Due to encoding, not all capabilities with large bounds have a
        contiguous representable region. This representability check is
@@ -122,7 +120,7 @@ module type Capability =
        - CCopyType in RISC V
        - CPYTYPE in Morello
      *)
-    val cap_set_value: t -> cap_value -> t
+    val cap_set_value: t -> vaddr -> t
 
     (* Reducing the Capability Bounds (with rounding)
 
@@ -191,5 +189,9 @@ module type Capability =
        - UNSEAL in Morello
      *)
     val cap_unseal: t -> t -> t
+
+    (* --- Utility methods --- *)
+
+    val to_string: t -> string
 
   end
