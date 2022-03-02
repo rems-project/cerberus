@@ -41,7 +41,7 @@ type definition = {
     permission: Sym.t;
     clauses : clause list;
   }
-  
+
 let pp_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^

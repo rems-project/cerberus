@@ -313,9 +313,48 @@ let app_symbol_it q = function
      SymSet.singleton v_s
   | _ -> SymSet.empty
 
+let same_type_resource req res = begin match (req, res) with
+  | (RER.Point p, RE.Point p2) -> Sctypes.equal p.ct p2.ct
+  | (RER.QPoint qp, RE.QPoint qp2) -> Sctypes.equal qp.ct qp2.ct
+  | (RER.Predicate p, RE.Predicate p2) -> String.equal p.name p2.name
+  | (RER.QPredicate qp, RE.QPredicate qp2) -> String.equal qp.name qp2.name
+  | _ -> false
+  end
 
+let clause_has_resource req c =
+  let open ArgumentTypes in
+  let rec f = function
+    | Resource (r, _, c) -> same_type_resource req r || f c
+    | Constraint (_, _, c) -> f c
+    | Computational (_, _, c) -> f c
+    | Logical (_, _, c) -> f c
+    | Define (_, _, c) -> f c
+    | I _ -> false
+  in
+  let open ResourcePredicates in
+  f c.packing_ft
 
-let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)=
+let relevant_predicate_clauses global oname req =
+  let open Global in
+  let open ResourcePredicates in
+  let clauses = StringMap.bindings global.resource_predicates
+    |> List.map (fun (nm, def) -> List.map (fun c -> (nm, c)) def.clauses)
+    |> List.concat in
+  List.filter (fun (nm, c) -> Option.equal String.equal (Some nm) oname
+    || clause_has_resource req c) clauses
+
+let rec ugly_print_clause =
+  let module AT = ArgumentTypes in
+  function
+  | AT.Resource (r, _, c) -> !^"Resource(" ^^ ugly_print_clause c ^^ !^")"
+  | AT.Constraint (lc, _, c) -> !^"Constraint(" ^^ ugly_print_clause c ^^ !^")"
+  | AT.Computational (_, _, c) -> !^"Computational(" ^^ ugly_print_clause c ^^ !^")"
+  | AT.Logical (_, _, c) -> !^"Logical(" ^^ ugly_print_clause c ^^ !^")"
+  | AT.Define (_, _, c) -> !^"Define(" ^^ ugly_print_clause c ^^ !^")"
+  | AT.I x -> !^"II"
+
+let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)
+    (orequest : RER.resource option) =
 
   let model, quantifier_counter_model = model_with_q in
 
@@ -572,8 +611,42 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
       ) ctxt.constraints
   in
 
+  let requested = match orequest with
+    | None -> []
+    | Some req -> [RER.pp (RER.subst substitution req)]
+  in
+
+  let resources = match orequest with
+    | None -> []
+    | Some req -> begin match List.filter (same_type_resource req) ctxt.resources with
+        | [] -> [!^"(none)"]
+        | rs -> List.map (fun r -> RE.pp (RE.subst substitution r)) rs
+        end
+  in
+
+  let predicate_name = match orequest with
+    | Some (Predicate p) -> Some p.name
+    | Some (QPredicate qp) -> Some qp.name
+    | _ -> None
+  in
+  let predicate_clauses = match orequest with
+    | None -> []
+    | Some req -> relevant_predicate_clauses ctxt.global predicate_name req
+  in
+  let doc_clause (nm, c) =
+    let open ResourcePredicates in
+    {
+      cond = IT.pp c.guard;
+      clause = ArgumentTypes.pp OutputDef.pp c.packing_ft
+    }
+  in
+  let predicate_hints = List.map doc_clause predicate_clauses in
+
   { memory = memory @ memory_var_lines;
     variables = predicate_oargs @ logical_var_lines;
+    requested = requested;
+    resources = resources;
+    predicate_hints = predicate_hints;
     constraints }
 
 

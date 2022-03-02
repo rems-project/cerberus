@@ -11,9 +11,18 @@ type var_entry = {
   }
 
 
+type predicate_clause_entry = {
+    cond : Pp.doc;
+    clause : Pp.doc;
+  }
+
+
 type state_report = {
     memory : state_entry list;
     variables : var_entry list;
+    requested : Pp.doc list;
+    resources : Pp.doc list;
+    predicate_hints : predicate_clause_entry list;
     constraints: Pp.doc list;
   }
 
@@ -132,15 +141,27 @@ let to_html report =
     }
   in
 
-  let constraint_entry constr =
+  let predicate_info_entry {cond; clause} =
     { header = false;
-      classes = ["constraint_entry"];
-      columns = [ 
-          { classes = ["contraint"]; content = sdoc constr; colspan = 3 };
+      classes = ["predicate_info_entry"];
+      columns = [
+          { classes = ["condition"]; content = sdoc cond; colspan = 1 };
+          { classes = ["clause"]; content = sdoc clause; colspan = 2 };
         ]
     }
   in
 
+  let full_row_entry nm doc =
+    { header = false;
+      classes = [nm ^ "_entry"];
+      columns = [ 
+          { classes = [nm]; content = sdoc doc; colspan = 3 };
+        ]
+    }
+  in
+
+  let constraint_entry = full_row_entry "constraint" in
+  let resource_entry = full_row_entry "resource" in
 
   let header hds = 
     let columns = 
@@ -155,6 +176,9 @@ let to_html report =
       classes = ["table_header"]} 
   in
 
+  let opt_header xs hds = if List.length xs = 0
+    then [] else [header hds] in
+
   let table = 
     { column_info = ["column1"; "column2"; "column3"];
       rows = (
@@ -162,6 +186,12 @@ let to_html report =
         List.map state_entry report.memory @
         header [("expression",1); ("value",2)] ::
         List.map variable_entry report.variables @
+        opt_header report.requested [("requested resource", 3)] @
+        List.map resource_entry report.requested @
+        opt_header report.requested [("available same-type resources", 3)] @
+        List.map resource_entry report.resources @
+        opt_header report.predicate_hints [("relevant predicate clauses", 3)] @
+        List.map predicate_info_entry report.predicate_hints @
         header [("constraints",3)] ::
         List.map constraint_entry report.constraints
     )}
