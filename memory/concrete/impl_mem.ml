@@ -1616,8 +1616,8 @@ module Concrete : Memory = struct
     match pv with
     | PV (_, PVnull ty) -> fnull ty
     | PV (_, PVfunction f) -> ffun f
-    | PV (Prov_none, PVconcrete addr) -> fconc None addr
-    | PV (Prov_some i, PVconcrete addr) -> fconc (Some i) addr
+    | PV (Prov_none, PVconcrete addr) -> fconc ()
+    | PV (Prov_some i, PVconcrete addr) -> fconc ()
     | _ -> failwith "case_ptrval"
 
   let case_funsym_opt st (PV (_, ptrval)) =
