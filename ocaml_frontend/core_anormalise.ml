@@ -2,6 +2,7 @@
 open Lem_pervasives
 open Ctype
 open Lem_assert_extra
+open Milicore
 
 (* Can be removed if support for OCaml 4.07 is dropped. *)
 module Option = struct
@@ -781,11 +782,8 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | End es ->
      let es = (List.map (fun e -> n_expr e k) es) in
      twrap (M_End es)
-  | Esave((sym1,bt1), syms_typs_pes, e) ->  (* have to check *)
-     let (_,typs_pes) = (List.split syms_typs_pes) in
-     let (_,pes) = (List.split typs_pes) in
-     n_pexpr_in_expr_names pes (fun pes ->
-     twrap (M_Erun(sym1, pes)))
+  | Esave((sym1,bt1), syms_typs_pes, e) ->  
+     error "core_anormalisation: Esave"
   (* DISCARDS CONTINUATION *)
   | Erun(_a, sym1, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
@@ -836,43 +834,33 @@ let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl =
 let normalise_impl (i : unit generic_impl) : unit mu_impl=
    (Pmap.map normalise_impl_decl i)
 
-let normalise_fun_map_decl 
-      (name1: symbol)
-      (d : (unit, 'a) generic_fun_map_decl) 
+let normalise_fun_map_decl (name1: symbol) d 
     : unit mu_fun_map_decl=
   match d with
-  | Fun (bt, args, pe) -> 
+  | Mi_Fun (bt, args, pe) -> 
      M_Fun(bt, args, normalise_pexpr Loc.unknown pe)
-  | Proc (loc, bt, args, e) -> 
-     let saves = (Core_aux.m_collect_saves e) in
+  | Mi_Proc (loc, bt, args, e, labels) -> 
      let returns = 
-       Pmap.fold (fun sym (_,_,_,annots) returns ->
-           if is_return annots then Pset.add sym returns else returns
-         ) saves (Pset.empty Symbol.symbol_compare)
+       Pmap.fold (fun sym label returns ->
+           match label with
+           | Mi_Return _ -> Pset.add sym returns
+           | _ -> returns
+         ) labels (Pset.empty Symbol.symbol_compare)
      in
-     let saves' =
-       (Pmap.map (fun (_,params,body,annots) ->
-            let param_tys = 
-              (map (fun (sym1,(((_,mctb),_))) -> 
-                   (match mctb with
-                    | Some (ct1,b) -> (Some sym1, (ct1,b))
-                    | None -> 
-                       error "core_anormalisation: label without c-type argument annotation"
-                   )
-                 ) params) 
-            in
-            let params = map (fun (sym, (((bt, _), _))) -> (sym,bt)) params in
-            let lloc = update_loc loc (Annot.get_loc_ annots) in
-            if is_return annots
-            then M_Return (lloc, param_tys)
-            else M_Label (lloc, param_tys, params, normalise_expr loc returns body, annots)
-          ) saves)
+     let labels' = 
+       Pmap.map (function
+           | Mi_Return (loc, lt) -> 
+              M_Return (loc, lt)
+           | Mi_Label (loc, lt, args, e, annots) ->
+              let e = normalise_expr loc returns e in
+              M_Label (loc, lt, args, e, annots)
+         ) labels
      in
-     M_Proc(loc, bt, args, normalise_expr loc returns e, saves')
-  | ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
-  | BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
+     M_Proc(loc, bt, args, normalise_expr loc returns e, labels')
+  | Mi_ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
+  | Mi_BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 
-let normalise_fun_map (fmap : (unit, 'a) generic_fun_map) : unit mu_fun_map= 
+let normalise_fun_map fmap : unit mu_fun_map= 
   let fmap = 
     Pmap.filter (fun sym _ ->
         match Symbol.symbol_description sym with
@@ -942,7 +930,7 @@ let rec ctype_contains_function_pointer (Ctype.Ctype (_, ct_)) =
   | Union _ -> false
 
 
-let check_supported file =
+let check_supported (file : ('a, 'TY) mi_file) =
   let _ = 
     Pmap.iter (fun _sym def -> 
         let (loc, _attrs, ret_ctype, args,  variadic, _) = def in
@@ -956,7 +944,7 @@ let check_supported file =
           Pp_errors.fatal (Pp_errors.to_string (loc, err)); 
         else
           ()
-      ) file.funinfo
+      ) file.mi_funinfo
   in
   (* let _ = 
    *   Pmap.iter (fun _sym def -> 
@@ -980,17 +968,17 @@ let check_supported file =
    * in *)
   ()
 
-let normalise_file file : unit Mu.mu_file = 
+let normalise_file (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file = 
   check_supported file;
-   ({ mu_main = (file.main)
-   ; mu_tagDefs = (normalise_tag_definitions file.tagDefs)
-   ; mu_stdlib = (normalise_fun_map file.stdlib)
-   ; mu_impl = (normalise_impl file.impl)
-   ; mu_globs = (normalise_globs_list file.globs)
-   ; mu_funs = (normalise_fun_map file.funs)
-   ; mu_extern = (file.extern)
-   ; mu_funinfo = (normalise_funinfos file.funinfo)
-   ; mu_loop_attributes = file.loop_attributes0
+   ({ mu_main = (file.mi_main)
+   ; mu_tagDefs = (normalise_tag_definitions file.mi_tagDefs)
+   ; mu_stdlib = (normalise_fun_map file.mi_stdlib)
+   ; mu_impl = (normalise_impl file.mi_impl)
+   ; mu_globs = (normalise_globs_list file.mi_globs)
+   ; mu_funs = (normalise_fun_map file.mi_funs)
+   ; mu_extern = (file.mi_extern)
+   ; mu_funinfo = (normalise_funinfos file.mi_funinfo)
+   ; mu_loop_attributes = file.mi_loop_attributes
    ; mu_resource_predicates = ()
    ; mu_logical_predicates = ()
   })
