@@ -942,14 +942,14 @@ BEFORE EVAL_PEXPR2
                 end in
               Mem.case_ptrval pv
                 (fun _ -> error "null function pointer")
-                 case_funptrval
-                (fun _ addr ->
+                case_funptrval
+                (fun _ ->
                   (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
                   match Mem.case_funsym_opt mem_st pv with
                   | Just sym ->
                       case_funptrval sym
                   | None ->
-                      error (show addr ^ " does not point to a function (Eccall)")
+                      error ("the address does not point to a function (Eccall)")
                   end)
                 (fun _ -> error "function pointer has an unspecified value")
           | Just cval ->

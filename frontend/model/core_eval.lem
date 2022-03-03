@@ -745,8 +745,8 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                 end in
               Mem.case_ptrval pv
                 (fun _ -> EU.fail $ Illformed_program "null function pointer")
-                 case_funptrval
-                (fun _ addr ->
+                case_funptrval
+                (fun _  ->
                 (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
                   match mem_st_opt with
                   | Just mem_st ->
@@ -754,10 +754,10 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                       | Just sym ->
                           case_funptrval sym
                       | None ->
-                          EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
+                          EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": does not point to a function")
                       end
                   | None ->
-                      EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
+                      EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": does not point to a function")
                   end)
                 (fun _ -> EU.fail $ Illformed_program "function pointer has an unspecified value")
           | Just (Vloaded (LVunspecified _)) ->
