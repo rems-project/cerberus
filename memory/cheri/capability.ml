@@ -190,8 +190,22 @@ module type Capability =
      *)
     val cap_unseal: t -> t -> t
 
+    (* encoding/decoding *)
+
+    val decode: char list -> t option
+    val encode: t -> char list
+
     (* --- Utility methods --- *)
 
     val to_string: t -> string
+
+    (* --- Equality --- *)
+
+    (* exact equality. compares capability metadata as well as value *)
+    val eq: t -> t -> bool
+
+    (* compare value only ignoring metadata *)
+    val value_compare: t -> t -> int
+
 
   end

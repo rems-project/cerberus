@@ -906,24 +906,29 @@ module CHERI (C:Capability) : Memory = struct
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint (* PNVI-ae-udi *)
           , begin match extract_unspec bs1' with
-              | Some cs ->
-                  let n = int_of_bytes false cs in
-                  begin match ref_ty with
+            | Some cs ->
+               begin match C.decode cs with
+               | None -> (* TODO *)
+                  failwith "could not decode capability"
+               | Some n ->
+                 begin match ref_ty with
                     | Ctype (_, Function _) ->
-                        if N.equal n N.zero then
-                          (* TODO: check *)
+                        if C.eq n C.cap_c0 then
                           MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                         else
+                          (*
                           (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
                           begin match IntMap.find_opt n funptrmap with
                             | Some (file_dig, name) ->
                                 MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))))
                             | None ->
-                                failwith ("unknown function pointer: " ^ N.to_string n)
+                                failwith ("unknown function pointer: " ^ C.to_string n)
                           end
+                           *)
+                    (* TODO: implement for CHERI. May need different approach *)
+                          failwith "TODO"
                     | _ ->
-                        if N.equal n N.zero then
-                          (* TODO: check *)
+                        if C.eq n C.cap_c0 then
                           MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                         else
                           let prov =
@@ -960,7 +965,8 @@ module CHERI (C:Capability) : Memory = struct
                             else
                               prov in
                           MVpointer (ref_ty, PV (prov, PVconcrete n))
-                  end
+                 end
+               end
               | None ->
                   MVunspecified (Ctype ([], Pointer (no_qualifiers, ref_ty)))
             end, bs2)
@@ -1049,8 +1055,8 @@ module CHERI (C:Capability) : Memory = struct
                 z in
           begin match ptrval_ with
             | PVnull _ ->
-                Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
-                ret @@ List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
+               Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+               ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
             | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
                 (* TODO: *)
                 (begin match opt_name with
@@ -1061,17 +1067,14 @@ module CHERI (C:Capability) : Memory = struct
                   (* | SD_Pointee _ -> funptrmap *)
                   (* | SD_PredOutput _ -> funptrmap *)
                   | SD_None -> funptrmap
+                (* TODO: this is wrong. Need to be fixed to return encoded capability, not encoded address *)
                 end, List.map (AbsByte.v prov) begin
                   bytes_of_int
                       false
                       ptr_size (N.of_int n)
                   end)
             | PVconcrete addr ->
-                ret @@ List.mapi (fun i -> AbsByte.v prov ~copy_offset:(Some i)) begin
-                  bytes_of_int
-                    false (* we model address as unsigned *)
-                    ptr_size addr
-                end
+               ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode addr
           end
       | MVarray mvals ->
           let (funptrmap, bs_s) =
@@ -1176,6 +1179,7 @@ module CHERI (C:Capability) : Memory = struct
                 funptrmap= funptrmap; }
           )
     end >>= fun () ->
+    (* memory allocation on stack *)
     return (PV (Prov_some alloc_id, PVconcrete addr))
   
   let update_prefix (pref, mval) =
@@ -1262,7 +1266,8 @@ module CHERI (C:Capability) : Memory = struct
       { st with
           allocations= IntMap.add alloc_id alloc st.allocations;
           dynamic_addrs= addr :: st.dynamic_addrs }
-    ) >>= fun () ->
+      ) >>= fun () ->
+    (* malloc *)
     return (PV (Prov_some alloc_id, PVconcrete addr))
   
   (* zap (make unspecified) any pointer in the memory with provenance matching a
@@ -1402,7 +1407,8 @@ module CHERI (C:Capability) : Memory = struct
               "EXITING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
               ", @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
               " ==> mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
-             );
+              );
+            (* controls reads from uninitialized memory *)
             if Switches.(has_switch SW_strict_reads) then
               match mval with
                 | MVunspecified _ ->
@@ -1598,8 +1604,7 @@ module CHERI (C:Capability) : Memory = struct
   let fun_ptrval sym =
     PV (Prov_none, PVfunction sym)
 
-  let concrete_ptrval i addr =
-    PV (Prov_some i, PVconcrete addr)
+  let concrete_ptrval i addr = failwith "concrete_ptrval: integer to pointer cast is not supported"
 
   let case_ptrval pv fnull ffun fconc _ =
     match pv with
@@ -1909,7 +1914,8 @@ module CHERI (C:Capability) : Memory = struct
       | PV (Prov_none, _) ->
           return false
 
-  
+
+  (* _ is integer type *)
   let ptrfromint _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD §6.3.2.3#5 *)
@@ -1945,6 +1951,7 @@ module CHERI (C:Capability) : Memory = struct
               add_iota alloc_ids >>= fun iota ->
               return (Prov_symbolic iota)
         end >>= fun prov ->
+        (* cast int to pointer *)
         return (PV (prov, PVconcrete n))
     else
       match prov with
@@ -1968,7 +1975,9 @@ module CHERI (C:Capability) : Memory = struct
           IV (Prov_none, N.of_int offset)
       | None ->
           failwith "CHERI.offsetof_ival: invalid memb_ident"
-  
+
+  (* will not be used by CHERI. TODO; replace with failwith to make
+   sure it is never called *)
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     match prov with
@@ -1985,7 +1994,8 @@ module CHERI (C:Capability) : Memory = struct
               failwith "CHERI.array_shift_ptrval, PVfunction"
           | PVconcrete addr ->
               PVconcrete (N.add addr offset))
-  
+
+  (* TODO: need effectful variant *)
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
     PV (prov, match ptrval_ with
@@ -1999,8 +2009,9 @@ module CHERI (C:Capability) : Memory = struct
       | PVfunction _ ->
           failwith "CHERI.member_shift_ptrval, PVfunction"
       | PVconcrete addr ->
-          PVconcrete (N.add addr offset))
-  
+         PVconcrete (N.add addr offset))
+
+  (* this will be used for pointer arithmetics *)
   let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in

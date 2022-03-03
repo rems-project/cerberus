@@ -216,6 +216,16 @@ module Morello_capability: Capability =
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
+    let decode b = None (* TODO implement *)
+
+    let encode c = [] (* TODO implement *)
+
+    (* exact equality. compares capability metadata as well as value *)
+    let eq = (=)
+
+    (* compare value only ignoring metadata *)
+    let value_compare x y = compare x.value y.value
+
     let to_string (c:t) =
       ("0x" ^ Z.format "%x" (Z.of_string (N.to_string c.value)))
         (* TODO: print more fields, including permissions *)
