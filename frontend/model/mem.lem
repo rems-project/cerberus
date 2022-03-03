@@ -84,7 +84,7 @@ val concrete_ptrval: integer -> integer -> pointer_value
 val case_ptrval: forall 'a. pointer_value ->
    (* null pointer *) (Ctype.ctype -> 'a) ->
    (* function pointer *) (Symbol.sym -> 'a) ->
-   (* concrete pointer *) (maybe integer -> integer -> 'a) ->
+   (* concrete pointer *) (unit -> 'a) ->
    (* unspecified value *) (unit -> 'a) -> 'a
 val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
 
