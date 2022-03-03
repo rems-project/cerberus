@@ -509,12 +509,29 @@ module ResourceInference = struct
 
       debug 10 (lazy (item "needed after exact matches:" (IT.pp needed)));
       let k_is = scan_key_indices requested.q needed in
-      let k_ptrs = List.map (fun i -> arrayShift_ (requested.pointer, requested.ct, i)) k_is in
-      let k_ptrs = List.map simp k_ptrs in
+      let k_ptrs = List.map (fun i -> (i, arrayShift_ (requested.pointer, requested.ct, i))) k_is in
+      let k_ptrs = List.map (fun (i, p) -> (simp i, simp p)) k_ptrs in
       if List.length k_ptrs == 0 then ()
-      else debug 10 (lazy (item "key ptrs for additional matches:" (Pp.list IT.pp k_ptrs)));
-      let@ k_ptr_match = exact_match_point_ptrs k_ptrs in
+      else debug 10 (lazy (item "key ptrs for additional matches:"
+          (Pp.list IT.pp (List.map snd k_ptrs))));
+      let@ k_ptr_match = exact_match_point_ptrs (List.map snd k_ptrs) in
       let is_exact_k re = !reorder_points && k_ptr_match re in
+
+      let necessary_k_ptrs = List.filter (fun (i, p) ->
+          let i_match = eq_ (sym_ (requested.q, Integer), i) in
+          match provable (forall_ (requested.q, BT.Integer) (impl_ (i_match, needed)))
+          with `True -> true | _ -> false) k_ptrs in
+      let@ () = ListM.iterM (fun (_, p) ->
+         let@ r = point_request ~recursive:true loc ({
+           ct = requested.ct;
+           pointer = p;
+           value = BT.of_sct requested.ct;
+           init = BT.Bool;
+           permission = bool_ true;
+         }) in
+         match r with
+         | Some res -> add_r None (RE.Point res)
+         | None -> return ()) necessary_k_ptrs in
 
       let@ (needed, C value, C init) =
         map_and_fold_resources loc (sub_resource_if is_exact_k)
@@ -533,7 +550,7 @@ module ResourceInference = struct
 
       let@ (needed, C value, C init) =
         map_and_fold_resources loc (sub_resource_if
-          (fun re -> not (is_exact_k re) && not (is_exact_k re)))
+          (fun re -> not (is_exact_re re) && not (is_exact_k re)))
           (needed, C value, C init) in
 
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
