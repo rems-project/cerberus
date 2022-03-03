@@ -236,7 +236,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
         Impl_mem.case_ptrval p
           (fun _ -> assert false (* null pointer *))
           (fun sym -> return @@ ATpointer (APfunction sym) (* function *))
-          (fun prov addr -> assert false)
+          (fun () -> assert false)
           (fun () -> assert false (* unspecified *))
       | Vunit ->
         return @@ ATunit

@@ -174,7 +174,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
     Impl_mem.case_ptrval pv
       (fun ct -> names_in_ctype ct)
       (fun sym -> record_dep (Sym sym))
-      (fun _ _ -> return ())
+      (fun () -> return ())
       (fun _ -> return ())
 
   and names_in_memory_value mv : unit m = 

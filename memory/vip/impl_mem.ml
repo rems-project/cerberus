@@ -632,9 +632,9 @@ let case_ptrval ptrval f_null f_funptr f_concrete _ =
     | PVnull ->
         f_null Ctype.void (*TODO: hack*)
     | PVloc (Prov_empty, addr) ->
-        f_concrete None addr
+        f_concrete ()
     | PVloc (Prov_some alloc_id, addr) ->
-        f_concrete (Some alloc_id) addr
+        f_concrete ()
     | PVfunptr sym ->
         f_funptr sym
 
