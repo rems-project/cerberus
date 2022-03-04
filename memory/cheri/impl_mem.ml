@@ -946,7 +946,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                         match prov_status with
                         | `NotValidPtrProv ->
                            (* KKK print_endline "NotValidPtrProv"; *)
-                           begin match find_overlaping n with
+                           begin match find_overlaping (C.cap_get_value n) with
                            | `NoAlloc ->
                               Prov_none
                            | `SingleAlloc alloc_id ->
@@ -1236,10 +1236,10 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        get_allocation alloc_id >>= fun alloc ->
        begin match pv with
        | PVconcrete addr ->
-          if addr = alloc.base then
+          if C.cap_get_value addr = alloc.base then
             return @@ Some (string_of_prefix alloc.prefix)
           else
-            return @@ aux addr alloc alloc.ty
+            return @@ aux C.(cap_get_value addr) alloc alloc.ty
        | PVnull ty ->
           if Some ty = alloc.ty then
             return @@ Some (string_of_prefix alloc.prefix)
@@ -1267,7 +1267,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
           dynamic_addrs= addr :: st.dynamic_addrs }
       ) >>= fun () ->
     (* malloc *)
-    return (PV (Prov_some alloc_id, PVconcrete addr))
+    return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size_n)))
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
@@ -1318,13 +1318,13 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
             return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
          | false ->
             get_allocation z >>= fun alloc ->
-            if N.equal addr alloc.base then
+            if N.equal (C.cap_get_value addr) alloc.base then
               return `OK
             else
               return (`FAIL (MerrUndefinedFree (loc, Free_out_of_bound))) in
        begin if is_dyn then
                (* this kill is dynamic one (i.e. free() or friends) *)
-               is_dynamic addr >>= begin function
+               is_dynamic (C.cap_get_value addr) >>= begin function
                                      | false ->
                                         fail (MerrUndefinedFree (loc, Free_static_allocation))
                                      | true ->
@@ -1350,7 +1350,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | PV (Prov_some alloc_id, PVconcrete addr) ->
        begin if is_dyn then
                (* this kill is dynamic one (i.e. free() or friends) *)
-               is_dynamic addr >>= begin function
+               is_dynamic (C.cap_get_value addr) >>= begin function
                                      | false ->
                                         fail (MerrUndefinedFree (loc, Free_static_allocation))
                                      | true ->
@@ -1367,7 +1367,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                                    failwith "Concrete: FREE was called on a dead allocation"
                               | false ->
                                  get_allocation alloc_id >>= fun alloc ->
-                                 if N.equal addr alloc.base then begin
+                                 if N.equal (C.cap_get_value addr) alloc.base then begin
                                      Debug_ocaml.print_debug 1 [] (fun () ->
                                          "KILLING alloc_id= " ^ N.to_string alloc_id
                                        );
@@ -1427,7 +1427,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | (Prov_none, _) ->
        fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
     | (Prov_device, PVconcrete addr) ->
-       begin is_within_device ty addr >>= function
+       begin is_within_device ty (C.cap_get_value addr) >>= function
              | false ->
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
@@ -1444,11 +1444,11 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                          | true ->
                             return (`FAIL (MerrAccess (loc, LoadAccess, DeadPtr)))
                          | false ->
-                            begin is_within_bound z ty addr >>= function
+                            begin is_within_bound z ty (C.cap_get_value addr) >>= function
                                   | false ->
                                      return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
                                   | true ->
-                                     begin is_atomic_member_access z ty addr >>= function
+                                     begin is_atomic_member_access z ty (C.cap_get_value addr) >>= function
                                            | true ->
                                               return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
                                            | false ->
@@ -1466,14 +1466,14 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                               | false ->
                                  return ()
                             end >>= fun () ->
-       begin is_within_bound alloc_id ty addr >>= function
+       begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
              | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->
                     "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
                   );
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
-                begin is_atomic_member_access alloc_id ty addr >>= function
+                begin is_atomic_member_access alloc_id ty (C.cap_get_value addr) >>= function
                       | true ->
                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                       | false ->
@@ -1519,7 +1519,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
       | (Prov_none, _) ->
          fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
       | (Prov_device, PVconcrete addr) ->
-         begin is_within_device ty addr >>= function
+         begin is_within_device ty (C.cap_get_value addr) >>= function
                | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
                | true ->
@@ -1532,7 +1532,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
             PNVI-ae-udi stuff separated to avoid polluting the
             vanilla PNVI code) *)
          let precondition z =
-           is_within_bound z ty addr >>= function
+           is_within_bound z ty (C.cap_get_value addr) >>= function
            | false ->
               return (`FAIL (MerrAccess (loc, StoreAccess, OutOfBoundPtr)))
            | true ->
@@ -1540,7 +1540,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
               if alloc.is_readonly then
                 return (`FAIL (MerrWriteOnReadOnly loc))
               else
-                begin is_atomic_member_access z ty addr >>= function
+                begin is_atomic_member_access z ty (C.cap_get_value addr) >>= function
                       | true ->
                          return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
                       | false ->
@@ -1562,7 +1562,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
          return fp
 
       | (Prov_some alloc_id, PVconcrete addr) ->
-         begin is_within_bound alloc_id ty addr >>= function
+         begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
                | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
                | true ->
@@ -1570,7 +1570,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                   if alloc.is_readonly then
                     fail (MerrWriteOnReadOnly loc)
                   else
-                    begin is_atomic_member_access alloc_id ty addr >>= function
+                    begin is_atomic_member_access alloc_id ty (C.cap_get_value addr) >>= function
                           | true ->
                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                           | false ->
@@ -1618,12 +1618,16 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | PVfunction sym -> Some sym
     | PVconcrete addr ->
        (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+       (*
        begin match IntMap.find_opt addr st.funptrmap with
        | Some (file_dig, name) ->
           Some (Symbol.Symbol (file_dig, N.to_int addr, SD_Id name))
        | None ->
           None
        end
+        *)
+       (* TODO: implement for CHERI. May need different approach *)
+       failwith "TODO"
     | _ -> None
 
 
