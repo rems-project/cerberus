@@ -72,6 +72,24 @@ module Morello_permission : Cap_permission = struct
       permit_mutable_load = false ;
       user_perms = List.init user_perms_len (fun _ -> false)
     }
+
+  let perm_alloc =
+    {
+      global = false ;
+      permits_load = true ;
+      permits_store = true ;
+      permits_execute = false ;
+      permits_load_cap = true ;
+      permits_store_cap = true ;
+      permits_store_local_cap = true ; (* not sure *)
+      permits_seal = false ;
+      permits_unseal = false ;
+      permits_system_access = false ;
+      permits_ccall = false ;
+      permit_compartment_id = false ;
+      permit_mutable_load = false ;
+      user_perms = List.init user_perms_len (fun _ -> false)
+    }
 end
 
 module Morello_capability: Capability =
@@ -92,11 +110,8 @@ module Morello_capability: Capability =
     type t =
       {
         valid: bool;
-
-        (* "Union" type of two values *)
         value: vaddr;
         obj_type: otype;
-
         bounds: vaddr_interval;
         flags: bool list;
         perms: P.t;
@@ -138,6 +153,18 @@ module Morello_capability: Capability =
         flags = List.init cap_flags_len (fun _ -> false) ;
         perms = P.perm_p0 ;
         is_execuvite = false ;
+      }
+
+    (* Capability for newly allocated region *)
+    let alloc_cap a size =
+      {
+        valid = true ;
+        value = a ;
+        obj_type = cap_SEAL_TYPE_UNSEALED ;
+        bounds = (a, N.add a size) ;
+        flags = List.init cap_flags_len (fun _ -> false) ;
+        perms = P.perm_alloc ;
+        is_execuvite = false
       }
 
     let cap_vaddr_representable c a = true (* TODO *)

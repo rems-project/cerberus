@@ -229,7 +229,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
 
 open Capability
 
-module CHERI (C:Capability) : Memory = struct
+module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   let name = "CHERI memory model"
 
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
@@ -237,9 +237,6 @@ module CHERI (C:Capability) : Memory = struct
 
   (* INTERNAL: storage_instance_id *)
   type storage_instance_id = N.num
-
-  (* INTERNAL: address *)
-  type address = N.num
 
   (* INTERNAL: provenance *)
   type provenance =
@@ -325,7 +322,7 @@ module CHERI (C:Capability) : Memory = struct
   (* INTERNAL: allocation *)
   type allocation = {
       prefix: Symbol.prefix;
-      base: address;
+      base: C.vaddr;
       size: N.num; (*TODO: this is probably unnecessary once we have the type *)
       ty: ctype option; (* None when dynamically allocated *)
       is_readonly: bool;
@@ -405,7 +402,7 @@ module CHERI (C:Capability) : Memory = struct
   type mem_state = {
       next_alloc_id: storage_instance_id;
       next_iota: symbolic_storage_instance_id;
-      last_address: address;
+      last_address: C.vaddr;
       allocations: allocation IntMap.t;
       (* this is only for PNVI-ae-udi *)
       iota_map: [ `Single of storage_instance_id | `Double of storage_instance_id * storage_instance_id ] IntMap.t;
@@ -415,7 +412,7 @@ module CHERI (C:Capability) : Memory = struct
       bytemap: AbsByte.t IntMap.t;
 
       dead_allocations: storage_instance_id list;
-      dynamic_addrs: address list;
+      dynamic_addrs: C.vaddr list;
       last_used: storage_instance_id option;
     }
 
@@ -437,7 +434,7 @@ module CHERI (C:Capability) : Memory = struct
 
   type footprint =
     (* base address, size *)
-    | FP of address * N.num
+    | FP of C.vaddr * N.num
 
   let check_overlap (FP (b1, sz1)) (FP (b2, sz2)) =
     if N.equal b1 b2 && N.equal sz1 sz2 then
@@ -542,7 +539,7 @@ module CHERI (C:Capability) : Memory = struct
 
   (* TODO: this is stupid, we need to allow the outside world to specify
      what memory ranges are in device memory *)
-  let device_ranges : (address * address) list =
+  let device_ranges : (C.vaddr * C.vaddr) list =
     (* TODO: these are some hardcoded ranges to match the Charon tests... *)
     (* NOTE: these two ranges only have 4 bytes (e.g. one int) *)
     [ (N.of_int64 0x40000000L, N.of_int64 0x40000004L)
@@ -1103,6 +1100,7 @@ module CHERI (C:Capability) : Memory = struct
 
 
   (* BEGIN DEBUG *)
+  (*
   let dot_of_mem_state st =
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
@@ -1123,11 +1121,12 @@ module CHERI (C:Capability) : Memory = struct
     prerr_endline "digraph G{";
     List.iter prerr_endline xs;
     prerr_endline "}"
+   *)
   (* END DEBUG *)
 
 
   (* TODO: this module should be made parametric in this function (i.e. the allocator should be impl-def) *)
-  let allocator (size: N.num) (align: N.num) : (storage_instance_id * address) memM =
+  let allocator (size: N.num) (align: N.num) : (storage_instance_id * C.vaddr) memM =
     get >>= fun st ->
     let alloc_id = st.next_alloc_id in
     begin
@@ -1180,7 +1179,7 @@ module CHERI (C:Capability) : Memory = struct
          )
     end >>= fun () ->
     (* memory allocation on stack *)
-    return (PV (Prov_some alloc_id, PVconcrete addr))
+    return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size)))
 
   let update_prefix (pref, mval) =
     match mval with
