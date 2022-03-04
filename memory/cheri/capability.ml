@@ -41,6 +41,9 @@ module type Cap_permission = sig
 
   (* null permission *)
   val perm_p0: t
+  (* permissions for newly allocated region *)
+  val perm_alloc: t
+
 end
 
 module type Capability =
@@ -81,6 +84,9 @@ module type Capability =
 
     (* Null capability *)
     val cap_c0: t
+
+    (* Capability for newly allocated region *)
+    val alloc_cap: vaddr -> vaddr -> t
 
     (* Due to encoding, not all capabilities with large bounds have a
        contiguous representable region. This representability check is
