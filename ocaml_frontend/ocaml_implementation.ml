@@ -227,12 +227,15 @@ module MorelloImpl = struct
   let alignof_pointer =
     Some 16
 
+  let alignof_ity = function
+    | Signed Intptr_t
+    | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
+
   let sizeof_ity = function
     | Signed Intptr_t
-    | Unsigned Intptr_t ->
-        None
-    | ity ->
-        DefaultImpl.sizeof_ity ity
+    | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
 end
 
 
