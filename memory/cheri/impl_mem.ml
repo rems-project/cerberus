@@ -1431,7 +1431,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
              | false ->
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
-                do_load None addr
+                (* TODO: before calling this, peroform capability
+                   bounds, permissions, and validity checks *)
+                do_load None (C.cap_get_value addr)
        end
 
     (* PNVI-ae-udi *)
@@ -1457,7 +1459,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                             end
                        end in
        resolve_iota precondition iota >>= fun alloc_id ->
-       do_load (Some alloc_id) addr
+       (* TODO: before calling this, peroform capability
+          bounds, permissions, and validity checks *)
+       do_load (Some alloc_id) (C.cap_get_value addr)
 
     | (Prov_some alloc_id, PVconcrete addr) ->
        is_dead alloc_id >>= begin function
@@ -1477,7 +1481,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                       | true ->
                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                       | false ->
-                         do_load (Some alloc_id) addr
+                         (* TODO: before calling this, peroform capability
+                            bounds, permissions, and validity checks *)
+                         do_load (Some alloc_id) (C.cap_get_value addr)
                 end
        end
 
@@ -1523,7 +1529,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
                | true ->
-                  do_store None addr
+                  (* TODO: before calling this, peroform capability
+                     bounds, permissions, and validity checks *)
+                  do_store None (C.cap_get_value addr)
          end
 
       (* PNVI-ae-udi *)
@@ -1547,7 +1555,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                          return `OK
                 end in
          resolve_iota precondition iota >>= fun alloc_id ->
-         do_store (Some alloc_id) addr >>= fun fp ->
+         (* TODO: before calling this, peroform capability
+            bounds, permissions, and validity checks *)
+         do_store (Some alloc_id) (C.cap_get_value addr) >>= fun fp ->
          begin if is_locking then
                  Eff.update (fun st ->
                      { st with allocations=
@@ -1574,7 +1584,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                           | true ->
                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                           | false ->
-                             do_store (Some alloc_id) addr >>= fun fp ->
+                             (* TODO: before calling this, peroform capability
+                                bounds, permissions, and validity checks *)
+                             do_store (Some alloc_id) (C.cap_get_value addr) >>= fun fp ->
                              if is_locking then
                                Eff.update (fun st ->
                                    { st with allocations=
