@@ -1927,55 +1927,63 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
 
 
   (* _ is integer type *)
-  let ptrfromint _ ref_ty (IV (prov, n)) =
+  let ptrfromint int_ty ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD §6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
           "implementation defined cast from integer to pointer"
         );
-    let n =
-      let (min, max) = match (Ocaml_implementation.get ()).sizeof_pointer with
-        | Some sz ->
-           let open Nat_big_num in
-           (of_int 0, sub (pow_int (of_int 2) (8*sz)) (of_int 1))
-        | None ->
-           failwith "the concrete memory model requires a complete implementation sizeof POINTER" in
-      (* wrapI *)
-      let dlt = N.succ (N.sub max min) in
-      let r = N.integerRem_f n dlt in
-      if N.less_equal r max then
-        r
-      else
-        N.sub r dlt in
-    if is_PNVI () then
-      (* TODO: device memory? *)
-      if N.equal n N.zero then
-        return (PV (Prov_none, PVnull ref_ty))
-      else
-        get >>= fun st ->
-        begin match find_overlaping st n with
-        | `NoAlloc ->
-           return Prov_none
-        | `SingleAlloc alloc_id ->
-           return (Prov_some alloc_id)
-        | `DoubleAlloc alloc_ids ->
-           add_iota alloc_ids >>= fun iota ->
-           return (Prov_symbolic iota)
-        end >>= fun prov ->
-        (* cast int to pointer *)
-        return (PV (prov, PVconcrete n))
-    else
-      match prov with
-      | Prov_none ->
-         (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-         if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
-           return (PV (Prov_device, PVconcrete n))
-         else if N.equal n N.zero then
-           return (PV (Prov_none, PVnull ref_ty))
+
+    match int_ty with
+    | Ctype.(Unsigned Intptr_t)| Ctype.(Signed Intptr_t) ->
+       begin
+         let n =
+           let (min, max) = match (Ocaml_implementation.get ()).sizeof_pointer with
+             | Some sz ->
+                let open Nat_big_num in
+                (of_int 0, sub (pow_int (of_int 2) (8*sz)) (of_int 1))
+             | None ->
+                failwith "the concrete memory model requires a complete implementation sizeof POINTER" in
+           (* wrapI *)
+           let dlt = N.succ (N.sub max min) in
+           let r = N.integerRem_f n dlt in
+           if N.less_equal r max then
+             r
+           else
+             N.sub r dlt in
+         if is_PNVI () then
+           (* TODO: device memory? *)
+           if N.equal n N.zero then
+             return (PV (Prov_none, PVnull ref_ty))
+           else
+             get >>= fun st ->
+             begin match find_overlaping st n with
+             | `NoAlloc ->
+                return Prov_none
+             | `SingleAlloc alloc_id ->
+                return (Prov_some alloc_id)
+             | `DoubleAlloc alloc_ids ->
+                add_iota alloc_ids >>= fun iota ->
+                return (Prov_symbolic iota)
+             end >>= fun prov ->
+             (* cast int to pointer *)
+             return (PV (prov, PVconcrete n))
          else
-           return (PV (Prov_none, PVconcrete n))
-      | _ ->
-         return (PV (prov, PVconcrete n))
+           match prov with
+           | Prov_none ->
+              (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+              if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+                return (PV (Prov_device, PVconcrete n))
+              else if N.equal n N.zero then
+                return (PV (Prov_none, PVnull ref_ty))
+              else
+                return (PV (Prov_none, PVconcrete n))
+           | _ ->
+              return (PV (prov, PVconcrete n))
+       end
+    | _ -> failwith "integer to pointer cast for unsupported integer type"
+
+
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
