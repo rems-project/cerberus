@@ -60,6 +60,7 @@ type token =
   | AT
 
   | EACH
+  | FOR
 
   | WHERE
   | WITH

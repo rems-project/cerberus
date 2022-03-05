@@ -138,6 +138,16 @@ module PageAlloc = struct
       in
       let qarg = Some 0 in
 
+
+      let two_to_the_order page = 
+        let o = page %. "order" in
+        let rec make i = 
+          if i >= mMAX_ORDER then default_ Integer else
+            ite_ (o %== int_ i, exp_ (int_ 2, int_ i), make (i + 1))
+        in
+        make 0
+      in
+
       let body = 
         let__ ("page_pointer", arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index)) (fun page_pointer ->
         let__ ("pool", pool) (fun pool ->
@@ -170,8 +180,10 @@ module PageAlloc = struct
                  next %!= self_node_pointer,
                  and_ [(page %. "refcount") %== int_ 0;
                        (page %. "order") %!= int_ hHYP_NO_ORDER;
+                       (rem_ (page_index, two_to_the_order page)) %== int_ 0;
                    ]
-            ));
+               )
+            );
             (impl_ (
                  (page %. "order") %== int_ hHYP_NO_ORDER,
                  (page %. "refcount") %== (int_ 0))
