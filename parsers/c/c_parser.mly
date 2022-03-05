@@ -854,7 +854,7 @@ type_specifier_unique:
     { spec }
 | spec= typedef_name_spec
     { spec }
-| TYPEOF expr= unary_expression
+| TYPEOF LPAREN expr= unary_expression RPAREN
     { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_expr expr) }
 | TYPEOF LPAREN ty= type_name RPAREN
     { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_type ty) }
