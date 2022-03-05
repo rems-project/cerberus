@@ -1,7 +1,7 @@
 
 module type Cap_permission = sig
   type t
-  (* Number of user-defined flags *)
+  (** the number of user-defined flags *)
   val user_perms_len: int
 
   (* it is a permssion in RISV but in Morello spec while it is
@@ -20,7 +20,7 @@ module type Cap_permission = sig
   val perm_is_system_access: t -> bool
   val perm_is_unseal: t -> bool
 
-  (* User-defined permissions *)
+  (** User-defined permissions *)
   val get_user_perms: t -> bool list (* TODO: enforce user_perms_len? *)
 
   (* Clearing permissions *)
@@ -36,12 +36,12 @@ module type Cap_permission = sig
   val perm_clear_system_access: t -> t
   val perm_clear_unseal: t -> t
 
-  (* perform bitwise AND of user permissions *)
+  (** perform bitwise AND of user permissions *)
   val perm_and_user_perms: t -> bool list -> t
 
-  (* null permission *)
+  (** null permission *)
   val perm_p0: t
-  (* permissions for newly allocated region *)
+  (** permissions for newly allocated region *)
   val perm_alloc: t
 
 end
@@ -51,18 +51,18 @@ module type Capability =
     module P: Cap_permission
 
     type t
-    (* vaddr_t: This is a new integer type introduced by CHERI C and
-       should be used to hold virtual addresses. vaddr_t should not be
-       directly cast to a pointer type for dereference; instead, it must
-       be combined with an existing valid capability to the address space
-       to generate a dereferenceable pointer. *)
+    (** This is a new integer type introduced by CHERI C and should be
+        used to hold virtual addresses. vaddr_t should not be directly
+        cast to a pointer type for dereference; instead, it must be
+        combined with an existing valid capability to the address
+        space to generate a dereferenceable pointer. *)
     type vaddr
     type otype
 
     type vaddr_interval
     type cap_seal_t
 
-    (* Number of user-defined flags *)
+    (** the number of user-defined flags *)
     val cap_flags_len: int
 
     val cap_is_valid : t -> bool
@@ -71,39 +71,39 @@ module type Capability =
 
     val cap_get_obj_type : t -> otype
 
-    (* Returns either inclusive bounds for covered  memory region *)
+    (** Returns either inclusive bounds for covered  memory region *)
     val cap_get_bounds: t -> vaddr_interval
 
-    (* Get informaiton about "seal" on this capability *)
+    (** Get informaiton about "seal" on this capability *)
     val cap_get_seal: t -> cap_seal_t
 
-    (* user-defined flags *)
+    (** user-defined flags *)
     val get_flags: t -> bool list (* TODO: enforce cap_flags_len? *)
 
     val get_perms: t -> P.t
 
-    (* Null capability *)
+    (** Null capability *)
     val cap_c0: t
 
-    (* Capability for newly allocated region *)
+    (** Capability for newly allocated region *)
     val alloc_cap: vaddr -> vaddr -> t
 
-    (* Due to encoding, not all capabilities with large bounds have a
-       contiguous representable region. This representability check is
-       applied when manipulating a Capability Value
+    (** Due to encoding, not all capabilities with large bounds have a
+        contiguous representable region. This representability check is
+        applied when manipulating a Capability Value
 
-       For example, in Morello: if modifying a Capability Value causes
-       the bounds to change, a representabilty check fails. Some
-       versions of the check may fail in additional cases.
+        For example, in Morello: if modifying a Capability Value causes
+        the bounds to change, a representabilty check fails. Some
+        versions of the check may fail in additional cases.
 
-       See: `CapIsRepresentable` in Morello *)
+        See: `CapIsRepresentable` in Morello *)
     val cap_vaddr_representable: t -> vaddr -> bool
 
-    (* Whenever given bounds could be encoded exactly. Due to
-       encoding issues not all bounds could be reprsented exactly
-       (e.g. due to alignment).
+    (** Whenever given bounds could be encoded exactly. Due to
+        encoding issues not all bounds could be reprsented exactly
+        (e.g. due to alignment).
 
-       See: `CapIsRepresentable` in Morello *)
+        See: `CapIsRepresentable` in Morello *)
     val cap_bounds_representable_exactly: t -> vaddr_interval -> bool
 
     (* Operations on capabilities.
@@ -112,87 +112,87 @@ module type Capability =
        - Section "2.6 Manipulating Capabilities" in Morello spec.
      *)
 
-    (* AKA "clear tag" *)
+    (** AKA "clear tag" *)
     val cap_invalidate : t -> t
 
     (* --- Monotonic manipulation -- *)
 
-    (* Modifying the Capability Value (vaddress of object type)
+    (** Modifying the Capability Value (vaddress of object type)
 
-       Related instructions:
-       - CFromPtr in RISC V
-       - CSetVaddr in RISC V
-       - SCVALUE in Morello
-       - CCopyType in RISC V
-       - CPYTYPE in Morello
+        Related instructions:
+        - CFromPtr in RISC V
+        - CSetVaddr in RISC V
+        - SCVALUE in Morello
+        - CCopyType in RISC V
+        - CPYTYPE in Morello
      *)
     val cap_set_value: t -> vaddr -> t
 
-    (* Reducing the Capability Bounds (with rounding)
+    (** Reducing the Capability Bounds (with rounding)
 
-       Related instructions:
-       - CSetBounds in RISCV
-       - SCBNDS (immediate) in Morello?
+        Related instructions:
+        - CSetBounds in RISCV
+        - SCBNDS (immediate) in Morello?
      *)
     val cap_narrow_bounds: t -> vaddr_interval -> t
 
-    (* Reducing the Capability Bounds (exact)
+    (** Reducing the Capability Bounds (exact)
 
-       Related instructions:
-       - CSetBoundsExact in RISCV
-       - SCBNDSE (immediate) in Morello?
+        Related instructions:
+        - CSetBoundsExact in RISCV
+        - SCBNDSE (immediate) in Morello?
      *)
     val cap_narrow_bounds_exact: t -> vaddr_interval -> t
 
-    (* Reducing the Capability Permissions
+    (** Reducing the Capability Permissions
 
-       Related instructions:
-       - CAndPerm in RISC V
-       - CLRPERM in Morello
+        Related instructions:
+        - CAndPerm in RISC V
+        - CLRPERM in Morello
      *)
     val cap_narrow_perms: t -> P.t -> t
 
     (* Sealing operations *)
 
-    (* Regular sealing (with object type)
+    (** Regular sealing (with object type)
 
-       Related instructions:
-       - CSeal in RISC V.
-       - SEAL (capabilitiy) in Morello
+        Related instructions:
+        - CSeal in RISC V.
+        - SEAL (capabilitiy) in Morello
      *)
     val cap_seal: t -> t -> t
 
-    (* Seal Entry
-       - CSealEntry in RISC V.
-       - SEAL (immediatete) in Morello
+    (** Seal Entry
+        - CSealEntry in RISC V.
+        - SEAL (immediatete) in Morello
      *)
     val cap_seal_entry: t -> t
 
-    (* Seal Indirect Entry
-       - CInvokeInd proposed but not implmented RISC V
-       - SEAL (immediatete) in Morello
+    (** Seal Indirect Entry
+        - CInvokeInd proposed but not implmented RISC V
+        - SEAL (immediatete) in Morello
      *)
     val cap_seal_indirect_entry: t -> t
 
-    (* Seal Entry Pair
-       - proposed but not implmented in in RISC V.
-       - SEAL (immediatete) in Morello
+    (** Seal Entry Pair
+        - proposed but not implmented in in RISC V.
+        - SEAL (immediatete) in Morello
      *)
     val cap_seal_indirect_entry_pair: t -> t
 
-    (* Modifying the Capability Flags
-       - BICFLGS in Morello
-       - EORFLGS in Morello
-       - ORRFLGS in Morello
-       - SCFLGS in Morello
+    (** Modifying the Capability Flags
+        - BICFLGS in Morello
+        - EORFLGS in Morello
+        - ORRFLGS in Morello
+        - SCFLGS in Morello
      *)
     val cap_set_flags: t -> bool list -> t
 
     (* --- Controlled non-monotonic manipulation --  *)
 
-    (* Unsealing a capability using an unsealing operation.
-       - CUnseal in RISCV
-       - UNSEAL in Morello
+    (** Unsealing a capability using an unsealing operation.
+        - CUnseal in RISCV
+        - UNSEAL in Morello
      *)
     val cap_unseal: t -> t -> t
 
@@ -207,11 +207,14 @@ module type Capability =
 
     (* --- Equality --- *)
 
-    (* exact equality. compares capability metadata as well as value *)
+    (** exact equality. compares capability metadata as well as value *)
     val eq: t -> t -> bool
 
-    (* compare value only ignoring metadata *)
+    (** compare value only ignoring metadata. [value_compare x y]
+        returns [0] if [cap_get_value x] is equal to [cap_get_value
+        y], a negative integer if [cap_get_value x] is less than
+        [cap_get_value y], and a positive integer if [cap_get_value x]
+        is greater than [cap_get_value y].  *)
     val value_compare: t -> t -> int
-
 
   end
