@@ -212,7 +212,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
-        Tags.set_tagDefs tagDefs;
+        (* Tags.set_tagDefs "Pipeline.core_frontend" tagDefs; *)
         return {
            Core.main=   Some sym_main;
            Core.tagDefs= tagDefs;
