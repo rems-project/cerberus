@@ -1761,15 +1761,15 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
       match ptrval1, ptrval2 with
       | PV (_, PVconcrete addr1), PV (_, PVconcrete addr2) ->
-         valid_postcond addr1 addr2
+         valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
       | _ ->
          error_postcond
     else match ptrval1, ptrval2 with
          | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2)) ->
             if N.equal alloc_id1 alloc_id2 then
               get_allocation alloc_id1 >>= fun alloc ->
-              if precond alloc addr1 addr2 then
-                valid_postcond addr1 addr2
+              if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
+                valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
               else
                 error_postcond
             else
@@ -1786,8 +1786,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                                    | `Single alloc_id ->
                                       if N.equal alloc_id alloc_id' then
                                         get_allocation alloc_id >>= fun alloc ->
-                                        if precond alloc addr1 addr2 then
-                                          valid_postcond addr1 addr2
+                                        if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
+                                          valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
                                         else
                                           error_postcond
                                       else
@@ -1795,11 +1795,11 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                                    | `Double (alloc_id1, alloc_id2) ->
                                       if N.equal alloc_id1 alloc_id' || N.equal alloc_id2 alloc_id' then
                                         get_allocation alloc_id' >>= fun alloc ->
-                                        if precond alloc addr1 addr2 then
+                                        if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
                                           update begin fun st ->
                                             {st with iota_map= IntMap.add iota (`Single alloc_id') st.iota_map }
                                             end >>= fun () ->
-                                          valid_postcond addr1 addr2
+                                          valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
                                         else
                                           error_postcond
                                       else
@@ -1843,10 +1843,10 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                  {st with iota_map= IntMap.add iota1 (`Single alloc_id')
                                       (IntMap.add iota2 (`Single alloc_id') st.iota_map) }
                  end >>= fun () ->
-               valid_postcond addr1 addr2
+               valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
             | `Double (alloc_id1, alloc_id2) ->
-               if N.equal addr1 addr2 then
-                 valid_postcond addr1 addr2 (* zero *)
+               if C.value_compare addr1 addr2 == 0 then
+                 valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2) (* zero *)
                else
                  fail (MerrOther "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
             end
