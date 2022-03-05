@@ -1645,7 +1645,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        return false
     | (PVconcrete addr1, PVconcrete addr2) ->
        if Switches.(has_switch SW_strict_pointer_equality) then
-         return (Nat_big_num.equal addr1 addr2)
+         return (C.value_compare addr1 addr2 == 0)
        else begin match (prov1, prov2) with
             | (Prov_none, Prov_none) ->
                return true
@@ -1667,11 +1667,11 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                return false
             end >>= begin function
                       | true ->
-                         return (Nat_big_num.equal addr1 addr2)
+                         return (C.value_compare addr1 addr2 == 0)
                       | false ->
                          Eff.msum "pointer equality"
                            [ ("using provenance", return false)
-                           ; ("ignoring provenance", return (Nat_big_num.equal addr1 addr2)) ]
+                           ; ("ignoring provenance", return (C.value_compare addr1 addr2 == 0)) ]
                     end
 
   let ne_ptrval ptrval1 ptrval2 =
@@ -1684,12 +1684,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when N.equal alloc1 alloc2 ->
-            return (Nat_big_num.compare addr1 addr2 == -1)
+            return (C.value_compare addr1 addr2 < 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         return (Nat_big_num.compare addr1 addr2 == -1)
+         return (C.value_compare addr1 addr2 < 0)
     | (PVnull _, _)
       | (_, PVnull _) ->
        fail (MerrWIP "lt_ptrval ==> one null pointer")
@@ -1702,12 +1702,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
-            return (Nat_big_num.compare addr1 addr2 == 1)
+            return (C.value_compare addr1 addr2 > 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         return (Nat_big_num.compare addr1 addr2 == 1)
+         return (C.value_compare addr1 addr2 > 0)
     | _ ->
        fail (MerrWIP "gt_ptrval")
 
@@ -1717,14 +1717,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
-            let cmp = Nat_big_num.compare addr1 addr2 in
-            return (cmp = -1 || cmp = 0)
+            return (C.value_compare addr1 addr2 <= 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         let cmp = Nat_big_num.compare addr1 addr2 in
-         return (cmp = -1 || cmp = 0)
+         return (C.value_compare addr1 addr2 <= 0)
     | _ ->
        fail (MerrWIP "le_ptrval")
 
@@ -1734,14 +1732,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
-            let cmp = Nat_big_num.compare addr1 addr2 in
-            return (cmp = 1 || cmp = 0)
+            return (C.value_compare addr1 addr2 >= 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         let cmp = Nat_big_num.compare addr1 addr2 in
-         return (cmp = 1 || cmp = 0)
+         return (C.value_compare addr1 addr2 >= 0)
     | _ ->
        fail (MerrWIP "ge_ptrval")
 
