@@ -9,5 +9,5 @@
 
 (ocamllex c_lexer)
 (menhir
- (flags (--external-tokens Tokens))
+ (flags (--external-tokens Tokens --explain))
  (modules c_parser))

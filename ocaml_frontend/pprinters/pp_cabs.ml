@@ -324,7 +324,7 @@ and pp_cabs_assignment_operator = function
   | Assign_Bor ->
       !^ "|="
 
-and dtree_of_declaration = function
+and dtree_of_cabs_declaration = function
   | Declaration_base (attrs, specifs, []) ->
       with_attributes attrs begin
         Dnode (pp_decl_ctor "Declaration_base", [dtree_of_specifiers specifs])
@@ -595,7 +595,7 @@ let rec dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
   | CabsSblock ss ->
       Dnode ( pp_stmt_ctor "CabsSblock", (List.map dtree_of_cabs_statement ss) )
   | CabsSdecl decl ->
-      Dnode ( pp_stmt_ctor "CabsSdecl", [dtree_of_declaration decl] )
+      Dnode ( pp_stmt_ctor "CabsSdecl", [dtree_of_cabs_declaration decl] )
   | CabsSnull ->
       Dleaf (pp_stmt_ctor "CabsSnull")
   | CabsSexpr e ->
@@ -637,7 +637,7 @@ and dtree_of_for_clause = function
  | FC_expr e ->
      Dnode (pp_stmt_ctor "FC_expr", [dtree_of_cabs_expression e])
  | FC_decl decl ->
-     Dnode (pp_stmt_ctor "FC_decl", [dtree_of_declaration decl])
+     Dnode (pp_stmt_ctor "FC_decl", [dtree_of_cabs_declaration decl])
 
 
 let dtree_of_function_definition (FunDef (_, attrs, specifs, decltor, stmt)) =
@@ -647,12 +647,15 @@ let dtree_of_function_definition (FunDef (_, attrs, specifs, decltor, stmt)) =
           ; dtree_of_declarator decltor
           ; dtree_of_cabs_statement stmt ] )
 
-
 let dtree_of_external_declaration = function
   | EDecl_func fdef ->
       Dnode (pp_decl_ctor "EDecl_func", [dtree_of_function_definition fdef])
   | EDecl_decl decl ->
-      Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_declaration decl])
+      Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
+(* BEGIN CN *)
+  | EDecl_predCN pred ->
+      Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_predicate pred])
+(* END CN *)
 
 let filter_external_decl =
   let pred = function

@@ -1,0 +1,99 @@
+open import Pervasives
+import Symbol Ctype
+
+type cn_base_type 'a =
+  | CN_unit
+  | CN_bool
+  | CN_integer
+  | CN_real
+  | CN_loc
+  | CN_struct of 'a
+  | CN_map of cn_base_type 'a * cn_base_type 'a
+  | CN_list of cn_base_type 'a
+  | CN_tuple of list (cn_base_type 'a)
+  | CN_set of cn_base_type 'a
+
+type cn_binop =
+  | CN_add
+  | CN_sub
+  | CN_mul
+  | CN_div
+  | CN_equal
+  | CN_inequal
+  | CN_lt
+  | CN_le
+  | CN_gt
+  | CN_ge
+  | CN_or
+  | CN_and
+
+(*
+  | Exponentiation of term * term
+  | Remainder of term * term
+  | FlipBit of {bit : term; t : term}
+  | ITE of term * term * term
+  | Not of term
+  | IntegerToPointerCast of term
+  | PointerToIntegerCast of term
+*)
+
+
+
+type cn_expr 'a =
+  | CNExpr_NULL
+  | CNExpr_var of 'a
+  | CNExpr_memberof of 'a * Symbol.identifier
+  | CNExpr_binop of cn_binop * cn_expr 'a * cn_expr 'a
+
+type cn_pred 'a 'ty =
+  | CN_owned of 'ty
+  | CN_block of 'ty
+  | CN_named of 'a
+
+type cn_resource 'a 'ty =
+  | CN_pred of cn_pred 'a 'ty * list (cn_expr 'a)
+  | CN_each of 'a * cn_base_type 'a * cn_expr 'a * cn_pred 'a 'ty * list (cn_expr 'a)
+
+type cn_clause 'a 'ty =
+  | CN_letResource of 'a * cn_resource 'a 'ty * cn_clause 'a 'ty
+  | CN_letExpr of 'a * cn_expr 'a * cn_clause 'a 'ty
+  | CN_assert of cn_expr 'a * cn_clause 'a 'ty
+  | CN_return of Loc.t * list ('a * cn_expr 'a)
+
+type cn_clauses 'a 'ty =
+  | CN_clause of cn_clause 'a 'ty
+  | CN_if of cn_expr 'a * cn_clause 'a 'ty * cn_clauses 'a 'ty
+
+type cn_predicate 'a 'ty = <|
+  cn_pred_name: 'a;
+  cn_pred_oargs: list (cn_base_type 'a * 'a);
+  cn_pred_iargs: list (cn_base_type 'a * 'a);
+  cn_pred_clauses: cn_clauses 'a 'ty;
+|>
+
+type cn_namespace =
+  | CN_predicate
+  | CN_resource
+  | CN_logical
+  | CN_oarg
+
+instance (Show cn_namespace)
+  let show ns =
+    match ns with
+      | CN_predicate -> "predicate"
+      | CN_resource  -> "resource"
+      | CN_logical   -> "logical"
+      | CN_oarg      -> "oarg"
+    end
+end
+
+type cn_error =
+  | CNErr_lowercase_predicate of Symbol.identifier
+  | CNErr_predicate_redeclaration
+  | CNErr_unknown_predicate
+  | CNErr_invalid_tag
+  | CNErr_unknown_identifier of cn_namespace * Symbol.identifier
+  | CNErr_missing_oarg of Symbol.sym
+
+type cn_typing_error =
+  | CNErr_typing_TODO

@@ -9,6 +9,8 @@ import Map_extra Ctype
 
 import Mem
 
+import Cn_desugaring
+
 module A      = AilSyntax
 
 
@@ -252,6 +254,10 @@ type state = <|
   current_return_type : Ctype.ctype;
   
   loop_attributes: Annot.loop_attributes;
+
+  (* BEGIN CN *)
+  cn_state: Cn_desugaring.cn_desugaring_state;
+  (* END CN *)
 
   (* TODO TODO TODO *)
   core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
@@ -500,7 +506,9 @@ let initial_state core_eval_stuff = <|
   used_identifier= [];
   current_return_type= Ctype.Ctype [] Ctype.Void; (* TODO: this is morally wrong *)
 
-  loop_attributes = Map.empty;
+  loop_attributes= Map.empty;
+
+  cn_state= Cn_desugaring.initial_cn_desugaring_state;
   
   core_eval_stuff= core_eval_stuff;
 |>
@@ -719,6 +727,46 @@ let resolve_typedef sym =
     end
   )
 
+
+(* BEGIN CN *)
+val liftCnDesug: forall 'a. Cn_desugaring.cn_desugM 'a -> desugM 'a
+let liftCnDesug mk =
+  begin fun st ->
+    Exception.bind (State_exception.run mk st.cn_state)
+      (fun (ret, cn_st') -> Exception.return (ret, <| st with cn_state= cn_st' |>))
+  end >>= fun ret -> (* (ret, st') -> *)
+  (* State_exception.put st' >>= fun () -> *)
+  return ret
+
+
+let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident)
+let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident)
+(* let inline  fetch_oarg acc ident = function *)
+let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs)
+
+let register_cn_predicate ident mk =
+  State_exception.get >>= fun st ->
+  match Map.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
+    | Nothing ->
+        register_cn_ident Cn.CN_predicate ident >>= fun sym ->
+        mk >>= fun (oargs, iargs, clauses) ->
+        let pred = <|
+          Cn.cn_pred_name= sym;
+          Cn.cn_pred_oargs= oargs;
+          Cn.cn_pred_iargs= iargs;
+          Cn.cn_pred_clauses= clauses;
+        |> in
+        liftCnDesug begin
+          State_exception.update (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_predicates= Map.insert ident (sym, pred) cn_st'.Cn_desugaring.cn_predicates;
+                           Cn_desugaring.cn_idents= Map.insert (Cn.CN_predicate, ident) sym st.cn_state.Cn_desugaring.cn_idents;
+                           Cn_desugaring.cn_current_scope= Map.empty; |>
+          )
+        end
+    | Just _ ->
+        fail (Loc.locOf ident) (Errors.Desugar_CN Cn.CNErr_predicate_redeclaration)
+  end
+(* END CN *)
 
 
 val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
@@ -1881,6 +1929,7 @@ let extract_program startup_str =
     A.extern_idmap= extern_idmap;
     A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
     A.loop_attributes = st.loop_attributes;
+    A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
    |>)
 
 
@@ -1956,7 +2005,8 @@ let get_sigma_sofar =
        A.extern_idmap= Map.empty;
        A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
        A.loop_attributes= st.loop_attributes;
-     |>
+       A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
+      |>
   )
 
 
@@ -1982,8 +2032,10 @@ let cabs_to_ail_effect_is_incomplete ty =
     A.extern_idmap= Map.empty;
     A.typedef_attributes= Map.empty;
     A.loop_attributes= Map.empty;
+    A.cn_predicates= [];
   |> in
   return (AilTypesAux.is_incomplete fake_ail_sigma ty)
 let inline is_incomplete = cabs_to_ail_effect_is_incomplete
+
 
 
