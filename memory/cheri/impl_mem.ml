@@ -1870,7 +1870,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
             Printf.printf "addr: %s\n" (Nat_big_num.to_string addr);
             Printf.printf "align: %d\n" (alignof ref_ty);
            *)
-          return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
+          return (N.(equal (modulus (C.cap_get_value addr) (of_int (alignof ref_ty))) zero))
        end
 
   (* Following §6.5.3.3, footnote 102) *)
