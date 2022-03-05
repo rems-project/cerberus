@@ -67,6 +67,7 @@ rule main = parse
   | '@'   { T.AT }
 
   | "each" {T.EACH }
+  | "for" {T.FOR }
 
   | "where" {T.WHERE }
   | "with" {T.WITH }

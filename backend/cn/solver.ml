@@ -553,10 +553,10 @@ module ReduceQuery = struct
 
   let plain it = 
     match it with
-    | IT (Bool_op (EachI ((i1, i_s, i2), body)), _) ->
-       let i = sym_ (i_s, Integer) in
-       let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in
-       forall (i_s, Integer) (impl_ (condition, body))
+    (* | IT (Bool_op (EachI ((i1, i_s, i2), body)), _) -> *)
+    (*    let i = sym_ (i_s, Integer) in *)
+    (*    let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in *)
+    (*    forall (i_s, Integer) (impl_ (condition, body)) *)
     | _ -> 
        { lc = it;
          oq = None }

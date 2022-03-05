@@ -372,39 +372,45 @@ let resolve_index_term loc
       (layouts : Memory.struct_decls)
       (default_mapping_name : string)
       (mappings : mapping StringMap.t)
-      (oquantifier : (string * (Sym.t * BT.t)) option)
+      (quantifiers : (string * (Sym.t * BT.t)) list)
       (term: Ast.term) 
         : (IT.typed * Sctypes.t option, type_error) m =
-  let lookup term mapping = 
-    match term, oquantifier with
-    | Var name, Some (name', (s, bt)) when String.equal name name' -> 
-       return (sym_ (s, bt), None)
+  let lookup term mapping quantifiers = 
+    let search () =
+      let found = List.find_opt (fun {path;_} -> Ast.equal path term) mapping in
+      match found with
+      | Some {it; o_sct; _} -> 
+         return (it, o_sct)
+      | None -> 
+         fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")}
+    in
+    match term with
+    | Var name ->
+       begin match List.assoc_opt String.equal name quantifiers with
+       | Some (s, bt) -> return (sym_ (s, bt), None)
+       | None -> search ()
+       end
     | _ ->
-       let found = List.find_opt (fun {path;_} -> Ast.equal path term) mapping in
-       match found with
-       | Some {it; o_sct; _} -> 
-          return (it, o_sct)
-       | None -> 
-          fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")}
+       search ()
   in
-  let rec resolve (term : Ast.term) mapping 
+  let rec resolve (term : Ast.term) mapping quantifiers
         : (IT.typed * Sctypes.t option, type_error) m =
     match term with
     | Addr name ->
-       lookup (Addr name) mapping
+       lookup (Addr name) mapping quantifiers
     | Var ln ->
-       lookup (Var ln) mapping
+       lookup (Var ln) mapping quantifiers
     | Pointee it ->
-       lookup (Pointee it) mapping
+       lookup (Pointee it) mapping quantifiers
     | PredOutput (name, oarg) ->
-       lookup (PredOutput (name, oarg)) mapping
+       lookup (PredOutput (name, oarg)) mapping quantifiers
     | Bool b -> 
        return (IT (Lit (IT.Bool b), BT.Bool), None)
     | Integer i -> 
        return (IT (Lit (IT.Z i), BT.Integer), None)
     | Addition (it, it') -> 
-       let@ (it, oct) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, oct) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let@ t = match IT.bt it with
          | Loc -> 
             let err = "pointer addition not allowed in specifications: "^
@@ -415,8 +421,8 @@ let resolve_index_term loc
        in
        return (t, None)
     | Subtraction (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let@ t = match IT.bt it with
          | Loc -> 
             let err = "pointer subtraction not allowed in specifications: "^
@@ -427,84 +433,84 @@ let resolve_index_term loc
        in
        return (t, None)
     | Multiplication (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let t = IT (Arith_op (Mul (it, it')), IT.bt it) in
        return (t, None)
     | Division (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Arith_op (Div (it, it')), IT.bt it), None)
     | Exponentiation (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        return (exp_ (it, it'), None)
     | Remainder (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Arith_op (Rem (it, it')), IT.bt it), None)
     | Equality (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Bool_op (EQ (it, it')), Bool), None)
     | Inequality (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), Bool))), Bool), None)
     | FlipBit {bit; t} ->
-       let@ (bit, _) = resolve bit mapping in
-       let@ (t, _) = resolve t mapping in
+       let@ (bit, _) = resolve bit mapping quantifiers in
+       let@ (t, _) = resolve t mapping quantifiers in
        return (IT (Arith_op (FlipBit {bit; t}), Integer), None)
     | ITE (it', it'', it''') ->
-       let@ (it', _) = resolve it' mapping in
-       let@ (it'', _) = resolve it'' mapping in
-       let@ (it''', _) = resolve it''' mapping in
+       let@ (it', _) = resolve it' mapping quantifiers in
+       let@ (it'', _) = resolve it'' mapping quantifiers in
+       let@ (it''', _) = resolve it''' mapping quantifiers in
        return (IT (Bool_op (ITE (it', it'', it''')), IT.bt it''), None)
     | Or (it', it'') ->
-       let@ (it', _) = resolve it' mapping in
-       let@ (it'', _) = resolve it'' mapping in
+       let@ (it', _) = resolve it' mapping quantifiers in
+       let@ (it'', _) = resolve it'' mapping quantifiers in
        return (IT (Bool_op (Or [it'; it'']), Bool), None)
     | And (it', it'') ->
-       let@ (it', _) = resolve it' mapping in
-       let@ (it'', _) = resolve it'' mapping in
+       let@ (it', _) = resolve it' mapping quantifiers in
+       let@ (it'', _) = resolve it'' mapping quantifiers in
        return (IT (Bool_op (And [it'; it'']), Bool), None)
     | Not it' ->
-       let@ (it', _) = resolve it' mapping in
+       let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Bool_op (Not it'), Bool), None)
     | LessThan (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let t = match IT.bt it with
          | Loc -> IT (Pointer_op (LTPointer (it, it')), Bool)
          | _ -> IT (Arith_op (LT (it, it')), Bool)
        in
        return (t, None)
     | GreaterThan (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let t = match IT.bt it with
          | Loc -> IT (Pointer_op (LTPointer (it', it)), Bool)
          | _ -> IT (Arith_op (LT (it', it)), Bool)
        in
        return (t, None)
     | LessOrEqual (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let t = match IT.bt it with
          | Loc -> IT (Pointer_op (LEPointer (it, it')), Bool)
          | _ -> IT (Arith_op (LE (it, it')), Bool)
        in
        return (t, None)
     | GreaterOrEqual (it, it') -> 
-       let@ (it, _) = resolve it mapping in
-       let@ (it', _) = resolve it' mapping in
+       let@ (it, _) = resolve it mapping quantifiers in
+       let@ (it', _) = resolve it' mapping quantifiers in
        let t = match IT.bt it with
          | Loc -> IT (Pointer_op (LEPointer (it', it)), Bool)
          | _ -> IT (Arith_op (LE (it', it)), Bool)
        in
        return (t, None)
     | Member (t, member) ->
-       let@ (st, _) = resolve t mapping in
+       let@ (st, _) = resolve t mapping quantifiers in
        let ppf () = Ast.Terms.pp false term in
        let@ tag = match IT.bt st with
          | Struct tag -> return tag
@@ -527,10 +533,10 @@ let resolve_index_term loc
        in
        return (IT (Struct_op (StructMember (st, member)), BT.of_sct sct), Some sct)
     | IntegerToPointerCast t ->
-       let@ (t, _) = resolve t mapping in
+       let@ (t, _) = resolve t mapping quantifiers in
        return (IT (Pointer_op (IntegerToPointerCast t), Loc), None)
     | PointerToIntegerCast t ->
-       let@ (t, _) = resolve t mapping in
+       let@ (t, _) = resolve t mapping quantifiers in
        return (IT (Pointer_op (PointerToIntegerCast t), Integer), None)
     | Null ->
        return (IT (Lit Null, BT.Loc), None)
@@ -558,23 +564,23 @@ let resolve_index_term loc
        in
        return (IT (Pointer_op (MemberOffset (tag, member)), BT.Integer), None)
     | CellPointer ((base, step), (from_index, to_index), pointer) ->
-       let@ (base, _) = resolve base mapping in
-       let@ (step, _) = resolve step mapping in
-       let@ (from_index, _) = resolve from_index mapping in
-       let@ (to_index, _) = resolve to_index mapping in
-       let@ (pointer, _) = resolve pointer mapping in
+       let@ (base, _) = resolve base mapping quantifiers in
+       let@ (step, _) = resolve step mapping quantifiers in
+       let@ (from_index, _) = resolve from_index mapping quantifiers in
+       let@ (to_index, _) = resolve to_index mapping quantifiers in
+       let@ (pointer, _) = resolve pointer mapping quantifiers in
        let t = cellPointer_ ~base ~step ~starti:from_index ~endi:to_index 
                  ~p:pointer in
        return (t, None)
     | Disjoint ((p1, sz1), (p2, sz2)) ->
-       let@ (p1, _) = resolve p1 mapping in
-       let@ (sz1, _) = resolve sz1 mapping in
-       let@ (p2, _) = resolve p2 mapping in
-       let@ (sz2, _) = resolve sz2 mapping in
+       let@ (p1, _) = resolve p1 mapping quantifiers in
+       let@ (sz1, _) = resolve sz1 mapping quantifiers in
+       let@ (p2, _) = resolve p2 mapping quantifiers in
+       let@ (sz2, _) = resolve sz2 mapping quantifiers in
        return (disjoint_ (p1, sz1) (p2, sz2), None)
     | App (t1, t2) ->
-       let@ (it1, _) = resolve t1 mapping in
-       let@ (it2, _) = resolve t2 mapping in
+       let@ (it1, _) = resolve t1 mapping quantifiers in
+       let@ (it2, _) = resolve t2 mapping quantifiers in
        begin match IT.bt it1 with
        | BT.Map (_, bt) -> 
           return ((map_get_ it1 it2), None)
@@ -590,7 +596,7 @@ let resolve_index_term loc
        in
        begin match StringMap.find_opt mapping_name mappings with
        | Some mapping -> 
-          resolve t mapping
+          resolve t mapping quantifiers
        | None ->
           fail {loc; msg = Generic (!^"label" ^^^ !^mapping_name ^^^ !^"does not apply")}
        end
@@ -600,11 +606,23 @@ let resolve_index_term loc
          then fail {loc; msg = Generic !^"Cannot use 'unchanged' together with '{_}@label' or other 'unchanged' expressions."}
          else return ()
        in
-       let@ (t_original, _) = resolve t (StringMap.find "start" mappings) in
-       let@ (t_new, _) = resolve t mapping in
+       let@ (t_original, _) = resolve t (StringMap.find "start" mappings) quantifiers in
+       let@ (t_new, _) = resolve t mapping quantifiers in
        return (eq_ (t_new, t_original), None)
+    | For (i, s, j, t) ->
+       let sym = Sym.fresh_pretty s in
+       let@ (t, _) = resolve t mapping ((s, (sym, Integer)) :: quantifiers) in
+       let make_int z = 
+         try return (Z.to_int z) with
+         | Z.Overflow -> fail {loc; msg = Generic !^"Too small/large integer"}
+       in
+       let@ i = make_int i in
+       let@ j = make_int j in
+       if j - i > 20 
+       then fail {loc; msg = Generic !^"Quantifying over too large integer space using 'for'"} 
+       else return (eachI_ (i, sym, j) t, None)
   in
-  resolve term (StringMap.find default_mapping_name mappings)
+  resolve term (StringMap.find default_mapping_name mappings) quantifiers
 
 
 
@@ -618,7 +636,7 @@ let rec resolve_typ loc
   | Typeof term ->
      let@ (_, osct) = 
        resolve_index_term loc layouts default_mapping_name
-         mappings oquantifier term
+         mappings (Option.to_list oquantifier) term
      in
      begin match osct with
      | Some sct -> return sct
@@ -650,7 +668,7 @@ let rec resolve_typ loc
 
 
 let resolve_constraint loc layouts default_mapping_name mappings lc = 
-  let@ (lc, _) = resolve_index_term loc layouts default_mapping_name mappings None lc in
+  let@ (lc, _) = resolve_index_term loc layouts default_mapping_name mappings [] lc in
   return (LC.t_ lc)
 
 
@@ -679,7 +697,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
     | Some permission ->
        let@ (t, _) = 
          resolve_index_term loc layouts default_mapping_name mappings 
-           (Option.map fst oq) permission
+           (Option.to_list (Option.map fst oq)) permission
        in
        return (Some t)
   in
@@ -694,7 +712,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
        | `Owned, [("value", value)] -> 
           let@ (value, _) = 
             resolve_index_term loc layouts default_mapping_name mappings 
-              (Option.map fst oq) value
+              (Option.to_list (Option.map fst oq)) value
           in
           return (Some value)
        | `Block, _ -> fail {loc; msg = Generic !^(""^predicate^"' has no output arguments")}
@@ -704,7 +722,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
      | None ->
         let@ (pointer_resolved, pointer_sct) = 
           resolve_index_term loc layouts default_mapping_name mappings 
-            (Option.map fst oq) pointer 
+            (Option.to_list (Option.map fst oq)) pointer 
         in
         let@ pointee_sct = match typ, pointer_sct with
           | Some typ, _ ->
@@ -736,7 +754,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
                  when String.equal name name' ->
              let@ (pointer,_) = 
                resolve_index_term loc layouts default_mapping_name mappings 
-                 None pointer 
+                 [] pointer 
              in
              return (pointer, Z.to_int step)
           | _ -> 
@@ -748,7 +766,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
         in
         let@ (condition, _) = 
           resolve_index_term loc layouts default_mapping_name mappings 
-            (Some (name, (qs, qbt))) condition 
+            [(name, (qs, qbt))] condition 
         in
         let@ pointee_sct = match typ with
           | Some typ ->
@@ -778,7 +796,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
        ListM.mapM (fun arg ->
            let@ (t, _) = 
              resolve_index_term loc layouts default_mapping_name mappings 
-               (Option.map fst oq) arg in
+               (Option.to_list (Option.map fst oq)) arg in
            return t
          ) arguments
      in
@@ -786,7 +804,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
        ListM.mapM (fun (name, arg) ->
            let@ (t, _) = 
              resolve_index_term loc layouts default_mapping_name mappings 
-               None arg in      (* quantifier not bound in some_oarg definition *)
+               [] arg in      (* quantifier not bound in some_oarg definition *)
            return (name, t)
          ) some_oargs
      in
@@ -794,7 +812,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
        | None ->
           let@ (pointer_resolved, pointer_sct) = 
             resolve_index_term loc layouts default_mapping_name mappings 
-              (Option.map fst oq) pointer 
+              (Option.to_list (Option.map fst oq)) pointer 
           in
           make_pred loc (predicate, def) 
             ~oname pointer_resolved iargs_resolved some_oargs_resolved ~o_permission
@@ -810,7 +828,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
                  when String.equal name name' ->
                let@ (pointer,_) = 
                  resolve_index_term loc layouts default_mapping_name mappings 
-                   None pointer 
+                   [] pointer 
                in
                return (pointer, Z.to_int step)
             | _ -> 
@@ -822,7 +840,7 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
           in
           let@ (condition, _) = 
              resolve_index_term loc layouts default_mapping_name mappings 
-               (Some (name, (s, bt))) condition 
+               [(name, (s, bt))] condition 
           in
           make_qpred 
             loc 
@@ -845,7 +863,7 @@ let apply_logical_predicate layouts default_mapping_name mappings (loc, cond) =
          ListM.mapM (fun arg ->
              let@ (t, _) = 
                resolve_index_term loc layouts default_mapping_name mappings 
-                 None arg in
+                 [] arg in
              return t
            ) cond.arguments
        in
@@ -856,13 +874,13 @@ let apply_logical_predicate layouts default_mapping_name mappings (loc, cond) =
          ListM.mapM (fun arg ->
              let@ (t, _) = 
                resolve_index_term loc layouts default_mapping_name mappings 
-                 (Some (name, (q, bt))) arg in
+                 [(name, (q, bt))] arg in
              return t
            ) cond.arguments
        in
        let@ (condition, _) = 
          resolve_index_term loc layouts default_mapping_name mappings 
-           (Some (name, (q, bt))) condition
+           [(name, (q, bt))] condition
        in
        let pred = LC.Pred.{ name = cond.predicate; args = args_resolved } in
        return (LC.QPred { q = (q, bt); condition; pred })
@@ -1014,7 +1032,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
            let s = Sym.fresh_named name in
            let@ (it, o_sct) = 
              resolve_index_term loc layouts 
-               "start" mappings None it
+               "start" mappings [] it
            in
            let mapping' = [{path = Ast.var name; it; o_sct}] in
            let mappings = 
@@ -1104,7 +1122,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
            let s = Sym.fresh_named name in
            let@ (it, o_sct) = 
              resolve_index_term loc layouts 
-               "end" mappings None it
+               "end" mappings [] it
            in
            let mapping' = [{path = Ast.var name; it; o_sct}] in
            let mappings = 
@@ -1250,7 +1268,7 @@ let make_label_spec
            let s = Sym.fresh_named name in
            let@ (it, o_sct) = 
              resolve_index_term loc layouts 
-               lname mappings None it
+               lname mappings [] it
            in
            let mapping' = [{path = Ast.var name; it; o_sct}] in
            let mappings = 

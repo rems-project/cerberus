@@ -97,7 +97,9 @@ let pp =
        | EQ (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
        | EachI ((i1, s, i2), t) ->
-          mparens (c_app ((c_app !^"eachI" [!^(string_of_int i1); Sym.pp s; !^(string_of_int i2)])) [aux false t])
+          mparens
+            (!^"for" ^^ parens(int i1 ^^ comma ^^^ Sym.pp s ^^ comma ^^^ int i2) ^^^
+               braces (aux false t))
        end
     | Tuple_op tuple_op -> 
        begin match tuple_op with

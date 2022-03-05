@@ -40,6 +40,7 @@ module Terms = struct
     | App of term * term
     | Env of term * string
     | Unchanged of term
+    | For of Z.t * string * Z.t * term
   [@@deriving eq, ord]
 
 
@@ -127,6 +128,10 @@ module Terms = struct
        parens (pp false t) ^^ at ^^ !^e
     | Unchanged t ->
        parens (pp false t) ^^^ !^"unchanged"
+    | For (i, name, j, body) ->
+       mparens atomic
+         (!^"for" ^^ parens(!^(Z.to_string i) ^^ comma ^^^ !^name ^^ comma ^^^ !^(Z.to_string j)) ^^^
+            braces (pp false body))
        
 
 
@@ -213,6 +218,8 @@ module Terms = struct
          true
       | Unchanged _ ->
          true
+      | For (_, _, _, body) ->
+         aux body
     in
     aux t
 
@@ -284,6 +291,8 @@ module Terms = struct
          true
       | Unchanged _ ->
          true
+      | For (_, _, _, body) ->
+         aux body
     in
     aux t
   

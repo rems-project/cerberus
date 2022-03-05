@@ -64,6 +64,7 @@ open Assertion_parser_util
 %token AT
 
 %token EACH
+%token FOR
 
 %token WHERE
 %token WITH
@@ -198,7 +199,8 @@ term:
       { Ast.PointerToIntegerCast a1 }
   | a1=atomic_term LBRACKET a2=term RBRACKET
       { Ast.App (a1, a2) } 
-
+  | FOR LPAREN i = integer COMMA s = NAME COMMA j = integer RPAREN LBRACE body=term RBRACE
+      { Ast.For (i, s, j, body) }
 
 term_with_name:
   | name=NAME EQUAL t=term
