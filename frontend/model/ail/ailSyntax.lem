@@ -1,5 +1,5 @@
 open import Pervasives Loc Ctype
-import Symbol Annot
+import Symbol Annot Cn
 
 type ail_identifier = Symbol.sym
 
@@ -241,6 +241,7 @@ type sigma 'a = <|
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
   typedef_attributes: map ail_identifier Annot.attributes;
   loop_attributes: Annot.loop_attributes;
+  cn_predicates: list (Cn.cn_predicate Symbol.sym Ctype.ctype);
 |>
 
 

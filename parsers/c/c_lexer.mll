@@ -75,19 +75,51 @@ let keywords: (string * Tokens.token) list = [
     "asm", ASM;
     "__asm__", ASM;
     "__volatile__", ASM_VOLATILE;
-    (* for CN *)
-    "pack"    , PACK;
-    "unpack"  , UNPACK;
-    "pack_struct"    , PACKSTRUCT;
-    "unpack_struct"  , UNPACKSTRUCT;
-    "have"  , HAVE;
-    "show"  , SHOW;
+
+    (* BEGIN CN *)
+    "__cerb_predicate"     , CN_PREDICATE;
+    "__cerb_pack"          , CN_PACK;
+    "__cerb_unpack"        , CN_UNPACK;
+    "__cerb_pack_struct"   , CN_PACK_STRUCT;
+    "__cerb_unpack_struct" , CN_UNPACK_STRUCT;
+    "__cerb_have"          , CN_HAVE;
+    "__cerb_show"          , CN_SHOW;
+    (* END CN *)
   ]
 
 let lexicon: (string, token) Hashtbl.t =
   let lexicon = Hashtbl.create 0 in
   let add (key, builder) = Hashtbl.add lexicon key builder in
   List.iter add keywords; lexicon
+
+
+(* BEGIN CN *)
+let cn_keywords: (string * Tokens.token) list = [
+    "bool"          , CN_BOOL;
+    "integer"       , CN_INTEGER;
+    "real"          , CN_REAL;
+    "pointer"       , CN_POINTER;
+    "map"           , CN_MAP;
+    "list"          , CN_LIST;
+    "tuple"         , CN_TUPLE;
+    "set"           , CN_SET;
+    "let"           , CN_LET;
+    "Owned"         , CN_OWNED;
+    "Block"         , CN_BLOCK;
+    "each"          , CN_EACH;
+    "NULL"          , CN_NULL;
+  ]
+
+let cn_lexicon: (string, token) Hashtbl.t =
+  let cn_lexicon = Hashtbl.create 0 in
+  let add (key, builder) = Hashtbl.add cn_lexicon key builder in
+  List.iter add cn_keywords; cn_lexicon
+
+let inside_cn =
+  ref false
+(* END CN *)
+
+
 
 let lex_comment remainder lexbuf =
   let ch = lexeme_char lexbuf 0 in
@@ -153,7 +185,6 @@ let identifier_nondigit =
   | universal_character_name
 
 let identifier = identifier_nondigit (identifier_nondigit | digit)*
-
 
 (* STD §6.4.4.2#1 *)
 let floating_suffix = ['f' 'l' 'F' 'L']
@@ -410,7 +441,13 @@ and initial = parse
 
   | identifier as id
     { try Hashtbl.find lexicon id
-      with Not_found -> NAME id
+      with Not_found ->
+        if !inside_cn then
+          try Hashtbl.find cn_lexicon id
+          with Not_found ->
+            NAME id
+        else
+          NAME id
     }
   | eof
       { EOF }

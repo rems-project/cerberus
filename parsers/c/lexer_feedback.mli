@@ -29,4 +29,4 @@ val fun_ids_decl: Symbol.identifier list -> context -> declarator -> declarator
 
 val reinstall_function_context: declarator -> unit
 val create_function_definition: Location_ocaml.t -> ((((Symbol.identifier
-option * Symbol.identifier) * (((Location_ocaml.t * string * (Location_ocaml.t * string) list) list) option)) list) list) option -> Cabs.specifiers -> declarator -> Cabs.cabs_statement -> Cabs.declaration list option -> Cabs.function_definition
+option * Symbol.identifier) * (((Location_ocaml.t * string * (Location_ocaml.t * string) list) list) option)) list) list) option -> Cabs.specifiers -> declarator -> Cabs.cabs_statement -> Cabs.cabs_declaration list option -> Cabs.function_definition

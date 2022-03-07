@@ -46,6 +46,8 @@ let specifiers_of_external_declaration = function
       Just specifs
   | EDecl_decl (Declaration_static_assert _) ->
       Nothing
+  | EDecl_predCN _ ->
+      Nothing
 end
 
 

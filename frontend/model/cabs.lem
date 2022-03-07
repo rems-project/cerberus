@@ -2,6 +2,8 @@ import Symbol
 open import Pervasives Loc
 import Annot
 
+import Cn
+
 (* §6.4.4 Constants *)
 type cabs_integer_suffix =
   | CabsSuffix_U
@@ -144,7 +146,7 @@ and cabs_assignment_operator =
 
 
 (* §6.7 Declarations, Syntax *)
-and declaration =
+and cabs_declaration =
   | Declaration_base of Annot.attributes * specifiers * list init_declarator
   | Declaration_static_assert of static_assert_declaration
 
@@ -290,7 +292,7 @@ and cabs_statement_ =
   (* §6.8.2 Compound statement, Syntax *)
   | CabsSblock of list cabs_statement
   (* §, Syntax *)
-  | CabsSdecl of declaration
+  | CabsSdecl of cabs_declaration
   (* §6.8.3 Expression and null statements, Syntax *)
   | CabsSnull
   | CabsSexpr of cabs_expression
@@ -327,7 +329,7 @@ and cabs_statement =
 
 and for_clause =
  | FC_expr of cabs_expression
- | FC_decl of declaration
+ | FC_decl of cabs_declaration
 
 
 (* §6.7.2.2 Enumeration specifiers, Syntax *)
@@ -340,7 +342,8 @@ type translation_unit =
 
 and external_declaration =
   | EDecl_func of function_definition
-  | EDecl_decl of declaration
+  | EDecl_decl of cabs_declaration
+  | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
 
 (* §6.9.1 Function definitions, Syntax *)
 and function_definition =

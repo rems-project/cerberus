@@ -50,13 +50,6 @@ type token =
   | NORETURN
   | STATIC_ASSERT
   | THREAD_LOCAL
-  (* for CN *)
-  | PACK
-  | UNPACK
-  | PACKSTRUCT
-  | UNPACKSTRUCT
-  | HAVE
-  | SHOW
 
   (* §6.4.2 Identifiers *)
   | NAME of string
@@ -134,6 +127,30 @@ type token =
   | PRINT_TYPE
   | ASM
   | ASM_VOLATILE
+  
+  (* CN syntax *)
+  | CN_PREDICATE
+  | CN_PACK
+  | CN_UNPACK
+  | CN_PACK_STRUCT
+  | CN_UNPACK_STRUCT
+  | CN_HAVE
+  | CN_SHOW
+  | CN_PREDNAME of string
+  | CN_BOOL
+  | CN_INTEGER
+  | CN_REAL
+  | CN_POINTER
+  | CN_MAP
+  | CN_LIST
+  | CN_TUPLE
+  | CN_SET
+  | CN_LET
+  | CN_OWNED
+  | CN_BLOCK
+  | CN_EACH
+  | CN_NULL
+
 
 let string_of_token = function
   | AUTO -> "AUTO"
@@ -249,9 +266,25 @@ let string_of_token = function
   | ASM -> "ASM"
   | ASM_VOLATILE -> "ASM_VOLATILE"
   | EOF -> "EOF"
-  | PACK -> "PACK"
-  | UNPACK -> "UNPACK"
-  | PACKSTRUCT -> "PACKSTRUCT"
-  | UNPACKSTRUCT -> "UNPACKSTRUCT"
-  | HAVE -> "HAVE"
-  | SHOW -> "SHOW"
+  | CN_PACK -> "CN_PACK"
+  | CN_UNPACK -> "CN_UNPACK"
+  | CN_PACK_STRUCT -> "CN_PACK_STRUCT"
+  | CN_UNPACK_STRUCT -> "CN_UNPACK_STRUCT"
+  | CN_HAVE -> "CN_HAVE"
+  | CN_SHOW -> "CN_SHOW"
+  | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")"
+  | CN_BOOL -> "CN_BOOL"
+  | CN_INTEGER -> "CN_INTEGER"
+  | CN_REAL -> "CN_REAL"
+  | CN_POINTER -> "CN_POINTER"
+  | CN_MAP -> "CN_MAP"
+  | CN_LIST -> "CN_LIST"
+  | CN_TUPLE -> "CN_TUPLE"
+  | CN_SET -> "CN_SET"
+  | CN_LET -> "CN_LET"
+  | CN_OWNED -> "CN_OWNED"
+  | CN_BLOCK -> "CN_BLOCK"
+  | CN_EACH -> "CN_EACH"
+  | CN_NULL -> "CN_NULL"
+  | CN_PREDICATE -> "CN_PREDICATE"
+

@@ -536,6 +536,8 @@ let dtree_of_program pp_annot (_, sigm) =
           ; Dnode (pp_ctor "AilStaticAssertions"
                   , List.map (dtree_of_static_assertions pp_annot)
                       sigm.static_assertions)
+          ; Dnode (pp_ctor "AilCNpredicates"
+                  , List.map Cn_ocaml.PpAil.dtree_of_cn_predicate sigm.cn_predicates)
           ] )
 
 let pp_annot gtc =

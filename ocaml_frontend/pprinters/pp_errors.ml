@@ -299,6 +299,8 @@ let string_of_desugar_cause = function
       "feature that will never supported: " ^ str
   | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
+  | Desugar_CN e ->
+      Cn_ocaml.string_of_error e
   | Desugar_TODO msg ->
       "TODO: " ^ msg
 

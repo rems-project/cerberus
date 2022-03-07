@@ -74,7 +74,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
   STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
-  THREAD_LOCAL (* FOR CN *) PACK UNPACK PACKSTRUCT UNPACKSTRUCT HAVE SHOW
+  THREAD_LOCAL
 
 (* §6.4.2 Identifiers *)
 %token<string> NAME (* NAME is either an variable identifier or a type name *)
@@ -106,10 +106,18 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 (* BMC syntax *)
 %token BMC_ASSUME
 
+(* CN syntax *)
+(* %token<string> CN_PREDNAME *)
+%token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW
+%token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
+%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_PREDICATE
+%token CN_NULL
+
 %token EOF
 
 %nonassoc THEN
 %nonassoc ELSE
+
 
 (* ========================================================================== *)
 
@@ -145,10 +153,10 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 %type<Cabs.cabs_assignment_operator>
   assignment_operator
 
-%type<Cabs.declaration>
+%type<Cabs.cabs_declaration>
   no_leading_attribute_declaration
 
-%type<Cabs.declaration>
+%type<Cabs.cabs_declaration>
   declaration
 
 %type<Cabs.specifiers>
@@ -268,6 +276,16 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   located_string_literal
 
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
+
+
+%type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_predicate> predicate
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clauses> clauses
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_pred> pred
+
+
 
 %% (* ======================================================================= *)
 
@@ -854,7 +872,7 @@ type_specifier_unique:
     { spec }
 | spec= typedef_name_spec
     { spec }
-| TYPEOF expr= unary_expression
+| TYPEOF LPAREN expr= unary_expression RPAREN
     { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_expr expr) }
 | TYPEOF LPAREN ty= type_name RPAREN
     { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor), TSpec_typeof_type ty) }
@@ -1419,20 +1437,20 @@ asm_statement:
 
 
 pack_statement:
-  | PACKSTRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+  | CN_PACK_STRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSpack (CTPU_Struct name, args)) }
-  | PACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+  | CN_PACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSpack (CTPU_Predicate name, args)) }
 unpack_statement:
-  | UNPACKSTRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+  | CN_UNPACK_STRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSunpack (CTPU_Struct name, args)) }
-  | UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+  | CN_UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSunpack (CTPU_Predicate name, args)) }
 have_statement:
-  | HAVE name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+  | CN_HAVE name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsShave (name, args)) }
 show_statement:
-  | SHOW name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
+  | CN_SHOW name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSshow (name, args)) }
 
 (* §6.9 External definitions *)
@@ -1444,6 +1462,8 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 external_declaration:
+| pred= predicate
+    { EDecl_predCN pred }
 | fdef= function_definition
     { EDecl_func fdef }
 | decl= declaration
@@ -1670,4 +1690,172 @@ balanced_token:
    { strs }
 ;
 
+(* BEGIN CN *)
+(* CN assertion language *****************************************************)
+(*
+cn_assertion:
 
+    | Addr of string
+        | Var of string
+    | Pointee of term
+        | PredOutput of string * string
+    | Member of term * Id.t
+    | Bool of bool
+    | Integer of Z.t
+        | Addition of term * term
+    | Subtraction of term * term
+    | Multiplication of term * term
+    | Division of term * term
+    | Exponentiation of term * term
+    | Remainder of term * term
+        | Equality of term * term
+    | Inequality of term * term
+    | FlipBit of {bit : term; t : term}
+    | ITE of term * term * term
+    | Or of term * term
+    | And of term * term
+    | Not of term
+    | LessThan of term * term
+    | LessOrEqual of term * term
+    | GreaterThan of term * term
+    | GreaterOrEqual of term * term
+    | IntegerToPointerCast of term
+    | PointerToIntegerCast of term
+        | Null
+    | OffsetOf of {tag:string; member:string}
+    | CellPointer of (term * term) * (term * term) * term
+    | Disjoint of (term * term) * (term * term)
+    | App of term * term
+    | Env of term * string
+*)
+prim_expr:
+| CN_NULL
+    { Cerb_frontend.Cn.CNExpr_NULL }
+| ident= cn_variable
+    { Cerb_frontend.Cn.CNExpr_var ident }
+| ident= cn_variable DOT ident_membr= cn_variable
+    { Cerb_frontend.Cn.CNExpr_memberof (ident, ident_membr) }
+| e= delimited(LPAREN, expr, RPAREN)
+    { e }
+
+add_expr:
+(* TODO *)
+| e= prim_expr
+     { e }
+| e1= add_expr PLUS e2= prim_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_add, e1, e2)) }
+| e1= add_expr MINUS e2= prim_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_sub, e1, e2)) }
+
+rel_expr:
+(* TODO *)
+| e= add_expr
+     { e }
+
+expr:
+| e= rel_expr
+     { e }
+| e1= expr EQ_EQ e2= rel_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_equal, e1, e2)) }
+| e1= expr BANG_EQ e2= rel_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_inequal, e1, e2)) }
+;
+
+(* CN predicate definitions **************************************************)
+base_type:
+| VOID
+    { Cerb_frontend.Cn.CN_unit }
+| CN_BOOL
+    { Cerb_frontend.Cn.CN_bool }
+| CN_INTEGER
+    { Cerb_frontend.Cn.CN_integer }
+| CN_REAL
+    { Cerb_frontend.Cn.CN_real }
+| CN_POINTER
+    { Cerb_frontend.Cn.CN_loc }
+| STRUCT str= NAME TYPE
+    { Cerb_frontend.Cn.CN_struct (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
+| CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
+    { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }
+| CN_LIST LT bTy= base_type GT
+    { Cerb_frontend.Cn.CN_list bTy }
+| CN_TUPLE LT bTys= separated_list(COMMA, base_type) GT
+    { Cerb_frontend.Cn.CN_tuple bTys }
+| CN_SET LT bTy= base_type GT
+    { Cerb_frontend.Cn.CN_set bTy }
+;
+
+enter_cn:
+| 
+    { C_lexer.inside_cn := true; }
+
+exit_cn:
+| 
+    { C_lexer.inside_cn := false; }
+
+predicate:
+| CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= NAME VARIABLE
+  cn_pred_iargs= delimited(LPAREN, args, RPAREN) EQ
+  cn_pred_clauses= delimited(LBRACE, clauses, RBRACE) exit_cn
+    { (* TODO: check the name start with upper case *)
+      { cn_pred_name= Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+      ; cn_pred_oargs
+      ; cn_pred_iargs
+      ; cn_pred_clauses} }
+;
+
+cn_variable:
+| str= NAME VARIABLE
+    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+
+args:
+| xs= separated_list(COMMA, pair(base_type, cn_variable))
+    { xs }
+;
+
+oargs_def:
+| xs= separated_list(COMMA, separated_pair(cn_variable, EQ, expr))
+    { xs }
+;
+
+
+clauses:
+| c= clause SEMICOLON
+    { Cerb_frontend.Cn.CN_clause c}
+| IF LPAREN e= expr RPAREN LBRACE c= clause SEMICOLON RBRACE ELSE LBRACE cs= clauses RBRACE
+    { Cerb_frontend.Cn.CN_if (e, c, cs) }
+;
+
+clause:
+| CN_LET str= NAME VARIABLE EQ res= resource SEMICOLON c= clause
+    { Cerb_frontend.Cn.CN_letResource (Symbol.Identifier (Location_ocaml.point $startpos(str), str), res, c) }
+| CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= clause
+    { Cerb_frontend.Cn.CN_letExpr (Symbol.Identifier (Location_ocaml.point $startpos(str), str), e, c) }
+| ASSERT e= delimited(LPAREN, expr, RPAREN) SEMICOLON c= clause
+    { Cerb_frontend.Cn.CN_assert (e, c) }
+| RETURN xs= delimited(LBRACE, oargs_def, RBRACE)
+    { Cerb_frontend.Cn.CN_return (Location_ocaml.region ($startpos(xs), $endpos(xs)) NoCursor, xs) }
+;
+
+resource:
+| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { Cerb_frontend.Cn.CN_pred (p, es) }
+| CN_EACH LPAREN bTy= base_type str= NAME VARIABLE SEMICOLON e1= expr RPAREN
+       LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
+    { Cerb_frontend.Cn.CN_each (Symbol.Identifier (Location_ocaml.point $startpos(str), str), bTy, e1, p, es) }
+;
+
+pred:
+| CN_OWNED ty= delimited(LT, ctype, GT)
+    { Cerb_frontend.Cn.CN_owned ty }
+| CN_BLOCK ty= delimited(LT, ctype, GT)
+    { Cerb_frontend.Cn.CN_block ty }
+| str= NAME VARIABLE
+    { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
+;
+
+ctype:
+| ty= type_name
+    { ty }
+;
+(* END CN *)
