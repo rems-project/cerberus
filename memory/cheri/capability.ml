@@ -1,6 +1,7 @@
 
 module type Cap_permission = sig
   type t
+
   (** the number of user-defined flags *)
   val user_perms_len: int
 
@@ -41,6 +42,7 @@ module type Cap_permission = sig
 
   (** null permission *)
   val perm_p0: t
+
   (** permissions for newly allocated region *)
   val perm_alloc: t
 
@@ -51,6 +53,7 @@ module type Capability =
     module P: Cap_permission
 
     type t
+
     (** This is a new integer type introduced by CHERI C and should be
         used to hold virtual addresses. vaddr_t should not be directly
         cast to a pointer type for dereference; instead, it must be
