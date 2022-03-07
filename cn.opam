@@ -8,4 +8,5 @@ depends: [
   "monomorphic"
   "ppx_deriving"
   "landmarks-ppx"
+  "z3" {>= "4.8.14"}
 ]
