@@ -139,13 +139,12 @@ module PageAlloc = struct
       let qarg = Some 0 in
 
 
-      let two_to_the_order page = 
-        let o = page %. "order" in
+      let two_to_the_order (f,t) o = 
         let rec make i = 
-          if i >= mMAX_ORDER then default_ Integer else
-            ite_ (o %== int_ i, exp_ (int_ 2, int_ i), make (i + 1))
+          if i <= t then ite_ (o %== int_ i, exp_ (int_ 2, int_ i), make (i + 1))
+          else default_ Integer
         in
-        make 0
+        make f
       in
 
       let body = 
@@ -180,10 +179,16 @@ module PageAlloc = struct
                  next %!= self_node_pointer,
                  and_ [(page %. "refcount") %== int_ 0;
                        (page %. "order") %!= int_ hHYP_NO_ORDER;
-                       (rem_ (page_index, two_to_the_order page)) %== int_ 0;
                    ]
                )
             );
+            (impl_ (
+                 (page %. "order") %!= int_ hHYP_NO_ORDER,
+                 (and_ 
+                    [(rem_ (page_index, two_to_the_order (0, mMAX_ORDER - 1) (page %. "order"))) %== int_ 0;
+                     ((page_index %* int_ pPAGE_SIZE) %+ ((two_to_the_order (0, mMAX_ORDER - 1) (page %. "order")) %* int_ pPAGE_SIZE)) %<= (pool %. "range_end");]
+                 )
+            ));
             (impl_ (
                  (page %. "order") %== int_ hHYP_NO_ORDER,
                  (page %. "refcount") %== (int_ 0))

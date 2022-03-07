@@ -77,8 +77,6 @@ let pp =
           c_app !^"intToReal" [aux false t]
        | RealToInt t ->
           c_app !^"realToInt" [aux false t]
-       | FlipBit fb ->
-          c_app !^"flipBit" [aux false fb.bit; aux false fb.t]
        | XOR (ity, t1, t2) -> 
           c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
        end
@@ -214,7 +212,6 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      | Max (it, it') -> [it; it'] @ ts
      | IntToReal t -> [t] @ ts
      | RealToInt t -> [t] @ ts
-     | FlipBit fb -> [fb.bit; fb.t] @ ts
      | XOR (_, it, it') -> [it; it'] @ ts
      end
   | Bool_op bool_op ->
@@ -358,7 +355,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Max (it, it') -> Max (subst su it, subst su it')
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
-       | FlipBit {bit; t} -> FlipBit {bit = subst su bit; t = subst su t}
        | XOR (ity, it, it') -> XOR (ity, subst su it, subst su it')
      in
      IT (Arith_op arith_op, bt)

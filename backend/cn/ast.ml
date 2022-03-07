@@ -22,7 +22,6 @@ module Terms = struct
     | Remainder of term * term
     | Equality of term * term
     | Inequality of term * term
-    | FlipBit of {bit : term; t : term}
     | ITE of term * term * term
     | Or of term * term
     | And of term * term
@@ -84,8 +83,6 @@ module Terms = struct
        mparens atomic (pp true t1 ^^^ !^"==" ^^^ pp true t2)
     | Inequality (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"!=" ^^^ pp true t2)
-    | FlipBit {bit; t} ->
-       mparens atomic (c_app !^"flipBit" [pp false bit; pp false t])
     | ITE (t1, t2, t3) ->
        mparens atomic (pp true t1 ^^^ !^"?" ^^^ pp true t2
                        ^^^ !^":" ^^^ pp true t3)
@@ -182,8 +179,6 @@ module Terms = struct
          aux t1 || aux t2
       | Inequality (t1, t2) -> 
          aux t1 || aux t2
-      | FlipBit {bit; t} ->
-         aux bit || aux t
       | ITE (t1, t2, t3) ->
          aux t1 || aux t2 || aux t3
       | Or (t1, t2) ->
@@ -255,8 +250,6 @@ module Terms = struct
          aux t1 || aux t2
       | Inequality (t1, t2) -> 
          aux t1 || aux t2
-      | FlipBit {bit; t} ->
-         aux bit || aux t
       | ITE (t1, t2, t3) ->
          aux t1 || aux t2 || aux t3
       | Or (t1, t2) ->

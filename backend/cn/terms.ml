@@ -26,7 +26,6 @@ type 'bt arith_op =
   | Max of 'bt term * 'bt term
   | IntToReal of 'bt term
   | RealToInt of 'bt term
-  | FlipBit of {bit: 'bt term; t : 'bt term}
   | XOR of Sctypes.IntegerTypes.t * 'bt term * 'bt term
 
 and 'bt bool_op = 

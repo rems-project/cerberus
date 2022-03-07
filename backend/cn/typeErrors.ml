@@ -411,7 +411,7 @@ let report ?state_file:to_ {loc; msg} =
          | None -> Filename.temp_file "" ".html"
        in
        output_state state_error_file state;
-       Some (!^"Consider state in" ^^^ !^state_error_file)
+       Some (!^"Consider the state in" ^^^ !^state_error_file)
     | None ->
        None
   in

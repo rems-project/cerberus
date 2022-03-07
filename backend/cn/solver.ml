@@ -304,16 +304,6 @@ module Translate = struct
          | Max (t1, t2) -> term (ite_ (ge_ (t1, t2), t1, t2))
          | IntToReal t -> Integer.mk_int2real context (term t)
          | RealToInt t -> Real.mk_real2int context (term t)
-         | FlipBit fb ->
-            (* looking at https://en.wikipedia.org/wiki/Bitwise_operation#XOR *)
-            let bit = mod_ (div_ (fb.t, exp_ (int_ 2, fb.bit)), int_ 2) in
-            let to_add_or_sub = exp_ (int_ 2, fb.bit) in
-            let result = 
-              ite_ (eq_ (bit, int_ 1),
-                    sub_ (fb.t, to_add_or_sub),
-                    add_ (fb.t, to_add_or_sub))
-            in
-            term result
          (* | XOR (ity, t1, t2) ->
           *    let bit_width = Memory.bits_per_byte * Memory.size_of_integer_type ity in
           *    let bt1 = Z3.Arithmetic.Integer.mk_int2bv context bit_width (term t1) in

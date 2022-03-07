@@ -457,10 +457,6 @@ let resolve_index_term loc
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Bool_op (Not (IT (Bool_op (EQ (it, it')), Bool))), Bool), None)
-    | FlipBit {bit; t} ->
-       let@ (bit, _) = resolve bit mapping quantifiers in
-       let@ (t, _) = resolve t mapping quantifiers in
-       return (IT (Arith_op (FlipBit {bit; t}), Integer), None)
     | ITE (it', it'', it''') ->
        let@ (it', _) = resolve it' mapping quantifiers in
        let@ (it'', _) = resolve it'' mapping quantifiers in
