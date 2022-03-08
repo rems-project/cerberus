@@ -247,10 +247,6 @@ module Morello_capability: Capability =
 
     let encode c = [] (* TODO implement *)
 
-    let decode_num n tag = None (* TODO implement *)
-
-    let encode_num c = N.of_int 0 (* TODO implement *)
-
     (* exact equality. compares capability metadata as well as value *)
     let eq = (=)
 
