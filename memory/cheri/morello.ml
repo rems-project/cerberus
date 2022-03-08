@@ -243,9 +243,13 @@ module Morello_capability: Capability =
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
-    let decode b = None (* TODO implement *)
+    let decode bytes tag = None (* TODO implement *)
 
     let encode c = [] (* TODO implement *)
+
+    let decode_num n tag = None (* TODO implement *)
+
+    let encode_num c = N.of_int 0 (* TODO implement *)
 
     (* exact equality. compares capability metadata as well as value *)
     let eq = (=)
