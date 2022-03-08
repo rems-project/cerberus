@@ -1992,7 +1992,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
            | _ ->
               return (PV (prov, PVconcrete c))
        end
-    | _ -> failwith "integer to pointer cast for unsupported integer type"
+    | _ -> fail (MerrCHERI CheriMerrIntFromPtr)
 
 
   let offsetof_ival tagDefs tag_sym memb_ident =
