@@ -59,7 +59,8 @@ let frontend cpp_str filename =
 
 
 let cpp_str =
-    "cc -E -C -Werror -nostdinc -undef -D__cerb__"
+  "cc -E -C -Werror -nostdinc -undef -D__cerb__"
+  ^ " -D__CHERI_PURE_CAPABILITY__"
   ^ " -DDEBUG"
   ^ " -DMAX_CPUS=4"
   ^ " -DMAX_VMS=2"
