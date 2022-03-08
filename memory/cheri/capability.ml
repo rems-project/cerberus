@@ -199,10 +199,23 @@ module type Capability =
      *)
     val cap_unseal: t -> t -> t
 
-    (* encoding/decoding *)
+    (* encoding/decoding to list of bytes *)
 
-    val decode: char list -> t option
+    (** Decoding sequence of bytes into capbility object. It will
+        return None if list is wrong size. Validity tag is passed
+        separately, as it is not part of encoding.  *)
+    val decode: char list -> bool -> t option
+
+    (** Encode capability as list of bytes *)
     val encode: t -> char list
+
+    (** Decoding [Nat_big_num.num] value as capability. It will
+        return None if list is wrong size. Validity tag is passed
+        separately, as it is not part of encoding.  *)
+    val decode_num: Nat_big_num.num -> bool -> t option
+
+    (** Encode capability as [Nat_big_num.num] value *)
+    val encode_num: t -> Nat_big_num.num
 
     (* --- Utility methods --- *)
 
