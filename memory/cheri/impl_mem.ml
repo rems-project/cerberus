@@ -904,7 +904,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        ( `NoTaint (* PNVI-ae-udi *)
        , begin match extract_unspec bs1' with
          | Some cs ->
-            begin match C.decode cs with
+            let tag = true in
+            begin match C.decode cs tag with
             | None -> (* TODO *)
                failwith "could not decode capability"
             | Some n ->
@@ -1951,6 +1952,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
              r
            else
              N.sub r dlt in
+         let c =
+           let tag = true in (* TODO: load tag *)
+           match C.decode_num n tag with
+           | Some c -> c
+           | None -> failwith "error decoding capability in int to pointer cast"
+         in
          if is_PNVI () then
            (* TODO: device memory? *)
            if N.equal n N.zero then
@@ -1967,22 +1974,24 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                 return (Prov_symbolic iota)
              end >>= fun prov ->
              (* cast int to pointer *)
-             return (PV (prov, PVconcrete n))
+             return (PV (prov, PVconcrete c))
          else
            match prov with
            | Prov_none ->
               (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
               if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
-                return (PV (Prov_device, PVconcrete n))
+                return (PV (Prov_device, PVconcrete c))
               else if N.equal n N.zero then
+                (* All 0-address capabilities regardless of their
+                   validity decoded as NULL. This is defacto behaviour
+                   of morello Clang. See intptr3.c example.  *)
                 return (PV (Prov_none, PVnull ref_ty))
               else
-                return (PV (Prov_none, PVconcrete n))
+                return (PV (Prov_none, PVconcrete c))
            | _ ->
-              return (PV (prov, PVconcrete n))
+              return (PV (prov, PVconcrete c))
        end
     | _ -> failwith "integer to pointer cast for unsupported integer type"
-
 
 
   let offsetof_ival tagDefs tag_sym memb_ident =
