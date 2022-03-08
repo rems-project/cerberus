@@ -2007,23 +2007,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   (* will not be used by CHERI. TODO; replace with failwith to make
      sure it is never called *)
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
-    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
-    match prov with
-    (* PNVI-ae-udi *)
-    | Prov_symbolic iota ->
-       failwith "CHERI.array_shift_ptrval found a Prov_symbolic"
-    | _ ->
-       PV (prov, match ptrval_ with
-                 | PVnull _ ->
-                    (* TODO: this seems to be undefined in ISO C *)
-                    (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-                    failwith "TODO(shift a null pointer should be undefined behaviour)"
-                 | PVfunction _ ->
-                    failwith "CHERI.array_shift_ptrval, PVfunction"
-                 | PVconcrete addr ->
-                    PVconcrete (N.add addr offset))
+    failwith "pure array_shift_ptrval not used in CHERI"
 
-  (* TODO: need effectful variant *)
+  (* TODO: use effectful variant instead. Needs to be added *)
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
     PV (prov, match ptrval_ with
@@ -2033,11 +2019,14 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                  if N.equal N.zero offset then
                    PVnull ty
                  else
-                   PVconcrete offset
+                   (* The value of C0 could not be changed. *)
+                   failwith "CHERI.member_shift_ptrval, shifting NULL"
               | PVfunction _ ->
                  failwith "CHERI.member_shift_ptrval, PVfunction"
-              | PVconcrete addr ->
-                 PVconcrete (N.add addr offset))
+              | PVconcrete c ->
+                 let addr = C.cap_get_value c in
+                 let c = C.cap_set_value c (N.add addr offset) in
+                 PVconcrete c)
 
   (* this will be used for pointer arithmetics *)
   let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
@@ -2052,12 +2041,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        failwith "CHERI.eff_array_shift_ptrval, PVfunction"
 
     (* PNVI-ae-udi *)
-    | PV (Prov_symbolic iota as prov, PVconcrete addr) ->
+    | PV (Prov_symbolic iota as prov, PVconcrete c) ->
        (* KKK print_endline ("HELLO iota ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
           PNVI-ae-udi stuff separated to avoid polluting the
           vanilla PNVI code) *)
-       let shifted_addr = N.add addr offset in
+       let shifted_addr = N.add (C.cap_get_value c) offset in
        let precond z =
          (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
          if    Switches.(has_switch (SW_pointer_arith `STRICT))
@@ -2071,63 +2060,71 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
              return false
          else
            return true in
-       lookup_iota iota >>= begin function
-                              | `Double (alloc_id1, alloc_id2) ->
-                                 if not (N.equal ival N.zero) then
-                                   (* TODO: this is yucky *)
-                                   precond alloc_id1 >>= begin function
-                                                           | true ->
-                                                              precond alloc_id2 >>= begin function
-                                                                                      | true ->
-                                                                                         if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
-                                                                                           return `NoCollapse
-                                                                                         else begin
-                                                                                             Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
-                                                                                               (N.to_string alloc_id1) (N.to_string alloc_id2)
-                                                                                               (N.to_string shifted_addr);
-                                                                                             fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
-                                                                                           end
-                                                                                      | false ->
-                                                                                         return (`Collapse alloc_id1)
-                                                                                    end
-                                                           | false ->
-                                                              precond alloc_id2 >>= begin function
-                                                                                      | true ->
-                                                                                         return (`Collapse alloc_id2)
-                                                                                      | false ->
-                                                                                         fail (MerrArrayShift loc)
-                                                                                    end
-                                                         end >>= begin function
-                                                                   | `Collapse alloc_id ->
-                                                                      update begin fun st ->
-                                                                        {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
-                                                                        end
-                                                                   | `NoCollapse ->
-                                                                      return ()
-                                                                 end >>= fun () ->
-                                   return (PV (prov, PVconcrete shifted_addr))
-                                 else
-                                   (* TODO: this is yucky *)
-                                   precond alloc_id1 >>= begin function
-                                                           | true ->
-                                                              return ()
-                                                           | false ->
-                                                              precond alloc_id2 >>= begin function
-                                                                                      | true ->
-                                                                                         return ()
-                                                                                      | false ->
-                                                                                         fail (MerrArrayShift loc)
-                                                                                    end
-                                                         end >>= fun () ->
-                                   return (PV (prov, PVconcrete shifted_addr))
-                              | `Single alloc_id ->
-                                 precond alloc_id >>= begin function
-                                                        | true ->
-                                                           return (PV (prov, PVconcrete shifted_addr))
-                                                        | false ->
-                                                           fail (MerrArrayShift loc)
-                                                      end
-                            end
+       lookup_iota iota >>=
+         begin function
+           | `Double (alloc_id1, alloc_id2) ->
+              if not (N.equal ival N.zero) then
+                (* TODO: this is yucky *)
+                precond alloc_id1 >>=
+                  begin function
+                    | true ->
+                       precond alloc_id2 >>=
+                         begin function
+                           | true ->
+                              if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
+                                return `NoCollapse
+                              else begin
+                                  Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
+                                    (N.to_string alloc_id1) (N.to_string alloc_id2)
+                                    (N.to_string shifted_addr);
+                                  fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
+                                end
+                           | false ->
+                              return (`Collapse alloc_id1)
+                         end
+                    | false ->
+                       precond alloc_id2 >>=
+                         begin function
+                           | true ->
+                              return (`Collapse alloc_id2)
+                           | false ->
+                              fail (MerrArrayShift loc)
+                         end
+                  end >>=
+                  begin function
+                    | `Collapse alloc_id ->
+                       update begin fun st ->
+                         {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
+                         end
+                    | `NoCollapse ->
+                       return ()
+                  end >>= fun () ->
+                return (PV (prov, PVconcrete shifted_addr))
+              else
+                (* TODO: this is yucky *)
+                precond alloc_id1 >>=
+                  begin function
+                    | true ->
+                       return ()
+                    | false ->
+                       precond alloc_id2 >>=
+                         begin function
+                           | true ->
+                              return ()
+                           | false ->
+                              fail (MerrArrayShift loc)
+                         end
+                  end >>= fun () ->
+                return (PV (prov, PVconcrete shifted_addr))
+           | `Single alloc_id ->
+              precond alloc_id >>=
+                begin function
+                  | true ->
+                     return (PV (prov, PVconcrete shifted_addr))
+                  | false ->
+                     fail (MerrArrayShift loc)
+                end
+         end
 
     | PV (Prov_some alloc_id, PVconcrete addr) ->
        (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
