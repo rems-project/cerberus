@@ -468,7 +468,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
         | MerrPtrFromInt
         | MerrPtrComparison
         | MerrWIP _
-        | MerrVIP _ ->
+        | MerrVIP _
+        | MerrCHERI _ ->
          Location_ocaml.other "Concrete" in
     let open Nondeterminism in
     match undefinedFromMem_error err with

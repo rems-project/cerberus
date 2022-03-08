@@ -192,8 +192,10 @@ let fail err =
     | MerrPtrFromInt
     | MerrPtrComparison
     | MerrWIP _
-    | MerrVIP _ ->
-        Location_ocaml.other "VIP" in
+    | MerrVIP _
+    | MerrCHERI _ ->
+       Location_ocaml.other "VIP"
+  in
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
     | Some ubs ->

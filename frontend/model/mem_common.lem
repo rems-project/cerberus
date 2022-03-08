@@ -75,6 +75,16 @@ type vip_error =
   | VIP_copy_alloc_id_invalid (* UB *)
 
 
+type mem_cheri_error =
+  | CheriMerrIntFromPtr
+
+instance (Show mem_cheri_error)
+  let show = function
+    | CheriMerrIntFromPtr ->
+       "CheriMerrIntFromPtr"
+  end
+end
+
 type mem_error =
   | MerrOutsideLifetime of string (* mem_read_request *)
   | MerrInternal of string
@@ -102,6 +112,7 @@ type mem_error =
 
     (* for the VIP memory model (should add a mechanism in the memory interface to expose custom errors) *)
   | MerrVIP of vip_error
+  | MerrCHERI of mem_cheri_error
 
 instance (Show mem_error)
   let show = function
@@ -178,6 +189,8 @@ instance (Show mem_error)
           | VIP_copy_alloc_id_invalid ->
               "MerrVIP copy_alloc_id_invalid"
         end
+    | MerrCHERI k ->
+      "MerrCHERI " ^ show k
   end
 end
 
